@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   scorecardItems,
   strengths,
@@ -10,6 +10,8 @@ import {
   REVIEW_DATE,
   REVIEW_VERSION,
 } from "@/data/reviewData";
+import { integrationTargets } from "@/data/integrationData";
+import { activationMilestones, outreachBatches } from "@/data/activationData";
 import ScoreBar from "@/components/ScoreBar";
 import TagBadge from "@/components/TagBadge";
 import SignalArchitectureSection from "@/components/sections/SignalArchitectureSection";
@@ -19,6 +21,7 @@ import CompetitiveSection from "@/components/sections/CompetitiveSection";
 import DemoScriptSection from "@/components/sections/DemoScriptSection";
 import { useActionChecklist } from "@/hooks/useActionChecklist";
 import { useScrollSpy } from "@/hooks/useScrollSpy";
+import { useWorkspaceState, type OutreachBatchState } from "@/hooks/useWorkspaceState";
 
 const statusLabel = {
   strong: { label: "Solid", color: "text-teal-400", dot: "bg-teal-500" },
@@ -41,7 +44,6 @@ const NAV_ITEMS = [
 ];
 
 const SECTION_IDS = NAV_ITEMS.map((n) => n.id);
-
 const PRIORITY_FILTERS = ["All", "Priority 1", "Priority 2", "Priority 3"] as const;
 type PriorityFilter = (typeof PRIORITY_FILTERS)[number];
 
@@ -56,6 +58,40 @@ export default function ReviewDashboard() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { completed, toggle, reset } = useActionChecklist();
   const activeId = useScrollSpy(SECTION_IDS);
+
+  // Build default states from data files (stable references via useMemo)
+  const defaultIntegrationStatuses = useMemo(
+    () => Object.fromEntries(integrationTargets.map((t) => [t.id, t.status])),
+    []
+  );
+  const defaultMilestoneStatuses = useMemo(
+    () => Object.fromEntries(activationMilestones.map((m) => [m.id, m.status])),
+    []
+  );
+  const defaultBatches = useMemo(
+    () =>
+      Object.fromEntries(
+        outreachBatches.map((b) => [
+          b.id,
+          {
+            sendDate: b.sendDate,
+            responsesCounted: b.responsesCounted,
+            qualifiedConversations: b.qualifiedConversations,
+            status: b.status,
+            notes: b.notes,
+          } satisfies OutreachBatchState,
+        ])
+      ),
+    []
+  );
+
+  const {
+    state: wsState,
+    cycleIntegrationStatus,
+    setIntegrationNote,
+    cycleMilestoneStatus,
+    updateOutreachBatch,
+  } = useWorkspaceState(defaultIntegrationStatuses, defaultMilestoneStatuses, defaultBatches);
 
   // URL hash sync
   useEffect(() => {
@@ -91,21 +127,13 @@ export default function ReviewDashboard() {
           >
             <div className="flex items-center justify-between mb-6">
               <span className="text-sm font-semibold text-foreground">Navigate</span>
-              <button
-                onClick={() => setMobileNavOpen(false)}
-                className="text-muted-foreground hover:text-foreground text-lg"
-              >
-                ×
-              </button>
+              <button onClick={() => setMobileNavOpen(false)} className="text-muted-foreground hover:text-foreground text-xl leading-none">×</button>
             </div>
             <div className="space-y-1">
               {NAV_ITEMS.map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => {
-                    scrollTo(item.id);
-                    setMobileNavOpen(false);
-                  }}
+                  onClick={() => { scrollTo(item.id); setMobileNavOpen(false); }}
                   className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
                     activeId === item.id
                       ? "bg-primary/15 text-primary font-medium"
@@ -115,6 +143,16 @@ export default function ReviewDashboard() {
                   {item.label}
                 </button>
               ))}
+            </div>
+            <div className="mt-6 pt-4 border-t border-border">
+              <p className="text-xs text-muted-foreground">
+                {REVIEW_DATE} · {REVIEW_VERSION}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {wsState.lastUpdated
+                  ? `Last updated: ${new Date(wsState.lastUpdated).toLocaleDateString()}`
+                  : ""}
+              </p>
             </div>
           </div>
         </div>
@@ -138,7 +176,7 @@ export default function ReviewDashboard() {
             </div>
           </div>
 
-          {/* Desktop nav — scrollable */}
+          {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-0.5 overflow-x-auto flex-1 justify-end">
             {NAV_ITEMS.map((item) => (
               <button
@@ -157,7 +195,7 @@ export default function ReviewDashboard() {
 
           {/* Mobile nav trigger */}
           <button
-            className="md:hidden p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            className="md:hidden p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
             onClick={() => setMobileNavOpen(true)}
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -186,11 +224,10 @@ export default function ReviewDashboard() {
               <span className="text-muted-foreground font-normal">Pre-Launch Review Workspace</span>
             </h1>
             <p className="text-muted-foreground max-w-2xl text-sm md:text-base leading-relaxed mt-4">
-              A structured second-opinion workspace covering product readiness, integration surface, demo readiness, brand assets, launch outreach, competitive positioning, and 30/60/90-day activation. Use this alongside or instead of your GitHub repo direction as a living coordination artifact.
+              A live coordination workspace covering product readiness, integration surface, demo readiness, brand assets, launch outreach, competitive positioning, and 30/60/90-day activation. Integration statuses, milestone progress, and outreach metrics are all editable and saved locally.
             </p>
           </div>
 
-          {/* Positioning callout */}
           <div className="border border-primary/30 bg-primary/5 rounded-lg px-5 py-4 max-w-3xl">
             <p className="text-xs font-semibold text-primary tracking-wider uppercase mb-2">Documented Positioning</p>
             <p className="text-sm text-foreground leading-relaxed">
@@ -204,14 +241,12 @@ export default function ReviewDashboard() {
             </p>
           </div>
 
-          {/* Overall score + dimension mini-summary */}
+          {/* Overall score */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="md:col-span-2 border border-border bg-card rounded-lg p-5 space-y-4">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
-                    {overallScore.label}
-                  </p>
+                  <p className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">{overallScore.label}</p>
                   <div className="flex items-baseline gap-2 mt-1">
                     <span className="text-5xl font-bold text-foreground">{overallScore.value}</span>
                     <span className="text-xl text-muted-foreground">/ {overallScore.maxValue}</span>
@@ -225,13 +260,12 @@ export default function ReviewDashboard() {
               <ScoreBar score={overallScore.value} maxScore={overallScore.maxValue} status="developing" size="lg" />
               <p className="text-sm text-muted-foreground leading-relaxed">{overallScore.interpretation}</p>
             </div>
-
             <div className="border border-border bg-card rounded-lg p-5 space-y-3">
               <p className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">Dimension Summary</p>
               {scorecardItems.slice(0, 5).map((item) => (
                 <div key={item.dimension} className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-foreground truncate pr-2 leading-tight">{item.dimension}</span>
+                    <span className="text-xs text-foreground truncate pr-2">{item.dimension}</span>
                     <span className={`text-xs font-semibold ${statusLabel[item.status].color} shrink-0`}>
                       {item.score}/{item.maxScore}
                     </span>
@@ -239,10 +273,7 @@ export default function ReviewDashboard() {
                   <ScoreBar score={item.score} maxScore={item.maxScore} status={item.status} size="sm" />
                 </div>
               ))}
-              <button
-                onClick={() => scrollTo("scorecard")}
-                className="text-xs text-primary hover:text-primary/80 transition-colors"
-              >
+              <button onClick={() => scrollTo("scorecard")} className="text-xs text-primary hover:text-primary/80 transition-colors">
                 View full scorecard →
               </button>
             </div>
@@ -253,7 +284,7 @@ export default function ReviewDashboard() {
         <section id="scorecard" className="space-y-6 scroll-mt-20">
           <SectionHeader
             label="Launch Readiness Scorecard"
-            description="Eight dimensions scored 1–10 based on evidence at review date. Scores reflect current state, not potential. The Integration Surface Coverage dimension replaces the previous 'workflow noise' dimension to better reflect product-stage priorities."
+            description="Eight dimensions scored 1–10 based on evidence at review date. Integration Surface Coverage replaced 'workflow noise' as a product-stage-relevant dimension."
           />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {scorecardItems.map((item) => {
@@ -279,8 +310,7 @@ export default function ReviewDashboard() {
           </div>
           <div className="border border-border/50 bg-muted/20 rounded-lg px-5 py-3">
             <p className="text-xs text-muted-foreground">
-              <strong className="text-foreground">Scoring methodology:</strong> Qualitative assessments based on reported state at review date.
-              Not audited, validated, or legally significant. No compliance or security certification implied.
+              <strong className="text-foreground">Scoring methodology:</strong> Qualitative assessments based on reported state at review date. Not audited, validated, or legally significant. No compliance or security certification implied.
             </p>
           </div>
         </section>
@@ -289,7 +319,7 @@ export default function ReviewDashboard() {
         <section id="architecture" className="space-y-6 scroll-mt-20">
           <SectionHeader
             label="Signal Architecture"
-            description="The four signal types that feed SignalGrid's runtime decision engine — and how each applies in a real shared-device frontline environment."
+            description="The four signal types that feed SignalGrid's runtime decision engine — with real shared-device frontline scenarios for each. Click any signal type to expand."
           />
           <SignalArchitectureSection />
         </section>
@@ -298,25 +328,35 @@ export default function ReviewDashboard() {
         <section id="integrations" className="space-y-6 scroll-mt-20">
           <SectionHeader
             label="Integration Proof Tracker"
-            description="Named integration targets with per-target status. Intune/Entra are Priority 1 — the first working proof closes the single most important product credibility gap."
+            description="Named integration targets with editable status tracking. Fleet MDM is added as a P1 open-source alternative with a full API quickstart. Click status badges to update progress — saved locally."
           />
-          <IntegrationTrackerSection />
+          <IntegrationTrackerSection
+            statuses={wsState.integrationStatuses}
+            notes={wsState.integrationNotes}
+            cycleStatus={cycleIntegrationStatus}
+            setNote={setIntegrationNote}
+          />
         </section>
 
         {/* ── Activation Plan ── */}
         <section id="activation" className="space-y-6 scroll-mt-20">
           <SectionHeader
             label="30/60/90-Day Activation Plan"
-            description="Three milestone bands with specific exit criteria and an outreach batch tracker. A milestone is not complete when its tasks are done — it is complete when its exit gate is met."
+            description="Editable milestone tracker and outreach batch tracker. Update milestone statuses, set a send date, and track responses. All changes saved locally."
           />
-          <ActivationPlanSection />
+          <ActivationPlanSection
+            milestoneStatuses={wsState.milestoneStatuses}
+            cycleMilestoneStatus={cycleMilestoneStatus}
+            batchState={wsState.outreachBatches}
+            updateBatch={updateOutreachBatch}
+          />
         </section>
 
         {/* ── Competitive ── */}
         <section id="competitive" className="space-y-6 scroll-mt-20">
           <SectionHeader
             label="Competitive Positioning"
-            description="Adjacent vendors that will surface as objections in early prospect conversations — with the specific gap each leaves in shared-device environments, and a prepared response to the 'extend existing stack' objection."
+            description="Adjacent vendors that surface as objections in early prospect conversations — with the specific shared-device gap each leaves, and the prepared 'extend existing stack' objection response."
           />
           <CompetitiveSection />
         </section>
@@ -325,7 +365,7 @@ export default function ReviewDashboard() {
         <section id="demo" className="space-y-6 scroll-mt-20">
           <SectionHeader
             label="Controlled Demo Script"
-            description="A scripted, repeatable demo narrative for the frontline shift-change access decision scenario. Step through each phase — setup, trigger, evaluation, outcome — and see prepared responses to the three most likely demo interruptions."
+            description="Scripted, step-by-step demo narrative for the frontline shift-change access decision scenario. Includes prepared responses to the three most likely demo interruptions."
           />
           <DemoScriptSection />
         </section>
@@ -347,7 +387,7 @@ export default function ReviewDashboard() {
         <section id="risks" className="space-y-6 scroll-mt-20">
           <SectionHeader
             label="Risks"
-            description="Material gaps that could limit credibility or forward progress if left unaddressed before the first external conversations."
+            description="Material gaps that could limit credibility or forward progress before first external conversations."
           />
           <div className="space-y-3">
             {risks.map((item, i) => (
@@ -360,7 +400,7 @@ export default function ReviewDashboard() {
         <section id="questions" className="space-y-6 scroll-mt-20">
           <SectionHeader
             label="Open Questions"
-            description="Questions this review cannot answer — and that need external answers before any go-to-market activity scales."
+            description="Questions that need external answers before any go-to-market activity scales."
           />
           <div className="space-y-3">
             {openQuestions.map((item, i) => (
@@ -373,11 +413,9 @@ export default function ReviewDashboard() {
         <section id="actions" className="space-y-6 scroll-mt-20">
           <SectionHeader
             label="Recommended Next Actions"
-            description="Check off actions as they're completed — progress is saved locally in your browser. Filter by priority to focus on what's blocking."
+            description="Check off actions as completed — saved in your browser. Filter by priority to focus on what's blocking."
           />
-
           <div className="flex items-center justify-between gap-4 flex-wrap">
-            {/* Priority filter */}
             <div className="flex items-center gap-1.5 flex-wrap">
               {PRIORITY_FILTERS.map((f) => (
                 <button
@@ -393,24 +431,16 @@ export default function ReviewDashboard() {
                 </button>
               ))}
             </div>
-
-            {/* Progress + reset */}
             <div className="flex items-center gap-3">
-              <span className="text-xs text-muted-foreground">
-                {completedCount}/{recommendedActions.length} completed
-              </span>
+              <span className="text-xs text-muted-foreground">{completedCount}/{recommendedActions.length} completed</span>
               {completedCount > 0 && (
-                <button
-                  onClick={reset}
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
+                <button onClick={reset} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
                   Reset
                 </button>
               )}
             </div>
           </div>
 
-          {/* Progress bar */}
           {completedCount > 0 && (
             <ScoreBar
               score={completedCount}
@@ -421,7 +451,7 @@ export default function ReviewDashboard() {
           )}
 
           <div className="space-y-3">
-            {filteredActions.map((item, i) => {
+            {filteredActions.map((item) => {
               const isDone = completed.has(item.id);
               const globalIndex = recommendedActions.indexOf(item);
               return (
@@ -438,13 +468,10 @@ export default function ReviewDashboard() {
                   }`}
                 >
                   <div className="flex items-start gap-4">
-                    {/* Checkbox */}
                     <button
                       onClick={() => toggle(item.id)}
                       className={`w-4 h-4 rounded border shrink-0 mt-0.5 flex items-center justify-center transition-colors ${
-                        isDone
-                          ? "bg-teal-700 border-teal-600"
-                          : "border-border hover:border-primary bg-transparent"
+                        isDone ? "bg-teal-700 border-teal-600" : "border-border hover:border-primary"
                       }`}
                     >
                       {isDone && (
@@ -453,7 +480,6 @@ export default function ReviewDashboard() {
                         </svg>
                       )}
                     </button>
-
                     <div className="flex-1 min-w-0 space-y-1.5">
                       <div className="flex items-start justify-between gap-3 flex-wrap">
                         <div className="flex items-start gap-2 min-w-0">
@@ -493,7 +519,6 @@ export default function ReviewDashboard() {
               const scoreStatus: "strong" | "developing" | "gap" =
                 dim.score >= 7 ? "strong" : dim.score >= 5 ? "developing" : "gap";
               const s = statusLabel[scoreStatus];
-
               return (
                 <div key={dim.key} className="border border-border bg-card rounded-lg overflow-hidden">
                   <button
@@ -508,7 +533,7 @@ export default function ReviewDashboard() {
                       <div className="flex items-center gap-3 shrink-0">
                         <div className="hidden sm:flex items-center gap-2 w-28">
                           <ScoreBar score={dim.score} maxScore={10} status={scoreStatus} size="sm" />
-                          <span className="text-xs text-muted-foreground whitespace-nowrap">{dim.score}/10</span>
+                          <span className="text-xs text-muted-foreground">{dim.score}/10</span>
                         </div>
                         <span className={`text-xs font-medium ${s.color}`}>{s.label}</span>
                         <span className="text-muted-foreground text-sm">{isOpen ? "−" : "+"}</span>
@@ -516,7 +541,6 @@ export default function ReviewDashboard() {
                     </div>
                     <p className="text-xs text-muted-foreground mt-2 leading-relaxed pr-8">{dim.summary}</p>
                   </button>
-
                   {isOpen && (
                     <div className="border-t border-border px-5 py-5 grid grid-cols-1 md:grid-cols-3 gap-6">
                       <div className="space-y-3">
@@ -524,8 +548,7 @@ export default function ReviewDashboard() {
                         <ul className="space-y-2">
                           {dim.observations.map((o, i) => (
                             <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
-                              <span className="text-teal-600 mt-0.5 shrink-0">·</span>
-                              {o}
+                              <span className="text-teal-600 mt-0.5 shrink-0">·</span>{o}
                             </li>
                           ))}
                         </ul>
@@ -535,8 +558,7 @@ export default function ReviewDashboard() {
                         <ul className="space-y-2">
                           {dim.gaps.map((g, i) => (
                             <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
-                              <span className="text-amber-700 mt-0.5 shrink-0">▸</span>
-                              {g}
+                              <span className="text-amber-700 mt-0.5 shrink-0">▸</span>{g}
                             </li>
                           ))}
                         </ul>
@@ -546,8 +568,7 @@ export default function ReviewDashboard() {
                         <ul className="space-y-2">
                           {dim.actions.map((a, i) => (
                             <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
-                              <span className="text-foreground/50 mt-0.5 shrink-0">{i + 1}.</span>
-                              {a}
+                              <span className="text-foreground/50 mt-0.5 shrink-0">{i + 1}.</span>{a}
                             </li>
                           ))}
                         </ul>
@@ -566,9 +587,7 @@ export default function ReviewDashboard() {
             <div>
               <p className="text-xs font-semibold text-muted-foreground tracking-wider uppercase mb-2">Scope & Limitations</p>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                This review is based on reported state and described artifacts as of {REVIEW_DATE}. It is not an audit, penetration
-                test, compliance assessment, or security certification. No live system has been directly inspected. Scores and
-                assessments are qualitative opinions and should not be relied upon as authoritative technical or legal guidance.
+                This workspace is based on reported state and described artifacts as of {REVIEW_DATE}. It is not an audit, penetration test, compliance assessment, or security certification. No live system has been directly inspected. Scores and assessments are qualitative opinions and should not be relied upon as authoritative technical or legal guidance.
               </p>
             </div>
             <div>
@@ -582,8 +601,7 @@ export default function ReviewDashboard() {
                   "Investment recommendation or endorsement",
                 ].map((item, i) => (
                   <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
-                    <span className="text-muted-foreground/40 mt-0.5 shrink-0">×</span>
-                    {item}
+                    <span className="text-muted-foreground/40 mt-0.5 shrink-0">×</span>{item}
                   </li>
                 ))}
               </ul>
@@ -599,6 +617,7 @@ export default function ReviewDashboard() {
             <span className="text-xs text-muted-foreground font-mono">{REVIEW_VERSION}</span>
           </div>
         </footer>
+
       </main>
     </div>
   );

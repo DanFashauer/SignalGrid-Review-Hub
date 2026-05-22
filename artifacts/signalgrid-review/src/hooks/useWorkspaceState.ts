@@ -84,6 +84,14 @@ export function useWorkspaceState(
     });
   }, []);
 
+  const setIntegrationStatus = useCallback((id: string, status: IntegrationStatus) => {
+    setState((prev) => ({
+      ...prev,
+      integrationStatuses: { ...prev.integrationStatuses, [id]: status },
+      lastUpdated: new Date().toISOString(),
+    }));
+  }, []);
+
   const setIntegrationNote = useCallback((id: string, note: string) => {
     setState((prev) => ({
       ...prev,
@@ -103,6 +111,14 @@ export function useWorkspaceState(
         lastUpdated: new Date().toISOString(),
       };
     });
+  }, []);
+
+  const setMilestoneStatus = useCallback((id: string, status: MilestoneStatus) => {
+    setState((prev) => ({
+      ...prev,
+      milestoneStatuses: { ...prev.milestoneStatuses, [id]: status },
+      lastUpdated: new Date().toISOString(),
+    }));
   }, []);
 
   const updateOutreachBatch = useCallback(
@@ -133,8 +149,10 @@ export function useWorkspaceState(
   return {
     state,
     cycleIntegrationStatus,
+    setIntegrationStatus,
     setIntegrationNote,
     cycleMilestoneStatus,
+    setMilestoneStatus,
     updateOutreachBatch,
     resetAll,
   };

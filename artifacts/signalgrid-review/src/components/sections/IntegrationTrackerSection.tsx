@@ -24,10 +24,11 @@ interface Props {
   statuses: Record<string, IntegrationStatus>;
   notes: Record<string, string>;
   cycleStatus: (id: string) => void;
+  setStatus: (id: string, status: IntegrationStatus) => void;
   setNote: (id: string, note: string) => void;
 }
 
-export default function IntegrationTrackerSection({ statuses, notes, cycleStatus, setNote }: Props) {
+export default function IntegrationTrackerSection({ statuses, notes, cycleStatus, setStatus, setNote }: Props) {
   const [filter, setFilter] = useState<string>("All");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showQuickstart, setShowQuickstart] = useState<string | null>(null);
@@ -220,14 +221,7 @@ export default function IntegrationTrackerSection({ statuses, notes, cycleStatus
                         return (
                           <button
                             key={s}
-                            onClick={() => {
-                              if (!isActive) {
-                                const targetIdx = STATUS_ORDER.indexOf(s);
-                                const currentIdx = STATUS_ORDER.indexOf(currentStatus);
-                                const clicks = (targetIdx - currentIdx + STATUS_ORDER.length) % STATUS_ORDER.length;
-                                for (let i = 0; i < clicks; i++) cycleStatus(target.id);
-                              }
-                            }}
+                            onClick={() => setStatus(target.id, s)}
                             className={`text-xs px-2.5 py-1 rounded border font-medium transition-all ${
                               isActive
                                 ? `${sm.bg} ${sm.color} border-current`

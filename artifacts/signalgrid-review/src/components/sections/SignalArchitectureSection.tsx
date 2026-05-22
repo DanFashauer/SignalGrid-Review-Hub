@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { signalTypes, decisionOutcomes } from "@/data/architectureData";
+import { signalTypes, decisionOutcomes, fleetSignalMap, signalTypeColors } from "@/data/architectureData";
 
 const signalColors = [
   { border: "border-teal-700", bg: "bg-teal-900/20", dot: "bg-teal-500", text: "text-teal-300" },
@@ -8,8 +8,16 @@ const signalColors = [
   { border: "border-amber-700", bg: "bg-amber-900/20", dot: "bg-amber-500", text: "text-amber-300" },
 ];
 
+const signalTypeLabels: Record<string, string> = {
+  "device-posture": "Device Posture",
+  identity: "Identity",
+  "session-context": "Session Context",
+  "operational-signals": "Operational Signals",
+};
+
 export default function SignalArchitectureSection() {
   const [activeSignal, setActiveSignal] = useState<string | null>(null);
+  const [showFleetMap, setShowFleetMap] = useState(true);
 
   const active = signalTypes.find((s) => s.id === activeSignal);
 
@@ -117,7 +125,7 @@ export default function SignalArchitectureSection() {
               <p className="text-xs font-semibold text-foreground tracking-wider uppercase mt-3">Signal Sources</p>
               <div className="flex flex-wrap gap-1.5 mt-1">
                 {active.sourceExamples.map((src) => (
-                  <span key={src} className="text-xs px-2 py-0.5 rounded bg-muted border border-border text-muted-foreground">
+                  <span key={src} className={`text-xs px-2 py-0.5 rounded border ${src.includes("Fleet") ? "bg-sky-900/30 border-sky-700/60 text-sky-300" : "bg-muted border-border text-muted-foreground"}`}>
                     {src}
                   </span>
                 ))}
@@ -144,6 +152,81 @@ export default function SignalArchitectureSection() {
             <p className="text-xs text-muted-foreground leading-relaxed">{o.description}</p>
           </div>
         ))}
+      </div>
+
+      {/* Fleet MDM Signal Map */}
+      <div className="border border-sky-800/50 bg-sky-950/20 rounded-lg overflow-hidden">
+        <button
+          onClick={() => setShowFleetMap((v) => !v)}
+          className="w-full flex items-center justify-between px-5 py-4 hover:bg-sky-900/10 transition-colors text-left"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-2 h-2 rounded-full bg-sky-500 shrink-0" />
+            <div>
+              <span className="text-sm font-bold text-sky-200">Fleet MDM — osquery Signal Map</span>
+              <span className="ml-3 text-xs text-sky-400/70 font-mono">8 tables → 4 signal types</span>
+            </div>
+          </div>
+          <span className="text-muted-foreground text-xs">{showFleetMap ? "▲ collapse" : "▼ expand"}</span>
+        </button>
+
+        {showFleetMap && (
+          <div className="px-5 pb-5 space-y-3">
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Every Fleet osquery table is a potential SignalGrid signal source. The mapping below shows which standard osquery tables feed which signal type — and the exact condition that triggers a policy outcome. This is the concrete integration surface for the Fleet proof-of-concept.
+            </p>
+
+            <div className="overflow-x-auto rounded-lg border border-sky-900/40">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-sky-900/40 bg-sky-900/20">
+                    <th className="text-left px-4 py-2.5 font-semibold text-sky-300 whitespace-nowrap">osquery Table</th>
+                    <th className="text-left px-4 py-2.5 font-semibold text-sky-300 whitespace-nowrap">Key Columns</th>
+                    <th className="text-left px-4 py-2.5 font-semibold text-sky-300 whitespace-nowrap">Signal Type</th>
+                    <th className="text-left px-4 py-2.5 font-semibold text-sky-300">Policy Condition → Outcome</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fleetSignalMap.map((row, i) => {
+                    const colors = signalTypeColors[row.signalType];
+                    return (
+                      <tr
+                        key={row.osqueryTable}
+                        className={`border-b border-sky-900/20 ${i % 2 === 0 ? "bg-transparent" : "bg-sky-950/10"}`}
+                      >
+                        <td className="px-4 py-2.5 font-mono text-sky-200 whitespace-nowrap">{row.osqueryTable}</td>
+                        <td className="px-4 py-2.5">
+                          <div className="flex flex-wrap gap-1">
+                            {row.columns.map((col) => (
+                              <span key={col} className="font-mono text-[10px] px-1.5 py-0.5 bg-stone-800 border border-stone-700 rounded text-stone-300">
+                                {col}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="px-4 py-2.5 whitespace-nowrap">
+                          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold border ${colors.bg} ${colors.text} border-current/30`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${colors.dot}`} />
+                            {signalTypeLabels[row.signalType]}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-muted-foreground leading-relaxed">{row.signalingExample}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex items-start gap-2 px-3 py-2.5 rounded bg-sky-900/10 border border-sky-900/30">
+              <div className="w-1 h-1 rounded-full bg-sky-500 mt-1.5 shrink-0" />
+              <p className="text-xs text-sky-300/80">
+                <span className="font-semibold text-sky-300">Proof-of-concept path:</span>{" "}
+                Run <code className="font-mono bg-sky-950 px-1 rounded">fleetctl preview</code> locally → enroll two test hosts → write a Fleet policy against the <code className="font-mono bg-sky-950 px-1 rounded">disk_encryption</code> or <code className="font-mono bg-sky-950 px-1 rounded">mdm</code> table → call the Fleet REST API from SignalGrid to retrieve policy failure counts → map the response to a device-posture signal. That loop — policy query to signal output — is the complete first integration proof.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

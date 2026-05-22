@@ -1,5 +1,5 @@
 export const REVIEW_DATE = "May 2026";
-export const REVIEW_VERSION = "v0.2 — Pre-Launch Workspace";
+export const REVIEW_VERSION = "v0.3 — Fleet Integration + Live Tracker";
 
 export interface ScoreItem {
   dimension: string;
@@ -40,15 +40,15 @@ export const scorecardItems: ScoreItem[] = [
     score: 3,
     maxScore: 10,
     rationale:
-      "No working integration with a production-adjacent identity provider (Entra ID, Okta), MDM platform (Intune, Jamf), or workflow system (ServiceNow, Jira) has been validated. First Intune/Entra posture proof is the named priority but has not yet been completed. This is the single highest-impact gap before any external conversation.",
+      "No working integration with a production-adjacent identity provider (Entra ID, Okta), MDM platform (Intune, Jamf, Fleet), or workflow system (ServiceNow, Jira) has been validated. Fleet MDM is now the fastest P1 path: open source, free sandbox via fleetctl preview, and a full REST + osquery API. First validated integration moves this score to 5. This is the single highest-impact gap before any external conversation.",
     status: "gap",
   },
   {
     dimension: "Demo Readiness",
-    score: 7,
+    score: 8,
     maxScore: 10,
     rationale:
-      "rc:smoke workflow is complete and passing. The demo environment is stable. Gap is the absence of a scripted, repeatable demo narrative — the 'before state, decision trigger, resolution' arc that a founder can deliver without improvisation. No recorded walkthrough exists.",
+      "rc:smoke workflow is complete and passing. The demo environment is stable. A scripted, 5-step demo narrative for the healthcare shift-change scenario has been written and documented in this workspace. Remaining gap: no recorded async walkthrough exists, and the script has not yet been rehearsed with an external observer.",
     status: "strong",
   },
   {
@@ -85,11 +85,11 @@ export const scorecardItems: ScoreItem[] = [
   },
   {
     dimension: "Next-Step Clarity",
-    score: 6,
+    score: 7,
     maxScore: 10,
     rationale:
-      "General direction exists. No crisp 30/60/90-day plan with owners, exit criteria, or decision gates. The gap between 'outreach package assembled' and 'first call booked' is not bridged by a concrete activation sequence with dates.",
-    status: "developing",
+      "A 30/60/90-day activation plan with milestone exit gates and outreach batch tracking now exists in this workspace. Remaining gaps: milestones do not have named owners, and the outreach batch send date has not been set to a specific date. Neither is structural — both are decisions.",
+    status: "strong",
   },
 ];
 
@@ -130,7 +130,7 @@ export const risks: ReviewItem[] = [
   {
     id: "r1",
     title: "No validated integration story",
-    body: "The runtime decision layer concept depends entirely on integrating with identity providers, MDM platforms, and workflow systems. Without at least one working integration against a real enterprise stack — even in a sandbox — the product story is theoretical. This is the most important gap before any enterprise buyer conversation.",
+    body: "The runtime decision layer concept depends entirely on integrating with identity providers, MDM platforms, and workflow systems. Without at least one working integration against a real enterprise stack — even in a sandbox — the product story is theoretical. Fleet MDM is the fastest path to first proof: open source, free sandbox (fleetctl preview), full REST API, and device posture via osquery. This is the most important gap before any enterprise buyer conversation.",
     tag: "Product",
   },
   {
@@ -153,8 +153,8 @@ export const risks: ReviewItem[] = [
   },
   {
     id: "r5",
-    title: "No 30/60/90-day activation plan",
-    body: "The project is in a state of 'ready to launch' without a defined launch sequence. Without exit criteria and decision gates, readiness states persist indefinitely without producing external momentum.",
+    title: "Activation plan exists — has not been executed",
+    body: "A 30/60/90-day plan with exit gates now exists. The risk has shifted: it is no longer the absence of a plan, it is the absence of a committed send date and an assigned owner for each milestone. Plans without owners and dates become artifacts, not commitments.",
     tag: "Execution",
   },
   {
@@ -207,8 +207,8 @@ export const openQuestions: ReviewItem[] = [
 export const recommendedActions: ReviewItem[] = [
   {
     id: "a1",
-    title: "Complete first Intune/Entra posture proof",
-    body: "Build a working proof-of-concept integration against Microsoft Intune and Entra ID device compliance in a sandbox environment. This is the single action that most advances product credibility. Aim for a demo-able artifact within 30 days.",
+    title: "Complete first integration proof — Fleet MDM is the fastest path",
+    body: "Install fleetctl (curl -sSL https://fleetdm.com/resources/install-fleetctl.sh | bash) and run fleetctl preview for a local sandbox with enrolled devices in under 10 minutes. Build the device posture signal integration against Fleet's policy API. Alternatively, pursue Intune/Entra Graph API in a Microsoft sandbox. Either advances product credibility immediately. Aim for a demo-able artifact within 14 days.",
     tag: "Priority 1",
   },
   {
@@ -231,8 +231,8 @@ export const recommendedActions: ReviewItem[] = [
   },
   {
     id: "a5",
-    title: "Build a 30/60/90-day activation plan with exit criteria",
-    body: "Define: 30 days = first conversation booked; 60 days = one qualified pilot candidate identified; 90 days = working integration in a customer-adjacent environment. Assign a named owner to each milestone.",
+    title: "Assign owners and set dates on the 30/60/90 milestones",
+    body: "The activation plan with exit gates exists in this workspace. The remaining step is assigning a named owner to each milestone and setting a specific date — not a range — for the Day 30 outreach send. Without an owner and a date, a plan is a document, not a commitment.",
     tag: "Priority 2",
   },
   {
@@ -243,8 +243,8 @@ export const recommendedActions: ReviewItem[] = [
   },
   {
     id: "a7",
-    title: "Write a scripted 10-minute demo narrative",
-    body: "Define the before state (shift change, shared device, workflow blocked), the decision trigger moment (SignalGrid evaluates four signals), and the resolution (access granted, workflow continues). Rehearse with one external observer before the first live meeting.",
+    title: "Rehearse the demo script with one external observer",
+    body: "The scripted healthcare shift-change demo narrative exists in this workspace. The remaining step is running the full script with a technical observer who can flag every improvised moment. Those moments need to be scripted before the first live prospect call. Record the rehearsal for async distribution.",
     tag: "Priority 3",
   },
   {
@@ -451,9 +451,9 @@ export const dimensionReviews: DimensionReview[] = [
 ];
 
 export const overallScore = {
-  value: 5.9,
+  value: 6.1,
   maxValue: 10,
   label: "Pre-Launch Readiness",
   interpretation:
-    "SignalGrid is in a credible pre-launch position with above-average engineering and brand execution for this stage. The dominant gaps are on the go-to-market and integration side: no integration has been validated, outreach has not been activated, and the 30/60/90-day plan does not yet exist. None of these gaps are structural — they are execution items. The most important single action is completing the first Intune/Entra posture proof, which advances both product credibility and the integration surface coverage score simultaneously.",
+    "SignalGrid is in a credible pre-launch position with above-average engineering, brand, and demo readiness for this stage. A 30/60/90-day activation plan now exists. The dominant remaining gap is integration surface coverage: zero validated integrations with any enterprise stack. Fleet MDM is the fastest path to first proof — open source, free sandbox in under 10 minutes, full REST API. Completing the first integration proof is the single action that most advances product credibility and the composite score simultaneously.",
 };

@@ -202,8 +202,78 @@ Authorization: Bearer {access_token}`,
     status: "not-started",
     priority: "P2",
     notes:
-      "Primary MDM platform for Apple-fleet healthcare and education environments. Device compliance, management profile status, smart group membership. REST API and webhook support. Classic API for legacy endpoints, Jamf Pro API (v1) for modern integrations.",
+      "Primary MDM platform for Apple-fleet healthcare and education environments. Device compliance, management profile status, smart group membership. REST API and webhook support. Classic API for legacy endpoints, Jamf Pro API (v1) for modern integrations. Sandbox available via Jamf Developer Program (free trial tenant).",
     apiDocs: "https://developer.jamf.com/jamf-pro/reference/get_v1-computers-management-id",
+    quickstartSteps: [
+      {
+        title: "Get a Jamf Pro trial or developer sandbox",
+        code: `# Jamf Developer Program: developer.jamf.com
+# Free trial tenant includes API access
+# Credentials: Settings > Jamf Pro User Accounts & Groups`,
+        description:
+          "Jamf offers a developer sandbox via the Jamf Developer Program. A 60-day trial tenant includes full API access. Alternatively, use a Jamf School or Jamf Now trial for basic MDM concepts.",
+      },
+      {
+        title: "Authenticate — get a Bearer token",
+        code: `# Jamf Pro API v1 uses Bearer token auth
+curl -X POST "https://yourinstance.jamfcloud.com/api/v1/auth/token" \\
+  -u "api_user:api_password"
+
+# Response includes token + expiration
+# { "token": "...", "expires": "2026-05-23T..." }`,
+        description:
+          "The Jamf Pro API v1 uses short-lived Bearer tokens (30 min default). Refresh with /api/v1/auth/keep-alive or re-authenticate. The Classic API uses Basic auth — prefer v1 for new integrations.",
+      },
+      {
+        title: "Get computer management details (device posture)",
+        code: `# Get management state for a specific computer
+curl -H "Authorization: Bearer YOUR_TOKEN" \\
+  "https://yourinstance.jamfcloud.com/api/v1/computers-management/{id}"
+
+# Check MDM capable, profile status, compliance policies
+# Key fields: mdmCapable, managementId, osVersion`,
+        description:
+          "Returns MDM enrollment state, management profile status, and OS version for the device. MDM-capable + enrolled + management profile valid = compliant posture baseline.",
+      },
+      {
+        title: "Query computer compliance policy status",
+        code: `# Classic API: get computer details including policy compliance
+curl -H "Authorization: Bearer YOUR_TOKEN" \\
+  -H "Accept: application/json" \\
+  "https://yourinstance.jamfcloud.com/JSSResource/computers/id/{id}/subset/Software"
+
+# Smart group membership = compliance grouping
+# GET /JSSResource/computergroups/id/{smartGroupId} for group membership`,
+        description:
+          "Smart group membership in Jamf is the primary compliance signal. A device in a 'Non-Compliant Devices' smart group is the Jamf equivalent of an Intune non-compliant device — the same posture signal, different platform.",
+      },
+      {
+        title: "Map Jamf compliance state to SignalGrid device posture signal",
+        code: `// Map Jamf computer details to SignalGrid device posture signal
+async function getJamfDevicePosture(computerId: string) {
+  const [details, policies] = await Promise.all([
+    fetch(\`\${JAMF_URL}/api/v1/computers-management/\${computerId}\`, {
+      headers: { Authorization: \`Bearer \${TOKEN}\` },
+    }).then(r => r.json()),
+    fetch(\`\${JAMF_URL}/JSSResource/computers/id/\${computerId}/subset/General\`, {
+      headers: { Authorization: \`Bearer \${TOKEN}\`, Accept: 'application/json' },
+    }).then(r => r.json()),
+  ]);
+
+  return {
+    signalType: "device-posture",
+    deviceId: computerId,
+    compliant: details.mdmCapable && details.managementId != null,
+    platform: "jamf",
+    osVersion: details.osVersion,
+    managementState: details.managementId ? "managed" : "unmanaged",
+    evaluatedAt: new Date().toISOString(),
+  };
+}`,
+        description:
+          "Jamf's posture signal maps directly to SignalGrid's device-posture signal type. MDM-capable + management profile valid = posture compliant. Smart group membership adds fine-grained policy compliance on top.",
+      },
+    ],
   },
   {
     id: "okta",
@@ -214,8 +284,92 @@ Authorization: Bearer {access_token}`,
     status: "not-started",
     priority: "P2",
     notes:
-      "Identity provider for non-Microsoft enterprise environments. Okta Device Trust for managed device verification. Okta Workflows for signal-triggered policy actions. Systems of Record API for identity signal retrieval.",
+      "Identity provider for non-Microsoft enterprise environments. Okta Device Trust for managed device verification. Okta Workflows for signal-triggered policy actions. Developer sandbox available free at developer.okta.com — no credit card required. Full REST API with API token or OAuth 2.0.",
     apiDocs: "https://developer.okta.com/docs/reference/",
+    quickstartSteps: [
+      {
+        title: "Create a free Okta developer org",
+        code: `# Free forever developer sandbox at:
+# developer.okta.com/signup
+# Full API access, no credit card, no expiry
+# Includes Okta Verify, Device Trust, and Workflows`,
+        description:
+          "Okta's developer org is the easiest enterprise IdP sandbox to set up — no enterprise agreement, no infrastructure. Create a test user and an application to issue access tokens against.",
+      },
+      {
+        title: "Get user profile and authentication methods",
+        code: `# Get user details — identity signal
+curl -H "Authorization: SSWS YOUR_API_TOKEN" \\
+  "https://yourorg.okta.com/api/v1/users/{userId}"
+
+# Get current active sessions for a user
+curl -H "Authorization: SSWS YOUR_API_TOKEN" \\
+  "https://yourorg.okta.com/api/v1/users/{userId}/sessions"`,
+        description:
+          "Returns the user's profile, status, and current active sessions. Active session count + last password change + MFA factors enrolled = the identity signal. Multiple concurrent sessions = session context anomaly.",
+      },
+      {
+        title: "Get authentication factors (MFA state)",
+        code: `# List enrolled MFA factors for a user
+curl -H "Authorization: SSWS YOUR_API_TOKEN" \\
+  "https://yourorg.okta.com/api/v1/users/{userId}/factors"
+
+# Response includes factor type, status, and last verified time
+# factorType: token:software:totp, push, webauthn, etc.`,
+        description:
+          "MFA factor enrollment and last verification time is a session context signal. A session authenticated with hardware key (WebAuthn) carries higher assurance than one authenticated with email OTP. SignalGrid can weight authentication method as part of the identity signal.",
+      },
+      {
+        title: "Get device enrollment state (Okta Device Trust)",
+        code: `# List devices enrolled in Okta Device Trust
+curl -H "Authorization: SSWS YOUR_API_TOKEN" \\
+  "https://yourorg.okta.com/api/v1/devices"
+
+# Filter by user
+curl -H "Authorization: SSWS YOUR_API_TOKEN" \\
+  "https://yourorg.okta.com/api/v1/users/{userId}/devices"
+
+# status: ACTIVE | INACTIVE | DEACTIVATED
+# management: MANAGED | REGISTERED | NOT_REGISTERED`,
+        description:
+          "Returns device enrollment state and management status for devices tied to a user's Okta identity. status=ACTIVE + management=MANAGED = device trust verified. This is the Okta-side device posture signal that complements Intune/Jamf compliance data.",
+      },
+      {
+        title: "Map Okta user + device trust to SignalGrid signals",
+        code: `// Map Okta identity + device trust to SignalGrid signal types
+async function getOktaSignals(userId: string) {
+  const [user, sessions, devices] = await Promise.all([
+    fetch(\`\${OKTA_URL}/api/v1/users/\${userId}\`, HEADERS).then(r => r.json()),
+    fetch(\`\${OKTA_URL}/api/v1/users/\${userId}/sessions\`, HEADERS).then(r => r.json()),
+    fetch(\`\${OKTA_URL}/api/v1/users/\${userId}/devices\`, HEADERS).then(r => r.json()),
+  ]);
+
+  const managedDevices = devices.filter((d: any) => d.profile.management === "MANAGED");
+
+  return {
+    identity: {
+      signalType: "identity",
+      userId,
+      status: user.status,     // ACTIVE | SUSPENDED | DEACTIVATED
+      activeSessions: sessions.length,
+      lastLogin: user.lastLogin,
+    },
+    devicePosture: {
+      signalType: "device-posture",
+      hasManagedDevice: managedDevices.length > 0,
+      managedDeviceCount: managedDevices.length,
+    },
+    sessionContext: {
+      signalType: "session-context",
+      concurrentSessions: sessions.length,
+      anomalousSessionOverlap: sessions.length > 2,
+    },
+  };
+}`,
+        description:
+          "Okta contributes three of SignalGrid's four signal types: identity (user status, last login), device posture (Device Trust enrollment and management state), and session context (concurrent session count, authentication method). The operational signals layer comes from ServiceNow or Jira.",
+      },
+    ],
   },
   {
     id: "servicenow",

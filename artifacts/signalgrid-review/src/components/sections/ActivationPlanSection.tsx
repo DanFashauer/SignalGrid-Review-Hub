@@ -19,6 +19,7 @@ const batchStatusOptions: { value: OutreachBatchState["status"]; label: string; 
 interface Props {
   milestoneStatuses: Record<string, MilestoneStatus>;
   cycleMilestoneStatus: (id: string) => void;
+  setMilestoneStatus: (id: string, status: MilestoneStatus) => void;
   batchState: Record<string, OutreachBatchState>;
   updateBatch: (id: string, patch: Partial<OutreachBatchState>) => void;
 }
@@ -26,6 +27,7 @@ interface Props {
 export default function ActivationPlanSection({
   milestoneStatuses,
   cycleMilestoneStatus,
+  setMilestoneStatus,
   batchState,
   updateBatch,
 }: Props) {
@@ -145,14 +147,7 @@ export default function ActivationPlanSection({
                             return (
                               <button
                                 key={s}
-                                onClick={() => {
-                                  if (!isActive) {
-                                    const targetIdx = MILESTONE_ORDER.indexOf(s);
-                                    const currentIdx = MILESTONE_ORDER.indexOf(currentStatus);
-                                    const clicks = (targetIdx - currentIdx + MILESTONE_ORDER.length) % MILESTONE_ORDER.length;
-                                    for (let i = 0; i < clicks; i++) cycleMilestoneStatus(m.id);
-                                  }
-                                }}
+                                onClick={() => setMilestoneStatus(m.id, s)}
                                 className={`text-xs px-2.5 py-1 rounded border font-medium transition-all ${
                                   isActive
                                     ? `${sm.color} border-current bg-muted/30`

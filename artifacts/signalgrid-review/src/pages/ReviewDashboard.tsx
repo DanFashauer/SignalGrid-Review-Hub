@@ -88,8 +88,10 @@ export default function ReviewDashboard() {
   const {
     state: wsState,
     cycleIntegrationStatus,
+    setIntegrationStatus,
     setIntegrationNote,
     cycleMilestoneStatus,
+    setMilestoneStatus,
     updateOutreachBatch,
   } = useWorkspaceState(defaultIntegrationStatuses, defaultMilestoneStatuses, defaultBatches);
 
@@ -334,6 +336,7 @@ export default function ReviewDashboard() {
             statuses={wsState.integrationStatuses}
             notes={wsState.integrationNotes}
             cycleStatus={cycleIntegrationStatus}
+            setStatus={setIntegrationStatus}
             setNote={setIntegrationNote}
           />
         </section>
@@ -347,6 +350,7 @@ export default function ReviewDashboard() {
           <ActivationPlanSection
             milestoneStatuses={wsState.milestoneStatuses}
             cycleMilestoneStatus={cycleMilestoneStatus}
+            setMilestoneStatus={setMilestoneStatus}
             batchState={wsState.outreachBatches}
             updateBatch={updateOutreachBatch}
           />

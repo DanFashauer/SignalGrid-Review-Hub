@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { demoScenario, demoSteps, demoObjectionResponses } from "@/data/demoData";
+import { demoScenarios, demoObjectionResponses } from "@/data/demoData";
 
 const phaseStyles: Record<string, { border: string; label: string; color: string }> = {
   setup: { border: "border-l-stone-600", label: "Setup", color: "text-stone-400" },
@@ -8,36 +8,97 @@ const phaseStyles: Record<string, { border: string; label: string; color: string
   outcome: { border: "border-l-primary/60", label: "Outcome", color: "text-primary" },
 };
 
+const industryColors: Record<string, { bg: string; text: string; dot: string }> = {
+  Healthcare: { bg: "bg-teal-900/20", text: "text-teal-300", dot: "bg-teal-500" },
+  "Logistics / Distribution": { bg: "bg-amber-900/20", text: "text-amber-300", dot: "bg-amber-500" },
+  Retail: { bg: "bg-violet-900/20", text: "text-violet-300", dot: "bg-violet-500" },
+  "Enterprise IT / Technology": { bg: "bg-sky-900/20", text: "text-sky-300", dot: "bg-sky-500" },
+  "Financial Services": { bg: "bg-emerald-900/20", text: "text-emerald-300", dot: "bg-emerald-500" },
+};
+
+const defaultColor = { bg: "bg-stone-900/20", text: "text-stone-300", dot: "bg-stone-500" };
+
 export default function DemoScriptSection() {
+  const [selectedId, setSelectedId] = useState(demoScenarios[0].id);
   const [showObjections, setShowObjections] = useState(false);
   const [activeStep, setActiveStep] = useState<string | null>(null);
 
+  const scenario = demoScenarios.find((s) => s.id === selectedId) ?? demoScenarios[0];
+
+  function handleSelectScenario(id: string) {
+    setSelectedId(id);
+    setActiveStep(null);
+  }
+
   return (
     <div className="space-y-6">
-      {/* Scenario header */}
-      <div className="border border-border bg-card rounded-lg p-5 space-y-4">
-        <div>
-          <p className="text-xs font-semibold text-muted-foreground tracking-wider uppercase mb-1">Demo Scenario</p>
-          <h3 className="text-base font-bold text-foreground">{demoScenario.title}</h3>
+      {/* Scenario picker */}
+      <div>
+        <p className="text-xs font-semibold text-muted-foreground tracking-wider uppercase mb-3">
+          Demo Scenarios — {demoScenarios.length} available
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+          {demoScenarios.map((s) => {
+            const color = industryColors[s.industry] ?? defaultColor;
+            const isActive = selectedId === s.id;
+            return (
+              <button
+                key={s.id}
+                onClick={() => handleSelectScenario(s.id)}
+                className={`text-left px-4 py-3 rounded-lg border transition-all ${
+                  isActive
+                    ? `${color.bg} border-current/30 ring-1 ring-inset ring-current/20`
+                    : "border-border hover:border-border/80 hover:bg-muted/20"
+                }`}
+              >
+                <div className="flex items-start gap-2">
+                  <div className={`w-1.5 h-1.5 rounded-full ${color.dot} shrink-0 mt-1.5`} />
+                  <div className="min-w-0">
+                    <p className={`text-xs font-semibold truncate ${isActive ? color.text : "text-muted-foreground"}`}>
+                      {s.industry}
+                    </p>
+                    <p className={`text-xs font-medium mt-0.5 leading-snug ${isActive ? "text-foreground" : "text-muted-foreground/70"}`}>
+                      {s.platform}
+                    </p>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+      </div>
+
+      {/* Selected scenario header */}
+      <div className="border border-border bg-card rounded-lg p-5 space-y-4">
+        <div className="flex items-start gap-3">
+          <div className={`w-2 h-2 rounded-full ${(industryColors[scenario.industry] ?? defaultColor).dot} shrink-0 mt-1.5`} />
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground tracking-wider uppercase mb-1">Demo Scenario</p>
+            <h3 className="text-base font-bold text-foreground">{scenario.title}</h3>
+            <p className={`text-xs mt-1 font-medium ${(industryColors[scenario.industry] ?? defaultColor).text}`}>
+              {scenario.industry} · {scenario.platform}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <p className="text-xs font-semibold text-muted-foreground tracking-wider uppercase mb-1">Environment</p>
-            <p className="text-xs text-muted-foreground leading-relaxed">{demoScenario.environment}</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">{scenario.environment}</p>
           </div>
           <div>
             <p className="text-xs font-semibold text-muted-foreground tracking-wider uppercase mb-1">Total Duration</p>
-            <p className="text-xs text-foreground font-medium">{demoScenario.totalDuration}</p>
+            <p className="text-xs text-foreground font-medium">{scenario.totalDuration}</p>
           </div>
           <div>
             <p className="text-xs font-semibold text-muted-foreground tracking-wider uppercase mb-1">Prerequisite</p>
-            <p className="text-xs text-muted-foreground leading-relaxed">{demoScenario.prerequisite}</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">{scenario.prerequisite}</p>
           </div>
         </div>
 
         <div className="border border-primary/20 bg-primary/5 rounded px-4 py-3">
           <p className="text-xs font-semibold text-primary tracking-wider uppercase mb-1">Opening Frame</p>
-          <p className="text-sm text-muted-foreground leading-relaxed italic">{demoScenario.openingFrame}</p>
+          <p className="text-sm text-muted-foreground leading-relaxed italic">{scenario.openingFrame}</p>
         </div>
       </div>
 
@@ -46,7 +107,7 @@ export default function DemoScriptSection() {
         <p className="text-xs font-semibold text-muted-foreground tracking-wider uppercase mb-3">Demo Script</p>
         <p className="text-xs text-muted-foreground mb-4">Click any step to expand the full narrative and technical notes.</p>
         <div className="space-y-3">
-          {demoSteps.map((step, i) => {
+          {scenario.steps.map((step, i) => {
             const ps = phaseStyles[step.phase];
             const isActive = activeStep === step.id;
             return (
@@ -96,7 +157,7 @@ export default function DemoScriptSection() {
         </div>
       </div>
 
-      {/* Objection responses */}
+      {/* Shared objection responses */}
       <div className="border border-border bg-card rounded-lg overflow-hidden">
         <button
           onClick={() => setShowObjections(!showObjections)}
@@ -105,7 +166,7 @@ export default function DemoScriptSection() {
           <div>
             <p className="text-sm font-semibold text-foreground">Demo Interruption Responses</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              The three most likely objections during a live demo — with prepared responses.
+              The four most likely objections during any live demo — prepared responses applicable across all scenarios.
             </p>
           </div>
           <span className="text-muted-foreground shrink-0 ml-4">{showObjections ? "−" : "+"}</span>
@@ -130,7 +191,7 @@ export default function DemoScriptSection() {
       <div className="border border-amber-800/30 bg-amber-900/10 rounded-lg px-4 py-3">
         <p className="text-xs text-amber-400 font-semibold mb-1">Before your first live demo</p>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Run the full script once with an external observer before the first live prospect meeting. The observer's job is to flag every moment where you improvise — those are the moments that need to be scripted before they're tested under pressure.
+          Choose the scenario that matches your prospect's industry and MDM platform before the call. Run the full script once with an external observer. The observer's job is to flag every moment where you improvise — those moments need to be scripted before they're tested under pressure.
         </p>
       </div>
     </div>

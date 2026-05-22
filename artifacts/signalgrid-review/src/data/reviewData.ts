@@ -1,5 +1,5 @@
-export const REVIEW_DATE = "May 2025";
-export const REVIEW_VERSION = "v0.1 — Pre-Launch Second Opinion";
+export const REVIEW_DATE = "May 2026";
+export const REVIEW_VERSION = "v0.2 — Pre-Launch Workspace";
 
 export interface ScoreItem {
   dimension: string;
@@ -10,6 +10,7 @@ export interface ScoreItem {
 }
 
 export interface ReviewItem {
+  id: string;
   title: string;
   body: string;
   tag?: string;
@@ -31,15 +32,23 @@ export const scorecardItems: ScoreItem[] = [
     score: 5,
     maxScore: 10,
     rationale:
-      "Core concept is coherent and differentiated. Runtime decision layer architecture is technically credible. However, no validated live integrations exist and the system has not been exercised against real enterprise identity or device posture stacks. Appropriate for pre-seed exploration, not customer pilot.",
+      "Core runtime decision layer concept is technically coherent and differentiated. The signal evaluation model is credible. Gap is the absence of any validated integration against a real enterprise identity or device posture stack — the system has not yet been exercised outside a controlled build environment.",
     status: "developing",
+  },
+  {
+    dimension: "Integration Surface Coverage",
+    score: 3,
+    maxScore: 10,
+    rationale:
+      "No working integration with a production-adjacent identity provider (Entra ID, Okta), MDM platform (Intune, Jamf), or workflow system (ServiceNow, Jira) has been validated. First Intune/Entra posture proof is the named priority but has not yet been completed. This is the single highest-impact gap before any external conversation.",
+    status: "gap",
   },
   {
     dimension: "Demo Readiness",
     score: 7,
     maxScore: 10,
     rationale:
-      "rc:smoke workflow is complete and passing. Basic demo flows appear functional in a controlled environment. Primary gap is the absence of a scripted, repeatable narrative that a non-technical founder could walk through without improvisation.",
+      "rc:smoke workflow is complete and passing. The demo environment is stable. Gap is the absence of a scripted, repeatable demo narrative — the 'before state, decision trigger, resolution' arc that a founder can deliver without improvisation. No recorded walkthrough exists.",
     status: "strong",
   },
   {
@@ -47,7 +56,7 @@ export const scorecardItems: ScoreItem[] = [
     score: 7,
     maxScore: 10,
     rationale:
-      "Landing page is live. Visual identity is defined with a recognizable wordmark and color system. Quality appears above average for a pre-revenue project. Main gap: no cohesive one-pager or pitch deck that carries the same visual standard.",
+      "Landing page is live with a defined visual identity. Execution quality is above average for a pre-revenue B2B security project. Gaps: no one-pager for email distribution, no pitch deck at the same visual standard, brand guidelines not formalized.",
     status: "strong",
   },
   {
@@ -55,7 +64,7 @@ export const scorecardItems: ScoreItem[] = [
     score: 5,
     maxScore: 10,
     rationale:
-      "An outreach package has been assembled. Target segment appears plausible. However, the package has not been activated — no outreach has gone out, no reply rate data exists, and the ICP definition remains internally validated only.",
+      "Outreach package assembled. Target segment is plausible. Package has not been activated — no sends, no replies, no qualified conversations. ICP definition is internally validated only. The gap between preparation and activation is where most pre-launch B2B projects stall.",
     status: "developing",
   },
   {
@@ -63,23 +72,15 @@ export const scorecardItems: ScoreItem[] = [
     score: 8,
     maxScore: 10,
     rationale:
-      "Repo cleanup is confirmed complete. CI smoke test is passing. README and repo structure are in reasonable shape for external review. Minor deduction for unresolved workflow notification noise, which creates cognitive overhead.",
+      "Repo cleanup complete. rc:smoke CI passing. Repository is in credible shape for external technical review. Minor deductions: notification noise unresolved, branch protection status unconfirmed. Neither is structural.",
     status: "strong",
-  },
-  {
-    dimension: "Workflow Automation Noise",
-    score: 4,
-    maxScore: 10,
-    rationale:
-      "GitHub Actions notification volume is a named concern. High-frequency, low-signal emails erode attention over time. This is a fixable operational detail but has not been addressed yet. Low severity, non-trivial nuisance.",
-    status: "gap",
   },
   {
     dimension: "Market Positioning",
     score: 6,
     maxScore: 10,
     rationale:
-      "The positioning as a runtime decision layer for shared-device / mobile frontline environments is specific and defensible. The category framing — not replacing IAM, UEM, SIEM, or ITSM — is appropriately conservative. Competitive differentiation from adjacent players (Okta, CrowdStrike, ServiceNow) needs one more sharpening pass.",
+      "Positioning as runtime decision layer for shared-device and mobile frontline environments is specific and defensible. Conservative framing — explicitly not replacing IAM, UEM, SIEM, or ITSM — is correct. Gap: no crisp answer to the 'just extend our existing Conditional Access / Okta policy engine' objection.",
     status: "developing",
   },
   {
@@ -87,139 +88,169 @@ export const scorecardItems: ScoreItem[] = [
     score: 6,
     maxScore: 10,
     rationale:
-      "There is a general sense of direction but no crisp 30/60/90-day plan with owners, exit criteria, or decision gates. The gap between 'outreach package assembled' and 'first call booked' is not yet bridged by a concrete activation sequence.",
+      "General direction exists. No crisp 30/60/90-day plan with owners, exit criteria, or decision gates. The gap between 'outreach package assembled' and 'first call booked' is not bridged by a concrete activation sequence with dates.",
     status: "developing",
   },
 ];
 
 export const strengths: ReviewItem[] = [
   {
+    id: "s1",
     title: "Differentiated problem framing",
-    body: "SignalGrid is not trying to replace any incumbent stack. The framing as a decision layer that evaluates identity, device posture, session context, and operational signals before workflows break is genuinely differentiated. This is a wedge, not a category replacement — and that restraint is a strategic asset.",
+    body: "SignalGrid is not trying to replace any incumbent stack. The framing as a decision layer that evaluates identity, device posture, session context, and operational signals before workflows break is genuinely differentiated. This is a wedge, not a category replacement — and that restraint is a strategic asset in enterprise security sales.",
     tag: "Positioning",
   },
   {
+    id: "s2",
     title: "Target environment is well-specified",
-    body: "Shared-device and mobile frontline environments (healthcare, logistics, field operations) represent a real and underserved surface area in Zero Trust architecture. Most Zero Trust narratives are built for knowledge-worker scenarios with persistent, managed devices. SignalGrid is addressing the harder problem.",
+    body: "Shared-device and mobile frontline environments — healthcare, logistics, field operations — represent a real and underserved surface area in Zero Trust architecture. Most ZT narratives are built for knowledge-worker scenarios with persistent, managed devices. SignalGrid is addressing the harder, less crowded problem.",
     tag: "Market",
   },
   {
+    id: "s3",
     title: "Technical scaffolding is ahead of typical pre-seed",
-    body: "rc:smoke passing, repo cleanup complete, and a working demo environment represent genuine engineering discipline. Most projects at this stage are still in whiteboard-and-deck territory. Having a testable artifact is a meaningful differentiator in early conversations.",
+    body: "rc:smoke passing, repo cleanup complete, and a stable demo environment represent genuine engineering discipline. Most projects at this stage are still whiteboard-and-deck. Having a testable artifact changes the quality of the first technical conversation.",
     tag: "Engineering",
   },
   {
-    title: "Brand execution is above the baseline",
-    body: "A live landing page and defined visual identity at this stage signals seriousness. First impressions matter disproportionately in enterprise security, where buyers are risk-averse and credibility cues are weighted heavily.",
+    id: "s4",
+    title: "Brand execution is above the category baseline",
+    body: "A live landing page with defined visual identity at this stage signals seriousness. First impressions carry disproportionate weight in enterprise security, where buyers are risk-averse and credibility cues are evaluated before product details.",
     tag: "Brand",
   },
   {
+    id: "s5",
     title: "Conservative language is the right call",
-    body: "Not claiming production readiness, compliance certifications, or validated enterprise integrations protects credibility and avoids commitments that would be difficult to walk back in early customer conversations.",
+    body: "Not claiming production readiness, compliance certifications, or validated enterprise integrations protects credibility and avoids commitments that would be difficult to walk back. This restraint is a deliberate choice and a durable differentiator versus vendors who overclaim.",
     tag: "Positioning",
   },
 ];
 
 export const risks: ReviewItem[] = [
   {
+    id: "r1",
     title: "No validated integration story",
-    body: "The runtime decision layer concept requires integration with identity providers, MDM/UEM platforms, and workflow systems. Without at least one validated, working integration against a real enterprise stack (even in a sandbox), the product story is theoretical. This is the single most important gap to close before any enterprise buyer conversation.",
+    body: "The runtime decision layer concept depends entirely on integrating with identity providers, MDM platforms, and workflow systems. Without at least one working integration against a real enterprise stack — even in a sandbox — the product story is theoretical. This is the most important gap before any enterprise buyer conversation.",
     tag: "Product",
   },
   {
+    id: "r2",
     title: "Outreach package has not been activated",
-    body: "An assembled package that hasn't been sent is not an outreach program. The gap between preparation and activation is where most early-stage B2B projects stall. Without a concrete activation sequence — who sends what, to whom, when, and what qualifies as a response worth pursuing — the outreach will remain dormant.",
+    body: "An assembled package that hasn't been sent is functionally equivalent to no outreach. Without a specific send date, batch size, and response classification criteria, the outreach will remain in preparation indefinitely.",
     tag: "Go-to-Market",
   },
   {
+    id: "r3",
     title: "ICP definition is internally validated only",
-    body: "The ideal customer profile has been reasoned from first principles rather than confirmed through customer discovery conversations. There is meaningful risk that the assumed buyer (operations leadership in shared-device environments) is not the actual economic buyer or champion in target organizations.",
+    body: "The ideal customer profile has been reasoned from first principles. There is meaningful risk that the assumed buyer (operations leadership in shared-device environments) is not the actual economic buyer or technical champion in target organizations. Five discovery conversations would resolve most of this.",
     tag: "Market",
   },
   {
+    id: "r4",
     title: "Competitive differentiation needs one more sharpening pass",
-    body: "The current positioning avoids claiming to replace IAM/UEM/SIEM — which is correct — but does not yet articulate a crisp answer to 'why not just extend our existing Okta/CrowdStrike/ServiceNow deployment?' That objection will surface in the first ten prospect conversations.",
+    body: "The 'just extend our existing Conditional Access / Okta policy engine' objection will surface in the first ten prospect conversations. Current materials flag this as a gap but don't answer it. That answer needs to be written and rehearsed before the first call.",
     tag: "Positioning",
   },
   {
+    id: "r5",
     title: "No 30/60/90-day activation plan",
-    body: "The project appears to be in a state of 'ready to launch' without a defined launch sequence. Without exit criteria, decision gates, and explicit ownership of the next actions, readiness states can persist indefinitely without producing external momentum.",
+    body: "The project is in a state of 'ready to launch' without a defined launch sequence. Without exit criteria and decision gates, readiness states persist indefinitely without producing external momentum.",
     tag: "Execution",
   },
   {
-    title: "Workflow notification noise is an unforced error",
-    body: "High-volume, low-signal GitHub Actions emails are a solvable problem and an unnecessary drain on attention. In a single-founder or small-team environment, operational noise competes directly with strategic focus.",
+    id: "r6",
+    title: "GitHub Actions notification volume",
+    body: "High-volume, low-signal CI emails are a solvable operational issue. In a small-team environment, ambient noise competes directly with strategic focus. Repository Watch → Custom → uncheck 'Actions' is a 10-minute fix.",
     tag: "Operations",
   },
 ];
 
 export const openQuestions: ReviewItem[] = [
   {
+    id: "q1",
     title: "Who is the economic buyer vs. the technical champion?",
-    body: "In healthcare and logistics, the IT buyer, the operations buyer, and the compliance buyer all have distinct incentive structures. Which persona is most likely to initiate a SignalGrid conversation — and who signs the check?",
+    body: "In healthcare and logistics, IT, operations, and compliance buyers have distinct incentive structures. Which persona initiates the SignalGrid conversation — and who signs the purchase order?",
     tag: "Market",
   },
   {
+    id: "q2",
     title: "What does the integration surface look like in practice?",
-    body: "Which identity providers and MDM platforms are in scope for v1? What is the expected implementation complexity for a 500-seat logistics company that runs a mix of iOS shared devices and a legacy Active Directory deployment?",
+    body: "Which identity providers and MDM platforms are in scope for v1? What is the implementation complexity for a 500-seat logistics company running shared iOS devices against a mixed Intune/Active Directory environment?",
     tag: "Product",
   },
   {
-    title: "What is the first proof point that isn't a smoke test?",
-    body: "rc:smoke validates internal build quality. What is the first externally observable proof point — a pilot deployment, a partner integration, a published case study, a reference customer willing to take a call?",
+    id: "q3",
+    title: "What is the first externally observable proof point?",
+    body: "rc:smoke validates internal build quality. What is the first proof point a prospect or partner could independently verify — a sandbox integration, a reference deployment, a documented API contract?",
     tag: "Validation",
   },
   {
-    title: "How does SignalGrid handle the 'just extend our existing stack' objection?",
-    body: "Most enterprise security buyers will attempt to solve this with an existing vendor before evaluating a net-new tool. What is the 30-second response to a prospect who says their MDM vendor or identity provider already has a policy engine?",
+    id: "q4",
+    title: "How does SignalGrid answer the 'extend existing stack' objection?",
+    body: "Most enterprise buyers will first attempt to solve this with Conditional Access policy extensions or Okta's device trust layer. What is the 45-second response to 'we already have this in our existing stack'?",
     tag: "Positioning",
   },
   {
-    title: "What does a successful outreach sequence look like at 30 days?",
-    body: "How many conversations should the outreach package generate? What is the definition of a qualified conversation versus a polite no? What is the follow-up cadence?",
+    id: "q5",
+    title: "What does successful outreach look like at 30 days?",
+    body: "How many conversations should the first batch generate? What qualifies as a warm response vs. a polite decline? What is the follow-up cadence and who owns it?",
     tag: "Go-to-Market",
   },
   {
-    title: "Is the GitHub workflow noise issue a configuration gap or a process gap?",
-    body: "High-volume CI notifications suggest either watch settings need adjusting (configuration) or the team hasn't established a clear CI triage protocol (process). Which is it, and who owns the fix?",
-    tag: "Operations",
+    id: "q6",
+    title: "What is the minimum viable pilot scope?",
+    body: "What does a 90-day pilot deployment look like for a 200-bed healthcare system running shared iOS devices? What signals does SignalGrid need to evaluate, what integrations are required, and what is the success metric the customer measures?",
+    tag: "Product",
   },
 ];
 
 export const recommendedActions: ReviewItem[] = [
   {
-    title: "Close the integration gap with one real stack",
-    body: "Identify one target integration — Okta, Jamf, or Microsoft Intune — and build a working proof-of-concept against a sandbox environment. This is the single action that most advances product credibility before any external conversation. Aim for a demo-able artifact within 30 days.",
+    id: "a1",
+    title: "Complete first Intune/Entra posture proof",
+    body: "Build a working proof-of-concept integration against Microsoft Intune and Entra ID device compliance in a sandbox environment. This is the single action that most advances product credibility. Aim for a demo-able artifact within 30 days.",
     tag: "Priority 1",
   },
   {
-    title: "Activate the outreach package with a defined send date",
-    body: "Set a specific send date (not a range) for the first batch of outreach. Define a minimum viable response: one conversation booked counts as success. Review and iterate after the first 20 sends regardless of outcome.",
+    id: "a2",
+    title: "Activate outreach with a specific send date",
+    body: "Set a specific date — not a range — for the first batch of 20–30 sends. Define what counts as a qualified response. Review results after the first batch regardless of outcome and iterate before the second.",
     tag: "Priority 1",
   },
   {
-    title: "Suppress GitHub Actions notification noise",
-    body: "Configure repository watch settings to notify only on direct mentions, failed runs, or security alerts. Alternatively, route CI notifications to a dedicated Slack channel or email filter. This is a 15-minute fix with disproportionate quality-of-life impact.",
+    id: "a3",
+    title: "Fix GitHub Actions notification noise",
+    body: "Repository → Watch → Custom → uncheck 'Actions' or restrict to failed runs only. Alternatively, filter CI notification emails at the inbox level. 10-minute fix, disproportionate quality-of-life impact.",
     tag: "Priority 2",
   },
   {
-    title: "Write one crisp objection-handling response",
-    body: "Draft a 150-word response to the 'why not just extend our existing IAM/UEM' objection. Test it in a peer review. Refine it before it gets tested in a live prospect conversation.",
+    id: "a4",
+    title: "Write the 'extend existing stack' objection response",
+    body: "Draft a 150-word answer to 'why not just use Conditional Access / Okta policy extensions?' Test it in peer review. Refine before the first live call. Map the specific gap each adjacent vendor leaves in shared-device environments.",
     tag: "Priority 2",
   },
   {
-    title: "Define a 30/60/90-day activation plan with exit criteria",
-    body: "Document: what success looks like at 30 days (first conversation booked), 60 days (one qualified pilot candidate identified), and 90 days (a working integration in a customer-adjacent environment). Assign an owner to each milestone.",
+    id: "a5",
+    title: "Build a 30/60/90-day activation plan with exit criteria",
+    body: "Define: 30 days = first conversation booked; 60 days = one qualified pilot candidate identified; 90 days = working integration in a customer-adjacent environment. Assign a named owner to each milestone.",
     tag: "Priority 2",
   },
   {
-    title: "Conduct 5 customer discovery conversations before refining positioning",
-    body: "The ICP and positioning language should be tested against actual buyers before the next revision. Five 20-minute conversations with operations or IT leaders in healthcare or logistics will surface objections, vocabulary mismatches, and unexpected use cases that no amount of internal iteration will reveal.",
+    id: "a6",
+    title: "Conduct 5 customer discovery conversations",
+    body: "Test ICP assumptions against actual operations or IT leaders in healthcare or logistics. Five 20-minute conversations will surface objections, vocabulary mismatches, and unexpected use cases that no amount of internal iteration will reveal.",
     tag: "Priority 3",
   },
   {
-    title: "Extend brand consistency to a one-pager and deck",
-    body: "The landing page visual standard should be carried forward into a one-page product overview and a short investor/partner deck. These are the artifacts that circulate in email threads when you are not in the room.",
+    id: "a7",
+    title: "Write a scripted 10-minute demo narrative",
+    body: "Define the before state (shift change, shared device, workflow blocked), the decision trigger moment (SignalGrid evaluates four signals), and the resolution (access granted, workflow continues). Rehearse with one external observer before the first live meeting.",
+    tag: "Priority 3",
+  },
+  {
+    id: "a8",
+    title: "Extend brand standard to one-pager and short deck",
+    body: "The landing page visual standard should carry forward into a one-page product overview for email distribution and a 10-slide pitch deck. These are the artifacts that circulate in email threads when you are not in the room.",
     tag: "Priority 3",
   },
 ];
@@ -230,23 +261,47 @@ export const dimensionReviews: DimensionReview[] = [
     label: "Product Readiness",
     score: 5,
     summary:
-      "The product concept is technically coherent and the problem framing is defensible. The runtime decision layer model — evaluating identity, device posture, session context, and operational signals as a pre-condition for workflow continuity — is genuinely differentiated. The gap is between architectural clarity and validated integration.",
+      "The runtime decision layer concept is technically coherent and the problem framing is defensible. The four-signal model — identity, device posture, session context, operational signals — is genuinely differentiated. The gap is between architectural clarity and validated integration against real enterprise stacks.",
     observations: [
       "Core decision engine concept is well-articulated and technically credible",
-      "Problem framing correctly targets shared-device and mobile frontline gap in existing Zero Trust stacks",
-      "rc:smoke passing indicates build quality discipline",
-      "No live integrations with identity providers, MDM, or workflow systems have been validated",
-      "No reference to a pilot deployment, sandbox customer, or external test environment",
+      "Problem framing correctly targets the shared-device and mobile frontline gap in existing Zero Trust architectures",
+      "rc:smoke passing indicates build quality discipline above the pre-seed baseline",
+      "No validated integrations with identity providers, MDM platforms, or workflow systems",
+      "No reference to a pilot deployment, sandbox customer, or externally reviewed API contract",
     ],
     gaps: [
-      "No working integration against a real enterprise identity or device posture stack",
+      "No working integration against a real enterprise identity or device posture stack (Intune, Entra, Okta, Jamf)",
       "No external validation of the decision model against production signal data",
-      "API surface and integration contract not publicly documented",
+      "API surface and integration contract not publicly documented or versioned",
     ],
     actions: [
-      "Build one proof-of-concept integration against Okta, Jamf, or Microsoft Intune in a sandbox environment",
-      "Document the integration contract and signal schema for external review",
-      "Define the minimum viable product scope for a first pilot deployment",
+      "Build first proof-of-concept integration against Intune/Entra ID device compliance in a sandbox environment",
+      "Document the integration contract and signal schema for external technical review",
+      "Define minimum viable product scope for a first 90-day pilot deployment",
+    ],
+  },
+  {
+    key: "integration",
+    label: "Integration Surface Coverage",
+    score: 3,
+    summary:
+      "Zero working integrations with production-adjacent enterprise stacks have been validated. This is the most structurally important gap in the entire review. The runtime decision layer is only meaningful if it can actually receive signals from the stacks that generate them — Entra ID, Intune, Jamf, Okta, ServiceNow.",
+    observations: [
+      "No integration with any identity provider has been validated (Entra ID, Okta, Azure AD)",
+      "No integration with any MDM/UEM platform has been validated (Intune, Jamf, SOTI, MobileIron)",
+      "No integration with any ITSM or workflow system has been validated (ServiceNow, Jira, Freshservice)",
+      "First Intune/Entra posture proof is the named priority target — not yet completed",
+      "Integration contract and signal schema are not publicly documented",
+    ],
+    gaps: [
+      "No sandbox-validated integration with Intune device compliance API",
+      "No sandbox-validated integration with Entra ID (conditional access / device posture signals)",
+      "No documented signal schema showing how each source system maps to SignalGrid's four signal types",
+    ],
+    actions: [
+      "Complete Intune sandbox integration: device compliance status, device posture evaluation, access outcome",
+      "Complete Entra ID integration: user identity, device registration, conditional access signal",
+      "Publish a signal schema document mapping source systems to identity / device posture / session context / operational signal types",
     ],
   },
   {
@@ -254,22 +309,24 @@ export const dimensionReviews: DimensionReview[] = [
     label: "Demo Readiness",
     score: 7,
     summary:
-      "The demo environment is functional and the smoke test pipeline is passing. This is ahead of most pre-seed projects. The remaining gap is narrative — a scripted, repeatable demo story that a non-technical founder can deliver consistently without improvisation.",
+      "Build environment is stable and smoke test is passing. This is ahead of the pre-seed baseline. The gap is narrative: a scripted, repeatable demo story with a defined before state, decision trigger, and resolution that a non-technical founder can deliver consistently.",
     observations: [
-      "rc:smoke workflow is complete and verified passing",
-      "Demo environment appears stable and controllable",
+      "rc:smoke CI workflow is passing",
+      "Demo environment is stable and controllable",
       "Build discipline is above average for this stage",
-      "No evidence of a scripted demo narrative with defined decision points",
-      "No mention of a recorded walkthrough or async demo artifact",
+      "No scripted demo narrative with defined setup, trigger, and resolution",
+      "No recorded async walkthrough for asynchronous prospect review",
+      "Demo is tied to a functional environment — no 'offline' demo backup for unreliable conference wifi",
     ],
     gaps: [
-      "No scripted demo narrative with clear before/after problem framing",
-      "No async demo artifact (video walkthrough, interactive sandbox) for asynchronous review",
+      "No scripted demo narrative with explicit before/after problem framing",
+      "No async demo artifact (recorded walkthrough) for asynchronous distribution",
+      "No rehearsed responses to the three most likely demo interruptions",
     ],
     actions: [
-      "Write a 10-minute scripted demo narrative with explicit problem setup, decision trigger, and resolution",
-      "Record one walkthrough video for async distribution",
-      "Rehearse the demo with at least one external observer before the first live prospect meeting",
+      "Write a 10-minute scripted demo narrative: before state → decision trigger → resolution",
+      "Record one walkthrough video for async distribution to prospects who can't make a live call",
+      "Rehearse with one external observer and capture three objection responses before the first live meeting",
     ],
   },
   {
@@ -277,23 +334,24 @@ export const dimensionReviews: DimensionReview[] = [
     label: "Brand & Visual Assets",
     score: 7,
     summary:
-      "The visual identity and landing page represent a credible, above-baseline brand execution for a pre-revenue security project. The next step is extending that standard to the artifacts that actually circulate in enterprise conversations: one-pagers and decks.",
+      "Landing page is live with a credible, consistent visual identity. Execution quality is above the pre-revenue B2B security baseline. The gap is collateral: no one-pager for email distribution, no deck at the same visual standard, brand guidelines not formalized.",
     observations: [
-      "Landing page is live with defined visual identity",
-      "Wordmark and color system appear consistent across reviewed materials",
-      "Visual execution is above average for a pre-revenue B2B security project",
-      "No one-pager or pitch deck at the same visual standard was referenced",
-      "Brand guidelines document not mentioned",
+      "Landing page is live with defined visual identity and wordmark",
+      "Color system and type appear consistent across reviewed materials",
+      "Visual execution quality is above average for a pre-revenue B2B security project",
+      "No one-page product overview for email distribution",
+      "No pitch deck at the same visual standard as the landing page",
+      "Brand guidelines not formalized — consistency will drift as output volume increases",
     ],
     gaps: [
       "No one-page product overview for email distribution",
-      "No pitch deck carrying the brand standard",
-      "Brand guidelines not formalized for consistency as team grows",
+      "No short pitch deck carrying the brand standard",
+      "Brand guidelines not documented — type, color, logo usage rules",
     ],
     actions: [
-      "Create a one-page product overview that can be attached to outreach emails",
-      "Build a 10-slide deck covering problem, solution, differentiation, and next step",
-      "Document core brand elements (color, type, logo usage) in a one-page brand guide",
+      "Create a one-page product overview (problem, solution framing, who it's for, next step) for outreach email attachment",
+      "Build a 10-slide deck: problem, solution, four signal types, integration story, competitive positioning, ask",
+      "Document core brand elements in a one-page guide: color values, type stack, logo usage, do/don'ts",
     ],
   },
   {
@@ -301,23 +359,23 @@ export const dimensionReviews: DimensionReview[] = [
     label: "Launch Outreach",
     score: 5,
     summary:
-      "An outreach package exists, which is progress. But an assembled package that has not been activated is functionally equivalent to no outreach. The gap is activation — a specific send date, a defined first-batch size, and a clear definition of what constitutes a successful response.",
+      "An outreach package exists but has not been activated. The gap is the activation sequence: a specific send date, a batch size, and qualification criteria for what counts as a response worth pursuing.",
     observations: [
       "Outreach package has been assembled and reviewed",
-      "Target segment appears plausible based on product framing",
-      "Package has not yet been sent or activated",
-      "No reply rate data or qualified conversation count exists",
-      "ICP definition has not been externally validated through discovery conversations",
+      "Target segment framing is plausible relative to the product positioning",
+      "Package has not been sent — zero sends, zero replies, zero qualified conversations",
+      "ICP definition has not been validated through external customer discovery",
+      "No response classification criteria defined (warm lead vs. polite decline vs. no response)",
     ],
     gaps: [
-      "No activation sequence with dates, owners, and batch sizes",
-      "No ICP validation through external customer discovery",
-      "No qualification criteria for distinguishing a warm response from a polite decline",
+      "No specific activation date — preparation without a launch date stalls indefinitely",
+      "No ICP validation through external customer discovery conversations",
+      "No response classification criteria or follow-up cadence defined",
     ],
     actions: [
-      "Set a specific send date for the first batch — not a range, a date",
-      "Define first-batch size (suggested: 20–30 sends) and response classification criteria",
-      "Conduct 5 customer discovery conversations to stress-test ICP assumptions before scaling outreach",
+      "Set a specific send date for first batch — date, not a range",
+      "Define batch size (20–30) and response classification criteria before sending",
+      "Book 5 discovery conversations with operations or IT leaders in healthcare or logistics to validate ICP assumptions",
     ],
   },
   {
@@ -325,44 +383,22 @@ export const dimensionReviews: DimensionReview[] = [
     label: "GitHub Hygiene",
     score: 8,
     summary:
-      "Repo cleanup is complete, CI is passing, and the repository is in credible shape for external review. This is a genuine strength. The remaining deduction reflects the unresolved notification noise issue, which is an operational nuisance rather than a structural gap.",
+      "Repo cleanup complete, CI passing, repository is in credible shape for external technical review. This is a genuine strength. Remaining deductions reflect unresolved notification noise and unconfirmed branch protection state.",
     observations: [
-      "Repo cleanup is confirmed complete",
-      "rc:smoke CI workflow is passing",
-      "Repository structure and README appear clean based on reported state",
+      "Repo cleanup confirmed complete",
+      "rc:smoke CI workflow passing",
+      "Repository structure and README are clean based on reported state",
       "GitHub Actions notification volume is a named, unresolved concern",
-      "No mention of branch protection rules or contribution workflow documentation",
+      "Branch protection rules on main not confirmed",
     ],
     gaps: [
-      "GitHub Actions notification noise has not been resolved",
-      "Branch protection and contribution workflow not mentioned",
+      "GitHub Actions notification noise not yet resolved",
+      "Branch protection and contribution workflow not documented or confirmed",
     ],
     actions: [
-      "Configure repository watch settings: notifications for direct mentions, failed runs, and security alerts only",
-      "Route CI notifications to a dedicated channel or label-filtered view",
-      "Verify branch protection rules are active on main",
-    ],
-  },
-  {
-    key: "workflow",
-    label: "Workflow Automation Noise",
-    score: 4,
-    summary:
-      "High-volume, low-signal GitHub Actions emails are a solvable operational issue that has not yet been solved. In a small-team or single-founder environment, this kind of ambient noise competes directly with strategic focus. It should be treated as a first-week fix, not a backlog item.",
-    observations: [
-      "GitHub Actions notification volume is explicitly named as a current concern",
-      "Volume suggests watch settings are configured to notify on all run events",
-      "This is a configuration issue, not a product or architecture issue",
-      "Low severity, but non-trivial nuisance in a high-attention context",
-    ],
-    gaps: [
-      "Repository watch settings have not been adjusted to filter notification frequency",
-      "No triage protocol established for CI alerts",
-    ],
-    actions: [
-      "Go to repository → Watch → Custom → uncheck 'Actions' or restrict to failed-only",
-      "Alternatively: set up a GitHub Actions notification email filter at the inbox level",
-      "Establish a weekly CI review cadence rather than real-time notification response",
+      "Repository → Watch → Custom → notifications for direct mentions, failed runs, and security alerts only",
+      "Confirm branch protection rules are active on main: require PR, require status checks, restrict force push",
+      "Route CI notifications to a dedicated email label or Slack channel for triage",
     ],
   },
   {
@@ -370,31 +406,54 @@ export const dimensionReviews: DimensionReview[] = [
     label: "Market Positioning",
     score: 6,
     summary:
-      "The positioning is specific, defensible, and correctly restrained. Shared-device and mobile frontline environments represent a genuine gap in the Zero Trust landscape. The 'not a replacement' framing is the right call. The remaining gap is the affirmative case: what exactly SignalGrid does better than extending existing stack components.",
+      "Positioning is specific, defensible, and correctly restrained. The shared-device and frontline environment framing targets a real gap in the Zero Trust landscape. The affirmative case — what SignalGrid does that extending existing stack components cannot — needs one more sharpening pass.",
     observations: [
-      "Positioning as runtime decision layer for shared-device and frontline environments is specific and differentiated",
+      "Runtime decision layer positioning for shared-device and frontline environments is differentiated",
       "Conservative framing (not replacing IAM/UEM/SIEM/ITSM) protects credibility",
       "Zero Trust orchestration framing aligns with current enterprise security vocabulary",
-      "Competitive differentiation from adjacent vendors is not yet fully articulated",
-      "The 'why not just extend existing stack' objection is not addressed in current materials",
+      "Competitive differentiation from Okta Device Trust, CrowdStrike ZTA, Microsoft Conditional Access not yet articulated",
+      "The 'extend existing stack' objection is identified but not answered in current materials",
     ],
     gaps: [
-      "No crisp response to the 'extend existing stack' objection",
-      "Competitive landscape analysis not referenced",
-      "Customer vocabulary alignment not validated through discovery",
+      "No crisp answer to the 'extend existing stack / Conditional Access already does this' objection",
+      "Competitive landscape not mapped: what each adjacent vendor specifically cannot do in shared-device environments",
+      "Customer vocabulary alignment not validated through discovery conversations",
     ],
     actions: [
-      "Write one crisp 'why SignalGrid vs. existing stack extension' response (150 words)",
-      "Map three adjacent vendors (suggest: Okta Device Trust, CrowdStrike Zero Trust Assessment, Microsoft Conditional Access) and articulate one specific gap each leaves in shared-device environments",
-      "Test positioning language with 3 security practitioners before finalizing",
+      "Write a 150-word 'why SignalGrid vs. stack extension' response — test in peer review before first call",
+      "Map three adjacent vendors: Okta Device Trust, Microsoft Conditional Access, CrowdStrike ZTA — one specific shared-device gap per vendor",
+      "Validate positioning language with 3 security practitioners or enterprise IT leaders before finalizing",
+    ],
+  },
+  {
+    key: "nextsteps",
+    label: "Next-Step Clarity",
+    score: 6,
+    summary:
+      "General direction exists. No crisp 30/60/90-day plan with owners, exit criteria, or decision gates. The gap between 'outreach package assembled' and 'first call booked' is not bridged by a concrete activation sequence.",
+    observations: [
+      "A general sense of direction exists — integrate, outreach, validate",
+      "No written 30/60/90-day plan with specific milestones and exit criteria",
+      "No named owner for next-step execution items",
+      "No decision gate defining what triggers the transition from pre-launch to active outreach",
+    ],
+    gaps: [
+      "No 30/60/90-day plan with specific success criteria and owners",
+      "No decision gate criteria defining when pre-launch preparation is complete",
+      "No defined cadence for reviewing progress against milestones",
+    ],
+    actions: [
+      "Write a one-page 30/60/90-day plan: 30 = first call booked, 60 = pilot candidate identified, 90 = working integration in customer-adjacent env",
+      "Assign a named owner or time block to each Priority 1 and Priority 2 action item",
+      "Set a weekly 30-minute review cadence to assess progress against milestones",
     ],
   },
 ];
 
 export const overallScore = {
-  value: 6.0,
+  value: 5.9,
   maxValue: 10,
   label: "Pre-Launch Readiness",
   interpretation:
-    "SignalGrid is in a credible pre-launch position with above-average engineering and brand execution for this stage. The dominant gaps are on the go-to-market side: outreach has not been activated, the integration story is unvalidated, and the 30/60/90-day plan does not yet exist. None of these gaps are structural — they are execution items. The most important single action is activating outreach while simultaneously closing one integration proof point.",
+    "SignalGrid is in a credible pre-launch position with above-average engineering and brand execution for this stage. The dominant gaps are on the go-to-market and integration side: no integration has been validated, outreach has not been activated, and the 30/60/90-day plan does not yet exist. None of these gaps are structural — they are execution items. The most important single action is completing the first Intune/Entra posture proof, which advances both product credibility and the integration surface coverage score simultaneously.",
 };

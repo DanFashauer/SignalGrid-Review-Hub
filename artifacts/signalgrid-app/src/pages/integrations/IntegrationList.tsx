@@ -32,6 +32,9 @@ const CATEGORY_ORDER = [
   "Networking / SDN",
   "Firewall / SASE",
   "Physical Access (PACS)",
+  "Security Keys / FIDO2",
+  "Mobile Credentials",
+  "IoT / Smart Building",
   "ITSM",
 ];
 
@@ -42,7 +45,10 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
   "SIEM": "Security information and event management platforms",
   "Networking / SDN": "Network infrastructure, SDN controllers, and access control",
   "Firewall / SASE": "Next-gen firewalls, SASE platforms, and SOAR orchestration",
-  "Physical Access (PACS)": "Physical access control systems and badge credential platforms",
+  "Physical Access (PACS)": "Physical access control systems, biometrics, and badge credential platforms",
+  "Security Keys / FIDO2": "Hardware security keys, passkeys, and phishing-resistant authenticators",
+  "Mobile Credentials": "Apple Wallet, Google Wallet, and mobile badge credential platforms",
+  "IoT / Smart Building": "Matter/CSA, building automation, and smart environment signal sources",
   "ITSM": "IT service management and incident tracking",
 };
 

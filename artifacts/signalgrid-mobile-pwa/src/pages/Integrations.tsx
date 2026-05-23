@@ -22,6 +22,9 @@ export default function Integrations() {
     "Networking / SDN",
     "Firewall / SASE",
     "Physical Access (PACS)",
+    "Security Keys / FIDO2",
+    "Mobile Credentials",
+    "IoT / Smart Building",
     "ITSM",
   ];
   

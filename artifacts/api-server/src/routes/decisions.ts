@@ -52,6 +52,15 @@ const SIGNAL_PLATFORMS = [
   { platform: "lenel-s2", signalType: "physical-access" },
   { platform: "genetec", signalType: "physical-access" },
   { platform: "imprivata", signalType: "physical-access" },
+  { platform: "rfideas", signalType: "physical-access" },
+  { platform: "apple-wallet", signalType: "physical-access" },
+  { platform: "google-wallet", signalType: "physical-access" },
+  { platform: "hid-crescendo", signalType: "physical-access" },
+  // Security keys / FIDO2
+  { platform: "yubico", signalType: "identity" },
+  { platform: "hid-crescendo", signalType: "identity" },
+  { platform: "authentik", signalType: "identity" },
+  { platform: "privacyidea", signalType: "identity" },
 ];
 
 function hashString(s: string): number {

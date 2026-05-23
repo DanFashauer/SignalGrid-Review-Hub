@@ -1,0 +1,259 @@
+What you’re really looking at is the convergence of:
+
+* Physical Access Control Systems (PACS)
+* Identity & Access Management (IAM)
+* Mobile Credentials
+* Passwordless / FIDO2 / Passkeys
+* BLE / NFC / RFID / UWB tap access
+* Smart badge ecosystems
+* Enterprise authentication orchestration
+* IoT/CSA Matter-style interoperability
+* Shared device authentication
+* Endpoint + building access convergence
+
+This is exactly where enterprise security is heading.
+
+⸻
+
+Core Enterprise Badge / PACS Ecosystem
+
+These are the major enterprise physical access vendors and ecosystems you should track.
+
+Company	Focus	APIs / SDKs / GitHub
+HID Global￼	Enterprise badges, readers, mobile credentials, piv/fido	HID Developer Portal￼
+LenelS2￼	Enterprise building access systems	LenelS2 Developer Portal￼
+Genetec￼	Physical security + access control + cameras	Genetec Developer Center￼
+Gallagher Security￼	Enterprise badge/access ecosystems	Gallagher APIs￼
+Brivo￼	Cloud access control	Brivo API Docs￼
+Kisi￼	Mobile-first access control	Kisi API Docs￼
+Openpath￼	Mobile/NFC/BLE enterprise access	Openpath APIs￼
+Imprivata￼	Healthcare badge auth + tap workflows	Imprivata Developer Portal￼
+RF IDeas￼	Badge readers + workstation auth	RF IDeas SDKs￼
+Suprema￼	Biometrics + fingerprint readers	Suprema APIs￼
+ZKTeco￼	Biometrics + enterprise access	ZKTeco Developer Docs￼
+
+⸻
+
+HID Ecosystem (Most Important)
+
+If you’re exploring tap-and-go mobile identity + badges + passwordless + enterprise convergence, HID is probably the most important ecosystem to study.
+
+HID Technologies
+
+* Seos
+* Mobile Access
+* Crescendo
+* OMNIKEY
+* FIDO2 credentials
+* NFC smart cards
+* BLE mobile credentials
+* PKI smartcards
+* PIV/CAC integrations
+* Enterprise Passkey Management
+
+HID is actively merging:
+
+* physical building access
+* logical workstation access
+* passkeys
+* FIDO2
+* mobile identity
+* smartcards
+* biometrics
+
+Their Crescendo ecosystem is specifically targeting:
+
+* “one card for doors and applications”
+* FIDO2 + physical access convergence
+* passkeys for enterprise environments  
+
+⸻
+
+Enterprise Mobile Badge / Tap Systems
+
+Mobile Credential Standards
+
+Technology	Usage
+NFC	Tap access
+BLE	Proximity unlock
+RFID	Legacy badge systems
+UWB	Precise location unlock
+Apple Wallet Credentials	iPhone badge access
+Google Wallet Access	Android badge access
+FIDO2	Passwordless auth
+WebAuthn	Browser/device auth
+CTAP2	Device communication
+PIV/CAC	Government/enterprise smartcards
+
+⸻
+
+Apple Wallet / Mobile Badge Ecosystem
+
+Apple is aggressively pushing enterprise badge/mobile credential integrations.
+
+Major integrations include:
+
+* HID Mobile Access
+* Gallagher
+* Brivo
+* Genetec
+* SwiftConnect
+* Proxy
+* Kisi
+
+Key technologies:
+
+* Apple Wallet Employee Badge
+* NFC secure element
+* Express Mode
+* BLE proximity unlock
+
+⸻
+
+Android Enterprise Mobile Credentials
+
+Google ecosystem:
+
+* Google Wallet access cards
+* Android Enterprise Identity Credential
+* NFC + BLE APIs
+* FIDO2 native support
+* Passkeys
+
+⸻
+
+Passwordless + Badge Convergence
+
+This is the biggest enterprise security trend right now.
+
+Technologies to Study
+
+Standard	Purpose
+FIDO2	Passwordless auth
+WebAuthn	Browser/device auth
+CTAP2	Hardware security key communication
+Passkeys	Device-bound credentials
+PKI	Smartcard enterprise auth
+OAuth2/OIDC	Identity federation
+SAML	Enterprise SSO
+SCIM	Identity provisioning
+
+Microsoft Entra, Okta, HID, Thales, Yubico, and Apple are all converging around this architecture.  
+
+⸻
+
+Best Enterprise Hardware Ecosystems
+
+Security Keys / Passwordless
+
+Vendor	Technologies
+Yubico￼	YubiKey, FIDO2, NFC
+Thales￼	SafeNet FIDO keys
+Feitian￼	FIDO tokens
+HID Crescendo￼	Badge + FIDO convergence
+SoloKeys￼	Open-source FIDO2 keys
+
+YubiKeys support:
+
+* NFC
+* USB-C
+* Smartcard/PIV
+* FIDO2
+* Passkeys
+* biometrics (Bio Series)  
+
+⸻
+
+CSA-IOT / Matter / IoT Identity
+
+The site you linked —  Connectivity Standards Alliance (CSA)￼ — is extremely important.
+
+They manage:
+
+* Matter
+* IoT interoperability
+* secure device onboarding
+* trust frameworks
+* smart building ecosystems
+
+This directly connects to:
+
+* enterprise building access
+* smart locks
+* mobile credentials
+* identity federation
+* secure device provisioning
+
+This is likely where enterprise physical identity systems eventually merge with:
+
+* smart buildings
+* endpoint trust
+* device posture
+* occupancy systems
+* workplace automation
+
+⸻
+
+GitHub Repositories You Should Track
+
+Physical Access / Identity / Security
+
+* awesome-webauthn￼
+* webauthn-rs￼
+* Yubico GitHub￼
+* HID OMNIKEY Samples￼
+* SoloKeys GitHub￼
+* FIDO Alliance￼
+* OpenSK￼
+* PrivacyIDEA￼
+* Keycloak￼
+* Authentik￼
+* NetBox￼
+
+⸻
+
+Technologies Most Relevant To Your SignalGrid Concept
+
+Based on your earlier SignalGrid architecture work, the highest-value areas are probably:
+
+Identity Convergence
+
+* Okta + badge + endpoint posture
+* Passkeys + physical access
+* session trust orchestration
+
+Shared Device Authentication
+
+* tap badge → workstation unlock
+* tap badge → iPhone shared mode
+* mobile credential → app session
+* clinician roaming
+
+Contextual Trust
+
+* location-aware trust
+* BLE/NFC/UWB identity presence
+* endpoint posture + building presence
+* shift-aware authentication
+
+Future Enterprise Architecture
+
+Eventually enterprise systems become:
+
+* identity-centric
+* passwordless
+* device-trust driven
+* location/context aware
+* continuously authenticated
+
+That’s why:
+
+* HID
+* Microsoft
+* Okta
+* Apple
+* Cisco
+* Imprivata
+* Yubico
+* CSA/Matter
+    are all slowly converging toward the same model.

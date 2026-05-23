@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/desktop/"
+title = "SignalGrid Desktop"
+version = "1.0.0"
+id = "artifacts/signalgrid-desktop"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/desktop/" ]
+localPort = 20886
+
+[services.development]
+run = "pnpm --filter @workspace/signalgrid-desktop run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/signalgrid-desktop", "run", "build" ]
+publicDir = "artifacts/signalgrid-desktop/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20886"
+BASE_PATH = "/desktop/"

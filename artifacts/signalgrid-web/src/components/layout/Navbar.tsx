@@ -1,38 +1,108 @@
-import { Link } from "wouter";
+import { useState } from "react";
+import { Link, useLocation } from "wouter";
+import { Menu, X } from "lucide-react";
+
+const NAV_LINKS = [
+  { href: "/hardware", label: "Hardware" },
+  { href: "/pricing", label: "Pricing" },
+  { href: "/federal", label: "Federal" },
+  { href: "/downloads", label: "Downloads" },
+];
+
+const PLATFORM_LINKS = [
+  { href: "#signal-types", label: "Signal Engine" },
+  { href: "#integrations", label: "Integrations" },
+  { href: "#how-it-works", label: "How It Works" },
+  { href: "#deployment", label: "Deployment" },
+];
 
 export default function Navbar() {
+  const [location] = useLocation();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto flex h-14 max-w-screen-2xl items-center px-4 md:px-8">
-        <div className="mr-4 flex">
-          <Link href="/" className="mr-6 flex items-center space-x-2">
+
+        {/* Logo */}
+        <div className="mr-6 flex items-center shrink-0">
+          <Link href="/" className="flex items-center space-x-2">
             <div className="h-6 w-6 rounded-sm bg-primary flex items-center justify-center">
               <div className="h-2 w-2 rounded-full bg-background" />
             </div>
-            <span className="hidden font-bold sm:inline-block tracking-tight">
-              SIGNALGRID
-            </span>
+            <span className="font-bold tracking-tight hidden sm:inline-block">SIGNALGRID</span>
           </Link>
-          <nav className="flex items-center space-x-6 text-sm font-medium">
-            <a href="#platform" className="transition-colors hover:text-foreground/80 text-foreground/60">Platform</a>
-            <a href="#integrations" className="transition-colors hover:text-foreground/80 text-foreground/60">Integrations</a>
-            <a href="#use-cases" className="transition-colors hover:text-foreground/80 text-foreground/60">Use Cases</a>
-            <a href="#deployment" className="transition-colors hover:text-foreground/80 text-foreground/60">Docs</a>
-          </nav>
         </div>
-        <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
-          <div className="w-full flex-1 md:w-auto md:flex-none">
-          </div>
-          <nav className="flex items-center space-x-2">
-            <a href="#" className="px-4 py-2 text-sm font-medium text-foreground hover:bg-accent hover:text-accent-foreground rounded-md transition-colors">
-              Sign In
-            </a>
-            <a href="#" className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 rounded-md transition-colors">
-              Request Access
-            </a>
-          </nav>
+
+        {/* Desktop nav */}
+        <nav className="hidden md:flex items-center gap-1 text-sm flex-1">
+          {/* Platform dropdown anchor */}
+          <a
+            href="#platform"
+            className="px-3 py-1.5 text-foreground/60 hover:text-foreground rounded transition-colors"
+          >
+            Platform
+          </a>
+          {NAV_LINKS.map(({ href, label }) => (
+            <Link
+              key={href}
+              href={href}
+              className={`px-3 py-1.5 rounded transition-colors ${
+                location === href
+                  ? "text-foreground font-medium"
+                  : "text-foreground/60 hover:text-foreground"
+              }`}
+            >
+              {label}
+            </Link>
+          ))}
+          <a
+            href="/app"
+            className="px-3 py-1.5 text-foreground/60 hover:text-foreground rounded transition-colors"
+          >
+            Dashboard
+          </a>
+        </nav>
+
+        {/* Right side CTAs */}
+        <div className="hidden md:flex items-center gap-2 ml-auto shrink-0">
+          <a
+            href="/app"
+            className="px-4 py-1.5 text-sm font-medium text-foreground hover:bg-accent hover:text-accent-foreground rounded-md transition-colors"
+          >
+            Sign In
+          </a>
+          <a
+            href="/hardware"
+            className="px-4 py-1.5 text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 rounded-md transition-colors"
+          >
+            Request Access
+          </a>
         </div>
+
+        {/* Mobile hamburger */}
+        <button
+          className="md:hidden ml-auto p-2 rounded-md text-foreground/60 hover:text-foreground"
+          onClick={() => setMobileOpen(o => !o)}
+        >
+          {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        </button>
       </div>
+
+      {/* Mobile menu */}
+      {mobileOpen && (
+        <div className="md:hidden border-t border-border/40 bg-background px-4 py-4 space-y-1">
+          <a href="#platform" className="block px-3 py-2 text-sm rounded hover:bg-muted text-foreground/70">Platform</a>
+          {NAV_LINKS.map(({ href, label }) => (
+            <Link key={href} href={href} className="block px-3 py-2 text-sm rounded hover:bg-muted text-foreground/70" onClick={() => setMobileOpen(false)}>{label}</Link>
+          ))}
+          <a href="/app" className="block px-3 py-2 text-sm rounded hover:bg-muted text-foreground/70">Dashboard</a>
+          <div className="pt-3 border-t border-border/40 flex gap-2">
+            <a href="/app" className="flex-1 text-center py-2 text-sm border border-border rounded-md">Sign In</a>
+            <a href="/hardware" className="flex-1 text-center py-2 text-sm bg-primary text-primary-foreground rounded-md">Request Access</a>
+          </div>
+        </div>
+      )}
     </header>
   );
 }

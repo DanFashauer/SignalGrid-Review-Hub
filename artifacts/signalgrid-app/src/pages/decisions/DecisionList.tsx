@@ -8,12 +8,30 @@ import { formatDate } from "@/lib/format";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 
+type DecisionRow = { id: string; identityId: string; deviceId: string; workflowId: string; outcome: string; latencyMs: number; evaluatedAt: string; policyId?: string | null };
+
+function exportCSV(decisions: DecisionRow[]) {
+  if (!decisions.length) return;
+  const header = ["id","identityId","deviceId","workflowId","outcome","latencyMs","evaluatedAt","policyId"];
+  const rows = decisions.map(d =>
+    [d.id, d.identityId, d.deviceId, d.workflowId, d.outcome, d.latencyMs, d.evaluatedAt, d.policyId ?? ""].join(",")
+  );
+  const csv = [header.join(","), ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `signalgrid-decisions-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function DecisionList() {
   const [, setLocation] = useLocation();
   const [outcomeFilter, setOutcomeFilter] = useState<ListDecisionsOutcome | "all">("all");
   
   const { data: decisionsData, isLoading } = useListDecisions({
-    limit: 100,
+    limit: 200,
     outcome: outcomeFilter === "all" ? undefined : outcomeFilter as ListDecisionsOutcome
   });
 
@@ -25,7 +43,7 @@ export function DecisionList() {
           <p className="text-muted-foreground mt-1 font-mono text-sm">RUNTIME ACCESS ENFORCEMENT LOG</p>
         </div>
         
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <Select value={outcomeFilter} onValueChange={(v: any) => setOutcomeFilter(v)}>
             <SelectTrigger className="w-[180px] font-mono">
               <SelectValue placeholder="Filter by outcome" />
@@ -38,6 +56,13 @@ export function DecisionList() {
               <SelectItem value="deny">DENY</SelectItem>
             </SelectContent>
           </Select>
+          <button
+            onClick={() => exportCSV(decisionsData?.decisions ?? [])}
+            disabled={!decisionsData?.decisions?.length}
+            className="px-3 py-2 text-xs font-mono rounded border border-border bg-card text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            EXPORT CSV
+          </button>
         </div>
       </div>
 

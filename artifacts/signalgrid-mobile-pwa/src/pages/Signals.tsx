@@ -14,7 +14,7 @@ export default function Signals() {
     query: { refetchInterval: 30_000, queryKey: ["signals", filter] },
   });
 
-  const types = ["all", "identity", "device-posture", "session-context", "operational-signals"] as const;
+  const types = ["all", "identity", "device-posture", "session-context", "operational-signals", "network-posture", "physical-access"] as const;
 
   return (
     <div className="h-full w-full flex flex-col pt-safe bg-background">

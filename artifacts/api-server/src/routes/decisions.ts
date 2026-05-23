@@ -11,22 +11,47 @@ import {
 const router: IRouter = Router();
 
 const SIGNAL_PLATFORMS = [
-  { platform: "intune", signalType: "device-posture" },
+  // Identity
   { platform: "okta", signalType: "identity" },
   { platform: "sailpoint", signalType: "identity" },
   { platform: "saviynt", signalType: "identity" },
   { platform: "microsoft-entra", signalType: "identity" },
-  { platform: "crowdstrike", signalType: "device-posture" },
-  { platform: "sentinelone", signalType: "device-posture" },
-  { platform: "servicenow", signalType: "operational-signals" },
-  { platform: "fleet", signalType: "device-posture" },
-  { platform: "workspace-one", signalType: "session-context" },
-  { platform: "hexnode", signalType: "session-context" },
-  { platform: "tanium", signalType: "operational-signals" },
-  { platform: "splunk", signalType: "operational-signals" },
-  { platform: "jamf", signalType: "device-posture" },
+  { platform: "auth0", signalType: "identity" },
+  { platform: "keycloak", signalType: "identity" },
+  { platform: "teleport", signalType: "identity" },
   { platform: "radiantone", signalType: "identity" },
   { platform: "manageengine-iga", signalType: "identity" },
+  { platform: "imprivata", signalType: "identity" },
+  // Device posture
+  { platform: "intune", signalType: "device-posture" },
+  { platform: "crowdstrike", signalType: "device-posture" },
+  { platform: "sentinelone", signalType: "device-posture" },
+  { platform: "fleet", signalType: "device-posture" },
+  { platform: "kolide", signalType: "device-posture" },
+  { platform: "santa", signalType: "device-posture" },
+  { platform: "jamf", signalType: "device-posture" },
+  { platform: "kandji", signalType: "device-posture" },
+  { platform: "osquery", signalType: "device-posture" },
+  { platform: "wazuh", signalType: "device-posture" },
+  // Session context
+  { platform: "workspace-one", signalType: "session-context" },
+  { platform: "hexnode", signalType: "session-context" },
+  { platform: "teleport", signalType: "session-context" },
+  // Operational signals
+  { platform: "servicenow", signalType: "operational-signals" },
+  { platform: "tanium", signalType: "operational-signals" },
+  { platform: "splunk", signalType: "operational-signals" },
+  { platform: "velociraptor", signalType: "operational-signals" },
+  // Network posture
+  { platform: "cisco-meraki", signalType: "network-posture" },
+  { platform: "cisco-ise", signalType: "network-posture" },
+  { platform: "palo-alto-panos", signalType: "network-posture" },
+  { platform: "fortinet", signalType: "network-posture" },
+  // Physical access
+  { platform: "hid-global", signalType: "physical-access" },
+  { platform: "lenel-s2", signalType: "physical-access" },
+  { platform: "genetec", signalType: "physical-access" },
+  { platform: "imprivata", signalType: "physical-access" },
 ];
 
 function hashString(s: string): number {
@@ -40,18 +65,36 @@ function hashString(s: string): number {
 function generateSignals(deviceId: string, identityId: string, mdmPlatform?: string) {
   const seed = hashString(`${deviceId}:${identityId}`);
 
-  const posturePlatform = mdmPlatform ?? SIGNAL_PLATFORMS[seed % 4].platform;
+  const idPlatforms = SIGNAL_PLATFORMS.filter((p) => p.signalType === "identity");
+  const identityPlatform = idPlatforms[seed % idPlatforms.length].platform;
+
+  const devicePlatforms = SIGNAL_PLATFORMS.filter((p) => p.signalType === "device-posture");
+  const posturePlatform = mdmPlatform ?? devicePlatforms[(seed >> 3) % devicePlatforms.length].platform;
+
+  const sessionPlatforms = SIGNAL_PLATFORMS.filter((p) => p.signalType === "session-context");
+  const sessionPlatform = sessionPlatforms[(seed >> 1) % sessionPlatforms.length].platform;
+
+  const opPlatforms = SIGNAL_PLATFORMS.filter((p) => p.signalType === "operational-signals");
+  const opPlatform = opPlatforms[(seed >> 4) % opPlatforms.length].platform;
+
   const postureStatus =
     seed % 10 < 7 ? "nominal" : seed % 10 < 9 ? "anomalous" : "critical";
-  const sessionStatus =
-    (seed >> 2) % 10 < 8 ? "nominal" : "anomalous";
+  const sessionStatus = (seed >> 2) % 10 < 8 ? "nominal" : "anomalous";
   const opStatus =
     (seed >> 4) % 10 < 8 ? "nominal" : (seed >> 4) % 10 < 9 ? "anomalous" : "critical";
+  const networkStatus = (seed >> 6) % 10 < 9 ? "nominal" : "anomalous";
+  const physicalStatus = (seed >> 8) % 10 < 9 ? "nominal" : "anomalous";
 
-  return [
+  const signals: Array<{
+    signalType: string;
+    platform: string;
+    value: Record<string, unknown>;
+    evaluatedAt: string;
+    status: string;
+  }> = [
     {
       signalType: "identity",
-      platform: "okta",
+      platform: identityPlatform,
       value: {
         mfaCompleted: true,
         roleAssigned: true,
@@ -75,7 +118,7 @@ function generateSignals(deviceId: string, identityId: string, mdmPlatform?: str
     },
     {
       signalType: "session-context",
-      platform: posturePlatform,
+      platform: sessionPlatform,
       value: {
         withinShiftWindow: sessionStatus === "nominal",
         locationAnomaly: sessionStatus !== "nominal",
@@ -87,7 +130,7 @@ function generateSignals(deviceId: string, identityId: string, mdmPlatform?: str
     },
     {
       signalType: "operational-signals",
-      platform: opStatus !== "nominal" ? "servicenow" : "tanium",
+      platform: opPlatform,
       value: {
         openIncidents: opStatus !== "nominal" ? 1 : 0,
         securityAgentRunning: opStatus !== "critical",
@@ -98,6 +141,46 @@ function generateSignals(deviceId: string, identityId: string, mdmPlatform?: str
       status: opStatus,
     },
   ];
+
+  // Network posture: 60% of decisions include a network policy check
+  if (seed % 10 < 6) {
+    const netPlatforms = SIGNAL_PLATFORMS.filter((p) => p.signalType === "network-posture");
+    const netPlatform = netPlatforms[(seed >> 1) % netPlatforms.length].platform;
+    signals.push({
+      signalType: "network-posture",
+      platform: netPlatform,
+      value: {
+        vlanCompliant: networkStatus === "nominal",
+        firewallPolicyMatched: true,
+        allowedSubnet: networkStatus === "nominal",
+        trafficAnomalyScore: networkStatus === "nominal" ? 0.02 : 0.78,
+        naacProfile: networkStatus === "nominal" ? "trusted-endpoint" : "quarantine",
+      },
+      evaluatedAt: new Date().toISOString(),
+      status: networkStatus,
+    });
+  }
+
+  // Physical access: 40% of decisions include a badge/PACS check (frontline workflows)
+  if (seed % 10 < 4) {
+    const pacsPlatforms = SIGNAL_PLATFORMS.filter((p) => p.signalType === "physical-access");
+    const pacsPlatform = pacsPlatforms[(seed >> 5) % pacsPlatforms.length].platform;
+    signals.push({
+      signalType: "physical-access",
+      platform: pacsPlatform,
+      value: {
+        badgedIntoBuilding: physicalStatus === "nominal",
+        accessZone: physicalStatus === "nominal" ? "authorized" : "restricted",
+        badgeEventTime: new Date(Date.now() - ((seed % 4) + 1) * 1800 * 1000).toISOString(),
+        tailgatingDetected: physicalStatus !== "nominal",
+        credentialType: seed % 3 === 0 ? "mobile" : "smart-card",
+      },
+      evaluatedAt: new Date().toISOString(),
+      status: physicalStatus,
+    });
+  }
+
+  return signals;
 }
 
 function evaluateOutcome(signals: Array<{ status: string }>): string {

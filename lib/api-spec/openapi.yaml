@@ -199,7 +199,7 @@ paths:
           name: signalType
           schema:
             type: string
-            enum: [identity, device-posture, session-context, operational-signals]
+            enum: [identity, device-posture, session-context, operational-signals, physical-access, network-posture]
         - in: query
           name: limit
           schema:
@@ -387,7 +387,7 @@ components:
 
     SignalType:
       type: string
-      enum: [identity, device-posture, session-context, operational-signals]
+      enum: [identity, device-posture, session-context, operational-signals, physical-access, network-posture]
 
     DecisionOutcome:
       type: string

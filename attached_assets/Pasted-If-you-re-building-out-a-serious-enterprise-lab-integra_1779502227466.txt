@@ -1,0 +1,163 @@
+If you’re building out a serious enterprise lab, integration stack, or research list around MDM/UEM/EMM, endpoint engineering, networking, firewall automation, identity, physical access, and enterprise APIs, these are some of the highest-value GitHub repos, SDKs, APIs, and enterprise ecosystems to track.
+
+MDM / UEM / Endpoint Management
+
+Open Source / GitOps / Endpoint Platforms
+
+* FleetDM GitHub￼ — One of the strongest modern open-source endpoint management platforms built around osquery and GitOps workflows. Supports macOS, Windows, Linux, iOS, Android.  
+* osquery GitHub￼ — Facebook/Meta-created endpoint telemetry and query engine used heavily in enterprise security.
+* Santa GitHub￼ — Google’s macOS binary whitelisting/endpoint security framework.
+* Kolide Launcher GitHub￼ — Endpoint telemetry/security tooling built around osquery.
+* Micromdm GitHub￼ — Open-source Apple MDM server.
+* NanoMDM GitHub￼ — Lightweight Apple MDM implementation.
+* Munki GitHub￼ — Massive macOS enterprise software deployment ecosystem.
+* AutoPkg GitHub￼ — macOS enterprise packaging automation.
+* Installomator GitHub￼ — Enterprise macOS app deployment automation.
+* MacAdmins Scripts GitHub￼ — Huge ecosystem of enterprise Apple management tooling.
+
+⸻
+
+Enterprise MDM / UEM Vendors
+
+Top enterprise platforms consistently referenced across enterprise mobility management:  
+
+Platform	Official Site	APIs / Dev
+Microsoft Intune￼	Microsoft Graph API￼	
+Omnissa Workspace ONE￼	Workspace ONE APIs￼	
+Jamf￼	Jamf API Docs￼	
+Kandji￼	Kandji API Docs￼	
+Hexnode￼	Hexnode API￼	
+ManageEngine Endpoint Central￼	Endpoint Central API￼	
+IBM MaaS360￼	MaaS360 APIs￼	
+
+⸻
+
+Identity / Zero Trust / Enterprise Security APIs
+
+Identity Providers / IAM
+
+* Okta Developer GitHub￼
+* Okta APIs￼
+* Microsoft Entra ID APIs￼
+* Auth0 GitHub￼
+* Keycloak GitHub￼
+* Teleport GitHub￼
+* Zitadel GitHub￼
+
+⸻
+
+Networking / Enterprise Infrastructure
+
+Cisco
+
+* Cisco DevNet￼
+* Cisco GitHub￼
+* Cisco pyATS￼
+* Cisco Meraki Dashboard API￼
+* Cisco DNAC SDK￼
+* Cisco ACI Toolkit￼
+* Cisco ISE Integrations￼ — Enterprise identity/network access integrations.  
+
+Arista / Juniper / HPE / Aruba
+
+* Arista GitHub￼
+* Arista CloudVision APIs￼
+* Juniper PyEZ￼
+* Juniper DevOps￼
+* HPE Aruba APIs￼
+
+⸻
+
+Firewall / Network Security / SASE
+
+Major enterprise firewall ecosystems commonly compared in enterprise environments include Cisco, Palo Alto, Fortinet, and Check Point.  
+
+Palo Alto Networks
+
+* Palo Alto GitHub￼
+* PAN-OS Python SDK￼
+* Cortex XSOAR Integrations￼
+* Prisma Cloud API Docs￼
+
+Fortinet
+
+* Fortinet GitHub￼
+* FortiGate API Docs￼
+* FortiSIEM GitHub Integration￼  
+* FortiAnalyzer GitHub Logs￼  
+
+Check Point
+
+* Check Point GitHub￼
+* Check Point APIs￼
+
+pfSense / OPNsense
+
+* pfSense GitHub￼
+* OPNsense GitHub￼
+
+⸻
+
+Security / Detection / SIEM / XDR
+
+* Wazuh GitHub￼
+* Security Onion GitHub￼
+* Velociraptor GitHub￼
+* Sigma Rules GitHub￼
+* YARA GitHub￼
+* TheHive Project￼
+* Elastic Security GitHub￼
+* Microsoft Sentinel Connectors￼ — Includes Cisco, Fortinet, F5, Symantec, and enterprise security integrations.  
+
+⸻
+
+Badge Systems / Physical Access / Identity Access Control
+
+Enterprise Badge / PACS Systems
+
+Vendor	APIs / Dev
+HID Global￼	HID Developer Portal￼
+LenelS2￼	LenelS2 APIs￼
+Genetec￼	Genetec SDKs￼
+Gallagher Security￼	Gallagher APIs￼
+Brivo￼	Brivo API Docs￼
+Kisi￼	Kisi API￼
+Imprivata￼	Imprivata APIs￼
+
+⸻
+
+Enterprise Automation / Infrastructure as Code
+
+These are critical if you want enterprise orchestration across networking, endpoint, security, and identity.
+
+* Terraform GitHub￼
+* Ansible GitHub￼
+* NetBox GitHub￼
+* Nornir GitHub￼
+* Batfish GitHub￼
+* OpenTofu GitHub￼
+
+⸻
+
+Enterprise APIs & Integrations Worth Learning
+
+These APIs dominate enterprise integration ecosystems:
+
+* Microsoft Graph API￼
+* ServiceNow APIs￼
+* Okta APIs￼
+* Cisco Meraki APIs￼
+* Palo Alto PAN-OS APIs￼
+* CrowdStrike APIs￼
+* SentinelOne APIs￼
+* Splunk APIs￼
+* Elastic APIs￼
+
+A few of the strongest current enterprise trends are:
+
+* GitOps-driven endpoint management
+* Zero Trust orchestration
+* Identity-driven networking
+* Unified telemetry (endpoint + firewall + IAM + badge access)
+* Security automation via APIs/webhooks
+* AI-assisted infrastructure policy generation  

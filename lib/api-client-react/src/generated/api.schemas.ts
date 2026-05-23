@@ -22,6 +22,8 @@ export const SignalType = {
   'device-posture': 'device-posture',
   'session-context': 'session-context',
   'operational-signals': 'operational-signals',
+  'physical-access': 'physical-access',
+  'network-posture': 'network-posture',
 } as const;
 
 export type DecisionOutcome = typeof DecisionOutcome[keyof typeof DecisionOutcome];
@@ -267,6 +269,8 @@ export const ListLatestSignalsSignalType = {
   'device-posture': 'device-posture',
   'session-context': 'session-context',
   'operational-signals': 'operational-signals',
+  'physical-access': 'physical-access',
+  'network-posture': 'network-posture',
 } as const;
 
 export type ListLatestSignals200 = {

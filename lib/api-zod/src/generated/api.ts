@@ -36,7 +36,7 @@ export const ListDecisionsResponse = zod.object({
   "outcome": zod.enum(['allow', 'step-up', 'restrict', 'deny']),
   "policyId": zod.string().optional(),
   "signals": zod.array(zod.object({
-  "signalType": zod.enum(['identity', 'device-posture', 'session-context', 'operational-signals']),
+  "signalType": zod.enum(['identity', 'device-posture', 'session-context', 'operational-signals', 'physical-access', 'network-posture']),
   "platform": zod.string(),
   "value": zod.record(zod.string(), zod.unknown()),
   "evaluatedAt": zod.coerce.date(),
@@ -74,7 +74,7 @@ export const EvaluateDecisionResponse = zod.object({
   "outcome": zod.enum(['allow', 'step-up', 'restrict', 'deny']),
   "policyId": zod.string().optional(),
   "signals": zod.array(zod.object({
-  "signalType": zod.enum(['identity', 'device-posture', 'session-context', 'operational-signals']),
+  "signalType": zod.enum(['identity', 'device-posture', 'session-context', 'operational-signals', 'physical-access', 'network-posture']),
   "platform": zod.string(),
   "value": zod.record(zod.string(), zod.unknown()),
   "evaluatedAt": zod.coerce.date(),
@@ -102,7 +102,7 @@ export const GetDecisionResponse = zod.object({
   "outcome": zod.enum(['allow', 'step-up', 'restrict', 'deny']),
   "policyId": zod.string().optional(),
   "signals": zod.array(zod.object({
-  "signalType": zod.enum(['identity', 'device-posture', 'session-context', 'operational-signals']),
+  "signalType": zod.enum(['identity', 'device-posture', 'session-context', 'operational-signals', 'physical-access', 'network-posture']),
   "platform": zod.string(),
   "value": zod.record(zod.string(), zod.unknown()),
   "evaluatedAt": zod.coerce.date(),
@@ -124,7 +124,7 @@ export const ListIntegrationsResponse = zod.object({
   "vendor": zod.string(),
   "product": zod.string(),
   "category": zod.string(),
-  "signalTypes": zod.array(zod.enum(['identity', 'device-posture', 'session-context', 'operational-signals'])),
+  "signalTypes": zod.array(zod.enum(['identity', 'device-posture', 'session-context', 'operational-signals', 'physical-access', 'network-posture'])),
   "status": zod.enum(['connected', 'degraded', 'disconnected', 'not-configured']),
   "lastSync": zod.coerce.date().optional(),
   "signalsIngested24h": zod.number(),
@@ -146,7 +146,7 @@ export const GetIntegrationResponse = zod.object({
   "vendor": zod.string(),
   "product": zod.string(),
   "category": zod.string(),
-  "signalTypes": zod.array(zod.enum(['identity', 'device-posture', 'session-context', 'operational-signals'])),
+  "signalTypes": zod.array(zod.enum(['identity', 'device-posture', 'session-context', 'operational-signals', 'physical-access', 'network-posture'])),
   "status": zod.enum(['connected', 'degraded', 'disconnected', 'not-configured']),
   "lastSync": zod.coerce.date().optional(),
   "signalsIngested24h": zod.number(),
@@ -159,7 +159,7 @@ export const GetIntegrationResponse = zod.object({
  * @summary Ingest a signal from an integration source
  */
 export const IngestSignalBody = zod.object({
-  "signalType": zod.enum(['identity', 'device-posture', 'session-context', 'operational-signals']),
+  "signalType": zod.enum(['identity', 'device-posture', 'session-context', 'operational-signals', 'physical-access', 'network-posture']),
   "platform": zod.string(),
   "deviceId": zod.string(),
   "value": zod.record(zod.string(), zod.unknown()),
@@ -173,14 +173,14 @@ export const IngestSignalBody = zod.object({
 export const listLatestSignalsQueryLimitDefault = 20;
 
 export const ListLatestSignalsQueryParams = zod.object({
-  "signalType": zod.enum(['identity', 'device-posture', 'session-context', 'operational-signals']).optional(),
+  "signalType": zod.enum(['identity', 'device-posture', 'session-context', 'operational-signals', 'physical-access', 'network-posture']).optional(),
   "limit": zod.coerce.number().default(listLatestSignalsQueryLimitDefault)
 })
 
 export const ListLatestSignalsResponse = zod.object({
   "signals": zod.array(zod.object({
   "id": zod.string(),
-  "signalType": zod.enum(['identity', 'device-posture', 'session-context', 'operational-signals']),
+  "signalType": zod.enum(['identity', 'device-posture', 'session-context', 'operational-signals', 'physical-access', 'network-posture']),
   "platform": zod.string(),
   "deviceId": zod.string(),
   "value": zod.record(zod.string(), zod.unknown()),
@@ -200,7 +200,7 @@ export const ListPoliciesResponse = zod.object({
   "description": zod.string().optional(),
   "workflowPattern": zod.string(),
   "rules": zod.array(zod.object({
-  "signal": zod.enum(['identity', 'device-posture', 'session-context', 'operational-signals']),
+  "signal": zod.enum(['identity', 'device-posture', 'session-context', 'operational-signals', 'physical-access', 'network-posture']),
   "condition": zod.string(),
   "outcome": zod.enum(['allow', 'step-up', 'restrict', 'deny']),
   "severity": zod.enum(['low', 'medium', 'high', 'critical'])
@@ -221,7 +221,7 @@ export const CreatePolicyBody = zod.object({
   "description": zod.string().optional(),
   "workflowPattern": zod.string(),
   "rules": zod.array(zod.object({
-  "signal": zod.enum(['identity', 'device-posture', 'session-context', 'operational-signals']),
+  "signal": zod.enum(['identity', 'device-posture', 'session-context', 'operational-signals', 'physical-access', 'network-posture']),
   "condition": zod.string(),
   "outcome": zod.enum(['allow', 'step-up', 'restrict', 'deny']),
   "severity": zod.enum(['low', 'medium', 'high', 'critical'])
@@ -244,7 +244,7 @@ export const GetPolicyResponse = zod.object({
   "description": zod.string().optional(),
   "workflowPattern": zod.string(),
   "rules": zod.array(zod.object({
-  "signal": zod.enum(['identity', 'device-posture', 'session-context', 'operational-signals']),
+  "signal": zod.enum(['identity', 'device-posture', 'session-context', 'operational-signals', 'physical-access', 'network-posture']),
   "condition": zod.string(),
   "outcome": zod.enum(['allow', 'step-up', 'restrict', 'deny']),
   "severity": zod.enum(['low', 'medium', 'high', 'critical'])
@@ -268,7 +268,7 @@ export const UpdatePolicyBody = zod.object({
   "description": zod.string().optional(),
   "workflowPattern": zod.string(),
   "rules": zod.array(zod.object({
-  "signal": zod.enum(['identity', 'device-posture', 'session-context', 'operational-signals']),
+  "signal": zod.enum(['identity', 'device-posture', 'session-context', 'operational-signals', 'physical-access', 'network-posture']),
   "condition": zod.string(),
   "outcome": zod.enum(['allow', 'step-up', 'restrict', 'deny']),
   "severity": zod.enum(['low', 'medium', 'high', 'critical'])
@@ -283,7 +283,7 @@ export const UpdatePolicyResponse = zod.object({
   "description": zod.string().optional(),
   "workflowPattern": zod.string(),
   "rules": zod.array(zod.object({
-  "signal": zod.enum(['identity', 'device-posture', 'session-context', 'operational-signals']),
+  "signal": zod.enum(['identity', 'device-posture', 'session-context', 'operational-signals', 'physical-access', 'network-posture']),
   "condition": zod.string(),
   "outcome": zod.enum(['allow', 'step-up', 'restrict', 'deny']),
   "severity": zod.enum(['low', 'medium', 'high', 'critical'])

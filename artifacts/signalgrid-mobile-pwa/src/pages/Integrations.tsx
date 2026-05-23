@@ -14,7 +14,16 @@ export default function Integrations() {
   });
 
   // Group and sort
-  const categories = ["IGA / IDP", "MDM / UEM", "EDR / XDR", "SIEM", "ITSM"];
+  const categories = [
+    "IGA / IDP",
+    "MDM / UEM",
+    "EDR / XDR",
+    "SIEM",
+    "Networking / SDN",
+    "Firewall / SASE",
+    "Physical Access (PACS)",
+    "ITSM",
+  ];
   
   const sortedIntegrations = data?.integrations ? [...data.integrations].sort((a, b) => {
     const aBad = a.status === "degraded" || a.status === "not-configured";

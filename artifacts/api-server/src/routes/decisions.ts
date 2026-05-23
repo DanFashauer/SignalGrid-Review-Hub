@@ -13,12 +13,20 @@ const router: IRouter = Router();
 const SIGNAL_PLATFORMS = [
   { platform: "intune", signalType: "device-posture" },
   { platform: "okta", signalType: "identity" },
+  { platform: "sailpoint", signalType: "identity" },
+  { platform: "saviynt", signalType: "identity" },
+  { platform: "microsoft-entra", signalType: "identity" },
+  { platform: "crowdstrike", signalType: "device-posture" },
+  { platform: "sentinelone", signalType: "device-posture" },
   { platform: "servicenow", signalType: "operational-signals" },
   { platform: "fleet", signalType: "device-posture" },
   { platform: "workspace-one", signalType: "session-context" },
-  { platform: "hexnode", signalType: "operational-signals" },
+  { platform: "hexnode", signalType: "session-context" },
   { platform: "tanium", signalType: "operational-signals" },
-  { platform: "maas360", signalType: "device-posture" },
+  { platform: "splunk", signalType: "operational-signals" },
+  { platform: "jamf", signalType: "device-posture" },
+  { platform: "radiantone", signalType: "identity" },
+  { platform: "manageengine-iga", signalType: "identity" },
 ];
 
 function hashString(s: string): number {

@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/mobile/"
+title = "SignalGrid Mobile (PWA)"
+version = "1.0.0"
+id = "artifacts/signalgrid-mobile-pwa"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/mobile/" ]
+localPort = 22407
+
+[services.development]
+run = "pnpm --filter @workspace/signalgrid-mobile-pwa run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/signalgrid-mobile-pwa", "run", "build" ]
+publicDir = "artifacts/signalgrid-mobile-pwa/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22407"
+BASE_PATH = "/mobile/"

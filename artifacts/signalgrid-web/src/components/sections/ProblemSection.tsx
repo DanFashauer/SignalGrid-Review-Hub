@@ -1,5 +1,15 @@
 import { motion } from "framer-motion";
-import { Activity, ShieldAlert, CheckCircle2 } from "lucide-react";
+import { ShieldAlert, ArrowRight, CheckCircle2 } from "lucide-react";
+
+const SILOS = [
+  "Badge / access control system",
+  "MDM / UEM platform",
+  "Physical access control (PACS)",
+  "Shared device workflow layer",
+  "Asset tracking / CMDB",
+  "Elevator & specialty area access",
+  "Security monitoring / SIEM",
+];
 
 export default function ProblemSection() {
   return (
@@ -8,61 +18,68 @@ export default function ProblemSection() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
           <div className="space-y-8">
             <div>
-              <h2 className="text-3xl font-bold tracking-tight mb-4">The Login-Time Fallacy</h2>
+              <div className="inline-flex items-center gap-2 text-destructive text-sm font-mono mb-4">
+                <ShieldAlert className="w-4 h-4" />
+                THE FRAGMENTATION PROBLEM
+              </div>
+              <h2 className="text-3xl font-bold tracking-tight mb-4">Seven Silos. Zero Accountability.</h2>
               <p className="text-muted-foreground text-lg leading-relaxed">
-                Traditional Zero Trust tools evaluate identity and device compliance when a user logs in. In frontline environments with shared devices, hours can pass between login and critical workflow execution.
+                Every system that should protect a shared device lives in a different silo. The badge system doesn't know the device is out of bounds. The MDM doesn't know the badge was removed. The SIEM knows neither. No single control plane owns the chain of custody.
               </p>
             </div>
-            
-            <div className="space-y-6">
-              <div className="flex gap-4 p-4 rounded-lg border border-destructive/20 bg-destructive/5">
-                <ShieldAlert className="w-6 h-6 text-destructive shrink-0 mt-1" />
-                <div>
-                  <h4 className="font-semibold text-foreground">The Gap</h4>
-                  <p className="text-sm text-muted-foreground mt-1">A medication cart iPad is "compliant" at 8:00 AM shift start. By 2:00 PM, the security agent has crashed, and the device is out of physical bounds, but the session remains active.</p>
-                </div>
+
+            <div className="flex gap-4 p-4 rounded-lg border border-destructive/20 bg-destructive/5">
+              <ShieldAlert className="w-6 h-6 text-destructive shrink-0 mt-1" />
+              <div>
+                <h4 className="font-semibold text-foreground">The Real Scenario</h4>
+                <p className="text-sm text-muted-foreground mt-1">
+                  A medication cart iPad is compliant at 08:00. At 14:03, the security agent has crashed, the device crossed a zone boundary without a badge checkout, and the badge was forcibly removed from the case — but the session is still active and the workflow is still accessible.
+                </p>
               </div>
-              
-              <div className="flex gap-4 p-4 rounded-lg border border-primary/20 bg-primary/5">
-                <Activity className="w-6 h-6 text-primary shrink-0 mt-1" />
-                <div>
-                  <h4 className="font-semibold text-foreground">The SignalGrid Solution</h4>
-                  <p className="text-sm text-muted-foreground mt-1">Evaluation occurs exactly when the workflow is requested. We check real-time service health, ITSM incidents, and shift context in milliseconds before granting access.</p>
-                </div>
+            </div>
+
+            <div className="flex gap-4 p-4 rounded-lg border border-primary/20 bg-primary/5">
+              <CheckCircle2 className="w-6 h-6 text-primary shrink-0 mt-1" />
+              <div>
+                <h4 className="font-semibold text-foreground">SignalGrid: One Control Plane</h4>
+                <p className="text-sm text-muted-foreground mt-1">
+                  All seven signal sources stream into a single runtime decision layer. Badge state, device posture, zone presence, shift authorization, and cellular reachability are evaluated together — at the moment the workflow fires.
+                </p>
               </div>
             </div>
           </div>
-          
-          <div className="relative">
-            <div className="absolute inset-0 bg-gradient-to-tr from-primary/5 to-transparent rounded-xl"></div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-4">
-                <div className="p-6 rounded-xl border border-border/50 bg-card shadow-sm opacity-50 relative overflow-hidden group">
-                  <div className="absolute inset-0 bg-red-500/5 transition-opacity group-hover:opacity-100"></div>
-                  <div className="text-xs font-mono text-muted-foreground mb-2">08:00 AM</div>
-                  <div className="font-medium">Legacy Access</div>
-                  <div className="text-sm text-muted-foreground mt-2">Evaluates once. Grants 12-hour session. Blind to runtime state changes.</div>
-                </div>
-                <div className="p-6 rounded-xl border border-primary/30 bg-card shadow-sm relative overflow-hidden">
-                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary"></div>
-                  <div className="text-xs font-mono text-primary mb-2">14:03:45 PM</div>
-                  <div className="font-medium">SignalGrid Runtime</div>
-                  <div className="text-sm text-muted-foreground mt-2">Continuous evaluation at exact moment of transaction request.</div>
-                </div>
+
+          <div className="relative space-y-3">
+            <div className="text-xs font-mono text-muted-foreground mb-4">BEFORE SIGNALGRID — 7 DISCONNECTED SYSTEMS</div>
+            {SILOS.map((silo, idx) => (
+              <motion.div
+                key={silo}
+                initial={{ opacity: 0, x: 20 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.3, delay: idx * 0.06 }}
+                className="flex items-center gap-3 p-3 rounded-lg border border-border/40 bg-card/50 opacity-70"
+              >
+                <div className="w-2 h-2 rounded-full bg-destructive/60 shrink-0"></div>
+                <span className="text-sm text-muted-foreground">{silo}</span>
+                <span className="ml-auto text-xs font-mono text-destructive/60">ISOLATED</span>
+              </motion.div>
+            ))}
+
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.5 }}
+              className="mt-6 flex items-center gap-3 p-4 rounded-lg border border-primary/30 bg-primary/5"
+            >
+              <ArrowRight className="w-5 h-5 text-primary shrink-0" />
+              <div>
+                <div className="text-sm font-semibold text-foreground">SignalGrid Runtime Layer</div>
+                <div className="text-xs text-muted-foreground mt-0.5">All 7 signal sources fused into one calibrated decision</div>
               </div>
-              <div className="space-y-4 pt-8">
-                <div className="p-6 rounded-xl border border-border/50 bg-card shadow-sm opacity-50">
-                  <div className="text-xs font-mono text-muted-foreground mb-2">STATE</div>
-                  <div className="font-medium text-destructive flex items-center"><span className="w-2 h-2 rounded-full bg-destructive mr-2"></span>Agent Failed</div>
-                  <div className="text-sm text-muted-foreground mt-2">Device compromised post-login.</div>
-                </div>
-                <div className="p-6 rounded-xl border border-border/50 bg-card shadow-sm opacity-50">
-                  <div className="text-xs font-mono text-muted-foreground mb-2">OUTCOME</div>
-                  <div className="font-medium text-primary flex items-center"><CheckCircle2 className="w-4 h-4 mr-2" />Access Blocked</div>
-                  <div className="text-sm text-muted-foreground mt-2">Workflow denied despite active token.</div>
-                </div>
-              </div>
-            </div>
+              <span className="ml-auto text-xs font-mono text-primary font-medium">UNIFIED</span>
+            </motion.div>
           </div>
         </div>
       </div>

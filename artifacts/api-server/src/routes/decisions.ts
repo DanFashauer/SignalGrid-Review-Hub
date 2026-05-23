@@ -61,6 +61,18 @@ const SIGNAL_PLATFORMS = [
   { platform: "hid-crescendo", signalType: "identity" },
   { platform: "authentik", signalType: "identity" },
   { platform: "privacyidea", signalType: "identity" },
+  // Cellular / eSIM (post-exit reachability)
+  { platform: "twilio-super-sim", signalType: "network-posture" },
+  { platform: "soracom", signalType: "network-posture" },
+  { platform: "hologram", signalType: "network-posture" },
+  // Infrastructure monitoring
+  { platform: "datadog", signalType: "operational-signals" },
+  { platform: "grafana", signalType: "operational-signals" },
+  { platform: "prometheus", signalType: "operational-signals" },
+  // SOAR
+  { platform: "tines", signalType: "operational-signals" },
+  // ITSM
+  { platform: "pagerduty", signalType: "operational-signals" },
 ];
 
 function hashString(s: string): number {

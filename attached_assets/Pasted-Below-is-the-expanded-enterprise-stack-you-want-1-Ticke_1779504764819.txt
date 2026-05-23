@@ -1,0 +1,214 @@
+Below is the expanded enterprise stack you want.
+
+1. Ticketing / ITSM / Incident Systems with APIs
+
+System	Best Use
+ServiceNow	Enterprise ITSM, SecOps, CMDB, incident/change/problem
+Jira Service Management	IT + DevOps incident workflows
+PagerDuty	On-call, alert routing, incident response
+Opsgenie	Alerting/on-call, now Atlassian ecosystem
+Freshservice	ITSM, service desk, asset workflows
+Zendesk	Support + IT ticketing
+BMC Helix	Enterprise ITSM/AIOps
+SolarWinds Service Desk	ITSM + asset/ticket workflows
+ManageEngine ServiceDesk Plus	ITSM + endpoint/infra tie-in
+HaloITSM	Enterprise ITSM/SLA workflows
+TOPdesk	ITSM/facilities service management
+Ivanti Neurons for ITSM	ITSM + endpoint/security operations
+
+PagerDuty can link incidents with ITSM tickets so updates in PagerDuty reflect back in the ITSM system, which is the model you want for alert-to-ticket automation.  
+
+2. Monitoring / SIEM / XDR / SOAR Tools
+
+SIEM / Log Analytics
+
+Tool	Best Use
+Microsoft Sentinel	Cloud SIEM/SOAR, Microsoft ecosystem
+Splunk Enterprise Security	Large enterprise SIEM/log analytics
+Elastic Security	SIEM + endpoint + detection
+CrowdStrike Falcon LogScale / Next-Gen SIEM	EDR-native security analytics
+Google Security Operations / Chronicle	Cloud-scale SIEM
+IBM QRadar	Traditional enterprise SIEM
+Sumo Logic	Cloud log/security analytics
+Graylog	Log management/SIEM
+Wazuh	Open-source SIEM/XDR
+Security Onion	Open-source blue-team monitoring
+
+Elastic has direct CrowdStrike integration for onboarding alerts and telemetry into Elastic Security for correlation and response.  
+
+XDR / EDR / Endpoint Security
+
+Tool	Notes
+CrowdStrike Falcon	EDR/XDR, identity, cloud, device telemetry
+SentinelOne Singularity	EDR/XDR, automation
+Microsoft Defender XDR	Endpoint, identity, cloud, email
+Palo Alto Cortex XDR / XSOAR	XDR + SOAR
+Trellix	EDR/XDR/SIEM legacy enterprise
+Sophos Central	Endpoint/firewall/security alerts
+VMware Carbon Black	Endpoint detection/response
+Trend Micro Vision One	XDR/security operations
+
+Infrastructure / Network / App Monitoring
+
+Tool	Notes
+Datadog	Infra, cloud, logs, APM, security alerts
+New Relic	APM + infrastructure monitoring
+Dynatrace	AIOps/APM/infra monitoring
+Grafana	Dashboards, alerting, observability
+Prometheus / Alertmanager	Metrics + alerting
+Zabbix	Infra/network monitoring
+PRTG	Network/device monitoring
+Nagios / Icinga	Traditional infra monitoring
+LogicMonitor	Enterprise hybrid infrastructure
+SolarWinds	Network + systems monitoring
+ThousandEyes	Network path/ISP/SaaS visibility
+Cisco Meraki Dashboard Alerts	Network/device/location alerts
+Cisco ISE	NAC/security posture events
+Aruba Central	Wireless/network alerts
+FortiManager/FortiAnalyzer	Fortinet security/log alerts
+Palo Alto Panorama	Firewall/security event control
+
+3. Cellular / eSIM / Carrier Monitoring APIs
+
+This is the important part for your Wi-Fi-only problem. For live alerting after a device leaves a building, you need cellular or another independent beacon path. Wi-Fi-only devices go dark once they lose Wi-Fi.
+
+Carrier / Platform	What It Gives You
+Verizon ThingSpace	IoT/eSIM management, diagnostics, APIs, global IoT orchestration
+AT&T Control Center	IoT device activation, usage, automation, API integration, real-time visibility
+Cisco IoT Control Center	Carrier IoT connectivity management, device usage, location change, fraud/data alerts
+T-Mobile IoT	IoT connectivity and eSIM/M2M programs
+Aeris	Global IoT connectivity platform
+KORE Wireless	Managed IoT connectivity
+Twilio Super SIM	Programmable cellular IoT SIM/eSIM
+Soracom	IoT SIM/eSIM, APIs, cloud integrations
+1NCE	Low-cost global IoT connectivity
+Hologram	IoT cellular connectivity APIs
+Eseye	Enterprise IoT connectivity
+EMnify	Cellular IoT API/platform
+
+AT&T Control Center supports device activation, automation, analytics, dashboards, and API integration with real-time visibility.   Verizon ThingSpace supports global IoT orchestration and eSIM profile switching through ThingSpace APIs.   Cisco IoT Control Center supports alerts based on usage, location change, fraud detection, geo-specific usage, and data usage.  
+
+4. Your “Device Leaving Facility” Architecture
+
+Best design:
+
+Device signal sources:
+MDM + Wi-Fi + BLE beacon + badge reader + door controller + cellular/eSIM + location
+Event logic:
+Device not checked out
+AND device crosses exit zone
+AND device loses facility Wi-Fi
+AND no approved user/badge association
+THEN trigger incident
+Actions:
+1. Alert security
+2. Create ServiceNow/Jira incident
+3. Send PagerDuty/Opsgenie alert
+4. Trigger device sound if reachable
+5. Put supervised iOS device into Managed Lost Mode
+6. Notify building access/security desk
+7. Optionally lock app/session or disable account access
+
+For iOS/iPadOS, Apple Managed Lost Mode can locate, lock, or erase supervised devices when stolen or lost.   But the limitation is important: MDM commands require the device to be online. If it is Wi-Fi-only and leaves the building, you may not reach it again until it joins a network.
+
+5. Systems to Integrate for This
+
+Badge / Building Access
+
+* HID
+* LenelS2
+* Genetec
+* Gallagher
+* Brivo
+* Kisi
+* Openpath / Avigilon Alta
+* Johnson Controls / C•CURE
+* Honeywell Pro-Watch
+* Siemens
+* Verkada
+* Axis
+* Salto
+* Suprema
+* RF IDeas
+* Imprivata
+
+Device / Endpoint
+
+* Microsoft Intune
+* Jamf
+* Kandji
+* Workspace ONE
+* Ivanti/MobileIron
+* FleetDM
+* SimpleMDM
+* Mosyle
+* Addigy
+
+Alert / Incident Pipeline
+
+* ServiceNow SecOps
+* PagerDuty
+* Opsgenie
+* Microsoft Sentinel
+* Splunk
+* Elastic
+* CrowdStrike
+* Datadog
+* Grafana Alerting
+* Webhooks
+* AWS EventBridge
+* Azure Event Grid / Logic Apps
+* Google Pub/Sub
+* Tines
+* Torq
+* Cortex XSOAR
+
+6. The Real Answer for “Ping the eSIM”
+
+You generally cannot “ping an eSIM” like a normal device unless the carrier platform, device OS, MDM, or installed agent supports a reachable control channel.
+
+What you can do:
+
+Option A: Cellular iPad/iPhone
+Use MDM + carrier IoT/eSIM APIs + Lost Mode + location.
+Option B: Wi-Fi-only iPad
+Use BLE/UWB/RFID exit detection before it leaves the building.
+Once it leaves Wi-Fi, assume loss of command/control.
+Option C: Add external tracker/modem
+Use a rugged case with LTE-M/NB-IoT/GPS/BLE module.
+That module reports independently from the iPad.
+Option D: Badge-auth checkout model
+Device must be associated with a user badge/session.
+Unapproved exit creates security incident.
+
+7. Best Enterprise Build Direction
+
+For your idea, the strongest architecture is:
+
+SignalGrid-style control layer
+Inputs:
+- MDM inventory/status
+- Wi-Fi association
+- BLE beacon proximity
+- Door/access-control events
+- Badge tap identity
+- Carrier/eSIM status
+- Location/geofence
+- Device checkout state
+- Shift/role/department
+Decision:
+- Approved movement
+- Suspicious movement
+- Lost/stolen
+- Offline risk
+- Exit violation
+Outputs:
+- ServiceNow incident
+- PagerDuty alert
+- Security desk notification
+- MDM Lost Mode
+- Play sound / lock app
+- Disable session
+- Badge/access escalation
+
+The key product gap: Wi-Fi-only shared devices need pre-exit detection, not post-exit recovery. Cellular/eSIM gives post-exit visibility; BLE/UWB/RFID + badge/door integration gives pre-exit prevention.

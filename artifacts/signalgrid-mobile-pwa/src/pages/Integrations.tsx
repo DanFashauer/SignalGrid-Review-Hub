@@ -25,6 +25,9 @@ export default function Integrations() {
     "Security Keys / FIDO2",
     "Mobile Credentials",
     "IoT / Smart Building",
+    "Cellular / eSIM",
+    "Infrastructure Monitoring",
+    "SOAR / Automation",
     "ITSM",
   ];
   

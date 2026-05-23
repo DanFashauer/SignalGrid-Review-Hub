@@ -35,6 +35,9 @@ const CATEGORY_ORDER = [
   "Security Keys / FIDO2",
   "Mobile Credentials",
   "IoT / Smart Building",
+  "Cellular / eSIM",
+  "Infrastructure Monitoring",
+  "SOAR / Automation",
   "ITSM",
 ];
 
@@ -49,7 +52,10 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
   "Security Keys / FIDO2": "Hardware security keys, passkeys, and phishing-resistant authenticators",
   "Mobile Credentials": "Apple Wallet, Google Wallet, and mobile badge credential platforms",
   "IoT / Smart Building": "Matter/CSA, building automation, and smart environment signal sources",
-  "ITSM": "IT service management and incident tracking",
+  "Cellular / eSIM": "Carrier IoT connectivity, eSIM management, and post-exit device reachability",
+  "Infrastructure Monitoring": "Observability, metrics, and infrastructure health signal sources",
+  "SOAR / Automation": "Security orchestration, event routing, and automated response platforms",
+  "ITSM": "IT service management, incident response, and on-call platforms",
 };
 
 const SIGNAL_TYPE_COLORS: Record<string, string> = {

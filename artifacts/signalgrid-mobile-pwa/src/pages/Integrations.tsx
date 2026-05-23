@@ -29,6 +29,8 @@ export default function Integrations() {
     "Infrastructure Monitoring",
     "SOAR / Automation",
     "ITSM",
+    "Disaster Recovery / BC",
+    "GRC / Compliance",
   ];
   
   const sortedIntegrations = data?.integrations ? [...data.integrations].sort((a, b) => {

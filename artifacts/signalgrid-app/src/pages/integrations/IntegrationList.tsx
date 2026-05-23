@@ -39,6 +39,8 @@ const CATEGORY_ORDER = [
   "Infrastructure Monitoring",
   "SOAR / Automation",
   "ITSM",
+  "Disaster Recovery / BC",
+  "GRC / Compliance",
 ];
 
 const CATEGORY_DESCRIPTIONS: Record<string, string> = {
@@ -56,6 +58,27 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
   "Infrastructure Monitoring": "Observability, metrics, and infrastructure health signal sources",
   "SOAR / Automation": "Security orchestration, event routing, and automated response platforms",
   "ITSM": "IT service management, incident response, and on-call platforms",
+  "Disaster Recovery / BC": "Backup, replication, and business continuity resilience signal sources",
+  "GRC / Compliance": "Governance, risk, compliance, and vulnerability management platforms — including DISA STIG, FedRAMP, and CMMC",
+};
+
+const CATEGORY_OWNER_TEAM: Record<string, string> = {
+  "IGA / IDP": "IAM",
+  "MDM / UEM": "Endpoint Mgmt",
+  "EDR / XDR": "SOC",
+  "SIEM": "SOC",
+  "Networking / SDN": "NetOps",
+  "Firewall / SASE": "NetSecOps",
+  "Physical Access (PACS)": "Physical Security",
+  "Security Keys / FIDO2": "IAM",
+  "Mobile Credentials": "IAM",
+  "IoT / Smart Building": "Facilities",
+  "Cellular / eSIM": "NetOps",
+  "Infrastructure Monitoring": "SRE",
+  "SOAR / Automation": "SOC",
+  "ITSM": "IT Service Desk",
+  "Disaster Recovery / BC": "Business Continuity",
+  "GRC / Compliance": "GRC",
 };
 
 const SIGNAL_TYPE_COLORS: Record<string, string> = {
@@ -169,6 +192,11 @@ export function IntegrationList() {
           <div className="flex items-baseline gap-3 border-b border-border pb-2">
             <h2 className="text-sm font-mono font-bold uppercase tracking-widest">{category}</h2>
             <span className="text-xs font-mono text-muted-foreground">{CATEGORY_DESCRIPTIONS[category]}</span>
+            {CATEGORY_OWNER_TEAM[category] && (
+              <span className="hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded border border-primary/20 bg-primary/5 text-xs font-mono text-primary">
+                OWNER: {CATEGORY_OWNER_TEAM[category]}
+              </span>
+            )}
             <span className="ml-auto text-xs font-mono text-muted-foreground">{items.length} sources</span>
           </div>
 

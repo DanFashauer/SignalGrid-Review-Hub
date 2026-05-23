@@ -1,83 +1,188 @@
 import { motion } from "framer-motion";
 import { Cloud, Server, ShieldCheck } from "lucide-react";
 
-export default function DeploymentSection() {
-  const options = [
-    {
-      title: "SignalGrid Cloud",
-      icon: Cloud,
-      type: "SaaS",
-      desc: "Managed, auto-scaling infrastructure with enterprise SLAs. Ideal for cloud-native organizations.",
-      features: ["Zero maintenance", "Enterprise contracts", "SOC 2 Type II compliant"],
-      highlight: true
-    },
-    {
-      title: "Self-Hosted",
-      icon: Server,
-      type: "Bring Your Own Infra",
-      desc: "Run anywhere using Docker Compose or Kubernetes Helm charts. Keep telemetry in your VPC.",
-      features: ["Free for self-hosted", "Full data sovereignty", "Custom scaling"],
-      highlight: false
-    },
-    {
-      title: "Air-Gapped",
-      icon: ShieldCheck,
-      type: "Regulated",
-      desc: "Completely isolated environments for critical infrastructure and government deployments.",
-      features: ["Zero external transmission", "Offline license validation", "FIPS 140-2 ready"],
-      highlight: false
-    }
-  ];
+const DEPLOYMENT_OPTIONS = [
+  {
+    title: "SignalGrid Cloud",
+    icon: Cloud,
+    type: "SaaS / Multi-Tenant",
+    desc: "Managed, auto-scaling infrastructure with enterprise SLAs. Telemetry processed in your chosen region — EU, US, APAC.",
+    features: [
+      "Zero maintenance, auto-scaling",
+      "SOC 2 Type II certified",
+      "HIPAA Business Associate Agreement",
+      "99.99% uptime SLA",
+      "Regional data residency",
+    ],
+    compliance: ["SOC 2", "HIPAA", "ISO 27001", "PCI DSS"],
+    highlight: true,
+    cta: "Contact Sales",
+  },
+  {
+    title: "Self-Hosted",
+    icon: Server,
+    type: "VPC / On-Premise",
+    desc: "Run in your own VPC or on-premise using Docker Compose or Kubernetes Helm charts. Full data sovereignty — telemetry never leaves your environment.",
+    features: [
+      "Full data sovereignty",
+      "Docker Compose + Helm charts",
+      "Custom scaling and HA config",
+      "FIPS 140-2 validated crypto",
+      "Bring your own PKI",
+    ],
+    compliance: ["NIST 800-53", "CMMC 2.0", "FedRAMP Ready"],
+    highlight: false,
+    cta: "View Docs",
+  },
+  {
+    title: "Air-Gapped",
+    icon: ShieldCheck,
+    type: "Classified / Regulated",
+    desc: "Fully isolated deployment for critical infrastructure, DoD, and IC environments. Zero external data transmission. Offline license validation.",
+    features: [
+      "Zero external network connectivity",
+      "Offline license and update model",
+      "DISA STIG hardened base image",
+      "SCAP/XCCDF benchmark included",
+      "IL4 / IL5 capable architecture",
+    ],
+    compliance: ["DISA STIG", "FedRAMP High", "DoD IL2–IL5", "CMMC L3", "ITAR"],
+    highlight: false,
+    cta: "Contact Sales",
+  },
+];
 
+const DR_CAPABILITIES = [
+  { label: "RTO Target", value: "< 4 hours", desc: "Decision engine full restoration" },
+  { label: "RPO Target", value: "< 15 min", desc: "Policy and audit data recovery point" },
+  { label: "HA Config", value: "Active-Active", desc: "Multi-region or multi-node cluster" },
+  { label: "Backup", value: "Encrypted", desc: "AES-256 at rest, TLS 1.3 in transit" },
+  { label: "Failover", value: "Automated", desc: "Health-check triggered, no manual step" },
+  { label: "Audit Log", value: "Immutable", desc: "WORM-compliant, tamper-evident trail" },
+];
+
+export default function DeploymentSection() {
   return (
     <section className="py-24 bg-zinc-950" id="deployment">
       <div className="container mx-auto px-4 md:px-8 max-w-screen-xl">
+
         <div className="text-center mb-16 max-w-3xl mx-auto">
-          <h2 className="text-3xl font-bold tracking-tight mb-4">Deploy Your Way</h2>
+          <h2 className="text-3xl font-bold tracking-tight mb-4">Deploy Where Your Controls Live</h2>
           <p className="text-muted-foreground text-lg">
-            Security infrastructure should match your operational requirements, not force you into a specific deployment model.
+            Security infrastructure must match your regulatory environment, sovereignty requirements, and classification level — not force you into a shared cloud model.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-          {options.map((opt, idx) => (
-            <motion.div 
+        {/* Deployment options */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
+          {DEPLOYMENT_OPTIONS.map((opt, idx) => (
+            <motion.div
               key={opt.title}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: idx * 0.1 }}
-              className={`relative p-8 rounded-xl border ${opt.highlight ? 'border-primary shadow-[0_0_30px_-10px_rgba(59,130,246,0.3)] bg-primary/5' : 'border-border/50 bg-card'}`}
+              className={`relative p-8 rounded-xl border flex flex-col ${
+                opt.highlight
+                  ? "border-primary shadow-[0_0_30px_-10px_rgba(59,130,246,0.3)] bg-primary/5"
+                  : "border-border/50 bg-card"
+              }`}
             >
               {opt.highlight && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-primary text-primary-foreground text-xs font-bold tracking-wider rounded-full uppercase">
                   Most Popular
                 </div>
               )}
-              <opt.icon className={`w-8 h-8 mb-6 ${opt.highlight ? 'text-primary' : 'text-muted-foreground'}`} />
-              <div className="text-sm font-mono text-muted-foreground mb-2">{opt.type}</div>
-              <h3 className="text-xl font-semibold mb-3">{opt.title}</h3>
-              <p className="text-sm text-muted-foreground mb-6 h-16">{opt.desc}</p>
-              
-              <ul className="space-y-3 mt-auto">
-                {opt.features.map(feat => (
-                  <li key={feat} className="flex items-center text-sm font-medium">
-                    <svg className={`w-4 h-4 mr-3 ${opt.highlight ? 'text-primary' : 'text-muted-foreground'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <opt.icon className={`w-7 h-7 mb-5 ${opt.highlight ? "text-primary" : "text-muted-foreground"}`} />
+              <div className="text-xs font-mono text-muted-foreground mb-1.5">{opt.type}</div>
+              <h3 className="text-lg font-semibold mb-3">{opt.title}</h3>
+              <p className="text-sm text-muted-foreground mb-5 leading-relaxed">{opt.desc}</p>
+
+              <ul className="space-y-2 mb-6">
+                {opt.features.map((feat) => (
+                  <li key={feat} className="flex items-center text-sm">
+                    <svg
+                      className={`w-3.5 h-3.5 mr-2.5 shrink-0 ${opt.highlight ? "text-primary" : "text-muted-foreground"}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                     {feat}
                   </li>
                 ))}
               </ul>
-              
-              <div className="mt-8">
-                <button className={`w-full py-2.5 rounded-md text-sm font-medium transition-colors ${opt.highlight ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}>
-                  {opt.title === "Self-Hosted" ? "View Docs" : "Contact Sales"}
-                </button>
+
+              {/* Compliance badges */}
+              <div className="mt-auto pt-4 border-t border-border/40">
+                <div className="text-xs font-mono text-muted-foreground mb-2">COMPLIANCE</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {opt.compliance.map((c) => (
+                    <span
+                      key={c}
+                      className="text-xs font-mono px-1.5 py-0.5 rounded border border-primary/20 bg-primary/5 text-primary"
+                    >
+                      {c}
+                    </span>
+                  ))}
+                </div>
               </div>
+
+              <button
+                className={`mt-6 w-full py-2.5 rounded-md text-sm font-medium transition-colors ${
+                  opt.highlight
+                    ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                    : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                }`}
+              >
+                {opt.cta}
+              </button>
             </motion.div>
           ))}
         </div>
+
+        {/* Disaster Recovery & resilience */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="rounded-xl border border-border bg-card p-8"
+        >
+          <div className="flex flex-col md:flex-row md:items-start gap-8">
+            <div className="md:w-72 shrink-0">
+              <div className="text-xs font-mono text-muted-foreground mb-2">BUILT-IN RESILIENCE</div>
+              <h3 className="text-lg font-semibold mb-3">Disaster Recovery Architecture</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                The SignalGrid decision engine is the access control plane for sensitive workflows — it must be more resilient than the systems it protects. Built-in HA, automated failover, and immutable audit logging are not optional features.
+              </p>
+            </div>
+            <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {DR_CAPABILITIES.map((cap) => (
+                <div key={cap.label} className="rounded-lg border border-border/60 bg-background/50 p-4">
+                  <div className="text-xs font-mono text-muted-foreground mb-1">{cap.label}</div>
+                  <div className="text-base font-bold font-mono text-primary mb-1">{cap.value}</div>
+                  <div className="text-xs text-muted-foreground">{cap.desc}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-6 pt-6 border-t border-border/40">
+            <div className="text-xs font-mono text-muted-foreground mb-3">DR INTEGRATION ECOSYSTEM — connects to your existing backup and recovery stack</div>
+            <div className="flex flex-wrap gap-2">
+              {["Veeam", "Zerto", "Rubrik", "Cohesity", "Commvault", "AWS Elastic DR", "Azure Site Recovery", "Veritas NetBackup", "Acronis Cyber Protect"].map((tool) => (
+                <span
+                  key={tool}
+                  className="text-xs font-mono px-2.5 py-1 rounded border border-border bg-muted/30 text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
+                >
+                  {tool}
+                </span>
+              ))}
+            </div>
+          </div>
+        </motion.div>
+
       </div>
     </section>
   );

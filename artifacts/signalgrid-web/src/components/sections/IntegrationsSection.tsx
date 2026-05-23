@@ -1,85 +1,105 @@
 import { motion } from "framer-motion";
 
-export default function IntegrationsSection() {
-  const mdmIntegrations = [
-    "Fleet MDM", "Microsoft Intune", "Workspace ONE", 
-    "Jamf Pro", "Hexnode UEM", "MaaS360", 
-    "NinjaOne", "Ivanti Neurons", "Endpoint Central", "Tanium"
-  ];
-  
-  const idpIntegrations = ["Entra ID", "Okta"];
-  const itsmIntegrations = ["ServiceNow", "Jira Service Management"];
+const CATEGORY_GROUPS = [
+  {
+    label: "Identity & Access",
+    items: ["Okta", "SailPoint", "Saviynt", "Entra ID", "Auth0", "Keycloak", "Imprivata", "Teleport", "Authentik", "ZITADEL"],
+    owner: "IAM",
+  },
+  {
+    label: "Endpoint & MDM",
+    items: ["Intune", "Jamf Pro", "Kandji", "Workspace ONE", "Fleet", "CrowdStrike", "SentinelOne", "Mosyle", "Carbon Black", "Trellix"],
+    owner: "Endpoint Mgmt / SOC",
+  },
+  {
+    label: "Physical Access & Cellular",
+    items: ["HID Global", "LenelS2", "Genetec", "RF IDeas", "Imprivata", "Verkada", "Honeywell Pro-Watch", "Twilio Super SIM", "Soracom", "C•CURE 9000"],
+    owner: "Physical Security / NetOps",
+  },
+  {
+    label: "SIEM, SOAR & Monitoring",
+    items: ["Splunk", "Microsoft Sentinel", "Elastic Security", "Chronicle", "Tines", "Torq", "Datadog", "Grafana", "PagerDuty", "AWS EventBridge"],
+    owner: "SOC / SRE",
+  },
+  {
+    label: "DR / BC & GRC",
+    items: ["Veeam", "Zerto", "Rubrik", "Qualys VMDR", "Tenable.io", "ServiceNow GRC", "Drata", "DISA SCAP/STIG", "RSA Archer", "Rapid7 InsightVM"],
+    owner: "Business Continuity / GRC",
+  },
+];
 
+export default function IntegrationsSection() {
   return (
     <section className="py-24 bg-zinc-950 border-b border-border/50" id="integrations">
       <div className="container mx-auto px-4 md:px-8 max-w-screen-xl">
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-16 gap-8">
           <div className="max-w-2xl">
-            <h2 className="text-3xl font-bold tracking-tight mb-4">Ecosystem Agnostic</h2>
+            <h2 className="text-3xl font-bold tracking-tight mb-4">140+ Native Integrations. 16 Signal Categories.</h2>
             <p className="text-muted-foreground text-lg">
-              We ingest signals from your existing infrastructure. 19 native integrations across Identity, MDM, and ITSM. No new agents required.
+              SignalGrid consumes signals from your entire security stack — identity, endpoint, physical access, SIEM, SOAR, DR, and GRC — and routes every alert to the team that owns that signal source.
             </p>
           </div>
-          <div className="font-mono text-sm px-4 py-2 rounded border border-border bg-card inline-flex self-start md:self-end">
-            <span className="text-primary mr-2">{"{"}</span>
-            API-FIRST ARCHITECTURE
-            <span className="text-primary ml-2">{"}"}</span>
+          <div className="font-mono text-sm px-4 py-2 rounded border border-border bg-card inline-flex self-start md:self-end gap-2">
+            <span className="text-primary">{"{"}</span>
+            API-FIRST — NO NEW AGENTS
+            <span className="text-primary">{"}"}</span>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-          <motion.div 
-            initial={{ opacity: 0, y: 10 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="md:col-span-6 p-8 rounded-xl border border-border/50 bg-card/50"
-          >
-            <h3 className="text-sm font-medium tracking-widest text-muted-foreground uppercase mb-6">MDM / UEM / Posture</h3>
-            <div className="flex flex-wrap gap-2">
-              {mdmIntegrations.map((item) => (
-                <span key={item} className="px-3 py-1.5 rounded-md border border-border bg-background text-sm font-medium text-foreground/80 hover:text-foreground transition-colors hover:border-primary/50">
-                  {item}
+        <div className="space-y-4">
+          {CATEGORY_GROUPS.map((group, idx) => (
+            <motion.div
+              key={group.label}
+              initial={{ opacity: 0, y: 10 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: idx * 0.08 }}
+              className="p-6 rounded-xl border border-border/50 bg-card/50"
+            >
+              <div className="flex items-center justify-between gap-4 mb-4">
+                <h3 className="text-sm font-mono font-bold uppercase tracking-widest text-muted-foreground">
+                  {group.label}
+                </h3>
+                <span className="text-xs font-mono px-2 py-0.5 rounded border border-primary/20 bg-primary/5 text-primary shrink-0">
+                  OWNER: {group.owner}
                 </span>
-              ))}
-            </div>
-          </motion.div>
-
-          <div className="md:col-span-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <motion.div 
-              initial={{ opacity: 0, y: 10 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.1 }}
-              className="p-8 rounded-xl border border-border/50 bg-card/50"
-            >
-              <h3 className="text-sm font-medium tracking-widest text-muted-foreground uppercase mb-6">Identity & Access</h3>
+              </div>
               <div className="flex flex-wrap gap-2">
-                {idpIntegrations.map((item) => (
-                  <span key={item} className="px-3 py-1.5 rounded-md border border-border bg-background text-sm font-medium text-foreground/80 hover:text-foreground transition-colors hover:border-primary/50">
+                {group.items.map((item) => (
+                  <span
+                    key={item}
+                    className="px-3 py-1.5 rounded-md border border-border bg-background text-sm font-medium text-foreground/80 hover:text-foreground hover:border-primary/50 transition-colors"
+                  >
                     {item}
                   </span>
                 ))}
+                <span className="px-3 py-1.5 rounded-md border border-border/40 bg-background/50 text-sm font-mono text-muted-foreground/60">
+                  + more
+                </span>
               </div>
             </motion.div>
-            
-            <motion.div 
-              initial={{ opacity: 0, y: 10 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.2 }}
-              className="p-8 rounded-xl border border-border/50 bg-card/50"
-            >
-              <h3 className="text-sm font-medium tracking-widest text-muted-foreground uppercase mb-6">ITSM & Ops</h3>
-              <div className="flex flex-wrap gap-2">
-                {itsmIntegrations.map((item) => (
-                  <span key={item} className="px-3 py-1.5 rounded-md border border-border bg-background text-sm font-medium text-foreground/80 hover:text-foreground transition-colors hover:border-primary/50">
-                    {item}
-                  </span>
-                ))}
-              </div>
-            </motion.div>
-          </div>
+          ))}
         </div>
+
+        <motion.div
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.4 }}
+          className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4"
+        >
+          {[
+            { value: "140+", label: "Native integrations" },
+            { value: "16", label: "Signal categories" },
+            { value: "8", label: "Owning teams routed" },
+            { value: "12+", label: "Compliance frameworks" },
+          ].map((stat) => (
+            <div key={stat.label} className="rounded-lg border border-border bg-card p-5 text-center">
+              <div className="text-2xl font-bold font-mono text-primary mb-1">{stat.value}</div>
+              <div className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{stat.label}</div>
+            </div>
+          ))}
+        </motion.div>
       </div>
     </section>
   );

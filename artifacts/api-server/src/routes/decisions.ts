@@ -73,6 +73,15 @@ const SIGNAL_PLATFORMS = [
   { platform: "tines", signalType: "operational-signals" },
   // ITSM
   { platform: "pagerduty", signalType: "operational-signals" },
+  // Disaster Recovery / BC
+  { platform: "veeam", signalType: "operational-signals" },
+  { platform: "zerto", signalType: "operational-signals" },
+  { platform: "rubrik", signalType: "operational-signals" },
+  // GRC / Compliance
+  { platform: "qualys-vmdr", signalType: "operational-signals" },
+  { platform: "servicenow-grc", signalType: "operational-signals" },
+  { platform: "tenable", signalType: "operational-signals" },
+  { platform: "disa-scap", signalType: "operational-signals" },
 ];
 
 function hashString(s: string): number {

@@ -1,5 +1,5 @@
 kind = "web"
-previewPath = "/"
+previewPath = "/review"
 title = "SignalGrid Second-Opinion Review"
 version = "1.0.0"
 id = "artifacts/signalgrid-review"
@@ -11,7 +11,7 @@ version = "1.0.0"
 
 [[services]]
 name = "web"
-paths = [ "/" ]
+paths = [ "/review" ]
 localPort = 24168
 
 [services.development]
@@ -28,4 +28,4 @@ to = "/index.html"
 
 [services.env]
 PORT = "24168"
-BASE_PATH = "/"
+BASE_PATH = "/review"

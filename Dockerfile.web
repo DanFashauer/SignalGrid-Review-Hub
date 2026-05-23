@@ -1,0 +1,27 @@
+FROM node:24-alpine AS builder
+
+WORKDIR /app
+
+RUN corepack enable pnpm
+
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY lib/ ./lib/
+COPY artifacts/signalgrid-web/ ./artifacts/signalgrid-web/
+COPY artifacts/signalgrid-app/ ./artifacts/signalgrid-app/
+
+RUN pnpm install --frozen-lockfile
+
+WORKDIR /app/artifacts/signalgrid-web
+RUN BASE_PATH=/ pnpm run build
+
+WORKDIR /app/artifacts/signalgrid-app
+RUN BASE_PATH=/app/ pnpm run build
+
+FROM nginx:alpine AS runtime
+
+COPY --from=builder /app/artifacts/signalgrid-web/dist/ /usr/share/nginx/html/
+COPY --from=builder /app/artifacts/signalgrid-app/dist/ /usr/share/nginx/html/app/
+
+EXPOSE 3000
+
+CMD ["nginx", "-g", "daemon off;"]

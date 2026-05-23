@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/app/"
+title = "SignalGrid — Operator Dashboard"
+version = "1.0.0"
+id = "artifacts/signalgrid-app"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/app/" ]
+localPort = 19385
+
+[services.development]
+run = "pnpm --filter @workspace/signalgrid-app run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/signalgrid-app", "run", "build" ]
+publicDir = "artifacts/signalgrid-app/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19385"
+BASE_PATH = "/app/"

@@ -1,0 +1,14 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "gToqnyHb3O885qhzioiYJ"
+uri = "file://artifacts/signalgrid-web/src/assets/architecture.png"
+type = "image"
+title = "Signal architecture diagram"
+
+[[generated]]
+id = "Vud904vc2_abD9yESwcOL"
+uri = "file://artifacts/signalgrid-web/src/assets/decision-flow.png"
+type = "image"
+title = "Access decision flow"

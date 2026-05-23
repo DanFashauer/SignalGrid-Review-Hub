@@ -2,21 +2,31 @@ openapi: 3.1.0
 info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
-  version: 0.1.0
-  description: API specification
+  version: 0.2.0
+  description: SignalGrid runtime decision layer API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: decisions
+    description: Access decision evaluation and log
+  - name: integrations
+    description: Integration health and configuration
+  - name: signals
+    description: Signal ingestion and inspection
+  - name: policies
+    description: Policy configuration
+  - name: metrics
+    description: Dashboard metrics and analytics
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +34,339 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ── Decisions ──────────────────────────────────────────────────────────────
+
+  /decisions:
+    get:
+      operationId: listDecisions
+      tags: [decisions]
+      summary: List recent access decisions
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+        - in: query
+          name: outcome
+          schema:
+            type: string
+            enum: [allow, step-up, restrict, deny]
+        - in: query
+          name: integrationId
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Decision list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  decisions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Decision"
+                  total:
+                    type: integer
+                required: [decisions, total]
+
+    post:
+      operationId: evaluateDecision
+      tags: [decisions]
+      summary: Evaluate an access decision request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DecisionRequest"
+      responses:
+        "200":
+          description: Decision evaluated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Decision"
+
+  /decisions/{id}:
+    get:
+      operationId: getDecision
+      tags: [decisions]
+      summary: Get a single decision with full signal breakdown
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Decision detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Decision"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Integrations ────────────────────────────────────────────────────────────
+
+  /integrations:
+    get:
+      operationId: listIntegrations
+      tags: [integrations]
+      summary: List all configured integrations and their health status
+      responses:
+        "200":
+          description: Integration list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  integrations:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/IntegrationHealth"
+                required: [integrations]
+
+  /integrations/{id}:
+    get:
+      operationId: getIntegration
+      tags: [integrations]
+      summary: Get integration health detail and recent signal activity
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Integration detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntegrationHealth"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Signals ─────────────────────────────────────────────────────────────────
+
+  /signals/ingest:
+    post:
+      operationId: ingestSignal
+      tags: [signals]
+      summary: Ingest a signal from an integration source
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignalIngestionRequest"
+      responses:
+        "202":
+          description: Signal accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  signalId:
+                    type: string
+                  accepted:
+                    type: boolean
+                required: [signalId, accepted]
+
+  /signals/latest:
+    get:
+      operationId: listLatestSignals
+      tags: [signals]
+      summary: List the most recent signals by type
+      parameters:
+        - in: query
+          name: signalType
+          schema:
+            type: string
+            enum: [identity, device-posture, session-context, operational-signals]
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Recent signals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  signals:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Signal"
+                required: [signals]
+
+  # ── Policies ─────────────────────────────────────────────────────────────────
+
+  /policies:
+    get:
+      operationId: listPolicies
+      tags: [policies]
+      summary: List all active policies
+      responses:
+        "200":
+          description: Policy list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  policies:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Policy"
+                required: [policies]
+
+    post:
+      operationId: createPolicy
+      tags: [policies]
+      summary: Create a new access policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PolicyInput"
+      responses:
+        "201":
+          description: Policy created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Policy"
+
+  /policies/{id}:
+    get:
+      operationId: getPolicy
+      tags: [policies]
+      summary: Get policy detail
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Policy"
+    put:
+      operationId: updatePolicy
+      tags: [policies]
+      summary: Update a policy
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PolicyInput"
+      responses:
+        "200":
+          description: Updated policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Policy"
+    delete:
+      operationId: deletePolicy
+      tags: [policies]
+      summary: Delete a policy
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  # ── Metrics ──────────────────────────────────────────────────────────────────
+
+  /metrics/dashboard:
+    get:
+      operationId: getDashboardMetrics
+      tags: [metrics]
+      summary: Aggregated metrics for the operator dashboard
+      parameters:
+        - in: query
+          name: window
+          schema:
+            type: string
+            enum: [1h, 24h, 7d, 30d]
+            default: 24h
+      responses:
+        "200":
+          description: Dashboard metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardMetrics"
+
+  /metrics/decisions/series:
+    get:
+      operationId: getDecisionSeries
+      tags: [metrics]
+      summary: Time-series decision counts for charting
+      parameters:
+        - in: query
+          name: window
+          schema:
+            type: string
+            enum: [1h, 24h, 7d, 30d]
+            default: 24h
+        - in: query
+          name: granularity
+          schema:
+            type: string
+            enum: [minute, hour, day]
+            default: hour
+      responses:
+        "200":
+          description: Time-series data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  series:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DecisionSeriesPoint"
+                required: [series]
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +374,291 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required: [error, message]
+
+    SignalType:
+      type: string
+      enum: [identity, device-posture, session-context, operational-signals]
+
+    DecisionOutcome:
+      type: string
+      enum: [allow, step-up, restrict, deny]
+
+    SignalValue:
+      type: object
+      properties:
+        signalType:
+          $ref: "#/components/schemas/SignalType"
+        platform:
+          type: string
+        value:
+          type: object
+          additionalProperties: true
+        evaluatedAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [nominal, anomalous, critical, unknown]
+      required: [signalType, platform, value, evaluatedAt, status]
+
+    Decision:
+      type: object
+      properties:
+        id:
+          type: string
+        identityId:
+          type: string
+        deviceId:
+          type: string
+        workflowId:
+          type: string
+        outcome:
+          $ref: "#/components/schemas/DecisionOutcome"
+        policyId:
+          type: string
+        signals:
+          type: array
+          items:
+            $ref: "#/components/schemas/SignalValue"
+        evaluatedAt:
+          type: string
+          format: date-time
+        latencyMs:
+          type: integer
+        industry:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+      required: [id, identityId, deviceId, workflowId, outcome, signals, evaluatedAt, latencyMs]
+
+    DecisionRequest:
+      type: object
+      properties:
+        identityId:
+          type: string
+        deviceId:
+          type: string
+        workflowId:
+          type: string
+        integrationContext:
+          type: object
+          properties:
+            mdmPlatform:
+              type: string
+            identityProvider:
+              type: string
+            itsmPlatform:
+              type: string
+          additionalProperties: true
+        metadata:
+          type: object
+          additionalProperties: true
+      required: [identityId, deviceId, workflowId]
+
+    IntegrationHealth:
+      type: object
+      properties:
+        id:
+          type: string
+        vendor:
+          type: string
+        product:
+          type: string
+        category:
+          type: string
+        signalTypes:
+          type: array
+          items:
+            $ref: "#/components/schemas/SignalType"
+        status:
+          type: string
+          enum: [connected, degraded, disconnected, not-configured]
+        lastSync:
+          type: string
+          format: date-time
+        signalsIngested24h:
+          type: integer
+        latencyMs:
+          type: integer
+        errorMessage:
+          type: string
+      required: [id, vendor, product, category, signalTypes, status, signalsIngested24h, latencyMs]
+
+    Signal:
+      type: object
+      properties:
+        id:
+          type: string
+        signalType:
+          $ref: "#/components/schemas/SignalType"
+        platform:
+          type: string
+        deviceId:
+          type: string
+        value:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+          enum: [nominal, anomalous, critical, unknown]
+        receivedAt:
+          type: string
+          format: date-time
+      required: [id, signalType, platform, deviceId, value, status, receivedAt]
+
+    SignalIngestionRequest:
+      type: object
+      properties:
+        signalType:
+          $ref: "#/components/schemas/SignalType"
+        platform:
+          type: string
+        deviceId:
+          type: string
+        value:
+          type: object
+          additionalProperties: true
+        sourceTimestamp:
+          type: string
+          format: date-time
+      required: [signalType, platform, deviceId, value]
+
+    PolicyRule:
+      type: object
+      properties:
+        signal:
+          $ref: "#/components/schemas/SignalType"
+        condition:
+          type: string
+        outcome:
+          $ref: "#/components/schemas/DecisionOutcome"
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+      required: [signal, condition, outcome, severity]
+
+    Policy:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        workflowPattern:
+          type: string
+        rules:
+          type: array
+          items:
+            $ref: "#/components/schemas/PolicyRule"
+        failMode:
+          type: string
+          enum: [fail-open, fail-closed]
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, name, workflowPattern, rules, failMode, active, createdAt, updatedAt]
+
+    PolicyInput:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        workflowPattern:
+          type: string
+        rules:
+          type: array
+          items:
+            $ref: "#/components/schemas/PolicyRule"
+        failMode:
+          type: string
+          enum: [fail-open, fail-closed]
+        active:
+          type: boolean
+      required: [name, workflowPattern, rules, failMode]
+
+    DashboardMetrics:
+      type: object
+      properties:
+        window:
+          type: string
+        totalDecisions:
+          type: integer
+        allowCount:
+          type: integer
+        stepUpCount:
+          type: integer
+        restrictCount:
+          type: integer
+        denyCount:
+          type: integer
+        allowRate:
+          type: number
+          format: float
+        restrictDenyRate:
+          type: number
+          format: float
+        avgLatencyMs:
+          type: integer
+        activeIntegrations:
+          type: integer
+        totalIntegrations:
+          type: integer
+        topPlatforms:
+          type: array
+          items:
+            type: object
+            properties:
+              platform:
+                type: string
+              count:
+                type: integer
+            required: [platform, count]
+      required:
+        - window
+        - totalDecisions
+        - allowCount
+        - stepUpCount
+        - restrictCount
+        - denyCount
+        - allowRate
+        - restrictDenyRate
+        - avgLatencyMs
+        - activeIntegrations
+        - totalIntegrations
+        - topPlatforms
+
+    DecisionSeriesPoint:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        allow:
+          type: integer
+        stepUp:
+          type: integer
+        restrict:
+          type: integer
+        deny:
+          type: integer
+      required: [timestamp, allow, stepUp, restrict, deny]

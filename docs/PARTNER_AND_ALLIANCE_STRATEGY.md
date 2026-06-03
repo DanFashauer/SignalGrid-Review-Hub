@@ -13,6 +13,7 @@ Partner ecosystems matter because SignalGrid depends on signals and workflows ow
 - Endpoint telemetry and EDR providers.
 - Physical/shared-device context systems such as badge, QR/NFC, and RTLS providers.
 - Dock, charging station, smart cabinet, kiosk, and return-station vendors.
+- Agentic operations, connector marketplace, and MCP-style tool-surface ecosystems where future bounded connectors are validated.
 
 ## Imprivata candidate healthcare path
 
@@ -28,6 +29,15 @@ DockBridge creates a future partner path for dock vendors, smart-cabinet vendors
 Apple MFi may become relevant only if SignalGrid or a partner builds certified Apple-connected hardware accessories. MFi should not be positioned as required for the current software-only strategy, simulated event API, or cloud-to-cloud workflow orchestration.
 
 DockBridge may also support the future Imprivata candidate healthcare access-management path, but Review Hub does not claim current Imprivata partnership, certification, alliance status, marketplace listing, or replacement of Imprivata GroundControl.
+
+
+## Agentic operations and connector ecosystem path
+
+Agentic operations platforms, MCP-style tool surfaces, and connector marketplaces are a future ecosystem direction because they show how specialized systems can expose signals and bounded actions while governance remains in the control path. SignalGrid should treat this as a connector pattern for shared-device and mobile frontline access decisions, not as a pivot into broad AI infrastructure.
+
+A future SignalGrid connector ecosystem could include read-only signal connectors, signed action request connectors, simulation before execution, human approval gates, audit records, rollback metadata, and policy-bound permissions. Jamf/UEM, Intune, Imprivata candidate workflows, ServiceNow, Sentinel, Splunk, dock vendors, and other systems should remain systems of record for their domains.
+
+Review Hub does not claim current Cisco Cloud Control integration, Jamf integration, MCP implementation, connector marketplace listing, partner certification, customer integration, or autonomous production remediation. Public language should keep the safe principle: agents may suggest, SignalGrid evaluates, operators approve, existing systems execute, and SignalGrid records. See [Agentic connector strategy](AGENTIC_CONNECTOR_STRATEGY.md).
 
 ## Requirements before applying broadly
 

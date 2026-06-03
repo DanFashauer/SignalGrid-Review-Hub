@@ -27,10 +27,26 @@ The recommended sequence remains:
 
 1. Intune/Entra posture proof.
 2. Operator mobile workflow MVP.
-3. DockBridge simulated dock event API.
-4. One dock/vendor adapter if the simulated workflow validates value.
-5. MFi or hardware certification path only if Apple-connected hardware integration is required.
-6. Imprivata/healthcare alliance path only if validated and mutually approved.
+3. Jamf/UEM connector proof.
+4. DockBridge simulated dock event API.
+5. MCP/agentic connector strategy proof after source-system proofs are grounded.
+6. One dock/vendor adapter if the simulated workflow validates value.
+7. MFi or hardware certification path only if Apple-connected hardware integration is required.
+8. Imprivata/healthcare alliance path only if validated and mutually approved.
+
+## Agentic connector production path
+
+Agentic operations and MCP-style connector concepts should remain future-facing until grounded by working proofs. SignalGrid should not claim autonomous production remediation, current MCP implementation, Cisco Cloud Control integration, Jamf partnership, connector marketplace listing, or customer deployment.
+
+| Stage | Goal | Evidence needed | Claim boundary |
+| --- | --- | --- | --- |
+| Read-only connector proof | Consume posture, inventory, ticket, security, or dock/edge signals without executing actions. | Connector schema, auth model, normalized signal, decision trace, audit record. | Discovery-only; source systems remain authoritative. |
+| Simulation proof | Show what a proposed action would do before execution. | Simulation output, affected assets, policy evaluation, operator review state. | No production state change. |
+| Signed action request proof | Hand an approved action request to the system that owns execution. | Signed request, scope, timestamp/nonce, approval record, idempotency, failure handling. | SignalGrid requests; existing systems execute. |
+| Human approval gates | Require operator or policy approval for higher-impact actions. | Role checks, approval workflow, escalation path, audit evidence. | No autonomous production remediation. |
+| Rollback metadata | Capture enough context to support reversal or follow-up. | Previous state, expected rollback path, owner, timeout, ticket/audit link. | Rollback execution remains owned by the source system unless separately validated. |
+
+The safe operating principle is: agents may suggest, SignalGrid evaluates, operators approve, existing systems execute, and SignalGrid records.
 
 ## DockBridge production path
 

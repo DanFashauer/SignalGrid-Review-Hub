@@ -32,9 +32,9 @@ export const integrationTargets: IntegrationTarget[] = [
     product: "Fleet MDM + osquery",
     signalTypes: ["Device Posture"],
     status: "not-started",
-    priority: "P1",
+    priority: "P2",
     notes:
-      "Open-source MDM and device management platform with a full REST API. Fleet collects real-time device posture via osquery — OS version, patch compliance, disk encryption, running processes, installed software, and custom policy results. Purpose-built for cross-platform fleets (macOS, Windows, Linux, iOS via MDM). SOC2 Type 2 certified. Excellent first integration target: no licensing cost, live sandbox available, comprehensive REST API, fleetctl CLI for scripting.",
+      "Open-source MDM and device management platform with a full REST API. Fleet collects real-time device posture via osquery — OS version, patch compliance, disk encryption, running processes, installed software, and custom policy results. Purpose-built for cross-platform fleets (macOS, Windows, Linux, iOS via MDM). Fleet remains a strong follow-on UEM/device-management connector path and a useful config-profile/remediation scaffolding reference after the Microsoft Intune / Entra posture proof; it is not the current first proof.",
     blockers: undefined,
     apiDocs: "https://fleetdm.com/docs/rest-api/rest-api",
     quickstartSteps: [
@@ -128,7 +128,7 @@ async function getDevicePosture(deviceId: string) {
     status: "in-progress",
     priority: "P1",
     notes:
-      "Primary integration target for Microsoft-stack organizations. Device compliance status, managed device enrollment state, OS patch level. Critical for shared iOS/Android device posture evaluation in healthcare and logistics. Uses Microsoft Graph API.",
+      "First concrete posture proof for Microsoft-stack organizations. Device compliance status, managed device enrollment state, OS patch level, last sync/check-in freshness, and Entra device context become normalized SignalGrid posture inputs for allow / step-up / deny / unknown decisions and audit records. Uses Microsoft Graph API in a sandbox or deterministic fixture path; no production-ready, compliance, or Microsoft replacement claim.",
     blockers: "Intune Graph API scopes and certificate-based auth for shared device mode require M365 E3/E5 sandbox. Entra Shared Device Mode enrollment needed for iOS shared device scenarios.",
     apiDocs: "https://learn.microsoft.com/en-us/graph/api/intune-devices-manageddevice-list",
     quickstartSteps: [

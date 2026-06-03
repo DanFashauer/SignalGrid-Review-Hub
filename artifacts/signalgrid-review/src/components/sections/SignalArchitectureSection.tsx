@@ -154,7 +154,7 @@ export default function SignalArchitectureSection() {
         ))}
       </div>
 
-      {/* Fleet MDM Signal Map */}
+      {/* Fleet MDM follow-on signal map */}
       <div className="border border-sky-800/50 bg-sky-950/20 rounded-lg overflow-hidden">
         <button
           onClick={() => setShowFleetMap((v) => !v)}
@@ -173,7 +173,7 @@ export default function SignalArchitectureSection() {
         {showFleetMap && (
           <div className="px-5 pb-5 space-y-3">
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Every Fleet osquery table is a potential SignalGrid signal source. The mapping below shows which standard osquery tables feed which signal type — and the exact condition that triggers a policy outcome. This is the concrete integration surface for the Fleet proof-of-concept.
+              Every Fleet osquery table is a potential SignalGrid signal source. The mapping below shows which standard osquery tables feed which signal type — and the exact condition that triggers a policy outcome. This is a follow-on UEM/device-management connector surface after the Microsoft Intune / Entra posture proof.
             </p>
 
             <div className="overflow-x-auto rounded-lg border border-sky-900/40">
@@ -222,7 +222,7 @@ export default function SignalArchitectureSection() {
               <div className="w-1 h-1 rounded-full bg-sky-500 mt-1.5 shrink-0" />
               <p className="text-xs text-sky-300/80">
                 <span className="font-semibold text-sky-300">Proof-of-concept path:</span>{" "}
-                Run <code className="font-mono bg-sky-950 px-1 rounded">fleetctl preview</code> locally → enroll two test hosts → write a Fleet policy against the <code className="font-mono bg-sky-950 px-1 rounded">disk_encryption</code> or <code className="font-mono bg-sky-950 px-1 rounded">mdm</code> table → call the Fleet REST API from SignalGrid to retrieve policy failure counts → map the response to a device-posture signal. That loop — policy query to signal output — is the complete first integration proof.
+                After the Microsoft Intune / Entra posture proof is grounded, run <code className="font-mono bg-sky-950 px-1 rounded">fleetctl preview</code> locally → enroll two test hosts → write a Fleet policy against the <code className="font-mono bg-sky-950 px-1 rounded">disk_encryption</code> or <code className="font-mono bg-sky-950 px-1 rounded">mdm</code> table → call the Fleet REST API from SignalGrid to retrieve policy failure counts → map the response to a device-posture signal. That loop becomes a follow-on UEM/device-management connector proof, not the current first proof.
               </p>
             </div>
           </div>

@@ -34,8 +34,8 @@ export const activationMilestones: Milestone[] = [
       "Activate outreach batch 1 (20–30 sends) by set date",
       "Follow up on non-responses at day 5 and day 10",
       "Book and confirm at least one 30-minute discovery call",
-      "Complete first integration proof: Fleet MDM sandbox (fastest path) or Intune/Entra posture proof",
-      "Run fleetctl preview locally — enrolled sandbox devices available in under 10 minutes",
+      "Complete first integration proof: Microsoft Intune / Entra posture proof",
+      "Use Microsoft sandbox data or deterministic fixtures for device ID, compliance state, management state, check-in freshness, and audit outcome",
     ],
     exitGate:
       "One confirmed discovery call on the calendar with a qualified prospect.",
@@ -51,8 +51,8 @@ export const activationMilestones: Milestone[] = [
       "Complete 3–5 discovery conversations from batch 1 outreach",
       "Send outreach batch 2 based on learnings from batch 1",
       "Develop pilot proposal template (scope, integration requirements, success metrics, timeline)",
-      "Complete second integration proof: Jamf sandbox or Okta Device Trust integration",
-      "Publish signal schema document mapping Fleet/Intune/Entra → four signal types",
+      "Complete second integration proof: Jamf, Fleet, Workspace ONE, broader UEM connector, or Okta Device Trust integration",
+      "Publish signal schema document mapping Intune/Entra first, then Fleet/Jamf/UEM follow-on paths → four signal types",
     ],
     exitGate:
       "A signed NDA or pilot MOU, or at minimum a written scope document agreed by both parties.",
@@ -65,7 +65,7 @@ export const activationMilestones: Milestone[] = [
       "SignalGrid is receiving live signals from at least two integration sources in a staging or sandbox environment that mirrors a pilot customer's stack. Decision engine is evaluating real signal combinations. At least one documented scenario produces a correct access outcome.",
     status: "not-started",
     tasks: [
-      "Deploy integration stack in customer-adjacent sandbox (Fleet MDM + Intune/Entra at minimum)",
+      "Deploy integration stack in customer-adjacent sandbox (Intune/Entra first, then Fleet/Jamf/UEM follow-on posture connectors)",
       "Demonstrate at least 3 distinct decision scenarios: allow, step-up, restrict",
       "Document integration setup, signal schema, and decision scenarios for pilot proposal",
       "Prepare reference architecture diagram for pilot customer presentation",

@@ -330,7 +330,7 @@ export default function ReviewDashboard() {
         <section id="integrations" className="space-y-6 scroll-mt-20">
           <SectionHeader
             label="Integration Proof Tracker"
-            description="Named integration targets with editable status tracking. Fleet MDM is added as a P1 open-source alternative with a full API quickstart. Click status badges to update progress — saved locally."
+            description="Named integration targets with editable status tracking. Microsoft Intune / Entra posture is the first concrete proof; Fleet, Jamf, Workspace ONE, and broader UEM paths are follow-on connector options. Click status badges to update progress — saved locally."
           />
           <IntegrationTrackerSection
             statuses={wsState.integrationStatuses}

@@ -39,7 +39,7 @@ The private SignalGrid repository remains the protected source and core foundati
 
 ## Documentation map
 
-Start with [`docs/INDEX.md`](docs/INDEX.md) for the complete public review package, including lineage, Alpha parity, milestone strategy, mobile/platform direction, integration catalog, ecosystem positioning, configuration remediation guardrails, partner strategy, roadmap to private core, and reviewer checklist. The short buyer-facing answer to “why not just use existing IAM/UEM/ITSM tools?” lives in [`docs/ECOSYSTEM_POSITIONING.md`](docs/ECOSYSTEM_POSITIONING.md).
+Start with [`docs/INDEX.md`](docs/INDEX.md) for the complete public review package, including lineage, Alpha parity, milestone strategy, mobile/platform direction, integration catalog, the first Intune / Entra posture proof, ecosystem positioning, configuration remediation guardrails, partner strategy, roadmap to private core, and reviewer checklist. The short buyer-facing answer to “why not just use existing IAM/UEM/ITSM tools?” lives in [`docs/ECOSYSTEM_POSITIONING.md`](docs/ECOSYSTEM_POSITIONING.md), and the first concrete posture-signal proof is in [`docs/INTUNE_ENTRA_POSTURE_PROOF.md`](docs/INTUNE_ENTRA_POSTURE_PROOF.md).
 
 ## Disclaimer
 

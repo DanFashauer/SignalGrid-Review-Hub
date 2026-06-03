@@ -34,6 +34,20 @@ The recommended sequence remains:
 7. MFi or hardware certification path only if Apple-connected hardware integration is required.
 8. Imprivata/healthcare alliance path only if validated and mutually approved.
 
+## Intune / Entra posture proof gate
+
+The first production-path proof is the [Intune / Entra posture proof](INTUNE_ENTRA_POSTURE_PROOF.md). It should establish that SignalGrid can consume Microsoft device/compliance context, normalize it, use it as a runtime decision input, and record audit evidence without claiming production readiness.
+
+| Gate | Evidence needed | Claim boundary |
+| --- | --- | --- |
+| Public-safe proof plan | Documentation of objective, scope, target flow, inputs, normalized posture model, decision mapping, audit record, future extensions, and validation checklist. | Documentation-first; no production rollout or compliance guarantee. |
+| Deterministic fixture path | Fake or sandbox payloads for compliant, non-compliant, stale, missing-device, and lookup-failure cases. | No customer data, no production secrets, no real tenant dependency in the public repo. |
+| Normalized posture model | Stable fields for device ID, source system, management state, compliance state, freshness, risk indicators, observed time, raw reference, confidence, and decision impact. | Microsoft Intune / Entra remains the source of record. |
+| Decision and audit trace | Candidate outcome, reason code, source system, lookup time, normalized posture, policy version, and optional operator/admin note. | Proof evidence only; not a production enforcement or certification claim. |
+| Failure-mode review | Missing device, stale posture, unknown posture, malformed payload, denied lookup, and source outage paths are deterministic. | Unknown posture must not be treated as compliant. |
+
+This gate should be completed before broader Jamf/UEM, DockBridge pairing, operator mobile alerts, Imprivata candidate workflow correlation, or agentic connector claims are advanced.
+
 ## Agentic connector production path
 
 Agentic operations and MCP-style connector concepts should remain future-facing until grounded by working proofs. SignalGrid should not claim autonomous production remediation, current MCP implementation, Cisco Cloud Control integration, Jamf partnership, connector marketplace listing, or customer deployment.

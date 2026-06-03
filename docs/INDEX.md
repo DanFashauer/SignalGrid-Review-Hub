@@ -13,6 +13,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Milestone strategy](MILESTONE_STRATEGY.md): uses tags/releases rather than messy repository copies.
 - [Mobile and platform strategy](MOBILE_AND_PLATFORM_STRATEGY.md): describes operator mobile, admin companion, PWA, desktop, and endpoint-agent boundaries.
 - [Integration catalog](INTEGRATION_CATALOG.md): lists integration categories, first proof direction, and vendor-claim boundaries.
+- [Intune / Entra posture proof](INTUNE_ENTRA_POSTURE_PROOF.md): defines the first concrete posture-signal proof, normalized model, decision mapping, audit record, and validation checklist.
 - [Agentic connector strategy](AGENTIC_CONNECTOR_STRATEGY.md): documents future MCP-style connector and governed agentic-operations direction without claiming production readiness or partnerships.
 - [Ecosystem positioning](ECOSYSTEM_POSITIONING.md): explains where SignalGrid fits relative to IAM, IGA, UEM/MDM, healthcare access, ITSM, SIEM/SOAR, NAC, endpoint telemetry, and dock/edge systems.
 - [DockBridge strategy](DOCKBRIDGE_STRATEGY.md): documents future edge/dock event orchestration for shared-device workflows.

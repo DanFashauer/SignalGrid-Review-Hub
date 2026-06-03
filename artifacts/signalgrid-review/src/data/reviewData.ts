@@ -1,5 +1,5 @@
 export const REVIEW_DATE = "May 2026";
-export const REVIEW_VERSION = "v0.3 — Fleet Integration + Live Tracker";
+export const REVIEW_VERSION = "v0.3 — Intune / Entra Posture Proof + Live Tracker";
 
 export interface ScoreItem {
   dimension: string;
@@ -40,7 +40,7 @@ export const scorecardItems: ScoreItem[] = [
     score: 3,
     maxScore: 10,
     rationale:
-      "No working integration with a production-adjacent identity provider (Entra ID, Okta), MDM platform (Intune, Jamf, Fleet), or workflow system (ServiceNow, Jira) has been validated. Fleet MDM is now the fastest P1 path: open source, free sandbox via fleetctl preview, and a full REST + osquery API. First validated integration moves this score to 5. This is the single highest-impact gap before any external conversation.",
+      "No working integration with a production-adjacent identity provider (Entra ID, Okta), MDM platform (Intune, Jamf, Fleet), or workflow system (ServiceNow, Jira) has been validated. Microsoft Intune / Entra posture is now the first concrete P1 proof because it aligns device compliance, managed state, identity context, and the likely Microsoft enterprise buyer environment. Fleet, Jamf, Workspace ONE, and broader UEM connectors remain follow-on paths after the Microsoft posture proof. First validated integration moves this score to 5. This is the single highest-impact gap before any external conversation.",
     status: "gap",
   },
   {
@@ -130,7 +130,7 @@ export const risks: ReviewItem[] = [
   {
     id: "r1",
     title: "No validated integration story",
-    body: "The runtime decision layer concept depends entirely on integrating with identity providers, MDM platforms, and workflow systems. Without at least one working integration against a real enterprise stack — even in a sandbox — the product story is theoretical. Fleet MDM is the fastest path to first proof: open source, free sandbox (fleetctl preview), full REST API, and device posture via osquery. This is the most important gap before any enterprise buyer conversation.",
+    body: "The runtime decision layer concept depends entirely on integrating with identity providers, MDM platforms, and workflow systems. Without at least one working integration against a real enterprise stack — even in a sandbox — the product story is theoretical. Microsoft Intune / Entra posture is the first concrete proof because it ties device compliance, managed state, identity/device context, normalized posture, and audit evidence to a common enterprise stack. Fleet remains a useful follow-on UEM/device-management connector and config-profile/remediation reference, but not the primary first proof.",
     tag: "Product",
   },
   {
@@ -207,8 +207,8 @@ export const openQuestions: ReviewItem[] = [
 export const recommendedActions: ReviewItem[] = [
   {
     id: "a1",
-    title: "Complete first integration proof — Fleet MDM is the fastest path",
-    body: "Install fleetctl (curl -sSL https://fleetdm.com/resources/install-fleetctl.sh | bash) and run fleetctl preview for a local sandbox with enrolled devices in under 10 minutes. Build the device posture signal integration against Fleet's policy API. Alternatively, pursue Intune/Entra Graph API in a Microsoft sandbox. Either advances product credibility immediately. Aim for a demo-able artifact within 14 days.",
+    title: "Complete first integration proof — Intune / Entra posture",
+    body: "Use a Microsoft sandbox or deterministic fixtures to prove the flow: device ID → Intune / Entra compliance lookup → normalized posture signal → SignalGrid decision input → allow / step-up / deny / unknown → audit record. Keep Fleet, Jamf, Workspace ONE, and broader UEM connector work as follow-on posture paths after the Microsoft proof. Aim for a demo-able, public-safe artifact within 14 days.",
     tag: "Priority 1",
   },
   {
@@ -455,5 +455,5 @@ export const overallScore = {
   maxValue: 10,
   label: "Pre-Launch Readiness",
   interpretation:
-    "SignalGrid is in a credible pre-launch position with above-average engineering, brand, and demo readiness for this stage. A 30/60/90-day activation plan now exists. The dominant remaining gap is integration surface coverage: zero validated integrations with any enterprise stack. Fleet MDM is the fastest path to first proof — open source, free sandbox in under 10 minutes, full REST API. Completing the first integration proof is the single action that most advances product credibility and the composite score simultaneously.",
+    "SignalGrid is in a credible pre-launch position with above-average engineering, brand, and demo readiness for this stage. A 30/60/90-day activation plan now exists. The dominant remaining gap is integration surface coverage: zero validated integrations with any enterprise stack. Microsoft Intune / Entra posture is the first concrete proof because it grounds device compliance, managed state, identity context, normalized posture, decision mapping, and audit evidence in a common enterprise stack. Fleet, Jamf, Workspace ONE, and broader UEM connectors remain important follow-on paths. Completing the first integration proof is the single action that most advances product credibility and the composite score simultaneously.",
 };

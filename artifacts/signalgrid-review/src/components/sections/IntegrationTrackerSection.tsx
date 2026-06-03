@@ -33,9 +33,16 @@ export default function IntegrationTrackerSection({ statuses, notes, cycleStatus
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showQuickstart, setShowQuickstart] = useState<string | null>(null);
 
-  const filtered = filter === "All"
+  const filtered = [...(filter === "All"
     ? integrationTargets
-    : integrationTargets.filter((t) => t.category === filter);
+    : integrationTargets.filter((t) => t.category === filter)
+  )];
+
+  filtered.sort((a, b) => {
+    if (a.id === "intune") return -1;
+    if (b.id === "intune") return 1;
+    return 0;
+  });
 
   const statusCounts = integrationTargets.reduce<Record<IntegrationStatus, number>>(
     (acc, t) => {
@@ -70,7 +77,7 @@ export default function IntegrationTrackerSection({ statuses, notes, cycleStatus
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <p className="text-sm text-muted-foreground max-w-2xl">
           The runtime decision layer is only as good as the signals it can receive. Click any status badge to update progress — all changes are saved locally.{" "}
-          <span className="text-primary font-medium">Fleet MDM</span> is added as a P1 open-source alternative with a full API quickstart below.
+          <span className="text-primary font-medium">Microsoft Intune / Entra posture</span> is the first concrete proof; Fleet, Jamf, Workspace ONE, and broader UEM paths remain follow-on connector options.
         </p>
         <div className="flex items-center gap-2 shrink-0">
           <div className="h-1.5 w-24 bg-muted rounded-full overflow-hidden">
@@ -114,14 +121,14 @@ export default function IntegrationTrackerSection({ statuses, notes, cycleStatus
             <div
               key={target.id}
               className={`border bg-card rounded-lg overflow-hidden transition-all ${
-                target.id === "fleet" ? "border-primary/30" : "border-border"
+                target.id === "intune" ? "border-primary/30" : "border-border"
               }`}
             >
-              {/* Fleet badge */}
-              {target.id === "fleet" && (
+              {/* First-proof badge */}
+              {target.id === "intune" && (
                 <div className="px-5 pt-3 pb-0">
                   <span className="text-xs px-2 py-0.5 rounded bg-primary/15 text-primary border border-primary/30 font-semibold">
-                    ✦ Recommended first integration · Open source · Free sandbox
+                    ✦ First concrete proof · Intune / Entra posture · Microsoft stack
                   </span>
                 </div>
               )}

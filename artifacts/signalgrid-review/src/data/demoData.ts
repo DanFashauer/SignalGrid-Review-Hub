@@ -143,22 +143,22 @@ export const demoScenarios: DemoScenario[] = [
         id: "d2-4",
         phase: "outcome",
         phaseLabel: "Access Outcome",
-        title: "Deny with automated remediation queue — Fleet auto-fix triggered",
+        title: "Deny with operator-reviewed remediation queue — posture failure recorded",
         narrative:
-          "The decision outcome is Deny for the controlled substances log. Nurse Rodriguez is redirected to a compliance notification page: 'Device encryption check failed. Contact IT for device remediation.' Simultaneously, SignalGrid triggers a Fleet webhook: the device is added to a Fleet auto-remediation target list. The IT queue receives a device remediation task. Nurse Rodriguez can use any other compliant device to access the workflow — the block is device-specific, not user-specific.",
+          "The decision outcome is Deny for the controlled substances log. Nurse Rodriguez is redirected to a compliance notification page: 'Device encryption check failed. Contact IT for device remediation.' SignalGrid records the normalized posture failure, decision outcome, and audit reason code, then queues an operator/admin review task. Nurse Rodriguez can use any other compliant device to access the workflow — the block is device-specific, not user-specific.",
         technicalNote:
-          "Fleet supports policy automation — when a policy fails, Fleet can trigger a script or webhook. The integration loop is: Fleet detects failure → SignalGrid enforces access restriction → Fleet queues remediation → SignalGrid re-evaluates on next access request. Show this full loop if time allows.",
+          "The first proof should use Microsoft Intune / Entra posture or deterministic fixtures to show device compliance → normalized posture → SignalGrid decision → audit record. Fleet can still become a follow-on UEM connector or config-profile/remediation scaffolding reference, but this demo should avoid autonomous remediation or first-proof Fleet claims.",
         duration: "2 min",
       },
       {
         id: "d2-5",
         phase: "outcome",
         phaseLabel: "Closing Frame",
-        title: "Open source + Zero Trust — the Fleet integration argument",
+        title: "Microsoft posture first — UEM connectors next",
         narrative:
-          "Fleet is free and open source. Its sandbox is running locally right now on a single command: fleetctl preview. The entire integration — Fleet policy API to SignalGrid device posture signal — took less than two hours to build. If your hospital is evaluating MDM platforms or wants to pilot Zero Trust enforcement without a six-month enterprise contract, Fleet is the fastest path to a working proof of concept.",
+          "The clean proof story is Microsoft first: device ID to Intune / Entra compliance lookup, normalized posture signal, SignalGrid decision input, allow / step-up / deny / unknown outcome, and audit record. That validates the runtime decision layer in the enterprise stack many buyers already run. Fleet, Jamf, Workspace ONE, and broader UEM paths remain valuable next connectors once the posture model is grounded.",
         technicalNote:
-          "This closing frame works for technical audiences and for budget-constrained healthcare IT buyers. The 'two hours to working PoC' claim needs to stay honest — it assumes a developer who is familiar with REST APIs and has read the Fleet quickstart documentation.",
+          "This closing frame keeps the claim public-safe: SignalGrid consumes posture and records decisions; Microsoft remains the source of record; Fleet/Jamf/UEM connectors are follow-on paths; no production-readiness, compliance, replacement, partnership, or autonomous remediation claim is made.",
         duration: "1 min",
       },
     ],

@@ -17,19 +17,24 @@ SignalGrid acts as a runtime decision layer that consumes signals from source sy
 | Dock/edge shared-device events | Docks, charging stations, smart cabinets, kiosks, return stations, optional edge gateways | Dock/undock events, slot state, wrong-slot return, return overdue, charging fault, dock online/offline, location and device identifiers. | Runtime decision event, operator/admin alert, ticket/audit event, remediation recommendation. | Dock firmware, hardware state, charging behavior, accessory certification, local safety controls. | Low/medium: start with simulated DockBridge event API after posture/mobile proof. | Medium later if one dock/vendor adapter is validated. |
 | Agentic control surfaces / MCP-style connectors | Cisco Cloud Control-style agentic operations platforms, MCP-style tool surfaces, connector marketplaces | Governed operational signals, scoped tool/action requests, simulation context, approval state, action metadata where a future approved connector exists. | Decision/audit event, policy evaluation, signed action request, approval requirement, simulation result. | Agent workspace, source-system APIs, marketplace governance, execution tooling, vendor platform controls. | Low: market-signal documentation only; not a first proof. | Medium later after Intune/Entra, operator mobile, Jamf/UEM, and DockBridge proofs. |
 
+## First proof: Intune / Entra posture
+
+The first concrete proof should validate the UEM/MDM posture category before broader connector claims. The public-safe plan is documented in [Intune / Entra posture proof](INTUNE_ENTRA_POSTURE_PROOF.md). It uses a device identifier, Microsoft device/compliance context, a normalized SignalGrid posture model, explicit decision mapping, and an audit record to prove that external posture can become a runtime decision input.
+
+The proof is not a production rollout, compliance guarantee, Microsoft replacement claim, or autonomous remediation path. Microsoft Intune / Entra remains the source of record for device management, compliance, identity, and directory context; SignalGrid consumes the resulting posture signal for runtime evaluation.
+
+| Proof element | Expected evidence | Boundary |
+| --- | --- | --- |
+| Device/compliance lookup | Sandbox, fake, or deterministic fixture containing device ID, compliance state, management state, last check-in, OS/platform, and assignment context if available. | No customer data, production secrets, or production tenant dependency in the public repo. |
+| Normalized posture signal | `deviceId`, `sourceSystem`, `managedState`, `complianceState`, `postureFreshness`, `riskIndicators`, `observedAt`, `rawReference`, `confidence`, and `decisionImpact`. | Normalization does not override or replace the Microsoft source record. |
+| Decision mapping | Compliant and fresh maps to an allow candidate; non-compliant maps to deny/restrict/review; stale or unknown maps to fail-closed, step-up, or review; missing device maps to unknown posture. | Posture is one decision input, not the entire enforcement engine. |
+| Audit record | Source system, lookup time, normalized posture, decision outcome, reason code, and optional operator/admin note. | Audit evidence for the proof only; no compliance guarantee. |
+
 ## Agentic operations and MCP-style connector direction
 
 Agentic operations platforms and MCP-style connector patterns are a market signal for SignalGrid, not a current production claim. The relevant pattern is that specialized systems expose governed data and bounded actions through APIs or tool surfaces, while policy, approval, and audit remain in the control path. SignalGrid can apply that pattern narrowly to shared-device and mobile frontline access decisions.
 
 A future connector model may include read-only signal connectors, signed action request connectors, simulation before execution, human approval gates, rollback metadata, and policy-bound permissions. Jamf and broader UEM/MDM platforms should be treated as future connector candidates for posture, inventory, management state, compliance freshness, and remediation/action request handoff. Review Hub does not claim current Jamf integration, Cisco Cloud Control integration, MCP implementation, vendor partnership, customer deployment, or autonomous production remediation. See [Agentic connector strategy](AGENTIC_CONNECTOR_STRATEGY.md).
-
-## First proof: Microsoft Intune / Entra posture
-
-The first integration proof should be constrained and auditable:
-
-`Device ID → compliance lookup → normalized posture signal → SignalGrid decision → audit record`
-
-The goal is to prove that SignalGrid can consume an authoritative posture signal, normalize it into the decision model, produce a clear allow/review/restrict/deny-style outcome, and record why the decision happened. This is a proof path, not a Microsoft certification claim and not a production MDM replacement.
 
 ## Imprivata candidate path
 

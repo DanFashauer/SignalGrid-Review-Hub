@@ -1,0 +1,111 @@
+{
+  "proofName": "intune-entra-posture-proof-scaffold",
+  "proofVersion": "2026-06-03.scaffold.v1",
+  "sourceSystem": "microsoft-intune-entra-fixture",
+  "evaluatedAt": "2026-06-03T12:00:00Z",
+  "freshnessWindowHours": 24,
+  "staleWindowHours": 168,
+  "fixtures": [
+    {
+      "caseId": "compliant-fresh-managed",
+      "description": "Managed, compliant device with a fresh Intune/Entra check-in should become an allow candidate.",
+      "environmentId": "sandbox-intune-tenant",
+      "deviceId": "device-lab-001",
+      "lookupStatus": "found",
+      "payload": {
+        "managedState": "managed",
+        "complianceState": "compliant",
+        "lastCheckInAt": "2026-06-03T11:30:00Z",
+        "platform": "Windows",
+        "ownershipContext": "corporate-assigned",
+        "rawReference": "fixture:intune-device-lab-001",
+        "observedAt": "2026-06-03T11:30:00Z"
+      },
+      "expectedDecisionImpact": "allow_candidate",
+      "expectedReasonCode": "POSTURE_COMPLIANT_FRESH"
+    },
+    {
+      "caseId": "non-compliant-managed",
+      "description": "Managed device marked non-compliant should become a deny/restrict candidate.",
+      "environmentId": "sandbox-intune-tenant",
+      "deviceId": "device-lab-002",
+      "lookupStatus": "found",
+      "payload": {
+        "managedState": "managed",
+        "complianceState": "nonCompliant",
+        "lastCheckInAt": "2026-06-03T10:45:00Z",
+        "platform": "macOS",
+        "ownershipContext": "corporate-shared",
+        "rawReference": "fixture:intune-device-lab-002",
+        "observedAt": "2026-06-03T10:45:00Z"
+      },
+      "expectedDecisionImpact": "deny_or_restrict_candidate",
+      "expectedReasonCode": "POSTURE_NON_COMPLIANT"
+    },
+    {
+      "caseId": "stale-managed-compliant",
+      "description": "Managed and compliant source data with an old check-in should route to step-up or review.",
+      "environmentId": "sandbox-intune-tenant",
+      "deviceId": "device-lab-003",
+      "lookupStatus": "found",
+      "payload": {
+        "managedState": "managed",
+        "complianceState": "compliant",
+        "lastCheckInAt": "2026-05-31T08:00:00Z",
+        "platform": "iOS",
+        "ownershipContext": "assigned-frontline-pool",
+        "rawReference": "fixture:intune-device-lab-003",
+        "observedAt": "2026-05-31T08:00:00Z"
+      },
+      "expectedDecisionImpact": "step_up_or_review_candidate",
+      "expectedReasonCode": "POSTURE_STALE_OR_UNKNOWN"
+    },
+    {
+      "caseId": "missing-device",
+      "description": "Device absent from the source lookup must remain unknown and never be treated as compliant.",
+      "environmentId": "sandbox-intune-tenant",
+      "deviceId": "device-lab-004",
+      "lookupStatus": "missing",
+      "expectedDecisionImpact": "unknown_posture",
+      "expectedReasonCode": "POSTURE_DEVICE_NOT_FOUND"
+    },
+    {
+      "caseId": "lookup-failed",
+      "description": "A source lookup failure should be recorded as unknown posture with an explicit failure mode.",
+      "environmentId": "sandbox-intune-tenant",
+      "deviceId": "device-lab-005",
+      "lookupStatus": "lookup_failed",
+      "failureMode": "source_lookup_failed",
+      "expectedDecisionImpact": "unknown_posture",
+      "expectedReasonCode": "POSTURE_SOURCE_LOOKUP_FAILED"
+    },
+    {
+      "caseId": "malformed-source-payload",
+      "description": "A malformed source response should fail closed to unknown posture without overclaiming compliance.",
+      "environmentId": "sandbox-intune-tenant",
+      "deviceId": "device-lab-006",
+      "lookupStatus": "malformed",
+      "failureMode": "malformed_source_payload",
+      "expectedDecisionImpact": "unknown_posture",
+      "expectedReasonCode": "POSTURE_SOURCE_LOOKUP_FAILED"
+    },
+    {
+      "caseId": "unmanaged-device",
+      "description": "Unmanaged, retired, inactive, or not-applicable devices should not become allow candidates.",
+      "environmentId": "sandbox-intune-tenant",
+      "deviceId": "device-lab-007",
+      "lookupStatus": "found",
+      "payload": {
+        "managedState": "unmanaged",
+        "complianceState": "notApplicable",
+        "lastCheckInAt": "2026-06-03T09:00:00Z",
+        "platform": "Android",
+        "ownershipContext": "bring-your-own-device",
+        "rawReference": "fixture:intune-device-lab-007",
+        "observedAt": "2026-06-03T09:00:00Z"
+      },
+      "expectedDecisionImpact": "deny_or_restrict_candidate",
+      "expectedReasonCode": "POSTURE_NOT_MANAGED_OR_INACTIVE"
+    }
+  ]
+}

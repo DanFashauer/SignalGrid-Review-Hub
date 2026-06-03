@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760" role="img" aria-labelledby="title desc">
+  <title id="title">Where SignalGrid Fits</title>
+  <desc id="desc">SignalGrid runtime decision orchestration across identity, device posture, session context, operational signals, and dock or edge events.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#211c19"/>
+      <stop offset="0.55" stop-color="#2a2420"/>
+      <stop offset="1" stop-color="#171412"/>
+    </linearGradient>
+    <linearGradient id="signal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1c7774"/>
+      <stop offset="1" stop-color="#2aa39a"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000000" flood-opacity="0.28"/>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5fb7ad"/>
+    </marker>
+    <style>
+      .title { font: 700 48px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #f4efe7; }
+      .subtitle { font: 400 23px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #d8d0c4; }
+      .label { font: 700 22px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #f4efe7; }
+      .small { font: 500 15px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #cfc6b9; }
+      .outcome { font: 700 20px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #171412; }
+      .note { font: 500 17px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #bfb6aa; }
+      .source-card { fill: #332c27; stroke: #5a4d43; stroke-width: 1.3; }
+      .center-card { fill: url(#signal); stroke: #8ce0d7; stroke-width: 2; }
+      .source-line { stroke: #5fb7ad; stroke-width: 3; stroke-linecap: round; marker-end: url(#arrow); opacity: 0.82; }
+      .out-line { stroke: #5fb7ad; stroke-width: 3.5; stroke-linecap: round; marker-end: url(#arrow); opacity: 0.9; }
+    </style>
+  </defs>
+
+  <rect width="1280" height="760" rx="0" fill="url(#bg)"/>
+  <circle cx="1080" cy="110" r="190" fill="#255f5c" opacity="0.18"/>
+  <circle cx="170" cy="670" r="240" fill="#8a5a2f" opacity="0.16"/>
+
+  <text x="72" y="82" class="title">Where SignalGrid Fits</text>
+  <text x="72" y="122" class="subtitle">Runtime decision orchestration across identity, device posture, session context, and operational signals.</text>
+
+  <g filter="url(#shadow)">
+    <rect x="72" y="180" width="195" height="104" rx="20" class="source-card"/>
+    <text x="100" y="222" class="label">IAM / IdP</text>
+    <text x="100" y="252" class="small">identity + session</text>
+
+    <rect x="310" y="180" width="195" height="104" rx="20" class="source-card"/>
+    <text x="338" y="222" class="label">UEM / MDM</text>
+    <text x="338" y="252" class="small">posture + freshness</text>
+
+    <rect x="548" y="180" width="195" height="104" rx="20" class="source-card"/>
+    <text x="576" y="222" class="label">Healthcare</text>
+    <text x="576" y="252" class="small">access workflows</text>
+
+    <rect x="786" y="180" width="195" height="104" rx="20" class="source-card"/>
+    <text x="814" y="222" class="label">ITSM / SIEM</text>
+    <text x="814" y="252" class="small">ops + security context</text>
+
+    <rect x="1024" y="180" width="195" height="104" rx="20" class="source-card"/>
+    <text x="1052" y="222" class="label">Dock / Edge</text>
+    <text x="1052" y="252" class="small">physical device state</text>
+  </g>
+
+  <path d="M169.5 284 C169.5 338 330 360 503 390" class="source-line" fill="none"/>
+  <path d="M407.5 284 C407.5 330 478 356 550 390" class="source-line" fill="none"/>
+  <path d="M645.5 284 L645.5 374" class="source-line" fill="none"/>
+  <path d="M883.5 284 C883.5 330 812 356 740 390" class="source-line" fill="none"/>
+  <path d="M1121.5 284 C1121.5 338 960 360 787 390" class="source-line" fill="none"/>
+
+  <g filter="url(#shadow)">
+    <rect x="360" y="388" width="560" height="138" rx="28" class="center-card"/>
+    <text x="427" y="446" class="label" style="font-size:31px; fill:#fffaf1;">SignalGrid Runtime Decision Layer</text>
+    <text x="448" y="486" class="small" style="font-size:18px; fill:#e8fffb;">Evaluates identity + posture + session + operational + physical context</text>
+  </g>
+
+  <path d="M640 526 L640 596" class="out-line" fill="none"/>
+
+  <g filter="url(#shadow)">
+    <rect x="142" y="610" width="170" height="70" rx="20" fill="#72b989"/>
+    <text x="186" y="653" class="outcome">Allow</text>
+
+    <rect x="344" y="610" width="170" height="70" rx="20" fill="#d6a85b"/>
+    <text x="391" y="653" class="outcome">Step-Up</text>
+
+    <rect x="546" y="610" width="170" height="70" rx="20" fill="#c7645c"/>
+    <text x="602" y="653" class="outcome">Deny</text>
+
+    <rect x="748" y="610" width="170" height="70" rx="20" fill="#7fb3aa"/>
+    <text x="788" y="653" class="outcome">Remediate</text>
+
+    <rect x="950" y="610" width="170" height="70" rx="20" fill="#d9d1c1"/>
+    <text x="1004" y="653" class="outcome">Record</text>
+  </g>
+
+  <text x="72" y="724" class="note">Connected systems stay systems of record. SignalGrid consumes signals, decides at runtime, and emits decisions, audit context, and action requests.</text>
+</svg>

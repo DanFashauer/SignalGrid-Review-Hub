@@ -39,7 +39,7 @@ The private SignalGrid repository remains the protected source and core foundati
 
 ## Documentation map
 
-Start with [`docs/INDEX.md`](docs/INDEX.md) for the complete public review package, including lineage, Alpha parity, milestone strategy, mobile/platform direction, integration catalog, configuration remediation guardrails, partner strategy, roadmap to private core, and reviewer checklist.
+Start with [`docs/INDEX.md`](docs/INDEX.md) for the complete public review package, including lineage, Alpha parity, milestone strategy, mobile/platform direction, integration catalog, ecosystem positioning, configuration remediation guardrails, partner strategy, roadmap to private core, and reviewer checklist. The short buyer-facing answer to “why not just use existing IAM/UEM/ITSM tools?” lives in [`docs/ECOSYSTEM_POSITIONING.md`](docs/ECOSYSTEM_POSITIONING.md).
 
 ## Disclaimer
 

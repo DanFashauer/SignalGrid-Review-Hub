@@ -1,5 +1,6 @@
 export const REVIEW_DATE = "May 2026";
-export const REVIEW_VERSION = "v0.3 — Intune / Entra Posture Proof + Live Tracker";
+export const REVIEW_VERSION =
+  "v0.3 — Intune / Entra Posture Proof + Live Tracker";
 
 export interface ScoreItem {
   dimension: string;
@@ -72,7 +73,7 @@ export const scorecardItems: ScoreItem[] = [
     score: 8,
     maxScore: 10,
     rationale:
-      "Repo cleanup complete. rc:smoke CI passing. Repository is in credible shape for external technical review. Minor deductions: notification noise unresolved, branch protection status unconfirmed. Neither is structural.",
+      "Repo cleanup complete. Review Hub CI is now defined for typecheck, build, docs sanity, and the Intune / Entra proof scaffold. Repository is in credible shape for external technical review. Remaining manual step: confirm branch protection requires Review Hub CI and conversation resolution before merge.",
     status: "strong",
   },
   {
@@ -88,7 +89,7 @@ export const scorecardItems: ScoreItem[] = [
     score: 7,
     maxScore: 10,
     rationale:
-      "A 30/60/90-day activation plan with milestone exit gates and outreach batch tracking now exists in this workspace. Remaining gaps: milestones do not have named owners, and the outreach batch send date has not been set to a specific date. Neither is structural — both are decisions.",
+      "A 30/60/90-day activation plan with milestone exit gates and outreach batch tracking now exists in this workspace. Remaining gaps: milestones do not have named owners, the outreach batch send date has not been set to a specific date, and GitHub branch protection still needs manual activation. Neither is structural — both are decisions.",
     status: "strong",
   },
 ];

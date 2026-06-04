@@ -162,6 +162,7 @@ function normalizeComplianceState(value: string | undefined): ComplianceState {
   switch (value) {
     case "compliant":
       return "compliant";
+    case "noncompliant":
     case "nonCompliant":
     case "non_compliant":
       return "non_compliant";

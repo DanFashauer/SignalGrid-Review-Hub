@@ -25,40 +25,41 @@ Before any production claim, SignalGrid would need evidence for:
 
 The recommended sequence remains:
 
-1. Intune/Entra posture proof.
-2. Operator mobile workflow MVP.
-3. Jamf/UEM connector proof.
+1. Intune / Entra posture proof using Microsoft Graph / Graph SDK design and deterministic public fixtures first.
+2. Jamf / Fleet / Workspace ONE follow-on UEM connector proof.
+3. RTLS, staff safety, and location-context roadmap validation.
 4. DockBridge simulated dock event API.
-5. MCP/agentic connector strategy proof after source-system proofs are grounded.
-6. One dock/vendor adapter if the simulated workflow validates value.
-7. MFi or hardware certification path only if Apple-connected hardware integration is required.
-8. Imprivata/healthcare alliance path only if validated and mutually approved.
+5. Operator mobile workflow MVP.
+6. MCP / agentic connector strategy later, after source-system proofs are grounded.
+7. One dock/vendor adapter if the simulated workflow validates value.
+8. MFi or hardware certification path only if Apple-connected hardware integration is required.
+9. Imprivata/healthcare alliance path only if validated and mutually approved.
 
 ## Intune / Entra posture proof gate
 
-The first production-path proof is the [Intune / Entra posture proof](INTUNE_ENTRA_POSTURE_PROOF.md). It should establish that SignalGrid can consume Microsoft device/compliance context, normalize it, use it as a runtime decision input, and record audit evidence without claiming production readiness.
+The first production-path proof is the [Intune / Entra posture proof](INTUNE_ENTRA_POSTURE_PROOF.md), with Microsoft Graph / Graph SDK sequencing documented in [Microsoft Graph and MCP strategy](MICROSOFT_GRAPH_AND_MCP_STRATEGY.md). It should establish that SignalGrid can consume Microsoft device/compliance context, normalize it, use it as a runtime decision input, and record audit evidence without claiming production readiness.
 
-| Gate | Evidence needed | Claim boundary |
-| --- | --- | --- |
-| Public-safe proof plan | Documentation of objective, scope, target flow, inputs, normalized posture model, decision mapping, audit record, future extensions, and validation checklist. | Documentation-first; no production rollout or compliance guarantee. |
-| Deterministic fixture path | Fake or sandbox payloads for compliant, non-compliant, stale, missing-device, and lookup-failure cases. | No customer data, no production secrets, no real tenant dependency in the public repo. |
-| Normalized posture model | Stable fields for device ID, source system, management state, compliance state, freshness, risk indicators, observed time, raw reference, confidence, and decision impact. | Microsoft Intune / Entra remains the source of record. |
-| Decision and audit trace | Candidate outcome, reason code, source system, lookup time, normalized posture, policy version, and optional operator/admin note. | Proof evidence only; not a production enforcement or certification claim. |
-| Failure-mode review | Missing device, stale posture, unknown posture, malformed payload, denied lookup, and source outage paths are deterministic. | Unknown posture must not be treated as compliant. |
+| Gate                       | Evidence needed                                                                                                                                                            | Claim boundary                                                                         |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Public-safe proof plan     | Documentation of objective, scope, target flow, inputs, normalized posture model, decision mapping, audit record, future extensions, and validation checklist.             | Documentation-first; no production rollout or compliance guarantee.                    |
+| Deterministic fixture path | Fake or sandbox payloads for compliant, non-compliant, stale, missing-device, and lookup-failure cases.                                                                    | No customer data, no production secrets, no real tenant dependency in the public repo. |
+| Normalized posture model   | Stable fields for device ID, source system, management state, compliance state, freshness, risk indicators, observed time, raw reference, confidence, and decision impact. | Microsoft Intune / Entra remains the source of record.                                 |
+| Decision and audit trace   | Candidate outcome, reason code, source system, lookup time, normalized posture, policy version, and optional operator/admin note.                                          | Proof evidence only; not a production enforcement or certification claim.              |
+| Failure-mode review        | Missing device, stale posture, unknown posture, malformed payload, denied lookup, and source outage paths are deterministic.                                               | Unknown posture must not be treated as compliant.                                      |
 
-This gate should be completed before broader Jamf/UEM, DockBridge pairing, operator mobile alerts, Imprivata candidate workflow correlation, or agentic connector claims are advanced.
+This gate should be completed before broader Jamf / Fleet / Workspace ONE UEM, RTLS/location, DockBridge pairing, operator mobile alerts, Imprivata candidate workflow correlation, or agentic connector claims are advanced. See [Frontline context signals roadmap](FRONTLINE_CONTEXT_SIGNALS.md) for later context categories.
 
 ## Agentic connector production path
 
 Agentic operations and MCP-style connector concepts should remain future-facing until grounded by working proofs. SignalGrid should not claim autonomous production remediation, current MCP implementation, Cisco Cloud Control integration, Jamf partnership, connector marketplace listing, or customer deployment.
 
-| Stage | Goal | Evidence needed | Claim boundary |
-| --- | --- | --- | --- |
-| Read-only connector proof | Consume posture, inventory, ticket, security, or dock/edge signals without executing actions. | Connector schema, auth model, normalized signal, decision trace, audit record. | Discovery-only; source systems remain authoritative. |
-| Simulation proof | Show what a proposed action would do before execution. | Simulation output, affected assets, policy evaluation, operator review state. | No production state change. |
-| Signed action request proof | Hand an approved action request to the system that owns execution. | Signed request, scope, timestamp/nonce, approval record, idempotency, failure handling. | SignalGrid requests; existing systems execute. |
-| Human approval gates | Require operator or policy approval for higher-impact actions. | Role checks, approval workflow, escalation path, audit evidence. | No autonomous production remediation. |
-| Rollback metadata | Capture enough context to support reversal or follow-up. | Previous state, expected rollback path, owner, timeout, ticket/audit link. | Rollback execution remains owned by the source system unless separately validated. |
+| Stage                       | Goal                                                                                          | Evidence needed                                                                         | Claim boundary                                                                     |
+| --------------------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Read-only connector proof   | Consume posture, inventory, ticket, security, or dock/edge signals without executing actions. | Connector schema, auth model, normalized signal, decision trace, audit record.          | Discovery-only; source systems remain authoritative.                               |
+| Simulation proof            | Show what a proposed action would do before execution.                                        | Simulation output, affected assets, policy evaluation, operator review state.           | No production state change.                                                        |
+| Signed action request proof | Hand an approved action request to the system that owns execution.                            | Signed request, scope, timestamp/nonce, approval record, idempotency, failure handling. | SignalGrid requests; existing systems execute.                                     |
+| Human approval gates        | Require operator or policy approval for higher-impact actions.                                | Role checks, approval workflow, escalation path, audit evidence.                        | No autonomous production remediation.                                              |
+| Rollback metadata           | Capture enough context to support reversal or follow-up.                                      | Previous state, expected rollback path, owner, timeout, ticket/audit link.              | Rollback execution remains owned by the source system unless separately validated. |
 
 The safe operating principle is: agents may suggest, SignalGrid evaluates, operators approve, existing systems execute, and SignalGrid records.
 
@@ -66,14 +67,14 @@ The safe operating principle is: agents may suggest, SignalGrid evaluates, opera
 
 DockBridge should progress through conservative stages:
 
-| Stage | Goal | Evidence needed | Claim boundary |
-| --- | --- | --- | --- |
-| Simulated dock API | Prove that dock events can drive SignalGrid decisions. | Event schema, simulator, decision trace, operator/admin alert, audit record. | Software-only demo; no hardware or platform certification claim. |
-| Event integrity | Prove events are authentic and replay-resistant enough for a controlled proof. | Signed webhook design, idempotency, timestamps, replay handling, logging. | Not production security certification. |
-| Posture pairing | Connect dock event context to MDM/UEM posture and identity/session context. | Device ID mapping, compliance lookup, normalized posture signal, decision result. | MDM/UEM remains system of record. |
-| Operator workflow | Validate review, exception, deny, ticket, and audit actions. | Operator mobile/admin flow, role checks, evidence capture, rollback notes. | No autonomous production remediation. |
-| Vendor adapter | Integrate one real dock/smart-cabinet/return-station vendor if warranted. | Vendor event mapping, test harness, failure handling, operational runbook. | No broad hardware certification or partner claim unless approved. |
-| Hardware/certification review | Evaluate MFi or other hardware/platform requirements if Apple-connected accessories are built. | Qualified partner, hardware design, certification path, legal/platform review. | Future-facing only until certified. |
+| Stage                         | Goal                                                                                           | Evidence needed                                                                   | Claim boundary                                                    |
+| ----------------------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Simulated dock API            | Prove that dock events can drive SignalGrid decisions.                                         | Event schema, simulator, decision trace, operator/admin alert, audit record.      | Software-only demo; no hardware or platform certification claim.  |
+| Event integrity               | Prove events are authentic and replay-resistant enough for a controlled proof.                 | Signed webhook design, idempotency, timestamps, replay handling, logging.         | Not production security certification.                            |
+| Posture pairing               | Connect dock event context to MDM/UEM posture and identity/session context.                    | Device ID mapping, compliance lookup, normalized posture signal, decision result. | MDM/UEM remains system of record.                                 |
+| Operator workflow             | Validate review, exception, deny, ticket, and audit actions.                                   | Operator mobile/admin flow, role checks, evidence capture, rollback notes.        | No autonomous production remediation.                             |
+| Vendor adapter                | Integrate one real dock/smart-cabinet/return-station vendor if warranted.                      | Vendor event mapping, test harness, failure handling, operational runbook.        | No broad hardware certification or partner claim unless approved. |
+| Hardware/certification review | Evaluate MFi or other hardware/platform requirements if Apple-connected accessories are built. | Qualified partner, hardware design, certification path, legal/platform review.    | Future-facing only until certified.                               |
 
 ## Systems of record
 

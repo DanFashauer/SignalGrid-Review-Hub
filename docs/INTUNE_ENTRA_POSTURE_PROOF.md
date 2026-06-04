@@ -141,6 +141,12 @@ After the Microsoft posture proof is reviewed and grounded, the same normalized 
 - Imprivata candidate access workflow correlation if healthcare design partners validate the need and any integration path is mutually approved.
 - SIEM/ITSM audit handoff for review tickets, evidence bundles, and exception tracking.
 
+## Microsoft Graph sequencing
+
+The implementation path for a private sandbox or production-facing proof design should use Microsoft Graph / Graph SDK or Graph REST before any MCP-style connector path. Graph is the deterministic source-data read path for device lookup, compliance state, management state, last check-in freshness, user/device relationship where available, and audit-ready source evidence.
+
+The public scaffold remains fixture-only. It does not call Microsoft Graph, store tenant identifiers, include credentials, or use customer data. Microsoft Graph v1.0 should be preferred for production-facing proof design; beta APIs should remain exploratory and should not support production claims. MCP-style Microsoft or enterprise agent connectors belong to a later agentic connector strategy and must not displace the first Intune / Entra posture proof. See [Microsoft Graph and MCP strategy](MICROSOFT_GRAPH_AND_MCP_STRATEGY.md).
+
 ## 9. Executable proof scaffold
 
 A public-safe executable scaffold now exists for the first Intune / Entra posture proof. It uses deterministic fake fixtures only and does not call Microsoft APIs, require Microsoft credentials, or include customer data.

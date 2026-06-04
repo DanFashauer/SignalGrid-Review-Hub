@@ -21,7 +21,6 @@ Imprivata is a future candidate healthcare access-management path because many s
 
 Review Hub does not claim any current Imprivata partnership, certification, alliance, marketplace listing, or validated integration.
 
-
 ## DockBridge ecosystem path
 
 DockBridge creates a future partner path for dock vendors, smart-cabinet vendors, charging/return-station providers, edge gateway vendors, and healthcare shared-device workflow partners. The near-term partner story should remain conservative: SignalGrid can define a simulated event API, signed webhook model, adapter pattern, and test harness before pursuing hardware-specific commitments.
@@ -30,12 +29,11 @@ Apple MFi may become relevant only if SignalGrid or a partner builds certified A
 
 DockBridge may also support the future Imprivata candidate healthcare access-management path, but Review Hub does not claim current Imprivata partnership, certification, alliance status, marketplace listing, or replacement of Imprivata GroundControl.
 
-
 ## Agentic operations and connector ecosystem path
 
 Agentic operations platforms, MCP-style tool surfaces, and connector marketplaces are a future ecosystem direction because they show how specialized systems can expose signals and bounded actions while governance remains in the control path. SignalGrid should treat this as a connector pattern for shared-device and mobile frontline access decisions, not as a pivot into broad AI infrastructure.
 
-A future SignalGrid connector ecosystem could include read-only signal connectors, signed action request connectors, simulation before execution, human approval gates, audit records, rollback metadata, and policy-bound permissions. Jamf/UEM, Intune, Imprivata candidate workflows, ServiceNow, Sentinel, Splunk, dock vendors, and other systems should remain systems of record for their domains.
+A future SignalGrid connector ecosystem could include read-only signal connectors, signed action request connectors, simulation before execution, human approval gates, audit records, rollback metadata, and policy-bound permissions. Jamf, Fleet, Workspace ONE, broader UEM, Intune, Imprivata candidate workflows, ServiceNow, Sentinel, Splunk, dock vendors, and other systems should remain systems of record for their domains.
 
 Review Hub does not claim current Cisco Cloud Control integration, Jamf integration, MCP implementation, connector marketplace listing, partner certification, customer integration, or autonomous production remediation. Public language should keep the safe principle: agents may suggest, SignalGrid evaluates, operators approve, existing systems execute, and SignalGrid records. See [Agentic connector strategy](AGENTIC_CONNECTOR_STRATEGY.md).
 

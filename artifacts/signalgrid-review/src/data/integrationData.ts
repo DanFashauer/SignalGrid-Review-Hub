@@ -210,7 +210,7 @@ Authorization: Bearer {access_token}`,
     status: "not-started",
     priority: "P2",
     notes:
-      "Primary MDM platform for Apple-fleet healthcare and education environments. Device compliance, management profile status, smart group membership. REST API and webhook support. Classic API for legacy endpoints, Jamf Pro API (v1) for modern integrations. Sandbox available via Jamf Developer Program (free trial tenant).",
+      "High-value Apple-specific posture follow-on after the Microsoft Intune / Entra proof. Jamf is purpose-built for Apple-first environments where Apple-native management depth matters: iOS/iPadOS shared devices, macOS frontline/admin workstations, Apple Business Manager / Automated Device Enrollment, configuration profile status, Declarative Device Management, Managed Device Attestation or hardware attestation where available, Platform SSO context where available, APNs communication health, Apple OS/update readiness, and Self Service remediation state. Review Hub does not claim a current Jamf partnership, validated integration, certification, production deployment, or replacement claim.",
     apiDocs:
       "https://developer.jamf.com/jamf-pro/reference/get_v1-computers-management-id",
     quickstartSteps: [
@@ -254,7 +254,7 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \\
 # Smart group membership = compliance grouping
 # GET /JSSResource/computergroups/id/{smartGroupId} for group membership`,
         description:
-          "Smart group membership in Jamf is the primary compliance signal. A device in a 'Non-Compliant Devices' smart group is the Jamf equivalent of an Intune non-compliant device — the same posture signal, different platform.",
+          "Smart group membership in Jamf is a useful compliance signal. A device in a 'Non-Compliant Devices' smart group is the Jamf equivalent of an Intune non-compliant device, while Apple-specific context such as configuration profile status, ADE/ABM enrollment, DDM, attestation, APNs health, and Self Service remediation state can add deeper Apple posture evidence.",
       },
       {
         title: "Map Jamf compliance state to SignalGrid device posture signal",
@@ -280,7 +280,7 @@ async function getJamfDevicePosture(computerId: string) {
   };
 }`,
         description:
-          "Jamf's posture signal maps directly to SignalGrid's device-posture signal type. MDM-capable + management profile valid = posture compliant. Smart group membership adds fine-grained policy compliance on top.",
+          "Jamf posture can map into SignalGrid's normalized device-posture signal type. MDM-capable + management profile valid contributes to posture confidence, while smart group membership, Apple enrollment context, profile status, attestation where available, APNs health, OS/update readiness, and Self Service remediation state can add Apple-specific decision evidence.",
       },
     ],
   },

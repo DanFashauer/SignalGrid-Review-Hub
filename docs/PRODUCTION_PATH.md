@@ -26,8 +26,8 @@ Before any production claim, SignalGrid would need evidence for:
 The recommended sequence remains:
 
 1. Intune / Entra posture proof using Microsoft Graph / Graph SDK design and deterministic public fixtures first.
-2. Jamf / Fleet / Workspace ONE follow-on UEM connector proof.
-3. RTLS, staff safety, and location-context roadmap validation.
+2. Jamf Apple-specific posture proof for Apple-heavy shared-device and frontline environments.
+3. Fleet / Workspace ONE / broader UEM connector paths.
 4. DockBridge simulated dock event API.
 5. Operator mobile workflow MVP.
 6. MCP / agentic connector strategy later, after source-system proofs are grounded.
@@ -47,7 +47,17 @@ The first production-path proof is the [Intune / Entra posture proof](INTUNE_ENT
 | Decision and audit trace   | Candidate outcome, reason code, source system, lookup time, normalized posture, policy version, and optional operator/admin note.                                          | Proof evidence only; not a production enforcement or certification claim.              |
 | Failure-mode review        | Missing device, stale posture, unknown posture, malformed payload, denied lookup, and source outage paths are deterministic.                                               | Unknown posture must not be treated as compliant.                                      |
 
-This gate should be completed before broader Jamf / Fleet / Workspace ONE UEM, RTLS/location, DockBridge pairing, operator mobile alerts, Imprivata candidate workflow correlation, or agentic connector claims are advanced. See [Frontline context signals roadmap](FRONTLINE_CONTEXT_SIGNALS.md) for later context categories.
+This gate should be completed before Jamf Apple-specific posture, broader Fleet / Workspace ONE UEM, RTLS/location, DockBridge pairing, operator mobile alerts, Imprivata candidate workflow correlation, or agentic connector claims are advanced. See [Frontline context signals roadmap](FRONTLINE_CONTEXT_SIGNALS.md) for later context categories.
+
+## Jamf / Apple-specific posture connector path
+
+Jamf is the high-value follow-on posture proof after the Microsoft Intune / Entra proof. Intune / Entra proves the Microsoft posture path; Jamf becomes the Apple-depth path. SignalGrid connects those posture signals to runtime access outcomes.
+
+Jamf is especially relevant for Apple-first environments where Apple-native management depth matters for iOS/iPadOS shared devices, macOS frontline/admin workstations, Apple Business Manager / Automated Device Enrollment workflows, Platform SSO, Managed Device Attestation, Declarative Device Management, APNs communication health, configuration profiles, OS update readiness, and Jamf Self Service remediation state.
+
+For this path, Jamf remains the system that owns Apple device lifecycle management, app/profile deployment, inventory collection, Apple-specific management frameworks, Self Service workflows, and device security enforcement. SignalGrid would normalize Jamf posture/context into runtime decision inputs, combine Apple posture with identity, session, location, workflow, and operational signals, determine allow / step-up / deny / review / remediation-routing candidates, record audit evidence, and hand action requests back to Jamf or another source system where appropriate.
+
+Review Hub does not claim a current Jamf partnership, validated Jamf integration, Jamf certification, production readiness, or replacement of Jamf.
 
 ## Agentic connector production path
 

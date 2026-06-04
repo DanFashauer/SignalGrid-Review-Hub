@@ -41,7 +41,7 @@ export const scorecardItems: ScoreItem[] = [
     score: 3,
     maxScore: 10,
     rationale:
-      "No working integration with a production-adjacent identity provider (Entra ID, Okta), MDM platform (Intune, Jamf, Fleet), or workflow system (ServiceNow, Jira) has been validated. Microsoft Intune / Entra posture is now the first concrete P1 proof because it aligns device compliance, managed state, identity context, and the likely Microsoft enterprise buyer environment. Fleet, Jamf, Workspace ONE, and broader UEM connectors remain follow-on paths after the Microsoft posture proof. First validated integration moves this score to 5. This is the single highest-impact gap before any external conversation.",
+      "No working integration with a production-adjacent identity provider (Entra ID, Okta), MDM platform (Intune, Jamf, Fleet), or workflow system (ServiceNow, Jira) has been validated. Microsoft Intune / Entra posture is now the first concrete P1 proof because it aligns device compliance, managed state, identity context, and the likely Microsoft enterprise buyer environment. Jamf is the Apple-specific follow-on posture path after the Microsoft proof; Fleet, Workspace ONE, and broader UEM connectors follow after that. First validated integration moves this score to 5. This is the single highest-impact gap before any external conversation.",
     status: "gap",
   },
   {
@@ -131,7 +131,7 @@ export const risks: ReviewItem[] = [
   {
     id: "r1",
     title: "No validated integration story",
-    body: "The runtime decision layer concept depends entirely on integrating with identity providers, MDM platforms, and workflow systems. Without at least one working integration against a real enterprise stack — even in a sandbox — the product story is theoretical. Microsoft Intune / Entra posture is the first concrete proof because it ties device compliance, managed state, identity/device context, normalized posture, and audit evidence to a common enterprise stack. Fleet remains a useful follow-on UEM/device-management connector and config-profile/remediation reference, but not the primary first proof.",
+    body: "The runtime decision layer concept depends entirely on integrating with identity providers, MDM platforms, and workflow systems. Without at least one working integration against a real enterprise stack — even in a sandbox — the product story is theoretical. Microsoft Intune / Entra posture is the first concrete proof because it ties device compliance, managed state, identity/device context, normalized posture, and audit evidence to a common enterprise stack. Jamf becomes the Apple-specific posture follow-on path, and Fleet remains a useful broader UEM/device-management connector and config-profile/remediation reference; neither changes the Microsoft first proof.",
     tag: "Product",
   },
   {
@@ -209,7 +209,7 @@ export const recommendedActions: ReviewItem[] = [
   {
     id: "a1",
     title: "Complete first integration proof — Intune / Entra posture",
-    body: "Use a Microsoft sandbox or deterministic fixtures to prove the flow: device ID → Intune / Entra compliance lookup → normalized posture signal → SignalGrid decision input → allow / step-up / deny / unknown → audit record. Keep Fleet, Jamf, Workspace ONE, and broader UEM connector work as follow-on posture paths after the Microsoft proof. Aim for a demo-able, public-safe artifact within 14 days.",
+    body: "Use a Microsoft sandbox or deterministic fixtures to prove the flow: device ID → Intune / Entra compliance lookup → normalized posture signal → SignalGrid decision input → allow / step-up / deny / unknown → audit record. Keep Jamf as the Apple-specific follow-on posture path after the Microsoft proof, with Fleet, Workspace ONE, and broader UEM connector work after that. Aim for a demo-able, public-safe artifact within 14 days.",
     tag: "Priority 1",
   },
   {
@@ -456,5 +456,5 @@ export const overallScore = {
   maxValue: 10,
   label: "Pre-Launch Readiness",
   interpretation:
-    "SignalGrid is in a credible pre-launch position with above-average engineering, brand, and demo readiness for this stage. A 30/60/90-day activation plan now exists. The dominant remaining gap is integration surface coverage: zero validated integrations with any enterprise stack. Microsoft Intune / Entra posture is the first concrete proof because it grounds device compliance, managed state, identity context, normalized posture, decision mapping, and audit evidence in a common enterprise stack. Fleet, Jamf, Workspace ONE, and broader UEM connectors remain important follow-on paths. Completing the first integration proof is the single action that most advances product credibility and the composite score simultaneously.",
+    "SignalGrid is in a credible pre-launch position with above-average engineering, brand, and demo readiness for this stage. A 30/60/90-day activation plan now exists. The dominant remaining gap is integration surface coverage: zero validated integrations with any enterprise stack. Microsoft Intune / Entra posture is the first concrete proof because it grounds device compliance, managed state, identity context, normalized posture, decision mapping, and audit evidence in a common enterprise stack. Jamf is the Apple-specific follow-on posture path; Fleet, Workspace ONE, and broader UEM connectors remain important later follow-on paths. Completing the first integration proof is the single action that most advances product credibility and the composite score simultaneously.",
 };

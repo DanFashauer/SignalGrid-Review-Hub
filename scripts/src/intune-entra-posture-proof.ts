@@ -87,6 +87,7 @@ interface SourceFixture {
   failureMode?: string;
   expectedDecisionImpact: DecisionImpact;
   expectedReasonCode: ReasonCode;
+  expectedNormalizedComplianceState?: ComplianceState;
 }
 
 interface FixtureFile {
@@ -730,7 +731,12 @@ function evaluateCase(
     reasonCode,
     failureMode,
   );
+  const expectedComplianceMatches =
+    fixture.expectedNormalizedComplianceState === undefined ||
+    fixture.expectedNormalizedComplianceState ===
+      normalizedPosture.complianceState;
   const passed =
+    expectedComplianceMatches &&
     fixture.expectedDecisionImpact === normalizedPosture.decisionImpact &&
     fixture.expectedReasonCode === reasonCode &&
     !(
@@ -802,6 +808,13 @@ function validateSourceFixture(fixture: unknown, index: number): SourceFixture {
     reasonCodes,
     `${prefix}.expectedReasonCode`,
   );
+  if (candidate.expectedNormalizedComplianceState !== undefined) {
+    assertEnum(
+      candidate.expectedNormalizedComplianceState,
+      complianceStates,
+      `${prefix}.expectedNormalizedComplianceState`,
+    );
+  }
 
   if (candidate.lookupStatus === "found") {
     if (!hasRequiredPayloadFields(candidate.payload)) {

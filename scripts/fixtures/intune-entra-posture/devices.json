@@ -54,7 +54,8 @@
         "observedAt": "2026-06-03T10:45:00Z"
       },
       "expectedDecisionImpact": "deny_or_restrict_candidate",
-      "expectedReasonCode": "POSTURE_NON_COMPLIANT"
+      "expectedReasonCode": "POSTURE_NON_COMPLIANT",
+      "expectedNormalizedComplianceState": "non_compliant"
     },
     {
       "caseId": "stale-managed-compliant",

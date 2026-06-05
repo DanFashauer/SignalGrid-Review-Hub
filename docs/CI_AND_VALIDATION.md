@@ -39,3 +39,7 @@ After the workflow is available on GitHub, branch protection should eventually r
 - Require the branch to be up to date before merging.
 
 This keeps Review Hub independent from `/DEV` and makes the public validation surface self-protecting.
+
+## Unsafe-claim scan scope
+
+The CI denylist is intentionally narrow and direct. It checks for production-ready, replacement, partnership, MFi certification, autonomous-remediation, and specific replacement phrases such as `replaces Jamf`, `replaces Intune`, `replaces Apple Configurator`, and `replaces GroundControl`, while allowing explicit disclaimers and guardrail wording.

@@ -76,6 +76,12 @@ jobs:
             "SignalGrid is an Imprivata partner"
             "SignalGrid is MFi certified"
             "autonomous production remediation"
+            "Imprivata partner"
+            "MFi certified"
+            "replaces Jamf"
+            "replaces Intune"
+            "replaces Apple Configurator"
+            "replaces GroundControl"
           )
 
           failed=0

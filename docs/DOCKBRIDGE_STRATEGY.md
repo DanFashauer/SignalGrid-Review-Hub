@@ -36,6 +36,14 @@ DockBridge should move event capture and workflow orchestration closer to the do
 
 The safe claim is that DockBridge could reduce dependence on separate workstation-based workflow orchestration by embedding event capture and coordination closer to the dock. It should not be framed as replacing Apple Configurator, MDM/UEM, Imprivata GroundControl, or other established device-management/access platforms.
 
+## Kontakt.io / RTLS adjacency
+
+Kontakt.io and similar RTLS platforms are adjacent future signal sources for DockBridge, not substitutes for the dock-event strategy. RTLS can provide room, zone, staff-safety, asset-location, missing-device, proximity, and location-freshness context, while DockBridge provides dock, slot, return, charging, and physical custody events.
+
+A later combined proof could pair deterministic RTLS fixtures with simulated dock events: for example, a device undocked from a return station and later observed in the wrong zone, a staff duress alert near a shared device, a stale location signal during a high-risk workflow, or a missing-device event correlated with an overdue return. Kontakt.io or the RTLS source would still own RTLS hardware, tags/wearables, location telemetry, calibration, APIs/SDKs, and native workflows. SignalGrid would normalize the context, combine it with identity/posture/session/dock signals, route operator alerts or tickets, and record audit evidence.
+
+No current Kontakt.io partnership, live API integration, production-ready RTLS workflow, patient-care outcome guarantee, or replacement claim is made. See [Kontakt.io / RTLS integration notes](KONTAKT_RTLS_INTEGRATION_NOTES.md).
+
 ## DockBridge event examples
 
 Potential event types include:
@@ -137,10 +145,11 @@ Suggested proof sequence:
 DockBridge belongs under future platform expansion, after the first posture and operator workflow proofs:
 
 1. Intune/Entra posture proof.
-2. Operator mobile workflow MVP.
-3. DockBridge simulated dock event API.
-4. One dock/vendor adapter.
-5. MFi or hardware certification path if needed.
-6. Imprivata/healthcare alliance path if validated.
+2. Kontakt.io / RTLS deterministic fixture proof if location or staff-safety context is the next validated need.
+3. Operator mobile workflow MVP.
+4. DockBridge simulated dock event API.
+5. One dock/vendor adapter.
+6. MFi or hardware certification path if needed.
+7. Imprivata/healthcare alliance path if validated.
 
 This sequence keeps SignalGrid focused on the runtime decision layer first, then expands toward physical shared-device orchestration when the workflow value is clearer.

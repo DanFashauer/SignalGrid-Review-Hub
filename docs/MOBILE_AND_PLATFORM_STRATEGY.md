@@ -47,6 +47,14 @@ SignalGrid would not replace Jamf. Jamf remains responsible for Apple device lif
 
 The positioning line is: Intune / Entra proves the Microsoft posture path. Jamf becomes the Apple-depth path. SignalGrid connects those posture signals to runtime access outcomes.
 
+## Kontakt.io / RTLS mobile context path
+
+Kontakt.io and similar RTLS platforms are future candidate sources for operator mobile alerts and frontline context. SignalGrid could eventually consume RTLS signals such as room/zone presence, asset or shared-device location, staff duress alerts, patient/device movement context where approved, location freshness, and proximity events.
+
+The operator mobile app could present SignalGrid outcomes from those signals as review queues, staff-safety alerts, missing-device notices, wrong-zone warnings, ITSM/SIEM handoff prompts, or audit/evidence summaries. Kontakt.io or the RTLS source would still own the RTLS hardware, badges, wearables, location engine, calibration, telemetry, APIs/SDKs, and native workflows. SignalGrid would normalize that context and combine it with identity, posture, session, dock, and workflow signals.
+
+This is a future fixture-proof path only. Review Hub does not claim a current Kontakt.io partnership, live integration, production-ready RTLS workflow, patient-care outcome guarantee, or replacement of RTLS, staff-safety, nurse-call, EHR, MDM/UEM, IAM, ITSM, SIEM, or dock systems.
+
 ## DockBridge / edge dock connector strategy
 
 SignalGrid DockBridge is a future edge/dock integration layer for shared-device docks, charging stations, smart cabinets, kiosks, and return stations. It would let dock vendors or simulated dock services report physical events such as device docked, device undocked, wrong-slot return, return overdue, charging fault, or dock offline into SignalGrid's runtime decision layer.
@@ -57,7 +65,7 @@ DockBridge remains a future platform expansion path. It should not be framed as 
 
 ## Posture source boundaries
 
-SignalGrid consumes MDM/UEM posture signals. SignalGrid does not replace MDM/UEM. The sequence is Microsoft Intune / Entra first, Jamf Apple-specific posture second, then Fleet / Workspace ONE / broader UEM paths. iOS and Android posture will usually come through systems such as Microsoft Intune, Jamf, Workspace ONE, Fleet, or similar tools.
+SignalGrid consumes MDM/UEM posture signals. SignalGrid does not replace MDM/UEM. The sequence is Microsoft Intune / Entra first, Jamf Apple-specific posture second, Fleet / Workspace ONE / broader UEM paths third, and Kontakt.io / RTLS deterministic fixtures later for location and staff-safety context if validated. iOS and Android posture will usually come through systems such as Microsoft Intune, Jamf, Workspace ONE, Fleet, or similar tools.
 
 ## Review questions
 

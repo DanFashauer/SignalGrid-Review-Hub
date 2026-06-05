@@ -11,7 +11,7 @@ Partner ecosystems matter because SignalGrid depends on signals and workflows ow
 - SIEM/SOAR and security operations platforms.
 - NAC/network platforms.
 - Endpoint telemetry and EDR providers.
-- Physical/shared-device context systems such as badge, QR/NFC, and RTLS providers.
+- Physical/shared-device context systems such as badge, QR/NFC, Kontakt.io, and other RTLS providers.
 - Dock, charging station, smart cabinet, kiosk, and return-station vendors.
 - Agentic operations, connector marketplace, and MCP-style tool-surface ecosystems where future bounded connectors are validated.
 
@@ -20,6 +20,12 @@ Partner ecosystems matter because SignalGrid depends on signals and workflows ow
 Imprivata is a future candidate healthcare access-management path because many shared-device and frontline healthcare workflows depend on clinical access, badge, workstation, mobile device, medical device, patient access, and privileged-access context. SignalGrid should treat this as a possible design-partner or ecosystem direction only.
 
 Review Hub does not claim any current Imprivata partnership, certification, alliance, marketplace listing, or validated integration.
+
+## Kontakt.io / RTLS candidate ecosystem path
+
+Kontakt.io and similar RTLS providers are future candidate ecosystem paths for location, staff-safety, asset tracking, patient journey/location context where approved, equipment movement, and operational workflow signals. The useful SignalGrid role would be narrow: consume RTLS/location/staff-safety context, normalize it, combine it with identity, device posture, session, DockBridge, and operational signals, then produce runtime decisions, operator alerts, ITSM/SIEM handoff requests, and audit evidence.
+
+Kontakt.io or another RTLS source would continue to own RTLS hardware, tags, badges, wearables, location engines, telemetry, infrastructure calibration, APIs/SDKs, and native workflows. Review Hub does not claim a current Kontakt.io partnership, validated integration, certification, marketplace listing, customer deployment, patient-care outcome guarantee, or production-ready capability. A real integration should be evaluated only after API/SDK access, privacy boundaries, partner boundaries, and data handling are validated.
 
 ## DockBridge ecosystem path
 

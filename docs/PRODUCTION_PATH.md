@@ -28,12 +28,13 @@ The recommended sequence remains:
 1. Intune / Entra posture proof using Microsoft Graph / Graph SDK design and deterministic public fixtures first.
 2. Jamf Apple-specific posture proof for Apple-heavy shared-device and frontline environments.
 3. Fleet / Workspace ONE / broader UEM connector paths.
-4. DockBridge simulated dock event API.
-5. Operator mobile workflow MVP.
-6. MCP / agentic connector strategy later, after source-system proofs are grounded.
-7. One dock/vendor adapter if the simulated workflow validates value.
-8. MFi or hardware certification path only if Apple-connected hardware integration is required.
-9. Imprivata/healthcare alliance path only if validated and mutually approved.
+4. Kontakt.io / RTLS deterministic fixture proof as the first location and staff-safety signal path.
+5. DockBridge simulated dock event API.
+6. Operator mobile workflow MVP.
+7. MCP / agentic connector strategy later, after source-system proofs are grounded.
+8. One dock/vendor adapter if the simulated workflow validates value.
+9. MFi or hardware certification path only if Apple-connected hardware integration is required.
+10. Imprivata/healthcare alliance path only if validated and mutually approved.
 
 ## Intune / Entra posture proof gate
 
@@ -58,6 +59,19 @@ Jamf is especially relevant for Apple-first environments where Apple-native mana
 For this path, Jamf remains the system that owns Apple device lifecycle management, app/profile deployment, inventory collection, Apple-specific management frameworks, Self Service workflows, and device security enforcement. SignalGrid would normalize Jamf posture/context into runtime decision inputs, combine Apple posture with identity, session, location, workflow, and operational signals, determine allow / step-up / deny / review / remediation-routing candidates, record audit evidence, and hand action requests back to Jamf or another source system where appropriate.
 
 Review Hub does not claim a current Jamf partnership, validated Jamf integration, Jamf certification, production readiness, or replacement of Jamf.
+
+## Kontakt.io / RTLS production path
+
+Kontakt.io and similar RTLS platforms should be documented as future location, staff-safety, asset-tracking, patient/device movement, and operational workflow signal sources. They should not become the next live connector before the Microsoft Intune / Entra posture proof and Review Hub CI are stable.
+
+| Stage                       | Goal                                                                                                      | Evidence needed                                                                           | Claim boundary                                                                                 |
+| --------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Candidate documentation     | Describe the RTLS/location/staff-safety signal category and source-system boundaries.                     | Public-safe docs, integration notes, roadmap placement, and guardrails.                   | No partnership, live integration, production-ready, patient-care outcome, or compliance claim. |
+| Deterministic fixture proof | Simulate staff duress, wrong-zone device, missing shared device, stale location, and proximity scenarios. | Fixture payloads, normalized signal model, decision mapping, operator alert/audit output. | No live Kontakt.io API calls, customer data, hospital identifiers, or PHI.                     |
+| Source access review        | Evaluate real API/SDK access, auth, event freshness, privacy, and partner boundaries.                     | API/SDK notes, data-minimization review, failure-mode plan, approval path.                | Evaluation only until approved and validated.                                                  |
+| Connector proof             | Read approved RTLS/location events and map them into SignalGrid decisions.                                | Test tenant/sandbox or approved non-customer data, replay-safe events, audit trace.       | RTLS source remains authoritative for hardware, telemetry, calibration, and native workflows.  |
+
+SignalGrid's safe role is to normalize RTLS/location/staff-safety context, combine it with identity, posture, session, DockBridge, and operational signals, determine allow / review / deny / alert / audit outcomes, and route evidence to operator or administrator workflows.
 
 ## Agentic connector production path
 

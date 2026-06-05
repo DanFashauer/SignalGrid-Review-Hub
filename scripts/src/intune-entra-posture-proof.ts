@@ -15,11 +15,37 @@ type ComplianceState =
   | "unknown"
   | "not_applicable";
 type PostureFreshness = "fresh" | "stale" | "expired" | "unknown";
+type LastCheckInFreshness = "fresh" | "stale" | "missing";
+type EnrollmentSource =
+  | "intune"
+  | "apple_business_manager"
+  | "automated_device_enrollment"
+  | "company_portal"
+  | "unknown";
+type OwnershipType = "corporate" | "personal" | "shared" | "unknown";
+type EnrollmentMode =
+  | "user_enrollment"
+  | "device_enrollment"
+  | "automated_device_enrollment"
+  | "shared_ipad"
+  | "single_app_kiosk"
+  | "multi_app_kiosk"
+  | "unknown";
+type ManagementChannel =
+  | "intune"
+  | "jamf"
+  | "workspace_one"
+  | "fleet"
+  | "unknown";
+type DeviceLimitState = "within_limit" | "limit_reached" | "unknown";
+type BooleanOrUnknown = boolean | "unknown";
 type Confidence = "high" | "medium" | "low" | "unknown";
 type DecisionImpact =
   | "allow_candidate"
   | "step_up_or_review_candidate"
   | "deny_or_restrict_candidate"
+  | "limited_access_candidate"
+  | "review_candidate"
   | "unknown_posture";
 
 type ReasonCode =
@@ -28,7 +54,11 @@ type ReasonCode =
   | "POSTURE_STALE_OR_UNKNOWN"
   | "POSTURE_DEVICE_NOT_FOUND"
   | "POSTURE_SOURCE_LOOKUP_FAILED"
-  | "POSTURE_NOT_MANAGED_OR_INACTIVE";
+  | "POSTURE_NOT_MANAGED_OR_INACTIVE"
+  | "POSTURE_ENROLLMENT_LIMIT_REACHED"
+  | "POSTURE_BYOD_USER_ENROLLMENT"
+  | "POSTURE_WEAK_ENROLLMENT_CONFIDENCE"
+  | "POSTURE_SHARED_DEVICE_CONTEXT";
 
 interface SourcePayload {
   managedState: string;
@@ -36,6 +66,13 @@ interface SourcePayload {
   lastCheckInAt: string;
   platform: string;
   ownershipContext?: string;
+  enrollmentSource?: string;
+  ownershipType?: string;
+  enrollmentMode?: string;
+  managementChannel?: string;
+  deviceLimitState?: string;
+  abmLinked?: BooleanOrUnknown;
+  supervised?: BooleanOrUnknown;
   rawReference: string;
   observedAt: string;
 }
@@ -68,6 +105,14 @@ interface NormalizedPosture {
   managedState: ManagedState;
   complianceState: ComplianceState;
   postureFreshness: PostureFreshness;
+  lastCheckInFreshness: LastCheckInFreshness;
+  enrollmentSource: EnrollmentSource;
+  ownershipType: OwnershipType;
+  enrollmentMode: EnrollmentMode;
+  managementChannel: ManagementChannel;
+  deviceLimitState: DeviceLimitState;
+  abmLinked: BooleanOrUnknown;
+  supervised: BooleanOrUnknown;
   riskIndicators: string[];
   observedAt: string;
   rawReference: string;
@@ -114,6 +159,8 @@ const decisionImpacts: DecisionImpact[] = [
   "allow_candidate",
   "step_up_or_review_candidate",
   "deny_or_restrict_candidate",
+  "limited_access_candidate",
+  "review_candidate",
   "unknown_posture",
 ];
 const reasonCodes: ReasonCode[] = [
@@ -123,6 +170,10 @@ const reasonCodes: ReasonCode[] = [
   "POSTURE_DEVICE_NOT_FOUND",
   "POSTURE_SOURCE_LOOKUP_FAILED",
   "POSTURE_NOT_MANAGED_OR_INACTIVE",
+  "POSTURE_ENROLLMENT_LIMIT_REACHED",
+  "POSTURE_BYOD_USER_ENROLLMENT",
+  "POSTURE_WEAK_ENROLLMENT_CONFIDENCE",
+  "POSTURE_SHARED_DEVICE_CONTEXT",
 ];
 const managedStates: ManagedState[] = [
   "managed",
@@ -143,19 +194,51 @@ const postureFreshnessValues: PostureFreshness[] = [
   "expired",
   "unknown",
 ];
+const lastCheckInFreshnessValues: LastCheckInFreshness[] = [
+  "fresh",
+  "stale",
+  "missing",
+];
+const enrollmentSources: EnrollmentSource[] = [
+  "intune",
+  "apple_business_manager",
+  "automated_device_enrollment",
+  "company_portal",
+  "unknown",
+];
+const ownershipTypes: OwnershipType[] = [
+  "corporate",
+  "personal",
+  "shared",
+  "unknown",
+];
+const enrollmentModes: EnrollmentMode[] = [
+  "user_enrollment",
+  "device_enrollment",
+  "automated_device_enrollment",
+  "shared_ipad",
+  "single_app_kiosk",
+  "multi_app_kiosk",
+  "unknown",
+];
+const managementChannels: ManagementChannel[] = [
+  "intune",
+  "jamf",
+  "workspace_one",
+  "fleet",
+  "unknown",
+];
+const deviceLimitStates: DeviceLimitState[] = [
+  "within_limit",
+  "limit_reached",
+  "unknown",
+];
 const confidenceValues: Confidence[] = ["high", "medium", "low", "unknown"];
 
 function normalizeManagedState(value: string | undefined): ManagedState {
-  switch (value) {
-    case "managed":
-    case "unmanaged":
-    case "retired":
-    case "inactive":
-    case "unknown":
-      return value;
-    default:
-      return "unknown";
-  }
+  return managedStates.includes(value as ManagedState)
+    ? (value as ManagedState)
+    : "unknown";
 }
 
 function normalizeComplianceState(value: string | undefined): ComplianceState {
@@ -174,6 +257,46 @@ function normalizeComplianceState(value: string | undefined): ComplianceState {
     default:
       return "unknown";
   }
+}
+
+function normalizeEnrollmentSource(
+  value: string | undefined,
+): EnrollmentSource {
+  return enrollmentSources.includes(value as EnrollmentSource)
+    ? (value as EnrollmentSource)
+    : "unknown";
+}
+
+function normalizeOwnershipType(value: string | undefined): OwnershipType {
+  return ownershipTypes.includes(value as OwnershipType)
+    ? (value as OwnershipType)
+    : "unknown";
+}
+
+function normalizeEnrollmentMode(value: string | undefined): EnrollmentMode {
+  return enrollmentModes.includes(value as EnrollmentMode)
+    ? (value as EnrollmentMode)
+    : "unknown";
+}
+
+function normalizeManagementChannel(
+  value: string | undefined,
+): ManagementChannel {
+  return managementChannels.includes(value as ManagementChannel)
+    ? (value as ManagementChannel)
+    : "unknown";
+}
+
+function normalizeDeviceLimitState(
+  value: string | undefined,
+): DeviceLimitState {
+  return deviceLimitStates.includes(value as DeviceLimitState)
+    ? (value as DeviceLimitState)
+    : "unknown";
+}
+
+function normalizeBooleanOrUnknown(value: unknown): BooleanOrUnknown {
+  return typeof value === "boolean" ? value : "unknown";
 }
 
 function classifyFreshness(
@@ -210,6 +333,20 @@ function classifyFreshness(
   return "expired";
 }
 
+function toLastCheckInFreshness(
+  postureFreshness: PostureFreshness,
+): LastCheckInFreshness {
+  if (postureFreshness === "fresh") {
+    return "fresh";
+  }
+
+  if (postureFreshness === "stale" || postureFreshness === "expired") {
+    return "stale";
+  }
+
+  return "missing";
+}
+
 function hasRequiredPayloadFields(
   payload: SourcePayload | undefined,
 ): payload is SourcePayload {
@@ -240,6 +377,14 @@ function buildUnknownPosture(
       managedState: "unknown",
       complianceState: "unknown",
       postureFreshness: "unknown",
+      lastCheckInFreshness: "missing",
+      enrollmentSource: "unknown",
+      ownershipType: "unknown",
+      enrollmentMode: "unknown",
+      managementChannel: "unknown",
+      deviceLimitState: "unknown",
+      abmLinked: "unknown",
+      supervised: "unknown",
       riskIndicators: [riskIndicator],
       observedAt: fixtureFile.evaluatedAt,
       rawReference: `fixture:${fixture.caseId}`,
@@ -249,6 +394,217 @@ function buildUnknownPosture(
     reasonCode,
     failureMode: fixture.failureMode ?? riskIndicator,
   };
+}
+
+function isAdeOrAbm(
+  enrollmentSource: EnrollmentSource,
+  enrollmentMode: EnrollmentMode,
+): boolean {
+  return (
+    enrollmentSource === "apple_business_manager" ||
+    enrollmentSource === "automated_device_enrollment" ||
+    enrollmentMode === "automated_device_enrollment"
+  );
+}
+
+function isSharedOrKiosk(enrollmentMode: EnrollmentMode): boolean {
+  return (
+    enrollmentMode === "shared_ipad" ||
+    enrollmentMode === "single_app_kiosk" ||
+    enrollmentMode === "multi_app_kiosk"
+  );
+}
+
+function collectRiskIndicators(
+  posture: Omit<
+    NormalizedPosture,
+    "riskIndicators" | "confidence" | "decisionImpact"
+  >,
+): string[] {
+  const riskIndicators: string[] = [];
+
+  if (posture.managedState !== "managed") {
+    riskIndicators.push("unmanaged_device");
+  }
+
+  if (posture.complianceState === "non_compliant") {
+    riskIndicators.push("non_compliant");
+  }
+
+  if (posture.lastCheckInFreshness === "stale") {
+    riskIndicators.push("stale_check_in");
+  }
+
+  if (posture.lastCheckInFreshness === "missing") {
+    riskIndicators.push("missing_check_in");
+  }
+
+  if (posture.deviceLimitState === "limit_reached") {
+    riskIndicators.push("device_limit_reached");
+  }
+
+  if (
+    posture.ownershipType === "personal" ||
+    posture.enrollmentMode === "user_enrollment"
+  ) {
+    riskIndicators.push("byod_or_user_enrollment");
+  }
+
+  if (
+    posture.ownershipType === "corporate" &&
+    posture.enrollmentSource === "unknown"
+  ) {
+    riskIndicators.push("unknown_enrollment_source");
+  }
+
+  if (
+    posture.ownershipType === "corporate" &&
+    (posture.abmLinked !== true || posture.supervised !== true)
+  ) {
+    riskIndicators.push("weak_apple_enrollment_confidence");
+  }
+
+  if (isSharedOrKiosk(posture.enrollmentMode)) {
+    riskIndicators.push("shared_or_kiosk_context");
+  }
+
+  return riskIndicators;
+}
+
+function mapDecision(
+  posture: Omit<
+    NormalizedPosture,
+    "riskIndicators" | "confidence" | "decisionImpact"
+  >,
+): {
+  decisionImpact: DecisionImpact;
+  reasonCode: ReasonCode;
+} {
+  if (posture.managedState !== "managed") {
+    return {
+      decisionImpact: "deny_or_restrict_candidate",
+      reasonCode: "POSTURE_NOT_MANAGED_OR_INACTIVE",
+    };
+  }
+
+  if (posture.complianceState === "non_compliant") {
+    return {
+      decisionImpact: "deny_or_restrict_candidate",
+      reasonCode: "POSTURE_NON_COMPLIANT",
+    };
+  }
+
+  if (posture.lastCheckInFreshness !== "fresh") {
+    return {
+      decisionImpact: "step_up_or_review_candidate",
+      reasonCode: "POSTURE_STALE_OR_UNKNOWN",
+    };
+  }
+
+  if (posture.deviceLimitState === "limit_reached") {
+    return {
+      decisionImpact: "review_candidate",
+      reasonCode: "POSTURE_ENROLLMENT_LIMIT_REACHED",
+    };
+  }
+
+  if (
+    posture.ownershipType === "personal" ||
+    posture.enrollmentMode === "user_enrollment"
+  ) {
+    return {
+      decisionImpact: "limited_access_candidate",
+      reasonCode: "POSTURE_BYOD_USER_ENROLLMENT",
+    };
+  }
+
+  if (
+    posture.ownershipType === "corporate" &&
+    posture.enrollmentSource === "unknown"
+  ) {
+    return {
+      decisionImpact: "review_candidate",
+      reasonCode: "POSTURE_WEAK_ENROLLMENT_CONFIDENCE",
+    };
+  }
+
+  if (
+    posture.ownershipType === "corporate" &&
+    (posture.abmLinked !== true || posture.supervised !== true)
+  ) {
+    return {
+      decisionImpact: "review_candidate",
+      reasonCode: "POSTURE_WEAK_ENROLLMENT_CONFIDENCE",
+    };
+  }
+
+  if (isSharedOrKiosk(posture.enrollmentMode)) {
+    return {
+      decisionImpact: "allow_candidate",
+      reasonCode: "POSTURE_SHARED_DEVICE_CONTEXT",
+    };
+  }
+
+  if (
+    posture.complianceState === "compliant" &&
+    posture.lastCheckInFreshness === "fresh" &&
+    posture.ownershipType === "corporate" &&
+    isAdeOrAbm(posture.enrollmentSource, posture.enrollmentMode) &&
+    posture.abmLinked === true &&
+    posture.supervised === true
+  ) {
+    return {
+      decisionImpact: "allow_candidate",
+      reasonCode: "POSTURE_COMPLIANT_FRESH",
+    };
+  }
+
+  if (posture.complianceState === "compliant") {
+    return {
+      decisionImpact: "allow_candidate",
+      reasonCode: "POSTURE_COMPLIANT_FRESH",
+    };
+  }
+
+  return {
+    decisionImpact: "unknown_posture",
+    reasonCode: "POSTURE_STALE_OR_UNKNOWN",
+  };
+}
+
+function determineConfidence(
+  posture: Omit<
+    NormalizedPosture,
+    "riskIndicators" | "confidence" | "decisionImpact"
+  >,
+): Confidence {
+  if (
+    posture.managedState === "managed" &&
+    posture.complianceState === "compliant" &&
+    posture.lastCheckInFreshness === "fresh" &&
+    posture.ownershipType === "corporate" &&
+    isAdeOrAbm(posture.enrollmentSource, posture.enrollmentMode) &&
+    posture.abmLinked === true &&
+    posture.supervised === true
+  ) {
+    return "high";
+  }
+
+  if (
+    posture.lastCheckInFreshness !== "fresh" ||
+    posture.enrollmentSource === "unknown"
+  ) {
+    return "low";
+  }
+
+  if (
+    posture.managedState !== "unknown" &&
+    posture.complianceState !== "unknown"
+  ) {
+    return "medium";
+  }
+
+  return "unknown";
 }
 
 function normalizePosture(
@@ -289,129 +645,48 @@ function normalizePosture(
     );
   }
 
-  const managedState = normalizeManagedState(fixture.payload.managedState);
-  const complianceState = normalizeComplianceState(
-    fixture.payload.complianceState,
-  );
   const postureFreshness = classifyFreshness(
     fixture.payload.lastCheckInAt,
     fixtureFile.evaluatedAt,
     fixtureFile.freshnessWindowHours,
     fixtureFile.staleWindowHours,
   );
-  const riskIndicators: string[] = [];
-
-  if (managedState !== "managed") {
-    riskIndicators.push("unmanaged_device");
-  }
-
-  if (complianceState === "non_compliant") {
-    riskIndicators.push("non_compliant");
-  }
-
-  if (postureFreshness === "stale") {
-    riskIndicators.push("stale_check_in");
-  }
-
-  if (postureFreshness === "expired") {
-    riskIndicators.push("expired_check_in");
-  }
-
-  if (postureFreshness === "unknown") {
-    riskIndicators.push("unknown_check_in_freshness");
-  }
-
-  const { decisionImpact, reasonCode } = mapDecision(
-    managedState,
-    complianceState,
+  const basePosture: Omit<
+    NormalizedPosture,
+    "riskIndicators" | "confidence" | "decisionImpact"
+  > = {
+    deviceId: fixture.deviceId,
+    sourceSystem: fixtureFile.sourceSystem,
+    managedState: normalizeManagedState(fixture.payload.managedState),
+    complianceState: normalizeComplianceState(fixture.payload.complianceState),
     postureFreshness,
-  );
+    lastCheckInFreshness: toLastCheckInFreshness(postureFreshness),
+    enrollmentSource: normalizeEnrollmentSource(
+      fixture.payload.enrollmentSource,
+    ),
+    ownershipType: normalizeOwnershipType(fixture.payload.ownershipType),
+    enrollmentMode: normalizeEnrollmentMode(fixture.payload.enrollmentMode),
+    managementChannel: normalizeManagementChannel(
+      fixture.payload.managementChannel,
+    ),
+    deviceLimitState: normalizeDeviceLimitState(
+      fixture.payload.deviceLimitState,
+    ),
+    abmLinked: normalizeBooleanOrUnknown(fixture.payload.abmLinked),
+    supervised: normalizeBooleanOrUnknown(fixture.payload.supervised),
+    observedAt: fixture.payload.observedAt,
+    rawReference: fixture.payload.rawReference,
+  };
+  const { decisionImpact, reasonCode } = mapDecision(basePosture);
 
   return {
     normalizedPosture: {
-      deviceId: fixture.deviceId,
-      sourceSystem: fixtureFile.sourceSystem,
-      managedState,
-      complianceState,
-      postureFreshness,
-      riskIndicators,
-      observedAt: fixture.payload.observedAt,
-      rawReference: fixture.payload.rawReference,
-      confidence: determineConfidence(
-        managedState,
-        complianceState,
-        postureFreshness,
-      ),
+      ...basePosture,
+      riskIndicators: collectRiskIndicators(basePosture),
+      confidence: determineConfidence(basePosture),
       decisionImpact,
     },
     reasonCode,
-  };
-}
-
-function determineConfidence(
-  managedState: ManagedState,
-  complianceState: ComplianceState,
-  postureFreshness: PostureFreshness,
-): Confidence {
-  if (
-    managedState === "managed" &&
-    complianceState === "compliant" &&
-    postureFreshness === "fresh"
-  ) {
-    return "high";
-  }
-
-  if (
-    postureFreshness === "fresh" &&
-    managedState !== "unknown" &&
-    complianceState !== "unknown"
-  ) {
-    return "medium";
-  }
-
-  if (postureFreshness === "stale" || postureFreshness === "expired") {
-    return "low";
-  }
-
-  return "unknown";
-}
-
-function mapDecision(
-  managedState: ManagedState,
-  complianceState: ComplianceState,
-  postureFreshness: PostureFreshness,
-): { decisionImpact: DecisionImpact; reasonCode: ReasonCode } {
-  if (managedState !== "managed") {
-    return {
-      decisionImpact: "deny_or_restrict_candidate",
-      reasonCode: "POSTURE_NOT_MANAGED_OR_INACTIVE",
-    };
-  }
-
-  if (complianceState === "non_compliant") {
-    return {
-      decisionImpact: "deny_or_restrict_candidate",
-      reasonCode: "POSTURE_NON_COMPLIANT",
-    };
-  }
-
-  if (postureFreshness !== "fresh") {
-    return {
-      decisionImpact: "step_up_or_review_candidate",
-      reasonCode: "POSTURE_STALE_OR_UNKNOWN",
-    };
-  }
-
-  if (complianceState === "compliant") {
-    return {
-      decisionImpact: "allow_candidate",
-      reasonCode: "POSTURE_COMPLIANT_FRESH",
-    };
-  }
-
-  return {
-    decisionImpact: "unknown_posture",
-    reasonCode: "POSTURE_STALE_OR_UNKNOWN",
   };
 }
 
@@ -461,6 +736,10 @@ function evaluateCase(
     !(
       normalizedPosture.decisionImpact === "allow_candidate" &&
       normalizedPosture.complianceState !== "compliant"
+    ) &&
+    !(
+      normalizedPosture.decisionImpact === "unknown_posture" &&
+      normalizedPosture.complianceState === "non_compliant"
     );
 
   return {
@@ -577,6 +856,36 @@ function validateNormalizedPosture(
     posture.postureFreshness,
     postureFreshnessValues,
     `${caseId}.normalizedPosture.postureFreshness`,
+  );
+  assertEnum(
+    posture.lastCheckInFreshness,
+    lastCheckInFreshnessValues,
+    `${caseId}.normalizedPosture.lastCheckInFreshness`,
+  );
+  assertEnum(
+    posture.enrollmentSource,
+    enrollmentSources,
+    `${caseId}.normalizedPosture.enrollmentSource`,
+  );
+  assertEnum(
+    posture.ownershipType,
+    ownershipTypes,
+    `${caseId}.normalizedPosture.ownershipType`,
+  );
+  assertEnum(
+    posture.enrollmentMode,
+    enrollmentModes,
+    `${caseId}.normalizedPosture.enrollmentMode`,
+  );
+  assertEnum(
+    posture.managementChannel,
+    managementChannels,
+    `${caseId}.normalizedPosture.managementChannel`,
+  );
+  assertEnum(
+    posture.deviceLimitState,
+    deviceLimitStates,
+    `${caseId}.normalizedPosture.deviceLimitState`,
   );
   assertEnum(
     posture.confidence,

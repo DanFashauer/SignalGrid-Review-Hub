@@ -7,7 +7,11 @@ export type IntegrationStatus =
 export interface IntegrationTarget {
   id: string;
   vendor: string;
-  category: "Identity Provider" | "MDM / UEM" | "ITSM / Workflow" | "SIEM / Analytics";
+  category:
+    | "Identity Provider"
+    | "MDM / UEM"
+    | "ITSM / Workflow"
+    | "SIEM / Analytics";
   product: string;
   signalTypes: string[];
   status: IntegrationStatus;
@@ -26,6 +30,51 @@ export interface QuickstartStep {
 
 export const integrationTargets: IntegrationTarget[] = [
   {
+    id: "intune",
+    vendor: "Microsoft",
+    category: "MDM / UEM",
+    product: "Intune Device Compliance",
+    signalTypes: ["Device Posture"],
+    status: "in-progress",
+    priority: "P1",
+    notes:
+      "First concrete posture proof for Microsoft-stack organizations. Device compliance status, managed device enrollment state, OS patch level, last sync/check-in freshness, and Entra device context become normalized SignalGrid posture inputs for allow / step-up / deny / unknown decisions and audit records. Uses Microsoft Graph API in a sandbox or deterministic fixture path; no production-ready, compliance, or Microsoft replacement claim.",
+    blockers:
+      "Intune Graph API scopes and certificate-based auth for shared device mode require M365 E3/E5 sandbox. Entra Shared Device Mode enrollment needed for iOS shared device scenarios.",
+    apiDocs:
+      "https://learn.microsoft.com/en-us/graph/api/intune-devices-manageddevice-list",
+    quickstartSteps: [
+      {
+        title: "Register an app in Entra ID (Azure AD)",
+        code: `# Required Graph API permissions:
+# DeviceManagementManagedDevices.Read.All
+# DeviceManagementConfiguration.Read.All
+# Device.Read.All`,
+        description:
+          "Register a service principal in Entra ID with read-only Graph API permissions for device management. Use certificate credentials in production, client secret for sandbox.",
+      },
+      {
+        title: "Get device compliance state via Graph API",
+        code: `# List all managed devices with compliance state
+GET https://graph.microsoft.com/v1.0/deviceManagement/managedDevices
+  ?$select=id,deviceName,complianceState,osVersion,enrolledDateTime,lastSyncDateTime
+  &$filter=complianceState ne 'compliant'
+
+# Authorization header
+Authorization: Bearer {access_token}`,
+        description:
+          "Returns managed device list filtered to non-compliant devices. complianceState values: compliant, noncompliant, unknown, notApplicable, inGracePeriod, conflict.",
+      },
+      {
+        title: "Get compliance policy evaluation results for a device",
+        code: `GET https://graph.microsoft.com/v1.0/deviceManagement/managedDevices/{deviceId}/deviceCompliancePolicyStates
+Authorization: Bearer {access_token}`,
+        description:
+          "Returns per-policy compliance evaluation for a specific device — which policies passed, failed, or haven't been evaluated yet.",
+      },
+    ],
+  },
+  {
     id: "fleet",
     vendor: "Fleet",
     category: "MDM / UEM",
@@ -41,7 +90,8 @@ export const integrationTargets: IntegrationTarget[] = [
       {
         title: "Install fleetctl CLI",
         code: `curl -sSL https://fleetdm.com/resources/install-fleetctl.sh | bash`,
-        description: "Install the Fleet command-line tool. Used to configure Fleet, manage policies, and script API interactions.",
+        description:
+          "Install the Fleet command-line tool. Used to configure Fleet, manage policies, and script API interactions.",
       },
       {
         title: "Connect to a Fleet instance (or start local sandbox)",
@@ -120,49 +170,6 @@ async function getDevicePosture(deviceId: string) {
     ],
   },
   {
-    id: "intune",
-    vendor: "Microsoft",
-    category: "MDM / UEM",
-    product: "Intune Device Compliance",
-    signalTypes: ["Device Posture"],
-    status: "in-progress",
-    priority: "P1",
-    notes:
-      "First concrete posture proof for Microsoft-stack organizations. Device compliance status, managed device enrollment state, OS patch level, last sync/check-in freshness, and Entra device context become normalized SignalGrid posture inputs for allow / step-up / deny / unknown decisions and audit records. Uses Microsoft Graph API in a sandbox or deterministic fixture path; no production-ready, compliance, or Microsoft replacement claim.",
-    blockers: "Intune Graph API scopes and certificate-based auth for shared device mode require M365 E3/E5 sandbox. Entra Shared Device Mode enrollment needed for iOS shared device scenarios.",
-    apiDocs: "https://learn.microsoft.com/en-us/graph/api/intune-devices-manageddevice-list",
-    quickstartSteps: [
-      {
-        title: "Register an app in Entra ID (Azure AD)",
-        code: `# Required Graph API permissions:
-# DeviceManagementManagedDevices.Read.All
-# DeviceManagementConfiguration.Read.All
-# Device.Read.All`,
-        description:
-          "Register a service principal in Entra ID with read-only Graph API permissions for device management. Use certificate credentials in production, client secret for sandbox.",
-      },
-      {
-        title: "Get device compliance state via Graph API",
-        code: `# List all managed devices with compliance state
-GET https://graph.microsoft.com/v1.0/deviceManagement/managedDevices
-  ?$select=id,deviceName,complianceState,osVersion,enrolledDateTime,lastSyncDateTime
-  &$filter=complianceState ne 'compliant'
-
-# Authorization header
-Authorization: Bearer {access_token}`,
-        description:
-          "Returns managed device list filtered to non-compliant devices. complianceState values: compliant, noncompliant, unknown, notApplicable, inGracePeriod, conflict.",
-      },
-      {
-        title: "Get compliance policy evaluation results for a device",
-        code: `GET https://graph.microsoft.com/v1.0/deviceManagement/managedDevices/{deviceId}/deviceCompliancePolicyStates
-Authorization: Bearer {access_token}`,
-        description:
-          "Returns per-policy compliance evaluation for a specific device — which policies passed, failed, or haven't been evaluated yet.",
-      },
-    ],
-  },
-  {
     id: "entra",
     vendor: "Microsoft",
     category: "Identity Provider",
@@ -172,7 +179,8 @@ Authorization: Bearer {access_token}`,
     priority: "P1",
     notes:
       "Identity resolution, device registration state, conditional access policy evaluation context. Entra Shared Device Mode is the primary target for frontline iOS deployments (nurses, logistics workers, field engineers sharing one device across shifts).",
-    blockers: "Entra Workload Identity Federation setup needed for service principal auth in sandbox.",
+    blockers:
+      "Entra Workload Identity Federation setup needed for service principal auth in sandbox.",
     apiDocs: "https://learn.microsoft.com/en-us/entra/identity-platform/",
     quickstartSteps: [
       {
@@ -202,8 +210,9 @@ Authorization: Bearer {access_token}`,
     status: "not-started",
     priority: "P2",
     notes:
-      "Primary MDM platform for Apple-fleet healthcare and education environments. Device compliance, management profile status, smart group membership. REST API and webhook support. Classic API for legacy endpoints, Jamf Pro API (v1) for modern integrations. Sandbox available via Jamf Developer Program (free trial tenant).",
-    apiDocs: "https://developer.jamf.com/jamf-pro/reference/get_v1-computers-management-id",
+      "High-value Apple-specific posture follow-on after the Microsoft Intune / Entra proof. Jamf is purpose-built for Apple-first environments where Apple-native management depth matters: iOS/iPadOS shared devices, macOS frontline/admin workstations, Apple Business Manager / Automated Device Enrollment, configuration profile status, Declarative Device Management, Managed Device Attestation or hardware attestation where available, Platform SSO context where available, APNs communication health, Apple OS/update readiness, and Self Service remediation state. Review Hub does not claim a current Jamf partnership, validated integration, certification, production deployment, or replacement claim.",
+    apiDocs:
+      "https://developer.jamf.com/jamf-pro/reference/get_v1-computers-management-id",
     quickstartSteps: [
       {
         title: "Get a Jamf Pro trial or developer sandbox",
@@ -245,7 +254,7 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \\
 # Smart group membership = compliance grouping
 # GET /JSSResource/computergroups/id/{smartGroupId} for group membership`,
         description:
-          "Smart group membership in Jamf is the primary compliance signal. A device in a 'Non-Compliant Devices' smart group is the Jamf equivalent of an Intune non-compliant device — the same posture signal, different platform.",
+          "Smart group membership in Jamf is a useful compliance signal. A device in a 'Non-Compliant Devices' smart group is the Jamf equivalent of an Intune non-compliant device, while Apple-specific context such as configuration profile status, ADE/ABM enrollment, DDM, attestation, APNs health, and Self Service remediation state can add deeper Apple posture evidence.",
       },
       {
         title: "Map Jamf compliance state to SignalGrid device posture signal",
@@ -271,7 +280,7 @@ async function getJamfDevicePosture(computerId: string) {
   };
 }`,
         description:
-          "Jamf's posture signal maps directly to SignalGrid's device-posture signal type. MDM-capable + management profile valid = posture compliant. Smart group membership adds fine-grained policy compliance on top.",
+          "Jamf posture can map into SignalGrid's normalized device-posture signal type. MDM-capable + management profile valid contributes to posture confidence, while smart group membership, Apple enrollment context, profile status, attestation where available, APNs health, OS/update readiness, and Self Service remediation state can add Apple-specific decision evidence.",
       },
     ],
   },
@@ -381,7 +390,8 @@ async function getOktaSignals(userId: string) {
     priority: "P2",
     notes:
       "Open incident or change record for a device is a first-class operational signal. Querying active incidents, change freeze windows, and device assignment state. Table API or IntegrationHub. REST API with basic auth or OAuth 2.0.",
-    apiDocs: "https://developer.servicenow.com/dev.do#!/reference/api/tokyo/rest/c_TableAPI",
+    apiDocs:
+      "https://developer.servicenow.com/dev.do#!/reference/api/tokyo/rest/c_TableAPI",
     quickstartSteps: [
       {
         title: "Query open incidents for a device",
@@ -406,7 +416,8 @@ Accept: application/json`,
     priority: "P3",
     notes:
       "CrowdStrike ZTA score as a device posture signal input. Relevant for environments where Falcon is already deployed — augments rather than replaces existing posture data. Falcon API with OAuth 2.0.",
-    apiDocs: "https://falcon.crowdstrike.com/documentation/page/a2a7fc0e/crowdstrike-oauth2-based-apis",
+    apiDocs:
+      "https://falcon.crowdstrike.com/documentation/page/a2a7fc0e/crowdstrike-oauth2-based-apis",
   },
   {
     id: "jira",
@@ -418,7 +429,8 @@ Accept: application/json`,
     priority: "P3",
     notes:
       "Operational signal source for SMB and tech-adjacent environments. Open incidents, SLA breach events, device-linked tickets as access decision inputs. REST API with OAuth 2.0 or API token.",
-    apiDocs: "https://developer.atlassian.com/cloud/jira/service-desk/rest/api-group-request/",
+    apiDocs:
+      "https://developer.atlassian.com/cloud/jira/service-desk/rest/api-group-request/",
   },
 
   // ── Gartner Peer Insights additions ───────────────────────────────────────
@@ -644,7 +656,8 @@ async function getTaniumOperationalSignals(endpointName: string) {
     priority: "P2",
     notes:
       "Purpose-built UEM for kiosk mode and frontline shared-device deployments. Hexnode has native API fields for kiosk mode status — whether a device is currently in locked-down single-app or multi-app kiosk mode — that most MDM platforms don't expose at this granularity. Strong fit for retail POS terminals, logistics kiosks, and healthcare nursing station devices. 30-day free trial, no credit card. Gartner: 260 ratings, 4.7 stars.",
-    apiDocs: "https://www.hexnode.com/mobile-device-management/hexnode-mdm-api/",
+    apiDocs:
+      "https://www.hexnode.com/mobile-device-management/hexnode-mdm-api/",
     quickstartSteps: [
       {
         title: "Start a free Hexnode trial (no credit card required)",

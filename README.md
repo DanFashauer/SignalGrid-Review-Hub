@@ -14,12 +14,12 @@ This repository is not the production SignalGrid core, not a customer deployment
 
 ## Repository roles
 
-| Repository | Role going forward |
-| --- | --- |
-| `DanFashauer/SignalGrid` | Private protected source, backup, and core foundation. |
-| `DanFashauer/SignalGrid-Review-Hub` | Public pre-production and post-launch review/validation surface. |
-| `DanFashauer/DEV` | Legacy Alpha repository and future Home/profile transition area after cleanup. |
-| `DanFashauer/Home` | Future personal homepage, resume, and founder profile if created separately. |
+| Repository                          | Role going forward                                                             |
+| ----------------------------------- | ------------------------------------------------------------------------------ |
+| `DanFashauer/SignalGrid`            | Private protected source, backup, and core foundation.                         |
+| `DanFashauer/SignalGrid-Review-Hub` | Public pre-production and post-launch review/validation surface.               |
+| `DanFashauer/DEV`                   | Legacy Alpha repository and future Home/profile transition area after cleanup. |
+| `DanFashauer/Home`                  | Future personal homepage, resume, and founder profile if created separately.   |
 
 ## Relationship to the private SignalGrid core
 
@@ -39,7 +39,7 @@ The private SignalGrid repository remains the protected source and core foundati
 
 ## Documentation map
 
-Start with [`docs/INDEX.md`](docs/INDEX.md) for the complete public review package, including lineage, Alpha parity, milestone strategy, mobile/platform direction, integration catalog, the first Intune / Entra posture proof, ecosystem positioning, configuration remediation guardrails, partner strategy, roadmap to private core, and reviewer checklist. The short buyer-facing answer to “why not just use existing IAM/UEM/ITSM tools?” lives in [`docs/ECOSYSTEM_POSITIONING.md`](docs/ECOSYSTEM_POSITIONING.md), and the first concrete posture-signal proof is in [`docs/INTUNE_ENTRA_POSTURE_PROOF.md`](docs/INTUNE_ENTRA_POSTURE_PROOF.md).
+Start with [`docs/INDEX.md`](docs/INDEX.md) for the complete public review package, including lineage, Alpha parity, milestone strategy, mobile/platform direction, integration catalog, the first Intune / Entra posture proof, ecosystem positioning, configuration remediation guardrails, partner strategy, roadmap to private core, and reviewer checklist. The short buyer-facing answer to “why not just use existing IAM/UEM/ITSM tools?” lives in [`docs/ECOSYSTEM_POSITIONING.md`](docs/ECOSYSTEM_POSITIONING.md), and the first concrete posture-signal proof is in [`docs/INTUNE_ENTRA_POSTURE_PROOF.md`](docs/INTUNE_ENTRA_POSTURE_PROOF.md). Review Hub automation is described in [`docs/CI_AND_VALIDATION.md`](docs/CI_AND_VALIDATION.md), Microsoft Graph/MCP sequencing in [`docs/MICROSOFT_GRAPH_AND_MCP_STRATEGY.md`](docs/MICROSOFT_GRAPH_AND_MCP_STRATEGY.md), and visual-code process in [`docs/VISUAL_CODE_ASSET_STRATEGY.md`](docs/VISUAL_CODE_ASSET_STRATEGY.md).
 
 ## Disclaimer
 

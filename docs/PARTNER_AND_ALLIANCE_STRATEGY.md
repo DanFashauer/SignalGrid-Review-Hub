@@ -11,7 +11,7 @@ Partner ecosystems matter because SignalGrid depends on signals and workflows ow
 - SIEM/SOAR and security operations platforms.
 - NAC/network platforms.
 - Endpoint telemetry and EDR providers.
-- Physical/shared-device context systems such as badge, QR/NFC, and RTLS providers.
+- Physical/shared-device context systems such as badge, QR/NFC, Kontakt.io, and other RTLS providers.
 - Dock, charging station, smart cabinet, kiosk, and return-station vendors.
 - Agentic operations, connector marketplace, and MCP-style tool-surface ecosystems where future bounded connectors are validated.
 
@@ -21,6 +21,11 @@ Imprivata is a future candidate healthcare access-management path because many s
 
 Review Hub does not claim any current Imprivata partnership, certification, alliance, marketplace listing, or validated integration.
 
+## Kontakt.io / RTLS candidate ecosystem path
+
+Kontakt.io and similar RTLS providers are future candidate ecosystem paths for location, staff-safety, asset tracking, patient journey/location context where approved, equipment movement, and operational workflow signals. The useful SignalGrid role would be narrow: consume RTLS/location/staff-safety context, normalize it, combine it with identity, device posture, session, DockBridge, and operational signals, then produce runtime decisions, operator alerts, ITSM/SIEM handoff requests, and audit evidence.
+
+Kontakt.io or another RTLS source would continue to own RTLS hardware, tags, badges, wearables, location engines, telemetry, infrastructure calibration, APIs/SDKs, and native workflows. Review Hub does not claim a current Kontakt.io partnership, validated integration, certification, marketplace listing, customer deployment, patient-care outcome guarantee, or production-ready capability. A real integration should be evaluated only after API/SDK access, privacy boundaries, partner boundaries, and data handling are validated.
 
 ## DockBridge ecosystem path
 
@@ -30,12 +35,11 @@ Apple MFi may become relevant only if SignalGrid or a partner builds certified A
 
 DockBridge may also support the future Imprivata candidate healthcare access-management path, but Review Hub does not claim current Imprivata partnership, certification, alliance status, marketplace listing, or replacement of Imprivata GroundControl.
 
-
 ## Agentic operations and connector ecosystem path
 
 Agentic operations platforms, MCP-style tool surfaces, and connector marketplaces are a future ecosystem direction because they show how specialized systems can expose signals and bounded actions while governance remains in the control path. SignalGrid should treat this as a connector pattern for shared-device and mobile frontline access decisions, not as a pivot into broad AI infrastructure.
 
-A future SignalGrid connector ecosystem could include read-only signal connectors, signed action request connectors, simulation before execution, human approval gates, audit records, rollback metadata, and policy-bound permissions. Jamf/UEM, Intune, Imprivata candidate workflows, ServiceNow, Sentinel, Splunk, dock vendors, and other systems should remain systems of record for their domains.
+A future SignalGrid connector ecosystem could include read-only signal connectors, signed action request connectors, simulation before execution, human approval gates, audit records, rollback metadata, and policy-bound permissions. Jamf, Fleet, Workspace ONE, broader UEM, Intune, Imprivata candidate workflows, ServiceNow, Sentinel, Splunk, dock vendors, and other systems should remain systems of record for their domains.
 
 Review Hub does not claim current Cisco Cloud Control integration, Jamf integration, MCP implementation, connector marketplace listing, partner certification, customer integration, or autonomous production remediation. Public language should keep the safe principle: agents may suggest, SignalGrid evaluates, operators approve, existing systems execute, and SignalGrid records. See [Agentic connector strategy](AGENTIC_CONNECTOR_STRATEGY.md).
 

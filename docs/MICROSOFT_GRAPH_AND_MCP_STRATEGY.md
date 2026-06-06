@@ -1,36 +1,38 @@
 # Microsoft Graph and MCP Strategy
 
-Microsoft Graph / Graph SDK is the first proof path for SignalGrid's Microsoft posture work. MCP-style and agentic connector surfaces are later strategy, not the first proof.
+Microsoft Graph / Graph SDK is the first proof path for SignalGrid's Microsoft identity and posture work. MCP-style and agentic connector surfaces are later strategy, not the first proof.
 
 ## First proof path: Microsoft Graph / Graph SDK
 
 The first concrete proof remains:
 
 ```text
-Device ID
-  -> Microsoft Graph / Intune / Entra posture read, or deterministic public fixture
-  -> normalized SignalGrid posture signal
-  -> runtime decision input
+User/device identity
+  -> Microsoft Graph / Entra ID / Intune posture read, or deterministic public fixture
+  -> normalized SignalGrid identity + posture signal
+  -> runtime trust decision input
   -> allow / step-up / deny / unknown candidate outcome
   -> audit evidence
 ```
 
-For production-facing proof design, prefer Microsoft Graph v1.0 endpoints and Graph SDK / REST reads for deterministic Intune / Entra posture and compliance context. Microsoft Graph beta APIs may be useful for exploration, but Review Hub must not depend on beta APIs for production-facing claims.
+For production-facing proof design, prefer Microsoft Graph v1.0 endpoints and Graph SDK / REST reads for deterministic Entra ID identity context, Intune posture, and compliance context. Microsoft Graph beta APIs may be useful for exploration, but Review Hub must not depend on beta APIs for production-facing claims.
 
-Graph SDK / REST should come before MCP for these posture-read concerns:
+Graph SDK / REST should come before MCP for these identity and posture-read concerns:
 
-- Device lookup.
+- User and device lookup.
+- Group/role context where authorized.
+- MFA, Conditional Access, risk, or session context where available and appropriately scoped.
 - Compliance state.
 - Management state.
 - Last check-in and freshness classification.
 - User/device relationship where available.
 - Audit-ready source evidence and request correlation.
 
-The eventual backend connector design should use app-only Microsoft Graph authentication when a service needs to read posture without a signed-in operator. That belongs in private-core or sandbox implementation, not in this public repo.
+The eventual backend connector design should use app-only Microsoft Graph authentication when a service needs to read identity or posture without a signed-in operator. That belongs in private-core or sandbox implementation, not in this public repo.
 
 ## Later path: Microsoft MCP / enterprise MCP
 
-Microsoft MCP or enterprise MCP-style endpoints are a future agentic connector path. They should not become the first proof, and they should not displace Microsoft Graph as the deterministic posture-read foundation.
+Microsoft MCP or enterprise MCP-style endpoints are a future agentic connector path. They should not become the first proof, and they should not displace Microsoft Graph as the deterministic identity/posture-read foundation.
 
 Future MCP framing, if validated, should stay limited to:
 
@@ -47,6 +49,8 @@ SignalGrid should keep a clear source-of-record boundary:
 
 ```text
 Graph reads trusted Microsoft source data.
+Entra ID authenticates identity.
+Intune proves posture.
 SignalGrid normalizes and decides.
 MCP/agents may assist later.
 Operators approve risky actions.
@@ -54,7 +58,7 @@ Existing systems execute.
 SignalGrid records evidence.
 ```
 
-That means Microsoft Intune / Entra remains authoritative for Microsoft device and compliance context. SignalGrid consumes, normalizes, evaluates, and records; it does not replace Microsoft Graph, Intune, Entra, Conditional Access, or device-management systems.
+That means Microsoft Entra ID remains authoritative for identity and Conditional Access context, while Microsoft Intune remains authoritative for device and compliance context. SignalGrid consumes, normalizes, evaluates runtime trust, and records; it does not replace Microsoft Graph, Intune, Entra ID, Conditional Access, MFA, IAM, IGA, PAM, or device-management systems. See [Identity Trust Layer strategy](IDENTITY_TRUST_LAYER_STRATEGY.md) for the broader identity roadmap.
 
 ## Public-repo guardrails
 

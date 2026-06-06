@@ -14,7 +14,8 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Mobile and platform strategy](MOBILE_AND_PLATFORM_STRATEGY.md): describes operator mobile, admin companion, PWA, desktop, and endpoint-agent boundaries.
 - [Integration catalog](INTEGRATION_CATALOG.md): lists integration categories, first proof direction, and vendor-claim boundaries.
 - [Intune / Entra posture proof](INTUNE_ENTRA_POSTURE_PROOF.md): defines the first concrete posture-signal proof, normalized model, decision mapping, audit record, and validation checklist.
-- [Microsoft Graph and MCP strategy](MICROSOFT_GRAPH_AND_MCP_STRATEGY.md): documents Graph / Graph SDK as the first Microsoft posture path and MCP as a later agentic connector direction.
+- [Identity Trust Layer strategy](IDENTITY_TRUST_LAYER_STRATEGY.md): documents IAM/IdP/IGA systems as core SignalGrid signal sources while preserving the Entra ID + Intune first proof.
+- [Microsoft Graph and MCP strategy](MICROSOFT_GRAPH_AND_MCP_STRATEGY.md): documents Graph / Graph SDK as the first Microsoft identity/posture path and MCP as a later agentic connector direction.
 - [Frontline context signals roadmap](FRONTLINE_CONTEXT_SIGNALS.md): captures future healthcare/frontline context inputs while preserving the Intune / Entra first-proof sequence.
 - [Kontakt.io / RTLS integration notes](KONTAKT_RTLS_INTEGRATION_NOTES.md): documents a future RTLS/location/staff-safety candidate path, fixture-proof boundary, source-system ownership, and guardrails.
 - [Agentic connector strategy](AGENTIC_CONNECTOR_STRATEGY.md): documents future MCP-style connector and governed agentic-operations direction without claiming production readiness or partnerships.

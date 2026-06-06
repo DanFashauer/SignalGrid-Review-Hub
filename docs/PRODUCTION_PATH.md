@@ -25,30 +25,34 @@ Before any production claim, SignalGrid would need evidence for:
 
 The recommended sequence remains:
 
-1. Intune / Entra posture proof using Microsoft Graph / Graph SDK design and deterministic public fixtures first.
-2. Jamf Apple-specific posture proof for Apple-heavy shared-device and frontline environments.
-3. Fleet / Workspace ONE / broader UEM connector paths.
-4. Kontakt.io / RTLS deterministic fixture proof as the first location and staff-safety signal path.
-5. DockBridge simulated dock event API.
-6. Operator mobile workflow MVP.
-7. MCP / agentic connector strategy later, after source-system proofs are grounded.
-8. One dock/vendor adapter if the simulated workflow validates value.
-9. MFi or hardware certification path only if Apple-connected hardware integration is required.
-10. Imprivata/healthcare alliance path only if validated and mutually approved.
+1. Entra ID + Intune identity/posture proof using Microsoft Graph / Graph SDK design and deterministic public fixtures first.
+2. Identity Trust Layer documentation for IAM/IdP/IGA signal boundaries and runtime trust framing.
+3. Jamf Apple-specific posture proof for Apple-heavy shared-device and frontline environments.
+4. Fleet / Workspace ONE / broader UEM connector paths.
+5. Okta / Ping / Duo follow-on identity and MFA context after the Microsoft proof is stable.
+6. Kontakt.io / RTLS deterministic fixture proof as the first location and staff-safety signal path.
+7. DockBridge simulated dock event API.
+8. Operator mobile workflow MVP.
+9. SailPoint / IGA governance context after identity/posture proof and policy explainability stabilize.
+10. AWS IAM / Google Cloud IAM later after enterprise identity and UEM proofs are grounded.
+11. MCP / agentic connector strategy later, after deterministic source-system proofs are grounded.
+12. One dock/vendor adapter if the simulated workflow validates value.
+13. MFi or hardware certification path only if Apple-connected hardware integration is required.
+14. Imprivata/healthcare alliance path only if validated and mutually approved.
 
-## Intune / Entra posture proof gate
+## Entra ID + Intune identity/posture proof gate
 
-The first production-path proof is the [Intune / Entra posture proof](INTUNE_ENTRA_POSTURE_PROOF.md), with Microsoft Graph / Graph SDK sequencing documented in [Microsoft Graph and MCP strategy](MICROSOFT_GRAPH_AND_MCP_STRATEGY.md). It should establish that SignalGrid can consume Microsoft device/compliance context, normalize it, use it as a runtime decision input, and record audit evidence without claiming production readiness.
+The first production-path proof is the [Intune / Entra posture proof](INTUNE_ENTRA_POSTURE_PROOF.md), with Microsoft Graph / Graph SDK sequencing documented in [Microsoft Graph and MCP strategy](MICROSOFT_GRAPH_AND_MCP_STRATEGY.md) and the broader identity framing documented in [Identity Trust Layer strategy](IDENTITY_TRUST_LAYER_STRATEGY.md). It should establish that SignalGrid can consume Microsoft identity plus device/compliance context, normalize it, use it as a runtime trust input, and record audit evidence without claiming production readiness.
 
-| Gate                       | Evidence needed                                                                                                                                                            | Claim boundary                                                                         |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Public-safe proof plan     | Documentation of objective, scope, target flow, inputs, normalized posture model, decision mapping, audit record, future extensions, and validation checklist.             | Documentation-first; no production rollout or compliance guarantee.                    |
-| Deterministic fixture path | Fake or sandbox payloads for compliant, non-compliant, stale, missing-device, and lookup-failure cases.                                                                    | No customer data, no production secrets, no real tenant dependency in the public repo. |
-| Normalized posture model   | Stable fields for device ID, source system, management state, compliance state, freshness, risk indicators, observed time, raw reference, confidence, and decision impact. | Microsoft Intune / Entra remains the source of record.                                 |
-| Decision and audit trace   | Candidate outcome, reason code, source system, lookup time, normalized posture, policy version, and optional operator/admin note.                                          | Proof evidence only; not a production enforcement or certification claim.              |
-| Failure-mode review        | Missing device, stale posture, unknown posture, malformed payload, denied lookup, and source outage paths are deterministic.                                               | Unknown posture must not be treated as compliant.                                      |
+| Gate                              | Evidence needed                                                                                                                                                                                                                                      | Claim boundary                                                                         |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Public-safe proof plan            | Documentation of objective, scope, target flow, inputs, normalized posture model, decision mapping, audit record, future extensions, and validation checklist.                                                                                       | Documentation-first; no production rollout or compliance guarantee.                    |
+| Deterministic fixture path        | Fake or sandbox payloads for compliant, non-compliant, stale, missing-device, and lookup-failure cases.                                                                                                                                              | No customer data, no production secrets, no real tenant dependency in the public repo. |
+| Normalized identity/posture model | Stable fields for user/device identity, source system, group/role, MFA or Conditional Access context where available, management state, compliance state, freshness, risk indicators, observed time, raw reference, confidence, and decision impact. | Microsoft Entra ID / Intune remains the source of record.                              |
+| Decision and audit trace          | Candidate outcome, reason code, source system, lookup time, normalized posture, policy version, and optional operator/admin note.                                                                                                                    | Proof evidence only; not a production enforcement or certification claim.              |
+| Failure-mode review               | Missing device, stale posture, unknown posture, malformed payload, denied lookup, and source outage paths are deterministic.                                                                                                                         | Unknown posture must not be treated as compliant.                                      |
 
-This gate should be completed before Jamf Apple-specific posture, broader Fleet / Workspace ONE UEM, RTLS/location, DockBridge pairing, operator mobile alerts, Imprivata candidate workflow correlation, or agentic connector claims are advanced. See [Frontline context signals roadmap](FRONTLINE_CONTEXT_SIGNALS.md) for later context categories.
+This gate should be completed before Jamf Apple-specific posture, broader Fleet / Workspace ONE UEM, Okta/Ping/Duo follow-on identity, SailPoint/IGA governance, cloud IAM, RTLS/location, DockBridge pairing, operator mobile alerts, Imprivata candidate workflow correlation, or agentic connector claims are advanced. See [Frontline context signals roadmap](FRONTLINE_CONTEXT_SIGNALS.md) for later context categories.
 
 ## Jamf / Apple-specific posture connector path
 
@@ -104,7 +108,8 @@ DockBridge should progress through conservative stages:
 
 SignalGrid should coordinate runtime decisions while preserving ownership boundaries:
 
-- IAM/access-management systems own identity and authentication controls.
+- IAM/access-management systems own identity, authentication, SSO, MFA, Conditional Access, and identity session controls.
+- IGA systems own access reviews, certifications, entitlement lifecycle, and governance policy.
 - MDM/UEM systems own device enrollment, compliance policy, device actions, and profile deployment.
 - ITSM systems own ticket/change lifecycle and approval workflows.
 - SIEM/SOAR systems own detection, correlation, retention, and response automation.

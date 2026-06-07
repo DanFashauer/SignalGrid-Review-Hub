@@ -29,16 +29,18 @@ The recommended sequence remains:
 2. Identity Trust Layer documentation for IAM/IdP/IGA signal boundaries and runtime trust framing.
 3. Jamf Apple-specific posture proof for Apple-heavy shared-device and frontline environments.
 4. Fleet / Workspace ONE / broader UEM connector paths.
-5. Okta / Ping / Duo follow-on identity and MFA context after the Microsoft proof is stable.
-6. Kontakt.io / RTLS deterministic fixture proof as the first location and staff-safety signal path.
-7. DockBridge simulated dock event API.
-8. Operator mobile workflow MVP.
-9. SailPoint / IGA governance context after identity/posture proof and policy explainability stabilize.
-10. AWS IAM / Google Cloud IAM later after enterprise identity and UEM proofs are grounded.
-11. MCP / agentic connector strategy later, after deterministic source-system proofs are grounded.
-12. One dock/vendor adapter if the simulated workflow validates value.
-13. MFi or hardware certification path only if Apple-connected hardware integration is required.
-14. Imprivata/healthcare alliance path only if validated and mutually approved.
+5. Operational Health / DEX layer documentation and deterministic fixtures for endpoint health, API/service health, alerting, ITSM routing, and user-experience signals.
+6. Okta / Ping / Duo follow-on identity and MFA context after the Microsoft proof is stable.
+7. Kontakt.io / RTLS deterministic fixture proof as the first location and staff-safety signal path.
+8. DockBridge simulated dock event API.
+9. Operator mobile workflow MVP.
+10. SailPoint / IGA governance context after identity/posture proof and policy explainability stabilize.
+11. AWS IAM / Google Cloud IAM later after enterprise identity, UEM, and operational-health proofs are grounded.
+12. Network / Cloud Trust Layer expansion after identity, posture, and Operational Health / DEX foundations.
+13. MCP / agentic connector strategy later, after deterministic source-system proofs and approval-gated action patterns are grounded.
+14. One dock/vendor adapter if the simulated workflow validates value.
+15. MFi or hardware certification path only if Apple-connected hardware integration is required.
+16. Imprivata/healthcare alliance path only if validated and mutually approved.
 
 ## Entra ID + Intune identity/posture proof gate
 
@@ -112,6 +114,7 @@ SignalGrid should coordinate runtime decisions while preserving ownership bounda
 - IGA systems own access reviews, certifications, entitlement lifecycle, and governance policy.
 - MDM/UEM systems own device enrollment, compliance policy, device actions, and profile deployment.
 - ITSM systems own ticket/change lifecycle and approval workflows.
+- DEX, RMM, monitoring, observability, and endpoint platforms own health telemetry, alert state, endpoint-experience data, API/service metrics, and native remediation controls.
 - SIEM/SOAR systems own detection, correlation, retention, and response automation.
 - Dock/accessory vendors own hardware state, firmware behavior, safety controls, and hardware certifications.
 - Apple, Android, and platform vendors own platform-controlled device-management operations.
@@ -125,3 +128,15 @@ Public claims should remain conservative unless there is evidence that is safe t
 - Reviewed for compliance, security, partner, and platform implications.
 - Clear about what SignalGrid consumes, emits, and does not replace.
 - Approved for public release.
+
+## Operational Health / DEX follow-on gate
+
+The [Operational Health / DEX Layer Strategy](OPERATIONAL_HEALTH_DEX_LAYER_STRATEGY.md) should follow the Entra ID + Intune first proof, the Identity Trust Layer, and Jamf / broader UEM posture paths. It should come before Network / Cloud Trust Layer expansion, autonomous remediation, and agentic/MCP action execution because endpoint health, API health, alerting, ITSM routing, and user-experience signals are lower-risk context inputs when treated as routed requests rather than autonomous production actions.
+
+| Gate                             | Evidence needed                                                                                                                                                                                                                                                                         | Claim boundary                                                                                           |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Public-safe health signal model  | Deterministic endpoint-health and API/service-health fixtures for online/offline state, check-in freshness, CPU/memory/disk pressure, app/service crash rate, network health, EDR/AV state, patch posture, latency/error rates, webhook failures, stale sync, and API auth failures.    | No live DEX, monitoring, ITSM, EDR, SIEM, observability, or customer data dependency in the public repo. |
+| Routing and ownership model      | Examples that map source system, workflow, owner, severity, impacted service, and session context to the correct team, ticket, email, mobile alert, Slack/Teams/PagerDuty/Opsgenie notification, posture refresh request, MDM sync request, EDR investigation request, or audit record. | Existing tools remain systems of record and execute their own controls.                                  |
+| Decision examples                | Explicit examples for compliant-device health degradation, non-compliant stale shared-device sessions, webhook retry exhaustion, EDR disabled for privileged users, shared-device app crash pools, and poor Teams/VDI quality.                                                          | Decision examples are proof patterns, not production-ready remediation claims.                           |
+| Approval-gated actions           | High-risk actions such as endpoint isolation, security escalation, or remediation execution are modeled as requests with approval gates, scoped permissions, and audit evidence.                                                                                                        | No autonomous production remediation claims.                                                             |
+| Private-core implementation plan | A note that real connectors belong in private/core/local Codex because they may require credentials, API keys, tenant data, webhook secrets, monitoring access, tool permissions, and private test data.                                                                                | Public Review Hub stays documentation-first and deterministic.                                           |

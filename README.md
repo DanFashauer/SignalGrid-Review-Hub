@@ -1,6 +1,6 @@
 # SignalGrid Review Hub
 
-SignalGrid is a runtime decision layer and Zero Trust orchestration platform for shared-device and mobile frontline environments. It evaluates identity, device posture, session context, and operational signals to determine access outcomes before workflows break.
+SignalGrid is a runtime decision layer and Zero Trust orchestration platform for shared-device and mobile frontline environments. It evaluates identity, device posture, session context, and operational health signals to determine access outcomes before workflows break.
 
 ## What this repository is
 
@@ -10,7 +10,7 @@ Current stage: **public pre-production / review / validation surface**.
 
 ## What this repository is not
 
-This repository is not the production SignalGrid core, not a customer deployment package, and not a compliance-certified system. It does not replace existing enterprise systems such as IAM, UEM, SIEM, ITSM, MDM, or NAC. It does not claim current partner certification, partnership, or alliance status with any listed vendor.
+This repository is not the production SignalGrid core, not a customer deployment package, and not a compliance-certified system. It does not replace existing enterprise systems such as IAM, UEM, DEX, RMM, monitoring, observability, SIEM, ITSM, MDM, or NAC. It does not claim current partner certification, partnership, or alliance status with any listed vendor.
 
 ## Repository roles
 
@@ -39,8 +39,8 @@ The private SignalGrid repository remains the protected source and core foundati
 
 ## Documentation map
 
-Start with [`docs/INDEX.md`](docs/INDEX.md) for the complete public review package, including lineage, Alpha parity, milestone strategy, mobile/platform direction, integration catalog, the first Intune / Entra posture proof, ecosystem positioning, configuration remediation guardrails, partner strategy, roadmap to private core, and reviewer checklist. The short buyer-facing answer to “why not just use existing IAM/UEM/ITSM tools?” lives in [`docs/ECOSYSTEM_POSITIONING.md`](docs/ECOSYSTEM_POSITIONING.md), and the first concrete posture-signal proof is in [`docs/INTUNE_ENTRA_POSTURE_PROOF.md`](docs/INTUNE_ENTRA_POSTURE_PROOF.md). Review Hub automation is described in [`docs/CI_AND_VALIDATION.md`](docs/CI_AND_VALIDATION.md), Microsoft Graph/MCP sequencing in [`docs/MICROSOFT_GRAPH_AND_MCP_STRATEGY.md`](docs/MICROSOFT_GRAPH_AND_MCP_STRATEGY.md), and visual-code process in [`docs/VISUAL_CODE_ASSET_STRATEGY.md`](docs/VISUAL_CODE_ASSET_STRATEGY.md).
+Start with [`docs/INDEX.md`](docs/INDEX.md) for the complete public review package, including lineage, Alpha parity, milestone strategy, mobile/platform direction, integration catalog, the first Intune / Entra posture proof, Operational Health / DEX layer strategy, ecosystem positioning, configuration remediation guardrails, partner strategy, roadmap to private core, and reviewer checklist. The short buyer-facing answer to “why not just use existing IAM/UEM/ITSM tools?” lives in [`docs/ECOSYSTEM_POSITIONING.md`](docs/ECOSYSTEM_POSITIONING.md), and the first concrete posture-signal proof is in [`docs/INTUNE_ENTRA_POSTURE_PROOF.md`](docs/INTUNE_ENTRA_POSTURE_PROOF.md). Review Hub automation is described in [`docs/CI_AND_VALIDATION.md`](docs/CI_AND_VALIDATION.md), Microsoft Graph/MCP sequencing in [`docs/MICROSOFT_GRAPH_AND_MCP_STRATEGY.md`](docs/MICROSOFT_GRAPH_AND_MCP_STRATEGY.md), and visual-code process in [`docs/VISUAL_CODE_ASSET_STRATEGY.md`](docs/VISUAL_CODE_ASSET_STRATEGY.md).
 
 ## Disclaimer
 
-SignalGrid Review Hub is not production-ready, not compliance-certified, and not a replacement for IAM, UEM, SIEM, ITSM, MDM, NAC, or other source systems. Remediation concepts are simulated, constrained, or operator-approved unless separately validated. No current partner certification, partnership, or alliance status is claimed.
+SignalGrid Review Hub is not production-ready, not compliance-certified, and not a replacement for IAM, UEM, DEX, RMM, monitoring, observability, SIEM, ITSM, MDM, NAC, or other source systems. Remediation concepts are simulated, constrained, or operator-approved unless separately validated. No current partner certification, partnership, or alliance status is claimed.

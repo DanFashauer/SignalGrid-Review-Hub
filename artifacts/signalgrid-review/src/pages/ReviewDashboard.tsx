@@ -48,7 +48,12 @@ const PRIORITY_FILTERS = ["All", "Priority 1", "Priority 2", "Priority 3"] as co
 type PriorityFilter = (typeof PRIORITY_FILTERS)[number];
 
 function scrollTo(id: string) {
-  document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const el = document.getElementById(id);
+  if (!el) return;
+
+  const headerOffset = 88;
+  const top = window.scrollY + el.getBoundingClientRect().top - headerOffset;
+  window.scrollTo({ top, behavior: "smooth" });
   history.replaceState(null, "", `#${id}`);
 }
 
@@ -94,11 +99,6 @@ export default function ReviewDashboard() {
     setMilestoneStatus,
     updateOutreachBatch,
   } = useWorkspaceState(defaultIntegrationStatuses, defaultMilestoneStatuses, defaultBatches);
-
-  // URL hash sync
-  useEffect(() => {
-    if (activeId) history.replaceState(null, "", `#${activeId}`);
-  }, [activeId]);
 
   // Scroll to hash on mount
   useEffect(() => {

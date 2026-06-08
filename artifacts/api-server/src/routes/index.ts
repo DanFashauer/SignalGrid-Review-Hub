@@ -1,18 +1,43 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
-import decisionsRouter from "./decisions";
 import integrationsRouter from "./integrations";
-import metricsRouter from "./metrics";
-import policiesRouter from "./policies";
-import signalsRouter from "./signals";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
-router.use(decisionsRouter);
 router.use(integrationsRouter);
-router.use(metricsRouter);
-router.use(policiesRouter);
-router.use(signalsRouter);
+
+if (process.env["DATABASE_URL"]) {
+  const [
+    { default: decisionsRouter },
+    { default: metricsRouter },
+    { default: policiesRouter },
+    { default: signalsRouter },
+  ] = await Promise.all([
+    import("./decisions"),
+    import("./metrics"),
+    import("./policies"),
+    import("./signals"),
+  ]);
+
+  router.use(decisionsRouter);
+  router.use(metricsRouter);
+  router.use(policiesRouter);
+  router.use(signalsRouter);
+} else {
+  const databaseUnavailable: IRouter = Router();
+
+  databaseUnavailable.use((_req, res) => {
+    res.status(503).json({
+      error: "database_unavailable",
+      message: "DATABASE_URL is required for this endpoint.",
+    });
+  });
+
+  router.use("/decisions", databaseUnavailable);
+  router.use("/metrics", databaseUnavailable);
+  router.use("/policies", databaseUnavailable);
+  router.use("/signals", databaseUnavailable);
+}
 
 export default router;

@@ -4,7 +4,7 @@ SignalGrid should support frontline and shared-device environments through a res
 
 ## Operator mobile app
 
-The operator mobile app is intended for frontline review and response workflows, including:
+The operator mobile app is intended for frontline review and response workflows, including identity, posture, shared-device, RTLS/DockBridge, Operational Health / DEX, alert-routing, and ITSM handoff scenarios:
 
 - Alert inbox.
 - Workflow orchestration.
@@ -15,12 +15,15 @@ The operator mobile app is intended for frontline review and response workflows,
 - QR, NFC, or device scan.
 - Evidence and audit notes.
 - Escalation workflows.
+- Endpoint-health and user-experience alerts.
+- API/service-health and stale-connector warnings.
+- ITSM ticket creation or update prompts.
 
 The operator app should make SignalGrid's decisions understandable and actionable without turning the phone into a replacement for IAM, MDM, ITSM, SIEM, or NAC tooling.
 
 ## Admin mobile companion
 
-The admin mobile companion should focus on time-sensitive oversight:
+The admin mobile companion should focus on time-sensitive oversight, including approval-gated health, alerting, and routing decisions:
 
 - Approval queue.
 - Critical alerts.
@@ -38,6 +41,21 @@ Emergency actions must remain constrained, logged, and reversible where possible
 | iOS/Android                   | React Native/Expo                    | Suitable once mobile-specific workflows such as push notifications, QR/NFC scanning, and operator queues are validated. |
 | macOS/Windows admin           | PWA, Tauri, or Electron if needed    | Useful only if desktop packaging materially improves admin workflows.                                                   |
 | macOS/Windows endpoint agents | Only if deeper telemetry is required | Endpoint agents increase security, support, and deployment burden; prefer existing telemetry sources first.             |
+
+## Operational Health / DEX mobile workflows
+
+The [Operational Health / DEX Layer Strategy](OPERATIONAL_HEALTH_DEX_LAYER_STRATEGY.md) adds a future mobile and platform workflow for endpoint health, user experience, API/service health, alerting, ITSM ownership, and routed remediation. Operator mobile should make these decisions actionable without turning SignalGrid into a replacement for DEX, RMM, EDR, SIEM, monitoring, observability, ITSM, or endpoint platforms.
+
+Example mobile workflows include:
+
+- Alerting an operator when a compliant device has severe health degradation during an active clinical workflow.
+- Prompting review when a non-compliant shared device has a stale check-in.
+- Warning a platform owner when webhook retries are exhausted or connector data is stale.
+- Routing EDR-disabled privileged sessions to security for deny/review escalation.
+- Routing repeated app crashes on a shared-device pool to the app owner and mobility team.
+- Routing poor Teams or VDI session quality to the EUC/DEX team rather than security when posture is otherwise acceptable.
+
+Real DEX, monitoring, ITSM, API-health, mobile push, and remediation connectors should move to private/core/local Codex because they may require tenant data, API keys, webhook secrets, monitoring-tool access, source-system permissions, and private test data. Public Review Hub should stay fixture-based and claim-safe.
 
 ## Jamf / Apple-specific posture path
 
@@ -65,7 +83,7 @@ DockBridge remains a future platform expansion path. It should not be framed as 
 
 ## Posture source boundaries
 
-SignalGrid consumes MDM/UEM posture signals. SignalGrid does not replace MDM/UEM. The sequence is Microsoft Intune / Entra first, Jamf Apple-specific posture second, Fleet / Workspace ONE / broader UEM paths third, and Kontakt.io / RTLS deterministic fixtures later for location and staff-safety context if validated. iOS and Android posture will usually come through systems such as Microsoft Intune, Jamf, Workspace ONE, Fleet, or similar tools.
+SignalGrid consumes MDM/UEM posture signals and future Operational Health / DEX signals. SignalGrid does not replace MDM/UEM, DEX, RMM, EDR, SIEM, monitoring, observability, or ITSM. The sequence is Microsoft Intune / Entra first, Identity Trust Layer, Jamf Apple-specific posture, Fleet / Workspace ONE / broader UEM paths, Operational Health / DEX deterministic fixtures, and then later RTLS, DockBridge, network/cloud, autonomous-remediation, and agentic/MCP paths if validated. iOS and Android posture will usually come through systems such as Microsoft Intune, Jamf, Workspace ONE, Fleet, or similar tools.
 
 ## Review questions
 

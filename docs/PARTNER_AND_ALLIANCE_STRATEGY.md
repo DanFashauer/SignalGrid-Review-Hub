@@ -1,6 +1,6 @@
 # Partner and Alliance Strategy
 
-Partner ecosystems matter because SignalGrid depends on signals and workflows owned by IAM, MDM/UEM, healthcare access, SIEM/SOAR, ITSM, NAC, endpoint telemetry, and physical context platforms. Clear ecosystem alignment helps buyers understand that SignalGrid orchestrates decisions around existing systems rather than replacing them.
+Partner ecosystems matter because SignalGrid depends on signals and workflows owned by IAM, MDM/UEM, healthcare access, DEX, RMM, monitoring, observability, SIEM/SOAR, ITSM, NAC, endpoint telemetry, and physical context platforms. Clear ecosystem alignment helps buyers understand that SignalGrid orchestrates decisions around existing systems rather than replacing them.
 
 ## Future partner categories
 
@@ -8,6 +8,7 @@ Partner ecosystems matter because SignalGrid depends on signals and workflows ow
 - UEM/MDM posture providers.
 - Healthcare access-management platforms.
 - ITSM and change-management platforms.
+- Operational Health / DEX, endpoint-experience, RMM, monitoring, and observability platforms.
 - SIEM/SOAR and security operations platforms.
 - NAC/network platforms.
 - Endpoint telemetry and EDR providers.
@@ -27,6 +28,14 @@ Kontakt.io and similar RTLS providers are future candidate ecosystem paths for l
 
 Kontakt.io or another RTLS source would continue to own RTLS hardware, tags, badges, wearables, location engines, telemetry, infrastructure calibration, APIs/SDKs, and native workflows. Review Hub does not claim a current Kontakt.io partnership, validated integration, certification, marketplace listing, customer deployment, patient-care outcome guarantee, or production-ready capability. A real integration should be evaluated only after API/SDK access, privacy boundaries, partner boundaries, and data handling are validated.
 
+## Operational Health / DEX ecosystem path
+
+The [Operational Health / DEX Layer Strategy](OPERATIONAL_HEALTH_DEX_LAYER_STRATEGY.md) creates a future ecosystem path for endpoint health, digital employee experience, monitoring, alerting, API/service health, ITSM ownership, and routed remediation. Candidate signal sources include ControlUp, Nexthink, Riverbed Aternity, Lakeside SysTrack, TeamViewer DEX, Tanium, Ivanti Neurons, Microsoft Intune / Endpoint Analytics, Microsoft Defender for Endpoint, CrowdStrike, SentinelOne, Datadog, Splunk, Azure Monitor, ServiceNow, Jira Service Management, PagerDuty, and Opsgenie.
+
+The useful partner framing is narrow: SignalGrid would consume health, experience, alert, ticket, service, severity, ownership, and impacted-service context; correlate it with identity, posture, session, RTLS/DockBridge, and workflow state; then route decisions, tickets, alerts, review requests, remediation requests, and audit evidence to the correct existing system or team. SignalGrid should not claim that it replaces DEX, RMM, EDR, SIEM, monitoring, observability, ITSM, or endpoint platforms.
+
+Real connector implementation belongs in private/core/local Codex after public documentation settles because partner APIs may require credentials, API keys, tenant data, webhook secrets, monitoring access, source-system permissions, mobile testing, and private test data.
+
 ## DockBridge ecosystem path
 
 DockBridge creates a future partner path for dock vendors, smart-cabinet vendors, charging/return-station providers, edge gateway vendors, and healthcare shared-device workflow partners. The near-term partner story should remain conservative: SignalGrid can define a simulated event API, signed webhook model, adapter pattern, and test harness before pursuing hardware-specific commitments.
@@ -39,9 +48,9 @@ DockBridge may also support the future Imprivata candidate healthcare access-man
 
 Agentic operations platforms, MCP-style tool surfaces, and connector marketplaces are a future ecosystem direction because they show how specialized systems can expose signals and bounded actions while governance remains in the control path. SignalGrid should treat this as a connector pattern for shared-device and mobile frontline access decisions, not as a pivot into broad AI infrastructure.
 
-A future SignalGrid connector ecosystem could include read-only signal connectors, signed action request connectors, simulation before execution, human approval gates, audit records, rollback metadata, and policy-bound permissions. Jamf, Fleet, Workspace ONE, broader UEM, Intune, Imprivata candidate workflows, ServiceNow, Sentinel, Splunk, dock vendors, and other systems should remain systems of record for their domains.
+A future SignalGrid connector ecosystem could include read-only signal connectors, signed action request connectors, simulation before execution, human approval gates, audit records, rollback metadata, and policy-bound permissions. Jamf, Fleet, Workspace ONE, broader UEM, Intune, Imprivata candidate workflows, ServiceNow, Jira Service Management, PagerDuty, Opsgenie, DEX platforms, endpoint platforms, Datadog, Azure Monitor, Sentinel, Splunk, dock vendors, and other systems should remain systems of record for their domains.
 
-Review Hub does not claim current Cisco Cloud Control integration, Jamf integration, MCP implementation, connector marketplace listing, partner certification, customer integration, or autonomous production remediation. Public language should keep the safe principle: agents may suggest, SignalGrid evaluates, operators approve, existing systems execute, and SignalGrid records. See [Agentic connector strategy](AGENTIC_CONNECTOR_STRATEGY.md).
+Review Hub does not claim current Cisco Cloud Control integration, Jamf integration, DEX integration, monitoring integration, ITSM integration, MCP implementation, connector marketplace listing, partner certification, customer integration, or autonomous production remediation. Public language should keep the safe principle: agents may suggest, SignalGrid evaluates, operators approve, existing systems execute, and SignalGrid records. See [Agentic connector strategy](AGENTIC_CONNECTOR_STRATEGY.md).
 
 ## Requirements before applying broadly
 

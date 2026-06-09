@@ -4,6 +4,22 @@ const observedAt = "2026-06-09T14:00:00.000Z";
 
 export const simulatorScenarios: SimulatorScenario[] = [
   {
+    id: "apple-ddm-platform-sso-state",
+    title: "Apple DDM and Platform SSO state",
+    summary: "Apple declared state, Platform SSO status, and audit events are consumed as evidence for a managed shared-device workflow.",
+    persona: "Apple mobility admin validating shared-use readiness",
+    expectedOutcomes: ["allow", "record_audit"],
+    expectedOwnerTeam: "Apple mobility operations",
+    safeDemoNote: "Apple DDM, Platform SSO, and audit events are fixture signals only. SignalGrid consumes state and evidence; it does not replace Apple, Jamf, Intune, Kandji, Mosyle, or Workspace ONE.",
+    startingSignals: [
+      signal("identity.authenticated", "identity", "Platform SSO fixture", "user:rn-144", "info", "Shared-use user authenticated through Platform SSO fixture", { ssoStatus: "active", touchIdPolicy: "satisfied" }),
+      signal("apple.ddm_declared_state", "device_state_compliance", "Apple DDM fixture", "device:ios-shared-018", "info", "Declared device state reports configuration and compliance as current", { declaredState: "current", configurationStatus: "applied", compliance: "compliant" }),
+      signal("apple.platform_sso_status", "device_state_compliance", "Apple Platform SSO fixture", "device:ios-shared-018", "info", "Platform SSO session is active for shared-use workflow", { ssoStatus: "active", guestUnlock: "not_used" }),
+      signal("apple.audit_event_recorded", "audit", "Apple audit fixture", "audit:apple-ddm-018", "info", "Apple management audit event is available as evidence", { evidenceSource: "apple_management_audit", eventCategory: "configuration_state" }),
+      signal("workflow.assignment_changed", "workflow", "Workflow fixture", "workflow:shift-handoff-18", "info", "Shared-use workflow is active and assigned", { active: true, sharedUse: true }),
+    ],
+  },
+  {
     id: "healthy-shared-device-checkout",
     title: "Healthy shared device checkout",
     summary: "Authenticated clinician checks out a compliant shared iPhone from the correct unit.",

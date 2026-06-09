@@ -7,6 +7,7 @@ import type { DecisionOutcome, SignalGridLayer, SimulatorRunResult } from "@/lib
 
 const layerLabels: Record<SignalGridLayer, string> = {
   identity: "Identity Trust",
+  device_state_compliance: "Device State & Compliance",
   device: "Device Trust",
   operational_health: "Operational Health / DEX",
   location: "RTLS / Location",

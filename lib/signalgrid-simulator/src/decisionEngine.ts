@@ -118,9 +118,14 @@ function evaluateScenario(scenario: SimulatorScenario, signals: SignalGridSignal
     reasonCodes.push("REMEDIATION_VERIFIED");
   }
 
-  if (outcomes.size === 0 && hasType("identity.authenticated") && hasType("device.posture_observed")) {
+  if (
+    outcomes.size === 0 &&
+    hasType("identity.authenticated") &&
+    (hasType("device.posture_observed") || hasType("apple.ddm_declared_state")) &&
+    !hasType("device.non_compliant")
+  ) {
     outcomes.add("allow");
-    reasonCodes.push("IDENTITY_AND_POSTURE_TRUSTED");
+    reasonCodes.push(hasType("apple.ddm_declared_state") ? "APPLE_DECLARED_STATE_TRUSTED" : "IDENTITY_AND_POSTURE_TRUSTED");
   }
 
   outcomes.add("record_audit");

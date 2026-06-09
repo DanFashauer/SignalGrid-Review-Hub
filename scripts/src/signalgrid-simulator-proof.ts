@@ -27,6 +27,7 @@ for (const result of results) {
 const byId = Object.fromEntries(results.map((result) => [result.scenario.id, result]));
 
 assertions.push(assertion("non-compliant cannot allow", !hasOutcome(byId["non-compliant-clinical-device"], "allow")));
+assertions.push(assertion("Apple declared state supports allow with audit", hasOutcome(byId["apple-ddm-platform-sso-state"], "allow") && (byId["apple-ddm-platform-sso-state"]?.auditEvidence.length ?? 0) > 0));
 assertions.push(assertion("stale posture cannot fully trust", hasOutcome(byId["stale-checkin-shared-device"], "step_up") && !hasOutcome(byId["stale-checkin-shared-device"], "allow")));
 assertions.push(assertion("security risk escalates", hasOwner(byId["edr-security-risk"], "Security operations")));
 assertions.push(assertion("missing dock event routes action", hasOutcome(byId["dock-missing-overdue-device"], "route_to_owner")));

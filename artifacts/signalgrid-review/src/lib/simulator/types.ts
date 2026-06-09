@@ -3,6 +3,7 @@ export type {
   AuditEvidence,
   DecisionOutcome,
   DevicePostureSignal,
+  DeviceStateComplianceSignal,
   DockSignal,
   IdentitySignal,
   IntegrationHealthSignal,

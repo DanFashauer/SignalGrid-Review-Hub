@@ -25,21 +25,22 @@ Before any production claim, SignalGrid would need evidence for:
 
 The recommended sequence remains:
 
-1. Local real-life simulator foundation using deterministic public fixtures across identity, posture, health, RTLS/location, DockBridge, workflow ownership, routing, and audit evidence.
+1. Local real-life simulator foundation using deterministic public fixtures across identity, device state/compliance, posture, health, RTLS/location, DockBridge, workflow ownership, routing, and audit evidence.
 2. Entra ID + Intune identity/posture proof using Microsoft Graph / Graph SDK design and deterministic public fixtures first.
 3. Identity Trust Layer documentation for IAM/IdP/IGA signal boundaries and runtime trust framing.
-4. Jamf Apple-specific posture proof for Apple-heavy shared-device and frontline environments.
-5. Fleet / Workspace ONE / broader UEM connector paths.
-6. Okta / Ping / Duo follow-on identity and MFA context after the Microsoft proof is stable.
-7. Kontakt.io / RTLS deterministic fixture proof as the first location and staff-safety signal path.
-8. DockBridge simulated dock event API.
-9. Operator mobile workflow MVP.
-10. SailPoint / IGA governance context after identity/posture proof and policy explainability stabilize.
-11. AWS IAM / Google Cloud IAM later after enterprise identity and UEM proofs are grounded.
-12. MCP / agentic connector strategy later, after deterministic source-system proofs are grounded.
-13. One dock/vendor adapter if the simulated workflow validates value.
-14. MFi or hardware certification path only if Apple-connected hardware integration is required.
-15. Imprivata/healthcare alliance path only if validated and mutually approved.
+4. Apple DDM / Platform SSO / audit-event fixture proof to consume Apple state and evidence without replacing Apple management systems.
+5. Jamf Apple-specific posture proof for Apple-heavy shared-device and frontline environments.
+6. Fleet / Workspace ONE / broader UEM connector paths.
+7. Okta / Ping / Duo follow-on identity and MFA context after the Microsoft proof is stable.
+8. Kontakt.io / RTLS deterministic fixture proof as the first location and staff-safety signal path.
+9. DockBridge simulated dock event API.
+10. Operator mobile workflow MVP.
+11. SailPoint / IGA governance context after identity/posture proof and policy explainability stabilize.
+12. AWS IAM / Google Cloud IAM later after enterprise identity and UEM proofs are grounded.
+13. MCP / agentic connector strategy later, after deterministic source-system proofs are grounded.
+14. One dock/vendor adapter if the simulated workflow validates value.
+15. MFi or hardware certification path only if Apple-connected hardware integration is required.
+16. Imprivata/healthcare alliance path only if validated and mutually approved.
 
 ## Entra ID + Intune identity/posture proof gate
 

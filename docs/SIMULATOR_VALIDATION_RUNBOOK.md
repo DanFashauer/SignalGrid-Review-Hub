@@ -45,6 +45,7 @@ pnpm run proof:signalgrid-simulator
 Expected coverage:
 
 - Healthy shared device checkout produces allow and audit evidence.
+- Apple DDM and Platform SSO state produces allow and audit evidence when declared state, identity, workflow, and audit-event fixtures align.
 - Non-compliant clinical shared device produces restrict, ticket, operator alert, and audit evidence.
 - Stale check-in produces step-up/review and posture-refresh request.
 - Wrong-zone RTLS event alerts the operator and routes to the local owner.
@@ -77,6 +78,7 @@ git diff --check
 ## Intentionally simulated
 
 - Identity signals.
+- Apple DDM, Platform SSO, configuration, enrollment, and management audit-event signals.
 - Device posture signals.
 - Operational health and DEX-style signals.
 - RTLS/location events.

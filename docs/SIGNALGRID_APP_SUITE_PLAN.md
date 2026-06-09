@@ -8,7 +8,7 @@ The SignalGrid Apps Suite is represented in this repository as thin simulator sh
 - Purpose: alert inbox and assigned-action cockpit for exceptions that affect shared-device or mobile workflows.
 - MVP simulator screens: alert inbox, assigned actions, acknowledge/escalate/verify states.
 - Future production role: triage operational exceptions and verify outcomes after private-core validation.
-- Signals consumed: device health, RTLS/location, DockBridge, workflow ownership, integration health.
+- Signals consumed: device state and compliance, device health, RTLS/location, DockBridge, workflow ownership, integration health.
 - Actions requested: acknowledge, escalate, create review action, verify remediation evidence.
 - Boundary: simulator shell only; no production action execution.
 
@@ -18,7 +18,7 @@ The SignalGrid Apps Suite is represented in this repository as thin simulator sh
 - Purpose: review policy decisions, integrations, ownership rules, and audit evidence.
 - MVP simulator screens: policy decisions, integrations, ownership rules, audit view.
 - Future production role: governed administration for routing rules and policy visibility.
-- Signals consumed: all normalized simulator signal categories.
+- Signals consumed: all normalized simulator signal categories, including Apple DDM/Platform SSO style state and audit evidence.
 - Actions requested: adjust simulated policy, inspect route, review audit evidence.
 - Boundary: no live policy enforcement or tenant configuration.
 
@@ -38,7 +38,7 @@ The SignalGrid Apps Suite is represented in this repository as thin simulator sh
 - Purpose: software-first checkout/check-in flow using QR, badge, or NFC placeholders.
 - MVP simulator screens: checkout/check-in, QR/badge/NFC placeholder, current device/session status.
 - Future production role: first mobile/PWA workflow before custom hardware investment.
-- Signals consumed: identity.authenticated, device.posture_observed, workflow.assignment_changed.
+- Signals consumed: identity.authenticated, apple.platform_sso_status, device.posture_observed, workflow.assignment_changed.
 - Actions requested: start session, end session, request review if posture or ownership is incomplete.
 - Boundary: no real badge reader, NFC, or identity-provider action.
 

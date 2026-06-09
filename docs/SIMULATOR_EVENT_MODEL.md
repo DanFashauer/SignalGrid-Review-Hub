@@ -20,6 +20,11 @@ Each simulator event contains:
 
 - identity.authenticated
 - identity.risk_detected
+- apple.ddm_declared_state
+- apple.platform_sso_status
+- apple.audit_event_recorded
+- device.configuration_observed
+- device.enrollment_observed
 - device.posture_observed
 - device.non_compliant
 - device.stale_checkin
@@ -43,6 +48,7 @@ Each simulator event contains:
 ## Layer mapping
 
 - Identity events map to the Identity Trust Layer.
+- Apple DDM, Platform SSO, configuration, enrollment, and management audit events map to the Device State & Compliance Layer and Audit Evidence Layer.
 - Device posture and device health events map to Device Trust and Operational Health / DEX.
 - RTLS events map to location context.
 - Dock events map to DockBridge/shared-device context.

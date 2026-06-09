@@ -10,7 +10,7 @@ Current stage: **public pre-production / review / validation surface**.
 
 ## Runnable simulator foundation
 
-Review Hub includes a local SignalGrid real-life simulator foundation. It uses deterministic fixtures to show how identity, device posture, operational health, RTLS/location, DockBridge/shared-device events, workflow ownership, integration health, decisions, routed actions, and audit evidence fit together.
+Review Hub includes a local SignalGrid real-life simulator foundation. It uses deterministic fixtures to show how identity, device state and compliance, device posture, operational health, RTLS/location, DockBridge/shared-device events, workflow ownership, integration health, decisions, routed actions, and audit evidence fit together.
 
 Local simulator entry points:
 

@@ -1,6 +1,11 @@
 export type SignalGridEventType =
   | "identity.authenticated"
   | "identity.risk_detected"
+  | "apple.ddm_declared_state"
+  | "apple.platform_sso_status"
+  | "apple.audit_event_recorded"
+  | "device.configuration_observed"
+  | "device.enrollment_observed"
   | "device.posture_observed"
   | "device.non_compliant"
   | "device.stale_checkin"
@@ -23,6 +28,7 @@ export type SignalGridEventType =
 
 export type SignalGridLayer =
   | "identity"
+  | "device_state_compliance"
   | "device"
   | "operational_health"
   | "location"
@@ -71,6 +77,10 @@ export interface IdentitySignal extends SignalGridSignal {
 
 export interface DevicePostureSignal extends SignalGridSignal {
   layer: "device";
+}
+
+export interface DeviceStateComplianceSignal extends SignalGridSignal {
+  layer: "device_state_compliance";
 }
 
 export interface OperationalHealthSignal extends SignalGridSignal {

@@ -8,6 +8,21 @@ SignalGrid is a runtime decision layer and Zero Trust orchestration platform for
 
 Current stage: **public pre-production / review / validation surface**.
 
+## Runnable simulator foundation
+
+Review Hub includes a local SignalGrid real-life simulator foundation. It uses deterministic fixtures to show how identity, device posture, operational health, RTLS/location, DockBridge/shared-device events, workflow ownership, integration health, decisions, routed actions, and audit evidence fit together.
+
+Local simulator entry points:
+
+- Review Hub UI: `http://localhost:5173`
+- API health: `http://localhost:5174/api/healthz`
+- Static integrations: `http://localhost:5174/api/integrations`
+- Simulator scenarios: `http://localhost:5174/api/simulator/scenarios`
+- Simulator proof: `pnpm run proof:signalgrid-simulator`
+- Simulator dev suite: `pnpm run dev:simulator`
+
+The simulator is public-safe: no credentials, no tenant IDs, no customer data, no real Microsoft Graph calls, and no real vendor API calls.
+
 ## What this repository is not
 
 This repository is not the production SignalGrid core, not a customer deployment package, and not a compliance-certified system. It does not replace existing enterprise systems such as IAM, UEM, SIEM, ITSM, MDM, or NAC. It does not claim current partner certification, partnership, or alliance status with any listed vendor.
@@ -39,7 +54,7 @@ The private SignalGrid repository remains the protected source and core foundati
 
 ## Documentation map
 
-Start with [`docs/INDEX.md`](docs/INDEX.md) for the complete public review package, including lineage, Alpha parity, milestone strategy, mobile/platform direction, integration catalog, the first Intune / Entra posture proof, ecosystem positioning, configuration remediation guardrails, partner strategy, roadmap to private core, and reviewer checklist. The short buyer-facing answer to “why not just use existing IAM/UEM/ITSM tools?” lives in [`docs/ECOSYSTEM_POSITIONING.md`](docs/ECOSYSTEM_POSITIONING.md), and the first concrete posture-signal proof is in [`docs/INTUNE_ENTRA_POSTURE_PROOF.md`](docs/INTUNE_ENTRA_POSTURE_PROOF.md). Review Hub automation is described in [`docs/CI_AND_VALIDATION.md`](docs/CI_AND_VALIDATION.md), Microsoft Graph/MCP sequencing in [`docs/MICROSOFT_GRAPH_AND_MCP_STRATEGY.md`](docs/MICROSOFT_GRAPH_AND_MCP_STRATEGY.md), and visual-code process in [`docs/VISUAL_CODE_ASSET_STRATEGY.md`](docs/VISUAL_CODE_ASSET_STRATEGY.md).
+Start with [`docs/INDEX.md`](docs/INDEX.md) for the complete public review package, including the simulator foundation, lineage, Alpha parity, milestone strategy, mobile/platform direction, integration catalog, the first Intune / Entra posture proof, ecosystem positioning, configuration remediation guardrails, partner strategy, roadmap to private core, and reviewer checklist. The short buyer-facing answer to “why not just use existing IAM/UEM/ITSM tools?” lives in [`docs/ECOSYSTEM_POSITIONING.md`](docs/ECOSYSTEM_POSITIONING.md), and the first concrete posture-signal proof is in [`docs/INTUNE_ENTRA_POSTURE_PROOF.md`](docs/INTUNE_ENTRA_POSTURE_PROOF.md). Review Hub automation is described in [`docs/CI_AND_VALIDATION.md`](docs/CI_AND_VALIDATION.md), Microsoft Graph/MCP sequencing in [`docs/MICROSOFT_GRAPH_AND_MCP_STRATEGY.md`](docs/MICROSOFT_GRAPH_AND_MCP_STRATEGY.md), and visual-code process in [`docs/VISUAL_CODE_ASSET_STRATEGY.md`](docs/VISUAL_CODE_ASSET_STRATEGY.md).
 
 ## Disclaimer
 

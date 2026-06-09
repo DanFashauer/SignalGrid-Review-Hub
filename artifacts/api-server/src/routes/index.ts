@@ -1,11 +1,13 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
 import integrationsRouter from "./integrations";
+import simulatorRouter from "./simulator";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(integrationsRouter);
+router.use(simulatorRouter);
 
 if (process.env["DATABASE_URL"]) {
   const [

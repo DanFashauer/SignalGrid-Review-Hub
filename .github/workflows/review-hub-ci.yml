@@ -45,6 +45,9 @@ jobs:
       - name: SignalGrid simulator proof
         run: pnpm run proof:signalgrid-simulator
 
+      - name: SignalGrid grid proof
+        run: pnpm run proof:signalgrid-grid
+
   docs-sanity:
     name: Required docs and unsafe-claim sanity
     runs-on: ubuntu-latest

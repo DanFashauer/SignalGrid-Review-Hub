@@ -108,9 +108,23 @@ export interface RoutedAction {
   kind: ActionKind;
   title: string;
   ownerTeam: string;
+  ownerCategory:
+    | "identity"
+    | "device"
+    | "operations"
+    | "workflow"
+    | "security"
+    | "integration"
+    | "audit"
+    | "platform";
   priority: "P1" | "P2" | "P3";
+  severity: "low" | "medium" | "high" | "critical";
   status: "simulated" | "queued" | "requires_review" | "verified";
   route: string;
+  destinationSystem: string;
+  approvalRequired: boolean;
+  simulatedOnly: boolean;
+  verificationExpectation: string;
   evidenceRefs: string[];
 }
 
@@ -119,7 +133,11 @@ export interface AuditEvidence {
   recordedAt: string;
   actor: string;
   summary: string;
-  evidenceType: "decision_trace" | "routing_trace" | "posture_refresh" | "ticket_update";
+  evidenceType:
+    | "decision_trace"
+    | "routing_trace"
+    | "posture_refresh"
+    | "ticket_update";
   references: string[];
 }
 

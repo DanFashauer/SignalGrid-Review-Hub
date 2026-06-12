@@ -19,6 +19,7 @@ import IntegrationTrackerSection from "@/components/sections/IntegrationTrackerS
 import ActivationPlanSection from "@/components/sections/ActivationPlanSection";
 import CompetitiveSection from "@/components/sections/CompetitiveSection";
 import DemoScriptSection from "@/components/sections/DemoScriptSection";
+import SignalGridSimulatorSection from "@/components/sections/SignalGridSimulatorSection";
 import { useActionChecklist } from "@/hooks/useActionChecklist";
 import { useScrollSpy } from "@/hooks/useScrollSpy";
 import { useWorkspaceState, type OutreachBatchState } from "@/hooks/useWorkspaceState";
@@ -30,6 +31,8 @@ const statusLabel = {
 };
 
 const NAV_ITEMS = [
+  { id: "simulator", label: "Simulator" },
+  { id: "app-suite", label: "App Suite" },
   { id: "scorecard", label: "Scorecard" },
   { id: "architecture", label: "Architecture" },
   { id: "integrations", label: "Integrations" },
@@ -48,7 +51,12 @@ const PRIORITY_FILTERS = ["All", "Priority 1", "Priority 2", "Priority 3"] as co
 type PriorityFilter = (typeof PRIORITY_FILTERS)[number];
 
 function scrollTo(id: string) {
-  document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const el = document.getElementById(id);
+  if (!el) return;
+
+  const headerOffset = 88;
+  const top = window.scrollY + el.getBoundingClientRect().top - headerOffset;
+  window.scrollTo({ top, behavior: "smooth" });
   history.replaceState(null, "", `#${id}`);
 }
 
@@ -95,11 +103,6 @@ export default function ReviewDashboard() {
     updateOutreachBatch,
   } = useWorkspaceState(defaultIntegrationStatuses, defaultMilestoneStatuses, defaultBatches);
 
-  // URL hash sync
-  useEffect(() => {
-    if (activeId) history.replaceState(null, "", `#${activeId}`);
-  }, [activeId]);
-
   // Scroll to hash on mount
   useEffect(() => {
     const hash = window.location.hash.replace("#", "");
@@ -133,9 +136,10 @@ export default function ReviewDashboard() {
             </div>
             <div className="space-y-1">
               {NAV_ITEMS.map((item) => (
-                <button
+                <a
                   key={item.id}
-                  onClick={() => { scrollTo(item.id); setMobileNavOpen(false); }}
+                  href={`#${item.id}`}
+                  onClick={() => { setMobileNavOpen(false); window.setTimeout(() => scrollTo(item.id), 0); }}
                   className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
                     activeId === item.id
                       ? "bg-primary/15 text-primary font-medium"
@@ -143,7 +147,7 @@ export default function ReviewDashboard() {
                   }`}
                 >
                   {item.label}
-                </button>
+                </a>
               ))}
             </div>
             <div className="mt-6 pt-4 border-t border-border">
@@ -179,11 +183,12 @@ export default function ReviewDashboard() {
           </div>
 
           {/* Desktop nav */}
-          <nav className="hidden md:flex items-center gap-0.5 overflow-x-auto flex-1 justify-end">
+          <nav className="hidden md:flex items-center gap-0.5 overflow-x-auto flex-1 justify-start">
             {NAV_ITEMS.map((item) => (
-              <button
+              <a
                 key={item.id}
-                onClick={() => scrollTo(item.id)}
+                href={`#${item.id}`}
+                onClick={() => window.setTimeout(() => scrollTo(item.id), 0)}
                 className={`px-2.5 py-1.5 text-xs rounded-md whitespace-nowrap transition-colors ${
                   activeId === item.id
                     ? "bg-primary/15 text-primary font-semibold"
@@ -191,7 +196,7 @@ export default function ReviewDashboard() {
                 }`}
               >
                 {item.label}
-              </button>
+              </a>
             ))}
           </nav>
 
@@ -280,6 +285,15 @@ export default function ReviewDashboard() {
               </button>
             </div>
           </div>
+        </section>
+
+        {/* Real-life simulator foundation */}
+        <section id="simulator" className="space-y-6 scroll-mt-20">
+          <SectionHeader
+            label="SignalGrid Real-Life Simulator"
+            description="Fixture-based simulator for runtime trust, operational orchestration, owner routing, and audit evidence across shared-device and mobile environments."
+          />
+          <SignalGridSimulatorSection />
         </section>
 
         {/* ── Scorecard ── */}

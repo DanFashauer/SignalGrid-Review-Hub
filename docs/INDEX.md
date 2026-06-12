@@ -10,6 +10,11 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 
 ## Strategy and roadmap
 
+- [SignalGrid real-life simulator](SIGNALGRID_REAL_LIFE_SIMULATOR.md): explains the public-safe deterministic simulator foundation and its runtime trust layers.
+- [SignalGrid app suite plan](SIGNALGRID_APP_SUITE_PLAN.md): defines Operator, Admin, DockBridge, Shared Device Assistant, and Remediation Assistant simulator shells.
+- [Simulator event model](SIMULATOR_EVENT_MODEL.md): documents deterministic simulator event types and normalized event shape.
+- [Simulator decision engine](SIMULATOR_DECISION_ENGINE.md): documents fixture-based inputs, outputs, rules, and guardrails.
+- [Simulator validation runbook](SIMULATOR_VALIDATION_RUNBOOK.md): lists local setup, smoke URLs, expected scenario outputs, and validation commands.
 - [Milestone strategy](MILESTONE_STRATEGY.md): uses tags/releases rather than messy repository copies.
 - [Mobile and platform strategy](MOBILE_AND_PLATFORM_STRATEGY.md): describes operator mobile, admin companion, PWA, desktop, and endpoint-agent boundaries.
 - [Integration catalog](INTEGRATION_CATALOG.md): lists integration categories, first proof direction, and vendor-claim boundaries.

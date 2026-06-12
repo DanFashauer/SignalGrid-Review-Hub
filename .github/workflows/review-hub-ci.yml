@@ -42,6 +42,9 @@ jobs:
       - name: Intune / Entra posture proof
         run: pnpm run proof:intune-entra-posture
 
+      - name: SignalGrid simulator proof
+        run: pnpm run proof:signalgrid-simulator
+
   docs-sanity:
     name: Required docs and unsafe-claim sanity
     runs-on: ubuntu-latest
@@ -61,6 +64,11 @@ jobs:
             docs/ECOSYSTEM_POSITIONING.md
             docs/MOBILE_AND_PLATFORM_STRATEGY.md
             docs/DOCKBRIDGE_STRATEGY.md
+            docs/SIGNALGRID_REAL_LIFE_SIMULATOR.md
+            docs/SIGNALGRID_APP_SUITE_PLAN.md
+            docs/SIMULATOR_EVENT_MODEL.md
+            docs/SIMULATOR_DECISION_ENGINE.md
+            docs/SIMULATOR_VALIDATION_RUNBOOK.md
           )
 
           for doc in "${required_docs[@]}"; do
@@ -76,6 +84,11 @@ jobs:
             "SignalGrid is an Imprivata partner"
             "SignalGrid is MFi certified"
             "autonomous production remediation"
+            "replaces ServiceNow"
+            "replaces PagerDuty"
+            "replaces CrowdStrike"
+            "replaces Defender"
+            "replaces ControlUp"
             "Imprivata partner"
             "MFi certified"
             "replaces Jamf"

@@ -6,7 +6,11 @@
   "scripts": {
     "hello": "tsx ./src/hello.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "proof:intune-entra-posture": "tsx ./src/intune-entra-posture-proof.ts"
+    "proof:intune-entra-posture": "tsx ./src/intune-entra-posture-proof.ts",
+    "proof:signalgrid-simulator": "tsx ./src/signalgrid-simulator-proof.ts"
+  },
+  "dependencies": {
+    "@workspace/signalgrid-simulator": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

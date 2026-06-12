@@ -60,6 +60,13 @@ const highRiskActionGates = [
   "create or change security rule",
   "high-risk remediation action",
 ].map((name) => ({ name, simulatedOnly: true, approvalRequired: true }));
+const custodyAllowBlockedMutations = new Set([
+  "rtls-wrong-zone",
+  "location-unknown",
+  "dockbridge-missing-return",
+  "overdue-checkout",
+  "wrong-bay-return",
+]);
 
 const hashes = Array.from({ length: 3 }, () =>
   hashForResults(
@@ -111,6 +118,16 @@ for (const scenario of scenarios) {
         assertion(
           `unsafe allow guard ${scenario.id}/${mutation.id}`,
           !isPlainAllow(mutated),
+          mutated.decision.outcomes.join(","),
+        ),
+      );
+    }
+
+    if (custodyAllowBlockedMutations.has(mutation.id)) {
+      assertions.push(
+        assertion(
+          `custody allow guard ${scenario.id}/${mutation.id}`,
+          !mutated.decision.outcomes.includes("allow"),
           mutated.decision.outcomes.join(","),
         ),
       );
@@ -678,12 +695,8 @@ function safeMalformedRun(name: string, input: unknown): SafeMalformedResult {
 
     return {
       status: "safe_decision",
-      primaryOutcome: isPlainAllow(result)
-        ? "step_up"
-        : result.decision.primaryOutcome,
-      reasonCodes: isPlainAllow(result)
-        ? [...result.decision.reasonCodes, "VALIDATION_REVIEW_REQUIRED"]
-        : result.decision.reasonCodes,
+      primaryOutcome: result.decision.primaryOutcome,
+      reasonCodes: result.decision.reasonCodes,
       auditEvidence: result.auditEvidence.map((item) => ({
         id: item.id,
         summary: item.summary,
@@ -717,8 +730,35 @@ function validateScenarioInput(
   }
 
   const scenario = input as Partial<SimulatorScenario>;
+  const allowedScenarioKeys = new Set([
+    "id",
+    "title",
+    "summary",
+    "persona",
+    "startingSignals",
+    "expectedOutcomes",
+    "expectedOwnerTeam",
+    "safeDemoNote",
+  ]);
+  const unexpectedKeys = Object.keys(input).filter(
+    (key) => !allowedScenarioKeys.has(key),
+  );
+
+  if (unexpectedKeys.length > 0) {
+    throw new Error(
+      `Unexpected scenario fields: ${unexpectedKeys.join(", ")}.`,
+    );
+  }
+
   if (!scenario.id || typeof scenario.id !== "string") {
     throw new Error("Scenario id is required.");
+  }
+
+  if (
+    !scenario.expectedOwnerTeam ||
+    typeof scenario.expectedOwnerTeam !== "string"
+  ) {
+    throw new Error("Scenario expectedOwnerTeam is required.");
   }
 
   if (!Array.isArray(scenario.startingSignals)) {

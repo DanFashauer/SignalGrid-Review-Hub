@@ -113,6 +113,12 @@ function evaluateScenario(
       signal.attributes["requiredApproval"] === "missing" ||
       signal.attributes["escalationDestination"] === "unavailable",
   );
+  const hasActiveCustodyIntegrityFailure =
+    hasCustodyFailure ||
+    hasType("dock.device_missing") ||
+    hasType("dock.wrong_slot_return") ||
+    hasType("rtls.wrong_zone") ||
+    hasType("rts.staff_safety_alert");
   const outcomes = new Set<DecisionOutcome>();
   const reasonCodes: string[] = [];
 
@@ -232,6 +238,11 @@ function evaluateScenario(
   ) {
     outcomes.delete("allow");
     reasonCodes.push("ALLOW_REMOVED_DUE_TO_HIGHER_RISK");
+  }
+
+  if (outcomes.has("allow") && hasActiveCustodyIntegrityFailure) {
+    outcomes.delete("allow");
+    reasonCodes.push("ALLOW_REMOVED_DUE_TO_CUSTODY_FAILURE");
   }
 
   const ordered = orderOutcomes([...outcomes]);

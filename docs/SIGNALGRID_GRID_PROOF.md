@@ -1,0 +1,15 @@
+# SignalGrid Grid Proof Harness
+
+The SignalGrid grid proof harness is a deterministic validation script for the public simulator fixtures. It replays every simulator scenario, mutates one signal layer at a time, and records evidence that decisions, route owners, reason codes, routed actions, and audit records remain stable across repeated runs.
+
+The harness uses public-safe fixtures only. It does not call live integrations, use credentials, access tenant data, or enforce production policy.
+
+High-risk action categories in the proof remain simulated and approval-required. The generated evidence validates routing metadata, audit evidence, deterministic timestamps, malformed-input handling, and public-safety scans for the simulator fixture surface.
+
+Run it from the repository root with:
+
+```bash
+pnpm run proof:signalgrid-grid
+```
+
+The script writes deterministic JSON evidence to `artifacts/proof/signalgrid-grid-proof.json`.

@@ -14,6 +14,7 @@ pnpm run typecheck
 PORT=3000 BASE_PATH=/ pnpm run build
 pnpm run proof:intune-entra-posture
 pnpm run proof:signalgrid-simulator
+pnpm run proof:signalgrid-grid
 ```
 
 The docs sanity job verifies that required public-review docs exist and checks for narrow, direct unsafe claims such as production-ready, replacement, partner, MFi certification, or autonomous production-remediation claims. It is not intended to block explicit disclaimers or guardrail language.
@@ -27,6 +28,7 @@ pnpm run typecheck
 PORT=3000 BASE_PATH=/ pnpm run build
 pnpm run proof:intune-entra-posture
 pnpm run proof:signalgrid-simulator
+pnpm run proof:signalgrid-grid
 git diff --check
 ```
 

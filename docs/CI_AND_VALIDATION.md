@@ -24,11 +24,13 @@ The docs sanity job verifies that required public-review docs exist and checks f
 Before opening or updating a pull request, run these commands from the repository root:
 
 ```bash
+pnpm install --frozen-lockfile
 pnpm run typecheck
 PORT=3000 BASE_PATH=/ pnpm run build
 pnpm run proof:intune-entra-posture
 pnpm run proof:signalgrid-simulator
 pnpm run proof:signalgrid-grid
+git grep -nE "SignalGrid is production-ready|SignalGrid replaces|SignalGrid is an Imprivata partner|SignalGrid is MFi certified|autonomous production remediation|replaces ServiceNow|replaces PagerDuty|replaces CrowdStrike|replaces Defender|replaces ControlUp|Imprivata partner|MFi certified|replaces Jamf|replaces Intune|replaces Apple Configurator|replaces GroundControl" -- README.md docs artifacts/signalgrid-review/src || true
 git diff --check
 ```
 

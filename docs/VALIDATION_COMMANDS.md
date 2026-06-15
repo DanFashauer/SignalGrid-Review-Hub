@@ -56,7 +56,7 @@ Validates the deterministic SignalGrid grid proof harness.
 git grep -nE "SignalGrid is production-ready|SignalGrid replaces|SignalGrid is an Imprivata partner|SignalGrid is MFi certified|autonomous production remediation|replaces ServiceNow|replaces PagerDuty|replaces CrowdStrike|replaces Defender|replaces ControlUp|Imprivata partner|MFi certified|replaces Jamf|replaces Intune|replaces Apple Configurator|replaces GroundControl" -- README.md docs artifacts/signalgrid-review/src || true
 ```
 
-Review any matches manually. Explicit disclaimers and guardrail language are acceptable; direct affirmative claims are not.
+Review any matches manually. Explicit disclaimers, guardrail language, and validation-command examples are acceptable; direct affirmative claims are not.
 
 ## Whitespace and patch hygiene
 

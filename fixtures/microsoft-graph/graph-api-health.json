@@ -1,0 +1,48 @@
+{
+  "fixtureName": "microsoft-graph-api-health",
+  "fixtureVersion": "2026-06-15.1",
+  "sourceSystem": "microsoft_graph_sandbox_fixture",
+  "observedAt": "2026-06-15T12:00:00.000Z",
+  "cases": [
+    {
+      "caseId": "graph-permission-failure",
+      "description": "Read-only permission check fails for compliance category.",
+      "subjectId": "synthetic-user-008",
+      "deviceId": "synthetic-device-008",
+      "identityStatus": "enabled",
+      "userRisk": "unknown",
+      "deviceRegistrationState": "unknown",
+      "deviceComplianceState": "unknown",
+      "deviceManagementState": "unknown",
+      "deviceLastSeenAt": null,
+      "configurationProfileState": "unknown",
+      "policyAssignmentState": "unknown",
+      "managedAppState": "unknown",
+      "accessReviewState": "unknown",
+      "permissionHealth": "failed",
+      "graphApiHealth": "available",
+      "correlationId": "sg-fixture-corr-008",
+      "expectedDecision": "integration_health_event"
+    },
+    {
+      "caseId": "graph-api-unavailable",
+      "description": "Graph API health fixture is unavailable.",
+      "subjectId": "synthetic-user-009",
+      "deviceId": "synthetic-device-009",
+      "identityStatus": "unknown",
+      "userRisk": "unknown",
+      "deviceRegistrationState": "unknown",
+      "deviceComplianceState": "unknown",
+      "deviceManagementState": "unknown",
+      "deviceLastSeenAt": null,
+      "configurationProfileState": "unknown",
+      "policyAssignmentState": "unknown",
+      "managedAppState": "unknown",
+      "accessReviewState": "unknown",
+      "permissionHealth": "unknown",
+      "graphApiHealth": "unavailable",
+      "correlationId": "sg-fixture-corr-009",
+      "expectedDecision": "degraded_confidence_route_integration_health"
+    }
+  ]
+}

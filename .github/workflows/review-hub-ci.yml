@@ -103,8 +103,10 @@ jobs:
           failed=0
           for phrase in "${denylist[@]}"; do
             while IFS= read -r match; do
-              # Allow explicit disclaimers, avoid lists, guardrails, and non-claim boundary language.
-              if printf '%s\n' "$match" | grep -Eiq 'not |does not|do not|no |avoid|guardrail|disclaimer|should not|must not|without claiming|no claim|doesn.t claim|not claim'; then
+              # Allow explicit disclaimers, validation-command examples, denylist docs,
+              # guardrails, and other non-claim boundary language without weakening
+              # detection of affirmative unsafe claims in product copy.
+              if printf '%s\n' "$match" | grep -Eiq 'not |does not|do not|no |avoid|guardrail|disclaimer|should not|must not|without claiming|no claim|doesn.t claim|not claim|git grep|denylist|unsafe-claim scan|validation command'; then
                 continue
               fi
 

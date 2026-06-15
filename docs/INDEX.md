@@ -34,5 +34,9 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 
 ## Review workflow
 
+- [Repository agent instructions](../AGENTS.md): defines Codex guardrails, public-safety rules, PR validation commands, and review guidelines.
+- [Mobile-first Codex workflow](MOBILE_CODEX_WORKFLOW.md): explains the iPhone-first Codex Web → PR → CI → review → GitHub Mobile merge loop.
+- [Codex task template](CODEX_TASK_TEMPLATE.md): provides a reusable prompt structure for focused Cloud Codex tasks.
+- [Validation commands](VALIDATION_COMMANDS.md): lists the standard install, typecheck, build, proof, unsafe-claim scan, and diff hygiene commands.
 - [CI and validation](CI_AND_VALIDATION.md): explains Review Hub CI, required local checks, docs sanity checks, and future branch-protection expectations.
 - [Review checklist](REVIEW_CHECKLIST.md): questions for reviewers, design partners, and advisors.

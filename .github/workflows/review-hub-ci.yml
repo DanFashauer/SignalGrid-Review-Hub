@@ -48,6 +48,9 @@ jobs:
       - name: SignalGrid grid proof
         run: pnpm run proof:signalgrid-grid
 
+      - name: Microsoft Graph sandbox proof
+        run: pnpm run proof:microsoft-graph-sandbox
+
   docs-sanity:
     name: Required docs and unsafe-claim sanity
     runs-on: ubuntu-latest

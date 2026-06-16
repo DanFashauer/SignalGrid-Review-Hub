@@ -91,7 +91,7 @@ SignalGrid Review Hub does not position SignalGrid as:
 - a Beam, hardware, case, battery, dock, or accessory replacement;
 - production-ready;
 - a compliance certification, attestation, or regulatory approval;
-- an autonomous production remediation system.
+- not an autonomous production remediation system.
 
 High-risk actions remain simulated, constrained, or approval-gated in this public Review Hub unless separately validated in an appropriate private context.
 

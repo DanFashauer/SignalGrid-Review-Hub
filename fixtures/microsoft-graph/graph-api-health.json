@@ -43,6 +43,48 @@
       "graphApiHealth": "unavailable",
       "correlationId": "sg-fixture-corr-009",
       "expectedDecision": "degraded_confidence_route_integration_health"
+    },
+    {
+      "caseId": "compliant-device-degraded-permission-health",
+      "description": "Healthy identity and compliant device with degraded Graph permission health.",
+      "subjectId": "synthetic-user-010",
+      "deviceId": "synthetic-device-010",
+      "identityStatus": "enabled",
+      "userRisk": "low",
+      "deviceRegistrationState": "registered",
+      "deviceComplianceState": "compliant",
+      "deviceManagementState": "managed",
+      "deviceLastSeenAt": "2026-06-15T11:50:00.000Z",
+      "configurationProfileState": "assigned",
+      "policyAssignmentState": "assigned",
+      "managedAppState": "healthy",
+      "accessReviewState": "current",
+      "permissionHealth": "degraded",
+      "graphApiHealth": "available",
+      "correlationId": "sg-fixture-corr-010",
+      "expectedDecision": "degraded_confidence_route_integration_health",
+      "expectedReasonCode": "GRAPH_PERMISSION_HEALTH_AMBIGUOUS"
+    },
+    {
+      "caseId": "compliant-device-unknown-graph-health",
+      "description": "Healthy identity and compliant device with unknown Graph API health.",
+      "subjectId": "synthetic-user-011",
+      "deviceId": "synthetic-device-011",
+      "identityStatus": "enabled",
+      "userRisk": "low",
+      "deviceRegistrationState": "registered",
+      "deviceComplianceState": "compliant",
+      "deviceManagementState": "managed",
+      "deviceLastSeenAt": "2026-06-15T11:55:00.000Z",
+      "configurationProfileState": "assigned",
+      "policyAssignmentState": "assigned",
+      "managedAppState": "healthy",
+      "accessReviewState": "current",
+      "permissionHealth": "healthy",
+      "graphApiHealth": "unknown",
+      "correlationId": "sg-fixture-corr-011",
+      "expectedDecision": "degraded_confidence_route_integration_health",
+      "expectedReasonCode": "GRAPH_API_HEALTH_AMBIGUOUS"
     }
   ]
 }

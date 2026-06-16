@@ -50,6 +50,14 @@ pnpm run proof:signalgrid-grid
 
 Validates the deterministic SignalGrid grid proof harness.
 
+## Microsoft Graph sandbox proof
+
+```bash
+pnpm run proof:microsoft-graph-sandbox
+```
+
+Validates the deterministic Microsoft Graph / Entra / Intune sandbox connector fixture path.
+
 ## Unsafe claim scan
 
 ```bash

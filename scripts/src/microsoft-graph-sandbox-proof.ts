@@ -11,6 +11,20 @@ type Decision =
   | "integration_health_event"
   | "degraded_confidence_route_integration_health";
 
+type ReasonCode =
+  | "GRAPH_HEALTHY_ALLOW_CANDIDATE"
+  | "IDENTITY_DISABLED"
+  | "DEVICE_NON_COMPLIANT"
+  | "DEVICE_UNMANAGED"
+  | "DEVICE_STALE"
+  | "COMPLIANCE_STATE_MISSING"
+  | "ACCESS_REVIEW_OVERDUE"
+  | "GRAPH_PERMISSION_HEALTH_FAILED"
+  | "GRAPH_PERMISSION_HEALTH_AMBIGUOUS"
+  | "GRAPH_API_HEALTH_UNAVAILABLE"
+  | "GRAPH_API_HEALTH_AMBIGUOUS"
+  | "GRAPH_HEALTH_OR_POSTURE_UNKNOWN";
+
 interface GraphFixtureCase {
   caseId: string;
   subjectId: string;
@@ -29,6 +43,7 @@ interface GraphFixtureCase {
   graphApiHealth: string;
   correlationId: string;
   expectedDecision: Decision;
+  expectedReasonCode?: ReasonCode;
 }
 
 interface GraphFixtureFile {
@@ -80,13 +95,16 @@ const normalized = loaded.flatMap((fixture) =>
 const results = normalized.map((item) => ({
   caseId: item.caseId,
   expectedDecision: item.expectedDecision,
-  actualDecision: mapDecision(item),
+  expectedReasonCode: item.expectedReasonCode,
+  ...mapDecision(item),
   normalizedFieldsPresent: requiredFields.every((field) => field in item),
 }));
 const failures = results.filter(
   (result) =>
     !result.normalizedFieldsPresent ||
-    result.actualDecision !== result.expectedDecision,
+    result.actualDecision !== result.expectedDecision ||
+    (result.expectedReasonCode !== undefined &&
+      result.actualReasonCode !== result.expectedReasonCode),
 );
 
 console.log("Microsoft Graph sandbox connector proof");
@@ -94,7 +112,7 @@ console.log(`fixtures=${fixtureFiles.join(",")}`);
 console.log(`cases=${results.length}`);
 for (const result of results) {
   console.log(
-    `${result.caseId}: expected=${result.expectedDecision} actual=${result.actualDecision} fields=${result.normalizedFieldsPresent ? "ok" : "missing"}`,
+    `${result.caseId}: expected=${result.expectedDecision} actual=${result.actualDecision} reason=${result.actualReasonCode} fields=${result.normalizedFieldsPresent ? "ok" : "missing"}`,
   );
 }
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"}`);
@@ -127,22 +145,76 @@ function freshness(lastSeenAt: string | null, observedAt: string) {
   return ageMs <= 7 * 24 * 60 * 60 * 1000 ? "fresh" : "stale";
 }
 
-function mapDecision(input: NormalizedSignalGridInput): Decision {
+function mapDecision(input: NormalizedSignalGridInput): {
+  actualDecision: Decision;
+  actualReasonCode: ReasonCode;
+} {
   if (input.graphApiHealth === "unavailable")
-    return "degraded_confidence_route_integration_health";
-  if (input.permissionHealth === "failed") return "integration_health_event";
-  if (input.identityStatus === "disabled") return "deny_route_owner";
-  if (input.accessReviewState === "overdue") return "approval_required";
+    return {
+      actualDecision: "degraded_confidence_route_integration_health",
+      actualReasonCode: "GRAPH_API_HEALTH_UNAVAILABLE",
+    };
+  if (input.permissionHealth === "failed")
+    return {
+      actualDecision: "integration_health_event",
+      actualReasonCode: "GRAPH_PERMISSION_HEALTH_FAILED",
+    };
+  if (isAmbiguousHealth(input.graphApiHealth))
+    return {
+      actualDecision: "degraded_confidence_route_integration_health",
+      actualReasonCode: "GRAPH_API_HEALTH_AMBIGUOUS",
+    };
+  if (isAmbiguousHealth(input.permissionHealth))
+    return {
+      actualDecision: "degraded_confidence_route_integration_health",
+      actualReasonCode: "GRAPH_PERMISSION_HEALTH_AMBIGUOUS",
+    };
+  if (input.identityStatus === "disabled")
+    return {
+      actualDecision: "deny_route_owner",
+      actualReasonCode: "IDENTITY_DISABLED",
+    };
+  if (input.accessReviewState === "overdue")
+    return {
+      actualDecision: "approval_required",
+      actualReasonCode: "ACCESS_REVIEW_OVERDUE",
+    };
   if (input.deviceManagementState === "unmanaged")
-    return "restrict_step_up_ticket";
+    return {
+      actualDecision: "restrict_step_up_ticket",
+      actualReasonCode: "DEVICE_UNMANAGED",
+    };
   if (input.deviceComplianceState === "non_compliant")
-    return "restrict_step_up_ticket";
-  if (input.deviceComplianceState === "missing") return "step_up_ticket";
-  if (input.postureFreshness === "stale") return "step_up_ticket";
+    return {
+      actualDecision: "restrict_step_up_ticket",
+      actualReasonCode: "DEVICE_NON_COMPLIANT",
+    };
+  if (input.deviceComplianceState === "missing")
+    return {
+      actualDecision: "step_up_ticket",
+      actualReasonCode: "COMPLIANCE_STATE_MISSING",
+    };
+  if (input.postureFreshness === "stale")
+    return {
+      actualDecision: "step_up_ticket",
+      actualReasonCode: "DEVICE_STALE",
+    };
   if (
     input.identityStatus === "enabled" &&
-    input.deviceComplianceState === "compliant"
+    input.deviceComplianceState === "compliant" &&
+    input.permissionHealth === "healthy" &&
+    input.graphApiHealth === "available"
   )
-    return "allow_candidate";
-  return "step_up_ticket";
+    return {
+      actualDecision: "allow_candidate",
+      actualReasonCode: "GRAPH_HEALTHY_ALLOW_CANDIDATE",
+    };
+  return {
+    actualDecision: "step_up_ticket",
+    actualReasonCode: "GRAPH_HEALTH_OR_POSTURE_UNKNOWN",
+  };
+}
+
+function isAmbiguousHealth(value: string | undefined): boolean {
+  return value === undefined || value === "unknown" || value === "degraded";
 }

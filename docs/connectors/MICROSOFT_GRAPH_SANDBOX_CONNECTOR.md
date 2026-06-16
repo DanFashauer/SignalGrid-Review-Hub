@@ -62,7 +62,7 @@ The MVP connector path is fixture-only. Later live sandbox testing is gated behi
 
 Future write-capable actions are not implemented here. Candidate actions include device quarantine, policy push, session revoke, account disablement, remediation action, Conditional Access change, Intune template import, and app or configuration deployment.
 
-Every future write action must be approval-required, simulated first, audited, reversible where possible, and never autonomous production remediation.
+Every future write action must be approval-required, simulated first, audited, reversible where possible, and must not perform autonomous production remediation.
 
 ## PC test gate
 

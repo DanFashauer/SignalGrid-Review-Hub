@@ -8,7 +8,7 @@ No entry in this document is a partnership claim, endorsement claim, procurement
 
 | Category | Candidate vendors or ecosystems | Candidate SignalGrid signal surface | Public-safe discovery posture |
 | --- | --- | --- | --- |
-| Healthcare shared iPhone/iPad case, battery, charging, and dock workflows | Beam Mobile | Case identity, battery identity, charging state, dock/bay state, checkout/return context, cleaning-ready handling notes | First candidate for healthcare shared Apple-device custody strategy; no current partnership, endorsement, or integration is claimed. |
+| Healthcare shared iPhone/iPad case, battery, charging, and dock workflows | Beam Mobile | Case identity, battery identity, charging state, dock/bay state, checkout/return context, cleaning-ready handling notes | Example discovery candidate for healthcare shared Apple-device custody strategy; no current partnership, endorsement, or integration is claimed. |
 | Healthcare rugged cases and battery systems | Beam Mobile and other healthcare accessory vendors | Case serial, battery serial, charge state, device survivability context, cleaning workflow context | Evaluate only with public docs, sanitized fixtures, or explicitly approved non-production technical materials. |
 | Charging docks | Beam Mobile, LocknCharge, Zebra cradles, Honeywell cradles, Datalogic cradles | Dock ID, bay ID, occupied/empty state, charge state, device return evidence | Start with fixture-backed state models; do not add live hardware calls in Review Hub. |
 | Smart lockers | Traka, Vecos | Locker ID, compartment state, checkout/return event, overdue asset signal | Treat lockers as physical custody source systems, not systems SignalGrid controls directly. |

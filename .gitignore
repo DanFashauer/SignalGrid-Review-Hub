@@ -48,5 +48,13 @@ Thumbs.db
 .cache/
 .local/
 
+
+# local environment files (including PC-only Microsoft Graph smoke-test credentials)
+.env
+.env.local
+.env.*.local
+.signalgrid.local.env
+.microsoft-graph-smoke.local.env
+
 # generated proof evidence
 /artifacts/proof/

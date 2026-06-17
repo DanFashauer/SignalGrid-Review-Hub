@@ -10,7 +10,7 @@ Run this only from a private local PC environment when a sandbox tenant is avail
 
 ## Required local configuration
 
-Create a local `.env` file outside committed source control using placeholders documented in `docs/env/MICROSOFT_GRAPH_ENV_EXAMPLE.md`.
+Store live sandbox credentials outside the repository whenever possible. If an operator must keep a local environment file in the repo root for a PC-only smoke test, use only an explicitly ignored filename such as `.signalgrid.local.env` or `.microsoft-graph-smoke.local.env`; `.env`, `.env.local`, and `.env.*.local` are also ignored as a defensive guardrail. Use the placeholders documented in `docs/env/MICROSOFT_GRAPH_ENV_EXAMPLE.md`.
 
 Required placeholder names:
 
@@ -20,7 +20,7 @@ Required placeholder names:
 - `GRAPH_SCOPE_PLACEHOLDER`
 - `SIGNALGRID_SANITIZE_OUTPUT=true`
 
-Use sandbox values only. Never commit the local `.env` file or copied values from it.
+Use sandbox values only. Never commit any local env file or copied values from it. Before staging changes, run `git status --short --ignored` and confirm any local Graph env file is ignored rather than listed as an untracked committable file.
 
 ## Read-only smoke-test sequence
 

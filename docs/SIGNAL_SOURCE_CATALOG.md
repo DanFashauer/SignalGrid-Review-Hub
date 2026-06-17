@@ -1,0 +1,97 @@
+# Signal Source Catalog
+
+## Purpose
+
+The Signal Source Catalog organizes potential inputs into SignalGrid's Operational Trust Orchestration model. It is a public-safe, documentation-only roadmap for candidate signal sources, ownership layers, normalized SignalGrid fields, decision impact, and future connector priority.
+
+This catalog is intended to help reviewers see how useful enterprise signals could be mapped into deterministic trust decisions without adding live integrations, credentials, tenant data, customer data, PHI, PII, or production-specific assumptions.
+
+## Core principle
+
+Existing enterprise systems remain the systems of record. SignalGrid does not replace IAM, IGA, MDM, UEM, MAM, DEX, network, security, workflow, physical custody, ITSM, SIEM, SOAR, or monitoring platforms.
+
+SignalGrid's role is to normalize signals, evaluate context, make deterministic trust decisions, route approved actions, audit evidence, and verify expected outcomes. High-risk actions remain approval-gated and simulated-first unless a future private implementation explicitly provides a safe test context.
+
+## Catalog table
+
+| Layer | Candidate systems | System-of-record owner | Candidate signals | Normalized SignalGrid fields | Decision impact | Future connector priority | Current status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Identity Trust / IAM | Entra ID; Okta; Ping; Duo; Auth0; Keycloak | Identity and access administration | Account status, authentication strength, user risk, MFA state, session state, conditional access posture | `identityStatus`, `userRisk`, `apiHealth`, `approvalRequired`, `verificationExpectation` | Valid identity can contribute to an allow candidate; disabled, risky, or stale identity can deny, restrict, or route to an identity owner | Microsoft Graph live read-only smoke test, then sanitized fixture updates; other IAM providers later as read-only fixture-backed models | Future candidate; Entra posture is represented by existing fixture-backed proof work |
+| IGA / Access Governance | Entra ID Governance; SailPoint; Saviynt; IBM Verify Governance; access review systems | Access governance / identity governance owner | Access review state, entitlement review findings, certification status, access request state, SoD flags | `accessReviewState`, `identityStatus`, `userRisk`, `workflowOwner`, `escalationPath`, `approvalRequired` | Missing or failed review can restrict access, route owner review, or require approval before action | Model access governance context after the first Microsoft Graph read-only path is proven | Documentation-only roadmap |
+| Device Trust / MDM / UEM | Intune; Jamf; Omnissa Workspace ONE; Kandji; Mosyle; Fleet; Ivanti | Endpoint engineering / UEM owner | Compliance state, management state, device ownership, platform, last check-in, policy state, shared-device mode | `deviceComplianceState`, `deviceManagementState`, `deviceLastSeenAt`, `postureFreshness`, `approvalRequired`, `verificationExpectation` | Compliant and fresh devices can contribute to allow candidates; unmanaged, noncompliant, or stale devices can deny, restrict, or route device administration | Microsoft Graph sanitized fixture update, then Jamf/Fleet device-state models | Intune / Entra posture proof exists; other providers are future candidates |
+| App/Data Protection / MAM | Intune App Protection; managed app inventory; app protection policy state; selective wipe capability as future approval-gated action only | Endpoint / application protection owner | Managed app inventory, app protection assignment, app protection health, wipe eligibility, app risk | `appProtectionState`, `deviceManagementState`, `identityStatus`, `approvalRequired`, `verificationExpectation`, `remediationState` | Missing MAM protection for sensitive apps can restrict, create a ticket, or require owner review; selective wipe remains future approval-gated only | Add MAM fixture model after device posture signals are stable | Documentation-only roadmap |
+| Provisioning / Enrollment | Windows Autopilot; Apple ADE / ABM; Android Enterprise enrollment; device registration and enrollment state | Device provisioning / endpoint enrollment owner | Enrollment status, Autopilot profile assignment, registration status, ADE assignment, enrollment errors | `enrollmentState`, `autopilotProfileState`, `deviceManagementState`, `deviceLastSeenAt`, `workflowOwner`, `escalationPath` | Incomplete provisioning can deny shared-device checkout, restrict use, or route device admin review | Add enrollment-state fixture model after Microsoft Graph fixture refresh | Documentation-only roadmap |
+| Microsoft Cloud / Admin Portals | Microsoft 365 Admin Center; Entra Admin Center; Intune Admin Center; Defender; Sentinel; Purview; Azure Portal; Power Platform / Copilot Studio as future context only | Microsoft cloud platform owners by domain | Service health, identity posture, device posture, security alerts, data governance indicators, admin workflow context | `apiHealth`, `identityStatus`, `deviceComplianceState`, `edrRisk`, `postureFreshness`, `workflowOwner`, `escalationPath` | Degraded platform health can lower confidence and route integration health checks; security posture can restrict or route security owner review | Microsoft Graph live read-only smoke test, then sanitized fixture update | Graph path is gated by PC-only runbook; no live integration added here |
+| Operational Health / DEX | ControlUp; Nexthink; Aternity; SysTrack; Tanium; Datadog; Splunk; Azure Monitor | End-user computing, operations, observability, or DEX owner | Device performance, session health, app health, telemetry freshness, incident correlation, endpoint health indicators | `postureFreshness`, `deviceLastSeenAt`, `apiHealth`, `workflowOwner`, `escalationPath`, `verificationExpectation` | Poor health or stale telemetry can degrade confidence, route operations, or verify expected recovery after approved action | Add operational health context after primary identity/device proof paths | Documentation-only roadmap |
+| Network Trust | Cisco ACI; Cisco enterprise network; Arista; Palo Alto; Fortinet; Zscaler; Cloudflare; Check Point | Network, SASE, firewall, or segmentation owner | Network zone, segmentation state, policy match, access path, VPN/SASE state, network risk | `networkZone`, `segmentationState`, `apiHealth`, `workflowOwner`, `escalationPath`, `approvalRequired` | Zone mismatch or segmentation risk can trigger step-up, restrict, or route network owner review | Network Trust layer model after workflow and device-state models | Documentation-only roadmap |
+| Workflow Ownership | ServiceNow; Jira Service Management; PagerDuty; Opsgenie; Teams / Slack / email routing | ITSM, operations, incident, service desk, or collaboration owner | Ticket state, assignment group, escalation policy, on-call owner, approval status, notification route | `workflowOwner`, `escalationPath`, `approvalRequired`, `remediationState`, `verificationExpectation` | Determines where SignalGrid routes decisions, approvals, exceptions, and verification tasks | ServiceNow/Jira/PagerDuty workflow routing model | Documentation-only roadmap |
+| Physical Custody | Beam Mobile; LocknCharge; Traka; Vecos; Zebra cradles; Honeywell/Datalogic cradles; HID; LenelS2; Genetec; Gallagher; Brivo; Verkada; RTLS / Kontakt.io | Facilities, physical security, clinical engineering, warehouse, or device operations owner | Dock state, custody zone, cabinet state, charge state, badge event, checkout/check-in state, RTLS location | `custodyState`, `dockState`, `chargeState`, `networkZone`, `workflowOwner`, `escalationPath`, `verificationExpectation` | Wrong custody zone, undocked device, or low charge can restrict, alert custody owner, or verify recovery after approved handling | Physical custody / DockBridge fixture expansion | Existing strategy docs exist; future fixture expansion candidate |
+| Security / EDR / SIEM | Microsoft Defender; CrowdStrike; SentinelOne; Splunk; Sentinel; Elastic | Security operations / endpoint security owner | Endpoint risk, alert severity, incident state, detection status, investigation state, security signal freshness | `edrRisk`, `apiHealth`, `postureFreshness`, `workflowOwner`, `escalationPath`, `approvalRequired` | High EDR or SIEM risk can deny, restrict, step-up, or route SOC review | Add fixture-backed security-risk model after core trust layers | Documentation-only roadmap |
+| Remediation / Automation | Intune remediation scripts; PowerShell detection/remediation; SOAR playbooks; MDM actions; ITSM change workflows | Endpoint automation, security automation, ITSM change, or operations owner | Detection result, proposed remediation, approval state, execution state, rollback expectation, verification result | `remediationState`, `approvalRequired`, `verificationExpectation`, `workflowOwner`, `escalationPath`, `apiHealth` | Proposed changes require approval and simulation first; verified results can close the loop after an approved action | Remediation model after routing and verification semantics are documented | Documentation-only roadmap; no autonomous production remediation |
+
+## Normalized signal examples
+
+Candidate normalized fields include:
+
+- `identityStatus`
+- `userRisk`
+- `accessReviewState`
+- `deviceComplianceState`
+- `deviceManagementState`
+- `appProtectionState`
+- `enrollmentState`
+- `autopilotProfileState`
+- `deviceLastSeenAt`
+- `postureFreshness`
+- `networkZone`
+- `segmentationState`
+- `apiHealth`
+- `workflowOwner`
+- `escalationPath`
+- `custodyState`
+- `dockState`
+- `chargeState`
+- `edrRisk`
+- `remediationState`
+- `approvalRequired`
+- `verificationExpectation`
+
+## Decision examples
+
+These examples describe candidate decision semantics for future fixture-backed work. They do not add live integrations or production actions.
+
+- Identity valid + device compliant + active shift = allow candidate.
+- Identity disabled + active shared-device session = deny / route owner.
+- Device compliant + wrong custody zone = restrict / custody alert.
+- Compliant device + degraded Graph health = degraded confidence / integration health route.
+- MAM policy missing + clinical app = restrict / ticket.
+- Autopilot/enrollment incomplete + shared-device checkout = deny or route device admin.
+- Network zone mismatch + high-risk app = step-up / network owner route.
+- Remediation proposed = approval required / simulated first.
+
+## Future connector priorities
+
+Suggested near-term order:
+
+1. Microsoft Graph live read-only smoke test.
+2. Microsoft Graph sanitized fixture update.
+3. Infor / workforce context model.
+4. Jamf/Fleet device-state models.
+5. ServiceNow/Jira/PagerDuty workflow routing model.
+6. Physical custody/DockBridge fixture expansion.
+7. Network Trust layer model.
+
+## Non-goals
+
+This catalog does not include or imply:
+
+- Live integrations in this PR.
+- Credentials.
+- Tenant data.
+- Customer data.
+- PHI or PII.
+- Production readiness claims.
+- Compliance certification claims.
+- Vendor partnership claims.
+- Replacement claims for existing systems of record.
+- Autonomous production remediation.

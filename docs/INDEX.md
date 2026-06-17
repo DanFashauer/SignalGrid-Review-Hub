@@ -19,6 +19,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Milestone strategy](MILESTONE_STRATEGY.md): uses tags/releases rather than messy repository copies.
 - [Mobile and platform strategy](MOBILE_AND_PLATFORM_STRATEGY.md): describes operator mobile, admin companion, PWA, desktop, and endpoint-agent boundaries.
 - [Integration catalog](INTEGRATION_CATALOG.md): lists integration categories, first proof direction, and vendor-claim boundaries.
+- [Signal Source Catalog](SIGNAL_SOURCE_CATALOG.md): organizes candidate input systems, ownership layers, normalized signal categories, decision impact, and future connector priority.
 - [Intune / Entra posture proof](INTUNE_ENTRA_POSTURE_PROOF.md): defines the first concrete posture-signal proof, normalized model, decision mapping, audit record, and validation checklist.
 - [Identity Trust Layer strategy](IDENTITY_TRUST_LAYER_STRATEGY.md): documents IAM/IdP/IGA systems as core SignalGrid signal sources while preserving the Entra ID + Intune first proof.
 - [Operational Health / DEX Layer Strategy](OPERATIONAL_HEALTH_DEX_LAYER_STRATEGY.md): documents endpoint health, API/service health, DEX/user-experience, monitoring, alerting, ITSM routing, remediation-request, and audit-evidence signals as a future SignalGrid layer.

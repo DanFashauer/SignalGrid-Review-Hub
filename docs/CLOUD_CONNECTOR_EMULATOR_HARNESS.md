@@ -40,7 +40,7 @@ No local PC or Replit instance is required:
 5. Review the workflow result.
 6. Download the `connector-emulator-results` artifact as sanitized evidence.
 
-A future Replit UI may visualize the same deterministic scenarios, but Replit is not required for validation.
+The Review Hub UI includes a static Connector Emulator section that visualizes the same deterministic scenarios, decisions, routes, guardrails, and proof evidence. Replit is not required for validation.
 
 ## Public-safety boundaries
 

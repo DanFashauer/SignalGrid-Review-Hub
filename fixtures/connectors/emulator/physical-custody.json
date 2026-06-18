@@ -1,0 +1,39 @@
+{
+  "fixtureName": "physical-custody",
+  "fixtureVersion": "2026-06-18.synthetic.1",
+  "generatedFrom": "synthetic-public-safe-fixture",
+  "scenarios": [
+    {
+      "id": "wrong-custody-zone-shared-device",
+      "title": "Wrong custody zone for a shared device is restricted and raises a custody alert",
+      "group": "physicalCustody",
+      "domains": ["physicalCustody", "workflowRouting", "mdmMam"],
+      "apiHealth": "healthy",
+      "identity": "healthy",
+      "session": "active",
+      "deviceCompliance": "compliant",
+      "mamPolicy": "present",
+      "appRisk": "standard",
+      "workflowContext": "sharedDevice",
+      "custodyZone": "wrong",
+      "networkZone": "expected",
+      "edrRisk": "low",
+      "remediation": {
+        "proposed": false,
+        "highRisk": false,
+        "approvalRequired": false,
+        "simulatedFirst": true
+      },
+      "expected": {
+        "decision": "restrict",
+        "reason": "WRONG_CUSTODY_ZONE_SHARED_DEVICE",
+        "route": {
+          "ownerCategory": "custody",
+          "severity": "high",
+          "destinationPlaceholder": "custody-alert-placeholder",
+          "verificationExpectation": "Confirm dock, room, or custody fixture state before clearing shared-device workflow."
+        }
+      }
+    }
+  ]
+}

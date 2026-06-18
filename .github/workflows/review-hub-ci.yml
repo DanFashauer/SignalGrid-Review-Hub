@@ -51,6 +51,9 @@ jobs:
       - name: Microsoft Graph sandbox proof
         run: pnpm run proof:microsoft-graph-sandbox
 
+      - name: Connector emulator proof
+        run: pnpm run proof:connector-emulator
+
   docs-sanity:
     name: Required docs and unsafe-claim sanity
     runs-on: ubuntu-latest
@@ -75,6 +78,8 @@ jobs:
             docs/SIMULATOR_EVENT_MODEL.md
             docs/SIMULATOR_DECISION_ENGINE.md
             docs/SIMULATOR_VALIDATION_RUNBOOK.md
+            docs/CLOUD_CONNECTOR_EMULATOR_HARNESS.md
+            docs/CONNECTOR_EMULATOR_SCENARIOS.md
           )
 
           for doc in "${required_docs[@]}"; do

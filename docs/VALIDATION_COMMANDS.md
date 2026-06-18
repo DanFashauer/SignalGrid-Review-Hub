@@ -58,6 +58,14 @@ pnpm run proof:microsoft-graph-sandbox
 
 Validates the deterministic Microsoft Graph / Entra / Intune sandbox connector fixture path.
 
+## Connector emulator proof
+
+```bash
+pnpm run proof:connector-emulator
+```
+
+Validates the deterministic cloud connector emulator harness, route metadata, approval gates, and proof hash output.
+
 ## Unsafe claim scan
 
 ```bash

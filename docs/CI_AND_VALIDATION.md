@@ -16,6 +16,7 @@ pnpm run proof:intune-entra-posture
 pnpm run proof:signalgrid-simulator
 pnpm run proof:signalgrid-grid
 pnpm run proof:microsoft-graph-sandbox
+pnpm run proof:connector-emulator
 ```
 
 The docs sanity job verifies that required public-review docs exist and checks for narrow, direct unsafe claims such as production-ready, replacement, partner, MFi certification, or autonomous production-remediation claims. It is not intended to block explicit disclaimers, guardrail language, or validation-command examples that document the scanner itself.
@@ -32,6 +33,7 @@ pnpm run proof:intune-entra-posture
 pnpm run proof:signalgrid-simulator
 pnpm run proof:signalgrid-grid
 pnpm run proof:microsoft-graph-sandbox
+pnpm run proof:connector-emulator
 git grep -nE "SignalGrid is production-ready|SignalGrid replaces|SignalGrid is an Imprivata partner|SignalGrid is MFi certified|autonomous production remediation|replaces ServiceNow|replaces PagerDuty|replaces CrowdStrike|replaces Defender|replaces ControlUp|Imprivata partner|MFi certified|replaces Jamf|replaces Intune|replaces Apple Configurator|replaces GroundControl" -- README.md docs artifacts/signalgrid-review/src || true
 git diff --check
 ```

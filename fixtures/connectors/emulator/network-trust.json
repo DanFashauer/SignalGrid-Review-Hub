@@ -1,0 +1,71 @@
+{
+  "fixtureName": "network-trust",
+  "fixtureVersion": "2026-06-18.synthetic.1",
+  "generatedFrom": "synthetic-public-safe-fixture",
+  "scenarios": [
+    {
+      "id": "network-zone-mismatch-high-risk-app",
+      "title": "Network zone mismatch for a high-risk app requires step-up and routes network owner",
+      "group": "networkTrust",
+      "domains": ["networkTrust", "workflowRouting", "securityEdr"],
+      "apiHealth": "healthy",
+      "identity": "healthy",
+      "session": "active",
+      "deviceCompliance": "compliant",
+      "mamPolicy": "present",
+      "appRisk": "high",
+      "workflowContext": "standard",
+      "custodyZone": "expected",
+      "networkZone": "mismatch",
+      "edrRisk": "medium",
+      "remediation": {
+        "proposed": false,
+        "highRisk": false,
+        "approvalRequired": false,
+        "simulatedFirst": true
+      },
+      "expected": {
+        "decision": "stepUp",
+        "reason": "NETWORK_ZONE_MISMATCH_HIGH_RISK_APP",
+        "route": {
+          "ownerCategory": "network",
+          "severity": "medium",
+          "destinationPlaceholder": "network-owner-ticket-placeholder",
+          "verificationExpectation": "Verify expected zone and segmentation source records before reducing step-up."
+        }
+      }
+    },
+    {
+      "id": "high-risk-remediation-proposed",
+      "title": "High-risk remediation proposal remains approval-required and simulated first",
+      "group": "networkTrust",
+      "domains": ["networkTrust", "securityEdr", "workflowRouting"],
+      "apiHealth": "healthy",
+      "identity": "healthy",
+      "session": "active",
+      "deviceCompliance": "compliant",
+      "mamPolicy": "present",
+      "appRisk": "high",
+      "workflowContext": "standard",
+      "custodyZone": "expected",
+      "networkZone": "expected",
+      "edrRisk": "high",
+      "remediation": {
+        "proposed": true,
+        "highRisk": true,
+        "approvalRequired": true,
+        "simulatedFirst": true
+      },
+      "expected": {
+        "decision": "approvalRequired",
+        "reason": "HIGH_RISK_REMEDIATION_APPROVAL_REQUIRED",
+        "route": {
+          "ownerCategory": "change-control",
+          "severity": "critical",
+          "destinationPlaceholder": "approval-queue-placeholder",
+          "verificationExpectation": "Review simulated remediation evidence and approve explicitly before any future real action path."
+        }
+      }
+    }
+  ]
+}

@@ -12,7 +12,9 @@
     "sim:signalgrid": "pnpm run proof:signalgrid-simulator",
     "dev:simulator": "node scripts/dev-simulator.cjs",
     "proof:signalgrid-grid": "pnpm --filter @workspace/scripts run proof:signalgrid-grid",
-    "proof:microsoft-graph-sandbox": "pnpm --filter @workspace/scripts run proof:microsoft-graph-sandbox"
+    "proof:microsoft-graph-sandbox": "pnpm --filter @workspace/scripts run proof:microsoft-graph-sandbox",
+    "proof:connector-emulator": "pnpm --filter @workspace/scripts run proof:connector-emulator",
+    "smoke:connector-emulator": "pnpm run proof:connector-emulator"
   },
   "private": true,
   "devDependencies": {

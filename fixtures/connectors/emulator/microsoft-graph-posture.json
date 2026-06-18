@@ -1,0 +1,103 @@
+{
+  "fixtureName": "microsoft-graph-posture",
+  "fixtureVersion": "2026-06-18.synthetic.1",
+  "generatedFrom": "synthetic-public-safe-fixture",
+  "scenarios": [
+    {
+      "id": "graph-healthy-allow-candidate",
+      "title": "Healthy identity plus compliant device plus healthy API produces an allow candidate only",
+      "group": "microsoftGraphPosture",
+      "domains": ["microsoftGraphIntune", "iamIga", "mdmMam", "securityEdr"],
+      "apiHealth": "healthy",
+      "identity": "healthy",
+      "session": "active",
+      "deviceCompliance": "compliant",
+      "mamPolicy": "present",
+      "appRisk": "standard",
+      "workflowContext": "standard",
+      "custodyZone": "expected",
+      "networkZone": "expected",
+      "edrRisk": "low",
+      "remediation": {
+        "proposed": false,
+        "highRisk": false,
+        "approvalRequired": false,
+        "simulatedFirst": true
+      },
+      "expected": {
+        "decision": "allowCandidate",
+        "reason": "HEALTHY_IDENTITY_DEVICE_API_ALLOW_CANDIDATE",
+        "route": {
+          "ownerCategory": "audit",
+          "severity": "info",
+          "destinationPlaceholder": "audit-evidence-placeholder",
+          "verificationExpectation": "Audit record keeps normalized source IDs synthetic."
+        }
+      }
+    },
+    {
+      "id": "identity-disabled-active-session",
+      "title": "Disabled identity with an active session is denied and routed to identity owner",
+      "group": "microsoftGraphPosture",
+      "domains": ["iamIga", "microsoftGraphIntune"],
+      "apiHealth": "healthy",
+      "identity": "disabled",
+      "session": "active",
+      "deviceCompliance": "compliant",
+      "mamPolicy": "present",
+      "appRisk": "standard",
+      "workflowContext": "standard",
+      "custodyZone": "expected",
+      "networkZone": "expected",
+      "edrRisk": "low",
+      "remediation": {
+        "proposed": false,
+        "highRisk": false,
+        "approvalRequired": false,
+        "simulatedFirst": true
+      },
+      "expected": {
+        "decision": "deny",
+        "reason": "DISABLED_IDENTITY_ACTIVE_SESSION",
+        "route": {
+          "ownerCategory": "identity",
+          "severity": "high",
+          "destinationPlaceholder": "identity-owner-queue-placeholder",
+          "verificationExpectation": "Confirm account state and session revocation in the source identity system."
+        }
+      }
+    },
+    {
+      "id": "graph-degraded-confidence-route",
+      "title": "Compliant device with degraded Graph health routes integration owner instead of plain allow",
+      "group": "microsoftGraphPosture",
+      "domains": ["microsoftGraphIntune", "mdmMam"],
+      "apiHealth": "degraded",
+      "identity": "healthy",
+      "session": "active",
+      "deviceCompliance": "compliant",
+      "mamPolicy": "present",
+      "appRisk": "standard",
+      "workflowContext": "standard",
+      "custodyZone": "expected",
+      "networkZone": "expected",
+      "edrRisk": "low",
+      "remediation": {
+        "proposed": false,
+        "highRisk": false,
+        "approvalRequired": false,
+        "simulatedFirst": true
+      },
+      "expected": {
+        "decision": "stepUp",
+        "reason": "CONNECTOR_HEALTH_DEGRADED_OR_UNKNOWN",
+        "route": {
+          "ownerCategory": "integration",
+          "severity": "medium",
+          "destinationPlaceholder": "integration-health-queue-placeholder",
+          "verificationExpectation": "Verify connector health before treating posture as current."
+        }
+      }
+    }
+  ]
+}

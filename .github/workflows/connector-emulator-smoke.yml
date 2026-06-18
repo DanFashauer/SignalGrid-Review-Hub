@@ -1,0 +1,63 @@
+name: Connector Emulator Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenarioGroup:
+        description: Optional scenario group to run (leave as all for every deterministic fixture)
+        required: false
+        default: all
+        type: choice
+        options:
+          - all
+          - microsoftGraphPosture
+          - workflowRouting
+          - physicalCustody
+          - networkTrust
+
+jobs:
+  smoke:
+    name: Deterministic connector emulator smoke
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      PORT: 3000
+      BASE_PATH: /
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.1
+          run_install: false
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm run typecheck
+      - name: Connector emulator proof - all scenarios
+        if: ${{ inputs.scenarioGroup == 'all' }}
+        run: pnpm run proof:connector-emulator
+      - name: Connector emulator proof - selected group
+        if: ${{ inputs.scenarioGroup != 'all' }}
+        env:
+          SCENARIO_GROUP: ${{ inputs.scenarioGroup }}
+        run: pnpm run proof:connector-emulator
+      - name: Existing proof suite
+        run: |
+          pnpm run proof:intune-entra-posture
+          pnpm run proof:signalgrid-simulator
+          pnpm run proof:signalgrid-grid
+          pnpm run proof:microsoft-graph-sandbox
+      - name: Upload sanitized emulator output
+        uses: actions/upload-artifact@v4
+        with:
+          name: connector-emulator-results
+          path: artifacts/connector-emulator/results.json
+          if-no-files-found: error

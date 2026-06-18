@@ -96,4 +96,4 @@ This PR explicitly does not add or claim:
 - production readiness;
 - compliance certification, attestation, or regulatory approval;
 - replacement of Apple, MDM, IAM, UEM, ITSM, OPA, or other systems of record; or
-- autonomous production remediation.
+- no autonomous production remediation.

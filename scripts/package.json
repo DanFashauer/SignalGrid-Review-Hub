@@ -9,7 +9,9 @@
     "proof:intune-entra-posture": "tsx ./src/intune-entra-posture-proof.ts",
     "proof:signalgrid-simulator": "tsx ./src/signalgrid-simulator-proof.ts",
     "proof:signalgrid-grid": "tsx ./src/signalgrid-grid-proof.ts",
-    "proof:microsoft-graph-sandbox": "tsx ./src/microsoft-graph-sandbox-proof.ts"
+    "proof:microsoft-graph-sandbox": "tsx ./src/microsoft-graph-sandbox-proof.ts",
+    "proof:connector-emulator": "tsx ./src/connector-emulator-proof.ts",
+    "smoke:connector-emulator": "pnpm run proof:connector-emulator"
   },
   "dependencies": {
     "@workspace/signalgrid-simulator": "workspace:*"

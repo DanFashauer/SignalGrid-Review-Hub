@@ -1,0 +1,71 @@
+{
+  "fixtureName": "workflow-routing",
+  "fixtureVersion": "2026-06-18.synthetic.1",
+  "generatedFrom": "synthetic-public-safe-fixture",
+  "scenarios": [
+    {
+      "id": "noncompliant-clinical-workflow",
+      "title": "Noncompliant device in a clinical workflow is restricted and routed to UEM owner",
+      "group": "workflowRouting",
+      "domains": ["mdmMam", "workflowRouting", "securityEdr"],
+      "apiHealth": "healthy",
+      "identity": "healthy",
+      "session": "active",
+      "deviceCompliance": "noncompliant",
+      "mamPolicy": "present",
+      "appRisk": "standard",
+      "workflowContext": "clinical",
+      "custodyZone": "expected",
+      "networkZone": "expected",
+      "edrRisk": "medium",
+      "remediation": {
+        "proposed": false,
+        "highRisk": false,
+        "approvalRequired": false,
+        "simulatedFirst": true
+      },
+      "expected": {
+        "decision": "restrict",
+        "reason": "NONCOMPLIANT_DEVICE_CLINICAL_WORKFLOW",
+        "route": {
+          "ownerCategory": "uem",
+          "severity": "high",
+          "destinationPlaceholder": "uem-owner-ticket-placeholder",
+          "verificationExpectation": "Confirm device compliance in the UEM source system before restoring access."
+        }
+      }
+    },
+    {
+      "id": "missing-mam-sensitive-app",
+      "title": "Missing MAM policy for a sensitive app is restricted and routed to app owner",
+      "group": "workflowRouting",
+      "domains": ["mdmMam", "workflowRouting"],
+      "apiHealth": "healthy",
+      "identity": "healthy",
+      "session": "active",
+      "deviceCompliance": "compliant",
+      "mamPolicy": "missing",
+      "appRisk": "sensitive",
+      "workflowContext": "standard",
+      "custodyZone": "expected",
+      "networkZone": "expected",
+      "edrRisk": "low",
+      "remediation": {
+        "proposed": false,
+        "highRisk": false,
+        "approvalRequired": false,
+        "simulatedFirst": true
+      },
+      "expected": {
+        "decision": "restrict",
+        "reason": "MISSING_MAM_POLICY_SENSITIVE_APP",
+        "route": {
+          "ownerCategory": "application",
+          "severity": "medium",
+          "destinationPlaceholder": "application-owner-ticket-placeholder",
+          "verificationExpectation": "Verify app protection assignment before granting sensitive app workflow access."
+        }
+      }
+    }
+  ]
+}

@@ -22,6 +22,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Signal Source Catalog](SIGNAL_SOURCE_CATALOG.md): organizes candidate input systems, ownership layers, normalized signal categories, decision impact, and future connector priority.
 - [Cloud Connector Emulator Harness](CLOUD_CONNECTOR_EMULATOR_HARNESS.md): documents deterministic cloud connector validation without live vendor access.
 - [Connector Emulator Scenarios](CONNECTOR_EMULATOR_SCENARIOS.md): lists synthetic scenario packs, expected outcomes, route owners, and approval gates.
+- [Connector Emulator Review Dashboard](CONNECTOR_EMULATOR_REVIEW_DASHBOARD.md): explains the static Review Hub UI for visually inspecting emulator scenarios, decision flow, guardrails, and proof evidence.
 - [Intune / Entra posture proof](INTUNE_ENTRA_POSTURE_PROOF.md): defines the first concrete posture-signal proof, normalized model, decision mapping, audit record, and validation checklist.
 - [Identity Trust Layer strategy](IDENTITY_TRUST_LAYER_STRATEGY.md): documents IAM/IdP/IGA systems as core SignalGrid signal sources while preserving the Entra ID + Intune first proof.
 - [Operational Health / DEX Layer Strategy](OPERATIONAL_HEALTH_DEX_LAYER_STRATEGY.md): documents endpoint health, API/service health, DEX/user-experience, monitoring, alerting, ITSM routing, remediation-request, and audit-evidence signals as a future SignalGrid layer.

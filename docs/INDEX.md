@@ -27,6 +27,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Identity Trust Layer strategy](IDENTITY_TRUST_LAYER_STRATEGY.md): documents IAM/IdP/IGA systems as core SignalGrid signal sources while preserving the Entra ID + Intune first proof.
 - [Operational Health / DEX Layer Strategy](OPERATIONAL_HEALTH_DEX_LAYER_STRATEGY.md): documents endpoint health, API/service health, DEX/user-experience, monitoring, alerting, ITSM routing, remediation-request, and audit-evidence signals as a future SignalGrid layer.
 - [Microsoft Graph and MCP strategy](MICROSOFT_GRAPH_AND_MCP_STRATEGY.md): documents Graph / Graph SDK as the first Microsoft identity/posture path and MCP as a later agentic connector direction.
+- [Apple Open Source Platform Strategy](APPLE_OPEN_SOURCE_PLATFORM_STRATEGY.md): maps Apple open-source and Apple-participating projects to future SignalGrid Apple platform directions without adding implementation code.
 - [Microsoft Graph PC test gate](MICROSOFT_GRAPH_PC_TEST_GATE.md): defines the local-only gate for a future read-only sandbox smoke test without adding live Graph calls to Review Hub CI.
 - [Microsoft Graph live smoke test runbook](MICROSOFT_GRAPH_LIVE_SMOKE_TEST_RUNBOOK.md): documents the PC-only procedure, sanitization rules, non-goals, and follow-up PR boundary for future live read-only testing.
 - [Frontline context signals roadmap](FRONTLINE_CONTEXT_SIGNALS.md): captures future healthcare/frontline context inputs while preserving the Intune / Entra first-proof sequence.

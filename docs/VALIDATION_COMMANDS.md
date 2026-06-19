@@ -66,6 +66,22 @@ pnpm run proof:connector-emulator
 
 Validates the deterministic cloud connector emulator harness, route metadata, approval gates, and proof hash output.
 
+## Phase gate
+
+```bash
+pnpm run phase:gate
+```
+
+Classifies the current changed-file set as GREEN, YELLOW, or RED based on docs-only status, workflows, scripts, proof/runtime changes, unsafe file paths, and unsafe-claim matches.
+
+## Phase summary check
+
+```bash
+pnpm run phase:summary-check
+```
+
+Validates that the reusable phase summary template includes Summary, What changed, Validation, Public-safety note, Remaining risks, and Merge lane sections. Set `PHASE_SUMMARY_FILE` to validate another PR-summary file.
+
 ## Unsafe claim scan
 
 ```bash

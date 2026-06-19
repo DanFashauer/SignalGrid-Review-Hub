@@ -46,6 +46,12 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 ## Review workflow
 
 - [Repository agent instructions](../AGENTS.md): defines Codex guardrails, public-safety rules, PR validation commands, and review guidelines.
+- [Phase Automation Orchestrator](PHASE_AUTOMATION_ORCHESTRATOR.md): defines the input → classify → backlog → scoped PR → validation → review → merge-lane loop.
+- [Phase Backlog](PHASE_BACKLOG.md): tracks seeded and future scoped phases, classifications, risk lanes, dependencies, and validation.
+- [Intake Classification Guide](INTAKE_CLASSIFICATION_GUIDE.md): classifies new inputs into product, signal, connector, UI, proof, automation, platform, maintenance, blocked, or parking-lot categories.
+- [Green / Yellow / Red Merge Policy](GREEN_YELLOW_RED_MERGE_POLICY.md): defines green, yellow, and red merge lanes and approval expectations.
+- [Automation Phase Template](AUTOMATION_PHASE_TEMPLATE.md): provides the reusable Codex prompt for one scoped phase at a time.
+- [Manual full-product smoke screen](MANUAL_FULL_PRODUCT_SMOKE_SCREEN.md): outlines future manual Review Hub smoke-screen steps and pass/fail notes.
 - [Mobile-first Codex workflow](MOBILE_CODEX_WORKFLOW.md): explains the iPhone-first Codex Web → PR → CI → review → GitHub Mobile merge loop.
 - [Codex task template](CODEX_TASK_TEMPLATE.md): provides a reusable prompt structure for focused Cloud Codex tasks.
 - [Validation commands](VALIDATION_COMMANDS.md): lists the standard install, typecheck, build, proof, unsafe-claim scan, and diff hygiene commands.

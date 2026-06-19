@@ -11,7 +11,9 @@
     "proof:signalgrid-grid": "tsx ./src/signalgrid-grid-proof.ts",
     "proof:microsoft-graph-sandbox": "tsx ./src/microsoft-graph-sandbox-proof.ts",
     "proof:connector-emulator": "tsx ./src/connector-emulator-proof.ts",
-    "smoke:connector-emulator": "pnpm run proof:connector-emulator"
+    "smoke:connector-emulator": "pnpm run proof:connector-emulator",
+    "phase:gate": "tsx ./src/phase-gate.ts",
+    "phase:summary-check": "tsx ./src/phase-summary-check.ts"
   },
   "dependencies": {
     "@workspace/signalgrid-simulator": "workspace:*"

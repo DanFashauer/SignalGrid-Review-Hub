@@ -4,6 +4,8 @@ import { resolve } from "node:path";
 
 const unsafeClaimPattern =
   /SignalGrid is production-ready|SignalGrid replaces|SignalGrid is an Imprivata partner|SignalGrid is MFi certified|autonomous production remediation|replaces ServiceNow|replaces PagerDuty|replaces CrowdStrike|replaces Defender|replaces ControlUp|Imprivata partner|MFi certified|replaces Jamf|replaces Intune|replaces Apple Configurator|replaces GroundControl/i;
+const unsafeClaimScanCommand =
+  'git grep -nE "SignalGrid is production-ready|SignalGrid replaces|SignalGrid is an Imprivata partner|SignalGrid is MFi certified|autonomous production remediation|replaces ServiceNow|replaces PagerDuty|replaces CrowdStrike|replaces Defender|replaces ControlUp|Imprivata partner|MFi certified|replaces Jamf|replaces Intune|replaces Apple Configurator|replaces GroundControl" -- README.md docs artifacts/signalgrid-review/src || true';
 const redFilePattern =
   /(^|\/)\.env($|\.)|(^|\/)(secrets?|credentials?|tenant|customer|phi|pii)(\.|-|_|\/)/i;
 const workflowPattern = /^\.github\/workflows\//;
@@ -19,29 +21,83 @@ const requiredValidation = [
   "pnpm run proof:intune-entra-posture",
   "pnpm run proof:signalgrid-simulator",
   "pnpm run proof:signalgrid-grid",
+  "pnpm run proof:microsoft-graph-sandbox",
+  "pnpm run proof:connector-emulator",
+  "pnpm run phase:gate",
+  "pnpm run phase:summary-check",
+  unsafeClaimScanCommand,
   "git diff --check",
 ];
+
+type ChangedFileSource = "pr-diff" | "local-worktree";
 
 function git(args: string[]): string {
   return execFileSync("git", args, { encoding: "utf8" }).trim();
 }
 
+function gitOrEmpty(args: string[]): string {
+  try {
+    return execFileSync("git", args, {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return "";
+  }
+}
+
+function uniqueSorted(files: string[]): string[] {
+  return Array.from(new Set(files.filter(Boolean))).sort();
+}
+
+function splitLines(output: string): string[] {
+  return output.split("\n").filter(Boolean);
+}
+
 const repoRoot = git(["rev-parse", "--show-toplevel"]);
 process.chdir(repoRoot);
-const changed = Array.from(
-  new Set(
-    [
-      ...git(["diff", "--name-only"]).split("\n").filter(Boolean),
-      ...git(["diff", "--cached", "--name-only"]).split("\n").filter(Boolean),
-      ...git(["ls-files", "--others", "--exclude-standard"])
-        .split("\n")
-        .filter(Boolean),
-    ].filter(Boolean),
-  ),
-).sort();
 
-const stagedUnsafe = git(["diff", "--cached", "--name-only"])
-  .split("\n")
+function getPrDiffFiles(): string[] {
+  const baseRef = process.env.PHASE_BASE_REF ?? process.env.GITHUB_BASE_REF;
+  const headRef = process.env.PHASE_HEAD_REF ?? process.env.GITHUB_HEAD_REF;
+  const eventName = process.env.GITHUB_EVENT_NAME;
+
+  if (!baseRef) return [];
+
+  if (eventName === "pull_request" || process.env.GITHUB_BASE_REF) {
+    gitOrEmpty(["fetch", "origin", baseRef, "--depth=1"]);
+  }
+
+  const base = baseRef.startsWith("origin/") ? baseRef : `origin/${baseRef}`;
+  const head = process.env.PHASE_HEAD_REF ? (headRef ?? "HEAD") : "HEAD";
+  const diff = gitOrEmpty(["diff", "--name-only", `${base}...${head}`]);
+
+  if (diff) return splitLines(diff);
+
+  const localBaseDiff = gitOrEmpty([
+    "diff",
+    "--name-only",
+    `${baseRef}...HEAD`,
+  ]);
+  return splitLines(localBaseDiff);
+}
+
+function getLocalWorktreeFiles(): string[] {
+  return [
+    ...splitLines(gitOrEmpty(["diff", "--name-only"])),
+    ...splitLines(gitOrEmpty(["diff", "--cached", "--name-only"])),
+    ...splitLines(gitOrEmpty(["ls-files", "--others", "--exclude-standard"])),
+  ];
+}
+
+const prDiffFiles = getPrDiffFiles();
+const changedSource: ChangedFileSource =
+  prDiffFiles.length > 0 ? "pr-diff" : "local-worktree";
+const changed = uniqueSorted(
+  changedSource === "pr-diff" ? prDiffFiles : getLocalWorktreeFiles(),
+);
+
+const stagedUnsafe = splitLines(gitOrEmpty(["diff", "--cached", "--name-only"]))
   .filter(Boolean)
   .filter((file) => redFilePattern.test(file));
 const changedUnsafe = changed.filter((file) => redFilePattern.test(file));
@@ -52,24 +108,15 @@ const touchesRuntime = changed.some((file) => runtimePattern.test(file));
 const docsOnly =
   changed.length > 0 && changed.every((file) => docsPattern.test(file));
 
-let unsafeClaims = "";
-try {
-  unsafeClaims = execFileSync(
-    "git",
-    [
-      "grep",
-      "-nE",
-      unsafeClaimPattern.source,
-      "--",
-      "README.md",
-      "docs",
-      "artifacts/signalgrid-review/src",
-    ],
-    { encoding: "utf8" },
-  ).trim();
-} catch {
-  unsafeClaims = "";
-}
+const unsafeClaims = gitOrEmpty([
+  "grep",
+  "-nE",
+  unsafeClaimPattern.source,
+  "--",
+  "README.md",
+  "docs",
+  "artifacts/signalgrid-review/src",
+]);
 
 const validationDoc = resolve(repoRoot, "docs/VALIDATION_COMMANDS.md");
 const validationText = existsSync(validationDoc)
@@ -94,6 +141,7 @@ if (changedUnsafe.length > 0 || stagedUnsafe.length > 0) {
   reasons.push(`unsafe file path detected: ${changedUnsafe.join(", ")}`);
 }
 if (unsafeClaims) {
+  if (lane === "GREEN") lane = "YELLOW";
   reasons.push("unsafe claim scan matched protected wording for manual review");
 }
 if (missingValidation.length > 0)
@@ -102,6 +150,7 @@ if (missingValidation.length > 0)
   );
 
 console.log("Phase gate");
+console.log(`changedSource=${changedSource}`);
 console.log(
   `changedFiles=${changed.length === 0 ? "none" : changed.join(",")}`,
 );

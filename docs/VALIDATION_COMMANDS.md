@@ -72,7 +72,7 @@ Validates the deterministic cloud connector emulator harness, route metadata, ap
 pnpm run phase:gate
 ```
 
-Classifies the current changed-file set as GREEN, YELLOW, or RED based on docs-only status, workflows, scripts, proof/runtime changes, unsafe file paths, and unsafe-claim matches.
+Classifies the PR/base diff as GREEN, YELLOW, or RED when `PHASE_BASE_REF`/`PHASE_HEAD_REF` or GitHub pull request environment variables are available, then falls back to the local worktree. The output includes `changedSource=pr-diff` or `changedSource=local-worktree` and accounts for docs-only status, workflows, scripts, proof/runtime changes, unsafe file paths, and unsafe-claim matches. GREEN requires a clean unsafe-claim scan; disclaimer, scanner, or guardrail matches are at least YELLOW for manual review.
 
 ## Phase summary check
 

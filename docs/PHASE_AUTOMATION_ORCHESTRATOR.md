@@ -25,7 +25,7 @@ Input
 4. **Scoped task**: Codex chooses one narrow phase and avoids bundling unrelated work.
 5. **Implementation PR**: Codex implements only that phase with public-safe fixtures and documentation unless explicitly approved otherwise.
 6. **CI validation**: GitHub Actions and local commands validate typecheck, build, proof harnesses, unsafe-claim scans, and diff hygiene.
-7. **Codex review**: Codex review comments are triaged, with P1/P2 comments blocking fast green-lane readiness.
+7. **Codex review**: Codex review comments are triaged, with P1/P2 comments blocking fast green-lane readiness. The phase gate should inspect the PR/base diff when branch context is available, and otherwise fall back to the local worktree.
 8. **ChatGPT validation**: ChatGPT review classifies readiness, checks public-safety posture, and confirms whether the lane is green, yellow, or red.
 9. **Merge lane**: green work can be prepared for fast owner merge; yellow and red work require explicit human approval.
 10. **Next phase**: the backlog identifies the next recommended scoped phase.

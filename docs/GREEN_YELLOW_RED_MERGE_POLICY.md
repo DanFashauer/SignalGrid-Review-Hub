@@ -13,7 +13,7 @@ A PR can be green only when all of these are true:
 - No runtime behavior changes.
 - All CI is green.
 - No Codex P1/P2 comments remain unresolved.
-- Unsafe-claim scan is clean.
+- Unsafe-claim scan is clean. Any protected-wording match demotes the lane out of GREEN for manual review, even when the match appears to be disclaimer or guardrail wording.
 
 ## YELLOW
 
@@ -23,6 +23,7 @@ A PR is yellow when it includes any of these:
 - Proof logic changes.
 - Dashboard/UI behavior changes.
 - Scripts.
+- Unsafe-claim scan matches that appear to be disclaimer, scanner, or guardrail wording and require manual review.
 - Fixture model expansion.
 - New deterministic decision rules.
 - Any change that affects CI, artifacts, or emulator output.

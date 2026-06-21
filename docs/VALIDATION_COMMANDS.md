@@ -66,6 +66,22 @@ pnpm run proof:connector-emulator
 
 Validates the deterministic cloud connector emulator harness, route metadata, approval gates, and proof hash output.
 
+## Phase gate
+
+```bash
+pnpm run phase:gate
+```
+
+Classifies the PR/base diff as GREEN, YELLOW, or RED when `PHASE_BASE_REF`/`PHASE_HEAD_REF` or GitHub pull request environment variables are available, then falls back to the local worktree. The output includes `changedSource=pr-diff` or `changedSource=local-worktree` and accounts for docs-only status, workflows, scripts, proof/runtime changes, unsafe file paths, and unsafe-claim matches. GREEN requires a clean unsafe-claim scan; disclaimer, scanner, or guardrail matches are at least YELLOW for manual review.
+
+## Phase summary check
+
+```bash
+pnpm run phase:summary-check
+```
+
+Validates that the reusable phase summary template includes Summary, What changed, Validation, Public-safety note, Remaining risks, and Merge lane sections. Set `PHASE_SUMMARY_FILE` to validate another PR-summary file.
+
 ## Unsafe claim scan
 
 ```bash

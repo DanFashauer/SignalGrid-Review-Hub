@@ -14,7 +14,9 @@
     "proof:signalgrid-grid": "pnpm --filter @workspace/scripts run proof:signalgrid-grid",
     "proof:microsoft-graph-sandbox": "pnpm --filter @workspace/scripts run proof:microsoft-graph-sandbox",
     "proof:connector-emulator": "pnpm --filter @workspace/scripts run proof:connector-emulator",
-    "smoke:connector-emulator": "pnpm run proof:connector-emulator"
+    "smoke:connector-emulator": "pnpm run proof:connector-emulator",
+    "phase:gate": "pnpm --filter @workspace/scripts run phase:gate",
+    "phase:summary-check": "pnpm --filter @workspace/scripts run phase:summary-check"
   },
   "private": true,
   "devDependencies": {

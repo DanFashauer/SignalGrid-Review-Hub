@@ -78,6 +78,22 @@ function decide(s: ConnectorScenario): { decision: Decision; reason: string } {
       decision: "stepUp",
       reason: "CONNECTOR_HEALTH_DEGRADED_OR_UNKNOWN",
     };
+  if (s.identity === "disabled" && s.session === "active")
+    return { decision: "deny", reason: "DISABLED_IDENTITY_ACTIVE_SESSION" };
+  if (s.deviceCompliance === "noncompliant" && s.workflowContext === "clinical")
+    return {
+      decision: "restrict",
+      reason: "NONCOMPLIANT_DEVICE_CLINICAL_WORKFLOW",
+    };
+  if (s.mamPolicy === "missing" && s.appRisk === "sensitive")
+    return { decision: "restrict", reason: "MISSING_MAM_POLICY_SENSITIVE_APP" };
+  if (s.custodyZone === "wrong" && s.workflowContext === "sharedDevice")
+    return { decision: "restrict", reason: "WRONG_CUSTODY_ZONE_SHARED_DEVICE" };
+  if (s.networkZone === "mismatch" && s.appRisk === "high")
+    return {
+      decision: "stepUp",
+      reason: "NETWORK_ZONE_MISMATCH_HIGH_RISK_APP",
+    };
   if (s.group === "credentialReader") {
     if (
       s.identityCorrelationState === "unresolved" ||
@@ -111,22 +127,6 @@ function decide(s: ConnectorScenario): { decision: Decision; reason: string } {
       reason: "AMBIGUOUS_CREDENTIAL_READER_EVIDENCE",
     };
   }
-  if (s.identity === "disabled" && s.session === "active")
-    return { decision: "deny", reason: "DISABLED_IDENTITY_ACTIVE_SESSION" };
-  if (s.deviceCompliance === "noncompliant" && s.workflowContext === "clinical")
-    return {
-      decision: "restrict",
-      reason: "NONCOMPLIANT_DEVICE_CLINICAL_WORKFLOW",
-    };
-  if (s.mamPolicy === "missing" && s.appRisk === "sensitive")
-    return { decision: "restrict", reason: "MISSING_MAM_POLICY_SENSITIVE_APP" };
-  if (s.custodyZone === "wrong" && s.workflowContext === "sharedDevice")
-    return { decision: "restrict", reason: "WRONG_CUSTODY_ZONE_SHARED_DEVICE" };
-  if (s.networkZone === "mismatch" && s.appRisk === "high")
-    return {
-      decision: "stepUp",
-      reason: "NETWORK_ZONE_MISMATCH_HIGH_RISK_APP",
-    };
   if (
     s.identity === "healthy" &&
     s.deviceCompliance === "compliant" &&

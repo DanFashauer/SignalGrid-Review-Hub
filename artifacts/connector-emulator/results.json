@@ -2,7 +2,7 @@
   "proof": "connector-emulator",
   "scenarioGroup": "all",
   "cases": 15,
-  "hash": "880ba7c2bf0571db310b5838f4c28f5529a819d40b69b44bab0f54e140d3ce86",
+  "hash": "026712a3075ec4d42507f64279f665e0785aac56416c5309bffa36660913402e",
   "results": [
     {
       "id": "graph-healthy-allow-candidate",
@@ -129,7 +129,7 @@
       "group": "credentialReader",
       "expectedDecision": "restrict",
       "actualDecision": "restrict",
-      "actualReason": "CREDENTIAL_CUSTODY_MISMATCH",
+      "actualReason": "WRONG_CUSTODY_ZONE_SHARED_DEVICE",
       "route": {
         "ownerCategory": "custody",
         "severity": "high",

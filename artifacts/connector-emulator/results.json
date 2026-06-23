@@ -1,0 +1,233 @@
+{
+  "proof": "connector-emulator",
+  "scenarioGroup": "all",
+  "cases": 15,
+  "hash": "880ba7c2bf0571db310b5838f4c28f5529a819d40b69b44bab0f54e140d3ce86",
+  "results": [
+    {
+      "id": "graph-healthy-allow-candidate",
+      "group": "microsoftGraphPosture",
+      "expectedDecision": "allowCandidate",
+      "actualDecision": "allowCandidate",
+      "actualReason": "HEALTHY_IDENTITY_DEVICE_API_ALLOW_CANDIDATE",
+      "route": {
+        "ownerCategory": "audit",
+        "severity": "info",
+        "destinationPlaceholder": "audit-evidence-placeholder",
+        "verificationExpectation": "Audit record keeps normalized source IDs synthetic."
+      },
+      "approvalRequired": false,
+      "simulatedFirst": true
+    },
+    {
+      "id": "identity-disabled-active-session",
+      "group": "microsoftGraphPosture",
+      "expectedDecision": "deny",
+      "actualDecision": "deny",
+      "actualReason": "DISABLED_IDENTITY_ACTIVE_SESSION",
+      "route": {
+        "ownerCategory": "identity",
+        "severity": "high",
+        "destinationPlaceholder": "identity-owner-queue-placeholder",
+        "verificationExpectation": "Confirm account state and session revocation in the source identity system."
+      },
+      "approvalRequired": false,
+      "simulatedFirst": true
+    },
+    {
+      "id": "graph-degraded-confidence-route",
+      "group": "microsoftGraphPosture",
+      "expectedDecision": "stepUp",
+      "actualDecision": "stepUp",
+      "actualReason": "CONNECTOR_HEALTH_DEGRADED_OR_UNKNOWN",
+      "route": {
+        "ownerCategory": "integration",
+        "severity": "medium",
+        "destinationPlaceholder": "integration-health-queue-placeholder",
+        "verificationExpectation": "Verify connector health before treating posture as current."
+      },
+      "approvalRequired": false,
+      "simulatedFirst": true
+    },
+    {
+      "id": "noncompliant-clinical-workflow",
+      "group": "workflowRouting",
+      "expectedDecision": "restrict",
+      "actualDecision": "restrict",
+      "actualReason": "NONCOMPLIANT_DEVICE_CLINICAL_WORKFLOW",
+      "route": {
+        "ownerCategory": "uem",
+        "severity": "high",
+        "destinationPlaceholder": "uem-owner-ticket-placeholder",
+        "verificationExpectation": "Confirm device compliance in the UEM source system before restoring access."
+      },
+      "approvalRequired": false,
+      "simulatedFirst": true
+    },
+    {
+      "id": "missing-mam-sensitive-app",
+      "group": "workflowRouting",
+      "expectedDecision": "restrict",
+      "actualDecision": "restrict",
+      "actualReason": "MISSING_MAM_POLICY_SENSITIVE_APP",
+      "route": {
+        "ownerCategory": "application",
+        "severity": "medium",
+        "destinationPlaceholder": "application-owner-ticket-placeholder",
+        "verificationExpectation": "Verify app protection assignment before granting sensitive app workflow access."
+      },
+      "approvalRequired": false,
+      "simulatedFirst": true
+    },
+    {
+      "id": "wrong-custody-zone-shared-device",
+      "group": "physicalCustody",
+      "expectedDecision": "restrict",
+      "actualDecision": "restrict",
+      "actualReason": "WRONG_CUSTODY_ZONE_SHARED_DEVICE",
+      "route": {
+        "ownerCategory": "custody",
+        "severity": "high",
+        "destinationPlaceholder": "custody-alert-placeholder",
+        "verificationExpectation": "Confirm dock, room, or custody fixture state before clearing shared-device workflow."
+      },
+      "approvalRequired": false,
+      "simulatedFirst": true
+    },
+    {
+      "id": "credential-reader-allow-candidate",
+      "group": "credentialReader",
+      "expectedDecision": "allowCandidate",
+      "actualDecision": "allowCandidate",
+      "actualReason": "HEALTHY_CREDENTIAL_READER_CONTEXT_ALLOW_CANDIDATE",
+      "route": {
+        "ownerCategory": "audit",
+        "severity": "info",
+        "destinationPlaceholder": "audit-evidence-placeholder",
+        "verificationExpectation": "Audit credential evidence with synthetic reader and custody correlation only."
+      },
+      "approvalRequired": false,
+      "simulatedFirst": true
+    },
+    {
+      "id": "credential-reader-unresolved-identity",
+      "group": "credentialReader",
+      "expectedDecision": "stepUp",
+      "actualDecision": "stepUp",
+      "actualReason": "CREDENTIAL_IDENTITY_UNRESOLVED",
+      "route": {
+        "ownerCategory": "identity",
+        "severity": "high",
+        "destinationPlaceholder": "identity-owner-queue-placeholder",
+        "verificationExpectation": "Resolve the synthetic credential-to-identity mapping in the identity system of record before allowing."
+      },
+      "approvalRequired": false,
+      "simulatedFirst": true
+    },
+    {
+      "id": "credential-reader-wrong-custody-zone",
+      "group": "credentialReader",
+      "expectedDecision": "restrict",
+      "actualDecision": "restrict",
+      "actualReason": "CREDENTIAL_CUSTODY_MISMATCH",
+      "route": {
+        "ownerCategory": "custody",
+        "severity": "high",
+        "destinationPlaceholder": "custody-alert-placeholder",
+        "verificationExpectation": "Verify the locker bay, dock, or custody-zone assignment in the custody system of record."
+      },
+      "approvalRequired": false,
+      "simulatedFirst": true
+    },
+    {
+      "id": "credential-reader-stale-active-session",
+      "group": "credentialReader",
+      "expectedDecision": "stepUp",
+      "actualDecision": "stepUp",
+      "actualReason": "STALE_READER_EVENT_ACTIVE_SESSION",
+      "route": {
+        "ownerCategory": "operations",
+        "severity": "medium",
+        "destinationPlaceholder": "operations-owner-ticket-placeholder",
+        "verificationExpectation": "Confirm a fresh credential event or close the stale active-session gap before continuing."
+      },
+      "approvalRequired": false,
+      "simulatedFirst": true
+    },
+    {
+      "id": "credential-reader-mobile-degraded-health",
+      "group": "credentialReader",
+      "expectedDecision": "stepUp",
+      "actualDecision": "stepUp",
+      "actualReason": "CONNECTOR_HEALTH_DEGRADED_OR_UNKNOWN",
+      "route": {
+        "ownerCategory": "integration",
+        "severity": "medium",
+        "destinationPlaceholder": "integration-health-queue-placeholder",
+        "verificationExpectation": "Verify synthetic reader/API health before relying on the future mobile credential event pattern."
+      },
+      "approvalRequired": false,
+      "simulatedFirst": true
+    },
+    {
+      "id": "credential-reader-workflow-mismatch",
+      "group": "credentialReader",
+      "expectedDecision": "restrict",
+      "actualDecision": "restrict",
+      "actualReason": "CREDENTIAL_WORKFLOW_ASSIGNMENT_MISMATCH",
+      "route": {
+        "ownerCategory": "workflow",
+        "severity": "high",
+        "destinationPlaceholder": "workflow-owner-ticket-placeholder",
+        "verificationExpectation": "Verify the assignment, kiosk, or release workflow before granting access."
+      },
+      "approvalRequired": false,
+      "simulatedFirst": true
+    },
+    {
+      "id": "credential-reader-custody-override-approval",
+      "group": "credentialReader",
+      "expectedDecision": "approvalRequired",
+      "actualDecision": "approvalRequired",
+      "actualReason": "HIGH_RISK_REMEDIATION_APPROVAL_REQUIRED",
+      "route": {
+        "ownerCategory": "change-control",
+        "severity": "critical",
+        "destinationPlaceholder": "approval-queue-placeholder",
+        "verificationExpectation": "Review simulated custody override evidence and approve explicitly before any future real action path."
+      },
+      "approvalRequired": true,
+      "simulatedFirst": true
+    },
+    {
+      "id": "network-zone-mismatch-high-risk-app",
+      "group": "networkTrust",
+      "expectedDecision": "stepUp",
+      "actualDecision": "stepUp",
+      "actualReason": "NETWORK_ZONE_MISMATCH_HIGH_RISK_APP",
+      "route": {
+        "ownerCategory": "network",
+        "severity": "medium",
+        "destinationPlaceholder": "network-owner-ticket-placeholder",
+        "verificationExpectation": "Verify expected zone and segmentation source records before reducing step-up."
+      },
+      "approvalRequired": false,
+      "simulatedFirst": true
+    },
+    {
+      "id": "high-risk-remediation-proposed",
+      "group": "networkTrust",
+      "expectedDecision": "approvalRequired",
+      "actualDecision": "approvalRequired",
+      "actualReason": "HIGH_RISK_REMEDIATION_APPROVAL_REQUIRED",
+      "route": {
+        "ownerCategory": "change-control",
+        "severity": "critical",
+        "destinationPlaceholder": "approval-queue-placeholder",
+        "verificationExpectation": "Review simulated remediation evidence and approve explicitly before any future real action path."
+      },
+      "approvalRequired": true,
+      "simulatedFirst": true
+    }
+  ]
+}

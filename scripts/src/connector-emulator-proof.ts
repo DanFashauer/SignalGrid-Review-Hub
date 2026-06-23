@@ -37,6 +37,20 @@ for (const result of results) {
     result.route.severity !== "info"
   )
     failures.push(`${result.id} allowCandidate route severity should be info`);
+
+  if (
+    result.group === "credentialReader" &&
+    result.actualDecision === "allowCandidate" &&
+    result.id.includes("unresolved")
+  )
+    failures.push(`${result.id} unresolved identity produced allowCandidate`);
+  if (
+    result.group === "credentialReader" &&
+    result.actualDecision === "allowCandidate" &&
+    result.id.includes("custody") &&
+    !result.id.includes("allow")
+  )
+    failures.push(`${result.id} custody mismatch produced allowCandidate`);
   for (const field of [
     "ownerCategory",
     "severity",

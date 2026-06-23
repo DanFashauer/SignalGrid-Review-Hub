@@ -12,12 +12,16 @@ The connector emulator scenario packs are synthetic, deterministic fixtures for 
 - Wrong custody zone + shared device = `restrict` and custody alert.
 - Network zone mismatch + high-risk app = `stepUp` and route network owner.
 - Remediation proposed = `approvalRequired` and simulated first.
+- Credential reader: valid credential + resolved identity + matched custody + compliant shared device = `allowCandidate` with audit evidence only.
+- Credential reader: unresolved identity, degraded reader/API health, stale event, custody mismatch, or workflow assignment mismatch cannot produce plain allow.
+- Credential reader: high-risk custody override = `approvalRequired` and simulated first.
 
 ## Scenario groups
 
 - `microsoftGraphPosture`
 - `workflowRouting`
 - `physicalCustody`
+- `credentialReader`
 - `networkTrust`
 
 Each route must include an owner category, severity, destination placeholder, and verification expectation so reviewers can see who would own the next action without relying on live systems.

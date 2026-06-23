@@ -28,6 +28,7 @@ export const fixtureFiles = [
   "microsoft-graph-posture.json",
   "workflow-routing.json",
   "physical-custody.json",
+  "credential-reader.json",
   "network-trust.json",
 ] as const;
 
@@ -77,6 +78,35 @@ function decide(s: ConnectorScenario): { decision: Decision; reason: string } {
       decision: "stepUp",
       reason: "CONNECTOR_HEALTH_DEGRADED_OR_UNKNOWN",
     };
+  if (s.group === "credentialReader") {
+    if (
+      s.identityCorrelationState === "unresolved" ||
+      s.actorResolved === false
+    )
+      return { decision: "stepUp", reason: "CREDENTIAL_IDENTITY_UNRESOLVED" };
+    if (s.custodyCorrelationState === "mismatch" || s.custodyZone === "wrong")
+      return { decision: "restrict", reason: "CREDENTIAL_CUSTODY_MISMATCH" };
+    if (s.credentialReadState === "stale" && s.session === "active")
+      return {
+        decision: "stepUp",
+        reason: "STALE_READER_EVENT_ACTIVE_SESSION",
+      };
+    if (s.custodyCorrelationState === "workflowMismatch")
+      return {
+        decision: "restrict",
+        reason: "CREDENTIAL_WORKFLOW_ASSIGNMENT_MISMATCH",
+      };
+    if (
+      s.credentialReadState === "valid" &&
+      s.identityCorrelationState === "resolved" &&
+      s.custodyCorrelationState === "matched" &&
+      s.deviceCompliance === "compliant"
+    )
+      return {
+        decision: "allowCandidate",
+        reason: "HEALTHY_CREDENTIAL_READER_CONTEXT_ALLOW_CANDIDATE",
+      };
+  }
   if (s.identity === "disabled" && s.session === "active")
     return { decision: "deny", reason: "DISABLED_IDENTITY_ACTIVE_SESSION" };
   if (s.deviceCompliance === "noncompliant" && s.workflowContext === "clinical")

@@ -2,6 +2,7 @@ export type ScenarioGroup =
   | "microsoftGraphPosture"
   | "workflowRouting"
   | "physicalCustody"
+  | "credentialReader"
   | "networkTrust";
 
 export type ConnectorDomain =
@@ -10,6 +11,7 @@ export type ConnectorDomain =
   | "mdmMam"
   | "workflowRouting"
   | "physicalCustody"
+  | "credentialReader"
   | "networkTrust"
   | "securityEdr";
 
@@ -40,6 +42,37 @@ export interface ConnectorScenario {
   mamPolicy: "present" | "missing" | "notApplicable";
   appRisk: "standard" | "sensitive" | "high";
   workflowContext: "standard" | "clinical" | "sharedDevice";
+  credentialReaderVendor?: string;
+  credentialReaderModel?: string;
+  credentialReaderClass?: string;
+  credentialTechnology?: string;
+  credentialType?: string;
+  readerConnectionType?: string;
+  readerLocation?: string;
+  readerPurpose?: string;
+  credentialReadState?:
+    | "valid"
+    | "stale"
+    | "overrideRequested"
+    | "failed"
+    | "unknown";
+  credentialConfidence?: "high" | "medium" | "low" | "degraded" | "unknown";
+  badgeEventObservedAt?: string;
+  actorResolved?: boolean;
+  identityCorrelationState?: "resolved" | "unresolved" | "unknown";
+  custodyCorrelationState?:
+    | "matched"
+    | "mismatch"
+    | "workflowMismatch"
+    | "overrideRequested"
+    | "unknown";
+  credentialWorkflowContext?: string;
+  deviceContext?: string;
+  lockerOrDockState?: string;
+  routeOwner?: string;
+  severity?: ConnectorRoute["severity"];
+  approvalRequired?: boolean;
+  verificationExpectation?: string;
   custodyZone: "expected" | "wrong" | "unknown";
   networkZone: "expected" | "mismatch" | "unknown";
   edrRisk: "low" | "medium" | "high";

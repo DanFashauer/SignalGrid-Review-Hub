@@ -106,6 +106,10 @@ function decide(s: ConnectorScenario): { decision: Decision; reason: string } {
         decision: "allowCandidate",
         reason: "HEALTHY_CREDENTIAL_READER_CONTEXT_ALLOW_CANDIDATE",
       };
+    return {
+      decision: "stepUp",
+      reason: "AMBIGUOUS_CREDENTIAL_READER_EVIDENCE",
+    };
   }
   if (s.identity === "disabled" && s.session === "active")
     return { decision: "deny", reason: "DISABLED_IDENTITY_ACTIVE_SESSION" };

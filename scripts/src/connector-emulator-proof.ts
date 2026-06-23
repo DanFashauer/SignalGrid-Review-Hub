@@ -38,19 +38,6 @@ for (const result of results) {
   )
     failures.push(`${result.id} allowCandidate route severity should be info`);
 
-  if (
-    result.group === "credentialReader" &&
-    result.actualDecision === "allowCandidate" &&
-    result.id.includes("unresolved")
-  )
-    failures.push(`${result.id} unresolved identity produced allowCandidate`);
-  if (
-    result.group === "credentialReader" &&
-    result.actualDecision === "allowCandidate" &&
-    result.id.includes("custody") &&
-    !result.id.includes("allow")
-  )
-    failures.push(`${result.id} custody mismatch produced allowCandidate`);
   for (const field of [
     "ownerCategory",
     "severity",
@@ -72,6 +59,33 @@ for (const scenario of selected) {
       `${scenario.id} high-risk remediation is not approval-required and simulated-first`,
     );
   }
+}
+for (const [index, scenario] of selected.entries()) {
+  const result = results[index];
+  if (
+    scenario.group === "credentialReader" &&
+    result.actualDecision === "allowCandidate" &&
+    (scenario.identityCorrelationState !== "resolved" ||
+      scenario.actorResolved !== true)
+  )
+    failures.push(`${scenario.id} unresolved identity produced allowCandidate`);
+  if (
+    scenario.group === "credentialReader" &&
+    result.actualDecision === "allowCandidate" &&
+    (scenario.custodyCorrelationState !== "matched" ||
+      scenario.custodyZone !== "expected")
+  )
+    failures.push(
+      `${scenario.id} custody mismatch or ambiguity produced allowCandidate`,
+    );
+  if (
+    scenario.group === "credentialReader" &&
+    result.actualDecision === "allowCandidate" &&
+    scenario.credentialReadState !== "valid"
+  )
+    failures.push(
+      `${scenario.id} ambiguous credential read produced allowCandidate`,
+    );
 }
 
 const artifactDir = resolve(

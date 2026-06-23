@@ -21,6 +21,7 @@ import CompetitiveSection from "@/components/sections/CompetitiveSection";
 import DemoScriptSection from "@/components/sections/DemoScriptSection";
 import SignalGridSimulatorSection from "@/components/sections/SignalGridSimulatorSection";
 import ConnectorEmulatorDashboard from "@/components/connector-emulator/ConnectorEmulatorDashboard";
+import CredentialReaderDashboardSection from "@/components/sections/CredentialReaderDashboardSection";
 import { useActionChecklist } from "@/hooks/useActionChecklist";
 import { useScrollSpy } from "@/hooks/useScrollSpy";
 import {
@@ -42,6 +43,7 @@ const NAV_ITEMS = [
   { id: "simulator", label: "Simulator" },
   { id: "app-suite", label: "App Suite" },
   { id: "connector-emulator", label: "Connector Emulator" },
+  { id: "credential-reader", label: "Credential Reader" },
   { id: "scorecard", label: "Scorecard" },
   { id: "architecture", label: "Architecture" },
   { id: "integrations", label: "Integrations" },
@@ -438,6 +440,15 @@ export default function ReviewDashboard() {
             description="Static, fixture-backed review surface for synthetic connector scenarios, decisions, routes, approval gates, and deterministic proof evidence."
           />
           <ConnectorEmulatorDashboard />
+        </section>
+
+        {/* Credential reader / smart locker review dashboard */}
+        <section id="credential-reader" className="space-y-6 scroll-mt-20">
+          <SectionHeader
+            label="Credential Reader / Smart Locker Review Dashboard"
+            description="Static, fixture-backed dashboard for credential-reader and smart-locker scenarios: badge read, identity correlation, custody correlation, device/workflow context, decision, route owner, and verification expectation."
+          />
+          <CredentialReaderDashboardSection />
         </section>
 
         {/* ── Scorecard ── */}

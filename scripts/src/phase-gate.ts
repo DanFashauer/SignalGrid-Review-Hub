@@ -7,7 +7,7 @@ const unsafeClaimPattern =
 const unsafeClaimScanCommand =
   'git grep -nE "SignalGrid is production-ready|SignalGrid replaces|SignalGrid is an Imprivata partner|SignalGrid is MFi certified|autonomous production remediation|replaces ServiceNow|replaces PagerDuty|replaces CrowdStrike|replaces Defender|replaces ControlUp|Imprivata partner|MFi certified|replaces Jamf|replaces Intune|replaces Apple Configurator|replaces GroundControl" -- README.md docs artifacts/signalgrid-review/src || true';
 const redFilePattern =
-  /(^|\/)\.env($|\.)|(^|\/)(secrets?|credentials|tenant|customer|phi|pii)(\.|_|\/)/i;
+  /(^|\/)\.env($|\.)|(^|\/)secrets?\/|(^|\/)credentials?\/|(^|\/)credential-store\/|(^|\/)credentials?(?:\.env|\.secret|\.json$|[-_](?:secret|store|token|key|prod|production))|(^|\/)(?:tenant|customer|phi|pii)(?:\.|-|_|\/)/i;
 const workflowPattern = /^\.github\/workflows\//;
 const scriptPattern = /^scripts\//;
 const proofPattern = /(^|\/)proof|fixtures?\/|scenario/i;

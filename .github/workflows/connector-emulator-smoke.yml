@@ -1,6 +1,9 @@
 name: Connector Emulator Smoke
 
 on:
+  push:
+    branches:
+      - SignalGrid_Alpha
   workflow_dispatch:
     inputs:
       scenarioGroup:
@@ -24,6 +27,9 @@ jobs:
     env:
       PORT: 3000
       BASE_PATH: /
+      SCENARIO_GROUP: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.scenarioGroup || 'all' }}
+      CONNECTOR_EMULATOR_ARTIFACT_NAME: connector-emulator-results
+      CONNECTOR_EMULATOR_EVIDENCE_ARTIFACT_NAME: connector-emulator-smoke-evidence
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,12 +48,10 @@ jobs:
       - name: Typecheck
         run: pnpm run typecheck
       - name: Connector emulator proof - all scenarios
-        if: ${{ inputs.scenarioGroup == 'all' }}
+        if: ${{ env.SCENARIO_GROUP == 'all' }}
         run: pnpm run proof:connector-emulator
       - name: Connector emulator proof - selected group
-        if: ${{ inputs.scenarioGroup != 'all' }}
-        env:
-          SCENARIO_GROUP: ${{ inputs.scenarioGroup }}
+        if: ${{ env.SCENARIO_GROUP != 'all' }}
         run: pnpm run proof:connector-emulator
       - name: Existing proof suite
         run: |
@@ -55,9 +59,48 @@ jobs:
           pnpm run proof:signalgrid-simulator
           pnpm run proof:signalgrid-grid
           pnpm run proof:microsoft-graph-sandbox
+      - name: Generate smoke evidence manifest
+        run: |
+          node <<'NODE'
+          const { mkdirSync, writeFileSync } = require('node:fs');
+          const manifest = {
+            workflowName: process.env.GITHUB_WORKFLOW,
+            runId: process.env.GITHUB_RUN_ID,
+            runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+            eventName: process.env.GITHUB_EVENT_NAME,
+            branch: process.env.GITHUB_REF_NAME,
+            headSha: process.env.GITHUB_SHA,
+            scenarioGroup: process.env.SCENARIO_GROUP || 'all',
+            artifactName: process.env.CONNECTOR_EMULATOR_ARTIFACT_NAME,
+            evidenceArtifactName: process.env.CONNECTOR_EMULATOR_EVIDENCE_ARTIFACT_NAME,
+            proofCommand:
+              process.env.SCENARIO_GROUP === 'all'
+                ? 'pnpm run proof:connector-emulator'
+                : `SCENARIO_GROUP=${process.env.SCENARIO_GROUP} pnpm run proof:connector-emulator`,
+            publicSafety: [
+              'synthetic fixtures only',
+              'no live vendor calls',
+              'no secrets',
+              'no tenant IDs',
+              'no customer data',
+              'no PHI/PII',
+            ],
+          };
+          mkdirSync('artifacts/connector-emulator', { recursive: true });
+          writeFileSync(
+            'artifacts/connector-emulator/evidence.json',
+            `${JSON.stringify(manifest, null, 2)}\n`,
+          );
+          NODE
       - name: Upload sanitized emulator output
         uses: actions/upload-artifact@v4
         with:
           name: connector-emulator-results
           path: artifacts/connector-emulator/results.json
+          if-no-files-found: error
+      - name: Upload smoke evidence manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: connector-emulator-smoke-evidence
+          path: artifacts/connector-emulator/evidence.json
           if-no-files-found: error

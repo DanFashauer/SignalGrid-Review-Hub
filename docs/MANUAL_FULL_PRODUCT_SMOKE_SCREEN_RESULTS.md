@@ -90,7 +90,7 @@ This smoke-screen pass is documentation-only and fixture-backed. It does not int
 ## Remaining risks or owner decisions
 
 - Owner should classify the smoke-screen result after PR review and CI.
-- A current Connector Emulator Smoke workflow run and `connector-emulator-results` artifact review must be completed before claiming a full smoke-screen pass.
+- A current Connector Emulator Smoke workflow run and `connector-emulator-results` artifact review must be completed before claiming a full smoke-screen pass; the post-merge automation path in `docs/POST_MERGE_CONNECTOR_SMOKE_EVIDENCE.md` is intended to produce that routine evidence without manual workflow dispatch.
 - If accepted, next build phase can be one of:
   - Review Dashboard visual polish and local QA screenshot strategy.
   - Selected Connector Emulator group runs and artifact review notes.

@@ -59,7 +59,7 @@ The Review Hub story remains connected end-to-end for documentation map, connect
 Codex could not trigger the workflow directly in this environment because `gh` is not installed and this checkout has no Git remote configured. To complete the current evidence pass, the repository owner should run **Connector Emulator Smoke** from the GitHub Actions tab on branch `SignalGrid_Alpha` with `scenarioGroup=all`, or run the equivalent GitHub CLI command from an authenticated workstation:
 
 ```bash
-gh workflow run connector-emulator-smoke.yml --repo SignalGrid/SignalGrid-Review-Hub --ref SignalGrid_Alpha -f scenarioGroup=all
+gh workflow run connector-emulator-smoke.yml --repo DanFashauer/SignalGrid-Review-Hub --ref SignalGrid_Alpha -f scenarioGroup=all
 ```
 
 After the run completes, record the run ID, conclusion, branch, head SHA, `connector-emulator-results` artifact name, artifact ID, artifact digest, and artifact review status. Only then should the Connector Emulator Smoke row, artifact row, and overall smoke-screen result move from limited/prior-evidence status to PASS.

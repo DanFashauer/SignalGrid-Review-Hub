@@ -1,13 +1,13 @@
 # Manual Full-Product Smoke Screen Results
 
-This document records the Manual Full Product Smoke Screen phase run after the Phase Automation Orchestrator, Credential Reader Signal Model, Credential Reader / Smart Locker Dashboard, and credential-reader guardrail hardening chain merged.
+This document records the Manual Full Product Smoke Screen phase run after the Phase Automation Orchestrator, Credential Reader Signal Model, Credential Reader / Smart Locker Dashboard, and credential-reader guardrail hardening chain merged. This update is the workflow evidence / smoke-screen completion pass requested after PR #26.
 
 ## Run metadata
 
 | Field | Value |
 | --- | --- |
 | Phase | PHASE-007: Manual full-product smoke screen |
-| Branch | `codex/manual-full-product-smoke-screen` |
+| Branch | `work` local Codex branch; intended workflow branch `SignalGrid_Alpha` |
 | Base context | PR #25 merged at `2026-06-23T14:13:05Z` with merge commit `6c9c94fec490f79ccdd5358a1b5003f9fcce004c` |
 | Risk lane | GREEN |
 | Scope | Documentation and results only |
@@ -23,8 +23,8 @@ This document records the Manual Full Product Smoke Screen phase run after the P
 | Confirm Connector Emulator Review Dashboard exists. | PASS | The Review Hub route includes a Connector Emulator section and the dedicated dashboard component documents fixture-backed connector scenarios and proof evidence. |
 | Confirm Credential Reader / Smart Locker Dashboard exists. | PASS | The Review Hub route includes a Credential Reader section and the dedicated dashboard component visualizes fixture-backed credential-reader and smart-locker scenarios. |
 | Confirm credential-reader story is visible. | PASS | The dashboard description and fixture data present the sequence: badge read → identity correlation → custody correlation → device/workflow context → decision → route owner → verification expectation. |
-| Confirm Connector Emulator Smoke workflow has a successful run. | LIMITED | No current post-PR #25 GitHub Actions run evidence was available in this docs-only correction. Local `pnpm run proof:connector-emulator` validates the same deterministic harness, but it is not a substitute for a current Connector Emulator Smoke workflow run. |
-| Confirm `connector-emulator-results` artifact exists or is documented from prior run. | PRIOR EVIDENCE ONLY | Historical evidence only: Connector Emulator Smoke run ID `27730655981`, artifact name `connector-emulator-results`, artifact digest `sha256:758c765c05a455105c560afb62667c1955f453bc4223c0455af0e2fb451e766c`. No current artifact ID, current artifact digest, or current artifact review was recorded for this pass. |
+| Confirm Connector Emulator Smoke workflow has a successful run. | LIMITED | Current workflow evidence remains owner-action blocked in this Codex environment: no GitHub remote is configured and the GitHub CLI is unavailable, so Codex could not trigger or inspect **Connector Emulator Smoke** on `SignalGrid_Alpha`. Local `pnpm run proof:connector-emulator` validates the same deterministic harness, but it is not a substitute for a current workflow run. |
+| Confirm `connector-emulator-results` artifact exists or is documented from prior run. | PRIOR EVIDENCE ONLY | Historical evidence only: Connector Emulator Smoke run ID `27730655981`, artifact name `connector-emulator-results`, artifact digest `sha256:758c765c05a455105c560afb62667c1955f453bc4223c0455af0e2fb451e766c`. No current artifact ID, current artifact digest, or current artifact review could be recorded because the current workflow run could not be triggered or inspected from this environment. |
 | Confirm proof commands are documented. | PASS | Proof and phase validation commands are documented in `docs/VALIDATION_COMMANDS.md` and referenced by Review Hub evidence panels. |
 | Confirm no live credentials, tenant IDs, PHI/PII, customer data, or production claims are introduced. | PASS | This pass adds documentation/results only and introduces no live integration, auth, secrets, tenant-specific values, customer data, PHI, PII, or production readiness claim. |
 | Confirm unsafe-claim scan passes. | PASS WITH NOTE | The denylist command completed successfully because it is intentionally run with `|| true`; it still reports pre-existing guardrail wording elsewhere in the repository for manual review. This pass does not add denylist-matching language. |
@@ -35,24 +35,34 @@ This document records the Manual Full Product Smoke Screen phase run after the P
 
 Result: **PASS WITH LIMITATIONS for the documentation-only smoke-screen pass**.
 
-The Review Hub story is connected end-to-end for documentation map, connector emulator proof surface, credential-reader and smart-locker visual story, deterministic local proof commands, phase gate, summary check, and unsafe-claim scan. The current smoke-screen pass is limited because it does not include current Connector Emulator Smoke workflow-run evidence or current `connector-emulator-results` artifact-review evidence. The pass did not add product scope, live integrations, live API calls, authentication, secrets, customer data, PHI/PII, production readiness assertions, compliance/certification assertions, partnership assertions, replacement assertions, or unsupervised production remediation assertions. The requested risk lane remains GREEN because the change set is docs/results only; the phase-gate tool still reports `phaseLane=YELLOW` for manual review because it scans existing repository guardrail language globally.
+The Review Hub story remains connected end-to-end for documentation map, connector emulator proof surface, credential-reader and smart-locker visual story, deterministic local proof commands, phase gate, summary check, and unsafe-claim scan. The current smoke-screen pass remains limited because this Codex environment cannot trigger or inspect the current Connector Emulator Smoke workflow run or current `connector-emulator-results` artifact-review evidence. The pass did not add product scope, live integrations, live API calls, authentication, secrets, customer data, PHI/PII, production readiness assertions, compliance/certification assertions, partnership assertions, replacement assertions, or unsupervised production remediation assertions. The requested risk lane remains GREEN because the change set is docs/results only; the phase-gate tool still reports `phaseLane=YELLOW` for manual review because it scans existing repository guardrail language globally.
 
 ## Workflow and artifact evidence
 
 | Evidence field | Value |
 | --- | --- |
-| Current GitHub Actions workflow name | Not recorded for this pass |
-| Current run ID | Not recorded for this pass |
-| Current run conclusion | Not recorded for this pass |
-| Current branch/SHA tested | Not recorded for this pass |
-| Current artifact name | Not recorded for this pass |
-| Current artifact ID | Not recorded for this pass |
-| Current artifact digest | Not recorded for this pass |
-| Current artifact review status | Not reviewed for this pass |
+| Current GitHub Actions workflow name | **Connector Emulator Smoke**; not run/verified in this environment |
+| Current run ID | Not recorded; owner action required |
+| Current run conclusion | Not recorded; owner action required |
+| Current branch/SHA tested | Intended branch `SignalGrid_Alpha`; head SHA not recorded because run could not be inspected |
+| Current artifact name | Expected `connector-emulator-results`; current artifact not recorded |
+| Current artifact ID | Not recorded; owner action required |
+| Current artifact digest | Not recorded; owner action required |
+| Current artifact review status | Not reviewed; owner action required |
 | Historical workflow run ID | `27730655981` |
 | Historical artifact name | `connector-emulator-results` |
 | Historical artifact digest | `sha256:758c765c05a455105c560afb62667c1955f453bc4223c0455af0e2fb451e766c` |
 | Historical evidence use | Reference only; not proof of the current post-PR #25 smoke-screen pass |
+
+## Owner action required for current workflow evidence
+
+Codex could not trigger the workflow directly in this environment because `gh` is not installed and this checkout has no Git remote configured. To complete the current evidence pass, the repository owner should run **Connector Emulator Smoke** from the GitHub Actions tab on branch `SignalGrid_Alpha` with `scenarioGroup=all`, or run the equivalent GitHub CLI command from an authenticated workstation:
+
+```bash
+gh workflow run connector-emulator-smoke.yml --repo DanFashauer/SignalGrid-Review-Hub --ref SignalGrid_Alpha -f scenarioGroup=all
+```
+
+After the run completes, record the run ID, conclusion, branch, head SHA, `connector-emulator-results` artifact name, artifact ID, artifact digest, and artifact review status. Only then should the Connector Emulator Smoke row, artifact row, and overall smoke-screen result move from limited/prior-evidence status to PASS.
 
 ## Validation log
 

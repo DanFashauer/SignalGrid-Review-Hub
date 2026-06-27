@@ -27,7 +27,7 @@ jobs:
     env:
       PORT: 3000
       BASE_PATH: /
-      SCENARIO_GROUP: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.scenarioGroup || 'all' }}
+      SELECTED_SCENARIO_GROUP: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.scenarioGroup || 'all' }}
       CONNECTOR_EMULATOR_ARTIFACT_NAME: connector-emulator-results
       CONNECTOR_EMULATOR_EVIDENCE_ARTIFACT_NAME: connector-emulator-smoke-evidence
     steps:
@@ -48,10 +48,12 @@ jobs:
       - name: Typecheck
         run: pnpm run typecheck
       - name: Connector emulator proof - all scenarios
-        if: ${{ env.SCENARIO_GROUP == 'all' }}
+        if: ${{ env.SELECTED_SCENARIO_GROUP == 'all' }}
         run: pnpm run proof:connector-emulator
       - name: Connector emulator proof - selected group
-        if: ${{ env.SCENARIO_GROUP != 'all' }}
+        if: ${{ env.SELECTED_SCENARIO_GROUP != 'all' }}
+        env:
+          SCENARIO_GROUP: ${{ env.SELECTED_SCENARIO_GROUP }}
         run: pnpm run proof:connector-emulator
       - name: Existing proof suite
         run: |
@@ -70,13 +72,13 @@ jobs:
             eventName: process.env.GITHUB_EVENT_NAME,
             branch: process.env.GITHUB_REF_NAME,
             headSha: process.env.GITHUB_SHA,
-            scenarioGroup: process.env.SCENARIO_GROUP || 'all',
+            scenarioGroup: process.env.SELECTED_SCENARIO_GROUP || 'all',
             artifactName: process.env.CONNECTOR_EMULATOR_ARTIFACT_NAME,
             evidenceArtifactName: process.env.CONNECTOR_EMULATOR_EVIDENCE_ARTIFACT_NAME,
             proofCommand:
-              process.env.SCENARIO_GROUP === 'all'
+              process.env.SELECTED_SCENARIO_GROUP === 'all'
                 ? 'pnpm run proof:connector-emulator'
-                : `SCENARIO_GROUP=${process.env.SCENARIO_GROUP} pnpm run proof:connector-emulator`,
+                : `SCENARIO_GROUP=${process.env.SELECTED_SCENARIO_GROUP} pnpm run proof:connector-emulator`,
             publicSafety: [
               'synthetic fixtures only',
               'no live vendor calls',

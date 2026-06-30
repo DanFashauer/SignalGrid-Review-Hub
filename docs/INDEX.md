@@ -55,6 +55,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Automation Phase Template](AUTOMATION_PHASE_TEMPLATE.md): provides the reusable Codex prompt for one scoped phase at a time.
 - [Manual full-product smoke screen](MANUAL_FULL_PRODUCT_SMOKE_SCREEN.md): outlines future manual Review Hub smoke-screen steps and pass/fail notes.
 - [Manual full-product smoke screen results](MANUAL_FULL_PRODUCT_SMOKE_SCREEN_RESULTS.md): records the current full-product smoke-screen pass, evidence, validation, and follow-up phases.
+- [Post-merge connector smoke evidence automation](POST_MERGE_CONNECTOR_SMOKE_EVIDENCE.md): explains the automatic Connector Emulator Smoke run and evidence manifest after merges to `SignalGrid_Alpha`.
 - [Mobile-first Codex workflow](MOBILE_CODEX_WORKFLOW.md): explains the iPhone-first Codex Web → PR → CI → review → GitHub Mobile merge loop.
 - [Codex task template](CODEX_TASK_TEMPLATE.md): provides a reusable prompt structure for focused Cloud Codex tasks.
 - [Validation commands](VALIDATION_COMMANDS.md): lists the standard install, typecheck, build, proof, unsafe-claim scan, and diff hygiene commands.

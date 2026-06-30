@@ -58,3 +58,6 @@ Thumbs.db
 
 # generated proof evidence
 /artifacts/proof/
+
+# generated phase PR reports
+/artifacts/phase-pr-report/

@@ -16,7 +16,9 @@
     "proof:connector-emulator": "pnpm --filter @workspace/scripts run proof:connector-emulator",
     "smoke:connector-emulator": "pnpm run proof:connector-emulator",
     "phase:gate": "pnpm --filter @workspace/scripts run phase:gate",
-    "phase:summary-check": "pnpm --filter @workspace/scripts run phase:summary-check"
+    "phase:summary-check": "pnpm --filter @workspace/scripts run phase:summary-check",
+    "phase:pr-report": "pnpm --filter @workspace/scripts run phase:pr-report",
+    "autopilot:backlog-check": "pnpm --filter @workspace/scripts run autopilot:backlog-check"
   },
   "private": true,
   "devDependencies": {

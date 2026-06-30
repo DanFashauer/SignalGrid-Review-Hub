@@ -48,6 +48,12 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 ## Review workflow
 
 - [Repository agent instructions](../AGENTS.md): defines Codex guardrails, public-safety rules, PR validation commands, and review guidelines.
+- [SignalGrid Autopilot Control Plane](SIGNALGRID_AUTOPILOT_CONTROL_PLANE.md): defines the one-input-to-one-phase automation model, bot roles, risk lanes, evidence requirements, and owner boundaries.
+- [Autopilot Intake Bot](AUTOPILOT_INTAKE_BOT.md): classifies screenshots, links, findings, PR summaries, and market notes into backlog-ready categories.
+- [Phase PR Evidence Bot](PHASE_PR_EVIDENCE_BOT.md): documents compact PR evidence reports and artifact upload behavior.
+- [Autopilot Backlog Curator](AUTOPILOT_BACKLOG_CURATOR.md): explains backlog integrity checks and next-phase recommendation behavior.
+- [Autopilot Command Guide](AUTOPILOT_COMMAND_GUIDE.md): defines short future user commands such as `@GitHub PR #__`, workflow run inspection, new input classification, pitch-pack refresh, and smoke-test review.
+
 - [Phase Automation Orchestrator](PHASE_AUTOMATION_ORCHESTRATOR.md): defines the input → classify → backlog → scoped PR → validation → review → merge-lane loop.
 - [Phase Backlog](PHASE_BACKLOG.md): tracks seeded and future scoped phases, classifications, risk lanes, dependencies, and validation.
 - [Intake Classification Guide](INTAKE_CLASSIFICATION_GUIDE.md): classifies new inputs into product, signal, connector, UI, proof, automation, platform, maintenance, blocked, or parking-lot categories.
@@ -61,3 +67,10 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Validation commands](VALIDATION_COMMANDS.md): lists the standard install, typecheck, build, proof, unsafe-claim scan, and diff hygiene commands.
 - [CI and validation](CI_AND_VALIDATION.md): explains Review Hub CI, required local checks, docs sanity checks, and future branch-protection expectations.
 - [Review checklist](REVIEW_CHECKLIST.md): questions for reviewers, design partners, and advisors.
+
+
+## Buyer, partner, and testing readiness
+
+- [Buyer / Partner Readiness Pack](BUYER_PARTNER_READINESS_PACK.md): packages validated public state for buyer, partner, investor, and design-partner conversations without unsupported claims.
+- [Founder Strategic Options](FOUNDER_STRATEGIC_OPTIONS.md): frames founder-control, partnership, investment, OEM, acquisition, and buyout paths as business-strategy options only.
+- [Real-World Testing Readiness Plan](REAL_WORLD_TESTING_READINESS_PLAN.md): stages Review Hub readiness from synthetic proof through limited pilot boundaries without adding live testing implementation.

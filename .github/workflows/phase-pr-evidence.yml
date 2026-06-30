@@ -1,0 +1,48 @@
+name: Phase PR Evidence
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  phase-pr-evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.1
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run phase gate
+        run: pnpm run phase:gate
+
+      - name: Run phase summary check
+        run: pnpm run phase:summary-check
+
+      - name: Generate phase report
+        run: pnpm run phase:pr-report
+
+      - name: Upload phase report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-pr-report
+          path: artifacts/phase-pr-report/

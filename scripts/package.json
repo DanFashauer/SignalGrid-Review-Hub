@@ -13,7 +13,9 @@
     "proof:connector-emulator": "tsx ./src/connector-emulator-proof.ts",
     "smoke:connector-emulator": "pnpm run proof:connector-emulator",
     "phase:gate": "tsx ./src/phase-gate.ts",
-    "phase:summary-check": "tsx ./src/phase-summary-check.ts"
+    "phase:summary-check": "tsx ./src/phase-summary-check.ts",
+    "phase:pr-report": "tsx ./src/phase-pr-report.ts",
+    "autopilot:backlog-check": "tsx ./src/autopilot-backlog-check.ts"
   },
   "dependencies": {
     "@workspace/signalgrid-simulator": "workspace:*"

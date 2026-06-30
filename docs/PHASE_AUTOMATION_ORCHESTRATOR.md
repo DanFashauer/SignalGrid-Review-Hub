@@ -44,8 +44,10 @@ Input
 
 The backlog is seeded with public-safe observations from recent work: rf IDEAS-style credential-reader patterns, LocknCharge/FUYL-shaped smart-locker identity and custody workflows, Apple open-source platform strategy, GitHub Actions Node 20/Node 24 maintenance warnings, Connector Emulator Smoke workflow success, and a future manual full-product smoke screen.
 
+## Autopilot extension
+
+The SignalGrid Autopilot Control Plane extends this loop so the user can hand off a PR number, workflow URL, screenshot, link, or short command instead of a long Codex summary. The Autopilot layer is documented in `docs/SIGNALGRID_AUTOPILOT_CONTROL_PLANE.md`, with intake classification in `docs/AUTOPILOT_INTAKE_BOT.md`, PR evidence reporting in `docs/PHASE_PR_EVIDENCE_BOT.md`, backlog checks in `docs/AUTOPILOT_BACKLOG_CURATOR.md`, and command syntax in `docs/AUTOPILOT_COMMAND_GUIDE.md`.
+
 ## Next recommended phase
 
-**Add Credential Reader Signal Model** is the next recommended implementation phase after this PR.
-
-That future phase should use rf IDEAS-style badge and credential reader signals plus LocknCharge/FUYL-shaped smart locker identity/custody workflows as public-safe signal patterns. It must not claim live integration, partnership, certification, or production support.
+The next recommended implementation phase should come from the highest-priority eligible backlog item after the Autopilot Control Plane lands. Live-integration ideas remain parked until owner approval and a safe private-test context exist.

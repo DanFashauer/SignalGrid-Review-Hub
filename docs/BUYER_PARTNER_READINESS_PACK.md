@@ -4,6 +4,8 @@ SignalGrid is an operational trust orchestration layer that connects identity, d
 
 ## Product thesis
 
+SignalGrid is operational trust orchestration for shared, mobile, and frontline environments.
+
 Shared, mobile, and frontline environments fail when identity, device, custody, network, and workflow signals remain separated. SignalGrid normalizes those signals, decides outcomes, routes approved actions, audits events, and verifies expected results while existing enterprise systems remain systems of record.
 
 ## Current validated proof assets
@@ -13,6 +15,10 @@ Shared, mobile, and frontline environments fail when identity, device, custody, 
 - SignalGrid grid proof for Review Hub evidence.
 - Microsoft Graph sandbox proof with fixture-backed boundaries.
 - Connector emulator proof for synthetic cloud, custody, routing, and network scenarios.
+- Connector Emulator Harness and Connector Emulator Review Dashboard.
+- Credential Reader Signal Model and Credential Reader / Smart Locker dashboard narrative.
+- Phase Automation Orchestrator and Autopilot Control Plane.
+- Connector Emulator Smoke evidence and synthetic proof harnesses.
 
 ## Demo assets
 
@@ -31,6 +37,11 @@ Shared, mobile, and frontline environments fail when identity, device, custody, 
 - ITSM/SOAR/workflow vendors
 - healthcare IT integrators
 - non-human identity / identity governance companies
+- frontline operations platforms
+
+## Strategic pitch pack
+
+The companion [Strategic Buyer / Partner Pitch Pack](STRATEGIC_BUYER_PARTNER_PITCH_PACK.md) contains the one-page positioning, target-category map, strategic paths, founder-control preference, demo narrative, outreach drafts, and guardrails for factual strategic conversations.
 
 ## Partnership path
 

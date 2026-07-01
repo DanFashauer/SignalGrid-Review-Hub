@@ -73,6 +73,17 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 
 - [Buyer / Partner Readiness Pack](BUYER_PARTNER_READINESS_PACK.md): packages validated public state for buyer, partner, investor, and design-partner conversations without unsupported claims.
 - [Strategic Buyer / Partner Pitch Pack](STRATEGIC_BUYER_PARTNER_PITCH_PACK.md): provides the one-page positioning, demo narrative, outreach scaffolds, target-category map, strategic paths, founder-control preference, and public-safety guardrails for factual strategic conversations.
+- [Pitch Execution Pack](PITCH_EXECUTION_PACK.md): organizes outbound-ready pitch materials from the merged strategic pack.
+- [Executive One-Pager](EXECUTIVE_ONE_PAGER.md): gives a concise buyer-facing summary of SignalGrid, current proof status, synthetic boundaries, and non-claims.
+- [Outreach Email Templates](OUTREACH_EMAIL_TEMPLATES.md): provides short editable drafts for strategic partners, design partners, investors/acquirers, healthcare/shared-device workflow companies, credential-reader / locker / custody hardware companies, and identity / MDM / UEM companies.
+- [First-Call Talk Track](FIRST_CALL_TALK_TRACK.md): provides the opener, problem framing, product framing, proof/demo sequence, partnership/acquisition path, founder-control preference, and next ask.
+- [Demo Script for Partners](DEMO_SCRIPT_FOR_PARTNERS.md): defines a public-safe walkthrough using the Review Hub, Connector Emulator Dashboard, Credential Reader / Smart Locker Dashboard, Connector Emulator Smoke evidence, Autopilot Control Plane, and Strategic Buyer / Partner Pitch Pack.
+- [Diligence Checklist](DILIGENCE_CHECKLIST.md): lists proof assets, docs to send, questions to ask, technical validation next steps, business/control terms, and guardrails.
+- [Social Media Pre-Announcement Packet](SOCIAL_MEDIA_PREANNOUNCEMENT_PACKET.md): packages founder-led pre-announcement/category-building copy and sequencing.
+- [LinkedIn Post Drafts](LINKEDIN_POST_DRAFTS.md): provides LinkedIn-ready founder, problem, shared-device, frontline, architecture, partner, proof, and soft-CTA drafts.
+- [Social Platform Message Variants](SOCIAL_PLATFORM_MESSAGE_VARIANTS.md): provides shorter X/Twitter-style, email, partner DM, website hero, and pinned-profile variants.
+- [Social Visual Concepts](SOCIAL_VISUAL_CONCEPTS.md): defines minimal enterprise visual ideas for fragmented signals, decision flow, shared-device context, and systems-of-record architecture.
+- [Public Messaging Guardrails](PUBLIC_MESSAGING_GUARDRAILS.md): lists public phrases to avoid, safer alternatives, safe framing patterns, and a pre-post checklist.
 - [Pitch Target Categories](PITCH_TARGET_CATEGORIES.md): groups potential buyer, partner, investor, and design-partner audiences by category without company-specific claims.
 - [Partnership and Acquisition Paths](PARTNERSHIP_AND_ACQUISITION_PATHS.md): frames design-partner, OEM, investment, acquisition-with-founder-leadership, and last-option full-buyout paths.
 - [Founder Strategic Options](FOUNDER_STRATEGIC_OPTIONS.md): frames founder-control, partnership, investment, OEM, acquisition, and buyout paths as business-strategy options only.

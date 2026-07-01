@@ -39,9 +39,9 @@ Shared, mobile, and frontline environments fail when identity, device, custody, 
 - non-human identity / identity governance companies
 - frontline operations platforms
 
-## Strategic pitch pack
+## Strategic pitch and execution packs
 
-The companion [Strategic Buyer / Partner Pitch Pack](STRATEGIC_BUYER_PARTNER_PITCH_PACK.md) contains the one-page positioning, target-category map, strategic paths, founder-control preference, demo narrative, outreach drafts, and guardrails for factual strategic conversations.
+The companion [Strategic Buyer / Partner Pitch Pack](STRATEGIC_BUYER_PARTNER_PITCH_PACK.md) contains the one-page positioning, target-category map, strategic paths, founder-control preference, demo narrative, outreach drafts, and guardrails for factual strategic conversations. The [Pitch Execution Pack](PITCH_EXECUTION_PACK.md) turns that strategy into outbound-ready materials: an executive one-pager, audience-specific outreach drafts, a first-call talk track, a partner demo script, and a diligence checklist. The [Social Media Pre-Announcement Packet](SOCIAL_MEDIA_PREANNOUNCEMENT_PACKET.md) supports founder-led category education and market curiosity without treating the work as a launch, partnership, funding, customer, production, certification, or compliance announcement.
 
 ## Partnership path
 

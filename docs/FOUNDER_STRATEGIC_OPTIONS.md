@@ -24,6 +24,12 @@ Consider strategic acquisition only if product leadership, public-safety discipl
 
 Treat a full buyout as a final option when creative-control requirements, product continuity, and founder outcomes are explicitly resolved.
 
+## Founder / CEO control preference
+
+The preferred path is strategic partnership, investment, or an acquisition structure with the founder remaining in CEO, product leadership, or creative-control role where possible. A full buyout is not the default preferred path, and this document makes no valuation, legal, financial, or transaction guarantee claims.
+
+See [Founder Control Requirements](FOUNDER_CONTROL_REQUIREMENTS.md) for the working conversation filter.
+
 ## Creative-control requirements
 
 - Preserve the orchestration thesis.

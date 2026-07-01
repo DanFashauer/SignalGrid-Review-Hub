@@ -72,5 +72,9 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 ## Buyer, partner, and testing readiness
 
 - [Buyer / Partner Readiness Pack](BUYER_PARTNER_READINESS_PACK.md): packages validated public state for buyer, partner, investor, and design-partner conversations without unsupported claims.
+- [Strategic Buyer / Partner Pitch Pack](STRATEGIC_BUYER_PARTNER_PITCH_PACK.md): provides the one-page positioning, demo narrative, outreach scaffolds, target-category map, strategic paths, founder-control preference, and public-safety guardrails for factual strategic conversations.
+- [Pitch Target Categories](PITCH_TARGET_CATEGORIES.md): groups potential buyer, partner, investor, and design-partner audiences by category without company-specific claims.
+- [Partnership and Acquisition Paths](PARTNERSHIP_AND_ACQUISITION_PATHS.md): frames design-partner, OEM, investment, acquisition-with-founder-leadership, and last-option full-buyout paths.
 - [Founder Strategic Options](FOUNDER_STRATEGIC_OPTIONS.md): frames founder-control, partnership, investment, OEM, acquisition, and buyout paths as business-strategy options only.
+- [Founder Control Requirements](FOUNDER_CONTROL_REQUIREMENTS.md): records founder CEO/product/creative-control preferences and conversation filters without legal or financial guarantees.
 - [Real-World Testing Readiness Plan](REAL_WORLD_TESTING_READINESS_PLAN.md): stages Review Hub readiness from synthetic proof through limited pilot boundaries without adding live testing implementation.

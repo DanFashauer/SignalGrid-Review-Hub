@@ -69,3 +69,17 @@ Use the companion docs as the working packet:
 ## Founder tone
 
 Keep the tone serious, founder-led, enterprise-grade, confident, and plain-spoken. Avoid hype-heavy claims, buzzword stuffing, exaggerated urgency, and any implication that the public Review Hub is a production product.
+
+## Level 10 two-week sequence addendum
+
+| Day | Theme | Asset |
+|---:|---|---|
+| 1 | Founder teaser | LinkedIn founder teaser |
+| 3 | Category problem | LinkedIn problem post |
+| 5 | Shared-device/frontline | LinkedIn frontline post |
+| 8 | Architecture education | LinkedIn architecture post |
+| 10 | Buyer/partner lens | LinkedIn buyer/partner post |
+| 12 | Short-form variants | X/Twitter sequence and partner DM |
+| 14 | Website/profile refresh | Hero teaser and pinned blurb |
+
+Pre-post approval remains required for public messaging tone, category education posture, and avoiding launch, production, compliance, partnership, customer, funding, valuation, or replacement claims.

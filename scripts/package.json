@@ -15,7 +15,8 @@
     "phase:gate": "tsx ./src/phase-gate.ts",
     "phase:summary-check": "tsx ./src/phase-summary-check.ts",
     "phase:pr-report": "tsx ./src/phase-pr-report.ts",
-    "autopilot:backlog-check": "tsx ./src/autopilot-backlog-check.ts"
+    "autopilot:backlog-check": "tsx ./src/autopilot-backlog-check.ts",
+    "level10:audit": "tsx ./src/level-10-audit.ts"
   },
   "dependencies": {
     "@workspace/signalgrid-simulator": "workspace:*"

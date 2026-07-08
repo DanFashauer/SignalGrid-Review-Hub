@@ -61,3 +61,6 @@ Thumbs.db
 
 # generated phase PR reports
 /artifacts/phase-pr-report/
+
+# generated Level 10 audit scorecards
+/artifacts/level-10/

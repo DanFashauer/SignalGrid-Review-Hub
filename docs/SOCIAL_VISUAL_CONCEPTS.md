@@ -66,3 +66,7 @@ IAM / MDM-UEM / Readers-Lockers / Network / ITSM / SIEM
 Place "SignalGrid operational trust orchestration" above them as a neutral orchestration layer. Add arrows upward for signals and downward for approval-required routes or evidence expectations, not direct production actions.
 
 Public-safe note: label all systems generically and avoid implying current integrations, partnerships, or replacement.
+
+## Level 10 visual concepts addendum
+
+Use visuals for a signal-to-evidence map, frontline trust timeline, shared-device custody card, Level 10 architecture room, and guardrail badge set: fixture-backed, deterministic, approval-gated, public-safe, no live writes.

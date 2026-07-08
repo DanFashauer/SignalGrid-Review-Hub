@@ -23,6 +23,6 @@ This matrix scores public-safe readiness for SignalGrid Review Hub. Level 10 mea
 
 ## Overall Level 10 score
 
-- Current average: **7.8 / 10**.
-- Target average for public-safe Level 10: **9.5 / 10**.
+- Current scored average: **7.69 / 10**.
+- Target scored average: **10 / 10** across the matrix, with **9.5 / 10** as the practical readiness threshold for public-safe Level 10 review.
 - Merge lane for this pass: **YELLOW** because it packages strategic, public, and testing-readiness material while preserving public-safe boundaries.

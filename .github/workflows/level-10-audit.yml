@@ -24,6 +24,7 @@ jobs:
       - run: pnpm run typecheck
       - run: pnpm run proof:connector-emulator
       - run: pnpm run phase:gate
+      - run: pnpm run phase:summary-check
       - run: pnpm run phase:pr-report
       - run: pnpm run autopilot:backlog-check
       - run: pnpm run level10:audit

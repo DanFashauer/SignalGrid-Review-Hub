@@ -1,7 +1,27 @@
+import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 type Score = { area: string; current: number; target: number; riskLane: string };
+
+const expectedAreas = [
+  'Product definition',
+  'Architecture clarity',
+  'Demo flow',
+  'Connector emulator proof',
+  'Credential-reader / smart-locker proof',
+  'Review Hub UI/demo readiness',
+  'Automation / Autopilot',
+  'Smoke evidence',
+  'Pitch readiness',
+  'Social/preannouncement readiness',
+  'Buyer/partner readiness',
+  'Founder strategy',
+  'Real-world testing readiness',
+  'Public-safety guardrails',
+  'Documentation navigation',
+  'Next-phase clarity',
+];
 
 const repoRoot = process.env.INIT_CWD ?? path.resolve(process.cwd(), '..');
 const matrixPath = path.join(repoRoot, 'docs', 'LEVEL_10_COMPLETION_MATRIX.md');
@@ -29,6 +49,13 @@ if (scores.length === 0) {
   throw new Error(`No Level 10 scores found in ${matrixPath}`);
 }
 
+const missingAreas = expectedAreas.filter((area) => !scores.some((score) => score.area === area));
+if (missingAreas.length > 0) {
+  throw new Error(`Level 10 matrix is missing required areas: ${missingAreas.join(', ')}`);
+}
+
+const sourceHash = createHash('sha256').update(markdown).digest('hex');
+
 const currentAverage = Number((scores.reduce((sum, score) => sum + score.current, 0) / scores.length).toFixed(2));
 const targetAverage = Number((scores.reduce((sum, score) => sum + score.target, 0) / scores.length).toFixed(2));
 const gaps = scores
@@ -36,8 +63,9 @@ const gaps = scores
   .sort((a, b) => b.gap - a.gap || a.area.localeCompare(b.area));
 
 const scorecard = {
-  generatedAt: new Date().toISOString(),
+  generatedAt: 'deterministic-from-source',
   source: 'docs/LEVEL_10_COMPLETION_MATRIX.md',
+  sourceHash,
   publicSafety: {
     liveIntegrations: false,
     liveApiCalls: false,
@@ -56,6 +84,7 @@ const text = [
   '=============================',
   `Source: ${scorecard.source}`,
   `Generated: ${scorecard.generatedAt}`,
+  `Source hash: ${scorecard.sourceHash}`,
   `Areas scored: ${scorecard.areaCount}`,
   `Current average: ${currentAverage}/10`,
   `Target average: ${targetAverage}/10`,

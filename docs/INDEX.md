@@ -59,6 +59,17 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Partner and alliance strategy](PARTNER_AND_ALLIANCE_STRATEGY.md): frames ecosystem paths without claiming current partnerships or certifications.
 - [Production path](PRODUCTION_PATH.md): defines conservative gates from public strategy to private-core proof and eventual production readiness.
 
+
+## v0.2 investor / design-partner product foundation
+
+- [SignalGrid v0.2 Readiness Plan](SIGNALGRID_V0_2_READINESS_PLAN.md): defines the product reality statement, staged readiness model, target architecture, guardrails, and next recommended engineering phase.
+- [v0.2 Epic Backlog](V0_2_EPIC_BACKLOG.md): converts the readiness plan into scoped future engineering epics with acceptance criteria, risk lanes, sequences, and dependencies.
+- [Microsoft Connector First Path](MICROSOFT_CONNECTOR_FIRST_PATH.md): documents the read-only, sandbox/mock-first Entra ID and Intune connector path with normalized posture signals and non-goals.
+- [Secure Tenancy Foundation Plan](SECURE_TENANCY_FOUNDATION_PLAN.md): defines tenant-aware data access, authorization, RBAC, audit, rate limiting, validation, and PII-safe logging requirements.
+- [Pilot Readiness Criteria](PILOT_READINESS_CRITERIA.md): lists paid-pilot prerequisites, private-context controls, and customer success criteria.
+- [Product Reality Checklist](PRODUCT_REALITY_CHECKLIST.md): keeps v0.2 focused on one workflow, one decision loop, one connector path, one tenant model, one pilot story, and one investor narrative.
+- [Investor / Design-Partner Readiness](INVESTOR_DESIGN_PARTNER_READINESS.md): outlines the package requirements and public-safe narrative for design-partner and investor conversations.
+
 ## Review workflow
 
 - [Repository agent instructions](../AGENTS.md): defines Codex guardrails, public-safety rules, PR validation commands, and review guidelines.

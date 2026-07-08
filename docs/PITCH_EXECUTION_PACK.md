@@ -42,3 +42,7 @@ Current proof is synthetic and fixture-backed. Live integrations require separat
 ## Merge lane
 
 This is a GREEN docs-only pitch execution phase as long as it changes documentation only and does not add scripts, workflows, dashboards, fixtures, live integrations, auth, customer data, PHI/PII, financial promises, valuation claims, legal claims, production readiness claims, certification claims, partnership claims, or acquisition claims.
+
+## Level 10 execution addendum
+
+For the Level 10 Autopilot Completion Program, use the executive one-pager, founder email, strategic partner email, design partner email, investor/acquirer intro email, first-call talk track, partner demo script, diligence checklist, founder-control preference, partner/acquirer questions, pre-call send list, and what-not-to-claim guardrails as the default pitch sequence. Keep all outreach public-safe and evidence-backed.

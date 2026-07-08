@@ -64,3 +64,7 @@ Before publishing, confirm the copy:
 - Avoids customer data, tenant IDs, PHI, PII, screenshots from private systems, and live integration details.
 - Keeps existing systems as systems of record.
 - Asks for comparison notes or design-partner conversations rather than implying sales availability.
+
+## Level 10 messaging guardrails addendum
+
+Safe language includes public-safe review hub, deterministic proof evidence, fixture-backed scenarios, approval-gated recommendations, existing systems remain systems of record, and preparing for controlled sandbox/design-partner validation. Block production readiness, certification, endorsement, live customer deployment, autonomous production remediation, acquisition/investment outcome, revenue, valuation, legal terms, or replacement claims.

@@ -1,0 +1,148 @@
+{
+  "generatedAt": "2026-07-04T01:59:47.426Z",
+  "source": "docs/LEVEL_10_COMPLETION_MATRIX.md",
+  "publicSafety": {
+    "liveIntegrations": false,
+    "liveApiCalls": false,
+    "secretsRequired": false,
+    "productionActions": false
+  },
+  "currentAverage": 7.69,
+  "targetAverage": 10,
+  "areaCount": 16,
+  "scores": [
+    {
+      "area": "Product definition",
+      "current": 8,
+      "target": 10,
+      "riskLane": "GREEN"
+    },
+    {
+      "area": "Architecture clarity",
+      "current": 8,
+      "target": 10,
+      "riskLane": "YELLOW"
+    },
+    {
+      "area": "Demo flow",
+      "current": 7,
+      "target": 10,
+      "riskLane": "YELLOW"
+    },
+    {
+      "area": "Connector emulator proof",
+      "current": 9,
+      "target": 10,
+      "riskLane": "GREEN"
+    },
+    {
+      "area": "Credential-reader / smart-locker proof",
+      "current": 8,
+      "target": 10,
+      "riskLane": "YELLOW"
+    },
+    {
+      "area": "Review Hub UI/demo readiness",
+      "current": 7,
+      "target": 10,
+      "riskLane": "YELLOW"
+    },
+    {
+      "area": "Automation / Autopilot",
+      "current": 8,
+      "target": 10,
+      "riskLane": "YELLOW"
+    },
+    {
+      "area": "Smoke evidence",
+      "current": 8,
+      "target": 10,
+      "riskLane": "GREEN"
+    },
+    {
+      "area": "Pitch readiness",
+      "current": 8,
+      "target": 10,
+      "riskLane": "YELLOW"
+    },
+    {
+      "area": "Social/preannouncement readiness",
+      "current": 6,
+      "target": 10,
+      "riskLane": "YELLOW"
+    },
+    {
+      "area": "Buyer/partner readiness",
+      "current": 8,
+      "target": 10,
+      "riskLane": "YELLOW"
+    },
+    {
+      "area": "Founder strategy",
+      "current": 8,
+      "target": 10,
+      "riskLane": "YELLOW"
+    },
+    {
+      "area": "Real-world testing readiness",
+      "current": 7,
+      "target": 10,
+      "riskLane": "YELLOW/RED"
+    },
+    {
+      "area": "Public-safety guardrails",
+      "current": 9,
+      "target": 10,
+      "riskLane": "GREEN"
+    },
+    {
+      "area": "Documentation navigation",
+      "current": 7,
+      "target": 10,
+      "riskLane": "GREEN"
+    },
+    {
+      "area": "Next-phase clarity",
+      "current": 7,
+      "target": 10,
+      "riskLane": "GREEN"
+    }
+  ],
+  "largestGaps": [
+    {
+      "area": "Social/preannouncement readiness",
+      "current": 6,
+      "target": 10,
+      "riskLane": "YELLOW",
+      "gap": 4
+    },
+    {
+      "area": "Demo flow",
+      "current": 7,
+      "target": 10,
+      "riskLane": "YELLOW",
+      "gap": 3
+    },
+    {
+      "area": "Documentation navigation",
+      "current": 7,
+      "target": 10,
+      "riskLane": "GREEN",
+      "gap": 3
+    },
+    {
+      "area": "Next-phase clarity",
+      "current": 7,
+      "target": 10,
+      "riskLane": "GREEN",
+      "gap": 3
+    },
+    {
+      "area": "Real-world testing readiness",
+      "current": 7,
+      "target": 10,
+      "riskLane": "YELLOW/RED",
+      "gap": 3
+    }
+  ]
+}

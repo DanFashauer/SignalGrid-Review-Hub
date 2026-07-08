@@ -292,3 +292,11 @@ Send a note if this problem sounds familiar.
 ### Risk notes / words to avoid
 
 Avoid sales launch, customer availability, production-ready, funding announcement, acquisition announcement, or partnership announcement language.
+
+## Level 10 LinkedIn draft set addendum
+
+- Founder teaser: Something important is coming: a clearer public-safe way to explain frontline trust decisions, approval paths, and evidence timelines.
+- Problem post: Enterprise teams do not lack tools; they lack shared evidence across identity, device, workflow, custody, approvals, and verification.
+- Shared-device/frontline post: Shared-device environments need clearer answers to who had the device, what workflow was active, and which signals disagreed.
+- Architecture post: Normalize signals, decide outcomes, route approved actions, audit the event, and verify expected results.
+- Buyer/partner post: SignalGrid materials are being packaged for deterministic proof review, partner-fit conversations, and responsible design-partner validation.

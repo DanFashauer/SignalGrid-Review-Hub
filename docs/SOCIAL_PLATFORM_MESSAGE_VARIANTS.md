@@ -33,3 +33,10 @@ SignalGrid is exploring operational trust orchestration: connecting identity, de
 ## Pinned LinkedIn profile blurb
 
 Building SignalGrid: exploring operational trust orchestration for shared-device, mobile, and frontline enterprise environments. Pre-announcement, fixture-backed, public-safe, and focused on the question existing systems rarely answer together: what should happen next?
+
+## Level 10 short variants addendum
+
+- X/Twitter: Something important is coming: explainable frontline trust decisions without replacing systems of record.
+- Partner DM: Open to a short fit call around public-safe SignalGrid demo evidence for identity, endpoint, workflow, shared-device, healthcare operations, or automation categories?
+- Website hero teaser: SignalGrid is a public-safe review hub for normalized signals, approval-gated recommendations, audit evidence, and verification timelines.
+- Pinned blurb: Building SignalGrid: public-safe review and validation for frontline trust, shared-device workflows, signal normalization, approvals, audit evidence, and verification.

@@ -2,6 +2,20 @@
 
 This documentation set explains SignalGrid's public pre-production and post-launch review strategy while keeping the protected core foundation private.
 
+
+## Where to start for Level 10 review
+
+- [Executive One-Pager](EXECUTIVE_ONE_PAGER.md): quickest buyer/partner/founder overview.
+- [Strategic Buyer / Partner Pitch Pack](STRATEGIC_BUYER_PARTNER_PITCH_PACK.md): strategic narrative and positioning.
+- [Level 10 Completion Matrix](LEVEL_10_COMPLETION_MATRIX.md): readiness scores, evidence, gaps, owners, and risk lanes.
+- [Level 10 Autopilot Runbook](LEVEL_10_AUTOPILOT_RUNBOOK.md): hands-off one-input-to-one-phase operating model.
+- [Pitch Execution Pack](PITCH_EXECUTION_PACK.md): outbound call materials, email templates, and diligence flow.
+- [Social Media Preannouncement Packet](SOCIAL_MEDIA_PREANNOUNCEMENT_PACKET.md): public-safe founder/category-building sequence.
+- [Real-World Testing Readiness Plan](REAL_WORLD_TESTING_READINESS_PLAN.md): staged path from synthetic proof to controlled private validation.
+- [Company Operating Pack](COMPANY_OPERATING_PACK.md): founder-control strategy and strategic options.
+- [Target Buyer / Partner Matrix](TARGET_BUYER_PARTNER_MATRIX.md): category-based target map without unsupported named-company claims.
+- [Demo and Simulation Expansion Plan](DEMO_AND_SIMULATION_EXPANSION_PLAN.md): next demo-room plan and UI follow-up boundary.
+
 ## Core orientation
 
 - [Repository lineage](REPO_LINEAGE.md): explains the public/private repository split and what belongs in each repository.
@@ -89,3 +103,11 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Founder Strategic Options](FOUNDER_STRATEGIC_OPTIONS.md): frames founder-control, partnership, investment, OEM, acquisition, and buyout paths as business-strategy options only.
 - [Founder Control Requirements](FOUNDER_CONTROL_REQUIREMENTS.md): records founder CEO/product/creative-control preferences and conversation filters without legal or financial guarantees.
 - [Real-World Testing Readiness Plan](REAL_WORLD_TESTING_READINESS_PLAN.md): stages Review Hub readiness from synthetic proof through limited pilot boundaries without adding live testing implementation.
+- [Real-World Testing Checklist](REAL_WORLD_TESTING_CHECKLIST.md): operational checklist for staged validation readiness.
+- [Sandbox Validation Requirements](SANDBOX_VALIDATION_REQUIREMENTS.md): guardrails before any private sandbox scope.
+- [Design Partner Readiness](DESIGN_PARTNER_READINESS.md): dry-run criteria and agenda for design-partner conversations.
+- [Company Operating Pack](COMPANY_OPERATING_PACK.md): founder/company operating paths and non-legal strategic framing.
+- [Founder Role and Control Strategy](FOUNDER_ROLE_AND_CONTROL_STRATEGY.md): founder/CEO and retained product leadership preference.
+- [Strategic Options Decision Tree](STRATEGIC_OPTIONS_DECISION_TREE.md): planning tree for design partner, investment, OEM, acquisition, and last-option buyout paths.
+- [Target Buyer / Partner Matrix](TARGET_BUYER_PARTNER_MATRIX.md): category-based buyer and partner matrix.
+- [Demo and Simulation Expansion Plan](DEMO_AND_SIMULATION_EXPANSION_PLAN.md): docs-first Level 10 demo expansion plan.

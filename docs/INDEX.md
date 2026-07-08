@@ -2,7 +2,6 @@
 
 This documentation set explains SignalGrid's public pre-production and post-launch review strategy while keeping the protected core foundation private.
 
-
 ## Where to start for Level 10 review
 
 - [Executive One-Pager](EXECUTIVE_ONE_PAGER.md): quickest buyer/partner/founder overview.
@@ -59,7 +58,6 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Partner and alliance strategy](PARTNER_AND_ALLIANCE_STRATEGY.md): frames ecosystem paths without claiming current partnerships or certifications.
 - [Production path](PRODUCTION_PATH.md): defines conservative gates from public strategy to private-core proof and eventual production readiness.
 
-
 ## v0.2 investor / design-partner product foundation
 
 - [SignalGrid v0.2 Readiness Plan](SIGNALGRID_V0_2_READINESS_PLAN.md): defines the product reality statement, staged readiness model, target architecture, guardrails, and next recommended engineering phase.
@@ -74,6 +72,8 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 
 - [Repository agent instructions](../AGENTS.md): defines Codex guardrails, public-safety rules, PR validation commands, and review guidelines.
 - [SignalGrid Autopilot Control Plane](SIGNALGRID_AUTOPILOT_CONTROL_PLANE.md): defines the one-input-to-one-phase automation model, bot roles, risk lanes, evidence requirements, and owner boundaries.
+- [SignalGrid Autopilot Evidence Bot](SIGNALGRID_AUTOPILOT_EVIDENCE_BOT.md): documents the full deterministic validation workflow, sanitized evidence artifacts, and PR comment behavior.
+- [One-Step Codex Autopilot Runbook](ONE_STEP_CODEX_AUTOPILOT_RUNBOOK.md): defines what the owner command `Build next phase` does and does not authorize.
 - [Autopilot Intake Bot](AUTOPILOT_INTAKE_BOT.md): classifies screenshots, links, findings, PR summaries, and market notes into backlog-ready categories.
 - [Phase PR Evidence Bot](PHASE_PR_EVIDENCE_BOT.md): documents compact PR evidence reports and artifact upload behavior.
 - [Autopilot Backlog Curator](AUTOPILOT_BACKLOG_CURATOR.md): explains backlog integrity checks and next-phase recommendation behavior.
@@ -92,7 +92,6 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Validation commands](VALIDATION_COMMANDS.md): lists the standard install, typecheck, build, proof, unsafe-claim scan, and diff hygiene commands.
 - [CI and validation](CI_AND_VALIDATION.md): explains Review Hub CI, required local checks, docs sanity checks, and future branch-protection expectations.
 - [Review checklist](REVIEW_CHECKLIST.md): questions for reviewers, design partners, and advisors.
-
 
 ## Buyer, partner, and testing readiness
 

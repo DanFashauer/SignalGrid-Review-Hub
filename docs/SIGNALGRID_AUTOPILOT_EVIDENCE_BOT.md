@@ -6,7 +6,7 @@ The SignalGrid Autopilot Evidence Bot is a YELLOW-lane automation workflow that 
 
 The bot installs with `pnpm install --frozen-lockfile`, then runs `pnpm run autopilot:evidence`. The script records each command in `artifacts/signalgrid-autopilot-evidence/commands.json` and fails loudly when any required validation fails.
 
-The evidence suite includes typecheck, build, deterministic proof harnesses, phase gates, backlog check, Level 10 audit, unsafe-claim scan self-tests, unsafe-claim scan, and committed-diff whitespace checking. On pull requests, the bot checks `BASE_SHA...HEAD_SHA`; on pushes, it checks the pushed before/after range; local runs fall back to the previous commit or working tree and record that fallback in `commands.json`.
+The evidence suite includes typecheck, build, deterministic proof harnesses, phase gates, backlog check, Level 10 audit, text-safety validation, unsafe-claim scan self-tests, unsafe-claim scan, and committed-diff whitespace checking. On pull requests, the bot checks `BASE_SHA...HEAD_SHA`; on pushes, it checks the pushed before/after range; local runs fall back to the previous commit or working tree and record that fallback in `commands.json`.
 
 ## Artifacts
 

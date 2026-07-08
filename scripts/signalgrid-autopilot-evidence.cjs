@@ -39,6 +39,7 @@ const commands = [
     command: "pnpm run autopilot:backlog-check",
   },
   { id: "level10-audit", command: "pnpm run level10:audit" },
+  { id: "text-safety", command: "node scripts/check-text-safety.cjs" },
   {
     id: "unsafe-claim-scan-self-test",
     command:

@@ -1,0 +1,3 @@
+.github/workflows/*.yml text eol=lf
+scripts/*.cjs text eol=lf
+docs/*.md text eol=lf

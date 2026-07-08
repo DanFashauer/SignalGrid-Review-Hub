@@ -1,3 +1,4 @@
+# LF-only public-safe workflow.
 name: SignalGrid Autopilot Evidence Bot
 
 on:

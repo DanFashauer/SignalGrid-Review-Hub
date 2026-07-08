@@ -20,6 +20,8 @@ jobs:
       BASE_PATH: /
       AUTOPILOT_EVIDENCE_ARTIFACT_NAME: signalgrid-autopilot-evidence
       PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

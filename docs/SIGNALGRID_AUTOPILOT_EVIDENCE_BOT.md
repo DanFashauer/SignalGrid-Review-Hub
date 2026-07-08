@@ -6,7 +6,7 @@ The SignalGrid Autopilot Evidence Bot is a YELLOW-lane automation workflow that 
 
 The bot installs with `pnpm install --frozen-lockfile`, then runs `pnpm run autopilot:evidence`. The script records each command in `artifacts/signalgrid-autopilot-evidence/commands.json` and fails loudly when any required validation fails.
 
-The evidence suite includes typecheck, build, deterministic proof harnesses, phase gates, backlog check, Level 10 audit, unsafe-claim scan, and `git diff --check`.
+The evidence suite includes typecheck, build, deterministic proof harnesses, phase gates, backlog check, Level 10 audit, unsafe-claim scan self-tests, unsafe-claim scan, and committed-diff whitespace checking. On pull requests, the bot checks `BASE_SHA...HEAD_SHA`; on pushes, it checks the pushed before/after range; local runs fall back to the previous commit or working tree and record that fallback in `commands.json`.
 
 ## Artifacts
 
@@ -18,11 +18,15 @@ The workflow uploads `signalgrid-autopilot-evidence` with:
 - `public-safety.json`
 - `next-phase.json`
 
-The summary includes repository, branch, commit SHA, event type, PR number when available, run ID, run attempt, command status, risk lane, public-safety status, unsafe-claim scan result, the next recommended PR, remaining risks, and owner action required.
+The summary includes repository, branch, commit SHA, event type, PR number when available, run ID, run attempt, command status, diff range or fallback reason for whitespace checking, risk lane, public-safety status, unsafe-claim scan result, the next recommended PR, remaining risks, and owner action required.
 
 ## Pull-request comment
 
 On `pull_request` events, the workflow attempts to update a previous bot comment using a stable marker. If no previous comment exists, it posts a new compact comment. Comment failure is intentionally non-blocking so validation status is not hidden by a GitHub API issue.
+
+## Unsafe-claim scanner behavior
+
+The scanner only suppresses denylisted phrases when the line is clearly an explicit guardrail, disclaimer, denylist definition, scanner fixture, or validation instruction. Broad words such as `no`, `blocked`, or `public-safety` do not suppress a match by themselves. The evidence suite runs self-test cases that prove unsafe copy such as `SignalGrid replaces ServiceNow with no handoff.` fails while explicit guardrails such as `Do not claim SignalGrid replaces ServiceNow.` pass.
 
 ## Public-safety boundaries
 

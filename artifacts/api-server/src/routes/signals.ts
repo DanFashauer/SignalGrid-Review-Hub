@@ -50,12 +50,17 @@ router.get("/signals/latest", async (req, res) => {
     ? parsed.data
     : { signalType: undefined, limit: 20 };
 
+  // Clamp the client-supplied limit to a sane bound so a crafted value
+  // (e.g. ?limit=1e8 or a negative/float) cannot trigger a full-table dump or
+  // an invalid SQL LIMIT.
+  const safeLimit = Math.min(Math.max(1, Math.floor(Number(limit) || 20)), 200);
+
   try {
     const query = db
       .select()
       .from(signalEventsTable)
       .orderBy(desc(signalEventsTable.receivedAt))
-      .limit(limit ?? 20);
+      .limit(safeLimit);
 
     const rows = await query;
 

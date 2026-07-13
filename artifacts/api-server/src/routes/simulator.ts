@@ -8,6 +8,10 @@ import {
 } from "@workspace/signalgrid-simulator";
 
 const router: IRouter = Router();
+// Bounded in-memory demo ledger. Capped so repeated unauthenticated
+// `POST /simulator/run` calls cannot grow it without bound (memory DoS); the
+// oldest entries are dropped past the cap (ring-buffer semantics).
+const MAX_LEDGER_ENTRIES = 500;
 const auditLedger: AuditEvidence[] = [];
 
 router.get("/simulator/scenarios", (_req, res) => {
@@ -34,6 +38,9 @@ router.post("/simulator/run", (req, res) => {
   try {
     const result = runSimulatorScenario(scenarioId);
     auditLedger.push(...result.auditEvidence);
+    if (auditLedger.length > MAX_LEDGER_ENTRIES) {
+      auditLedger.splice(0, auditLedger.length - MAX_LEDGER_ENTRIES);
+    }
     res.json(envelope(result));
   } catch (_err) {
     res.status(404).json(envelope({ error: "not_found", message: "Simulator scenario not found." }));

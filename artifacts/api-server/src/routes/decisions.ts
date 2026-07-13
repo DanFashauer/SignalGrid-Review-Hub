@@ -226,12 +226,16 @@ router.get("/decisions", async (req, res) => {
   const parsed = ListDecisionsQueryParams.safeParse(req.query);
   const { limit = 50, outcome, integrationId } = parsed.success ? parsed.data : { limit: 50, outcome: undefined, integrationId: undefined };
 
+  // Clamp the client-supplied limit so a crafted value cannot dump the whole
+  // table into memory or produce an invalid SQL LIMIT.
+  const safeLimit = Math.min(Math.max(1, Math.floor(Number(limit) || 50)), 200);
+
   try {
     const query = db
       .select()
       .from(decisionsTable)
       .orderBy(desc(decisionsTable.evaluatedAt))
-      .limit(limit ?? 50);
+      .limit(safeLimit);
 
     const rows = await query;
 

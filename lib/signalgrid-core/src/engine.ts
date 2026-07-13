@@ -6,6 +6,10 @@ import { verifyAuditChain, type ChainVerification } from "./audit";
 import { appendAudit } from "./audit";
 import { computeMetrics } from "./metrics";
 import { ruleSetDigest, runPolicyTests as runTests } from "./policy";
+import {
+  buildResolutionPlan,
+  simulateResolution as runResolutionSimulation,
+} from "./resolution";
 import { simulateDecision as simulate } from "./simulate";
 import { seedDemoStore } from "./seed";
 import { MemoryStore } from "./store";
@@ -27,6 +31,8 @@ import {
   type PolicyVersion,
   type Principal,
   type RemediationAction,
+  type ResolutionPlan,
+  type ResolutionSimulation,
   type SimulationResult,
   type Tenant,
   type WebhookDelivery,
@@ -304,6 +310,50 @@ export class SignalGridCore {
     const principal = authenticate(this.store, token);
     authorize(principal, "decision:read");
     return computeMetrics(this.store.listDecisions(principal.tenantId));
+  }
+
+  /** The Resolution Assistant's plan for a decision (deterministic). */
+  getResolution(token: string, decisionId: string): ResolutionPlan {
+    const principal = authenticate(this.store, token);
+    authorize(principal, "decision:read");
+    const decision = this.store.getDecision(principal.tenantId, decisionId);
+    if (!decision) {
+      throw new CoreError("not_found", `Decision "${decisionId}" not found.`, 404);
+    }
+    const config = this.store.getResolutionConfig(principal.tenantId) ?? {
+      tenantId: principal.tenantId,
+      primaryHardwareChannel: "operator_console" as const,
+      autoProposeEnabled: true,
+    };
+    return buildResolutionPlan(decision, config);
+  }
+
+  /**
+   * Preview the outcome after the decision's resolvable fixes are (simulated)
+   * applied — approval-gated, nothing is executed. No stored state changes.
+   */
+  simulateResolution(token: string, decisionId: string): ResolutionSimulation {
+    const principal = authenticate(this.store, token);
+    authorize(principal, "decision:read");
+    const decision = this.store.getDecision(principal.tenantId, decisionId);
+    if (!decision) {
+      throw new CoreError("not_found", `Decision "${decisionId}" not found.`, 404);
+    }
+    const snapshot = this.store.getSnapshot(
+      principal.tenantId,
+      decision.evidenceSnapshotId,
+    );
+    if (!snapshot) {
+      throw new CoreError("not_found", "Evidence snapshot not found.", 404);
+    }
+    const version = this.store.getPolicyVersion(
+      principal.tenantId,
+      decision.policyVersionId,
+    );
+    if (!version) {
+      throw new CoreError("not_found", "Policy version not found.", 404);
+    }
+    return runResolutionSimulation(decision, snapshot.evidence, version);
   }
 
   listWebhookEndpoints(token: string): WebhookEndpoint[] {

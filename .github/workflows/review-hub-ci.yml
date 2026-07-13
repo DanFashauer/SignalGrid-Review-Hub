@@ -98,6 +98,7 @@ jobs:
             docs/PRODUCT_DATA_MODEL.md
             docs/PRIVATE_CORE_HANDOFF.md
             docs/RUN_AND_GO_LIVE.md
+            docs/ECOSYSTEM_FLOW_AND_RESOLUTION.md
             SECURITY.md
           )
 

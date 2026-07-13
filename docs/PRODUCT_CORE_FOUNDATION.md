@@ -99,6 +99,8 @@ the client, which is what makes cross-tenant access structurally impossible.
 | `GET /api/v1/webhooks/deliveries` | `connector:read` | Simulated deliveries with retry/backoff |
 | `GET /api/v1/remediation` | `decision:read` | Proposed remediation (approval-required, simulated) |
 | `POST /api/v1/remediation/:id/approve` | `remediation:approve` | Approve a remediation (simulated, never executed) |
+| `GET /api/v1/decisions/:id/resolution` | `decision:read` | Resolution Assistant plan (steps, classes, channels) |
+| `POST /api/v1/decisions/:id/resolve` | `decision:read` | Simulate the resolution → projected outcome |
 
 Middleware: request id + security headers (`x-content-type-options`,
 `x-frame-options`, `referrer-policy`, `cache-control`), bearer authentication /

@@ -128,6 +128,14 @@ async function run() {
   check("simulate → 200", sim.status === 200);
   check("stale decision escalates to restrict under v2", sim.json?.simulation?.simulatedOutcome === "restrict" && sim.json?.simulation?.changed === true);
 
+  // ── resolution assistant ────────────────────────────────────────────────
+  const resolution = await req("GET", `/v1/decisions/${staleId}/resolution`, { token: KEYS.operator });
+  check("resolution plan → 200", resolution.status === 200);
+  check("stale decision is self-service", resolution.json?.resolution?.path === "self_service" && resolution.json?.resolution?.autoResolvable === true);
+  const resolve = await req("POST", `/v1/decisions/${staleId}/resolve`, { token: KEYS.operator });
+  check("resolve simulation → 200", resolve.status === 200);
+  check("simulated resolution reaches allow", resolve.json?.simulation?.resolved === true && resolve.json?.simulation?.projectedOutcome === "allow");
+
   // ── metrics ─────────────────────────────────────────────────────────────
   const metrics = await req("GET", "/v1/metrics", { token: KEYS.operator });
   check("metrics → 200", metrics.status === 200);

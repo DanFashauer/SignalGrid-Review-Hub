@@ -225,6 +225,26 @@ paths:
       responses:
         "200": { description: Metrics summary }
 
+  /v1/decisions/{id}/resolution:
+    get:
+      operationId: getResolution
+      tags: [decisions]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      summary: Resolution Assistant plan for a decision (deterministic)
+      responses:
+        "200": { description: Resolution plan (steps, classes, channels) }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/decisions/{id}/resolve:
+    post:
+      operationId: simulateResolution
+      tags: [decisions]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      summary: Preview the outcome after resolvable fixes (simulated, approval-gated)
+      responses:
+        "200": { description: Resolution simulation (projected outcome) }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /v1/webhooks:
     get:
       operationId: listWebhookEndpoints

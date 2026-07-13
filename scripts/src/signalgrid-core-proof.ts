@@ -539,6 +539,70 @@ if (pending) {
   );
 }
 
+// ── 13. Resolution Assistant (deterministic, approval-gated, simulated) ───────
+
+{
+  const staleDec = decisions.find((d) => d.reasonCodes.includes("POSTURE_STALE"));
+  check("resolution: stale decision found", Boolean(staleDec));
+  if (staleDec) {
+    const plan = core.getResolution(T.operator, staleDec.id);
+    check(
+      "resolution: stale posture is self-service",
+      plan.path === "self_service" && plan.autoResolvable === true,
+    );
+    check(
+      "resolution: stale has an auto-proposed device step",
+      plan.steps.some(
+        (s) => s.resolutionClass === "auto_proposed" && s.channel === "device_prompt",
+      ),
+    );
+    const sim = core.simulateResolution(T.operator, staleDec.id);
+    check(
+      "resolution: simulated posture refresh resolves stale to allow",
+      sim.resolved === true && sim.projectedOutcome === "allow",
+    );
+  }
+
+  const ncDec = decisions.find((d) => d.reasonCodes.includes("DEVICE_NONCOMPLIANT"));
+  if (ncDec) {
+    const plan = core.getResolution(T.operator, ncDec.id);
+    check(
+      "resolution: non-compliant is assisted (approval-gated)",
+      plan.path === "assisted" && plan.autoResolvable === true,
+    );
+    check(
+      "resolution: non-compliant routes device remediation to ITSM",
+      plan.steps.some(
+        (s) => s.resolutionClass === "requires_approval" && s.channel === "itsm_ticket",
+      ),
+    );
+    const sim = core.simulateResolution(T.operator, ncDec.id);
+    check("resolution: approved compliance fix resolves non-compliant", sim.resolved === true);
+  }
+
+  const disDec = decisions.find((d) => d.reasonCodes.includes("IDENTITY_DISABLED"));
+  if (disDec) {
+    const plan = core.getResolution(T.operator, disDec.id);
+    check(
+      "resolution: disabled identity escalates (manual only)",
+      plan.path === "escalation" && plan.autoResolvable === false,
+    );
+    const sim = core.simulateResolution(T.operator, disDec.id);
+    check(
+      "resolution: disabled identity cannot self-resolve",
+      sim.resolved === false && sim.projectedOutcome !== "allow",
+    );
+
+    expectError("resolution: cross-tenant plan is denied", "not_found", () =>
+      core.getResolution(T.atlasOwner, disDec.id),
+    );
+  }
+
+  expectError("resolution: unknown token is rejected", "unauthorized", () =>
+    core.getResolution("sgk_not_real", decisions[0].id),
+  );
+}
+
 // ── Report ────────────────────────────────────────────────────────────────────
 
 const failed = assertions.filter((a) => !a.passed);

@@ -13,6 +13,7 @@ import type {
   PolicyTest,
   PolicyVersion,
   RemediationAction,
+  ResolutionConfig,
   Tenant,
   User,
   WebhookDelivery,
@@ -48,6 +49,7 @@ export class MemoryStore {
   private readonly webhookEndpoints = new Map<string, WebhookEndpoint>();
   private readonly webhookDeliveries = new Map<string, WebhookDelivery>();
   private readonly remediations = new Map<string, RemediationAction>();
+  private readonly resolutionConfigs = new Map<string, ResolutionConfig>();
   private readonly decisionSeq = new Map<string, number>();
   private readonly auditEvents: AuditEvent[] = [];
   private readonly auditTail = new Map<string, { seq: number; digest: string }>();
@@ -308,6 +310,16 @@ export class MemoryStore {
     return [...this.remediations.values()]
       .filter((row) => row.tenantId === tenantId)
       .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
+  }
+
+  // ── Resolution config ─────────────────────────────────────────────────────
+
+  putResolutionConfig(config: ResolutionConfig): void {
+    this.resolutionConfigs.set(config.tenantId, config);
+  }
+
+  getResolutionConfig(tenantId: string): ResolutionConfig | undefined {
+    return this.resolutionConfigs.get(tenantId);
   }
 
   // ── Audit ledger ──────────────────────────────────────────────────────────

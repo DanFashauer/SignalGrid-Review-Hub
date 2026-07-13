@@ -88,6 +88,20 @@ export function seedDemoStore(clock: Clock): SeededDemo {
 
   seedWebhookEndpoints(store, NORTHWIND);
   seedWebhookEndpoints(store, ATLAS);
+
+  // Per-organization resolution flow control: the hospital routes worker steps
+  // to badge/credential readers; the warehouse routes them to smart lockers.
+  store.putResolutionConfig({
+    tenantId: NORTHWIND,
+    primaryHardwareChannel: "credential_reader",
+    autoProposeEnabled: true,
+  });
+  store.putResolutionConfig({
+    tenantId: ATLAS,
+    primaryHardwareChannel: "smart_locker",
+    autoProposeEnabled: true,
+  });
+
   seedApiKeys(store);
 
   return {

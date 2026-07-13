@@ -379,6 +379,75 @@ export interface RemediationAction {
   note: string;
 }
 
+// ── Resolution Assistant (deterministic, approval-gated, simulated) ──────────
+
+export type ResolutionAudience = "worker" | "operator" | "admin" | "system";
+
+export type ResolutionChannel =
+  | "device_prompt"
+  | "operator_console"
+  | "itsm_ticket"
+  | "credential_reader"
+  | "smart_locker"
+  | "notify_owner";
+
+/**
+ * How a resolution step may be actioned:
+ *  - auto_proposed: low-risk, reversible; the system proposes it automatically
+ *    (still approval-gated + simulated — never auto-executed).
+ *  - requires_approval: an owner/admin must approve before it is (simulated).
+ *  - manual_only: a hard block that needs a person; not self-resolvable.
+ */
+export type ResolutionClass =
+  | "auto_proposed"
+  | "requires_approval"
+  | "manual_only";
+
+export type ResolutionPathKind = "self_service" | "assisted" | "escalation";
+
+export interface ResolutionStep {
+  order: number;
+  reasonCode: string;
+  audience: ResolutionAudience;
+  channel: ResolutionChannel;
+  resolutionClass: ResolutionClass;
+  action: string;
+  /** The reason code this step would clear if completed. */
+  clears: string;
+}
+
+export interface ResolutionPlan {
+  decisionId: string;
+  outcome: DecisionOutcome;
+  summaryForWorker: string;
+  summaryForOperator: string;
+  steps: ResolutionStep[];
+  /** True when at least one block is auto-proposable/approvable (not all hard). */
+  autoResolvable: boolean;
+  path: ResolutionPathKind;
+}
+
+export interface ResolutionSimulation {
+  decisionId: string;
+  originalOutcome: DecisionOutcome;
+  /** Reason codes whose (simulated) fix was applied in this preview. */
+  appliedReasonCodes: string[];
+  projectedOutcome: DecisionOutcome;
+  projectedReasonCodes: string[];
+  /** True when the projected outcome is allow. */
+  resolved: boolean;
+  note: string;
+}
+
+/** Per-organization control over how resolution flows. */
+export interface ResolutionConfig {
+  tenantId: string;
+  /** The organization's primary hardware channel for worker-facing steps. */
+  primaryHardwareChannel: ResolutionChannel;
+  /** When false, auto_proposed steps are downgraded to requires_approval. */
+  autoProposeEnabled: boolean;
+}
+
 // ── Webhook delivery (simulated, public-safe) ────────────────────────────────
 
 export type DeliveryStatus = "delivered" | "failed" | "dead_letter";

@@ -8,6 +8,8 @@ import {
   type MetricsSummary,
   type PolicyVersion,
   type RemediationAction,
+  type ResolutionPlan,
+  type ResolutionSimulation,
   type SimulationResult,
   type WebhookDelivery,
 } from "@workspace/signalgrid-core";
@@ -60,6 +62,8 @@ interface Row {
   snapshot: EvidenceSnapshot;
   evidenceVerified: boolean;
   simulations: SimulationResult[];
+  resolution: ResolutionPlan;
+  resolutionSim: ResolutionSimulation;
 }
 
 export default function OperatorConsoleSection() {
@@ -85,7 +89,17 @@ export default function OperatorConsoleSection() {
       const simulations = policyVersions.map((version) =>
         core.simulateDecision(OPERATOR_TOKEN, decision.id, version.id),
       );
-      return { label: scenario.label, decision, snapshot, evidenceVerified, simulations };
+      const resolution = core.getResolution(OPERATOR_TOKEN, decision.id);
+      const resolutionSim = core.simulateResolution(OPERATOR_TOKEN, decision.id);
+      return {
+        label: scenario.label,
+        decision,
+        snapshot,
+        evidenceVerified,
+        simulations,
+        resolution,
+        resolutionSim,
+      };
     });
     return {
       rows: built,
@@ -463,6 +477,53 @@ function DecisionDetail({
         </div>
       </TraceBlock>
 
+      {decision.outcome !== "allow" && (
+        <TraceBlock title="Resolution Assistant — self-service &amp; escalation">
+          <p className="text-[11px] text-muted-foreground mb-2">
+            {row.resolution.summaryForWorker}
+          </p>
+          <div className="space-y-1.5">
+            {row.resolution.steps.map((step) => (
+              <div
+                key={step.order}
+                className="flex items-start justify-between gap-2 text-[11px]"
+              >
+                <span className="text-muted-foreground min-w-0">
+                  <span className="text-foreground/80">{step.audience}</span> ·{" "}
+                  {step.action}
+                </span>
+                <span className="flex items-center gap-1.5 shrink-0">
+                  <span className="font-mono text-[10px] text-muted-foreground/70">
+                    {step.channel}
+                  </span>
+                  <span
+                    className={`font-mono px-1.5 py-0.5 rounded border ${resolutionClassTone[step.resolutionClass]}`}
+                  >
+                    {resolutionClassLabel[step.resolutionClass]}
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center justify-between mt-3 pt-2 border-t border-border/60">
+            <span className="text-[11px] text-muted-foreground">
+              Simulated resolution (approval-gated · nothing executed)
+            </span>
+            <span
+              className={`text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded border ${
+                row.resolutionSim.resolved
+                  ? "text-teal-300 bg-teal-950/40 border-teal-700/50"
+                  : "text-amber-300 bg-amber-950/40 border-amber-700/50"
+              }`}
+            >
+              {row.resolutionSim.resolved
+                ? "→ ALLOW"
+                : `→ ${outcomeLabel[row.resolutionSim.projectedOutcome]} · needs escalation`}
+            </span>
+          </div>
+        </TraceBlock>
+      )}
+
       <div className="flex items-center justify-between text-[11px] text-muted-foreground border-t border-border pt-3">
         <span>
           Review status:{" "}
@@ -473,6 +534,18 @@ function DecisionDetail({
     </div>
   );
 }
+
+const resolutionClassTone: Record<string, string> = {
+  auto_proposed: "text-teal-300 bg-teal-950/40 border-teal-700/50",
+  requires_approval: "text-amber-300 bg-amber-950/40 border-amber-700/50",
+  manual_only: "text-red-300 bg-red-950/40 border-red-700/50",
+};
+
+const resolutionClassLabel: Record<string, string> = {
+  auto_proposed: "self-service",
+  requires_approval: "approval",
+  manual_only: "manual",
+};
 
 function TraceBlock({
   title,

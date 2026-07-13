@@ -36,15 +36,7 @@ export function buildEvidence(
         ? false
         : "unknown";
 
-  const criticalSignalsPresent =
-    identityEnabled !== "unknown" &&
-    compliance !== "unknown" &&
-    managed !== "unknown" &&
-    encrypted !== "unknown" &&
-    postureFreshness !== "missing" &&
-    postureFreshness !== "unknown";
-
-  return {
+  const partial = {
     identityEnabled,
     deviceManaged: managed,
     deviceCompliance: compliance,
@@ -53,8 +45,30 @@ export function buildEvidence(
     ownerType: device.ownerType,
     postureFreshness,
     workflowRiskTier: workflow.riskTier,
-    criticalSignalsPresent,
   };
+
+  return {
+    ...partial,
+    criticalSignalsPresent: deriveCriticalSignalsPresent(partial),
+  };
+}
+
+/**
+ * Critical evidence is present only when every critical input is known and not
+ * degraded. Shared by evidence derivation and resolution simulation so a
+ * simulated fix recomputes the same way a real signal would.
+ */
+export function deriveCriticalSignalsPresent(
+  evidence: Omit<DecisionEvidence, "criticalSignalsPresent">,
+): boolean {
+  return (
+    evidence.identityEnabled !== "unknown" &&
+    evidence.deviceCompliance !== "unknown" &&
+    evidence.deviceManaged !== "unknown" &&
+    evidence.deviceEncrypted !== "unknown" &&
+    evidence.postureFreshness !== "missing" &&
+    evidence.postureFreshness !== "unknown"
+  );
 }
 
 export function buildSnapshot(

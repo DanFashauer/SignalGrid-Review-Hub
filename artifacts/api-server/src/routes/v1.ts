@@ -77,6 +77,16 @@ router.get("/v1/metrics", (req: Request, res: Response) => {
   res.json(envelope(req, { metrics }));
 });
 
+router.get("/v1/decisions/:id/resolution", (req: Request, res: Response) => {
+  const resolution = core.getResolution(token(req), param(req, "id"));
+  res.json(envelope(req, { resolution }));
+});
+
+router.post("/v1/decisions/:id/resolve", (req: Request, res: Response) => {
+  const simulation = core.simulateResolution(token(req), param(req, "id"));
+  res.json(envelope(req, { simulation }));
+});
+
 router.get("/v1/policies", (req: Request, res: Response) => {
   const policies = core.listPolicies(token(req));
   res.json(envelope(req, { policies }));

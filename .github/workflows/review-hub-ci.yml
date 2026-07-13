@@ -102,6 +102,7 @@ jobs:
             docs/DOCKBRIDGE_PRODUCT_CONNECTOR.md
             docs/SECURITY_BASELINE_ALIGNMENT.md
             docs/APP_SUITE_MATRIX.md
+            docs/WHAT_SIGNALGRID_DOES_TODAY.md
             SECURITY.md
           )
 

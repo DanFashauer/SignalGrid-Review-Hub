@@ -34,9 +34,9 @@ export default function IntegrationsSection() {
       <div className="container mx-auto px-4 md:px-8 max-w-screen-xl">
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-16 gap-8">
           <div className="max-w-2xl">
-            <h2 className="text-3xl font-bold tracking-tight mb-4">16 Signal Categories. Candidate Sources Across Your Stack.</h2>
+            <h2 className="text-3xl font-bold tracking-tight mb-4">16 Candidate Source Categories Across Your Stack.</h2>
             <p className="text-muted-foreground text-lg">
-              SignalGrid is designed to consume signals from across your security stack — identity, endpoint, physical access &amp; custody, SIEM, SOAR, DR, and GRC — and route every alert to the team that owns that signal source. The vendors below are candidate signal-source categories, not live integrations; systems of record remain external.
+              SignalGrid is designed to consume signals from across your security stack — identity, endpoint, physical access &amp; custody, SIEM, SOAR, DR, and GRC — and route every alert to the team that owns that signal source. These are the candidate source-category taxonomy (the core normalizes 11 signal categories today; see <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/blob/main/docs/WHAT_SIGNALGRID_DOES_TODAY.md" className="text-primary underline">what's evaluated today</a>). The vendors below are candidate categories, not live integrations; systems of record remain external.
             </p>
           </div>
           <div className="font-mono text-sm px-4 py-2 rounded border border-border bg-card inline-flex self-start md:self-end gap-2">
@@ -89,8 +89,8 @@ export default function IntegrationsSection() {
           className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4"
         >
           {[
-            { value: "16", label: "Signal categories" },
-            { value: "Candidate", label: "Source categories" },
+            { value: "11", label: "Core signal categories" },
+            { value: "16", label: "Candidate source categories" },
             { value: "8", label: "Owning teams routed" },
             { value: "12+", label: "Frameworks mapped" },
           ].map((stat) => (

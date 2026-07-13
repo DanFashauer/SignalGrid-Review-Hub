@@ -5,6 +5,7 @@ export default function SignalTypesSection() {
   const signals = [
     {
       id: "identity",
+      evaluated: true,
       name: "Identity & Badge State",
       icon: UserCircle,
       items: [
@@ -19,6 +20,7 @@ export default function SignalTypesSection() {
     },
     {
       id: "device",
+      evaluated: true,
       name: "Device Posture",
       icon: Shield,
       items: [
@@ -33,6 +35,7 @@ export default function SignalTypesSection() {
     },
     {
       id: "physical",
+      evaluated: true,
       name: "Physical Presence",
       icon: MapPin,
       items: [
@@ -47,6 +50,7 @@ export default function SignalTypesSection() {
     },
     {
       id: "baseline",
+      evaluated: true,
       name: "Security Baseline (CIS)",
       icon: ShieldCheck,
       items: [
@@ -61,6 +65,7 @@ export default function SignalTypesSection() {
     },
     {
       id: "session",
+      evaluated: false,
       name: "Session & Shift Context",
       icon: Clock,
       items: [
@@ -75,6 +80,7 @@ export default function SignalTypesSection() {
     },
     {
       id: "network",
+      evaluated: false,
       name: "Network & Cellular Posture",
       icon: Wifi,
       items: [
@@ -89,6 +95,7 @@ export default function SignalTypesSection() {
     },
     {
       id: "operational",
+      evaluated: false,
       name: "Operational Signals",
       icon: ActivitySquare,
       items: [
@@ -107,9 +114,9 @@ export default function SignalTypesSection() {
     <section className="py-24 bg-background border-b border-border/50" id="platform">
       <div className="container mx-auto px-4 md:px-8 max-w-screen-xl">
         <div className="mb-16 max-w-3xl">
-          <h2 className="text-3xl font-bold tracking-tight mb-4">Seven-Dimensional Signal Fusion</h2>
+          <h2 className="text-3xl font-bold tracking-tight mb-4">Multi-Dimensional Signal Fusion</h2>
           <p className="text-muted-foreground text-lg leading-relaxed">
-            A token proves identity. MDM proves enrollment. A badge tap proves presence. None of them alone proves readiness for a sensitive workflow. SignalGrid fuses seven signal dimensions — including DockBridge physical custody, cellular reachability, and CIS security-baseline alignment — in a single deterministic evaluation.
+            A token proves identity. MDM proves enrollment. A badge tap proves presence. None of them alone proves readiness for a sensitive workflow. The deterministic core evaluates <span className="text-foreground font-medium">four dimensions today</span> — identity, device posture, DockBridge physical custody, and CIS security-baseline alignment — in a single deterministic evaluation. The remaining dimensions below are <span className="text-foreground font-medium">candidate signal categories</span> on the roadmap, not decision inputs today.
           </p>
         </div>
 
@@ -124,8 +131,19 @@ export default function SignalTypesSection() {
               className={`p-6 rounded-xl border ${signal.border} bg-card shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group`}
             >
               <div className={`absolute top-0 right-0 w-32 h-32 -mr-8 -mt-8 rounded-full blur-3xl opacity-20 group-hover:opacity-30 transition-opacity ${signal.bg}`}></div>
-              <div className={`w-10 h-10 rounded-lg ${signal.bg} flex items-center justify-center mb-5`}>
-                <signal.icon className={`w-5 h-5 ${signal.color}`} />
+              <div className="flex items-center justify-between mb-5">
+                <div className={`w-10 h-10 rounded-lg ${signal.bg} flex items-center justify-center`}>
+                  <signal.icon className={`w-5 h-5 ${signal.color}`} />
+                </div>
+                <span
+                  className={`text-[10px] font-mono px-2 py-0.5 rounded-full border uppercase tracking-wider ${
+                    signal.evaluated
+                      ? "text-emerald-400 border-emerald-400/30 bg-emerald-400/5"
+                      : "text-muted-foreground border-border bg-muted/20"
+                  }`}
+                >
+                  {signal.evaluated ? "Evaluated today" : "Candidate"}
+                </span>
               </div>
               <h3 className="text-base font-semibold mb-4 text-foreground">{signal.name}</h3>
               <ul className="space-y-2.5">

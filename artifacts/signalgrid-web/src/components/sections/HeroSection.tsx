@@ -107,7 +107,7 @@ export default function HeroSection() {
               <div className="grid grid-cols-3 gap-px bg-border/30 border-t border-border/30">
                 {[
                   { label: "SIGNALS FUSED", value: "7" },
-                  { label: "SIGNAL CATEGORIES", value: "16" },
+                  { label: "CORE SIGNAL CATEGORIES", value: "11" },
                   { label: "EVALUATION", value: "FIXTURE" },
                 ].map((s) => (
                   <div key={s.label} className="bg-card px-4 py-3 text-center">

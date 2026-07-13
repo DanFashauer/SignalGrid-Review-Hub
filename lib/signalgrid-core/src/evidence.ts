@@ -40,6 +40,7 @@ export function buildEvidence(
     identityEnabled !== "unknown" &&
     compliance !== "unknown" &&
     managed !== "unknown" &&
+    encrypted !== "unknown" &&
     postureFreshness !== "missing" &&
     postureFreshness !== "unknown";
 

@@ -50,11 +50,11 @@ GET {{base}}/v1/decisions
 Authorization: Bearer {{operator}}
 
 ### Decision evidence (replace :id with a decisionId from the list)
-GET {{base}}/v1/decisions/dec_00e987a939d23e8d/evidence
+GET {{base}}/v1/decisions/dec_c9eb72042e5e1929/evidence
 Authorization: Bearer {{operator}}
 
 ### Simulate a decision against the stricter v2 draft
-POST {{base}}/v1/decisions/dec_00e987a939d23e8d/simulate
+POST {{base}}/v1/decisions/dec_c9eb72042e5e1929/simulate
 Authorization: Bearer {{operator}}
 Content-Type: application/json
 
@@ -100,7 +100,7 @@ Authorization: Bearer {{owner}}
 GET {{base}}/v1/decisions
 
 ### Negative: cross-tenant read → 404 (atlas key, northwind decision)
-GET {{base}}/v1/decisions/dec_00e987a939d23e8d
+GET {{base}}/v1/decisions/dec_c9eb72042e5e1929
 Authorization: Bearer {{atlas}}
 
 ### Negative: auditor cannot evaluate → 403

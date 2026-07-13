@@ -96,6 +96,11 @@ export function evaluateDecision(
   const evidence = buildEvidence(identity, device, workflow, signalsUsed);
   const evaluation = evaluatePolicy(version, evidence);
 
+  // Per-evaluation sequence keeps ids unique when the same scenario is
+  // evaluated more than once against a fixed clock (so a re-run does not
+  // overwrite an earlier decision), while two FRESH cores each producing their
+  // first decision still agree — preserving cross-core determinism.
+  const evaluationSeq = store.listDecisions(tenantId).length;
   const decisionId = deterministicId(
     "dec",
     tenantId,
@@ -104,6 +109,7 @@ export function evaluateDecision(
     workflow.id,
     version.id,
     createdAt,
+    String(evaluationSeq),
   );
 
   const snapshot = buildSnapshot(

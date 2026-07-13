@@ -6,7 +6,7 @@ import {
 } from "@workspace/signalgrid-core";
 import { core, DEMO_KEYS } from "../lib/core";
 import { requireTenantContext } from "../middlewares/context";
-import { rateLimit } from "../middlewares/rateLimit";
+import { v1RateLimiter } from "../middlewares/rateLimit";
 
 /**
  * /v1 — the product-shaped SignalGrid surface.
@@ -28,7 +28,7 @@ router.get("/v1/keys", (req: Request, res: Response) => {
 });
 
 // Everything below requires a tenant context and is rate-limited.
-router.use("/v1", rateLimit(240, 60_000), requireTenantContext);
+router.use("/v1", v1RateLimiter, requireTenantContext);
 
 router.get("/v1/context", (req: Request, res: Response) => {
   const { principal, tenant } = core.context(token(req));
@@ -209,11 +209,18 @@ function parseRules(body: unknown): PolicyRuleSpec[] {
   return rules as PolicyRuleSpec[];
 }
 
+const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
 function sanitizeContext(
   input: Record<string, unknown>,
 ): Record<string, string> {
-  const out: Record<string, string> = {};
+  // Null-prototype object + key allowlisting prevents prototype-pollution via
+  // a client-controlled property name.
+  const out: Record<string, string> = Object.create(null);
   for (const [key, value] of Object.entries(input)) {
+    if (FORBIDDEN_KEYS.has(key)) {
+      continue;
+    }
     if (typeof value === "string") {
       out[key] = value;
     }

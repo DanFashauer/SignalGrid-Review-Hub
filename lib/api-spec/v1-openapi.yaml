@@ -55,7 +55,13 @@ paths:
           description: Decision evaluated
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/EvaluateResult" }
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      decision: { $ref: "#/components/schemas/EvaluateResult" }
+                    required: [decision]
         "400": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -288,6 +294,15 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
   schemas:
+    Envelope:
+      description: >-
+        Every successful /v1 response is wrapped in this envelope; the
+        operation-specific payload is added alongside these fields.
+      type: object
+      properties:
+        requestId: { type: [string, "null"] }
+        timestamp: { type: string, format: date-time }
+      required: [timestamp]
     Error:
       type: object
       properties:

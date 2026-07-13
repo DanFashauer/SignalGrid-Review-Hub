@@ -1,50 +1,47 @@
-import type { NextFunction, Request, RequestHandler, Response } from "express";
-import { CoreError } from "@workspace/signalgrid-core";
-
-interface Window {
-  count: number;
-  resetAt: number;
-}
+import rateLimit, { type RateLimitRequestHandler } from "express-rate-limit";
+import type { Request } from "express";
 
 /**
- * Minimal in-memory fixed-window rate limiter. Public-safe and dependency-free;
- * a production deployment would use a shared/distributed limiter. Keyed by
- * bearer token when present, else by client address.
+ * Fixed-window rate limiter for the /v1 product surface. Uses the standard
+ * `express-rate-limit` middleware (a production deployment would back it with a
+ * shared/distributed store).
+ *
+ * The limiter runs ahead of the authentication middleware, so it parses the
+ * bearer token itself and keys by token — this gives per-key limiting instead
+ * of per-IP, so a single caller behind shared NAT cannot exhaust the bucket for
+ * every demo key from that address. Unauthenticated requests fall back to the
+ * client address.
  */
-export function rateLimit(
-  limit: number,
-  windowMs: number,
-): RequestHandler {
-  const windows = new Map<string, Window>();
-  return (req: Request, res: Response, next: NextFunction): void => {
-    const key = req.bearerToken ?? req.ip ?? "anonymous";
-    const now = Date.now();
-    const existing = windows.get(key);
-    if (!existing || now >= existing.resetAt) {
-      windows.set(key, { count: 1, resetAt: now + windowMs });
-      setHeaders(res, limit, limit - 1);
-      next();
-      return;
-    }
-    existing.count += 1;
-    const remaining = Math.max(0, limit - existing.count);
-    setHeaders(res, limit, remaining);
-    if (existing.count > limit) {
-      res.setHeader(
-        "retry-after",
-        String(Math.ceil((existing.resetAt - now) / 1000)),
-      );
-      throw new CoreError(
-        "validation",
-        "Rate limit exceeded. Slow down and retry shortly.",
-        429,
-      );
-    }
-    next();
-  };
-}
+export const v1RateLimiter: RateLimitRequestHandler = rateLimit({
+  windowMs: 60_000,
+  limit: 240,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: Request): string => {
+    const token = bearerToken(req);
+    return token ? `tok:${token}` : `ip:${req.ip ?? "unknown"}`;
+  },
+  // Key-generator IP validation is not relevant here — we key by token first
+  // and only fall back to the address for unauthenticated requests.
+  validate: { ip: false },
+  message: {
+    error: "rate_limited",
+    message: "Rate limit exceeded. Slow down and retry shortly.",
+  },
+});
 
-function setHeaders(res: Response, limit: number, remaining: number): void {
-  res.setHeader("x-ratelimit-limit", String(limit));
-  res.setHeader("x-ratelimit-remaining", String(remaining));
+function bearerToken(req: Request): string | null {
+  const header = req.headers.authorization;
+  if (typeof header !== "string") {
+    return null;
+  }
+  const prefix = "bearer ";
+  if (
+    header.length <= prefix.length ||
+    header.slice(0, prefix.length).toLowerCase() !== prefix
+  ) {
+    return null;
+  }
+  const token = header.slice(prefix.length).trim();
+  return token.length > 0 ? token : null;
 }

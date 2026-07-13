@@ -17,11 +17,18 @@
  * data, no live vendor calls.
  */
 import {
+  buildEvidence,
   CoreError,
+  evaluatePolicy,
   SignalGridCore,
   SHARED_DEVICE_RULES_V2,
   type Decision,
   type DecisionOutcome,
+  type Device,
+  type Identity,
+  type NormalizedSignal,
+  type SignalCategory,
+  type Workflow,
 } from "@workspace/signalgrid-core";
 
 interface Assertion {
@@ -434,6 +441,101 @@ if (pending) {
   // Isolation: atlas owner cannot see or approve a northwind remediation.
   expectError("remediation: cross-tenant approval denied", "not_found", () =>
     core.approveRemediation(T.atlasOwner, pending.id),
+  );
+}
+
+// ── 11. Fail-closed on missing encryption evidence (regression) ───────────────
+
+{
+  const identity: Identity = {
+    id: "id_enc",
+    tenantId: "tenant_northwind",
+    externalRef: "nurse.enc",
+    displayName: "Nurse",
+    state: "enabled",
+    assignedRole: "nurse",
+  };
+  const device: Device = {
+    id: "dev_enc",
+    tenantId: "tenant_northwind",
+    externalRef: "ipad-enc",
+    name: "Ward iPad",
+    osPlatform: "iPadOS",
+    osVersion: "18.5",
+    ownerType: "shared",
+    managementAgent: "intune",
+  };
+  const workflow: Workflow = {
+    id: "wf_enc",
+    tenantId: "tenant_northwind",
+    key: "clinical-session",
+    name: "Clinical session",
+    riskTier: "elevated",
+  };
+  const sig = (
+    category: SignalCategory,
+    value: NormalizedSignal["value"],
+  ): NormalizedSignal => ({
+    id: `sig_${category}`,
+    tenantId: "tenant_northwind",
+    connectorId: "conn",
+    subjectType: "device",
+    subjectId: device.id,
+    category,
+    value,
+    observedAt: "2026-07-13T13:00:00.000Z",
+    freshness: "fresh",
+    sourceReference: "fixture:test",
+  });
+  // Healthy in every dimension EXCEPT there is no device_encryption signal.
+  const signals = [
+    sig("device_compliance", "compliant"),
+    sig("device_management", true),
+    sig("os_support", true),
+    sig("posture_freshness", "fresh"),
+  ];
+  const ev = buildEvidence(identity, device, workflow, signals);
+  check(
+    "encryption: missing encryption evidence marks critical evidence degraded",
+    ev.deviceEncrypted === "unknown" && ev.criticalSignalsPresent === false,
+  );
+  const activeV1 = core
+    .listPolicyVersions(T.owner, policyId)
+    .find((v) => v.version === 1);
+  check("encryption: v1 policy version resolved", Boolean(activeV1));
+  if (activeV1) {
+    check(
+      "encryption: elevated workflow with unknown encryption does not allow",
+      evaluatePolicy(activeV1, ev).outcome !== "allow",
+    );
+  }
+}
+
+// ── 12. Repeated evaluation does not overwrite (unique ids) ────────────────────
+
+{
+  const dupCore = SignalGridCore.demo();
+  const dupReq = {
+    identityRef: "nurse.compliant",
+    deviceRef: "ipad-ward-01",
+    workflowKey: "clinical-session",
+  };
+  const first = dupCore.evaluate(T.operator, dupReq);
+  const second = dupCore.evaluate(T.operator, dupReq);
+  check(
+    "repeat: evaluating the same scenario twice yields distinct decision ids",
+    first.decisionId !== second.decisionId,
+  );
+  check(
+    "repeat: both decisions are retained (no overwrite)",
+    dupCore.listDecisions(T.operator).length === 2,
+  );
+  // Cross-core determinism still holds: each fresh core's FIRST decision agrees.
+  const freshA = SignalGridCore.demo().evaluate(T.operator, dupReq);
+  const freshB = SignalGridCore.demo().evaluate(T.operator, dupReq);
+  check(
+    "repeat: first decision id is still deterministic across fresh cores",
+    freshA.decisionId === freshB.decisionId,
   );
 }
 

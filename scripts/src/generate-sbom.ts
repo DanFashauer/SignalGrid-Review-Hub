@@ -61,7 +61,8 @@ function collect(
 }
 
 function bomRef(component: Component): string {
-  return `pkg:npm/${component.name.replace("@", "%40")}@${component.version}`;
+  // Encode every "@" in the package name (scoped names begin with "@").
+  return `pkg:npm/${component.name.replaceAll("@", "%40")}@${component.version}`;
 }
 
 function main(): void {

@@ -67,6 +67,14 @@ function extractBearer(req: Request): string | null {
   if (typeof header !== "string") {
     return null;
   }
-  const match = header.match(/^Bearer\s+(.+)$/i);
-  return match ? match[1].trim() : null;
+  // Parse without a backtracking-prone regex (avoids ReDoS on crafted headers).
+  const prefix = "bearer ";
+  if (
+    header.length <= prefix.length ||
+    header.slice(0, prefix.length).toLowerCase() !== prefix
+  ) {
+    return null;
+  }
+  const token = header.slice(prefix.length).trim();
+  return token.length > 0 ? token : null;
 }

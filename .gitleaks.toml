@@ -1,0 +1,21 @@
+# gitleaks configuration for SignalGrid Review Hub.
+#
+# This repository is public-safe by design. The only "credential-shaped" strings
+# it contains are the deterministic demo API tokens `sgk_demo_*`, which are
+# intentional public fixtures used in docs, examples, and the in-memory core —
+# they are NOT real secrets. This config keeps the full default gitleaks rule
+# set and allowlists only those demo tokens so real leaks are still caught.
+
+title = "SignalGrid gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public-safe demo fixtures — sgk_demo_* tokens are intentional and are not real credentials"
+# Match against the whole line so example curl `Authorization: Bearer sgk_demo_*`
+# lines are allowlisted, while genuine high-entropy secrets are not.
+regexTarget = "line"
+regexes = [
+  '''sgk_demo_[a-z_]+''',
+]

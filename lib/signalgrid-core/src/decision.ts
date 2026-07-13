@@ -1,6 +1,7 @@
 import { appendAudit } from "./audit";
 import { buildEvidence, buildSnapshot } from "./evidence";
 import { evaluatePolicy } from "./policy";
+import { deliverEvent } from "./webhooks";
 import type { MemoryStore } from "./store";
 import { deterministicId } from "./util";
 import type { Clock } from "./util";
@@ -160,6 +161,9 @@ export function evaluateDecision(
     references: [decisionId, snapshot.id, policy.id, version.id],
     recordedAt: createdAt,
   });
+
+  // Route the decision event to configured webhook endpoints (simulated sink).
+  deliverEvent(store, clock, tenantId, decisionId, "decision.evaluated");
 
   const result: EvaluateResult = {
     decisionId,

@@ -342,6 +342,43 @@ export interface MetricsSummary {
   pendingReview: number;
 }
 
+// ── Webhook delivery (simulated, public-safe) ────────────────────────────────
+
+export type DeliveryStatus = "delivered" | "failed" | "dead_letter";
+
+export interface WebhookEndpoint {
+  id: string;
+  tenantId: string;
+  /** Fixture sink URL (…demo.invalid). No real request is ever made. */
+  url: string;
+  events: AuditEventType[];
+  active: boolean;
+  /**
+   * Fixture reliability knob: the simulated sink rejects this many attempts
+   * before succeeding, so retry/backoff can be demonstrated deterministically.
+   */
+  failuresBeforeSuccess: number;
+  maxAttempts: number;
+}
+
+export interface DeliveryAttempt {
+  attempt: number;
+  status: "ok" | "error";
+  simulatedStatusCode: number;
+  backoffSeconds: number;
+}
+
+export interface WebhookDelivery {
+  id: string;
+  tenantId: string;
+  endpointId: string;
+  decisionId: string;
+  event: AuditEventType;
+  status: DeliveryStatus;
+  attempts: DeliveryAttempt[];
+  createdAt: string;
+}
+
 // ── Audit ledger ─────────────────────────────────────────────────────────────
 
 export type AuditEventType =

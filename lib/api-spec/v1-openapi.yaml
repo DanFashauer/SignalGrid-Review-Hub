@@ -219,6 +219,22 @@ paths:
       responses:
         "200": { description: Metrics summary }
 
+  /v1/webhooks:
+    get:
+      operationId: listWebhookEndpoints
+      tags: [connectors]
+      summary: List configured webhook endpoints (simulated sinks)
+      responses:
+        "200": { description: Webhook endpoints }
+
+  /v1/webhooks/deliveries:
+    get:
+      operationId: listWebhookDeliveries
+      tags: [connectors]
+      summary: List simulated webhook deliveries with retry/backoff attempts
+      responses:
+        "200": { description: Delivery records }
+
 components:
   securitySchemes:
     bearerAuth:

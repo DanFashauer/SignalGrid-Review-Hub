@@ -8,6 +8,7 @@ export * from "./evidence";
 export * from "./audit";
 export * from "./metrics";
 export * from "./simulate";
+export * from "./webhooks";
 export * from "./decision";
 export * from "./seed";
 export * from "./engine";

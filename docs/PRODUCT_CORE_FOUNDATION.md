@@ -90,6 +90,13 @@ the client, which is what makes cross-tenant access structurally impossible.
 | `GET /api/v1/connectors/:id/sync-runs` | `connector:read` | Sync run history |
 | `POST /api/v1/connectors/:id/sync` | `connector:sync` | Replay fixture sync |
 | `GET /api/v1/audit` | `audit:read` | Audit events + chain verification |
+| `GET /api/v1/metrics` | `decision:read` | Operator metrics (outcomes, p95 latency, pilot gates) |
+| `POST /api/v1/decisions/:id/simulate` | `decision:read` | Replay a decision against a chosen policy version |
+| `POST /api/v1/policies/:id/versions` | `policy:write` | Author a draft policy version |
+| `POST /api/v1/policies/:id/versions/:vid/activate` | `policy:write` | Activate a policy version |
+| `GET /api/v1/policies/:id/tests` | `policy:read` | Run a version's policy test fixtures |
+| `GET /api/v1/webhooks` | `connector:read` | Configured webhook endpoints (simulated) |
+| `GET /api/v1/webhooks/deliveries` | `connector:read` | Simulated deliveries with retry/backoff |
 
 Middleware: request id + security headers (`x-content-type-options`,
 `x-frame-options`, `referrer-policy`, `cache-control`), bearer authentication /

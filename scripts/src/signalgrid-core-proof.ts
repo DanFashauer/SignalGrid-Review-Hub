@@ -357,6 +357,45 @@ check(
   `p95=${metrics.p95LatencyMs}ms`,
 );
 
+// ── 9. Webhook delivery (simulated, with retry/backoff) ───────────────────────
+
+const deliveries = core.listWebhookDeliveries(T.owner);
+check(
+  "webhooks: every evaluated decision fanned out to both endpoints",
+  deliveries.length === decisions.length * 2,
+  `${deliveries.length} deliveries for ${decisions.length} decisions`,
+);
+check(
+  "webhooks: reliable endpoint delivered on the first attempt",
+  deliveries
+    .filter((d) => d.endpointId.endsWith("_siem"))
+    .every((d) => d.status === "delivered" && d.attempts.length === 1),
+);
+const flaky = deliveries.filter((d) => d.endpointId.endsWith("_itsm"));
+check(
+  "webhooks: flaky endpoint delivered after retries with backoff",
+  flaky.length > 0 &&
+    flaky.every(
+      (d) =>
+        d.status === "delivered" &&
+        d.attempts.length === 3 &&
+        d.attempts[0].status === "error" &&
+        d.attempts[0].backoffSeconds === 1 &&
+        d.attempts[2].status === "ok",
+    ),
+);
+check(
+  "webhooks: deliveries are tenant-scoped",
+  core
+    .listWebhookDeliveries(T.atlasOwner)
+    .every((d) => d.tenantId === "tenant_atlas"),
+);
+expectError(
+  "webhooks: unknown token cannot read deliveries",
+  "unauthorized",
+  () => core.listWebhookDeliveries("sgk_not_real"),
+);
+
 // ── Report ────────────────────────────────────────────────────────────────────
 
 const failed = assertions.filter((a) => !a.passed);

@@ -28,6 +28,8 @@ import {
   type Principal,
   type SimulationResult,
   type Tenant,
+  type WebhookDelivery,
+  type WebhookEndpoint,
 } from "./types";
 
 /** The fixed evaluation clock used by the deterministic demo. */
@@ -301,6 +303,18 @@ export class SignalGridCore {
     const principal = authenticate(this.store, token);
     authorize(principal, "decision:read");
     return computeMetrics(this.store.listDecisions(principal.tenantId));
+  }
+
+  listWebhookEndpoints(token: string): WebhookEndpoint[] {
+    const principal = authenticate(this.store, token);
+    authorize(principal, "connector:read");
+    return this.store.listWebhookEndpoints(principal.tenantId);
+  }
+
+  listWebhookDeliveries(token: string): WebhookDelivery[] {
+    const principal = authenticate(this.store, token);
+    authorize(principal, "connector:read");
+    return this.store.listWebhookDeliveries(principal.tenantId);
   }
 
   listAudit(token: string): AuditEvent[] {

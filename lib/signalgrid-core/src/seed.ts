@@ -86,6 +86,8 @@ export function seedDemoStore(clock: Clock): SeededDemo {
   const northwindConnectorId = runConnector(store, clock, NORTHWIND, northwindRecords);
   const atlasConnectorId = runConnector(store, clock, ATLAS, atlasRecords);
 
+  seedWebhookEndpoints(store, NORTHWIND);
+  seedWebhookEndpoints(store, ATLAS);
   seedApiKeys(store);
 
   return {
@@ -330,6 +332,28 @@ function runConnector(
     recordedAt: run.completedAt,
   });
   return connector.id;
+}
+
+function seedWebhookEndpoints(store: MemoryStore, tenantId: string): void {
+  // A reliable sink and a flaky one, so retry/backoff is visible in deliveries.
+  store.putWebhookEndpoint({
+    id: `wh_${tenantId}_siem`,
+    tenantId,
+    url: `https://sink.demo.invalid/${tenantId}/siem`,
+    events: ["decision.evaluated"],
+    active: true,
+    failuresBeforeSuccess: 0,
+    maxAttempts: 5,
+  });
+  store.putWebhookEndpoint({
+    id: `wh_${tenantId}_itsm`,
+    tenantId,
+    url: `https://sink.demo.invalid/${tenantId}/itsm`,
+    events: ["decision.evaluated"],
+    active: true,
+    failuresBeforeSuccess: 2,
+    maxAttempts: 5,
+  });
 }
 
 function seedApiKeys(store: MemoryStore): void {

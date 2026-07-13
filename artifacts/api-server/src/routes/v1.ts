@@ -136,6 +136,16 @@ router.get("/v1/audit", (req: Request, res: Response) => {
   res.json(envelope(req, { events, chain }));
 });
 
+router.get("/v1/webhooks", (req: Request, res: Response) => {
+  const endpoints = core.listWebhookEndpoints(token(req));
+  res.json(envelope(req, { endpoints }));
+});
+
+router.get("/v1/webhooks/deliveries", (req: Request, res: Response) => {
+  const deliveries = core.listWebhookDeliveries(token(req));
+  res.json(envelope(req, { deliveries }));
+});
+
 export default router;
 
 function token(req: Request): string {

@@ -14,6 +14,8 @@ import type {
   PolicyVersion,
   Tenant,
   User,
+  WebhookDelivery,
+  WebhookEndpoint,
   Workflow,
 } from "./types";
 
@@ -42,6 +44,8 @@ export class MemoryStore {
   private readonly policyTests = new Map<string, PolicyTest>();
   private readonly decisions = new Map<string, Decision>();
   private readonly snapshots = new Map<string, EvidenceSnapshot>();
+  private readonly webhookEndpoints = new Map<string, WebhookEndpoint>();
+  private readonly webhookDeliveries = new Map<string, WebhookDelivery>();
   private readonly auditEvents: AuditEvent[] = [];
 
   // ── Tenant-independent registries (auth resolution only) ──────────────────
@@ -250,6 +254,28 @@ export class MemoryStore {
 
   getSnapshot(tenantId: string, id: string): EvidenceSnapshot | undefined {
     return scoped(this.snapshots.get(id), tenantId);
+  }
+
+  // ── Webhooks ──────────────────────────────────────────────────────────────
+
+  putWebhookEndpoint(endpoint: WebhookEndpoint): void {
+    this.webhookEndpoints.set(endpoint.id, endpoint);
+  }
+
+  listWebhookEndpoints(tenantId: string): WebhookEndpoint[] {
+    return [...this.webhookEndpoints.values()].filter(
+      (row) => row.tenantId === tenantId,
+    );
+  }
+
+  putWebhookDelivery(delivery: WebhookDelivery): void {
+    this.webhookDeliveries.set(delivery.id, delivery);
+  }
+
+  listWebhookDeliveries(tenantId: string): WebhookDelivery[] {
+    return [...this.webhookDeliveries.values()]
+      .filter((row) => row.tenantId === tenantId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
   // ── Audit ledger ──────────────────────────────────────────────────────────

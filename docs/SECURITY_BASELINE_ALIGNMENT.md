@@ -122,5 +122,4 @@ consumes a baseline result and makes an access decision with it.
 - The baseline signal here is deterministic and fixture-backed; the private
   production core would ingest a real baseline result from the operator's own
   posture source under a read-only, least-privilege scope.
-- Every baseline-driven remediation is approval-gated and simulated; there is no
-  autonomous production remediation.
+- Every baseline-driven remediation is approval-gated and simulated, with no autonomous production remediation — SignalGrid records and simulates.

@@ -20,6 +20,7 @@ Local simulator entry points:
 - Simulator scenarios: `http://localhost:5174/api/simulator/scenarios`
 - Simulator proof: `pnpm run proof:signalgrid-simulator`
 - Product core proof (tenancy, policy, decision, evidence, audit): `pnpm run proof:signalgrid-core`
+- API contract + integration tests: `pnpm run proof:api-contract` and `pnpm run test:api`
 - Product `/v1` API (works without a database): `POST /api/v1/decisions/evaluate` with a demo Bearer key
 - Operator Console decision trace: the "Operator Console" section of the Review Hub UI
 - Simulator dev suite: `pnpm run dev:simulator`

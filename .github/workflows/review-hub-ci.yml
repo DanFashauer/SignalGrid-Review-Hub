@@ -57,6 +57,12 @@ jobs:
       - name: Connector emulator proof
         run: pnpm run proof:connector-emulator
 
+      - name: OpenAPI contract check
+        run: pnpm run proof:api-contract
+
+      - name: API integration test
+        run: pnpm run test:api
+
   docs-sanity:
     name: Required docs and unsafe-claim sanity
     runs-on: ubuntu-latest

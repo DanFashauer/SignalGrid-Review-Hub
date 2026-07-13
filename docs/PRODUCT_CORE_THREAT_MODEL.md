@@ -58,7 +58,7 @@ Files: `artifacts/api-server/src/middlewares/context.ts`,
 | Spoofing | Caller forges identity or claims another tenant | Bearer token resolved to a principal; **tenant + role derived from the key record, never from the client**; no default tenant | Real authentication provider (OIDC / session issuer), key rotation and revocation |
 | Tampering | Client injects `x-request-id` or headers to confuse logs | Request id echoed but non-authoritative; auth reads only the `Authorization` header | Signed request context; provider-issued tokens |
 | Repudiation | Actor denies making a call | Principal `keyReference` + request id flow into audit and logs | Provider-backed identity binding |
-| Information disclosure | Auth errors leak whether a key exists | Uniform `unauthorized` (401) for both missing and unknown tokens | Constant-time key comparison, real secret storage |
+| Information disclosure | Auth errors leak whether a key exists | Uniform `unauthorized` (401) for both missing and unknown tokens; **token comparison is length-independent** (`constantTimeEquals`), so lookup does not leak a per-character timing signal | Real secret storage; compare fixed-length token digests with a native constant-time primitive |
 | Denial of service | Auth path made expensive | Auth is an O(1) in-memory lookup with no network call | Cache and rate-limit the real provider |
 | Elevation of privilege | Missing/empty token treated as a default principal | **Fail-closed:** missing or unknown token throws 401; never resolves to a default tenant or role | Same posture over a real IdP |
 
@@ -106,7 +106,8 @@ Files: `lib/signalgrid-core/src/policy.ts`, `PolicyVersion.digest`.
 | Tampering | Rule set altered after activation | Each `PolicyVersion` carries a deterministic **rule-set content digest**; versions are `active`/`superseded`/`draft`, not edited in place | Keyed cryptographic signing of policy versions; approval workflow |
 | Elevation of privilege | Degraded evidence yields an unsafe `allow` | **Fail-closed:** `allow` is suppressed to `step_up` when `criticalSignalsPresent` is false; unmatched evidence defaults to `step_up`, never a silent allow; outcome is the most restrictive firing rule (deny > restrict > step_up > allow) | Same guardrail over real signals, with monitored rule-change review |
 | Repudiation | Which policy decided is disputed | Decisions record `policyId`, `policyVersionId`, and `policyVersion` | Durable, signed version lineage |
-| Denial of service | Pathological rule evaluation | Rules are bounded, typed, and evaluated in a single deterministic pass with an exhaustiveness guard | Complexity limits on authored policy |
+| Denial of service | Pathological or malformed authored rule set (missing `match`, bad condition, deep nesting) crashes a later evaluation | **Authored rules are fully validated at the write boundary** (`validatePolicyRules`): structure, field domains, non-empty `match`, per-rule/condition caps (≤64 rules, ≤16 conditions), and a canonical-JSON depth cap; malformed input is rejected with a 400 and can never be stored, so `evaluatePolicy` only ever sees well-formed rules; evaluation is additionally defensive (an empty/absent `match` fails closed rather than firing vacuously) | Monitored rule-change review and per-tenant complexity budgets |
+| Tampering | Authored rule injects unexpected/prototype-y keys | Rules are **re-materialised** into fresh objects with only known keys during validation, dropping any extra properties | Schema-registry-validated policy authoring |
 
 ### 6. Decision loop
 
@@ -147,8 +148,8 @@ File: `artifacts/api-server/src/middlewares/rateLimit.ts`.
 
 | STRIDE | Threat | Implemented mitigation | Residual / private core |
 | ------ | ------ | ---------------------- | ----------------------- |
-| Denial of service | Flood of requests exhausts the service | **Fixed-window limiter** (240 req/60s on `/v1`), keyed by bearer token when present else client address; returns 429 with `retry-after` | **Distributed/shared limiter** across instances; per-route and per-tenant budgets |
-| Spoofing | Rotate source to evade limits | Keyed by bearer token first, so a single principal is bounded regardless of address | Provider-backed principal keys |
+| Denial of service | Flood of requests exhausts the service | **Two limiters:** a coarse global limiter (600 req/60s) applied ahead of *every* route so the unauthenticated public surface (health, integrations, simulator, and the `/v1/keys` discovery route that sits ahead of the auth guard) cannot be spammed for amplification, plus a tighter per-key `/v1` limiter (240 req/60s); both return 429 with `retry-after` | **Distributed/shared limiter** across instances; per-route and per-tenant budgets |
+| Spoofing | Rotate source to evade limits | The `/v1` limiter is keyed by bearer token first, so a single principal is bounded regardless of address | Provider-backed principal keys |
 
 ### 10. Error handling
 
@@ -157,7 +158,9 @@ File: `artifacts/api-server/src/middlewares/errors.ts`, `CoreError`.
 | STRIDE | Threat | Implemented mitigation | Residual / private core |
 | ------ | ------ | ---------------------- | ----------------------- |
 | Information disclosure | Stack traces, file paths, or raw errors leak to clients | **Structured errors only:** `CoreError` maps to a stable `{ requestId, error, message }` shape; unknown errors become a generic `internal` 500; internals are logged server-side, never returned | Same posture with production log hygiene |
-| Tampering | Oversized body abuses the parser | **64 KB body cap** on JSON and urlencoded parsing (`app.ts`) | Streaming limits and upload quotas |
+| Tampering | Oversized body abuses the parser | **64 KB body cap** on JSON and urlencoded parsing (`app.ts`); an oversized body maps to a **413 `payload_too_large`** | Streaming limits and upload quotas |
+| Denial of service | Malformed JSON body throws a raw parser error and is mishandled as a 500 | Body-parser failures (bad JSON, unsupported charset/encoding) are **classified to a 400 `bad_request`** with a fixed, non-leaky message instead of a 500 | Unchanged |
+| Spoofing | Any web origin scripts the authenticated API from a victim's browser | **CORS is an explicit allow-list** (`CORS_ALLOWED_ORIGINS`), not a wildcard; unknown browser origins receive no `Access-Control-Allow-Origin` and are blocked; default is deny-all cross-origin | Per-environment origin policy tied to the real console host |
 | Denial of service | Verbose error handling amplifies load | Cheap, bounded translation; no reflection of client input beyond the request id | Unchanged |
 | Repudiation | Error not attributable | Every response carries the request id | Correlated distributed tracing |
 
@@ -176,6 +179,7 @@ File: `artifacts/api-server/src/middlewares/errors.ts`, `CoreError`.
 | Snapshot tamper-evidence | Mutating an evidence snapshot fails its digest check |
 | Audit tamper-evidence | Mutating an audit event breaks the chain and is detected with the broken seq |
 | Determinism | Two fresh cores produce identical decision and snapshot ids for the same request |
+| Untrusted-input hardening | Every malformed authored rule shape (absent/empty `match`, unknown condition field, out-of-domain value, invalid outcome/severity, over the rule cap, duplicate ids, non-array) is rejected with a validation error; a validated draft still activates and evaluates without throwing; deeply-nested input is rejected by the canonical-JSON depth cap rather than exhausting the stack; the constant-time comparison behaves as an equality; the shipped facade exposes no `unsafeStore()`/caller-tenant probe |
 
 ## What the private production core must add
 

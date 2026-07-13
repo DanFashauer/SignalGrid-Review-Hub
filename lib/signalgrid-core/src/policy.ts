@@ -1,13 +1,15 @@
 import { canonicalJson, digest } from "./util";
-import type {
-  DecisionEvidence,
-  DecisionOutcome,
-  MatchedRule,
-  PolicyRuleSpec,
-  PolicyTest,
-  PolicyTestResult,
-  PolicyVersion,
-  RuleCondition,
+import {
+  CoreError,
+  type DecisionOutcome,
+  type DecisionEvidence,
+  type MatchedRule,
+  type PolicyRuleSpec,
+  type PolicyTest,
+  type PolicyTestResult,
+  type PolicyVersion,
+  type RuleCondition,
+  type Severity,
 } from "./types";
 
 /** Severity of a degraded-evidence outcome, worst-first for precedence. */
@@ -30,6 +32,204 @@ export function ruleSetDigest(rules: PolicyRuleSpec[]): string {
   return digest(canonicalJson(rules));
 }
 
+// ── Rule validation (untrusted input hardening) ──────────────────────────────
+//
+// Policy rules can arrive from an authenticated caller (POST a new draft
+// version). Without structural validation, a malformed rule (e.g. one missing
+// `match`, or a condition with a bad `field`/`in`) would flow untouched into
+// `evaluatePolicy`, where `rule.match.every(...)` or `condition.in.includes(...)`
+// would throw a raw TypeError on the *next* evaluation — turning an authoring
+// request into a stored, deferred denial-of-service. Validation is enforced at
+// the write boundary so only well-formed rules can ever be persisted, and the
+// values are re-materialised into fresh objects so unexpected/prototype-y keys
+// are dropped.
+
+/** Upper bound on rules per policy version — bounds evaluation cost and body size. */
+export const MAX_POLICY_RULES = 64;
+/** Upper bound on conditions per rule. */
+export const MAX_RULE_CONDITIONS = 16;
+/** Upper bound on any string field in an authored rule. */
+const MAX_RULE_STRING = 200;
+
+const VALID_OUTCOMES = new Set<DecisionOutcome>([
+  "allow",
+  "step_up",
+  "restrict",
+  "deny",
+]);
+const VALID_SEVERITIES = new Set<Severity>([
+  "low",
+  "medium",
+  "high",
+  "critical",
+]);
+
+// Condition fields whose value is `equals: boolean | "unknown"`.
+const TRISTATE_FIELDS = new Set([
+  "identityEnabled",
+  "deviceManaged",
+  "deviceEncrypted",
+  "osSupported",
+]);
+// Condition fields whose value is `equals: boolean`.
+const BOOL_FIELDS = new Set(["criticalSignalsPresent"]);
+// Condition fields whose value is `in: <enum>[]`, with the allowed members.
+const IN_FIELDS: Record<string, ReadonlySet<string>> = {
+  deviceCompliance: new Set(["compliant", "non_compliant", "unknown"]),
+  postureFreshness: new Set(["fresh", "stale", "expired", "missing", "unknown"]),
+  ownerType: new Set(["corporate", "personal", "shared", "unknown"]),
+  workflowRiskTier: new Set(["low", "standard", "elevated", "critical"]),
+  custodyState: new Set([
+    "checked_in",
+    "checked_out",
+    "overdue",
+    "exception",
+    "maintenance",
+    "unknown",
+  ]),
+  chargeState: new Set([
+    "charging",
+    "charged",
+    "low",
+    "critical",
+    "not_present",
+    "unknown",
+  ]),
+  tamperState: new Set([
+    "none",
+    "suspected",
+    "confirmed",
+    "sensor_unavailable",
+    "unknown",
+  ]),
+};
+
+function reject(message: string): never {
+  throw new CoreError("validation", message, 400);
+}
+
+function requireString(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    reject(`${label} must be a non-empty string.`);
+  }
+  if (value.length > MAX_RULE_STRING) {
+    reject(`${label} exceeds the ${MAX_RULE_STRING}-character limit.`);
+  }
+  return value;
+}
+
+function validateCondition(input: unknown, ruleId: string): RuleCondition {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    reject(`Rule "${ruleId}" has a condition that is not an object.`);
+  }
+  const record = input as Record<string, unknown>;
+  const field = record["field"];
+  if (typeof field !== "string") {
+    reject(`Rule "${ruleId}" has a condition with a missing/invalid field.`);
+  }
+
+  if (TRISTATE_FIELDS.has(field)) {
+    const equals = record["equals"];
+    if (typeof equals !== "boolean" && equals !== "unknown") {
+      reject(
+        `Condition on "${field}" requires equals to be a boolean or "unknown".`,
+      );
+    }
+    return { field, equals } as RuleCondition;
+  }
+
+  if (BOOL_FIELDS.has(field)) {
+    const equals = record["equals"];
+    if (typeof equals !== "boolean") {
+      reject(`Condition on "${field}" requires equals to be a boolean.`);
+    }
+    return { field, equals } as RuleCondition;
+  }
+
+  const allowed = IN_FIELDS[field];
+  if (allowed) {
+    const members = record["in"];
+    if (!Array.isArray(members) || members.length === 0) {
+      reject(`Condition on "${field}" requires a non-empty "in" array.`);
+    }
+    if (members.length > MAX_RULE_CONDITIONS) {
+      reject(`Condition on "${field}" has too many members.`);
+    }
+    for (const member of members) {
+      if (typeof member !== "string" || !allowed.has(member)) {
+        reject(`Condition on "${field}" has an unsupported value.`);
+      }
+    }
+    return { field, in: [...members] } as RuleCondition;
+  }
+
+  reject(`Rule "${ruleId}" references an unknown condition field "${field}".`);
+}
+
+function validateRule(input: unknown, index: number): PolicyRuleSpec {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    reject(`Rule at index ${index} is not an object.`);
+  }
+  const record = input as Record<string, unknown>;
+  const id = requireString(record["id"], `Rule[${index}].id`);
+  const description = requireString(
+    record["description"],
+    `Rule "${id}".description`,
+  );
+  const outcome = record["outcome"];
+  if (typeof outcome !== "string" || !VALID_OUTCOMES.has(outcome as DecisionOutcome)) {
+    reject(`Rule "${id}" has an invalid outcome.`);
+  }
+  const reasonCode = requireString(record["reasonCode"], `Rule "${id}".reasonCode`);
+  const severity = record["severity"];
+  if (typeof severity !== "string" || !VALID_SEVERITIES.has(severity as Severity)) {
+    reject(`Rule "${id}" has an invalid severity.`);
+  }
+  const match = record["match"];
+  if (!Array.isArray(match) || match.length === 0) {
+    reject(`Rule "${id}" requires a non-empty "match" array.`);
+  }
+  if (match.length > MAX_RULE_CONDITIONS) {
+    reject(`Rule "${id}" has too many conditions (max ${MAX_RULE_CONDITIONS}).`);
+  }
+  const conditions = match.map((condition) => validateCondition(condition, id));
+  // Re-materialise as a clean object so only known keys survive.
+  return {
+    id,
+    description,
+    match: conditions,
+    outcome: outcome as DecisionOutcome,
+    reasonCode,
+    severity: severity as Severity,
+  };
+}
+
+/**
+ * Validate an untrusted rule set from an authenticated authoring request.
+ * Returns fully-typed, re-materialised rules on success; throws a
+ * `validation` CoreError (HTTP 400) on any structural problem. This is the
+ * single choke point that guarantees `evaluatePolicy` only ever sees
+ * well-formed rules.
+ */
+export function validatePolicyRules(input: unknown): PolicyRuleSpec[] {
+  if (!Array.isArray(input) || input.length === 0) {
+    reject("A policy version requires a non-empty array of rules.");
+  }
+  if (input.length > MAX_POLICY_RULES) {
+    reject(`A policy version may contain at most ${MAX_POLICY_RULES} rules.`);
+  }
+  const seen = new Set<string>();
+  const rules = input.map((rule, index) => {
+    const validated = validateRule(rule, index);
+    if (seen.has(validated.id)) {
+      reject(`Duplicate rule id "${validated.id}".`);
+    }
+    seen.add(validated.id);
+    return validated;
+  });
+  return rules;
+}
+
 /**
  * Evaluate normalized decision evidence against a versioned policy.
  *
@@ -49,6 +249,12 @@ export function evaluatePolicy(
   const reasonCodes: string[] = [];
 
   for (const rule of version.rules) {
+    // Defense-in-depth: rules are validated at authoring, but never let a
+    // malformed rule (empty/absent match) crash evaluation or fire vacuously.
+    // A rule with no real conditions fails closed (does not match).
+    if (!Array.isArray(rule.match) || rule.match.length === 0) {
+      continue;
+    }
     if (rule.match.every((condition) => matches(condition, evidence))) {
       matchedRules.push({
         ruleId: rule.id,

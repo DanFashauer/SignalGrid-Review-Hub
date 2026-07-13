@@ -30,6 +30,24 @@ export const v1RateLimiter: RateLimitRequestHandler = rateLimit({
   },
 });
 
+/**
+ * Coarser limiter applied to EVERY route (registered first in `app.ts`), so the
+ * unauthenticated public surface — health, integrations, the simulator, and the
+ * `/v1/keys` discovery route that sits ahead of the /v1 auth guard — cannot be
+ * spammed for amplification or token harvesting. Keyed by client address; the
+ * per-key /v1 limiter still applies a tighter bound on the authenticated paths.
+ */
+export const globalRateLimiter: RateLimitRequestHandler = rateLimit({
+  windowMs: 60_000,
+  limit: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: "rate_limited",
+    message: "Rate limit exceeded. Slow down and retry shortly.",
+  },
+});
+
 function bearerToken(req: Request): string | null {
   const header = req.headers.authorization;
   if (typeof header !== "string") {

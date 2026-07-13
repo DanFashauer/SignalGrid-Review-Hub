@@ -107,9 +107,16 @@ fail-closed by design.
 | Control | Framework refs | Status | Where |
 | ------- | -------------- | ------ | ----- |
 | Typed request/response contracts | ASVS 5.0; API Top 10 | Implemented (public core) | `lib/signalgrid-core/src/types.ts` (`EvaluateRequest`, `RuleCondition`) |
+| Untrusted authored-rule validation at the write boundary (structure, field domains, non-empty `match`, ≤64 rules / ≤16 conditions, re-materialised keys) | ASVS 5.0; API Top 10 (API8) | Implemented (public core) | `lib/signalgrid-core/src/policy.ts` (`validatePolicyRules`); verified by `proof:signalgrid-core` (untrusted-input hardening) |
+| Bounded-depth canonical JSON (rejects stack-overflow DoS input) | ASVS 5.0; API Top 10 (API4) | Implemented (public core) | `lib/signalgrid-core/src/util.ts` (`canonicalJson`, `MAX_CANONICAL_DEPTH`) |
+| Defensive fail-closed evaluation (empty/absent `match` never fires vacuously; malformed condition never matches) | ASVS 5.0; 800-207 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts` (`evaluatePolicy`, `matches`) |
 | Structured error codes with safe messages (no internal-detail leak) | ASVS 5.0; API Top 10 | Implemented (public core) | `lib/signalgrid-core/src/types.ts` (`CoreError`, `CoreErrorCode`); error translator middleware |
+| Body-parser failures mapped to 4xx (malformed JSON → 400, oversized → 413), never a misleading 500 | ASVS 5.0; API Top 10 (API4) | Implemented (public core) | `artifacts/api-server/src/middlewares/errors.ts` (`classifyBodyError`) |
 | 64 KB request body cap | ASVS 5.0; API Top 10 (API4) | Implemented (public core) | `/v1` middleware (`docs/PRODUCT_CORE_FOUNDATION.md`) |
-| Fixed-window rate limiting | ASVS 5.0; API Top 10 (API4) | Implemented (public core) | `/v1` middleware (`docs/PRODUCT_CORE_FOUNDATION.md`) |
+| Explicit CORS allow-list (no wildcard on the authenticated surface; default deny-all cross-origin) | ASVS 5.0; API Top 10 (API8) | Implemented (public core) | `artifacts/api-server/src/app.ts` (`corsOptions`, `CORS_ALLOWED_ORIGINS`) |
+| Two-tier rate limiting: coarse global limiter over every route (covers the unauthenticated public surface) + tighter per-key `/v1` limiter | ASVS 5.0; API Top 10 (API4) | Implemented (public core) | `artifacts/api-server/src/middlewares/rateLimit.ts` (`globalRateLimiter`, `v1RateLimiter`) |
+| Constant-time (length-independent) token comparison | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/util.ts` (`constantTimeEquals`); `store.ts` (`findApiKeyByToken`) |
+| No unauthenticated cross-tenant affordances on the shipped facade (removed `unsafeStore()` / caller-supplied-tenant probe) | API Top 10 (API1); ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/engine.ts` (gated `demoApiKeys()` only) |
 | Security response headers (content-type-options, frame-options, referrer-policy, cache-control) | ASVS 5.0 | Implemented (public core) | `/v1` middleware (`docs/PRODUCT_CORE_FOUNDATION.md`) |
 | Request id propagation for traceability | ASVS 5.0; CSF 2.0 (DE) | Implemented (public core) | `/v1` middleware (`docs/PRODUCT_CORE_FOUNDATION.md`) |
 | Fail-closed on missing/stale/unknown critical evidence (no unsafe `allow`) | ASVS 5.0; 800-207 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts`; verified by `proof:signalgrid-core` (fail-closed invariant) |

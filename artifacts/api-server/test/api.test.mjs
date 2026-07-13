@@ -154,6 +154,63 @@ async function run() {
   const tests = await req("GET", "/v1/policies/pol_tenant_northwind_shared_device/tests", { token: KEYS.owner });
   check("policy tests pass", tests.status === 200 && tests.json?.passed === true);
 
+  // ── security hardening: untrusted policy rules are validated (no deferred DoS)
+  const malformedRule = await req("POST", "/v1/policies/pol_tenant_northwind_shared_device/versions", {
+    token: KEYS.owner,
+    body: { rules: [{ id: "x", description: "d", outcome: "allow", reasonCode: "R", severity: "low" }] },
+  });
+  check("malformed policy rule (no match) → 400 not 500", malformedRule.status === 400);
+
+  const badField = await req("POST", "/v1/policies/pol_tenant_northwind_shared_device/versions", {
+    token: KEYS.owner,
+    body: { rules: [{ id: "x", description: "d", match: [{ field: "notAField", equals: true }], outcome: "allow", reasonCode: "R", severity: "low" }] },
+  });
+  check("policy rule with unknown condition field → 400", badField.status === 400);
+
+  // A deeply-nested rules payload is rejected as a client error, never a 500.
+  let nested = 0;
+  for (let i = 0; i < 400; i++) nested = [nested];
+  const deepRules = await req("POST", "/v1/policies/pol_tenant_northwind_shared_device/versions", {
+    token: KEYS.owner,
+    body: { rules: [{ id: "x", description: "d", match: nested, outcome: "allow", reasonCode: "R", severity: "low" }] },
+  });
+  check("deeply-nested rules payload → 4xx not 500", deepRules.status >= 400 && deepRules.status < 500);
+
+  // A valid authored draft still activates and evaluates cleanly afterwards.
+  // Capture the currently-active version so we can restore it — activating a
+  // new version is global state and later assertions depend on the seed policy.
+  const policiesBefore = await req("GET", "/v1/policies", { token: KEYS.owner });
+  const sharedPolicy = (policiesBefore.json?.policies ?? []).find(
+    (p) => p.id === "pol_tenant_northwind_shared_device",
+  );
+  const originalActiveVersionId = sharedPolicy?.activeVersionId;
+
+  const goodDraft = await req("POST", "/v1/policies/pol_tenant_northwind_shared_device/versions", {
+    token: KEYS.owner,
+    body: { rules: [{ id: "sec-rule", description: "d", match: [{ field: "deviceManaged", equals: false }], outcome: "restrict", reasonCode: "SEC", severity: "high" }] },
+  });
+  check("valid authored policy draft → 201", goodDraft.status === 201);
+  const activateGood = await req("POST", `/v1/policies/pol_tenant_northwind_shared_device/versions/${goodDraft.json?.version?.id}/activate`, { token: KEYS.owner });
+  check("valid draft activates → 200", activateGood.status === 200);
+  const postActivateEval = await req("POST", "/v1/decisions/evaluate", {
+    token: KEYS.operator,
+    body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" },
+  });
+  check("evaluation after activating a validated draft still succeeds (no brick)", postActivateEval.status === 200);
+
+  // Restore the seed policy so downstream assertions see the original engine.
+  if (originalActiveVersionId) {
+    await req("POST", `/v1/policies/pol_tenant_northwind_shared_device/versions/${originalActiveVersionId}/activate`, { token: KEYS.owner });
+  }
+
+  // Malformed JSON body is a client error (400), not a server fault (500).
+  const brokenJson = await fetch(`${BASE}/v1/decisions/evaluate`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${KEYS.operator}`, "content-type": "application/json" },
+    body: "{ not valid json",
+  });
+  check("malformed JSON body → 400 not 500", brokenJson.status === 400);
+
   // ── connectors (posture + DockBridge custody) ───────────────────────────
   const connectors = await req("GET", "/v1/connectors", { token: KEYS.owner });
   check("connectors listed", connectors.status === 200 && Array.isArray(connectors.json?.connectors));

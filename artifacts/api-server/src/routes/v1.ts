@@ -1,9 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import {
-  CoreError,
-  type EvaluateRequest,
-  type PolicyRuleSpec,
-} from "@workspace/signalgrid-core";
+import { CoreError, type EvaluateRequest } from "@workspace/signalgrid-core";
 import { core, DEMO_KEYS } from "../lib/core";
 import { requireTenantContext } from "../middlewares/context";
 import { v1RateLimiter } from "../middlewares/rateLimit";
@@ -98,8 +94,11 @@ router.get("/v1/policies/:id/versions", (req: Request, res: Response) => {
 });
 
 router.post("/v1/policies/:id/versions", (req: Request, res: Response) => {
-  const rules = parseRules(req.body);
-  const version = core.createPolicyDraft(token(req), param(req, "id"), rules);
+  // The core fully validates the untrusted rule set (structure, field domains,
+  // count/depth caps) and rejects malformed input with a 400, so a bad rule can
+  // never be persisted and can never crash a later evaluation.
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const version = core.createPolicyDraft(token(req), param(req, "id"), body["rules"]);
   res.status(201).json(envelope(req, { version }));
 });
 
@@ -203,20 +202,6 @@ function parseEvaluate(body: unknown): EvaluateRequest {
       ? sanitizeContext(record["requestContext"] as Record<string, unknown>)
       : undefined;
   return { identityRef, deviceRef, workflowKey, requestContext };
-}
-
-function parseRules(body: unknown): PolicyRuleSpec[] {
-  const record = (body ?? {}) as Record<string, unknown>;
-  const rules = record["rules"];
-  if (!Array.isArray(rules) || rules.length === 0) {
-    throw new CoreError(
-      "validation",
-      "Body must include a non-empty `rules` array.",
-      400,
-    );
-  }
-  // The core validates rule structure; malformed conditions fail closed.
-  return rules as PolicyRuleSpec[];
 }
 
 const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);

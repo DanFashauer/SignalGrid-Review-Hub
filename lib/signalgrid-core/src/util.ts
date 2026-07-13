@@ -41,22 +41,35 @@ export function digest(input: string): string {
 }
 
 /**
+ * Maximum nesting depth `canonicalJson` will traverse. Digest inputs in this
+ * core (evidence, rule sets) are shallow; a value nested beyond this is treated
+ * as hostile input rather than being allowed to exhaust the call stack.
+ */
+export const MAX_CANONICAL_DEPTH = 64;
+
+/**
  * Canonical JSON: stable key ordering so digests are reproducible regardless of
- * property insertion order.
+ * property insertion order. Bounded depth: deeply-nested input (a stack-overflow
+ * DoS vector) is rejected instead of recursed. Throws a RangeError past the cap.
  */
 export function canonicalJson(value: unknown): string {
-  return JSON.stringify(sortValue(value));
+  return JSON.stringify(sortValue(value, 0));
 }
 
-function sortValue(value: unknown): unknown {
+function sortValue(value: unknown, depth: number): unknown {
+  if (depth > MAX_CANONICAL_DEPTH) {
+    throw new RangeError(
+      `canonicalJson: input nested deeper than ${MAX_CANONICAL_DEPTH} levels.`,
+    );
+  }
   if (Array.isArray(value)) {
-    return value.map(sortValue);
+    return value.map((item) => sortValue(item, depth + 1));
   }
   if (value && typeof value === "object") {
     const record = value as Record<string, unknown>;
     const sorted: Record<string, unknown> = {};
     for (const key of Object.keys(record).sort()) {
-      sorted[key] = sortValue(record[key]);
+      sorted[key] = sortValue(record[key], depth + 1);
     }
     return sorted;
   }
@@ -66,6 +79,24 @@ function sortValue(value: unknown): unknown {
 /** Deterministic, human-readable id derived from stable seed parts. */
 export function deterministicId(prefix: string, ...parts: string[]): string {
   return `${prefix}_${digest(parts.join("|"))}`;
+}
+
+/**
+ * Length-independent string comparison. Unlike `===`, its running time does not
+ * short-circuit at the first differing character, so it does not leak a
+ * character-by-character timing signal that could be used to recover a secret
+ * token. Pure JS (the core is isomorphic and cannot use `crypto.timingSafeEqual`
+ * directly); the private production core would compare fixed-length digests with
+ * a native constant-time primitive.
+ */
+export function constantTimeEquals(a: string, b: string): boolean {
+  const length = Math.max(a.length, b.length);
+  // Fold the length difference in so unequal lengths never compare equal.
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < length; i++) {
+    diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  }
+  return diff === 0;
 }
 
 /**

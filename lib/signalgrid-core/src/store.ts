@@ -20,6 +20,7 @@ import type {
   WebhookEndpoint,
   Workflow,
 } from "./types";
+import { constantTimeEquals } from "./util";
 
 /**
  * In-memory, tenant-scoped store.
@@ -73,12 +74,15 @@ export class MemoryStore {
   }
 
   findApiKeyByToken(token: string): ApiKeyRecord | undefined {
+    // Compare with a length-independent equality so token lookup does not leak a
+    // per-character timing signal (see `constantTimeEquals`).
+    let match: ApiKeyRecord | undefined;
     for (const key of this.apiKeys.values()) {
-      if (key.token === token) {
-        return key;
+      if (constantTimeEquals(key.token, token)) {
+        match = key;
       }
     }
-    return undefined;
+    return match;
   }
 
   getTenant(tenantId: string): Tenant | undefined {

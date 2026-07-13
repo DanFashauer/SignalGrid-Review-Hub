@@ -18,10 +18,15 @@
  */
 import {
   buildEvidence,
+  canonicalJson,
+  constantTimeEquals,
   CoreError,
   evaluatePolicy,
+  fixedClock,
+  seedDemoStore,
   SignalGridCore,
   SHARED_DEVICE_RULES_V2,
+  validatePolicyRules,
   type Decision,
   type DecisionOutcome,
   type Device,
@@ -137,13 +142,18 @@ check(
 
 // ── 3. Tenant isolation ───────────────────────────────────────────────────────
 
+// White-box store-level isolation check. Built on a freshly-seeded store (not a
+// caller-supplied-tenant probe on the shipped facade, which no longer exists):
+// `findDeviceByRef` is tenant-scoped, so an atlas device ref is invisible under
+// the northwind tenant and vice-versa.
+const isoStore = seedDemoStore(fixedClock("2026-07-13T15:00:00.000Z")).store;
 check(
   "isolation: atlas device invisible under northwind tenant",
-  core.probeDeviceVisibility("tenant_northwind", "handheld-01") === false,
+  isoStore.findDeviceByRef("tenant_northwind", "handheld-01") === undefined,
 );
 check(
   "isolation: northwind device invisible under atlas tenant",
-  core.probeDeviceVisibility("tenant_atlas", "ipad-ward-01") === false,
+  isoStore.findDeviceByRef("tenant_atlas", "ipad-ward-01") === undefined,
 );
 
 const northwindDecisionId = decisions[0].id;
@@ -682,6 +692,118 @@ if (pending) {
       evaluatePolicy(v1, confirmedEvidence).outcome === "deny",
     );
   }
+}
+
+// ── 15. Security hardening (untrusted input, DoS, invariants) ─────────────────
+
+{
+  const validRule = {
+    id: "sec-test-rule",
+    description: "A well-formed rule for the hardening proof.",
+    match: [{ field: "deviceManaged", equals: false }],
+    outcome: "restrict",
+    reasonCode: "SEC_TEST",
+    severity: "high",
+  };
+
+  // validatePolicyRules accepts a well-formed rule and re-materialises it.
+  const accepted = validatePolicyRules([validRule]);
+  check(
+    "hardening: valid rule set is accepted and normalized",
+    accepted.length === 1 && accepted[0].id === "sec-test-rule",
+  );
+
+  // …and drops unexpected/prototype-y keys during re-materialisation.
+  const cleaned = validatePolicyRules([
+    { ...validRule, id: "clean", extra: "dropme", __proto__: { polluted: true } },
+  ]);
+  check(
+    "hardening: rule re-materialisation strips unknown keys",
+    !Object.prototype.hasOwnProperty.call(cleaned[0], "extra"),
+  );
+
+  // Each malformed shape is rejected with a validation CoreError (HTTP 400),
+  // BEFORE it can ever be stored and crash a later evaluation.
+  const malformed: Array<[string, unknown]> = [
+    ["missing match array", [{ id: "x", description: "d", outcome: "allow", reasonCode: "R", severity: "low" }]],
+    ["empty match array (no vacuous fire)", [{ ...validRule, match: [] }]],
+    ["unknown condition field", [{ ...validRule, match: [{ field: "notAField", equals: true }]}]],
+    ["bad `in` value for enum field", [{ ...validRule, match: [{ field: "deviceCompliance", in: ["banana"] }]}]],
+    ["missing `in` on enum field", [{ ...validRule, match: [{ field: "deviceCompliance" }]}]],
+    ["invalid outcome (precedence-safety)", [{ ...validRule, outcome: "banana" }]],
+    ["invalid severity", [{ ...validRule, severity: "apocalyptic" }]],
+    ["non-array rules", { rules: "nope" }],
+    ["empty rules", []],
+    ["over the rule cap", Array.from({ length: 65 }, (_v, i) => ({ ...validRule, id: `r${i}` }))],
+    ["duplicate rule ids", [validRule, { ...validRule }]],
+  ];
+  for (const [label, input] of malformed) {
+    expectError(`hardening: rejects ${label}`, "validation", () =>
+      validatePolicyRules(input),
+    );
+  }
+
+  // End-to-end: a malformed rule can never be persisted, so activating+
+  // evaluating cannot be bricked by it. A valid authored draft, by contrast,
+  // activates and evaluates cleanly.
+  const secCore = SignalGridCore.demo();
+  expectError(
+    "hardening: createPolicyDraft rejects a malformed rule (no deferred DoS)",
+    "validation",
+    () =>
+      secCore.createPolicyDraft(T.owner, policyId, [
+        { id: "x", description: "d", outcome: "allow", reasonCode: "R", severity: "low" },
+      ]),
+  );
+  const goodDraft = secCore.createPolicyDraft(T.owner, policyId, [validRule]);
+  secCore.activatePolicyVersion(T.owner, policyId, goodDraft.id);
+  let evaluatedCleanly = true;
+  try {
+    secCore.evaluate(T.operator, {
+      identityRef: "nurse.compliant",
+      deviceRef: "ipad-ward-01",
+      workflowKey: "clinical-session",
+    });
+  } catch {
+    evaluatedCleanly = false;
+  }
+  check(
+    "hardening: evaluation after activating a validated draft does not throw",
+    evaluatedCleanly,
+  );
+
+  // Deeply-nested input is rejected by the canonical-JSON depth cap rather than
+  // exhausting the call stack (stack-overflow DoS vector).
+  let deep: unknown = 0;
+  for (let i = 0; i < 500; i++) {
+    deep = [deep];
+  }
+  let depthGuarded = false;
+  try {
+    canonicalJson(deep);
+  } catch (err) {
+    depthGuarded = err instanceof RangeError;
+  }
+  check("hardening: canonicalJson rejects pathologically nested input", depthGuarded);
+
+  // Constant-time token comparison behaves as an equality.
+  check(
+    "hardening: constantTimeEquals matches identical strings",
+    constantTimeEquals("sgk_demo_token_abc", "sgk_demo_token_abc"),
+  );
+  check(
+    "hardening: constantTimeEquals rejects different strings",
+    !constantTimeEquals("sgk_demo_token_abc", "sgk_demo_token_abd") &&
+      !constantTimeEquals("short", "longer-value"),
+  );
+
+  // The dangerous cross-tenant affordances are gone from the shipped facade.
+  const facade = core as unknown as Record<string, unknown>;
+  check(
+    "hardening: no unsafeStore()/probe affordance on the core class",
+    typeof facade["unsafeStore"] === "undefined" &&
+      typeof facade["probeDeviceVisibility"] === "undefined",
+  );
 }
 
 // ── Report ────────────────────────────────────────────────────────────────────

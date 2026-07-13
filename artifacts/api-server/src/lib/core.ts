@@ -14,7 +14,7 @@ export const core: SignalGridCore = SignalGridCore.demo();
  * can authenticate against the seeded tenants. These are obviously-fake tokens,
  * never real secrets.
  */
-export const DEMO_KEYS = core.apiKeys().map((key) => ({
+export const DEMO_KEYS = core.demoApiKeys().map((key) => ({
   tenant: key.tenantId,
   role: key.role,
   token: key.token,

@@ -6,7 +6,11 @@ import { verifySnapshot } from "./evidence";
 import { verifyAuditChain, type ChainVerification } from "./audit";
 import { appendAudit } from "./audit";
 import { computeMetrics } from "./metrics";
-import { ruleSetDigest, runPolicyTests as runTests } from "./policy";
+import {
+  ruleSetDigest,
+  runPolicyTests as runTests,
+  validatePolicyRules,
+} from "./policy";
 import {
   buildResolutionPlan,
   simulateResolution as runResolutionSimulation,
@@ -27,7 +31,6 @@ import {
   type EvidenceSnapshot,
   type MetricsSummary,
   type Policy,
-  type PolicyRuleSpec,
   type PolicyTestResult,
   type PolicyVersion,
   type Principal,
@@ -61,17 +64,21 @@ export class SignalGridCore {
   private readonly clock: Clock;
   private readonly fixtureRecords: Record<string, FixturePostureRecord[]>;
   private readonly dockRecords: Record<string, DockCustodyRecord[]>;
+  /** True only for a core built via `demo()`; gates the public-safe demo-key accessor. */
+  private readonly demoMode: boolean;
 
   private constructor(
     store: MemoryStore,
     clock: Clock,
     fixtureRecords: Record<string, FixturePostureRecord[]>,
     dockRecords: Record<string, DockCustodyRecord[]>,
+    demoMode: boolean,
   ) {
     this.store = store;
     this.clock = clock;
     this.fixtureRecords = fixtureRecords;
     this.dockRecords = dockRecords;
+    this.demoMode = demoMode;
   }
 
   /** Build a core preloaded with the deterministic public-safe demo seed. */
@@ -82,6 +89,7 @@ export class SignalGridCore {
       seeded.clock,
       seeded.fixtureRecords,
       seeded.dockRecords,
+      true,
     );
   }
 
@@ -182,11 +190,18 @@ export class SignalGridCore {
     return runFixtureSync(this.store, this.clock, connector, records);
   }
 
-  /** Create a new draft policy version from a rule set (owner/admin). */
+  /**
+   * Create a new draft policy version from a rule set (owner/admin).
+   *
+   * The rule set is untrusted request input, so it is fully validated and
+   * re-materialised by `validatePolicyRules` before it is ever persisted. This
+   * guarantees the stored version can only contain well-formed rules — a
+   * malformed rule can never reach `evaluatePolicy` to crash a later decision.
+   */
   createPolicyDraft(
     token: string,
     policyId: string,
-    rules: PolicyRuleSpec[],
+    rules: unknown,
   ): PolicyVersion {
     const principal = authenticate(this.store, token);
     authorize(principal, "policy:write");
@@ -194,13 +209,7 @@ export class SignalGridCore {
     if (!policy) {
       throw new CoreError("not_found", `Policy "${policyId}" not found.`, 404);
     }
-    if (!Array.isArray(rules) || rules.length === 0) {
-      throw new CoreError(
-        "validation",
-        "A policy version requires at least one rule.",
-        400,
-      );
-    }
+    const validatedRules = validatePolicyRules(rules);
     const version = this.store.nextPolicyVersionNumber(
       principal.tenantId,
       policyId,
@@ -212,9 +221,9 @@ export class SignalGridCore {
       policyId,
       version,
       status: "draft",
-      rules,
+      rules: validatedRules,
       createdAt,
-      digest: ruleSetDigest(rules),
+      digest: ruleSetDigest(validatedRules),
     };
     this.store.putPolicyVersion(draft);
     return draft;
@@ -436,23 +445,24 @@ export class SignalGridCore {
     return verifyAuditChain(this.store, principal.tenantId);
   }
 
-  // ── Test-only affordances (used by the proof harness) ─────────────────────
-
   /**
-   * Direct, unauthenticated tenant-scoped device lookup — used ONLY by the
-   * cross-tenant isolation proof to demonstrate that a device belonging to one
-   * tenant is invisible under another tenant's id.
+   * The public-safe demo API keys. This exists ONLY because the review build
+   * ships intentionally-public fixture tokens (`sgk_demo_*`) so reviewers can
+   * authenticate against the seeded tenants. It is available only on a core
+   * built via `SignalGridCore.demo()`; on any non-demo core it throws, so the
+   * production-shaped surface never has an unscoped, raw-token accessor. A real
+   * production core would expose only masked `keyReference`s, tenant-scoped and
+   * behind `tenant:admin`. There is no `unsafeStore()` / caller-supplied-tenant
+   * probe on this class — cross-tenant access is structurally impossible.
    */
-  probeDeviceVisibility(tenantId: string, deviceExternalRef: string): boolean {
-    return Boolean(this.store.findDeviceByRef(tenantId, deviceExternalRef));
-  }
-
-  /** Expose the underlying store for tamper simulations in the proof only. */
-  unsafeStore(): MemoryStore {
-    return this.store;
-  }
-
-  apiKeys(): ApiKeyRecord[] {
+  demoApiKeys(): ApiKeyRecord[] {
+    if (!this.demoMode) {
+      throw new CoreError(
+        "forbidden",
+        "Demo API keys are only available on a demo-seeded core.",
+        403,
+      );
+    }
     return [...this.store.apiKeys.values()];
   }
 

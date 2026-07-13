@@ -21,6 +21,7 @@ import CompetitiveSection from "@/components/sections/CompetitiveSection";
 import DemoScriptSection from "@/components/sections/DemoScriptSection";
 import SignalGridSimulatorSection from "@/components/sections/SignalGridSimulatorSection";
 import OperatorConsoleSection from "@/components/sections/OperatorConsoleSection";
+import WorkerSelfServiceSection from "@/components/sections/WorkerSelfServiceSection";
 import ConnectorEmulatorDashboard from "@/components/connector-emulator/ConnectorEmulatorDashboard";
 import CredentialReaderDashboardSection from "@/components/sections/CredentialReaderDashboardSection";
 import { useActionChecklist } from "@/hooks/useActionChecklist";
@@ -42,6 +43,7 @@ const statusLabel = {
 
 const NAV_ITEMS = [
   { id: "operator-console", label: "Operator Console" },
+  { id: "worker-self-service", label: "Worker Self-Service" },
   { id: "simulator", label: "Simulator" },
   { id: "app-suite", label: "App Suite" },
   { id: "connector-emulator", label: "Connector Emulator" },
@@ -433,6 +435,15 @@ export default function ReviewDashboard() {
             description="Product-shaped, tenant-scoped decision loop running deterministically in-browser: each shared-device access decision is traced from outcome to matched rules, evidence snapshot, versioned policy, and a tamper-evident audit chain. Public-safe synthetic data only."
           />
           <OperatorConsoleSection />
+        </section>
+
+        {/* Worker self-service — customer-facing resolution */}
+        <section id="worker-self-service" className="space-y-6 scroll-mt-20">
+          <SectionHeader
+            label="Worker Self-Service — Access Resolution"
+            description="The frontline worker's view on a shared device: a blocked session explained in plain language with the steps to resolve it. Safe cases resolve in place; only genuine security/compliance blocks escalate to an operator. Public-safe synthetic data."
+          />
+          <WorkerSelfServiceSection />
         </section>
 
         {/* Real-life simulator foundation */}

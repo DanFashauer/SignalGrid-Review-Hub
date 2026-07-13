@@ -1,12 +1,15 @@
 import { useMemo, useState } from "react";
 import {
   SignalGridCore,
+  type AuditEvent,
   type Decision,
   type DecisionOutcome,
   type EvidenceSnapshot,
   type MetricsSummary,
   type PolicyVersion,
+  type RemediationAction,
   type SimulationResult,
+  type WebhookDelivery,
 } from "@workspace/signalgrid-core";
 
 /**
@@ -60,7 +63,8 @@ interface Row {
 }
 
 export default function OperatorConsoleSection() {
-  const { rows, auditChain, metrics, versions } = useMemo(() => {
+  const { rows, auditChain, metrics, versions, audit, deliveries, remediations } =
+    useMemo(() => {
     const core = SignalGridCore.demo();
     const evaluated = SCENARIOS.map((scenario) => {
       const result = core.evaluate(OPERATOR_TOKEN, {
@@ -88,6 +92,9 @@ export default function OperatorConsoleSection() {
       auditChain: core.verifyAudit(OWNER_TOKEN),
       metrics: core.metrics(OPERATOR_TOKEN),
       versions: policyVersions,
+      audit: core.listAudit(OWNER_TOKEN).slice(-9).reverse(),
+      deliveries: core.listWebhookDeliveries(OWNER_TOKEN),
+      remediations: core.listRemediations(OWNER_TOKEN),
     };
   }, []);
 
@@ -172,6 +179,109 @@ export default function OperatorConsoleSection() {
           {selected && (
             <DecisionDetail row={selected} versions={versions} />
           )}
+        </div>
+      </div>
+
+      <OperationsPanels
+        audit={audit}
+        deliveries={deliveries}
+        remediations={remediations}
+      />
+    </div>
+  );
+}
+
+function OperationsPanels({
+  audit,
+  deliveries,
+  remediations,
+}: {
+  audit: AuditEvent[];
+  deliveries: WebhookDelivery[];
+  remediations: RemediationAction[];
+}) {
+  const delivered = deliveries.filter((d) => d.status === "delivered").length;
+  const retried = deliveries.filter(
+    (d) => d.attempts.length > 1 && d.status === "delivered",
+  ).length;
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      {/* Audit ledger */}
+      <div className="border border-border bg-card rounded-lg p-4">
+        <p className="text-xs font-semibold text-muted-foreground tracking-wider uppercase mb-3">
+          Audit ledger
+        </p>
+        <div className="space-y-2">
+          {audit.map((event) => (
+            <div key={event.id} className="flex items-start gap-2 text-[11px]">
+              <span className="font-mono text-faint text-muted-foreground/70 tabular-nums">
+                #{event.seq}
+              </span>
+              <div className="min-w-0">
+                <span className="font-mono text-cyan-300/80">{event.type}</span>
+                <p className="text-muted-foreground truncate">{event.summary}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Webhook deliveries */}
+      <div className="border border-border bg-card rounded-lg p-4">
+        <p className="text-xs font-semibold text-muted-foreground tracking-wider uppercase mb-3">
+          Webhook deliveries
+        </p>
+        <p className="text-[11px] text-muted-foreground mb-3">
+          {delivered}/{deliveries.length} delivered · {retried} recovered after
+          retry/backoff (simulated sink).
+        </p>
+        <div className="space-y-1.5">
+          {deliveries.slice(0, 6).map((d) => (
+            <div
+              key={d.id}
+              className="flex items-center justify-between gap-2 text-[11px]"
+            >
+              <span className="font-mono text-muted-foreground truncate">
+                {d.endpointId.split("_").slice(-1)[0]} · {d.attempts.length} try
+                {d.attempts.length > 1 ? "s" : ""}
+              </span>
+              <span
+                className={`font-mono px-1.5 py-0.5 rounded border ${
+                  d.status === "delivered"
+                    ? "text-teal-300 bg-teal-950/40 border-teal-700/50"
+                    : "text-red-300 bg-red-950/40 border-red-700/50"
+                }`}
+              >
+                {d.status}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Remediation queue */}
+      <div className="border border-border bg-card rounded-lg p-4">
+        <p className="text-xs font-semibold text-muted-foreground tracking-wider uppercase mb-3">
+          Remediation queue
+        </p>
+        <p className="text-[11px] text-muted-foreground mb-3">
+          {remediations.length} proposed · every one approval-required and
+          simulated. SignalGrid never executes a change.
+        </p>
+        <div className="space-y-1.5">
+          {remediations.slice(0, 6).map((r) => (
+            <div
+              key={r.id}
+              className="flex items-center justify-between gap-2 text-[11px]"
+            >
+              <span className="font-mono text-muted-foreground truncate">
+                {r.kind}
+              </span>
+              <span className="font-mono px-1.5 py-0.5 rounded border text-amber-300 bg-amber-950/40 border-amber-700/50">
+                approval
+              </span>
+            </div>
+          ))}
         </div>
       </div>
     </div>

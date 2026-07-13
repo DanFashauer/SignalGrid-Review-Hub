@@ -17,6 +17,7 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "connector:read",
     "connector:sync",
     "audit:read",
+    "remediation:approve",
     "tenant:admin",
   ],
   admin: [
@@ -27,6 +28,7 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "connector:read",
     "connector:sync",
     "audit:read",
+    "remediation:approve",
   ],
   operator: ["decision:evaluate", "decision:read", "policy:read", "connector:read"],
   auditor: ["decision:read", "policy:read", "connector:read", "audit:read"],

@@ -1,6 +1,7 @@
 import { appendAudit } from "./audit";
 import { buildEvidence, buildSnapshot } from "./evidence";
 import { evaluatePolicy } from "./policy";
+import { proposeRemediation } from "./remediation";
 import { deliverEvent } from "./webhooks";
 import type { MemoryStore } from "./store";
 import { deterministicId } from "./util";
@@ -161,6 +162,9 @@ export function evaluateDecision(
     references: [decisionId, snapshot.id, policy.id, version.id],
     recordedAt: createdAt,
   });
+
+  // Propose approval-gated, simulated-only remediation for non-allow outcomes.
+  proposeRemediation(store, clock, actor, decision, evidence);
 
   // Route the decision event to configured webhook endpoints (simulated sink).
   deliverEvent(store, clock, tenantId, decisionId, "decision.evaluated");

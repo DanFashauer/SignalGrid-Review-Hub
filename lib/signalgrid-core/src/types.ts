@@ -20,6 +20,7 @@ export type Permission =
   | "connector:read"
   | "connector:sync"
   | "audit:read"
+  | "remediation:approve"
   | "tenant:admin";
 
 export type PrincipalType = "user" | "service";
@@ -342,6 +343,42 @@ export interface MetricsSummary {
   pendingReview: number;
 }
 
+// ── Remediation requests (approval-gated, always simulated) ──────────────────
+
+export type RemediationKind =
+  | "request_device_remediation"
+  | "request_posture_refresh"
+  | "request_encryption_enforcement"
+  | "notify_identity_owner"
+  | "notify_security";
+
+export type RemediationStatus =
+  | "requires_approval"
+  | "approved_simulated"
+  | "dismissed";
+
+/**
+ * A proposed follow-up action for a non-allow decision. It is ALWAYS
+ * approval-required and ALWAYS simulated — SignalGrid records the request and
+ * (when approved) simulates it; it never executes a change on a source system.
+ * There is deliberately no "executed" status.
+ */
+export interface RemediationAction {
+  id: string;
+  tenantId: string;
+  decisionId: string;
+  kind: RemediationKind;
+  targetType: "device" | "identity" | "workflow";
+  targetRef: string;
+  reasonCode: string;
+  status: RemediationStatus;
+  approvalRequired: true;
+  simulatedOnly: true;
+  requestedAt: string;
+  approvedAt: string | null;
+  note: string;
+}
+
 // ── Webhook delivery (simulated, public-safe) ────────────────────────────────
 
 export type DeliveryStatus = "delivered" | "failed" | "dead_letter";
@@ -385,7 +422,9 @@ export type AuditEventType =
   | "decision.evaluated"
   | "connector.synced"
   | "policy.version_activated"
-  | "evidence.captured";
+  | "evidence.captured"
+  | "remediation.requested"
+  | "remediation.approved";
 
 export interface AuditEvent {
   id: string;

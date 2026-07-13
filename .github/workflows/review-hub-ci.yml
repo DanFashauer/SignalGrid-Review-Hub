@@ -87,6 +87,8 @@ jobs:
             docs/PRODUCT_CORE_THREAT_MODEL.md
             docs/SECURITY_CONTROLS_MATRIX.md
             docs/PRODUCT_DATA_MODEL.md
+            docs/PRIVATE_CORE_HANDOFF.md
+            docs/RUN_AND_GO_LIVE.md
             SECURITY.md
           )
 

@@ -26,7 +26,7 @@ deployment live.
 | Audit ledger | `src/audit.ts` | Append-only, per-tenant, digest-chained (tamper-evident) |
 | Product API | `artifacts/api-server/src/routes/v1.ts` + middleware | `/v1` surface backed by the in-memory core (works with no database) |
 | Operator console | `artifacts/signalgrid-review/.../OperatorConsoleSection.tsx` | In-browser decision trace over synthetic data |
-| Proof | `scripts/src/signalgrid-core-proof.ts` | `pnpm run proof:signalgrid-core` — 34 invariant assertions |
+| Proof | `scripts/src/signalgrid-core-proof.ts` | `pnpm run proof:signalgrid-core` — 61 invariant assertions |
 
 ## The decision loop
 
@@ -97,6 +97,8 @@ the client, which is what makes cross-tenant access structurally impossible.
 | `GET /api/v1/policies/:id/tests` | `policy:read` | Run a version's policy test fixtures |
 | `GET /api/v1/webhooks` | `connector:read` | Configured webhook endpoints (simulated) |
 | `GET /api/v1/webhooks/deliveries` | `connector:read` | Simulated deliveries with retry/backoff |
+| `GET /api/v1/remediation` | `decision:read` | Proposed remediation (approval-required, simulated) |
+| `POST /api/v1/remediation/:id/approve` | `remediation:approve` | Approve a remediation (simulated, never executed) |
 
 Middleware: request id + security headers (`x-content-type-options`,
 `x-frame-options`, `referrer-policy`, `cache-control`), bearer authentication /

@@ -146,6 +146,16 @@ router.get("/v1/webhooks/deliveries", (req: Request, res: Response) => {
   res.json(envelope(req, { deliveries }));
 });
 
+router.get("/v1/remediation", (req: Request, res: Response) => {
+  const actions = core.listRemediations(token(req));
+  res.json(envelope(req, { actions }));
+});
+
+router.post("/v1/remediation/:id/approve", (req: Request, res: Response) => {
+  const action = core.approveRemediation(token(req), param(req, "id"));
+  res.json(envelope(req, { action }));
+});
+
 export default router;
 
 function token(req: Request): string {

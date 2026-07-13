@@ -12,6 +12,7 @@ import type {
   Policy,
   PolicyTest,
   PolicyVersion,
+  RemediationAction,
   Tenant,
   User,
   WebhookDelivery,
@@ -46,6 +47,7 @@ export class MemoryStore {
   private readonly snapshots = new Map<string, EvidenceSnapshot>();
   private readonly webhookEndpoints = new Map<string, WebhookEndpoint>();
   private readonly webhookDeliveries = new Map<string, WebhookDelivery>();
+  private readonly remediations = new Map<string, RemediationAction>();
   private readonly auditEvents: AuditEvent[] = [];
 
   // ── Tenant-independent registries (auth resolution only) ──────────────────
@@ -276,6 +278,22 @@ export class MemoryStore {
     return [...this.webhookDeliveries.values()]
       .filter((row) => row.tenantId === tenantId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  // ── Remediation ───────────────────────────────────────────────────────────
+
+  putRemediation(action: RemediationAction): void {
+    this.remediations.set(action.id, action);
+  }
+
+  getRemediation(tenantId: string, id: string): RemediationAction | undefined {
+    return scoped(this.remediations.get(id), tenantId);
+  }
+
+  listRemediations(tenantId: string): RemediationAction[] {
+    return [...this.remediations.values()]
+      .filter((row) => row.tenantId === tenantId)
+      .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
   }
 
   // ── Audit ledger ──────────────────────────────────────────────────────────

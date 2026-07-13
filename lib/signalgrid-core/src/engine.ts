@@ -26,6 +26,7 @@ import {
   type PolicyTestResult,
   type PolicyVersion,
   type Principal,
+  type RemediationAction,
   type SimulationResult,
   type Tenant,
   type WebhookDelivery,
@@ -315,6 +316,49 @@ export class SignalGridCore {
     const principal = authenticate(this.store, token);
     authorize(principal, "connector:read");
     return this.store.listWebhookDeliveries(principal.tenantId);
+  }
+
+  listRemediations(token: string): RemediationAction[] {
+    const principal = authenticate(this.store, token);
+    authorize(principal, "decision:read");
+    return this.store.listRemediations(principal.tenantId);
+  }
+
+  /**
+   * Approve a remediation request. Approval is simulated only: it records the
+   * decision to act, it does NOT execute any change on a source system.
+   */
+  approveRemediation(token: string, id: string): RemediationAction {
+    const principal = authenticate(this.store, token);
+    authorize(principal, "remediation:approve");
+    const action = this.store.getRemediation(principal.tenantId, id);
+    if (!action) {
+      throw new CoreError("not_found", `Remediation "${id}" not found.`, 404);
+    }
+    if (action.status !== "requires_approval") {
+      throw new CoreError(
+        "validation",
+        `Remediation "${id}" is not awaiting approval.`,
+        400,
+      );
+    }
+    const approvedAt = this.clock.now().toISOString();
+    const approved: RemediationAction = {
+      ...action,
+      status: "approved_simulated",
+      approvedAt,
+    };
+    this.store.putRemediation(approved);
+    appendAudit(this.store, {
+      tenantId: principal.tenantId,
+      type: "remediation.approved",
+      actor: this.actorLabel(principal),
+      subject: approved.id,
+      summary: `Remediation ${approved.kind} approved (simulated only; no source-system change executed).`,
+      references: [approved.decisionId, approved.id],
+      recordedAt: approvedAt,
+    });
+    return approved;
   }
 
   listAudit(token: string): AuditEvent[] {

@@ -396,6 +396,47 @@ expectError(
   () => core.listWebhookDeliveries("sgk_not_real"),
 );
 
+// ── 10. Remediation (approval-gated, simulated-only) ──────────────────────────
+
+const remediations = core.listRemediations(T.operator);
+check(
+  "remediation: non-allow decisions generated remediation requests",
+  remediations.length > 0,
+  `${remediations.length} requests`,
+);
+check(
+  "remediation: allow decisions generate none",
+  remediations.every((r) => {
+    const d = decisions.find((dec) => dec.id === r.decisionId);
+    return d ? d.outcome !== "allow" : true;
+  }),
+);
+check(
+  "remediation: every request is approval-required and simulated-only",
+  remediations.every((r) => r.approvalRequired === true && r.simulatedOnly === true),
+);
+check(
+  "remediation: no request is auto-approved or executed",
+  remediations.every((r) => r.status === "requires_approval"),
+);
+// Operators cannot approve; owners can, and approval is simulated (no execution).
+const pending = remediations[0];
+check("remediation: a pending request exists", Boolean(pending));
+if (pending) {
+  expectError("remediation: operator cannot approve", "forbidden", () =>
+    core.approveRemediation(T.operator, pending.id),
+  );
+  const approved = core.approveRemediation(T.owner, pending.id);
+  check(
+    "remediation: owner approval marks it approved_simulated (never executed)",
+    approved.status === "approved_simulated" && approved.approvedAt !== null,
+  );
+  // Isolation: atlas owner cannot see or approve a northwind remediation.
+  expectError("remediation: cross-tenant approval denied", "not_found", () =>
+    core.approveRemediation(T.atlasOwner, pending.id),
+  );
+}
+
 // ── Report ────────────────────────────────────────────────────────────────────
 
 const failed = assertions.filter((a) => !a.passed);

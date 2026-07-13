@@ -235,6 +235,25 @@ paths:
       responses:
         "200": { description: Delivery records }
 
+  /v1/remediation:
+    get:
+      operationId: listRemediation
+      tags: [decisions]
+      summary: List proposed remediation (always approval-required and simulated)
+      responses:
+        "200": { description: Remediation actions }
+
+  /v1/remediation/{id}/approve:
+    post:
+      operationId: approveRemediation
+      tags: [decisions]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      summary: Approve a remediation request (simulated only — never executed)
+      responses:
+        "200": { description: Approved (simulated) remediation }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
 components:
   securitySchemes:
     bearerAuth:

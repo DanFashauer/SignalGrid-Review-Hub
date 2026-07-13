@@ -19,7 +19,8 @@ export default function Signals() {
   return (
     <div className="h-full w-full flex flex-col pt-safe bg-background">
       <header className="px-4 py-3 shrink-0 bg-background z-10 border-b border-border/50">
-        <h1 className="text-lg font-bold">Live Signals</h1>
+        <h1 className="text-lg font-bold">Signals (fixture)</h1>
+        <p className="text-[11px] text-amber-400/80 mt-1">Synthetic data · some categories are candidate, not core-evaluated</p>
         <div className="flex gap-2 mt-3 overflow-x-auto pb-1 scroll-area -mx-4 px-4">
           {types.map(t => (
             <button

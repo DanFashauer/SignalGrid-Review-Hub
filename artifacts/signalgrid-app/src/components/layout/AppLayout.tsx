@@ -33,6 +33,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <SidebarHeader className="p-4 flex items-center gap-2">
             <Grid className="w-6 h-6 text-primary" />
             <span className="font-bold text-lg tracking-tight font-mono">SIGNALGRID</span>
+            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-amber-400/30 bg-amber-400/5 text-amber-400/90 ml-auto">FIXTURE</span>
           </SidebarHeader>
           <SidebarContent>
             <SidebarMenu className="px-2 gap-1">

@@ -40,7 +40,7 @@ export default function HandoffPage() {
         <GitBranch className="w-5 h-5 text-primary" />
         <div>
           <h1 className="text-xl font-bold tracking-tight">Shift Handoff</h1>
-          <p className="text-xs font-mono text-muted-foreground mt-0.5">DEVICE CUSTODY TRANSITION · SHIFT 07:00–19:00</p>
+          <p className="text-xs font-mono text-muted-foreground mt-0.5">DEVICE CUSTODY (STATIC DEMO MOCK — illustrative, not from the decision core)</p>
         </div>
       </div>
 
@@ -111,7 +111,7 @@ export default function HandoffPage() {
 
       {/* Recent custody decisions */}
       <div>
-        <div className="text-xs font-mono text-muted-foreground uppercase tracking-wider mb-2">Recent Handoff Decisions</div>
+        <div className="text-xs font-mono text-muted-foreground uppercase tracking-wider mb-2">Recent decisions (fixture)</div>
         <div className="space-y-1.5">
           {recentDecisions?.decisions.slice(0, 4).map(d => (
             <div key={d.id} className="flex items-center gap-3 px-3 py-2 bg-card border border-border rounded text-xs font-mono">

@@ -25,7 +25,11 @@ export default function SignalsPage() {
     <div className="p-6 space-y-4">
       <div>
         <h1 className="text-xl font-bold tracking-tight">Signals</h1>
-        <p className="text-xs font-mono text-muted-foreground mt-0.5">LIVE TELEMETRY FEED</p>
+        <p className="text-xs font-mono text-muted-foreground mt-0.5">SIGNAL FEED (FIXTURE)</p>
+        <p className="text-[11px] text-amber-400/80 mt-1.5 max-w-2xl">
+          Synthetic fixtures. Network / operational categories shown here are candidate,
+          not evaluated by the decision core (identity, device posture, DockBridge custody, CIS baseline).
+        </p>
       </div>
 
       <div className="flex gap-1.5 flex-wrap">

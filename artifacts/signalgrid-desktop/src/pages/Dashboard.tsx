@@ -19,7 +19,7 @@ export default function DashboardPage() {
     <div className="p-6 space-y-6 max-w-screen-xl">
       <div>
         <h1 className="text-xl font-bold tracking-tight">Overview</h1>
-        <p className="text-xs font-mono text-muted-foreground mt-0.5">24H SYSTEM TELEMETRY · LIVE</p>
+        <p className="text-xs font-mono text-muted-foreground mt-0.5">24H SYSTEM TELEMETRY (FIXTURE)</p>
       </div>
 
       {/* Metrics */}
@@ -78,7 +78,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 gap-4">
         {/* Decision feed */}
         <div className="bg-card border border-border rounded p-4">
-          <div className="text-xs font-mono text-muted-foreground mb-3 uppercase tracking-wider">Live Feed</div>
+          <div className="text-xs font-mono text-muted-foreground mb-3 uppercase tracking-wider">Recent decisions (fixture)</div>
           <div className="space-y-1.5">
             {decisions?.decisions.slice(0, 8).map(d => (
               <div key={d.id} className="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-muted/30 transition-colors decision-row">

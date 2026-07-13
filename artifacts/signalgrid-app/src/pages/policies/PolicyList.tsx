@@ -16,7 +16,7 @@ export function PolicyList() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Policies</h1>
-          <p className="text-muted-foreground mt-1 font-mono text-sm">ENFORCEMENT RULES & WORKFLOW PATTERNS</p>
+          <p className="text-muted-foreground mt-1 font-mono text-sm">DECISION RULES & WORKFLOW PATTERNS</p>
         </div>
         <Link href="/policies/new">
           <Button className="font-mono uppercase tracking-wider text-xs">

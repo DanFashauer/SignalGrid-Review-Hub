@@ -48,7 +48,9 @@ export class MemoryStore {
   private readonly webhookEndpoints = new Map<string, WebhookEndpoint>();
   private readonly webhookDeliveries = new Map<string, WebhookDelivery>();
   private readonly remediations = new Map<string, RemediationAction>();
+  private readonly decisionSeq = new Map<string, number>();
   private readonly auditEvents: AuditEvent[] = [];
+  private readonly auditTail = new Map<string, { seq: number; digest: string }>();
 
   // ── Tenant-independent registries (auth resolution only) ──────────────────
 
@@ -240,6 +242,18 @@ export class MemoryStore {
     this.decisions.set(decision.id, decision);
   }
 
+  /**
+   * Monotonic per-tenant evaluation counter (O(1)). Returns the count of prior
+   * evaluations and increments — a fresh store starts each tenant at 0, so two
+   * fresh cores agree on their first decision while repeated evaluations in one
+   * core stay unique.
+   */
+  nextDecisionSeq(tenantId: string): number {
+    const current = this.decisionSeq.get(tenantId) ?? 0;
+    this.decisionSeq.set(tenantId, current + 1);
+    return current;
+  }
+
   getDecision(tenantId: string, id: string): Decision | undefined {
     return scoped(this.decisions.get(id), tenantId);
   }
@@ -300,6 +314,8 @@ export class MemoryStore {
 
   appendAudit(event: AuditEvent): void {
     this.auditEvents.push(event);
+    // Maintain an O(1) per-tenant chain tail so appends do not rescan the log.
+    this.auditTail.set(event.tenantId, { seq: event.seq, digest: event.digest });
   }
 
   listAudit(tenantId: string): AuditEvent[] {
@@ -308,13 +324,13 @@ export class MemoryStore {
       .sort((a, b) => a.seq - b.seq);
   }
 
-  lastAudit(tenantId: string): AuditEvent | undefined {
-    const events = this.listAudit(tenantId);
-    return events.length > 0 ? events[events.length - 1] : undefined;
+  /** Digest of the last event in a tenant's chain (O(1)), or undefined. */
+  lastAuditDigest(tenantId: string): string | undefined {
+    return this.auditTail.get(tenantId)?.digest;
   }
 
   nextAuditSeq(tenantId: string): number {
-    return this.listAudit(tenantId).length + 1;
+    return (this.auditTail.get(tenantId)?.seq ?? 0) + 1;
   }
 }
 

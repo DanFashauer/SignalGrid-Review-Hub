@@ -24,8 +24,7 @@ export function appendAudit(
   store: MemoryStore,
   input: AppendAuditInput,
 ): AuditEvent {
-  const prev = store.lastAudit(input.tenantId);
-  const prevDigest = prev ? prev.digest : GENESIS_DIGEST;
+  const prevDigest = store.lastAuditDigest(input.tenantId) ?? GENESIS_DIGEST;
   const seq = store.nextAuditSeq(input.tenantId);
 
   const body = canonicalJson({

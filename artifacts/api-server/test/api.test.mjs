@@ -28,11 +28,13 @@ const KEYS = {
 let passed = 0;
 const failures = [];
 
-function check(name, ok, detail) {
+// Only the (static) assertion name is ever recorded/logged — never any value
+// derived from an HTTP response — so response data is not written to logs.
+function check(name, ok) {
   if (ok) {
     passed += 1;
   } else {
-    failures.push(detail ? `${name} (${detail})` : name);
+    failures.push(name);
   }
 }
 
@@ -79,20 +81,20 @@ async function run() {
 
   // ── auth fails closed ───────────────────────────────────────────────────
   const noAuth = await req("GET", "/v1/decisions");
-  check("unauthenticated request is 401", noAuth.status === 401, `got ${noAuth.status}`);
+  check("unauthenticated request is 401", noAuth.status === 401);
 
   const badToken = await req("GET", "/v1/decisions", { token: "sgk_not_real" });
-  check("unknown token is 401", badToken.status === 401, `got ${badToken.status}`);
+  check("unknown token is 401", badToken.status === 401);
 
   // ── evaluate: allow ─────────────────────────────────────────────────────
   const allow = await req("POST", "/v1/decisions/evaluate", {
     token: KEYS.operator,
     body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" },
   });
-  check("evaluate compliant → 200", allow.status === 200, `got ${allow.status}`);
+  check("evaluate compliant → 200", allow.status === 200);
   check("evaluate response is enveloped", typeof allow.json?.requestId !== "undefined" && typeof allow.json?.timestamp === "string");
   check("evaluate returns decision under `decision`", allow.json?.decision?.decisionId !== undefined);
-  check("compliant outcome is allow", allow.json?.decision?.outcome === "allow", allow.json?.decision?.outcome);
+  check("compliant outcome is allow", allow.json?.decision?.outcome === "allow");
   const allowId = allow.json?.decision?.decisionId;
 
   // ── evaluate: restrict + stale ──────────────────────────────────────────
@@ -100,22 +102,22 @@ async function run() {
     token: KEYS.operator,
     body: { identityRef: "nurse.noncompliant", deviceRef: "ipad-ward-02", workflowKey: "clinical-session" },
   });
-  check("non-compliant outcome is restrict", restrict.json?.decision?.outcome === "restrict", restrict.json?.decision?.outcome);
+  check("non-compliant outcome is restrict", restrict.json?.decision?.outcome === "restrict");
 
   const stale = await req("POST", "/v1/decisions/evaluate", {
     token: KEYS.operator,
     body: { identityRef: "nurse.stale", deviceRef: "ipad-ward-03", workflowKey: "clinical-session" },
   });
-  check("stale posture outcome is step_up", stale.json?.decision?.outcome === "step_up", stale.json?.decision?.outcome);
+  check("stale posture outcome is step_up", stale.json?.decision?.outcome === "step_up");
   const staleId = stale.json?.decision?.decisionId;
 
   // ── validation error ────────────────────────────────────────────────────
   const badBody = await req("POST", "/v1/decisions/evaluate", { token: KEYS.operator, body: { identityRef: "x" } });
-  check("missing fields → 400", badBody.status === 400, `got ${badBody.status}`);
+  check("missing fields → 400", badBody.status === 400);
 
   // ── evidence + integrity ────────────────────────────────────────────────
   const evidence = await req("GET", `/v1/decisions/${allowId}/evidence`, { token: KEYS.operator });
-  check("evidence fetch → 200", evidence.status === 200, `got ${evidence.status}`);
+  check("evidence fetch → 200", evidence.status === 200);
   check("evidence snapshot verifies", evidence.json?.verified === true);
 
   // ── simulate stale decision against v2 → restrict ───────────────────────
@@ -123,7 +125,7 @@ async function run() {
     token: KEYS.operator,
     body: { policyVersionId: "pol_tenant_northwind_shared_device_v2" },
   });
-  check("simulate → 200", sim.status === 200, `got ${sim.status}`);
+  check("simulate → 200", sim.status === 200);
   check("stale decision escalates to restrict under v2", sim.json?.simulation?.simulatedOutcome === "restrict" && sim.json?.simulation?.changed === true);
 
   // ── metrics ─────────────────────────────────────────────────────────────
@@ -138,7 +140,7 @@ async function run() {
   check("audit chain is verified", audit.json?.chain?.valid === true);
 
   const auditByOperator = await req("GET", "/v1/audit", { token: KEYS.operator });
-  check("operator cannot read audit (403)", auditByOperator.status === 403, `got ${auditByOperator.status}`);
+  check("operator cannot read audit (403)", auditByOperator.status === 403);
 
   // ── policy tests + versions ─────────────────────────────────────────────
   const tests = await req("GET", "/v1/policies/pol_tenant_northwind_shared_device/tests", { token: KEYS.owner });
@@ -158,10 +160,10 @@ async function run() {
 
   if (pending) {
     const denyApprove = await req("POST", `/v1/remediation/${pending.id}/approve`, { token: KEYS.operator });
-    check("operator cannot approve remediation (403)", denyApprove.status === 403, `got ${denyApprove.status}`);
+    check("operator cannot approve remediation (403)", denyApprove.status === 403);
 
     const approve = await req("POST", `/v1/remediation/${pending.id}/approve`, { token: KEYS.owner });
-    check("owner approves remediation (200)", approve.status === 200, `got ${approve.status}`);
+    check("owner approves remediation (200)", approve.status === 200);
     check("approval is simulated only", approve.json?.action?.status === "approved_simulated");
   }
 
@@ -170,16 +172,16 @@ async function run() {
     token: KEYS.auditor,
     body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" },
   });
-  check("auditor cannot evaluate (403)", auditorEval.status === 403, `got ${auditorEval.status}`);
+  check("auditor cannot evaluate (403)", auditorEval.status === 403);
 
   const crossTenant = await req("GET", `/v1/decisions/${allowId}`, { token: KEYS.atlas });
-  check("cross-tenant read is 404", crossTenant.status === 404, `got ${crossTenant.status}`);
+  check("cross-tenant read is 404", crossTenant.status === 404);
 
   const atlasEval = await req("POST", "/v1/decisions/evaluate", {
     token: KEYS.atlas,
     body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" },
   });
-  check("atlas key cannot resolve northwind subjects (404)", atlasEval.status === 404, `got ${atlasEval.status}`);
+  check("atlas key cannot resolve northwind subjects (404)", atlasEval.status === 404);
 
   // ── transport hygiene ───────────────────────────────────────────────────
   check("rate-limit headers present", allow.headers.get("ratelimit-limit") !== null);

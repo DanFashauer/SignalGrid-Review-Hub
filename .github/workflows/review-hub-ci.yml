@@ -63,6 +63,9 @@ jobs:
       - name: API integration test
         run: pnpm run test:api
 
+      - name: Decision-latency pilot gate
+        run: pnpm run bench:decision-latency
+
   docs-sanity:
     name: Required docs and unsafe-claim sanity
     runs-on: ubuntu-latest

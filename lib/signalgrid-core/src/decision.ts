@@ -100,7 +100,7 @@ export function evaluateDecision(
   // evaluated more than once against a fixed clock (so a re-run does not
   // overwrite an earlier decision), while two FRESH cores each producing their
   // first decision still agree — preserving cross-core determinism.
-  const evaluationSeq = store.listDecisions(tenantId).length;
+  const evaluationSeq = store.nextDecisionSeq(tenantId);
   const decisionId = deterministicId(
     "dec",
     tenantId,

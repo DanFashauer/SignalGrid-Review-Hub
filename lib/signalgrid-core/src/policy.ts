@@ -102,6 +102,13 @@ const IN_FIELDS: Record<string, ReadonlySet<string>> = {
     "sensor_unavailable",
     "unknown",
   ]),
+  baselineState: new Set([
+    "aligned",
+    "partial",
+    "drifted",
+    "not_assessed",
+    "unknown",
+  ]),
 };
 
 function reject(message: string): never {
@@ -323,6 +330,8 @@ function matches(condition: RuleCondition, evidence: DecisionEvidence): boolean 
       return condition.in.includes(evidence.dockChargeState);
     case "tamperState":
       return condition.in.includes(evidence.tamperState);
+    case "baselineState":
+      return condition.in.includes(evidence.baselineCompliance);
     default: {
       // Exhaustiveness guard at compile time; fail-closed at runtime so an
       // unknown/malformed condition (e.g. from an authored draft) never matches.
@@ -493,6 +502,15 @@ export const SHARED_DEVICE_RULES_V1: PolicyRuleSpec[] = [
     severity: "medium",
   },
   {
+    id: "baseline-drifted",
+    description:
+      "A device that has materially drifted from its assigned security (CIS/hardening) baseline requires step-up before a session.",
+    match: [{ field: "baselineState", in: ["drifted"] }],
+    outcome: "step_up",
+    reasonCode: "BASELINE_DRIFTED",
+    severity: "medium",
+  },
+  {
     id: "healthy-allow",
     description:
       "Enabled identity + compliant, managed, fresh, encrypted device on a corporate/shared device is an allow candidate.",
@@ -511,11 +529,12 @@ export const SHARED_DEVICE_RULES_V1: PolicyRuleSpec[] = [
 ];
 
 /**
- * Stricter shared-device policy (v2 draft). Tightens two rules relative to v1
+ * Stricter shared-device policy (v2 draft). Tightens three rules relative to v1
  * so a decision replayed against v2 can diverge — useful for demonstrating
  * versioned-policy simulation:
  *  - stale/expired posture escalates to RESTRICT (v1: step-up)
  *  - unknown identity state escalates to DENY (v1: step-up)
+ *  - security-baseline drift escalates to RESTRICT (v1: step-up)
  */
 export const SHARED_DEVICE_RULES_V2: PolicyRuleSpec[] = SHARED_DEVICE_RULES_V1.map(
   (rule) => {
@@ -533,6 +552,14 @@ export const SHARED_DEVICE_RULES_V2: PolicyRuleSpec[] = SHARED_DEVICE_RULES_V1.m
         outcome: "deny",
         reasonCode: "IDENTITY_STATE_UNKNOWN_STRICT",
         severity: "critical",
+      };
+    }
+    if (rule.id === "baseline-drifted") {
+      return {
+        ...rule,
+        outcome: "restrict",
+        reasonCode: "BASELINE_DRIFTED_STRICT",
+        severity: "high",
       };
     }
     return rule;

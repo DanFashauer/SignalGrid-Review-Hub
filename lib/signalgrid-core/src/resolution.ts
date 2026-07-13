@@ -37,6 +37,7 @@ type EvidenceTransform = Partial<
     | "custodyState"
     | "tamperState"
     | "dockChargeState"
+    | "baselineCompliance"
   >
 >;
 
@@ -154,6 +155,20 @@ const DESCRIPTORS: Record<string, ResolutionDescriptor> = {
     workerAction: "This device is out of service (tamper confirmed) — use a different device and report it.",
     operatorAction: "Remove the device from service and route to security operations; do not clear automatically.",
     transform: null,
+    hardwareOriented: false,
+  },
+  BASELINE_DRIFTED: {
+    baseClass: "auto_proposed",
+    workerAction: "This device has drifted from its security baseline — return it to its dock or reconnect so the hardening profile re-applies, then retry.",
+    operatorAction: "Request a baseline (CIS/hardening) re-scan and profile re-apply from the endpoint-management source, then re-evaluate.",
+    transform: { baselineCompliance: "aligned" },
+    hardwareOriented: true,
+  },
+  BASELINE_DRIFTED_STRICT: {
+    baseClass: "requires_approval",
+    workerAction: "This device drifted from its security baseline and needs review before this workflow — an operator will re-apply the hardening profile.",
+    operatorAction: "Approve a baseline re-apply (CIS/hardening profile) for this device, then re-evaluate.",
+    transform: { baselineCompliance: "aligned" },
     hardwareOriented: false,
   },
 };

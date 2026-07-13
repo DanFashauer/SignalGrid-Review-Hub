@@ -1,5 +1,6 @@
 import { canonicalJson, deterministicId, digest } from "./util";
 import type {
+  BaselineState,
   ChargeState,
   ComplianceState,
   CustodyState,
@@ -51,6 +52,7 @@ export function buildEvidence(
     custodyState: readCustody(signals),
     dockChargeState: readCharge(signals),
     tamperState: readTamper(signals),
+    baselineCompliance: readBaseline(signals),
   };
 
   return {
@@ -162,9 +164,14 @@ const CUSTODY_STATES = [
 ] as const;
 const CHARGE_STATES = ["charging", "charged", "low", "critical", "not_present"] as const;
 const TAMPER_STATES = ["none", "suspected", "confirmed", "sensor_unavailable"] as const;
+const BASELINE_STATES = ["aligned", "partial", "drifted", "not_assessed"] as const;
 
 function readCustody(signals: NormalizedSignal[]): CustodyState {
   return readEnum(signals, "custody_state", CUSTODY_STATES) ?? "unknown";
+}
+
+function readBaseline(signals: NormalizedSignal[]): BaselineState {
+  return readEnum(signals, "security_baseline", BASELINE_STATES) ?? "unknown";
 }
 
 function readCharge(signals: NormalizedSignal[]): ChargeState {

@@ -203,7 +203,7 @@ real secret is stored.
 | `connectorId` | `string` | Producing connector. |
 | `subjectType` | `SubjectType` | `device` \| `identity`. |
 | `subjectId` | `string` | The `Device` or `Identity` observed. |
-| `category` | `SignalCategory` | `identity_state` \| `device_compliance` \| `device_management` \| `device_encryption` \| `os_support` \| `posture_freshness`. |
+| `category` | `SignalCategory` | `identity_state` \| `device_compliance` \| `device_management` \| `device_encryption` \| `os_support` \| `posture_freshness` \| `custody_state` \| `charge_state` \| `tamper_state` \| `dock_state` \| `security_baseline`. |
 | `value` | `string \| number \| boolean \| null` | Normalized value. |
 | `observedAt` | `string` | When the source observed it. |
 | `freshness` | `Freshness` | `fresh` \| `stale` \| `expired` \| `missing` \| `unknown`. |
@@ -296,7 +296,14 @@ child of `Policy` / `PolicyVersion` so the model reflects its intended shape.
 > `MatchedRule` (`ruleId`, `reasonCode`, `outcome`, `severity`) is embedded in
 > the decision. `DecisionEvidence` is the normalized, fail-closed context the
 > engine tested — missing inputs resolve to `unknown` / `missing`, never to a
-> healthy value.
+> healthy value. Its dimensions are: `identityEnabled`, `deviceManaged`,
+> `deviceCompliance`, `deviceEncrypted`, `osSupported`, `ownerType`,
+> `postureFreshness`, `workflowRiskTier`, the physical-custody fields
+> `custodyState` / `dockChargeState` / `tamperState`, the security-baseline field
+> `baselineCompliance` (`BaselineState`: `aligned` \| `partial` \| `drifted` \|
+> `not_assessed` \| `unknown` — see
+> [Security-Baseline Alignment](SECURITY_BASELINE_ALIGNMENT.md)), and the derived
+> `criticalSignalsPresent`.
 
 **EvidenceSnapshot** — an immutable, reproducible, content-digested record of
 exactly what the engine saw.

@@ -95,6 +95,7 @@ const scenarios: Scenario[] = [
   { label: "custody-overdue-restrict", identityRef: "nurse.overdue", deviceRef: "ipad-loan-01", workflowKey: "clinical-session", expectedOutcome: "restrict", expectedReason: "CUSTODY_OVERDUE" },
   { label: "tamper-suspected-restrict", identityRef: "nurse.tamper", deviceRef: "ipad-loan-02", workflowKey: "clinical-session", expectedOutcome: "restrict", expectedReason: "TAMPER_SUSPECTED" },
   { label: "battery-critical-stepup", identityRef: "nurse.lowbatt", deviceRef: "ipad-loan-03", workflowKey: "clinical-session", expectedOutcome: "step_up", expectedReason: "BATTERY_CRITICAL" },
+  { label: "baseline-drift-stepup", identityRef: "nurse.baseline_drift", deviceRef: "ipad-ward-06", workflowKey: "clinical-session", expectedOutcome: "step_up", expectedReason: "BASELINE_DRIFTED" },
 ];
 
 const decisions: Decision[] = [];
@@ -803,6 +804,83 @@ if (pending) {
     "hardening: no unsafeStore()/probe affordance on the core class",
     typeof facade["unsafeStore"] === "undefined" &&
       typeof facade["probeDeviceVisibility"] === "undefined",
+  );
+}
+
+// ── 16. Security-baseline (CIS/hardening) posture as a decision dimension ─────
+
+{
+  // The compliant device reports an aligned baseline in its evidence and still
+  // allows — an aligned baseline never blocks.
+  const compliant = decisions.find((d) => d.reasonCodes.includes("TRUST_ESTABLISHED"));
+  check("baseline: an aligned device is captured and allowed", Boolean(compliant));
+  if (compliant) {
+    const snapshot = core.getSnapshot(T.operator, compliant.evidenceSnapshotId);
+    check(
+      "baseline: aligned baseline is recorded in the evidence snapshot",
+      snapshot.evidence.baselineCompliance === "aligned",
+    );
+  }
+
+  // The drifted device steps up, carries the baseline state in evidence, and is
+  // self-service resolvable (re-apply the hardening profile) back to allow.
+  const drift = decisions.find((d) => d.reasonCodes.includes("BASELINE_DRIFTED"));
+  check("baseline: a drifted device exists", Boolean(drift));
+  if (drift) {
+    const snapshot = core.getSnapshot(T.operator, drift.evidenceSnapshotId);
+    check(
+      "baseline: drift state is captured in the evidence snapshot",
+      snapshot.evidence.baselineCompliance === "drifted",
+    );
+    // Under the stricter v2 policy, baseline drift escalates to restrict.
+    const sim = core.simulateDecision(T.owner, drift.id, `${policyId}_v2`);
+    check(
+      "baseline: drift escalates step_up → restrict under v2",
+      sim.simulatedOutcome === "restrict" && sim.changed === true,
+    );
+    const plan = core.getResolution(T.operator, drift.id);
+    check(
+      "baseline: drift is self-service (re-apply hardening profile)",
+      plan.path === "self_service" &&
+        plan.steps.some((s) => s.reasonCode === "BASELINE_DRIFTED"),
+    );
+    const resolved = core.simulateResolution(T.operator, drift.id);
+    check(
+      "baseline: re-applying the baseline resolves to allow",
+      resolved.resolved === true && resolved.projectedOutcome === "allow",
+    );
+  }
+
+  // An unknown baseline never fabricates a healthy state and never blocks on its
+  // own — a device with no baseline scan is not penalised by this rule.
+  const unknownBaseline = validatePolicyRules([
+    {
+      id: "baseline-guard",
+      description: "baseline rule accepts the baselineState condition",
+      match: [{ field: "baselineState", in: ["drifted", "not_assessed"] }],
+      outcome: "step_up",
+      reasonCode: "BASELINE_CHECK",
+      severity: "medium",
+    },
+  ]);
+  check(
+    "baseline: validator accepts a baselineState rule condition",
+    unknownBaseline[0]?.match[0]?.field === "baselineState",
+  );
+  expectError(
+    "baseline: validator rejects an out-of-domain baseline value",
+    "validation",
+    () =>
+      validatePolicyRules([
+        {
+          id: "bad-baseline",
+          description: "d",
+          match: [{ field: "baselineState", in: ["super-aligned"] }],
+          outcome: "step_up",
+          reasonCode: "R",
+          severity: "low",
+        },
+      ]),
   );
 }
 

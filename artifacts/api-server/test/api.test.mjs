@@ -225,6 +225,19 @@ async function run() {
   const overdueRes = await req("GET", `/v1/decisions/${overdue.json?.decision?.decisionId}/resolution`, { token: KEYS.operator });
   check("overdue return is self-service", overdueRes.json?.resolution?.path === "self_service");
 
+  // ── security-baseline (CIS/hardening) posture as a decision dimension ─────
+  const baselineDrift = await req("POST", "/v1/decisions/evaluate", {
+    token: KEYS.operator,
+    body: { identityRef: "nurse.baseline_drift", deviceRef: "ipad-ward-06", workflowKey: "clinical-session" },
+  });
+  check("baseline drift → step_up", baselineDrift.json?.decision?.outcome === "step_up");
+  check("baseline drift reason surfaced", (baselineDrift.json?.decision?.reasonCodes ?? []).includes("BASELINE_DRIFTED"));
+  const driftId = baselineDrift.json?.decision?.decisionId;
+  const driftEvidence = await req("GET", `/v1/decisions/${driftId}/evidence`, { token: KEYS.operator });
+  check("baseline state is exposed in decision evidence", driftEvidence.json?.evidence?.evidence?.baselineCompliance === "drifted");
+  const driftRes = await req("GET", `/v1/decisions/${driftId}/resolution`, { token: KEYS.operator });
+  check("baseline drift is self-service (re-apply hardening profile)", driftRes.json?.resolution?.path === "self_service");
+
   // ── connector + webhooks ────────────────────────────────────────────────
   const deliveries = await req("GET", "/v1/webhooks/deliveries", { token: KEYS.owner });
   check("webhook deliveries listed", deliveries.status === 200 && Array.isArray(deliveries.json?.deliveries));

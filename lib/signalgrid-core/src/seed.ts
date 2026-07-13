@@ -238,6 +238,7 @@ function seedPolicyTests(
     custodyState: "checked_out",
     dockChargeState: "charged",
     tamperState: "none",
+    baselineCompliance: "aligned",
     criticalSignalsPresent: true,
   };
   const cases: Array<Omit<PolicyTest, "id" | "tenantId" | "policyId">> = [
@@ -246,6 +247,8 @@ function seedPolicyTests(
     { name: "disabled identity → deny", evidence: { ...base, identityEnabled: false, criticalSignalsPresent: false }, expectedOutcome: "deny", expectedReasonCode: "IDENTITY_DISABLED" },
     { name: "stale posture → step-up", evidence: { ...base, postureFreshness: "stale" }, expectedOutcome: "step_up", expectedReasonCode: "POSTURE_STALE" },
     { name: "missing posture → restrict", evidence: { ...base, postureFreshness: "missing", criticalSignalsPresent: false }, expectedOutcome: "restrict", expectedReasonCode: "POSTURE_MISSING" },
+    { name: "baseline drift → step-up", evidence: { ...base, baselineCompliance: "drifted" }, expectedOutcome: "step_up", expectedReasonCode: "BASELINE_DRIFTED" },
+    { name: "baseline unknown → still allow (no fabricated block)", evidence: { ...base, baselineCompliance: "unknown" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
   ];
   for (const [index, spec] of cases.entries()) {
     store.putPolicyTest({
@@ -274,7 +277,7 @@ function seedNorthwindSubjects(store: MemoryStore): FixturePostureRecord[] {
     {
       identity: { externalRef: "nurse.compliant", displayName: "Compliant Nurse", state: "enabled", assignedRole: "nurse" },
       device: { externalRef: "ipad-ward-01", name: "Ward iPad 01", osPlatform: "iPadOS", osVersion: "18.5", ownerType: "shared", managementAgent: "intune" },
-      posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, sourceReference: "fixture:intune:managedDevices#ipad-ward-01" },
+      posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, baseline: "aligned", sourceReference: "fixture:intune:managedDevices#ipad-ward-01" },
     },
     {
       identity: { externalRef: "nurse.noncompliant", displayName: "Nurse (non-compliant device)", state: "enabled", assignedRole: "nurse" },
@@ -316,6 +319,13 @@ function seedNorthwindSubjects(store: MemoryStore): FixturePostureRecord[] {
       identity: { externalRef: "nurse.lowbatt", displayName: "Nurse (low battery)", state: "enabled", assignedRole: "nurse" },
       device: { externalRef: "ipad-loan-03", name: "Loaner iPad 03", osPlatform: "iPadOS", osVersion: "18.5", ownerType: "shared", managementAgent: "intune" },
       posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, sourceReference: "fixture:intune:managedDevices#ipad-loan-03" },
+    },
+    // Security-baseline scenario: posture is otherwise healthy, so the device's
+    // drift from its assigned CIS/hardening baseline is the decisive signal.
+    {
+      identity: { externalRef: "nurse.baseline_drift", displayName: "Nurse (baseline drift)", state: "enabled", assignedRole: "nurse" },
+      device: { externalRef: "ipad-ward-06", name: "Ward iPad 06", osPlatform: "iPadOS", osVersion: "18.5", ownerType: "shared", managementAgent: "intune" },
+      posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, baseline: "drifted", sourceReference: "fixture:intune:managedDevices#ipad-ward-06" },
     },
   ];
   return materializeSubjects(store, NORTHWIND, specs);

@@ -160,6 +160,24 @@ export type ComplianceState = "compliant" | "non_compliant" | "unknown";
 export type Freshness = "fresh" | "stale" | "expired" | "missing" | "unknown";
 export type SubjectType = "device" | "identity";
 
+/**
+ * Security-baseline (hardening) alignment for a device, normalized from an
+ * endpoint-management / posture source that reports against a recognized
+ * baseline (e.g. a CIS Benchmark or CIS Controls v8 profile, or an equivalent
+ * NIST 800-53 / STIG hardening baseline). Vendor-neutral and public-safe:
+ *  - aligned:      meets the device's assigned baseline profile,
+ *  - partial:      minor, non-critical control drift,
+ *  - drifted:      material drift from the baseline (hardening regressed),
+ *  - not_assessed: no baseline scan on record for this device yet,
+ *  - unknown:      state could not be determined (fail-safe, never "aligned").
+ */
+export type BaselineState =
+  | "aligned"
+  | "partial"
+  | "drifted"
+  | "not_assessed"
+  | "unknown";
+
 // Physical-custody / DockBridge hardware states (vendor-neutral).
 export type CustodyState =
   | "checked_in"
@@ -199,7 +217,8 @@ export type SignalCategory =
   | "custody_state"
   | "charge_state"
   | "tamper_state"
-  | "dock_state";
+  | "dock_state"
+  | "security_baseline";
 
 export interface NormalizedSignal {
   id: string;
@@ -232,7 +251,8 @@ export type EvidenceField =
   | "criticalSignalsPresent"
   | "custodyState"
   | "chargeState"
-  | "tamperState";
+  | "tamperState"
+  | "baselineState";
 
 export type RuleCondition =
   | { field: "identityEnabled"; equals: boolean | "unknown" }
@@ -246,7 +266,8 @@ export type RuleCondition =
   | { field: "workflowRiskTier"; in: RiskTier[] }
   | { field: "custodyState"; in: CustodyState[] }
   | { field: "chargeState"; in: ChargeState[] }
-  | { field: "tamperState"; in: TamperState[] };
+  | { field: "tamperState"; in: TamperState[] }
+  | { field: "baselineState"; in: BaselineState[] };
 
 export interface PolicyRuleSpec {
   id: string;
@@ -297,6 +318,8 @@ export interface DecisionEvidence {
   custodyState: CustodyState;
   dockChargeState: ChargeState;
   tamperState: TamperState;
+  /** Security-baseline (CIS/hardening) alignment for the device (default "unknown"). */
+  baselineCompliance: BaselineState;
   /** True only when every critical input is present and not degraded. */
   criticalSignalsPresent: boolean;
 }

@@ -38,6 +38,7 @@ Scope and honesty guardrails:
 | **API Top 10** | OWASP API Security Top 10 (esp. **API1 Broken Object Level Authorization**) |
 | **800-207** | NIST SP 800-207, Zero Trust Architecture |
 | **CSF 2.0** | NIST Cybersecurity Framework 2.0 (org security/risk program functions) |
+| **CIS** | CIS Benchmarks (device hardening) + CIS Controls v8 (safeguards); see [Security-Baseline Alignment](SECURITY_BASELINE_ALIGNMENT.md) |
 
 ---
 
@@ -120,6 +121,7 @@ fail-closed by design.
 | Security response headers (content-type-options, frame-options, referrer-policy, cache-control) | ASVS 5.0 | Implemented (public core) | `/v1` middleware (`docs/PRODUCT_CORE_FOUNDATION.md`) |
 | Request id propagation for traceability | ASVS 5.0; CSF 2.0 (DE) | Implemented (public core) | `/v1` middleware (`docs/PRODUCT_CORE_FOUNDATION.md`) |
 | Fail-closed on missing/stale/unknown critical evidence (no unsafe `allow`) | ASVS 5.0; 800-207 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts`; verified by `proof:signalgrid-core` (fail-closed invariant) |
+| Security-baseline (CIS/hardening) alignment as a decision dimension (drift → step-up/restrict; unknown never assumed aligned; self-service re-apply) | CIS; 800-207; CSF 2.0 (PR.PS) | Implemented (public core) | `lib/signalgrid-core/src/{types,evidence,policy,connector,resolution}.ts`; `docs/SECURITY_BASELINE_ALIGNMENT.md`; verified by `proof:signalgrid-core` (baseline section) |
 | PII-safe / sanitized production logging | ASVS 5.0; CSF 2.0 (PR.DS) | Private-core (planned) | Private production repo (API + connector worker) |
 
 ---

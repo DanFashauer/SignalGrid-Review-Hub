@@ -3,6 +3,7 @@ import type { Clock } from "./util";
 import { classifyFreshness, deterministicId } from "./util";
 import {
   CoreError,
+  type BaselineState,
   type Connector,
   type ConnectorSyncRun,
   type NormalizedSignal,
@@ -30,6 +31,13 @@ export interface FixturePostureRecord {
   osSupported: boolean;
   /** Last Intune sync time; drives posture freshness. */
   lastSyncAt: string | null;
+  /**
+   * Optional security-baseline (CIS/hardening) alignment reported by the
+   * posture source against the device's assigned benchmark profile. Absent =
+   * the source reported no baseline, which normalizes to "unknown" (never
+   * assumed aligned).
+   */
+  baseline?: BaselineState;
   sourceReference: string;
 }
 
@@ -85,6 +93,14 @@ export function runFixtureSync(
       { category: "os_support", value: record.osSupported },
       { category: "posture_freshness", value: postureFreshness },
     ];
+
+    // Security-baseline (CIS/hardening) alignment, when the source reports it.
+    if (record.baseline !== undefined) {
+      deviceSignals.push({
+        category: "security_baseline",
+        value: record.baseline,
+      });
+    }
 
     for (const spec of deviceSignals) {
       store.putSignal(

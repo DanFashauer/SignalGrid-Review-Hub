@@ -100,6 +100,7 @@ jobs:
             docs/RUN_AND_GO_LIVE.md
             docs/ECOSYSTEM_FLOW_AND_RESOLUTION.md
             docs/DOCKBRIDGE_PRODUCT_CONNECTOR.md
+            docs/SECURITY_BASELINE_ALIGNMENT.md
             SECURITY.md
           )
 

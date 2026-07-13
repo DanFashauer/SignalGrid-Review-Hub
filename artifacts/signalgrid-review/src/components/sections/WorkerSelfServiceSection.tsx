@@ -37,6 +37,7 @@ const SCENARIOS: WorkerScenario[] = [
   { worker: "Sam W.", role: "Nurse", device: "Ward iPad 04", identityRef: "nurse.disabled", deviceRef: "ipad-ward-04", workflowKey: "clinical-session", workflowLabel: "Clinical session" },
   { worker: "Jo N.", role: "Nurse", device: "Loaner iPad 01", identityRef: "nurse.overdue", deviceRef: "ipad-loan-01", workflowKey: "clinical-session", workflowLabel: "Clinical session" },
   { worker: "Lee M.", role: "Nurse", device: "Loaner iPad 03", identityRef: "nurse.lowbatt", deviceRef: "ipad-loan-03", workflowKey: "clinical-session", workflowLabel: "Clinical session" },
+  { worker: "Rin O.", role: "Nurse", device: "Ward iPad 06", identityRef: "nurse.baseline_drift", deviceRef: "ipad-ward-06", workflowKey: "clinical-session", workflowLabel: "Clinical session" },
 ];
 
 interface WorkerCase {

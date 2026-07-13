@@ -101,6 +101,7 @@ jobs:
             docs/ECOSYSTEM_FLOW_AND_RESOLUTION.md
             docs/DOCKBRIDGE_PRODUCT_CONNECTOR.md
             docs/SECURITY_BASELINE_ALIGNMENT.md
+            docs/APP_SUITE_MATRIX.md
             SECURITY.md
           )
 

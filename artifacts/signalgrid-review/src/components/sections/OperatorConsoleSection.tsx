@@ -43,6 +43,7 @@ const SCENARIOS: ScenarioSpec[] = [
   { label: "Overdue device return (DockBridge)", identityRef: "nurse.overdue", deviceRef: "ipad-loan-01", workflowKey: "clinical-session" },
   { label: "Device flagged for tamper (DockBridge)", identityRef: "nurse.tamper", deviceRef: "ipad-loan-02", workflowKey: "clinical-session" },
   { label: "Critically low battery (DockBridge)", identityRef: "nurse.lowbatt", deviceRef: "ipad-loan-03", workflowKey: "clinical-session" },
+  { label: "Security-baseline drift (CIS)", identityRef: "nurse.baseline_drift", deviceRef: "ipad-ward-06", workflowKey: "clinical-session" },
 ];
 
 const outcomeTone: Record<DecisionOutcome, string> = {
@@ -406,6 +407,19 @@ function DecisionDetail({
           )}
           {evidence.tamperState !== "unknown" && evidence.tamperState !== "none" && (
             <EvidenceRow label="Tamper" value={evidence.tamperState} tone="warn" />
+          )}
+          {evidence.baselineCompliance !== "unknown" && (
+            <EvidenceRow
+              label="Security baseline (CIS)"
+              value={evidence.baselineCompliance}
+              tone={
+                evidence.baselineCompliance === "aligned"
+                  ? "ok"
+                  : evidence.baselineCompliance === "drifted"
+                    ? "warn"
+                    : undefined
+              }
+            />
           )}
           <EvidenceRow
             label="Critical evidence intact"

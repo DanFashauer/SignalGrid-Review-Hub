@@ -4,6 +4,8 @@ import type {
   DecisionOutcome,
   MatchedRule,
   PolicyRuleSpec,
+  PolicyTest,
+  PolicyTestResult,
   PolicyVersion,
   RuleCondition,
 } from "./types";
@@ -110,9 +112,11 @@ function matches(condition: RuleCondition, evidence: DecisionEvidence): boolean 
     case "workflowRiskTier":
       return condition.in.includes(evidence.workflowRiskTier);
     default: {
-      // Exhaustiveness guard: an unknown condition never silently passes.
+      // Exhaustiveness guard at compile time; fail-closed at runtime so an
+      // unknown/malformed condition (e.g. from an authored draft) never matches.
       const _exhaustive: never = condition;
-      return Boolean(_exhaustive);
+      void _exhaustive;
+      return false;
     }
   }
 }
@@ -133,6 +137,29 @@ function explain(outcome: DecisionOutcome, reasonCodes: string[]): string {
       return String(_exhaustive);
     }
   }
+}
+
+/** Run a version's test fixtures against the engine; pins version behaviour. */
+export function runPolicyTests(
+  version: PolicyVersion,
+  tests: PolicyTest[],
+): PolicyTestResult[] {
+  return tests.map((test) => {
+    const evaluation = evaluatePolicy(version, test.evidence);
+    const outcomeOk = evaluation.outcome === test.expectedOutcome;
+    const reasonOk =
+      test.expectedReasonCode === undefined ||
+      evaluation.reasonCodes.includes(test.expectedReasonCode);
+    return {
+      testId: test.id,
+      name: test.name,
+      passed: outcomeOk && reasonOk,
+      expectedOutcome: test.expectedOutcome,
+      actualOutcome: evaluation.outcome,
+      expectedReasonCode: test.expectedReasonCode,
+      actualReasonCodes: evaluation.reasonCodes,
+    };
+  });
 }
 
 // ── Default rule sets used by the seed ───────────────────────────────────────
@@ -229,3 +256,32 @@ export const SHARED_DEVICE_RULES_V1: PolicyRuleSpec[] = [
     severity: "low",
   },
 ];
+
+/**
+ * Stricter shared-device policy (v2 draft). Tightens two rules relative to v1
+ * so a decision replayed against v2 can diverge — useful for demonstrating
+ * versioned-policy simulation:
+ *  - stale/expired posture escalates to RESTRICT (v1: step-up)
+ *  - unknown identity state escalates to DENY (v1: step-up)
+ */
+export const SHARED_DEVICE_RULES_V2: PolicyRuleSpec[] = SHARED_DEVICE_RULES_V1.map(
+  (rule) => {
+    if (rule.id === "posture-stale") {
+      return {
+        ...rule,
+        outcome: "restrict",
+        reasonCode: "POSTURE_STALE_STRICT",
+        severity: "high",
+      };
+    }
+    if (rule.id === "identity-unknown") {
+      return {
+        ...rule,
+        outcome: "deny",
+        reasonCode: "IDENTITY_STATE_UNKNOWN_STRICT",
+        severity: "critical",
+      };
+    }
+    return rule;
+  },
+);

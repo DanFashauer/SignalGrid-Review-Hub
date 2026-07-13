@@ -1,0 +1,36 @@
+name: CodeQL
+
+# Static code scanning for the TypeScript/JavaScript in the workspace.
+# Findings surface in the repository's Security tab.
+on:
+  push:
+    branches:
+      - SignalGrid_Alpha
+  pull_request:
+  schedule:
+    # Weekly baseline scan (Mondays 07:17 UTC).
+    - cron: "17 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    name: Analyze (javascript-typescript)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          queries: security-and-quality
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript-typescript"

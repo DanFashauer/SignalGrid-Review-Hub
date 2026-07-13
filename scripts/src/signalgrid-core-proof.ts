@@ -19,6 +19,7 @@
 import {
   CoreError,
   SignalGridCore,
+  SHARED_DEVICE_RULES_V2,
   type Decision,
   type DecisionOutcome,
 } from "@workspace/signalgrid-core";
@@ -262,6 +263,98 @@ check(
 check(
   "determinism: identical evidence snapshot id across fresh cores",
   a.evidenceSnapshotId === b.evidenceSnapshotId,
+);
+
+// ── 8. Policy tests, simulation, lifecycle, metrics ───────────────────────────
+
+const policyId = decisions[0].policyId;
+
+// Policy test fixtures pass against the active version.
+const testResults = core.runPolicyTests(T.owner, policyId);
+check(
+  "policy tests: all fixtures pass on the active version",
+  testResults.length > 0 && testResults.every((r) => r.passed),
+  `${testResults.filter((r) => r.passed).length}/${testResults.length}`,
+);
+
+// Simulate the stale-posture decision against the stricter v2 draft.
+const v2 = core
+  .listPolicyVersions(T.owner, policyId)
+  .find((v) => v.version === 2);
+check("simulate: v2 draft exists", Boolean(v2));
+if (v2) {
+  const staleDecision = decisions.find((d) => d.reasonCodes.includes("POSTURE_STALE"));
+  check("simulate: stale decision found", Boolean(staleDecision));
+  if (staleDecision) {
+    const sim = core.simulateDecision(T.operator, staleDecision.id, v2.id);
+    check(
+      "simulate: stale decision escalates step_up → restrict under v2",
+      sim.simulatedOutcome === "restrict" && sim.changed,
+      `${sim.storedOutcome} → ${sim.simulatedOutcome}`,
+    );
+    // Simulation must not mutate the stored decision.
+    check(
+      "simulate: stored decision is unchanged after simulation",
+      core.getDecision(T.operator, staleDecision.id).outcome === "step_up",
+    );
+  }
+}
+
+// Policy lifecycle on a fresh core: draft → activate, with RBAC enforced.
+const lifecycleCore = SignalGridCore.demo();
+expectError("lifecycle: operator cannot author a draft", "forbidden", () =>
+  lifecycleCore.createPolicyDraft(T.operator, policyId, SHARED_DEVICE_RULES_V2),
+);
+const draft = lifecycleCore.createPolicyDraft(
+  T.owner,
+  policyId,
+  SHARED_DEVICE_RULES_V2,
+);
+check("lifecycle: owner creates a draft version", draft.status === "draft");
+const activated = lifecycleCore.activatePolicyVersion(T.owner, policyId, draft.id);
+check(
+  "lifecycle: activation switches the active version",
+  activated.activeVersionId === draft.id,
+);
+// After activating the stricter policy, a stale-posture evaluation now restricts.
+const afterActivation = lifecycleCore.evaluate(T.operator, {
+  identityRef: "nurse.stale",
+  deviceRef: "ipad-ward-03",
+  workflowKey: "clinical-session",
+});
+check(
+  "lifecycle: stale posture restricts under the newly-activated v2",
+  afterActivation.outcome === "restrict",
+  `got "${afterActivation.outcome}"`,
+);
+
+// Metrics + pilot gates over the main core's decisions.
+const metrics = core.metrics(T.operator);
+check(
+  "metrics: total equals decisions evaluated",
+  metrics.totalDecisions === decisions.length,
+  `${metrics.totalDecisions} vs ${decisions.length}`,
+);
+check(
+  "metrics: outcome buckets sum to total",
+  metrics.byOutcome.allow +
+    metrics.byOutcome.step_up +
+    metrics.byOutcome.restrict +
+    metrics.byOutcome.deny ===
+    metrics.totalDecisions,
+);
+check(
+  "pilot gate: 100% of decisions carry a policy version",
+  metrics.decisionsWithPolicyVersion === metrics.totalDecisions,
+);
+check(
+  "pilot gate: 100% of decisions carry an evidence snapshot",
+  metrics.decisionsWithEvidence === metrics.totalDecisions,
+);
+check(
+  "pilot gate: p95 decision latency is well under 750ms",
+  metrics.p95LatencyMs < 750,
+  `p95=${metrics.p95LatencyMs}ms`,
 );
 
 // ── Report ────────────────────────────────────────────────────────────────────

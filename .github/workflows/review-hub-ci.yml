@@ -84,6 +84,10 @@ jobs:
             docs/CLOUD_CONNECTOR_EMULATOR_HARNESS.md
             docs/CONNECTOR_EMULATOR_SCENARIOS.md
             docs/PRODUCT_CORE_FOUNDATION.md
+            docs/PRODUCT_CORE_THREAT_MODEL.md
+            docs/SECURITY_CONTROLS_MATRIX.md
+            docs/PRODUCT_DATA_MODEL.md
+            SECURITY.md
           )
 
           for doc in "${required_docs[@]}"; do

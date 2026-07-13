@@ -1,13 +1,19 @@
 import { runFixtureSync, type FixturePostureRecord } from "./connector";
 import { appendAudit } from "./audit";
-import { ruleSetDigest, SHARED_DEVICE_RULES_V1 } from "./policy";
+import {
+  ruleSetDigest,
+  SHARED_DEVICE_RULES_V1,
+  SHARED_DEVICE_RULES_V2,
+} from "./policy";
 import { MemoryStore } from "./store";
 import type { Clock } from "./util";
 import type {
   Connector,
+  DecisionEvidence,
   Device,
   Identity,
   Policy,
+  PolicyTest,
   PolicyVersion,
   Workflow,
 } from "./types";
@@ -155,7 +161,24 @@ function seedPolicy(
     activeVersionId: versionId,
   };
   store.putPolicyVersion(version);
+
+  // A stricter v2 draft ships alongside v1 so operators can simulate/compare
+  // before activating it. It is a draft, so it does not affect live decisions.
+  const draftId = `${policyId}_v2`;
+  const draft: PolicyVersion = {
+    id: draftId,
+    tenantId,
+    policyId,
+    version: 2,
+    status: "draft",
+    rules: SHARED_DEVICE_RULES_V2,
+    createdAt,
+    digest: ruleSetDigest(SHARED_DEVICE_RULES_V2),
+  };
+  store.putPolicyVersion(draft);
+
   store.putPolicy(policy);
+  seedPolicyTests(store, tenantId, policyId);
   appendAudit(store, {
     tenantId,
     type: "policy.version_activated",
@@ -165,6 +188,39 @@ function seedPolicy(
     references: [policyId, versionId],
     recordedAt: createdAt,
   });
+}
+
+function seedPolicyTests(
+  store: MemoryStore,
+  tenantId: string,
+  policyId: string,
+): void {
+  const base: DecisionEvidence = {
+    identityEnabled: true,
+    deviceManaged: true,
+    deviceCompliance: "compliant",
+    deviceEncrypted: true,
+    osSupported: true,
+    ownerType: "shared",
+    postureFreshness: "fresh",
+    workflowRiskTier: "elevated",
+    criticalSignalsPresent: true,
+  };
+  const cases: Array<Omit<PolicyTest, "id" | "tenantId" | "policyId">> = [
+    { name: "healthy → allow", evidence: base, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
+    { name: "non-compliant → restrict", evidence: { ...base, deviceCompliance: "non_compliant" }, expectedOutcome: "restrict", expectedReasonCode: "DEVICE_NONCOMPLIANT" },
+    { name: "disabled identity → deny", evidence: { ...base, identityEnabled: false, criticalSignalsPresent: false }, expectedOutcome: "deny", expectedReasonCode: "IDENTITY_DISABLED" },
+    { name: "stale posture → step-up", evidence: { ...base, postureFreshness: "stale" }, expectedOutcome: "step_up", expectedReasonCode: "POSTURE_STALE" },
+    { name: "missing posture → restrict", evidence: { ...base, postureFreshness: "missing", criticalSignalsPresent: false }, expectedOutcome: "restrict", expectedReasonCode: "POSTURE_MISSING" },
+  ];
+  for (const [index, spec] of cases.entries()) {
+    store.putPolicyTest({
+      id: `test_${policyId}_${index}`,
+      tenantId,
+      policyId,
+      ...spec,
+    });
+  }
 }
 
 interface SubjectSpec {

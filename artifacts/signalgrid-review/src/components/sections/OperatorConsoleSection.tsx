@@ -4,6 +4,9 @@ import {
   type Decision,
   type DecisionOutcome,
   type EvidenceSnapshot,
+  type MetricsSummary,
+  type PolicyVersion,
+  type SimulationResult,
 } from "@workspace/signalgrid-core";
 
 /**
@@ -53,23 +56,39 @@ interface Row {
   decision: Decision;
   snapshot: EvidenceSnapshot;
   evidenceVerified: boolean;
+  simulations: SimulationResult[];
 }
 
 export default function OperatorConsoleSection() {
-  const { rows, auditChain } = useMemo(() => {
+  const { rows, auditChain, metrics, versions } = useMemo(() => {
     const core = SignalGridCore.demo();
-    const built: Row[] = SCENARIOS.map((scenario) => {
+    const evaluated = SCENARIOS.map((scenario) => {
       const result = core.evaluate(OPERATOR_TOKEN, {
         identityRef: scenario.identityRef,
         deviceRef: scenario.deviceRef,
         workflowKey: scenario.workflowKey,
       });
+      return { scenario, result };
+    });
+    const policyId = evaluated[0]?.result.policyId ?? "";
+    const policyVersions = policyId
+      ? core.listPolicyVersions(OWNER_TOKEN, policyId)
+      : [];
+    const built: Row[] = evaluated.map(({ scenario, result }) => {
       const decision = core.getDecision(OPERATOR_TOKEN, result.decisionId);
       const snapshot = core.getSnapshot(OPERATOR_TOKEN, result.evidenceSnapshotId);
       const evidenceVerified = core.verifyEvidence(OPERATOR_TOKEN, snapshot.id);
-      return { label: scenario.label, decision, snapshot, evidenceVerified };
+      const simulations = policyVersions.map((version) =>
+        core.simulateDecision(OPERATOR_TOKEN, decision.id, version.id),
+      );
+      return { label: scenario.label, decision, snapshot, evidenceVerified, simulations };
     });
-    return { rows: built, auditChain: core.verifyAudit(OWNER_TOKEN) };
+    return {
+      rows: built,
+      auditChain: core.verifyAudit(OWNER_TOKEN),
+      metrics: core.metrics(OPERATOR_TOKEN),
+      versions: policyVersions,
+    };
   }, []);
 
   const [selectedId, setSelectedId] = useState<string>(rows[0]?.decision.id ?? "");
@@ -87,6 +106,8 @@ export default function OperatorConsoleSection() {
           audit chain; it is not a production system.
         </p>
       </div>
+
+      <MetricsTiles metrics={metrics} />
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
         {/* Decisions list */}
@@ -149,7 +170,7 @@ export default function OperatorConsoleSection() {
         {/* Decision detail trace */}
         <div className="lg:col-span-3">
           {selected && (
-            <DecisionDetail row={selected} />
+            <DecisionDetail row={selected} versions={versions} />
           )}
         </div>
       </div>
@@ -157,7 +178,56 @@ export default function OperatorConsoleSection() {
   );
 }
 
-function DecisionDetail({ row }: { row: Row }) {
+function MetricsTiles({ metrics }: { metrics: MetricsSummary }) {
+  const tiles: Array<{ label: string; value: string; tone?: string }> = [
+    { label: "Decisions", value: String(metrics.totalDecisions) },
+    {
+      label: "Allow",
+      value: String(metrics.byOutcome.allow),
+      tone: "text-teal-300",
+    },
+    {
+      label: "Step-up",
+      value: String(metrics.byOutcome.step_up),
+      tone: "text-amber-300",
+    },
+    {
+      label: "Restrict / Deny",
+      value: String(metrics.byOutcome.restrict + metrics.byOutcome.deny),
+      tone: "text-red-300",
+    },
+    { label: "p95 latency", value: `${metrics.p95LatencyMs}ms` },
+    {
+      label: "With policy version",
+      value: `${metrics.decisionsWithPolicyVersion}/${metrics.totalDecisions}`,
+    },
+  ];
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-6 gap-2.5">
+      {tiles.map((tile) => (
+        <div
+          key={tile.label}
+          className="border border-border bg-card rounded-lg px-3 py-2.5"
+        >
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wider truncate">
+            {tile.label}
+          </p>
+          <p className={`text-lg font-bold ${tile.tone ?? "text-foreground"}`}>
+            {tile.value}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DecisionDetail({
+  row,
+  versions,
+}: {
+  row: Row;
+  versions: PolicyVersion[];
+}) {
   const { decision, snapshot, evidenceVerified } = row;
   const evidence = snapshot.evidence;
 
@@ -244,6 +314,42 @@ function DecisionDetail({ row }: { row: Row }) {
               </p>
             ))}
           </div>
+        </div>
+      </TraceBlock>
+
+      <TraceBlock title="Policy Lab — replay against policy versions">
+        <p className="text-[11px] text-muted-foreground mb-2">
+          The same immutable evidence, re-evaluated against each policy version.
+          No stored state changes.
+        </p>
+        <div className="space-y-1.5">
+          {row.simulations.map((sim) => {
+            const version = versions.find(
+              (v) => v.id === sim.simulatedPolicyVersionId,
+            );
+            const isActive = version?.status === "active";
+            return (
+              <div
+                key={sim.simulatedPolicyVersionId}
+                className="flex items-center justify-between gap-2 text-xs"
+              >
+                <span className="text-muted-foreground">
+                  Policy v{sim.simulatedPolicyVersion}
+                  {isActive ? " (active)" : version ? ` (${version.status})` : ""}
+                </span>
+                <span className="flex items-center gap-2">
+                  {sim.changed && (
+                    <span className="text-[10px] text-amber-300">changed</span>
+                  )}
+                  <span
+                    className={`font-mono px-1.5 py-0.5 rounded border ${outcomeTone[sim.simulatedOutcome]}`}
+                  >
+                    {outcomeLabel[sim.simulatedOutcome]}
+                  </span>
+                </span>
+              </div>
+            );
+          })}
         </div>
       </TraceBlock>
 

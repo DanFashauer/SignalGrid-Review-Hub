@@ -1,5 +1,9 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { CoreError, type EvaluateRequest } from "@workspace/signalgrid-core";
+import {
+  CoreError,
+  type EvaluateRequest,
+  type PolicyRuleSpec,
+} from "@workspace/signalgrid-core";
 import { core, DEMO_KEYS } from "../lib/core";
 import { requireTenantContext } from "../middlewares/context";
 import { rateLimit } from "../middlewares/rateLimit";
@@ -54,6 +58,25 @@ router.get("/v1/decisions/:id/evidence", (req: Request, res: Response) => {
   res.json(envelope(req, { evidence, verified }));
 });
 
+router.post("/v1/decisions/:id/simulate", (req: Request, res: Response) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const policyVersionId = body["policyVersionId"];
+  if (typeof policyVersionId !== "string") {
+    throw new CoreError("validation", "policyVersionId is required.", 400);
+  }
+  const simulation = core.simulateDecision(
+    token(req),
+    param(req, "id"),
+    policyVersionId,
+  );
+  res.json(envelope(req, { simulation }));
+});
+
+router.get("/v1/metrics", (req: Request, res: Response) => {
+  const metrics = core.metrics(token(req));
+  res.json(envelope(req, { metrics }));
+});
+
 router.get("/v1/policies", (req: Request, res: Response) => {
   const policies = core.listPolicies(token(req));
   res.json(envelope(req, { policies }));
@@ -62,6 +85,34 @@ router.get("/v1/policies", (req: Request, res: Response) => {
 router.get("/v1/policies/:id/versions", (req: Request, res: Response) => {
   const versions = core.listPolicyVersions(token(req), param(req, "id"));
   res.json(envelope(req, { versions }));
+});
+
+router.post("/v1/policies/:id/versions", (req: Request, res: Response) => {
+  const rules = parseRules(req.body);
+  const version = core.createPolicyDraft(token(req), param(req, "id"), rules);
+  res.status(201).json(envelope(req, { version }));
+});
+
+router.post(
+  "/v1/policies/:id/versions/:versionId/activate",
+  (req: Request, res: Response) => {
+    const policy = core.activatePolicyVersion(
+      token(req),
+      param(req, "id"),
+      param(req, "versionId"),
+    );
+    res.json(envelope(req, { policy }));
+  },
+);
+
+router.get("/v1/policies/:id/tests", (req: Request, res: Response) => {
+  const versionId =
+    typeof req.query["versionId"] === "string"
+      ? req.query["versionId"]
+      : undefined;
+  const results = core.runPolicyTests(token(req), param(req, "id"), versionId);
+  const passed = results.every((r) => r.passed);
+  res.json(envelope(req, { results, passed }));
 });
 
 router.get("/v1/connectors", (req: Request, res: Response) => {
@@ -122,6 +173,20 @@ function parseEvaluate(body: unknown): EvaluateRequest {
       ? sanitizeContext(record["requestContext"] as Record<string, unknown>)
       : undefined;
   return { identityRef, deviceRef, workflowKey, requestContext };
+}
+
+function parseRules(body: unknown): PolicyRuleSpec[] {
+  const record = (body ?? {}) as Record<string, unknown>;
+  const rules = record["rules"];
+  if (!Array.isArray(rules) || rules.length === 0) {
+    throw new CoreError(
+      "validation",
+      "Body must include a non-empty `rules` array.",
+      400,
+    );
+  }
+  // The core validates rule structure; malformed conditions fail closed.
+  return rules as PolicyRuleSpec[];
 }
 
 function sanitizeContext(

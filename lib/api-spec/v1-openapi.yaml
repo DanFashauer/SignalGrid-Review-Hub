@@ -1,0 +1,291 @@
+openapi: 3.1.0
+info:
+  title: SignalGrid v1 (public-safe product core)
+  version: 1.0.0
+  description: >-
+    The product-shaped SignalGrid decision API, backed by the deterministic,
+    fixture-backed public-safe core (`@workspace/signalgrid-core`). Every route
+    is tenant-scoped: the tenant is derived from the authenticated bearer token,
+    never from a client-supplied id. This is a review surface, not a production
+    system — no real credentials, tenant data, PHI/PII, or live vendor calls.
+servers:
+  - url: /api
+    description: Base API path
+security:
+  - bearerAuth: []
+tags:
+  - name: context
+  - name: decisions
+  - name: policies
+  - name: connectors
+  - name: audit
+  - name: metrics
+
+paths:
+  /v1/keys:
+    get:
+      operationId: listDemoKeys
+      tags: [context]
+      security: []
+      summary: List public-safe demo keys (not real credentials)
+      responses:
+        "200": { description: Demo keys }
+
+  /v1/context:
+    get:
+      operationId: getContext
+      tags: [context]
+      summary: Resolve the caller's principal and tenant
+      responses:
+        "200": { description: Tenant context }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/decisions/evaluate:
+    post:
+      operationId: evaluateDecision
+      tags: [decisions]
+      summary: Run the shared-device decision loop
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EvaluateRequest" }
+      responses:
+        "200":
+          description: Decision evaluated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EvaluateResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/decisions:
+    get:
+      operationId: listDecisions
+      tags: [decisions]
+      summary: List the tenant's decisions
+      responses:
+        "200": { description: Decision list }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/decisions/{id}:
+    get:
+      operationId: getDecision
+      tags: [decisions]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      summary: Get a decision
+      responses:
+        "200": { description: Decision }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/decisions/{id}/evidence:
+    get:
+      operationId: getDecisionEvidence
+      tags: [decisions]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      summary: Get a decision's immutable evidence snapshot and integrity check
+      responses:
+        "200": { description: Evidence snapshot + verified flag }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/decisions/{id}/simulate:
+    post:
+      operationId: simulateDecision
+      tags: [decisions]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      summary: Replay a decision's evidence against a chosen policy version
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                policyVersionId: { type: string }
+              required: [policyVersionId]
+      responses:
+        "200": { description: Simulation result }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/policies:
+    get:
+      operationId: listPolicies
+      tags: [policies]
+      summary: List policies
+      responses:
+        "200": { description: Policy list }
+
+  /v1/policies/{id}/versions:
+    get:
+      operationId: listPolicyVersions
+      tags: [policies]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      summary: List policy versions
+      responses:
+        "200": { description: Version list }
+    post:
+      operationId: createPolicyDraft
+      tags: [policies]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      summary: Create a draft policy version (owner/admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                rules:
+                  type: array
+                  items: { type: object }
+              required: [rules]
+      responses:
+        "201": { description: Draft version created }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/policies/{id}/versions/{versionId}/activate:
+    post:
+      operationId: activatePolicyVersion
+      tags: [policies]
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+        - in: path
+          name: versionId
+          required: true
+          schema: { type: string }
+      summary: Activate a policy version (owner/admin)
+      responses:
+        "200": { description: Policy with new active version }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/policies/{id}/tests:
+    get:
+      operationId: runPolicyTests
+      tags: [policies]
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+        - in: query
+          name: versionId
+          schema: { type: string }
+      summary: Run a policy version's test fixtures
+      responses:
+        "200": { description: Test results + passed flag }
+
+  /v1/connectors:
+    get:
+      operationId: listConnectors
+      tags: [connectors]
+      summary: List connectors and health
+      responses:
+        "200": { description: Connector list }
+
+  /v1/connectors/{id}/sync-runs:
+    get:
+      operationId: listSyncRuns
+      tags: [connectors]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      summary: List connector sync runs
+      responses:
+        "200": { description: Sync run history }
+
+  /v1/connectors/{id}/sync:
+    post:
+      operationId: syncConnector
+      tags: [connectors]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      summary: Replay the fixture connector sync (read-only)
+      responses:
+        "200": { description: Sync run }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/audit:
+    get:
+      operationId: listAudit
+      tags: [audit]
+      summary: List audit events and verify the tamper-evident chain
+      responses:
+        "200": { description: Audit events + chain verification }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/metrics:
+    get:
+      operationId: getMetrics
+      tags: [metrics]
+      summary: Operator metrics for the tenant's decisions
+      responses:
+        "200": { description: Metrics summary }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Public-safe demo key, e.g. `sgk_demo_northwind_operator`.
+  parameters:
+    Id:
+      in: path
+      name: id
+      required: true
+      schema: { type: string }
+  responses:
+    Unauthorized:
+      description: Missing or unknown bearer token
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Role lacks the required permission
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Not found (includes cross-tenant access, which fails closed)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ValidationError:
+      description: Invalid request
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    Error:
+      type: object
+      properties:
+        requestId: { type: [string, "null"] }
+        error: { type: string }
+        message: { type: string }
+      required: [error, message]
+    EvaluateRequest:
+      type: object
+      properties:
+        identityRef: { type: string }
+        deviceRef: { type: string }
+        workflowKey: { type: string }
+        requestContext:
+          type: object
+          additionalProperties: { type: string }
+      required: [identityRef, deviceRef, workflowKey]
+    EvaluateResult:
+      type: object
+      properties:
+        decisionId: { type: string }
+        outcome:
+          type: string
+          enum: [allow, step_up, restrict, deny]
+        reasonCodes:
+          type: array
+          items: { type: string }
+        policyId: { type: string }
+        policyVersion: { type: integer }
+        policyVersionId: { type: string }
+        evidenceSnapshotId: { type: string }
+        reviewable: { type: boolean }
+        latencyMs: { type: integer }
+        explanation: { type: string }
+      required:
+        [decisionId, outcome, reasonCodes, policyVersionId, evidenceSnapshotId]

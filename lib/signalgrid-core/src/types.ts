@@ -291,6 +291,57 @@ export interface Decision {
   explanation: string;
 }
 
+// ── Policy tests (fixtures that pin a version's behaviour) ───────────────────
+
+export interface PolicyTest {
+  id: string;
+  tenantId: string;
+  policyId: string;
+  name: string;
+  evidence: DecisionEvidence;
+  expectedOutcome: DecisionOutcome;
+  expectedReasonCode?: string;
+}
+
+export interface PolicyTestResult {
+  testId: string;
+  name: string;
+  passed: boolean;
+  expectedOutcome: DecisionOutcome;
+  actualOutcome: DecisionOutcome;
+  expectedReasonCode?: string;
+  actualReasonCodes: string[];
+}
+
+// ── Simulation / replay ──────────────────────────────────────────────────────
+
+export interface SimulationResult {
+  decisionId: string;
+  storedOutcome: DecisionOutcome;
+  simulatedPolicyVersionId: string;
+  simulatedPolicyVersion: number;
+  simulatedOutcome: DecisionOutcome;
+  simulatedReasonCodes: string[];
+  simulatedMatchedRules: MatchedRule[];
+  changed: boolean;
+  /** The (immutable) evidence the replay was evaluated against. */
+  evidence: DecisionEvidence;
+}
+
+// ── Operator metrics ─────────────────────────────────────────────────────────
+
+export interface MetricsSummary {
+  totalDecisions: number;
+  byOutcome: Record<DecisionOutcome, number>;
+  allowRate: number;
+  restrictDenyRate: number;
+  avgLatencyMs: number;
+  p95LatencyMs: number;
+  decisionsWithPolicyVersion: number;
+  decisionsWithEvidence: number;
+  pendingReview: number;
+}
+
 // ── Audit ledger ─────────────────────────────────────────────────────────────
 
 export type AuditEventType =

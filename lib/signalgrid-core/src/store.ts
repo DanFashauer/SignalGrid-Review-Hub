@@ -10,6 +10,7 @@ import type {
   Membership,
   NormalizedSignal,
   Policy,
+  PolicyTest,
   PolicyVersion,
   Tenant,
   User,
@@ -38,6 +39,7 @@ export class MemoryStore {
   private readonly signals = new Map<string, NormalizedSignal>();
   private readonly policies = new Map<string, Policy>();
   private readonly policyVersions = new Map<string, PolicyVersion>();
+  private readonly policyTests = new Map<string, PolicyTest>();
   private readonly decisions = new Map<string, Decision>();
   private readonly snapshots = new Map<string, EvidenceSnapshot>();
   private readonly auditEvents: AuditEvent[] = [];
@@ -209,6 +211,21 @@ export class MemoryStore {
     return [...this.policyVersions.values()]
       .filter((row) => row.tenantId === tenantId && row.policyId === policyId)
       .sort((a, b) => b.version - a.version);
+  }
+
+  nextPolicyVersionNumber(tenantId: string, policyId: string): number {
+    const versions = this.listPolicyVersions(tenantId, policyId);
+    return versions.length === 0 ? 1 : versions[0].version + 1;
+  }
+
+  putPolicyTest(test: PolicyTest): void {
+    this.policyTests.set(test.id, test);
+  }
+
+  listPolicyTests(tenantId: string, policyId: string): PolicyTest[] {
+    return [...this.policyTests.values()].filter(
+      (row) => row.tenantId === tenantId && row.policyId === policyId,
+    );
   }
 
   // ── Decisions & snapshots ─────────────────────────────────────────────────

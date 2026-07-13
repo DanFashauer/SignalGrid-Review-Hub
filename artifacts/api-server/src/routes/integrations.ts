@@ -2000,8 +2000,15 @@ const INTEGRATIONS = [
   },
 ];
 
+// The integration catalog is immutable for the process lifetime, so serialize
+// it once at module load instead of re-running JSON.stringify over ~149 objects
+// on every request, and mark the response cacheable (overriding the global
+// no-store) since it never changes between deploys.
+const INTEGRATIONS_BODY = JSON.stringify({ integrations: INTEGRATIONS });
+
 router.get("/integrations", (_req, res) => {
-  res.json({ integrations: INTEGRATIONS });
+  res.setHeader("cache-control", "public, max-age=300");
+  res.type("application/json").send(INTEGRATIONS_BODY);
 });
 
 router.get("/integrations/:id", (req, res) => {

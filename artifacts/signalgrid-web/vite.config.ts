@@ -44,6 +44,17 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // Split stable vendor code into long-term-cacheable chunks so an app
+        // change does not bust React / animation library caches, and the
+        // initial payload is not one monolithic bundle.
+        manualChunks: {
+          "react-vendor": ["react", "react-dom"],
+          motion: ["framer-motion"],
+        },
+      },
+    },
   },
   server: {
     port,

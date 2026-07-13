@@ -27,11 +27,17 @@ export function buildEvidence(
   workflow: Workflow,
   signals: NormalizedSignal[],
 ): DecisionEvidence {
-  const compliance = readCompliance(signals);
-  const managed = readBoolean(signals, "device_management");
-  const encrypted = readBoolean(signals, "device_encryption");
-  const osSupported = readBoolean(signals, "os_support");
-  const postureFreshness = readFreshness(signals);
+  // Group the signals into the single latest-per-category entry in one pass,
+  // instead of filtering+sorting the whole array once per category (this was 9
+  // filter+sort passes per decision). Output is identical: for each category we
+  // keep the entry with the greatest observedAt, and on a tie the first in the
+  // original order — matching a stable descending sort's first element.
+  const latestByCategory = groupLatest(signals);
+  const compliance = readCompliance(latestByCategory);
+  const managed = readBoolean(latestByCategory, "device_management");
+  const encrypted = readBoolean(latestByCategory, "device_encryption");
+  const osSupported = readBoolean(latestByCategory, "os_support");
+  const postureFreshness = readFreshness(latestByCategory);
 
   const identityEnabled: boolean | "unknown" =
     identity.state === "enabled"
@@ -49,10 +55,10 @@ export function buildEvidence(
     ownerType: device.ownerType,
     postureFreshness,
     workflowRiskTier: workflow.riskTier,
-    custodyState: readCustody(signals),
-    dockChargeState: readCharge(signals),
-    tamperState: readTamper(signals),
-    baselineCompliance: readBaseline(signals),
+    custodyState: readCustody(latestByCategory),
+    dockChargeState: readCharge(latestByCategory),
+    tamperState: readTamper(latestByCategory),
+    baselineCompliance: readBaseline(latestByCategory),
   };
 
   return {
@@ -130,8 +136,28 @@ export function verifySnapshot(snapshot: EvidenceSnapshot): boolean {
   return digest(body) === snapshot.digest;
 }
 
-function readCompliance(signals: NormalizedSignal[]): ComplianceState {
-  const signal = latest(signals, "device_compliance");
+type LatestByCategory = Map<NormalizedSignal["category"], NormalizedSignal>;
+
+/**
+ * One pass over the signals, keeping the latest (max observedAt) entry per
+ * category. On an observedAt tie the first entry in the original order wins,
+ * which matches the first element of a stable descending sort — so the derived
+ * evidence is byte-for-byte identical to the prior filter+sort-per-category
+ * approach, at O(n) instead of O(categories · n log n).
+ */
+function groupLatest(signals: NormalizedSignal[]): LatestByCategory {
+  const map: LatestByCategory = new Map();
+  for (const signal of signals) {
+    const current = map.get(signal.category);
+    if (!current || signal.observedAt.localeCompare(current.observedAt) > 0) {
+      map.set(signal.category, signal);
+    }
+  }
+  return map;
+}
+
+function readCompliance(latestByCategory: LatestByCategory): ComplianceState {
+  const signal = latestByCategory.get("device_compliance");
   if (!signal) {
     return "unknown";
   }
@@ -145,10 +171,10 @@ function readCompliance(signals: NormalizedSignal[]): ComplianceState {
 }
 
 function readBoolean(
-  signals: NormalizedSignal[],
+  latestByCategory: LatestByCategory,
   category: NormalizedSignal["category"],
 ): boolean | "unknown" {
-  const signal = latest(signals, category);
+  const signal = latestByCategory.get(category);
   if (!signal) {
     return "unknown";
   }
@@ -166,28 +192,28 @@ const CHARGE_STATES = ["charging", "charged", "low", "critical", "not_present"] 
 const TAMPER_STATES = ["none", "suspected", "confirmed", "sensor_unavailable"] as const;
 const BASELINE_STATES = ["aligned", "partial", "drifted", "not_assessed"] as const;
 
-function readCustody(signals: NormalizedSignal[]): CustodyState {
-  return readEnum(signals, "custody_state", CUSTODY_STATES) ?? "unknown";
+function readCustody(latestByCategory: LatestByCategory): CustodyState {
+  return readEnum(latestByCategory, "custody_state", CUSTODY_STATES) ?? "unknown";
 }
 
-function readBaseline(signals: NormalizedSignal[]): BaselineState {
-  return readEnum(signals, "security_baseline", BASELINE_STATES) ?? "unknown";
+function readBaseline(latestByCategory: LatestByCategory): BaselineState {
+  return readEnum(latestByCategory, "security_baseline", BASELINE_STATES) ?? "unknown";
 }
 
-function readCharge(signals: NormalizedSignal[]): ChargeState {
-  return readEnum(signals, "charge_state", CHARGE_STATES) ?? "unknown";
+function readCharge(latestByCategory: LatestByCategory): ChargeState {
+  return readEnum(latestByCategory, "charge_state", CHARGE_STATES) ?? "unknown";
 }
 
-function readTamper(signals: NormalizedSignal[]): TamperState {
-  return readEnum(signals, "tamper_state", TAMPER_STATES) ?? "unknown";
+function readTamper(latestByCategory: LatestByCategory): TamperState {
+  return readEnum(latestByCategory, "tamper_state", TAMPER_STATES) ?? "unknown";
 }
 
 function readEnum<T extends string>(
-  signals: NormalizedSignal[],
+  latestByCategory: LatestByCategory,
   category: NormalizedSignal["category"],
   allowed: readonly T[],
 ): T | undefined {
-  const signal = latest(signals, category);
+  const signal = latestByCategory.get(category);
   if (!signal || typeof signal.value !== "string") {
     return undefined;
   }
@@ -196,8 +222,8 @@ function readEnum<T extends string>(
     : undefined;
 }
 
-function readFreshness(signals: NormalizedSignal[]): Freshness {
-  const signal = latest(signals, "posture_freshness");
+function readFreshness(latestByCategory: LatestByCategory): Freshness {
+  const signal = latestByCategory.get("posture_freshness");
   if (!signal) {
     return "missing";
   }
@@ -212,13 +238,4 @@ function readFreshness(signals: NormalizedSignal[]): Freshness {
     return value;
   }
   return "unknown";
-}
-
-function latest(
-  signals: NormalizedSignal[],
-  category: NormalizedSignal["category"],
-): NormalizedSignal | undefined {
-  return signals
-    .filter((signal) => signal.category === category)
-    .sort((a, b) => b.observedAt.localeCompare(a.observedAt))[0];
 }

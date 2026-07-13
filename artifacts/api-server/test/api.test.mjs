@@ -79,6 +79,27 @@ async function run() {
   check("keys discovery is public (200)", keys.status === 200);
   check("keys lists the four demo keys", Array.isArray(keys.json?.keys) && keys.json.keys.length === 4);
 
+  // ── public catalog + simulator routes ────────────────────────────────────
+  const integrations = await req("GET", "/integrations");
+  check("integrations catalog → 200", integrations.status === 200);
+  check("integrations catalog is a non-empty array", Array.isArray(integrations.json?.integrations) && integrations.json.integrations.length > 0);
+  // The immutable catalog is served cacheable (overriding the global no-store).
+  check("integrations catalog is cacheable", (integrations.headers.get("cache-control") ?? "").includes("max-age"));
+  const firstIntegrationId = integrations.json?.integrations?.[0]?.id;
+  const oneIntegration = await req("GET", `/integrations/${firstIntegrationId}`);
+  check("single integration fetch → 200", oneIntegration.status === 200);
+  const badIntegration = await req("GET", "/integrations/does-not-exist-xyz");
+  check("unknown integration → 404", badIntegration.status === 404);
+
+  const scenarios = await req("GET", "/simulator/scenarios");
+  check("simulator scenarios → 200", scenarios.status === 200 && Array.isArray(scenarios.json?.scenarios));
+  const simRun = await req("POST", "/simulator/run", { body: { scenarioId: (scenarios.json?.scenarios ?? [])[0]?.id } });
+  check("simulator run → 200 with audit evidence", simRun.status === 200 && Array.isArray(simRun.json?.auditEvidence));
+  const simBad = await req("POST", "/simulator/run", { body: {} });
+  check("simulator run without scenarioId → 400", simBad.status === 400);
+  const simReset = await req("POST", "/simulator/reset", { body: {} });
+  check("simulator reset → 200", simReset.status === 200 && Array.isArray(simReset.json?.auditEvidence));
+
   // ── auth fails closed ───────────────────────────────────────────────────
   const noAuth = await req("GET", "/v1/decisions");
   check("unauthenticated request is 401", noAuth.status === 401);

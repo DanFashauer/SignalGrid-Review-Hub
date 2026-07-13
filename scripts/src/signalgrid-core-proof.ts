@@ -23,6 +23,7 @@ import {
   CoreError,
   evaluatePolicy,
   fixedClock,
+  MemoryStore,
   seedDemoStore,
   SignalGridCore,
   SHARED_DEVICE_RULES_V2,
@@ -881,6 +882,38 @@ if (pending) {
           severity: "low",
         },
       ]),
+  );
+}
+
+// ── 17. Store indexes: tenant-scoped, order-preserving, latest-wins ───────────
+
+{
+  const store = new MemoryStore();
+  const dev = { id: "dv_x", tenantId: "tenant_a", externalRef: "dev-1", name: "n", osPlatform: "iPadOS", osVersion: "18", ownerType: "shared" as const, managementAgent: "intune" as const };
+  store.putDevice(dev);
+  check("index: findDeviceByRef resolves within tenant", store.findDeviceByRef("tenant_a", "dev-1")?.id === "dv_x");
+  check("index: findDeviceByRef is tenant-scoped (foreign tenant → undefined)", store.findDeviceByRef("tenant_b", "dev-1") === undefined);
+  check("index: findDeviceByRef unknown ref → undefined", store.findDeviceByRef("tenant_a", "nope") === undefined);
+
+  // Two compliance signals for the same subject, inserted OUT of observedAt
+  // order: the index bucket must return both, and the latest observedAt must win
+  // in derived evidence regardless of insertion order.
+  const mk = (id: string, value: string, observedAt: string): NormalizedSignal => ({
+    id, tenantId: "tenant_a", connectorId: "c", subjectType: "device", subjectId: "dv_x",
+    category: "device_compliance", value, observedAt, freshness: "fresh", sourceReference: "fixture",
+  });
+  store.putSignal(mk("s_new", "compliant", "2026-07-13T14:00:00.000Z"));
+  store.putSignal(mk("s_old", "non_compliant", "2026-07-13T10:00:00.000Z")); // older, inserted last
+  const gathered = store.listSignalsForSubject("tenant_a", "device", "dv_x");
+  check("index: listSignalsForSubject returns all subject signals", gathered.length === 2);
+  check("index: listSignalsForSubject is tenant-scoped", store.listSignalsForSubject("tenant_b", "device", "dv_x").length === 0);
+
+  const identity: Identity = { id: "i", tenantId: "tenant_a", externalRef: "r", displayName: "d", state: "enabled", assignedRole: "nurse" };
+  const workflow: Workflow = { id: "w", tenantId: "tenant_a", key: "clinical-session", name: "n", riskTier: "standard" };
+  const ev = buildEvidence(identity, dev, workflow, gathered);
+  check(
+    "index: latest-observedAt signal wins regardless of insertion order",
+    ev.deviceCompliance === "compliant",
   );
 }
 

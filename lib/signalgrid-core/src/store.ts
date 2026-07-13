@@ -55,6 +55,18 @@ export class MemoryStore {
   private readonly auditEvents: AuditEvent[] = [];
   private readonly auditTail = new Map<string, { seq: number; digest: string }>();
 
+  // Composite-key indexes for the per-decision hot path, so device/identity/
+  // workflow resolution and per-subject signal gathering are O(1) instead of a
+  // full-store scan on every evaluation. Every key is prefixed with the tenant
+  // id, so the indexes preserve the same tenant-isolation invariant as the
+  // scans they replace — a lookup can only ever return rows for the queried
+  // tenant. The signal index buckets by subject and dedupes by signal id,
+  // preserving insertion order so derived evidence and snapshots are identical.
+  private readonly identityByRef = new Map<string, Identity>();
+  private readonly deviceByRef = new Map<string, Device>();
+  private readonly workflowByKey = new Map<string, Workflow>();
+  private readonly signalsBySubject = new Map<string, Map<string, NormalizedSignal>>();
+
   // ── Tenant-independent registries (auth resolution only) ──────────────────
 
   putTenant(tenant: Tenant): void {
@@ -93,6 +105,7 @@ export class MemoryStore {
 
   putIdentity(identity: Identity): void {
     this.identities.set(identity.id, identity);
+    this.identityByRef.set(refKey(identity.tenantId, identity.externalRef), identity);
   }
 
   getIdentity(tenantId: string, id: string): Identity | undefined {
@@ -100,18 +113,14 @@ export class MemoryStore {
   }
 
   findIdentityByRef(tenantId: string, ref: string): Identity | undefined {
-    for (const identity of this.identities.values()) {
-      if (identity.tenantId === tenantId && identity.externalRef === ref) {
-        return identity;
-      }
-    }
-    return undefined;
+    return this.identityByRef.get(refKey(tenantId, ref));
   }
 
   // ── Devices ───────────────────────────────────────────────────────────────
 
   putDevice(device: Device): void {
     this.devices.set(device.id, device);
+    this.deviceByRef.set(refKey(device.tenantId, device.externalRef), device);
   }
 
   getDevice(tenantId: string, id: string): Device | undefined {
@@ -119,27 +128,18 @@ export class MemoryStore {
   }
 
   findDeviceByRef(tenantId: string, ref: string): Device | undefined {
-    for (const device of this.devices.values()) {
-      if (device.tenantId === tenantId && device.externalRef === ref) {
-        return device;
-      }
-    }
-    return undefined;
+    return this.deviceByRef.get(refKey(tenantId, ref));
   }
 
   // ── Workflows ─────────────────────────────────────────────────────────────
 
   putWorkflow(workflow: Workflow): void {
     this.workflows.set(workflow.id, workflow);
+    this.workflowByKey.set(refKey(workflow.tenantId, workflow.key), workflow);
   }
 
   findWorkflowByKey(tenantId: string, key: string): Workflow | undefined {
-    for (const workflow of this.workflows.values()) {
-      if (workflow.tenantId === tenantId && workflow.key === key) {
-        return workflow;
-      }
-    }
-    return undefined;
+    return this.workflowByKey.get(refKey(tenantId, key));
   }
 
   // ── Connectors ────────────────────────────────────────────────────────────
@@ -174,6 +174,15 @@ export class MemoryStore {
 
   putSignal(signal: NormalizedSignal): void {
     this.signals.set(signal.id, signal);
+    const key = subjectKey(signal.tenantId, signal.subjectType, signal.subjectId);
+    let bucket = this.signalsBySubject.get(key);
+    if (!bucket) {
+      bucket = new Map();
+      this.signalsBySubject.set(key, bucket);
+    }
+    // Keyed by signal id so a re-put overwrites in place (preserving order),
+    // exactly as the by-id primary map does.
+    bucket.set(signal.id, signal);
   }
 
   listSignalsForSubject(
@@ -181,12 +190,10 @@ export class MemoryStore {
     subjectType: NormalizedSignal["subjectType"],
     subjectId: string,
   ): NormalizedSignal[] {
-    return [...this.signals.values()].filter(
-      (row) =>
-        row.tenantId === tenantId &&
-        row.subjectType === subjectType &&
-        row.subjectId === subjectId,
+    const bucket = this.signalsBySubject.get(
+      subjectKey(tenantId, subjectType, subjectId),
     );
+    return bucket ? [...bucket.values()] : [];
   }
 
   // ── Policies ──────────────────────────────────────────────────────────────
@@ -348,6 +355,22 @@ export class MemoryStore {
   nextAuditSeq(tenantId: string): number {
     return (this.auditTail.get(tenantId)?.seq ?? 0) + 1;
   }
+}
+
+// Composite index keys. The tenant id is always the first segment, so an index
+// lookup is inherently tenant-scoped. `|` is safe as a separator: tenant ids,
+// external refs, workflow keys, and subject ids in this core are alphanumeric
+// with `_`/`-`/`.` and never contain `|`.
+function refKey(tenantId: string, ref: string): string {
+  return `${tenantId}|${ref}`;
+}
+
+function subjectKey(
+  tenantId: string,
+  subjectType: string,
+  subjectId: string,
+): string {
+  return `${tenantId}|${subjectType}|${subjectId}`;
 }
 
 /** Return the row only if it belongs to the caller's tenant; else undefined. */

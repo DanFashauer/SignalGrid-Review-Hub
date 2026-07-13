@@ -83,7 +83,7 @@ File: `lib/signalgrid-core/src/store.ts`.
 | Information disclosure | One tenant reads another's identities, devices, decisions, or audit | **Every entity is `tenant_id`-scoped**; lookups take the principal's tenant; cross-tenant reads fail closed as `not_found` | Row-level security / per-tenant isolation in durable storage |
 | Tampering | Cross-tenant write or overwrite | Writes are keyed by the principal's tenant; the connector skips records referencing unknown subjects rather than trusting them | Database constraints and per-tenant keys |
 | Elevation of privilege | Enumerating ids to reach another tenant's data | Ids are deterministic but access is still tenant-gated; a foreign id resolves to `not_found` | Same gate at the persistence layer |
-| Denial of service | Unbounded in-memory growth | Fixed public-safe seed; deterministic dataset | Durable, quota-bounded persistence |
+| Denial of service | Unbounded in-memory growth, or per-decision full-store scans that degrade under load | Fixed public-safe seed; deterministic dataset; per-decision device/identity/workflow/signal resolution uses **tenant-prefixed composite-key indexes** (O(1)), so lookups do not scan the whole store and remain structurally tenant-scoped (the tenant id is the first key segment) | Durable, quota-bounded persistence with indexed, tenant-partitioned queries |
 
 ### 4. Fixture connector sync
 

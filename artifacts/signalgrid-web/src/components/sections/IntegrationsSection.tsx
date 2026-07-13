@@ -12,8 +12,8 @@ const CATEGORY_GROUPS = [
     owner: "Endpoint Mgmt / SOC",
   },
   {
-    label: "Physical Access & Cellular",
-    items: ["HID Global", "LenelS2", "Genetec", "RF IDeas", "Imprivata", "Verkada", "Honeywell Pro-Watch", "Twilio Super SIM", "Soracom", "C•CURE 9000"],
+    label: "Physical Access, Custody & Cellular",
+    items: ["DockBridge (custody)", "HID Global", "LenelS2", "Genetec", "RF IDeas", "Verkada", "Honeywell Pro-Watch", "Twilio Super SIM", "Soracom", "C•CURE 9000"],
     owner: "Physical Security / NetOps",
   },
   {
@@ -34,9 +34,9 @@ export default function IntegrationsSection() {
       <div className="container mx-auto px-4 md:px-8 max-w-screen-xl">
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-16 gap-8">
           <div className="max-w-2xl">
-            <h2 className="text-3xl font-bold tracking-tight mb-4">140+ Native Integrations. 16 Signal Categories.</h2>
+            <h2 className="text-3xl font-bold tracking-tight mb-4">16 Signal Categories. Candidate Sources Across Your Stack.</h2>
             <p className="text-muted-foreground text-lg">
-              SignalGrid consumes signals from your entire security stack — identity, endpoint, physical access, SIEM, SOAR, DR, and GRC — and routes every alert to the team that owns that signal source.
+              SignalGrid is designed to consume signals from across your security stack — identity, endpoint, physical access &amp; custody, SIEM, SOAR, DR, and GRC — and route every alert to the team that owns that signal source. The vendors below are candidate signal-source categories, not live integrations; systems of record remain external.
             </p>
           </div>
           <div className="font-mono text-sm px-4 py-2 rounded border border-border bg-card inline-flex self-start md:self-end gap-2">
@@ -89,10 +89,10 @@ export default function IntegrationsSection() {
           className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4"
         >
           {[
-            { value: "140+", label: "Native integrations" },
             { value: "16", label: "Signal categories" },
+            { value: "Candidate", label: "Source categories" },
             { value: "8", label: "Owning teams routed" },
-            { value: "12+", label: "Compliance frameworks" },
+            { value: "12+", label: "Frameworks mapped" },
           ].map((stat) => (
             <div key={stat.label} className="rounded-lg border border-border bg-card p-5 text-center">
               <div className="text-2xl font-bold font-mono text-primary mb-1">{stat.value}</div>

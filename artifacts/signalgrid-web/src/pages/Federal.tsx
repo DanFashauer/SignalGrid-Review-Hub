@@ -3,15 +3,18 @@ import { ShieldCheck, CheckCircle2, AlertCircle, Clock } from "lucide-react";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 
+// Pre-announcement posture. Badges describe how SignalGrid MAPS to each
+// framework in its decision model, not certifications held or product
+// availability. Everything here is modeled on public-safe fixtures.
 const COMPLIANCE_STATUS = [
-  { framework: "DISA STIG", status: "available", detail: "Hardened base image · SCAP/XCCDF benchmark · CAT I/II/III decision mapping", badge: "AVAILABLE NOW" },
-  { framework: "DoD IL2 – IL5", status: "available", detail: "Air-gapped architecture · No external data transmission · Offline license validation", badge: "AVAILABLE NOW" },
-  { framework: "CMMC 2.0 Level 3", status: "available", detail: "110 NIST SP 800-171 controls mapped · Policy engine covers all 14 practice domains", badge: "AVAILABLE NOW" },
-  { framework: "FedRAMP Moderate", status: "in-progress", detail: "ATO roadmap in progress · 3PAO selected · Expected authorization 2025", badge: "IN PROCESS" },
-  { framework: "FedRAMP High", status: "planned", detail: "Roadmap target following Moderate authorization · Available via air-gap deployment", badge: "PLANNED" },
-  { framework: "NIST SP 800-53 Rev 5", status: "available", detail: "Full control mapping document available on request · 325 controls addressed", badge: "AVAILABLE NOW" },
-  { framework: "NIST SP 800-171", status: "available", detail: "110-control baseline fully addressed · CUI handling procedures documented", badge: "AVAILABLE NOW" },
-  { framework: "ITAR / EAR", status: "available", detail: "Air-gap deployment keeps data fully domestic · No third-country transfer", badge: "AVAILABLE NOW" },
+  { framework: "DISA STIG", status: "available", detail: "STIG-oriented base image · SCAP/XCCDF benchmark mapping · CAT I/II/III decision mapping", badge: "SIGNAL MAPPING" },
+  { framework: "DoD IL2 – IL5", status: "in-progress", detail: "Air-gap-oriented architecture · no external data transmission by design · offline license model", badge: "DESIGN TARGET" },
+  { framework: "CMMC 2.0 Level 3", status: "in-progress", detail: "NIST SP 800-171 controls mapped into the policy model across the practice domains", badge: "CONTROL MAPPING" },
+  { framework: "FedRAMP Moderate", status: "planned", detail: "Authorization is a roadmap target that would require a separate, formal process — not claimed today", badge: "ROADMAP" },
+  { framework: "FedRAMP High", status: "planned", detail: "Roadmap target following any Moderate authorization; air-gap deployment is the design path", badge: "PLANNED" },
+  { framework: "NIST SP 800-53 Rev 5", status: "in-progress", detail: "Control-mapping document in progress · controls mapped into the policy model", badge: "CONTROL MAPPING" },
+  { framework: "NIST SP 800-171", status: "in-progress", detail: "110-control baseline mapped · CUI handling modeled in the policy engine", badge: "CONTROL MAPPING" },
+  { framework: "ITAR / EAR", status: "in-progress", detail: "Air-gap deployment is designed to keep data domestic; export-control posture is a design goal", badge: "DESIGN TARGET" },
 ];
 
 const STATUS_META: Record<string, { color: string; icon: React.ComponentType<{className?: string}> }> = {
@@ -24,20 +27,20 @@ const VEHICLES = [
   { name: "GSA Schedule 70", desc: "IT Products and Services · In progress", status: "in-progress" },
   { name: "SEWP V", desc: "NASA SEWP · On-ramping", status: "in-progress" },
   { name: "CIO-SP3", desc: "NIH GWAC · Evaluation underway", status: "planned" },
-  { name: "Direct Contract", desc: "Available now via sole-source or competitive", status: "available" },
+  { name: "Direct Contract", desc: "Exploring direct-contract paths for design-partner engagements", status: "planned" },
 ];
 
 const DEPLOYMENT_FEATURES = [
-  "Zero external network connectivity — classified enclave deployable",
-  "Offline license validation — no phone-home required",
-  "DISA STIG hardened Ubuntu or RHEL base image",
-  "SCAP 1.3 / XCCDF / OVAL benchmark bundle included",
-  "FIPS 140-2 validated cryptographic modules",
+  "Zero external network connectivity — classified-enclave-oriented design",
+  "Offline license model — no phone-home by design",
+  "DISA STIG-oriented Ubuntu or RHEL base image",
+  "SCAP 1.3 / XCCDF / OVAL benchmark mapping",
+  "FIPS 140-2-oriented cryptographic module design",
   "Air-gap software update via signed bundle transfer",
-  "Immutable audit log with WORM-compliant storage option",
-  "CAC / PIV credential support via PACS integration",
-  "Dedicated mission team for ATO support packages",
-  "Classified network (SIPRNet / JWICS) architecture available",
+  "Immutable audit log with WORM-style storage option",
+  "CAC / PIV credential support (candidate PACS signal category)",
+  "Design path for ATO support packages",
+  "Classified-network (SIPRNet / JWICS) architecture design",
 ];
 
 export default function Federal() {
@@ -56,16 +59,19 @@ export default function Federal() {
                 Zero Trust for DoD, IC,<br />and Federal Civilian Agencies
               </h1>
               <p className="text-lg text-muted-foreground leading-relaxed mb-8">
-                SignalGrid is purpose-built for environments where software-only Zero Trust is insufficient. Physical custody binding, DISA STIG hardened deployment, air-gap capability, and CMMC-mapped policy controls — ready for classified and regulated government environments.
+                SignalGrid is being designed for environments where software-only Zero Trust is insufficient: physical-custody binding, a STIG-oriented air-gap deployment path, and CMMC/NIST-mapped policy controls. This is a pre-announcement, fixture-backed design — not a certified, authorized, or available product.
               </p>
+              <div className="rounded-lg border border-amber-400/20 bg-amber-400/5 px-4 py-3 mb-8 text-sm text-muted-foreground">
+                <span className="text-amber-400 font-medium">Pre-announcement:</span> framework references describe how signals map into the decision model, not certifications held or authorizations granted. No ATO, FedRAMP authorization, or availability is claimed.
+              </div>
               <div className="flex flex-wrap gap-3 mb-8">
-                {["DISA STIG Available", "DoD IL2–IL5", "CMMC 2.0 L3", "Air-Gap Ready", "FedRAMP In Process", "ITAR Compliant"].map(b => (
+                {["DISA STIG-mapped", "DoD IL2–IL5 target", "CMMC 2.0 L3 mapping", "Air-gap-capable design", "FedRAMP-path (roadmap)", "ITAR-aware design"].map(b => (
                   <span key={b} className="text-xs font-mono px-2.5 py-1 rounded border border-primary/20 bg-primary/5 text-primary">{b}</span>
                 ))}
               </div>
               <div className="flex gap-3">
-                <a href="#" className="px-5 py-2.5 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors">Request ATO Package</a>
-                <a href="#" className="px-5 py-2.5 border border-border rounded-md text-sm font-medium hover:border-primary/50 transition-colors">Download Security Brief</a>
+                <a href="#" className="px-5 py-2.5 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors">Request a conversation</a>
+                <a href="#" className="px-5 py-2.5 border border-border rounded-md text-sm font-medium hover:border-primary/50 transition-colors">Read the approach</a>
               </div>
             </div>
           </div>
@@ -110,7 +116,7 @@ export default function Federal() {
               <div>
                 <h2 className="text-2xl font-bold tracking-tight mb-4">Air-Gapped Deployment</h2>
                 <p className="text-muted-foreground mb-6 leading-relaxed">
-                  For DoD, IC, and critical infrastructure environments that cannot tolerate any external network dependency. The SignalGrid decision engine runs entirely within the classified enclave — no phone-home, no cloud dependency, no exception.
+                  For DoD, IC, and critical-infrastructure environments that cannot tolerate an external network dependency, the SignalGrid decision engine is designed to run entirely within the classified enclave — no phone-home, no cloud dependency. This is the intended air-gap design, modeled on public-safe fixtures.
                 </p>
                 <ul className="space-y-3">
                   {DEPLOYMENT_FEATURES.map(f => (
@@ -129,9 +135,9 @@ export default function Federal() {
                     { label: "Data Sovereignty", value: "100% on-premise", color: "text-green-400" },
                     { label: "License Validation", value: "Offline · Signed bundle", color: "text-green-400" },
                     { label: "Update Path", value: "Signed air-gap transfer", color: "text-green-400" },
-                    { label: "Audit Storage", value: "WORM-compliant on-site", color: "text-green-400" },
-                    { label: "Crypto Module", value: "FIPS 140-2 Level 2", color: "text-primary" },
-                    { label: "OS Baseline", value: "DISA STIG Ubuntu / RHEL", color: "text-primary" },
+                    { label: "Audit Storage", value: "WORM-style on-site", color: "text-green-400" },
+                    { label: "Crypto Module", value: "FIPS 140-2-oriented", color: "text-primary" },
+                    { label: "OS Baseline", value: "DISA STIG-oriented", color: "text-primary" },
                     { label: "Container", value: "Podman rootless", color: "text-primary" },
                     { label: "Auth", value: "CAC / PIV + LDAP", color: "text-primary" },
                   ].map(row => (

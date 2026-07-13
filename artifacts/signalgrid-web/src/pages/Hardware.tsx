@@ -19,7 +19,7 @@ const SPECS = [
     { label: "USB", value: "USB-C 3.2 · Data + Charging" },
   ]},
   { category: "Security", items: [
-    { label: "Secure Element", value: "EAL5+ certified SE" },
+    { label: "Secure Element", value: "EAL5+-class SE (design target)" },
     { label: "Crypto", value: "FIPS 140-2 Level 2" },
     { label: "Attestation", value: "TPM 2.0 + device certificate" },
     { label: "Badge Lock", value: "Electromagnetic + solenoid latch" },
@@ -87,10 +87,10 @@ export default function Hardware() {
                   The Badge-Locking<br />Device Case
                 </h1>
                 <p className="text-lg text-muted-foreground leading-relaxed mb-8">
-                  A hardened device carrier that physically binds badge custody to digital identity. BLE + UWB zone detection, electromagnetic badge lock, eSIM cellular keepalive, and tamper-evident post-exit recovery — in a shift-durable form factor.
+                  A hardened device carrier that physically binds badge custody to digital identity. BLE + UWB zone detection, electromagnetic badge lock, eSIM cellular keepalive, and tamper-evident post-exit recovery — in a shift-durable form factor. Custody, charge, and tamper events feed the decision engine through the DockBridge custody connector.
                 </p>
                 <div className="flex flex-wrap gap-3 mb-8">
-                  {["FIPS 140-2 L2", "MIL-STD-810H", "IP54", "EAL5+ SE", "CAT-M1 eSIM"].map(b => (
+                  {["FIPS 140-2 L2", "MIL-STD-810H", "IP54", "EAL5+-class SE", "CAT-M1 eSIM"].map(b => (
                     <span key={b} className="text-xs font-mono px-2.5 py-1 rounded border border-primary/20 bg-primary/5 text-primary">{b}</span>
                   ))}
                 </div>
@@ -110,7 +110,7 @@ export default function Hardware() {
                       { icon: Lock, label: "EM LATCH", desc: "Electromagnetic lock", color: "text-amber-400" },
                       { icon: Radio, label: "BLE + UWB", desc: "5.3 + 802.15.4a", color: "text-cyan-400" },
                       { icon: Wifi, label: "eSIM MODULE", desc: "CAT-M1 / LTE", color: "text-purple-400" },
-                      { icon: Cpu, label: "SECURE ELEMENT", desc: "EAL5+ certified", color: "text-green-400" },
+                      { icon: Cpu, label: "SECURE ELEMENT", desc: "EAL5+-class (design target)", color: "text-green-400" },
                       { icon: Battery, label: "BATTERY", desc: "4,800 mAh · 12h", color: "text-orange-400" },
                     ].map(({ icon: Icon, label, desc, color }) => (
                       <div key={label} className="flex items-center gap-3 p-2.5 rounded border border-border bg-background/50">

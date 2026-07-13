@@ -6,17 +6,17 @@ const DEPLOYMENT_OPTIONS = [
     title: "SignalGrid Cloud",
     icon: Cloud,
     type: "SaaS / Multi-Tenant",
-    desc: "Managed, auto-scaling infrastructure with enterprise SLAs. Telemetry processed in your chosen region — EU, US, APAC.",
+    desc: "A managed, auto-scaling design with regional processing targets — EU, US, APAC. Availability and operational targets are design goals, not a live service offering.",
     features: [
-      "Zero maintenance, auto-scaling",
-      "SOC 2 Type II certified",
-      "HIPAA Business Associate Agreement",
-      "99.99% uptime SLA",
+      "Zero maintenance, auto-scaling design",
+      "SOC 2 controls as a design target",
+      "PHI-access controls by design",
+      "High-availability design target",
       "Regional data residency",
     ],
     compliance: ["SOC 2", "HIPAA", "ISO 27001", "PCI DSS"],
     highlight: true,
-    cta: "Contact Sales",
+    cta: "Request a walkthrough",
   },
   {
     title: "Self-Hosted",
@@ -27,10 +27,10 @@ const DEPLOYMENT_OPTIONS = [
       "Full data sovereignty",
       "Docker Compose + Helm charts",
       "Custom scaling and HA config",
-      "FIPS 140-2 validated crypto",
+      "FIPS 140-2-oriented crypto design",
       "Bring your own PKI",
     ],
-    compliance: ["NIST 800-53", "CMMC 2.0", "FedRAMP Ready"],
+    compliance: ["NIST 800-53", "CMMC 2.0", "FedRAMP-path"],
     highlight: false,
     cta: "View Docs",
   },
@@ -42,13 +42,13 @@ const DEPLOYMENT_OPTIONS = [
     features: [
       "Zero external network connectivity",
       "Offline license and update model",
-      "DISA STIG hardened base image",
-      "SCAP/XCCDF benchmark included",
-      "IL4 / IL5 capable architecture",
+      "DISA STIG-oriented base image",
+      "SCAP/XCCDF benchmark mapping",
+      "IL4 / IL5-oriented architecture",
     ],
     compliance: ["DISA STIG", "FedRAMP High", "DoD IL2–IL5", "CMMC L3", "ITAR"],
     highlight: false,
-    cta: "Contact Sales",
+    cta: "Request a walkthrough",
   },
 ];
 
@@ -58,7 +58,7 @@ const DR_CAPABILITIES = [
   { label: "HA Config", value: "Active-Active", desc: "Multi-region or multi-node cluster" },
   { label: "Backup", value: "Encrypted", desc: "AES-256 at rest, TLS 1.3 in transit" },
   { label: "Failover", value: "Automated", desc: "Health-check triggered, no manual step" },
-  { label: "Audit Log", value: "Immutable", desc: "WORM-compliant, tamper-evident trail" },
+  { label: "Audit Log", value: "Immutable", desc: "WORM-style, tamper-evident trail" },
 ];
 
 export default function DeploymentSection() {
@@ -116,7 +116,7 @@ export default function DeploymentSection() {
 
               {/* Compliance badges */}
               <div className="mt-auto pt-4 border-t border-border/40">
-                <div className="text-xs font-mono text-muted-foreground mb-2">COMPLIANCE</div>
+                <div className="text-xs font-mono text-muted-foreground mb-2">DESIGNED TOWARD (not certifications held)</div>
                 <div className="flex flex-wrap gap-1.5">
                   {opt.compliance.map((c) => (
                     <span

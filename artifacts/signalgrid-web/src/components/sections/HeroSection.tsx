@@ -1,13 +1,15 @@
 import { motion } from "framer-motion";
 
+// Vendor-neutral candidate signal categories (public-safe fixture values, not
+// named live vendor integrations).
 const LIVE_SIGNALS = [
   { label: "BADGE", value: "INSERTED", color: "text-orange-400" },
-  { label: "IDENTITY", value: "OKTA + IMPRIVATA", color: "text-blue-400" },
-  { label: "MDM", value: "JAMF — COMPLIANT", color: "text-green-400" },
+  { label: "IDENTITY", value: "ENABLED", color: "text-blue-400" },
+  { label: "DEVICE POSTURE", value: "COMPLIANT", color: "text-green-400" },
   { label: "LOCATION", value: "ZONE 3B / ICU", color: "text-cyan-400" },
   { label: "SHIFT", value: "07:00–19:00 MATCHED", color: "text-purple-400" },
-  { label: "POSTURE", value: "CROWDSTRIKE NOMINAL", color: "text-green-400" },
-  { label: "CELLULAR", value: "SORACOM REACHABLE", color: "text-cyan-400" },
+  { label: "SECURITY BASELINE", value: "CIS ALIGNED", color: "text-green-400" },
+  { label: "CUSTODY (DOCKBRIDGE)", value: "CHECKED OUT", color: "text-cyan-400" },
 ];
 
 export default function HeroSection() {
@@ -48,7 +50,7 @@ export default function HeroSection() {
             </div>
 
             <div className="mt-10 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
-              {["SOC 2 Type II", "On-Premise Ready", "Air-Gap Capable", "HIPAA Aligned"].map((t) => (
+              {["Fixture-backed proof", "On-premise-ready design", "Air-gap-capable design", "Systems of record stay external"].map((t) => (
                 <div key={t} className="flex items-center">
                   <svg className="mr-2 h-4 w-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
@@ -69,7 +71,7 @@ export default function HeroSection() {
               <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 bg-muted/30">
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
-                  <span className="text-xs font-mono text-muted-foreground">SIGNALGRID DECISION ENGINE — LIVE</span>
+                  <span className="text-xs font-mono text-muted-foreground">SIGNALGRID DECISION ENGINE — FIXTURE PROOF</span>
                 </div>
                 <span className="text-xs font-mono text-muted-foreground">14:03:47.821</span>
               </div>
@@ -98,15 +100,15 @@ export default function HeroSection() {
                   className="flex items-center justify-between rounded-md bg-emerald-500/10 border border-emerald-500/30 px-4 py-3"
                 >
                   <span className="text-xs font-mono font-semibold text-emerald-400">DECISION: ALLOW</span>
-                  <span className="text-xs font-mono text-muted-foreground">LATENCY 31ms</span>
+                  <span className="text-xs font-mono text-muted-foreground">DETERMINISTIC</span>
                 </motion.div>
               </div>
 
               <div className="grid grid-cols-3 gap-px bg-border/30 border-t border-border/30">
                 {[
                   { label: "SIGNALS FUSED", value: "7" },
-                  { label: "PLATFORMS", value: "122+" },
-                  { label: "P99 LATENCY", value: "38ms" },
+                  { label: "SIGNAL CATEGORIES", value: "16" },
+                  { label: "EVALUATION", value: "FIXTURE" },
                 ].map((s) => (
                   <div key={s.label} className="bg-card px-4 py-3 text-center">
                     <div className="text-lg font-bold font-mono text-foreground">{s.value}</div>

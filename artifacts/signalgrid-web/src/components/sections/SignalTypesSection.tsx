@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { UserCircle, Shield, MapPin, Clock, Wifi, ActivitySquare } from "lucide-react";
+import { UserCircle, Shield, ShieldCheck, MapPin, Clock, Wifi, ActivitySquare } from "lucide-react";
 
 export default function SignalTypesSection() {
   const signals = [
@@ -10,7 +10,7 @@ export default function SignalTypesSection() {
       items: [
         "IdP/SSO token + MFA state",
         "Badge physically inserted in case",
-        "Imprivata tap-and-go session binding",
+        "Tap-and-go session binding",
         "Passkey / FIDO2 verification",
       ],
       color: "text-blue-400",
@@ -39,11 +39,25 @@ export default function SignalTypesSection() {
         "Badge tap event — door / zone",
         "BLE/UWB indoor proximity zone",
         "PACS access log — current location",
-        "Dock state — checked out or returned",
+        "DockBridge custody — checked out / overdue / returned",
       ],
       color: "text-orange-400",
       bg: "bg-orange-400/10",
       border: "border-orange-400/20",
+    },
+    {
+      id: "baseline",
+      name: "Security Baseline (CIS)",
+      icon: ShieldCheck,
+      items: [
+        "CIS Benchmark alignment (aligned / drifted)",
+        "CIS Controls v8 safeguard coverage",
+        "DISA STIG / SCAP finding state",
+        "Hardening drift → step-up or restrict",
+      ],
+      color: "text-emerald-400",
+      bg: "bg-emerald-400/10",
+      border: "border-emerald-400/20",
     },
     {
       id: "session",
@@ -93,9 +107,9 @@ export default function SignalTypesSection() {
     <section className="py-24 bg-background border-b border-border/50" id="platform">
       <div className="container mx-auto px-4 md:px-8 max-w-screen-xl">
         <div className="mb-16 max-w-3xl">
-          <h2 className="text-3xl font-bold tracking-tight mb-4">Six-Dimensional Signal Fusion</h2>
+          <h2 className="text-3xl font-bold tracking-tight mb-4">Seven-Dimensional Signal Fusion</h2>
           <p className="text-muted-foreground text-lg leading-relaxed">
-            A token proves identity. MDM proves enrollment. A badge tap proves presence. None of them alone proves readiness for a sensitive workflow. SignalGrid fuses six signal dimensions — including physical custody state and cellular reachability — in a single sub-40ms evaluation.
+            A token proves identity. MDM proves enrollment. A badge tap proves presence. None of them alone proves readiness for a sensitive workflow. SignalGrid fuses seven signal dimensions — including DockBridge physical custody, cellular reachability, and CIS security-baseline alignment — in a single deterministic evaluation.
           </p>
         </div>
 

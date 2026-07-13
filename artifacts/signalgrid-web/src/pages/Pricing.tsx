@@ -10,20 +10,20 @@ const TIERS = [
     unit: "per device / month",
     desc: "For teams piloting Zero Trust on shared devices. Up to 250 managed devices.",
     highlight: false,
-    cta: "Start Free Trial",
+    cta: "Request a walkthrough",
     features: [
       { text: "Up to 250 managed devices", ok: true },
-      { text: "5 integration sources", ok: true },
+      { text: "5 candidate signal sources", ok: true },
       { text: "Decision engine + policy editor", ok: true },
       { text: "Operator dashboard", ok: true },
-      { text: "Mobile PWA", ok: true },
+      { text: "Mobile PWA (worker + operator)", ok: true },
       { text: "7-day audit log retention", ok: true },
       { text: "Email support", ok: true },
       { text: "Shift Handoff Intelligence", ok: false },
       { text: "Compliance reporting export", ok: false },
       { text: "Custom alert routing", ok: false },
       { text: "Air-gap / on-premise deploy", ok: false },
-      { text: "SLA guarantee", ok: false },
+      { text: "Availability targets", ok: false },
     ],
   },
   {
@@ -32,42 +32,42 @@ const TIERS = [
     unit: "per device / month",
     desc: "For enterprise security teams managing large frontline device fleets across facilities.",
     highlight: true,
-    cta: "Contact Sales",
+    cta: "Request a walkthrough",
     features: [
       { text: "Unlimited managed devices", ok: true },
-      { text: "140+ integration sources", ok: true },
+      { text: "16 signal categories (candidate sources)", ok: true },
       { text: "Decision engine + policy editor", ok: true },
       { text: "Operator dashboard + Desktop client", ok: true },
-      { text: "Mobile PWA + Zebra native build", ok: true },
+      { text: "Mobile PWA (My Access worker + operator)", ok: true },
       { text: "1-year immutable audit log", ok: true },
-      { text: "24/7 dedicated support + SRE", ok: true },
+      { text: "Priority support (design target)", ok: true },
       { text: "Shift Handoff Intelligence", ok: true },
       { text: "Compliance reporting export", ok: true },
       { text: "Ownership-aware alert routing", ok: true },
       { text: "Cloud or self-hosted VPC", ok: true },
-      { text: "99.99% uptime SLA", ok: true },
+      { text: "High-availability design target", ok: true },
     ],
   },
   {
     name: "Federal / DoD",
     price: "Custom",
-    unit: "contact for pricing",
-    desc: "Air-gapped, DISA STIG hardened, FedRAMP-path, CMMC L3 certified deployments for government and defense.",
+    unit: "contact for a conversation",
+    desc: "Air-gap-oriented, STIG-oriented, FedRAMP-path, CMMC-L3-mapped deployment design for government and defense (pre-announcement).",
     highlight: false,
-    cta: "Contact Sales",
+    cta: "Request a conversation",
     features: [
       { text: "Unlimited managed devices", ok: true },
-      { text: "Air-gapped deployment", ok: true },
-      { text: "DISA STIG hardened base image", ok: true },
-      { text: "FedRAMP authorization path", ok: true },
-      { text: "DoD IL2–IL5 architecture", ok: true },
-      { text: "CMMC 2.0 Level 3", ok: true },
-      { text: "ITAR / EAR compliance", ok: true },
-      { text: "Classified network deployment", ok: true },
-      { text: "On-site professional services", ok: true },
+      { text: "Air-gap-oriented deployment", ok: true },
+      { text: "DISA STIG-oriented base image", ok: true },
+      { text: "FedRAMP-path (roadmap)", ok: true },
+      { text: "DoD IL2–IL5-oriented architecture", ok: true },
+      { text: "CMMC 2.0 Level 3 mapping", ok: true },
+      { text: "ITAR / EAR-aware design", ok: true },
+      { text: "Classified-network design", ok: true },
+      { text: "Professional-services design path", ok: true },
       { text: "Offline license model", ok: true },
-      { text: "SCAP / XCCDF benchmark included", ok: true },
-      { text: "Dedicated mission team", ok: true },
+      { text: "SCAP / XCCDF benchmark mapping", ok: true },
+      { text: "Design-partner engagement", ok: true },
     ],
   },
 ];
@@ -87,11 +87,11 @@ const FAQ = [
   },
   {
     q: "What does the FedRAMP path mean?",
-    a: "SignalGrid is pursuing FedRAMP Moderate authorization. Air-gapped Federal/DoD deployments are available now and include a full ATO support package with DISA STIG hardening documentation.",
+    a: "FedRAMP authorization is a roadmap target that would require a separate, formal process — it is not claimed today. The air-gap Federal/DoD deployment is a design modeled on public-safe fixtures, not an available offering.",
   },
   {
     q: "Do you support Zebra and other rugged Android devices?",
-    a: "Yes. SignalGrid has native integrations for Zebra StageNow/OEMConfig, DNA Cloud, LifeGuard Analytics, and DataWedge. SOTI MobiControl, 42Gears, Honeywell, and Datalogic are also supported.",
+    a: "Rugged-Android management tools (e.g. Zebra StageNow/OEMConfig/DataWedge, SOTI, 42Gears, Honeywell, Datalogic) are candidate signal-source categories in the design. They are not live integrations today; any live integration would require separate private validation.",
   },
 ];
 
@@ -104,8 +104,8 @@ export default function Pricing() {
         <section className="py-24 border-b border-border/50">
           <div className="container mx-auto px-4 md:px-8 max-w-screen-xl">
             <div className="text-center mb-16 max-w-2xl mx-auto">
-              <h1 className="text-4xl font-bold tracking-tight mb-4">Transparent Pricing. No Per-Workflow Tax.</h1>
-              <p className="text-muted-foreground text-lg">Per-device pricing that scales with your fleet — not your decision volume. No charge per API call.</p>
+              <h1 className="text-4xl font-bold tracking-tight mb-4">Indicative Pricing. No Per-Workflow Tax.</h1>
+              <p className="text-muted-foreground text-lg">Illustrative per-device pricing that would scale with your fleet — not your decision volume. Pre-announcement: figures are indicative and not a live offer.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">

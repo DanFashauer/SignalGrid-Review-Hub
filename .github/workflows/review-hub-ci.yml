@@ -129,21 +129,30 @@ jobs:
             "replaces Intune"
             "replaces Apple Configurator"
             "replaces GroundControl"
+            "available now"
+            "SOC 2 Type II certified"
+            "99.99% uptime SLA"
+            "FedRAMP-authorized"
+            "CMMC-certified"
+            "STIG hardened"
+            "EAL5+ certified"
+            "FIPS 140-2 validated"
           )
 
           failed=0
           for phrase in "${denylist[@]}"; do
             while IFS= read -r match; do
               # Allow explicit disclaimers, validation-command examples, denylist docs,
-              # guardrails, and other non-claim boundary language without weakening
-              # detection of affirmative unsafe claims in product copy.
-              if printf '%s\n' "$match" | grep -Eiq 'not |does not|do not|no |avoid|guardrail|disclaimer|should not|must not|without claiming|no claim|doesn.t claim|not claim|git grep|denylist|unsafe-claim scan|validation command'; then
+              # guardrails, pre-announcement/design-target framing, and other non-claim
+              # boundary language without weakening detection of affirmative unsafe
+              # claims in product copy.
+              if printf '%s\n' "$match" | grep -Eiq 'not |does not|do not|no |avoid|guardrail|disclaimer|should not|must not|without claiming|no claim|doesn.t claim|not claim|git grep|denylist|unsafe-claim scan|validation command|pre-announcement|design target'; then
                 continue
               fi
 
               echo "Unsafe direct claim found for '$phrase': $match" >&2
               failed=1
-            done < <(git grep -nF -- "$phrase" -- README.md docs artifacts/signalgrid-review/src 2>/dev/null || true)
+            done < <(git grep -nF -- "$phrase" -- README.md docs artifacts/signalgrid-review/src artifacts/signalgrid-web/src 2>/dev/null || true)
           done
 
           exit "$failed"

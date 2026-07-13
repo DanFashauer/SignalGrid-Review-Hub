@@ -111,6 +111,12 @@ function matches(condition: RuleCondition, evidence: DecisionEvidence): boolean 
       return condition.in.includes(evidence.ownerType);
     case "workflowRiskTier":
       return condition.in.includes(evidence.workflowRiskTier);
+    case "custodyState":
+      return condition.in.includes(evidence.custodyState);
+    case "chargeState":
+      return condition.in.includes(evidence.dockChargeState);
+    case "tamperState":
+      return condition.in.includes(evidence.tamperState);
     default: {
       // Exhaustiveness guard at compile time; fail-closed at runtime so an
       // unknown/malformed condition (e.g. from an authored draft) never matches.
@@ -237,6 +243,47 @@ export const SHARED_DEVICE_RULES_V1: PolicyRuleSpec[] = [
     ],
     outcome: "step_up",
     reasonCode: "ENCRYPTION_REQUIRED_FOR_WORKFLOW",
+    severity: "medium",
+  },
+  {
+    id: "tamper-confirmed",
+    description: "Confirmed physical tamper on the device is denied.",
+    match: [{ field: "tamperState", in: ["confirmed"] }],
+    outcome: "deny",
+    reasonCode: "TAMPER_CONFIRMED",
+    severity: "critical",
+  },
+  {
+    id: "tamper-suspected",
+    description: "Suspected tamper is restricted pending inspection.",
+    match: [{ field: "tamperState", in: ["suspected"] }],
+    outcome: "restrict",
+    reasonCode: "TAMPER_SUSPECTED",
+    severity: "high",
+  },
+  {
+    id: "custody-overdue",
+    description: "A device overdue for return/check-in is restricted.",
+    match: [{ field: "custodyState", in: ["overdue"] }],
+    outcome: "restrict",
+    reasonCode: "CUSTODY_OVERDUE",
+    severity: "high",
+  },
+  {
+    id: "custody-exception",
+    description: "A custody exception (e.g. removed without a session) is restricted.",
+    match: [{ field: "custodyState", in: ["exception"] }],
+    outcome: "restrict",
+    reasonCode: "CUSTODY_EXCEPTION",
+    severity: "high",
+  },
+  {
+    id: "battery-critical",
+    description:
+      "A critically low battery on a shared device requires step-up before a session (operational risk).",
+    match: [{ field: "chargeState", in: ["critical"] }],
+    outcome: "step_up",
+    reasonCode: "BATTERY_CRITICAL",
     severity: "medium",
   },
   {

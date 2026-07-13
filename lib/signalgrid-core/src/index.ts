@@ -3,6 +3,7 @@ export * from "./util";
 export * from "./store";
 export * from "./auth";
 export * from "./connector";
+export * from "./dock";
 export * from "./policy";
 export * from "./evidence";
 export * from "./audit";

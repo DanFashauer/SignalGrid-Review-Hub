@@ -154,6 +154,20 @@ async function run() {
   const tests = await req("GET", "/v1/policies/pol_tenant_northwind_shared_device/tests", { token: KEYS.owner });
   check("policy tests pass", tests.status === 200 && tests.json?.passed === true);
 
+  // ── connectors (posture + DockBridge custody) ───────────────────────────
+  const connectors = await req("GET", "/v1/connectors", { token: KEYS.owner });
+  check("connectors listed", connectors.status === 200 && Array.isArray(connectors.json?.connectors));
+  check("dockbridge custody connector present", (connectors.json?.connectors ?? []).some((c) => c.kind === "dockbridge-custody"));
+
+  // Overdue-custody decision carries the dock state and is self-service.
+  const overdue = await req("POST", "/v1/decisions/evaluate", {
+    token: KEYS.operator,
+    body: { identityRef: "nurse.overdue", deviceRef: "ipad-loan-01", workflowKey: "clinical-session" },
+  });
+  check("overdue custody → restrict", overdue.json?.decision?.outcome === "restrict");
+  const overdueRes = await req("GET", `/v1/decisions/${overdue.json?.decision?.decisionId}/resolution`, { token: KEYS.operator });
+  check("overdue return is self-service", overdueRes.json?.resolution?.path === "self_service");
+
   // ── connector + webhooks ────────────────────────────────────────────────
   const deliveries = await req("GET", "/v1/webhooks/deliveries", { token: KEYS.owner });
   check("webhook deliveries listed", deliveries.status === 200 && Array.isArray(deliveries.json?.deliveries));

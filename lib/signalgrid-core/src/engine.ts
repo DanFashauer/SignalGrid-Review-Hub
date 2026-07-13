@@ -1,5 +1,6 @@
 import { assertSameTenant, authenticate, authorize } from "./auth";
 import { runFixtureSync, type FixturePostureRecord } from "./connector";
+import { runDockSync, type DockCustodyRecord } from "./dock";
 import { evaluateDecision } from "./decision";
 import { verifySnapshot } from "./evidence";
 import { verifyAuditChain, type ChainVerification } from "./audit";
@@ -59,21 +60,29 @@ export class SignalGridCore {
   private readonly store: MemoryStore;
   private readonly clock: Clock;
   private readonly fixtureRecords: Record<string, FixturePostureRecord[]>;
+  private readonly dockRecords: Record<string, DockCustodyRecord[]>;
 
   private constructor(
     store: MemoryStore,
     clock: Clock,
     fixtureRecords: Record<string, FixturePostureRecord[]>,
+    dockRecords: Record<string, DockCustodyRecord[]>,
   ) {
     this.store = store;
     this.clock = clock;
     this.fixtureRecords = fixtureRecords;
+    this.dockRecords = dockRecords;
   }
 
   /** Build a core preloaded with the deterministic public-safe demo seed. */
   static demo(clockIso: string = DEMO_CLOCK_ISO): SignalGridCore {
     const seeded = seedDemoStore(fixedClock(clockIso));
-    return new SignalGridCore(seeded.store, seeded.clock, seeded.fixtureRecords);
+    return new SignalGridCore(
+      seeded.store,
+      seeded.clock,
+      seeded.fixtureRecords,
+      seeded.dockRecords,
+    );
   }
 
   context(token: string): TenantContext {
@@ -164,6 +173,10 @@ export class SignalGridCore {
     const connector = this.store.getConnector(principal.tenantId, connectorId);
     if (!connector) {
       throw new CoreError("not_found", `Connector "${connectorId}" not found.`, 404);
+    }
+    if (connector.kind === "dockbridge-custody") {
+      const dock = this.dockRecords[connector.id] ?? [];
+      return runDockSync(this.store, this.clock, connector, dock);
     }
     const records = this.fixtureRecords[connector.id] ?? [];
     return runFixtureSync(this.store, this.clock, connector, records);

@@ -87,6 +87,9 @@ const scenarios: Scenario[] = [
   { label: "disabled-identity-deny", identityRef: "nurse.disabled", deviceRef: "ipad-ward-04", workflowKey: "clinical-session", expectedOutcome: "deny", expectedReason: "IDENTITY_DISABLED" },
   { label: "missing-posture-restrict", identityRef: "nurse.nosync", deviceRef: "ipad-ward-05", workflowKey: "clinical-session", expectedOutcome: "restrict", expectedReason: "POSTURE_MISSING" },
   { label: "critical-workflow-personal-deny", identityRef: "tech.unmanaged", deviceRef: "ipad-byod-01", workflowKey: "med-admin", expectedOutcome: "deny", expectedReason: "CRITICAL_WORKFLOW_UNTRUSTED_DEVICE" },
+  { label: "custody-overdue-restrict", identityRef: "nurse.overdue", deviceRef: "ipad-loan-01", workflowKey: "clinical-session", expectedOutcome: "restrict", expectedReason: "CUSTODY_OVERDUE" },
+  { label: "tamper-suspected-restrict", identityRef: "nurse.tamper", deviceRef: "ipad-loan-02", workflowKey: "clinical-session", expectedOutcome: "restrict", expectedReason: "TAMPER_SUSPECTED" },
+  { label: "battery-critical-stepup", identityRef: "nurse.lowbatt", deviceRef: "ipad-loan-03", workflowKey: "clinical-session", expectedOutcome: "step_up", expectedReason: "BATTERY_CRITICAL" },
 ];
 
 const decisions: Decision[] = [];
@@ -601,6 +604,84 @@ if (pending) {
   expectError("resolution: unknown token is rejected", "unauthorized", () =>
     core.getResolution("sgk_not_real", decisions[0].id),
   );
+}
+
+// ── 14. DockBridge custody (hardware signals in the decision) ─────────────────
+
+{
+  // The DockBridge connector is present and ingests via an embedded dock app.
+  const connectors = core.listConnectors(T.owner);
+  const dock = connectors.find((c) => c.kind === "dockbridge-custody");
+  check("dockbridge: custody connector is registered", Boolean(dock));
+  check(
+    "dockbridge: connector documents its (fixture) ingestion mode",
+    dock?.ingestionMode === "app_in_dock",
+  );
+
+  const overdue = decisions.find((d) => d.reasonCodes.includes("CUSTODY_OVERDUE"));
+  check("dockbridge: overdue-custody decision exists", Boolean(overdue));
+  if (overdue) {
+    const snapshot = core.getSnapshot(T.operator, overdue.evidenceSnapshotId);
+    check(
+      "dockbridge: custody state is captured in the evidence snapshot",
+      snapshot.evidence.custodyState === "overdue",
+    );
+    const plan = core.getResolution(T.operator, overdue.id);
+    check(
+      "dockbridge: overdue return is self-service to the org hardware channel",
+      plan.path === "self_service" &&
+        plan.steps.some(
+          (s) => s.reasonCode === "CUSTODY_OVERDUE" && s.channel === "credential_reader",
+        ),
+    );
+    const sim = core.simulateResolution(T.operator, overdue.id);
+    check(
+      "dockbridge: returning/checking in the device resolves to allow",
+      sim.resolved === true && sim.projectedOutcome === "allow",
+    );
+  }
+
+  const tamper = decisions.find((d) => d.reasonCodes.includes("TAMPER_SUSPECTED"));
+  if (tamper) {
+    const plan = core.getResolution(T.operator, tamper.id);
+    check(
+      "dockbridge: suspected tamper needs operator approval",
+      plan.path === "assisted",
+    );
+  }
+
+  const battery = decisions.find((d) => d.reasonCodes.includes("BATTERY_CRITICAL"));
+  if (battery) {
+    const sim = core.simulateResolution(T.operator, battery.id);
+    check(
+      "dockbridge: swapping to a charged device resolves the battery block",
+      sim.resolved === true,
+    );
+  }
+
+  // A confirmed-tamper device is a hard deny that cannot self-resolve.
+  const tamperCore = SignalGridCore.demo();
+  const confirmedEvidence = buildEvidence(
+    { id: "i", tenantId: "tenant_northwind", externalRef: "r", displayName: "d", state: "enabled", assignedRole: "nurse" },
+    { id: "dv", tenantId: "tenant_northwind", externalRef: "d", name: "n", osPlatform: "iPadOS", osVersion: "18", ownerType: "shared", managementAgent: "intune" },
+    { id: "w", tenantId: "tenant_northwind", key: "clinical-session", name: "n", riskTier: "elevated" },
+    [
+      { id: "s1", tenantId: "tenant_northwind", connectorId: "c", subjectType: "device", subjectId: "dv", category: "device_compliance", value: "compliant", observedAt: "2026-07-13T14:30:00.000Z", freshness: "fresh", sourceReference: "fixture" },
+      { id: "s2", tenantId: "tenant_northwind", connectorId: "c", subjectType: "device", subjectId: "dv", category: "device_management", value: true, observedAt: "2026-07-13T14:30:00.000Z", freshness: "fresh", sourceReference: "fixture" },
+      { id: "s3", tenantId: "tenant_northwind", connectorId: "c", subjectType: "device", subjectId: "dv", category: "os_support", value: true, observedAt: "2026-07-13T14:30:00.000Z", freshness: "fresh", sourceReference: "fixture" },
+      { id: "s4", tenantId: "tenant_northwind", connectorId: "c", subjectType: "device", subjectId: "dv", category: "posture_freshness", value: "fresh", observedAt: "2026-07-13T14:30:00.000Z", freshness: "fresh", sourceReference: "fixture" },
+      { id: "s5", tenantId: "tenant_northwind", connectorId: "c", subjectType: "device", subjectId: "dv", category: "tamper_state", value: "confirmed", observedAt: "2026-07-13T14:30:00.000Z", freshness: "fresh", sourceReference: "fixture" },
+    ],
+  );
+  void tamperCore;
+  const v1 = core.listPolicyVersions(T.owner, policyId).find((v) => v.version === 1);
+  check("dockbridge: confirmed tamper denies (v1 present)", Boolean(v1));
+  if (v1) {
+    check(
+      "dockbridge: confirmed tamper is denied",
+      evaluatePolicy(v1, confirmedEvidence).outcome === "deny",
+    );
+  }
 }
 
 // ── Report ────────────────────────────────────────────────────────────────────

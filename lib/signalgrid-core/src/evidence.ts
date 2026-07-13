@@ -1,6 +1,8 @@
 import { canonicalJson, deterministicId, digest } from "./util";
 import type {
+  ChargeState,
   ComplianceState,
+  CustodyState,
   DecisionEvidence,
   Device,
   EvidenceSnapshot,
@@ -8,6 +10,7 @@ import type {
   Identity,
   NormalizedSignal,
   PolicyVersion,
+  TamperState,
   Workflow,
 } from "./types";
 
@@ -45,6 +48,9 @@ export function buildEvidence(
     ownerType: device.ownerType,
     postureFreshness,
     workflowRiskTier: workflow.riskTier,
+    custodyState: readCustody(signals),
+    dockChargeState: readCharge(signals),
+    tamperState: readTamper(signals),
   };
 
   return {
@@ -145,6 +151,42 @@ function readBoolean(
     return "unknown";
   }
   return typeof signal.value === "boolean" ? signal.value : "unknown";
+}
+
+const CUSTODY_STATES = [
+  "checked_in",
+  "checked_out",
+  "overdue",
+  "exception",
+  "maintenance",
+] as const;
+const CHARGE_STATES = ["charging", "charged", "low", "critical", "not_present"] as const;
+const TAMPER_STATES = ["none", "suspected", "confirmed", "sensor_unavailable"] as const;
+
+function readCustody(signals: NormalizedSignal[]): CustodyState {
+  return readEnum(signals, "custody_state", CUSTODY_STATES) ?? "unknown";
+}
+
+function readCharge(signals: NormalizedSignal[]): ChargeState {
+  return readEnum(signals, "charge_state", CHARGE_STATES) ?? "unknown";
+}
+
+function readTamper(signals: NormalizedSignal[]): TamperState {
+  return readEnum(signals, "tamper_state", TAMPER_STATES) ?? "unknown";
+}
+
+function readEnum<T extends string>(
+  signals: NormalizedSignal[],
+  category: NormalizedSignal["category"],
+  allowed: readonly T[],
+): T | undefined {
+  const signal = latest(signals, category);
+  if (!signal || typeof signal.value !== "string") {
+    return undefined;
+  }
+  return (allowed as readonly string[]).includes(signal.value)
+    ? (signal.value as T)
+    : undefined;
 }
 
 function readFreshness(signals: NormalizedSignal[]): Freshness {

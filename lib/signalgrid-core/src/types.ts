@@ -108,15 +108,26 @@ export interface Workflow {
 
 // ── Connector (fixture-only, read-only) ──────────────────────────────────────
 
-export type ConnectorKind = "microsoft-entra-intune";
+export type ConnectorKind = "microsoft-entra-intune" | "dockbridge-custody";
 export type ConnectorMode = "fixture";
 export type ConnectorStatus = "healthy" | "degraded" | "never_synced";
+
+/**
+ * How dock/custody events reach SignalGrid. Both are modeled as fixture
+ * ingestion here (public-safe, no real hardware or vendor calls):
+ *  - app_in_dock: a SignalGrid agent embedded in the dock/cradle firmware,
+ *  - vendor_api: polling a dock/locker vendor's existing event API,
+ *  - edge_gateway: an on-site gateway relaying events.
+ */
+export type ConnectorIngestionMode = "app_in_dock" | "vendor_api" | "edge_gateway";
 
 export interface Connector {
   id: string;
   tenantId: string;
   kind: ConnectorKind;
   mode: ConnectorMode;
+  /** Present for hardware connectors: documents the (fixture) ingestion path. */
+  ingestionMode?: ConnectorIngestionMode;
   /** Read-only least-privilege permission, documented not exercised. */
   permissionScope: string;
   /**
@@ -149,13 +160,46 @@ export type ComplianceState = "compliant" | "non_compliant" | "unknown";
 export type Freshness = "fresh" | "stale" | "expired" | "missing" | "unknown";
 export type SubjectType = "device" | "identity";
 
+// Physical-custody / DockBridge hardware states (vendor-neutral).
+export type CustodyState =
+  | "checked_in"
+  | "checked_out"
+  | "overdue"
+  | "exception"
+  | "maintenance"
+  | "unknown";
+export type ChargeState =
+  | "charging"
+  | "charged"
+  | "low"
+  | "critical"
+  | "not_present"
+  | "unknown";
+export type TamperState =
+  | "none"
+  | "suspected"
+  | "confirmed"
+  | "sensor_unavailable"
+  | "unknown";
+export type DockState =
+  | "occupied"
+  | "empty"
+  | "reserved"
+  | "faulted"
+  | "offline"
+  | "unknown";
+
 export type SignalCategory =
   | "identity_state"
   | "device_compliance"
   | "device_management"
   | "device_encryption"
   | "os_support"
-  | "posture_freshness";
+  | "posture_freshness"
+  | "custody_state"
+  | "charge_state"
+  | "tamper_state"
+  | "dock_state";
 
 export interface NormalizedSignal {
   id: string;
@@ -185,7 +229,10 @@ export type EvidenceField =
   | "ownerType"
   | "postureFreshness"
   | "workflowRiskTier"
-  | "criticalSignalsPresent";
+  | "criticalSignalsPresent"
+  | "custodyState"
+  | "chargeState"
+  | "tamperState";
 
 export type RuleCondition =
   | { field: "identityEnabled"; equals: boolean | "unknown" }
@@ -196,7 +243,10 @@ export type RuleCondition =
   | { field: "deviceCompliance"; in: ComplianceState[] }
   | { field: "postureFreshness"; in: Freshness[] }
   | { field: "ownerType"; in: OwnerType[] }
-  | { field: "workflowRiskTier"; in: RiskTier[] };
+  | { field: "workflowRiskTier"; in: RiskTier[] }
+  | { field: "custodyState"; in: CustodyState[] }
+  | { field: "chargeState"; in: ChargeState[] }
+  | { field: "tamperState"; in: TamperState[] };
 
 export interface PolicyRuleSpec {
   id: string;
@@ -243,6 +293,10 @@ export interface DecisionEvidence {
   ownerType: OwnerType;
   postureFreshness: Freshness;
   workflowRiskTier: RiskTier;
+  /** Physical-custody / DockBridge hardware context (default "unknown"). */
+  custodyState: CustodyState;
+  dockChargeState: ChargeState;
+  tamperState: TamperState;
   /** True only when every critical input is present and not degraded. */
   criticalSignalsPresent: boolean;
 }

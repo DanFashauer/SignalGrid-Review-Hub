@@ -1,4 +1,5 @@
 import { runFixtureSync, type FixturePostureRecord } from "./connector";
+import { runDockSync, type DockCustodyRecord } from "./dock";
 import { appendAudit } from "./audit";
 import {
   ruleSetDigest,
@@ -9,6 +10,7 @@ import { MemoryStore } from "./store";
 import type { Clock } from "./util";
 import type {
   Connector,
+  ConnectorIngestionMode,
   DecisionEvidence,
   Device,
   Identity,
@@ -42,6 +44,8 @@ export interface SeededDemo {
   };
   /** Per-connector fixture posture records, so a sync can be replayed. */
   fixtureRecords: Record<string, FixturePostureRecord[]>;
+  /** Per-connector fixture dock/custody records, so a sync can be replayed. */
+  dockRecords: Record<string, DockCustodyRecord[]>;
 }
 
 const NORTHWIND = "tenant_northwind";
@@ -86,6 +90,13 @@ export function seedDemoStore(clock: Clock): SeededDemo {
   const northwindConnectorId = runConnector(store, clock, NORTHWIND, northwindRecords);
   const atlasConnectorId = runConnector(store, clock, ATLAS, atlasRecords);
 
+  // DockBridge custody connectors: the hospital ingests via an app embedded in
+  // the dock; the warehouse polls a locker vendor's event API. Both fixture-only.
+  const northwindDockRecords = northwindDockCustody();
+  const atlasDockRecords = atlasDockCustody();
+  const northwindDockId = runDockConnector(store, clock, NORTHWIND, "app_in_dock", northwindDockRecords);
+  const atlasDockId = runDockConnector(store, clock, ATLAS, "vendor_api", atlasDockRecords);
+
   seedWebhookEndpoints(store, NORTHWIND);
   seedWebhookEndpoints(store, ATLAS);
 
@@ -117,6 +128,10 @@ export function seedDemoStore(clock: Clock): SeededDemo {
     fixtureRecords: {
       [northwindConnectorId]: northwindRecords,
       [atlasConnectorId]: atlasRecords,
+    },
+    dockRecords: {
+      [northwindDockId]: northwindDockRecords,
+      [atlasDockId]: atlasDockRecords,
     },
   };
 }
@@ -220,6 +235,9 @@ function seedPolicyTests(
     ownerType: "shared",
     postureFreshness: "fresh",
     workflowRiskTier: "elevated",
+    custodyState: "checked_out",
+    dockChargeState: "charged",
+    tamperState: "none",
     criticalSignalsPresent: true,
   };
   const cases: Array<Omit<PolicyTest, "id" | "tenantId" | "policyId">> = [
@@ -283,8 +301,83 @@ function seedNorthwindSubjects(store: MemoryStore): FixturePostureRecord[] {
       device: { externalRef: "ipad-ward-05", name: "Ward iPad 05", osPlatform: "iPadOS", osVersion: "18.5", ownerType: "shared", managementAgent: "intune" },
       posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: null, sourceReference: "fixture:intune:managedDevices#ipad-ward-05" },
     },
+    // Custody scenarios: posture is healthy so the DockBridge signal is decisive.
+    {
+      identity: { externalRef: "nurse.overdue", displayName: "Nurse (overdue return)", state: "enabled", assignedRole: "nurse" },
+      device: { externalRef: "ipad-loan-01", name: "Loaner iPad 01", osPlatform: "iPadOS", osVersion: "18.5", ownerType: "shared", managementAgent: "intune" },
+      posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, sourceReference: "fixture:intune:managedDevices#ipad-loan-01" },
+    },
+    {
+      identity: { externalRef: "nurse.tamper", displayName: "Nurse (device flagged)", state: "enabled", assignedRole: "nurse" },
+      device: { externalRef: "ipad-loan-02", name: "Loaner iPad 02", osPlatform: "iPadOS", osVersion: "18.5", ownerType: "shared", managementAgent: "intune" },
+      posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, sourceReference: "fixture:intune:managedDevices#ipad-loan-02" },
+    },
+    {
+      identity: { externalRef: "nurse.lowbatt", displayName: "Nurse (low battery)", state: "enabled", assignedRole: "nurse" },
+      device: { externalRef: "ipad-loan-03", name: "Loaner iPad 03", osPlatform: "iPadOS", osVersion: "18.5", ownerType: "shared", managementAgent: "intune" },
+      posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, sourceReference: "fixture:intune:managedDevices#ipad-loan-03" },
+    },
   ];
   return materializeSubjects(store, NORTHWIND, specs);
+}
+
+// Public-safe candidate hardware labels (matching the repo's custody schema).
+const DOCK_VENDOR = "CandidateHealthcareDockVendor";
+const DOCK_MODEL = "FixtureDock-SharedApple-01";
+const CUSTODY_OBSERVED_AT = "2026-07-13T14:30:00.000Z"; // 30m before the demo clock
+
+function benignDock(deviceRef: string, index: number): DockCustodyRecord {
+  return {
+    deviceRef,
+    hardwareVendor: DOCK_VENDOR,
+    hardwareModel: DOCK_MODEL,
+    caseSerial: `case-fixture-${String(index).padStart(4, "0")}`,
+    dockId: "dock-fixture-ward-01",
+    bayId: `bay-${String(index).padStart(2, "0")}`,
+    chargeState: "charged",
+    dockState: "occupied",
+    custodyState: "checked_out",
+    tamperState: "none",
+    observedAt: CUSTODY_OBSERVED_AT,
+    sourceReference: `fixture:dockbridge:events#${deviceRef}`,
+  };
+}
+
+function northwindDockCustody(): DockCustodyRecord[] {
+  const benignDevices = [
+    "ipad-ward-01",
+    "ipad-ward-02",
+    "ipad-ward-03",
+    "ipad-ward-04",
+    "ipad-ward-05",
+  ];
+  const records = benignDevices.map((ref, i) => benignDock(ref, i + 1));
+  // Adverse custody scenarios.
+  records.push({
+    ...benignDock("ipad-loan-01", 11),
+    custodyState: "overdue",
+    dockState: "empty",
+  });
+  records.push({
+    ...benignDock("ipad-loan-02", 12),
+    tamperState: "suspected",
+  });
+  records.push({
+    ...benignDock("ipad-loan-03", 13),
+    chargeState: "critical",
+    dockState: "empty",
+  });
+  return records;
+}
+
+function atlasDockCustody(): DockCustodyRecord[] {
+  return [
+    {
+      ...benignDock("handheld-01", 1),
+      dockId: "locker-fixture-dc-01",
+      bayId: "bay-01",
+    },
+  ];
 }
 
 function seedAtlasSubjects(store: MemoryStore): FixturePostureRecord[] {
@@ -342,6 +435,38 @@ function runConnector(
     actor: "seed",
     subject: connector.id,
     summary: `Fixture connector sync normalized ${run.signalsNormalized} signals from ${run.recordsProcessed} records.`,
+    references: [connector.id, run.id],
+    recordedAt: run.completedAt,
+  });
+  return connector.id;
+}
+
+function runDockConnector(
+  store: MemoryStore,
+  clock: Clock,
+  tenantId: string,
+  ingestionMode: ConnectorIngestionMode,
+  records: DockCustodyRecord[],
+): string {
+  const connector: Connector = {
+    id: `conn_${tenantId}_dockbridge`,
+    tenantId,
+    kind: "dockbridge-custody",
+    mode: "fixture",
+    ingestionMode,
+    permissionScope: "Read-only dock/custody events (fixture; no dock action performed)",
+    credentialRef: `keyvault-placeholder://${tenantId}/dockbridge-readonly (non-secret placeholder)`,
+    status: "never_synced",
+    lastSyncAt: null,
+  };
+  store.putConnector(connector);
+  const run = runDockSync(store, clock, connector, records);
+  appendAudit(store, {
+    tenantId,
+    type: "connector.synced",
+    actor: "seed",
+    subject: connector.id,
+    summary: `DockBridge fixture sync normalized ${run.signalsNormalized} custody signals from ${run.recordsProcessed} events.`,
     references: [connector.id, run.id],
     recordedAt: run.completedAt,
   });

@@ -34,6 +34,9 @@ type EvidenceTransform = Partial<
     | "deviceCompliance"
     | "deviceManaged"
     | "deviceEncrypted"
+    | "custodyState"
+    | "tamperState"
+    | "dockChargeState"
   >
 >;
 
@@ -115,6 +118,41 @@ const DESCRIPTORS: Record<string, ResolutionDescriptor> = {
     baseClass: "manual_only",
     workerAction: "This high-risk workflow requires a managed, trusted device — switch to one to continue.",
     operatorAction: "Advise the worker to use a managed shared device; do not grant this workflow on an untrusted device.",
+    transform: null,
+    hardwareOriented: false,
+  },
+  CUSTODY_OVERDUE: {
+    baseClass: "auto_proposed",
+    workerAction: "Return the device to its dock or bay to check it back in, then retry.",
+    operatorAction: "Confirm the device is returned/checked in at its bay, then re-evaluate.",
+    transform: { custodyState: "checked_in" },
+    hardwareOriented: true,
+  },
+  CUSTODY_EXCEPTION: {
+    baseClass: "requires_approval",
+    workerAction: "A custody issue was flagged — an operator is reviewing the device's dock/bay status.",
+    operatorAction: "Review the custody exception (removed without a session?) and clear or route it.",
+    transform: { custodyState: "checked_in" },
+    hardwareOriented: false,
+  },
+  BATTERY_CRITICAL: {
+    baseClass: "auto_proposed",
+    workerAction: "Battery is critically low — swap to a charged shared device, or dock this one before starting.",
+    operatorAction: "Direct the worker to a charged device; the low-battery device can keep charging in its bay.",
+    transform: { dockChargeState: "charged" },
+    hardwareOriented: true,
+  },
+  TAMPER_SUSPECTED: {
+    baseClass: "requires_approval",
+    workerAction: "This device is flagged for a physical check — an operator will inspect it before it can be used.",
+    operatorAction: "Inspect the device for tamper; approve to clear only after physical inspection.",
+    transform: { tamperState: "none" },
+    hardwareOriented: false,
+  },
+  TAMPER_CONFIRMED: {
+    baseClass: "manual_only",
+    workerAction: "This device is out of service (tamper confirmed) — use a different device and report it.",
+    operatorAction: "Remove the device from service and route to security operations; do not clear automatically.",
     transform: null,
     hardwareOriented: false,
   },

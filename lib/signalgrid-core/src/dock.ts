@@ -1,0 +1,112 @@
+import type { MemoryStore } from "./store";
+import { classifyFreshness, deterministicId } from "./util";
+import type { Clock } from "./util";
+import {
+  CoreError,
+  type ChargeState,
+  type Connector,
+  type ConnectorSyncRun,
+  type CustodyState,
+  type DockState,
+  type NormalizedSignal,
+  type SignalCategory,
+  type TamperState,
+} from "./types";
+
+export const CUSTODY_FRESH_WINDOW_HOURS = 6;
+export const CUSTODY_STALE_WINDOW_HOURS = 24;
+
+/**
+ * A fixture dock/custody event. This is the shape a DockBridge connector would
+ * normalize from a dock, cradle, smart locker, or return station — via an
+ * app embedded in the dock, a vendor event API, or an edge gateway. Here it is
+ * entirely synthetic (public-safe): no hardware is touched and no vendor call
+ * is made. Fields mirror the repo's vendor-neutral physical-custody schema.
+ */
+export interface DockCustodyRecord {
+  deviceRef: string;
+  hardwareVendor: string;
+  hardwareModel: string;
+  caseSerial: string;
+  dockId: string;
+  bayId: string;
+  chargeState: ChargeState;
+  dockState: DockState;
+  custodyState: CustodyState;
+  tamperState: TamperState;
+  observedAt: string;
+  sourceReference: string;
+}
+
+/**
+ * Run a fixture-backed DockBridge sync: normalize custody/charging/dock/tamper
+ * events into cached signals so the decision engine can combine physical
+ * custody with identity and posture. Read-only; no dock actions are performed.
+ */
+export function runDockSync(
+  store: MemoryStore,
+  clock: Clock,
+  connector: Connector,
+  records: DockCustodyRecord[],
+): ConnectorSyncRun {
+  if (connector.mode !== "fixture") {
+    throw new CoreError(
+      "connector_unavailable",
+      "Only fixture-mode connectors run in the public-safe core.",
+      503,
+    );
+  }
+
+  const startedAt = clock.now().toISOString();
+  let signalsNormalized = 0;
+
+  for (const record of records) {
+    const device = store.findDeviceByRef(connector.tenantId, record.deviceRef);
+    if (!device) {
+      continue;
+    }
+    const freshness = classifyFreshness(
+      record.observedAt,
+      startedAt,
+      CUSTODY_FRESH_WINDOW_HOURS,
+      CUSTODY_STALE_WINDOW_HOURS,
+    );
+    const pairs: Array<{ category: SignalCategory; value: NormalizedSignal["value"] }> = [
+      { category: "custody_state", value: record.custodyState },
+      { category: "charge_state", value: record.chargeState },
+      { category: "tamper_state", value: record.tamperState },
+      { category: "dock_state", value: record.dockState },
+    ];
+    for (const pair of pairs) {
+      store.putSignal({
+        id: deterministicId("sig", connector.tenantId, "device", device.id, pair.category),
+        tenantId: connector.tenantId,
+        connectorId: connector.id,
+        subjectType: "device",
+        subjectId: device.id,
+        category: pair.category,
+        value: pair.value,
+        observedAt: record.observedAt,
+        freshness,
+        sourceReference: record.sourceReference,
+      });
+      signalsNormalized += 1;
+    }
+  }
+
+  const completedAt = clock.now().toISOString();
+  const run: ConnectorSyncRun = {
+    id: deterministicId("sync", connector.id, startedAt),
+    tenantId: connector.tenantId,
+    connectorId: connector.id,
+    startedAt,
+    completedAt,
+    status: "success",
+    recordsProcessed: records.length,
+    signalsNormalized,
+    note: `DockBridge fixture sync (${connector.ingestionMode ?? "app_in_dock"}): synthetic custody events only, read-only, no dock action.`,
+  };
+  store.putSyncRun(run);
+  store.putConnector({ ...connector, status: "healthy", lastSyncAt: completedAt });
+  return run;
+}

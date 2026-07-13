@@ -40,6 +40,9 @@ const SCENARIOS: ScenarioSpec[] = [
   { label: "Disabled account", identityRef: "nurse.disabled", deviceRef: "ipad-ward-04", workflowKey: "clinical-session" },
   { label: "Missing posture (never synced)", identityRef: "nurse.nosync", deviceRef: "ipad-ward-05", workflowKey: "clinical-session" },
   { label: "Critical workflow · untrusted device", identityRef: "tech.unmanaged", deviceRef: "ipad-byod-01", workflowKey: "med-admin" },
+  { label: "Overdue device return (DockBridge)", identityRef: "nurse.overdue", deviceRef: "ipad-loan-01", workflowKey: "clinical-session" },
+  { label: "Device flagged for tamper (DockBridge)", identityRef: "nurse.tamper", deviceRef: "ipad-loan-02", workflowKey: "clinical-session" },
+  { label: "Critically low battery (DockBridge)", identityRef: "nurse.lowbatt", deviceRef: "ipad-loan-03", workflowKey: "clinical-session" },
 ];
 
 const outcomeTone: Record<DecisionOutcome, string> = {
@@ -383,6 +386,27 @@ function DecisionDetail({
           <EvidenceRow label="OS supported" value={String(evidence.osSupported)} />
           <EvidenceRow label="Owner type" value={evidence.ownerType} />
           <EvidenceRow label="Workflow risk" value={evidence.workflowRiskTier} />
+          {evidence.custodyState !== "unknown" && (
+            <EvidenceRow
+              label="Custody (dock)"
+              value={evidence.custodyState}
+              tone={
+                evidence.custodyState === "overdue" || evidence.custodyState === "exception"
+                  ? "warn"
+                  : undefined
+              }
+            />
+          )}
+          {evidence.dockChargeState !== "unknown" && (
+            <EvidenceRow
+              label="Battery"
+              value={evidence.dockChargeState}
+              tone={evidence.dockChargeState === "critical" ? "warn" : undefined}
+            />
+          )}
+          {evidence.tamperState !== "unknown" && evidence.tamperState !== "none" && (
+            <EvidenceRow label="Tamper" value={evidence.tamperState} tone="warn" />
+          )}
           <EvidenceRow
             label="Critical evidence intact"
             value={String(evidence.criticalSignalsPresent)}

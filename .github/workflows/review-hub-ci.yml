@@ -42,6 +42,9 @@ jobs:
       - name: Intune / Entra posture proof
         run: pnpm run proof:intune-entra-posture
 
+      - name: SignalGrid core proof
+        run: pnpm run proof:signalgrid-core
+
       - name: SignalGrid simulator proof
         run: pnpm run proof:signalgrid-simulator
 
@@ -80,6 +83,7 @@ jobs:
             docs/SIMULATOR_VALIDATION_RUNBOOK.md
             docs/CLOUD_CONNECTOR_EMULATOR_HARNESS.md
             docs/CONNECTOR_EMULATOR_SCENARIOS.md
+            docs/PRODUCT_CORE_FOUNDATION.md
           )
 
           for doc in "${required_docs[@]}"; do

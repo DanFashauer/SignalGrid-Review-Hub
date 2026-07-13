@@ -1,0 +1,305 @@
+import { useMemo, useState } from "react";
+import {
+  SignalGridCore,
+  type Decision,
+  type DecisionOutcome,
+  type EvidenceSnapshot,
+} from "@workspace/signalgrid-core";
+
+/**
+ * Operator Console — a public-safe, in-browser trace of the SignalGrid decision
+ * loop. It runs the deterministic core directly in the browser (no network, no
+ * credentials, no live vendor calls) so a reviewer can follow a shared-device
+ * access decision from outcome → matched rules → evidence snapshot → policy
+ * version → tamper-evident audit chain.
+ */
+
+const OPERATOR_TOKEN = "sgk_demo_northwind_operator";
+const OWNER_TOKEN = "sgk_demo_northwind_owner";
+
+interface ScenarioSpec {
+  label: string;
+  identityRef: string;
+  deviceRef: string;
+  workflowKey: string;
+}
+
+const SCENARIOS: ScenarioSpec[] = [
+  { label: "Compliant nurse · clinical session", identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" },
+  { label: "Non-compliant device", identityRef: "nurse.noncompliant", deviceRef: "ipad-ward-02", workflowKey: "clinical-session" },
+  { label: "Stale posture", identityRef: "nurse.stale", deviceRef: "ipad-ward-03", workflowKey: "clinical-session" },
+  { label: "Unmanaged personal device", identityRef: "tech.unmanaged", deviceRef: "ipad-byod-01", workflowKey: "general-lookup" },
+  { label: "Disabled account", identityRef: "nurse.disabled", deviceRef: "ipad-ward-04", workflowKey: "clinical-session" },
+  { label: "Missing posture (never synced)", identityRef: "nurse.nosync", deviceRef: "ipad-ward-05", workflowKey: "clinical-session" },
+  { label: "Critical workflow · untrusted device", identityRef: "tech.unmanaged", deviceRef: "ipad-byod-01", workflowKey: "med-admin" },
+];
+
+const outcomeTone: Record<DecisionOutcome, string> = {
+  allow: "text-teal-300 bg-teal-950/40 border-teal-700/50",
+  step_up: "text-amber-300 bg-amber-950/40 border-amber-700/50",
+  restrict: "text-red-300 bg-red-950/40 border-red-700/50",
+  deny: "text-red-200 bg-red-950/60 border-red-600/60",
+};
+
+const outcomeLabel: Record<DecisionOutcome, string> = {
+  allow: "ALLOW",
+  step_up: "STEP-UP",
+  restrict: "RESTRICT",
+  deny: "DENY",
+};
+
+interface Row {
+  label: string;
+  decision: Decision;
+  snapshot: EvidenceSnapshot;
+  evidenceVerified: boolean;
+}
+
+export default function OperatorConsoleSection() {
+  const { rows, auditChain } = useMemo(() => {
+    const core = SignalGridCore.demo();
+    const built: Row[] = SCENARIOS.map((scenario) => {
+      const result = core.evaluate(OPERATOR_TOKEN, {
+        identityRef: scenario.identityRef,
+        deviceRef: scenario.deviceRef,
+        workflowKey: scenario.workflowKey,
+      });
+      const decision = core.getDecision(OPERATOR_TOKEN, result.decisionId);
+      const snapshot = core.getSnapshot(OPERATOR_TOKEN, result.evidenceSnapshotId);
+      const evidenceVerified = core.verifyEvidence(OPERATOR_TOKEN, snapshot.id);
+      return { label: scenario.label, decision, snapshot, evidenceVerified };
+    });
+    return { rows: built, auditChain: core.verifyAudit(OWNER_TOKEN) };
+  }, []);
+
+  const [selectedId, setSelectedId] = useState<string>(rows[0]?.decision.id ?? "");
+  const selected = rows.find((row) => row.decision.id === selectedId) ?? rows[0];
+
+  return (
+    <div className="space-y-5">
+      <div className="border border-primary/30 bg-primary/5 rounded-lg px-5 py-3">
+        <p className="text-xs text-foreground leading-relaxed">
+          <strong className="text-primary">Public-safe alpha.</strong> Every
+          decision below is produced by the deterministic SignalGrid core running{" "}
+          <em>in your browser</em> against synthetic fixtures — no credentials, no
+          tenant data, no Microsoft Graph call. It demonstrates the product-shaped
+          decision loop, versioned policy, evidence snapshots, and tamper-evident
+          audit chain; it is not a production system.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+        {/* Decisions list */}
+        <div className="lg:col-span-2 space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
+            Decisions ({rows.length})
+          </p>
+          <div className="space-y-1.5">
+            {rows.map((row) => {
+              const active = row.decision.id === selected?.decision.id;
+              return (
+                <button
+                  key={row.decision.id}
+                  onClick={() => setSelectedId(row.decision.id)}
+                  className={`w-full text-left border rounded-lg px-3.5 py-3 transition-colors ${
+                    active
+                      ? "border-primary/50 bg-primary/10"
+                      : "border-border bg-card hover:bg-muted/30"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm text-foreground truncate">
+                      {row.label}
+                    </span>
+                    <span
+                      className={`text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded border shrink-0 ${outcomeTone[row.decision.outcome]}`}
+                    >
+                      {outcomeLabel[row.decision.outcome]}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1 font-mono truncate">
+                    {row.decision.reasonCodes.join(", ")}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="border border-border/60 bg-muted/20 rounded-lg px-3.5 py-3 mt-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">
+                Audit chain (Northwind tenant)
+              </span>
+              <span
+                className={`text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded border ${
+                  auditChain.valid
+                    ? "text-teal-300 bg-teal-950/40 border-teal-700/50"
+                    : "text-red-300 bg-red-950/40 border-red-700/50"
+                }`}
+              >
+                {auditChain.valid ? "VERIFIED" : "BROKEN"}
+              </span>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              {auditChain.length} tamper-evident events, digest-chained.
+            </p>
+          </div>
+        </div>
+
+        {/* Decision detail trace */}
+        <div className="lg:col-span-3">
+          {selected && (
+            <DecisionDetail row={selected} />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DecisionDetail({ row }: { row: Row }) {
+  const { decision, snapshot, evidenceVerified } = row;
+  const evidence = snapshot.evidence;
+
+  return (
+    <div className="border border-border bg-card rounded-lg p-5 space-y-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs text-muted-foreground">Decision</p>
+          <p className="text-sm font-mono text-foreground">{decision.id}</p>
+        </div>
+        <span
+          className={`text-xs font-mono font-semibold px-2 py-1 rounded border ${outcomeTone[decision.outcome]}`}
+        >
+          {outcomeLabel[decision.outcome]}
+        </span>
+      </div>
+
+      <p className="text-sm text-muted-foreground leading-relaxed">
+        {decision.explanation}
+      </p>
+
+      <TraceBlock title="Decision evidence">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+          <EvidenceRow label="Identity enabled" value={String(evidence.identityEnabled)} />
+          <EvidenceRow label="Device managed" value={String(evidence.deviceManaged)} />
+          <EvidenceRow label="Compliance" value={evidence.deviceCompliance} />
+          <EvidenceRow label="Posture freshness" value={evidence.postureFreshness} />
+          <EvidenceRow label="Encrypted" value={String(evidence.deviceEncrypted)} />
+          <EvidenceRow label="OS supported" value={String(evidence.osSupported)} />
+          <EvidenceRow label="Owner type" value={evidence.ownerType} />
+          <EvidenceRow label="Workflow risk" value={evidence.workflowRiskTier} />
+          <EvidenceRow
+            label="Critical evidence intact"
+            value={String(evidence.criticalSignalsPresent)}
+            tone={evidence.criticalSignalsPresent ? "ok" : "warn"}
+          />
+        </div>
+      </TraceBlock>
+
+      <TraceBlock title={`Matched rules (${decision.matchedRules.length})`}>
+        {decision.matchedRules.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            No rule matched — the engine defaulted to step-up (fail-closed).
+          </p>
+        ) : (
+          <div className="space-y-1.5">
+            {decision.matchedRules.map((rule) => (
+              <div
+                key={rule.ruleId}
+                className="flex items-center justify-between gap-2 text-xs"
+              >
+                <span className="font-mono text-muted-foreground truncate">
+                  {rule.reasonCode}
+                </span>
+                <span
+                  className={`font-mono px-1.5 py-0.5 rounded border shrink-0 ${outcomeTone[rule.outcome]}`}
+                >
+                  {outcomeLabel[rule.outcome]} · {rule.severity}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </TraceBlock>
+
+      <TraceBlock title="Evidence snapshot & policy">
+        <div className="space-y-1.5">
+          <EvidenceRow label="Policy version" value={`v${snapshot.policyVersion}`} />
+          <EvidenceRow label="Policy version id" value={snapshot.policyVersionId} mono />
+          <EvidenceRow label="Snapshot id" value={snapshot.id} mono />
+          <EvidenceRow label="Snapshot digest" value={snapshot.digest} mono />
+          <EvidenceRow
+            label="Snapshot integrity"
+            value={evidenceVerified ? "verified" : "tampered"}
+            tone={evidenceVerified ? "ok" : "warn"}
+          />
+          <div className="pt-1">
+            <p className="text-[11px] text-muted-foreground mb-1">
+              Source references
+            </p>
+            {snapshot.sourceReferences.map((ref) => (
+              <p key={ref} className="text-[11px] font-mono text-muted-foreground">
+                {ref}
+              </p>
+            ))}
+          </div>
+        </div>
+      </TraceBlock>
+
+      <div className="flex items-center justify-between text-[11px] text-muted-foreground border-t border-border pt-3">
+        <span>
+          Review status:{" "}
+          <span className="text-foreground">{decision.reviewStatus}</span>
+        </span>
+        <span>latency ~{decision.latencyMs}ms</span>
+      </div>
+    </div>
+  );
+}
+
+function TraceBlock({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
+        {title}
+      </p>
+      {children}
+    </div>
+  );
+}
+
+function EvidenceRow({
+  label,
+  value,
+  mono,
+  tone,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  tone?: "ok" | "warn";
+}) {
+  const valueTone =
+    tone === "ok"
+      ? "text-teal-300"
+      : tone === "warn"
+        ? "text-amber-300"
+        : "text-foreground";
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-[11px] text-muted-foreground">{label}</span>
+      <span
+        className={`text-[11px] ${mono ? "font-mono" : ""} ${valueTone} truncate max-w-[60%] text-right`}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}

@@ -159,6 +159,9 @@ importers:
       '@workspace/db':
         specifier: workspace:*
         version: link:../../lib/db
+      '@workspace/signalgrid-core':
+        specifier: workspace:*
+        version: link:../../lib/signalgrid-core
       '@workspace/signalgrid-simulator':
         specifier: workspace:*
         version: link:../../lib/signalgrid-simulator
@@ -1084,6 +1087,9 @@ importers:
       '@workspace/api-client-react':
         specifier: workspace:*
         version: link:../../lib/api-client-react
+      '@workspace/signalgrid-core':
+        specifier: workspace:*
+        version: link:../../lib/signalgrid-core
       '@workspace/signalgrid-simulator':
         specifier: workspace:*
         version: link:../../lib/signalgrid-simulator
@@ -1395,10 +1401,15 @@ importers:
         specifier: ^0.31.10
         version: 0.31.10
 
+  lib/signalgrid-core: {}
+
   lib/signalgrid-simulator: {}
 
   scripts:
     dependencies:
+      '@workspace/signalgrid-core':
+        specifier: workspace:*
+        version: link:../lib/signalgrid-core
       '@workspace/signalgrid-simulator':
         specifier: workspace:*
         version: link:../lib/signalgrid-simulator

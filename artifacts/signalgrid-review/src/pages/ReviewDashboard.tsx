@@ -20,6 +20,7 @@ import ActivationPlanSection from "@/components/sections/ActivationPlanSection";
 import CompetitiveSection from "@/components/sections/CompetitiveSection";
 import DemoScriptSection from "@/components/sections/DemoScriptSection";
 import SignalGridSimulatorSection from "@/components/sections/SignalGridSimulatorSection";
+import OperatorConsoleSection from "@/components/sections/OperatorConsoleSection";
 import ConnectorEmulatorDashboard from "@/components/connector-emulator/ConnectorEmulatorDashboard";
 import CredentialReaderDashboardSection from "@/components/sections/CredentialReaderDashboardSection";
 import { useActionChecklist } from "@/hooks/useActionChecklist";
@@ -40,6 +41,7 @@ const statusLabel = {
 };
 
 const NAV_ITEMS = [
+  { id: "operator-console", label: "Operator Console" },
   { id: "simulator", label: "Simulator" },
   { id: "app-suite", label: "App Suite" },
   { id: "connector-emulator", label: "Connector Emulator" },
@@ -422,6 +424,15 @@ export default function ReviewDashboard() {
               </button>
             </div>
           </div>
+        </section>
+
+        {/* Operator console — in-browser decision trace */}
+        <section id="operator-console" className="space-y-6 scroll-mt-20">
+          <SectionHeader
+            label="Operator Console — Decision Trace"
+            description="Product-shaped, tenant-scoped decision loop running deterministically in-browser: each shared-device access decision is traced from outcome to matched rules, evidence snapshot, versioned policy, and a tamper-evident audit chain. Public-safe synthetic data only."
+          />
+          <OperatorConsoleSection />
         </section>
 
         {/* Real-life simulator foundation */}

@@ -8,6 +8,7 @@
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
     "proof:intune-entra-posture": "pnpm --filter @workspace/scripts run proof:intune-entra-posture",
+    "proof:signalgrid-core": "pnpm --filter @workspace/scripts run proof:signalgrid-core",
     "proof:signalgrid-simulator": "pnpm --filter @workspace/scripts run proof:signalgrid-simulator",
     "sim:signalgrid": "pnpm run proof:signalgrid-simulator",
     "dev:simulator": "node scripts/dev-simulator.cjs",

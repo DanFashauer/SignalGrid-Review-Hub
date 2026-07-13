@@ -2,12 +2,15 @@ import { Router, type IRouter } from "express";
 import healthRouter from "./health";
 import integrationsRouter from "./integrations";
 import simulatorRouter from "./simulator";
+import v1Router from "./v1";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(integrationsRouter);
 router.use(simulatorRouter);
+// The /v1 product surface is backed by the in-memory core and needs no database.
+router.use(v1Router);
 
 if (process.env["DATABASE_URL"]) {
   const [

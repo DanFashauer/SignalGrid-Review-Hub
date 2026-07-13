@@ -6,6 +6,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 ## Where to start for Level 10 review
 
 - [Realistic Launch Plan](REALISTIC_LAUNCH_PLAN.md): public-safe, honest sequence from today's review surface to a real company, paid pilot, and production SaaS — with readiness scores, phased engineering, budget ranges, and a 30-day operating plan as planning hypotheses, not current claims.
+- [Product Core Foundation](PRODUCT_CORE_FOUNDATION.md): the deterministic, fixture-backed, public-safe product core (tenancy, auth/RBAC, read-only connector sync, versioned policy engine, decision loop, evidence snapshots, tamper-evident audit ledger), its `/v1` API, the in-browser Operator Console, and the 34-assertion core proof — realizing plan phases B–D in a review-safe form.
 - [Executive One-Pager](EXECUTIVE_ONE_PAGER.md): quickest buyer/partner/founder overview.
 - [Strategic Buyer / Partner Pitch Pack](STRATEGIC_BUYER_PARTNER_PITCH_PACK.md): strategic narrative and positioning.
 - [Level 10 Completion Matrix](LEVEL_10_COMPLETION_MATRIX.md): readiness scores, evidence, gaps, owners, and risk lanes.

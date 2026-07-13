@@ -210,22 +210,31 @@ function parseRules(body: unknown): PolicyRuleSpec[] {
 }
 
 const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+// Linear, length-bounded key pattern (no nested quantifiers → no ReDoS).
+const CONTEXT_KEY = /^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$/;
+const MAX_CONTEXT_ENTRIES = 32;
 
 function sanitizeContext(
   input: Record<string, unknown>,
 ): Record<string, string> {
-  // Null-prototype object + key allowlisting prevents prototype-pollution via
-  // a client-controlled property name.
-  const out: Record<string, string> = Object.create(null);
+  // Validate each client-provided key against a strict allowlist pattern and a
+  // forbidden set, then build the object from validated entries. No dynamic
+  // `obj[userKey] = …` write happens on our side, so a client-controlled
+  // property name cannot inject onto or pollute the result object.
+  const entries: Array<[string, string]> = [];
   for (const [key, value] of Object.entries(input)) {
-    if (FORBIDDEN_KEYS.has(key)) {
+    if (entries.length >= MAX_CONTEXT_ENTRIES) {
+      break;
+    }
+    if (typeof value !== "string") {
       continue;
     }
-    if (typeof value === "string") {
-      out[key] = value;
+    if (FORBIDDEN_KEYS.has(key) || !CONTEXT_KEY.test(key)) {
+      continue;
     }
+    entries.push([key, value]);
   }
-  return out;
+  return Object.fromEntries(entries);
 }
 
 function envelope<T extends object>(req: Request, data: T) {

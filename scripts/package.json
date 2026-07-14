@@ -21,12 +21,14 @@
     "phase:summary-check": "tsx ./src/phase-summary-check.ts",
     "phase:pr-report": "tsx ./src/phase-pr-report.ts",
     "autopilot:backlog-check": "tsx ./src/autopilot-backlog-check.ts",
-    "level10:audit": "tsx ./src/level-10-audit.ts"
+    "level10:audit": "tsx ./src/level-10-audit.ts",
+    "proof:orchestration": "tsx ./src/orchestration-proof.ts"
   },
   "dependencies": {
     "@workspace/signalgrid-core": "workspace:*",
     "@workspace/signalgrid-simulator": "workspace:*",
-    "@workspace/webauthn": "workspace:*"
+    "@workspace/webauthn": "workspace:*",
+    "@workspace/orchestration": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

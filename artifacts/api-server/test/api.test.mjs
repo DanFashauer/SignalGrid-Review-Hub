@@ -112,6 +112,24 @@ async function run() {
   const policies = await req("GET", "/policies");
   check("monitoring policies → 200 with rules", policies.status === 200 && Array.isArray(policies.json?.policies) && (policies.json.policies[0]?.rules?.length ?? 0) > 0);
 
+  // ── smart-hospital sim: Trusted Room Entry (decision → orchestration) ─────
+  const roomScenarios = await req("GET", "/sim/room-entry/scenarios");
+  check("room-entry scenarios → 200 non-empty", roomScenarios.status === 200 && Array.isArray(roomScenarios.json?.scenarios) && roomScenarios.json.scenarios.length > 0);
+  const allowEntry = await req("POST", "/sim/room-entry", { body: { scenarioId: "compliant-bedside" } });
+  check("room-entry allow scenario → 200 with plan", allowEntry.status === 200 && Array.isArray(allowEntry.json?.plan?.actions));
+  check("room-entry allow: sensitive display is assist, not auto",
+    allowEntry.json?.plan?.actions?.find((a) => a.kind === "clinical.display.activate")?.disposition === "assist");
+  check("room-entry allow: signals include custody + baseline + badge dimensions",
+    allowEntry.json?.signals && "custodyState" in allowEntry.json.signals && "baselineCompliance" in allowEntry.json.signals && "badgeBinding" in allowEntry.json.signals);
+  const denyEntry = await req("POST", "/sim/room-entry", { body: { scenarioId: "disabled-account" } });
+  check("room-entry deny scenario → deny + all blocked",
+    denyEntry.json?.decision?.outcome === "deny" && denyEntry.json?.plan?.mode === "deny" && denyEntry.json.plan.actions.every((a) => a.disposition === "blocked"));
+  const confirmEntry = await req("POST", "/sim/room-entry", { body: { scenarioId: "compliant-bedside", confirmedActionIds: ["act-RM-418-clinical.display.activate"] } });
+  check("room-entry confirm moves an assist action to applied",
+    confirmEntry.json?.plan?.actions?.find((a) => a.kind === "clinical.display.activate")?.disposition === "applied");
+  const badEntry = await req("POST", "/sim/room-entry", { body: { scenarioId: "does-not-exist" } });
+  check("room-entry unknown scenario → 404", badEntry.status === 404);
+
   const scenarios = await req("GET", "/simulator/scenarios");
   check("simulator scenarios → 200", scenarios.status === 200 && Array.isArray(scenarios.json?.scenarios));
   const simRun = await req("POST", "/simulator/run", { body: { scenarioId: (scenarios.json?.scenarios ?? [])[0]?.id } });

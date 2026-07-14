@@ -3,6 +3,7 @@
   "compileOnSave": false,
   "files": [],
   "references": [
+    { "path": "./lib/orchestration" },
     { "path": "./lib/integration-bridge" },
     { "path": "./lib/location" },
     { "path": "./lib/webauthn" },

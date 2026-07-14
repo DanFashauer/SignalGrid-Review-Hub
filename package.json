@@ -29,7 +29,8 @@
     "phase:summary-check": "pnpm --filter @workspace/scripts run phase:summary-check",
     "phase:pr-report": "pnpm --filter @workspace/scripts run phase:pr-report",
     "autopilot:backlog-check": "pnpm --filter @workspace/scripts run autopilot:backlog-check",
-    "level10:audit": "pnpm --filter @workspace/scripts run level10:audit"
+    "level10:audit": "pnpm --filter @workspace/scripts run level10:audit",
+    "proof:orchestration": "pnpm --filter @workspace/scripts run proof:orchestration"
   },
   "private": true,
   "devDependencies": {

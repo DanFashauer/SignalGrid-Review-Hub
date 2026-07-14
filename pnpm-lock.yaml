@@ -144,6 +144,9 @@ importers:
       '@workspace/api-zod':
         specifier: workspace:*
         version: link:../../lib/api-zod
+      '@workspace/orchestration':
+        specifier: workspace:*
+        version: link:../../lib/orchestration
       '@workspace/signalgrid-core':
         specifier: workspace:*
         version: link:../../lib/signalgrid-core
@@ -1356,6 +1359,16 @@ importers:
         specifier: 'catalog:'
         version: 25.6.2
 
+  lib/orchestration:
+    dependencies:
+      '@workspace/signalgrid-core':
+        specifier: workspace:*
+        version: link:../signalgrid-core
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.6.2
+
   lib/signalgrid-core: {}
 
   lib/signalgrid-simulator: {}
@@ -1375,6 +1388,9 @@ importers:
 
   scripts:
     dependencies:
+      '@workspace/orchestration':
+        specifier: workspace:*
+        version: link:../lib/orchestration
       '@workspace/signalgrid-core':
         specifier: workspace:*
         version: link:../lib/signalgrid-core

@@ -70,6 +70,9 @@ jobs:
       - name: WebAuthn signature-verification proof
         run: pnpm run proof:webauthn-verify
 
+      - name: Orchestration (Trust→Action) proof
+        run: pnpm run proof:orchestration
+
       - name: Decision-latency pilot gate
         run: pnpm run bench:decision-latency
 

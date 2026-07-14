@@ -150,6 +150,9 @@ importers:
       '@workspace/room-sim':
         specifier: workspace:*
         version: link:../../lib/room-sim
+      '@workspace/signal-radar':
+        specifier: workspace:*
+        version: link:../../lib/signal-radar
       '@workspace/signalgrid-core':
         specifier: workspace:*
         version: link:../../lib/signalgrid-core
@@ -1385,6 +1388,16 @@ importers:
         specifier: 'catalog:'
         version: 25.6.2
 
+  lib/signal-radar:
+    dependencies:
+      '@workspace/signalgrid-core':
+        specifier: workspace:*
+        version: link:../signalgrid-core
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.6.2
+
   lib/signalgrid-core: {}
 
   lib/signalgrid-simulator: {}
@@ -1407,6 +1420,9 @@ importers:
       '@workspace/orchestration':
         specifier: workspace:*
         version: link:../lib/orchestration
+      '@workspace/signal-radar':
+        specifier: workspace:*
+        version: link:../lib/signal-radar
       '@workspace/signalgrid-core':
         specifier: workspace:*
         version: link:../lib/signalgrid-core

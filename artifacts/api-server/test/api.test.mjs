@@ -140,6 +140,20 @@ async function run() {
   check("controlled med room includes medication-cabinet action",
     (medRoom.json?.plan?.actions ?? []).some((a) => a.kind === "medication.cabinet.unlock"));
 
+  // ── Signal Radar: new-signal detection ───────────────────────────────────
+  const catalog = await req("GET", "/signals/catalog");
+  check("signal catalog → 200 with 12 evaluated categories", catalog.status === 200 && catalog.json?.evaluated?.length === 12);
+  const radar = await req("POST", "/signals/radar", { body: { signals: [
+    { category: "identity_state" },
+    { category: "rtls_location" },
+    { category: "smart_bed_occupancy", sourceReference: "bed-42" },
+  ] } });
+  check("radar → 200 flags the novel signal", radar.status === 200 && radar.json?.novel?.some((o) => o.category === "smart_bed_occupancy"));
+  check("radar does not flag an evaluated signal as novel", !radar.json?.novel?.some((o) => o.category === "identity_state"));
+  check("radar raises a first-seen alert for the novel signal", (radar.json?.alerts ?? []).some((a) => a.includes("smart_bed_occupancy")));
+  const emptyRadar = await req("POST", "/signals/radar", { body: {} });
+  check("radar with no signals → 200 empty report", emptyRadar.status === 200 && Array.isArray(emptyRadar.json?.observations) && emptyRadar.json.observations.length === 0);
+
   const scenarios = await req("GET", "/simulator/scenarios");
   check("simulator scenarios → 200", scenarios.status === 200 && Array.isArray(scenarios.json?.scenarios));
   const simRun = await req("POST", "/simulator/run", { body: { scenarioId: (scenarios.json?.scenarios ?? [])[0]?.id } });

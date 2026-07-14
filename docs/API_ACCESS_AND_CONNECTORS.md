@@ -1,0 +1,96 @@
+# API access & connectors
+
+How to talk to SignalGrid — and the options beyond raw REST. Everything here is
+public-safe: the demo token is a fixture, not a real credential, and no live
+vendor call happens by default.
+
+## The surface
+
+SignalGrid's api-server exposes two surfaces on one origin (default
+`http://localhost:8080/api`):
+
+- **Public demo surface** (no auth) — health, the integrations catalog, the
+  simulator, the monitoring dashboards, the smart-hospital **room-entry**
+  simulation, and the **Signal Radar** (`/signals/catalog`, `/signals/radar`).
+- **`/v1` product API** (bearer token) — the deterministic decision core:
+  context, `decisions/evaluate`, evidence, policies + versions, connectors,
+  audit, webhooks, remediation, metrics. Tenant is always derived from the
+  token, never from a client-supplied id.
+
+The authoritative machine-readable contract for `/v1` is
+[`lib/api-spec/v1-openapi.yaml`](../lib/api-spec/v1-openapi.yaml) (OpenAPI 3.1).
+
+## Ways to connect — pick the one that fits
+
+### 1. Postman collection (import and click)
+A ready-made collection covering **every** endpoint (public + `/v1`) is committed
+at [`docs/postman/`](./postman/):
+
+- `SignalGrid.postman_collection.json` — 38 requests in three folders, with
+  example bodies.
+- `SignalGrid.postman_environment.json` — `base_url` + a demo `token` + the path
+  variables (`decisionId`, `policyId`, …).
+
+Import both into Postman (desktop or the web app), select the environment, and
+run. Start with **List demo keys** (`GET /v1/keys`) to grab a token, paste it
+into the environment's `token`, then call **Evaluate a decision**. The collection
+is generated from the route list and kept in lockstep with the OpenAPI spec by a
+CI check (`pnpm run check:postman`); regenerate with `pnpm run build:postman`.
+
+### 2. Generated typed client (best for apps)
+`@workspace/api-client-react` is a generated, fully-typed client + React Query
+hooks for the API — no hand-written fetch code, types stay in sync with the spec
+via `orval`. This is what the operator console and mobile PWA use. Import a hook
+(`useListDecisions`, `useGetDashboardMetrics`, …) and call it; set the base URL
+with `setBaseUrl()`.
+
+### 3. Webhooks (push, not poll)
+The `/v1/webhooks` surface delivers decision/remediation events outbound to a URL
+you register, HMAC-signed, with retry + a deliveries log. Use this instead of
+polling when you want to *react* to decisions (e.g. a SIEM or an alerting flow).
+
+### 4. Raw REST / curl
+Every endpoint is plain JSON over HTTPS. See [`RUN_ON_MAC.md`](./RUN_ON_MAC.md)
+for curl examples.
+
+## Bringing new signals in — the Signal Radar
+
+You don't have to know in advance every signal a deployment emits. **Signal
+Radar** (`@workspace/signal-radar`) watches incoming signals and classifies each:
+
+- **evaluated** — already used by the decision core,
+- **candidate** — a known roadmap category (observed, not yet a decision input),
+- **novel** — never catalogued: a genuinely new signal, which raises a *first-seen
+  alert* so you can decide whether to bring it into the grid.
+
+Try it: `POST /api/signals/radar` with `{ "signals": [{ "category": "smart_bed_occupancy" }] }`
+→ it comes back flagged as novel with an alert. The set of evaluated categories
+is guarded at compile time: if the core's signal set changes, the radar (and CI)
+notices. This is how the grid *detects, alerts on, and monitors* new signal
+sources rather than silently ignoring them.
+
+## "Is there something better than the API — direct connectors or plugins?"
+
+Short answer: the API is the integration point, and there are three higher-level
+options layered on it. Longer answer, honestly:
+
+- **Connectors (inbound signals).** SignalGrid already models integrations as
+  *connectors* that normalize a vendor's data into the core's signal shape — the
+  harvested `@workspace/integrations` adapters (ITSM/UEM/NAC/SIEM/EDR) and the
+  `@workspace/integration-bridge` (FleetDM posture → core signals) are exactly
+  this. A "direct connector" for a new source means writing a small adapter that
+  emits normalized signals; the Signal Radar helps you discover which sources are
+  worth adapting. These stay **fixture-safe by default** and only make live calls
+  in a `beta`/`prod` tier with real credentials.
+- **Typed client + webhooks** (above) are the "SDK and events" layer over REST —
+  usually what you want instead of hand-rolling HTTP.
+- **MCP server (plugin path) — roadmap, not built.** The cleanest "plugin" story
+  for AI/agent tooling would be a **Model Context Protocol** server exposing
+  SignalGrid decisions/signals as MCP tools, so an assistant could query the grid
+  directly. This is a natural next connector and is noted here as a deliberate
+  future option, not a current capability — flagged honestly rather than implied.
+
+If you tell me the specific system you want to connect (a UEM, a badge reader, a
+nurse-call system, an assistant), the right answer is usually a small connector
+that emits normalized signals plus a webhook subscription for the decisions back
+out — and I can scaffold that.

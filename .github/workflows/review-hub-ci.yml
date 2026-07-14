@@ -73,6 +73,17 @@ jobs:
       - name: Orchestration (Trust→Action) proof
         run: pnpm run proof:orchestration
 
+      - name: Signal Radar (new-signal detection) proof
+        run: pnpm run proof:signal-radar
+
+      - name: Safety gate (guardrails)
+        run: pnpm run safety:check
+
+      - name: Postman collection is committed in sync
+        run: |
+          pnpm run build:postman
+          git diff --exit-code docs/postman || (echo "::error::Postman collection out of date — run 'pnpm run build:postman' and commit." && exit 1)
+
       - name: Decision-latency pilot gate
         run: pnpm run bench:decision-latency
 

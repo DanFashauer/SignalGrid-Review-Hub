@@ -23,13 +23,15 @@
     "autopilot:backlog-check": "tsx ./src/autopilot-backlog-check.ts",
     "level10:audit": "tsx ./src/level-10-audit.ts",
     "proof:orchestration": "tsx ./src/orchestration-proof.ts",
-    "build:room-console": "node ./build-room-console.mjs"
+    "build:room-console": "node ./build-room-console.mjs",
+    "proof:signal-radar": "tsx ./src/signal-radar-proof.ts"
   },
   "dependencies": {
     "@workspace/signalgrid-core": "workspace:*",
     "@workspace/signalgrid-simulator": "workspace:*",
     "@workspace/webauthn": "workspace:*",
-    "@workspace/orchestration": "workspace:*"
+    "@workspace/orchestration": "workspace:*",
+    "@workspace/signal-radar": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

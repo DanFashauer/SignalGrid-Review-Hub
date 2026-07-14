@@ -25,6 +25,9 @@
     },
     {
       "path": "../../lib/room-sim"
+    },
+    {
+      "path": "../../lib/signal-radar"
     }
   ]
 }

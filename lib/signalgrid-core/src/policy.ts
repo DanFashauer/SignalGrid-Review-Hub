@@ -521,6 +521,15 @@ export const SHARED_DEVICE_RULES_V1: PolicyRuleSpec[] = [
     severity: "high",
   },
   {
+    id: "custody-maintenance",
+    description:
+      "A device pulled for maintenance is not for general use — a shared-device session on it is restricted until it is released from maintenance.",
+    match: [{ field: "custodyState", in: ["maintenance"] }],
+    outcome: "restrict",
+    reasonCode: "CUSTODY_MAINTENANCE",
+    severity: "high",
+  },
+  {
     id: "battery-critical",
     description:
       "A critically low battery on a shared device requires step-up before a session (operational risk).",

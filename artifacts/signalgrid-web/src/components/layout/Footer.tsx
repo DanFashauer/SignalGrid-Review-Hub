@@ -1,29 +1,32 @@
 import { Link } from "wouter";
 
+const REPO = "https://github.com/DanFashauer/SignalGrid-Review-Hub";
+const DOCS = `${REPO}/tree/main/docs`;
+
 const FOOTER_LINKS = {
   Product: [
     { label: "Hardware", href: "/hardware" },
     { label: "Platform", href: "/#platform" },
-    { label: "Integrations", href: "#integrations" },
+    { label: "Integrations", href: "/#integrations" },
     { label: "Pricing", href: "/pricing" },
   ],
   Solutions: [
     { label: "Federal & DoD", href: "/federal" },
-    { label: "Healthcare", href: "#use-cases" },
-    { label: "Manufacturing", href: "#use-cases" },
-    { label: "Retail & Distribution", href: "#use-cases" },
+    { label: "Healthcare", href: "/#use-cases" },
+    { label: "Manufacturing", href: "/#use-cases" },
+    { label: "Retail & Distribution", href: "/#use-cases" },
   ],
   Resources: [
-    { label: "Documentation", href: "#" },
-    { label: "API Reference", href: "/api/healthz" },
+    { label: "Documentation", href: DOCS },
+    { label: "API Reference", href: `${REPO}/blob/main/lib/api-spec/v1-openapi.yaml` },
     { label: "Downloads", href: "/downloads" },
-    { label: "Changelog", href: "#" },
+    { label: "Changelog", href: `${REPO}/commits/main` },
   ],
   Company: [
-    { label: "About", href: "#" },
-    { label: "Blog", href: "#" },
-    { label: "Careers", href: "#" },
-    { label: "Contact", href: "#" },
+    { label: "About", href: REPO },
+    { label: "Launch plan", href: `${REPO}/blob/main/docs/REALISTIC_LAUNCH_PLAN.md` },
+    { label: "Security", href: `${REPO}/blob/main/SECURITY.md` },
+    { label: "Contact", href: REPO },
   ],
 };
 
@@ -56,7 +59,9 @@ export default function Footer() {
               <ul className="space-y-3 text-sm text-muted-foreground">
                 {links.map(({ label, href }) => (
                   <li key={label}>
-                    {href.includes("#") || href.startsWith("http") || href.startsWith("/api") ? (
+                    {href.startsWith("http") ? (
+                      <a href={href} target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">{label}</a>
+                    ) : href.includes("#") ? (
                       <a href={href} className="hover:text-primary transition-colors">{label}</a>
                     ) : (
                       <Link href={href} className="hover:text-primary transition-colors">{label}</Link>

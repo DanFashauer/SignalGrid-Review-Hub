@@ -2,6 +2,10 @@
   "name": "signalgrid-review-hub",
   "version": "0.0.0",
   "license": "MIT",
+  "packageManager": "pnpm@10.28.1",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "preinstall": "node scripts/enforce-pnpm.cjs",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",

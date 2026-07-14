@@ -268,6 +268,7 @@ function seedPolicyTests(
     { name: "badge removed → restrict", evidence: { ...base, badgeBinding: "removed" }, expectedOutcome: "restrict", expectedReasonCode: "BADGE_REMOVED" },
     { name: "badge forced removal → deny", evidence: { ...base, badgeBinding: "forced" }, expectedOutcome: "deny", expectedReasonCode: "BADGE_FORCED_REMOVAL" },
     { name: "badge absent/unknown → no fabricated block (allow)", evidence: { ...base, badgeBinding: "unknown" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
+    { name: "custody maintenance → restrict", evidence: { ...base, custodyState: "maintenance" }, expectedOutcome: "restrict", expectedReasonCode: "CUSTODY_MAINTENANCE" },
     { name: "SmartDock faulted → restrict", evidence: { ...base, dockState: "faulted" }, expectedOutcome: "restrict", expectedReasonCode: "DOCK_FAULTED" },
     { name: "SmartDock offline → step-up", evidence: { ...base, dockState: "offline" }, expectedOutcome: "step_up", expectedReasonCode: "DOCK_OFFLINE" },
     { name: "dock state unknown → still allow (no fabricated block)", evidence: { ...base, dockState: "unknown" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },

@@ -138,6 +138,13 @@ const DESCRIPTORS: Record<string, ResolutionDescriptor> = {
     transform: { custodyState: "checked_in" },
     hardwareOriented: false,
   },
+  CUSTODY_MAINTENANCE: {
+    baseClass: "requires_approval",
+    workerAction: "This device is in maintenance — use a different device; an operator can release it from maintenance.",
+    operatorAction: "Confirm the device has completed maintenance and release it (check it back in), then re-evaluate.",
+    transform: { custodyState: "checked_in" },
+    hardwareOriented: false,
+  },
   BATTERY_CRITICAL: {
     baseClass: "auto_proposed",
     workerAction: "Battery is critically low — swap to a charged shared device, or dock this one before starting.",

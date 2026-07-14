@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Shield, Wifi, Battery, Cpu, Radio, Lock, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Shield, Wifi, Battery, Cpu, Radio, Lock, AlertTriangle } from "lucide-react";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 

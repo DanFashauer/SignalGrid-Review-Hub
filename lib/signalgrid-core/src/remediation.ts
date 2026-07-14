@@ -135,6 +135,7 @@ function mapReasonsToRemediation(
       // check to the hardware owner. No dock action is taken by SignalGrid.
       case "CUSTODY_OVERDUE":
       case "CUSTODY_EXCEPTION":
+      case "CUSTODY_MAINTENANCE":
       case "TAMPER_SUSPECTED":
       case "TAMPER_SENSOR_UNAVAILABLE":
       case "BATTERY_CRITICAL":

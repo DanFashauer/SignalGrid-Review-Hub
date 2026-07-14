@@ -31,6 +31,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Enable GitHub Pages automatically if it isn't already, so this workflow
+      # doesn't fail (and email) when Pages hasn't been turned on by hand.
+      - name: Configure Pages (auto-enable)
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }

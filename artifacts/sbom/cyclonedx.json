@@ -236,10 +236,24 @@
     },
     {
       "type": "library",
+      "name": "@hono/node-server",
+      "version": "1.19.14",
+      "bom-ref": "pkg:npm/%40hono/node-server@1.19.14",
+      "purl": "pkg:npm/%40hono/node-server@1.19.14"
+    },
+    {
+      "type": "library",
       "name": "@hookform/resolvers",
       "version": "3.10.0",
       "bom-ref": "pkg:npm/%40hookform/resolvers@3.10.0",
       "purl": "pkg:npm/%40hookform/resolvers@3.10.0"
+    },
+    {
+      "type": "library",
+      "name": "@ioredis/commands",
+      "version": "1.10.0",
+      "bom-ref": "pkg:npm/%40ioredis/commands@1.10.0",
+      "purl": "pkg:npm/%40ioredis/commands@1.10.0"
     },
     {
       "type": "library",
@@ -275,6 +289,13 @@
       "version": "0.3.31",
       "bom-ref": "pkg:npm/%40jridgewell/trace-mapping@0.3.31",
       "purl": "pkg:npm/%40jridgewell/trace-mapping@0.3.31"
+    },
+    {
+      "type": "library",
+      "name": "@modelcontextprotocol/sdk",
+      "version": "1.29.0",
+      "bom-ref": "pkg:npm/%40modelcontextprotocol/sdk@1.29.0",
+      "purl": "pkg:npm/%40modelcontextprotocol/sdk@1.29.0"
     },
     {
       "type": "library",
@@ -1209,6 +1230,13 @@
     },
     {
       "type": "library",
+      "name": "@types/uuid",
+      "version": "10.0.0",
+      "bom-ref": "pkg:npm/%40types/uuid@10.0.0",
+      "purl": "pkg:npm/%40types/uuid@10.0.0"
+    },
+    {
+      "type": "library",
       "name": "@vitejs/plugin-react",
       "version": "5.2.0",
       "bom-ref": "pkg:npm/%40vitejs/plugin-react@5.2.0",
@@ -1381,6 +1409,13 @@
       "version": "2.1.1",
       "bom-ref": "pkg:npm/clsx@2.1.1",
       "purl": "pkg:npm/clsx@2.1.1"
+    },
+    {
+      "type": "library",
+      "name": "cluster-key-slot",
+      "version": "1.1.1",
+      "bom-ref": "pkg:npm/cluster-key-slot@1.1.1",
+      "purl": "pkg:npm/cluster-key-slot@1.1.1"
     },
     {
       "type": "library",
@@ -1594,6 +1629,13 @@
     },
     {
       "type": "library",
+      "name": "denque",
+      "version": "2.1.0",
+      "bom-ref": "pkg:npm/denque@2.1.0",
+      "purl": "pkg:npm/denque@2.1.0"
+    },
+    {
+      "type": "library",
       "name": "depd",
       "version": "2.0.0",
       "bom-ref": "pkg:npm/depd@2.0.0",
@@ -1769,6 +1811,20 @@
     },
     {
       "type": "library",
+      "name": "eventsource-parser",
+      "version": "3.1.0",
+      "bom-ref": "pkg:npm/eventsource-parser@3.1.0",
+      "purl": "pkg:npm/eventsource-parser@3.1.0"
+    },
+    {
+      "type": "library",
+      "name": "eventsource",
+      "version": "3.0.7",
+      "bom-ref": "pkg:npm/eventsource@3.0.7",
+      "purl": "pkg:npm/eventsource@3.0.7"
+    },
+    {
+      "type": "library",
       "name": "execa",
       "version": "9.6.1",
       "bom-ref": "pkg:npm/execa@9.6.1",
@@ -1780,6 +1836,13 @@
       "version": "7.5.1",
       "bom-ref": "pkg:npm/express-rate-limit@7.5.1",
       "purl": "pkg:npm/express-rate-limit@7.5.1"
+    },
+    {
+      "type": "library",
+      "name": "express-rate-limit",
+      "version": "8.5.2",
+      "bom-ref": "pkg:npm/express-rate-limit@8.5.2",
+      "purl": "pkg:npm/express-rate-limit@8.5.2"
     },
     {
       "type": "library",
@@ -2014,6 +2077,13 @@
     },
     {
       "type": "library",
+      "name": "hono",
+      "version": "4.12.30",
+      "bom-ref": "pkg:npm/hono@4.12.30",
+      "purl": "pkg:npm/hono@4.12.30"
+    },
+    {
+      "type": "library",
       "name": "http-errors",
       "version": "2.0.1",
       "bom-ref": "pkg:npm/http-errors@2.0.1",
@@ -2060,6 +2130,20 @@
       "version": "2.0.3",
       "bom-ref": "pkg:npm/internmap@2.0.3",
       "purl": "pkg:npm/internmap@2.0.3"
+    },
+    {
+      "type": "library",
+      "name": "ioredis",
+      "version": "5.11.1",
+      "bom-ref": "pkg:npm/ioredis@5.11.1",
+      "purl": "pkg:npm/ioredis@5.11.1"
+    },
+    {
+      "type": "library",
+      "name": "ip-address",
+      "version": "10.2.0",
+      "bom-ref": "pkg:npm/ip-address@10.2.0",
+      "purl": "pkg:npm/ip-address@10.2.0"
     },
     {
       "type": "library",
@@ -2140,6 +2224,13 @@
     },
     {
       "type": "library",
+      "name": "jose",
+      "version": "6.2.3",
+      "bom-ref": "pkg:npm/jose@6.2.3",
+      "purl": "pkg:npm/jose@6.2.3"
+    },
+    {
+      "type": "library",
       "name": "joycon",
       "version": "3.1.1",
       "bom-ref": "pkg:npm/joycon@3.1.1",
@@ -2172,6 +2263,13 @@
       "version": "1.0.0",
       "bom-ref": "pkg:npm/json-schema-traverse@1.0.0",
       "purl": "pkg:npm/json-schema-traverse@1.0.0"
+    },
+    {
+      "type": "library",
+      "name": "json-schema-typed",
+      "version": "8.0.2",
+      "bom-ref": "pkg:npm/json-schema-typed@8.0.2",
+      "purl": "pkg:npm/json-schema-typed@8.0.2"
     },
     {
       "type": "library",
@@ -2588,6 +2686,13 @@
     },
     {
       "type": "library",
+      "name": "pkce-challenge",
+      "version": "5.0.1",
+      "bom-ref": "pkg:npm/pkce-challenge@5.0.1",
+      "purl": "pkg:npm/pkce-challenge@5.0.1"
+    },
+    {
+      "type": "library",
       "name": "postcss-selector-parser",
       "version": "6.0.10",
       "bom-ref": "pkg:npm/postcss-selector-parser@6.0.10",
@@ -2819,6 +2924,20 @@
     },
     {
       "type": "library",
+      "name": "redis-errors",
+      "version": "1.2.0",
+      "bom-ref": "pkg:npm/redis-errors@1.2.0",
+      "purl": "pkg:npm/redis-errors@1.2.0"
+    },
+    {
+      "type": "library",
+      "name": "redis-parser",
+      "version": "3.0.0",
+      "bom-ref": "pkg:npm/redis-parser@3.0.0",
+      "purl": "pkg:npm/redis-parser@3.0.0"
+    },
+    {
+      "type": "library",
       "name": "regexparam",
       "version": "3.0.0",
       "bom-ref": "pkg:npm/regexparam@3.0.0",
@@ -3012,6 +3131,13 @@
       "version": "4.2.0",
       "bom-ref": "pkg:npm/split2@4.2.0",
       "purl": "pkg:npm/split2@4.2.0"
+    },
+    {
+      "type": "library",
+      "name": "standard-as-callback",
+      "version": "2.1.0",
+      "bom-ref": "pkg:npm/standard-as-callback@2.1.0",
+      "purl": "pkg:npm/standard-as-callback@2.1.0"
     },
     {
       "type": "library",
@@ -3253,6 +3379,13 @@
     },
     {
       "type": "library",
+      "name": "uuid",
+      "version": "11.1.1",
+      "bom-ref": "pkg:npm/uuid@11.1.1",
+      "purl": "pkg:npm/uuid@11.1.1"
+    },
+    {
+      "type": "library",
       "name": "vary",
       "version": "1.1.2",
       "bom-ref": "pkg:npm/vary@1.1.2",
@@ -3327,6 +3460,13 @@
       "version": "2.1.2",
       "bom-ref": "pkg:npm/yoctocolors@2.1.2",
       "purl": "pkg:npm/yoctocolors@2.1.2"
+    },
+    {
+      "type": "library",
+      "name": "zod-to-json-schema",
+      "version": "3.25.2",
+      "bom-ref": "pkg:npm/zod-to-json-schema@3.25.2",
+      "purl": "pkg:npm/zod-to-json-schema@3.25.2"
     },
     {
       "type": "library",

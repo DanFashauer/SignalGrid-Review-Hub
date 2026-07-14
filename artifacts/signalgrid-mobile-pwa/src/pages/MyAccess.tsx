@@ -91,10 +91,13 @@ export default function MyAccess() {
         </div>
       </header>
 
-      <p className="text-sm text-muted-foreground">
-        Tap a session to see why it was allowed or held, and the steps to fix it
-        yourself. Every step is self-service — nothing is changed for you.
-      </p>
+      <div className="rounded-xl border border-border bg-card px-4 py-3">
+        <p className="font-mono text-[11px] tracking-widest text-primary">SIGNAL → YOUR MOVE</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Tap a session to see the signal, the call, and the one thing you can do to
+          continue. The choice is yours — nothing is changed for you.
+        </p>
+      </div>
 
       <div className="space-y-3">
         {SCENARIOS.map((s) => {

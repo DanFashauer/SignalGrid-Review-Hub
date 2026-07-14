@@ -431,8 +431,8 @@ export default function ReviewDashboard() {
         {/* Operator console — in-browser decision trace */}
         <section id="operator-console" className="space-y-6 scroll-mt-20">
           <SectionHeader
-            label="Operator Console — Decision Trace"
-            description="Product-shaped, tenant-scoped decision loop running deterministically in-browser: each shared-device access decision is traced from outcome to matched rules, evidence snapshot, versioned policy, and a tamper-evident audit chain. Public-safe synthetic data only."
+            label="Operator Console — Signal to Decision"
+            description="The administrator's view: pick a scenario and watch the signal become a clear call — allow, step-up, restrict, or deny — with the matched rules, evidence snapshot, versioned policy, and tamper-evident audit chain right there to back it. Runs deterministically in-browser on public-safe synthetic data."
           />
           <OperatorConsoleSection />
         </section>
@@ -440,8 +440,8 @@ export default function ReviewDashboard() {
         {/* Worker self-service — customer-facing resolution */}
         <section id="worker-self-service" className="space-y-6 scroll-mt-20">
           <SectionHeader
-            label="Worker Self-Service — Access Resolution"
-            description="The frontline worker's view on a shared device: a blocked session explained in plain language with the steps to resolve it. Safe cases resolve in place; only genuine security/compliance blocks escalate to an operator. Public-safe synthetic data."
+            label="Worker Self-Service — Signal to Your Next Move"
+            description="The frontline worker's view: one signal, one clear call, and one thing you can do to continue — in plain language, on the device. Safe cases resolve in place; only genuine security or compliance blocks route to an operator. The choice stays with the person. Public-safe synthetic data."
           />
           <WorkerSelfServiceSection />
         </section>

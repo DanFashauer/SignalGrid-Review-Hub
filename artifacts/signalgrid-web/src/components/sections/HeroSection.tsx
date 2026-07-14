@@ -31,13 +31,15 @@ export default function HeroSection() {
               Contextual Workforce Trust Orchestration
             </div>
 
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground mb-6 leading-tight">
-              The Identity Layer for<br className="hidden md:block" />
-              <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">Badge-Locked Shared Devices.</span>
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground mb-6 leading-tight text-balance">
+              Every access signal,<br className="hidden md:block" />
+              <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">turned into one clear call.</span>
             </h1>
 
-            <p className="text-lg text-muted-foreground mb-8 max-w-[600px] leading-relaxed">
-              Who. Where. When. What device. What role. What floor. What posture. What workflow. SignalGrid evaluates all of it — continuously, at the exact moment a workflow fires — binding identity to physical custody across every shift.
+            <p className="text-lg text-muted-foreground mb-8 max-w-[600px] leading-relaxed text-pretty">
+              The moment a workflow fires, SignalGrid reads the signals that matter — identity, device
+              posture, physical custody, and security baseline — and turns them into a simple decision:
+              allow, step-up, restrict, or deny. You choose the action.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">

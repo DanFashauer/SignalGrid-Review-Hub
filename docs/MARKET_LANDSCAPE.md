@@ -35,7 +35,7 @@
 - **SGNL** — dynamic access management, CAEP hub, zero standing privilege; **being acquired by CrowdStrike for ~$740M** (Jan 8 2026). Enterprise SaaS/cloud + AI-agent identity, not shared physical frontline devices.
 - **Oso, Aserto/Topaz, OpenFGA (Auth0/Okta), Styra/OPA, PlainID, Axiomatics** — application/enterprise authorization engines (ABAC/ReBAC/policy); none reason about "who is physically holding this shared scanner."
 
-**Cluster B — Continuous Access Evaluation / adaptive access (IdP-native).** Microsoft Entra (Conditional Access + CAE + device posture), Cisco Duo, Okta. Re-evaluate a user's *session/token*; assume a 1:1 user↔session. The shared-device "which human is this right now" gap is what they don't natively resolve.
+**Cluster B — Continuous Access Evaluation / adaptive access (IdP-native).** Microsoft Entra (Conditional Access + CAE + device posture), Cisco Duo, Okta. Re-evaluate a user's *session/token*; assume a 1:1 user↔session. The shared-device "which human is this right now" gap is what they don't natively resolve. **Entra is best treated as a platform to extend, not fight — threat MEDIUM (LOW-MEDIUM);** note its Conditional Access *authentication context* already does per-action step-up (on auth strength), so don't overclaim "Entra can't." Full analysis in [`COMPETITIVE_ENTRA.md`](./COMPETITIVE_ENTRA.md).
 
 **Cluster C — Device trust (managed/unmanaged/browser).**
 - **Kolide (now 1Password Extended Access Management)** — endpoint-agent device trust; oriented to managed endpoints, no longer sold standalone.

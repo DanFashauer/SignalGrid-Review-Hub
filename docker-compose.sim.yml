@@ -1,0 +1,22 @@
+# Lean local topology for the smart-hospital simulation (Phase 1: Trusted Room
+# Entry). Runs only the deterministic, in-memory decision + orchestration API —
+# no database, no web tier, no nginx. The interactive console is served by the
+# API itself at http://localhost:8080/console
+#
+#   docker compose -f docker-compose.sim.yml up --build
+#
+# Everything is synthetic and public-safe: fixture identities, rooms, and
+# assignments. No real hospital, patient data, or vendor system is involved.
+services:
+  signalgrid-sim:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    image: signalgrid-sim
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+      SIGNALGRID_TIER: dev # fixture-safe; never makes a live integration call
+    ports:
+      - "8080:8080"

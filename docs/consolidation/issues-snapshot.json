@@ -1,0 +1,33 @@
+{
+  "generated": "pre-filled from live issues at cutover prep (2026-07-14)",
+  "note": "Open-issue snapshot across the consolidation sources. DanFashauer/SignalGrid is the home repo (its issues are not 'migrated'). Review-Hub + DEV are the archived sources. Regenerate at cutover with scripts/cutover/00-triage-issues.sh to capture any drift.",
+  "sources": {
+    "DanFashauer/SignalGrid-Review-Hub": [
+      {
+        "number": 38,
+        "title": "Security: adversarial pentest record + residual hardening backlog",
+        "state": "open",
+        "labels": ["security"],
+        "url": "https://github.com/DanFashauer/SignalGrid-Review-Hub/issues/38",
+        "author": "DanFashauer",
+        "createdAt": "2026-07-14T00:37:36Z",
+        "updatedAt": "2026-07-14T00:37:36Z",
+        "source": "DanFashauer/SignalGrid-Review-Hub",
+        "triage": {
+          "decision": "migrate",
+          "rationale": "Tracking/record issue for the adversarial pentest (no exploitable break found) plus a small residual low-priority hardening backlog. The backlog is still open work worth tracking, so re-home it to the production repo; the pentest record travels with it for provenance.",
+          "target": "DanFashauer/SignalGrid"
+        }
+      }
+    ],
+    "DanFashauer/DEV": [],
+    "DanFashauer/SignalGrid": []
+  },
+  "summary": {
+    "open_total": 1,
+    "migrate": 1,
+    "close_as_record": 0,
+    "drop": 0,
+    "home_repo_open": 0
+  }
+}

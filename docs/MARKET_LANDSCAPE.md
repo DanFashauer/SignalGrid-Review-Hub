@@ -45,6 +45,8 @@
 
 **Cluster F — The nearest thesis-twin.** **OLOID** — explicitly markets "the shared-device attribution gap breaks traditional IAM," ties it to HIPAA and FDA 21 CFR Part 11, and sells badge-tap attribution for frontline/warehouse/factory. The competitor whose language most overlaps SignalGrid's.
 
+**Cluster G — Infrastructure-access platforms (vocabulary overlap only).** **Teleport** and similar infra-access tools share the *vocabulary* (device trust, just-in-time, PDP, zero trust) but protect servers/K8s/DBs for engineers/machines via a cert-based protocol proxy — no shared-device / physical-custody / frontline-worker notion. Assessed as **orthogonal-to-adjacent, threat LOW**; full analysis in [`COMPETITIVE_TELEPORT.md`](./COMPETITIVE_TELEPORT.md).
+
 ## SignalGrid's wedge (honest)
 
 Where it is genuinely differentiated:

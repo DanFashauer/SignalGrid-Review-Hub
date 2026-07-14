@@ -44,6 +44,20 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // Split heavy, stable vendor code into cacheable chunks so the app
+        // shell is small and a code change does not bust the vendor cache.
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          if (id.includes("/react/") || id.includes("/react-dom/") || id.includes("/scheduler/")) return "react-vendor";
+          if (id.includes("recharts") || id.includes("/d3-") || id.includes("/victory-")) return "charts";
+          if (id.includes("@radix-ui")) return "radix";
+          if (id.includes("framer-motion")) return "motion";
+          if (id.includes("@tanstack")) return "query";
+        },
+      },
+    },
   },
   server: {
     port,

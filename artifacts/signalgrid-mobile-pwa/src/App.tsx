@@ -1,12 +1,15 @@
-import { useState, useEffect } from "react";
+import { lazy, Suspense, useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { ShieldCheck, Home, List, Activity, Plug } from "lucide-react";
+// The default worker tab is lightweight and loads eagerly for an instant first
+// paint; the operator monitoring tabs (and the charting library on Overview)
+// load on demand the first time they're opened.
 import MyAccess from "@/pages/MyAccess";
-import Overview from "@/pages/Overview";
-import Decisions from "@/pages/Decisions";
-import Signals from "@/pages/Signals";
-import Integrations from "@/pages/Integrations";
+const Overview = lazy(() => import("@/pages/Overview"));
+const Decisions = lazy(() => import("@/pages/Decisions"));
+const Signals = lazy(() => import("@/pages/Signals"));
+const Integrations = lazy(() => import("@/pages/Integrations"));
 
 const queryClient = new QueryClient();
 
@@ -18,11 +21,13 @@ function MainLayout() {
   return (
     <div className="flex flex-col h-[100dvh] w-full bg-background text-foreground overflow-hidden">
       <div className="flex-1 overflow-hidden relative">
-        {activeTab === "access" && <MyAccess />}
-        {activeTab === "overview" && <Overview />}
-        {activeTab === "decisions" && <Decisions />}
-        {activeTab === "signals" && <Signals />}
-        {activeTab === "integrations" && <Integrations />}
+        <Suspense fallback={<div className="p-4 text-sm text-muted-foreground">Loading…</div>}>
+          {activeTab === "access" && <MyAccess />}
+          {activeTab === "overview" && <Overview />}
+          {activeTab === "decisions" && <Decisions />}
+          {activeTab === "signals" && <Signals />}
+          {activeTab === "integrations" && <Integrations />}
+        </Suspense>
       </div>
 
       <div className="h-14 shrink-0 bg-card border-t border-border flex items-center justify-around pb-safe">

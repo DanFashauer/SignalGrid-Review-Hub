@@ -75,7 +75,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 
 ## Review workflow
 
-- [Repository agent instructions](../AGENTS.md): defines Codex guardrails, public-safety rules, PR validation commands, and review guidelines.
+- [Repository agent instructions](../AGENTS.md): defines automation-agent guardrails, public-safety rules, PR validation commands, and review guidelines.
 - [SignalGrid Autopilot Control Plane](SIGNALGRID_AUTOPILOT_CONTROL_PLANE.md): defines the one-input-to-one-phase automation model, bot roles, risk lanes, evidence requirements, and owner boundaries.
 - [Autopilot Intake Bot](AUTOPILOT_INTAKE_BOT.md): classifies screenshots, links, findings, PR summaries, and market notes into backlog-ready categories.
 - [Phase PR Evidence Bot](PHASE_PR_EVIDENCE_BOT.md): documents compact PR evidence reports and artifact upload behavior.
@@ -86,12 +86,10 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Phase Backlog](PHASE_BACKLOG.md): tracks seeded and future scoped phases, classifications, risk lanes, dependencies, and validation.
 - [Intake Classification Guide](INTAKE_CLASSIFICATION_GUIDE.md): classifies new inputs into product, signal, connector, UI, proof, automation, platform, maintenance, blocked, or parking-lot categories.
 - [Green / Yellow / Red Merge Policy](GREEN_YELLOW_RED_MERGE_POLICY.md): defines green, yellow, and red merge lanes and approval expectations.
-- [Automation Phase Template](AUTOMATION_PHASE_TEMPLATE.md): provides the reusable Codex prompt for one scoped phase at a time.
+- [Automation Phase Template](AUTOMATION_PHASE_TEMPLATE.md): provides the reusable automation prompt for one scoped phase at a time.
 - [Manual full-product smoke screen](MANUAL_FULL_PRODUCT_SMOKE_SCREEN.md): outlines future manual Review Hub smoke-screen steps and pass/fail notes.
 - [Manual full-product smoke screen results](MANUAL_FULL_PRODUCT_SMOKE_SCREEN_RESULTS.md): records the current full-product smoke-screen pass, evidence, validation, and follow-up phases.
 - [Post-merge connector smoke evidence automation](POST_MERGE_CONNECTOR_SMOKE_EVIDENCE.md): explains the automatic Connector Emulator Smoke run and evidence manifest after merges to `SignalGrid_Alpha`.
-- [Mobile-first Codex workflow](MOBILE_CODEX_WORKFLOW.md): explains the iPhone-first Codex Web → PR → CI → review → GitHub Mobile merge loop.
-- [Codex task template](CODEX_TASK_TEMPLATE.md): provides a reusable prompt structure for focused Cloud Codex tasks.
 - [Validation commands](VALIDATION_COMMANDS.md): lists the standard install, typecheck, build, proof, unsafe-claim scan, and diff hygiene commands.
 - [CI and validation](CI_AND_VALIDATION.md): explains Review Hub CI, required local checks, docs sanity checks, and future branch-protection expectations.
 - [Review checklist](REVIEW_CHECKLIST.md): questions for reviewers, design partners, and advisors.

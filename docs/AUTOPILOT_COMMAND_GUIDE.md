@@ -1,6 +1,6 @@
 # Autopilot Command Guide
 
-Use short commands to drive future GitHub/Codex automation.
+Use short commands to drive future GitHub/CI automation.
 
 - `@GitHub PR #__` means inspect the PR, CI, comments, and phase report.
 - `@GitHub run <url>` means inspect workflow evidence and artifacts.
@@ -9,4 +9,4 @@ Use short commands to drive future GitHub/Codex automation.
 - `Prepare pitch pack` means update buyer/partner materials from validated state only.
 - `Smoke test` means run or review available smoke automation.
 
-Full Codex summaries should not be required unless GitHub state is unavailable.
+Full automation summaries should not be required unless GitHub state is unavailable.

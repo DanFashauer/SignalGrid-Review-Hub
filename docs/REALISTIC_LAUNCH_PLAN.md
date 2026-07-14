@@ -88,7 +88,7 @@ securely tenant-scoped.
 ### Current active engineering state
 
 PR #35 is merged. PR #36 remains open as the Autopilot Evidence Bot. Its workflows
-are green, but two Codex P2 findings remain around committed-diff checking and
+are green, but two automated-review P2 findings remain around committed-diff checking and
 unsafe-claim suppression.
 
 The `signalgrid-complete.zip` package is a meaningful next step. It contains:
@@ -457,7 +457,7 @@ actually exist and operate.
 
 ### Demo environment
 
-Use Replit or a similar managed runtime for the public alpha demo if that gives the
+Use a managed runtime for the public alpha demo if that gives the
 fastest live URL. The demo should: use synthetic data; not contain customer
 credentials; not be marketed as production; be clearly bannered "public-safe
 alpha / demo"; and have no sensitive admin functions.
@@ -676,7 +676,7 @@ Build this while the pilot is underway.
 1. Fix and merge PR #36.
 2. Integrate `signalgrid-complete.zip`.
 3. Add the in-memory store and test suite.
-4. Run `bash scripts/bootstrap.sh` in Codex / Replit.
+4. Run `bash scripts/bootstrap.sh` in your local environment.
 5. Boot API and web.
 6. Verify all listed endpoints.
 7. Deploy a live public-safe demo.

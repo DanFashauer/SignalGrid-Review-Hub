@@ -173,20 +173,6 @@
     },
     {
       "type": "library",
-      "name": "@drizzle-team/brocli",
-      "version": "0.10.2",
-      "bom-ref": "pkg:npm/%40drizzle-team/brocli@0.10.2",
-      "purl": "pkg:npm/%40drizzle-team/brocli@0.10.2"
-    },
-    {
-      "type": "library",
-      "name": "@esbuild-kit/esm-loader",
-      "version": "4.21.0",
-      "bom-ref": "pkg:npm/%40esbuild-kit/esm-loader@4.21.0",
-      "purl": "pkg:npm/%40esbuild-kit/esm-loader@4.21.0"
-    },
-    {
-      "type": "library",
       "name": "@esbuild/linux-x64",
       "version": "0.27.3",
       "bom-ref": "pkg:npm/%40esbuild/linux-x64@0.27.3",
@@ -803,27 +789,6 @@
     },
     {
       "type": "library",
-      "name": "@replit/vite-plugin-cartographer",
-      "version": "0.5.5",
-      "bom-ref": "pkg:npm/%40replit/vite-plugin-cartographer@0.5.5",
-      "purl": "pkg:npm/%40replit/vite-plugin-cartographer@0.5.5"
-    },
-    {
-      "type": "library",
-      "name": "@replit/vite-plugin-dev-banner",
-      "version": "0.1.2",
-      "bom-ref": "pkg:npm/%40replit/vite-plugin-dev-banner@0.1.2",
-      "purl": "pkg:npm/%40replit/vite-plugin-dev-banner@0.1.2"
-    },
-    {
-      "type": "library",
-      "name": "@replit/vite-plugin-runtime-error-modal",
-      "version": "0.0.6",
-      "bom-ref": "pkg:npm/%40replit/vite-plugin-runtime-error-modal@0.0.6",
-      "purl": "pkg:npm/%40replit/vite-plugin-runtime-error-modal@0.0.6"
-    },
-    {
-      "type": "library",
       "name": "@rolldown/pluginutils",
       "version": "1.0.0-rc.3",
       "bom-ref": "pkg:npm/%40rolldown/pluginutils@1.0.0-rc.3",
@@ -1083,13 +1048,6 @@
     },
     {
       "type": "library",
-      "name": "@types/cookie-parser",
-      "version": "1.4.10",
-      "bom-ref": "pkg:npm/%40types/cookie-parser@1.4.10",
-      "purl": "pkg:npm/%40types/cookie-parser@1.4.10"
-    },
-    {
-      "type": "library",
       "name": "@types/cors",
       "version": "2.8.19",
       "bom-ref": "pkg:npm/%40types/cors@2.8.19",
@@ -1199,13 +1157,6 @@
       "version": "25.6.2",
       "bom-ref": "pkg:npm/%40types/node@25.6.2",
       "purl": "pkg:npm/%40types/node@25.6.2"
-    },
-    {
-      "type": "library",
-      "name": "@types/pg",
-      "version": "8.20.0",
-      "bom-ref": "pkg:npm/%40types/pg@8.20.0",
-      "purl": "pkg:npm/%40types/pg@8.20.0"
     },
     {
       "type": "library",
@@ -1482,20 +1433,6 @@
     },
     {
       "type": "library",
-      "name": "cookie-parser",
-      "version": "1.4.7",
-      "bom-ref": "pkg:npm/cookie-parser@1.4.7",
-      "purl": "pkg:npm/cookie-parser@1.4.7"
-    },
-    {
-      "type": "library",
-      "name": "cookie-signature",
-      "version": "1.0.6",
-      "bom-ref": "pkg:npm/cookie-signature@1.0.6",
-      "purl": "pkg:npm/cookie-signature@1.0.6"
-    },
-    {
-      "type": "library",
       "name": "cookie-signature",
       "version": "1.2.2",
       "bom-ref": "pkg:npm/cookie-signature@1.2.2",
@@ -1682,27 +1619,6 @@
       "version": "5.2.1",
       "bom-ref": "pkg:npm/dom-helpers@5.2.1",
       "purl": "pkg:npm/dom-helpers@5.2.1"
-    },
-    {
-      "type": "library",
-      "name": "drizzle-kit",
-      "version": "0.31.10",
-      "bom-ref": "pkg:npm/drizzle-kit@0.31.10",
-      "purl": "pkg:npm/drizzle-kit@0.31.10"
-    },
-    {
-      "type": "library",
-      "name": "drizzle-orm",
-      "version": "0.45.2",
-      "bom-ref": "pkg:npm/drizzle-orm@0.45.2",
-      "purl": "pkg:npm/drizzle-orm@0.45.2"
-    },
-    {
-      "type": "library",
-      "name": "drizzle-zod",
-      "version": "0.8.3",
-      "bom-ref": "pkg:npm/drizzle-zod@0.8.3",
-      "purl": "pkg:npm/drizzle-zod@0.8.3"
     },
     {
       "type": "library",
@@ -2455,13 +2371,6 @@
     },
     {
       "type": "library",
-      "name": "modern-screenshot",
-      "version": "4.7.0",
-      "bom-ref": "pkg:npm/modern-screenshot@4.7.0",
-      "purl": "pkg:npm/modern-screenshot@4.7.0"
-    },
-    {
-      "type": "library",
       "name": "motion-dom",
       "version": "12.38.0",
       "bom-ref": "pkg:npm/motion-dom@12.38.0",
@@ -2616,62 +2525,6 @@
     },
     {
       "type": "library",
-      "name": "pg-cloudflare",
-      "version": "1.3.0",
-      "bom-ref": "pkg:npm/pg-cloudflare@1.3.0",
-      "purl": "pkg:npm/pg-cloudflare@1.3.0"
-    },
-    {
-      "type": "library",
-      "name": "pg-connection-string",
-      "version": "2.12.0",
-      "bom-ref": "pkg:npm/pg-connection-string@2.12.0",
-      "purl": "pkg:npm/pg-connection-string@2.12.0"
-    },
-    {
-      "type": "library",
-      "name": "pg-int8",
-      "version": "1.0.1",
-      "bom-ref": "pkg:npm/pg-int8@1.0.1",
-      "purl": "pkg:npm/pg-int8@1.0.1"
-    },
-    {
-      "type": "library",
-      "name": "pg-pool",
-      "version": "3.13.0",
-      "bom-ref": "pkg:npm/pg-pool@3.13.0",
-      "purl": "pkg:npm/pg-pool@3.13.0"
-    },
-    {
-      "type": "library",
-      "name": "pg-protocol",
-      "version": "1.13.0",
-      "bom-ref": "pkg:npm/pg-protocol@1.13.0",
-      "purl": "pkg:npm/pg-protocol@1.13.0"
-    },
-    {
-      "type": "library",
-      "name": "pg-types",
-      "version": "2.2.0",
-      "bom-ref": "pkg:npm/pg-types@2.2.0",
-      "purl": "pkg:npm/pg-types@2.2.0"
-    },
-    {
-      "type": "library",
-      "name": "pg",
-      "version": "8.20.0",
-      "bom-ref": "pkg:npm/pg@8.20.0",
-      "purl": "pkg:npm/pg@8.20.0"
-    },
-    {
-      "type": "library",
-      "name": "pgpass",
-      "version": "1.0.5",
-      "bom-ref": "pkg:npm/pgpass@1.0.5",
-      "purl": "pkg:npm/pgpass@1.0.5"
-    },
-    {
-      "type": "library",
       "name": "picocolors",
       "version": "1.1.1",
       "bom-ref": "pkg:npm/picocolors@1.1.1",
@@ -2746,34 +2599,6 @@
       "version": "8.5.14",
       "bom-ref": "pkg:npm/postcss@8.5.14",
       "purl": "pkg:npm/postcss@8.5.14"
-    },
-    {
-      "type": "library",
-      "name": "postgres-array",
-      "version": "2.0.0",
-      "bom-ref": "pkg:npm/postgres-array@2.0.0",
-      "purl": "pkg:npm/postgres-array@2.0.0"
-    },
-    {
-      "type": "library",
-      "name": "postgres-bytea",
-      "version": "1.0.1",
-      "bom-ref": "pkg:npm/postgres-bytea@1.0.1",
-      "purl": "pkg:npm/postgres-bytea@1.0.1"
-    },
-    {
-      "type": "library",
-      "name": "postgres-date",
-      "version": "1.0.7",
-      "bom-ref": "pkg:npm/postgres-date@1.0.7",
-      "purl": "pkg:npm/postgres-date@1.0.7"
-    },
-    {
-      "type": "library",
-      "name": "postgres-interval",
-      "version": "1.2.0",
-      "bom-ref": "pkg:npm/postgres-interval@1.2.0",
-      "purl": "pkg:npm/postgres-interval@1.2.0"
     },
     {
       "type": "library",
@@ -3474,13 +3299,6 @@
       "version": "1.0.2",
       "bom-ref": "pkg:npm/wrappy@1.0.2",
       "purl": "pkg:npm/wrappy@1.0.2"
-    },
-    {
-      "type": "library",
-      "name": "xtend",
-      "version": "4.0.2",
-      "bom-ref": "pkg:npm/xtend@4.0.2",
-      "purl": "pkg:npm/xtend@4.0.2"
     },
     {
       "type": "library",

@@ -31,7 +31,7 @@ The proof verifies that:
 
 ## Mobile-first GitHub Actions usage
 
-No local PC or Replit instance is required:
+No local PC or hosted-runtime instance is required:
 
 1. Open GitHub Mobile or GitHub web.
 2. Go to **Actions**.
@@ -40,7 +40,7 @@ No local PC or Replit instance is required:
 5. Review the workflow result.
 6. Download the `connector-emulator-results` artifact as sanitized evidence.
 
-The Review Hub UI includes a static Connector Emulator section that visualizes the same deterministic scenarios, decisions, routes, guardrails, and proof evidence. Replit is not required for validation.
+The Review Hub UI includes a static Connector Emulator section that visualizes the same deterministic scenarios, decisions, routes, guardrails, and proof evidence. No hosted runtime is required for validation.
 
 ## Public-safety boundaries
 

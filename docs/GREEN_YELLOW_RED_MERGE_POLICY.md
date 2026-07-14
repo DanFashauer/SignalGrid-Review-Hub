@@ -12,7 +12,7 @@ A PR can be green only when all of these are true:
 - No proof logic changes.
 - No runtime behavior changes.
 - All CI is green.
-- No Codex P1/P2 comments remain unresolved.
+- No automated-review P1/P2 comments remain unresolved.
 - Unsafe-claim scan is clean. Any protected-wording match demotes the lane out of GREEN for manual review, even when the match appears to be disclaimer or guardrail wording.
 
 ## YELLOW

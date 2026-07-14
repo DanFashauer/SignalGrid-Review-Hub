@@ -50,7 +50,7 @@ The current Review Hub remains:
 - independent of MDM, ADE, and ABM dependencies; and
 - not a production device-management capability.
 
-The repository's current proof path is the no-license/no-PC/no-Replit synthetic connector validation loop and visual review surface. Apple strategy work should inform future design without bypassing deterministic fixtures, documented proofs, or public-safety boundaries.
+The repository's current proof path is the no-license/no-PC/no-external-runtime synthetic connector validation loop and visual review surface. Apple strategy work should inform future design without bypassing deterministic fixtures, documented proofs, or public-safety boundaries.
 
 ## 6. Relationship to SignalGrid and EnterpriseShell
 

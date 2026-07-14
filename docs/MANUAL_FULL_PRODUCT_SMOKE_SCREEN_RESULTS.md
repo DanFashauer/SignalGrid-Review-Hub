@@ -7,7 +7,7 @@ This document records the Manual Full Product Smoke Screen phase run after the P
 | Field | Value |
 | --- | --- |
 | Phase | PHASE-007: Manual full-product smoke screen |
-| Branch | Current evidence branch `SignalGrid_Alpha`; local documentation update prepared on the current Codex branch |
+| Branch | Current evidence branch `SignalGrid_Alpha`; local documentation update prepared on the current automation branch |
 | Base context | PR #29 merged the SignalGrid Autopilot Control Plane; current post-merge Connector Emulator Smoke evidence was produced on branch `SignalGrid_Alpha` at head SHA `dd30fbedc4c0de7dc9973ba6ecf7339e2be03fb6` |
 | Risk lane | GREEN |
 | Scope | Documentation and results only |

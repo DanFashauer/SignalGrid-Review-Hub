@@ -1,6 +1,6 @@
 # Intake Classification Guide
 
-Use this guide when a new screenshot, link, finding, Codex summary, GitHub validation result, or vendor observation arrives.
+Use this guide when a new screenshot, link, finding, automation summary, GitHub validation result, or vendor observation arrives.
 
 ## Classes
 
@@ -12,7 +12,7 @@ Use this guide when a new screenshot, link, finding, Codex summary, GitHub valid
 | Connector candidate           | A possible future integration that should start as read-only and fixture-backed                      | YELLOW       |
 | UI/dashboard improvement      | Review Hub visual, dashboard, screenshot, or QA experience change                                    | YELLOW       |
 | Proof/scenario expansion      | New deterministic proof cases, fixtures, scenario packs, or expected outcomes                        | YELLOW       |
-| Workflow automation           | Codex loop, phase gate, validation script, PR template, or GitHub Actions process                    | YELLOW       |
+| Workflow automation           | automation loop, phase gate, validation script, PR template, or GitHub Actions process                    | YELLOW       |
 | Platform strategy             | Apple, Microsoft, local runner, device platform, or runtime strategy documentation                   | GREEN        |
 | Maintenance                   | Dependency, Node runtime, build warning, lint, or CI cleanup                                         | YELLOW       |
 | Blocked/live-integration item | Live API calls, auth, secrets, tenant/customer data, PHI/PII, writes, device actions, or remediation | RED          |

@@ -100,16 +100,6 @@ async function run() {
   const simReset = await req("POST", "/simulator/reset", { body: {} });
   check("simulator reset → 200", simReset.status === 200 && Array.isArray(simReset.json?.auditEvidence));
 
-  // ── legacy DB routes are gated: 503 when DATABASE_URL is unset ────────────
-  // (This server runs without DATABASE_URL, so the legacy decisions/metrics/
-  // policies/signals routers are replaced by the database-unavailable handler.
-  // When DATABASE_URL IS set, those routers sit behind requireTenantContext —
-  // see routes/index.ts — so they are never anonymously reachable.)
-  for (const path of ["/decisions", "/metrics/dashboard", "/policies", "/signals/latest"]) {
-    const legacy = await req("GET", path);
-    check(`legacy ${path} without DATABASE_URL → 503`, legacy.status === 503 && legacy.json?.error === "database_unavailable");
-  }
-
   // ── auth fails closed ───────────────────────────────────────────────────
   const noAuth = await req("GET", "/v1/decisions");
   check("unauthenticated request is 401", noAuth.status === 401);

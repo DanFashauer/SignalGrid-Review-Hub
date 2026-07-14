@@ -6,7 +6,7 @@ Use this prompt for future scoped SignalGrid Review Hub phases.
 Project: SignalGrid / SignalGrid-Review-Hub
 
 New input:
-<paste screenshot summary, link, finding, Codex output, GitHub validation result, or vendor observation>
+<paste screenshot summary, link, finding, automation output, GitHub validation result, or vendor observation>
 
 Task:
 1. Classify the input using docs/INTAKE_CLASSIFICATION_GUIDE.md.

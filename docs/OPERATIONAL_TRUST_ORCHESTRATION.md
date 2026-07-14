@@ -129,7 +129,7 @@ Review Hub already contains public-safe milestones that support the category sto
 - the deterministic grid proof harness for evaluating trust-grid behavior;
 - the Microsoft Graph / Intune fixture-backed signal model for read-only identity and posture signal modeling;
 - the hardware custody signal model for case, battery, dock, bay, checkout, return, and custody signal modeling;
-- the mobile-first Codex workflow for controlled Review Hub iteration, CI validation, and owner-reviewed merge decisions.
+- the mobile-first automation workflow for controlled Review Hub iteration, CI validation, and owner-reviewed merge decisions.
 
 These are proof and documentation foundations, not production claims.
 

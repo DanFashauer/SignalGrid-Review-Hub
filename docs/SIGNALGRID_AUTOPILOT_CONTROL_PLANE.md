@@ -22,7 +22,7 @@ Autopilot keeps one implementation phase per PR. It may park several inputs, but
 
 ## User handoff format
 
-Use short handoffs instead of long Codex summaries:
+Use short handoffs instead of long automation summaries:
 
 - `@GitHub PR #__`
 - `@GitHub run <workflow URL>`

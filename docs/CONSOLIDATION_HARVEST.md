@@ -32,6 +32,22 @@ preserved via subtree merge at cutover.
 - Port the security-reference specs onto the api-server + wire semgrep/k6 into CI.
 - Complete the WebAuthn signature verification.
 - Wire additional integration adapters into the core connector layer (FleetDM bridge is the first).
-- Adopt DEV's brand system + build the company landing/home page.
-- Stand up `dev → alpha → beta → prod` promotion branches + per-tier environments.
-- Triage + migrate open issues; cutover (push to SignalGrid, protect `prod`, archive old repos).
+- ~~Adopt DEV's brand system + build the company landing/home page.~~ **Done** — brand system applied across web + all four product apps; About page added.
+
+## Cutover (Phase 6)
+
+The move to the `DanFashauer/SignalGrid` home repo — standing up the
+`dev → alpha → beta → prod` branches + per-tier environments, preserving all three
+repos' git history, triaging/migrating open issues, and archiving the sources — is
+a **user-run** procedure (it mutates repos and org settings the sandbox cannot
+touch). The full step-by-step is in **[`PHASE6_CUTOVER_RUNBOOK.md`](./PHASE6_CUTOVER_RUNBOOK.md)**,
+with idempotent, `DRY_RUN`-able companion scripts under
+[`scripts/cutover/`](../scripts/cutover/):
+
+| Script | Step |
+| ------ | ---- |
+| `00-triage-issues.sh` | Snapshot + migration checklist for open issues |
+| `01-build-consolidated-history.sh` | `dev` tree = consolidation, ancestry = all 3 repos (`-s ours`) |
+| `02-create-tiers.sh` | Create/push `dev/alpha/beta/prod`; set default |
+| `03-protect-and-environments.sh` | Branch protection + per-tier environments + gate variable |
+| `04-archive-sources.sh` | Archive Review-Hub + DEV (after the §8 checklist) |

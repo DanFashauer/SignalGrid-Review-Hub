@@ -12,9 +12,9 @@ const STEPS = [
     icon: Radio,
     title: "A signal fires",
     body: "The moment a workflow starts, the evidence arrives — identity, device posture, physical custody, and security baseline.",
-    accent: "text-blue-400",
-    ring: "ring-blue-400/30",
-    glow: "bg-blue-400/10",
+    accent: "text-teal-400",
+    ring: "ring-teal-400/30",
+    glow: "bg-teal-400/10",
   },
   {
     tag: "GRID",
@@ -39,7 +39,6 @@ const STEPS = [
 export default function FlowSection() {
   return (
     <section className="relative overflow-hidden border-b border-border/50 bg-background py-24" id="flow">
-      <div className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[400px] w-[700px] -translate-x-1/2 rounded-full bg-primary/10 opacity-40 blur-[120px]" />
 
       <div className="container mx-auto max-w-screen-xl px-4 md:px-8">
         <div className="mx-auto mb-16 max-w-3xl text-center">
@@ -49,7 +48,7 @@ export default function FlowSection() {
           <h2 className="text-balance text-3xl font-bold leading-tight tracking-tight md:text-5xl">
             A signal fires. The grid decides.
             <br className="hidden sm:block" />{" "}
-            <span className="bg-gradient-to-r from-blue-400 via-primary to-emerald-400 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-teal-400 via-primary to-emerald-400 bg-clip-text text-transparent">
               You choose what happens next.
             </span>
           </h2>
@@ -62,7 +61,7 @@ export default function FlowSection() {
         {/* Flow */}
         <div className="relative grid grid-cols-1 gap-6 md:grid-cols-3 md:gap-4">
           {/* Connecting line (desktop) */}
-          <div className="pointer-events-none absolute left-0 right-0 top-[3.25rem] hidden h-px bg-gradient-to-r from-blue-400/40 via-primary/40 to-emerald-400/40 md:block" />
+          <div className="pointer-events-none absolute left-0 right-0 top-[3.25rem] hidden h-px bg-gradient-to-r from-teal-400/40 via-primary/40 to-emerald-400/40 md:block" />
 
           {STEPS.map((step, i) => (
             <motion.div
@@ -80,7 +79,7 @@ export default function FlowSection() {
                 </div>
               </div>
 
-              <div className={`mb-2 font-mono text-xs tracking-widest ${step.accent}`}>
+              <div className={`mb-2 font-mono text-xs tracking-wide ${step.accent}`}>
                 {String(i + 1).padStart(2, "0")} · {step.tag}
               </div>
               <h3 className="mb-3 text-xl font-semibold text-foreground">{step.title}</h3>

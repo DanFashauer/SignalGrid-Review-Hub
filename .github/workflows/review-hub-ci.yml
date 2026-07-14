@@ -1,9 +1,13 @@
-name: Review Hub CI
+name: SignalGrid CI
 
 on:
   pull_request:
   push:
     branches:
+      - dev
+      - alpha
+      - beta
+      - prod
       - SignalGrid_Alpha
   workflow_dispatch:
 

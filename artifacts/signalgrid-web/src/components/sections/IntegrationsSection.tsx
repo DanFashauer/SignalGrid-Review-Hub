@@ -57,7 +57,7 @@ export default function IntegrationsSection() {
               className="p-6 rounded-xl border border-border/50 bg-card/50"
             >
               <div className="flex items-center justify-between gap-4 mb-4">
-                <h3 className="text-sm font-mono font-bold uppercase tracking-widest text-muted-foreground">
+                <h3 className="text-sm font-mono font-bold uppercase tracking-wide text-muted-foreground">
                   {group.label}
                 </h3>
                 <span className="text-xs font-mono px-2 py-0.5 rounded border border-primary/20 bg-primary/5 text-primary shrink-0">

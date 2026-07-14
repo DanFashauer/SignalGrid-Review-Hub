@@ -58,7 +58,7 @@ export default function Decisions() {
           </div>
         ) : (
           <div className="divide-y divide-border/50 pb-safe">
-            {data?.decisions.map(d => (
+            {(data?.decisions ?? []).map(d => (
               <button 
                 key={d.id} 
                 onClick={() => setSelectedId(d.id)}

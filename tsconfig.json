@@ -3,6 +3,11 @@
   "compileOnSave": false,
   "files": [],
   "references": [
+    { "path": "./lib/integration-bridge" },
+    { "path": "./lib/location" },
+    { "path": "./lib/webauthn" },
+    { "path": "./lib/audit" },
+    { "path": "./lib/integrations" },
     {
       "path": "./lib/api-client-react"
     },

@@ -48,7 +48,7 @@ export function PolicyList() {
                 <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">No policies configured.</TableCell>
               </TableRow>
             ) : (
-              policiesData?.policies.map(policy => (
+              (policiesData?.policies ?? []).map(policy => (
                 <TableRow key={policy.id} className="border-border hover:bg-muted/50">
                   <TableCell>
                     <Link href={`/policies/${policy.id}`} className="font-semibold text-primary hover:underline">

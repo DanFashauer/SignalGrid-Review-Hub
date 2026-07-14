@@ -88,7 +88,7 @@ export function DecisionList() {
                 <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">No decisions found.</TableCell>
               </TableRow>
             ) : (
-              decisionsData?.decisions.map(d => (
+              (decisionsData?.decisions ?? []).map(d => (
                 <TableRow 
                   key={d.id} 
                   className="cursor-pointer hover:bg-muted/50 border-border"

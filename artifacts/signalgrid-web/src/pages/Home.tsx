@@ -1,11 +1,8 @@
 import HeroSection from "@/components/sections/HeroSection";
 import FlowSection from "@/components/sections/FlowSection";
-import ProblemSection from "@/components/sections/ProblemSection";
 import SignalTypesSection from "@/components/sections/SignalTypesSection";
 import OutcomesSection from "@/components/sections/OutcomesSection";
-import DifferentiatorsSection from "@/components/sections/DifferentiatorsSection";
 import IntegrationsSection from "@/components/sections/IntegrationsSection";
-import ComplianceSection from "@/components/sections/ComplianceSection";
 import VerticalsSection from "@/components/sections/VerticalsSection";
 import DeploymentSection from "@/components/sections/DeploymentSection";
 import Navbar from "@/components/layout/Navbar";
@@ -18,12 +15,9 @@ export default function Home() {
       <main className="flex-1">
         <HeroSection />
         <FlowSection />
-        <ProblemSection />
         <SignalTypesSection />
         <OutcomesSection />
-        <DifferentiatorsSection />
         <IntegrationsSection />
-        <ComplianceSection />
         <VerticalsSection />
         <DeploymentSection />
       </main>

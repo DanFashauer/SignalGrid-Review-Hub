@@ -1,0 +1,174 @@
+# SwiftLint Configuration for EnterpriseShell iOS App
+# https://github.com/realm/SwiftLint
+
+# Enable strict mode
+strict: true
+
+# Excluded paths
+excluded:
+  - .build
+  - Pods
+  - DerivedData
+  - "**/*.xcodeproj"
+
+# Disabled rules (need review before enabling)
+disabled_rules:
+  - trailing_whitespace
+  - file_length
+  - function_body_length
+  - type_body_length
+  - identifier_name
+  - type_name
+
+# Opt-in rules
+opt_in_rules:
+  - empty_count
+  - empty_string
+  - closure_spacing
+  - contains_over_first_not_nil
+  - fatal_error_message
+  - first_where
+  - multiline_parameters
+  - redundant_nil_coalescing
+  - sorted_first_last
+  - unneeded_parentheses_in_closure_argument
+
+# Custom rules for security
+custom_rules:
+  # Detect hardcoded credentials
+  hardcoded_credentials:
+    name: "Hardcoded Credentials"
+    regex: "(password|apiKey|clientSecret|secretKey)\\s*[:=]\\s*[\"']"
+    message: "Found potential hardcoded credential. Use secure storage (Keychain) instead."
+    severity: error
+
+  # Detect print statements (should use AuditLogger)
+  print_statement:
+    name: "Print Statement"
+    regex: "print\\("
+    message: "Use AuditLogger instead of print() for logging"
+    severity: warning
+
+  # Detect force unwraps
+  force_unwrap:
+    name: "Force Unwrap"
+    regex: "!\\s*(as|is)"
+    message: "Avoid force unwrapping. Use safe casting instead."
+    severity: warning
+
+  # Detect http:// URLs (should be https)
+  insecure_url:
+    name: "Insecure URL"
+    regex: "http://(?!localhost)"
+    message: "Use HTTPS instead of HTTP for security"
+    severity: error
+
+  # Detect TODO without severity
+  todo_without_severity:
+    name: "TODO without severity"
+    regex: "(TODO|FIXME):(?!\\s+(HIGH|MEDIUM|LOW))"
+    message: "TODO/FIXME should include severity level (HIGH/MEDIUM/LOW)"
+    severity: warning
+
+  # Detect unused @objc
+  unnecessary_objc:
+    name: "Unnecessary @objc"
+    regex: "@objc\\s+(private|fileprivate)\\s+(func|var)"
+    message: "@objc is unnecessary for private/fileprivate members in Swift 4+"
+    severity: warning
+
+  # Detect weak delegates (memory leak risk)
+  weak_delegate:
+    name: "Weak Delegate"
+    regex: "(var|let)\\s+\\w+Delegate\\s*:\\s*(?!\\w+\\s*\\?\\s*:)"
+    message: "Delegate should be declared as weak to avoid retain cycles"
+    severity: warning
+
+  # Detect missing device encryption check
+  device_encryption:
+    name: "Device Encryption Check"
+    regex: "isDataProtectionEnabled"
+    message: "Ensure data protection is enabled for sensitive data"
+    severity: info
+
+# Line length
+line_length:
+  warning: 120
+  error: 200
+  ignores_comments: true
+
+# Type alias
+typealias:
+  minLength: 3
+  maxLength: "50"
+
+# Variable name
+variable_name:
+  min_length:
+    warning: 1
+    error: 2
+  max_length:
+    warning: 40
+    error: 60
+
+# File metrics
+file_length:
+  warning: 500
+  error: 1000
+
+# Function metrics
+function_body_length:
+  warning: 50
+  error: 100
+
+# Type metrics
+type_body_length:
+  warning: 300
+  error: 500
+
+# Cyclomatic complexity
+cyclomatic_complexity:
+  warning: 10
+  error: 20
+
+# Nesting
+nesting:
+  type_level:
+    warning: 2
+  statement_level:
+    warning: 5
+
+# Reign
+reign:
+  unused: error
+  bundled: error
+
+# Attributes
+attributes:
+  - always_on_same_line:
+      - "@IBAction"
+      - "@IBOutlet"
+      - "@objc"
+  - always_on_new_line:
+      - "@discardableResult"
+
+# Modifier order
+modifier_order:
+  preferred_modifier_order:
+    - override
+    - private
+    - fileprivate
+    - internal
+    - public
+    - open
+    - static
+    - class
+    - final
+    - lazy
+    - weak
+    - unowned
+    - mutating
+    - nonmutating
+    - convenience
+    - required
+    - optional

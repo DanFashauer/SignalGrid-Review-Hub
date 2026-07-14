@@ -108,7 +108,7 @@ export default function Downloads() {
 
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-4">
-                        <div className="text-xs font-mono text-muted-foreground uppercase tracking-widest">Downloads</div>
+                        <div className="text-xs font-mono text-muted-foreground uppercase tracking-wide">Downloads</div>
                         <span className="text-xs font-mono text-muted-foreground">{platform.version}</span>
                       </div>
                       <div className="space-y-2">

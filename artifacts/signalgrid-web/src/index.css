@@ -67,35 +67,43 @@
 }
 
 :root {
-  --background: 222.2 84% 4.9%;
-  --foreground: 210 40% 98%;
-  --card: 222.2 84% 4.9%;
-  --card-foreground: 210 40% 98%;
-  --popover: 222.2 84% 4.9%;
-  --popover-foreground: 210 40% 98%;
-  --primary: 217.2 91.2% 59.8%;
-  --primary-foreground: 222.2 47.4% 11.2%;
-  --secondary: 217.2 32.6% 17.5%;
-  --secondary-foreground: 210 40% 98%;
-  --muted: 217.2 32.6% 17.5%;
-  --muted-foreground: 215 20.2% 65.1%;
-  --accent: 217.2 32.6% 17.5%;
-  --accent-foreground: 210 40% 98%;
-  --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 217.2 32.6% 17.5%;
-  --input: 217.2 32.6% 17.5%;
-  --ring: 224.3 76.3% 48%;
-  --radius: 0.25rem;
-  
-  --chart-1: 220 70% 50%;
-  --chart-2: 160 60% 45%;
-  --chart-3: 30 80% 55%;
-  --chart-4: 280 65% 60%;
-  --chart-5: 340 75% 55%;
+  /* SignalGrid brand system — warm charcoal foundations, off-white type, muted
+     teal accents. Risk colors are reserved for decision-state communication
+     only, never broad brand accents. No electric blues / cyber cyan / neon. */
+  --background: 210 13% 9%;        /* Warm Charcoal 950  #15181B */
+  --foreground: 43 26% 94%;        /* Off-White 100      #F3F1EC */
+  --card: 207 14% 13%;             /* Warm Charcoal 900  #1D2226 */
+  --card-foreground: 43 26% 94%;
+  --popover: 207 14% 13%;
+  --popover-foreground: 43 26% 94%;
+  --primary: 175 28% 43%;          /* Muted Teal 500     #4F8C87 */
+  --primary-foreground: 43 26% 94%;
+  --secondary: 207 14% 13%;
+  --secondary-foreground: 43 26% 94%;
+  --muted: 205 13% 19%;            /* Border Neutral     #2A3136 */
+  --muted-foreground: 40 14% 80%;  /* Off-White 300      #D8D4CC */
+  --accent: 175 22% 55%;           /* Muted Teal 400     #6FA7A1 */
+  --accent-foreground: 210 13% 9%;
+  --destructive: 0 28% 49%;        /* Decision Deny      #A15B5B */
+  --destructive-foreground: 43 26% 94%;
+  --border: 205 13% 19%;           /* Border Neutral     #2A3136 */
+  --input: 205 13% 19%;
+  --ring: 175 28% 43%;
+  --radius: 0.375rem;
+
+  /* Decision states — use ONLY for allow/step-up/deny communication. */
+  --decision-allow: 145 21% 47%;   /* #5E8F73 */
+  --decision-review: 32 35% 51%;   /* #B08B57 */
+  --decision-deny: 0 28% 49%;      /* #A15B5B */
+
+  --chart-1: 175 28% 43%;          /* teal      */
+  --chart-2: 145 21% 47%;          /* allow     */
+  --chart-3: 32 35% 51%;           /* review    */
+  --chart-4: 0 28% 49%;            /* deny      */
+  --chart-5: 175 22% 55%;          /* teal soft */
 
   --app-font-sans: "Inter", sans-serif;
-  --app-font-mono: "JetBrains Mono", monospace;
+  --app-font-mono: "IBM Plex Mono", monospace;
 }
 
 @layer base {

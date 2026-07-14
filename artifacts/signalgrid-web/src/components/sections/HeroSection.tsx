@@ -4,20 +4,17 @@ import { motion } from "framer-motion";
 // named live vendor integrations).
 const LIVE_SIGNALS = [
   { label: "BADGE", value: "INSERTED", color: "text-orange-400" },
-  { label: "IDENTITY", value: "ENABLED", color: "text-blue-400" },
+  { label: "IDENTITY", value: "ENABLED", color: "text-teal-400" },
   { label: "DEVICE POSTURE", value: "COMPLIANT", color: "text-green-400" },
-  { label: "LOCATION", value: "ZONE 3B / ICU", color: "text-cyan-400" },
+  { label: "LOCATION", value: "ZONE 3B / ICU", color: "text-teal-400" },
   { label: "SHIFT", value: "07:00–19:00 MATCHED", color: "text-purple-400" },
   { label: "SECURITY BASELINE", value: "CIS ALIGNED", color: "text-green-400" },
-  { label: "CUSTODY (DOCKBRIDGE)", value: "CHECKED OUT", color: "text-cyan-400" },
+  { label: "CUSTODY (DOCKBRIDGE)", value: "CHECKED OUT", color: "text-teal-400" },
 ];
 
 export default function HeroSection() {
   return (
-    <section className="relative overflow-hidden bg-background pt-24 pb-32 md:pt-32 md:pb-40 border-b border-border/50">
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
-      <div className="absolute left-0 right-0 top-0 -z-10 m-auto h-[310px] w-[310px] rounded-full bg-primary/20 opacity-20 blur-[100px]"></div>
-
+    <section className="relative bg-background pt-28 pb-32 md:pt-36 md:pb-40 border-b border-border/50">
       <div className="container relative z-10 mx-auto px-4 md:px-8 max-w-screen-xl">
         <div className="grid grid-cols-1 gap-12 lg:grid-cols-2 lg:gap-8 items-center">
           <motion.div
@@ -33,7 +30,7 @@ export default function HeroSection() {
 
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground mb-6 leading-tight text-balance">
               Every access signal,<br className="hidden md:block" />
-              <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">turned into one clear call.</span>
+              <span className="text-primary">turned into one clear call.</span>
             </h1>
 
             <p className="text-lg text-muted-foreground mb-8 max-w-[600px] leading-relaxed text-pretty">

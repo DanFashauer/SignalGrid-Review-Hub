@@ -1,0 +1,931 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "SignalGrid Device Policy & Security API",
+    "description": "Enterprise device security, compliance, and policy enforcement platform. Integrates with MDM, NAC, ITSM, and SIEM systems.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "API Support",
+      "email": "support@signalgrid.local"
+    },
+    "license": {
+      "name": "Proprietary"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.signalgrid.local",
+      "description": "Production API",
+      "variables": {}
+    },
+    {
+      "url": "http://localhost:3000",
+      "description": "Development server"
+    }
+  ],
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "summary": "Health check endpoint",
+        "description": "Check API availability and dependencies",
+        "operationId": "healthCheck",
+        "tags": ["Health"],
+        "responses": {
+          "200": {
+            "description": "Service is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "healthy"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "version": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/session/start": {
+      "post": {
+        "summary": "Start a device session",
+        "description": "Initiate a new device session with badge authentication",
+        "operationId": "startSession",
+        "tags": ["Sessions"],
+        "security": [
+          {
+            "HMACSignature": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BadgeEvent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Session created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDirective"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - invalid signature or timestamp",
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "429": {
+            "description": "Too many requests",
+            "$ref": "#/components/responses/RateLimitError"
+          }
+        }
+      }
+    },
+    "/api/v1/session/{sessionId}": {
+      "get": {
+        "summary": "Get session details",
+        "operationId": "getSession",
+        "tags": ["Sessions"],
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "APIKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      }
+    },
+    "/api/v1/location/report": {
+      "post": {
+        "summary": "Report device location",
+        "description": "Submit location signal from device or location service",
+        "operationId": "reportLocation",
+        "tags": ["Telemetry"],
+        "security": [
+          {
+            "HMACSignature": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocationSignal"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Location recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
+          }
+        }
+      }
+    },
+    "/api/v1/events": {
+      "get": {
+        "summary": "List security events",
+        "description": "Get audit log of security decisions and policy actions",
+        "operationId": "listEvents",
+        "tags": ["Events"],
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "APIKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "description": "Filter by event type",
+            "schema": {
+              "type": "string",
+              "enum": ["session_allowed", "session_denied", "quarantine", "siem_alert", "itsm_ticket"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Event list with pagination",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      }
+    },
+    "/api/v1/devices": {
+      "get": {
+        "summary": "List devices",
+        "operationId": "listDevices",
+        "tags": ["Devices"],
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "APIKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "enrolled",
+            "in": "query",
+            "description": "Filter by enrollment status",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Device list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{deviceId}": {
+      "get": {
+        "summary": "Get device details",
+        "operationId": "getDevice",
+        "tags": ["Devices"],
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "APIKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Device details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Device"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Device not found"
+          }
+        }
+      }
+    },
+    "/api/v1/policies": {
+      "get": {
+        "summary": "List security policies",
+        "operationId": "listPolicies",
+        "tags": ["Policies"],
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "APIKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Policy list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "policies": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Policy"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/webhooks": {
+      "get": {
+        "summary": "List webhooks",
+        "operationId": "listWebhooks",
+        "tags": ["Webhooks"],
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "APIKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "webhooks": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Webhook"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create webhook",
+        "operationId": "createWebhook",
+        "tags": ["Webhooks"],
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "APIKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWebhookRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Webhook created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Webhook"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
+    "/api/v1/metrics": {
+      "get": {
+        "summary": "Get API performance metrics",
+        "operationId": "getMetrics",
+        "tags": ["Monitoring"],
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "APIKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Metrics in Prometheus format",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT token from OIDC provider or admin API key"
+      },
+      "APIKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "Admin API key for development (deprecated in production)"
+      },
+      "HMACSignature": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Signature",
+        "description": "HMAC-SHA256 request signature for device endpoints"
+      }
+    },
+    "schemas": {
+      "BadgeEvent": {
+        "type": "object",
+        "required": ["device", "badge", "timestamp"],
+        "properties": {
+          "device": {
+            "type": "object",
+            "required": ["deviceId"],
+            "properties": {
+              "deviceId": {
+                "type": "string"
+              },
+              "deviceSerial": {
+                "type": "string"
+              },
+              "deviceModel": {
+                "type": "string"
+              }
+            }
+          },
+          "badge": {
+            "type": "object",
+            "required": ["badgeId"],
+            "properties": {
+              "badgeId": {
+                "type": "string"
+              },
+              "badgeUid": {
+                "type": "string"
+              }
+            }
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "nonce": {
+            "type": "string",
+            "description": "Unique value for replay attack prevention"
+          }
+        }
+      },
+      "SessionDirective": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string",
+            "enum": ["LAUNCH_APP", "UNLOCK_DEVICE", "WAIT", "ERROR"]
+          },
+          "bundleId": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Session": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "deviceId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["active", "expired", "terminated"]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastActivityAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "nextAction": {
+            "type": "string"
+          }
+        }
+      },
+      "LocationSignal": {
+        "type": "object",
+        "required": ["deviceId", "observedAt", "source"],
+        "properties": {
+          "deviceId": {
+            "type": "string"
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "source": {
+            "type": "string",
+            "enum": ["gps", "wifi", "ble", "cellular", "manual"]
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["precise", "coarse", "presence"]
+          },
+          "lat": {
+            "type": "number"
+          },
+          "lon": {
+            "type": "number"
+          },
+          "accuracyM": {
+            "type": "number",
+            "description": "Accuracy in meters"
+          },
+          "siteId": {
+            "type": "string"
+          },
+          "buildingId": {
+            "type": "string"
+          },
+          "floorId": {
+            "type": "string"
+          },
+          "zoneId": {
+            "type": "string"
+          }
+        }
+      },
+      "SecurityEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["session_denied", "session_allowed", "quarantine", "siem_alert", "itsm_ticket"]
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actor": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "device": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "complianceStatus": {
+                "type": "string"
+              }
+            }
+          },
+          "decision": {
+            "type": "string",
+            "enum": ["DENY", "ALLOW"]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "actionsTriggered": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "riskScore": {
+            "type": "number"
+          }
+        }
+      },
+      "EventList": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SecurityEvent"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Device": {
+        "type": "object",
+        "properties": {
+          "deviceId": {
+            "type": "string"
+          },
+          "deviceSerial": {
+            "type": "string"
+          },
+          "deviceModel": {
+            "type": "string"
+          },
+          "osVersion": {
+            "type": "string"
+          },
+          "enrolled": {
+            "type": "boolean"
+          },
+          "enrolledAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastSeenAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "managementId": {
+            "type": "string"
+          }
+        }
+      },
+      "DeviceList": {
+        "type": "object",
+        "properties": {
+          "devices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Device"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        }
+      },
+      "Policy": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "Webhook": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CreateWebhookRequest": {
+        "type": "object",
+        "required": ["url", "events"],
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Webhook endpoint URL (must be HTTPS in production)"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Event types to subscribe to"
+          },
+          "active": {
+            "type": "boolean",
+            "default": true
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    },
+    "responses": {
+      "UnauthorizedError": {
+        "description": "Unauthorized",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "RateLimitError": {
+        "description": "Rate limit exceeded",
+        "headers": {
+          "Retry-After": {
+            "schema": {
+              "type": "string"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "BadRequest": {
+        "description": "Bad request",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      }
+    }
+  }
+}

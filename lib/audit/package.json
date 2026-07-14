@@ -1,0 +1,9 @@
+{
+  "name": "@workspace/audit",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "uuid": "^11.0.3" },
+  "devDependencies": { "@types/node": "catalog:", "@types/uuid": "^10.0.0" }
+}

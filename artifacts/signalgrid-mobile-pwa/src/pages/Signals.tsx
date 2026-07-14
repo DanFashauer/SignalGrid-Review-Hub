@@ -45,7 +45,7 @@ export default function Signals() {
           </div>
         ) : (
           <div className="divide-y divide-border/50 pb-safe">
-            {data?.signals.map(s => {
+            {(data?.signals ?? []).map(s => {
               const previewKey = Object.keys(s.value)[0];
               const previewValue = previewKey ? String(s.value[previewKey]) : "No data";
 

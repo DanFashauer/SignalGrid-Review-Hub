@@ -84,7 +84,7 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {decisionsData?.decisions.slice(0, 5).map(d => (
+              {(decisionsData?.decisions ?? []).slice(0, 5).map(d => (
                 <div key={d.id} className="flex items-center justify-between p-3 border border-border rounded bg-card/50 hover:bg-card/80 transition-colors">
                   <div className="flex items-center gap-3">
                     <OutcomeBadge outcome={d.outcome} />
@@ -176,7 +176,7 @@ export function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {signalsData?.signals.filter(s => s.status === 'anomalous' || s.status === 'critical').slice(0, 3).map(s => (
+                {(signalsData?.signals ?? []).filter(s => s.status === 'anomalous' || s.status === 'critical').slice(0, 3).map(s => (
                   <div key={s.id} className="p-2 text-sm border border-border rounded flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <SignalStatusBadge status={s.status} />

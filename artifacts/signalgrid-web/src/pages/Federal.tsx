@@ -129,7 +129,7 @@ export default function Federal() {
               </div>
               <div className="space-y-4">
                 <div className="bg-card border border-border rounded-xl p-6 font-mono text-xs space-y-3">
-                  <div className="text-muted-foreground uppercase tracking-widest mb-4">Deployment Architecture</div>
+                  <div className="text-muted-foreground uppercase tracking-wide mb-4">Deployment Architecture</div>
                   {[
                     { label: "Network Boundary", value: "Air-gap / JWICS / SIPRNet", color: "text-green-400" },
                     { label: "Data Sovereignty", value: "100% on-premise", color: "text-green-400" },

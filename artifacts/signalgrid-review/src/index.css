@@ -74,58 +74,62 @@
   --elevate-2: rgba(255,255,255,.06);
 
   /* Warm charcoal background */
-  --background: 38 8% 9%;
-  --foreground: 40 22% 88%;
+  --background: 210 13% 9%;
+  --foreground: 43 26% 94%;
 
-  --border: 38 6% 22%;
-  --input: 38 6% 22%;
-  --ring: 175 24% 42%;
+  --border: 205 13% 19%;
+  --input: 205 13% 19%;
+  --ring: 175 28% 43%;
 
   /* Slightly lighter card surface */
-  --card: 38 7% 12%;
-  --card-foreground: 40 22% 88%;
-  --card-border: 38 6% 20%;
+  --card: 207 14% 13%;
+  --card-foreground: 43 26% 94%;
+  --card-border: 205 13% 19%;
 
-  --popover: 38 7% 12%;
-  --popover-foreground: 40 22% 88%;
-  --popover-border: 38 6% 20%;
+  --popover: 207 14% 13%;
+  --popover-foreground: 43 26% 94%;
+  --popover-border: 205 13% 19%;
 
   /* Muted teal primary */
-  --primary: 175 24% 42%;
-  --primary-foreground: 38 8% 9%;
+  --primary: 175 28% 43%;
+  --primary-foreground: 43 26% 94%;
 
-  --secondary: 38 6% 18%;
-  --secondary-foreground: 40 16% 72%;
+  --secondary: 207 14% 13%;
+  --secondary-foreground: 43 26% 94%;
 
-  --muted: 38 6% 16%;
-  --muted-foreground: 40 12% 54%;
+  --muted: 205 13% 19%;
+  --muted-foreground: 40 14% 80%;
 
   /* Teal accent */
-  --accent: 175 24% 42%;
-  --accent-foreground: 38 8% 9%;
+  --accent: 175 22% 55%;
+  --accent-foreground: 210 13% 9%;
 
   /* Restrained amber-red for destructive */
-  --destructive: 15 55% 45%;
-  --destructive-foreground: 40 22% 88%;
+  --destructive: 0 28% 49%;
+  --destructive-foreground: 43 26% 94%;
 
-  --sidebar: 38 8% 10%;
-  --sidebar-foreground: 40 22% 88%;
-  --sidebar-border: 38 6% 18%;
-  --sidebar-primary: 175 24% 42%;
-  --sidebar-primary-foreground: 38 8% 9%;
-  --sidebar-accent: 38 6% 16%;
-  --sidebar-accent-foreground: 40 22% 88%;
-  --sidebar-ring: 175 24% 42%;
+  --sidebar: 207 14% 13%;
+  --sidebar-foreground: 43 26% 94%;
+  --sidebar-border: 205 13% 19%;
+  --sidebar-primary: 175 28% 43%;
+  --sidebar-primary-foreground: 43 26% 94%;
+  --sidebar-accent: 205 13% 19%;
+  --sidebar-accent-foreground: 43 26% 94%;
+  --sidebar-ring: 175 28% 43%;
 
-  --chart-1: 175 24% 42%;
-  --chart-2: 38 40% 58%;
-  --chart-3: 200 18% 52%;
-  --chart-4: 15 40% 48%;
-  --chart-5: 280 14% 52%;
+  --chart-1: 175 28% 43%;
+  --chart-2: 145 21% 47%;
+  --chart-3: 32 35% 51%;
+  --chart-4: 0 28% 49%;
+  --chart-5: 175 22% 55%;
+
+  --decision-allow: 145 21% 47%;
+  --decision-review: 32 35% 51%;
+  --decision-deny: 0 28% 49%;
 
   --app-font-sans: 'Inter', 'system-ui', sans-serif;
   --app-font-serif: Georgia, serif;
-  --app-font-mono: Menlo, monospace;
+  --app-font-mono: "IBM Plex Mono", monospace;
   --radius: .375rem;
 
   --primary-border: hsl(var(--primary));

@@ -1,5 +1,6 @@
 import { canonicalJson, deterministicId, digest } from "./util";
 import type {
+  BadgeBindingState,
   BaselineState,
   ChargeState,
   ComplianceState,
@@ -59,6 +60,7 @@ export function buildEvidence(
     dockChargeState: readCharge(latestByCategory),
     tamperState: readTamper(latestByCategory),
     baselineCompliance: readBaseline(latestByCategory),
+    badgeBinding: readBadge(latestByCategory),
   };
 
   return {
@@ -191,6 +193,7 @@ const CUSTODY_STATES = [
 const CHARGE_STATES = ["charging", "charged", "low", "critical", "not_present"] as const;
 const TAMPER_STATES = ["none", "suspected", "confirmed", "sensor_unavailable"] as const;
 const BASELINE_STATES = ["aligned", "partial", "drifted", "not_assessed"] as const;
+const BADGE_STATES = ["present", "removed", "forced", "absent"] as const;
 
 function readCustody(latestByCategory: LatestByCategory): CustodyState {
   return readEnum(latestByCategory, "custody_state", CUSTODY_STATES) ?? "unknown";
@@ -198,6 +201,10 @@ function readCustody(latestByCategory: LatestByCategory): CustodyState {
 
 function readBaseline(latestByCategory: LatestByCategory): BaselineState {
   return readEnum(latestByCategory, "security_baseline", BASELINE_STATES) ?? "unknown";
+}
+
+function readBadge(latestByCategory: LatestByCategory): BadgeBindingState {
+  return readEnum(latestByCategory, "badge_binding", BADGE_STATES) ?? "unknown";
 }
 
 function readCharge(latestByCategory: LatestByCategory): ChargeState {

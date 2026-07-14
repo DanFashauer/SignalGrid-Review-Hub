@@ -4,6 +4,16 @@
 
 This phase adds a public-safe, fixture-backed model for credential-reader events as a SignalGrid signal source. It treats badge, card, mobile credential, kiosk login, and passkey-adjacent reader observations as context that can be normalized, correlated, routed, audited, and verified without adding live integrations or source-system writes.
 
+> **Now a core decision dimension.** The one-bit "who is bound to this shared
+> device right now" read from the reader case is normalized into the core as the
+> `badge_binding` signal category and the `badgeBinding` evidence field
+> (`present` / `removed` / `forced` / `absent` / `unknown`). A badge pulled from
+> the case restricts the live session; a forced/torn removal denies. This is the
+> deterministic, evaluated-today slice of the richer reader model below — see
+> [What SignalGrid Does Today](WHAT_SIGNALGRID_DOES_TODAY.md). The wider set of
+> reader classes, credential types, and workflow contexts described in the rest of
+> this document remain candidate signal-source patterns, not live integrations.
+
 ## Intake classification and merge lane
 
 - Classification: `Credential/custody signal` and `Proof/scenario expansion` under the Intake Classification Guide.

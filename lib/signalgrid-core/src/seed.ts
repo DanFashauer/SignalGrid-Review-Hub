@@ -239,6 +239,7 @@ function seedPolicyTests(
     dockChargeState: "charged",
     tamperState: "none",
     baselineCompliance: "aligned",
+    badgeBinding: "present",
     criticalSignalsPresent: true,
   };
   const cases: Array<Omit<PolicyTest, "id" | "tenantId" | "policyId">> = [
@@ -249,6 +250,9 @@ function seedPolicyTests(
     { name: "missing posture → restrict", evidence: { ...base, postureFreshness: "missing", criticalSignalsPresent: false }, expectedOutcome: "restrict", expectedReasonCode: "POSTURE_MISSING" },
     { name: "baseline drift → step-up", evidence: { ...base, baselineCompliance: "drifted" }, expectedOutcome: "step_up", expectedReasonCode: "BASELINE_DRIFTED" },
     { name: "baseline unknown → still allow (no fabricated block)", evidence: { ...base, baselineCompliance: "unknown" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
+    { name: "badge removed → restrict", evidence: { ...base, badgeBinding: "removed" }, expectedOutcome: "restrict", expectedReasonCode: "BADGE_REMOVED" },
+    { name: "badge forced removal → deny", evidence: { ...base, badgeBinding: "forced" }, expectedOutcome: "deny", expectedReasonCode: "BADGE_FORCED_REMOVAL" },
+    { name: "badge absent/unknown → no fabricated block (allow)", evidence: { ...base, badgeBinding: "unknown" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
   ];
   for (const [index, spec] of cases.entries()) {
     store.putPolicyTest({
@@ -327,6 +331,17 @@ function seedNorthwindSubjects(store: MemoryStore): FixturePostureRecord[] {
       device: { externalRef: "ipad-ward-06", name: "Ward iPad 06", osPlatform: "iPadOS", osVersion: "18.5", ownerType: "shared", managementAgent: "intune" },
       posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, baseline: "drifted", sourceReference: "fixture:intune:managedDevices#ipad-ward-06" },
     },
+    // Badge-reader-case scenarios: posture is healthy so the badge read decides.
+    {
+      identity: { externalRef: "nurse.badge_removed", displayName: "Nurse (badge withdrawn)", state: "enabled", assignedRole: "nurse" },
+      device: { externalRef: "ipad-badge-01", name: "Case iPad 01", osPlatform: "iPadOS", osVersion: "18.5", ownerType: "shared", managementAgent: "intune" },
+      posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, baseline: "aligned", sourceReference: "fixture:intune:managedDevices#ipad-badge-01" },
+    },
+    {
+      identity: { externalRef: "nurse.badge_forced", displayName: "Nurse (badge forced out)", state: "enabled", assignedRole: "nurse" },
+      device: { externalRef: "ipad-badge-02", name: "Case iPad 02", osPlatform: "iPadOS", osVersion: "18.5", ownerType: "shared", managementAgent: "intune" },
+      posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, baseline: "aligned", sourceReference: "fixture:intune:managedDevices#ipad-badge-02" },
+    },
   ];
   return materializeSubjects(store, NORTHWIND, specs);
 }
@@ -348,6 +363,7 @@ function benignDock(deviceRef: string, index: number): DockCustodyRecord {
     dockState: "occupied",
     custodyState: "checked_out",
     tamperState: "none",
+    badgeBinding: "present",
     observedAt: CUSTODY_OBSERVED_AT,
     sourceReference: `fixture:dockbridge:events#${deviceRef}`,
   };
@@ -376,6 +392,16 @@ function northwindDockCustody(): DockCustodyRecord[] {
     ...benignDock("ipad-loan-03", 13),
     chargeState: "critical",
     dockState: "empty",
+  });
+  // Badge-reader-case scenarios: posture is healthy so the badge read is decisive.
+  records.push({
+    ...benignDock("ipad-badge-01", 14),
+    badgeBinding: "removed",
+  });
+  records.push({
+    ...benignDock("ipad-badge-02", 15),
+    badgeBinding: "forced",
+    tamperState: "suspected",
   });
   return records;
 }

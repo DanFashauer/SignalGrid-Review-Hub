@@ -3,6 +3,7 @@ import { classifyFreshness, deterministicId } from "./util";
 import type { Clock } from "./util";
 import {
   CoreError,
+  type BadgeBindingState,
   type ChargeState,
   type Connector,
   type ConnectorSyncRun,
@@ -34,6 +35,12 @@ export interface DockCustodyRecord {
   dockState: DockState;
   custodyState: CustodyState;
   tamperState: TamperState;
+  /**
+   * Badge-binding read from the reader case (the case with `caseSerial` is the
+   * RFID/prox reader). Optional: absent means the record carried no badge read,
+   * which normalizes to "unknown".
+   */
+  badgeBinding?: BadgeBindingState;
   observedAt: string;
   sourceReference: string;
 }
@@ -77,6 +84,10 @@ export function runDockSync(
       { category: "tamper_state", value: record.tamperState },
       { category: "dock_state", value: record.dockState },
     ];
+    // The reader case reports a badge-binding read when present.
+    if (record.badgeBinding !== undefined) {
+      pairs.push({ category: "badge_binding", value: record.badgeBinding });
+    }
     for (const pair of pairs) {
       store.putSignal({
         id: deterministicId("sig", connector.tenantId, "device", device.id, pair.category),

@@ -269,6 +269,24 @@ async function run() {
   const driftRes = await req("GET", `/v1/decisions/${driftId}/resolution`, { token: KEYS.operator });
   check("baseline drift is self-service (re-apply hardening profile)", driftRes.json?.resolution?.path === "self_service");
 
+  // ── badge-reader case: identity↔device binding as a decision dimension ────
+  const badgeOut = await req("POST", "/v1/decisions/evaluate", {
+    token: KEYS.operator,
+    body: { identityRef: "nurse.badge_removed", deviceRef: "ipad-badge-01", workflowKey: "clinical-session" },
+  });
+  check("badge withdrawn → restrict", badgeOut.json?.decision?.outcome === "restrict");
+  check("badge-removed reason surfaced", (badgeOut.json?.decision?.reasonCodes ?? []).includes("BADGE_REMOVED"));
+  const badgeId = badgeOut.json?.decision?.decisionId;
+  const badgeEvidence = await req("GET", `/v1/decisions/${badgeId}/evidence`, { token: KEYS.operator });
+  check("badge binding is exposed in decision evidence", badgeEvidence.json?.evidence?.evidence?.badgeBinding === "removed");
+  const badgeRes = await req("GET", `/v1/decisions/${badgeId}/resolution`, { token: KEYS.operator });
+  check("badge withdrawn is self-service (re-insert badge)", badgeRes.json?.resolution?.path === "self_service");
+  const badgeForced = await req("POST", "/v1/decisions/evaluate", {
+    token: KEYS.operator,
+    body: { identityRef: "nurse.badge_forced", deviceRef: "ipad-badge-02", workflowKey: "clinical-session" },
+  });
+  check("badge forced removal → deny", badgeForced.json?.decision?.outcome === "deny" && (badgeForced.json?.decision?.reasonCodes ?? []).includes("BADGE_FORCED_REMOVAL"));
+
   // ── connector + webhooks ────────────────────────────────────────────────
   const deliveries = await req("GET", "/v1/webhooks/deliveries", { token: KEYS.owner });
   check("webhook deliveries listed", deliveries.status === 200 && Array.isArray(deliveries.json?.deliveries));

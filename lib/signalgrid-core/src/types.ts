@@ -178,6 +178,24 @@ export type BaselineState =
   | "not_assessed"
   | "unknown";
 
+/**
+ * Badge-binding state from the RFID/prox/NFC badge-reader case — whether the
+ * assigned worker's credential is physically bound to this shared device at the
+ * moment a workflow fires. This is the signal that ties a human to a shared
+ * device; vendor-neutral and public-safe (no live reader, no real credential):
+ *  - present: the assigned badge is seated in the reader case (bound now),
+ *  - removed: the badge was withdrawn (the session should not continue),
+ *  - forced:  the badge was forcibly removed / the reader case was tampered,
+ *  - absent:  no badge is present (an unbound shared device — not itself a fault),
+ *  - unknown: no reader signal (fail-safe; never assumed present).
+ */
+export type BadgeBindingState =
+  | "present"
+  | "removed"
+  | "forced"
+  | "absent"
+  | "unknown";
+
 // Physical-custody / DockBridge hardware states (vendor-neutral).
 export type CustodyState =
   | "checked_in"
@@ -218,7 +236,8 @@ export type SignalCategory =
   | "charge_state"
   | "tamper_state"
   | "dock_state"
-  | "security_baseline";
+  | "security_baseline"
+  | "badge_binding";
 
 export interface NormalizedSignal {
   id: string;
@@ -252,7 +271,8 @@ export type EvidenceField =
   | "custodyState"
   | "chargeState"
   | "tamperState"
-  | "baselineState";
+  | "baselineState"
+  | "badgeState";
 
 export type RuleCondition =
   | { field: "identityEnabled"; equals: boolean | "unknown" }
@@ -267,7 +287,8 @@ export type RuleCondition =
   | { field: "custodyState"; in: CustodyState[] }
   | { field: "chargeState"; in: ChargeState[] }
   | { field: "tamperState"; in: TamperState[] }
-  | { field: "baselineState"; in: BaselineState[] };
+  | { field: "baselineState"; in: BaselineState[] }
+  | { field: "badgeState"; in: BadgeBindingState[] };
 
 export interface PolicyRuleSpec {
   id: string;
@@ -320,6 +341,8 @@ export interface DecisionEvidence {
   tamperState: TamperState;
   /** Security-baseline (CIS/hardening) alignment for the device (default "unknown"). */
   baselineCompliance: BaselineState;
+  /** Badge-binding state from the RFID/prox badge-reader case (default "unknown"). */
+  badgeBinding: BadgeBindingState;
   /** True only when every critical input is present and not degraded. */
   criticalSignalsPresent: boolean;
 }

@@ -97,6 +97,8 @@ const scenarios: Scenario[] = [
   { label: "tamper-suspected-restrict", identityRef: "nurse.tamper", deviceRef: "ipad-loan-02", workflowKey: "clinical-session", expectedOutcome: "restrict", expectedReason: "TAMPER_SUSPECTED" },
   { label: "battery-critical-stepup", identityRef: "nurse.lowbatt", deviceRef: "ipad-loan-03", workflowKey: "clinical-session", expectedOutcome: "step_up", expectedReason: "BATTERY_CRITICAL" },
   { label: "baseline-drift-stepup", identityRef: "nurse.baseline_drift", deviceRef: "ipad-ward-06", workflowKey: "clinical-session", expectedOutcome: "step_up", expectedReason: "BASELINE_DRIFTED" },
+  { label: "badge-removed-restrict", identityRef: "nurse.badge_removed", deviceRef: "ipad-badge-01", workflowKey: "clinical-session", expectedOutcome: "restrict", expectedReason: "BADGE_REMOVED" },
+  { label: "badge-forced-deny", identityRef: "nurse.badge_forced", deviceRef: "ipad-badge-02", workflowKey: "clinical-session", expectedOutcome: "deny", expectedReason: "BADGE_FORCED_REMOVAL" },
 ];
 
 const decisions: Decision[] = [];
@@ -938,6 +940,53 @@ if (pending) {
     "index: equal-observedAt tie resolves to the first-inserted signal",
     tie("compliant", "non_compliant") === "compliant" &&
       tie("non_compliant", "compliant") === "non_compliant",
+  );
+}
+
+// ── 18. Badge-reader case: identity↔device binding as a decision dimension ────
+
+{
+  // Badge withdrawn → restrict; the state is captured in evidence; the worker
+  // self-service step is to re-insert the badge into the reader case → allow.
+  const removed = decisions.find((d) => d.reasonCodes.includes("BADGE_REMOVED"));
+  check("badge: a withdrawn-badge decision exists", Boolean(removed));
+  if (removed) {
+    const snap = core.getSnapshot(T.operator, removed.evidenceSnapshotId);
+    check("badge: binding state is captured in the evidence snapshot", snap.evidence.badgeBinding === "removed");
+    const plan = core.getResolution(T.operator, removed.id);
+    check(
+      "badge: withdrawn badge is self-service (re-insert into the case)",
+      plan.path === "self_service" && plan.steps.some((s) => s.reasonCode === "BADGE_REMOVED"),
+    );
+    const sim = core.simulateResolution(T.operator, removed.id);
+    check("badge: re-binding the badge resolves to allow", sim.resolved === true && sim.projectedOutcome === "allow");
+  }
+
+  // Forced removal / reader tamper → deny, manual-only (cannot self-resolve).
+  const forced = decisions.find((d) => d.reasonCodes.includes("BADGE_FORCED_REMOVAL"));
+  check("badge: a forced-removal decision exists and denies", Boolean(forced) && forced?.outcome === "deny");
+  if (forced) {
+    const plan = core.getResolution(T.operator, forced.id);
+    check("badge: forced removal is manual-only (routed to security)", plan.path === "escalation");
+  }
+
+  // A bound badge is a positive signal that never blocks on its own; an unknown
+  // badge (no reader) never fabricates a healthy state.
+  const bound = decisions.find((d) => d.reasonCodes.includes("TRUST_ESTABLISHED"));
+  if (bound) {
+    const snap = core.getSnapshot(T.operator, bound.evidenceSnapshotId);
+    check("badge: a healthy allow carries a present (bound) badge", snap.evidence.badgeBinding === "present");
+  }
+
+  // Validator accepts a badgeState rule and rejects an out-of-domain value.
+  const okRule = validatePolicyRules([
+    { id: "badge-guard", description: "d", match: [{ field: "badgeState", in: ["removed", "forced"] }], outcome: "restrict", reasonCode: "BADGE_CHECK", severity: "high" },
+  ]);
+  check("badge: validator accepts a badgeState rule condition", okRule[0]?.match[0]?.field === "badgeState");
+  expectError("badge: validator rejects an out-of-domain badge value", "validation", () =>
+    validatePolicyRules([
+      { id: "bad", description: "d", match: [{ field: "badgeState", in: ["super-bound"] }], outcome: "deny", reasonCode: "R", severity: "low" },
+    ]),
   );
 }
 

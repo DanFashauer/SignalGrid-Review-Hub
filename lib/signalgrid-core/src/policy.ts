@@ -109,6 +109,13 @@ const IN_FIELDS: Record<string, ReadonlySet<string>> = {
     "not_assessed",
     "unknown",
   ]),
+  badgeState: new Set([
+    "present",
+    "removed",
+    "forced",
+    "absent",
+    "unknown",
+  ]),
 };
 
 function reject(message: string): never {
@@ -332,6 +339,8 @@ function matches(condition: RuleCondition, evidence: DecisionEvidence): boolean 
       return condition.in.includes(evidence.tamperState);
     case "baselineState":
       return condition.in.includes(evidence.baselineCompliance);
+    case "badgeState":
+      return condition.in.includes(evidence.badgeBinding);
     default: {
       // Exhaustiveness guard at compile time; fail-closed at runtime so an
       // unknown/malformed condition (e.g. from an authored draft) never matches.
@@ -500,6 +509,24 @@ export const SHARED_DEVICE_RULES_V1: PolicyRuleSpec[] = [
     outcome: "step_up",
     reasonCode: "BATTERY_CRITICAL",
     severity: "medium",
+  },
+  {
+    id: "badge-forced-removal",
+    description:
+      "A forcibly-removed badge or a tampered reader case is a hard deny — physical binding was broken under duress.",
+    match: [{ field: "badgeState", in: ["forced"] }],
+    outcome: "deny",
+    reasonCode: "BADGE_FORCED_REMOVAL",
+    severity: "critical",
+  },
+  {
+    id: "badge-removed",
+    description:
+      "The assigned worker's badge was withdrawn from the reader case — the shared-device session is restricted until the badge is re-bound.",
+    match: [{ field: "badgeState", in: ["removed"] }],
+    outcome: "restrict",
+    reasonCode: "BADGE_REMOVED",
+    severity: "high",
   },
   {
     id: "baseline-drifted",

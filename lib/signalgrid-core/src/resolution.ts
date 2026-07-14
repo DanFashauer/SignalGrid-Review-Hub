@@ -38,6 +38,7 @@ type EvidenceTransform = Partial<
     | "tamperState"
     | "dockChargeState"
     | "baselineCompliance"
+    | "badgeBinding"
   >
 >;
 
@@ -154,6 +155,20 @@ const DESCRIPTORS: Record<string, ResolutionDescriptor> = {
     baseClass: "manual_only",
     workerAction: "This device is out of service (tamper confirmed) — use a different device and report it.",
     operatorAction: "Remove the device from service and route to security operations; do not clear automatically.",
+    transform: null,
+    hardwareOriented: false,
+  },
+  BADGE_REMOVED: {
+    baseClass: "auto_proposed",
+    workerAction: "Re-insert your badge into the reader case to re-bind it to this device, then retry.",
+    operatorAction: "Confirm the worker's badge is re-seated in the reader case, then re-evaluate.",
+    transform: { badgeBinding: "present" },
+    hardwareOriented: true,
+  },
+  BADGE_FORCED_REMOVAL: {
+    baseClass: "manual_only",
+    workerAction: "This device is locked out — the badge was forcibly removed. Use a different device and report it.",
+    operatorAction: "Out of service: forced badge removal / reader-case tamper — route to security operations; do not clear automatically.",
     transform: null,
     hardwareOriented: false,
   },

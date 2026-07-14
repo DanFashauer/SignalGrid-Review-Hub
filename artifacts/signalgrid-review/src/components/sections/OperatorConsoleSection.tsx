@@ -44,6 +44,8 @@ const SCENARIOS: ScenarioSpec[] = [
   { label: "Device flagged for tamper (DockBridge)", identityRef: "nurse.tamper", deviceRef: "ipad-loan-02", workflowKey: "clinical-session" },
   { label: "Critically low battery (DockBridge)", identityRef: "nurse.lowbatt", deviceRef: "ipad-loan-03", workflowKey: "clinical-session" },
   { label: "Security-baseline drift (CIS)", identityRef: "nurse.baseline_drift", deviceRef: "ipad-ward-06", workflowKey: "clinical-session" },
+  { label: "Badge pulled from reader case", identityRef: "nurse.badge_removed", deviceRef: "ipad-badge-01", workflowKey: "clinical-session" },
+  { label: "Badge forced from reader case", identityRef: "nurse.badge_forced", deviceRef: "ipad-badge-02", workflowKey: "clinical-session" },
 ];
 
 const outcomeTone: Record<DecisionOutcome, string> = {
@@ -418,6 +420,21 @@ function DecisionDetail({
                   : evidence.baselineCompliance === "drifted"
                     ? "warn"
                     : undefined
+              }
+            />
+          )}
+          {evidence.badgeBinding !== "unknown" && (
+            <EvidenceRow
+              label="Badge binding (reader case)"
+              value={evidence.badgeBinding}
+              tone={
+                evidence.badgeBinding === "present"
+                  ? "ok"
+                  : evidence.badgeBinding === "forced"
+                    ? "warn"
+                    : evidence.badgeBinding === "removed"
+                      ? "warn"
+                      : undefined
               }
             />
           )}

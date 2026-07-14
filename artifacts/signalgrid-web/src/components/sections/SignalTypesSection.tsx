@@ -116,7 +116,7 @@ export default function SignalTypesSection() {
         <div className="mb-16 max-w-3xl">
           <h2 className="text-3xl font-bold tracking-tight mb-4">Multi-Dimensional Signal Fusion</h2>
           <p className="text-muted-foreground text-lg leading-relaxed">
-            A token proves identity. MDM proves enrollment. A badge tap proves presence. None of them alone proves readiness for a sensitive workflow. The deterministic core evaluates <span className="text-foreground font-medium">four dimensions today</span> — identity, device posture, DockBridge physical custody, and CIS security-baseline alignment — in a single deterministic evaluation. The remaining dimensions below are <span className="text-foreground font-medium">candidate signal categories</span> on the roadmap, not decision inputs today.
+            A token proves identity. MDM proves enrollment. A badge tap proves presence. None of them alone proves readiness for a sensitive workflow. The deterministic core evaluates <span className="text-foreground font-medium">five dimensions today</span> — identity, device posture, DockBridge physical custody, CIS security-baseline alignment, and badge binding from the reader case — in a single deterministic evaluation. The remaining dimensions below are <span className="text-foreground font-medium">candidate signal categories</span> on the roadmap, not decision inputs today.
           </p>
         </div>
 

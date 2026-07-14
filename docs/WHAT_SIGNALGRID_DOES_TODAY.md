@@ -32,16 +32,17 @@ test today:
 | Charge state (DockBridge) | charging / charged / low / critical / not_present / unknown |
 | Tamper state (DockBridge) | none / suspected / confirmed / sensor_unavailable / unknown |
 | Security baseline (CIS) | aligned / partial / drifted / not_assessed / unknown |
+| Badge binding (reader case) | present / removed / forced / absent / unknown — who is bound to the shared device right now |
 | Critical signals present | derived fail-closed gate — `allow` is suppressed when a critical input is degraded |
 
-### The 11 normalized signal categories
+### The 12 normalized signal categories
 
-The connector layer normalizes source data into exactly **11 signal categories**
+The connector layer normalizes source data into exactly **12 signal categories**
 that feed the evidence above:
 
 `identity_state`, `device_compliance`, `device_management`, `device_encryption`,
 `os_support`, `posture_freshness`, `custody_state`, `charge_state`,
-`tamper_state`, `dock_state`, `security_baseline`.
+`tamper_state`, `dock_state`, `security_baseline`, `badge_binding`.
 
 ### The four outcomes
 
@@ -51,14 +52,19 @@ degraded critical evidence).
 
 ### Grouped for humans: the signal dimensions we evaluate today
 
-The website groups these into four **evaluated-today** dimensions:
+The website groups these into five **evaluated-today** dimensions:
 
-1. **Identity & badge state** — identity enabled/disabled, badge custody.
+1. **Identity state** — identity enabled/disabled/unknown.
 2. **Device posture** — managed, compliant, encrypted, OS-supported, fresh.
 3. **Physical custody (DockBridge)** — custody, charge, and tamper state from
    dock/case hardware.
 4. **Security baseline (CIS)** — CIS/hardening alignment; drift steps up or
    restricts.
+5. **Badge binding (reader case)** — who is physically bound to the shared
+   device right now. A badge pulled from the reader case restricts the session;
+   a forced/torn removal denies. This is the RFID/prox reader case turned into a
+   first-class decision signal: the person→shared-device binding the workflow
+   depends on.
 
 ## What is deterministic and fixture-backed
 
@@ -82,7 +88,7 @@ decision inputs in the core today, and any surface that shows them must say so:
 - **RTLS / precise indoor location** — candidate.
 - The **broader integration catalog** (~149 candidate sources across ~16
   categories in the catalog taxonomy) — these are *candidate signal-source
-  categories*, distinct from the 11 categories the core normalizes today, and
+  categories*, distinct from the 12 categories the core normalizes today, and
   none is a live integration.
 - **Native app shells** (React Native / Expo, Tauri / Electron) — the current
   cross-platform delivery is responsive web + PWA; native is a documented next
@@ -96,7 +102,7 @@ The repo intentionally has two surfaces that must not be conflated:
 
 1. **Product-core lineage** — `@workspace/signalgrid-core` and the Review Hub's
    Operator Console / Worker Self-Service run the real, deterministic decision
-   loop with the 11 categories and 4 outcomes above. This is the truth.
+   loop with the 12 categories and 4 outcomes above. This is the truth.
 2. **Catalog / app-shell lineage** — the `/api/integrations` catalog (~149
    candidate sources, ~16 taxonomy categories) and the platform app shells
    (`signalgrid-app`, `-desktop`, `-mobile-pwa`) illustrate the broader vision
@@ -104,15 +110,16 @@ The repo intentionally has two surfaces that must not be conflated:
    what the core evaluates.
 
 When a surface shows "16 categories" or "~149 sources," it means the candidate
-catalog taxonomy — not the 11 categories the core evaluates. When it shows the
-signal dimensions a decision actually uses, it means the four evaluated-today
+catalog taxonomy — not the 12 categories the core evaluates. When it shows the
+signal dimensions a decision actually uses, it means the five evaluated-today
 dimensions above.
 
 ## How to verify
 
-- `pnpm run proof:signalgrid-core` — 130 assertions over the real core: outcomes,
+- `pnpm run proof:signalgrid-core` — 145 assertions over the real core: outcomes,
   fail-closed, tenant isolation, RBAC, tamper-evidence, determinism, the
-  security-baseline dimension, and untrusted-input hardening.
+  security-baseline dimension, the badge-binding (reader case) dimension, and
+  untrusted-input hardening.
 - `pnpm run test:api` — the `/v1` HTTP surface end to end.
 - `pnpm run bench:decision-latency` — the decision-latency gate.
 

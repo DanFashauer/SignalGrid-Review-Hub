@@ -203,7 +203,7 @@ real secret is stored.
 | `connectorId` | `string` | Producing connector. |
 | `subjectType` | `SubjectType` | `device` \| `identity`. |
 | `subjectId` | `string` | The `Device` or `Identity` observed. |
-| `category` | `SignalCategory` | `identity_state` \| `device_compliance` \| `device_management` \| `device_encryption` \| `os_support` \| `posture_freshness` \| `custody_state` \| `charge_state` \| `tamper_state` \| `dock_state` \| `security_baseline`. |
+| `category` | `SignalCategory` | `identity_state` \| `device_compliance` \| `device_management` \| `device_encryption` \| `os_support` \| `posture_freshness` \| `custody_state` \| `charge_state` \| `tamper_state` \| `dock_state` \| `security_baseline` \| `badge_binding`. |
 | `value` | `string \| number \| boolean \| null` | Normalized value. |
 | `observedAt` | `string` | When the source observed it. |
 | `freshness` | `Freshness` | `fresh` \| `stale` \| `expired` \| `missing` \| `unknown`. |
@@ -302,8 +302,12 @@ child of `Policy` / `PolicyVersion` so the model reflects its intended shape.
 > `custodyState` / `dockChargeState` / `tamperState`, the security-baseline field
 > `baselineCompliance` (`BaselineState`: `aligned` \| `partial` \| `drifted` \|
 > `not_assessed` \| `unknown` — see
-> [Security-Baseline Alignment](SECURITY_BASELINE_ALIGNMENT.md)), and the derived
-> `criticalSignalsPresent`.
+> [Security-Baseline Alignment](SECURITY_BASELINE_ALIGNMENT.md)), the
+> badge-binding field `badgeBinding` (`BadgeBindingState`: `present` \|
+> `removed` \| `forced` \| `absent` \| `unknown` — the RFID/prox reader case's
+> person→shared-device binding; see
+> [Credential-Reader Signal Model](CREDENTIAL_READER_SIGNAL_MODEL.md)), and the
+> derived `criticalSignalsPresent`.
 
 **EvidenceSnapshot** — an immutable, reproducible, content-digested record of
 exactly what the engine saw.

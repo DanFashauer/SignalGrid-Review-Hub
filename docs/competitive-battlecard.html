@@ -358,8 +358,8 @@
         <div class="comp__head"><span class="comp__name">Microsoft Entra</span><span class="threat">Objection</span></div>
         <p class="comp__sub">Shared device mode + CAE — extend, don't fight</p>
         <dl>
-          <div><dt>Their strength</dt><dd>Conditional Access + Continuous Access Evaluation + Shared Device Mode + posture — native, and many buyers are Microsoft-standardized.</dd></div>
-          <div><dt>Our wedge</dt><dd>Entra decides at <b>session/token</b> granularity and assumes session = person. It doesn't fuse <b>physical custody / badge-holder at action time</b>.</dd></div>
+          <div><dt>Their strength — concede precisely</dt><dd>CA + CAE + Shared Device Mode + posture — native, Microsoft-standardized. <b>Don't say “Entra can't do per-action”</b> — auth context already does per-action step-up on auth strength.</dd></div>
+          <div><dt>Our wedge</dt><dd>Entra steps up on auth strength but can't condition on <b>who holds the device, custody/tamper, or CIS baseline</b>; it decides at session/token level and assumes session = person.</dd></div>
           <div><dt>“We already have Entra” → say</dt><dd class="say">“Perfect — we sit on top of it. Entra gives us session + posture; we add <b>who's physically holding this shared device</b> and <b>should this action proceed</b>. An Entra multiplier, not a replacement.”</dd></div>
         </dl>
       </article>
@@ -368,9 +368,9 @@
         <div class="comp__head"><span class="comp__name">PDP engines</span><span class="threat">Overlap</span></div>
         <p class="comp__sub">Cerbos · SGNL/CrowdStrike · Oso · PlainID</p>
         <dl>
-          <div><dt>Their world</dt><dd>Fine-grained authorization for <b>software/app resources</b> (ABAC/ReBAC/policy-as-code). SGNL (CrowdStrike ~$740M, Jan 2026) does identity+device+behavior for cloud/AI-agent access.</dd></div>
+          <div><dt>Their world</dt><dd>Fine-grained authz for <b>software/app resources</b>. SGNL (CrowdStrike ~$740M, Jan 2026) does identity+device+behavior for cloud/AI-agent access — their “device” is <b>EDR posture of an assigned endpoint</b>, not custody of a shared one.</dd></div>
           <div><dt>Our wedge</dt><dd>A PDP for <b>physical shared-device frontline workflows</b> with custody / badge / baseline signals a generic authz engine has no concept of.</dd></div>
-          <div><dt>Frame</dt><dd class="say">“Same PDP <b>pattern</b> — a signal set and a buyer they don't serve.”</dd></div>
+          <div><dt>SGNL/CrowdStrike — today Low / strategic Low-Med</dt><dd class="say">Don't claim to compete with CrowdStrike; <b>consume Falcon/EDR posture as an input</b>. Watch, don't fear.</dd></div>
         </dl>
       </article>
 

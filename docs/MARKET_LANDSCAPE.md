@@ -32,7 +32,7 @@
 
 **Cluster A — Runtime / fine-grained authorization (PDP-as-a-service).** Own the "fuse context → single decision + audit" mechanism.
 - **Cerbos** — stateless runtime authorization engine (YAML/CEL); developer-embedded app authz, no device/custody/frontline notion.
-- **SGNL** — dynamic access management, CAEP hub, zero standing privilege; **being acquired by CrowdStrike for ~$740M** (Jan 8 2026). Enterprise SaaS/cloud + AI-agent identity, not shared physical frontline devices.
+- **SGNL** — dynamic access management, CAEP hub, zero standing privilege; **being acquired by CrowdStrike for ~$740M** (Jan 8 2026). Enterprise SaaS/cloud + AI-agent identity, not shared physical frontline devices. **Threat TODAY LOW / STRATEGIC LOW-MEDIUM** (two-horizon — the deal validates the thesis but the buyer/resource/"device" meaning all differ); full analysis in [`COMPETITIVE_SGNL.md`](./COMPETITIVE_SGNL.md).
 - **Oso, Aserto/Topaz, OpenFGA (Auth0/Okta), Styra/OPA, PlainID, Axiomatics** — application/enterprise authorization engines (ABAC/ReBAC/policy); none reason about "who is physically holding this shared scanner."
 
 **Cluster B — Continuous Access Evaluation / adaptive access (IdP-native).** Microsoft Entra (Conditional Access + CAE + device posture), Cisco Duo, Okta. Re-evaluate a user's *session/token*; assume a 1:1 user↔session. The shared-device "which human is this right now" gap is what they don't natively resolve. **Entra is best treated as a platform to extend, not fight — threat MEDIUM (LOW-MEDIUM);** note its Conditional Access *authentication context* already does per-action step-up (on auth strength), so don't overclaim "Entra can't." Full analysis in [`COMPETITIVE_ENTRA.md`](./COMPETITIVE_ENTRA.md).

@@ -82,14 +82,15 @@ Green flags: mixed multi-vendor fleet · non-EPCS high-risk workflows · retail/
 - **Our wedge:** different resource (frontline *workflows* not servers), different user (clinical/frontline not engineers), different mechanism (overlay decision API, not an inline proxy).
 - **If they say "isn't this Teleport for devices?":** "Teleport secures how engineers reach infrastructure. We decide whether a *frontline worker's action on a shared device* should proceed. Non-overlapping planes — they can run both." Then leave it; not a real contest.
 
-### ⬜ Microsoft Entra (shared device mode + CAE) — objection more than competitor
-- **Their strength:** Conditional Access + Continuous Access Evaluation + Shared Device Mode + device posture — native, and many buyers are Microsoft-standardized.
-- **Our wedge:** Entra decides at **session/token** granularity and assumes *session = person*; it does not fuse **physical custody / badge-holder at action time**. We **extend** Entra (consume its posture/CAE signals), we don't compete with it.
-- **If they say "we already have Entra":** "Perfect — we sit on top of it. Entra tells us the session and posture; we add *who is physically holding this shared device* and *should this action proceed*, and write one decision trail. It's an Entra multiplier, not a replacement."
+### ⬜ Microsoft Entra (shared device mode + CAE) — objection more than competitor · threat MEDIUM
+- **Their strength (concede precisely):** Conditional Access + Continuous Access Evaluation + Shared Device Mode + device posture — native, Microsoft-standardized buyers. **Do not claim "Entra can't do per-action"** — its Conditional Access *authentication context* already does per-action step-up (on auth *strength*, developer-wired).
+- **Our wedge:** Entra steps up on auth strength but can't condition on **who physically holds the device, custody/tamper, or CIS baseline**; it decides at **session/token** granularity and assumes *session = person*. We **extend** Entra (consume its posture/CAE signals), we don't compete with it.
+- **If they say "we already have Entra":** "Perfect — we sit on top of it. Entra tells us the session and posture; we add *who is physically holding this shared device* and *should this action proceed*, and write one decision trail. An Entra multiplier, not a replacement." (Full: `COMPETITIVE_ENTRA.md`)
 
 ### ⬜ Runtime-authz / PDP engines (Cerbos, SGNL/CrowdStrike, Oso, PlainID…) — vocabulary overlap
-- **Their world:** fine-grained authorization for **software/app resources** (ABAC/ReBAC/policy-as-code). SGNL (being acquired by CrowdStrike, ~$740M, Jan 2026) does identity+device+behavior for enterprise/cloud/AI-agent access.
+- **Their world:** fine-grained authorization for **software/app resources** (ABAC/ReBAC/policy-as-code). SGNL (acquired by CrowdStrike, ~$740M, Jan 2026) does identity+device+behavior for enterprise/cloud/AI-agent access. Their "device" = **EDR posture of an assigned endpoint**, not custody of a shared one.
 - **Our wedge:** we're a PDP for **physical shared-device frontline workflows** with custody/badge/baseline signals a generic authz engine has no concept of. Frame: "same PDP *pattern*, a signal set and buyer they don't serve."
+- **SGNL/CrowdStrike specifically — threat TODAY LOW / STRATEGIC LOW-MED:** don't claim to compete with CrowdStrike; consume Falcon/EDR posture as an *input*. Watch (don't fear) whether they ever ship device-*context* (vs posture) decisioning for frontline. (Full: `COMPETITIVE_SGNL.md`)
 
 ---
 

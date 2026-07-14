@@ -84,11 +84,17 @@ options layered on it. Longer answer, honestly:
   in a `beta`/`prod` tier with real credentials.
 - **Typed client + webhooks** (above) are the "SDK and events" layer over REST —
   usually what you want instead of hand-rolling HTTP.
-- **MCP server (plugin path) — roadmap, not built.** The cleanest "plugin" story
-  for AI/agent tooling would be a **Model Context Protocol** server exposing
-  SignalGrid decisions/signals as MCP tools, so an assistant could query the grid
-  directly. This is a natural next connector and is noted here as a deliberate
-  future option, not a current capability — flagged honestly rather than implied.
+- **MCP server (plugin path) — built.** `@workspace/mcp-server` is a
+  **Model Context Protocol** server (stdio) exposing SignalGrid as tools, so an
+  AI assistant or agent can query the grid directly. Tools: `list_room_scenarios`,
+  `evaluate_room_entry`, `signal_catalog`, `scan_signals`, `evaluate_decision`.
+  It runs against the public-safe in-memory demo core (no DB, no live calls).
+  Build with `pnpm --filter @workspace/mcp-server run build`, then point an MCP
+  client at it:
+  ```json
+  { "command": "node", "args": ["<repo>/artifacts/mcp-server/dist/index.mjs"] }
+  ```
+  (or `pnpm --filter @workspace/mcp-server run dev` for tsx watch).
 
 If you tell me the specific system you want to connect (a UEM, a badge reader, a
 nurse-call system, an assistant), the right answer is usually a small connector

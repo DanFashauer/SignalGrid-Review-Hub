@@ -1,0 +1,57 @@
+name: Deploy demo site to Pages
+
+# Publishes the on-device demos (Trusted Room Entry console + battlecard) to
+# GitHub Pages, giving a permanent public link that opens on any device.
+#
+# One-time setup: repo Settings → Pages → Source = "GitHub Actions".
+# Everything is public-safe static HTML — no server, no data.
+on:
+  push:
+    branches: [claude/signalgrid-launch-plan-emxm01, dev, prod, SignalGrid_Alpha]
+    paths:
+      - "site/**"
+      - "docs/room-entry-console.html"
+      - "docs/competitive-battlecard.html"
+      - "tools/room-console/**"
+      - "lib/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      # Regenerate the on-device console from source so Pages is always current.
+      - run: pnpm run build:room-console
+      - name: Assemble site
+        run: |
+          mkdir -p _site
+          cp site/index.html _site/index.html
+          cp docs/room-entry-console.html _site/console.html
+          cp docs/competitive-battlecard.html _site/battlecard.html
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: _site }
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

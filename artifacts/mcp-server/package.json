@@ -1,0 +1,25 @@
+{
+  "name": "@workspace/mcp-server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": { "signalgrid-mcp": "./dist/index.mjs" },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --external:@modelcontextprotocol/sdk --outfile=dist/index.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/index.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "catalog:",
+    "@workspace/signalgrid-core": "workspace:*",
+    "@workspace/room-sim": "workspace:*",
+    "@workspace/signal-radar": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "esbuild": "0.27.3",
+    "tsx": "catalog:"
+  }
+}

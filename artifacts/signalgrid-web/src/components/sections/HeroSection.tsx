@@ -43,12 +43,12 @@ export default function HeroSection() {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
-              <button className="inline-flex h-12 items-center justify-center rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90">
+              <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub" target="_blank" rel="noopener noreferrer" className="inline-flex h-12 items-center justify-center rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90">
                 Request a Demo
-              </button>
-              <button className="inline-flex h-12 items-center justify-center rounded-md border border-input bg-background px-8 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground">
+              </a>
+              <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/tree/main/docs" target="_blank" rel="noopener noreferrer" className="inline-flex h-12 items-center justify-center rounded-md border border-input bg-background px-8 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground">
                 Read Architecture Docs
-              </button>
+              </a>
             </div>
 
             <div className="mt-10 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">

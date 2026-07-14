@@ -113,7 +113,7 @@ export default function Downloads() {
                       </div>
                       <div className="space-y-2">
                         {platform.options.map(opt => (
-                          <div key={opt.label} className="flex items-center justify-between p-3 rounded-lg border border-border bg-background/50 hover:border-primary/40 hover:bg-primary/5 transition-colors group cursor-pointer">
+                          <a key={opt.label} href="https://github.com/DanFashauer/SignalGrid-Review-Hub" target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-3 rounded-lg border border-border bg-background/50 hover:border-primary/40 hover:bg-primary/5 transition-colors group cursor-pointer">
                             <div className="flex items-center gap-3">
                               <Download className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
                               <div>
@@ -127,7 +127,7 @@ export default function Downloads() {
                               )}
                               {opt.ext && <span className="text-xs font-mono text-muted-foreground">{opt.ext}</span>}
                             </div>
-                          </div>
+                          </a>
                         ))}
                       </div>
                     </div>

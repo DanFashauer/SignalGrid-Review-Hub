@@ -37,7 +37,7 @@ pnpm run typecheck                      # whole workspace
 PORT=3000 BASE_PATH=/ pnpm run build    # build the Review Hub + workspace
 
 # Deterministic proof suite (fixture-backed, no network):
-pnpm run proof:signalgrid-core          # product core — 61 invariants, deterministic
+pnpm run proof:signalgrid-core          # product core — 163 invariants, deterministic
 pnpm run proof:signalgrid-simulator     # simulator scenarios
 pnpm run proof:signalgrid-grid          # grid proof
 pnpm run proof:intune-entra-posture     # Intune/Entra posture proof (fixtures)
@@ -45,7 +45,7 @@ pnpm run proof:intune-entra-posture     # Intune/Entra posture proof (fixtures)
 pnpm run sbom                           # generate the software bill of materials
 ```
 
-The **core proof asserts 61 invariants deterministically** — correct outcomes for
+The **core proof asserts 163 invariants deterministically** — correct outcomes for
 a spread of posture cases, fail-closed on degraded evidence (`allow` is actively
 suppressed), tenant isolation (cross-tenant reads/evaluations fail closed),
 deny-by-default RBAC, authentication fail-closed, tamper-evidence on evidence
@@ -234,7 +234,7 @@ Status: **available in this repository today.**
 
 - [ ] `pnpm run typecheck` passes.
 - [ ] `PORT=3000 BASE_PATH=/ pnpm run build` succeeds.
-- [ ] Proof suite green, including `pnpm run proof:signalgrid-core` (61 invariants).
+- [ ] Proof suite green, including `pnpm run proof:signalgrid-core` (163 invariants).
 - [ ] `pnpm run sbom` generated.
 - [ ] `/v1` API runs with no database; curl walkthrough above reproduces the
       documented outcomes; cross-tenant → 404 and unauthenticated → 401.

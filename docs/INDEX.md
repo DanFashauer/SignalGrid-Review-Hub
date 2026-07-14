@@ -52,6 +52,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Visual-code asset strategy](VISUAL_CODE_ASSET_STRATEGY.md): defines how diagrams, Review Hub visuals, and public graphics should remain source-controlled visual code where practical.
 - [Ecosystem positioning](ECOSYSTEM_POSITIONING.md): explains where SignalGrid fits relative to IAM, IGA, UEM/MDM, healthcare access, ITSM, SIEM/SOAR, NAC, endpoint telemetry, and dock/edge systems.
 - [DockBridge strategy](DOCKBRIDGE_STRATEGY.md): documents future edge/dock event orchestration for shared-device workflows.
+- [SignalGrid SmartDock](SIGNALGRID_SMARTDOCK.md): the optional embedded smart-charging dock hardware layer (power + network in, decisions in SaaS cloud or on-site); a pre-production design concept realised in the core as the `embedded_smartdock` ingestion mode.
 - [Hardware partner matrix](HARDWARE_PARTNER_MATRIX.md): maps public-safe candidate hardware categories for Physical Custody, DockBridge, and shared-device trust signals.
 - [Beam Mobile partner-candidate brief](BEAM_MOBILE_PARTNER_CANDIDATE_BRIEF.md): frames Beam Mobile as a candidate healthcare shared iPhone/iPad case, battery, charging, and dock layer without claiming partnership or endorsement.
 - [Physical Custody signal model](PHYSICAL_CUSTODY_SIGNAL_MODEL.md): defines a vendor-neutral fixture schema and custody decision examples for future DockBridge proof work.

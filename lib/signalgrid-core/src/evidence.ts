@@ -7,6 +7,7 @@ import type {
   CustodyState,
   DecisionEvidence,
   Device,
+  DockState,
   EvidenceSnapshot,
   Freshness,
   Identity,
@@ -59,6 +60,7 @@ export function buildEvidence(
     custodyState: readCustody(latestByCategory),
     dockChargeState: readCharge(latestByCategory),
     tamperState: readTamper(latestByCategory),
+    dockState: readDock(latestByCategory),
     baselineCompliance: readBaseline(latestByCategory),
     badgeBinding: readBadge(latestByCategory),
   };
@@ -192,6 +194,7 @@ const CUSTODY_STATES = [
 ] as const;
 const CHARGE_STATES = ["charging", "charged", "low", "critical", "not_present"] as const;
 const TAMPER_STATES = ["none", "suspected", "confirmed", "sensor_unavailable"] as const;
+const DOCK_STATES = ["occupied", "empty", "reserved", "faulted", "offline"] as const;
 const BASELINE_STATES = ["aligned", "partial", "drifted", "not_assessed"] as const;
 const BADGE_STATES = ["present", "removed", "forced", "absent"] as const;
 
@@ -213,6 +216,10 @@ function readCharge(latestByCategory: LatestByCategory): ChargeState {
 
 function readTamper(latestByCategory: LatestByCategory): TamperState {
   return readEnum(latestByCategory, "tamper_state", TAMPER_STATES) ?? "unknown";
+}
+
+function readDock(latestByCategory: LatestByCategory): DockState {
+  return readEnum(latestByCategory, "dock_state", DOCK_STATES) ?? "unknown";
 }
 
 function readEnum<T extends string>(

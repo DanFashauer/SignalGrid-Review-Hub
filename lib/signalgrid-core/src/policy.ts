@@ -102,6 +102,14 @@ const IN_FIELDS: Record<string, ReadonlySet<string>> = {
     "sensor_unavailable",
     "unknown",
   ]),
+  dockState: new Set([
+    "occupied",
+    "empty",
+    "reserved",
+    "faulted",
+    "offline",
+    "unknown",
+  ]),
   baselineState: new Set([
     "aligned",
     "partial",
@@ -337,6 +345,8 @@ function matches(condition: RuleCondition, evidence: DecisionEvidence): boolean 
       return condition.in.includes(evidence.dockChargeState);
     case "tamperState":
       return condition.in.includes(evidence.tamperState);
+    case "dockState":
+      return condition.in.includes(evidence.dockState);
     case "baselineState":
       return condition.in.includes(evidence.baselineCompliance);
     case "badgeState":
@@ -486,6 +496,15 @@ export const SHARED_DEVICE_RULES_V1: PolicyRuleSpec[] = [
     severity: "high",
   },
   {
+    id: "tamper-sensor-unavailable",
+    description:
+      "A blinded tamper sensor cannot witness the device — fail closed to step-up rather than trust an unwitnessed shared device.",
+    match: [{ field: "tamperState", in: ["sensor_unavailable"] }],
+    outcome: "step_up",
+    reasonCode: "TAMPER_SENSOR_UNAVAILABLE",
+    severity: "medium",
+  },
+  {
     id: "custody-overdue",
     description: "A device overdue for return/check-in is restricted.",
     match: [{ field: "custodyState", in: ["overdue"] }],
@@ -508,6 +527,24 @@ export const SHARED_DEVICE_RULES_V1: PolicyRuleSpec[] = [
     match: [{ field: "chargeState", in: ["critical"] }],
     outcome: "step_up",
     reasonCode: "BATTERY_CRITICAL",
+    severity: "medium",
+  },
+  {
+    id: "dock-faulted",
+    description:
+      "A faulted SmartDock/dock cannot vouch for the device's custody, charge, or tamper state — the shared-device session is restricted until custody is re-established on a healthy dock.",
+    match: [{ field: "dockState", in: ["faulted"] }],
+    outcome: "restrict",
+    reasonCode: "DOCK_FAULTED",
+    severity: "high",
+  },
+  {
+    id: "dock-offline",
+    description:
+      "An offline SmartDock/dock has lost its live custody channel, so recent custody/charge/tamper reads may be stale — require step-up before a session.",
+    match: [{ field: "dockState", in: ["offline"] }],
+    outcome: "step_up",
+    reasonCode: "DOCK_OFFLINE",
     severity: "medium",
   },
   {

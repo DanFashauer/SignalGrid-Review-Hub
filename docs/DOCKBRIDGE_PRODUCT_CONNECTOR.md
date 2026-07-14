@@ -16,14 +16,17 @@ systems of record:
 
 | `ingestionMode` | Meaning |
 | --------------- | ------- |
-| `app_in_dock` | A SignalGrid agent embedded in the dock/cradle firmware reports events. |
+| `app_in_dock` | A generic SignalGrid agent embedded in a third-party dock/cradle firmware reports events. |
 | `vendor_api` | SignalGrid polls a dock/locker vendor's existing event API (read-only). |
 | `edge_gateway` | An on-site gateway relays dock events. |
+| `embedded_smartdock` | The dedicated SignalGrid **SmartDock** — SignalGrid firmware on SignalGrid-designed smart-charging hardware, emitting the full signal set natively. Optional layer; see [SignalGrid SmartDock](SIGNALGRID_SMARTDOCK.md). |
 
-The demo seeds a hospital DockBridge connector using `app_in_dock` and a
-warehouse connector using `vendor_api`, so both paths are represented. The
-connector is read-only; its `credentialRef` is a non-secret placeholder showing
-where a real credential reference would live in the private core.
+The demo seeds a hospital DockBridge connector using `app_in_dock`, a warehouse
+connector using `vendor_api`, and a dedicated SmartDock connector using
+`embedded_smartdock`, so all paths are represented end to end (connector → sync
+run → normalized signals → decision → audit). Every connector is read-only; its
+`credentialRef` is a non-secret placeholder showing where a real credential
+reference would live in the private core.
 
 ## Normalized custody signals
 
@@ -37,10 +40,12 @@ into device signals and marked with freshness:
 | `charge_state` | `charging`, `charged`, `low`, `critical`, `not_present`, `unknown` |
 | `tamper_state` | `none`, `suspected`, `confirmed`, `sensor_unavailable`, `unknown` |
 | `dock_state` | `occupied`, `empty`, `reserved`, `faulted`, `offline`, `unknown` |
+| `badge_binding` | `present`, `removed`, `forced`, `absent`, `unknown` — the reader case's person→device binding |
 
 These become part of the decision evidence (`custodyState`, `dockChargeState`,
-`tamperState`). Absence of a dock signal is `unknown` and never fabricates a
-healthy state; it simply adds no custody-based conclusion.
+`tamperState`, `dockState`, `badgeBinding`). Absence of a dock signal is
+`unknown` and never fabricates a healthy state; it simply adds no custody-based
+conclusion.
 
 ## Custody policy rules
 
@@ -51,9 +56,16 @@ the active v1 and the stricter v2 draft):
 | ---- | --------- | ------- | ----------- |
 | Confirmed tamper | `tamperState = confirmed` | `deny` | `TAMPER_CONFIRMED` |
 | Suspected tamper | `tamperState = suspected` | `restrict` | `TAMPER_SUSPECTED` |
+| Tamper sensor blinded | `tamperState = sensor_unavailable` | `step_up` | `TAMPER_SENSOR_UNAVAILABLE` |
 | Overdue return | `custodyState = overdue` | `restrict` | `CUSTODY_OVERDUE` |
 | Custody exception | `custodyState = exception` | `restrict` | `CUSTODY_EXCEPTION` |
 | Critical battery | `chargeState = critical` | `step_up` | `BATTERY_CRITICAL` |
+| Faulted dock | `dockState = faulted` | `restrict` | `DOCK_FAULTED` |
+| Offline dock | `dockState = offline` | `step_up` | `DOCK_OFFLINE` |
+
+The tamper-sensor, faulted-dock, and offline-dock rules close a fail-open gap:
+an unwitnessed device (blinded tamper sensor) or a dock that can't vouch for
+custody (faulted/offline) no longer rests on a silent `allow`.
 
 Because the engine takes the most-restrictive firing outcome, a healthy device
 that is overdue is restricted, and a healthy device with a critically low

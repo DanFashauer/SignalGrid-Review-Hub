@@ -46,6 +46,8 @@ const SCENARIOS: ScenarioSpec[] = [
   { label: "Security-baseline drift (CIS)", identityRef: "nurse.baseline_drift", deviceRef: "ipad-ward-06", workflowKey: "clinical-session" },
   { label: "Badge pulled from reader case", identityRef: "nurse.badge_removed", deviceRef: "ipad-badge-01", workflowKey: "clinical-session" },
   { label: "Badge forced from reader case", identityRef: "nurse.badge_forced", deviceRef: "ipad-badge-02", workflowKey: "clinical-session" },
+  { label: "SmartDock faulted", identityRef: "nurse.dock_faulted", deviceRef: "ipad-dock-01", workflowKey: "clinical-session" },
+  { label: "SmartDock offline", identityRef: "nurse.dock_offline", deviceRef: "ipad-dock-02", workflowKey: "clinical-session" },
 ];
 
 const outcomeTone: Record<DecisionOutcome, string> = {
@@ -409,6 +411,17 @@ function DecisionDetail({
           )}
           {evidence.tamperState !== "unknown" && evidence.tamperState !== "none" && (
             <EvidenceRow label="Tamper" value={evidence.tamperState} tone="warn" />
+          )}
+          {evidence.dockState !== "unknown" && evidence.dockState !== "occupied" && (
+            <EvidenceRow
+              label="Dock (SmartDock)"
+              value={evidence.dockState}
+              tone={
+                evidence.dockState === "faulted" || evidence.dockState === "offline"
+                  ? "warn"
+                  : undefined
+              }
+            />
           )}
           {evidence.baselineCompliance !== "unknown" && (
             <EvidenceRow

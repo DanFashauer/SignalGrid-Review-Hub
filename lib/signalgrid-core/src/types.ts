@@ -113,13 +113,22 @@ export type ConnectorMode = "fixture";
 export type ConnectorStatus = "healthy" | "degraded" | "never_synced";
 
 /**
- * How dock/custody events reach SignalGrid. Both are modeled as fixture
+ * How dock/custody events reach SignalGrid. All are modeled as fixture
  * ingestion here (public-safe, no real hardware or vendor calls):
- *  - app_in_dock: a SignalGrid agent embedded in the dock/cradle firmware,
+ *  - app_in_dock: a generic SignalGrid agent embedded in a third-party
+ *    dock/cradle firmware,
  *  - vendor_api: polling a dock/locker vendor's existing event API,
- *  - edge_gateway: an on-site gateway relaying events.
+ *  - edge_gateway: an on-site gateway relaying events,
+ *  - embedded_smartdock: the dedicated SignalGrid SmartDock — SignalGrid
+ *    firmware on SignalGrid-designed smart-charging hardware, emitting the full
+ *    custody/charge/tamper/dock/badge signal set natively. Optional layer; see
+ *    docs/SIGNALGRID_SMARTDOCK.md.
  */
-export type ConnectorIngestionMode = "app_in_dock" | "vendor_api" | "edge_gateway";
+export type ConnectorIngestionMode =
+  | "app_in_dock"
+  | "vendor_api"
+  | "edge_gateway"
+  | "embedded_smartdock";
 
 export interface Connector {
   id: string;
@@ -271,6 +280,7 @@ export type EvidenceField =
   | "custodyState"
   | "chargeState"
   | "tamperState"
+  | "dockState"
   | "baselineState"
   | "badgeState";
 
@@ -287,6 +297,7 @@ export type RuleCondition =
   | { field: "custodyState"; in: CustodyState[] }
   | { field: "chargeState"; in: ChargeState[] }
   | { field: "tamperState"; in: TamperState[] }
+  | { field: "dockState"; in: DockState[] }
   | { field: "baselineState"; in: BaselineState[] }
   | { field: "badgeState"; in: BadgeBindingState[] };
 
@@ -339,6 +350,12 @@ export interface DecisionEvidence {
   custodyState: CustodyState;
   dockChargeState: ChargeState;
   tamperState: TamperState;
+  /**
+   * Dock/SmartDock hardware state (default "unknown"). A `faulted` or `offline`
+   * dock means the custody/charge/tamper channel for the device is unreliable,
+   * so `allow` should not rest on it. See docs/SIGNALGRID_SMARTDOCK.md.
+   */
+  dockState: DockState;
   /** Security-baseline (CIS/hardening) alignment for the device (default "unknown"). */
   baselineCompliance: BaselineState;
   /** Badge-binding state from the RFID/prox badge-reader case (default "unknown"). */

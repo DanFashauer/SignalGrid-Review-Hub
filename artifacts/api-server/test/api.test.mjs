@@ -287,6 +287,24 @@ async function run() {
   });
   check("badge forced removal → deny", badgeForced.json?.decision?.outcome === "deny" && (badgeForced.json?.decision?.reasonCodes ?? []).includes("BADGE_FORCED_REMOVAL"));
 
+  // ── SmartDock: the embedded dock's own hardware state drives decisions ────
+  const dockFaulted = await req("POST", "/v1/decisions/evaluate", {
+    token: KEYS.operator,
+    body: { identityRef: "nurse.dock_faulted", deviceRef: "ipad-dock-01", workflowKey: "clinical-session" },
+  });
+  check("faulted SmartDock → restrict", dockFaulted.json?.decision?.outcome === "restrict");
+  check("dock-faulted reason surfaced", (dockFaulted.json?.decision?.reasonCodes ?? []).includes("DOCK_FAULTED"));
+  const dockFaultedId = dockFaulted.json?.decision?.decisionId;
+  const dockEvidence = await req("GET", `/v1/decisions/${dockFaultedId}/evidence`, { token: KEYS.operator });
+  check("dock hardware state is exposed in decision evidence", dockEvidence.json?.evidence?.evidence?.dockState === "faulted");
+  const dockOffline = await req("POST", "/v1/decisions/evaluate", {
+    token: KEYS.operator,
+    body: { identityRef: "nurse.dock_offline", deviceRef: "ipad-dock-02", workflowKey: "clinical-session" },
+  });
+  check("offline SmartDock → step-up", dockOffline.json?.decision?.outcome === "step_up" && (dockOffline.json?.decision?.reasonCodes ?? []).includes("DOCK_OFFLINE"));
+  const smartdockConnectors = await req("GET", "/v1/connectors", { token: KEYS.owner });
+  check("embedded SmartDock connector is present", (smartdockConnectors.json?.connectors ?? []).some((c) => c.ingestionMode === "embedded_smartdock"));
+
   // ── connector + webhooks ────────────────────────────────────────────────
   const deliveries = await req("GET", "/v1/webhooks/deliveries", { token: KEYS.owner });
   check("webhook deliveries listed", deliveries.status === 200 && Array.isArray(deliveries.json?.deliveries));

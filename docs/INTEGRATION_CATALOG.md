@@ -86,6 +86,6 @@ Imprivata is documented as a future candidate healthcare access-management integ
 
 ## DockBridge candidate integration
 
-SignalGrid DockBridge is a future dock/edge integration strategy for shared-device physical events. The first proof should be software-only: a simulated `POST /api/dock/events` contract and demo flow that turns dock state into SignalGrid runtime decisions and audit records. Real dock hardware, MFi work, or vendor-specific adapters should come later only if the simulated workflow validates customer value.
+SignalGrid DockBridge is a future dock/edge integration strategy for shared-device physical events. The first proof should be software-only: a simulated `POST /api/dock/events` contract and demo flow that turns dock state into SignalGrid runtime decisions and audit records (the implemented path is now `POST /api/v1/connectors/{id}/sync`). Real dock hardware, MFi work, or vendor-specific adapters should come later only if the simulated workflow validates customer value.
 
 DockBridge should reduce workstation-centered orchestration where possible, but it should not be claimed as a replacement for Apple Configurator, MDM/UEM, Imprivata GroundControl, or platform-managed device operations.

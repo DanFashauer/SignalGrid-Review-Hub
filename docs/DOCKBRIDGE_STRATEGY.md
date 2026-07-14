@@ -130,6 +130,8 @@ DockBridge is not:
 
 The first DockBridge proof should be a simulated dock event API and demo flow before working with real dock hardware.
 
+> Note: this simulated dock-event API has since been realised in the product core as the DockBridge custody connector, exercised via `POST /api/v1/connectors/{id}/sync` (see `DOCKBRIDGE_PRODUCT_CONNECTOR.md`), so the `/api/dock/events` contract below is the original design sketch.
+
 Suggested proof sequence:
 
 1. Define a `POST /api/dock/events` contract for simulated dock events.

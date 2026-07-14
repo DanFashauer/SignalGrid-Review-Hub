@@ -37,6 +37,7 @@ type EvidenceTransform = Partial<
     | "custodyState"
     | "tamperState"
     | "dockChargeState"
+    | "dockState"
     | "baselineCompliance"
     | "badgeBinding"
   >
@@ -158,6 +159,27 @@ const DESCRIPTORS: Record<string, ResolutionDescriptor> = {
     transform: null,
     hardwareOriented: false,
   },
+  TAMPER_SENSOR_UNAVAILABLE: {
+    baseClass: "requires_approval",
+    workerAction: "This device's tamper sensor isn't reporting — an operator will confirm the device is intact before it can be used.",
+    operatorAction: "Physically confirm the device is intact (or move it to a dock with a working tamper sensor), then approve to clear.",
+    transform: { tamperState: "none" },
+    hardwareOriented: false,
+  },
+  DOCK_FAULTED: {
+    baseClass: "requires_approval",
+    workerAction: "The dock holding this device is faulted — an operator will move it to a healthy dock/bay before it can be used.",
+    operatorAction: "Move the device to a healthy SmartDock/bay to re-establish custody (and service the faulted dock), then re-evaluate.",
+    transform: { dockState: "occupied" },
+    hardwareOriented: false,
+  },
+  DOCK_OFFLINE: {
+    baseClass: "auto_proposed",
+    workerAction: "This dock is offline — return the device to an online dock/bay to refresh its custody state, then retry.",
+    operatorAction: "Confirm the device is on an online SmartDock/bay (or reconnect the dock), then re-evaluate.",
+    transform: { dockState: "occupied" },
+    hardwareOriented: true,
+  },
   BADGE_REMOVED: {
     baseClass: "auto_proposed",
     workerAction: "Re-insert your badge into the reader case to re-bind it to this device, then retry.",
@@ -223,7 +245,7 @@ export function buildResolutionPlan(
   return {
     decisionId: decision.id,
     outcome: decision.outcome,
-    summaryForWorker: workerSummary(decision, path),
+    summaryForWorker: workerSummary(decision, path, steps.length),
     summaryForOperator: operatorSummary(decision, steps, path),
     steps,
     autoResolvable,
@@ -289,7 +311,12 @@ function channelFor(
   return descriptor.hardwareOriented ? config.primaryHardwareChannel : "device_prompt";
 }
 
-function workerSummary(decision: Decision, path: string): string {
+function workerSummary(decision: Decision, path: string, stepCount: number): string {
+  if (stepCount === 0) {
+    // No mapped resolution step (e.g. a bare default step-up): don't promise a
+    // self-service fix that has no step attached — route to a human.
+    return `Access needs another look (${decision.outcome}). There's no self-service step for this one — retry, or ask your operator/IT to review.`;
+  }
   if (path === "self_service") {
     return "You can resolve this yourself in a moment — complete the step below and retry.";
   }

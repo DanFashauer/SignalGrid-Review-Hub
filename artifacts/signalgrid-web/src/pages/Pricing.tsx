@@ -13,7 +13,7 @@ const TIERS = [
     cta: "Request a walkthrough",
     features: [
       { text: "Up to 250 managed devices", ok: true },
-      { text: "5 candidate signal sources", ok: true },
+      { text: "5 evaluated-today signal dimensions", ok: true },
       { text: "Decision engine + policy editor", ok: true },
       { text: "Operator dashboard", ok: true },
       { text: "Mobile PWA (worker + operator)", ok: true },
@@ -35,7 +35,7 @@ const TIERS = [
     cta: "Request a walkthrough",
     features: [
       { text: "Unlimited managed devices", ok: true },
-      { text: "16 signal categories (candidate sources)", ok: true },
+      { text: "16 candidate source categories", ok: true },
       { text: "Decision engine + policy editor", ok: true },
       { text: "Operator dashboard + Desktop client", ok: true },
       { text: "Mobile PWA (My Access worker + operator)", ok: true },
@@ -149,13 +149,17 @@ export default function Pricing() {
                     ))}
                   </ul>
 
-                  <button className={`w-full py-2.5 rounded-md text-sm font-medium transition-colors ${
+                  <a
+                    href="https://github.com/DanFashauer/SignalGrid-Review-Hub"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`block text-center w-full py-2.5 rounded-md text-sm font-medium transition-colors ${
                     tier.highlight
                       ? "bg-primary text-primary-foreground hover:bg-primary/90"
                       : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
                   }`}>
                     {tier.cta}
-                  </button>
+                  </a>
                 </motion.div>
               ))}
             </div>

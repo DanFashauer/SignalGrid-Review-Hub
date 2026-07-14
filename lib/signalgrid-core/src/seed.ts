@@ -97,6 +97,19 @@ export function seedDemoStore(clock: Clock): SeededDemo {
   const northwindDockId = runDockConnector(store, clock, NORTHWIND, "app_in_dock", northwindDockRecords);
   const atlasDockId = runDockConnector(store, clock, ATLAS, "vendor_api", atlasDockRecords);
 
+  // Dedicated SignalGrid SmartDock: the embedded smart-charging dock reports the
+  // full custody/charge/tamper/dock/badge signal set natively. Optional hardware
+  // layer, fixture-only, no dock action performed. See docs/SIGNALGRID_SMARTDOCK.md.
+  const northwindSmartDockRecords = northwindSmartDockCustody();
+  const northwindSmartDockId = runDockConnector(
+    store,
+    clock,
+    NORTHWIND,
+    "embedded_smartdock",
+    northwindSmartDockRecords,
+    "smartdock",
+  );
+
   seedWebhookEndpoints(store, NORTHWIND);
   seedWebhookEndpoints(store, ATLAS);
 
@@ -132,6 +145,7 @@ export function seedDemoStore(clock: Clock): SeededDemo {
     dockRecords: {
       [northwindDockId]: northwindDockRecords,
       [atlasDockId]: atlasDockRecords,
+      [northwindSmartDockId]: northwindSmartDockRecords,
     },
   };
 }
@@ -238,6 +252,7 @@ function seedPolicyTests(
     custodyState: "checked_out",
     dockChargeState: "charged",
     tamperState: "none",
+    dockState: "occupied",
     baselineCompliance: "aligned",
     badgeBinding: "present",
     criticalSignalsPresent: true,
@@ -253,6 +268,10 @@ function seedPolicyTests(
     { name: "badge removed → restrict", evidence: { ...base, badgeBinding: "removed" }, expectedOutcome: "restrict", expectedReasonCode: "BADGE_REMOVED" },
     { name: "badge forced removal → deny", evidence: { ...base, badgeBinding: "forced" }, expectedOutcome: "deny", expectedReasonCode: "BADGE_FORCED_REMOVAL" },
     { name: "badge absent/unknown → no fabricated block (allow)", evidence: { ...base, badgeBinding: "unknown" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
+    { name: "SmartDock faulted → restrict", evidence: { ...base, dockState: "faulted" }, expectedOutcome: "restrict", expectedReasonCode: "DOCK_FAULTED" },
+    { name: "SmartDock offline → step-up", evidence: { ...base, dockState: "offline" }, expectedOutcome: "step_up", expectedReasonCode: "DOCK_OFFLINE" },
+    { name: "dock state unknown → still allow (no fabricated block)", evidence: { ...base, dockState: "unknown" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
+    { name: "tamper sensor unavailable → step-up (no fail-open)", evidence: { ...base, tamperState: "sensor_unavailable" }, expectedOutcome: "step_up", expectedReasonCode: "TAMPER_SENSOR_UNAVAILABLE" },
   ];
   for (const [index, spec] of cases.entries()) {
     store.putPolicyTest({
@@ -342,6 +361,23 @@ function seedNorthwindSubjects(store: MemoryStore): FixturePostureRecord[] {
       device: { externalRef: "ipad-badge-02", name: "Case iPad 02", osPlatform: "iPadOS", osVersion: "18.5", ownerType: "shared", managementAgent: "intune" },
       posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, baseline: "aligned", sourceReference: "fixture:intune:managedDevices#ipad-badge-02" },
     },
+    // SmartDock scenarios: posture is healthy, so the dock's own hardware state
+    // (reported by the embedded SmartDock) is the decisive signal.
+    {
+      identity: { externalRef: "nurse.dock_faulted", displayName: "Nurse (faulted dock)", state: "enabled", assignedRole: "nurse" },
+      device: { externalRef: "ipad-dock-01", name: "SmartDock iPad 01", osPlatform: "iPadOS", osVersion: "18.5", ownerType: "shared", managementAgent: "intune" },
+      posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, baseline: "aligned", sourceReference: "fixture:intune:managedDevices#ipad-dock-01" },
+    },
+    {
+      identity: { externalRef: "nurse.dock_offline", displayName: "Nurse (offline dock)", state: "enabled", assignedRole: "nurse" },
+      device: { externalRef: "ipad-dock-02", name: "SmartDock iPad 02", osPlatform: "iPadOS", osVersion: "18.5", ownerType: "shared", managementAgent: "intune" },
+      posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, baseline: "aligned", sourceReference: "fixture:intune:managedDevices#ipad-dock-02" },
+    },
+    {
+      identity: { externalRef: "nurse.tamper_blind", displayName: "Nurse (tamper sensor down)", state: "enabled", assignedRole: "nurse" },
+      device: { externalRef: "ipad-dock-03", name: "SmartDock iPad 03", osPlatform: "iPadOS", osVersion: "18.5", ownerType: "shared", managementAgent: "intune" },
+      posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, baseline: "aligned", sourceReference: "fixture:intune:managedDevices#ipad-dock-03" },
+    },
   ];
   return materializeSubjects(store, NORTHWIND, specs);
 }
@@ -393,15 +429,44 @@ function northwindDockCustody(): DockCustodyRecord[] {
     chargeState: "critical",
     dockState: "empty",
   });
+  return records;
+}
+
+/**
+ * Custody events reported by the dedicated SignalGrid SmartDock (the embedded
+ * smart-charging dock). These devices sit in the reader-case SmartDock, so the
+ * badge-binding and the dock's own hardware state are the decisive signals.
+ * See docs/SIGNALGRID_SMARTDOCK.md.
+ */
+function northwindSmartDockCustody(): DockCustodyRecord[] {
+  const records: DockCustodyRecord[] = [];
   // Badge-reader-case scenarios: posture is healthy so the badge read is decisive.
   records.push({
     ...benignDock("ipad-badge-01", 14),
+    dockId: "smartdock-fixture-ward-01",
     badgeBinding: "removed",
   });
   records.push({
     ...benignDock("ipad-badge-02", 15),
+    dockId: "smartdock-fixture-ward-01",
     badgeBinding: "forced",
     tamperState: "suspected",
+  });
+  // Dock-hardware scenarios: the SmartDock reports its own health.
+  records.push({
+    ...benignDock("ipad-dock-01", 16),
+    dockId: "smartdock-fixture-ward-02",
+    dockState: "faulted",
+  });
+  records.push({
+    ...benignDock("ipad-dock-02", 17),
+    dockId: "smartdock-fixture-ward-03",
+    dockState: "offline",
+  });
+  records.push({
+    ...benignDock("ipad-dock-03", 18),
+    dockId: "smartdock-fixture-ward-04",
+    tamperState: "sensor_unavailable",
   });
   return records;
 }
@@ -483,15 +548,16 @@ function runDockConnector(
   tenantId: string,
   ingestionMode: ConnectorIngestionMode,
   records: DockCustodyRecord[],
+  idKey = "dockbridge",
 ): string {
   const connector: Connector = {
-    id: `conn_${tenantId}_dockbridge`,
+    id: `conn_${tenantId}_${idKey}`,
     tenantId,
     kind: "dockbridge-custody",
     mode: "fixture",
     ingestionMode,
     permissionScope: "Read-only dock/custody events (fixture; no dock action performed)",
-    credentialRef: `keyvault-placeholder://${tenantId}/dockbridge-readonly (non-secret placeholder)`,
+    credentialRef: `keyvault-placeholder://${tenantId}/${idKey}-readonly (non-secret placeholder)`,
     status: "never_synced",
     lastSyncAt: null,
   };

@@ -31,6 +31,7 @@ test today:
 | Custody state (DockBridge) | checked_in / checked_out / overdue / exception / maintenance / unknown |
 | Charge state (DockBridge) | charging / charged / low / critical / not_present / unknown |
 | Tamper state (DockBridge) | none / suspected / confirmed / sensor_unavailable / unknown |
+| Dock state (DockBridge / SmartDock) | occupied / empty / reserved / faulted / offline / unknown — a faulted or offline dock can't vouch for custody |
 | Security baseline (CIS) | aligned / partial / drifted / not_assessed / unknown |
 | Badge binding (reader case) | present / removed / forced / absent / unknown — who is bound to the shared device right now |
 | Critical signals present | derived fail-closed gate — `allow` is suppressed when a critical input is degraded |
@@ -56,8 +57,10 @@ The website groups these into five **evaluated-today** dimensions:
 
 1. **Identity state** — identity enabled/disabled/unknown.
 2. **Device posture** — managed, compliant, encrypted, OS-supported, fresh.
-3. **Physical custody (DockBridge)** — custody, charge, and tamper state from
-   dock/case hardware.
+3. **Physical custody (DockBridge / SmartDock)** — custody, charge, tamper, and
+   the dock's own hardware state from dock/case hardware. The optional embedded
+   [SmartDock](SIGNALGRID_SMARTDOCK.md) is a dedicated ingestion path for these
+   signals; a faulted or offline dock changes the runtime decision.
 4. **Security baseline (CIS)** — CIS/hardening alignment; drift steps up or
    restricts.
 5. **Badge binding (reader case)** — who is physically bound to the shared
@@ -116,10 +119,10 @@ dimensions above.
 
 ## How to verify
 
-- `pnpm run proof:signalgrid-core` — 145 assertions over the real core: outcomes,
+- `pnpm run proof:signalgrid-core` — 163 assertions over the real core: outcomes,
   fail-closed, tenant isolation, RBAC, tamper-evidence, determinism, the
-  security-baseline dimension, the badge-binding (reader case) dimension, and
-  untrusted-input hardening.
+  security-baseline dimension, the badge-binding (reader case) dimension, the
+  dock/SmartDock hardware-state dimension, and untrusted-input hardening.
 - `pnpm run test:api` — the `/v1` HTTP surface end to end.
 - `pnpm run bench:decision-latency` — the decision-latency gate.
 

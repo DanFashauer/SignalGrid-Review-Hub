@@ -129,15 +129,20 @@ export default function DeploymentSection() {
                 </div>
               </div>
 
-              <button
-                className={`mt-6 w-full py-2.5 rounded-md text-sm font-medium transition-colors ${
+              <a
+                href={opt.cta === "View Docs"
+                  ? "https://github.com/DanFashauer/SignalGrid-Review-Hub/tree/main/docs"
+                  : "https://github.com/DanFashauer/SignalGrid-Review-Hub"}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`mt-6 block text-center w-full py-2.5 rounded-md text-sm font-medium transition-colors ${
                   opt.highlight
                     ? "bg-primary text-primary-foreground hover:bg-primary/90"
                     : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
                 }`}
               >
                 {opt.cta}
-              </button>
+              </a>
             </motion.div>
           ))}
         </div>

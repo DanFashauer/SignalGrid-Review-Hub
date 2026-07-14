@@ -3,7 +3,7 @@ import { Link } from "wouter";
 const FOOTER_LINKS = {
   Product: [
     { label: "Hardware", href: "/hardware" },
-    { label: "Platform", href: "#platform" },
+    { label: "Platform", href: "/#platform" },
     { label: "Integrations", href: "#integrations" },
     { label: "Pricing", href: "/pricing" },
   ],
@@ -56,7 +56,7 @@ export default function Footer() {
               <ul className="space-y-3 text-sm text-muted-foreground">
                 {links.map(({ label, href }) => (
                   <li key={label}>
-                    {href.startsWith("#") || href.startsWith("http") || href.startsWith("/api") ? (
+                    {href.includes("#") || href.startsWith("http") || href.startsWith("/api") ? (
                       <a href={href} className="hover:text-primary transition-colors">{label}</a>
                     ) : (
                       <Link href={href} className="hover:text-primary transition-colors">{label}</Link>
@@ -71,9 +71,9 @@ export default function Footer() {
         <div className="pt-8 border-t border-border/40 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
           <div>&copy; {new Date().getFullYear()} SignalGrid, Inc. All rights reserved.</div>
           <div className="flex gap-6">
-            <a href="#" className="hover:text-foreground transition-colors">Privacy Policy</a>
-            <a href="#" className="hover:text-foreground transition-colors">Terms of Service</a>
-            <a href="#" className="hover:text-foreground transition-colors">System Status</a>
+            <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Privacy Policy</a>
+            <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Terms of Service</a>
+            <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">System Status</a>
             <a href="/federal" className="hover:text-foreground transition-colors">FedRAMP</a>
           </div>
         </div>

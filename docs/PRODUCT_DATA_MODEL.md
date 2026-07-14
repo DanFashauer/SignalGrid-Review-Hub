@@ -299,7 +299,9 @@ child of `Policy` / `PolicyVersion` so the model reflects its intended shape.
 > healthy value. Its dimensions are: `identityEnabled`, `deviceManaged`,
 > `deviceCompliance`, `deviceEncrypted`, `osSupported`, `ownerType`,
 > `postureFreshness`, `workflowRiskTier`, the physical-custody fields
-> `custodyState` / `dockChargeState` / `tamperState`, the security-baseline field
+> `custodyState` / `dockChargeState` / `tamperState` / `dockState` (the dock's
+> own hardware state — `faulted`/`offline` restrict or step up; see
+> [SignalGrid SmartDock](SIGNALGRID_SMARTDOCK.md)), the security-baseline field
 > `baselineCompliance` (`BaselineState`: `aligned` \| `partial` \| `drifted` \|
 > `not_assessed` \| `unknown` — see
 > [Security-Baseline Alignment](SECURITY_BASELINE_ALIGNMENT.md)), the

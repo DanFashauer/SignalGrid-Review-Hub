@@ -99,6 +99,9 @@ const scenarios: Scenario[] = [
   { label: "baseline-drift-stepup", identityRef: "nurse.baseline_drift", deviceRef: "ipad-ward-06", workflowKey: "clinical-session", expectedOutcome: "step_up", expectedReason: "BASELINE_DRIFTED" },
   { label: "badge-removed-restrict", identityRef: "nurse.badge_removed", deviceRef: "ipad-badge-01", workflowKey: "clinical-session", expectedOutcome: "restrict", expectedReason: "BADGE_REMOVED" },
   { label: "badge-forced-deny", identityRef: "nurse.badge_forced", deviceRef: "ipad-badge-02", workflowKey: "clinical-session", expectedOutcome: "deny", expectedReason: "BADGE_FORCED_REMOVAL" },
+  { label: "smartdock-faulted-restrict", identityRef: "nurse.dock_faulted", deviceRef: "ipad-dock-01", workflowKey: "clinical-session", expectedOutcome: "restrict", expectedReason: "DOCK_FAULTED" },
+  { label: "smartdock-offline-stepup", identityRef: "nurse.dock_offline", deviceRef: "ipad-dock-02", workflowKey: "clinical-session", expectedOutcome: "step_up", expectedReason: "DOCK_OFFLINE" },
+  { label: "tamper-sensor-unavailable-stepup", identityRef: "nurse.tamper_blind", deviceRef: "ipad-dock-03", workflowKey: "clinical-session", expectedOutcome: "step_up", expectedReason: "TAMPER_SENSOR_UNAVAILABLE" },
 ];
 
 const decisions: Decision[] = [];
@@ -625,7 +628,9 @@ if (pending) {
 {
   // The DockBridge connector is present and ingests via an embedded dock app.
   const connectors = core.listConnectors(T.owner);
-  const dock = connectors.find((c) => c.kind === "dockbridge-custody");
+  const dock = connectors.find(
+    (c) => c.kind === "dockbridge-custody" && c.ingestionMode === "app_in_dock",
+  );
   check("dockbridge: custody connector is registered", Boolean(dock));
   check(
     "dockbridge: connector documents its (fixture) ingestion mode",
@@ -674,7 +679,6 @@ if (pending) {
   }
 
   // A confirmed-tamper device is a hard deny that cannot self-resolve.
-  const tamperCore = SignalGridCore.demo();
   const confirmedEvidence = buildEvidence(
     { id: "i", tenantId: "tenant_northwind", externalRef: "r", displayName: "d", state: "enabled", assignedRole: "nurse" },
     { id: "dv", tenantId: "tenant_northwind", externalRef: "d", name: "n", osPlatform: "iPadOS", osVersion: "18", ownerType: "shared", managementAgent: "intune" },
@@ -687,7 +691,6 @@ if (pending) {
       { id: "s5", tenantId: "tenant_northwind", connectorId: "c", subjectType: "device", subjectId: "dv", category: "tamper_state", value: "confirmed", observedAt: "2026-07-13T14:30:00.000Z", freshness: "fresh", sourceReference: "fixture" },
     ],
   );
-  void tamperCore;
   const v1 = core.listPolicyVersions(T.owner, policyId).find((v) => v.version === 1);
   check("dockbridge: confirmed tamper denies (v1 present)", Boolean(v1));
   if (v1) {
@@ -986,6 +989,66 @@ if (pending) {
   expectError("badge: validator rejects an out-of-domain badge value", "validation", () =>
     validatePolicyRules([
       { id: "bad", description: "d", match: [{ field: "badgeState", in: ["super-bound"] }], outcome: "deny", reasonCode: "R", severity: "low" },
+    ]),
+  );
+}
+
+// ── 19. SmartDock: the embedded dock is a first-class ingestion path + signal ──
+
+{
+  // The dedicated SmartDock is registered as its own DockBridge connector and
+  // documents the embedded_smartdock ingestion mode.
+  const connectors = core.listConnectors(T.owner);
+  const smartdock = connectors.find((c) => c.ingestionMode === "embedded_smartdock");
+  check("smartdock: embedded connector is registered", Boolean(smartdock));
+  check(
+    "smartdock: connector is a dockbridge-custody kind via embedded_smartdock",
+    smartdock?.kind === "dockbridge-custody" && smartdock?.ingestionMode === "embedded_smartdock",
+  );
+  if (smartdock) {
+    // It re-syncs deterministically and normalizes custody signals (read-only).
+    const run = core.syncConnector(T.owner, smartdock.id);
+    check("smartdock: re-sync normalizes custody signals (read-only)", run.signalsNormalized > 0);
+  }
+
+  // A faulted dock cannot vouch for custody → restrict; the dock's own hardware
+  // state is now captured in the evidence snapshot (previously discarded).
+  const faulted = decisions.find((d) => d.reasonCodes.includes("DOCK_FAULTED"));
+  check("smartdock: a faulted-dock decision exists and restricts", Boolean(faulted) && faulted?.outcome === "restrict");
+  if (faulted) {
+    const snap = core.getSnapshot(T.operator, faulted.evidenceSnapshotId);
+    check("smartdock: dock hardware state is captured in evidence", snap.evidence.dockState === "faulted");
+    const plan = core.getResolution(T.operator, faulted.id);
+    check("smartdock: faulted dock is approval-gated (move to a healthy dock)", plan.path === "assisted");
+  }
+
+  // An offline dock has lost its live custody channel → step-up, self-service.
+  const offline = decisions.find((d) => d.reasonCodes.includes("DOCK_OFFLINE"));
+  check("smartdock: an offline-dock decision exists and steps up", Boolean(offline) && offline?.outcome === "step_up");
+  if (offline) {
+    const sim = core.simulateResolution(T.operator, offline.id);
+    check("smartdock: returning to an online dock resolves to allow", sim.resolved === true && sim.projectedOutcome === "allow");
+  }
+
+  // A blinded tamper sensor no longer fails open: step-up instead of allow.
+  const blind = decisions.find((d) => d.reasonCodes.includes("TAMPER_SENSOR_UNAVAILABLE"));
+  check("smartdock: a blinded tamper sensor steps up (no fail-open)", Boolean(blind) && blind?.outcome === "step_up");
+
+  // A healthy allow carries an occupied dock; an unknown dock never fabricates one.
+  const bound = decisions.find((d) => d.reasonCodes.includes("TRUST_ESTABLISHED"));
+  if (bound) {
+    const snap = core.getSnapshot(T.operator, bound.evidenceSnapshotId);
+    check("smartdock: a healthy allow carries an occupied dock state", snap.evidence.dockState === "occupied");
+  }
+
+  // Validator accepts a dockState rule and rejects an out-of-domain value.
+  const okRule = validatePolicyRules([
+    { id: "dock-guard", description: "d", match: [{ field: "dockState", in: ["faulted", "offline"] }], outcome: "restrict", reasonCode: "DOCK_CHECK", severity: "high" },
+  ]);
+  check("smartdock: validator accepts a dockState rule condition", okRule[0]?.match[0]?.field === "dockState");
+  expectError("smartdock: validator rejects an out-of-domain dock value", "validation", () =>
+    validatePolicyRules([
+      { id: "bad", description: "d", match: [{ field: "dockState", in: ["melted"] }], outcome: "deny", reasonCode: "R", severity: "low" },
     ]),
   );
 }

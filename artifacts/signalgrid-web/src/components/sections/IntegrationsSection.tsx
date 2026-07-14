@@ -90,8 +90,8 @@ export default function IntegrationsSection() {
         >
           {[
             { value: "12", label: "Core signal categories" },
-            { value: "16", label: "Candidate source categories" },
-            { value: "8", label: "Owning teams routed" },
+            { value: "16", label: "Candidate source categories (taxonomy)" },
+            { value: String(new Set(CATEGORY_GROUPS.map(g => g.owner)).size), label: "Owning teams shown" },
             { value: "12+", label: "Frameworks mapped" },
           ].map((stat) => (
             <div key={stat.label} className="rounded-lg border border-border bg-card p-5 text-center">

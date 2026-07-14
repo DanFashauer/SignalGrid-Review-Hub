@@ -70,8 +70,8 @@ export default function Federal() {
                 ))}
               </div>
               <div className="flex gap-3">
-                <a href="#" className="px-5 py-2.5 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors">Request a conversation</a>
-                <a href="#" className="px-5 py-2.5 border border-border rounded-md text-sm font-medium hover:border-primary/50 transition-colors">Read the approach</a>
+                <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub" target="_blank" rel="noopener noreferrer" className="px-5 py-2.5 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors">Request a conversation</a>
+                <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/tree/main/docs" target="_blank" rel="noopener noreferrer" className="px-5 py-2.5 border border-border rounded-md text-sm font-medium hover:border-primary/50 transition-colors">Read the approach</a>
               </div>
             </div>
           </div>
@@ -178,7 +178,7 @@ export default function Federal() {
                   <div className="text-sm font-semibold mb-1">Need a CAGE Code or DUNS?</div>
                   <div className="text-sm text-muted-foreground">Contact our Federal team for SAM.gov registration details, sole-source justification support, and IDIQ on-ramp information.</div>
                 </div>
-                <a href="#" className="px-5 py-2.5 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors shrink-0">Contact Federal Team</a>
+                <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub" target="_blank" rel="noopener noreferrer" className="px-5 py-2.5 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors shrink-0">Contact Federal Team</a>
               </div>
             </div>
           </div>

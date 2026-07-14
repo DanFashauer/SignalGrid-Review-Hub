@@ -76,6 +76,13 @@ export interface PlanInput {
   room: RoomContext;
   /** Ids of `assist` actions a human has confirmed this turn. */
   confirmedActionIds?: string[];
+  /**
+   * True once the holder has satisfied a step-up (badge tap / biometric). On a
+   * `step_up` decision this releases the held actions — they behave as on an
+   * allow (non-sensitive auto, sensitive still human-confirmed). Ignored for
+   * other outcomes.
+   */
+  stepUpSatisfied?: boolean;
 }
 
 interface ActionSpec {
@@ -149,6 +156,30 @@ const CATALOG: ActionSpec[] = [
   },
 ];
 
+// Additional coordination that only applies in a controlled-substance room —
+// both are inherently sensitive (a physical cabinet, a second clinician), so
+// they are always human-confirmed on an allow.
+const CONTROLLED_EXTRAS: ActionSpec[] = [
+  {
+    kind: "medication.cabinet.unlock",
+    label: "Unlock medication cabinet",
+    targetSystem: "Automated dispensing cabinet",
+    sensitive: () => true,
+    gatedByStepUp: true,
+  },
+  {
+    kind: "witness.require",
+    label: "Request second-nurse witness",
+    targetSystem: "Clinical witness workflow",
+    sensitive: () => true,
+    gatedByStepUp: true,
+  },
+];
+
+function applicableSpecs(room: RoomContext): ActionSpec[] {
+  return room.sensitivity === "controlled" ? [...CATALOG, ...CONTROLLED_EXTRAS] : CATALOG;
+}
+
 const firstReason = (codes: string[], fallback: string): string =>
   codes.length > 0 ? codes[0] : fallback;
 
@@ -162,14 +193,19 @@ export function planOrchestration(input: PlanInput): OrchestrationPlan {
   const { outcome, reasonCodes, room } = input;
   const confirmed = new Set(input.confirmedActionIds ?? []);
 
-  const actions: DownstreamAction[] = CATALOG.map((spec) => {
+  // A satisfied step-up releases the held actions: from here they behave exactly
+  // as on an allow (non-sensitive auto, sensitive still human-confirmed).
+  const stepUpDone = outcome === "step_up" && input.stepUpSatisfied === true;
+  const effective: DecisionOutcome = stepUpDone ? "allow" : outcome;
+
+  const actions: DownstreamAction[] = applicableSpecs(room).map((spec) => {
     const id = `act-${room.roomId}-${spec.kind}`;
     const sensitive = spec.sensitive(room);
     let disposition: ActionDisposition;
     let reason: string;
     let requiresConfirmation = false;
 
-    switch (outcome) {
+    switch (effective) {
       case "deny":
         disposition = "blocked";
         reason = `Denied — ${firstReason(reasonCodes, "trust conditions not met")}`;
@@ -207,7 +243,7 @@ export function planOrchestration(input: PlanInput): OrchestrationPlan {
           }
         } else {
           disposition = "auto";
-          reason = "Trusted — performed automatically";
+          reason = stepUpDone ? "Released after step-up" : "Trusted — performed automatically";
         }
         break;
     }
@@ -224,8 +260,8 @@ export function planOrchestration(input: PlanInput): OrchestrationPlan {
     };
   });
 
-  const mode = deriveMode(outcome, actions);
-  return { mode, summary: summarize(mode, room), actions };
+  const mode = deriveMode(effective, actions);
+  return { mode, summary: summarize(mode, room, stepUpDone), actions };
 }
 
 function deriveMode(outcome: DecisionOutcome, actions: DownstreamAction[]): OrchestrationMode {
@@ -236,12 +272,13 @@ function deriveMode(outcome: DecisionOutcome, actions: DownstreamAction[]): Orch
   return actions.some((a) => a.disposition === "assist") ? "assist" : "proceed";
 }
 
-function summarize(mode: OrchestrationMode, room: RoomContext): string {
+function summarize(mode: OrchestrationMode, room: RoomContext, stepUpDone = false): string {
+  const after = stepUpDone ? " after step-up" : "";
   switch (mode) {
     case "proceed":
-      return `Trusted presence — ${room.workflowLabel} prepared automatically in ${room.roomId}.`;
+      return `Trusted presence — ${room.workflowLabel} prepared automatically in ${room.roomId}${after}.`;
     case "assist":
-      return `Environment prepared for ${room.workflowLabel} in ${room.roomId}; sensitive actions await clinician confirmation.`;
+      return `Environment prepared for ${room.workflowLabel} in ${room.roomId}${after}; sensitive actions await clinician confirmation.`;
     case "step_up":
       return `Access held in ${room.roomId} pending a step-up (badge tap / biometric).`;
     case "hold":
@@ -258,4 +295,12 @@ function summarize(mode: OrchestrationMode, room: RoomContext): string {
 export function confirmActions(input: PlanInput, actionIds: string[]): OrchestrationPlan {
   const merged = new Set([...(input.confirmedActionIds ?? []), ...actionIds]);
   return planOrchestration({ ...input, confirmedActionIds: [...merged] });
+}
+
+/**
+ * Simulate the holder satisfying a step-up (badge tap / biometric). On a
+ * `step_up` decision this releases the held actions. Pure — recomputes.
+ */
+export function completeStepUp(input: PlanInput): OrchestrationPlan {
+  return planOrchestration({ ...input, stepUpSatisfied: true });
 }

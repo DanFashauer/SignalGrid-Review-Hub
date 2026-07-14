@@ -125,7 +125,11 @@ Run it: [`RUN_ON_MAC.md`](./RUN_ON_MAC.md). Proven by `proof:orchestration`
 Once access is decided, SignalGrid orchestrates simulated downstream actions —
 unlock door, start workstation/mobile session, assign the shared device, set
 lighting, activate the clinical display, route alerts, arm session-close on exit
-— each **auto** or, when sensitive, **assist** (human-confirmed).
+— each **auto** or, when sensitive, **assist** (human-confirmed). A **step-up**
+decision holds the gated actions and offers a *badge-tap / biometric*
+completion that releases them (non-sensitive → auto, sensitive → still
+confirmed). A **controlled med room** adds the clinically-real steps — unlock
+the medication cabinet and request a second-nurse witness — both human-confirmed.
 
 ### Phase 3 — Operational intelligence ✅ (built, runnable)
 The console shows, per entry: the signals evaluated → the decision → *why* → the

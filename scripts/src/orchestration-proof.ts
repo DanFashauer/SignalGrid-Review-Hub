@@ -9,7 +9,7 @@
 //
 // Run: pnpm --filter @workspace/scripts run proof:orchestration
 
-import { planOrchestration, confirmActions, type RoomContext } from "@workspace/orchestration";
+import { planOrchestration, confirmActions, completeStepUp, type RoomContext } from "@workspace/orchestration";
 
 let passed = 0;
 const failures: string[] = [];
@@ -69,6 +69,25 @@ check("confirming one of several leaves mode assist", partial.mode === "assist")
 const full = confirmActions(input, sensitiveIds);
 check("confirming all sensitive actions → mode proceed", full.mode === "proceed");
 check("confirming all → no assist actions remain", full.actions.every((a) => a.disposition !== "assist"));
+
+// ── step-up completion releases held actions ────────────────────────────────
+const suInput = { outcome: "step_up" as const, reasonCodes: ["BASELINE_DRIFTED"], room: controlled };
+check("step_up before completion holds gated actions", planOrchestration(suInput).mode === "step_up");
+const suDone = completeStepUp(suInput);
+check("completeStepUp releases held actions (controlled → mode assist)", suDone.mode === "assist");
+check("completeStepUp: a non-sensitive gated action becomes auto",
+  suDone.actions.find((a) => a.kind === "mobile.session.start")?.disposition === "auto");
+check("completeStepUp: sensitive actions still require human confirmation",
+  suDone.actions.filter((a) => a.sensitive).every((a) => a.disposition === "assist"));
+check("SAFETY: step-up completion never auto-runs a sensitive action",
+  suDone.actions.every((a) => !(a.sensitive && a.disposition === "auto")));
+
+// ── controlled-room extras ──────────────────────────────────────────────────
+const ctlKinds = planOrchestration({ outcome: "allow", reasonCodes: [], room: controlled }).actions.map((a) => a.kind);
+check("controlled room includes medication cabinet + witness",
+  ctlKinds.includes("medication.cabinet.unlock") && ctlKinds.includes("witness.require"));
+check("standard room excludes controlled-only extras",
+  !planOrchestration({ outcome: "allow", reasonCodes: [], room: standard }).actions.some((a) => a.kind === "medication.cabinet.unlock"));
 
 // ── determinism ─────────────────────────────────────────────────────────────
 const a = JSON.stringify(planOrchestration({ outcome: "allow", reasonCodes: [], room: controlled }));

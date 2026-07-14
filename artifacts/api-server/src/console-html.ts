@@ -95,7 +95,7 @@ export const CONSOLE_HTML = /* html */ `<!doctype html>
 </div>
 <script>
 const $=(s,el=document)=>el.querySelector(s);
-let current=null, confirmed=new Set();
+let current=null, confirmed=new Set(), stepUp=false;
 async function j(url,opts){const r=await fetch(url,opts);return r.json();}
 function sigClass(k,v){
   const bad=['disabled','noncompliant','absent','withdrawn','forced','tampered','drifted','offline','faulted','stale','false'];
@@ -111,13 +111,13 @@ async function load(){
   data.scenarios.forEach(s=>{
     const b=document.createElement('button');b.className='s';b.dataset.id=s.id;
     b.innerHTML='<div class="t">'+s.title+'</div><div class="d">'+s.description+'</div>';
-    b.onclick=()=>{current=s.id;confirmed=new Set();document.querySelectorAll('button.s').forEach(x=>x.classList.toggle('active',x.dataset.id===s.id));run();};
+    b.onclick=()=>{current=s.id;confirmed=new Set();stepUp=false;document.querySelectorAll('button.s').forEach(x=>x.classList.toggle('active',x.dataset.id===s.id));run();};
     box.appendChild(b);
   });
 }
 async function run(){
   if(!current)return;
-  const data=await j('/api/sim/room-entry',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({scenarioId:current,confirmedActionIds:[...confirmed]})});
+  const data=await j('/api/sim/room-entry',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({scenarioId:current,confirmedActionIds:[...confirmed],stepUpSatisfied:stepUp})});
   render(data);
 }
 function render(d){
@@ -144,10 +144,12 @@ function render(d){
       '<span class="pill">Orchestration · '+mode+'</span>'+
       '<span style="font-family:var(--mono);font-size:.7rem;color:var(--faint)">'+d.context.roomId+' · '+d.context.unit+' · '+d.context.sensitivity+'</span></div>'+
       '<p class="why">'+d.decision.explanation+'</p>'+(codes?'<div class="codes">'+codes+'</div>':'')+
-      '<p class="sum">'+d.plan.summary+'</p></div>'+
+      '<p class="sum">'+d.plan.summary+'</p>'+
+      (mode==='step_up'?'<button class="confirm" id="stepupbtn" style="margin-top:.7rem">Complete step-up &middot; badge tap</button>':'')+'</div>'+
     '<div class="panel"><h2>Signals evaluated</h2><div class="sig">'+sig+'</div></div>'+
     '<div class="panel"><h2>Downstream orchestration</h2><div class="acts">'+acts+'</div></div>';
-  out.querySelectorAll('.confirm').forEach(b=>b.onclick=()=>{confirmed.add(b.dataset.act);run();});
+  out.querySelectorAll('.confirm[data-act]').forEach(b=>b.onclick=()=>{confirmed.add(b.dataset.act);run();});
+  const su=$('#stepupbtn',out); if(su)su.onclick=()=>{stepUp=true;run();};
 }
 load();
 </script>

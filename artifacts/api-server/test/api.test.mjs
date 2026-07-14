@@ -129,6 +129,16 @@ async function run() {
     confirmEntry.json?.plan?.actions?.find((a) => a.kind === "clinical.display.activate")?.disposition === "applied");
   const badEntry = await req("POST", "/sim/room-entry", { body: { scenarioId: "does-not-exist" } });
   check("room-entry unknown scenario → 404", badEntry.status === 404);
+  // step-up scenario holds, then completes on badge tap
+  const stepHeld = await req("POST", "/sim/room-entry", { body: { scenarioId: "baseline-drift" } });
+  check("room-entry step-up scenario holds gated actions", stepHeld.json?.plan?.mode === "step_up");
+  const stepDone = await req("POST", "/sim/room-entry", { body: { scenarioId: "baseline-drift", stepUpSatisfied: true } });
+  check("room-entry step-up completion releases the mobile session (auto)",
+    stepDone.json?.plan?.mode !== "step_up" && stepDone.json?.plan?.actions?.find((a) => a.kind === "mobile.session.start")?.disposition === "auto");
+  // controlled med room carries the extra clinical actions
+  const medRoom = await req("POST", "/sim/room-entry", { body: { scenarioId: "compliant-medroom" } });
+  check("controlled med room includes medication-cabinet action",
+    (medRoom.json?.plan?.actions ?? []).some((a) => a.kind === "medication.cabinet.unlock"));
 
   const scenarios = await req("GET", "/simulator/scenarios");
   check("simulator scenarios → 200", scenarios.status === 200 && Array.isArray(scenarios.json?.scenarios));

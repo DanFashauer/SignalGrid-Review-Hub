@@ -91,7 +91,7 @@
 (function(){
   const SG = window.SignalGridSim;
   const byId = (s,el)=> (el||document).querySelector(s);
-  let current=null, confirmed=new Set();
+  let current=null, confirmed=new Set(), stepUp=false;
   function sigClass(v){
     const bad=['disabled','noncompliant','absent','withdrawn','forced','tampered','drifted','offline','faulted','stale'];
     const ok=['enabled','compliant','present','bound','aligned','fresh','docked','nominal','supported'];
@@ -108,13 +108,13 @@
       const b=document.createElement('button'); b.className='s'; b.dataset.id=s.id;
       b.innerHTML='<div class="t"></div><div class="d"></div>';
       b.querySelector('.t').textContent=s.title; b.querySelector('.d').textContent=s.description;
-      b.onclick=()=>{current=s.id;confirmed=new Set();document.querySelectorAll('button.s').forEach(x=>x.classList.toggle('active',x.dataset.id===s.id));run();};
+      b.onclick=()=>{current=s.id;confirmed=new Set();stepUp=false;document.querySelectorAll('button.s').forEach(x=>x.classList.toggle('active',x.dataset.id===s.id));run();};
       box.appendChild(b);
     });
   }
   function run(){
     if(!current) return;
-    let d; try{ d=SG.run(current,[...confirmed]); }catch(e){ byId('#out').innerHTML='<div class="placeholder">'+e.message+'</div>'; return; }
+    let d; try{ d=SG.run(current,{confirmedActionIds:[...confirmed],stepUpSatisfied:stepUp}); }catch(e){ byId('#out').innerHTML='<div class="placeholder">'+e.message+'</div>'; return; }
     render(d);
   }
   function el(tag,cls,txt){const e=document.createElement(tag); if(cls)e.className=cls; if(txt!=null)e.textContent=txt; return e;}
@@ -132,6 +132,11 @@
       const cc=el('div','codes'); d.decision.reasonCodes.forEach(c=>cc.appendChild(el('span','code',c))); v.appendChild(cc);
     }
     v.appendChild(el('p','sum',d.plan.summary));
+    if(d.plan.mode==='step_up'){
+      const btn=el('button','confirm','Complete step-up · badge tap'); btn.style.marginTop='.7rem';
+      btn.onclick=()=>{stepUp=true;run();};
+      v.appendChild(btn);
+    }
     out.appendChild(v);
 
     const sp=el('div','panel'); sp.appendChild(el('h2',null,'Signals evaluated'));

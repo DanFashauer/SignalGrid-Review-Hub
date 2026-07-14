@@ -121,11 +121,17 @@ export function findScenario(id: string): Scenario | undefined {
  * scenario is unknown. `confirmedActionIds` promotes `assist` actions to
  * `applied` (a clinician confirming a sensitive step).
  */
+export interface RoomEntryOptions {
+  confirmedActionIds?: string[];
+  /** True once the holder has satisfied a step-up (badge tap / biometric). */
+  stepUpSatisfied?: boolean;
+}
+
 export function runRoomEntry(
   core: CoreLike,
   token: string,
   scenarioId: string,
-  confirmedActionIds: string[] = [],
+  options: RoomEntryOptions = {},
 ): RoomEntryResult {
   const scenario = findScenario(scenarioId);
   if (!scenario) throw new Error(`Unknown scenario '${scenarioId}'`);
@@ -146,7 +152,8 @@ export function runRoomEntry(
     outcome: result.outcome,
     reasonCodes: result.reasonCodes,
     room: scenario.room,
-    confirmedActionIds,
+    confirmedActionIds: options.confirmedActionIds ?? [],
+    stepUpSatisfied: options.stepUpSatisfied ?? false,
   });
 
   return {

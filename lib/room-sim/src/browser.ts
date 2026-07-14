@@ -7,7 +7,7 @@
 // so the in-browser result is identical to the hosted API's.
 
 import { SignalGridCore } from "@workspace/signalgrid-core";
-import { listScenarios, runRoomEntry, type RoomEntryResult } from "./index";
+import { listScenarios, runRoomEntry, type RoomEntryOptions, type RoomEntryResult } from "./index";
 
 const core = SignalGridCore.demo();
 const token =
@@ -17,12 +17,12 @@ const token =
 
 export interface RoomSimGlobal {
   scenarios: ReturnType<typeof listScenarios>;
-  run(scenarioId: string, confirmedActionIds?: string[]): RoomEntryResult;
+  run(scenarioId: string, options?: RoomEntryOptions): RoomEntryResult;
 }
 
 const api: RoomSimGlobal = {
   scenarios: listScenarios(),
-  run: (scenarioId, confirmedActionIds = []) => runRoomEntry(core, token, scenarioId, confirmedActionIds),
+  run: (scenarioId, options = {}) => runRoomEntry(core, token, scenarioId, options),
 };
 
 // Expose to the inline console script.

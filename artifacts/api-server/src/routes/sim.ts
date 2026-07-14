@@ -42,6 +42,7 @@ router.post("/sim/room-entry", (req, res) => {
   const confirmedActionIds: string[] = Array.isArray(req.body?.confirmedActionIds)
     ? req.body.confirmedActionIds.filter((x: unknown): x is string => typeof x === "string")
     : [];
+  const stepUpSatisfied = req.body?.stepUpSatisfied === true;
 
   if (!NW_OPERATOR) {
     res.status(500).json({ error: "seed_error", message: "Demo operator token unavailable" });
@@ -49,7 +50,7 @@ router.post("/sim/room-entry", (req, res) => {
   }
 
   try {
-    const result = runRoomEntry(core, NW_OPERATOR, scenarioId, confirmedActionIds);
+    const result = runRoomEntry(core, NW_OPERATOR, scenarioId, { confirmedActionIds, stepUpSatisfied });
     res.json({ demo: true, ...result });
   } catch (err) {
     const message = err instanceof Error ? err.message : "evaluation failed";

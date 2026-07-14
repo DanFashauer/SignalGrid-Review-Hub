@@ -66,6 +66,50 @@ jobs:
       - name: Decision-latency pilot gate
         run: pnpm run bench:decision-latency
 
+  db-integration:
+    name: Legacy DB-route integration (Postgres)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: signalgrid
+          POSTGRES_PASSWORD: signalgrid
+          POSTGRES_DB: signalgrid
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U signalgrid"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://signalgrid:signalgrid@localhost:5432/signalgrid
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.1
+          run_install: false
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Push database schema
+        run: pnpm --filter @workspace/db run push
+
+      - name: Legacy DB-route integration test (auth gate, filter+count, clamps)
+        run: pnpm --filter @workspace/api-server run test:api-db
+
   docs-sanity:
     name: Required docs and unsafe-claim sanity
     runs-on: ubuntu-latest

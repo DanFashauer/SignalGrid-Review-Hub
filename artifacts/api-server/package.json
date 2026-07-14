@@ -8,6 +8,7 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "test:api": "pnpm run build && node ./test/api.test.mjs",
+    "test:api-db": "pnpm run build && node ./test/db.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

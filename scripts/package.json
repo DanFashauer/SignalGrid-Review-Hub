@@ -22,7 +22,8 @@
     "phase:pr-report": "tsx ./src/phase-pr-report.ts",
     "autopilot:backlog-check": "tsx ./src/autopilot-backlog-check.ts",
     "level10:audit": "tsx ./src/level-10-audit.ts",
-    "proof:orchestration": "tsx ./src/orchestration-proof.ts"
+    "proof:orchestration": "tsx ./src/orchestration-proof.ts",
+    "build:room-console": "node ./build-room-console.mjs"
   },
   "dependencies": {
     "@workspace/signalgrid-core": "workspace:*",
@@ -32,6 +33,7 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "tsx": "catalog:"
+    "tsx": "catalog:",
+    "esbuild": "0.27.3"
   }
 }

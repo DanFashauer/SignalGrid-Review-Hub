@@ -1,12 +1,29 @@
-# Run SignalGrid locally on your Mac
+# Run SignalGrid — iPhone, iPad, or Mac
 
 The smart-hospital simulation (Phase 1: **Trusted Room Entry**) runs entirely on
-your own machine with no cloud, no database, and no connection to any employer
+your own device with no cloud, no database, and no connection to any employer
 system. Everything is **synthetic and public-safe** — fixture identities, rooms,
 and assignments. SignalGrid is a *planner*: it computes decisions and an
 orchestration plan; it never actuates a real device.
 
-## Option A — Docker (recommended)
+## Option A — Open it in a browser (zero setup — works on iPhone/iPad)
+
+The whole decision core + orchestration is bundled into **one self-contained HTML
+file** that runs entirely in the browser — no server, no network, no install. On
+an iPhone, iPad, or any Mac:
+
+- **Fastest:** open the hosted console link (a Claude Artifact) on your device and
+  tap through the scenarios. Ask for the link and it opens right in Safari or the
+  Claude app.
+- **From the repo:** the same page is committed at
+  [`docs/room-entry-console.html`](./room-entry-console.html) — open that file in
+  any browser (or serve it from anywhere static). To rebuild it from source:
+  `pnpm install && pnpm run build:room-console`.
+
+This is the recommended path if you're on iOS — you can use, test, and show
+SignalGrid entirely from the device in your hand.
+
+## Option B — Docker (hosted API + console, on a Mac)
 
 Requires **Docker Desktop for Mac** (Apple Silicon or Intel).
 
@@ -23,7 +40,7 @@ signals it evaluated, the decision and why, and the downstream orchestration —
 with sensitive actions (a controlled-room door, a PHI display) held for your
 confirmation. Stop with `Ctrl-C`.
 
-## Option B — Node + pnpm (no Docker)
+## Option C — Node + pnpm (no Docker)
 
 Requires **Node 22+** and **pnpm 10+** (`corepack enable` gives you pnpm).
 

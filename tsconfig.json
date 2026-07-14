@@ -4,6 +4,7 @@
   "files": [],
   "references": [
     { "path": "./lib/orchestration" },
+    { "path": "./lib/room-sim" },
     { "path": "./lib/integration-bridge" },
     { "path": "./lib/location" },
     { "path": "./lib/webauthn" },

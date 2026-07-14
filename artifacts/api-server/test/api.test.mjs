@@ -91,6 +91,27 @@ async function run() {
   const badIntegration = await req("GET", "/integrations/does-not-exist-xyz");
   check("unknown integration → 404", badIntegration.status === 404);
 
+  // ── monitoring surface (operator console + mobile dashboards) ─────────────
+  const dash = await req("GET", "/metrics/dashboard");
+  check("dashboard metrics → 200", dash.status === 200);
+  check("dashboard metrics has totals + rates", typeof dash.json?.totalDecisions === "number" && typeof dash.json?.allowRate === "number");
+  const series = await req("GET", "/metrics/decisions/series");
+  check("decision series → 200 with points", series.status === 200 && Array.isArray(series.json?.series) && series.json.series.length > 0);
+  check("series point shape", typeof (series.json?.series?.[0]?.allow) === "number" && typeof (series.json?.series?.[0]?.timestamp) === "string");
+  const decisions = await req("GET", "/decisions?limit=5");
+  check("decisions list → 200", decisions.status === 200 && Array.isArray(decisions.json?.decisions));
+  check("decisions list honors limit + reports total", decisions.json.decisions.length <= 5 && typeof decisions.json?.total === "number");
+  const oneDecision = await req("GET", `/decisions/${decisions.json?.decisions?.[0]?.id}`);
+  check("single monitoring decision → 200", oneDecision.status === 200 && oneDecision.json?.id === decisions.json.decisions[0].id);
+  const badDecision = await req("GET", "/decisions/does-not-exist-xyz");
+  check("unknown monitoring decision → 404", badDecision.status === 404);
+  const latest = await req("GET", "/signals/latest?limit=4");
+  check("latest signals → 200 within limit", latest.status === 200 && Array.isArray(latest.json?.signals) && latest.json.signals.length <= 4);
+  const idOnly = await req("GET", "/signals/latest?signalType=identity");
+  check("signals filter by type", idOnly.status === 200 && (idOnly.json?.signals ?? []).every((s) => s.signalType === "identity"));
+  const policies = await req("GET", "/policies");
+  check("monitoring policies → 200 with rules", policies.status === 200 && Array.isArray(policies.json?.policies) && (policies.json.policies[0]?.rules?.length ?? 0) > 0);
+
   const scenarios = await req("GET", "/simulator/scenarios");
   check("simulator scenarios → 200", scenarios.status === 200 && Array.isArray(scenarios.json?.scenarios));
   const simRun = await req("POST", "/simulator/run", { body: { scenarioId: (scenarios.json?.scenarios ?? [])[0]?.id } });

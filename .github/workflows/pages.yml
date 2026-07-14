@@ -3,18 +3,14 @@ name: Deploy demo site to Pages
 # Publishes the on-device demos (Trusted Room Entry console + battlecard) to
 # GitHub Pages, giving a permanent public link that opens on any device.
 #
-# One-time setup: repo Settings → Pages → Source = "GitHub Actions".
+# Manual-only. The default GITHUB_TOKEN cannot enable Pages, so this runs on
+# demand (never automatically) to avoid failing until Pages is turned on.
+#
+# One-time setup, then it's a green one-click deploy:
+#   1. Repo Settings → Pages → Source = "GitHub Actions".
+#   2. Actions tab → "Deploy demo site to Pages" → Run workflow.
 # Everything is public-safe static HTML — no server, no data.
 on:
-  push:
-    branches: [claude/signalgrid-launch-plan-emxm01, dev, prod, SignalGrid_Alpha]
-    paths:
-      - "site/**"
-      - "docs/room-entry-console.html"
-      - "docs/competitive-battlecard.html"
-      - "tools/room-console/**"
-      - "lib/**"
-      - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:

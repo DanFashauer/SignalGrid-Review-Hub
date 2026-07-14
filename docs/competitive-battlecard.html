@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="SignalGrid competitive battlecard — threat ratings, per-competitor plays, objection handling, and where-we-win/walk.">
+<title>SignalGrid — Competitive Battlecard</title>
+<style>
+  /* ── Tokens: light is the base; dark via media query; both overridden by data-theme ── */
+  :root {
+    --bg: #F1EEE7;            /* warm off-white */
+    --panel: #FAF8F3;
+    --card: #FFFFFF;
+    --ink: #1B1F21;          /* warm near-black */
+    --ink-soft: #4C534E;
+    --ink-faint: #767c77;
+    --line: #E4DFD3;
+    --line-strong: #d3cdbe;
+    --accent: #38726D;       /* muted teal, darkened for light ground */
+    --accent-soft: #4F8C87;
+    --allow: #4E7B5E;        /* decision: allow  → threat LOW */
+    --stepup: #96703B;       /* decision: step-up → threat MEDIUM */
+    --deny: #8C4B4B;         /* decision: deny   → threat HIGH */
+    --shadow: 0 1px 2px rgba(27,31,33,.05), 0 8px 24px -12px rgba(27,31,33,.18);
+    --radius: 9px;
+    --maxw: 1120px;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "IBM Plex Mono", "SFMono-Regular", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171A;         /* warm charcoal, slight teal bias */
+      --panel: #191E22;
+      --card: #1E2429;
+      --ink: #F2F0EA;
+      --ink-soft: #AEB4AF;
+      --ink-faint: #7f8781;
+      --line: #2A3137;
+      --line-strong: #333c43;
+      --accent: #74ABA5;
+      --accent-soft: #5F938D;
+      --allow: #6FA88C;
+      --stepup: #C29A66;
+      --deny: #C07474;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 30px -14px rgba(0,0,0,.55);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #F1EEE7; --panel: #FAF8F3; --card: #FFFFFF; --ink: #1B1F21;
+    --ink-soft: #4C534E; --ink-faint: #767c77; --line: #E4DFD3; --line-strong: #d3cdbe;
+    --accent: #38726D; --accent-soft: #4F8C87; --allow: #4E7B5E; --stepup: #96703B; --deny: #8C4B4B;
+    --shadow: 0 1px 2px rgba(27,31,33,.05), 0 8px 24px -12px rgba(27,31,33,.18);
+  }
+  :root[data-theme="dark"] {
+    --bg: #14171A; --panel: #191E22; --card: #1E2429; --ink: #F2F0EA;
+    --ink-soft: #AEB4AF; --ink-faint: #7f8781; --line: #2A3137; --line-strong: #333c43;
+    --accent: #74ABA5; --accent-soft: #5F938D; --allow: #6FA88C; --stepup: #C29A66; --deny: #C07474;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 30px -14px rgba(0,0,0,.55);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--sans); line-height: 1.5;
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+  }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: clamp(1.1rem, 3vw, 2.75rem); }
+
+  .eyebrow {
+    font-family: var(--mono); font-size: .72rem; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--accent); font-weight: 600;
+  }
+  h1, h2, h3 { text-wrap: balance; margin: 0; font-weight: 680; letter-spacing: -.012em; }
+
+  /* ── Masthead ── */
+  .mast { border-bottom: 1px solid var(--line); padding-bottom: 1.9rem; margin-bottom: 2.2rem; }
+  .mast__top { display: flex; align-items: center; gap: .7rem; margin-bottom: 1.4rem; }
+  .glyph {
+    width: 30px; height: 30px; border-radius: 7px; flex: none;
+    background: linear-gradient(150deg, var(--accent), var(--accent-soft));
+    display: grid; place-items: center; position: relative;
+  }
+  .glyph::before, .glyph::after { content: ""; position: absolute; background: var(--bg); }
+  .glyph::before { width: 2px; height: 60%; }
+  .glyph::after { width: 60%; height: 2px; }
+  .mast__wordmark { font-family: var(--mono); font-weight: 600; letter-spacing: .02em; font-size: 1.02rem; }
+  .mast__wordmark span { color: var(--accent); }
+  .mast__tag {
+    margin-left: auto; font-family: var(--mono); font-size: .66rem; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--ink-faint); border: 1px solid var(--line-strong);
+    padding: .28rem .55rem; border-radius: 99px;
+  }
+  .thesis { font-size: clamp(1.32rem, 2.9vw, 1.95rem); line-height: 1.28; max-width: 30ch; margin-bottom: .1rem; }
+  .thesis em { color: var(--accent); font-style: normal; }
+  .thesis .q { color: var(--ink-soft); }
+  .mast__note {
+    margin-top: 1.3rem; font-size: .84rem; color: var(--ink-soft); max-width: 62ch;
+    padding-left: .9rem; border-left: 2px solid var(--line-strong);
+  }
+  .mast__note strong { color: var(--ink); font-weight: 620; }
+
+  /* ── Section scaffolding ── */
+  section { margin-top: 2.6rem; }
+  .shead { display: flex; align-items: baseline; gap: .8rem; margin-bottom: 1.15rem; }
+  .shead h2 { font-size: 1.16rem; }
+  .shead .idx { font-family: var(--mono); font-size: .74rem; color: var(--ink-faint); letter-spacing: .05em; }
+  .shead .rule { flex: 1; height: 1px; background: var(--line); align-self: center; }
+
+  /* ── Threat summary strip ── */
+  .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .6rem; }
+  .sumcell {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: .7rem .8rem; display: flex; flex-direction: column; gap: .35rem;
+    border-top: 3px solid var(--tone);
+  }
+  .sumcell .n { font-weight: 640; font-size: .96rem; }
+  .sumcell .t {
+    font-family: var(--mono); font-size: .66rem; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--tone); font-weight: 600; display: flex; align-items: center; gap: .38rem;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tone); flex: none; }
+  .t--high { --tone: var(--deny); }
+  .t--med  { --tone: var(--stepup); }
+  .t--low  { --tone: var(--allow); }
+  .t--flat { --tone: var(--accent); }
+
+  /* ── Moat pillars ── */
+  .moat { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1rem; }
+  .pillar {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 1.15rem 1.15rem 1.25rem; box-shadow: var(--shadow); position: relative;
+  }
+  .pillar .k { font-family: var(--mono); font-size: .68rem; letter-spacing: .1em; color: var(--accent); text-transform: uppercase; }
+  .pillar h3 { font-size: 1.02rem; margin: .5rem 0 .45rem; }
+  .pillar p { margin: 0; font-size: .87rem; color: var(--ink-soft); }
+  .moat-note { margin-top: .95rem; font-size: .82rem; color: var(--ink-faint); font-style: italic; }
+
+  /* ── Lexicon: use vs avoid ── */
+  .lex { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .lexcol { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 1rem 1.05rem; }
+  .lexcol h3 { font-size: .8rem; font-family: var(--mono); letter-spacing: .06em; text-transform: uppercase; display: flex; align-items: center; gap: .5rem; margin-bottom: .8rem; }
+  .lex--use h3 { color: var(--allow); }
+  .lex--avoid h3 { color: var(--deny); }
+  .chips { display: flex; flex-wrap: wrap; gap: .45rem; }
+  .chip {
+    font-size: .8rem; padding: .32rem .62rem; border-radius: 7px; line-height: 1.2;
+    border: 1px solid var(--edge); color: var(--fg);
+    background: color-mix(in srgb, var(--fg) 9%, transparent);
+  }
+  .lex--use .chip { --fg: var(--allow); --edge: color-mix(in srgb, var(--allow) 30%, transparent); }
+  .lex--avoid .chip { --fg: var(--deny); --edge: color-mix(in srgb, var(--deny) 30%, transparent); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--deny) 55%, transparent); }
+  .lexcol p { font-size: .78rem; color: var(--ink-faint); margin: .75rem 0 0; }
+
+  /* ── Competitor cards ── */
+  .comps { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; }
+  .comp {
+    background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--tone);
+    border-radius: var(--radius); padding: 1.15rem 1.2rem 1.25rem; box-shadow: var(--shadow);
+    display: flex; flex-direction: column;
+  }
+  .comp--high { --tone: var(--deny); }
+  .comp--med  { --tone: var(--stepup); }
+  .comp--low  { --tone: var(--allow); }
+  .comp--flat { --tone: var(--accent); }
+  .comp__head { display: flex; align-items: center; gap: .7rem; margin-bottom: .15rem; }
+  .comp__name { font-size: 1.12rem; font-weight: 680; }
+  .threat {
+    margin-left: auto; font-family: var(--mono); font-size: .64rem; font-weight: 600;
+    letter-spacing: .09em; text-transform: uppercase; padding: .26rem .5rem; border-radius: 99px;
+    color: var(--tone); background: color-mix(in srgb, var(--tone) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--tone) 32%, transparent); white-space: nowrap;
+  }
+  .comp__sub { font-size: .8rem; color: var(--ink-faint); margin: 0 0 .85rem; font-style: italic; }
+  .comp dl { margin: 0; display: grid; gap: .7rem; }
+  .comp dt {
+    font-family: var(--mono); font-size: .63rem; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--ink-faint); margin-bottom: .22rem;
+  }
+  .comp dd { margin: 0; font-size: .85rem; color: var(--ink-soft); }
+  .comp dd.say { color: var(--ink); border-left: 2px solid var(--accent); padding-left: .6rem; }
+  .comp dd b { color: var(--ink); font-weight: 620; }
+
+  /* ── Win / Walk ── */
+  .ww { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .wwcol { border: 1px solid var(--line); border-radius: var(--radius); padding: 1.05rem 1.1rem; background: var(--card); }
+  .wwcol h3 { font-size: .82rem; font-family: var(--mono); letter-spacing: .06em; text-transform: uppercase; margin-bottom: .7rem; display: flex; gap: .5rem; align-items: center; }
+  .ww--win h3 { color: var(--allow); }
+  .ww--walk h3 { color: var(--stepup); }
+  .ww ul { margin: 0; padding: 0; list-style: none; display: grid; gap: .55rem; }
+  .ww li { font-size: .85rem; color: var(--ink-soft); padding-left: 1.1rem; position: relative; }
+  .ww li::before { content: ""; position: absolute; left: 0; top: .5em; width: 6px; height: 6px; border-radius: 50%; background: var(--mk); }
+  .ww--win li::before { --mk: var(--allow); }
+  .ww--walk li::before { --mk: var(--stepup); }
+
+  /* ── Objections ── */
+  .obj { display: grid; gap: .1rem; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--card); }
+  .obj__row { display: grid; grid-template-columns: minmax(200px, 34%) 1fr; gap: 1rem; padding: .95rem 1.1rem; }
+  .obj__row + .obj__row { border-top: 1px solid var(--line); }
+  .obj__q { font-weight: 600; font-size: .88rem; color: var(--ink); }
+  .obj__q::before { content: "“"; color: var(--deny); font-weight: 700; }
+  .obj__q::after { content: "”"; color: var(--deny); font-weight: 700; }
+  .obj__a { font-size: .86rem; color: var(--ink-soft); }
+  .obj__a b { color: var(--ink); font-weight: 600; }
+
+  /* ── Two-up compact (discovery / landmines) ── */
+  .twoup { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .mini { border: 1px solid var(--line); border-radius: var(--radius); padding: 1.05rem 1.1rem; background: var(--panel); }
+  .mini h3 { font-size: .82rem; font-family: var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin-bottom: .75rem; }
+  .mini ul { margin: 0; padding-left: 1.05rem; display: grid; gap: .5rem; }
+  .mini li { font-size: .84rem; color: var(--ink-soft); }
+  .mini li::marker { color: var(--accent); }
+
+  /* ── Coda ── */
+  .coda {
+    margin-top: 2.8rem; padding: 1.8rem clamp(1.1rem, 3vw, 2.2rem); border-radius: var(--radius);
+    background: var(--panel); border: 1px solid var(--line); position: relative;
+  }
+  .coda .eyebrow { display: block; margin-bottom: .7rem; }
+  .coda p { margin: 0; font-size: clamp(1.06rem, 2.3vw, 1.4rem); line-height: 1.4; max-width: 52ch; text-wrap: balance; }
+  .coda p b { color: var(--accent); font-weight: 640; }
+
+  footer { margin-top: 2.2rem; padding-top: 1.2rem; border-top: 1px solid var(--line); font-family: var(--mono); font-size: .68rem; color: var(--ink-faint); letter-spacing: .03em; display: flex; flex-wrap: wrap; gap: .4rem 1.1rem; }
+
+  a { color: var(--accent); text-underline-offset: 2px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+  /* entrance */
+  @media (prefers-reduced-motion: no-preference) {
+    section, .mast { animation: rise .5s cubic-bezier(.22,.61,.36,1) both; }
+    section:nth-of-type(2) { animation-delay: .04s; }
+    section:nth-of-type(3) { animation-delay: .08s; }
+    .comp { transition: transform .18s ease, box-shadow .18s ease; }
+    .comp:hover { transform: translateY(-2px); }
+    @keyframes rise { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: none; } }
+  }
+
+  @media (max-width: 720px) {
+    .lex, .ww, .twoup { grid-template-columns: 1fr; }
+    .obj__row { grid-template-columns: 1fr; gap: .35rem; }
+    .mast__tag { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="mast">
+    <div class="mast__top">
+      <span class="glyph" aria-hidden="true"></span>
+      <span class="mast__wordmark">Signal<span>Grid</span></span>
+      <span class="mast__tag">Competitive Battlecard · Internal</span>
+    </div>
+    <h1 class="thesis">The decision layer for the moment a workflow fires on a <em>shared</em> device — <span class="q">is the person holding it right now allowed to do this?</span></h1>
+    <p class="mast__note"><strong>How to use this card:</strong> we win by being narrow and true, not by claiming everything. Anchor every conversation on the three pillars below, concede where an incumbent already wins, and reframe competitors as signal sources — never rip-and-replace. Never overclaim custody certainty, compliance, or novelty on “step-up.”</p>
+  </header>
+
+  <section>
+    <div class="shead"><span class="idx">00</span><h2>Threat at a glance</h2><span class="rule"></span></div>
+    <div class="summary">
+      <div class="sumcell t--high"><span class="n">OLOID</span><span class="t"><span class="dot"></span>High</span></div>
+      <div class="sumcell t--high"><span class="n">Imprivata</span><span class="t"><span class="dot"></span>High · healthcare</span></div>
+      <div class="sumcell t--med"><span class="n">Imprivata</span><span class="t"><span class="dot"></span>Med · retail/logistics</span></div>
+      <div class="sumcell t--low"><span class="n">Teleport</span><span class="t"><span class="dot"></span>Low</span></div>
+      <div class="sumcell t--flat"><span class="n">Entra / PDPs</span><span class="t"><span class="dot"></span>Objection</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="shead"><span class="idx">01</span><h2>The moat — always anchor here</h2><span class="rule"></span></div>
+    <div class="moat">
+      <div class="pillar">
+        <span class="k">Signal others don't fuse</span>
+        <h3>Custody &amp; tamper</h3>
+        <p>Is the shared device docked, charging, in-hand, or <b>tampered</b> — and is the badged-in holder still the one using it? Others treat charge/dock state as logout hygiene; we make it a gating input to the verdict.</p>
+      </div>
+      <div class="pillar">
+        <span class="k">Signal others don't fuse</span>
+        <h3>CIS baseline drift</h3>
+        <p>Not “is the device enrolled,” but “has it drifted from its security baseline” — evaluated at the moment of action, as a weighted input to the decision.</p>
+      </div>
+      <div class="pillar">
+        <span class="k">Architecture others won't adopt</span>
+        <h3>Vendor-neutral overlay PDP</h3>
+        <p>One fused allow / step-up / restrict / deny verdict <b>and one audit plane</b> across a mixed IAM / badge / UEM / EDR / ITSM stack. We consume their signals; we never own the login.</p>
+      </div>
+    </div>
+    <p class="moat-note">If a deal touches none of these three, it isn't our wedge — qualify hard.</p>
+  </section>
+
+  <section>
+    <div class="shead"><span class="idx">02</span><h2>Say this, not that</h2><span class="rule"></span></div>
+    <div class="lex">
+      <div class="lexcol lex--use">
+        <h3>Words to use</h3>
+        <div class="chips">
+          <span class="chip">custody-aware authorization</span>
+          <span class="chip">shared-device workflow governance</span>
+          <span class="chip">moment-of-action decisioning</span>
+          <span class="chip">decision &amp; attribution layer</span>
+          <span class="chip">vendor-neutral overlay</span>
+        </div>
+        <p>Frames the buyer on the decision, on a shared device, on top of their stack.</p>
+      </div>
+      <div class="lexcol lex--avoid">
+        <h3>Trap phrases to avoid</h3>
+        <div class="chips">
+          <span class="chip">device trust</span>
+          <span class="chip">just-in-time access</span>
+          <span class="chip">infrastructure identity</span>
+          <span class="chip">passwordless login</span>
+          <span class="chip">badge tap / tap-and-go</span>
+          <span class="chip">badge SSO</span>
+          <span class="chip">EPCS</span>
+        </div>
+        <p>Each hands the frame to Teleport, OLOID, or Imprivata. We are not an auth product.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="shead"><span class="idx">03</span><h2>Competitor plays</h2><span class="rule"></span></div>
+    <div class="comps">
+
+      <article class="comp comp--high">
+        <div class="comp__head"><span class="comp__name">OLOID</span><span class="threat">Threat · High</span></div>
+        <p class="comp__sub">The closest thesis-twin</p>
+        <dl>
+          <div><dt>They own — concede it</dt><dd>Passwordless frontline login + badge attribution, HIPAA / 21 CFR Part 11 story, real logos, hardware. Their <b>FIL</b> (May 2026) is moving toward per-action governance.</dd></div>
+          <div><dt>Our wedge</dt><dd>They <b>attribute at login</b>; we <b>decide per action</b>. We fuse custody/tamper + CIS baseline (they don't) and are a neutral overlay. FIL routes to a human; we <b>compute</b> a multi-signal verdict.</dd></div>
+          <div><dt>“OLOID already does this” → say</dt><dd class="say">“OLOID resolves who's logged in, brilliantly. We decide whether <b>this action</b> should proceed given custody and baseline — and we take OLOID's badge as an input.”</dd></div>
+          <div><dt>Walk / partner when</dt><dd>The whole ask is passwordless login + attribution. Offer coexistence.</dd></div>
+        </dl>
+      </article>
+
+      <article class="comp comp--high">
+        <div class="comp__head"><span class="comp__name">Imprivata</span><span class="threat">High · Med</span></div>
+        <p class="comp__sub">Healthcare incumbent — the hardest wall</p>
+        <dl>
+          <div><dt>They own — concede loudly</dt><dd>Badge tap-in/out, roaming, Entra SSO, <b>per-transaction EPCS step-up</b>, posture checks, charge-state custody, and Verosint (Nov 2025) for runtime risk. “We already own the badge” is largely true.</dd></div>
+          <div><dt>Our wedge</dt><dd>A neutral, <b>unified</b> per-action verdict fusing custody(+tamper) + CIS baseline + posture + badge + workflow risk into <b>one decision + one audit plane</b> across a <b>mixed</b> fleet — consuming their badge, not replacing it.</dd></div>
+          <div><dt>“Isn't this just Imprivata?” → say</dt><dd class="say">“All-Imprivata in one hospital? They cover most of it. We're for the <b>mixed fleet</b> and <b>non-EPCS workflows</b>, and we sit <b>above</b> Imprivata — taking its badge as one input.”</dd></div>
+          <div><dt>Do NOT fight</dt><dd>Badge-SSO, roaming, Entra SSO, EPCS signing. Best ground: retail / warehouse / logistics, where they're shallow.</dd></div>
+        </dl>
+      </article>
+
+      <article class="comp comp--low">
+        <div class="comp__head"><span class="comp__name">Teleport</span><span class="threat">Threat · Low</span></div>
+        <p class="comp__sub">Orthogonal — infrastructure access</p>
+        <dl>
+          <div><dt>Their world</dt><dd>Servers / K8s / DBs / apps for <b>engineers &amp; machines</b> via a cert-issuing proxy. Their “Device Trust” = hardware-attested 1:1 engineer laptops. No shared-device / custody / badge notion.</dd></div>
+          <div><dt>Our wedge</dt><dd>Different resource (frontline workflows, not servers), user (clinical/frontline, not engineers), mechanism (overlay decision API, not an inline proxy).</dd></div>
+          <div><dt>“Isn't this Teleport for devices?” → say</dt><dd class="say">“Teleport secures how engineers reach infrastructure. We decide whether a <b>frontline worker's action on a shared device</b> proceeds. Non-overlapping planes — run both.”</dd></div>
+          <div><dt>Then</dt><dd>Leave it. Not a real contest; refer and move on.</dd></div>
+        </dl>
+      </article>
+
+      <article class="comp comp--flat">
+        <div class="comp__head"><span class="comp__name">Microsoft Entra</span><span class="threat">Objection</span></div>
+        <p class="comp__sub">Shared device mode + CAE — extend, don't fight</p>
+        <dl>
+          <div><dt>Their strength</dt><dd>Conditional Access + Continuous Access Evaluation + Shared Device Mode + posture — native, and many buyers are Microsoft-standardized.</dd></div>
+          <div><dt>Our wedge</dt><dd>Entra decides at <b>session/token</b> granularity and assumes session = person. It doesn't fuse <b>physical custody / badge-holder at action time</b>.</dd></div>
+          <div><dt>“We already have Entra” → say</dt><dd class="say">“Perfect — we sit on top of it. Entra gives us session + posture; we add <b>who's physically holding this shared device</b> and <b>should this action proceed</b>. An Entra multiplier, not a replacement.”</dd></div>
+        </dl>
+      </article>
+
+      <article class="comp comp--flat">
+        <div class="comp__head"><span class="comp__name">PDP engines</span><span class="threat">Overlap</span></div>
+        <p class="comp__sub">Cerbos · SGNL/CrowdStrike · Oso · PlainID</p>
+        <dl>
+          <div><dt>Their world</dt><dd>Fine-grained authorization for <b>software/app resources</b> (ABAC/ReBAC/policy-as-code). SGNL (CrowdStrike ~$740M, Jan 2026) does identity+device+behavior for cloud/AI-agent access.</dd></div>
+          <div><dt>Our wedge</dt><dd>A PDP for <b>physical shared-device frontline workflows</b> with custody / badge / baseline signals a generic authz engine has no concept of.</dd></div>
+          <div><dt>Frame</dt><dd class="say">“Same PDP <b>pattern</b> — a signal set and a buyer they don't serve.”</dd></div>
+        </dl>
+      </article>
+
+    </div>
+  </section>
+
+  <section>
+    <div class="shead"><span class="idx">04</span><h2>Where we win / where we walk</h2><span class="rule"></span></div>
+    <div class="ww">
+      <div class="wwcol ww--win">
+        <h3>Win when</h3>
+        <ul>
+          <li>Mixed, multi-vendor frontline stack needing one decision + audit plane</li>
+          <li>Retail / warehouse / logistics frontline — incumbents are shallow here</li>
+          <li>Per-action gating wanted <b>without</b> changing how workers log in</li>
+          <li>Custody/tamper or baseline-drift is a felt pain</li>
+          <li>Audit must explain <b>why</b> an action was allowed, not just who did it</li>
+        </ul>
+      </div>
+      <div class="wwcol ww--walk">
+        <h3>Walk or partner when</h3>
+        <ul>
+          <li>Pure “kill shared passwords / passwordless login” ask → OLOID's</li>
+          <li>Deep all-Imprivata healthcare shop wanting only badge-SSO + EPCS</li>
+          <li>Buyer wants to <b>replace</b> their IdP / badge system — we're an overlay</li>
+          <li>Infrastructure / server / engineer access → Teleport's; refer</li>
+          <li>Compliance satisfied by attribution alone — no “why” needed</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="shead"><span class="idx">05</span><h2>Objection handling</h2><span class="rule"></span></div>
+    <div class="obj">
+      <div class="obj__row"><div class="obj__q">Isn't this just Imprivata / OLOID?</div><div class="obj__a">Those own the <b>login and badge</b>. We own the <b>decision at the moment of action</b>, across your whole stack — and we take their badge as an input. A layer above, not a replacement.</div></div>
+      <div class="obj__row"><div class="obj__q">We already have Entra Conditional Access.</div><div class="obj__a">Great — we consume it. Entra decides the <b>session</b>; we decide the <b>action on a shared device</b> using custody and baseline it doesn't track.</div></div>
+      <div class="obj__row"><div class="obj__q">We already do step-up for controlled substances.</div><div class="obj__a">EPCS is mandated and solved. We're for the <b>other</b> high-risk workflows and the mixed-fleet fusion + one audit trail — not EPCS re-invention.</div></div>
+      <div class="obj__row"><div class="obj__q">Sounds like a policy engine / PDP.</div><div class="obj__a">It is one — for the physical frontline. The novelty is the <b>signals</b> (custody, tamper, badge-holder, CIS drift), not the pattern.</div></div>
+      <div class="obj__row"><div class="obj__q">How reliable is “custody” really?</div><div class="obj__a">It's one <b>weighted evidence input</b>, never ground truth. We publish false-accept / false-reject behavior and let policy decide how much it counts.</div></div>
+      <div class="obj__row"><div class="obj__q">Is this production-ready / certified?</div><div class="obj__a">Today it's a fixture-backed, public-safe decision core with real integration adapters gated behind explicit config. <b>Not compliance-certified</b>, doesn't replace source systems. Here's exactly what it decides today.</div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="shead"><span class="idx">06</span><h2>Discovery &amp; disqualify</h2><span class="rule"></span></div>
+    <div class="twoup">
+      <div class="mini">
+        <h3>Ask early</h3>
+        <ul>
+          <li>When a worker does a high-risk action on a <b>shared</b> device, what decides if it proceeds right then — and is it the same across every app?</li>
+          <li>Who was <b>physically holding</b> the device at that moment, and how do you know?</li>
+          <li>How many vendors touch that decision — and is there one place that fuses them into a verdict and one audit trail?</li>
+          <li>Do you evaluate <b>baseline drift</b> at the moment of action, or only at enrollment?</li>
+          <li>Outside healthcare — what's watching shared-scanner workflows in your retail/warehouse sites?</li>
+        </ul>
+      </div>
+      <div class="mini">
+        <h3>Disqualifiers</h3>
+        <ul>
+          <li>Ask = passwordless login / kill shared passwords → OLOID's</li>
+          <li>Single-vendor all-Imprivata shop, badge-SSO + EPCS only</li>
+          <li>Infrastructure / engineer access → Teleport's</li>
+          <li>Wants to replace IdP / badge / UEM — we're an overlay</li>
+          <li>Compliance met by attribution alone — thin value; requalify</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <div class="coda">
+    <span class="eyebrow">Leave this in every prospect's head</span>
+    <p>You've already bought identity, badges, and device management — SignalGrid is the <b>neutral decision layer</b> that fuses them, plus device custody and baseline, into one allow / step-up / deny verdict at the moment a shared-device workflow fires — with an audit trail that explains <b>why</b>.</p>
+  </div>
+
+  <footer>
+    <span>SignalGrid · Competitive Battlecard</span>
+    <span>Source: MARKET_LANDSCAPE · COMPETITIVE_OLOID · COMPETITIVE_IMPRIVATA · COMPETITIVE_TELEPORT</span>
+    <span>Internal — honest by design</span>
+  </footer>
+
+</div>
+</body>
+</html>

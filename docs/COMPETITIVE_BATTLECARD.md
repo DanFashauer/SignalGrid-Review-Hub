@@ -8,6 +8,11 @@
 > be honest. We win by being *narrow and true*, not by claiming everything. Never
 > overclaim custody certainty, compliance, or novelty on "step-up." Where a
 > competitor already wins, say so and reframe.
+>
+> **Visual version:** a self-contained, theme-aware HTML rendering of this card is
+> at [`competitive-battlecard.html`](./competitive-battlecard.html) (open in a
+> browser) — it renders the competitor threat levels in SignalGrid's own
+> allow/step-up/deny decision colors.
 
 ---
 

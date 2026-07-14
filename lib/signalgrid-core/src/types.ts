@@ -467,7 +467,9 @@ export type RemediationKind =
   | "request_posture_refresh"
   | "request_encryption_enforcement"
   | "notify_identity_owner"
-  | "notify_security";
+  | "notify_security"
+  | "request_custody_check"
+  | "request_baseline_reapply";
 
 export type RemediationStatus =
   | "requires_approval"

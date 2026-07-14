@@ -131,6 +131,47 @@ function mapReasonsToRemediation(
           note: "Route to security operations: a critical workflow was attempted on an untrusted device.",
         });
         break;
+      // Physical custody / dock / battery / badge-withdrawn: route a custody
+      // check to the hardware owner. No dock action is taken by SignalGrid.
+      case "CUSTODY_OVERDUE":
+      case "CUSTODY_EXCEPTION":
+      case "TAMPER_SUSPECTED":
+      case "TAMPER_SENSOR_UNAVAILABLE":
+      case "BATTERY_CRITICAL":
+      case "DOCK_FAULTED":
+      case "DOCK_OFFLINE":
+      case "BADGE_REMOVED":
+        proposals.set("request_custody_check", {
+          kind: "request_custody_check",
+          targetType: "device",
+          targetRef: device,
+          reasonCode: reason,
+          note: "Request a physical custody/dock check (return, swap, re-seat badge, or move to a healthy dock) from the hardware owner. No dock action is performed by SignalGrid.",
+        });
+        break;
+      // Confirmed tamper or a forced badge removal is a security event, not a
+      // routine custody check — route to security operations.
+      case "TAMPER_CONFIRMED":
+      case "BADGE_FORCED_REMOVAL":
+        proposals.set("notify_security", {
+          kind: "notify_security",
+          targetType: "device",
+          targetRef: device,
+          reasonCode: reason,
+          note: "Route to security operations: confirmed tamper or forced badge removal — take the device out of service; SignalGrid records and simulates only.",
+        });
+        break;
+      // Security-baseline (CIS/hardening) drift: request a baseline re-apply.
+      case "BASELINE_DRIFTED":
+      case "BASELINE_DRIFTED_STRICT":
+        proposals.set("request_baseline_reapply", {
+          kind: "request_baseline_reapply",
+          targetType: "device",
+          targetRef: device,
+          reasonCode: reason,
+          note: "Request a security-baseline (CIS/hardening) re-scan and profile re-apply from the endpoint-management owner. No change is applied by SignalGrid.",
+        });
+        break;
       default:
         break;
     }

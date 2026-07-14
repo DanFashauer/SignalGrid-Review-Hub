@@ -446,6 +446,20 @@ check(
   "remediation: no request is auto-approved or executed",
   remediations.every((r) => r.status === "requires_approval"),
 );
+// Physical/custody/baseline reason codes now generate remediation too (the
+// mapping keeps pace with the newer decision dimensions — no silent gap).
+check(
+  "remediation: a faulted-dock decision proposes a custody check",
+  remediations.some((r) => r.reasonCode === "DOCK_FAULTED" && r.kind === "request_custody_check"),
+);
+check(
+  "remediation: a forced-badge decision routes to security",
+  remediations.some((r) => r.reasonCode === "BADGE_FORCED_REMOVAL" && r.kind === "notify_security"),
+);
+check(
+  "remediation: a baseline-drift decision proposes a baseline re-apply",
+  remediations.some((r) => r.reasonCode === "BASELINE_DRIFTED" && r.kind === "request_baseline_reapply"),
+);
 // Operators cannot approve; owners can, and approval is simulated (no execution).
 const pending = remediations[0];
 check("remediation: a pending request exists", Boolean(pending));

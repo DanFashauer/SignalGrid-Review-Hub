@@ -9,6 +9,10 @@ import { globalRateLimiter } from "./middlewares/rateLimit";
 
 const app: Express = express();
 
+// Don't advertise the framework — remove the default `X-Powered-By: Express`
+// header (minor information disclosure surfaced by the adversarial pass).
+app.disable("x-powered-by");
+
 // Explicit CORS allow-list. A bare `cors()` emits `Access-Control-Allow-Origin:
 // *`, which would let any web origin script the authenticated /v1 surface from a
 // victim's browser. Instead we reflect ONLY origins named in

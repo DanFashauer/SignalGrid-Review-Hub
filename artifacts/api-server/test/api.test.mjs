@@ -309,6 +309,7 @@ async function run() {
   // ── transport hygiene ───────────────────────────────────────────────────
   check("rate-limit headers present", allow.headers.get("ratelimit-limit") !== null);
   check("security header x-content-type-options set", allow.headers.get("x-content-type-options") === "nosniff");
+  check("framework header x-powered-by is not disclosed", allow.headers.get("x-powered-by") === null);
   check("request id echoed", typeof allow.headers.get("x-request-id") === "string");
 }
 

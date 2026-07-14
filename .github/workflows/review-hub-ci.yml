@@ -153,7 +153,7 @@ jobs:
 
               echo "Unsafe direct claim found for '$phrase': $match" >&2
               failed=1
-            done < <(git grep -nF -- "$phrase" -- README.md docs artifacts/signalgrid-review/src artifacts/signalgrid-web/src 2>/dev/null || true)
+            done < <(git grep -nF -- "$phrase" -- README.md docs artifacts/signalgrid-review/src artifacts/signalgrid-web/src artifacts/signalgrid-app/src artifacts/signalgrid-desktop/src artifacts/signalgrid-mobile-pwa/src 2>/dev/null || true)
           done
 
           exit "$failed"

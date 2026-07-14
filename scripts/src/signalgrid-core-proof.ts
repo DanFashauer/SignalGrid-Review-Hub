@@ -915,6 +915,30 @@ if (pending) {
     "index: latest-observedAt signal wins regardless of insertion order",
     ev.deviceCompliance === "compliant",
   );
+
+  // listSignalsForSubject must preserve insertion order (it feeds the snapshot
+  // signalsUsed array, whose order is part of the tamper-evident digest).
+  check(
+    "index: listSignalsForSubject preserves insertion order",
+    gathered[0].id === "s_new" && gathered[1].id === "s_old",
+  );
+
+  // Tie-break: on EQUAL observedAt, the first-inserted signal wins — matching a
+  // stable descending sort's first element. Insert in both orders on separate
+  // stores and assert the derived compliance is stable (first-inserted's value).
+  const sameTs = "2026-07-13T12:00:00.000Z";
+  const tie = (first: string, second: string): string => {
+    const s = new MemoryStore();
+    s.putDevice(dev);
+    s.putSignal(mk("tie_a", first, sameTs));
+    s.putSignal(mk("tie_b", second, sameTs));
+    return buildEvidence(identity, dev, workflow, s.listSignalsForSubject("tenant_a", "device", "dv_x")).deviceCompliance;
+  };
+  check(
+    "index: equal-observedAt tie resolves to the first-inserted signal",
+    tie("compliant", "non_compliant") === "compliant" &&
+      tie("non_compliant", "compliant") === "non_compliant",
+  );
 }
 
 // ── Report ────────────────────────────────────────────────────────────────────

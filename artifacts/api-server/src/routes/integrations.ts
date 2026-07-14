@@ -2004,7 +2004,19 @@ const INTEGRATIONS = [
 // it once at module load instead of re-running JSON.stringify over ~149 objects
 // on every request, and mark the response cacheable (overriding the global
 // no-store) since it never changes between deploys.
-const INTEGRATIONS_BODY = JSON.stringify({ integrations: INTEGRATIONS });
+//
+// Transparency: this is an ILLUSTRATIVE catalog. The per-item `status`
+// ("connected"/"degraded"), `signalsIngested24h`, `latencyMs`, and `lastSync`
+// values are synthetic demo fixtures fixed at process start — not live
+// connections or real ingestion volumes. No live vendor call is ever made. The
+// envelope carries an explicit `note` and `demo` flag so any consumer of this
+// machine-readable surface sees the disclaimer, matching the rest of the
+// fixture-backed product.
+const INTEGRATIONS_BODY = JSON.stringify({
+  demo: true,
+  note: "Illustrative catalog — per-item status, ingestion volumes, latency, and lastSync are synthetic demo fixtures (fixed at process start), not live connections. No live vendor call is made.",
+  integrations: INTEGRATIONS,
+});
 
 router.get("/integrations", (_req, res) => {
   res.setHeader("cache-control", "public, max-age=300");

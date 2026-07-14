@@ -54,21 +54,19 @@ router.get("/signals/latest", async (req, res) => {
   // (e.g. ?limit=1e8 or a negative/float) cannot trigger a full-table dump or
   // an invalid SQL LIMIT.
   const safeLimit = Math.min(Math.max(1, Math.floor(Number(limit) || 20)), 200);
+  // Filter by signalType in SQL BEFORE limiting; filtering after LIMIT would
+  // drop matching rows just past the window and return fewer than exist.
+  const where = signalType ? eq(signalEventsTable.signalType, signalType) : undefined;
 
   try {
-    const query = db
+    const signals = await db
       .select()
       .from(signalEventsTable)
+      .where(where)
       .orderBy(desc(signalEventsTable.receivedAt))
       .limit(safeLimit);
 
-    const rows = await query;
-
-    const filtered = signalType
-      ? rows.filter((r) => r.signalType === signalType)
-      : rows;
-
-    res.json({ signals: filtered });
+    res.json({ signals });
   } catch (err) {
     req.log.error({ err }, "Failed to list signals");
     res.status(500).json({ error: "internal", message: "Failed to list signals" });

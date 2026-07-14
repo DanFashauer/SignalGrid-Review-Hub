@@ -24,7 +24,7 @@ export default function SignalTypesSection() {
       name: "Device Posture",
       icon: Shield,
       items: [
-        "MDM/UEM real-time compliance",
+        "MDM/UEM compliance state",
         "EDR agent health & threat score",
         "Encryption, patch, jailbreak state",
         "Tamper sensor — forced badge removal",

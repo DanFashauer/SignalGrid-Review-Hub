@@ -224,26 +224,31 @@ function evaluateOutcome(signals: Array<{ status: string }>): string {
 
 router.get("/decisions", async (req, res) => {
   const parsed = ListDecisionsQueryParams.safeParse(req.query);
-  const { limit = 50, outcome, integrationId } = parsed.success ? parsed.data : { limit: 50, outcome: undefined, integrationId: undefined };
+  const { limit = 50, outcome } = parsed.success ? parsed.data : { limit: 50, outcome: undefined };
 
   // Clamp the client-supplied limit so a crafted value cannot dump the whole
   // table into memory or produce an invalid SQL LIMIT.
   const safeLimit = Math.min(Math.max(1, Math.floor(Number(limit) || 50)), 200);
+  // Filter in SQL BEFORE limiting, so the page contains the right rows. Filtering
+  // after LIMIT would silently drop matching rows that sit just past the window
+  // (e.g. `?outcome=deny&limit=50` could return zero denies while thousands
+  // exist). `total` is a separate COUNT over the same predicate, not the page size.
+  const where = outcome ? eq(decisionsTable.outcome, outcome) : undefined;
 
   try {
-    const query = db
+    const decisions = await db
       .select()
       .from(decisionsTable)
+      .where(where)
       .orderBy(desc(decisionsTable.evaluatedAt))
       .limit(safeLimit);
 
-    const rows = await query;
+    const [counted] = await db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(decisionsTable)
+      .where(where);
 
-    const filtered = outcome
-      ? rows.filter((r) => r.outcome === outcome)
-      : rows;
-
-    res.json({ decisions: filtered, total: filtered.length });
+    res.json({ decisions, total: counted?.total ?? decisions.length });
   } catch (err) {
     req.log.error({ err }, "Failed to list decisions");
     res.status(500).json({ error: "internal", message: "Failed to list decisions" });

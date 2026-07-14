@@ -7,6 +7,10 @@
     "hello": "tsx ./src/hello.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "proof:intune-entra-posture": "tsx ./src/intune-entra-posture-proof.ts",
+    "proof:signalgrid-core": "tsx ./src/signalgrid-core-proof.ts",
+    "proof:api-contract": "tsx ./src/api-contract-proof.ts",
+    "bench:decision-latency": "tsx ./src/latency-bench.ts",
+    "sbom": "tsx ./src/generate-sbom.ts",
     "proof:signalgrid-simulator": "tsx ./src/signalgrid-simulator-proof.ts",
     "proof:signalgrid-grid": "tsx ./src/signalgrid-grid-proof.ts",
     "proof:microsoft-graph-sandbox": "tsx ./src/microsoft-graph-sandbox-proof.ts",
@@ -19,6 +23,7 @@
     "level10:audit": "tsx ./src/level-10-audit.ts"
   },
   "dependencies": {
+    "@workspace/signalgrid-core": "workspace:*",
     "@workspace/signalgrid-simulator": "workspace:*"
   },
   "devDependencies": {

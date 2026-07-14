@@ -6,7 +6,7 @@ This runbook documents the future local-only, PC-only procedure for a read-only 
 
 ## Operator boundary
 
-Run this only from a private local PC environment when a sandbox tenant is available. Do not run it from Review Hub CI, public preview environments, shared machines, or mobile-only Codex sessions.
+Run this only from a private local PC environment when a sandbox tenant is available. Do not run it from Review Hub CI, public preview environments, shared machines, or mobile-only automation sessions.
 
 ## Required local configuration
 

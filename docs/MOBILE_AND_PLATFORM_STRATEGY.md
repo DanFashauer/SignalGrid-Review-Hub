@@ -55,7 +55,7 @@ Example mobile workflows include:
 - Routing repeated app crashes on a shared-device pool to the app owner and mobility team.
 - Routing poor Teams or VDI session quality to the EUC/DEX team rather than security when posture is otherwise acceptable.
 
-Real DEX, monitoring, ITSM, API-health, mobile push, and remediation connectors should move to private/core/local Codex because they may require tenant data, API keys, webhook secrets, monitoring-tool access, source-system permissions, and private test data. Public Review Hub should stay fixture-based and claim-safe.
+Real DEX, monitoring, ITSM, API-health, mobile push, and remediation connectors should move to the private/core/local implementation because they may require tenant data, API keys, webhook secrets, monitoring-tool access, source-system permissions, and private test data. Public Review Hub should stay fixture-based and claim-safe.
 
 ## Jamf / Apple-specific posture path
 

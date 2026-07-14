@@ -5,6 +5,8 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 
 ## Where to start for Level 10 review
 
+- [Realistic Launch Plan](REALISTIC_LAUNCH_PLAN.md): public-safe, honest sequence from today's review surface to a real company, paid pilot, and production SaaS — with readiness scores, phased engineering, budget ranges, and a 30-day operating plan as planning hypotheses, not current claims.
+- [Product Core Foundation](PRODUCT_CORE_FOUNDATION.md): the deterministic, fixture-backed, public-safe product core (tenancy, auth/RBAC, read-only connector sync, versioned policy engine, decision loop, evidence snapshots, tamper-evident audit ledger), its `/v1` API, the in-browser Operator Console, and the core proof — realizing plan phases B–D in a review-safe form. Companions: [Product Data Model](PRODUCT_DATA_MODEL.md), [Product Core Threat Model](PRODUCT_CORE_THREAT_MODEL.md), [Security Controls Matrix](SECURITY_CONTROLS_MATRIX.md), [Run & Go-Live runbook](RUN_AND_GO_LIVE.md), [Private-Core Hand-off spec](PRIVATE_CORE_HANDOFF.md), [Ecosystem Flow & Resolution Assistant](ECOSYSTEM_FLOW_AND_RESOLUTION.md), [DockBridge Product Connector](DOCKBRIDGE_PRODUCT_CONNECTOR.md), [Security-Baseline Alignment (CIS & other hardening baselines)](SECURITY_BASELINE_ALIGNMENT.md), [App Suite Platform × Persona Matrix](APP_SUITE_MATRIX.md), [What SignalGrid Does Today (implemented vs candidate)](WHAT_SIGNALGRID_DOES_TODAY.md), the `/v1` OpenAPI spec ([`lib/api-spec/v1-openapi.yaml`](../lib/api-spec/v1-openapi.yaml)), and the vulnerability-disclosure policy ([`SECURITY.md`](../SECURITY.md)).
 - [Executive One-Pager](EXECUTIVE_ONE_PAGER.md): quickest buyer/partner/founder overview.
 - [Strategic Buyer / Partner Pitch Pack](STRATEGIC_BUYER_PARTNER_PITCH_PACK.md): strategic narrative and positioning.
 - [Level 10 Completion Matrix](LEVEL_10_COMPLETION_MATRIX.md): readiness scores, evidence, gaps, owners, and risk lanes.
@@ -50,6 +52,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Visual-code asset strategy](VISUAL_CODE_ASSET_STRATEGY.md): defines how diagrams, Review Hub visuals, and public graphics should remain source-controlled visual code where practical.
 - [Ecosystem positioning](ECOSYSTEM_POSITIONING.md): explains where SignalGrid fits relative to IAM, IGA, UEM/MDM, healthcare access, ITSM, SIEM/SOAR, NAC, endpoint telemetry, and dock/edge systems.
 - [DockBridge strategy](DOCKBRIDGE_STRATEGY.md): documents future edge/dock event orchestration for shared-device workflows.
+- [SignalGrid SmartDock](SIGNALGRID_SMARTDOCK.md): the optional embedded smart-charging dock hardware layer (power + network in, decisions in SaaS cloud or on-site); a pre-production design concept realised in the core as the `embedded_smartdock` ingestion mode.
 - [Hardware partner matrix](HARDWARE_PARTNER_MATRIX.md): maps public-safe candidate hardware categories for Physical Custody, DockBridge, and shared-device trust signals.
 - [Beam Mobile partner-candidate brief](BEAM_MOBILE_PARTNER_CANDIDATE_BRIEF.md): frames Beam Mobile as a candidate healthcare shared iPhone/iPad case, battery, charging, and dock layer without claiming partnership or endorsement.
 - [Physical Custody signal model](PHYSICAL_CUSTODY_SIGNAL_MODEL.md): defines a vendor-neutral fixture schema and custody decision examples for future DockBridge proof work.
@@ -72,7 +75,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 
 ## Review workflow
 
-- [Repository agent instructions](../AGENTS.md): defines Codex guardrails, public-safety rules, PR validation commands, and review guidelines.
+- [Repository agent instructions](../AGENTS.md): defines automation-agent guardrails, public-safety rules, PR validation commands, and review guidelines.
 - [SignalGrid Autopilot Control Plane](SIGNALGRID_AUTOPILOT_CONTROL_PLANE.md): defines the one-input-to-one-phase automation model, bot roles, risk lanes, evidence requirements, and owner boundaries.
 - [Autopilot Intake Bot](AUTOPILOT_INTAKE_BOT.md): classifies screenshots, links, findings, PR summaries, and market notes into backlog-ready categories.
 - [Phase PR Evidence Bot](PHASE_PR_EVIDENCE_BOT.md): documents compact PR evidence reports and artifact upload behavior.
@@ -83,12 +86,10 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Phase Backlog](PHASE_BACKLOG.md): tracks seeded and future scoped phases, classifications, risk lanes, dependencies, and validation.
 - [Intake Classification Guide](INTAKE_CLASSIFICATION_GUIDE.md): classifies new inputs into product, signal, connector, UI, proof, automation, platform, maintenance, blocked, or parking-lot categories.
 - [Green / Yellow / Red Merge Policy](GREEN_YELLOW_RED_MERGE_POLICY.md): defines green, yellow, and red merge lanes and approval expectations.
-- [Automation Phase Template](AUTOMATION_PHASE_TEMPLATE.md): provides the reusable Codex prompt for one scoped phase at a time.
+- [Automation Phase Template](AUTOMATION_PHASE_TEMPLATE.md): provides the reusable automation prompt for one scoped phase at a time.
 - [Manual full-product smoke screen](MANUAL_FULL_PRODUCT_SMOKE_SCREEN.md): outlines future manual Review Hub smoke-screen steps and pass/fail notes.
 - [Manual full-product smoke screen results](MANUAL_FULL_PRODUCT_SMOKE_SCREEN_RESULTS.md): records the current full-product smoke-screen pass, evidence, validation, and follow-up phases.
 - [Post-merge connector smoke evidence automation](POST_MERGE_CONNECTOR_SMOKE_EVIDENCE.md): explains the automatic Connector Emulator Smoke run and evidence manifest after merges to `SignalGrid_Alpha`.
-- [Mobile-first Codex workflow](MOBILE_CODEX_WORKFLOW.md): explains the iPhone-first Codex Web → PR → CI → review → GitHub Mobile merge loop.
-- [Codex task template](CODEX_TASK_TEMPLATE.md): provides a reusable prompt structure for focused Cloud Codex tasks.
 - [Validation commands](VALIDATION_COMMANDS.md): lists the standard install, typecheck, build, proof, unsafe-claim scan, and diff hygiene commands.
 - [CI and validation](CI_AND_VALIDATION.md): explains Review Hub CI, required local checks, docs sanity checks, and future branch-protection expectations.
 - [Review checklist](REVIEW_CHECKLIST.md): questions for reviewers, design partners, and advisors.

@@ -1,0 +1,565 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SignalGrid — Sneak Peek</title>
+</head>
+<body style="margin:0">
+<style>
+  :root {
+    --bg: #080b11;
+    --bg2: #0b1017;
+    --surface: #111a24;
+    --surface2: #16202c;
+    --line: rgba(148, 163, 184, 0.14);
+    --line-soft: rgba(148, 163, 184, 0.08);
+    --text: #eaf0f6;
+    --muted: #8695a8;
+    --faint: #5a6879;
+    --cyan: #2fe6c6;
+    --cyan-dim: #1a9f8b;
+    --allow: #34d8b4;
+    --stepup: #f5b740;
+    --restrict: #f2724b;
+    --deny: #ef5468;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { margin: 0; padding: 0; }
+
+  body {
+    background:
+      radial-gradient(120% 90% at 78% 12%, rgba(47, 230, 198, 0.10), transparent 55%),
+      radial-gradient(90% 80% at 8% 100%, rgba(47, 230, 198, 0.05), transparent 60%),
+      var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  #grid {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    opacity: 0.9;
+    pointer-events: none;
+  }
+
+  /* subtle vignette so edges fall away and center reads */
+  .vignette {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background: radial-gradient(120% 120% at 50% 45%, transparent 55%, rgba(4, 6, 10, 0.72) 100%);
+  }
+
+  .stage {
+    position: relative;
+    z-index: 2;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 68px 56px 44px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .topbar {
+    position: absolute;
+    top: 30px;
+    left: 56px;
+    right: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .brandmark {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .glyph {
+    display: grid;
+    grid-template-columns: repeat(2, 9px);
+    grid-template-rows: repeat(2, 9px);
+    gap: 3px;
+  }
+  .glyph i {
+    display: block;
+    border-radius: 2px;
+    background: var(--cyan);
+  }
+  .glyph i:nth-child(2) { background: rgba(47, 230, 198, 0.5); }
+  .glyph i:nth-child(3) { background: rgba(47, 230, 198, 0.5); }
+  .glyph i:nth-child(4) { background: rgba(47, 230, 198, 0.28); }
+
+  .brandmark span {
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    font-size: 15px;
+  }
+
+  .status {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--faint);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .status .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--cyan);
+    box-shadow: 0 0 0 0 rgba(47, 230, 198, 0.6);
+    animation: pulse 2.6s ease-out infinite;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(47, 230, 198, 0.5); }
+    70% { box-shadow: 0 0 0 7px rgba(47, 230, 198, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(47, 230, 198, 0); }
+  }
+
+  .grid2 {
+    display: grid;
+    grid-template-columns: 1.06fr 0.94fr;
+    gap: 54px;
+    align-items: center;
+  }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--cyan);
+    margin: 0 0 22px;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: clamp(52px, 7.6vw, 92px);
+    line-height: 0.94;
+    font-weight: 800;
+    letter-spacing: -0.035em;
+    text-wrap: balance;
+  }
+  h1 .g {
+    background: linear-gradient(180deg, #6ff2db, var(--cyan) 60%, var(--cyan-dim));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .tagline {
+    margin: 26px 0 0;
+    font-size: 19px;
+    line-height: 1.55;
+    color: var(--muted);
+    max-width: 30em;
+  }
+  .tagline b { color: var(--text); font-weight: 600; }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    margin-top: 30px;
+  }
+  .chip {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.015);
+    padding: 6px 12px;
+    border-radius: 999px;
+  }
+  .chip.key { color: var(--cyan); border-color: rgba(47, 230, 198, 0.35); }
+
+  .boundary {
+    margin-top: 26px;
+    font-size: 13.5px;
+    color: var(--faint);
+    max-width: 34em;
+    line-height: 1.5;
+  }
+
+  /* ── Verdict card ── */
+  .card {
+    position: relative;
+    background:
+      linear-gradient(180deg, rgba(47, 230, 198, 0.06), transparent 30%),
+      var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 24px 24px 20px;
+    box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.8),
+      inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  }
+  .card::before {
+    content: "";
+    position: absolute;
+    top: -1px; left: 22px; right: 22px; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(47, 230, 198, 0.7), transparent);
+  }
+
+  .card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+  }
+  .card-head .lbl {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--faint);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card-head .lbl .live {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--allow);
+    box-shadow: 0 0 8px var(--allow);
+  }
+
+  .verdict {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    padding: 5px 11px;
+    border-radius: 7px;
+    color: #04120e;
+    background: var(--allow);
+  }
+
+  .decid {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--faint);
+    margin: 2px 0 14px;
+  }
+
+  .explain {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text);
+    margin: 0 0 18px;
+  }
+
+  .rows { display: flex; flex-direction: column; gap: 0; }
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 0;
+    border-top: 1px solid var(--line-soft);
+    font-size: 13px;
+  }
+  .row:first-child { border-top: none; }
+  .row .k { color: var(--muted); font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.02em; }
+  .row .v { display: flex; align-items: center; gap: 7px; font-variant-numeric: tabular-nums; }
+  .ok { color: var(--allow); }
+  .tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 2px 7px;
+  }
+  .check {
+    width: 15px; height: 15px; border-radius: 50%;
+    background: rgba(52, 216, 180, 0.14);
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+
+  .meta {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 16px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+  }
+  .meta div { display: flex; justify-content: space-between; gap: 8px; }
+  .meta .mk { color: var(--faint); }
+  .meta .mv { color: var(--muted); }
+  .meta .mv.hl { color: var(--cyan); }
+
+  .audit {
+    margin-top: 16px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: 0.04em;
+    color: var(--allow);
+  }
+  .audit .seal {
+    width: 16px; height: 16px;
+    border: 1px solid rgba(52, 216, 180, 0.5);
+    border-radius: 4px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--allow);
+  }
+  .audit .dim { color: var(--faint); letter-spacing: 0.02em; }
+
+  /* ── outcome legend footer ── */
+  .legend {
+    margin-top: 46px;
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    flex-wrap: wrap;
+    border-top: 1px solid var(--line-soft);
+    padding-top: 22px;
+  }
+  .legend .lead {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+  .outcomes { display: flex; gap: 18px; flex-wrap: wrap; }
+  .oc {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+  }
+  .oc i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+  .oc.allow i { background: var(--allow); }
+  .oc.step i { background: var(--stepup); }
+  .oc.rest i { background: var(--restrict); }
+  .oc.deny i { background: var(--deny); }
+
+  @media (max-width: 900px) {
+    .stage { padding: 92px 30px 40px; }
+    .grid2 { grid-template-columns: 1fr; gap: 40px; }
+    .topbar { left: 30px; right: 30px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .status .dot { animation: none; }
+  }
+</style>
+
+<canvas id="grid"></canvas>
+<div class="vignette"></div>
+
+<div class="stage">
+  <div class="topbar">
+    <div class="brandmark">
+      <span class="glyph"><i></i><i></i><i></i><i></i></span>
+      <span>SignalGrid</span>
+    </div>
+    <div class="status"><span class="dot"></span> Sneak peek · v1 core</div>
+  </div>
+
+  <div class="grid2">
+    <div class="lede">
+      <p class="eyebrow">Operational Trust Orchestration</p>
+      <h1>Trust,<br>decided at<br>the <span class="g">moment</span>.</h1>
+      <p class="tagline">
+        SignalGrid is the runtime decision layer for shared, mobile, and
+        frontline devices. It reads <b>identity</b>, <b>device posture</b>, and
+        <b>workflow context</b>, then decides what happens next —
+        <b>before workflows break</b>.
+      </p>
+      <div class="chips">
+        <span class="chip key">Pre-launch</span>
+        <span class="chip">Public-safe alpha</span>
+        <span class="chip">Deterministic proof</span>
+        <span class="chip">Tenant-isolated</span>
+      </div>
+      <p class="boundary">
+        The trust layer that orchestrates above your stack — not a replacement
+        for IAM, UEM, or ITSM.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <span class="lbl"><span class="live"></span> Live decision</span>
+        <span class="verdict">ALLOW</span>
+      </div>
+      <p class="decid">dec_00e987a939d23e8d</p>
+      <p class="explain">
+        Identity, device posture, and workflow context are aligned and fresh.
+      </p>
+
+      <div class="rows">
+        <div class="row">
+          <span class="k">Identity enabled</span>
+          <span class="v ok"><span class="check">✓</span> true</span>
+        </div>
+        <div class="row">
+          <span class="k">Device compliant &amp; managed</span>
+          <span class="v ok"><span class="check">✓</span> true</span>
+        </div>
+        <div class="row">
+          <span class="k">Posture freshness</span>
+          <span class="v ok"><span class="check">✓</span> fresh · 2h</span>
+        </div>
+        <div class="row">
+          <span class="k">Workflow</span>
+          <span class="v"><span class="tag">clinical session · elevated</span></span>
+        </div>
+      </div>
+
+      <div class="meta">
+        <div><span class="mk">reason</span><span class="mv hl">TRUST_ESTABLISHED</span></div>
+        <div><span class="mk">policy</span><span class="mv">v1</span></div>
+        <div><span class="mk">evidence</span><span class="mv">63b7f566…</span></div>
+        <div><span class="mk">latency</span><span class="mv">1&nbsp;ms</span></div>
+      </div>
+
+      <div class="audit">
+        <span class="seal">◇</span> Audit chain VERIFIED
+        <span class="dim">· tamper-evident · 16 events</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span class="lead">Four verdicts</span>
+    <div class="outcomes">
+      <span class="oc allow"><i></i> ALLOW</span>
+      <span class="oc step"><i></i> STEP-UP</span>
+      <span class="oc rest"><i></i> RESTRICT</span>
+      <span class="oc deny"><i></i> DENY</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const canvas = document.getElementById("grid");
+    const ctx = canvas.getContext("2d");
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let w, h, dpr, nodes, links, cols, rows, gap;
+
+    function setup() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      w = canvas.clientWidth;
+      h = canvas.clientHeight;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      gap = 46;
+      cols = Math.ceil(w / gap) + 2;
+      rows = Math.ceil(h / gap) + 2;
+
+      // focal point: near the verdict card (upper-right third)
+      const fx = w * 0.72;
+      const fy = h * 0.42;
+
+      // a few "signal" nodes that will pulse toward the focus
+      nodes = [];
+      const count = 7;
+      for (let i = 0; i < count; i++) {
+        const ang = (i / count) * Math.PI * 2;
+        const rad = Math.min(w, h) * (0.22 + (i % 3) * 0.07);
+        nodes.push({
+          x: fx + Math.cos(ang) * rad * 1.3,
+          y: fy + Math.sin(ang) * rad,
+          phase: Math.random() * Math.PI * 2,
+          speed: 0.5 + Math.random() * 0.6,
+        });
+      }
+      links = nodes.map((n) => ({ n, fx, fy }));
+    }
+
+    function draw(t) {
+      ctx.clearRect(0, 0, w, h);
+
+      // dot grid
+      for (let i = 0; i < cols; i++) {
+        for (let j = 0; j < rows; j++) {
+          const x = i * gap;
+          const y = j * gap;
+          ctx.fillStyle = "rgba(148,163,184,0.09)";
+          ctx.fillRect(x, y, 1.4, 1.4);
+        }
+      }
+
+      // converging links + travelling pulses
+      for (const l of links) {
+        const grad = ctx.createLinearGradient(l.n.x, l.n.y, l.fx, l.fy);
+        grad.addColorStop(0, "rgba(47,230,198,0)");
+        grad.addColorStop(1, "rgba(47,230,198,0.16)");
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(l.n.x, l.n.y);
+        ctx.lineTo(l.fx, l.fy);
+        ctx.stroke();
+
+        // node glow
+        ctx.fillStyle = "rgba(47,230,198,0.5)";
+        ctx.beginPath();
+        ctx.arc(l.n.x, l.n.y, 2.1, 0, Math.PI * 2);
+        ctx.fill();
+
+        // pulse travelling to focus
+        const prog = reduce ? 0.62 : (Math.sin(t * 0.0006 * l.n.speed + l.n.phase) * 0.5 + 0.5);
+        const px = l.n.x + (l.fx - l.n.x) * prog;
+        const py = l.n.y + (l.fy - l.n.y) * prog;
+        ctx.fillStyle = "rgba(120,245,222,0.9)";
+        ctx.beginPath();
+        ctx.arc(px, py, 2.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // focus node
+      const fl = links[0];
+      if (fl) {
+        ctx.fillStyle = "rgba(47,230,198,0.9)";
+        ctx.beginPath();
+        ctx.arc(fl.fx, fl.fy, 3.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(47,230,198,0.25)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(fl.fx, fl.fy, 9 + (reduce ? 0 : (Math.sin(t * 0.002) * 0.5 + 0.5) * 6), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
+    function loop(t) {
+      draw(t);
+      if (!reduce) requestAnimationFrame(loop);
+    }
+
+    setup();
+    window.addEventListener("resize", setup);
+    if (reduce) draw(0);
+    else requestAnimationFrame(loop);
+  })();
+</script>
+
+</body>
+</html>

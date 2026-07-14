@@ -150,6 +150,6 @@ It should be placed before:
 
 This order keeps SignalGrid grounded in identity and posture first, then adds operational context before moving into broader network/cloud trust or higher-risk action execution.
 
-## Local Codex guidance
+## Local implementation guidance
 
-Public Review Hub work should document the strategy, signal model, boundaries, and deterministic examples. Real DEX, monitoring, observability, API-health, ITSM, alert-routing, and remediation connector implementation should move to private/core/local Codex because it may require credentials, API keys, tenant data, webhook secrets, monitoring-tool access, source-system permissions, mobile testing, and private test data.
+Public Review Hub work should document the strategy, signal model, boundaries, and deterministic examples. Real DEX, monitoring, observability, API-health, ITSM, alert-routing, and remediation connector implementation should move to the private/core/local implementation because it may require credentials, API keys, tenant data, webhook secrets, monitoring-tool access, source-system permissions, mobile testing, and private test data.

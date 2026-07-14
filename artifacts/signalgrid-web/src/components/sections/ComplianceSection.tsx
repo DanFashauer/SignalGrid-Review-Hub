@@ -2,7 +2,8 @@ import { motion } from "framer-motion";
 import { ShieldCheck, Users, AlertTriangle, CheckCircle2 } from "lucide-react";
 
 const FRAMEWORKS = [
-  { name: "DISA STIG", level: "DoD", desc: "CAT I/II/III hardening — SCAP/XCCDF compliance checker integration", color: "text-blue-400 border-blue-400/20 bg-blue-400/5" },
+  { name: "CIS Benchmarks", level: "CIS", desc: "Device hardening baselines + CIS Controls v8 safeguards — baseline drift becomes a decision signal", color: "text-emerald-400 border-emerald-400/20 bg-emerald-400/5" },
+  { name: "DISA STIG", level: "DoD", desc: "CAT I/II/III hardening — maps SCAP/XCCDF checker results to posture signals", color: "text-blue-400 border-blue-400/20 bg-blue-400/5" },
   { name: "FedRAMP Moderate", level: "USG", desc: "NIST 800-53 Rev 5 control baseline for federal cloud deployments", color: "text-blue-400 border-blue-400/20 bg-blue-400/5" },
   { name: "FedRAMP High", level: "USG", desc: "High-impact federal workloads — expanded 800-53 control coverage", color: "text-blue-400 border-blue-400/20 bg-blue-400/5" },
   { name: "DoD IL2 – IL5", level: "DoD", desc: "Impact Level classification for DoD cloud workloads and CUI data", color: "text-blue-400 border-blue-400/20 bg-blue-400/5" },
@@ -78,15 +79,15 @@ export default function ComplianceSection() {
             <ShieldCheck className="w-4 h-4" />
             COMPLIANCE & GOVERNANCE
           </div>
-          <h2 className="text-3xl font-bold tracking-tight mb-4">Built for Regulated Environments. Mapped to Every Major Framework.</h2>
+          <h2 className="text-3xl font-bold tracking-tight mb-4">Designed for Regulated Environments. Signals Mapped to Major Frameworks.</h2>
           <p className="text-muted-foreground text-lg leading-relaxed">
-            SignalGrid is designed from the ground up to operate in DISA-regulated, FedRAMP-authorized, and CMMC-certified environments. Every decision, every signal evaluation, and every alert is logged with the immutable audit trail that compliance mandates require.
+            SignalGrid is designed toward regulated environments — it maps recognized framework signals (CIS, DISA STIG, NIST) into its decision evidence and logs every evaluation to a tamper-evident audit trail. SignalGrid is not presented as a compliance certification or attestation; the frameworks below are what it maps signals to, not certifications it holds.
           </p>
         </div>
 
         {/* Compliance framework grid */}
         <div className="mb-20">
-          <div className="text-xs font-mono text-muted-foreground mb-4 uppercase tracking-widest">Supported Frameworks & Standards</div>
+          <div className="text-xs font-mono text-muted-foreground mb-4 uppercase tracking-widest">Frameworks we map signals to (not certifications held)</div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {FRAMEWORKS.map((fw, idx) => (
               <motion.div
@@ -118,10 +119,10 @@ export default function ComplianceSection() {
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-3">
                 <ShieldCheck className="w-6 h-6 text-blue-400" />
-                <h3 className="text-lg font-semibold text-foreground">DISA STIG Integration — First-Class Support</h3>
+                <h3 className="text-lg font-semibold text-foreground">Hardening baselines — CIS &amp; DISA STIG as decision signals</h3>
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                SignalGrid natively ingests SCAP Compliance Checker (SCC) and STIG Viewer results via the DISA SCAP integration. CAT I, II, and III finding counts, XCCDF benchmark state, and unmitigated finding age are surfaced as real-time device posture signals — blocking access to sensitive workflows when hardening compliance drops below threshold.
+                SignalGrid maps hardening-baseline results — CIS Benchmark alignment and SCAP/STIG (CAT I/II/III) finding state — into its decision evidence as a device security-baseline signal. A device that has drifted from its assigned baseline is stepped up or restricted at the moment a workflow fires. This is a candidate signal category modeled on public-safe fixtures; the source scanner remains the system of record.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3 lg:w-72 shrink-0">

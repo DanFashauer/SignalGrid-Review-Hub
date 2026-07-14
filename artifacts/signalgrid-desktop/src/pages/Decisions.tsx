@@ -36,7 +36,7 @@ export default function DecisionsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold tracking-tight">Decisions</h1>
-          <p className="text-xs font-mono text-muted-foreground mt-0.5">RUNTIME ACCESS ENFORCEMENT LOG</p>
+          <p className="text-xs font-mono text-muted-foreground mt-0.5">RUNTIME ACCESS DECISION LOG</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex gap-1">

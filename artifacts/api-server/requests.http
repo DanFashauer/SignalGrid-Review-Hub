@@ -1,0 +1,111 @@
+### SignalGrid /v1 request collection (public-safe demo)
+#
+# Start the API first:
+#   pnpm --filter @workspace/api-server run build
+#   PORT=5174 pnpm --filter @workspace/api-server run start
+#
+# Demo keys are public-safe fixtures, NOT real credentials. Two tenants exist so
+# cross-tenant isolation can be exercised directly.
+
+@base = http://localhost:5174/api
+@owner = sgk_demo_northwind_owner
+@operator = sgk_demo_northwind_operator
+@auditor = sgk_demo_northwind_auditor
+@atlas = sgk_demo_atlas_owner
+@policy = pol_tenant_northwind_shared_device
+
+### Health
+GET {{base}}/healthz
+
+### Discover demo keys (no auth)
+GET {{base}}/v1/keys
+
+### Who am I
+GET {{base}}/v1/context
+Authorization: Bearer {{operator}}
+
+### Evaluate — compliant nurse → allow
+POST {{base}}/v1/decisions/evaluate
+Authorization: Bearer {{operator}}
+Content-Type: application/json
+
+{ "identityRef": "nurse.compliant", "deviceRef": "ipad-ward-01", "workflowKey": "clinical-session" }
+
+### Evaluate — non-compliant device → restrict
+POST {{base}}/v1/decisions/evaluate
+Authorization: Bearer {{operator}}
+Content-Type: application/json
+
+{ "identityRef": "nurse.noncompliant", "deviceRef": "ipad-ward-02", "workflowKey": "clinical-session" }
+
+### Evaluate — stale posture → step-up
+POST {{base}}/v1/decisions/evaluate
+Authorization: Bearer {{operator}}
+Content-Type: application/json
+
+{ "identityRef": "nurse.stale", "deviceRef": "ipad-ward-03", "workflowKey": "clinical-session" }
+
+### List decisions
+GET {{base}}/v1/decisions
+Authorization: Bearer {{operator}}
+
+### Decision evidence (replace :id with a decisionId from the list)
+GET {{base}}/v1/decisions/dec_c9eb72042e5e1929/evidence
+Authorization: Bearer {{operator}}
+
+### Simulate a decision against the stricter v2 draft
+POST {{base}}/v1/decisions/dec_c9eb72042e5e1929/simulate
+Authorization: Bearer {{operator}}
+Content-Type: application/json
+
+{ "policyVersionId": "pol_tenant_northwind_shared_device_v2" }
+
+### Policy versions
+GET {{base}}/v1/policies/{{policy}}/versions
+Authorization: Bearer {{owner}}
+
+### Run policy tests
+GET {{base}}/v1/policies/{{policy}}/tests
+Authorization: Bearer {{owner}}
+
+### Operator metrics
+GET {{base}}/v1/metrics
+Authorization: Bearer {{operator}}
+
+### Audit ledger + chain verification
+GET {{base}}/v1/audit
+Authorization: Bearer {{owner}}
+
+### Connector health
+GET {{base}}/v1/connectors
+Authorization: Bearer {{owner}}
+
+### Replay fixture connector sync
+POST {{base}}/v1/connectors/conn_tenant_northwind_entra_intune/sync
+Authorization: Bearer {{owner}}
+
+### Webhook deliveries (simulated, with retry/backoff)
+GET {{base}}/v1/webhooks/deliveries
+Authorization: Bearer {{owner}}
+
+### Remediation queue (approval-required, simulated)
+GET {{base}}/v1/remediation
+Authorization: Bearer {{operator}}
+
+### Approve a remediation (owner only; simulated — never executed)
+POST {{base}}/v1/remediation/REPLACE_WITH_REMEDIATION_ID/approve
+Authorization: Bearer {{owner}}
+
+### Negative: unauthenticated → 401
+GET {{base}}/v1/decisions
+
+### Negative: cross-tenant read → 404 (atlas key, northwind decision)
+GET {{base}}/v1/decisions/dec_c9eb72042e5e1929
+Authorization: Bearer {{atlas}}
+
+### Negative: auditor cannot evaluate → 403
+POST {{base}}/v1/decisions/evaluate
+Authorization: Bearer {{auditor}}
+Content-Type: application/json
+
+{ "identityRef": "nurse.compliant", "deviceRef": "ipad-ward-01", "workflowKey": "clinical-session" }

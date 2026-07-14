@@ -1,4 +1,5 @@
 import HeroSection from "@/components/sections/HeroSection";
+import FlowSection from "@/components/sections/FlowSection";
 import ProblemSection from "@/components/sections/ProblemSection";
 import SignalTypesSection from "@/components/sections/SignalTypesSection";
 import OutcomesSection from "@/components/sections/OutcomesSection";
@@ -16,6 +17,7 @@ export default function Home() {
       <Navbar />
       <main className="flex-1">
         <HeroSection />
+        <FlowSection />
         <ProblemSection />
         <SignalTypesSection />
         <OutcomesSection />

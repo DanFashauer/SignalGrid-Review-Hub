@@ -1,6 +1,6 @@
 # Connector Emulator Review Dashboard
 
-The Connector Emulator Review Dashboard is a static Review Hub UI section for visually inspecting the cloud connector emulator harness without local PC setup, Replit, live vendor accounts, enterprise licenses, or privileged credentials.
+The Connector Emulator Review Dashboard is a static Review Hub UI section for visually inspecting the cloud connector emulator harness without local PC setup, a hosted runtime, live vendor accounts, enterprise licenses, or privileged credentials.
 
 ## What reviewers can inspect
 

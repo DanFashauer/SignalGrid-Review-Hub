@@ -1,74 +1,57 @@
 import { motion } from "framer-motion";
-import { Download, Monitor, Smartphone, Terminal, CheckCircle2 } from "lucide-react";
+import { Download, Monitor, Smartphone, CheckCircle2 } from "lucide-react";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 
+// Pre-announcement app-suite preview. These are the review-artifact surfaces
+// (responsive web + PWA today; native shells are a documented next step). No
+// download is live yet — the badges describe availability status, not a file.
 const PLATFORMS = [
   {
     icon: Monitor,
-    name: "SignalGrid Desktop",
-    subtitle: "Windows · macOS · Linux",
-    desc: "Full-featured desktop client with native window chrome, three-panel layout, system tray integration, and real-time desktop notifications. Built on the same decision engine as the operator dashboard.",
-    version: "v2.1.0",
+    name: "Web Admin Console",
+    subtitle: "Any modern browser",
+    desc: "The administrative surface: decision stream, evidence inspection (including the security-baseline/CIS signal), policy lab, tamper-evident audit ledger, and approval-gated remediation. Runs as a responsive web app today.",
+    version: "Web · pre-announcement",
     options: [
-      { label: "Windows x64 (MSI)", ext: ".msi", size: "84 MB", badge: "RECOMMENDED" },
-      { label: "macOS Universal (DMG)", ext: ".dmg", size: "91 MB", badge: "" },
-      { label: "macOS Apple Silicon", ext: ".dmg", size: "78 MB", badge: "" },
-      { label: "Linux x64 (AppImage)", ext: ".AppImage", size: "96 MB", badge: "" },
-      { label: "Linux x64 (DEB)", ext: ".deb", size: "64 MB", badge: "" },
-      { label: "Linux x64 (RPM)", ext: ".rpm", size: "67 MB", badge: "" },
+      { label: "Open the web console", ext: "", size: "", badge: "WEB" },
+      { label: "Self-host (Docker / Helm)", ext: "", size: "", badge: "DESIGN" },
     ],
-    features: ["Real-time decision feed", "Shift Handoff dashboard", "CSV audit export", "System notifications", "Offline policy cache"],
+    features: ["Decision feed + evidence", "Security-baseline (CIS) row", "Policy lab (v1 vs v2)", "Audit ledger", "Approval-gated remediation"],
+  },
+  {
+    icon: Monitor,
+    name: "Desktop (macOS / Windows)",
+    subtitle: "Desktop-chromed operator console",
+    desc: "The operator/admin surface framed for macOS and Windows, adding an ITSM hand-off view. Delivered today as a desktop-chromed web app; native shells (Tauri/Electron) are a documented next step, not shipped.",
+    version: "Desktop · pre-announcement",
+    options: [
+      { label: "macOS shell", ext: "", size: "", badge: "PLANNED" },
+      { label: "Windows shell", ext: "", size: "", badge: "PLANNED" },
+    ],
+    features: ["Operator dashboard", "Shift hand-off view", "Decision + evidence trace", "Audit export"],
   },
   {
     icon: Smartphone,
-    name: "SignalGrid Android",
-    subtitle: "Android 10+ · Zebra · Honeywell · Datalogic",
-    desc: "Native Android app with Zebra DataWedge intent integration, badge scan events, MDM enrollment support, and offline-capable signal caching for warehouse, clinical, and field environments.",
-    version: "v2.1.0",
+    name: "Mobile PWA (iOS / Android)",
+    subtitle: "Installable progressive web app",
+    desc: "One installable PWA serving both personas: the end-user 'My Access' worker surface (why a session was allowed/held + self-service steps) and the operator monitoring tabs. Native React Native/Expo shells are a documented next step.",
+    version: "PWA · pre-announcement",
     options: [
-      { label: "Android (APK — Universal)", ext: ".apk", size: "38 MB", badge: "" },
-      { label: "Zebra Build (DataWedge Enhanced)", ext: ".apk", size: "41 MB", badge: "ZEBRA OPTIMIZED" },
-      { label: "Google Play Store", ext: "", size: "", badge: "ENTERPRISE" },
-      { label: "Managed Google Play (EMM)", ext: "", size: "", badge: "MDM DEPLOY" },
+      { label: "Install via browser (Add to Home Screen)", ext: "", size: "", badge: "PWA" },
+      { label: "Native iOS / Android shell", ext: "", size: "", badge: "PLANNED" },
     ],
-    features: ["Zebra DataWedge integration", "Badge scan custody events", "Android Enterprise support", "Offline signal cache", "MDM policy enforcement"],
-  },
-  {
-    icon: Smartphone,
-    name: "SignalGrid iOS",
-    subtitle: "iOS 16+ · iPad · iPhone",
-    desc: "Progressive Web App installable from Safari. Full dashboard access, real-time decision monitoring, and shift handoff management. Add to Home Screen for app-like experience.",
-    version: "v2.1.0",
-    options: [
-      { label: "Install via Safari (PWA)", ext: "", size: "", badge: "RECOMMENDED" },
-      { label: "TestFlight (Beta)", ext: "", size: "", badge: "BETA" },
-    ],
-    features: ["Full operator dashboard", "Real-time alerts", "Offline capable (PWA)", "Biometric auth", "iPad split-view"],
-  },
-  {
-    icon: Terminal,
-    name: "SignalGrid CLI",
-    subtitle: "Windows · macOS · Linux",
-    desc: "Command-line interface for DevSecOps workflows. Query decisions, manage policies, ingest signals, and export audit logs from scripts and CI/CD pipelines.",
-    version: "v1.4.2",
-    options: [
-      { label: "macOS (Homebrew)", ext: "", size: "", badge: "" },
-      { label: "Windows (winget)", ext: "", size: "", badge: "" },
-      { label: "Linux (APT / YUM)", ext: "", size: "", badge: "" },
-      { label: "Binary release (all platforms)", ext: ".tar.gz", size: "12 MB", badge: "" },
-    ],
-    features: ["Decision query + filter", "Policy CRUD", "Audit log export", "Signal ingest", "CI/CD integration"],
+    features: ["'My Access' worker surface", "Self-service resolution steps", "Operator triage tabs", "Offline-capable (PWA)"],
   },
 ];
 
 const SYSTEM_REQUIREMENTS = [
-  { platform: "Windows", req: "Windows 10 22H2 or later · 4 GB RAM · 500 MB disk" },
-  { platform: "macOS", req: "macOS 13 Ventura or later · Apple Silicon or Intel" },
-  { platform: "Linux", req: "Ubuntu 22.04 / RHEL 8+ · glibc 2.31+" },
-  { platform: "Android", req: "Android 10+ · 2 GB RAM · ARM64 or x86_64" },
+  { platform: "Web", req: "Any modern evergreen browser (Chromium, Safari, Firefox)" },
+  { platform: "macOS", req: "macOS 13 Ventura or later (desktop-chromed web today)" },
+  { platform: "Windows", req: "Windows 10 22H2 or later (desktop-chromed web today)" },
+  { platform: "Android", req: "Android 10+ · installable PWA via Chrome" },
   { platform: "iOS", req: "iOS 16+ · Safari 16.4+ for PWA installation" },
-  { platform: "Zebra", req: "Zebra Android 10+ · DataWedge 7.0+ · StageNow 3.4+" },
+  { platform: "Delivery", req: "Responsive web + PWA today; native shells are a documented next step" },
 ];
 
 export default function Downloads() {
@@ -84,7 +67,10 @@ export default function Downloads() {
                 <Download className="w-4 h-4" /> DOWNLOADS
               </div>
               <h1 className="text-4xl font-bold tracking-tight mb-4">Every Platform. One Decision Engine.</h1>
-              <p className="text-muted-foreground text-lg">Desktop, mobile, Zebra-native, and CLI — all backed by the same real-time Zero Trust signal evaluation engine.</p>
+              <p className="text-muted-foreground text-lg">Web admin, desktop, and a mobile PWA that serves both the operator and the end-user worker — all backed by the same deterministic decision core.</p>
+              <div className="mt-6 inline-block rounded-lg border border-amber-400/20 bg-amber-400/5 px-4 py-3 text-sm text-muted-foreground">
+                <span className="text-amber-400 font-medium">Pre-announcement:</span> these surfaces are review artifacts. Delivery today is responsive web + PWA; native desktop/mobile shells are a documented next step. Downloads are not yet live.
+              </div>
             </div>
 
             <div className="space-y-8">
@@ -127,7 +113,7 @@ export default function Downloads() {
                       </div>
                       <div className="space-y-2">
                         {platform.options.map(opt => (
-                          <div key={opt.label} className="flex items-center justify-between p-3 rounded-lg border border-border bg-background/50 hover:border-primary/40 hover:bg-primary/5 transition-colors group cursor-pointer">
+                          <a key={opt.label} href="https://github.com/DanFashauer/SignalGrid-Review-Hub" target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-3 rounded-lg border border-border bg-background/50 hover:border-primary/40 hover:bg-primary/5 transition-colors group cursor-pointer">
                             <div className="flex items-center gap-3">
                               <Download className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
                               <div>
@@ -141,7 +127,7 @@ export default function Downloads() {
                               )}
                               {opt.ext && <span className="text-xs font-mono text-muted-foreground">{opt.ext}</span>}
                             </div>
-                          </div>
+                          </a>
                         ))}
                       </div>
                     </div>

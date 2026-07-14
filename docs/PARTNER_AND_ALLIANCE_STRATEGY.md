@@ -34,7 +34,7 @@ The [Operational Health / DEX Layer Strategy](OPERATIONAL_HEALTH_DEX_LAYER_STRAT
 
 The useful partner framing is narrow: SignalGrid would consume health, experience, alert, ticket, service, severity, ownership, and impacted-service context; correlate it with identity, posture, session, RTLS/DockBridge, and workflow state; then route decisions, tickets, alerts, review requests, remediation requests, and audit evidence to the correct existing system or team. SignalGrid should not claim that it replaces DEX, RMM, EDR, SIEM, monitoring, observability, ITSM, or endpoint platforms.
 
-Real connector implementation belongs in private/core/local Codex after public documentation settles because partner APIs may require credentials, API keys, tenant data, webhook secrets, monitoring access, source-system permissions, mobile testing, and private test data.
+Real connector implementation belongs in the private/core/local implementation after public documentation settles because partner APIs may require credentials, API keys, tenant data, webhook secrets, monitoring access, source-system permissions, mobile testing, and private test data.
 
 ## DockBridge ecosystem path
 

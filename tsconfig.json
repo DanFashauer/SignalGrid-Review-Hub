@@ -4,9 +4,6 @@
   "files": [],
   "references": [
     {
-      "path": "./lib/db"
-    },
-    {
       "path": "./lib/api-client-react"
     },
     {
@@ -14,6 +11,9 @@
     },
     {
       "path": "./lib/signalgrid-simulator"
+    },
+    {
+      "path": "./lib/signalgrid-core"
     }
   ]
 }

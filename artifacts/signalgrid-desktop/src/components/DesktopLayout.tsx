@@ -47,18 +47,19 @@ export default function DesktopLayout({ children }: { children: React.ReactNode 
             <div className="h-1.5 w-1.5 rounded-full bg-background" />
           </div>
           <span className="text-xs font-bold tracking-widest text-foreground/70 font-mono">SIGNALGRID DESKTOP</span>
-          <span className="text-xs font-mono text-muted-foreground">v2.1.0</span>
+          <span className="text-xs font-mono text-muted-foreground">review build</span>
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-amber-400/30 bg-amber-400/5 text-amber-400/90">FIXTURE DATA</span>
         </div>
 
         {/* Status indicators */}
         <div className="flex items-center gap-4 shrink-0">
           <div className="flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-green-400 pulse-dot" />
-            <span className="text-xs font-mono text-muted-foreground">ENGINE LIVE</span>
+            <div className="w-1.5 h-1.5 rounded-full bg-amber-400 pulse-dot" />
+            <span className="text-xs font-mono text-muted-foreground">ENGINE · FIXTURE</span>
           </div>
           <div className="flex items-center gap-1 text-xs font-mono text-muted-foreground">
             <Wifi className="w-3 h-3" />
-            <span>{metrics?.activeIntegrations ?? "–"}/{metrics?.totalIntegrations ?? "–"} CONNECTED</span>
+            <span>{metrics?.activeIntegrations ?? "–"}/{metrics?.totalIntegrations ?? "–"} CATALOG</span>
           </div>
           <div className="flex items-center gap-1 text-xs font-mono text-muted-foreground">
             <Clock className="w-3 h-3" />
@@ -111,15 +112,15 @@ export default function DesktopLayout({ children }: { children: React.ReactNode 
             <div className="text-xs font-mono text-muted-foreground/60 uppercase tracking-widest mb-2">System</div>
             <div className="flex items-center justify-between text-xs font-mono">
               <span className="text-muted-foreground">Decision Engine</span>
-              <span className="text-green-400">HEALTHY</span>
+              <span className="text-amber-400">FIXTURE</span>
             </div>
             <div className="flex items-center justify-between text-xs font-mono">
-              <span className="text-muted-foreground">DB Pool</span>
-              <span className="text-green-400">OK</span>
+              <span className="text-muted-foreground">Data source</span>
+              <span className="text-amber-400">SYNTHETIC</span>
             </div>
             <div className="flex items-center justify-between text-xs font-mono">
-              <span className="text-muted-foreground">Signal Queue</span>
-              <span className="text-primary">LIVE</span>
+              <span className="text-muted-foreground">Signal feed</span>
+              <span className="text-muted-foreground">fixture</span>
             </div>
             <div className="flex items-center justify-between text-xs font-mono">
               <span className="text-muted-foreground">Avg Latency</span>
@@ -172,7 +173,7 @@ export default function DesktopLayout({ children }: { children: React.ReactNode 
         </div>
         <div className="flex items-center gap-1.5 ml-auto">
           <Database className="w-3 h-3 text-muted-foreground/60" />
-          <span className="text-xs font-mono text-muted-foreground/60">PostgreSQL · Connected</span>
+          <span className="text-xs font-mono text-muted-foreground/60">Synthetic fixture data · read-only</span>
         </div>
         {metrics && (
           <span className="text-xs font-mono text-muted-foreground/60">

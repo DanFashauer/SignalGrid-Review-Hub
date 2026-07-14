@@ -1,7 +1,38 @@
 import { motion } from "framer-motion";
-import { Shield, Wifi, Battery, Cpu, Radio, Lock, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Shield, Wifi, Battery, Cpu, Radio, Lock, AlertTriangle } from "lucide-react";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
+
+const REPO = "https://github.com/DanFashauer/SignalGrid-Review-Hub";
+
+// The dedicated SmartDock: an OPTIONAL embedded smart-charging dock. Power +
+// network in; every decision runs in the SaaS cloud or on-site. Design concept.
+const SMARTDOCK = [
+  {
+    title: "Power + network in, nothing else required",
+    body: "The dock takes power and a network uplink. The embedded SignalGrid agent streams normalized custody/charge/tamper/dock/badge signals — every ALLOW / STEP-UP / RESTRICT / DENY decision runs in the SaaS cloud or on-site, not on the dock.",
+    icon: Wifi,
+    color: "text-cyan-400",
+  },
+  {
+    title: "Smart charging as a decision signal",
+    body: "Charge state, battery health, and charge faults are first-class signals. A device that could die mid-workflow is stepped up before it is handed out — the dock keeps it topped up in its bay.",
+    icon: Battery,
+    color: "text-orange-400",
+  },
+  {
+    title: "Custody + badge binding at the bay",
+    body: "The reader case in the dock asserts the person→shared-device binding continuously. A badge pulled restricts the live session; a forced removal denies. The dock is the tamper witness for the device it holds.",
+    icon: Lock,
+    color: "text-amber-400",
+  },
+  {
+    title: "The dock reports its own health",
+    body: "A faulted dock can't vouch for custody, so the session is restricted; an offline dock has lost its live channel, so access steps up. The dock's own state is part of the decision — not silently ignored.",
+    icon: AlertTriangle,
+    color: "text-red-400",
+  },
+];
 
 const SPECS = [
   { category: "Form Factor", items: [
@@ -19,8 +50,8 @@ const SPECS = [
     { label: "USB", value: "USB-C 3.2 · Data + Charging" },
   ]},
   { category: "Security", items: [
-    { label: "Secure Element", value: "EAL5+ certified SE" },
-    { label: "Crypto", value: "FIPS 140-2 Level 2" },
+    { label: "Secure Element", value: "EAL5+-class SE (design target)" },
+    { label: "Crypto", value: "FIPS 140-2 L2 (design target)" },
     { label: "Attestation", value: "TPM 2.0 + device certificate" },
     { label: "Badge Lock", value: "Electromagnetic + solenoid latch" },
     { label: "Tamper", value: "Physical tamper detection + wipe" },
@@ -86,17 +117,20 @@ export default function Hardware() {
                 <h1 className="text-4xl font-bold tracking-tight mb-6 leading-tight">
                   The Badge-Locking<br />Device Case
                 </h1>
-                <p className="text-lg text-muted-foreground leading-relaxed mb-8">
-                  A hardened device carrier that physically binds badge custody to digital identity. BLE + UWB zone detection, electromagnetic badge lock, eSIM cellular keepalive, and tamper-evident post-exit recovery — in a shift-durable form factor.
+                <p className="text-lg text-muted-foreground leading-relaxed mb-6">
+                  A hardened device carrier that physically binds badge custody to digital identity. BLE + UWB zone detection, electromagnetic badge lock, eSIM cellular keepalive, and tamper-evident post-exit recovery — in a shift-durable form factor. Custody, charge, and tamper events feed the decision engine through the DockBridge custody connector.
                 </p>
+                <div className="mb-8 rounded-lg border border-amber-400/20 bg-amber-400/5 px-4 py-3 text-sm text-amber-200/80">
+                  Pre-production hardware design concept. The specifications below are <span className="font-medium">design targets</span>, not shipped or certified. SignalGrid runs software-only today; this hardware layer is optional and fixture-backed. Nothing here is available for sale.
+                </div>
                 <div className="flex flex-wrap gap-3 mb-8">
-                  {["FIPS 140-2 L2", "MIL-STD-810H", "IP54", "EAL5+ SE", "CAT-M1 eSIM"].map(b => (
+                  {["FIPS 140-2 L2 (target)", "MIL-STD-810H (target)", "IP54 (target)", "EAL5+-class SE (target)", "CAT-M1 eSIM (target)"].map(b => (
                     <span key={b} className="text-xs font-mono px-2.5 py-1 rounded border border-primary/20 bg-primary/5 text-primary">{b}</span>
                   ))}
                 </div>
                 <div className="flex gap-3">
-                  <a href="#" className="px-5 py-2.5 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors">Request a Pilot Kit</a>
-                  <a href="#" className="px-5 py-2.5 border border-border text-foreground rounded-md text-sm font-medium hover:border-primary/50 transition-colors">Download Datasheet</a>
+                  <a href={REPO} target="_blank" rel="noopener noreferrer" className="px-5 py-2.5 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors">Talk to us about a design pilot</a>
+                  <a href={`${REPO}/blob/main/docs/SIGNALGRID_SMARTDOCK.md`} target="_blank" rel="noopener noreferrer" className="px-5 py-2.5 border border-border text-foreground rounded-md text-sm font-medium hover:border-primary/50 transition-colors">Read the SmartDock design</a>
                 </div>
               </div>
 
@@ -110,7 +144,7 @@ export default function Hardware() {
                       { icon: Lock, label: "EM LATCH", desc: "Electromagnetic lock", color: "text-amber-400" },
                       { icon: Radio, label: "BLE + UWB", desc: "5.3 + 802.15.4a", color: "text-cyan-400" },
                       { icon: Wifi, label: "eSIM MODULE", desc: "CAT-M1 / LTE", color: "text-purple-400" },
-                      { icon: Cpu, label: "SECURE ELEMENT", desc: "EAL5+ certified", color: "text-green-400" },
+                      { icon: Cpu, label: "SECURE ELEMENT", desc: "EAL5+-class (design target)", color: "text-green-400" },
                       { icon: Battery, label: "BATTERY", desc: "4,800 mAh · 12h", color: "text-orange-400" },
                     ].map(({ icon: Icon, label, desc, color }) => (
                       <div key={label} className="flex items-center gap-3 p-2.5 rounded border border-border bg-background/50">
@@ -162,6 +196,40 @@ export default function Hardware() {
           </div>
         </section>
 
+        {/* SmartDock — the optional embedded hardware layer */}
+        <section className="py-20 border-b border-border/50">
+          <div className="container mx-auto px-4 md:px-8 max-w-screen-xl">
+            <div className="mb-12 max-w-3xl">
+              <div className="inline-flex items-center gap-2 text-cyan-400 text-sm font-mono mb-3">
+                <Battery className="w-4 h-4" /> SIGNALGRID SMARTDOCK · OPTIONAL LAYER
+              </div>
+              <h2 className="text-2xl font-bold tracking-tight mb-3">A dedicated smart-charging dock, with SignalGrid embedded.</h2>
+              <p className="text-muted-foreground leading-relaxed">
+                SmartDock is the optional hardware layer for teams that want more control of the grid and their signals — a sophisticated phone dock and smart-charging station running the SignalGrid agent in firmware. It complements existing shared-device and mobile-access platforms rather than replacing them, and it's a candidate we'd build directly or as a partnership. The product runs software-only today; the dock is additive.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {SMARTDOCK.map(({ title, body, icon: Icon, color }) => (
+                <motion.div
+                  key={title}
+                  initial={{ opacity: 0, y: 16 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  className="rounded-xl border border-border/50 bg-card/50 p-6"
+                >
+                  <Icon className={`w-5 h-5 mb-3 ${color}`} />
+                  <h3 className="font-semibold text-foreground mb-2">{title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{body}</p>
+                </motion.div>
+              ))}
+            </div>
+            <div className="mt-6 flex flex-col sm:flex-row items-start sm:items-center gap-3 text-sm text-muted-foreground">
+              <span className="font-mono text-xs px-2.5 py-1 rounded border border-cyan-400/20 bg-cyan-400/5 text-cyan-400 shrink-0">INGESTION MODE: embedded_smartdock</span>
+              <span>Modeled end-to-end in the deterministic core (connector → sync → normalized signals → decision → audit), fixture-backed and read-only.</span>
+            </div>
+          </div>
+        </section>
+
         {/* Specs */}
         <section className="py-20">
           <div className="container mx-auto px-4 md:px-8 max-w-screen-xl">
@@ -188,12 +256,12 @@ export default function Hardware() {
         <section className="py-16 border-t border-border/50 bg-zinc-950">
           <div className="container mx-auto px-4 md:px-8 max-w-screen-xl flex flex-col md:flex-row items-center justify-between gap-8">
             <div>
-              <h3 className="text-xl font-bold mb-2">Request a 30-Day Pilot Kit</h3>
-              <p className="text-muted-foreground text-sm">Ships with 10 cases, 1 dock station, and pre-configured SignalGrid tenant. No commitment.</p>
+              <h3 className="text-xl font-bold mb-2">Explore a design-partner pilot</h3>
+              <p className="text-muted-foreground text-sm">This hardware is a pre-production design concept, not a shipping product. Review the deterministic core and the SmartDock design, or reach out about a design-partner collaboration.</p>
             </div>
             <div className="flex gap-3 shrink-0">
-              <a href="#" className="px-6 py-3 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 transition-colors">Request Pilot Kit</a>
-              <a href="#" className="px-6 py-3 border border-border rounded-md font-medium hover:border-primary/50 transition-colors">Contact Sales</a>
+              <a href={REPO} target="_blank" rel="noopener noreferrer" className="px-6 py-3 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 transition-colors">Explore the repo</a>
+              <a href={`${REPO}/blob/main/docs/SIGNALGRID_SMARTDOCK.md`} target="_blank" rel="noopener noreferrer" className="px-6 py-3 border border-border rounded-md font-medium hover:border-primary/50 transition-colors">SmartDock design</a>
             </div>
           </div>
         </section>

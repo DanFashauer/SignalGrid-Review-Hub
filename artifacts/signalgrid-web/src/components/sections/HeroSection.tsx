@@ -1,13 +1,15 @@
 import { motion } from "framer-motion";
 
+// Vendor-neutral candidate signal categories (public-safe fixture values, not
+// named live vendor integrations).
 const LIVE_SIGNALS = [
   { label: "BADGE", value: "INSERTED", color: "text-orange-400" },
-  { label: "IDENTITY", value: "OKTA + IMPRIVATA", color: "text-blue-400" },
-  { label: "MDM", value: "JAMF — COMPLIANT", color: "text-green-400" },
+  { label: "IDENTITY", value: "ENABLED", color: "text-blue-400" },
+  { label: "DEVICE POSTURE", value: "COMPLIANT", color: "text-green-400" },
   { label: "LOCATION", value: "ZONE 3B / ICU", color: "text-cyan-400" },
   { label: "SHIFT", value: "07:00–19:00 MATCHED", color: "text-purple-400" },
-  { label: "POSTURE", value: "CROWDSTRIKE NOMINAL", color: "text-green-400" },
-  { label: "CELLULAR", value: "SORACOM REACHABLE", color: "text-cyan-400" },
+  { label: "SECURITY BASELINE", value: "CIS ALIGNED", color: "text-green-400" },
+  { label: "CUSTODY (DOCKBRIDGE)", value: "CHECKED OUT", color: "text-cyan-400" },
 ];
 
 export default function HeroSection() {
@@ -29,26 +31,28 @@ export default function HeroSection() {
               Contextual Workforce Trust Orchestration
             </div>
 
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground mb-6 leading-tight">
-              The Identity Layer for<br className="hidden md:block" />
-              <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">Badge-Locked Shared Devices.</span>
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground mb-6 leading-tight text-balance">
+              Every access signal,<br className="hidden md:block" />
+              <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">turned into one clear call.</span>
             </h1>
 
-            <p className="text-lg text-muted-foreground mb-8 max-w-[600px] leading-relaxed">
-              Who. Where. When. What device. What role. What floor. What posture. What workflow. SignalGrid evaluates all of it — continuously, at the exact moment a workflow fires — binding identity to physical custody across every shift.
+            <p className="text-lg text-muted-foreground mb-8 max-w-[600px] leading-relaxed text-pretty">
+              The moment a workflow fires, SignalGrid reads the signals that matter — identity, device
+              posture, physical custody, and security baseline — and turns them into a simple decision:
+              allow, step-up, restrict, or deny. You choose the action.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
-              <button className="inline-flex h-12 items-center justify-center rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90">
+              <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub" target="_blank" rel="noopener noreferrer" className="inline-flex h-12 items-center justify-center rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90">
                 Request a Demo
-              </button>
-              <button className="inline-flex h-12 items-center justify-center rounded-md border border-input bg-background px-8 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground">
+              </a>
+              <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/tree/main/docs" target="_blank" rel="noopener noreferrer" className="inline-flex h-12 items-center justify-center rounded-md border border-input bg-background px-8 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground">
                 Read Architecture Docs
-              </button>
+              </a>
             </div>
 
             <div className="mt-10 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
-              {["SOC 2 Type II", "On-Premise Ready", "Air-Gap Capable", "HIPAA Aligned"].map((t) => (
+              {["Fixture-backed proof", "On-premise-ready design", "Air-gap-capable design", "Systems of record stay external"].map((t) => (
                 <div key={t} className="flex items-center">
                   <svg className="mr-2 h-4 w-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
@@ -69,7 +73,7 @@ export default function HeroSection() {
               <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 bg-muted/30">
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
-                  <span className="text-xs font-mono text-muted-foreground">SIGNALGRID DECISION ENGINE — LIVE</span>
+                  <span className="text-xs font-mono text-muted-foreground">SIGNALGRID DECISION ENGINE — FIXTURE PROOF</span>
                 </div>
                 <span className="text-xs font-mono text-muted-foreground">14:03:47.821</span>
               </div>
@@ -98,15 +102,15 @@ export default function HeroSection() {
                   className="flex items-center justify-between rounded-md bg-emerald-500/10 border border-emerald-500/30 px-4 py-3"
                 >
                   <span className="text-xs font-mono font-semibold text-emerald-400">DECISION: ALLOW</span>
-                  <span className="text-xs font-mono text-muted-foreground">LATENCY 31ms</span>
+                  <span className="text-xs font-mono text-muted-foreground">DETERMINISTIC</span>
                 </motion.div>
               </div>
 
               <div className="grid grid-cols-3 gap-px bg-border/30 border-t border-border/30">
                 {[
                   { label: "SIGNALS FUSED", value: "7" },
-                  { label: "PLATFORMS", value: "122+" },
-                  { label: "P99 LATENCY", value: "38ms" },
+                  { label: "CORE SIGNAL CATEGORIES", value: "12" },
+                  { label: "EVALUATION", value: "FIXTURE" },
                 ].map((s) => (
                   <div key={s.label} className="bg-card px-4 py-3 text-center">
                     <div className="text-lg font-bold font-mono text-foreground">{s.value}</div>

@@ -79,7 +79,7 @@ export function PolicyCreate() {
 
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Create Policy</h1>
-        <p className="text-muted-foreground mt-1 font-mono text-sm">DEFINE A NEW ENFORCEMENT RULESET</p>
+        <p className="text-muted-foreground mt-1 font-mono text-sm">DEFINE A NEW DECISION RULESET</p>
       </div>
 
       <Form {...form}>

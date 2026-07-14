@@ -39,7 +39,12 @@ export function SignalList() {
     <div className="p-8 max-w-7xl mx-auto space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Signal Feed</h1>
-        <p className="text-muted-foreground mt-1 font-mono text-sm">REAL-TIME INGESTION STREAM — {signalsData?.signals.length ?? 0} SIGNALS</p>
+        <p className="text-muted-foreground mt-1 font-mono text-sm">SIGNAL STREAM (FIXTURE) — {signalsData?.signals.length ?? 0} SIGNALS</p>
+        <p className="text-xs text-amber-400/80 mt-2 max-w-2xl">
+          Synthetic fixture data. This catalog view includes candidate signal categories
+          (session, network, operational) that the decision core does not evaluate today —
+          the core normalizes identity, device posture, DockBridge custody, and CIS baseline.
+        </p>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>

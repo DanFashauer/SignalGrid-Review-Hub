@@ -14,7 +14,7 @@ This runbook defines the hands-off operating model for moving SignalGrid Review 
 5. **Autopilot opens one scoped PR per phase** so changes stay reviewable and rollback-safe.
 6. **CI/proofs/smoke evidence run** using deterministic commands and public-safe fixtures only.
 7. **Phase PR Evidence report is generated** so reviewers can inspect what changed, what passed, and what remains blocked.
-8. **ChatGPT reviews GitHub state directly** from PRs, run URLs, files, and artifacts instead of asking the owner to paste long Codex summaries.
+8. **ChatGPT reviews GitHub state directly** from PRs, run URLs, files, and artifacts instead of asking the owner to paste long automation summaries.
 9. **Owner approves only strategic or risky decisions**, especially YELLOW/RED work, outreach posture, sandbox movement, and any future opt-in automation policy.
 
 ## Default classification table

@@ -71,7 +71,7 @@ git diff --check
 
 - Simulator data is deterministic fixture data.
 - API simulator routes are in-memory and reset when the server restarts.
-- DB-backed API routes intentionally return 503 without DATABASE_URL.
+- The product API is the deterministic, in-memory `/v1` surface; there is no database.
 - Real Microsoft Graph, DEX, RTLS, ITSM, DockBridge, EDR, and mobile implementations remain future private-core or local follow-up work.
 - Vite sourcemap or large chunk warnings may remain non-blocking.
 

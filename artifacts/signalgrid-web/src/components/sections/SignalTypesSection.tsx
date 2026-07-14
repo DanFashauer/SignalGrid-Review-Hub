@@ -1,16 +1,17 @@
 import { motion } from "framer-motion";
-import { UserCircle, Shield, MapPin, Clock, Wifi, ActivitySquare } from "lucide-react";
+import { UserCircle, Shield, ShieldCheck, MapPin, Clock, Wifi, ActivitySquare } from "lucide-react";
 
 export default function SignalTypesSection() {
   const signals = [
     {
       id: "identity",
-      name: "Identity & Badge State",
+      evaluated: true,
+      name: "Identity State",
       icon: UserCircle,
       items: [
         "IdP/SSO token + MFA state",
-        "Badge physically inserted in case",
-        "Imprivata tap-and-go session binding",
+        "Account enabled / disabled / unknown",
+        "Tap-and-go session binding",
         "Passkey / FIDO2 verification",
       ],
       color: "text-blue-400",
@@ -19,10 +20,11 @@ export default function SignalTypesSection() {
     },
     {
       id: "device",
+      evaluated: true,
       name: "Device Posture",
       icon: Shield,
       items: [
-        "MDM/UEM real-time compliance",
+        "MDM/UEM compliance state",
         "EDR agent health & threat score",
         "Encryption, patch, jailbreak state",
         "Tamper sensor — forced badge removal",
@@ -33,20 +35,52 @@ export default function SignalTypesSection() {
     },
     {
       id: "physical",
+      evaluated: true,
       name: "Physical Presence",
       icon: MapPin,
       items: [
-        "Badge tap event — door / zone",
-        "BLE/UWB indoor proximity zone",
-        "PACS access log — current location",
-        "Dock state — checked out or returned",
+        "DockBridge custody — checked out / overdue / returned",
+        "SmartDock hardware state — faulted / offline",
+        "Battery / charge state from the dock",
+        "Tamper witness — sensor present / blinded",
       ],
       color: "text-orange-400",
       bg: "bg-orange-400/10",
       border: "border-orange-400/20",
     },
     {
+      id: "baseline",
+      evaluated: true,
+      name: "Security Baseline (CIS)",
+      icon: ShieldCheck,
+      items: [
+        "CIS Benchmark alignment (aligned / drifted)",
+        "CIS Controls v8 safeguard coverage",
+        "DISA STIG / SCAP finding state",
+        "Hardening drift → step-up or restrict",
+      ],
+      color: "text-emerald-400",
+      bg: "bg-emerald-400/10",
+      border: "border-emerald-400/20",
+    },
+    {
+      id: "badge",
+      evaluated: true,
+      name: "Badge Binding (reader case)",
+      icon: ShieldCheck,
+      items: [
+        "Badge present / removed / forced in the case",
+        "Person → shared-device binding, live",
+        "Withdrawn badge → restrict the session",
+        "Forced / torn removal → deny",
+      ],
+      color: "text-amber-400",
+      bg: "bg-amber-400/10",
+      border: "border-amber-400/20",
+    },
+    {
       id: "session",
+      evaluated: false,
       name: "Session & Shift Context",
       icon: Clock,
       items: [
@@ -61,6 +95,7 @@ export default function SignalTypesSection() {
     },
     {
       id: "network",
+      evaluated: false,
       name: "Network & Cellular Posture",
       icon: Wifi,
       items: [
@@ -75,6 +110,7 @@ export default function SignalTypesSection() {
     },
     {
       id: "operational",
+      evaluated: false,
       name: "Operational Signals",
       icon: ActivitySquare,
       items: [
@@ -93,9 +129,9 @@ export default function SignalTypesSection() {
     <section className="py-24 bg-background border-b border-border/50" id="platform">
       <div className="container mx-auto px-4 md:px-8 max-w-screen-xl">
         <div className="mb-16 max-w-3xl">
-          <h2 className="text-3xl font-bold tracking-tight mb-4">Six-Dimensional Signal Fusion</h2>
+          <h2 className="text-3xl font-bold tracking-tight mb-4">Multi-Dimensional Signal Fusion</h2>
           <p className="text-muted-foreground text-lg leading-relaxed">
-            A token proves identity. MDM proves enrollment. A badge tap proves presence. None of them alone proves readiness for a sensitive workflow. SignalGrid fuses six signal dimensions — including physical custody state and cellular reachability — in a single sub-40ms evaluation.
+            A token proves identity. MDM proves enrollment. A badge tap proves presence. None of them alone proves readiness for a sensitive workflow. The deterministic core evaluates <span className="text-foreground font-medium">five dimensions today</span> — identity, device posture, DockBridge physical custody, CIS security-baseline alignment, and badge binding from the reader case — in a single deterministic evaluation. The remaining dimensions below are <span className="text-foreground font-medium">candidate signal categories</span> on the roadmap, not decision inputs today.
           </p>
         </div>
 
@@ -110,8 +146,19 @@ export default function SignalTypesSection() {
               className={`p-6 rounded-xl border ${signal.border} bg-card shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group`}
             >
               <div className={`absolute top-0 right-0 w-32 h-32 -mr-8 -mt-8 rounded-full blur-3xl opacity-20 group-hover:opacity-30 transition-opacity ${signal.bg}`}></div>
-              <div className={`w-10 h-10 rounded-lg ${signal.bg} flex items-center justify-center mb-5`}>
-                <signal.icon className={`w-5 h-5 ${signal.color}`} />
+              <div className="flex items-center justify-between mb-5">
+                <div className={`w-10 h-10 rounded-lg ${signal.bg} flex items-center justify-center`}>
+                  <signal.icon className={`w-5 h-5 ${signal.color}`} />
+                </div>
+                <span
+                  className={`text-[10px] font-mono px-2 py-0.5 rounded-full border uppercase tracking-wider ${
+                    signal.evaluated
+                      ? "text-emerald-400 border-emerald-400/30 bg-emerald-400/5"
+                      : "text-muted-foreground border-border bg-muted/20"
+                  }`}
+                >
+                  {signal.evaluated ? "Evaluated today" : "Candidate"}
+                </span>
               </div>
               <h3 className="text-base font-semibold mb-4 text-foreground">{signal.name}</h3>
               <ul className="space-y-2.5">

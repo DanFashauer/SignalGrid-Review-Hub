@@ -1,21 +1,7 @@
-version: "3.9"
-
+# Local delivery topology for the SignalGrid review artifact.
+# The product is the deterministic, in-memory /v1 core — no database is required.
+#   nginx (reverse proxy) → api (/api) + web (/, /app)
 services:
-  postgres:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: signalgrid
-      POSTGRES_USER: signalgrid
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U signalgrid"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   api:
     build:
       context: .
@@ -24,13 +10,8 @@ services:
     environment:
       NODE_ENV: production
       PORT: 8080
-      DATABASE_URL: postgres://signalgrid:${POSTGRES_PASSWORD:-changeme}@postgres:5432/signalgrid
-      SESSION_SECRET: ${SESSION_SECRET:-change-this-in-production}
     ports:
       - "8080:8080"
-    depends_on:
-      postgres:
-        condition: service_healthy
 
   web:
     build:
@@ -58,5 +39,4 @@ services:
       - web
 
 volumes:
-  postgres_data:
   nginx_certs:

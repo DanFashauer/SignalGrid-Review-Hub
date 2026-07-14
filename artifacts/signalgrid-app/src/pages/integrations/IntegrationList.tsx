@@ -140,7 +140,7 @@ export function IntegrationList() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Integrations</h1>
-          <p className="text-muted-foreground mt-1 font-mono text-sm">TELEMETRY SOURCES & ENFORCEMENT POINTS</p>
+          <p className="text-muted-foreground mt-1 font-mono text-sm">CANDIDATE SIGNAL SOURCES (CATALOG — not connected)</p>
         </div>
         <div className="flex gap-6 text-right">
           <div>

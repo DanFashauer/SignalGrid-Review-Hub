@@ -2,12 +2,21 @@
   "name": "signalgrid-review-hub",
   "version": "0.0.0",
   "license": "MIT",
+  "packageManager": "pnpm@10.28.1",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "preinstall": "node scripts/enforce-pnpm.cjs",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
     "proof:intune-entra-posture": "pnpm --filter @workspace/scripts run proof:intune-entra-posture",
+    "proof:signalgrid-core": "pnpm --filter @workspace/scripts run proof:signalgrid-core",
+    "proof:api-contract": "pnpm --filter @workspace/scripts run proof:api-contract",
+    "test:api": "pnpm --filter @workspace/api-server run test:api",
+    "bench:decision-latency": "pnpm --filter @workspace/scripts run bench:decision-latency",
+    "sbom": "pnpm --filter @workspace/scripts run sbom",
     "proof:signalgrid-simulator": "pnpm --filter @workspace/scripts run proof:signalgrid-simulator",
     "sim:signalgrid": "pnpm run proof:signalgrid-simulator",
     "dev:simulator": "node scripts/dev-simulator.cjs",

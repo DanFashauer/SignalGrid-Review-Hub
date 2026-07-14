@@ -9,13 +9,6 @@ const NAV_LINKS = [
   { href: "/downloads", label: "Downloads" },
 ];
 
-const PLATFORM_LINKS = [
-  { href: "#signal-types", label: "Signal Engine" },
-  { href: "#integrations", label: "Integrations" },
-  { href: "#how-it-works", label: "How It Works" },
-  { href: "#deployment", label: "Deployment" },
-];
-
 export default function Navbar() {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -38,7 +31,7 @@ export default function Navbar() {
         <nav className="hidden md:flex items-center gap-1 text-sm flex-1">
           {/* Platform dropdown anchor */}
           <a
-            href="#platform"
+            href="/#platform"
             className="px-3 py-1.5 text-foreground/60 hover:text-foreground rounded transition-colors"
           >
             Platform
@@ -56,28 +49,22 @@ export default function Navbar() {
               {label}
             </Link>
           ))}
-          <a
-            href="/app"
-            className="px-3 py-1.5 text-foreground/60 hover:text-foreground rounded transition-colors"
-          >
-            Dashboard
-          </a>
         </nav>
 
         {/* Right side CTAs */}
         <div className="hidden md:flex items-center gap-2 ml-auto shrink-0">
-          <a
-            href="/app"
+          <Link
+            href="/downloads"
             className="px-4 py-1.5 text-sm font-medium text-foreground hover:bg-accent hover:text-accent-foreground rounded-md transition-colors"
           >
-            Sign In
-          </a>
-          <a
+            App Suite
+          </Link>
+          <Link
             href="/hardware"
             className="px-4 py-1.5 text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 rounded-md transition-colors"
           >
             Request Access
-          </a>
+          </Link>
         </div>
 
         {/* Mobile hamburger */}
@@ -92,14 +79,13 @@ export default function Navbar() {
       {/* Mobile menu */}
       {mobileOpen && (
         <div className="md:hidden border-t border-border/40 bg-background px-4 py-4 space-y-1">
-          <a href="#platform" className="block px-3 py-2 text-sm rounded hover:bg-muted text-foreground/70">Platform</a>
+          <a href="/#platform" className="block px-3 py-2 text-sm rounded hover:bg-muted text-foreground/70" onClick={() => setMobileOpen(false)}>Platform</a>
           {NAV_LINKS.map(({ href, label }) => (
             <Link key={href} href={href} className="block px-3 py-2 text-sm rounded hover:bg-muted text-foreground/70" onClick={() => setMobileOpen(false)}>{label}</Link>
           ))}
-          <a href="/app" className="block px-3 py-2 text-sm rounded hover:bg-muted text-foreground/70">Dashboard</a>
           <div className="pt-3 border-t border-border/40 flex gap-2">
-            <a href="/app" className="flex-1 text-center py-2 text-sm border border-border rounded-md">Sign In</a>
-            <a href="/hardware" className="flex-1 text-center py-2 text-sm bg-primary text-primary-foreground rounded-md">Request Access</a>
+            <Link href="/downloads" className="flex-1 text-center py-2 text-sm border border-border rounded-md" onClick={() => setMobileOpen(false)}>App Suite</Link>
+            <Link href="/hardware" className="flex-1 text-center py-2 text-sm bg-primary text-primary-foreground rounded-md" onClick={() => setMobileOpen(false)}>Request Access</Link>
           </div>
         </div>
       )}

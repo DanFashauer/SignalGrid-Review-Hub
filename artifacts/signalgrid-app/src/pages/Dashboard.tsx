@@ -23,7 +23,7 @@ export function Dashboard() {
     <div className="p-8 max-w-7xl mx-auto space-y-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Overview</h1>
-        <p className="text-muted-foreground mt-1 font-mono text-sm">24H SYSTEM TELEMETRY</p>
+        <p className="text-muted-foreground mt-1 font-mono text-sm">24H SYSTEM TELEMETRY (FIXTURE)</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -79,7 +79,7 @@ export function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <Card className="border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-mono uppercase tracking-wider text-muted-foreground">Live Feed</CardTitle>
+            <CardTitle className="text-sm font-mono uppercase tracking-wider text-muted-foreground">Recent decisions (fixture)</CardTitle>
             <Link href="/decisions" className="text-xs text-primary hover:underline">View All</Link>
           </CardHeader>
           <CardContent>
@@ -172,7 +172,7 @@ export function Dashboard() {
 
           <Card className="border-border">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-mono uppercase tracking-wider text-muted-foreground">Anomalous Alerts</CardTitle>
+              <CardTitle className="text-sm font-mono uppercase tracking-wider text-muted-foreground">Stale / non-compliant</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
@@ -187,7 +187,7 @@ export function Dashboard() {
                 ))}
                 {(!signalsData?.signals || signalsData.signals.filter(s => s.status === 'anomalous' || s.status === 'critical').length === 0) && (
                   <div className="text-sm text-muted-foreground p-4 text-center border border-dashed border-border rounded">
-                    No active anomalies detected
+                    No stale or non-compliant signals
                   </div>
                 )}
               </div>
@@ -227,7 +227,7 @@ function ShiftHandoffPanel() {
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div>
           <CardTitle className="text-sm font-mono uppercase tracking-wider text-muted-foreground">Shift Handoff</CardTitle>
-          <p className="text-xs text-muted-foreground font-mono mt-0.5">DEVICE CUSTODY STATUS · SHIFT 07:00–19:00</p>
+          <p className="text-xs text-muted-foreground font-mono mt-0.5">DEVICE CUSTODY (STATIC DEMO MOCK — illustrative, not from the decision core)</p>
         </div>
         <div className="flex gap-4 text-xs font-mono">
           <span className="text-green-400">{docked.length} DOCKED</span>

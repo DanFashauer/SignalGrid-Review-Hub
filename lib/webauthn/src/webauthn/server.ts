@@ -20,7 +20,17 @@ import {
   getCredentialsForUser,
   createStepUpSession,
   getStepUpSession,
+  getUser,
+  saveUser,
 } from './store';
+import {
+  extractCredentialPublicKey,
+  verifyAssertionSignature,
+  rpIdHashMatches,
+  isUserPresent,
+  readSignCount,
+  type VerifiableKey,
+} from './verify';
 import { appendAuditRecord } from '@workspace/audit';
 
 /**
@@ -125,9 +135,9 @@ export async function verifyRegistration(
     return { success: false, error: 'Challenge not found or expired', timestamp };
   }
 
-  // Parse client data JSON
+  // Parse client data JSON (WebAuthn base64url-encodes clientDataJSON).
   const clientData = JSON.parse(
-    Buffer.from(response.response.clientDataJSON, 'base64').toString()
+    Buffer.from(response.response.clientDataJSON, 'base64url').toString()
   );
 
   // Verify challenge matches
@@ -146,21 +156,26 @@ export async function verifyRegistration(
     return { success: false, error: 'Invalid credential type', timestamp };
   }
 
-  // Parse attestation object (simplified - real implementation would verify signature)
-  // In production, you'd parse the CBOR attestationObject and verify the signature
-  const attestationObject = Buffer.from(
-    response.response.attestationObject,
-    'base64'
-  );
+  // Extract the attested credential public key from the attestation object.
+  // Fail closed: if the key can't be parsed into a supported (ES256/RS256)
+  // verifiable key, we refuse to register it rather than store an unusable
+  // credential that would later be un-verifiable.
+  const verifiable = extractCredentialPublicKey(response.response.attestationObject);
+  if (!verifiable) {
+    return {
+      success: false,
+      error: 'Unsupported or unparseable credential public key',
+      timestamp,
+    };
+  }
 
-  // Extract public key from attestation (simplified)
-  // Real implementation would use a CBOR library to parse this properly
   const credentialId = response.id || response.rawId;
 
-  // Create credential record
+  // Store the verifiable key (JWK + alg) so future assertions can be checked
+  // cryptographically against it.
   const credential: WebAuthnCredential = {
     id: credentialId,
-    publicKey: bufferToBase64url(attestationObject), // Simplified - store full attestation in production
+    publicKey: JSON.stringify(verifiable),
     counter: 0,
     createdAt: timestamp,
   };
@@ -241,10 +256,9 @@ export async function verifyAuthentication(
     return { success: false, error: 'Challenge not found or expired', timestamp };
   }
 
-  // Verify challenge matches
-  const clientData = JSON.parse(
-    Buffer.from(response.response.clientDataJSON, 'base64').toString()
-  );
+  // Verify challenge matches (clientDataJSON is base64url-encoded).
+  const clientDataBytes = Buffer.from(response.response.clientDataJSON, 'base64url');
+  const clientData = JSON.parse(clientDataBytes.toString());
 
   if (clientData.challenge !== challengeData.challenge.challenge) {
     return { success: false, error: 'Challenge mismatch', timestamp };
@@ -267,6 +281,78 @@ export async function verifyAuthentication(
 
   if (!credential) {
     return { success: false, error: 'Credential not found', timestamp };
+  }
+
+  // Fail closed: the credential must carry a verifiable public key. Legacy
+  // credentials stored before cryptographic verification existed (raw
+  // attestation blobs) are not JSON VerifiableKeys and are rejected — they
+  // must be re-registered rather than trusted un-verified.
+  let key: VerifiableKey;
+  try {
+    const parsed = JSON.parse(credential.publicKey);
+    if (!parsed || typeof parsed !== 'object' || !parsed.jwk || !parsed.alg) {
+      throw new Error('not a verifiable key');
+    }
+    key = parsed as VerifiableKey;
+  } catch {
+    return {
+      success: false,
+      error: 'Credential has no verifiable public key — re-registration required',
+      timestamp,
+    };
+  }
+
+  const authenticatorData = Buffer.from(response.response.authenticatorData, 'base64url');
+  const signature = Buffer.from(response.response.signature, 'base64url');
+
+  // Bind the assertion to our RP and require user presence.
+  if (!rpIdHashMatches(authenticatorData, config.rpId)) {
+    return { success: false, error: 'rpId hash mismatch', timestamp };
+  }
+  if (!isUserPresent(authenticatorData)) {
+    return { success: false, error: 'User presence flag not set', timestamp };
+  }
+
+  // The core check: verify the authenticator's signature over
+  // authenticatorData || SHA-256(clientDataJSON) with the stored public key.
+  const signatureValid = verifyAssertionSignature({
+    key,
+    authenticatorData,
+    clientDataJSON: clientDataBytes,
+    signature,
+  });
+  if (!signatureValid) {
+    await appendAuditRecord(
+      'security.webauthn.step_up.failure',
+      { type: 'user', id: userId },
+      { meta: { credentialId: credential.id, reason: 'signature_invalid' } }
+    );
+    return { success: false, error: 'Assertion signature verification failed', timestamp };
+  }
+
+  // Signature-counter clone detection: a non-zero counter must strictly
+  // increase. (Authenticators that always report 0 are exempt, per spec.)
+  const newCounter = readSignCount(authenticatorData);
+  if (newCounter !== 0 && credential.counter !== 0 && newCounter <= credential.counter) {
+    await appendAuditRecord(
+      'security.webauthn.step_up.failure',
+      { type: 'user', id: userId },
+      { meta: { credentialId: credential.id, reason: 'counter_regression' } }
+    );
+    return { success: false, error: 'Authenticator counter did not increase (possible clone)', timestamp };
+  }
+
+  // Persist the advanced counter + last-used time.
+  if (newCounter > credential.counter) {
+    const user = await getUser(userId);
+    if (user) {
+      const stored = user.credentials.find(c => c.id === credential.id);
+      if (stored) {
+        stored.counter = newCounter;
+        stored.lastUsedAt = timestamp;
+        await saveUser(user);
+      }
+    }
   }
 
   // Audit

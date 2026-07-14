@@ -12,7 +12,7 @@ preserved via subtree merge at cutover.
 | -------------- | -------- | ------ |
 | `@workspace/integrations` | `src/lib/integrations` | Ported. Real adapters: ITSM (ServiceNow/Jira/Zendesk/Freshservice/BMC/Ivanti/ManageEngine), UEM (Intune/Jamf/Workspace ONE), NAC (Cisco ISE/Aruba), SIEM (Splunk/Sentinel), EDR (FleetDM/Defender), webhook delivery, device registry. **Fixture-safe by default** — adapters only call out with real config; Redis stores fall back to in-memory when `REDIS_URL` is unset. |
 | `@workspace/audit` | `src/lib/auditLedger.ts` | Ported. Shared hash-chained, tamper-evident audit ledger (used by integrations + webauthn). |
-| `@workspace/webauthn` | `src/lib/auth/webauthn` + `stepUpStore` | Ported. Passkeys + step-up auth. **Note:** the CBOR/signature verification is still simplified and must be completed before production. |
+| `@workspace/webauthn` | `src/lib/auth/webauthn` + `stepUpStore` | Ported **and hardened**. Passkeys + step-up auth. Assertion/attestation signatures are now verified cryptographically (`webauthn/verify.ts`: COSE ES256/RS256 key extraction, signature check over `authenticatorData ‖ SHA-256(clientDataJSON)`, rpIdHash + user-presence + counter clone-detection), fail-closed. Proven positive + negative via `proof:webauthn-verify` (6/6). |
 | `@workspace/location` | `src/lib/location` | Ported. Vendor-neutral presence/coarse/precise location signals (privacy-first). |
 | `@workspace/integration-bridge` | (new) | Maps a live FleetDM (osquery) posture read into the core's normalized signals (`device_compliance` / `device_management` / `security_baseline` / freshness) — the link that lets real MDM/EDR posture feed an ALLOW/STEP-UP/RESTRICT/DENY decision. Pure/deterministic. |
 | `native/ios/` | `ios/EnterpriseShell` | Brought in as a first-class package (Swift — built on macOS CI, not in the pnpm graph): BLE + USB-C badge login, OIDC/Entra, HMAC request signing, session state machine, XcodeGen/SwiftLint tooling. The real hardware badge-reader the core modeled. `ios-ci.yml` retargeted to `native/ios/**`. |
@@ -30,7 +30,7 @@ preserved via subtree merge at cutover.
 ## Still to do (later phases)
 
 - Port the security-reference specs onto the api-server + wire semgrep/k6 into CI.
-- Complete the WebAuthn signature verification.
+- ~~Complete the WebAuthn signature verification.~~ **Done** — real ES256/RS256 assertion verification, fail-closed, proven by `proof:webauthn-verify` (in CI).
 - Wire additional integration adapters into the core connector layer (FleetDM bridge is the first).
 - ~~Adopt DEV's brand system + build the company landing/home page.~~ **Done** — brand system applied across web + all four product apps; About page added.
 

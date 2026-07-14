@@ -1381,6 +1381,9 @@ importers:
       '@workspace/signalgrid-simulator':
         specifier: workspace:*
         version: link:../lib/signalgrid-simulator
+      '@workspace/webauthn':
+        specifier: workspace:*
+        version: link:../lib/webauthn
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

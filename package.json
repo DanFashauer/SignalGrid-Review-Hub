@@ -14,6 +14,7 @@
     "proof:intune-entra-posture": "pnpm --filter @workspace/scripts run proof:intune-entra-posture",
     "proof:signalgrid-core": "pnpm --filter @workspace/scripts run proof:signalgrid-core",
     "proof:api-contract": "pnpm --filter @workspace/scripts run proof:api-contract",
+    "proof:webauthn-verify": "pnpm --filter @workspace/scripts run proof:webauthn-verify",
     "test:api": "pnpm --filter @workspace/api-server run test:api",
     "bench:decision-latency": "pnpm --filter @workspace/scripts run bench:decision-latency",
     "sbom": "pnpm --filter @workspace/scripts run sbom",

@@ -226,8 +226,20 @@ gh repo archive DanFashauer/SignalGrid-Review-Hub --yes
 gh repo archive DanFashauer/DEV --yes
 ```
 
-Update the home repo's README to note the consolidation and link the archived
-sources for provenance.
+Apply the post-cutover home README (drafted at
+[`docs/consolidation/HOME_REPO_README.md`](consolidation/HOME_REPO_README.md) — it
+notes the consolidation, links the archived sources for provenance, and replaces the
+old "Review Hub" README). Do this on `dev`, then let it promote up the tiers:
+
+```bash
+cd "$WORK/mono"
+git checkout dev
+# Strip the leading HTML draft comment, then install as the top-level README.
+sed '/^<!--/,/-->/d' docs/consolidation/HOME_REPO_README.md | sed '/./,$!d' > README.md
+git add README.md
+git commit -m "Adopt consolidated home README"
+git push home dev
+```
 
 ---
 

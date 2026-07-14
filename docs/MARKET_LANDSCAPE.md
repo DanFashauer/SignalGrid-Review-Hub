@@ -24,6 +24,10 @@
 4. **ITDR is the runtime-identity-attack category** (Gartner, March 2022) — operates after authentication, watching for abuse of legitimate access.
 5. **"Operational Trust Orchestration" — collision assessment.** The exact phrase is not an established analyst/vendor category (ownable as a wordmark) but sits in a busy neighborhood: "trust orchestration" is a shipping Signicat product; "orchestration as the control plane" is Daon's framing; "context-aware trust orchestration" is a defined glossary term; "identity orchestration" is a full category. **Net:** the coined name gets no free recognition, invites "how is this different from identity orchestration?", and understates the actual differentiator (custody/attribution at point of action).
 
+> **Selling against these?** The distilled, sales-ready version of this section —
+> discovery questions, per-competitor plays, objection handling, and where-we-win /
+> where-we-walk — is in [`COMPETITIVE_BATTLECARD.md`](./COMPETITIVE_BATTLECARD.md).
+
 ## Competitor map
 
 **Cluster A — Runtime / fine-grained authorization (PDP-as-a-service).** Own the "fuse context → single decision + audit" mechanism.

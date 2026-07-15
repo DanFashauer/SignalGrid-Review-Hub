@@ -1,11 +1,12 @@
 import React from "react";
 import { Link, useLocation } from "wouter";
-import { 
-  Activity, 
-  ShieldAlert, 
-  Settings, 
-  Network, 
+import {
+  Activity,
+  ShieldAlert,
+  Settings,
+  Network,
   Database,
+  Server,
   Grid
 } from "lucide-react";
 import {
@@ -74,6 +75,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <Link href="/policies">
                     <Settings className="w-4 h-4 mr-2" />
                     <span>Policies</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location.startsWith("/fleet")}>
+                  <Link href="/fleet">
+                    <Server className="w-4 h-4 mr-2" />
+                    <span>Fleet &amp; tenants</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

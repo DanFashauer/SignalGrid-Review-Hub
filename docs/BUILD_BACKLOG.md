@@ -14,9 +14,6 @@ picking these up:
 
 ## Now (next up)
 
-- [ ] **Control-plane admin surface** — a "Fleet & tenants" page in `signalgrid-app`
-      that reads `/api/cp/v1/*` (tenants, sites, edge nodes, fleet health, sync
-      status) — the "one pane of glass" across verticals.
 - [ ] **Edge-sync contract proof** — a small harness that walks a node from
       behind → synced using `/cp/v1/sync/:nodeId` + `/cp/v1/policy-bundle`,
       asserting checksum integrity end-to-end.
@@ -46,6 +43,8 @@ picking these up:
 
 ## Done (recent)
 
+- [x] Control-plane admin surface — "Fleet & tenants" page reading `/api/cp/v1/*`
+      (rollup, per-vertical breakdown, edge-node sync + health across verticals).
 - [x] SaaS control-plane scaffold (`@workspace/control-plane`) + `/cp/v1` routes
       + proof (3 verticals: healthcare / warehouse / global fleet).
 - [x] WebAuthn step-up hardening (exact origin, User-Verification required).

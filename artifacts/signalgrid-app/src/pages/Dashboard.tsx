@@ -10,6 +10,7 @@ import {
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { OutcomeBadge, IntegrationStatusBadge, SignalStatusBadge } from "@/components/StatusBadge";
+import { LiveDecisionPanel } from "@/components/LiveDecisionPanel";
 import { formatTimeAgo, formatDate } from "@/lib/format";
 
 export function Dashboard() {
@@ -32,6 +33,8 @@ export function Dashboard() {
         <MetricCard title="Restrict/Deny Rate" value={metrics ? `${(metrics.restrictDenyRate * 100).toFixed(1)}%` : "-"} />
         <MetricCard title="Avg Latency" value={metrics ? `${Math.round(metrics.avgLatencyMs)}ms` : "-"} />
       </div>
+
+      <LiveDecisionPanel />
 
       <Card className="border-border">
         <CardHeader>

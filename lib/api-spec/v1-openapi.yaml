@@ -20,6 +20,7 @@ tags:
   - name: connectors
   - name: audit
   - name: metrics
+  - name: control-plane
 
 paths:
   /v1/keys:
@@ -279,6 +280,127 @@ paths:
         "200": { description: Approved (simulated) remediation }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  # ── Control plane (public management surface; see docs/DEPLOYMENT_MODELS.md) ──
+  # The cloud half of the hybrid architecture: manages tenants/sites/fleet,
+  # distributes policy bundles DOWN, ingests telemetry UP. Deterministic
+  # fixtures; the control plane never decides — the edge decision core does.
+  /cp/v1/tenants:
+    get:
+      operationId: cpListTenants
+      tags: [control-plane]
+      security: []
+      summary: List tenants (with vertical + tier)
+      responses:
+        "200": { description: Tenants }
+
+  /cp/v1/sites:
+    get:
+      operationId: cpListSites
+      tags: [control-plane]
+      security: []
+      summary: List sites, optionally scoped to a tenant
+      parameters:
+        - in: query
+          name: tenant
+          schema: { type: string }
+      responses:
+        "200": { description: Sites }
+
+  /cp/v1/edge-nodes:
+    get:
+      operationId: cpListEdgeNodes
+      tags: [control-plane]
+      security: []
+      summary: List edge nodes (local decision planes), optionally by tenant
+      parameters:
+        - in: query
+          name: tenant
+          schema: { type: string }
+      responses:
+        "200": { description: Edge nodes }
+
+  /cp/v1/fleet:
+    get:
+      operationId: cpListFleet
+      tags: [control-plane]
+      security: []
+      summary: List fleet devices, optionally scoped to a site
+      parameters:
+        - in: query
+          name: site
+          schema: { type: string }
+      responses:
+        "200": { description: Fleet devices }
+
+  /cp/v1/policy-bundle:
+    get:
+      operationId: cpGetPolicyBundle
+      tags: [control-plane]
+      security: []
+      summary: The policy bundle pushed DOWN to a tenant's edge nodes (checksummed)
+      parameters:
+        - in: query
+          name: tenant
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Policy bundle }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /cp/v1/sync/{nodeId}:
+    get:
+      operationId: cpSyncPlan
+      tags: [control-plane]
+      security: []
+      summary: An edge node's sync plan (is its bundle behind the target?)
+      parameters:
+        - in: path
+          name: nodeId
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Sync plan }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /cp/v1/telemetry:
+    post:
+      operationId: cpIngestTelemetry
+      tags: [control-plane]
+      security: []
+      summary: Ingest a telemetry batch reported UP by an edge node
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nodeId]
+              properties:
+                nodeId: { type: string }
+                windowMins: { type: integer }
+                decisions: { type: integer }
+                allow: { type: integer }
+                stepUp: { type: integer }
+                restrict: { type: integer }
+                deny: { type: integer }
+      responses:
+        "200": { description: Ingested }
+        "400": { $ref: "#/components/responses/ValidationError" }
+
+  /cp/v1/health:
+    get:
+      operationId: cpFleetHealth
+      tags: [control-plane]
+      security: []
+      summary: Fleet-wide health rollup with a per-vertical breakdown
+      parameters:
+        - in: query
+          name: tenant
+          schema: { type: string }
+      responses:
+        "200": { description: Fleet health }
 
 components:
   securitySchemes:

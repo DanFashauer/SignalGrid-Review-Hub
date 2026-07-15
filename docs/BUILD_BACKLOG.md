@@ -14,9 +14,6 @@ picking these up:
 
 ## Now (next up)
 
-- [ ] **Edge-sync contract proof** — a small harness that walks a node from
-      behind → synced using `/cp/v1/sync/:nodeId` + `/cp/v1/policy-bundle`,
-      asserting checksum integrity end-to-end.
 - [ ] **`/cp/v1` in the OpenAPI + Postman** — document the control-plane surface
       and add it to the generated Postman collection.
 
@@ -43,6 +40,8 @@ picking these up:
 
 ## Done (recent)
 
+- [x] Edge-sync contract proof — walks a node behind → synced (pull, verify
+      checksum, reject tampered bundle fail-closed, apply, idempotent). 12/12.
 - [x] Control-plane admin surface — "Fleet & tenants" page reading `/api/cp/v1/*`
       (rollup, per-vertical breakdown, edge-node sync + health across verticals).
 - [x] SaaS control-plane scaffold (`@workspace/control-plane`) + `/cp/v1` routes

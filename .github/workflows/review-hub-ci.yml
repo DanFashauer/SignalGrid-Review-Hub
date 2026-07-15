@@ -79,6 +79,9 @@ jobs:
       - name: Control-plane (cloud↔edge contract) proof
         run: pnpm run proof:control-plane
 
+      - name: Edge-sync (config-down integrity) proof
+        run: pnpm run proof:edge-sync
+
       - name: Safety gate (guardrails)
         run: pnpm run safety:check
 

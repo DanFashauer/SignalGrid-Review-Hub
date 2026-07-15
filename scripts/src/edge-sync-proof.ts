@@ -1,0 +1,73 @@
+// Proof: the cloud↔edge sync contract (config DOWN with integrity).
+//
+// Walks an edge node from behind → synced, the way a real local decision plane
+// would pull and verify config from the control plane:
+//   1. A behind node reports updateAvailable with a target version + checksum.
+//   2. The pulled bundle's checksum verifies (recomputed from content).
+//   3. A TAMPERED bundle fails the integrity check (fail closed) — the node must
+//      refuse to apply it.
+//   4. Applying the (verified) bundle advances the node; it is now up to date.
+//   5. Re-applying is idempotent (no spurious update).
+//   6. A node already current needs no update.
+//
+// Run: pnpm --filter @workspace/scripts run proof:edge-sync
+
+import { ControlPlane, verifyBundleChecksum, type PolicyBundle } from "@workspace/control-plane";
+
+let passed = 0;
+const failures: string[] = [];
+function check(name: string, ok: boolean) {
+  if (ok) passed += 1;
+  else failures.push(name);
+}
+
+function main() {
+  const cp = ControlPlane.demo();
+
+  // Atlas warehouse edge node starts behind (bundle 3, target 4).
+  const behindNodeId = "edge_atlas_dc7";
+  const before = cp.syncPlan(behindNodeId);
+  check("behind node reports an update is available", before?.updateAvailable === true);
+  check("sync plan advertises a target version ahead of current", !!before && before.targetBundleVersion > before.currentBundleVersion);
+
+  // The node pulls the tenant's bundle (config DOWN) and checks integrity.
+  const bundle = cp.getPolicyBundle("tenant_atlas");
+  check("bundle pulled for the node's tenant", bundle !== null);
+  check("pulled bundle checksum matches the sync plan", !!bundle && !!before && bundle.checksum === before.checksum);
+  check("pulled bundle verifies (recomputed checksum)", !!bundle && verifyBundleChecksum(bundle));
+
+  // A tampered bundle must fail closed — the node refuses to apply it.
+  if (bundle) {
+    const tamperedWorkflows: PolicyBundle = { ...bundle, workflows: [...bundle.workflows, "attacker-injected"] };
+    const tamperedVersion: PolicyBundle = { ...bundle, version: bundle.version + 99 };
+    check("tampered bundle (extra workflow) fails integrity", verifyBundleChecksum(tamperedWorkflows) === false);
+    check("tampered bundle (version bump) fails integrity", verifyBundleChecksum(tamperedVersion) === false);
+  }
+
+  // Apply the verified bundle → node advances to target.
+  const applied = cp.applyBundle(behindNodeId);
+  check("applying the bundle clears updateAvailable", applied?.updateAvailable === false);
+  check("node advanced to the target version", !!applied && !!before && applied.currentBundleVersion === before.targetBundleVersion);
+
+  // Idempotent: applying again changes nothing.
+  const again = cp.applyBundle(behindNodeId);
+  check("re-applying is idempotent", again?.updateAvailable === false && again?.currentBundleVersion === applied?.currentBundleVersion);
+
+  // A node already current needs no update.
+  const current = cp.syncPlan("edge_nw_general");
+  check("already-current node needs no update", current?.updateAvailable === false);
+
+  // Unknown node yields nothing (fail closed).
+  check("unknown node cannot be synced", cp.applyBundle("edge_nope") === null);
+
+  const total = passed + failures.length;
+  console.log(`Edge-sync contract proof: ${passed}/${total} assertions passed`);
+  if (failures.length) {
+    console.error("Failed assertions:");
+    for (const f of failures) console.error(`  - ${f}`);
+    process.exit(1);
+  }
+  console.log("Cloud→edge config distribution with integrity confirmed (pull, verify, apply, idempotent, fail-closed).");
+}
+
+main();

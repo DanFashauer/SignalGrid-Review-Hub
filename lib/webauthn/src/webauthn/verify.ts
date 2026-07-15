@@ -180,6 +180,15 @@ export function isUserPresent(authData: Buffer): boolean {
 }
 
 /**
+ * Is the User-Verified (UV) flag set in authenticatorData? UV means the
+ * authenticator verified the user (biometric / PIN), not merely that a user was
+ * present. A step-up is a high-assurance gate, so the step-up path requires UV.
+ */
+export function isUserVerified(authData: Buffer): boolean {
+  return (authData.readUInt8(32) & 0x04) !== 0;
+}
+
+/**
  * Verify a WebAuthn assertion signature. The authenticator signs
  * `authenticatorData || SHA-256(clientDataJSON)` with the credential private
  * key; we verify with the stored public key. Fails closed on any error.

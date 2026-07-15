@@ -50,7 +50,7 @@ lib/                       Source-only @workspace/* packages (TypeScript project
   integrations               ITSM / UEM / NAC / SIEM / EDR adapters (fixture-safe by default)
   integration-bridge         FleetDM (osquery) posture → normalized core signals
   audit                      Hash-chained, tamper-evident audit ledger
-  webauthn                   Passkeys + step-up (verification simplified — see harvest notes)
+  webauthn                   Passkeys + step-up — real CBOR/COSE + ES256/RS256 assertion verification, exact-origin, User-Verification-required, counter clone-detection (proof: proof:webauthn-verify)
   location                   Vendor-neutral presence / coarse / precise signals
   api-client-react           Generated typed API client + hooks
   api-spec                   /v1 OpenAPI contract

@@ -59,6 +59,31 @@ For live-reload development instead of a build:
 pnpm --filter @workspace/api-server run dev   # tsx watch on the API
 ```
 
+## The operator console (admin app), fully populated
+
+The React admin app (`signalgrid-app`) reads the api-server's `/api/*`
+monitoring surface. With the api-server running on `:8080` (above), start the
+app in a second terminal — its dev/preview server proxies `/api` to the
+api-server automatically:
+
+```bash
+pnpm --filter signalgrid-app run dev     # http://localhost:5173
+# or against a build:
+pnpm --filter signalgrid-app run build
+PORT=5173 pnpm --filter signalgrid-app exec vite preview
+```
+
+Open **http://localhost:5173** — the dashboard populates with decision
+telemetry, the volume chart, integration health, and signals (deterministic,
+public-safe **fixtures** — clearly labelled; the `/v1` core is the source of
+truth for real evaluations).
+
+- Proxy target defaults to `http://localhost:8080`; override with
+  `API_PROXY_TARGET` if the api-server runs elsewhere.
+- To point a **hosted/static** build at a remote api-server, build with
+  `VITE_API_BASE_URL=https://your-api-host` and add that app origin to the
+  api-server's `CORS_ALLOWED_ORIGINS`.
+
 ## What you can do
 
 - **Try every scenario.** They span the full decision range: a clean allow, a

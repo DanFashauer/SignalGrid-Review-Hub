@@ -16,6 +16,12 @@ SignalGrid's api-server exposes two surfaces on one origin (default
   context, `decisions/evaluate`, evidence, policies + versions, connectors,
   audit, webhooks, remediation, metrics. Tenant is always derived from the
   token, never from a client-supplied id.
+- **`/cp/v1` control-plane surface** (no auth in the demo) — the SaaS management
+  plane: tenants, sites, edge nodes (local decision planes), fleet devices,
+  policy bundles pushed **down** (checksummed), telemetry ingested **up**, and a
+  fleet-health rollup with a per-vertical breakdown. The control plane manages
+  and distributes; it never decides — the edge core does. See
+  [`DEPLOYMENT_MODELS.md`](./DEPLOYMENT_MODELS.md).
 
 The authoritative machine-readable contract for `/v1` is
 [`lib/api-spec/v1-openapi.yaml`](../lib/api-spec/v1-openapi.yaml) (OpenAPI 3.1).

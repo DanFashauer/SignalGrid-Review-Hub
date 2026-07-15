@@ -866,6 +866,195 @@
           }
         }
       ]
+    },
+    {
+      "name": "Control plane (/cp/v1)",
+      "item": [
+        {
+          "name": "Tenants",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cp/v1/tenants",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cp",
+                "v1",
+                "tenants"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Sites",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cp/v1/sites",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cp",
+                "v1",
+                "sites"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Edge nodes (decision planes)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cp/v1/edge-nodes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cp",
+                "v1",
+                "edge-nodes"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Fleet devices",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cp/v1/fleet",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cp",
+                "v1",
+                "fleet"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Policy bundle (config down)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cp/v1/policy-bundle?tenant=tenant_northwind",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cp",
+                "v1",
+                "policy-bundle"
+              ],
+              "query": [
+                {
+                  "key": "tenant",
+                  "value": "tenant_northwind"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Edge sync plan",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cp/v1/sync/{{nodeId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cp",
+                "v1",
+                "sync",
+                "{{nodeId}}"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Ingest telemetry (up)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nodeId\": \"{{nodeId}}\",\n  \"windowMins\": 1440,\n  \"decisions\": 4200,\n  \"allow\": 3444,\n  \"stepUp\": 420,\n  \"restrict\": 210,\n  \"deny\": 126\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/cp/v1/telemetry",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cp",
+                "v1",
+                "telemetry"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Fleet health rollup",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cp/v1/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cp",
+                "v1",
+                "health"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
     }
   ],
   "variable": [

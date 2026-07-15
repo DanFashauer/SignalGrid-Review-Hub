@@ -14,13 +14,11 @@ picking these up:
 
 ## Now (next up)
 
-- [ ] **`/cp/v1` in the OpenAPI + Postman** — document the control-plane surface
-      and add it to the generated Postman collection.
+- [ ] **Telemetry-up from the decision plane** — have the `/v1` core emit a
+      periodic telemetry batch the control plane ingests (wire the two planes).
 
 ## Next
 
-- [ ] **Telemetry-up from the decision plane** — have the `/v1` core emit a
-      periodic telemetry batch the control plane ingests (wire the two planes).
 - [ ] **Warehouse scenario pack** — add pick/pack + controlled-area scenarios to
       the room-sim/console so the demo isn't hospital-only.
 - [ ] **Global-fleet scenario pack** — vehicle-mount checkout + cross-region
@@ -40,6 +38,8 @@ picking these up:
 
 ## Done (recent)
 
+- [x] `/cp/v1` documented in the OpenAPI spec + Postman collection (with a
+      lockstep coverage check for both `/v1` and `/cp/v1`).
 - [x] Edge-sync contract proof — walks a node behind → synced (pull, verify
       checksum, reject tampered bundle fail-closed, apply, idempotent). 12/12.
 - [x] Control-plane admin surface — "Fleet & tenants" page reading `/api/cp/v1/*`

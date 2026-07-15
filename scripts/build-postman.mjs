@@ -106,6 +106,19 @@ const v1Requests = [
 ];
 const v1Folder = { name: "/v1 product API (bearer)", item: v1Requests };
 
+// ── Control plane (/cp/v1) — public management surface (no auth) ──────────────
+const cpRequests = [
+  item("Tenants", "GET", "/cp/v1/tenants", { auth: NOAUTH }),
+  item("Sites", "GET", "/cp/v1/sites", { auth: NOAUTH }),
+  item("Edge nodes (decision planes)", "GET", "/cp/v1/edge-nodes", { auth: NOAUTH }),
+  item("Fleet devices", "GET", "/cp/v1/fleet", { auth: NOAUTH }),
+  item("Policy bundle (config down)", "GET", "/cp/v1/policy-bundle?tenant=tenant_northwind", { auth: NOAUTH }),
+  item("Edge sync plan", "GET", "/cp/v1/sync/{{nodeId}}", { auth: NOAUTH }),
+  item("Ingest telemetry (up)", "POST", "/cp/v1/telemetry", { auth: NOAUTH, body: { nodeId: "{{nodeId}}", windowMins: 1440, decisions: 4200, allow: 3444, stepUp: 420, restrict: 210, deny: 126 } }),
+  item("Fleet health rollup", "GET", "/cp/v1/health", { auth: NOAUTH }),
+];
+const cpFolder = { name: "Control plane (/cp/v1)", item: cpRequests };
+
 const collection = {
   info: {
     _postman_id: COLLECTION_ID,
@@ -117,7 +130,7 @@ const collection = {
     schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
   },
   auth: { type: "bearer", bearer: [{ key: "token", value: "{{token}}", type: "string" }] },
-  item: [publicFolder, simFolder, v1Folder],
+  item: [publicFolder, simFolder, v1Folder, cpFolder],
   variable: [{ key: "base_url", value: "http://localhost:8080/api" }],
 };
 
@@ -134,25 +147,30 @@ const environment = {
     { key: "remediationId", value: "", enabled: true },
     { key: "integrationId", value: "sailpoint", enabled: true },
     { key: "scenarioId", value: "healthcare-shared-ipad", enabled: true },
+    { key: "nodeId", value: "edge_nw_general", enabled: true },
   ],
   _postman_variable_scope: "environment",
 };
 
 // ── /v1 spec-coverage check ──────────────────────────────────────────────────
 const canon = (p) => p.replace(/\{\{[^}]+\}\}/g, "*").replace(/\{[^}]+\}/g, "*").replace(/:[^/]+/g, "*");
-function specCoverage() {
+function coverage(prefixRe, requests) {
   const spec = readFileSync(resolve(repo, "lib/api-spec/v1-openapi.yaml"), "utf8");
-  const specPaths = [...spec.matchAll(/^ {2}(\/v1[^\s:]*):/gm)].map((m) => canon(m[1]));
+  const specPaths = [...spec.matchAll(prefixRe)].map((m) => canon(m[1]));
   const collectionPaths = new Set(
-    v1Requests.map((r) => canon("/" + r.request.url.path.join("/").split("?")[0])),
+    requests.map((r) => canon("/" + r.request.url.path.join("/").split("?")[0])),
   );
   const missing = specPaths.filter((p) => !collectionPaths.has(p));
   return { specCount: specPaths.length, missing };
 }
 
-const { specCount, missing } = specCoverage();
+// /v1 product API and /cp/v1 control plane are each kept in lockstep with the spec.
+const v1 = coverage(/^ {2}(\/v1[^\s:]*):/gm, v1Requests);
+const cp = coverage(/^ {2}(\/cp\/v1[^\s:]*):/gm, cpRequests);
+const specCount = v1.specCount + cp.specCount;
+const missing = [...v1.missing, ...cp.missing];
 if (missing.length > 0) {
-  console.error(`Postman collection is missing ${missing.length} /v1 path(s) from the OpenAPI spec:`);
+  console.error(`Postman collection is missing ${missing.length} path(s) from the OpenAPI spec:`);
   for (const m of missing) console.error(`  - ${m}`);
   process.exit(1);
 }
@@ -165,4 +183,4 @@ if (process.argv.includes("--check")) {
 mkdirSync(OUT_DIR, { recursive: true });
 writeFileSync(resolve(OUT_DIR, "SignalGrid.postman_collection.json"), JSON.stringify(collection, null, 2) + "\n");
 writeFileSync(resolve(OUT_DIR, "SignalGrid.postman_environment.json"), JSON.stringify(environment, null, 2) + "\n");
-console.log(`Built Postman collection (${publicFolder.item.length + simFolder.item.length + v1Requests.length} requests) + environment. /v1 coverage: ${specCount} spec paths.`);
+console.log(`Built Postman collection (${publicFolder.item.length + simFolder.item.length + v1Requests.length + cpRequests.length} requests) + environment. Spec coverage: ${specCount} paths (/v1 + /cp/v1).`);

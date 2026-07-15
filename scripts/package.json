@@ -16,18 +16,26 @@
     "proof:microsoft-graph-sandbox": "tsx ./src/microsoft-graph-sandbox-proof.ts",
     "proof:connector-emulator": "tsx ./src/connector-emulator-proof.ts",
     "smoke:connector-emulator": "pnpm run proof:connector-emulator",
+    "proof:webauthn-verify": "tsx ./src/webauthn-verify-proof.ts",
     "phase:gate": "tsx ./src/phase-gate.ts",
     "phase:summary-check": "tsx ./src/phase-summary-check.ts",
     "phase:pr-report": "tsx ./src/phase-pr-report.ts",
     "autopilot:backlog-check": "tsx ./src/autopilot-backlog-check.ts",
-    "level10:audit": "tsx ./src/level-10-audit.ts"
+    "level10:audit": "tsx ./src/level-10-audit.ts",
+    "proof:orchestration": "tsx ./src/orchestration-proof.ts",
+    "build:room-console": "node ./build-room-console.mjs",
+    "proof:signal-radar": "tsx ./src/signal-radar-proof.ts"
   },
   "dependencies": {
     "@workspace/signalgrid-core": "workspace:*",
-    "@workspace/signalgrid-simulator": "workspace:*"
+    "@workspace/signalgrid-simulator": "workspace:*",
+    "@workspace/webauthn": "workspace:*",
+    "@workspace/orchestration": "workspace:*",
+    "@workspace/signal-radar": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "tsx": "catalog:"
+    "tsx": "catalog:",
+    "esbuild": "0.27.3"
   }
 }

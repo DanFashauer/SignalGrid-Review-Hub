@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "outDir": "dist", "rootDir": "src", "types": ["node"], "module": "esnext", "moduleResolution": "bundler" },
+  "include": ["src"],
+  "references": [
+    { "path": "../../lib/signalgrid-core" },
+    { "path": "../../lib/room-sim" },
+    { "path": "../../lib/signal-radar" }
+  ]
+}

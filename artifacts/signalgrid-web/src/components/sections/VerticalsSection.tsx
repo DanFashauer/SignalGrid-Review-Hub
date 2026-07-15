@@ -4,7 +4,7 @@ const VERTICALS = [
   {
     name: "Healthcare",
     badge: "HIGH PRIORITY",
-    badgeColor: "text-blue-400 bg-blue-400/10 border-blue-400/20",
+    badgeColor: "text-teal-400 bg-teal-400/10 border-teal-400/20",
     useCase: "Medication cart iPads, EHR/MAR workflow access",
     detail:
       "Badge-locked devices prevent unauthorized MAR access. Managed Lost Mode activates if a cart leaves the floor without checkout. Shift-scoped app credentials rotate automatically between nurses.",
@@ -12,7 +12,7 @@ const VERTICALS = [
   {
     name: "Warehousing & Logistics",
     badge: "HIGH PRIORITY",
-    badgeColor: "text-blue-400 bg-blue-400/10 border-blue-400/20",
+    badgeColor: "text-teal-400 bg-teal-400/10 border-teal-400/20",
     useCase: "Shared Android scanners, high-value inventory authorization",
     detail:
       "Inventory write permissions gated to zone, shift, and device posture. BLE proximity confirms the worker is physically at the pick location before authorizing the transaction.",
@@ -20,7 +20,7 @@ const VERTICALS = [
   {
     name: "Manufacturing",
     badge: "HIGH PRIORITY",
-    badgeColor: "text-blue-400 bg-blue-400/10 border-blue-400/20",
+    badgeColor: "text-teal-400 bg-teal-400/10 border-teal-400/20",
     useCase: "Restricted floor access, production workflow gating",
     detail:
       "Contextual physical access to production areas, server rooms, and lab zones based on live assignment. Tamper detection prevents unauthorized device relocation between cells.",

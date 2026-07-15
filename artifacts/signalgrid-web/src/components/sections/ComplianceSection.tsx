@@ -3,10 +3,10 @@ import { ShieldCheck, Users, AlertTriangle, CheckCircle2 } from "lucide-react";
 
 const FRAMEWORKS = [
   { name: "CIS Benchmarks", level: "CIS", desc: "Device hardening baselines + CIS Controls v8 safeguards — baseline drift becomes a decision signal", color: "text-emerald-400 border-emerald-400/20 bg-emerald-400/5" },
-  { name: "DISA STIG", level: "DoD", desc: "CAT I/II/III hardening — maps SCAP/XCCDF checker results to posture signals", color: "text-blue-400 border-blue-400/20 bg-blue-400/5" },
-  { name: "FedRAMP Moderate", level: "USG", desc: "NIST 800-53 Rev 5 control baseline for federal cloud deployments", color: "text-blue-400 border-blue-400/20 bg-blue-400/5" },
-  { name: "FedRAMP High", level: "USG", desc: "High-impact federal workloads — expanded 800-53 control coverage", color: "text-blue-400 border-blue-400/20 bg-blue-400/5" },
-  { name: "DoD IL2 – IL5", level: "DoD", desc: "Impact Level classification for DoD cloud workloads and CUI data", color: "text-blue-400 border-blue-400/20 bg-blue-400/5" },
+  { name: "DISA STIG", level: "DoD", desc: "CAT I/II/III hardening — maps SCAP/XCCDF checker results to posture signals", color: "text-teal-400 border-teal-400/20 bg-teal-400/5" },
+  { name: "FedRAMP Moderate", level: "USG", desc: "NIST 800-53 Rev 5 control baseline for federal cloud deployments", color: "text-teal-400 border-teal-400/20 bg-teal-400/5" },
+  { name: "FedRAMP High", level: "USG", desc: "High-impact federal workloads — expanded 800-53 control coverage", color: "text-teal-400 border-teal-400/20 bg-teal-400/5" },
+  { name: "DoD IL2 – IL5", level: "DoD", desc: "Impact Level classification for DoD cloud workloads and CUI data", color: "text-teal-400 border-teal-400/20 bg-teal-400/5" },
   { name: "CMMC 2.0 L2/L3", level: "DoD", desc: "Cybersecurity Maturity Model Certification for defense contractors", color: "text-purple-400 border-purple-400/20 bg-purple-400/5" },
   { name: "NIST SP 800-53", level: "NIST", desc: "Security and privacy controls — full Rev 5 control mapping", color: "text-purple-400 border-purple-400/20 bg-purple-400/5" },
   { name: "NIST SP 800-171", level: "NIST", desc: "Protecting CUI in non-federal systems — 110-control baseline", color: "text-purple-400 border-purple-400/20 bg-purple-400/5" },
@@ -34,7 +34,7 @@ const TEAM_ROUTING = [
     team: "IAM",
     owns: ["IGA / IDP", "Security Keys / FIDO2", "Mobile Credentials"],
     alerts: "Identity anomaly, MFA failure patterns, credential risk scores, badge credential revocation",
-    color: "text-blue-400 bg-blue-400/10 border-blue-400/20",
+    color: "text-teal-400 bg-teal-400/10 border-teal-400/20",
   },
   {
     team: "Endpoint Mgmt",
@@ -46,7 +46,7 @@ const TEAM_ROUTING = [
     team: "NetOps / NetSecOps",
     owns: ["Networking / SDN", "Firewall / SASE", "Cellular / eSIM"],
     alerts: "Network posture anomaly, eSIM connectivity loss, VLAN policy violation, firewall rule breach",
-    color: "text-cyan-400 bg-cyan-400/10 border-cyan-400/20",
+    color: "text-teal-400 bg-teal-400/10 border-teal-400/20",
   },
   {
     team: "SRE / Infra",
@@ -87,7 +87,7 @@ export default function ComplianceSection() {
 
         {/* Compliance framework grid */}
         <div className="mb-20">
-          <div className="text-xs font-mono text-muted-foreground mb-4 uppercase tracking-widest">Frameworks we map signals to (not certifications held)</div>
+          <div className="text-xs font-mono text-muted-foreground mb-4 uppercase tracking-wide">Frameworks we map signals to (not certifications held)</div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {FRAMEWORKS.map((fw, idx) => (
               <motion.div
@@ -113,12 +113,12 @@ export default function ComplianceSection() {
           initial={{ opacity: 0, y: 10 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="mb-20 rounded-xl border border-blue-400/20 bg-blue-400/5 p-8"
+          className="mb-20 rounded-xl border border-teal-400/20 bg-teal-400/5 p-8"
         >
           <div className="flex flex-col lg:flex-row lg:items-center gap-6">
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-3">
-                <ShieldCheck className="w-6 h-6 text-blue-400" />
+                <ShieldCheck className="w-6 h-6 text-teal-400" />
                 <h3 className="text-lg font-semibold text-foreground">Hardening baselines — CIS &amp; DISA STIG as decision signals</h3>
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed">
@@ -132,9 +132,9 @@ export default function ComplianceSection() {
                 { label: "CAT III FINDINGS", value: "Monitor", desc: "Logged, remediation flagged" },
                 { label: "BENCHMARK", value: "XCCDF/OVAL", desc: "SCAP 1.3 compatible" },
               ].map((item) => (
-                <div key={item.label} className="rounded-lg border border-blue-400/20 bg-background/50 p-3">
+                <div key={item.label} className="rounded-lg border border-teal-400/20 bg-background/50 p-3">
                   <div className="text-xs font-mono text-muted-foreground mb-1">{item.label}</div>
-                  <div className="text-sm font-semibold text-blue-400 font-mono">{item.value}</div>
+                  <div className="text-sm font-semibold text-teal-400 font-mono">{item.value}</div>
                   <div className="text-xs text-muted-foreground mt-0.5">{item.desc}</div>
                 </div>
               ))}

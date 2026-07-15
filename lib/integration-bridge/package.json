@@ -1,0 +1,12 @@
+{
+  "name": "@workspace/integration-bridge",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@workspace/integrations": "workspace:*",
+    "@workspace/signalgrid-core": "workspace:*"
+  },
+  "devDependencies": { "@types/node": "catalog:" }
+}

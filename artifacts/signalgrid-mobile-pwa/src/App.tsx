@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ShieldCheck, Home, List, Activity, Plug } from "lucide-react";
 // The default worker tab is lightweight and loads eagerly for an instant first
 // paint; the operator monitoring tabs (and the charting library on Overview)
@@ -55,10 +56,12 @@ function TabButton({ icon, label, active, onClick }: { icon: React.ReactNode, la
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <MainLayout />
-      <Toaster />
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <MainLayout />
+        <Toaster />
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

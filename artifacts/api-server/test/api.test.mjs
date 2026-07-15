@@ -91,6 +91,69 @@ async function run() {
   const badIntegration = await req("GET", "/integrations/does-not-exist-xyz");
   check("unknown integration → 404", badIntegration.status === 404);
 
+  // ── monitoring surface (operator console + mobile dashboards) ─────────────
+  const dash = await req("GET", "/metrics/dashboard");
+  check("dashboard metrics → 200", dash.status === 200);
+  check("dashboard metrics has totals + rates", typeof dash.json?.totalDecisions === "number" && typeof dash.json?.allowRate === "number");
+  const series = await req("GET", "/metrics/decisions/series");
+  check("decision series → 200 with points", series.status === 200 && Array.isArray(series.json?.series) && series.json.series.length > 0);
+  check("series point shape", typeof (series.json?.series?.[0]?.allow) === "number" && typeof (series.json?.series?.[0]?.timestamp) === "string");
+  const decisions = await req("GET", "/decisions?limit=5");
+  check("decisions list → 200", decisions.status === 200 && Array.isArray(decisions.json?.decisions));
+  check("decisions list honors limit + reports total", decisions.json.decisions.length <= 5 && typeof decisions.json?.total === "number");
+  const oneDecision = await req("GET", `/decisions/${decisions.json?.decisions?.[0]?.id}`);
+  check("single monitoring decision → 200", oneDecision.status === 200 && oneDecision.json?.id === decisions.json.decisions[0].id);
+  const badDecision = await req("GET", "/decisions/does-not-exist-xyz");
+  check("unknown monitoring decision → 404", badDecision.status === 404);
+  const latest = await req("GET", "/signals/latest?limit=4");
+  check("latest signals → 200 within limit", latest.status === 200 && Array.isArray(latest.json?.signals) && latest.json.signals.length <= 4);
+  const idOnly = await req("GET", "/signals/latest?signalType=identity");
+  check("signals filter by type", idOnly.status === 200 && (idOnly.json?.signals ?? []).every((s) => s.signalType === "identity"));
+  const policies = await req("GET", "/policies");
+  check("monitoring policies → 200 with rules", policies.status === 200 && Array.isArray(policies.json?.policies) && (policies.json.policies[0]?.rules?.length ?? 0) > 0);
+
+  // ── smart-hospital sim: Trusted Room Entry (decision → orchestration) ─────
+  const roomScenarios = await req("GET", "/sim/room-entry/scenarios");
+  check("room-entry scenarios → 200 non-empty", roomScenarios.status === 200 && Array.isArray(roomScenarios.json?.scenarios) && roomScenarios.json.scenarios.length > 0);
+  const allowEntry = await req("POST", "/sim/room-entry", { body: { scenarioId: "compliant-bedside" } });
+  check("room-entry allow scenario → 200 with plan", allowEntry.status === 200 && Array.isArray(allowEntry.json?.plan?.actions));
+  check("room-entry allow: sensitive display is assist, not auto",
+    allowEntry.json?.plan?.actions?.find((a) => a.kind === "clinical.display.activate")?.disposition === "assist");
+  check("room-entry allow: signals include custody + baseline + badge dimensions",
+    allowEntry.json?.signals && "custodyState" in allowEntry.json.signals && "baselineCompliance" in allowEntry.json.signals && "badgeBinding" in allowEntry.json.signals);
+  const denyEntry = await req("POST", "/sim/room-entry", { body: { scenarioId: "disabled-account" } });
+  check("room-entry deny scenario → deny + all blocked",
+    denyEntry.json?.decision?.outcome === "deny" && denyEntry.json?.plan?.mode === "deny" && denyEntry.json.plan.actions.every((a) => a.disposition === "blocked"));
+  const confirmEntry = await req("POST", "/sim/room-entry", { body: { scenarioId: "compliant-bedside", confirmedActionIds: ["act-RM-418-clinical.display.activate"] } });
+  check("room-entry confirm moves an assist action to applied",
+    confirmEntry.json?.plan?.actions?.find((a) => a.kind === "clinical.display.activate")?.disposition === "applied");
+  const badEntry = await req("POST", "/sim/room-entry", { body: { scenarioId: "does-not-exist" } });
+  check("room-entry unknown scenario → 404", badEntry.status === 404);
+  // step-up scenario holds, then completes on badge tap
+  const stepHeld = await req("POST", "/sim/room-entry", { body: { scenarioId: "baseline-drift" } });
+  check("room-entry step-up scenario holds gated actions", stepHeld.json?.plan?.mode === "step_up");
+  const stepDone = await req("POST", "/sim/room-entry", { body: { scenarioId: "baseline-drift", stepUpSatisfied: true } });
+  check("room-entry step-up completion releases the mobile session (auto)",
+    stepDone.json?.plan?.mode !== "step_up" && stepDone.json?.plan?.actions?.find((a) => a.kind === "mobile.session.start")?.disposition === "auto");
+  // controlled med room carries the extra clinical actions
+  const medRoom = await req("POST", "/sim/room-entry", { body: { scenarioId: "compliant-medroom" } });
+  check("controlled med room includes medication-cabinet action",
+    (medRoom.json?.plan?.actions ?? []).some((a) => a.kind === "medication.cabinet.unlock"));
+
+  // ── Signal Radar: new-signal detection ───────────────────────────────────
+  const catalog = await req("GET", "/signals/catalog");
+  check("signal catalog → 200 with 12 evaluated categories", catalog.status === 200 && catalog.json?.evaluated?.length === 12);
+  const radar = await req("POST", "/signals/radar", { body: { signals: [
+    { category: "identity_state" },
+    { category: "rtls_location" },
+    { category: "smart_bed_occupancy", sourceReference: "bed-42" },
+  ] } });
+  check("radar → 200 flags the novel signal", radar.status === 200 && radar.json?.novel?.some((o) => o.category === "smart_bed_occupancy"));
+  check("radar does not flag an evaluated signal as novel", !radar.json?.novel?.some((o) => o.category === "identity_state"));
+  check("radar raises a first-seen alert for the novel signal", (radar.json?.alerts ?? []).some((a) => a.includes("smart_bed_occupancy")));
+  const emptyRadar = await req("POST", "/signals/radar", { body: {} });
+  check("radar with no signals → 200 empty report", emptyRadar.status === 200 && Array.isArray(emptyRadar.json?.observations) && emptyRadar.json.observations.length === 0);
+
   const scenarios = await req("GET", "/simulator/scenarios");
   check("simulator scenarios → 200", scenarios.status === 200 && Array.isArray(scenarios.json?.scenarios));
   const simRun = await req("POST", "/simulator/run", { body: { scenarioId: (scenarios.json?.scenarios ?? [])[0]?.id } });

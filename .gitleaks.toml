@@ -19,3 +19,12 @@ regexTarget = "line"
 regexes = [
   '''sgk_demo_[a-z_]+''',
 ]
+# Documentation is prose + illustrative examples (e.g. `Authorization: Bearer …`,
+# vendor feature lists), which trip the generic-api-key / curl-auth-header rules.
+# This repo is public-safe by policy (no real secrets anywhere), and the
+# scripts/safety-check.mjs gate independently scans ALL tracked files — including
+# docs — for high-confidence real-secret patterns (AWS keys, Stripe live keys,
+# GitHub PATs, private keys), so genuine leaks are still caught.
+paths = [
+  '''.*\.md$''',
+]

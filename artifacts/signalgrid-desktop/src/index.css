@@ -47,41 +47,44 @@
 /* Always dark — SignalGrid Desktop is a dark-mode SOC tool */
 :root,
 .dark {
-  --background: 222.2 84% 4.9%;
-  --foreground: 210 40% 98%;
-  --border: 217.2 32.6% 17.5%;
-  --input: 217.2 32.6% 17.5%;
-  --ring: 217.2 91.2% 59.8%;
-  --card: 222.2 47.4% 7.2%;
-  --card-foreground: 210 40% 98%;
-  --popover: 222.2 84% 4.9%;
-  --popover-foreground: 210 40% 98%;
-  --primary: 217.2 91.2% 59.8%;
-  --primary-foreground: 222.2 47.4% 1.2%;
-  --secondary: 217.2 32.6% 12%;
-  --secondary-foreground: 210 40% 98%;
-  --muted: 217.2 32.6% 17.5%;
-  --muted-foreground: 215 20.2% 55.1%;
-  --accent: 217.2 32.6% 17.5%;
-  --accent-foreground: 210 40% 98%;
-  --destructive: 0 62.8% 40.6%;
-  --destructive-foreground: 210 40% 98%;
-  --sidebar: 222.2 84% 3.9%;
-  --sidebar-foreground: 210 40% 98%;
-  --sidebar-border: 217.2 32.6% 15%;
-  --sidebar-primary: 217.2 91.2% 59.8%;
-  --sidebar-primary-foreground: 222.2 47.4% 1.2%;
-  --sidebar-accent: 217.2 32.6% 15%;
-  --sidebar-accent-foreground: 210 40% 98%;
-  --sidebar-ring: 217.2 91.2% 59.8%;
-  --chart-1: 217.2 91.2% 59.8%;
-  --chart-2: 142.1 76.2% 36.3%;
-  --chart-3: 38.5 92.1% 50.2%;
-  --chart-4: 25 90.5% 54.1%;
-  --chart-5: 0 72.2% 50.6%;
+  --background: 210 13% 9%;
+  --foreground: 43 26% 94%;
+  --border: 205 13% 19%;
+  --input: 205 13% 19%;
+  --ring: 175 28% 43%;
+  --card: 207 14% 13%;
+  --card-foreground: 43 26% 94%;
+  --popover: 207 14% 13%;
+  --popover-foreground: 43 26% 94%;
+  --primary: 175 28% 43%;
+  --primary-foreground: 43 26% 94%;
+  --secondary: 207 14% 13%;
+  --secondary-foreground: 43 26% 94%;
+  --muted: 205 13% 19%;
+  --muted-foreground: 40 14% 80%;
+  --accent: 175 22% 55%;
+  --accent-foreground: 210 13% 9%;
+  --destructive: 0 28% 49%;
+  --destructive-foreground: 43 26% 94%;
+  --sidebar: 207 14% 13%;
+  --sidebar-foreground: 43 26% 94%;
+  --sidebar-border: 205 13% 19%;
+  --sidebar-primary: 175 28% 43%;
+  --sidebar-primary-foreground: 43 26% 94%;
+  --sidebar-accent: 205 13% 19%;
+  --sidebar-accent-foreground: 43 26% 94%;
+  --sidebar-ring: 175 28% 43%;
+  --chart-1: 175 28% 43%;
+  --chart-2: 145 21% 47%;
+  --chart-3: 32 35% 51%;
+  --chart-4: 0 28% 49%;
+  --chart-5: 175 22% 55%;
+  --decision-allow: 145 21% 47%;
+  --decision-review: 32 35% 51%;
+  --decision-deny: 0 28% 49%;
   --app-font-sans: 'Inter', system-ui, sans-serif;
-  --app-font-mono: 'JetBrains Mono', 'Menlo', 'Consolas', monospace;
-  --radius: 0.25rem;
+  --app-font-mono: "IBM Plex Mono", 'Menlo', 'Consolas', monospace;
+  --radius: 0.375rem;
 }
 
 @layer base {
@@ -92,8 +95,8 @@
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: hsl(217.2 32.6% 25%); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: hsl(217.2 32.6% 35%); }
+::-webkit-scrollbar-thumb { background: hsl(205 13% 28%); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: hsl(205 13% 38%); }
 
 /* Title bar drag region */
 .titlebar { -webkit-app-region: drag; user-select: none; }
@@ -107,4 +110,4 @@
 .pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
 
 /* Table striping */
-.decision-row:nth-child(even) { background: hsl(222.2 84% 4.9% / 0.5); }
+.decision-row:nth-child(even) { background: hsl(210 13% 9% / 0.5); }

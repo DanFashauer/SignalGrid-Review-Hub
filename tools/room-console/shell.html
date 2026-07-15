@@ -1,0 +1,173 @@
+<title>SignalGrid — Trusted Room Entry</title>
+<style>
+  :root{
+    --bg:#14171A;--panel:#191E22;--card:#1E2429;--ink:#F2F0EA;--soft:#AEB4AF;--faint:#7f8781;
+    --line:#2A3137;--accent:#74ABA5;--allow:#6FA88C;--stepup:#C29A66;--restrict:#C99B6B;--deny:#C07474;
+    --mono:ui-monospace,"IBM Plex Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  }
+  @media (prefers-color-scheme:light){:root{
+    --bg:#F1EEE7;--panel:#FAF8F3;--card:#FFF;--ink:#1B1F21;--soft:#4C534E;--faint:#767c77;
+    --line:#E4DFD3;--accent:#38726D;--allow:#4E7B5E;--stepup:#96703B;--restrict:#8a6a3b;--deny:#8C4B4B;
+  }}
+  :root[data-theme="dark"]{--bg:#14171A;--panel:#191E22;--card:#1E2429;--ink:#F2F0EA;--soft:#AEB4AF;--faint:#7f8781;--line:#2A3137;--accent:#74ABA5;--allow:#6FA88C;--stepup:#C29A66;--restrict:#C99B6B;--deny:#C07474;}
+  :root[data-theme="light"]{--bg:#F1EEE7;--panel:#FAF8F3;--card:#FFF;--ink:#1B1F21;--soft:#4C534E;--faint:#767c77;--line:#E4DFD3;--accent:#38726D;--allow:#4E7B5E;--stepup:#96703B;--restrict:#8a6a3b;--deny:#8C4B4B;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5;-webkit-text-size-adjust:100%}
+  .wrap{max-width:1180px;margin:0 auto;padding:clamp(1rem,3.5vw,2rem)}
+  header{display:flex;align-items:center;gap:.7rem;border-bottom:1px solid var(--line);padding-bottom:1.1rem;margin-bottom:1.3rem;flex-wrap:wrap}
+  .glyph{width:28px;height:28px;border-radius:7px;background:linear-gradient(150deg,var(--accent),color-mix(in srgb,var(--accent) 60%,#000));position:relative;flex:none}
+  .glyph::before,.glyph::after{content:"";position:absolute;background:var(--bg)}
+  .glyph::before{width:2px;height:58%;left:50%;top:21%;transform:translateX(-50%)}
+  .glyph::after{height:2px;width:58%;top:50%;left:21%;transform:translateY(-50%)}
+  .brand{font-family:var(--mono);font-weight:600}.brand span{color:var(--accent)}
+  .sub{margin-left:auto;font-family:var(--mono);font-size:.62rem;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);border:1px solid var(--line);padding:.28rem .55rem;border-radius:99px}
+  h1{font-size:1.14rem;margin:.1rem 0 .2rem}
+  .lead{color:var(--soft);font-size:.9rem;margin:0 0 1.2rem;max-width:66ch}
+  .grid{display:grid;grid-template-columns:270px 1fr;gap:1.3rem;align-items:start}
+  @media (max-width:780px){.grid{grid-template-columns:1fr}}
+  .scn{display:flex;flex-direction:column;gap:.5rem}
+  .scn h2,.panel h2{font-family:var(--mono);font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin:0 0 .3rem}
+  button.s{text-align:left;background:var(--card);border:1px solid var(--line);border-left:3px solid var(--faint);border-radius:8px;padding:.6rem .7rem;color:var(--ink);cursor:pointer;font:inherit;transition:border-color .15s}
+  button.s:hover{border-left-color:var(--accent)}
+  button.s.active{border-left-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--card))}
+  button.s .t{font-weight:600;font-size:.86rem}
+  button.s .d{font-size:.74rem;color:var(--faint);margin-top:.15rem}
+  .out{display:flex;flex-direction:column;gap:1.05rem;min-height:200px}
+  .placeholder{color:var(--faint);font-size:.9rem;padding:2rem 0;text-align:center;border:1px dashed var(--line);border-radius:10px}
+  .verdict{border-radius:10px;padding:1rem 1.15rem;border:1px solid var(--line);border-left:5px solid var(--tone);background:var(--card)}
+  .verdict .row{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+  .pill{font-family:var(--mono);font-size:.64rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:.26rem .55rem;border-radius:99px;color:var(--tone);background:color-mix(in srgb,var(--tone) 15%,transparent);border:1px solid color-mix(in srgb,var(--tone) 32%,transparent)}
+  .verdict .why{margin:.6rem 0 0;font-size:.9rem;color:var(--soft)}
+  .verdict .sum{margin:.5rem 0 0;font-size:.86rem}
+  .meta-line{font-family:var(--mono);font-size:.68rem;color:var(--faint)}
+  .codes{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.55rem}
+  .code{font-family:var(--mono);font-size:.68rem;padding:.2rem .45rem;border-radius:5px;background:color-mix(in srgb,var(--tone) 12%,transparent);color:var(--tone)}
+  .tone-allow{--tone:var(--allow)}.tone-step_up{--tone:var(--stepup)}.tone-restrict{--tone:var(--restrict)}.tone-deny{--tone:var(--deny)}
+  .panel{border:1px solid var(--line);border-radius:10px;padding:1rem 1.1rem;background:var(--card)}
+  .sig{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:.5rem;margin-top:.2rem}
+  .s-item{border:1px solid var(--line);border-radius:7px;padding:.45rem .55rem;background:var(--panel)}
+  .s-item .k{font-family:var(--mono);font-size:.58rem;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+  .s-item .v{font-size:.82rem;font-weight:600;margin-top:.15rem}
+  .s-item .v.ok{color:var(--allow)}.s-item .v.warn{color:var(--stepup)}.s-item .v.bad{color:var(--deny)}
+  .acts{display:flex;flex-direction:column;gap:.5rem;margin-top:.2rem}
+  .act{display:flex;align-items:center;gap:.7rem;border:1px solid var(--line);border-radius:8px;padding:.6rem .75rem;background:var(--panel);flex-wrap:wrap}
+  .act .body{flex:1;min-width:180px}
+  .act .label{font-weight:600;font-size:.87rem}
+  .act .metatxt{font-size:.74rem;color:var(--faint);margin-top:.1rem}
+  .act .target{font-family:var(--mono);font-size:.66rem;color:var(--soft)}
+  .disp{font-family:var(--mono);font-size:.6rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:.24rem .48rem;border-radius:99px;white-space:nowrap;color:var(--dt);background:color-mix(in srgb,var(--dt) 14%,transparent);border:1px solid color-mix(in srgb,var(--dt) 30%,transparent)}
+  .d-auto{--dt:var(--soft)}.d-applied{--dt:var(--allow)}.d-assist{--dt:var(--stepup)}.d-step_up{--dt:var(--stepup)}.d-blocked{--dt:var(--deny)}
+  .confirm{font:inherit;font-size:.74rem;font-weight:600;cursor:pointer;border:1px solid var(--stepup);color:var(--stepup);background:color-mix(in srgb,var(--stepup) 12%,transparent);border-radius:7px;padding:.34rem .6rem}
+  .confirm:active{background:color-mix(in srgb,var(--stepup) 24%,transparent)}
+  .lock{font-family:var(--mono);font-size:.6rem;color:var(--faint)}
+  footer{margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--line);font-family:var(--mono);font-size:.64rem;color:var(--faint)}
+  a{color:var(--accent)}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="glyph" aria-hidden="true"></span>
+    <span class="brand">Signal<span>Grid</span></span>
+    <span class="sub">Trusted Room Entry · runs on-device</span>
+  </header>
+  <h1>Context-aware trust &amp; orchestration — Phase 1</h1>
+  <p class="lead">A synthetic nurse with a managed device approaches a room. SignalGrid runs the real decision core over identity, device posture, custody, badge binding, security baseline and workflow risk — then orchestrates the downstream actions. Sensitive steps (a controlled-room door, a PHI display) are never automatic; they wait for a clinician to confirm. <b>Everything here runs in this browser tab</b> — no server, no network.</p>
+  <div class="grid">
+    <aside class="scn">
+      <h2>Scenarios</h2>
+      <div id="scenarios"></div>
+    </aside>
+    <main class="out" id="out">
+      <div class="placeholder">Select a scenario to evaluate a room entry.</div>
+    </main>
+  </div>
+  <footer>Synthetic, public-safe fixtures — no real hospital, patient data, or vendor system. SignalGrid is a planner: it never actuates a real device. The full decision core + orchestration are bundled and run entirely on this device; decisions shown in the product's allow / step-up / restrict / deny colors.</footer>
+</div>
+
+<script>/*__BUNDLE__*/</script>
+<script>
+(function(){
+  const SG = window.SignalGridSim;
+  const byId = (s,el)=> (el||document).querySelector(s);
+  let current=null, confirmed=new Set(), stepUp=false;
+  function sigClass(v){
+    const bad=['disabled','noncompliant','absent','withdrawn','forced','tampered','drifted','offline','faulted','stale'];
+    const ok=['enabled','compliant','present','bound','aligned','fresh','docked','nominal','supported'];
+    const s=String(v).toLowerCase();
+    if(v===false) return 'bad';
+    if(bad.some(b=>s.includes(b)))return 'bad';
+    if(v===true) return 'ok';
+    if(ok.some(o=>s.includes(o)))return 'ok';
+    return '';
+  }
+  function load(){
+    const box=byId('#scenarios'); box.innerHTML='';
+    SG.scenarios.forEach(s=>{
+      const b=document.createElement('button'); b.className='s'; b.dataset.id=s.id;
+      b.innerHTML='<div class="t"></div><div class="d"></div>';
+      b.querySelector('.t').textContent=s.title; b.querySelector('.d').textContent=s.description;
+      b.onclick=()=>{current=s.id;confirmed=new Set();stepUp=false;document.querySelectorAll('button.s').forEach(x=>x.classList.toggle('active',x.dataset.id===s.id));run();};
+      box.appendChild(b);
+    });
+  }
+  function run(){
+    if(!current) return;
+    let d; try{ d=SG.run(current,{confirmedActionIds:[...confirmed],stepUpSatisfied:stepUp}); }catch(e){ const o=byId('#out'); o.innerHTML=''; o.appendChild(el('div','placeholder',e.message)); return; }
+    render(d);
+  }
+  function el(tag,cls,txt){const e=document.createElement(tag); if(cls)e.className=cls; if(txt!=null)e.textContent=txt; return e;}
+  function render(d){
+    const out=byId('#out'); out.innerHTML='';
+    const o=d.decision.outcome, mode=d.plan.mode;
+    const v=el('div','verdict tone-'+o);
+    const row=el('div','row');
+    row.appendChild(el('span','pill','Decision · '+o.replace('_','-')));
+    row.appendChild(el('span','pill','Orchestration · '+mode));
+    row.appendChild(el('span','meta-line',d.context.roomId+' · '+d.context.unit+' · '+d.context.sensitivity));
+    v.appendChild(row);
+    v.appendChild(el('p','why',d.decision.explanation));
+    if(d.decision.reasonCodes && d.decision.reasonCodes.length){
+      const cc=el('div','codes'); d.decision.reasonCodes.forEach(c=>cc.appendChild(el('span','code',c))); v.appendChild(cc);
+    }
+    v.appendChild(el('p','sum',d.plan.summary));
+    if(d.plan.mode==='step_up'){
+      const btn=el('button','confirm','Complete step-up · badge tap'); btn.style.marginTop='.7rem';
+      btn.onclick=()=>{stepUp=true;run();};
+      v.appendChild(btn);
+    }
+    out.appendChild(v);
+
+    const sp=el('div','panel'); sp.appendChild(el('h2',null,'Signals evaluated'));
+    const sg=el('div','sig');
+    Object.entries(d.signals).forEach(([k,val])=>{
+      const it=el('div','s-item');
+      it.appendChild(el('div','k',k.replace(/([A-Z])/g,' $1').trim()));
+      it.appendChild(el('div','v '+sigClass(val),String(val)));
+      sg.appendChild(it);
+    });
+    sp.appendChild(sg); out.appendChild(sp);
+
+    const ap=el('div','panel'); ap.appendChild(el('h2',null,'Downstream orchestration'));
+    const al=el('div','acts');
+    d.plan.actions.forEach(a=>{
+      const act=el('div','act');
+      const body=el('div','body');
+      const label=el('div','label'); label.textContent=a.label;
+      if(a.sensitive){ label.appendChild(document.createTextNode(' · ')); label.appendChild(el('span','lock','sensitive')); }
+      body.appendChild(label);
+      const m=el('div','metatxt'); m.appendChild(el('span','target',a.targetSystem)); m.appendChild(document.createTextNode(' — '+a.reason));
+      body.appendChild(m); act.appendChild(body);
+      act.appendChild(el('span','disp d-'+a.disposition,a.disposition.replace('_','-')));
+      if(a.disposition==='assist'){
+        const btn=el('button','confirm','Confirm'); btn.onclick=()=>{confirmed.add(a.id);run();}; act.appendChild(btn);
+      } else if(a.requiresConfirmation){ act.appendChild(el('span','lock','held')); }
+      al.appendChild(act);
+    });
+    ap.appendChild(al); out.appendChild(ap);
+  }
+  if(!SG){ byId('#out').innerHTML='<div class="placeholder">Engine failed to load.</div>'; return; }
+  load();
+})();
+</script>

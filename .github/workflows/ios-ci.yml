@@ -1,0 +1,99 @@
+# Consolidated iOS CI/CD Workflow
+# Combines: build, test, lint, security analysis
+
+name: iOS CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'native/ios/**'
+      - '.swiftlint.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'native/ios/**'
+      - '.swiftlint.yml'
+
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "16.4"
+
+      - name: Verify Xcode version
+        run: xcodebuild -version
+
+      - name: Setup Swift
+        run: swift --version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: native/ios
+        run: |
+          if [ -f "project.yml" ]; then
+            xcodegen generate
+          fi
+
+      - name: Build EnterpriseShell
+        working-directory: native/ios
+        run: |
+          xcodebuild -project EnterpriseShell.xcodeproj \
+            -scheme EnterpriseShell \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 15' \
+            build
+
+      - name: Run unit tests
+        working-directory: native/ios
+        run: |
+          xcodebuild -project EnterpriseShell.xcodeproj \
+            -scheme EnterpriseShell \
+            -destination 'platform=iOS Simulator,name=iPhone 15' \
+            test
+
+  lint-and-security:
+    name: Lint & Security
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "16.4"
+
+      - name: Install SwiftLint
+        run: brew install swiftlint
+
+      - name: Run SwiftLint
+        run: swiftlint --config ../.swiftlint.yml
+        working-directory: native/ios
+
+      - name: Security Analysis
+        run: |
+          echo "=== Security Analysis ==="
+          
+          # Check for hardcoded credentials
+          echo "Checking for hardcoded credentials..."
+          grep -r "password\s*=" native/ios/EnterpriseShell --include="*.swift" | grep -v "TODO\|FIXME" || echo "✅ No hardcoded credentials"
+          
+          # Check for insecure URL schemes
+          echo "Checking for insecure URL schemes..."
+          grep -r "http://" native/ios/EnterpriseShell --include="*.swift" | grep -v "// TODO" | grep -v "// FIXME" || echo "✅ No insecure URLs"
+          
+          # Check for TODOs
+          echo "Checking for TODOs..."
+          grep -rn "TODO:" native/ios/EnterpriseShell --include="*.swift" || echo "✅ No TODOs found"
+          grep -rn "FIXME:" native/ios/EnterpriseShell --include="*.swift" || echo "✅ No FIXMEs found"

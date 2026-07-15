@@ -7,6 +7,7 @@ const NAV_LINKS = [
   { href: "/pricing", label: "Pricing" },
   { href: "/federal", label: "Federal" },
   { href: "/downloads", label: "Downloads" },
+  { href: "/about", label: "About" },
 ];
 
 export default function Navbar() {

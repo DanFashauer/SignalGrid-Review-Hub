@@ -1,0 +1,66 @@
+name: EnterpriseShell
+options:
+  bundleIdPrefix: com.enterprise
+  deploymentTarget:
+    iOS: "15.0"
+  xcodeVersion: "15.0"
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGNING_REQUIRED: "NO"
+    CODE_SIGN_ENTITLEMENTS: "EnterpriseShell/EnterpriseShell.entitlements"
+
+targets:
+  EnterpriseShell:
+    type: application
+    platform: iOS
+    sources:
+      - path: EnterpriseShell
+        excludes:
+          - "**/.DS_Store"
+      - path: EnterpriseShell/Resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.enterprise.shell
+        INFOPLIST_FILE: EnterpriseShell/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ENABLE_BITCODE: "NO"
+        SWIFT_VERSION: "5.9"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: "YES"
+        CODE_SIGN_STYLE: Automatic
+        LD_RUNPATH_SEARCH_PATHS:
+          - $(inherited)
+          - "@executable_path/Frameworks"
+    entitlements:
+      path: EnterpriseShell/EnterpriseShell.entitlements
+    info:
+      path: EnterpriseShell/Info.plist
+      properties:
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+
+schemes:
+  EnterpriseShell:
+    build:
+      targets:
+        EnterpriseShell: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release

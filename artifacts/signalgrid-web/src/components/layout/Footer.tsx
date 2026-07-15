@@ -23,7 +23,7 @@ const FOOTER_LINKS = {
     { label: "Changelog", href: `${REPO}/commits/main` },
   ],
   Company: [
-    { label: "About", href: REPO },
+    { label: "About", href: "/about" },
     { label: "Launch plan", href: `${REPO}/blob/main/docs/REALISTIC_LAUNCH_PLAN.md` },
     { label: "Security", href: `${REPO}/blob/main/SECURITY.md` },
     { label: "Contact", href: REPO },

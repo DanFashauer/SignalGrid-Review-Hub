@@ -82,11 +82,11 @@ const CATEGORY_OWNER_TEAM: Record<string, string> = {
 };
 
 const SIGNAL_TYPE_COLORS: Record<string, string> = {
-  "identity": "text-blue-400 bg-blue-400/10 border-blue-400/20",
+  "identity": "text-teal-400 bg-teal-400/10 border-teal-400/20",
   "device-posture": "text-green-400 bg-green-400/10 border-green-400/20",
   "session-context": "text-purple-400 bg-purple-400/10 border-purple-400/20",
   "operational-signals": "text-amber-400 bg-amber-400/10 border-amber-400/20",
-  "network-posture": "text-cyan-400 bg-cyan-400/10 border-cyan-400/20",
+  "network-posture": "text-teal-400 bg-teal-400/10 border-teal-400/20",
   "physical-access": "text-orange-400 bg-orange-400/10 border-orange-400/20",
 };
 

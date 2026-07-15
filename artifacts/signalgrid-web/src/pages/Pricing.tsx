@@ -128,7 +128,7 @@ export default function Pricing() {
                     </div>
                   )}
                   <div className="mb-6">
-                    <div className="text-xs font-mono text-muted-foreground mb-2 uppercase tracking-widest">{tier.name}</div>
+                    <div className="text-xs font-mono text-muted-foreground mb-2 uppercase tracking-wide">{tier.name}</div>
                     <div className="flex items-baseline gap-1 mb-1">
                       <span className="text-4xl font-bold font-mono">{tier.price}</span>
                       {tier.price !== "Custom" && <span className="text-sm text-muted-foreground">/mo</span>}

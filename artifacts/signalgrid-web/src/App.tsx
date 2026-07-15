@@ -12,6 +12,7 @@ const Hardware = lazy(() => import("@/pages/Hardware"));
 const Pricing = lazy(() => import("@/pages/Pricing"));
 const Federal = lazy(() => import("@/pages/Federal"));
 const Downloads = lazy(() => import("@/pages/Downloads"));
+const About = lazy(() => import("@/pages/About"));
 
 const queryClient = new QueryClient();
 
@@ -24,6 +25,7 @@ function Router() {
         <Route path="/pricing" component={Pricing} />
         <Route path="/federal" component={Federal} />
         <Route path="/downloads" component={Downloads} />
+        <Route path="/about" component={About} />
         <Route component={NotFound} />
       </Switch>
     </Suspense>

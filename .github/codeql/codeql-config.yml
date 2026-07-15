@@ -1,0 +1,43 @@
+# CodeQL configuration for SignalGrid Review Hub.
+#
+# Two deliberate choices, both to keep the security signal meaningful on a
+# public-safe reference repo:
+#
+# 1) Query suite: `security-extended` (security queries, incl. the extended
+#    set) instead of `security-and-quality`. The quality suite emits a large
+#    volume of code-style "note/warning" lint (unused vars, complexity, etc.)
+#    that is not a security signal and only creates noise on large diffs. We
+#    keep the FULL security suite — nothing security-relevant is dropped.
+#
+# 2) Scope: analysis is scoped to the first-party SignalGrid product code that
+#    this project authors and runs. The following are excluded from the
+#    security gate (they are still in the repo, just not CI-gated here):
+#      - lib/integrations, lib/integration-bridge — harvested vendor API
+#        *client* adapters (Jamf/ISE/Splunk/Sentinel/ServiceNow/…). By design
+#        they issue outbound HTTP to an operator-configured vendor endpoint,
+#        which CodeQL reports as request-forgery (SSRF) on every call site.
+#        That is inherent to an integration client, not a defect; these
+#        adapters are fixture-safe and never make a live call in the default
+#        (demo) tier. Gating CI red on them produces false signal.
+#      - lib/api-client-react — generated (orval) typed client; regenerated
+#        from the OpenAPI spec, not hand-authored.
+#      - tests/**, **/*.test.ts — test + security-reference fixtures.
+#      - build outputs and vendored bundles.
+#    First-party code (signalgrid-core, orchestration, room-sim, signal-radar,
+#    webauthn, api-server, mcp-server, the apps, scripts, tools) stays fully
+#    security-scanned.
+name: "SignalGrid CodeQL config"
+
+queries:
+  - uses: security-extended
+
+paths-ignore:
+  - lib/integrations
+  - lib/integration-bridge
+  - lib/api-client-react
+  - tests
+  - "**/*.test.ts"
+  - "**/*.spec.ts"
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/*.min.js"

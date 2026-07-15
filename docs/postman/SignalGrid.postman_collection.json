@@ -1,0 +1,877 @@
+{
+  "info": {
+    "_postman_id": "51a17e00-51a1-51a1-51a1-5163616c6772",
+    "name": "SignalGrid API",
+    "description": "The SignalGrid API surface, both the public demo endpoints and the authenticated /v1 product core. Public-safe fixtures only — the demo token is a fake, not a real credential. Set {{base_url}} to your server (default http://localhost:8080/api) and {{token}} to a demo key from GET /v1/keys.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Public demo surface",
+      "item": [
+        {
+          "name": "Health (tier + live-integrations flag)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/healthz",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "healthz"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Integrations catalog",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/integrations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "integrations"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Integration by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/integrations/{{integrationId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "integrations",
+                "{{integrationId}}"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Dashboard metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/metrics/dashboard",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "metrics",
+                "dashboard"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Decision volume series",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/metrics/decisions/series",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "metrics",
+                "decisions",
+                "series"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Recent decisions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/decisions?limit=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "decisions"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Latest signals",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/signals/latest?limit=50",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "signals",
+                "latest"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Policies (monitoring)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/policies",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "policies"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Simulator scenarios",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/simulator/scenarios",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "simulator",
+                "scenarios"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Simulator run",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scenarioId\": \"{{scenarioId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/simulator/run",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "simulator",
+                "run"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Smart hospital · sim + radar",
+      "item": [
+        {
+          "name": "Room-entry scenarios",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sim/room-entry/scenarios",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "sim",
+                "room-entry",
+                "scenarios"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Run room entry (decision → orchestration)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scenarioId\": \"compliant-medroom\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/sim/room-entry",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "sim",
+                "room-entry"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Run room entry · complete step-up",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scenarioId\": \"baseline-drift\",\n  \"stepUpSatisfied\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/sim/room-entry",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "sim",
+                "room-entry"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Signal catalog (evaluated + candidate)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/signals/catalog",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "signals",
+                "catalog"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Signal radar (detect novel signals)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"signals\": [\n    {\n      \"category\": \"identity_state\"\n    },\n    {\n      \"category\": \"rtls_location\"\n    },\n    {\n      \"category\": \"smart_bed_occupancy\",\n      \"sourceReference\": \"bed-42\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/signals/radar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "signals",
+                "radar"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "/v1 product API (bearer)",
+      "item": [
+        {
+          "name": "List demo keys",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/keys",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "keys"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Context (principal + tenant)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/context",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "context"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Evaluate a decision",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identityRef\": \"nurse.compliant\",\n  \"deviceRef\": \"ipad-ward-01\",\n  \"workflowKey\": \"clinical-session\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/decisions/evaluate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "decisions",
+                "evaluate"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List decisions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/decisions?limit=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "decisions"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get a decision",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/decisions/{{decisionId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "decisions",
+                "{{decisionId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get decision evidence",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/decisions/{{decisionId}}/evidence",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "decisions",
+                "{{decisionId}}",
+                "evidence"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Simulate (replay) a decision",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"policyVersionId\": \"{{policyVersionId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/decisions/{{decisionId}}/simulate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "decisions",
+                "{{decisionId}}",
+                "simulate"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get decision resolution",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/decisions/{{decisionId}}/resolution",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "decisions",
+                "{{decisionId}}",
+                "resolution"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Resolve a decision",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/decisions/{{decisionId}}/resolve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "decisions",
+                "{{decisionId}}",
+                "resolve"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/metrics",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "metrics"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List policies",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/policies",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "policies"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List policy versions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/policies/{{policyId}}/versions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "policies",
+                "{{policyId}}",
+                "versions"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create policy draft",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Draft policy\",\n  \"rules\": []\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/policies/{{policyId}}/versions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "policies",
+                "{{policyId}}",
+                "versions"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Activate a policy version",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/policies/{{policyId}}/versions/{{policyVersionId}}/activate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "policies",
+                "{{policyId}}",
+                "versions",
+                "{{policyVersionId}}",
+                "activate"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Run policy tests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/policies/{{policyId}}/tests",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "policies",
+                "{{policyId}}",
+                "tests"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List connectors",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/connectors",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "connectors"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Connector sync runs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/connectors/{{connectorId}}/sync-runs",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "connectors",
+                "{{connectorId}}",
+                "sync-runs"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Trigger connector sync",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/connectors/{{connectorId}}/sync",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "connectors",
+                "{{connectorId}}",
+                "sync"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Audit log",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/audit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "audit"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Webhooks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/webhooks",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "webhooks"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Webhook deliveries",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/webhooks/deliveries",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "webhooks",
+                "deliveries"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Remediation requests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/remediation",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "remediation"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Approve a remediation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/remediation/{{remediationId}}/approve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "remediation",
+                "{{remediationId}}",
+                "approve"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080/api"
+    }
+  ]
+}

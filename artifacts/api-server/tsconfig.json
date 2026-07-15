@@ -3,18 +3,31 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["src"],
+  "include": [
+    "src"
+  ],
   "references": [
     {
       "path": "../../lib/api-zod"
+    },
+    {
+      "path": "../../lib/orchestration"
     },
     {
       "path": "../../lib/signalgrid-core"
     },
     {
       "path": "../../lib/signalgrid-simulator"
+    },
+    {
+      "path": "../../lib/room-sim"
+    },
+    {
+      "path": "../../lib/signal-radar"
     }
   ]
 }

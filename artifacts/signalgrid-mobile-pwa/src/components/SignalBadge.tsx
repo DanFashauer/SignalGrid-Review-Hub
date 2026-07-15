@@ -5,9 +5,9 @@ export function SignalBadge({ type }: { type: string }) {
   let colors = "text-zinc-400 bg-zinc-400/10 border-zinc-400/20";
   
   if (type === SignalType.identity) {
-    colors = "text-blue-400 bg-blue-400/10 border-blue-400/20";
+    colors = "text-teal-400 bg-teal-400/10 border-teal-400/20";
   } else if (type === SignalType["device-posture"]) {
-    colors = "text-indigo-400 bg-indigo-400/10 border-indigo-400/20";
+    colors = "text-emerald-400 bg-emerald-400/10 border-emerald-400/20";
   } else if (type === SignalType["session-context"]) {
     colors = "text-purple-400 bg-purple-400/10 border-purple-400/20";
   } else if (type === SignalType["operational-signals"]) {

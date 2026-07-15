@@ -2,6 +2,7 @@ import express, { type Express } from "express";
 import cors, { type CorsOptions } from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
+import { CONSOLE_HTML } from "./console-html";
 import { logger } from "./lib/logger";
 import { requestContext } from "./middlewares/context";
 import { errorHandler } from "./middlewares/errors";
@@ -66,6 +67,12 @@ app.use(globalRateLimiter);
 app.use(express.json({ limit: "64kb" }));
 app.use(express.urlencoded({ extended: true, limit: "64kb" }));
 app.use(requestContext);
+
+// Trusted Room Entry simulation console (Phase 1 smart-hospital demo). Served at
+// the root for a friendly local URL: http://localhost:8080/console
+app.get(["/", "/console"], (_req, res) => {
+  res.type("html").send(CONSOLE_HTML);
+});
 
 app.use("/api", router);
 

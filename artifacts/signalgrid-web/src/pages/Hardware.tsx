@@ -12,7 +12,7 @@ const SMARTDOCK = [
     title: "Power + network in, nothing else required",
     body: "The dock takes power and a network uplink. The embedded SignalGrid agent streams normalized custody/charge/tamper/dock/badge signals — every ALLOW / STEP-UP / RESTRICT / DENY decision runs in the SaaS cloud or on-site, not on the dock.",
     icon: Wifi,
-    color: "text-cyan-400",
+    color: "text-teal-400",
   },
   {
     title: "Smart charging as a decision signal",
@@ -137,12 +137,12 @@ export default function Hardware() {
               {/* Device diagram */}
               <div className="lg:w-96 shrink-0">
                 <div className="relative bg-card border border-border rounded-2xl p-8 font-mono text-xs">
-                  <div className="text-xs text-muted-foreground mb-6 uppercase tracking-widest">SG-CASE-02 · Isometric View</div>
+                  <div className="text-xs text-muted-foreground mb-6 uppercase tracking-wide">SG-CASE-02 · Isometric View</div>
                   <div className="space-y-2.5">
                     {[
                       { icon: Shield, label: "BADGE SLOT", desc: "ISO 7816 + NFC", color: "text-primary" },
                       { icon: Lock, label: "EM LATCH", desc: "Electromagnetic lock", color: "text-amber-400" },
-                      { icon: Radio, label: "BLE + UWB", desc: "5.3 + 802.15.4a", color: "text-cyan-400" },
+                      { icon: Radio, label: "BLE + UWB", desc: "5.3 + 802.15.4a", color: "text-teal-400" },
                       { icon: Wifi, label: "eSIM MODULE", desc: "CAT-M1 / LTE", color: "text-purple-400" },
                       { icon: Cpu, label: "SECURE ELEMENT", desc: "EAL5+-class (design target)", color: "text-green-400" },
                       { icon: Battery, label: "BATTERY", desc: "4,800 mAh · 12h", color: "text-orange-400" },
@@ -200,7 +200,7 @@ export default function Hardware() {
         <section className="py-20 border-b border-border/50">
           <div className="container mx-auto px-4 md:px-8 max-w-screen-xl">
             <div className="mb-12 max-w-3xl">
-              <div className="inline-flex items-center gap-2 text-cyan-400 text-sm font-mono mb-3">
+              <div className="inline-flex items-center gap-2 text-teal-400 text-sm font-mono mb-3">
                 <Battery className="w-4 h-4" /> SIGNALGRID SMARTDOCK · OPTIONAL LAYER
               </div>
               <h2 className="text-2xl font-bold tracking-tight mb-3">A dedicated smart-charging dock, with SignalGrid embedded.</h2>
@@ -224,7 +224,7 @@ export default function Hardware() {
               ))}
             </div>
             <div className="mt-6 flex flex-col sm:flex-row items-start sm:items-center gap-3 text-sm text-muted-foreground">
-              <span className="font-mono text-xs px-2.5 py-1 rounded border border-cyan-400/20 bg-cyan-400/5 text-cyan-400 shrink-0">INGESTION MODE: embedded_smartdock</span>
+              <span className="font-mono text-xs px-2.5 py-1 rounded border border-teal-400/20 bg-teal-400/5 text-teal-400 shrink-0">INGESTION MODE: embedded_smartdock</span>
               <span>Modeled end-to-end in the deterministic core (connector → sync → normalized signals → decision → audit), fixture-backed and read-only.</span>
             </div>
           </div>
@@ -237,7 +237,7 @@ export default function Hardware() {
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
               {SPECS.map(cat => (
                 <div key={cat.category} className="space-y-3">
-                  <div className="text-xs font-mono text-muted-foreground uppercase tracking-widest border-b border-border pb-2">
+                  <div className="text-xs font-mono text-muted-foreground uppercase tracking-wide border-b border-border pb-2">
                     {cat.category}
                   </div>
                   {cat.items.map(item => (

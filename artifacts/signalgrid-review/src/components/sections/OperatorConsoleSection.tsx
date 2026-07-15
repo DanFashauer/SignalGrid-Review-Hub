@@ -240,7 +240,7 @@ function OperationsPanels({
                 #{event.seq}
               </span>
               <div className="min-w-0">
-                <span className="font-mono text-cyan-300/80">{event.type}</span>
+                <span className="font-mono text-teal-300/80">{event.type}</span>
                 <p className="text-muted-foreground truncate">{event.summary}</p>
               </div>
             </div>

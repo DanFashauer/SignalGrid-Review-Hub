@@ -12,6 +12,15 @@ if (Number.isNaN(port) || port <= 0) {
 
 const basePath = process.env.BASE_PATH ?? "/";
 
+// Where the app's `/api/*` calls are proxied in local dev + `vite preview`.
+// Defaults to the api-server's default port; override with API_PROXY_TARGET.
+// (For a hosted static build pointing at a remote api-server, set
+// VITE_API_BASE_URL at build time instead — see src/main.tsx.)
+const apiProxyTarget = process.env.API_PROXY_TARGET ?? "http://localhost:8080";
+const apiProxy = {
+  "/api": { target: apiProxyTarget, changeOrigin: true },
+};
+
 export default defineConfig({
   base: basePath,
   plugins: [
@@ -49,6 +58,7 @@ export default defineConfig({
     strictPort: true,
     host: "0.0.0.0",
     allowedHosts: true,
+    proxy: apiProxy,
     fs: {
       strict: true,
     },
@@ -57,5 +67,6 @@ export default defineConfig({
     port,
     host: "0.0.0.0",
     allowedHosts: true,
+    proxy: apiProxy,
   },
 });

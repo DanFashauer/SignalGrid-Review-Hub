@@ -3,55 +3,448 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SignalGrid — live demos</title>
-<meta name="description" content="SignalGrid — context-aware trust & orchestration. Live, on-device demos.">
+<title>SignalGrid — context-aware trust &amp; orchestration</title>
+<meta name="description" content="SignalGrid is a runtime trust &amp; orchestration layer for shared, mobile, and frontline devices — fusing identity, device, workflow, and context into an allow / step-up / restrict / deny decision, then orchestrating the next action with a human in the loop.">
+<meta property="og:title" content="SignalGrid — context-aware trust &amp; orchestration">
+<meta property="og:description" content="A runtime decision layer for the moment a workflow fires on a shared, mobile, or frontline device. Live, on-device demos — no install.">
+<meta property="og:type" content="website">
 <style>
   :root{
-    --bg:#14171A;--card:#1E2429;--ink:#F2F0EA;--soft:#AEB4AF;--faint:#7f8781;
-    --line:#2A3137;--accent:#74ABA5;
+    --bg:#14171A; --bg2:#181C20; --card:#1E2429; --card2:#232A30;
+    --ink:#F2F0EA; --soft:#AEB4AF; --faint:#7f8781; --line:#2A3137;
+    --accent:#74ABA5; --accent-deep:#38726D;
+    --allow:#6FA88C; --stepup:#C29A66; --restrict:#C08A5A; --deny:#C07474;
     --mono:ui-monospace,"IBM Plex Mono",Menlo,Consolas,monospace;
-    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;
+    --maxw:1080px;
   }
-  @media (prefers-color-scheme:light){:root{--bg:#F1EEE7;--card:#FFF;--ink:#1B1F21;--soft:#4C534E;--faint:#767c77;--line:#E4DFD3;--accent:#38726D;}}
+  @media (prefers-color-scheme:light){
+    :root{--bg:#F1EEE7;--bg2:#EAE6DC;--card:#FFFFFF;--card2:#F7F4EC;--ink:#1B1F21;--soft:#4C534E;--faint:#767c77;--line:#E4DFD3;--accent:#38726D;--accent-deep:#2b5a56;}
+  }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;-webkit-text-size-adjust:100%}
-  .wrap{max-width:720px;margin:0 auto;padding:clamp(1.4rem,6vw,4rem) clamp(1.1rem,4vw,2rem)}
-  .top{display:flex;align-items:center;gap:.7rem;margin-bottom:2.2rem}
-  .glyph{width:30px;height:30px;border-radius:7px;background:linear-gradient(150deg,var(--accent),color-mix(in srgb,var(--accent) 60%,#000));position:relative;flex:none}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;-webkit-text-size-adjust:100%;overflow-x:hidden}
+  a{color:inherit}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 clamp(1.1rem,4vw,2rem)}
+  h1,h2,h3{letter-spacing:-.02em;line-height:1.15;text-wrap:balance;margin:0}
+  section{padding:clamp(3rem,8vw,5.5rem) 0;border-top:1px solid var(--line)}
+  .eyebrow{font-family:var(--mono);font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin:0 0 .9rem}
+
+  /* ---------- nav ---------- */
+  header.nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(12px);background:color-mix(in srgb,var(--bg) 82%,transparent);border-bottom:1px solid var(--line)}
+  .nav .wrap{display:flex;align-items:center;gap:1rem;height:60px}
+  .brand{display:flex;align-items:center;gap:.6rem;font-family:var(--mono);font-weight:600;font-size:1rem;text-decoration:none}
+  .brand span{color:var(--accent)}
+  .glyph{width:26px;height:26px;border-radius:6px;background:linear-gradient(150deg,var(--accent),var(--accent-deep));position:relative;flex:none}
   .glyph::before,.glyph::after{content:"";position:absolute;background:var(--bg)}
-  .glyph::before{width:2px;height:58%;left:50%;top:21%;transform:translateX(-50%)}
-  .glyph::after{height:2px;width:58%;top:50%;left:21%;transform:translateY(-50%)}
-  .brand{font-family:var(--mono);font-weight:600;font-size:1.05rem}.brand span{color:var(--accent)}
-  h1{font-size:clamp(1.6rem,5vw,2.3rem);line-height:1.2;margin:0 0 .6rem;letter-spacing:-.015em;text-wrap:balance}
-  .lead{color:var(--soft);font-size:1.02rem;margin:0 0 2.2rem;max-width:52ch}
-  .cards{display:grid;gap:1rem}
-  a.card{display:block;text-decoration:none;color:inherit;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:11px;padding:1.15rem 1.25rem;transition:transform .12s ease,border-color .12s ease}
-  a.card:hover{transform:translateY(-2px)}
-  a.card .k{font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
-  a.card h2{font-size:1.15rem;margin:.35rem 0 .3rem}
-  a.card p{margin:0;color:var(--soft);font-size:.9rem}
-  .note{margin-top:2rem;font-size:.82rem;color:var(--faint);border-top:1px solid var(--line);padding-top:1.2rem}
-  a.plain{color:var(--accent)}
+  .glyph::before{width:2px;height:56%;left:50%;top:22%;transform:translateX(-50%)}
+  .glyph::after{height:2px;width:56%;top:50%;left:22%;transform:translateY(-50%)}
+  .nav nav{margin-left:auto;display:flex;gap:1.4rem;align-items:center}
+  .nav nav a{font-size:.86rem;color:var(--soft);text-decoration:none}
+  .nav nav a:hover{color:var(--ink)}
+  .nav .cta{background:var(--accent);color:#0c0f10;padding:.5rem .9rem;border-radius:8px;font-weight:600;font-size:.82rem}
+  .navlink-hide{display:none}
+  @media(min-width:820px){.navlink-hide{display:inline}}
+
+  /* ---------- hero ---------- */
+  .hero{border-top:0;position:relative;padding-top:clamp(3rem,7vw,5rem);overflow:hidden}
+  .hero::before{content:"";position:absolute;inset:-30% -10% auto;height:520px;background:radial-gradient(60% 60% at 70% 20%,color-mix(in srgb,var(--accent) 22%,transparent),transparent 70%);pointer-events:none}
+  .hero-inner{position:relative}
+  .hero h1{font-size:clamp(2.1rem,6.2vw,3.9rem);max-width:16ch}
+  .hero .lead{color:var(--soft);font-size:clamp(1.02rem,2.4vw,1.22rem);max-width:56ch;margin:1.2rem 0 0}
+  .btns{display:flex;flex-wrap:wrap;gap:.8rem;margin-top:2rem}
+  .btn{display:inline-flex;align-items:center;gap:.5rem;padding:.8rem 1.2rem;border-radius:10px;font-weight:600;font-size:.95rem;text-decoration:none;border:1px solid var(--line);transition:transform .12s ease}
+  .btn:hover{transform:translateY(-2px)}
+  .btn.primary{background:var(--accent);color:#0c0f10;border-color:transparent}
+  .btn.ghost{background:var(--card)}
+  .pills{display:flex;flex-wrap:wrap;gap:.55rem;margin-top:2.4rem}
+  .pill{font-family:var(--mono);font-size:.74rem;padding:.4rem .7rem;border-radius:999px;border:1px solid var(--line);background:var(--card);display:inline-flex;align-items:center;gap:.45rem}
+  .dot{width:8px;height:8px;border-radius:50%;flex:none}
+  .d-allow{background:var(--allow)}.d-stepup{background:var(--stepup)}.d-restrict{background:var(--restrict)}.d-deny{background:var(--deny)}
+  .note-syn{margin-top:1.6rem;font-size:.8rem;color:var(--faint)}
+
+  /* ---------- equation ---------- */
+  .equation{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem;font-family:var(--mono);font-size:clamp(.82rem,2.4vw,1.05rem);margin-top:.4rem}
+  .tok{padding:.5rem .8rem;border-radius:9px;background:var(--card);border:1px solid var(--line);white-space:nowrap}
+  .tok.hot{border-color:var(--accent);color:var(--accent)}
+  .op{color:var(--faint)}
+
+  /* ---------- generic grid ---------- */
+  .grid{display:grid;gap:1rem}
+  .g2{grid-template-columns:1fr}
+  .g3{grid-template-columns:1fr}
+  .g4{grid-template-columns:1fr 1fr}
+  @media(min-width:720px){.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(4,1fr)}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:1.3rem}
+  .card h3{font-size:1.05rem;margin-bottom:.4rem}
+  .card p{margin:0;color:var(--soft);font-size:.92rem}
+  .k{font-family:var(--mono);font-size:.68rem;letter-spacing:.09em;text-transform:uppercase;color:var(--accent)}
+
+  h2.big{font-size:clamp(1.7rem,4.6vw,2.5rem);max-width:20ch}
+  .sub{color:var(--soft);font-size:1.03rem;max-width:60ch;margin:.9rem 0 2rem}
+
+  /* outcomes */
+  .outcome{border-left:4px solid var(--line);padding-left:1rem}
+  .outcome.allow{border-color:var(--allow)} .outcome.stepup{border-color:var(--stepup)}
+  .outcome.restrict{border-color:var(--restrict)} .outcome.deny{border-color:var(--deny)} .outcome.assist{border-color:var(--accent)}
+  .outcome h3{font-size:.98rem;display:flex;align-items:center;gap:.5rem}
+  .tag{font-family:var(--mono);font-size:.62rem;padding:.15rem .45rem;border-radius:5px;border:1px solid var(--line);color:var(--faint)}
+
+  /* walkthrough steps */
+  ol.steps{list-style:none;counter-reset:s;padding:0;margin:0;display:grid;gap:.8rem}
+  ol.steps li{counter-increment:s;position:relative;padding:1rem 1rem 1rem 3.2rem;background:var(--card);border:1px solid var(--line);border-radius:12px}
+  ol.steps li::before{content:counter(s);position:absolute;left:1rem;top:1rem;width:1.5rem;height:1.5rem;border-radius:50%;background:var(--accent);color:#0c0f10;font-family:var(--mono);font-weight:600;font-size:.8rem;display:grid;place-items:center}
+  ol.steps li b{font-size:.95rem}
+  ol.steps li p{margin:.25rem 0 0;color:var(--soft);font-size:.9rem}
+
+  /* platform list */
+  .plat{display:flex;gap:.8rem;align-items:flex-start;padding:1rem;background:var(--card);border:1px solid var(--line);border-radius:12px}
+  .plat .ic{width:34px;height:34px;border-radius:8px;background:var(--card2);border:1px solid var(--line);display:grid;place-items:center;font-family:var(--mono);font-size:.8rem;color:var(--accent);flex:none}
+  .plat b{font-size:.95rem}.plat p{margin:.2rem 0 0;color:var(--soft);font-size:.86rem}
+
+  /* capability chips */
+  .chips{display:flex;flex-wrap:wrap;gap:.5rem}
+  .chip{font-family:var(--mono);font-size:.76rem;padding:.45rem .75rem;border-radius:8px;background:var(--card);border:1px solid var(--line)}
+
+  /* roadmap */
+  .phase{position:relative;padding:1.3rem;background:var(--card);border:1px solid var(--line);border-radius:13px}
+  .phase .k{margin-bottom:.5rem;display:block}
+  .phase h3{font-size:1.08rem;margin-bottom:.4rem}
+  .phase p{margin:0;color:var(--soft);font-size:.9rem}
+  .phase .st{margin-top:.8rem;font-family:var(--mono);font-size:.68rem;color:var(--faint)}
+  .badge-live{color:var(--allow)}
+  .badge-build{color:var(--stepup)}
+  .badge-vision{color:var(--accent)}
+
+  /* about */
+  .about{display:grid;gap:1.4rem;grid-template-columns:1fr}
+  @media(min-width:760px){.about{grid-template-columns:1.4fr 1fr}}
+  .avatar{width:64px;height:64px;border-radius:14px;background:linear-gradient(150deg,var(--accent),var(--accent-deep));display:grid;place-items:center;font-family:var(--mono);font-weight:700;font-size:1.3rem;color:#0c0f10}
+  .placeholder{border:1px dashed var(--line);border-radius:10px;padding:.8rem 1rem;color:var(--faint);font-size:.85rem;background:color-mix(in srgb,var(--card) 60%,transparent)}
+
+  /* cta band */
+  .band{background:linear-gradient(140deg,var(--accent-deep),color-mix(in srgb,var(--accent-deep) 55%,#000));border-radius:18px;padding:clamp(1.6rem,4vw,2.6rem);text-align:center;color:#fff}
+  .band h2{color:#fff}.band p{color:rgba(255,255,255,.82);max-width:48ch;margin:.7rem auto 1.4rem}
+  .band .eyebrow{color:rgba(255,255,255,.85)}
+  .band .btn.primary{background:#fff;color:var(--accent-deep)}
+  .band .btn.ghost{background:transparent;color:#fff;border-color:rgba(255,255,255,.4)}
+
+  footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--faint);font-size:.82rem}
+  footer a{color:var(--accent);text-decoration:none}
+  .foot-row{display:flex;flex-wrap:wrap;gap:1.2rem;justify-content:space-between;align-items:flex-start}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="top"><span class="glyph"></span><span class="brand">Signal<span>Grid</span></span></div>
-  <h1>Context-aware trust &amp; orchestration for the smart hospital.</h1>
-  <p class="lead">A runtime decision layer for the moment a workflow fires on a shared, mobile, or frontline device. These demos run entirely in your browser — no install, works on iPhone and iPad.</p>
-  <div class="cards">
-    <a class="card" href="./console.html">
-      <div class="k">Live · runs on-device</div>
-      <h2>Trusted Room Entry →</h2>
-      <p>A nurse approaches a room; SignalGrid fuses identity, device posture, custody, badge binding, baseline and workflow risk into an allow / step-up / deny decision, then orchestrates the downstream actions — sensitive steps held for a clinician to confirm.</p>
-    </a>
-    <a class="card" href="./battlecard.html">
-      <div class="k">Reference</div>
-      <h2>Competitive battlecard →</h2>
-      <p>Where SignalGrid wins and where it walks, per competitor — rendered in the product's own decision colors.</p>
-    </a>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top"><span class="glyph"></span>Signal<span>Grid</span></a>
+    <nav>
+      <a class="navlink-hide" href="#how">How it works</a>
+      <a class="navlink-hide" href="#platform">Platform</a>
+      <a class="navlink-hide" href="#roadmap">Vision</a>
+      <a class="navlink-hide" href="#about">About</a>
+      <a class="cta" href="./console.html">Live demo →</a>
+    </nav>
   </div>
-  <p class="note">Synthetic, public-safe fixtures — no real hospital, patient data, or vendor system. SignalGrid is a planner: it never actuates a real device. Built by <a class="plain" href="https://www.linkedin.com/in/daniel-fashauer-a0148278">Daniel Fashauer</a>.</p>
-</div>
+</header>
+
+<a id="top"></a>
+<section class="hero">
+  <div class="wrap hero-inner">
+    <p class="eyebrow">Context-aware trust &amp; orchestration</p>
+    <h1>Trust decided in the moment a workflow fires.</h1>
+    <p class="lead">SignalGrid is a runtime decision layer for shared, mobile, and frontline devices. It fuses <b>identity, device posture, workflow risk, and real-world context</b> into a single <b>allow / step-up / restrict / deny</b> decision — then orchestrates the next action, with a human kept in the loop for anything sensitive.</p>
+    <p class="lead" style="font-size:1rem;margin-top:.85rem">It's a full <b>platform</b>, not a web page — delivered as <b>hosted SaaS</b> or <b>self-hosted / on-prem</b>, with native <b>mobile</b> and <b>desktop</b> apps, an <b>admin console</b>, an API + connector ecosystem, and an optional <b>docking-station hardware layer</b>. The demo below is just the fastest way to watch the engine decide.</p>
+    <div class="btns">
+      <a class="btn primary" href="./console.html">▶ Try the live demo</a>
+      <a class="btn ghost" href="#platform">Explore the platform</a>
+    </div>
+    <div class="pills">
+      <span class="pill"><span class="dot d-allow"></span>Allow</span>
+      <span class="pill"><span class="dot d-stepup"></span>Step-up</span>
+      <span class="pill"><span class="dot d-restrict"></span>Restrict</span>
+      <span class="pill"><span class="dot d-deny"></span>Deny</span>
+      <span class="pill">+ Assist · human-confirmed</span>
+    </div>
+    <p class="note-syn"><b>The demo</b> runs in your browser — no install, works on iPhone and iPad — on synthetic, public-safe fixtures (no real hospital, patient data, or vendor system). <b>The product</b> deploys into your environment across mobile, desktop, admin console, and docking hardware.</p>
+  </div>
+</section>
+
+<!-- THE IDEA -->
+<section id="idea">
+  <div class="wrap">
+    <p class="eyebrow">The idea</p>
+    <h2 class="big">One equation, decided at the edge of every workflow.</h2>
+    <p class="sub">Most access is decided once, at login. But a shared tablet on a ward, a frontline scanner, or a kiosk changes hands, moves rooms, and runs high-stakes workflows all shift long. SignalGrid re-decides trust <em>per workflow, in context</em>.</p>
+    <div class="equation">
+      <span class="tok">Identity</span><span class="op">+</span>
+      <span class="tok">Device</span><span class="op">+</span>
+      <span class="tok">Workflow</span><span class="op">+</span>
+      <span class="tok">Context</span><span class="op">=</span>
+      <span class="tok hot">Trust</span>
+    </div>
+    <div class="equation" style="margin-top:.7rem">
+      <span class="tok hot">Trust</span><span class="op">+</span>
+      <span class="tok">Orchestration</span><span class="op">=</span>
+      <span class="tok hot">Action</span>
+    </div>
+
+    <div class="grid g3" style="margin-top:2.4rem">
+      <div class="card"><div class="k">Deterministic core</div><h3>Explainable, not a black box</h3><p>Every decision carries the evidence and reason codes that produced it. The core is deterministic — same inputs, same decision, every time — so it can be audited and replayed.</p></div>
+      <div class="card"><div class="k">Human-centered</div><h3>Removes friction, keeps judgment</h3><p>SignalGrid removes repetitive friction while preserving explicit controls, auditability, and human judgment. Sensitive steps are never silently automated — they're held for a person to confirm.</p></div>
+      <div class="card"><div class="k">Public-safe by design</div><h3>Fixture-first</h3><p>The whole platform runs on synthetic fixtures by default. No secrets, no PHI/PII, no live vendor calls — live integrations stay gated behind explicit configuration.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- OUTCOMES -->
+<section id="outcomes">
+  <div class="wrap">
+    <p class="eyebrow">The decision</p>
+    <h2 class="big">Four outcomes, plus a human-confirmed assist.</h2>
+    <p class="sub">Not a binary gate. SignalGrid grades the moment and routes it to the proportionate response.</p>
+    <div class="grid g2">
+      <div class="outcome allow"><h3><span class="dot d-allow"></span>Allow <span class="tag">low friction</span></h3><p>Identity, device, and context all clear for this workflow — proceed, and orchestrate the supporting actions automatically.</p></div>
+      <div class="outcome stepup"><h3><span class="dot d-stepup"></span>Step-up <span class="tag">re-verify</span></h3><p>Confidence is close but not enough — challenge for a passkey / badge tap, then continue once satisfied.</p></div>
+      <div class="outcome restrict"><h3><span class="dot d-restrict"></span>Restrict <span class="tag">reduced scope</span></h3><p>Let the safe part of the workflow proceed while holding back the risky capability.</p></div>
+      <div class="outcome deny"><h3><span class="dot d-deny"></span>Deny <span class="tag">fail-closed</span></h3><p>A hard signal (custody lost, tamper, disabled account) blocks the action — with the reason on record.</p></div>
+    </div>
+    <div class="outcome assist" style="margin-top:1rem">
+      <h3><span class="dot" style="background:var(--accent)"></span>Assist <span class="tag">human confirms</span></h3>
+      <p>The safety rail: even on an allow, a sensitive downstream step (unlock a controlled cabinet, activate a clinical display) is never actuated automatically — it's surfaced for a clinician to confirm. SignalGrid plans; a person decides the sensitive move.</p>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="how">
+  <div class="wrap">
+    <p class="eyebrow">How it works · Trusted Room Entry</p>
+    <h2 class="big">A nurse walks up to a room. Here's the moment.</h2>
+    <p class="sub">The flagship scenario — one of eight in the live demo — shows the full pipeline: signals in, decision out, orchestration planned, sensitive steps held.</p>
+    <ol class="steps">
+      <li><b>Signals arrive.</b><p>Identity (badge-bound, enabled), device posture (managed, compliant, encrypted, baseline aligned), custody &amp; dock state, and workflow risk tier for what's about to happen.</p></li>
+      <li><b>The core evaluates.</b><p>Twelve signal categories become weighted evidence → a single decision with reason codes. Deterministic and explainable.</p></li>
+      <li><b>Orchestration is planned.</b><p>The decision becomes a plan of downstream actions — session start, environment, alert routing — each tagged auto, assist, step-up, or blocked.</p></li>
+      <li><b>Sensitive steps wait for a human.</b><p>Opening a controlled-medication cabinet or activating a patient display is held with a <em>Confirm</em> button. The clinician stays in control; the audit trail captures it.</p></li>
+    </ol>
+    <div class="btns"><a class="btn primary" href="./console.html">Walk through it yourself →</a></div>
+  </div>
+</section>
+
+<!-- THE PLATFORM -->
+<section id="platform">
+  <div class="wrap">
+    <p class="eyebrow">The platform</p>
+    <h2 class="big">Built as a platform — not a browser demo.</h2>
+    <p class="sub">SignalGrid is an engine plus everything around it: where it runs, how people use it, the hardware that can feed it, and the paths that plug it into your stack.</p>
+
+    <h3 class="k" style="margin:1.4rem 0 .8rem;font-size:.95rem">Deploy it your way</h3>
+    <div class="grid g3">
+      <div class="plat"><div class="ic">☁</div><div><b>Hosted SaaS</b><p>Run it as a managed service — the fastest path to a live decision loop without standing up infrastructure yourself.</p></div></div>
+      <div class="plat"><div class="ic">⌂</div><div><b>Self-hosted / on-prem</b><p>Deploy inside your own environment (containerized) so signals, decisions, and audit stay under your control — a fit for regulated and tightly-scoped settings.</p></div></div>
+      <div class="plat"><div class="ic">▙</div><div><b>Tiered environments</b><p>Promote through dev → alpha → beta → prod on the same core; live vendor integrations stay gated until you explicitly enable them.</p></div></div>
+    </div>
+
+    <div class="card" style="margin-top:1.1rem">
+      <div class="k" style="margin-bottom:.9rem">Recommended · hybrid architecture</div>
+      <div style="display:grid;gap:.8rem;grid-template-columns:1fr;align-items:stretch">
+        <div style="display:grid;gap:.8rem;grid-template-columns:1fr auto 1fr;align-items:center">
+          <div style="border:1px solid var(--line);border-radius:11px;padding:.9rem 1rem;background:var(--card2)">
+            <div style="font-family:var(--mono);font-size:.72rem;color:var(--accent);margin-bottom:.35rem">☁ Cloud control plane</div>
+            <div style="font-size:.84rem;color:var(--soft)">Policy &amp; config, connector catalog, app / dock / fleet management, updates, cross-site insight, onboarding.</div>
+          </div>
+          <div style="font-family:var(--mono);color:var(--faint);font-size:1.1rem;text-align:center">⇅</div>
+          <div style="border:1px solid var(--line);border-radius:11px;padding:.9rem 1rem;background:var(--card2)">
+            <div style="font-family:var(--mono);font-size:.72rem;color:var(--accent);margin-bottom:.35rem">⌂ Local decision plane</div>
+            <div style="font-size:.84rem;color:var(--soft)">The deterministic core — fast, offline-tolerant, decisions &amp; sensitive signals stay resident (edge / on-prem).</div>
+          </div>
+        </div>
+        <p style="margin:.2rem 0 0;color:var(--soft);font-size:.88rem">Central management where it helps, local decisions where they matter — so you get SaaS iteration speed <em>and</em> the latency, availability, and data-residency the point of care needs. The core already runs anywhere unchanged, so this is additive, not a rewrite. <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/blob/SignalGrid_Alpha/docs/DEPLOYMENT_MODELS.md" style="color:var(--accent);text-decoration:none">Deployment models →</a></p>
+      </div>
+    </div>
+
+    <h3 class="k" style="margin:1.6rem 0 .8rem;font-size:.95rem">Apps &amp; surfaces</h3>
+    <div class="grid g3">
+      <div class="plat"><div class="ic">▤</div><div><b>Admin console</b><p>Operator dashboard for decisions, signals, policies, and integration health — on the web and as a macOS / Windows desktop app.</p></div></div>
+      <div class="plat"><div class="ic">iOS</div><div><b>Native iOS enterprise shell</b><p>A locked-down shared-device shell: badge tap-in (BLE / USB-C reader), OIDC identity, a full session lifecycle, and on-device audit — for frontline iPhone / iPad.</p></div></div>
+      <div class="plat"><div class="ic">▥</div><div><b>Android &amp; mobile PWA</b><p>An installable worker experience — decisions and signals in your pocket, offline-tolerant — plus the in-browser console for instant, no-install access.</p></div></div>
+    </div>
+
+    <h3 class="k" style="margin:1.6rem 0 .8rem;font-size:.95rem">Hardware layer<span style="color:var(--faint);text-transform:none;letter-spacing:0"> · optional</span></h3>
+    <div class="grid g3">
+      <div class="plat"><div class="ic">⎓</div><div><b>SmartDock docking station</b><p>A smart-charging dock that also holds custody — device seating, tamper-evidence, charge &amp; thermal health — streamed as normalized signals. It charges and connects to the network; the decision still happens in SignalGrid.</p></div></div>
+      <div class="plat"><div class="ic">▦</div><div><b>Badge / RFID reader case</b><p>Binds the physical badge to the device at the point of custody, so "who is holding this right now" becomes a real, live signal — not an assumption.</p></div></div>
+      <div class="plat"><div class="ic">◉</div><div><b>Custody, dock &amp; tamper signals</b><p>The physical world becomes decision input: docked or in-hand, badge bound or withdrawn, seated or tampered — high fidelity, real time.</p></div></div>
+    </div>
+    <p class="note-syn" style="margin-top:1rem">The hardware layer is an <b>optional, pre-production design concept</b> — SignalGrid runs fully on software-only signals (MDM/UEM posture, identity, baseline) today. Hardware adds the physical signals only a device at the point of custody can produce.</p>
+
+    <h3 class="k" style="margin:1.8rem 0 .8rem;font-size:.95rem">Integration paths</h3>
+    <div class="grid g3">
+      <div class="plat"><div class="ic">API</div><div><b>/v1 REST API</b><p>The deterministic decision core over HTTP, described by an OpenAPI 3.1 contract. Tenant derived from the token.</p></div></div>
+      <div class="plat"><div class="ic">⇄</div><div><b>Webhooks</b><p>React to decisions instead of polling — HMAC-signed delivery with retries and a deliveries log.</p></div></div>
+      <div class="plat"><div class="ic">MCP</div><div><b>Model Context Protocol</b><p>An MCP server exposes SignalGrid as tools, so an AI assistant or agent can query the grid directly.</p></div></div>
+      <div class="plat"><div class="ic">▷</div><div><b>Postman collection</b><p>Every endpoint, ready to import and click — kept in lockstep with the spec by CI.</p></div></div>
+      <div class="plat"><div class="ic">⊕</div><div><b>Connectors</b><p>Adapters that normalize a vendor's data into signals — ITSM, UEM, NAC, SIEM, EDR — fixture-safe by default.</p></div></div>
+      <div class="plat"><div class="ic">◎</div><div><b>Signal Radar</b><p>Watches incoming signals, classifies each as evaluated / candidate / novel, and raises a first-seen alert on anything new.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- CORE CAPABILITIES -->
+<section id="core">
+  <div class="wrap">
+    <p class="eyebrow">Core functionality</p>
+    <h2 class="big">What actually goes into a decision.</h2>
+    <p class="sub">The signal categories and controls the core reasons over today — each explainable, each fixture-backed.</p>
+    <div class="chips">
+      <span class="chip">Identity &amp; enablement</span>
+      <span class="chip">Device management</span>
+      <span class="chip">Compliance posture</span>
+      <span class="chip">Encryption</span>
+      <span class="chip">OS support</span>
+      <span class="chip">Ownership type</span>
+      <span class="chip">Posture freshness</span>
+      <span class="chip">Workflow risk tier</span>
+      <span class="chip">Custody state</span>
+      <span class="chip">Dock / charge state</span>
+      <span class="chip">Tamper state</span>
+      <span class="chip">Badge binding</span>
+      <span class="chip">Security baseline (CIS)</span>
+      <span class="chip">Critical-signal presence</span>
+    </div>
+    <div class="grid g3" style="margin-top:2rem">
+      <div class="card"><div class="k">Audit</div><h3>Hash-chained ledger</h3><p>Decisions and sensitive confirmations land in a tamper-evident, replayable audit trail.</p></div>
+      <div class="card"><div class="k">Step-up</div><h3>Real WebAuthn / passkey</h3><p>Step-up is a genuine FIDO2 challenge with fail-closed signature verification — not a checkbox.</p></div>
+      <div class="card"><div class="k">Custody</div><h3>Badge &amp; dock aware</h3><p>Physical signals — who's holding it, is it docked, has the badge been withdrawn — are first-class inputs.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ROADMAP / VISION -->
+<section id="roadmap">
+  <div class="wrap">
+    <p class="eyebrow">Vision &amp; roadmap</p>
+    <h2 class="big">From one trusted room to an operational fabric.</h2>
+    <p class="sub">The bet: context-aware trust becomes the connective tissue of the smart hospital — and any frontline environment. Below is the arc. It's a roadmap and a vision, not a claim of a finished or certified product.</p>
+    <div class="grid g3">
+      <div class="phase">
+        <span class="k">Phase 1</span>
+        <h3>Trusted Room Entry</h3>
+        <p>Fuse identity, device, custody, and workflow risk into a real-time decision at the point of care, with sensitive actions held for a human.</p>
+        <div class="st badge-live">● Live in the demo today</div>
+      </div>
+      <div class="phase">
+        <span class="k">Phase 2</span>
+        <h3>Orchestration</h3>
+        <p>The decision drives the environment — sessions, displays, alerts, controlled-medication workflows — always with the assist rail on sensitive steps.</p>
+        <div class="st badge-build">◐ Building — early flows in the demo</div>
+      </div>
+      <div class="phase">
+        <span class="k">Phase 3</span>
+        <h3>Operational intelligence</h3>
+        <p>Patterns across decisions become insight: friction hotspots, posture drift, custody gaps, shift-handoff health — surfaced to operators.</p>
+        <div class="st badge-vision">○ Vision</div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:1.2rem">
+      <div class="k">Beyond healthcare</div>
+      <h3 style="margin:.4rem 0 .5rem;font-size:1.05rem">The same engine, other frontlines</h3>
+      <p style="color:var(--soft);font-size:.92rem">Shared and mobile devices, high-stakes workflows, and physical context aren't unique to hospitals. The same trust-and-orchestration pattern extends to retail floors, logistics, and field operations — anywhere a workflow fires on a device that changes hands.</p>
+    </div>
+  </div>
+</section>
+
+<!-- DEMO BAND -->
+<section id="demo">
+  <div class="wrap">
+    <div class="band">
+      <p class="eyebrow">See it move</p>
+      <h2 class="big" style="margin:0 auto;max-width:18ch">Eight scenarios. Every outcome. In your browser.</h2>
+      <p>From a clean allow to a withdrawn badge, a tamper flag, and a disabled account — each producing a real decision and a matching orchestration plan. Nothing to install.</p>
+      <div class="btns" style="justify-content:center">
+        <a class="btn primary" href="./console.html">▶ Open the live console</a>
+        <a class="btn ghost" href="./battlecard.html">Competitive battlecard</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ABOUT / FOUNDER / PORTFOLIO -->
+<section id="about">
+  <div class="wrap">
+    <p class="eyebrow">About the founder</p>
+    <div class="about">
+      <div>
+        <div style="display:flex;gap:1rem;align-items:center;margin-bottom:1rem">
+          <div class="avatar">DF</div>
+          <div>
+            <h2 style="font-size:1.5rem">Daniel Fashauer</h2>
+            <p style="color:var(--soft);margin:.2rem 0 0;font-size:.92rem">Founder — SignalGrid · Senior UEM / Endpoint Engineer, enterprise healthcare · Tampa Bay</p>
+          </div>
+        </div>
+        <p style="color:var(--soft)">Daniel is a Senior Platform / UEM engineer with <b>10+ years</b> securing and managing shared, mobile, and frontline devices in enterprise healthcare — <b>300K+ endpoints</b> across Workspace ONE, Intune, and Jamf, with deep work in shared-device mode, Zero Trust, and clinical mobility.</p>
+        <p style="color:var(--soft)">SignalGrid is the product he kept wishing existed. The people who actually run hospital device fleets know the hard truth: trust decided once, at login, goes stale the moment a shared tablet changes hands. SignalGrid re-decides it <em>in context</em> — built from frontline reality, not a whiteboard.</p>
+        <div class="btns">
+          <a class="btn ghost" href="https://www.linkedin.com/in/daniel-fashauer-a0148278">Connect on LinkedIn →</a>
+          <a class="btn ghost" href="https://github.com/DanFashauer/SignalGrid-Review-Hub">View the code</a>
+        </div>
+        <p class="note-syn" style="margin-top:1.4rem">SignalGrid is an independent project built on synthetic, public-safe data — not affiliated with, endorsed by, or connected to any current or past employer.</p>
+      </div>
+      <div>
+        <div class="card">
+          <div class="k">Background</div>
+          <div style="margin-top:.8rem;display:grid;gap:.9rem">
+            <div>
+              <b style="font-size:.95rem">Senior Platform Engineer — MDM / UEM</b>
+              <div style="font-family:var(--mono);font-size:.72rem;color:var(--accent)">Enterprise healthcare · 2025–present</div>
+              <p style="margin:.3rem 0 0;color:var(--soft);font-size:.86rem">Workspace ONE + Intune strategy across 300K+ endpoints; shared-device compliance for clinical iOS/Android; automation aligned to Zero Trust.</p>
+            </div>
+            <div>
+              <b style="font-size:.95rem">Endpoint &amp; Mobility Engineer → Senior</b>
+              <div style="font-family:var(--mono);font-size:.72rem;color:var(--accent)">Health system · 2019–2024</div>
+              <p style="margin:.3rem 0 0;color:var(--soft);font-size:.86rem">5,000+ device MDM rollout (+35% operational efficiency); Apple DEP / VPP / ABM &amp; Android Enterprise provisioning; endpoint-health dashboards.</p>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:1rem">
+          <div class="k" style="margin-bottom:.7rem">Expertise</div>
+          <div class="chips">
+            <span class="chip">Workspace ONE</span>
+            <span class="chip">Intune</span>
+            <span class="chip">Jamf</span>
+            <span class="chip">Shared Device Mode</span>
+            <span class="chip">Zero Trust</span>
+            <span class="chip">Apple DEP / VPP / ABM</span>
+            <span class="chip">Android Enterprise</span>
+            <span class="chip">PowerShell · Python · Bash</span>
+            <span class="chip">Azure AD · M365</span>
+            <span class="chip">ServiceNow</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-row">
+      <div style="max-width:46ch">
+        <a class="brand" href="#top" style="color:var(--ink)"><span class="glyph"></span>Signal<span style="color:var(--accent)">Grid</span></a>
+        <p style="margin:.7rem 0 0">Context-aware trust &amp; orchestration. Synthetic, public-safe fixtures only — no real hospital, patient data, or vendor system. SignalGrid is a planner: it never actuates a real device.</p>
+      </div>
+      <div style="display:flex;gap:1.2rem;flex-wrap:wrap">
+        <a href="./console.html">Live demo</a>
+        <a href="./battlecard.html">Battlecard</a>
+        <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub">GitHub</a>
+        <a href="https://www.linkedin.com/in/daniel-fashauer-a0148278">LinkedIn</a>
+      </div>
+    </div>
+    <p style="margin-top:1.6rem;color:var(--faint)">Built by <a href="https://www.linkedin.com/in/daniel-fashauer-a0148278">Daniel Fashauer</a>. Not a production, certified, or compliance-validated system.</p>
+  </div>
+</footer>
+
 </body>
 </html>

@@ -6,6 +6,7 @@
     { "path": "./lib/orchestration" },
     { "path": "./lib/room-sim" },
     { "path": "./lib/signal-radar" },
+    { "path": "./lib/control-plane" },
     { "path": "./lib/integration-bridge" },
     { "path": "./lib/location" },
     { "path": "./lib/webauthn" },

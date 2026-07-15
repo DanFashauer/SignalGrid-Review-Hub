@@ -7,6 +7,8 @@
 //   3. An assertion signed by a DIFFERENT key is REJECTED.
 //   4. A wrong-rpId assertion is REJECTED.
 //   5. A legacy stub credential (non-verifiable public key) FAILS CLOSED.
+//   6. An assertion WITHOUT the User-Verified flag is REJECTED (step-up needs UV).
+//   7. A look-alike origin (prefix, not exact) is REJECTED.
 //
 // Run: pnpm --filter @workspace/scripts run proof:webauthn-verify
 
@@ -115,7 +117,7 @@ async function main() {
     userId,
   });
 
-  const regAuthData = buildAuthData(rpId, 0x41, 0, attestedCredentialData(credId, cose)); // UP+AT
+  const regAuthData = buildAuthData(rpId, 0x45, 0, attestedCredentialData(credId, cose)); // UP+UV+AT
   const attestationObject = cborMap([
     ["fmt", cborText("none")],
     ["attStmt", cborMap([])],
@@ -139,6 +141,8 @@ async function main() {
     rpIdForAuth?: string;
     signCount?: number;
     tamperSig?: boolean;
+    flags?: number;
+    originForAuth?: string;
   }) {
     const challengeId = randomBytes(16).toString("base64url");
     const challenge = randomBytes(32).toString("base64url");
@@ -148,8 +152,8 @@ async function main() {
       purpose: "authentication",
       userId,
     });
-    const cd = clientData("webauthn.get", challenge, origin);
-    const authData = buildAuthData(opts.rpIdForAuth ?? rpId, 0x01, opts.signCount ?? 1); // UP
+    const cd = clientData("webauthn.get", challenge, opts.originForAuth ?? origin);
+    const authData = buildAuthData(opts.rpIdForAuth ?? rpId, opts.flags ?? 0x05, opts.signCount ?? 1); // default UP+UV
     const signed = Buffer.concat([authData, sha256(cd)]);
     let signature = createSign("SHA256").update(signed).sign(opts.signer); // DER ECDSA
     if (opts.tamperSig) signature = Buffer.concat([signature.subarray(0, signature.length - 1), Buffer.from([signature[signature.length - 1] ^ 0xff])]);
@@ -181,6 +185,14 @@ async function main() {
   // ── 5. Wrong rpId rejected ────────────────────────────────────────────────
   const wrongRp = await runAssertion({ signer: privateKey, rpIdForAuth: "evil.example", signCount: 8 });
   check("wrong rpId hash rejected", wrongRp.success === false);
+
+  // ── 6. Missing User-Verified flag rejected (step-up requires UV) ───────────
+  const noUv = await runAssertion({ signer: privateKey, signCount: 9, flags: 0x01 }); // UP only, no UV
+  check("assertion without user-verification rejected", noUv.success === false);
+
+  // ── 7. Look-alike origin rejected (exact match, not prefix) ────────────────
+  const badOrigin = await runAssertion({ signer: privateKey, signCount: 9, originForAuth: origin + ".evil.com" });
+  check("look-alike origin (prefix) rejected", badOrigin.success === false);
 
   // ── 6. Legacy stub credential fails closed ────────────────────────────────
   const legacyUser = "user-legacy";

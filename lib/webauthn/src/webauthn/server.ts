@@ -28,6 +28,7 @@ import {
   verifyAssertionSignature,
   rpIdHashMatches,
   isUserPresent,
+  isUserVerified,
   readSignCount,
   type VerifiableKey,
 } from './verify';
@@ -105,7 +106,8 @@ export async function generateRegistrationOptions(
     authenticatorSelection: {
       authenticatorAttachment: 'cross-platform',
       requireResidentKey: false,
-      userVerification: 'preferred',
+      // Create UV-capable credentials so the step-up path can require UV.
+      userVerification: 'required',
     },
     attestation: 'none',
   };
@@ -145,9 +147,10 @@ export async function verifyRegistration(
     return { success: false, error: 'Challenge mismatch', timestamp };
   }
 
-  // Verify origin
+  // Verify origin — EXACT match. A prefix check (startsWith) would accept a
+  // look-alike origin like `https://good.example.evil.com`, so require equality.
   const config = getWebAuthnConfig();
-  if (!clientData.origin.startsWith(config.origin)) {
+  if (clientData.origin !== config.origin) {
     return { success: false, error: 'Invalid origin', timestamp };
   }
 
@@ -227,7 +230,8 @@ export async function generateAuthenticationOptions(
       id: c.id,
       type: 'public-key',
     })),
-    userVerification: 'preferred',
+    // Step-up demands verified users (biometric / PIN), enforced at verify time.
+    userVerification: 'required',
   };
 }
 
@@ -264,9 +268,10 @@ export async function verifyAuthentication(
     return { success: false, error: 'Challenge mismatch', timestamp };
   }
 
-  // Verify origin
+  // Verify origin — EXACT match (see verifyRegistration for why a prefix check
+  // is unsafe).
   const config = getWebAuthnConfig();
-  if (!clientData.origin.startsWith(config.origin)) {
+  if (clientData.origin !== config.origin) {
     return { success: false, error: 'Invalid origin', timestamp };
   }
 
@@ -311,6 +316,16 @@ export async function verifyAuthentication(
   }
   if (!isUserPresent(authenticatorData)) {
     return { success: false, error: 'User presence flag not set', timestamp };
+  }
+  // A step-up is a high-assurance gate: require User Verification (biometric /
+  // PIN), not merely user presence. Options request `userVerification: required`.
+  if (!isUserVerified(authenticatorData)) {
+    await appendAuditRecord(
+      'security.webauthn.step_up.failure',
+      { type: 'user', id: userId },
+      { meta: { credentialId: credential.id, reason: 'user_verification_missing' } }
+    );
+    return { success: false, error: 'User verification required for step-up', timestamp };
   }
 
   // The core check: verify the authenticator's signature over

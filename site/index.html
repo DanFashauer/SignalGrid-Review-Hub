@@ -247,6 +247,24 @@
       <div class="plat"><div class="ic">▙</div><div><b>Tiered environments</b><p>Promote through dev → alpha → beta → prod on the same core; live vendor integrations stay gated until you explicitly enable them.</p></div></div>
     </div>
 
+    <div class="card" style="margin-top:1.1rem">
+      <div class="k" style="margin-bottom:.9rem">Recommended · hybrid architecture</div>
+      <div style="display:grid;gap:.8rem;grid-template-columns:1fr;align-items:stretch">
+        <div style="display:grid;gap:.8rem;grid-template-columns:1fr auto 1fr;align-items:center">
+          <div style="border:1px solid var(--line);border-radius:11px;padding:.9rem 1rem;background:var(--card2)">
+            <div style="font-family:var(--mono);font-size:.72rem;color:var(--accent);margin-bottom:.35rem">☁ Cloud control plane</div>
+            <div style="font-size:.84rem;color:var(--soft)">Policy &amp; config, connector catalog, app / dock / fleet management, updates, cross-site insight, onboarding.</div>
+          </div>
+          <div style="font-family:var(--mono);color:var(--faint);font-size:1.1rem;text-align:center">⇅</div>
+          <div style="border:1px solid var(--line);border-radius:11px;padding:.9rem 1rem;background:var(--card2)">
+            <div style="font-family:var(--mono);font-size:.72rem;color:var(--accent);margin-bottom:.35rem">⌂ Local decision plane</div>
+            <div style="font-size:.84rem;color:var(--soft)">The deterministic core — fast, offline-tolerant, decisions &amp; sensitive signals stay resident (edge / on-prem).</div>
+          </div>
+        </div>
+        <p style="margin:.2rem 0 0;color:var(--soft);font-size:.88rem">Central management where it helps, local decisions where they matter — so you get SaaS iteration speed <em>and</em> the latency, availability, and data-residency the point of care needs. The core already runs anywhere unchanged, so this is additive, not a rewrite. <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/blob/SignalGrid_Alpha/docs/DEPLOYMENT_MODELS.md" style="color:var(--accent);text-decoration:none">Deployment models →</a></p>
+      </div>
+    </div>
+
     <h3 class="k" style="margin:1.6rem 0 .8rem;font-size:.95rem">Apps &amp; surfaces</h3>
     <div class="grid g3">
       <div class="plat"><div class="ic">▤</div><div><b>Admin console</b><p>Operator dashboard for decisions, signals, policies, and integration health — on the web and as a macOS / Windows desktop app.</p></div></div>

@@ -1,18 +1,19 @@
 version: 2
 # Dependabot keeps dependencies patched via automated pull requests.
 # Public-safe: it only reads manifests and opens PRs; it touches no secrets.
+#
+# Concept / pre-dev stage: updates are batched into a single grouped PR per
+# ecosystem and run monthly, so the repo stays clean and dependency review is a
+# quick, occasional task rather than a flood of individual PRs.
 updates:
   - package-ecosystem: npm
     directory: "/"
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: monthly
+    open-pull-requests-limit: 2
     groups:
-      # Batch low-risk updates so review stays manageable.
-      minor-and-patch:
-        update-types:
-          - minor
-          - patch
+      npm-dependencies:
+        patterns: ["*"]
     commit-message:
       prefix: "deps"
     labels:
@@ -21,8 +22,11 @@ updates:
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: monthly
+    open-pull-requests-limit: 2
+    groups:
+      github-actions:
+        patterns: ["*"]
     commit-message:
       prefix: "ci"
     labels:

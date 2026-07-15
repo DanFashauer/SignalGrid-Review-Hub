@@ -141,7 +141,7 @@
     <a class="brand" href="#top"><span class="glyph"></span>Signal<span>Grid</span></a>
     <nav>
       <a class="navlink-hide" href="#how">How it works</a>
-      <a class="navlink-hide" href="#platforms">Platforms</a>
+      <a class="navlink-hide" href="#platform">Platform</a>
       <a class="navlink-hide" href="#roadmap">Vision</a>
       <a class="navlink-hide" href="#about">About</a>
       <a class="cta" href="./console.html">Live demo →</a>
@@ -155,9 +155,10 @@
     <p class="eyebrow">Context-aware trust &amp; orchestration</p>
     <h1>Trust decided in the moment a workflow fires.</h1>
     <p class="lead">SignalGrid is a runtime decision layer for shared, mobile, and frontline devices. It fuses <b>identity, device posture, workflow risk, and real-world context</b> into a single <b>allow / step-up / restrict / deny</b> decision — then orchestrates the next action, with a human kept in the loop for anything sensitive.</p>
+    <p class="lead" style="font-size:1rem;margin-top:.85rem">It's a full <b>platform</b>, not a web page — delivered as <b>hosted SaaS</b> or <b>self-hosted / on-prem</b>, with native <b>mobile</b> and <b>desktop</b> apps, an <b>admin console</b>, an API + connector ecosystem, and an optional <b>docking-station hardware layer</b>. The demo below is just the fastest way to watch the engine decide.</p>
     <div class="btns">
-      <a class="btn primary" href="./console.html">▶ Try the on-device demo</a>
-      <a class="btn ghost" href="#how">See how it works</a>
+      <a class="btn primary" href="./console.html">▶ Try the live demo</a>
+      <a class="btn ghost" href="#platform">Explore the platform</a>
     </div>
     <div class="pills">
       <span class="pill"><span class="dot d-allow"></span>Allow</span>
@@ -166,7 +167,7 @@
       <span class="pill"><span class="dot d-deny"></span>Deny</span>
       <span class="pill">+ Assist · human-confirmed</span>
     </div>
-    <p class="note-syn">Runs entirely in your browser — no install, works on iPhone and iPad. Everything shown is synthetic, public-safe fixtures: no real hospital, patient data, or vendor system.</p>
+    <p class="note-syn"><b>The demo</b> runs in your browser — no install, works on iPhone and iPad — on synthetic, public-safe fixtures (no real hospital, patient data, or vendor system). <b>The product</b> deploys into your environment across mobile, desktop, admin console, and docking hardware.</p>
   </div>
 </section>
 
@@ -232,21 +233,36 @@
   </div>
 </section>
 
-<!-- PLATFORMS -->
-<section id="platforms">
+<!-- THE PLATFORM -->
+<section id="platform">
   <div class="wrap">
-    <p class="eyebrow">Platforms &amp; avenues</p>
-    <h2 class="big">Everywhere a workflow fires — and every way to plug in.</h2>
-    <p class="sub">SignalGrid is a decision engine with many front doors. Surfaces to run it, and integration paths to feed it and act on it.</p>
+    <p class="eyebrow">The platform</p>
+    <h2 class="big">Built as a platform — not a browser demo.</h2>
+    <p class="sub">SignalGrid is an engine plus everything around it: where it runs, how people use it, the hardware that can feed it, and the paths that plug it into your stack.</p>
 
-    <h3 style="margin:1.2rem 0 .8rem;font-size:.95rem" class="k">Surfaces</h3>
+    <h3 class="k" style="margin:1.4rem 0 .8rem;font-size:.95rem">Deploy it your way</h3>
     <div class="grid g3">
-      <div class="plat"><div class="ic">iOS</div><div><b>iPhone &amp; iPad</b><p>On-device console + a native enterprise shell (BLE / USB-C badge) for shared frontline devices.</p></div></div>
-      <div class="plat"><div class="ic">◩</div><div><b>Web &amp; desktop</b><p>Operator console for admins; macOS / Windows / Android surfaces for the field.</p></div></div>
-      <div class="plat"><div class="ic">▤</div><div><b>Mobile PWA</b><p>Installable worker experience — decisions and signals in your pocket, offline-tolerant.</p></div></div>
+      <div class="plat"><div class="ic">☁</div><div><b>Hosted SaaS</b><p>Run it as a managed service — the fastest path to a live decision loop without standing up infrastructure yourself.</p></div></div>
+      <div class="plat"><div class="ic">⌂</div><div><b>Self-hosted / on-prem</b><p>Deploy inside your own environment (containerized) so signals, decisions, and audit stay under your control — a fit for regulated and tightly-scoped settings.</p></div></div>
+      <div class="plat"><div class="ic">▙</div><div><b>Tiered environments</b><p>Promote through dev → alpha → beta → prod on the same core; live vendor integrations stay gated until you explicitly enable them.</p></div></div>
     </div>
 
-    <h3 style="margin:1.6rem 0 .8rem;font-size:.95rem" class="k">Integration paths</h3>
+    <h3 class="k" style="margin:1.6rem 0 .8rem;font-size:.95rem">Apps &amp; surfaces</h3>
+    <div class="grid g3">
+      <div class="plat"><div class="ic">▤</div><div><b>Admin console</b><p>Operator dashboard for decisions, signals, policies, and integration health — on the web and as a macOS / Windows desktop app.</p></div></div>
+      <div class="plat"><div class="ic">iOS</div><div><b>Native iOS enterprise shell</b><p>A locked-down shared-device shell: badge tap-in (BLE / USB-C reader), OIDC identity, a full session lifecycle, and on-device audit — for frontline iPhone / iPad.</p></div></div>
+      <div class="plat"><div class="ic">▥</div><div><b>Android &amp; mobile PWA</b><p>An installable worker experience — decisions and signals in your pocket, offline-tolerant — plus the in-browser console for instant, no-install access.</p></div></div>
+    </div>
+
+    <h3 class="k" style="margin:1.6rem 0 .8rem;font-size:.95rem">Hardware layer<span style="color:var(--faint);text-transform:none;letter-spacing:0"> · optional</span></h3>
+    <div class="grid g3">
+      <div class="plat"><div class="ic">⎓</div><div><b>SmartDock docking station</b><p>A smart-charging dock that also holds custody — device seating, tamper-evidence, charge &amp; thermal health — streamed as normalized signals. It charges and connects to the network; the decision still happens in SignalGrid.</p></div></div>
+      <div class="plat"><div class="ic">▦</div><div><b>Badge / RFID reader case</b><p>Binds the physical badge to the device at the point of custody, so "who is holding this right now" becomes a real, live signal — not an assumption.</p></div></div>
+      <div class="plat"><div class="ic">◉</div><div><b>Custody, dock &amp; tamper signals</b><p>The physical world becomes decision input: docked or in-hand, badge bound or withdrawn, seated or tampered — high fidelity, real time.</p></div></div>
+    </div>
+    <p class="note-syn" style="margin-top:1rem">The hardware layer is an <b>optional, pre-production design concept</b> — SignalGrid runs fully on software-only signals (MDM/UEM posture, identity, baseline) today. Hardware adds the physical signals only a device at the point of custody can produce.</p>
+
+    <h3 class="k" style="margin:1.8rem 0 .8rem;font-size:.95rem">Integration paths</h3>
     <div class="grid g3">
       <div class="plat"><div class="ic">API</div><div><b>/v1 REST API</b><p>The deterministic decision core over HTTP, described by an OpenAPI 3.1 contract. Tenant derived from the token.</p></div></div>
       <div class="plat"><div class="ic">⇄</div><div><b>Webhooks</b><p>React to decisions instead of polling — HMAC-signed delivery with retries and a deliveries log.</p></div></div>

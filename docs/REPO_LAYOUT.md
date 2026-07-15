@@ -1,5 +1,11 @@
 # Repository layout & project stage
 
+> **This is the canonical SignalGrid repository.** All active development happens
+> here. The earlier `DanFashauer/DEV` and `DanFashauer/SignalGrid` (beta) repos
+> are retired POC / concept and are superseded by this one (see *Legacy
+> repositories* below). CI, the safety gate, CodeQL, and Supply-Chain run across
+> the `dev` / `alpha` / `beta` / `prod` tier branches.
+
 ## Project stage — concept / pre-dev
 
 **SignalGrid is at an early concept / pre-development stage.** This repository is

@@ -9,12 +9,27 @@ validates the SignalGrid direction. It is **not** production software, not
 compliance-certified, and not a customer deployment. Treat everything here as a
 buildable concept moving toward a first real pilot, not a shipped product.
 
-## One consolidated monorepo
+## One consolidated monorepo (this repo is current)
 
-The work that used to live across separate repositories (a `DEV` home repo and a
-`SignalGrid` beta repo) is now consolidated into this single monorepo, so there
-is one source of truth for the core, apps, API, control plane, and docs. Package
-layout:
+The work that used to live across separate repositories is now consolidated into
+this single monorepo, so there is one source of truth for the core, apps, API,
+control plane, and docs.
+
+### Legacy repositories — superseded
+
+The following earlier repositories are **legacy**: they represent the original
+**pre-dev / concept** stage and are **superseded by this consolidated monorepo**.
+They are kept only for history; new work happens here.
+
+| Legacy repo | Was | Status |
+|---|---|---|
+| `DanFashauer/DEV` | Early "home" / dev workspace | **Legacy — pre-dev / concept; superseded by this repo** |
+| `DanFashauer/SignalGrid` | "SignalGrid-Beta" repo | **Legacy — pre-dev / concept; superseded by this repo** |
+
+> `DanFashauer/VaultLens` is a separate, unrelated side project (a collectibles
+> app) — not part of SignalGrid.
+
+Package layout of this consolidated repo:
 
 ```
 lib/        Source-only @workspace/* packages (TypeScript project refs)

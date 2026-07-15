@@ -6,7 +6,7 @@ SignalGrid is a runtime decision layer and Operational Trust Orchestration platf
 
 **DanFashauer/SignalGrid-Review-Hub** is the public working surface for SignalGrid pre-production planning, post-launch review, public visibility, and external validation. It is where reviewers can understand the product direction, validate the story, inspect public roadmap assumptions, and discuss integration priorities without requiring access to the protected core source repository.
 
-Current stage: **public pre-production / review / validation surface**.
+Current stage: **concept / pre-dev — a public, buildable prototype and review/validation surface**, not production software. The work formerly split across separate `DEV` and `SignalGrid` (beta) repos is now consolidated here as one monorepo, with a **dev → alpha → beta → prod** tier layout. See [`docs/REPO_LAYOUT.md`](docs/REPO_LAYOUT.md) for the package/branch structure and promotion pipeline.
 
 ## Runnable simulator foundation
 

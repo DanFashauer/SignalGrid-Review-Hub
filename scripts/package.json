@@ -26,7 +26,8 @@
     "build:room-console": "node ./build-room-console.mjs",
     "proof:signal-radar": "tsx ./src/signal-radar-proof.ts",
     "proof:control-plane": "tsx ./src/control-plane-proof.ts",
-    "proof:edge-sync": "tsx ./src/edge-sync-proof.ts"
+    "proof:edge-sync": "tsx ./src/edge-sync-proof.ts",
+    "proof:telemetry-up": "tsx ./src/telemetry-up-proof.ts"
   },
   "dependencies": {
     "@workspace/signalgrid-core": "workspace:*",

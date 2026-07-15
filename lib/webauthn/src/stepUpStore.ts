@@ -16,6 +16,7 @@
  * - STEPUP_TTL_SECONDS: Step-up session time-to-live (default: 5 minutes)
  */
 
+import { randomBytes } from 'crypto';
 import Redis from 'ioredis';
 
 // ============================================================================
@@ -107,7 +108,9 @@ const memoryStore = new Map<string, { session: StepUpSession; expiresAt: number 
 // ============================================================================
 
 function generateId(): string {
-  return `su_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+  // Step-up session IDs are security tokens (they gate high-risk operations),
+  // so they must be unguessable — use CSPRNG bytes, never Math.random().
+  return `su_${Date.now()}_${randomBytes(16).toString('hex')}`;
 }
 
 function nowISO(): string {

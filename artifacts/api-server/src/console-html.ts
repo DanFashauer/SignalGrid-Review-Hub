@@ -96,6 +96,8 @@ export const CONSOLE_HTML = /* html */ `<!doctype html>
 <script>
 const $=(s,el=document)=>el.querySelector(s);
 let current=null, confirmed=new Set(), stepUp=false;
+// HTML-entity encode every dynamic value before it reaches innerHTML.
+const esc=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 async function j(url,opts){const r=await fetch(url,opts);return r.json();}
 function sigClass(k,v){
   const bad=['disabled','noncompliant','absent','withdrawn','forced','tampered','drifted','offline','faulted','stale','false'];
@@ -110,7 +112,7 @@ async function load(){
   const box=$('#scenarios');box.innerHTML='';
   data.scenarios.forEach(s=>{
     const b=document.createElement('button');b.className='s';b.dataset.id=s.id;
-    b.innerHTML='<div class="t">'+s.title+'</div><div class="d">'+s.description+'</div>';
+    b.innerHTML='<div class="t">'+esc(s.title)+'</div><div class="d">'+esc(s.description)+'</div>';
     b.onclick=()=>{current=s.id;confirmed=new Set();stepUp=false;document.querySelectorAll('button.s').forEach(x=>x.classList.toggle('active',x.dataset.id===s.id));run();};
     box.appendChild(b);
   });
@@ -122,29 +124,29 @@ async function run(){
 }
 function render(d){
   const out=$('#out');
-  if(d.error){out.innerHTML='<div class="placeholder">'+d.message+'</div>';return;}
+  if(d.error){out.innerHTML='<div class="placeholder">'+esc(d.message)+'</div>';return;}
   const o=d.decision.outcome, mode=d.plan.mode;
-  const codes=(d.decision.reasonCodes||[]).map(c=>'<span class="code">'+c+'</span>').join('');
+  const codes=(d.decision.reasonCodes||[]).map(c=>'<span class="code">'+esc(c)+'</span>').join('');
   const sig=Object.entries(d.signals).map(([k,v])=>{
     const cls=sigClass(k,v);
-    return '<div class="s-item"><div class="k">'+k.replace(/([A-Z])/g,' $1').trim()+'</div><div class="v '+cls+'">'+String(v)+'</div></div>';
+    return '<div class="s-item"><div class="k">'+esc(String(k).replace(/([A-Z])/g,' $1').trim())+'</div><div class="v '+esc(cls)+'">'+esc(v)+'</div></div>';
   }).join('');
   const acts=d.plan.actions.map(a=>{
     const canConfirm=a.disposition==='assist';
     const right=canConfirm
-      ? '<button class="confirm" data-act="'+a.id+'">Confirm</button>'
+      ? '<button class="confirm" data-act="'+esc(a.id)+'">Confirm</button>'
       : (a.requiresConfirmation?'<span class="lock">held</span>':'');
-    return '<div class="act"><div class="body"><div class="label">'+a.label+
+    return '<div class="act"><div class="body"><div class="label">'+esc(a.label)+
       (a.sensitive?' &middot; <span class="lock">sensitive</span>':'')+
-      '</div><div class="meta"><span class="target">'+a.targetSystem+'</span> — '+a.reason+'</div></div>'+
-      '<span class="disp d-'+a.disposition+'">'+a.disposition.replace('_','-')+'</span>'+right+'</div>';
+      '</div><div class="meta"><span class="target">'+esc(a.targetSystem)+'</span> — '+esc(a.reason)+'</div></div>'+
+      '<span class="disp d-'+esc(a.disposition)+'">'+esc(String(a.disposition).replace('_','-'))+'</span>'+right+'</div>';
   }).join('');
   out.innerHTML=
-    '<div class="verdict tone-'+o+'"><div class="row"><span class="pill">Decision · '+o.replace('_','-')+'</span>'+
-      '<span class="pill">Orchestration · '+mode+'</span>'+
-      '<span style="font-family:var(--mono);font-size:.7rem;color:var(--faint)">'+d.context.roomId+' · '+d.context.unit+' · '+d.context.sensitivity+'</span></div>'+
-      '<p class="why">'+d.decision.explanation+'</p>'+(codes?'<div class="codes">'+codes+'</div>':'')+
-      '<p class="sum">'+d.plan.summary+'</p>'+
+    '<div class="verdict tone-'+esc(o)+'"><div class="row"><span class="pill">Decision · '+esc(String(o).replace('_','-'))+'</span>'+
+      '<span class="pill">Orchestration · '+esc(mode)+'</span>'+
+      '<span style="font-family:var(--mono);font-size:.7rem;color:var(--faint)">'+esc(d.context.roomId)+' · '+esc(d.context.unit)+' · '+esc(d.context.sensitivity)+'</span></div>'+
+      '<p class="why">'+esc(d.decision.explanation)+'</p>'+(codes?'<div class="codes">'+codes+'</div>':'')+
+      '<p class="sum">'+esc(d.plan.summary)+'</p>'+
       (mode==='step_up'?'<button class="confirm" id="stepupbtn" style="margin-top:.7rem">Complete step-up &middot; badge tap</button>':'')+'</div>'+
     '<div class="panel"><h2>Signals evaluated</h2><div class="sig">'+sig+'</div></div>'+
     '<div class="panel"><h2>Downstream orchestration</h2><div class="acts">'+acts+'</div></div>';

@@ -122,7 +122,7 @@
   }
   function run(){
     if(!current) return;
-    let d; try{ d=SG.run(current,{confirmedActionIds:[...confirmed],stepUpSatisfied:stepUp}); }catch(e){ byId('#out').innerHTML='<div class="placeholder">'+e.message+'</div>'; return; }
+    let d; try{ d=SG.run(current,{confirmedActionIds:[...confirmed],stepUpSatisfied:stepUp}); }catch(e){ const o=byId('#out'); o.innerHTML=''; o.appendChild(el('div','placeholder',e.message)); return; }
     render(d);
   }
   function el(tag,cls,txt){const e=document.createElement(tag); if(cls)e.className=cls; if(txt!=null)e.textContent=txt; return e;}

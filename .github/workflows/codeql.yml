@@ -28,7 +28,10 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: javascript-typescript
-          queries: security-and-quality
+          # Query suite + analysis scope live in the config file so the
+          # security gate stays meaningful (security queries only) and scoped
+          # to first-party product code. See .github/codeql/codeql-config.yml.
+          config-file: ./.github/codeql/codeql-config.yml
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3

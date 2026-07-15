@@ -34,7 +34,7 @@ jobs:
         with:
           enablement: true
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       # Regenerate the on-device console from source so Pages is always current.

@@ -25,6 +25,20 @@ function fnv1a(input: string): string {
   return h.toString(16).padStart(8, "0");
 }
 
+/** Canonical checksum over a bundle's content (tenant + version + workflows). */
+function bundleChecksum(tenantId: string, version: number, workflows: string[]): string {
+  return fnv1a(`${tenantId}:${version}:${workflows.join(",")}`);
+}
+
+/**
+ * Recompute a bundle's checksum from its content and compare to the advertised
+ * checksum — the integrity check an edge node runs before applying config it
+ * pulled DOWN. Returns false (fail closed) on any mismatch or tampering.
+ */
+export function verifyBundleChecksum(bundle: PolicyBundle): boolean {
+  return bundleChecksum(bundle.tenantId, bundle.version, bundle.workflows) === bundle.checksum;
+}
+
 // ── domain model ─────────────────────────────────────────────────────────────
 
 export type Vertical = "healthcare" | "warehouse" | "global_fleet";
@@ -225,8 +239,23 @@ export class ControlPlane {
   getPolicyBundle(tenantId: string): PolicyBundle | null {
     const b = this.seed.bundles.get(tenantId);
     if (!b) return null;
-    const checksum = fnv1a(`${tenantId}:${b.version}:${b.workflows.join(",")}`);
-    return { tenantId, version: b.version, workflows: b.workflows, checksum };
+    return { tenantId, version: b.version, workflows: b.workflows, checksum: bundleChecksum(tenantId, b.version, b.workflows) };
+  }
+
+  /**
+   * Apply the tenant's current bundle to an edge node (the node "pulled" the
+   * config and verified it). Advances the node's bundleVersion to target and
+   * returns the fresh sync plan. Idempotent; returns null for an unknown node.
+   */
+  applyBundle(nodeId: string): SyncPlan | null {
+    const node = this.seed.nodes.find((n) => n.id === nodeId);
+    if (!node) return null;
+    const site = this.seed.sites.find((s) => s.id === node.siteId);
+    if (!site) return null;
+    const bundle = this.getPolicyBundle(site.tenantId);
+    if (!bundle) return null;
+    if (node.bundleVersion < bundle.version) node.bundleVersion = bundle.version;
+    return this.syncPlan(nodeId);
   }
 
   /** What an edge node should pull: whether its bundle is behind the target. */

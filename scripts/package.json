@@ -25,7 +25,8 @@
     "proof:orchestration": "tsx ./src/orchestration-proof.ts",
     "build:room-console": "node ./build-room-console.mjs",
     "proof:signal-radar": "tsx ./src/signal-radar-proof.ts",
-    "proof:control-plane": "tsx ./src/control-plane-proof.ts"
+    "proof:control-plane": "tsx ./src/control-plane-proof.ts",
+    "proof:edge-sync": "tsx ./src/edge-sync-proof.ts"
   },
   "dependencies": {
     "@workspace/signalgrid-core": "workspace:*",

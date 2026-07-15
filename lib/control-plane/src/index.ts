@@ -97,6 +97,33 @@ export interface TelemetryBatch {
   deny: number;
 }
 
+/** Outcome labels the decision core produces (telemetry UP is aggregated from these). */
+export type DecisionOutcomeLabel = "allow" | "step_up" | "restrict" | "deny";
+
+/**
+ * Shape a telemetry batch from a run of decision outcomes reported by an edge
+ * node's decision plane. This is the "telemetry UP" aggregation: the edge tallies
+ * its own decisions and reports counts to the control plane — raw decisions never
+ * leave the edge. Deterministic; no clock read here.
+ */
+export function aggregateOutcomes(
+  nodeId: string,
+  outcomes: DecisionOutcomeLabel[],
+  windowMins = 1440,
+): TelemetryBatch {
+  const tally = { allow: 0, step_up: 0, restrict: 0, deny: 0 };
+  for (const o of outcomes) tally[o] += 1;
+  return {
+    nodeId,
+    windowMins,
+    decisions: outcomes.length,
+    allow: tally.allow,
+    stepUp: tally.step_up,
+    restrict: tally.restrict,
+    deny: tally.deny,
+  };
+}
+
 export interface FleetHealth {
   tenants: number;
   sites: number;

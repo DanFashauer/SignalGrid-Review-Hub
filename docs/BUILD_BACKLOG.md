@@ -14,13 +14,11 @@ picking these up:
 
 ## Now (next up)
 
-- [ ] **Telemetry-up from the decision plane** — have the `/v1` core emit a
-      periodic telemetry batch the control plane ingests (wire the two planes).
+- [ ] **Warehouse scenario pack** — add pick/pack + controlled-area scenarios to
+      the room-sim/console so the demo isn't hospital-only.
 
 ## Next
 
-- [ ] **Warehouse scenario pack** — add pick/pack + controlled-area scenarios to
-      the room-sim/console so the demo isn't hospital-only.
 - [ ] **Global-fleet scenario pack** — vehicle-mount checkout + cross-region
       session scenarios.
 - [ ] **Per-vertical policy bundles** — model distinct bundles per vertical and
@@ -38,6 +36,8 @@ picking these up:
 
 ## Done (recent)
 
+- [x] Telemetry-up wiring — real /v1 core decisions aggregated and ingested into
+      the control-plane rollup (proof:telemetry-up, 7/7).
 - [x] `/cp/v1` documented in the OpenAPI spec + Postman collection (with a
       lockstep coverage check for both `/v1` and `/cp/v1`).
 - [x] Edge-sync contract proof — walks a node behind → synced (pull, verify

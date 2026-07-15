@@ -76,6 +76,9 @@ jobs:
       - name: Signal Radar (new-signal detection) proof
         run: pnpm run proof:signal-radar
 
+      - name: Control-plane (cloud↔edge contract) proof
+        run: pnpm run proof:control-plane
+
       - name: Safety gate (guardrails)
         run: pnpm run safety:check
 

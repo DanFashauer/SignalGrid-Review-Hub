@@ -61,14 +61,25 @@ native authenticator the app invokes for a step-up.
   `@workspace/app-workflows`), so "confirmation" always means a real native
   gesture the app captured, never a SignalGrid dialog the user had to find.
 
+## The embedded flow, shown
+
+`docs/embedded-host-app-demo.html` (published at `/embedded-demo.html`) is the
+reference demonstration of this law: a generic clinical app ("Wardlink Chart",
+no SignalGrid branding inside the phone) where the worker opens a chart and views
+results with no friction, then places a controlled med order that is *held* — the
+app triggers a native-style authenticator, and only a captured gesture releases
+it. A separate "behind the glass" panel (never seen by the worker) shows the
+`allow` / `step_up` decision the core returned. The step-up completion is a
+clearly-labeled **demo simulation**, not a real hardware gesture.
+
 ## Open reconciliation
 
 - `artifacts/signalgrid-mobile-pwa` ("My Access") today renders a **SignalGrid-
   branded end-user screen** with self-service resolution steps. That predates this
-  law and conflicts with it: an end user should not open a SignalGrid app. It
-  should be repositioned as either (a) a **demonstration of the embedded UX** (a
-  reference host app showing how gating/step-up look *inside* a partner app,
-  clearly framed as illustrative), or (b) an **operator/support** view — not a
+  law and conflicts with it: an end user should not open a SignalGrid app. The
+  embedded-UX demonstration above now realizes option (a) — a reference host app
+  showing gating/step-up *inside* a partner app; the remaining work is to
+  reposition the mobile-pwa itself as an **operator/support** view rather than a
   worker destination. Tracked in `docs/BUILD_BACKLOG.md`.
 
 ## The test for any new surface

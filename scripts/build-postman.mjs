@@ -105,7 +105,6 @@ const v1Requests = [
   item("Approve a remediation", "POST", "/v1/remediation/{{remediationId}}/approve", { body: {} }),
   item("List app-workflow integrations", "GET", "/v1/app-workflows/integrations"),
   item("Gate an app workflow (EMR)", "POST", "/v1/app-workflows/evaluate", { body: { integrationId: "emr-chart", identityRef: "nurse.compliant", deviceRef: "ipad-ward-01" } }),
-  item("Complete a step-up (native gesture)", "POST", "/v1/app-workflows/step-up", { body: { integrationId: "bcma", identityRef: "nurse.baseline_drift", deviceRef: "ipad-ward-06" } }),
 ];
 const v1Folder = { name: "/v1 product API (bearer)", item: v1Requests };
 

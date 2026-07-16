@@ -8,6 +8,17 @@ host app on the device**, identically on iOS / Android / Web / desktop.
 This is a hard product constraint, not a preference. Every surface, API, and
 flow is measured against it.
 
+**It applies to every role, every industry, every platform.** A frontline nurse,
+a warehouse picker, a long-haul driver, a NOC engineer, an executive, the CEO —
+none of them ever log into SignalGrid, install a SignalGrid app, or make a
+SignalGrid decision. They use their normal apps and their device; the trust layer
+is underneath. The point is that it feels like the *future*: everything just
+works, invisibly, because the hard part (is this the right person, on a
+trustworthy device, in the right context, for this action?) is answered for the
+app instead of by the user. This holds identically on the **macOS and Windows
+desktop** apps as on mobile and web — the only per-platform difference is which
+native authenticator the app invokes for a step-up.
+
 ## What this means concretely
 
 1. **No SignalGrid login, screen, app, or portal for end users.** A nurse opens

@@ -2,7 +2,6 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { CoreError, type EvaluateRequest } from "@workspace/signalgrid-core";
 import { listAppIntegrations, findAppIntegration, planAppSession } from "@workspace/app-workflows";
 import { core, DEMO_KEYS } from "../lib/core";
-import { issueStepUpProof, verifyStepUpProof } from "../lib/stepup";
 import { requireTenantContext } from "../middlewares/context";
 import { v1RateLimiter } from "../middlewares/rateLimit";
 
@@ -187,49 +186,22 @@ router.post("/v1/app-workflows/evaluate", (req: Request, res: Response) => {
   if (!integration) {
     throw new CoreError("not_found", `Unknown app integration '${integrationId}'.`, 404);
   }
-  // The app's session maps to the integration's decision-core workflow.
+  // The app's session maps to the integration's decision-core workflow. Return
+  // the plan AS DECIDED — a `step_up` keeps its high-assurance actions held. We
+  // deliberately do NOT release held actions from this product API on a request-
+  // supplied signal: releasing a step-up requires a real hardware-backed WebAuthn
+  // assertion (the `@workspace/webauthn` path), which a public-safe fixture can't
+  // genuinely provide, so we don't ship a stand-in that would be a bypassable
+  // gate. Step-up COMPLETION is a clearly-labeled client-side SIMULATION in the
+  // demo UI (the pure `completeAppStepUp` helper), never a server security control.
   const evalReq = parseEvaluate({ ...body, workflowKey: integration.workflowKey });
   const decision = core.evaluate(token(req), evalReq);
-  // Release held actions ONLY on a server-verified step-up proof — never a
-  // caller-asserted boolean. `stepUpProof` is issued by POST /step-up after a
-  // native gesture and is HMAC-bound to this exact (identity, device, workflow);
-  // a forged/expired/mismatched proof is ignored and the actions stay held.
-  const stepUpSatisfied =
-    decision.outcome === "step_up" &&
-    verifyStepUpProof(body["stepUpProof"], evalReq.identityRef, evalReq.deviceRef, integration.workflowKey, Date.now());
   const plan = planAppSession({
     integration,
     outcome: decision.outcome,
     reasonCodes: decision.reasonCodes,
-    stepUpSatisfied,
   });
-  res.json(envelope(req, { decision, plan, stepUpApplied: stepUpSatisfied }));
-});
-
-// Complete a step-up: the host app calls this after the platform's NATIVE
-// authenticator succeeds (Face ID / badge tap — the end user never sees a
-// SignalGrid screen). Returns a short-lived, server-signed proof bound to the
-// (identity, device, workflow); the app re-evaluates presenting it. This is the
-// seam where real WebAuthn assertion verification plugs in.
-router.post("/v1/app-workflows/step-up", (req: Request, res: Response) => {
-  const body = (req.body ?? {}) as Record<string, unknown>;
-  const integrationId = body["integrationId"];
-  const identityRef = body["identityRef"];
-  const deviceRef = body["deviceRef"];
-  if (typeof integrationId !== "string" || typeof identityRef !== "string" || typeof deviceRef !== "string") {
-    throw new CoreError("validation", "integrationId, identityRef, and deviceRef are required.", 400);
-  }
-  const integration = findAppIntegration(integrationId);
-  if (!integration) {
-    throw new CoreError("not_found", `Unknown app integration '${integrationId}'.`, 404);
-  }
-  // Only meaningful when the current decision actually requires a step-up.
-  const decision = core.evaluate(token(req), { identityRef, deviceRef, workflowKey: integration.workflowKey });
-  if (decision.outcome !== "step_up") {
-    throw new CoreError("validation", `No step-up required (decision is '${decision.outcome}').`, 400);
-  }
-  const issued = issueStepUpProof(identityRef, deviceRef, integration.workflowKey, Date.now());
-  res.json(envelope(req, { ...issued }));
+  res.json(envelope(req, { decision, plan }));
 });
 
 export default router;

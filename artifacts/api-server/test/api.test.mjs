@@ -208,8 +208,9 @@ async function run() {
   const gateUnknown = await req("POST", "/v1/app-workflows/evaluate", { token: KEYS.operator, body: { integrationId: "nope", identityRef: "nurse.compliant", deviceRef: "ipad-ward-01" } });
   check("app-workflows unknown integration → 404", gateUnknown.status === 404);
 
-  // Step-up loop: a baseline-drift nurse on BCMA is held, completes a native
-  // gesture (server-issued proof), then the held action releases.
+  // A step_up keeps its high-assurance actions held — the product API never
+  // releases them from a request-supplied signal (real completion requires a
+  // hardware-backed WebAuthn assertion; see docs/EMBEDDED_UX_PRINCIPLE.md).
   const bcmaHeld = await req("POST", "/v1/app-workflows/evaluate", {
     token: KEYS.operator,
     body: { integrationId: "bcma", identityRef: "nurse.baseline_drift", deviceRef: "ipad-ward-06" },
@@ -217,35 +218,6 @@ async function run() {
   check("app-workflows BCMA baseline-drift → step_up, controlled admin held",
     bcmaHeld.json?.decision?.outcome === "step_up" &&
     bcmaHeld.json?.plan?.actions?.find((a) => a.key === "controlled.administer")?.disposition === "step_up");
-  const stepUp = await req("POST", "/v1/app-workflows/step-up", {
-    token: KEYS.operator,
-    body: { integrationId: "bcma", identityRef: "nurse.baseline_drift", deviceRef: "ipad-ward-06" },
-  });
-  check("step-up issues a proof", stepUp.status === 200 && typeof stepUp.json?.stepUpProof === "string");
-  const released = await req("POST", "/v1/app-workflows/evaluate", {
-    token: KEYS.operator,
-    body: { integrationId: "bcma", identityRef: "nurse.baseline_drift", deviceRef: "ipad-ward-06", stepUpProof: stepUp.json.stepUpProof },
-  });
-  check("valid step-up proof releases held actions (stepUpApplied)", released.json?.stepUpApplied === true);
-  check("released BCMA: controlled admin now assist (not held)",
-    released.json?.plan?.actions?.find((a) => a.key === "controlled.administer")?.disposition === "assist");
-  const forged = await req("POST", "/v1/app-workflows/evaluate", {
-    token: KEYS.operator,
-    body: { integrationId: "bcma", identityRef: "nurse.baseline_drift", deviceRef: "ipad-ward-06", stepUpProof: "forged.proof" },
-  });
-  check("SAFETY: a forged step-up proof does NOT release (stays held)",
-    forged.json?.stepUpApplied === false &&
-    forged.json?.plan?.actions?.find((a) => a.key === "controlled.administer")?.disposition === "step_up");
-  const wrongActor = await req("POST", "/v1/app-workflows/evaluate", {
-    token: KEYS.operator,
-    body: { integrationId: "bcma", identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", stepUpProof: stepUp.json.stepUpProof },
-  });
-  check("SAFETY: a proof bound to another actor is ignored", wrongActor.json?.stepUpApplied === false);
-  const stepUpNotNeeded = await req("POST", "/v1/app-workflows/step-up", {
-    token: KEYS.operator,
-    body: { integrationId: "emr-chart", identityRef: "nurse.compliant", deviceRef: "ipad-ward-01" },
-  });
-  check("step-up on a non-step_up decision → 400", stepUpNotNeeded.status === 400);
 
   // ── validation error ────────────────────────────────────────────────────
   const badBody = await req("POST", "/v1/decisions/evaluate", { token: KEYS.operator, body: { identityRef: "x" } });

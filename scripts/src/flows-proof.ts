@@ -85,16 +85,42 @@ check("dual-approval action needs two approvals", byKey(allow, "controlled.admin
 check("admin-approval action needs one approval", byKey(allow, "dose.override").disposition === "admin_approval" && byKey(allow, "dose.override").requiresApprovals === 1);
 check("user-override is NOT offered without a downtime", byKey(allow, "downtime.paper_fallback").disposition === "blocked");
 
-// deny blocks everything except a downtime override.
+// deny blocks everything (an override needs downtime + satisfied safety nets).
 const deny = planFlowActions(med, "deny");
 check("deny blocks all non-override actions", deny.filter((a) => a.approval !== "user_override_on_downtime").every((a) => a.disposition === "blocked"));
 
-// during a declared downtime the user override becomes available (with safety nets).
-const downtime = planFlowActions(med, "deny", { downtime: true });
-const override = byKey(downtime, "downtime.paper_fallback");
-check("downtime enables the user break-glass override", override.disposition === "user_override" && override.reason.includes("safety nets"));
+// step_up HOLDS every action until verification is satisfied — nothing runs early.
+const stepHeld = planFlowActions(med, "step_up");
+check("SAFETY: step_up holds automated actions (not run before verification)",
+  byKey(stepHeld, "bcma.open").disposition === "held");
+check("step_up holds every non-override action", stepHeld.filter((a) => a.approval !== "user_override_on_downtime").every((a) => a.disposition === "held"));
+const stepDone = planFlowActions(med, "step_up", { stepUpSatisfied: true });
+check("a satisfied step-up releases as allow", byKey(stepDone, "bcma.open").disposition === "automated");
+
+// break-glass override: downtime ALONE is not enough — safety nets must be satisfied.
+const downtimeOnly = planFlowActions(med, "deny", { downtime: true });
+check("SAFETY: downtime without satisfied safety nets does NOT offer the override",
+  byKey(downtimeOnly, "downtime.paper_fallback").disposition === "blocked");
+const downtimeCleared = planFlowActions(med, "deny", { downtime: true, safetyNetsCleared: true });
+const override = byKey(downtimeCleared, "downtime.paper_fallback");
+check("downtime + satisfied safety nets enables the break-glass override",
+  override.disposition === "user_override" && override.reason.includes("safety nets satisfied"));
 check("SAFETY: a user can ONLY ever act on a downtime override, nothing else",
-  downtime.every((a) => a.disposition !== "user_override" || a.approval === "user_override_on_downtime"));
+  downtimeCleared.every((a) => a.disposition !== "user_override" || a.approval === "user_override_on_downtime"));
+
+// an override action with NO configured safety nets fails closed even in downtime.
+const noNetsFlow = { ...med, actions: [{ key: "x", label: "x", approval: "user_override_on_downtime" as const }] };
+check("SAFETY: override with no configured safety nets is blocked",
+  planFlowActions(noNetsFlow, "deny", { downtime: true, safetyNetsCleared: true })[0].disposition === "blocked");
+
+// conflicting signal observations aggregate to the MOST RESTRICTIVE (fail closed).
+const conflicting: SignalState[] = [
+  { id: "identity", status: "healthy" }, { id: "device_compliance", status: "healthy" },
+  { id: "badge_binding", status: "healthy" }, { id: "baseline", status: "broken" },
+  { id: "baseline", status: "healthy" }, // a later healthy obs must NOT override the broken one
+];
+check("SAFETY: conflicting signal observations resolve to the most restrictive (broken)",
+  evaluateFlowHealth(med, conflicting).status === "broken");
 
 // ── grid intelligence: more signals ⇒ smarter ────────────────────────────────
 const few = gridIntelligence(DEMO_FLOWS, healthy(["identity"]));

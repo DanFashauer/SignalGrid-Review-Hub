@@ -90,8 +90,17 @@ export interface FlowHealth {
   staleSignals: string[];
 }
 
+// Most-restrictive wins, so a signal observed both broken and healthy is treated
+// as broken. Fail closed: ambiguous/conflicting input never resolves to healthy.
+const SIGNAL_SEVERITY: Record<SignalStatus, number> = { broken: 3, missing: 2, stale: 1, healthy: 0 };
+
 function statusOf(signalStates: SignalState[]): Map<string, SignalStatus> {
-  return new Map(signalStates.map((s) => [s.id, s.status]));
+  const m = new Map<string, SignalStatus>();
+  for (const s of signalStates) {
+    const prev = m.get(s.id);
+    if (prev === undefined || SIGNAL_SEVERITY[s.status] > SIGNAL_SEVERITY[prev]) m.set(s.id, s.status);
+  }
+  return m;
 }
 
 /**
@@ -189,7 +198,7 @@ export function resolveFlowBreak(flow: Flow, signalStates: SignalState[], nowIso
 
 // ── action dispositions (Assist model, admin-configured) ─────────────────────
 
-export type ActionDisposition = "automated" | "admin_approval" | "dual_approval" | "user_override" | "blocked";
+export type ActionDisposition = "automated" | "admin_approval" | "dual_approval" | "user_override" | "held" | "blocked";
 
 export interface ActionPlan {
   key: string;
@@ -200,38 +209,76 @@ export interface ActionPlan {
   reason: string;
 }
 
+export interface PlanActionsOptions {
+  /** A declared downtime — the only condition under which a user override applies. */
+  downtime?: boolean;
+  /**
+   * True once the action's configured disaster-recovery safety nets have been
+   * verified satisfied. An override is NEVER offered without this (fail closed).
+   */
+  safetyNetsCleared?: boolean;
+  /**
+   * True once the holder has satisfied the step-up (real verification). Until
+   * then a `step_up` outcome HOLDS every action — nothing runs before the
+   * additional verification the core requires.
+   */
+  stepUpSatisfied?: boolean;
+}
+
 /**
- * Given a flow, the live trust decision, and whether a downtime is declared,
- * compute each action's disposition. This is where the admin's configuration
- * (automated vs. approval vs. dual) meets the runtime decision:
- *   - deny/broken flow → everything blocked.
- *   - allow → automated actions run; admin/dual actions wait for approval(s);
- *     user_override is not offered (there is no downtime).
- *   - during a declared downtime, user_override actions become available to the
- *     end user AS A BREAK-GLASS, gated by their safety nets. Nothing else changes.
+ * Compute each action's disposition from the admin's config + the live decision.
+ * Fail-closed throughout:
+ *   - deny / restrict → blocked (except a valid break-glass override).
+ *   - step_up (not yet satisfied) → every action HELD pending verification.
+ *   - allow (or a satisfied step-up) → automated runs; admin/dual wait for
+ *     approval(s).
+ *   - a `user_override_on_downtime` action is offered to the end user ONLY when a
+ *     downtime is declared AND the action has DR safety nets configured AND they
+ *     are verified satisfied. Missing/empty/unsatisfied safety nets → blocked.
  */
 export function planFlowActions(
   flow: Flow,
   outcome: "allow" | "step_up" | "restrict" | "deny",
-  opts: { downtime?: boolean } = {},
+  opts: PlanActionsOptions = {},
 ): ActionPlan[] {
   const downtime = opts.downtime === true;
+  const safetyNetsCleared = opts.safetyNetsCleared === true;
+  const stepUpSatisfied = opts.stepUpSatisfied === true;
+  const stepUpHeld = outcome === "step_up" && !stepUpSatisfied;
+
   return flow.actions.map((a) => {
     let disposition: ActionDisposition;
     let requiresApprovals = 0;
     let reason: string;
 
-    if (outcome === "deny" || outcome === "restrict") {
-      // A user override is the one thing still possible during downtime.
-      if (a.approval === "user_override_on_downtime" && downtime) {
-        disposition = "user_override";
-        reason = `Break-glass override available during downtime (safety nets: ${(a.safetyNets ?? ["DR checkpoint"]).join(", ")})`;
-      } else {
+    if (a.approval === "user_override_on_downtime") {
+      // Break-glass: available only during a downtime, and only with configured
+      // DR safety nets that are verified satisfied. Otherwise fail closed.
+      const nets = a.safetyNets ?? [];
+      if (!downtime) {
         disposition = "blocked";
-        reason = outcome === "deny" ? "Denied — trust conditions not met" : "Restricted — action not permitted";
+        reason = "Override only available during a declared downtime";
+      } else if (nets.length === 0) {
+        disposition = "blocked";
+        reason = "Override unavailable — no disaster-recovery safety nets configured";
+      } else if (!safetyNetsCleared) {
+        disposition = "blocked";
+        reason = `Override held — safety nets not yet satisfied (${nets.join(", ")})`;
+      } else {
+        disposition = "user_override";
+        reason = `Break-glass override available — safety nets satisfied (${nets.join(", ")})`;
       }
+      return { key: a.key, label: a.label, approval: a.approval, disposition, requiresApprovals, reason };
+    }
+
+    if (stepUpHeld) {
+      disposition = "held";
+      reason = "Held — awaiting step-up verification before any action runs";
+    } else if (outcome === "deny" || outcome === "restrict") {
+      disposition = "blocked";
+      reason = outcome === "deny" ? "Denied — trust conditions not met" : "Restricted — action not permitted";
     } else {
-      // allow / step_up: apply the admin's approval configuration.
+      // allow, or a satisfied step-up: apply the admin's approval configuration.
       switch (a.approval) {
         case "automated":
           disposition = "automated";
@@ -247,14 +294,9 @@ export function planFlowActions(
           requiresApprovals = 2;
           reason = "Requires two administrator approvals (four-eyes)";
           break;
-        case "user_override_on_downtime":
-          if (downtime) {
-            disposition = "user_override";
-            reason = `Break-glass override available during downtime (safety nets: ${(a.safetyNets ?? ["DR checkpoint"]).join(", ")})`;
-          } else {
-            disposition = "blocked";
-            reason = "Override only available during a declared downtime";
-          }
+        default:
+          disposition = "blocked";
+          reason = "Unrecognized approval policy (fail closed)";
           break;
       }
     }

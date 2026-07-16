@@ -311,7 +311,7 @@ paths:
                 deviceRef: { type: string }
                 requestContext: { type: object, additionalProperties: { type: string } }
       responses:
-        "200": { description: Decision + app-session plan (as decided; no caller-asserted confirmation) }
+        "200": { description: Decision + app-session plan (as decided; a step_up keeps its high-assurance actions held) }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
 

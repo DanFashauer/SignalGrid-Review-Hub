@@ -208,6 +208,17 @@ async function run() {
   const gateUnknown = await req("POST", "/v1/app-workflows/evaluate", { token: KEYS.operator, body: { integrationId: "nope", identityRef: "nurse.compliant", deviceRef: "ipad-ward-01" } });
   check("app-workflows unknown integration → 404", gateUnknown.status === 404);
 
+  // A step_up keeps its high-assurance actions held — the product API never
+  // releases them from a request-supplied signal (real completion requires a
+  // hardware-backed WebAuthn assertion; see docs/EMBEDDED_UX_PRINCIPLE.md).
+  const bcmaHeld = await req("POST", "/v1/app-workflows/evaluate", {
+    token: KEYS.operator,
+    body: { integrationId: "bcma", identityRef: "nurse.baseline_drift", deviceRef: "ipad-ward-06" },
+  });
+  check("app-workflows BCMA baseline-drift → step_up, controlled admin held",
+    bcmaHeld.json?.decision?.outcome === "step_up" &&
+    bcmaHeld.json?.plan?.actions?.find((a) => a.key === "controlled.administer")?.disposition === "step_up");
+
   // ── validation error ────────────────────────────────────────────────────
   const badBody = await req("POST", "/v1/decisions/evaluate", { token: KEYS.operator, body: { identityRef: "x" } });
   check("missing fields → 400", badBody.status === 400);

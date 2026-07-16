@@ -53,6 +53,26 @@ exactly to clinical safety.
 | **Age/rx-restricted** | scan item | approve an **age-restricted** or **pharmacy** sale |
 | **Inventory** | count, receive | **markdown / write-off** above a threshold |
 
+### P5 — Data center / NOC (uptime is the north star)
+A strong fit: uptime is everything, and the highest-risk actions must never run
+from an untrusted device/context without verification. SignalGrid gates them
+invisibly, holding the uptime-affecting ones for confirmation + step-up — for
+every role, up to the CEO (`docs/EMBEDDED_UX_PRINCIPLE.md`).
+
+| App category | Example gated actions | Highest-risk (Assist / step-up) |
+|---|---|---|
+| **DCIM / change mgmt** | view topology, open a change | **execute a change**, **bypass a change freeze** |
+| **Network config** | view config, stage a diff | **push config** to a core device, ACL/route change |
+| **Power / PDU** | read draw, view breakers | **power-cycle a rack / PDU**, shed load |
+| **ITSM / incident** | view ticket, update status | declare/resolve a **Sev-1**, page an exec bridge |
+| **Cooling / BMS** | read sensors, ack | change a **setpoint**, override an interlock |
+| **Compute / orchestration** | view nodes | **drain a node / trigger failover**, cordon a cluster |
+
+The "resources it needs for proper usage" — capacity, power, cooling, network,
+and compute headroom — are exactly what the operational-intelligence rollups
+(friction / drift / gaps) already model; a NOC view would surface uptime-risk
+concentration the same way.
+
 ## Cross-cutting building blocks (enable all of the above)
 
 1. **App-workflow orchestration engine** — generalize the Assist model from
@@ -61,8 +81,15 @@ exactly to clinical safety.
 2. **App-integration API** (`/v1/app-workflows`) — the endpoint an app calls:
    "given this actor + device + context, what can this app do right now?" plus a
    single-action gate. Bearer-authed, runs the real decision core. *(P1 build.)*
-3. **In-app step-up** — when a decision is `step_up`, the app drives a WebAuthn
-   badge-tap / biometric (the hardened path already exists) and re-requests.
+3. **In-app step-up (real, hardware-backed)** — when a decision is `step_up`, the
+   **host app** drives the platform's *native* authenticator (Face ID / Touch ID /
+   Windows Hello / badge tap); the assertion is verified cryptographically by the
+   hardened `@workspace/webauthn` path, and only then does the held action
+   release. The user sees only their own app's familiar prompt — never a SignalGrid
+   screen (`docs/EMBEDDED_UX_PRINCIPLE.md`). Because a public-safe fixture can't
+   provide real hardware evidence, the product API does **not** ship a release
+   stand-in; in the demo, step-up completion is a clearly-labeled simulation. This
+   is the next build.
 4. **Workflow templates** — per-vertical starter catalogs an integrator clones.
 5. **Admin surface** — an "App workflows" page: the integration catalog + a live
    gated-action preview per vertical.

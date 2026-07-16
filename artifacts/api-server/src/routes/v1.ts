@@ -186,16 +186,16 @@ router.post("/v1/app-workflows/evaluate", (req: Request, res: Response) => {
   if (!integration) {
     throw new CoreError("not_found", `Unknown app integration '${integrationId}'.`, 404);
   }
-  // The app's session maps to the integration's decision-core workflow.
+  // The app's session maps to the integration's decision-core workflow. Return
+  // the plan AS DECIDED — a `step_up` keeps its high-assurance actions held. We
+  // deliberately do NOT release held actions from this product API on a request-
+  // supplied signal: releasing a step-up requires a real hardware-backed WebAuthn
+  // assertion (the `@workspace/webauthn` path), which a public-safe fixture can't
+  // genuinely provide, so we don't ship a stand-in that would be a bypassable
+  // gate. Step-up COMPLETION is a clearly-labeled client-side SIMULATION in the
+  // demo UI (the pure `completeAppStepUp` helper), never a server security control.
   const evalReq = parseEvaluate({ ...body, workflowKey: integration.workflowKey });
   const decision = core.evaluate(token(req), evalReq);
-  // Return the plan AS DECIDED. We deliberately do NOT accept caller-asserted
-  // `confirmedActionKeys` / `stepUpSatisfied` here: a request must never be able
-  // to promote a sensitive action to `applied` or release a step-up without
-  // server-side evidence. Human confirmation and step-up completion are separate,
-  // evidence-backed steps (the WebAuthn step-up path is the real gate); the
-  // pure planner helpers (confirmAppActions / completeAppStepUp) stay simulation-
-  // only for the console/tests.
   const plan = planAppSession({
     integration,
     outcome: decision.outcome,

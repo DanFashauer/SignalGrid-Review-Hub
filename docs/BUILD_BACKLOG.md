@@ -14,15 +14,31 @@ picking these up:
 
 ## Now (next up)
 
+- [ ] **Data-center / NOC app catalog** — a new vertical for `@workspace/app-workflows`
+      gating the tools a NOC uses, with uptime as the north star: DCIM / change
+      management, network config push, power / PDU control, ITSM incident, remote
+      hands / BMS. The uptime-affecting actions (config push, power-cycle, failover,
+      change-freeze bypass) are critical → held for confirmation/step-up. See
+      `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md`.
 - [ ] **Retail + industrial tenants in the core** — seed two more demo tenants so
       the retail (POS / restricted-sale) and industrial (MES / SCADA-HMI) app
       catalogs gate live, not catalog-only. Same pattern as the Meridian add.
 
 ## Next
 
-- [ ] **In-app step-up loop** — when `/v1/app-workflows/evaluate` returns
-      `step_up`, drive the hardened WebAuthn badge-tap / biometric and re-request,
-      showing held actions releasing. (See `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md`.)
+- [ ] **In-app step-up completion (real, hardware-backed)** — releasing a held
+      `step_up` action requires a REAL WebAuthn assertion verified by the hardened
+      `@workspace/webauthn` path (challenge → native gesture → cryptographic
+      verify → release), plus device enrollment. A public-safe fixture cannot
+      genuinely provide hardware evidence, so the product API must NOT ship a
+      release stand-in (an earlier HMAC-proof attempt was removed for exactly this
+      reason). Until then, step-up completion is a clearly-labeled client-side
+      SIMULATION in the demo UI (`completeAppStepUp`), never a server control.
+- [ ] **Embedded host-app demo UI (worker-side invisible flow)** — a mock host
+      app (e.g. a generic clinical app, no SignalGrid branding) that shows the loop
+      from the worker's view: normal use → a held action → a native prompt →
+      proceed, with the step-up completion clearly labeled as a demo simulation.
+      Reframes `artifacts/signalgrid-mobile-pwa` per `docs/EMBEDDED_UX_PRINCIPLE.md`.
 - [ ] **Per-integration workflow templates** — a starter catalog an integrator
       clones per app, plus a validation lint.
 
@@ -31,6 +47,13 @@ picking these up:
 _(see `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` for the full app-workflow roadmap)_
 
 ## Done (recent)
+
+- [x] Embedded-UX design law captured (`docs/EMBEDDED_UX_PRINCIPLE.md`) — the end
+      user never touches SignalGrid; everything happens inside the host app, for
+      every role (frontline to CEO) and every platform (mobile / web / macOS /
+      Windows). The `/v1/app-workflows/evaluate` product endpoint returns the plan
+      AS DECIDED — a `step_up` keeps its high-assurance actions held; the API never
+      releases them from a request-supplied signal.
 
 - [x] App-workflow gating (`@workspace/app-workflows`) — SignalGrid now gates
       APPLICATION actions, not just physical ones: an app calls it before a

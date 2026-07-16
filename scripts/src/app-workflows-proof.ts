@@ -34,7 +34,7 @@ const base = (outcome: AppPlanInput["outcome"], reasonCodes: string[] = []): App
 });
 
 // ── catalog integrity ─────────────────────────────────────────────────────────
-check("catalog spans five verticals", new Set(APP_INTEGRATIONS.map((i) => i.vertical)).size === 5);
+check("catalog spans six verticals", new Set(APP_INTEGRATIONS.map((i) => i.vertical)).size === 6);
 check("every action has a stable key + risk tier", APP_INTEGRATIONS.every((i) => i.actions.every((x) => x.key && x.riskTier)));
 check("critical actions are always sensitive", APP_INTEGRATIONS.every((i) => i.actions.every((x) => x.riskTier !== "critical" || x.sensitive)));
 check("healthcare integrations exist (EMR/BCMA/messaging/alarms)", listAppIntegrations("healthcare").length >= 4);
@@ -102,6 +102,29 @@ check("retail plan names the manager",
   planAppSession({ integration: pos, outcome: "allow", reasonCodes: [] }).actions.some((x) => x.reason.includes("manager")));
 check("healthcare plan names the clinician",
   allow.actions.some((x) => x.reason.includes("clinician")));
+
+// ── data-center / NOC (P5): uptime is the north star ─────────────────────────
+// The whole point of this vertical is that uptime-affecting actions must never
+// run from an unverified context. Assert the highest-risk actions stay held.
+const netcfg = findAppIntegration("network-config")!;
+const power = findAppIntegration("power-pdu")!;
+const compute = findAppIntegration("compute-orchestration")!;
+check("data-center vertical is in the catalog", listAppIntegrations("data_center").length === 6);
+check("NOC plan names the shift lead",
+  planAppSession({ integration: netcfg, outcome: "allow", reasonCodes: [] }).actions.some((x) => x.reason.includes("shift lead")));
+check("SAFETY: config push to a core device is never auto on allow (held for shift lead)",
+  planAppSession({ integration: netcfg, outcome: "allow", reasonCodes: [] }).actions.find((x) => x.key === "config.push")?.disposition === "assist");
+check("SAFETY: power-cycle a rack is blocked under restriction",
+  planAppSession({ integration: power, outcome: "restrict", reasonCodes: ["DEVICE_NONCOMPLIANT"] }).actions.find((x) => x.key === "rack.powercycle")?.disposition === "blocked");
+check("uptime read stays available under restriction (power draw, non-gated)",
+  planAppSession({ integration: power, outcome: "restrict", reasonCodes: [] }).actions.find((x) => x.key === "draw.read")?.disposition === "auto");
+check("SAFETY: trigger a failover is held for step-up when verification is required",
+  planAppSession({ integration: compute, outcome: "step_up", reasonCodes: ["BASELINE_DRIFTED"] }).actions.find((x) => x.key === "failover.trigger")?.disposition === "step_up");
+check("SAFETY: deny blocks every uptime-affecting action",
+  planAppSession({ integration: compute, outcome: "deny", reasonCodes: ["IDENTITY_DISABLED"] }).actions.every((x) => x.disposition === "blocked"));
+check("SAFETY: no critical NOC action is ever auto on allow (whole vertical)",
+  listAppIntegrations("data_center").every((i) => planAppSession({ integration: i, outcome: "allow", reasonCodes: [] })
+    .actions.every((x) => !(x.riskTier === "critical" && x.disposition === "auto"))));
 
 // ── determinism ───────────────────────────────────────────────────────────────
 check("plans are deterministic", JSON.stringify(planAppSession(base("allow"))) === JSON.stringify(planAppSession(base("allow"))));

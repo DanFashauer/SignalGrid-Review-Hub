@@ -17,7 +17,7 @@
 
 import type { DecisionOutcome } from "@workspace/signalgrid-core";
 
-export type AppVertical = "healthcare" | "warehouse" | "industrial" | "global_fleet" | "retail";
+export type AppVertical = "healthcare" | "warehouse" | "industrial" | "global_fleet" | "retail" | "data_center";
 
 export type AppRiskTier = "standard" | "elevated" | "critical";
 
@@ -90,6 +90,7 @@ const DEFAULT_CONFIRMER: Record<AppVertical, string> = {
   industrial: "supervisor",
   global_fleet: "dispatcher",
   retail: "manager",
+  data_center: "shift lead",
 };
 
 const firstReason = (codes: string[], fallback: string): string => (codes.length > 0 ? codes[0] : fallback);

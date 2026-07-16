@@ -95,7 +95,10 @@ let claimHits = 0;
 for (const phrase of DENYLIST) {
   let out = "";
   try {
-    out = execFileSync("git", ["grep", "-nF", "--", phrase, "--", ...SCAN_PATHS], { cwd: repo, encoding: "utf8" });
+    // --untracked also scans new, not-yet-staged files (excluding gitignored),
+    // so a brand-new doc with an unsafe claim is caught by preflight BEFORE it
+    // is committed — a tracked-only scan would miss it (matches review-invariants).
+    out = execFileSync("git", ["grep", "--untracked", "-nF", "--", phrase, "--", ...SCAN_PATHS], { cwd: repo, encoding: "utf8" });
   } catch {
     out = ""; // git grep exits non-zero when there are no matches
   }

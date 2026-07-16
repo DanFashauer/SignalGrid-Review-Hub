@@ -8,7 +8,8 @@ import {
   Database,
   Server,
   Grid,
-  AppWindow
+  AppWindow,
+  Sparkles
 } from "lucide-react";
 import {
   Sidebar,
@@ -92,6 +93,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <Link href="/app-workflows">
                     <AppWindow className="w-4 h-4 mr-2" />
                     <span>App workflows</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location.startsWith("/intelligence")}>
+                  <Link href="/intelligence">
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    <span>Grid intelligence</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

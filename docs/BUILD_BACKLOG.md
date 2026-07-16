@@ -14,12 +14,6 @@ picking these up:
 
 ## Now (next up)
 
-- [ ] **Data-center / NOC app catalog** — a new vertical for `@workspace/app-workflows`
-      gating the tools a NOC uses, with uptime as the north star: DCIM / change
-      management, network config push, power / PDU control, ITSM incident, remote
-      hands / BMS. The uptime-affecting actions (config push, power-cycle, failover,
-      change-freeze bypass) are critical → held for confirmation/step-up. See
-      `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md`.
 - [ ] **Retail + industrial tenants in the core** — seed two more demo tenants so
       the retail (POS / restricted-sale) and industrial (MES / SCADA-HMI) app
       catalogs gate live, not catalog-only. Same pattern as the Meridian add.
@@ -47,6 +41,24 @@ picking these up:
 _(see `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` for the full app-workflow roadmap)_
 
 ## Done (recent)
+
+- [x] Data-center / NOC app catalog (P5) — a sixth vertical for
+      `@workspace/app-workflows` gating the tools a NOC runs, with **uptime as
+      the north star**: DCIM / change mgmt, network config, power / PDU, ITSM /
+      incident, cooling / BMS, compute / orchestration. The uptime-affecting
+      actions (execute a change, push config to a core device, power-cycle a
+      rack, trigger a failover, bypass a change freeze) are `critical` → always
+      sensitive: held for confirmation on allow, step-up when required, blocked
+      under restriction/deny; reads/acks stay available so a NOC can always SEE
+      even when it may not ACT. Confirmation phrased for the shift lead. Live in
+      the admin App-workflows page; proof:app-workflows 41/41 (10 new NOC/uptime
+      safety assertions). See `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` §P5.
+
+- [x] Admin "Grid intelligence" console — one calm surface (design law) tying
+      flow-health/self-heal + learned recommendations + signal-discovery, read
+      live from `/cp/v1`. Exceptions-first "Needs attention", advisory
+      recommendations, and a discovery table that labels onboarding as a
+      proposal (never a completed action). Route `/intelligence`.
 
 - [x] Signal discovery + auto-onboarding (`@workspace/signal-discovery`) — tells
       admins what signals were detected across connected sources, classifies each

@@ -3,8 +3,9 @@
 // These are generic app CATEGORIES (never a real vendor/product name) with the
 // kinds of actions people perform in them. `workflowKey` is the decision-core
 // workflow the app's session maps to; the three seeded demo tenants
-// (healthcare / warehouse / global-fleet) can evaluate live, while retail and
-// industrial are catalog entries the same engine plans (supply a decision).
+// (healthcare / warehouse / global-fleet) can evaluate live, while retail,
+// industrial, and data-center/NOC are catalog entries the same engine plans
+// (supply a decision).
 //
 // Risk tiers: standard (low-risk read/ack) · elevated (writes / sensitive reads)
 // · critical (irreversible / high-consequence — always sensitive). `sensitive`
@@ -187,6 +188,91 @@ export const APP_INTEGRATIONS: AppIntegration[] = [
       a("item.scan", "Scan an item", "standard"),
       a("agerestricted.approve", "Approve an age-restricted sale", "critical"),
       a("pharmacy.approve", "Approve a pharmacy sale", "critical"),
+    ],
+  },
+
+  // ── Data center / NOC (P5) — uptime is the north star ────────────────────────
+  // The uptime-affecting actions (execute a change, push config, power-cycle,
+  // failover, freeze bypass) are the highest-consequence in the whole catalog:
+  // they must never run from an unverified device/context. They are `critical`
+  // → always sensitive (held for confirmation on allow, step-up when required,
+  // blocked under restriction/deny). Reads and acks stay available so a NOC can
+  // always SEE, even when it may not ACT. Catalog entry; supply a decision to plan.
+  {
+    id: "dcim-change",
+    name: "DCIM / change mgmt",
+    category: "Data-center infrastructure",
+    vertical: "data_center",
+    workflowKey: "noc-session",
+    actions: [
+      a("topology.view", "View topology / capacity", "standard", { gated: false }),
+      a("change.open", "Open a change record", "elevated"),
+      a("change.execute", "Execute a change", "critical"),
+      a("freeze.bypass", "Bypass a change freeze", "critical"),
+    ],
+  },
+  {
+    id: "network-config",
+    name: "Network config",
+    category: "Network control",
+    vertical: "data_center",
+    workflowKey: "network-change",
+    actions: [
+      a("config.view", "View running config", "standard", { gated: false }),
+      a("diff.stage", "Stage a config diff", "elevated"),
+      a("config.push", "Push config to a core device", "critical"),
+      a("acl.change", "Change an ACL / route", "critical"),
+    ],
+  },
+  {
+    id: "power-pdu",
+    name: "Power / PDU",
+    category: "Power control",
+    vertical: "data_center",
+    workflowKey: "power-control",
+    actions: [
+      a("draw.read", "Read power draw / breakers", "standard", { gated: false }),
+      a("rack.powercycle", "Power-cycle a rack / PDU", "critical"),
+      a("load.shed", "Shed load", "critical"),
+    ],
+  },
+  {
+    id: "itsm-incident",
+    name: "ITSM / incident",
+    category: "Incident management",
+    vertical: "data_center",
+    workflowKey: "incident-response",
+    actions: [
+      a("ticket.view", "View a ticket", "standard", { gated: false }),
+      a("status.update", "Update ticket status", "standard"),
+      a("sev1.declare", "Declare / resolve a Sev-1", "critical"),
+      a("execbridge.page", "Page an exec bridge", "critical"),
+    ],
+  },
+  {
+    id: "cooling-bms",
+    name: "Cooling / BMS",
+    category: "Facilities control",
+    vertical: "data_center",
+    workflowKey: "facilities-control",
+    actions: [
+      a("sensor.read", "Read sensors", "standard", { gated: false }),
+      a("bms.ack", "Acknowledge a BMS event", "standard"),
+      a("setpoint.change", "Change a cooling setpoint", "critical"),
+      a("interlock.override", "Override a safety interlock", "critical"),
+    ],
+  },
+  {
+    id: "compute-orchestration",
+    name: "Compute / orchestration",
+    category: "Compute control",
+    vertical: "data_center",
+    workflowKey: "compute-ops",
+    actions: [
+      a("node.view", "View nodes / clusters", "standard", { gated: false }),
+      a("node.drain", "Drain a node", "critical"),
+      a("failover.trigger", "Trigger a failover", "critical"),
+      a("cluster.cordon", "Cordon a cluster", "critical"),
     ],
   },
 ];

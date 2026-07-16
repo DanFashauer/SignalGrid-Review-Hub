@@ -53,7 +53,13 @@ exactly to clinical safety.
 | **Age/rx-restricted** | scan item | approve an **age-restricted** or **pharmacy** sale |
 | **Inventory** | count, receive | **markdown / write-off** above a threshold |
 
-### P5 — Data center / NOC (uptime is the north star)
+### P5 — Data center / NOC (uptime is the north star) — ✅ catalog built
+_Built as a sixth `@workspace/app-workflows` vertical (`data_center`): the six
+app categories below, live in the admin App-workflows page, with every
+uptime-affecting action held for confirmation/step-up and blocked under
+restriction. proof:app-workflows covers the uptime-safety invariants. A seeded
+NOC tenant (to evaluate live rather than catalog-only) remains future work._
+
 A strong fit: uptime is everything, and the highest-risk actions must never run
 from an untrusted device/context without verification. SignalGrid gates them
 invisibly, holding the uptime-affecting ones for confirmation + step-up — for

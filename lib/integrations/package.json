@@ -8,12 +8,12 @@
   },
   "dependencies": {
     "ioredis": "^5.4.1",
-    "uuid": "^11.0.3",
+    "uuid": "^14.0.1",
     "zod": "catalog:",
     "@workspace/audit": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "@types/uuid": "^10.0.0"
+    "@types/uuid": "^11.0.0"
   }
 }

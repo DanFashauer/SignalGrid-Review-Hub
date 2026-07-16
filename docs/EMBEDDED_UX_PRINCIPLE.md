@@ -72,6 +72,14 @@ it. A separate "behind the glass" panel (never seen by the worker) shows the
 `allow` / `step_up` decision the core returned. The step-up completion is a
 clearly-labeled **demo simulation**, not a real hardware gesture.
 
+`docs/embedded-desktop-demo.html` (published at `/desktop-demo.html`) is the
+**cross-platform parity** companion: the identical Assist flow inside a generic
+NOC desktop app on **macOS / Windows**, where a config push to a core switch is
+held for a step-up then an in-app confirmation. A toggle swaps the native prompt
+between **Touch ID** and **Windows Hello** — the *only* per-platform difference —
+making the point that the behavior is identical everywhere; just the
+authenticator changes.
+
 ## Open reconciliation
 
 - `artifacts/signalgrid-mobile-pwa` ("My Access") today renders a **SignalGrid-

@@ -56,6 +56,16 @@ _(see `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` for the full app-workflow roadmap)
 
 ## Done (recent)
 
+- [x] macOS / Windows desktop host-app demo (cross-platform parity) —
+      `docs/embedded-desktop-demo.html` (published at `/desktop-demo.html`): the
+      same invisible Assist flow as the mobile demo, in a generic NOC desktop app
+      ("NetOps Console", no SignalGrid branding), where a config push to a core
+      switch is held for a step-up then an in-app confirmation (two gates,
+      fail-closed). A toggle swaps the native prompt Touch ID ↔ Windows Hello —
+      the only per-platform difference. Ties the desktop story to the
+      NOC/uptime + macOS-27 work. Self-contained, no external hosts; wired into
+      the Pages deploy. CDP-verified across the full flow + both platforms.
+
 - [x] DDM / device-health signal connector (`@workspace/ddm-connector`, macOS 27)
       — normalizes a Declarative Device Management report (enrollment, health
       reporting, binary-control state, declarative-privacy posture, last check-in)

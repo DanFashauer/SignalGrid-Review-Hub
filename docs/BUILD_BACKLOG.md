@@ -14,8 +14,7 @@ picking these up:
 
 ## Now (next up)
 
-- [ ] **Global-fleet scenario pack** — vehicle-mount checkout + cross-region
-      session scenarios (extend the Trusted-Entry runner to the Meridian tenant).
+_(nothing queued — scenario packs shipped for all three verticals)_
 
 ## Later / vision
 
@@ -26,6 +25,14 @@ picking these up:
       narrower).
 
 ## Done (recent)
+
+- [x] Global-fleet scenario pack — a third vertical (Meridian) added to the core
+      seed and the Trusted-Entry runner + console: vehicle-mount field session and
+      cross-region regulated-cargo checkout, across the full allow / step-up /
+      restrict / deny spectrum. Fleet orchestration catalog (vehicle unlock,
+      mount session, TMS route, cargo seal, dispatcher co-sign) + dispatcher
+      confirmation language, cross-tenant fail-closed. Proof: room-sim 39/39,
+      orchestration 40/40, core 166/166.
 
 - [x] Warehouse scenario pack — the Trusted-Entry runner + on-device console now
       span two verticals: smart-hospital (Northwind) and warehouse (Atlas), with

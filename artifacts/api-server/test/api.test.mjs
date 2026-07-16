@@ -77,7 +77,7 @@ async function run() {
 
   const keys = await req("GET", "/v1/keys");
   check("keys discovery is public (200)", keys.status === 200);
-  check("keys lists the four demo keys", Array.isArray(keys.json?.keys) && keys.json.keys.length === 4);
+  check("keys lists the five demo keys", Array.isArray(keys.json?.keys) && keys.json.keys.length === 5);
 
   // ── public catalog + simulator routes ────────────────────────────────────
   const integrations = await req("GET", "/integrations");

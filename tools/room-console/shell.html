@@ -75,7 +75,7 @@
     <span class="sub">Trusted Room Entry · runs on-device</span>
   </header>
   <h1>Context-aware trust &amp; orchestration — Phase 1</h1>
-  <p class="lead">A synthetic holder with a managed shared device approaches a space — a hospital room or a warehouse zone. SignalGrid runs the real decision core over identity, device posture, custody, badge binding, security baseline and workflow risk — then orchestrates the downstream actions for that vertical. Sensitive steps (a controlled-room door and PHI display, or a high-value cage and customer-PII manifest) are never automatic; they wait for a clinician or supervisor to confirm. <b>Everything here runs in this browser tab</b> — no server, no network.</p>
+  <p class="lead">A synthetic holder with a managed shared device approaches a space — a hospital room, a warehouse zone, or a fleet vehicle. SignalGrid runs the real decision core over identity, device posture, custody, badge binding, security baseline and workflow risk — then orchestrates the downstream actions for that vertical. Sensitive steps (a controlled-room door and PHI display, a high-value cage, or a cross-region cargo seal) are never automatic; they wait for a clinician, supervisor, or dispatcher to confirm. <b>Everything here runs in this browser tab</b> — no server, no network.</p>
   <div class="grid">
     <aside class="scn">
       <h2>Scenarios</h2>
@@ -106,7 +106,7 @@
   }
   function load(){
     const box=byId('#scenarios'); box.innerHTML='';
-    const LABEL={clinical:'Smart hospital',warehouse:'Warehouse'};
+    const LABEL={clinical:'Smart hospital',warehouse:'Warehouse',global_fleet:'Global fleet'};
     let lastDomain=null;
     SG.scenarios.forEach(s=>{
       const domain=s.domain||'clinical';

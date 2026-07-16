@@ -13,7 +13,7 @@
 // Run: pnpm --filter @workspace/scripts run proof:room-sim
 
 import { SignalGridCore } from "@workspace/signalgrid-core";
-import { listScenarios, runRoomEntry, tenantForScenario, WAREHOUSE_SCENARIOS } from "@workspace/room-sim";
+import { listScenarios, runRoomEntry, tenantForScenario, WAREHOUSE_SCENARIOS, GLOBAL_FLEET_SCENARIOS } from "@workspace/room-sim";
 
 let passed = 0;
 const failures: string[] = [];
@@ -27,21 +27,28 @@ function tokenFor(tenantId: string): string {
 }
 const run = (id: string) => runRoomEntry(core, tokenFor(tenantForScenario(id)), id);
 
-// Expected outcomes per warehouse scenario (the point of the pack).
+// Expected outcomes per non-clinical scenario (the point of the packs).
 const EXPECTED: Record<string, string> = {
   "wh-compliant-pick": "allow",
   "wh-compliant-cage": "allow",
   "wh-noncompliant-pick": "restrict",
   "wh-baseline-cage": "step_up",
   "wh-disabled-pick": "deny",
+  "gf-compliant-field": "allow",
+  "gf-compliant-checkout": "allow",
+  "gf-noncompliant-field": "restrict",
+  "gf-baseline-checkout": "step_up",
+  "gf-disabled-field": "deny",
 };
 
-// 1. The combined listing exposes both verticals.
+// 1. The combined listing exposes all three verticals.
 const listed = listScenarios();
-check("scenario listing spans both verticals", listed.some((s) => s.domain === "clinical") && listed.some((s) => s.domain === "warehouse"));
+check("scenario listing spans all three verticals",
+  listed.some((s) => s.domain === "clinical") && listed.some((s) => s.domain === "warehouse") && listed.some((s) => s.domain === "global_fleet"));
 check("warehouse pack has 5 scenarios", WAREHOUSE_SCENARIOS.length === 5);
+check("global-fleet pack has 5 scenarios", GLOBAL_FLEET_SCENARIOS.length === 5);
 
-// 2. Every warehouse scenario evaluates under the Atlas tenant and hits its outcome.
+// 2. Every non-clinical scenario evaluates under its own tenant and hits its outcome.
 const outcomes = new Set<string>();
 for (const s of WAREHOUSE_SCENARIOS) {
   check(`${s.id} routes to the atlas tenant`, tenantForScenario(s.id) === "tenant_atlas");
@@ -51,6 +58,31 @@ for (const s of WAREHOUSE_SCENARIOS) {
 }
 check("warehouse pack spans allow + step_up + restrict + deny",
   ["allow", "step_up", "restrict", "deny"].every((o) => outcomes.has(o)));
+
+const fleetOutcomes = new Set<string>();
+for (const s of GLOBAL_FLEET_SCENARIOS) {
+  check(`${s.id} routes to the meridian tenant`, tenantForScenario(s.id) === "tenant_meridian");
+  const r = run(s.id);
+  fleetOutcomes.add(r.decision.outcome);
+  check(`${s.id} → ${EXPECTED[s.id]}`, r.decision.outcome === EXPECTED[s.id]);
+}
+check("global-fleet pack spans allow + step_up + restrict + deny",
+  ["allow", "step_up", "restrict", "deny"].every((o) => fleetOutcomes.has(o)));
+
+// Global-fleet plan uses the fleet catalog + dispatcher language + Assist safety.
+const checkout = run("gf-compliant-checkout");
+const checkoutKinds = checkout.plan.actions.map((a) => a.kind);
+check("cross-region checkout plan includes vehicle unlock + cargo seal + dispatcher co-sign",
+  checkoutKinds.includes("vehicle.unlock") && checkoutKinds.includes("cargo.seal.release") && checkoutKinds.includes("witness.require"));
+check("fleet plan carries no clinical/warehouse action kinds",
+  !checkoutKinds.includes("door.unlock") && !checkoutKinds.includes("gate.unlock") && !checkoutKinds.includes("cage.unlock"));
+check("SAFETY: no sensitive fleet action is ever auto on an allow",
+  checkout.plan.actions.every((a) => !(a.sensitive && a.disposition === "auto")));
+check("fleet plan speaks of a dispatcher, not a clinician/supervisor",
+  checkout.plan.summary.includes("dispatcher") && !checkout.plan.summary.includes("clinician") && !checkout.plan.summary.includes("supervisor"));
+let fleetRefused = false;
+try { runRoomEntry(core, tokenFor("tenant_northwind"), "gf-compliant-field"); } catch { fleetRefused = true; }
+check("cross-tenant: hospital token cannot run a fleet scenario", fleetRefused);
 
 // 3. Warehouse plans use the warehouse catalog + supervisor language + Assist safety.
 const cage = run("wh-compliant-cage");

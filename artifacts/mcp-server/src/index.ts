@@ -35,9 +35,10 @@ const server = new McpServer({ name: "signalgrid", version: "0.1.0" });
 server.registerTool(
   "list_room_scenarios",
   {
-    title: "List trusted-room-entry scenarios",
+    title: "List trusted-entry scenarios",
     description:
-      "List the synthetic smart-hospital scenarios (a nurse approaching a room). Public-safe fixtures.",
+      "List the synthetic Trusted-Entry scenarios across verticals — smart-hospital (a nurse approaching " +
+      "a room), warehouse (a picker at a zone), and global-fleet (a driver at a vehicle). Public-safe fixtures.",
     inputSchema: {},
   },
   async () => asText({ scenarios: listScenarios() }),

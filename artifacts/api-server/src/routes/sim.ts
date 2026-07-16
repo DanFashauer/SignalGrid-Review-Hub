@@ -29,7 +29,7 @@ function tokenForTenant(tenant: string): string {
 router.get("/sim/room-entry/scenarios", (_req, res) => {
   res.json({
     demo: true,
-    note: "Synthetic Trusted-Entry scenarios across verticals (smart-hospital + warehouse), public-safe fixtures. No real facility, patient, customer, or vendor system is involved.",
+    note: "Synthetic Trusted-Entry scenarios across verticals (smart-hospital, warehouse, and global-fleet), public-safe fixtures. No real facility, patient, customer, or vendor system is involved.",
     scenarios: listScenarios(),
   });
 });

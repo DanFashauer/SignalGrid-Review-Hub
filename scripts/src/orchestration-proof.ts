@@ -120,6 +120,26 @@ check("warehouse step-up holds the gate, permits ambient lighting",
 check("clinical domain is unchanged (default): summary still names the clinician",
   planOrchestration({ outcome: "allow", reasonCodes: [], room: controlled }).summary.includes("clinician"));
 
+// ── global-fleet domain: fleet catalog + dispatcher language ──────────────────
+const gfZone = (sensitivity: RoomContext["sensitivity"], workflowKey: string): RoomContext => ({
+  roomId: "VEH-1", unit: "EU-West", sensitivity, workflowKey, workflowLabel: "Fleet workflow", domain: "global_fleet",
+});
+const gfAllow = planOrchestration({ outcome: "allow", reasonCodes: [], room: gfZone("controlled", "vehicle-checkout") });
+const gfKinds = gfAllow.actions.map((a) => a.kind);
+check("fleet catalog: vehicle/mount/manifest present, no clinical/warehouse kinds",
+  gfKinds.includes("vehicle.unlock") && gfKinds.includes("mount.session.start") && gfKinds.includes("manifest.display.activate") &&
+  !gfKinds.includes("door.unlock") && !gfKinds.includes("gate.unlock"));
+check("fleet controlled checkout adds cargo seal + dispatcher co-sign",
+  gfKinds.includes("cargo.seal.release") && gfKinds.includes("witness.require"));
+check("fleet standard zone excludes controlled-only extras",
+  !planOrchestration({ outcome: "allow", reasonCodes: [], room: gfZone("standard", "field-session") }).actions.some((a) => a.kind === "cargo.seal.release"));
+check("fleet manifest display is always sensitive (regulated cargo/PII), never auto",
+  gfAllow.actions.every((a) => !(a.sensitive && a.disposition === "auto")) &&
+  gfAllow.actions.find((a) => a.kind === "manifest.display.activate")?.disposition === "assist");
+check("fleet confirmation language names the dispatcher",
+  gfAllow.summary.includes("dispatcher") &&
+  (gfAllow.actions.find((a) => a.disposition === "assist")?.reason.includes("dispatcher") ?? false));
+
 // ── determinism ─────────────────────────────────────────────────────────────
 const a = JSON.stringify(planOrchestration({ outcome: "allow", reasonCodes: [], room: controlled }));
 const b = JSON.stringify(planOrchestration({ outcome: "allow", reasonCodes: [], room: controlled }));

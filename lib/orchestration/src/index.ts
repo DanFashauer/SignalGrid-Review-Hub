@@ -40,7 +40,7 @@ export type RoomSensitivity = "standard" | "elevated" | "controlled";
  * PHI display; a supervisor confirms a controlled-area cage). Defaults to
  * `clinical` when omitted, so existing hospital callers are unaffected.
  */
-export type FacilityDomain = "clinical" | "warehouse";
+export type FacilityDomain = "clinical" | "warehouse" | "global_fleet";
 
 export interface RoomContext {
   /** Room / bay / zone identifier, e.g. "RM-412" or "CAGE-1". */
@@ -268,11 +268,96 @@ const WAREHOUSE_CONTROLLED_EXTRAS: ActionSpec[] = [
   },
 ];
 
+// ── Global-fleet catalog ─────────────────────────────────────────────────────
+// Vehicle-mount + cross-region shape, structurally identical to the others (a
+// gated access action, a non-sensitive session, an always-sensitive PII display,
+// ambient prep, plus regulated-cargo extras), so the safety invariants hold.
+const FLEET_CATALOG: ActionSpec[] = [
+  {
+    kind: "vehicle.unlock",
+    label: "Unlock vehicle / cargo compartment",
+    targetSystem: "Telematics access",
+    sensitive: (r) => r.sensitivity !== "standard",
+    gatedByStepUp: true,
+  },
+  {
+    kind: "mount.session.start",
+    label: "Start vehicle-mount session",
+    targetSystem: "Mobile session broker",
+    sensitive: () => false,
+    gatedByStepUp: true,
+  },
+  {
+    kind: "route.assign",
+    label: "Assign route / manifest to holder",
+    targetSystem: "Fleet dispatch (TMS)",
+    sensitive: () => false,
+    gatedByStepUp: true,
+  },
+  {
+    kind: "device.assign",
+    label: "Assign shared mount tablet to holder",
+    targetSystem: "Shared-device broker",
+    sensitive: (r) => r.sensitivity === "controlled",
+    gatedByStepUp: true,
+  },
+  {
+    kind: "environment.lighting",
+    label: "Set cab / cargo lighting preset",
+    targetSystem: "Vehicle automation",
+    sensitive: () => false,
+    gatedByStepUp: false,
+  },
+  {
+    kind: "manifest.display.activate",
+    label: "Activate manifest / cargo display",
+    targetSystem: "Cargo display (customer + regulated-cargo PII)",
+    sensitive: () => true, // regulated cargo + customer PII — always human-confirmed
+    gatedByStepUp: true,
+  },
+  {
+    kind: "alert.route",
+    label: "Route fleet exceptions to holder",
+    targetSystem: "Fleet alerting",
+    sensitive: () => false,
+    gatedByStepUp: false,
+  },
+  {
+    kind: "session.terminate.on_exit",
+    label: "Arm session close on vehicle egress",
+    targetSystem: "Session lifecycle",
+    sensitive: () => false,
+    gatedByStepUp: false,
+  },
+];
+
+// Cross-region / regulated-cargo extras — both inherently sensitive (a physical
+// seal, a dispatcher co-sign), so always human-confirmed on an allow.
+const FLEET_CONTROLLED_EXTRAS: ActionSpec[] = [
+  {
+    kind: "cargo.seal.release",
+    label: "Release regulated-cargo seal",
+    targetSystem: "Automated cargo seal",
+    sensitive: () => true,
+    gatedByStepUp: true,
+  },
+  {
+    kind: "witness.require",
+    label: "Request dispatcher co-sign",
+    targetSystem: "Fleet witness workflow",
+    sensitive: () => true,
+    gatedByStepUp: true,
+  },
+];
+
+const CATALOGS: Record<FacilityDomain, { catalog: ActionSpec[]; extras: ActionSpec[] }> = {
+  clinical: { catalog: CATALOG, extras: CONTROLLED_EXTRAS },
+  warehouse: { catalog: WAREHOUSE_CATALOG, extras: WAREHOUSE_CONTROLLED_EXTRAS },
+  global_fleet: { catalog: FLEET_CATALOG, extras: FLEET_CONTROLLED_EXTRAS },
+};
+
 function applicableSpecs(room: RoomContext): ActionSpec[] {
-  const [catalog, extras] =
-    room.domain === "warehouse"
-      ? [WAREHOUSE_CATALOG, WAREHOUSE_CONTROLLED_EXTRAS]
-      : [CATALOG, CONTROLLED_EXTRAS];
+  const { catalog, extras } = CATALOGS[room.domain ?? "clinical"];
   return room.sensitivity === "controlled" ? [...catalog, ...extras] : catalog;
 }
 
@@ -289,7 +374,8 @@ export function planOrchestration(input: PlanInput): OrchestrationPlan {
   const { outcome, reasonCodes, room } = input;
   const confirmed = new Set(input.confirmedActionIds ?? []);
   // Who confirms a sensitive action, phrased for the vertical.
-  const confirmer = room.domain === "warehouse" ? "supervisor" : "clinician";
+  const confirmer =
+    room.domain === "warehouse" ? "supervisor" : room.domain === "global_fleet" ? "dispatcher" : "clinician";
 
   // A satisfied step-up releases the held actions: from here they behave exactly
   // as on an allow (non-sensitive auto, sensitive still human-confirmed).

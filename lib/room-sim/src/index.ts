@@ -169,7 +169,58 @@ export const WAREHOUSE_SCENARIOS: Scenario[] = [
   },
 ];
 
-export const SCENARIOS: Scenario[] = [...CLINICAL_SCENARIOS, ...WAREHOUSE_SCENARIOS];
+// Global-fleet "Trusted Vehicle Entry" — a driver with a shared vehicle-mount
+// tablet starting a field session or a cross-region regulated-cargo checkout.
+// Same decision core + Assist model, on the Meridian (global-fleet) tenant seed.
+export const GLOBAL_FLEET_SCENARIOS: Scenario[] = [
+  {
+    id: "gf-compliant-field",
+    title: "Compliant driver · field session",
+    description: "On-shift driver, compliant shared vehicle-mount tablet, field session in-region.",
+    identityRef: "driver.compliant",
+    deviceRef: "vehicle-mount-01",
+    tenant: "tenant_meridian",
+    room: { roomId: "VEH-4471", unit: "EU-West · Regional", sensitivity: "standard", workflowKey: "field-session", workflowLabel: "Field session", domain: "global_fleet" },
+  },
+  {
+    id: "gf-compliant-checkout",
+    title: "Compliant driver · cross-region checkout",
+    description: "On-shift driver starting a cross-region regulated-cargo checkout (critical) — seal + manifest await dispatcher confirmation.",
+    identityRef: "driver.compliant",
+    deviceRef: "vehicle-mount-01",
+    tenant: "tenant_meridian",
+    room: { roomId: "VEH-4471", unit: "EU-West → APAC · Long-haul", sensitivity: "controlled", workflowKey: "vehicle-checkout", workflowLabel: "Cross-region checkout", domain: "global_fleet" },
+  },
+  {
+    id: "gf-noncompliant-field",
+    title: "Non-compliant mount · field session",
+    description: "Driver on a non-compliant shared vehicle-mount tablet attempting a field session.",
+    identityRef: "driver.noncompliant",
+    deviceRef: "vehicle-mount-02",
+    tenant: "tenant_meridian",
+    room: { roomId: "VEH-4472", unit: "EU-West · Regional", sensitivity: "standard", workflowKey: "field-session", workflowLabel: "Field session", domain: "global_fleet" },
+  },
+  {
+    id: "gf-baseline-checkout",
+    title: "Security-baseline drift · cross-region checkout",
+    description: "Vehicle-mount tablet drifted from its hardening baseline; cross-region checkout requested — held for step-up.",
+    identityRef: "driver.baseline_drift",
+    deviceRef: "vehicle-mount-06",
+    tenant: "tenant_meridian",
+    room: { roomId: "VEH-4476", unit: "EU-West → APAC · Long-haul", sensitivity: "controlled", workflowKey: "vehicle-checkout", workflowLabel: "Cross-region checkout", domain: "global_fleet" },
+  },
+  {
+    id: "gf-disabled-field",
+    title: "Disabled account · field session",
+    description: "A disabled driver identity attempts entry — trust fails at the identity layer.",
+    identityRef: "driver.disabled",
+    deviceRef: "vehicle-mount-04",
+    tenant: "tenant_meridian",
+    room: { roomId: "VEH-4474", unit: "EU-West · Regional", sensitivity: "standard", workflowKey: "field-session", workflowLabel: "Field session", domain: "global_fleet" },
+  },
+];
+
+export const SCENARIOS: Scenario[] = [...CLINICAL_SCENARIOS, ...WAREHOUSE_SCENARIOS, ...GLOBAL_FLEET_SCENARIOS];
 
 export interface ScenarioSummary {
   id: string;

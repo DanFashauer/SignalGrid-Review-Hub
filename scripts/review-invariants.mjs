@@ -31,8 +31,14 @@ const failures = [];
 const ok = (m) => console.log(`  ✓ ${m}`);
 const bad = (m) => { failures.push(m); console.error(`  ✗ ${m}`); };
 
-const tracked = execFileSync("git", ["ls-files"], { cwd: repo, encoding: "utf8" })
-  .split("\n").filter(Boolean);
+// Tracked AND untracked-but-not-ignored files, so a NEW file is reviewed before
+// it is ever staged (a tracked-only scan would miss it until commit — exactly
+// how a self-referential doc slipped past preflight the first time).
+const tracked = execFileSync(
+  "git",
+  ["ls-files", "--cached", "--others", "--exclude-standard"],
+  { cwd: repo, encoding: "utf8" },
+).split("\n").filter(Boolean);
 const read = (f) => { try { return readFileSync(resolve(repo, f), "utf8"); } catch { return ""; } };
 
 // The pure planner/decision libs: no side effects, no wall-clock, fail closed.
@@ -135,10 +141,13 @@ function stripComments(src) {
     "every catalog gates live",
     "all app-workflow catalogs gate live",
   ];
+  // The reviewer's own script and its documentation necessarily quote the
+  // denylisted phrases as negative examples, so they are exempt from the scan.
+  const META = new Set(["scripts/review-invariants.mjs", "docs/SELF_REVIEW.md"]);
   const scan = tracked.filter((f) =>
     (f.startsWith("lib/") || f.startsWith("docs/") || f.startsWith("artifacts/")) &&
     (f.endsWith(".ts") || f.endsWith(".tsx") || f.endsWith(".md")) &&
-    f !== "scripts/review-invariants.mjs");
+    !META.has(f));
   const hits = [];
   for (const f of scan) {
     const body = read(f).toLowerCase();

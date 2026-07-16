@@ -36,6 +36,7 @@ export function Fleet() {
     queryFn: () => Promise.all(tenantList.map((t) => controlPlane.policyBundle(t.id))),
     enabled: tenantList.length > 0,
   });
+  const ops = useQuery({ queryKey: ["cp-ops"], queryFn: () => controlPlane.opsIntelligence() });
 
   const syncByNode = new Map<string, SyncPlan>((sync.data ?? []).map((s) => [s.nodeId, s]));
   const siteById = new Map<string, Site>((sites.data ?? []).map((s) => [s.id, s]));
@@ -78,6 +79,51 @@ export function Fleet() {
             ))}
             {!h && <div className="text-sm text-muted-foreground p-4">Loading fleet health…</div>}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Operational intelligence (Phase 3 rollup) */}
+      <Card className="border-border">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-mono uppercase tracking-wider text-muted-foreground">Operational intelligence</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Friction hotspots */}
+            <div className="border border-border rounded-lg p-4">
+              <div className="font-mono text-xs uppercase tracking-wider text-amber-400 mb-2">Friction hotspots</div>
+              {(ops.data?.hotspots ?? []).slice(0, 4).map((h) => (
+                <div key={h.nodeId} className="flex items-center justify-between text-xs font-mono py-1 border-b border-border/30 last:border-0">
+                  <span className="text-muted-foreground truncate mr-2" title={h.nodeId}>{h.siteName}</span>
+                  <span className={h.frictionRate >= 0.2 ? "text-amber-400" : "text-muted-foreground"}>{Math.round(h.frictionRate * 100)}%</span>
+                </div>
+              ))}
+              {ops.data && ops.data.hotspots.length === 0 && <div className="text-xs text-muted-foreground">No telemetry yet</div>}
+            </div>
+            {/* Posture / config drift */}
+            <div className="border border-border rounded-lg p-4">
+              <div className="font-mono text-xs uppercase tracking-wider text-primary mb-2">Posture / config drift</div>
+              {(ops.data?.postureDrift ?? []).slice(0, 4).map((d) => (
+                <div key={d.nodeId} className="flex items-center justify-between text-xs font-mono py-1 border-b border-border/30 last:border-0">
+                  <span className="text-muted-foreground truncate mr-2" title={d.nodeId}>{d.siteName}</span>
+                  <span className="text-amber-400">v{d.currentBundleVersion} → v{d.targetBundleVersion}</span>
+                </div>
+              ))}
+              {ops.data && ops.data.postureDrift.length === 0 && <div className="text-xs text-muted-foreground">All nodes on target bundle</div>}
+            </div>
+            {/* Custody gaps */}
+            <div className="border border-border rounded-lg p-4">
+              <div className="font-mono text-xs uppercase tracking-wider text-red-400 mb-2">Custody gaps</div>
+              {(ops.data?.custodyGaps ?? []).slice(0, 4).map((g) => (
+                <div key={g.nodeId} className="flex items-center justify-between text-xs font-mono py-1 border-b border-border/30 last:border-0">
+                  <span className="text-muted-foreground truncate mr-2" title={g.reason}>{g.siteName}</span>
+                  <span className="text-red-400 uppercase">{g.status}</span>
+                </div>
+              ))}
+              {ops.data && ops.data.custodyGaps.length === 0 && <div className="text-xs text-muted-foreground">No custody gaps</div>}
+            </div>
+          </div>
+          {!ops.data && <div className="text-sm text-muted-foreground mt-2">Loading operational intelligence…</div>}
         </CardContent>
       </Card>
 

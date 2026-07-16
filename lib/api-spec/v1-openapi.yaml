@@ -402,6 +402,19 @@ paths:
       responses:
         "200": { description: Fleet health }
 
+  /cp/v1/ops-intelligence:
+    get:
+      operationId: cpOpsIntelligence
+      tags: [control-plane]
+      security: []
+      summary: Operational-intelligence rollup (friction hotspots, posture drift, custody gaps)
+      parameters:
+        - in: query
+          name: tenant
+          schema: { type: string }
+      responses:
+        "200": { description: Operational-intelligence rollup }
+
 components:
   securitySchemes:
     bearerAuth:

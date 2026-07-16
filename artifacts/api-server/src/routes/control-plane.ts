@@ -85,4 +85,10 @@ router.get("/cp/v1/health", (req, res) => {
   res.json(cp.fleetHealth(str(req.query.tenant)));
 });
 
+// Operational-intelligence rollup: friction hotspots, posture/config drift, and
+// custody gaps across sites, derived from ingested telemetry + node state.
+router.get("/cp/v1/ops-intelligence", (req, res) => {
+  res.json(cp.operationalIntelligence(str(req.query.tenant)));
+});
+
 export default router;

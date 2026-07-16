@@ -28,6 +28,24 @@ export interface PolicyBundle {
   tenantId: string; version: number; workflows: string[];
   checksum: string; signature: string;
 }
+export interface FrictionHotspot {
+  nodeId: string; siteId: string; siteName: string; vertical: Vertical;
+  decisions: number; frictionRate: number; stepUpRate: number; restrictRate: number; denyRate: number;
+}
+export interface PostureDrift {
+  nodeId: string; siteName: string; vertical: Vertical;
+  currentBundleVersion: number; targetBundleVersion: number; behindBy: number;
+}
+export interface CustodyGap {
+  nodeId: string; siteName: string; vertical: Vertical;
+  status: EdgeStatus; lastSyncMinsAgo: number; reason: string;
+}
+export interface OpsIntelligence {
+  hotspots: FrictionHotspot[];
+  postureDrift: PostureDrift[];
+  custodyGaps: CustodyGap[];
+  summary: { nodesWithTelemetry: number; avgFrictionRate: number; hotspotCount: number; driftCount: number; gapCount: number };
+}
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`, { headers: { accept: "application/json" } });
@@ -42,6 +60,7 @@ export const controlPlane = {
   sites: (tenant?: string) => get<{ sites: Site[] }>(`/api/cp/v1/sites${tenant ? `?tenant=${encodeURIComponent(tenant)}` : ""}`).then((r) => r.sites),
   sync: (nodeId: string) => get<SyncPlan>(`/api/cp/v1/sync/${encodeURIComponent(nodeId)}`),
   policyBundle: (tenant: string) => get<PolicyBundle>(`/api/cp/v1/policy-bundle?tenant=${encodeURIComponent(tenant)}`),
+  opsIntelligence: (tenant?: string) => get<OpsIntelligence>(`/api/cp/v1/ops-intelligence${tenant ? `?tenant=${encodeURIComponent(tenant)}` : ""}`),
 };
 
 export const VERTICAL_LABEL: Record<Vertical, string> = {

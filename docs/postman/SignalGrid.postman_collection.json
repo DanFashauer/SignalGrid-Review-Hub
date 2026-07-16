@@ -1053,6 +1053,27 @@
               "type": "noauth"
             }
           }
+        },
+        {
+          "name": "Operational intelligence",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cp/v1/ops-intelligence",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cp",
+                "v1",
+                "ops-intelligence"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
         }
       ]
     }

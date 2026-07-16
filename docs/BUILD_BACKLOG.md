@@ -14,13 +14,20 @@ picking these up:
 
 ## Now (next up)
 
-_(nothing queued — scenario packs shipped for all three verticals)_
+_(backlog clear — scenario packs shipped for all three verticals; new ideas land here)_
 
 ## Later / vision
 
-- [ ] **Operational-intelligence rollups (Phase 3)** — friction hotspots,
-      posture drift, custody gaps across sites, from ingested telemetry.
+_(nothing queued)_
+
 ## Done (recent)
+
+- [x] Operational-intelligence rollups (Phase 3) — `operationalIntelligence()`
+      on the control plane derives friction hotspots (from ingested telemetry),
+      posture/config drift (nodes behind target bundle), and custody gaps
+      (unreachable/degraded or stale-sync nodes) across sites, tenant-scoped.
+      Exposed at `GET /cp/v1/ops-intelligence` (OpenAPI + Postman) and surfaced
+      as a three-panel card on the admin Fleet page. Proof: control-plane 23/23.
 
 - [x] Attestation verification — registration now verifies the attestation
       STATEMENT, not just the credential key. `none` (self-attested) is accepted;

@@ -26,6 +26,7 @@ import {
 import {
   extractCredentialPublicKey,
   verifyAssertionSignature,
+  verifyAttestation,
   rpIdHashMatches,
   isUserPresent,
   isUserVerified,
@@ -157,6 +158,23 @@ export async function verifyRegistration(
   // Verify type
   if (clientData.type !== 'webauthn.create') {
     return { success: false, error: 'Invalid credential type', timestamp };
+  }
+
+  // Verify the attestation STATEMENT before trusting the credential. `none`
+  // (self-attested) is accepted; `packed` and `fido-u2f` are cryptographically
+  // verified over authData || SHA-256(clientDataJSON); any other format, or a bad
+  // signature, is refused (fail closed). This closes the gap where a forged
+  // `packed`/`fido-u2f` statement would have been accepted unverified.
+  const attestation = verifyAttestation({
+    attestationObjectB64: response.response.attestationObject,
+    clientDataJSON: Buffer.from(response.response.clientDataJSON, 'base64url'),
+  });
+  if (!attestation.ok) {
+    return {
+      success: false,
+      error: `Attestation verification failed (${attestation.fmt}): ${attestation.error ?? 'invalid'}`,
+      timestamp,
+    };
   }
 
   // Extract the attested credential public key from the attestation object.

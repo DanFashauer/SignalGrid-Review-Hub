@@ -20,11 +20,15 @@ _(nothing queued — scenario packs shipped for all three verticals)_
 
 - [ ] **Operational-intelligence rollups (Phase 3)** — friction hotspots,
       posture drift, custody gaps across sites, from ingested telemetry.
-- [ ] **Attestation verification** — verify packed/fido-u2f attestation at
-      registration (today: `none` self-attested keys, which is acceptable but
-      narrower).
-
 ## Done (recent)
+
+- [x] Attestation verification — registration now verifies the attestation
+      STATEMENT, not just the credential key. `none` (self-attested) is accepted;
+      `packed` and `fido-u2f` are cryptographically verified (authData ||
+      SHA-256(clientDataJSON), self- or x5c-attestation); any other format or a
+      bad signature is refused (fail-closed). Proof: webauthn-verify 14/14
+      (valid packed accepted; forged sig, alg/key mismatch, unsupported format,
+      malformed none, malformed fido-u2f all rejected).
 
 - [x] Global-fleet scenario pack — a third vertical (Meridian) added to the core
       seed and the Trusted-Entry runner + console: vehicle-mount field session and

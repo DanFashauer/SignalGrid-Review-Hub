@@ -11,7 +11,7 @@
 // pubKeyCredParams). No external CBOR dependency, so there is no ambiguity about
 // what is trusted.
 
-import { createHash, createPublicKey, verify as cryptoVerify, type KeyObject } from 'crypto';
+import { createHash, createPublicKey, verify as cryptoVerify, X509Certificate, type KeyObject } from 'crypto';
 
 // ── minimal CBOR reader (definite-length; major types 0–5) ──────────────────
 
@@ -221,5 +221,160 @@ export function rpIdHashMatches(authData: Buffer, rpId: string): boolean {
     return authData.subarray(0, 32).equals(sha256(Buffer.from(rpId, 'utf8')));
   } catch {
     return false;
+  }
+}
+
+// ── attestation-statement verification (registration) ────────────────────────
+//
+// At registration WebAuthn returns an attestationObject = { fmt, attStmt,
+// authData }. The `fmt` says HOW the authenticator vouched for the new
+// credential. We verify the two statement formats a platform/security key
+// commonly sends — `packed` and `fido-u2f` — plus `none` (self-attested, no
+// statement). Everything FAILS CLOSED: an unknown format, a missing field, or a
+// bad signature returns `{ ok: false }`; only a genuinely-verified statement (or
+// an explicit `none`) returns `{ ok: true }`.
+
+export type AttestationFormat = 'none' | 'packed' | 'fido-u2f' | string;
+
+export interface AttestationResult {
+  ok: boolean;
+  /** The attestation format that was present. */
+  fmt: AttestationFormat;
+  /** True when a cryptographic statement was actually verified (not `none`). */
+  attested: boolean;
+  error?: string;
+}
+
+interface ParsedAttestation {
+  fmt: string;
+  attStmt: Map<unknown, unknown>;
+  authData: Buffer;
+}
+
+function parseAttestationObject(attestationObjectB64: string): ParsedAttestation | null {
+  try {
+    const att = decodeFirst(Buffer.from(attestationObjectB64, 'base64url'));
+    if (!(att instanceof Map)) return null;
+    const fmt = att.get('fmt');
+    const attStmt = att.get('attStmt');
+    const authData = att.get('authData');
+    if (typeof fmt !== 'string' || !(attStmt instanceof Map) || !Buffer.isBuffer(authData)) return null;
+    return { fmt, attStmt, authData };
+  } catch {
+    return null;
+  }
+}
+
+/** The credential id + raw COSE key bytes carried in attestedCredentialData. */
+function readAttestedCredential(authData: Buffer): { credId: Buffer; coseKeyBytes: Buffer } | null {
+  try {
+    if ((authData.readUInt8(32) & 0x40) === 0) return null; // AT flag
+    let offset = 37 + 16; // rpIdHash+flags+signCount, then aaguid
+    const credIdLen = authData.readUInt16BE(offset);
+    offset += 2;
+    const credId = authData.subarray(offset, offset + credIdLen);
+    offset += credIdLen;
+    // The COSE key is the remaining bytes; re-encode via decode round-trip length.
+    const decoded = decodeItem(authData, offset);
+    return { credId, coseKeyBytes: authData.subarray(offset, decoded.next) };
+  } catch {
+    return null;
+  }
+}
+
+/** COSE alg id (-7 / -257) → node verify parameters. */
+function algParams(coseAlg: number): { hash: string; dsaEncoding?: 'der' } | null {
+  if (coseAlg === -7) return { hash: 'sha256', dsaEncoding: 'der' }; // ES256
+  if (coseAlg === -257) return { hash: 'sha256' }; // RS256
+  if (coseAlg === -35) return { hash: 'sha384', dsaEncoding: 'der' }; // ES384
+  if (coseAlg === -36) return { hash: 'sha512', dsaEncoding: 'der' }; // ES512
+  return null;
+}
+
+/** Uncompressed EC point (0x04 || x || y) for a P-256 COSE key — fido-u2f form. */
+function ecUncompressedPoint(cose: Map<unknown, unknown>): Buffer | null {
+  const x = cose.get(-2);
+  const y = cose.get(-3);
+  if (!Buffer.isBuffer(x) || !Buffer.isBuffer(y) || x.length !== 32 || y.length !== 32) return null;
+  return Buffer.concat([Buffer.from([0x04]), x, y]);
+}
+
+/**
+ * Verify a registration's attestation statement against the clientDataJSON.
+ * `none` is accepted (self-attested); `packed` and `fido-u2f` are cryptographically
+ * verified; anything else fails closed.
+ */
+export function verifyAttestation(params: {
+  attestationObjectB64: string;
+  clientDataJSON: Buffer;
+}): AttestationResult {
+  const parsed = parseAttestationObject(params.attestationObjectB64);
+  if (!parsed) return { ok: false, fmt: 'unknown', attested: false, error: 'unparseable attestationObject' };
+  const { fmt, attStmt, authData } = parsed;
+  const clientDataHash = sha256(params.clientDataJSON);
+
+  if (fmt === 'none') {
+    // No statement to verify. Accept, but flag that nothing was attested.
+    if (attStmt.size !== 0) return { ok: false, fmt, attested: false, error: 'none format must have an empty statement' };
+    return { ok: true, fmt, attested: false };
+  }
+
+  try {
+    if (fmt === 'packed') {
+      const alg = attStmt.get('alg');
+      const sig = attStmt.get('sig');
+      const x5c = attStmt.get('x5c');
+      if (typeof alg !== 'number' || !Buffer.isBuffer(sig)) {
+        return { ok: false, fmt, attested: false, error: 'packed statement missing alg/sig' };
+      }
+      const signedData = Buffer.concat([authData, clientDataHash]);
+
+      let publicKey: KeyObject;
+      if (Array.isArray(x5c) && x5c.length > 0) {
+        // Full attestation — the leaf certificate's key signs.
+        if (!Buffer.isBuffer(x5c[0])) return { ok: false, fmt, attested: false, error: 'bad x5c' };
+        publicKey = new X509Certificate(x5c[0]).publicKey;
+      } else {
+        // Self attestation — the new credential key signs; its alg must match.
+        const cred = readAttestedCredential(authData);
+        if (!cred) return { ok: false, fmt, attested: false, error: 'no attested credential' };
+        const cose = decodeFirst(cred.coseKeyBytes);
+        if (!(cose instanceof Map)) return { ok: false, fmt, attested: false, error: 'bad COSE key' };
+        if (cose.get(3) !== alg) return { ok: false, fmt, attested: false, error: 'self-attestation alg mismatch' };
+        const verifiable = coseKeyToVerifiable(cose);
+        if (!verifiable) return { ok: false, fmt, attested: false, error: 'unsupported self-attestation key' };
+        publicKey = createPublicKey({ key: verifiable.jwk, format: 'jwk' });
+      }
+
+      const ap = algParams(alg);
+      if (!ap) return { ok: false, fmt, attested: false, error: `unsupported packed alg ${alg}` };
+      const ok = cryptoVerify(ap.hash, signedData, ap.dsaEncoding ? { key: publicKey, dsaEncoding: ap.dsaEncoding } : publicKey, sig);
+      return { ok, fmt, attested: ok, error: ok ? undefined : 'packed signature invalid' };
+    }
+
+    if (fmt === 'fido-u2f') {
+      // Legacy U2F: verificationData = 0x00 || rpIdHash || clientDataHash || credId || publicKeyU2F
+      const sig = attStmt.get('sig');
+      const x5c = attStmt.get('x5c');
+      if (!Buffer.isBuffer(sig) || !Array.isArray(x5c) || !Buffer.isBuffer(x5c[0])) {
+        return { ok: false, fmt, attested: false, error: 'fido-u2f statement missing sig/x5c' };
+      }
+      const cred = readAttestedCredential(authData);
+      if (!cred) return { ok: false, fmt, attested: false, error: 'no attested credential' };
+      const cose = decodeFirst(cred.coseKeyBytes);
+      if (!(cose instanceof Map)) return { ok: false, fmt, attested: false, error: 'bad COSE key' };
+      const point = ecUncompressedPoint(cose);
+      if (!point) return { ok: false, fmt, attested: false, error: 'fido-u2f requires a P-256 key' };
+      const rpIdHash = authData.subarray(0, 32);
+      const verificationData = Buffer.concat([Buffer.from([0x00]), rpIdHash, clientDataHash, cred.credId, point]);
+      const publicKey = new X509Certificate(x5c[0]).publicKey;
+      const ok = cryptoVerify('sha256', verificationData, { key: publicKey, dsaEncoding: 'der' }, sig);
+      return { ok, fmt, attested: ok, error: ok ? undefined : 'fido-u2f signature invalid' };
+    }
+
+    // Unknown / unsupported format (tpm, android-key, apple, …): fail closed.
+    return { ok: false, fmt, attested: false, error: `unsupported attestation format '${fmt}'` };
+  } catch (err) {
+    return { ok: false, fmt, attested: false, error: err instanceof Error ? err.message : 'attestation verify error' };
   }
 }

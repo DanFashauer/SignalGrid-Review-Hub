@@ -125,7 +125,7 @@
 
   <div class="grid">
     <div>
-      <div class="win" id="win">
+      <div class="win" id="deskwin">
         <div class="titlebar">
           <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
           <div class="wintitle">NetOps Console</div>
@@ -198,7 +198,7 @@
   var APPLIED = { host:"Config pushed to core-sw-01.", verdict:"applied", why:"CONFIRMED_BY_ENGINEER",
     body:"The engineer confirmed in the app's own dialog → the held push is applied. Two gates cleared: a native step-up AND an explicit confirmation. In production the step-up is a real WebAuthn assertion; here it is a labeled simulation." };
 
-  var i=0, awaitingStepUp=false, awaitingConfirm=false;
+  var i=0, awaitingStepUp=false, awaitingConfirm=false, heldOp=null;
   var ops=document.getElementById("ops"), confirmEl=document.getElementById("confirm"), msg=document.getElementById("msg");
   var primary=document.getElementById("primary"), osdim=document.getElementById("osdim");
   var decAction=document.getElementById("decAction"), decVerdict=document.getElementById("decVerdict"), decBody=document.getElementById("decBody"), decWhy=document.getElementById("decWhy");
@@ -207,7 +207,7 @@
     platform=p;
     document.getElementById("mac").classList.toggle("on", p==="mac");
     document.getElementById("win").classList.toggle("on", p==="win");
-    document.getElementById("win").classList.toggle("windows", p==="win");
+    document.getElementById("deskwin").classList.toggle("windows", p==="win");
     document.getElementById("ospill").textContent = p==="mac" ? "Demo · simulated Touch ID" : "Demo · simulated Windows Hello";
     document.getElementById("osicon").className = "osicon" + (p==="win" ? " hello" : "");
     document.getElementById("osGo").textContent = p==="mac" ? "Simulate Touch ID" : "Simulate Windows Hello";
@@ -217,13 +217,13 @@
   document.getElementById("win").onclick=function(){setPlatform("win");};
 
   function setDecision(a,v,why,body){ decAction.textContent=a; decVerdict.textContent=v.toUpperCase(); decVerdict.className="verdict v-"+v; decBody.innerHTML=body; decWhy.textContent=why?("reason · "+why):""; }
-  function addOp(label,state){ ops.insertAdjacentHTML("beforeend",'<div class="op '+state+'"><div class="ic">•</div><div>'+label+'</div><div class="st">'+(state==="done"?"DONE":"HELD")+'</div></div>'); }
+  function addOp(label,state){ ops.insertAdjacentHTML("beforeend",'<div class="op '+state+'"><div class="ic">•</div><div>'+label+'</div><div class="st">'+(state==="done"?"DONE":"HELD")+'</div></div>'); return ops.lastElementChild; }
   function updatePrimary(){ if(i>=STEPS.length){primary.textContent="All done ✓";primary.disabled=true;return;} primary.disabled=false; primary.textContent=STEPS[i].label; }
 
   function advance(){
     if(i>=STEPS.length) return;
     var s=STEPS[i]; setDecision(s.action,s.verdict,s.why,s.body);
-    if(s.needsStepUp){ awaitingStepUp=true; msg.innerHTML='<div class="msg">One quick check to confirm it\'s you on this shared workstation.</div>'; addOp(s.op,"held"); primary.disabled=true; osdim.classList.add("show"); return; }
+    if(s.needsStepUp){ awaitingStepUp=true; msg.innerHTML='<div class="msg">One quick check to confirm it\'s you on this shared workstation.</div>'; if(!heldOp) heldOp=addOp(s.op,"held"); primary.disabled=true; osdim.classList.add("show"); return; }
     msg.innerHTML='<div class="msg ok">'+s.host+'</div>'; addOp(s.op,"done"); i++; updatePrimary();
   }
   function completeStepUp(){
@@ -235,7 +235,7 @@
   }
   function confirmChange(){
     awaitingConfirm=false; confirmEl.innerHTML="";
-    var held=ops.querySelector(".op.held"); if(held){held.classList.remove("held");held.classList.add("done");held.querySelector(".st").textContent="DONE";}
+    if(heldOp){heldOp.classList.remove("held");heldOp.classList.add("done");heldOp.querySelector(".st").textContent="DONE";} heldOp=null;
     msg.innerHTML='<div class="msg ok">'+APPLIED.host+'</div>'; setDecision(STEPS[i].action,APPLIED.verdict,APPLIED.why,APPLIED.body); i++; updatePrimary();
   }
   function cancelConfirm(){
@@ -246,7 +246,7 @@
   primary.onclick=function(){ if(!awaitingStepUp && !awaitingConfirm) advance(); };
   document.getElementById("osGo").onclick=completeStepUp;
   document.getElementById("osNo").onclick=function(){ osdim.classList.remove("show"); awaitingStepUp=false; primary.disabled=false; msg.innerHTML='<div class="msg">Cancelled. The action stays held — nothing was pushed.</div>'; setDecision(STEPS[i].action,"step_up","STEP_UP_NOT_SATISFIED","The engineer declined the check, so the held push never fires. Fail-closed: no gesture, no release."); };
-  document.getElementById("reset").onclick=function(){ i=0;awaitingStepUp=false;awaitingConfirm=false; ops.innerHTML="";msg.innerHTML="";confirmEl.innerHTML=""; setDecision("—","allow","","Press <strong>View topology</strong> to begin."); decAction.textContent="—";decVerdict.textContent="—";decVerdict.className="verdict"; osdim.classList.remove("show"); updatePrimary(); };
+  document.getElementById("reset").onclick=function(){ i=0;awaitingStepUp=false;awaitingConfirm=false;heldOp=null; ops.innerHTML="";msg.innerHTML="";confirmEl.innerHTML=""; setDecision("—","allow","","Press <strong>View topology</strong> to begin."); decAction.textContent="—";decVerdict.textContent="—";decVerdict.className="verdict"; osdim.classList.remove("show"); updatePrimary(); };
 
   setPlatform("mac"); updatePrimary();
 })();

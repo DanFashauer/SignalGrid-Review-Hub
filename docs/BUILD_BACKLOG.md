@@ -24,10 +24,12 @@ picking these up:
       release stand-in (an earlier HMAC-proof attempt was removed for exactly this
       reason). Until then, step-up completion is a clearly-labeled client-side
       SIMULATION in the demo UI (`completeAppStepUp`), never a server control.
-- [ ] **Reposition `signalgrid-mobile-pwa` as operator/support (not a worker
-      destination)** — the embedded-UX demo below now covers the worker-side
-      reference (option a); the remaining reconciliation is to reframe the
-      branded "My Access" app itself per `docs/EMBEDDED_UX_PRINCIPLE.md`.
+- [x] **Reposition `signalgrid-mobile-pwa` as operator/support (not a worker
+      destination)** — done. The branded first-person "My Access" worker screen is
+      now the `AccessSupport` tab ("Access support · Worker session triage · relay
+      guidance"): a support lead's window into worker sessions that relays guidance
+      with no worker-executed controls. `docs/EMBEDDED_UX_PRINCIPLE.md` (Reconciliation)
+      and `docs/APP_SUITE_MATRIX.md` updated to match.
 - [ ] **Per-integration workflow templates** — a starter catalog an integrator
       clones per app, plus a validation lint.
 

@@ -80,15 +80,20 @@ between **Touch ID** and **Windows Hello** — the *only* per-platform differenc
 making the point that the behavior is identical everywhere; just the
 authenticator changes.
 
-## Open reconciliation
+## Reconciliation (done)
 
-- `artifacts/signalgrid-mobile-pwa` ("My Access") today renders a **SignalGrid-
-  branded end-user screen** with self-service resolution steps. That predates this
-  law and conflicts with it: an end user should not open a SignalGrid app. The
-  embedded-UX demonstration above now realizes option (a) — a reference host app
-  showing gating/step-up *inside* a partner app; the remaining work is to
-  reposition the mobile-pwa itself as an **operator/support** view rather than a
-  worker destination. Tracked in `docs/BUILD_BACKLOG.md`.
+- `artifacts/signalgrid-mobile-pwa` previously rendered a **SignalGrid-branded
+  end-user screen** ("My Access", "Alex R. · Nurse") with first-person
+  self-service steps ("Fix it yourself", "Retry after these steps"). That
+  predated this law and conflicted with it: an end user should not open a
+  SignalGrid app. It has now been repositioned as an **operator/support** surface
+  — the `AccessSupport` tab ("Access support · Worker session triage · relay
+  guidance"). A support lead reviews a worker's blocked session and sees the
+  guidance to relay; the worker's actual resolution happens invisibly in their
+  host app, and there are no worker-executed controls in the PWA. The embedded-UX
+  demonstrations (`embedded-host-app-demo.html` for mobile,
+  `embedded-desktop-demo.html` for desktop) remain the reference for the worker's
+  embedded flow. `docs/APP_SUITE_MATRIX.md` reflects the repositioning.
 
 ## The test for any new surface
 

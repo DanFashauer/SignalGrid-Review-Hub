@@ -38,7 +38,7 @@ const TIERS = [
       { text: "16 candidate source categories", ok: true },
       { text: "Decision engine + policy editor", ok: true },
       { text: "Operator dashboard + Desktop client", ok: true },
-      { text: "Mobile PWA (My Access worker + operator)", ok: true },
+      { text: "Mobile PWA (operator + access-support triage)", ok: true },
       { text: "1-year immutable audit log", ok: true },
       { text: "Priority support (design target)", ok: true },
       { text: "Shift Handoff Intelligence", ok: true },

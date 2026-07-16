@@ -73,6 +73,9 @@ jobs:
       - name: Orchestration (Trust→Action) proof
         run: pnpm run proof:orchestration
 
+      - name: Room-sim (Trusted-Entry, multi-vertical) proof
+        run: pnpm run proof:room-sim
+
       - name: Signal Radar (new-signal detection) proof
         run: pnpm run proof:signal-radar
 

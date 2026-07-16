@@ -20,6 +20,22 @@ picking these up:
       six-vertical story end to end. Deferred deliberately; owner OK'd retail +
       industrial first.
 
+- [ ] **DDM / device-health signal connector (macOS 27)** — a fixture-first
+      connector that normalizes Declarative Device Management health reporting +
+      binary-control / declarative-privacy posture into the decision dimensions
+      the core already understands (device compliance, baseline alignment,
+      posture freshness), raising assurance where warranted (e.g. off-baseline
+      binary-control state nudges a sensitive action auto → step-up). Complements
+      OS binary control rather than duplicating it. See
+      `docs/MACOS_27_DDM_SIGNAL_OPPORTUNITY.md`. No live MDM calls.
+
+- [ ] **Preflight mirrors the docs-sanity CI job** — `pnpm run preflight` covers
+      the validation + supply-chain jobs but not the `docs-sanity` job (required
+      docs exist + the unsafe-claim denylist scan). Extract that job's logic into
+      a shared `scripts/docs-sanity.mjs` used by BOTH the workflow and preflight,
+      so a doc that trips the unsafe-claim scan fails preflight before the push
+      (same pattern as the SBOM gate). Small, tooling-only.
+
 ## Next
 
 - [ ] **In-app step-up completion (real, hardware-backed)** — releasing a held

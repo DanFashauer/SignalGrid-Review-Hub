@@ -3,6 +3,7 @@ import { ControlPlane, type TelemetryBatch } from "@workspace/control-plane";
 import { listFlows, evaluateFlowHealth, resolveFlowBreak, gridIntelligence, type SignalState } from "@workspace/flows";
 import { recommend, DEMO_USAGE } from "@workspace/recommendations";
 import { discover, planOnboarding, discoverySummary, DEMO_SOURCES, DEMO_OBSERVED } from "@workspace/signal-discovery";
+import { normalizeDdmReports, ddmSummary, DEMO_DDM_REPORTS, DDM_OBSERVED_AT } from "@workspace/ddm-connector";
 
 /**
  * `/cp/v1/*` — the SaaS **control-plane** surface (management, not decisions).
@@ -143,6 +144,21 @@ router.get("/cp/v1/signal-discovery", (_req, res) => {
     summary: discoverySummary(discovered, DEMO_SOURCES),
     discovered,
     onboarding: planOnboarding(discovered),
+  });
+});
+
+// DDM / device-health signals (macOS 27): normalize Declarative Device Management
+// health reporting + binary-control + declarative-privacy posture into the
+// decision dimensions the core understands. Complementary to OS binary control;
+// a weak posture only RAISES the assurance a sensitive action demands. Fixture —
+// no live MDM call. See docs/MACOS_27_DDM_SIGNAL_OPPORTUNITY.md.
+router.get("/cp/v1/ddm", (_req, res) => {
+  const signals = normalizeDdmReports(DEMO_DDM_REPORTS, DDM_OBSERVED_AT);
+  res.json({
+    note: "Fixture DDM reports normalized to decision dimensions; no live MDM is called. A weak posture only raises assurance (auto → step-up), never lowers it.",
+    observedAt: DDM_OBSERVED_AT,
+    summary: ddmSummary(signals, DEMO_DDM_REPORTS),
+    signals,
   });
 });
 

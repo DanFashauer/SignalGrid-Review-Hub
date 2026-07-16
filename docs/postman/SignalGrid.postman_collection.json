@@ -1204,6 +1204,27 @@
               "type": "noauth"
             }
           }
+        },
+        {
+          "name": "DDM / device-health signals (macOS 27)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cp/v1/ddm",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cp",
+                "v1",
+                "ddm"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
         }
       ]
     }

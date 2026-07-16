@@ -54,17 +54,34 @@ They answer **different questions on the same device**, so they compose:
    desktop host-app path, the Assist decision layer lives inside the app
    regardless of the OS's binary-control policy.
 
-## What this could turn into (future work — not built here)
+## What's built
 
-- A **DDM / device-health signal connector** (fixture-first, like the existing
-  Entra/Intune and DockBridge connectors) that normalizes DDM health reporting
-  and binary-control/privacy posture into decision dimensions the core already
-  understands (device compliance, baseline alignment, posture freshness).
-- A mapping doc: which DDM/EndpointSecurity signals feed which decision
-  dimensions, and where they raise assurance (e.g. an off-baseline binary-control
-  state nudges a sensitive action from auto → step-up).
+- ✅ **DDM / device-health signal connector** (`@workspace/ddm-connector`,
+  fixture-first like the Entra/Intune and DockBridge connectors) — normalizes a
+  DDM device report (enrollment, health reporting, binary-control state,
+  declarative-privacy posture, last check-in) into the decision dimensions the
+  core already understands:
+
+  | DDM signal | → decision dimension |
+  |---|---|
+  | enrolled | `deviceManaged` |
+  | health (healthy/degraded/unreporting) | `deviceCompliance` |
+  | binary control (enforced/permissive/disabled) | `baselineCompliance` (enforced ⇒ aligned) |
+  | last check-in + now | `postureFreshness` |
+
+  Plus an **assurance hint**: any weak posture (not enrolled, binary control not
+  enforced, privacy declaration incomplete, health degraded, or a stale/unknown
+  check-in) sets `raise_step_up` — which can only move a sensitive action
+  **auto → step-up**, never relax it (fail-closed, proven). Read API
+  `GET /cp/v1/ddm`; proof:ddm-connector 28/28.
+
+## Still open (future work)
+
 - A macOS desktop host-app demo showing the same invisible Assist flow the
   frontline mobile path uses (`docs/EMBEDDED_UX_PRINCIPLE.md`).
+- Wiring the DDM assurance hint into a live policy path (today it's a normalized
+  signal + hint; a policy that consumes `baselineCompliance`/`postureFreshness`
+  already reacts to it).
 
 Tracked in `docs/BUILD_BACKLOG.md`. All future work stays fixture-first and
 public-safe — no live MDM/vendor calls, no partnership or certification claims.

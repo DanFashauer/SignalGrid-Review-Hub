@@ -1460,6 +1460,9 @@ importers:
       '@workspace/orchestration':
         specifier: workspace:*
         version: link:../lib/orchestration
+      '@workspace/room-sim':
+        specifier: workspace:*
+        version: link:../lib/room-sim
       '@workspace/signal-radar':
         specifier: workspace:*
         version: link:../lib/signal-radar

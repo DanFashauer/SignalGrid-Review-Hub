@@ -89,6 +89,37 @@ check("controlled room includes medication cabinet + witness",
 check("standard room excludes controlled-only extras",
   !planOrchestration({ outcome: "allow", reasonCodes: [], room: standard }).actions.some((a) => a.kind === "medication.cabinet.unlock"));
 
+// ── warehouse domain: same Assist model, warehouse catalog + language ────────
+const whZone = (sensitivity: RoomContext["sensitivity"], workflowKey: string): RoomContext => ({
+  roomId: "AISLE-1", unit: "DC-7", sensitivity, workflowKey, workflowLabel: "Warehouse workflow", domain: "warehouse",
+});
+const whStd = whZone("standard", "pick-pack");
+const whCtl = whZone("controlled", "controlled-area");
+
+const whAllow = planOrchestration({ outcome: "allow", reasonCodes: [], room: whCtl });
+const whKinds = whAllow.actions.map((a) => a.kind);
+check("warehouse catalog: gate/handheld/manifest present, no clinical kinds",
+  whKinds.includes("gate.unlock") && whKinds.includes("handheld.session.start") && whKinds.includes("manifest.display.activate") &&
+  !whKinds.includes("door.unlock") && !whKinds.includes("clinical.display.activate"));
+check("warehouse controlled area adds cage + supervisor witness",
+  whKinds.includes("cage.unlock") && whKinds.includes("witness.require"));
+check("warehouse standard zone excludes controlled-only extras",
+  !planOrchestration({ outcome: "allow", reasonCodes: [], room: whStd }).actions.some((a) => a.kind === "cage.unlock"));
+check("warehouse manifest display is always sensitive (customer PII), never auto",
+  whAllow.actions.every((a) => !(a.sensitive && a.disposition === "auto")) &&
+  whAllow.actions.find((a) => a.kind === "manifest.display.activate")?.disposition === "assist");
+check("warehouse confirmation language names the supervisor, not a clinician",
+  whAllow.summary.includes("supervisor") && !whAllow.summary.includes("clinician") &&
+  (whAllow.actions.find((a) => a.disposition === "assist")?.reason.includes("supervisor") ?? false));
+check("warehouse deny blocks every action too",
+  planOrchestration({ outcome: "deny", reasonCodes: ["IDENTITY_DISABLED"], room: whCtl }).actions.every((a) => a.disposition === "blocked"));
+check("warehouse step-up holds the gate, permits ambient lighting",
+  (() => { const p = planOrchestration({ outcome: "step_up", reasonCodes: ["BASELINE_DRIFTED"], room: whCtl });
+    return p.actions.find((a) => a.kind === "gate.unlock")?.disposition === "step_up" &&
+      p.actions.find((a) => a.kind === "environment.lighting")?.disposition === "auto"; })());
+check("clinical domain is unchanged (default): summary still names the clinician",
+  planOrchestration({ outcome: "allow", reasonCodes: [], room: controlled }).summary.includes("clinician"));
+
 // ── determinism ─────────────────────────────────────────────────────────────
 const a = JSON.stringify(planOrchestration({ outcome: "allow", reasonCodes: [], room: controlled }));
 const b = JSON.stringify(planOrchestration({ outcome: "allow", reasonCodes: [], room: controlled }));

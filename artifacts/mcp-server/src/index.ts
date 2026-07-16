@@ -15,14 +15,18 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { SignalGridCore } from "@workspace/signalgrid-core";
-import { listScenarios, runRoomEntry } from "@workspace/room-sim";
+import { listScenarios, runRoomEntry, tenantForScenario } from "@workspace/room-sim";
 import { scanSignals, signalCatalog } from "@workspace/signal-radar";
 
 const core = SignalGridCore.demo();
-const token =
-  core.demoApiKeys().find((k) => k.tenantId === "tenant_northwind" && k.role === "operator")?.token ??
-  core.demoApiKeys().find((k) => k.tenantId === "tenant_northwind")?.token ??
-  "";
+const demoKeys = core.demoApiKeys();
+
+// One demo token per tenant, so hospital and warehouse scenarios each evaluate
+// under their own tenant (cross-tenant evaluation is refused by design).
+function tokenForTenant(tenantId: string): string {
+  const preferred = demoKeys.find((k) => k.tenantId === tenantId && (k.role === "operator" || k.role === "owner"));
+  return (preferred ?? demoKeys.find((k) => k.tenantId === tenantId))?.token ?? "";
+}
 
 const asText = (data: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] });
 
@@ -56,7 +60,7 @@ server.registerTool(
   async ({ scenarioId, confirmedActionIds, stepUpSatisfied }) => {
     try {
       return asText(
-        runRoomEntry(core, token, scenarioId, {
+        runRoomEntry(core, tokenForTenant(tenantForScenario(scenarioId)), scenarioId, {
           confirmedActionIds: confirmedActionIds ?? [],
           stepUpSatisfied: stepUpSatisfied ?? false,
         }),
@@ -111,7 +115,7 @@ server.registerTool(
   },
   async ({ identityRef, deviceRef, workflowKey }) => {
     try {
-      const r = core.evaluate(token, { identityRef, deviceRef, workflowKey });
+      const r = core.evaluate(tokenForTenant("tenant_northwind"), { identityRef, deviceRef, workflowKey });
       return asText({ outcome: r.outcome, reasonCodes: r.reasonCodes, explanation: r.explanation, latencyMs: r.latencyMs });
     } catch (err) {
       return { isError: true, content: [{ type: "text" as const, text: err instanceof Error ? err.message : "evaluation failed" }] };

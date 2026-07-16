@@ -7,13 +7,17 @@
 // so the in-browser result is identical to the hosted API's.
 
 import { SignalGridCore } from "@workspace/signalgrid-core";
-import { listScenarios, runRoomEntry, type RoomEntryOptions, type RoomEntryResult } from "./index";
+import { listScenarios, runRoomEntry, tenantForScenario, type RoomEntryOptions, type RoomEntryResult } from "./index";
 
 const core = SignalGridCore.demo();
-const token =
-  core.demoApiKeys().find((k) => k.tenantId === "tenant_northwind" && k.role === "operator")?.token ??
-  core.demoApiKeys().find((k) => k.tenantId === "tenant_northwind")?.token ??
-  "";
+const keys = core.demoApiKeys();
+
+// One demo token per tenant, so hospital and warehouse scenarios each evaluate
+// under their own tenant (cross-tenant evaluation is refused by design).
+function tokenFor(tenantId: string): string {
+  const preferred = keys.find((k) => k.tenantId === tenantId && (k.role === "operator" || k.role === "owner"));
+  return (preferred ?? keys.find((k) => k.tenantId === tenantId))?.token ?? "";
+}
 
 export interface RoomSimGlobal {
   scenarios: ReturnType<typeof listScenarios>;
@@ -22,7 +26,7 @@ export interface RoomSimGlobal {
 
 const api: RoomSimGlobal = {
   scenarios: listScenarios(),
-  run: (scenarioId, options = {}) => runRoomEntry(core, token, scenarioId, options),
+  run: (scenarioId, options = {}) => runRoomEntry(core, tokenFor(tenantForScenario(scenarioId)), scenarioId, options),
 };
 
 // Expose to the inline console script.

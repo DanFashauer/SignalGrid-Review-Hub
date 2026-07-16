@@ -74,9 +74,12 @@ export function seedDemoStore(clock: Clock): SeededDemo {
     { key: "med-admin", name: "Medication administration", riskTier: "critical" },
     { key: "general-lookup", name: "General directory lookup", riskTier: "standard" },
   ]);
-  // Atlas: warehouse handheld workflows.
+  // Atlas: warehouse handheld workflows, escalating with zone sensitivity —
+  // an open pick aisle, a general lookup, and a controlled high-value/hazmat area.
   seedWorkflows(store, ATLAS, [
+    { key: "general-lookup", name: "Warehouse directory lookup", riskTier: "standard" },
     { key: "pick-pack", name: "Warehouse pick/pack session", riskTier: "standard" },
+    { key: "controlled-area", name: "Controlled-area entry (high-value / hazmat)", riskTier: "critical" },
   ]);
 
   seedPolicy(store, NORTHWIND, createdAt);
@@ -473,21 +476,40 @@ function northwindSmartDockCustody(): DockCustodyRecord[] {
 }
 
 function atlasDockCustody(): DockCustodyRecord[] {
-  return [
-    {
-      ...benignDock("handheld-01", 1),
-      dockId: "locker-fixture-dc-01",
-      bayId: "bay-01",
-    },
-  ];
+  // Benign locker custody for every warehouse handheld, so the decisive signal in
+  // each scenario is posture / baseline / identity — not an incidental custody gap.
+  return ["handheld-01", "handheld-02", "handheld-06", "handheld-04"].map((ref, i) => ({
+    ...benignDock(ref, i + 1),
+    dockId: "locker-fixture-dc-01",
+    bayId: `bay-${String(i + 1).padStart(2, "0")}`,
+  }));
 }
 
 function seedAtlasSubjects(store: MemoryStore): FixturePostureRecord[] {
+  const fresh = "2026-07-13T14:00:00.000Z";
   const specs: SubjectSpec[] = [
     {
       identity: { externalRef: "picker.compliant", displayName: "Compliant Picker", state: "enabled", assignedRole: "picker" },
       device: { externalRef: "handheld-01", name: "Warehouse Handheld 01", osPlatform: "Android", osVersion: "14", ownerType: "corporate", managementAgent: "intune" },
-      posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: "2026-07-13T14:00:00.000Z", sourceReference: "fixture:intune:managedDevices#handheld-01" },
+      posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, baseline: "aligned", sourceReference: "fixture:intune:managedDevices#handheld-01" },
+    },
+    // Non-compliant handheld — the device posture is the decisive signal (restrict).
+    {
+      identity: { externalRef: "picker.noncompliant", displayName: "Picker (non-compliant device)", state: "enabled", assignedRole: "picker" },
+      device: { externalRef: "handheld-02", name: "Warehouse Handheld 02", osPlatform: "Android", osVersion: "13", ownerType: "corporate", managementAgent: "intune" },
+      posture: { identityEnabled: true, managed: true, compliance: "non_compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, sourceReference: "fixture:intune:managedDevices#handheld-02" },
+    },
+    // Security-baseline drift — posture otherwise healthy, so the drift decides (step-up).
+    {
+      identity: { externalRef: "picker.baseline_drift", displayName: "Picker (baseline drift)", state: "enabled", assignedRole: "picker" },
+      device: { externalRef: "handheld-06", name: "Warehouse Handheld 06", osPlatform: "Android", osVersion: "14", ownerType: "corporate", managementAgent: "intune" },
+      posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, baseline: "drifted", sourceReference: "fixture:intune:managedDevices#handheld-06" },
+    },
+    // Disabled account — trust fails at the identity layer (deny).
+    {
+      identity: { externalRef: "picker.disabled", displayName: "Disabled picker account", state: "disabled", assignedRole: "picker" },
+      device: { externalRef: "handheld-04", name: "Warehouse Handheld 04", osPlatform: "Android", osVersion: "14", ownerType: "corporate", managementAgent: "intune" },
+      posture: { identityEnabled: false, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, baseline: "aligned", sourceReference: "fixture:intune:managedDevices#handheld-04" },
     },
   ];
   return materializeSubjects(store, ATLAS, specs);

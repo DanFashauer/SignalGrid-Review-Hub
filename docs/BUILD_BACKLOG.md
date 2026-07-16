@@ -14,13 +14,8 @@ picking these up:
 
 ## Now (next up)
 
-- [ ] **Warehouse scenario pack** — add pick/pack + controlled-area scenarios to
-      the room-sim/console so the demo isn't hospital-only.
-
-## Next
-
 - [ ] **Global-fleet scenario pack** — vehicle-mount checkout + cross-region
-      session scenarios.
+      session scenarios (extend the Trusted-Entry runner to the Meridian tenant).
 
 ## Later / vision
 
@@ -31,6 +26,15 @@ picking these up:
       narrower).
 
 ## Done (recent)
+
+- [x] Warehouse scenario pack — the Trusted-Entry runner + on-device console now
+      span two verticals: smart-hospital (Northwind) and warehouse (Atlas), with
+      pick-aisle and controlled high-value/hazmat cage scenarios across the full
+      allow / step-up / restrict / deny spectrum. Domain-aware orchestration
+      catalog (zone gate, handheld, WES/WMS task, cage, supervisor witness) +
+      confirmation language, cross-tenant fail-closed. Proof: room-sim 22/22,
+      orchestration 35/35. (Also fixed a pre-existing api-contract parser bug
+      where `/cp/v1/*` methods leaked onto the last `/v1` path.)
 
 - [x] Per-vertical policy bundles surfaced in the admin Fleet UI — each tenant
       shows its signed bundle version + the workflow set it distributes

@@ -22,6 +22,16 @@ export interface Scenario {
   identityRef: string;
   deviceRef: string;
   room: RoomContext;
+  /** Demo tenant whose token evaluates this scenario. Defaults to Northwind (hospital). */
+  tenant?: string;
+}
+
+/** Default tenant for a scenario that doesn't name one (the hospital seed). */
+export const DEFAULT_TENANT = "tenant_northwind";
+
+/** The tenant whose demo token should evaluate a given scenario. */
+export function tenantForScenario(id: string): string {
+  return findScenario(id)?.tenant ?? DEFAULT_TENANT;
 }
 
 export interface RoomEntryResult {
@@ -41,7 +51,7 @@ export interface RoomEntryResult {
 
 // Rooms of escalating sensitivity mapped to workflows of escalating risk, so the
 // physical space and the clinical risk move together.
-export const SCENARIOS: Scenario[] = [
+export const CLINICAL_SCENARIOS: Scenario[] = [
   {
     id: "compliant-standard",
     title: "Compliant nurse · standard room",
@@ -108,8 +118,76 @@ export const SCENARIOS: Scenario[] = [
   },
 ];
 
-export function listScenarios(): Array<Pick<Scenario, "id" | "title" | "description" | "room">> {
-  return SCENARIOS.map((s) => ({ id: s.id, title: s.title, description: s.description, room: s.room }));
+// Warehouse "Trusted Zone Entry" — a picker with a shared handheld approaching a
+// pick aisle or a controlled high-value/hazmat cage. Same decision core + Assist
+// model as the hospital, on the Atlas (warehouse) tenant seed. Public-safe.
+export const WAREHOUSE_SCENARIOS: Scenario[] = [
+  {
+    id: "wh-compliant-pick",
+    title: "Compliant picker · pick aisle",
+    description: "On-shift picker, compliant shared handheld, pick/pack session in an open aisle.",
+    identityRef: "picker.compliant",
+    deviceRef: "handheld-01",
+    tenant: "tenant_atlas",
+    room: { roomId: "AISLE-12", unit: "DC-7 · Ambient pick", sensitivity: "standard", workflowKey: "pick-pack", workflowLabel: "Pick/pack session", domain: "warehouse" },
+  },
+  {
+    id: "wh-compliant-cage",
+    title: "Compliant picker · controlled cage",
+    description: "On-shift picker entering a controlled high-value / hazmat cage (critical) — cage + manifest await supervisor confirmation.",
+    identityRef: "picker.compliant",
+    deviceRef: "handheld-01",
+    tenant: "tenant_atlas",
+    room: { roomId: "CAGE-1", unit: "DC-7 · High-value cage", sensitivity: "controlled", workflowKey: "controlled-area", workflowLabel: "Controlled-area entry", domain: "warehouse" },
+  },
+  {
+    id: "wh-noncompliant-pick",
+    title: "Non-compliant handheld · pick aisle",
+    description: "Picker on a non-compliant shared handheld attempting a pick/pack session.",
+    identityRef: "picker.noncompliant",
+    deviceRef: "handheld-02",
+    tenant: "tenant_atlas",
+    room: { roomId: "AISLE-12", unit: "DC-7 · Ambient pick", sensitivity: "standard", workflowKey: "pick-pack", workflowLabel: "Pick/pack session", domain: "warehouse" },
+  },
+  {
+    id: "wh-baseline-cage",
+    title: "Security-baseline drift · controlled cage",
+    description: "Handheld drifted from its hardening baseline; controlled-area entry requested — held for step-up.",
+    identityRef: "picker.baseline_drift",
+    deviceRef: "handheld-06",
+    tenant: "tenant_atlas",
+    room: { roomId: "CAGE-1", unit: "DC-7 · High-value cage", sensitivity: "controlled", workflowKey: "controlled-area", workflowLabel: "Controlled-area entry", domain: "warehouse" },
+  },
+  {
+    id: "wh-disabled-pick",
+    title: "Disabled account · pick aisle",
+    description: "A disabled picker identity attempts entry — trust fails at the identity layer.",
+    identityRef: "picker.disabled",
+    deviceRef: "handheld-04",
+    tenant: "tenant_atlas",
+    room: { roomId: "AISLE-12", unit: "DC-7 · Ambient pick", sensitivity: "standard", workflowKey: "pick-pack", workflowLabel: "Pick/pack session", domain: "warehouse" },
+  },
+];
+
+export const SCENARIOS: Scenario[] = [...CLINICAL_SCENARIOS, ...WAREHOUSE_SCENARIOS];
+
+export interface ScenarioSummary {
+  id: string;
+  title: string;
+  description: string;
+  room: RoomContext;
+  /** Vertical this scenario belongs to (grouping for the UI). */
+  domain: NonNullable<RoomContext["domain"]>;
+}
+
+export function listScenarios(): ScenarioSummary[] {
+  return SCENARIOS.map((s) => ({
+    id: s.id,
+    title: s.title,
+    description: s.description,
+    room: s.room,
+    domain: s.room.domain ?? "clinical",
+  }));
 }
 
 export function findScenario(id: string): Scenario | undefined {

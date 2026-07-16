@@ -33,6 +33,8 @@
   button.s.active{border-left-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--card))}
   button.s .t{font-weight:600;font-size:.86rem}
   button.s .d{font-size:.74rem;color:var(--faint);margin-top:.15rem}
+  .group{font-size:.66rem;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);margin:.5rem 0 .15rem;font-weight:600}
+  .group:first-child{margin-top:0}
   .out{display:flex;flex-direction:column;gap:1.05rem;min-height:200px}
   .placeholder{color:var(--faint);font-size:.9rem;padding:2rem 0;text-align:center;border:1px dashed var(--line);border-radius:10px}
   .verdict{border-radius:10px;padding:1rem 1.15rem;border:1px solid var(--line);border-left:5px solid var(--tone);background:var(--card)}
@@ -73,7 +75,7 @@
     <span class="sub">Trusted Room Entry · runs on-device</span>
   </header>
   <h1>Context-aware trust &amp; orchestration — Phase 1</h1>
-  <p class="lead">A synthetic nurse with a managed device approaches a room. SignalGrid runs the real decision core over identity, device posture, custody, badge binding, security baseline and workflow risk — then orchestrates the downstream actions. Sensitive steps (a controlled-room door, a PHI display) are never automatic; they wait for a clinician to confirm. <b>Everything here runs in this browser tab</b> — no server, no network.</p>
+  <p class="lead">A synthetic holder with a managed shared device approaches a space — a hospital room or a warehouse zone. SignalGrid runs the real decision core over identity, device posture, custody, badge binding, security baseline and workflow risk — then orchestrates the downstream actions for that vertical. Sensitive steps (a controlled-room door and PHI display, or a high-value cage and customer-PII manifest) are never automatic; they wait for a clinician or supervisor to confirm. <b>Everything here runs in this browser tab</b> — no server, no network.</p>
   <div class="grid">
     <aside class="scn">
       <h2>Scenarios</h2>
@@ -104,7 +106,14 @@
   }
   function load(){
     const box=byId('#scenarios'); box.innerHTML='';
+    const LABEL={clinical:'Smart hospital',warehouse:'Warehouse'};
+    let lastDomain=null;
     SG.scenarios.forEach(s=>{
+      const domain=s.domain||'clinical';
+      if(domain!==lastDomain){
+        const h=document.createElement('div'); h.className='group'; h.textContent=LABEL[domain]||domain;
+        box.appendChild(h); lastDomain=domain;
+      }
       const b=document.createElement('button'); b.className='s'; b.dataset.id=s.id;
       b.innerHTML='<div class="t"></div><div class="d"></div>';
       b.querySelector('.t').textContent=s.title; b.querySelector('.d').textContent=s.description;

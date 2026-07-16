@@ -85,6 +85,9 @@ jobs:
       - name: Recommendations (learned-habit proposals) proof
         run: pnpm run proof:recommendations
 
+      - name: Signal-discovery (auto-onboarding) proof
+        run: pnpm run proof:signal-discovery
+
       - name: Signal Radar (new-signal detection) proof
         run: pnpm run proof:signal-radar
 

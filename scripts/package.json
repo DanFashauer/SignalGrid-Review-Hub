@@ -31,7 +31,8 @@
     "proof:signal-radar": "tsx ./src/signal-radar-proof.ts",
     "proof:control-plane": "tsx ./src/control-plane-proof.ts",
     "proof:edge-sync": "tsx ./src/edge-sync-proof.ts",
-    "proof:telemetry-up": "tsx ./src/telemetry-up-proof.ts"
+    "proof:telemetry-up": "tsx ./src/telemetry-up-proof.ts",
+    "proof:signal-discovery": "tsx ./src/signal-discovery-proof.ts"
   },
   "dependencies": {
     "@workspace/signalgrid-core": "workspace:*",
@@ -43,7 +44,8 @@
     "@workspace/recommendations": "workspace:*",
     "@workspace/signal-radar": "workspace:*",
     "@workspace/control-plane": "workspace:*",
-    "@workspace/room-sim": "workspace:*"
+    "@workspace/room-sim": "workspace:*",
+    "@workspace/signal-discovery": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

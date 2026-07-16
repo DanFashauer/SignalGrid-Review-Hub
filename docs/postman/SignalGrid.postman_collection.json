@@ -1183,6 +1183,27 @@
               "type": "noauth"
             }
           }
+        },
+        {
+          "name": "Signal discovery + auto-onboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cp/v1/signal-discovery",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cp",
+                "v1",
+                "signal-discovery"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
         }
       ]
     }

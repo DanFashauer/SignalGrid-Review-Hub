@@ -25,7 +25,8 @@
     "pino-http": "^10.5.0",
     "@workspace/room-sim": "workspace:*",
     "@workspace/signal-radar": "workspace:*",
-    "@workspace/control-plane": "workspace:*"
+    "@workspace/control-plane": "workspace:*",
+    "@workspace/signal-discovery": "workspace:*"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

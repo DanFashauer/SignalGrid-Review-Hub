@@ -7,6 +7,7 @@
     { "path": "./lib/app-workflows" },
     { "path": "./lib/flows" },
     { "path": "./lib/recommendations" },
+    { "path": "./lib/signal-discovery" },
     { "path": "./lib/room-sim" },
     { "path": "./lib/signal-radar" },
     { "path": "./lib/control-plane" },

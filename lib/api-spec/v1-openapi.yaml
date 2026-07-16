@@ -476,6 +476,15 @@ paths:
       responses:
         "200": { description: Advisory recommendations }
 
+  /cp/v1/signal-discovery:
+    get:
+      operationId: cpSignalDiscovery
+      tags: [control-plane]
+      security: []
+      summary: Detected signals across sources, with auto-onboard vs. admin-gate plan
+      responses:
+        "200": { description: Discovery + onboarding plan }
+
 components:
   securitySchemes:
     bearerAuth:

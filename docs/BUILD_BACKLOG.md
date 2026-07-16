@@ -14,13 +14,34 @@ picking these up:
 
 ## Now (next up)
 
-_(backlog clear — scenario packs shipped for all three verticals; new ideas land here)_
+- [ ] **Retail + industrial tenants in the core** — seed two more demo tenants so
+      the retail (POS / restricted-sale) and industrial (MES / SCADA-HMI) app
+      catalogs gate live, not catalog-only. Same pattern as the Meridian add.
+
+## Next
+
+- [ ] **In-app step-up loop** — when `/v1/app-workflows/evaluate` returns
+      `step_up`, drive the hardened WebAuthn badge-tap / biometric and re-request,
+      showing held actions releasing. (See `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md`.)
+- [ ] **Per-integration workflow templates** — a starter catalog an integrator
+      clones per app, plus a validation lint.
 
 ## Later / vision
 
-_(nothing queued)_
+_(see `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` for the full app-workflow roadmap)_
 
 ## Done (recent)
+
+- [x] App-workflow gating (`@workspace/app-workflows`) — SignalGrid now gates
+      APPLICATION actions, not just physical ones: an app calls it before a
+      sensitive action and gets back which of its actions may run automatically
+      vs. which must be human-confirmed (Assist model), from a live decision.
+      Catalog spans five verticals (healthcare EMR/BCMA/messaging/alarms;
+      warehouse WMS/labor; industrial MES-HMI; fleet TMS/ELD/telematics; retail
+      POS/restricted). New `GET /v1/app-workflows/integrations` +
+      `POST /v1/app-workflows/evaluate` (OpenAPI + Postman), an "App workflows"
+      admin page with live per-vertical gating, and `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md`.
+      Proof: app-workflows 31/31 (incl. real-core EMR/BCMA end-to-end), api test 106/106.
 
 - [x] Operational-intelligence rollups (Phase 3) — `operationalIntelligence()`
       on the control plane derives friction hotspots (from ingested telemetry),

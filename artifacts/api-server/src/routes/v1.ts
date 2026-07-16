@@ -1,5 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { CoreError, type EvaluateRequest } from "@workspace/signalgrid-core";
+import { listAppIntegrations, findAppIntegration, planAppSession } from "@workspace/app-workflows";
 import { core, DEMO_KEYS } from "../lib/core";
 import { requireTenantContext } from "../middlewares/context";
 import { v1RateLimiter } from "../middlewares/rateLimit";
@@ -163,6 +164,44 @@ router.get("/v1/remediation", (req: Request, res: Response) => {
 router.post("/v1/remediation/:id/approve", (req: Request, res: Response) => {
   const action = core.approveRemediation(token(req), param(req, "id"));
   res.json(envelope(req, { action }));
+});
+
+// ── App-workflow gating: the surface an integrated app calls to gate its own
+// actions. Discovery lists the catalog; evaluate runs the REAL decision core for
+// the actor + device, then returns which of the app's actions may run
+// automatically vs. which must be human-confirmed (the Assist model). ──────────
+router.get("/v1/app-workflows/integrations", (req: Request, res: Response) => {
+  const vertical = typeof req.query.vertical === "string" ? req.query.vertical : undefined;
+  const integrations = listAppIntegrations(vertical as never);
+  res.json(envelope(req, { integrations, total: integrations.length }));
+});
+
+router.post("/v1/app-workflows/evaluate", (req: Request, res: Response) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const integrationId = body["integrationId"];
+  if (typeof integrationId !== "string") {
+    throw new CoreError("validation", "integrationId is required.", 400);
+  }
+  const integration = findAppIntegration(integrationId);
+  if (!integration) {
+    throw new CoreError("not_found", `Unknown app integration '${integrationId}'.`, 404);
+  }
+  // The app's session maps to the integration's decision-core workflow.
+  const evalReq = parseEvaluate({ ...body, workflowKey: integration.workflowKey });
+  const decision = core.evaluate(token(req), evalReq);
+  // Return the plan AS DECIDED. We deliberately do NOT accept caller-asserted
+  // `confirmedActionKeys` / `stepUpSatisfied` here: a request must never be able
+  // to promote a sensitive action to `applied` or release a step-up without
+  // server-side evidence. Human confirmation and step-up completion are separate,
+  // evidence-backed steps (the WebAuthn step-up path is the real gate); the
+  // pure planner helpers (confirmAppActions / completeAppStepUp) stay simulation-
+  // only for the console/tests.
+  const plan = planAppSession({
+    integration,
+    outcome: decision.outcome,
+    reasonCodes: decision.reasonCodes,
+  });
+  res.json(envelope(req, { decision, plan }));
 });
 
 export default router;

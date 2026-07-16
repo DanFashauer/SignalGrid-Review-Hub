@@ -140,6 +140,11 @@ check("fleet confirmation language names the dispatcher",
   gfAllow.summary.includes("dispatcher") &&
   (gfAllow.actions.find((a) => a.disposition === "assist")?.reason.includes("dispatcher") ?? false));
 
+// ── fail closed on a malformed / unrecognized outcome ────────────────────────
+const badOutcome = planOrchestration({ outcome: "sideways" as never, reasonCodes: [], room: controlled });
+check("SAFETY: unrecognized outcome fails closed (mode deny, all blocked)",
+  badOutcome.mode === "deny" && badOutcome.actions.every((x) => x.disposition === "blocked"));
+
 // ── determinism ─────────────────────────────────────────────────────────────
 const a = JSON.stringify(planOrchestration({ outcome: "allow", reasonCodes: [], room: controlled }));
 const b = JSON.stringify(planOrchestration({ outcome: "allow", reasonCodes: [], room: controlled }));

@@ -195,6 +195,19 @@ async function run() {
   check("stale posture outcome is step_up", stale.json?.decision?.outcome === "step_up");
   const staleId = stale.json?.decision?.decisionId;
 
+  // ── app-workflows: gate application actions ─────────────────────────────
+  const appList = await req("GET", "/v1/app-workflows/integrations?vertical=healthcare", { token: KEYS.operator });
+  check("app-workflows catalog (healthcare) → 200 with EMR", appList.status === 200 && appList.json?.integrations?.some((i) => i.id === "emr-chart"));
+  const gateEmr = await req("POST", "/v1/app-workflows/evaluate", {
+    token: KEYS.operator,
+    body: { integrationId: "emr-chart", identityRef: "nurse.compliant", deviceRef: "ipad-ward-01" },
+  });
+  check("app-workflows EMR gate → 200 allow", gateEmr.status === 200 && gateEmr.json?.decision?.outcome === "allow");
+  check("app-workflows: sensitive med order is assist, not auto",
+    gateEmr.json?.plan?.actions?.find((a) => a.key === "order.place")?.disposition === "assist");
+  const gateUnknown = await req("POST", "/v1/app-workflows/evaluate", { token: KEYS.operator, body: { integrationId: "nope", identityRef: "nurse.compliant", deviceRef: "ipad-ward-01" } });
+  check("app-workflows unknown integration → 404", gateUnknown.status === 404);
+
   // ── validation error ────────────────────────────────────────────────────
   const badBody = await req("POST", "/v1/decisions/evaluate", { token: KEYS.operator, body: { identityRef: "x" } });
   check("missing fields → 400", badBody.status === 400);

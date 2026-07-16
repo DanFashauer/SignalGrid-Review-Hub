@@ -281,6 +281,40 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /v1/app-workflows/integrations:
+    get:
+      operationId: listAppIntegrations
+      tags: [decisions]
+      summary: List integrated app-workflow catalogs (optionally by vertical)
+      parameters:
+        - in: query
+          name: vertical
+          schema: { type: string }
+      responses:
+        "200": { description: App integrations }
+
+  /v1/app-workflows/evaluate:
+    post:
+      operationId: evaluateAppWorkflow
+      tags: [decisions]
+      summary: Gate an app's actions — real decision + Assist plan for one integration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [integrationId, identityRef, deviceRef]
+              properties:
+                integrationId: { type: string }
+                identityRef: { type: string }
+                deviceRef: { type: string }
+                requestContext: { type: object, additionalProperties: { type: string } }
+      responses:
+        "200": { description: Decision + app-session plan (as decided; no caller-asserted confirmation) }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   # ── Control plane (public management surface; see docs/DEPLOYMENT_MODELS.md) ──
   # The cloud half of the hybrid architecture: manages tenants/sites/fleet,
   # distributes policy bundles DOWN, ingests telemetry UP. Deterministic

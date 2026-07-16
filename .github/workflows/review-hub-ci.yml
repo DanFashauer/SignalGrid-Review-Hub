@@ -76,6 +76,9 @@ jobs:
       - name: Room-sim (Trusted-Entry, multi-vertical) proof
         run: pnpm run proof:room-sim
 
+      - name: App-workflows (application gating) proof
+        run: pnpm run proof:app-workflows
+
       - name: Signal Radar (new-signal detection) proof
         run: pnpm run proof:signal-radar
 

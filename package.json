@@ -31,6 +31,7 @@
     "autopilot:backlog-check": "pnpm --filter @workspace/scripts run autopilot:backlog-check",
     "level10:audit": "pnpm --filter @workspace/scripts run level10:audit",
     "proof:orchestration": "pnpm --filter @workspace/scripts run proof:orchestration",
+    "proof:app-workflows": "pnpm --filter @workspace/scripts run proof:app-workflows",
     "proof:room-sim": "pnpm --filter @workspace/scripts run proof:room-sim",
     "build:room-console": "pnpm --filter @workspace/scripts run build:room-console",
     "proof:signal-radar": "pnpm --filter @workspace/scripts run proof:signal-radar",

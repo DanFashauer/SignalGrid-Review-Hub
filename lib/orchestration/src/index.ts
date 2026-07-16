@@ -415,7 +415,6 @@ export function planOrchestration(input: PlanInput): OrchestrationPlan {
         }
         break;
       case "allow":
-      default:
         if (sensitive) {
           if (confirmed.has(id)) {
             disposition = "applied";
@@ -429,6 +428,12 @@ export function planOrchestration(input: PlanInput): OrchestrationPlan {
           disposition = "auto";
           reason = stepUpDone ? "Released after step-up" : "Trusted — performed automatically";
         }
+        break;
+      default:
+        // Fail closed on any unrecognized runtime outcome — never fall through to
+        // allow behaviour.
+        disposition = "blocked";
+        reason = `Denied — unrecognized decision outcome (fail closed)`;
         break;
     }
 
@@ -452,8 +457,8 @@ function deriveMode(outcome: DecisionOutcome, actions: DownstreamAction[]): Orch
   if (outcome === "deny") return "deny";
   if (outcome === "restrict") return "hold";
   if (outcome === "step_up") return "step_up";
-  // allow
-  return actions.some((a) => a.disposition === "assist") ? "assist" : "proceed";
+  if (outcome === "allow") return actions.some((a) => a.disposition === "assist") ? "assist" : "proceed";
+  return "deny"; // fail closed on an unrecognized outcome
 }
 
 function summarize(mode: OrchestrationMode, room: RoomContext, stepUpDone = false, confirmer = "clinician"): string {

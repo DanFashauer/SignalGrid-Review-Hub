@@ -144,6 +144,9 @@ importers:
       '@workspace/api-zod':
         specifier: workspace:*
         version: link:../../lib/api-zod
+      '@workspace/app-workflows':
+        specifier: workspace:*
+        version: link:../../lib/app-workflows
       '@workspace/control-plane':
         specifier: workspace:*
         version: link:../../lib/control-plane
@@ -1338,6 +1341,16 @@ importers:
         specifier: 'catalog:'
         version: 3.25.76
 
+  lib/app-workflows:
+    dependencies:
+      '@workspace/signalgrid-core':
+        specifier: workspace:*
+        version: link:../signalgrid-core
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.6.2
+
   lib/audit:
     dependencies:
       uuid:
@@ -1454,6 +1467,9 @@ importers:
 
   scripts:
     dependencies:
+      '@workspace/app-workflows':
+        specifier: workspace:*
+        version: link:../lib/app-workflows
       '@workspace/control-plane':
         specifier: workspace:*
         version: link:../lib/control-plane

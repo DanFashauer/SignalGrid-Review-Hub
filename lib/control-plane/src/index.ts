@@ -56,6 +56,7 @@ const FIXTURE_SIGNING_KEYS: Record<string, string> = {
   tenant_meridian: "cpk_demo_meridian_signing",
   tenant_vero: "cpk_demo_vero_signing",
   tenant_forge: "cpk_demo_forge_signing",
+  tenant_orion: "cpk_demo_orion_signing",
 };
 
 function canonicalBundle(tenantId: string, version: number, workflows: string[]): string {
@@ -85,7 +86,7 @@ export function verifyBundleSignature(bundle: PolicyBundle): boolean {
 
 // ── domain model ─────────────────────────────────────────────────────────────
 
-export type Vertical = "healthcare" | "warehouse" | "global_fleet" | "retail" | "industrial";
+export type Vertical = "healthcare" | "warehouse" | "global_fleet" | "retail" | "industrial" | "data_center";
 export type Tier = "dev" | "alpha" | "beta" | "prod";
 export type EdgeStatus = "healthy" | "degraded" | "unreachable";
 export type DeviceKind =
@@ -95,7 +96,8 @@ export type DeviceKind =
   | "rugged_scanner"
   | "vehicle_mount"
   | "pos_terminal"
-  | "hmi_panel";
+  | "hmi_panel"
+  | "noc_console";
 
 export interface Tenant {
   id: string;
@@ -252,7 +254,7 @@ export const HOTSPOT_FRICTION_THRESHOLD = 0.2;
 /** A node whose last sync is older than this (mins) is a custody/staleness gap. */
 export const STALE_SYNC_MINS = 60;
 
-// ── seed: five verticals, one plane ──────────────────────────────────────────
+// ── seed: six verticals, one plane ───────────────────────────────────────────
 
 interface Seed {
   tenants: Tenant[];
@@ -270,6 +272,7 @@ function buildSeed(): Seed {
     { id: "tenant_meridian", name: "Meridian Field Ops", vertical: "global_fleet", tier: "alpha" },
     { id: "tenant_vero", name: "Vero Markets", vertical: "retail", tier: "alpha" },
     { id: "tenant_forge", name: "Forge Industrial", vertical: "industrial", tier: "alpha" },
+    { id: "tenant_orion", name: "Orion Data Centers", vertical: "data_center", tier: "alpha" },
   ];
 
   const sites: Site[] = [
@@ -280,6 +283,7 @@ function buildSeed(): Seed {
     { id: "site_mer_apac", tenantId: "tenant_meridian", name: "Meridian APAC", region: "ap-southeast" },
     { id: "site_vero_flagship", tenantId: "tenant_vero", name: "Vero Flagship Store", region: "us-west" },
     { id: "site_forge_plant2", tenantId: "tenant_forge", name: "Forge Plant 2", region: "us-central" },
+    { id: "site_orion_iad1", tenantId: "tenant_orion", name: "Orion IAD1 Data Center", region: "us-east" },
   ];
 
   const nodes: EdgeNode[] = [
@@ -290,6 +294,7 @@ function buildSeed(): Seed {
     { id: "edge_mer_apac", siteId: "site_mer_apac", coreVersion: "1.3.2", bundleVersion: 5, status: "unreachable", lastSyncMinsAgo: 143 },
     { id: "edge_vero_flagship", siteId: "site_vero_flagship", coreVersion: "1.4.0", bundleVersion: 2, status: "healthy", lastSyncMinsAgo: 3 },
     { id: "edge_forge_plant2", siteId: "site_forge_plant2", coreVersion: "1.3.2", bundleVersion: 1, status: "degraded", lastSyncMinsAgo: 34 },
+    { id: "edge_orion_iad1", siteId: "site_orion_iad1", coreVersion: "1.4.0", bundleVersion: 3, status: "healthy", lastSyncMinsAgo: 1 },
   ];
 
   // A compact fleet across verticals — hospital iPads/docks/badge readers,
@@ -311,6 +316,8 @@ function buildSeed(): Seed {
     ["site_vero_flagship", "rugged_scanner", 18, 17],
     ["site_forge_plant2", "hmi_panel", 24, 22],
     ["site_forge_plant2", "tablet", 12, 11],
+    ["site_orion_iad1", "noc_console", 28, 28],
+    ["site_orion_iad1", "tablet", 10, 10],
   ];
   const devices: FleetDevice[] = [];
   for (const [siteId, kind, count, online] of devicePlan) {
@@ -331,6 +338,7 @@ function buildSeed(): Seed {
     ["tenant_meridian", { version: 5, workflows: ["general-lookup", "field-session", "vehicle-checkout"] }],
     ["tenant_vero", { version: 2, workflows: ["general-lookup", "pos-session", "restricted-sale"] }],
     ["tenant_forge", { version: 1, workflows: ["general-lookup", "line-ops"] }],
+    ["tenant_orion", { version: 3, workflows: ["general-lookup", "noc-session", "network-change", "power-control", "incident-response", "facilities-control", "compute-ops"] }],
   ]);
 
   // Deterministic per-node telemetry (shift-shaped-ish, fixed).
@@ -343,6 +351,7 @@ function buildSeed(): Seed {
     ["edge_mer_apac", 1500],
     ["edge_vero_flagship", 5200],
     ["edge_forge_plant2", 2100],
+    ["edge_orion_iad1", 6400],
   ];
   for (const [nodeId, decisions] of telePlan) {
     telemetry.set(nodeId, {
@@ -455,7 +464,7 @@ export class ControlPlane {
         .filter((t) => nodeIds.has(t.nodeId))
         .reduce((sum, t) => sum + t.decisions, 0);
 
-    const byVertical = (["healthcare", "warehouse", "global_fleet", "retail", "industrial"] as Vertical[])
+    const byVertical = (["healthcare", "warehouse", "global_fleet", "retail", "industrial", "data_center"] as Vertical[])
       .map((vertical) => {
         const vTenantIds = new Set(tenants.filter((t) => t.vertical === vertical).map((t) => t.id));
         const vSites = sites.filter((s) => vTenantIds.has(s.tenantId));

@@ -25,6 +25,7 @@ const DEMO_ACTOR: Partial<Record<AppVertical, { token: string; identityRef: stri
   global_fleet: { token: "sgk_demo_meridian_owner", identityRef: "driver.compliant", deviceRef: "vehicle-mount-01" },
   retail: { token: "sgk_demo_vero_owner", identityRef: "cashier.compliant", deviceRef: "pos-station-01" },
   industrial: { token: "sgk_demo_forge_owner", identityRef: "operator.compliant", deviceRef: "hmi-panel-01" },
+  data_center: { token: "sgk_demo_orion_owner", identityRef: "noc.compliant", deviceRef: "noc-console-01" },
 };
 
 const DISP_STYLE: Record<V1AppActionPlan["disposition"], string> = {

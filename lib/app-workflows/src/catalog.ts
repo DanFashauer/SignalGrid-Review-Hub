@@ -2,10 +2,9 @@
 //
 // These are generic app CATEGORIES (never a real vendor/product name) with the
 // kinds of actions people perform in them. `workflowKey` is the decision-core
-// workflow the app's session maps to; the three seeded demo tenants
-// (healthcare / warehouse / global-fleet) can evaluate live, while retail,
-// industrial, and data-center/NOC are catalog entries the same engine plans
-// (supply a decision).
+// workflow the app's session maps to; all six verticals now have a seeded demo
+// tenant (healthcare / warehouse / global-fleet / retail / industrial /
+// data-center-NOC), so every catalog here evaluates against a live decision.
 //
 // Risk tiers: standard (low-risk read/ack) · elevated (writes / sensitive reads)
 // · critical (irreversible / high-consequence — always sensitive). `sensitive`
@@ -110,7 +109,7 @@ export const APP_INTEGRATIONS: AppIntegration[] = [
     ],
   },
 
-  // ── Industrial (P2) — catalog entry; supply a decision to plan ──────────────
+  // ── Industrial (P2) ─────────────────────────────────────────────────────────
   {
     id: "mes-scada",
     name: "MES / SCADA-HMI",
@@ -164,7 +163,7 @@ export const APP_INTEGRATIONS: AppIntegration[] = [
     ],
   },
 
-  // ── Retail (P4) — catalog entry; supply a decision to plan ──────────────────
+  // ── Retail (P4) ─────────────────────────────────────────────────────────────
   {
     id: "pos",
     name: "POS",
@@ -197,7 +196,7 @@ export const APP_INTEGRATIONS: AppIntegration[] = [
   // they must never run from an unverified device/context. They are `critical`
   // → always sensitive (held for confirmation on allow, step-up when required,
   // blocked under restriction/deny). Reads and acks stay available so a NOC can
-  // always SEE, even when it may not ACT. Catalog entry; supply a decision to plan.
+  // always SEE, even when it may not ACT.
   {
     id: "dcim-change",
     name: "DCIM / change mgmt",

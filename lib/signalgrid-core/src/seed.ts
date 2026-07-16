@@ -23,11 +23,11 @@ import type {
 /**
  * Deterministic, public-safe demo seed.
  *
- * Five tenants exist across five verticals (healthcare / warehouse / global-fleet
- * / retail / industrial) so cross-tenant isolation can be exercised directly and
- * each of those five app-workflow catalogs gates against a live decision. (The
- * data-center/NOC catalog remains catalog-only — no seeded tenant yet.) All
- * identities, devices, tokens, and posture records are synthetic. Tokens are
+ * Six tenants exist across six verticals (healthcare / warehouse / global-fleet
+ * / retail / industrial / data-center-NOC) so cross-tenant isolation can be
+ * exercised directly and each of the six app-workflow catalogs now gates
+ * against a live decision. All identities, devices, tokens, and posture records
+ * are synthetic. Tokens are
  * obviously-fake demo strings, never real credentials. `credentialRef` values
  * are placeholders that show WHERE a real secret reference would live in the
  * private core — they are not secrets.
@@ -41,6 +41,7 @@ export interface SeededDemo {
     meridian: string;
     vero: string;
     forge: string;
+    orion: string;
   };
   tokens: {
     northwindOwner: string;
@@ -50,6 +51,7 @@ export interface SeededDemo {
     meridianOwner: string;
     veroOwner: string;
     forgeOwner: string;
+    orionOwner: string;
   };
   /** Per-connector fixture posture records, so a sync can be replayed. */
   fixtureRecords: Record<string, FixturePostureRecord[]>;
@@ -62,6 +64,7 @@ const ATLAS = "tenant_atlas";
 const MERIDIAN = "tenant_meridian";
 const VERO = "tenant_vero";
 const FORGE = "tenant_forge";
+const ORION = "tenant_orion";
 
 export function seedDemoStore(clock: Clock): SeededDemo {
   const store = new MemoryStore();
@@ -95,6 +98,12 @@ export function seedDemoStore(clock: Clock): SeededDemo {
     tenantId: FORGE,
     slug: "forge-industrial",
     name: "Forge Industrial (demo)",
+    createdAt,
+  });
+  seedTenant(store, {
+    tenantId: ORION,
+    slug: "orion-datacenters",
+    name: "Orion Data Centers (demo)",
     createdAt,
   });
 
@@ -132,12 +141,26 @@ export function seedDemoStore(clock: Clock): SeededDemo {
     { key: "general-lookup", name: "Plant directory lookup", riskTier: "standard" },
     { key: "line-ops", name: "Line operations (MES / SCADA-HMI)", riskTier: "critical" },
   ]);
+  // Orion: data-center / NOC workflows. Keys match the app-workflows catalog
+  // (noc-session / network-change / power-control / incident-response /
+  // facilities-control / compute-ops) so every NOC app catalog gates against a
+  // live decision — uptime-affecting actions are the critical ones.
+  seedWorkflows(store, ORION, [
+    { key: "general-lookup", name: "NOC directory lookup", riskTier: "standard" },
+    { key: "noc-session", name: "DCIM / change-management session", riskTier: "elevated" },
+    { key: "network-change", name: "Network configuration change", riskTier: "critical" },
+    { key: "power-control", name: "Power / PDU control", riskTier: "critical" },
+    { key: "incident-response", name: "ITSM incident response", riskTier: "elevated" },
+    { key: "facilities-control", name: "Cooling / BMS control", riskTier: "critical" },
+    { key: "compute-ops", name: "Compute / orchestration", riskTier: "critical" },
+  ]);
 
   seedPolicy(store, NORTHWIND, createdAt);
   seedPolicy(store, ATLAS, createdAt);
   seedPolicy(store, MERIDIAN, createdAt);
   seedPolicy(store, VERO, createdAt);
   seedPolicy(store, FORGE, createdAt);
+  seedPolicy(store, ORION, createdAt);
 
   // Northwind subjects: a deliberate spread of posture outcomes.
   const northwindRecords = seedNorthwindSubjects(store);
@@ -149,12 +172,15 @@ export function seedDemoStore(clock: Clock): SeededDemo {
   const veroRecords = seedVeroSubjects(store);
   // Forge (industrial) subjects: the same spread for line operators.
   const forgeRecords = seedForgeSubjects(store);
+  // Orion (data-center / NOC) subjects: the same spread for NOC engineers.
+  const orionRecords = seedOrionSubjects(store);
 
   const northwindConnectorId = runConnector(store, clock, NORTHWIND, northwindRecords);
   const atlasConnectorId = runConnector(store, clock, ATLAS, atlasRecords);
   const meridianConnectorId = runConnector(store, clock, MERIDIAN, meridianRecords);
   const veroConnectorId = runConnector(store, clock, VERO, veroRecords);
   const forgeConnectorId = runConnector(store, clock, FORGE, forgeRecords);
+  const orionConnectorId = runConnector(store, clock, ORION, orionRecords);
 
   // DockBridge custody connectors: the hospital ingests via an app embedded in
   // the dock; the warehouse polls a locker vendor's event API. Both fixture-only.
@@ -163,11 +189,13 @@ export function seedDemoStore(clock: Clock): SeededDemo {
   const meridianDockRecords = meridianDockCustody();
   const veroDockRecords = veroDockCustody();
   const forgeDockRecords = forgeDockCustody();
+  const orionDockRecords = orionDockCustody();
   const northwindDockId = runDockConnector(store, clock, NORTHWIND, "app_in_dock", northwindDockRecords);
   const atlasDockId = runDockConnector(store, clock, ATLAS, "vendor_api", atlasDockRecords);
   const meridianDockId = runDockConnector(store, clock, MERIDIAN, "vendor_api", meridianDockRecords);
   const veroDockId = runDockConnector(store, clock, VERO, "vendor_api", veroDockRecords);
   const forgeDockId = runDockConnector(store, clock, FORGE, "vendor_api", forgeDockRecords);
+  const orionDockId = runDockConnector(store, clock, ORION, "vendor_api", orionDockRecords);
 
   // Dedicated SignalGrid SmartDock: the embedded smart-charging dock reports the
   // full custody/charge/tamper/dock/badge signal set natively. Optional hardware
@@ -187,6 +215,7 @@ export function seedDemoStore(clock: Clock): SeededDemo {
   seedWebhookEndpoints(store, MERIDIAN);
   seedWebhookEndpoints(store, VERO);
   seedWebhookEndpoints(store, FORGE);
+  seedWebhookEndpoints(store, ORION);
 
   // Per-organization resolution flow control: the hospital routes worker steps
   // to badge/credential readers; the warehouse routes them to smart lockers.
@@ -215,13 +244,18 @@ export function seedDemoStore(clock: Clock): SeededDemo {
     primaryHardwareChannel: "credential_reader",
     autoProposeEnabled: true,
   });
+  store.putResolutionConfig({
+    tenantId: ORION,
+    primaryHardwareChannel: "credential_reader",
+    autoProposeEnabled: true,
+  });
 
   seedApiKeys(store);
 
   return {
     store,
     clock,
-    tenants: { northwind: NORTHWIND, atlas: ATLAS, meridian: MERIDIAN, vero: VERO, forge: FORGE },
+    tenants: { northwind: NORTHWIND, atlas: ATLAS, meridian: MERIDIAN, vero: VERO, forge: FORGE, orion: ORION },
     tokens: {
       northwindOwner: "sgk_demo_northwind_owner",
       northwindOperator: "sgk_demo_northwind_operator",
@@ -230,6 +264,7 @@ export function seedDemoStore(clock: Clock): SeededDemo {
       meridianOwner: "sgk_demo_meridian_owner",
       veroOwner: "sgk_demo_vero_owner",
       forgeOwner: "sgk_demo_forge_owner",
+      orionOwner: "sgk_demo_orion_owner",
     },
     fixtureRecords: {
       [northwindConnectorId]: northwindRecords,
@@ -237,6 +272,7 @@ export function seedDemoStore(clock: Clock): SeededDemo {
       [meridianConnectorId]: meridianRecords,
       [veroConnectorId]: veroRecords,
       [forgeConnectorId]: forgeRecords,
+      [orionConnectorId]: orionRecords,
     },
     dockRecords: {
       [northwindDockId]: northwindDockRecords,
@@ -244,6 +280,7 @@ export function seedDemoStore(clock: Clock): SeededDemo {
       [meridianDockId]: meridianDockRecords,
       [veroDockId]: veroDockRecords,
       [forgeDockId]: forgeDockRecords,
+      [orionDockId]: orionDockRecords,
       [northwindSmartDockId]: northwindSmartDockRecords,
     },
   };
@@ -611,6 +648,16 @@ function forgeDockCustody(): DockCustodyRecord[] {
   }));
 }
 
+function orionDockCustody(): DockCustodyRecord[] {
+  // Benign secure-cabinet custody for every NOC console, so the decisive signal
+  // in each scenario is posture / baseline / identity — not custody.
+  return ["noc-console-01", "noc-console-02", "noc-console-06", "noc-console-04"].map((ref, i) => ({
+    ...benignDock(ref, i + 1),
+    dockId: "cabinet-fixture-noc-01",
+    bayId: `slot-${String(i + 1).padStart(2, "0")}`,
+  }));
+}
+
 function seedAtlasSubjects(store: MemoryStore): FixturePostureRecord[] {
   const fresh = "2026-07-13T14:00:00.000Z";
   const specs: SubjectSpec[] = [
@@ -729,6 +776,36 @@ function seedForgeSubjects(store: MemoryStore): FixturePostureRecord[] {
     },
   ];
   return materializeSubjects(store, FORGE, specs);
+}
+
+function seedOrionSubjects(store: MemoryStore): FixturePostureRecord[] {
+  const fresh = "2026-07-13T14:00:00.000Z";
+  const specs: SubjectSpec[] = [
+    {
+      identity: { externalRef: "noc.compliant", displayName: "Compliant NOC Engineer", state: "enabled", assignedRole: "noc-engineer" },
+      device: { externalRef: "noc-console-01", name: "NOC Console 01", osPlatform: "Windows", osVersion: "11", ownerType: "corporate", managementAgent: "intune" },
+      posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, baseline: "aligned", sourceReference: "fixture:intune:managedDevices#noc-console-01" },
+    },
+    // Non-compliant workstation — device posture is the decisive signal (restrict).
+    {
+      identity: { externalRef: "noc.noncompliant", displayName: "NOC Engineer (non-compliant console)", state: "enabled", assignedRole: "noc-engineer" },
+      device: { externalRef: "noc-console-02", name: "NOC Console 02", osPlatform: "Windows", osVersion: "10", ownerType: "corporate", managementAgent: "intune" },
+      posture: { identityEnabled: true, managed: true, compliance: "non_compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, sourceReference: "fixture:intune:managedDevices#noc-console-02" },
+    },
+    // Security-baseline drift — otherwise healthy, so the drift decides (step-up).
+    {
+      identity: { externalRef: "noc.baseline_drift", displayName: "NOC Engineer (baseline drift)", state: "enabled", assignedRole: "noc-engineer" },
+      device: { externalRef: "noc-console-06", name: "NOC Console 06", osPlatform: "Windows", osVersion: "11", ownerType: "corporate", managementAgent: "intune" },
+      posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, baseline: "drifted", sourceReference: "fixture:intune:managedDevices#noc-console-06" },
+    },
+    // Disabled account — trust fails at the identity layer (deny).
+    {
+      identity: { externalRef: "noc.disabled", displayName: "Disabled NOC account", state: "disabled", assignedRole: "noc-engineer" },
+      device: { externalRef: "noc-console-04", name: "NOC Console 04", osPlatform: "Windows", osVersion: "11", ownerType: "corporate", managementAgent: "intune" },
+      posture: { identityEnabled: false, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, baseline: "aligned", sourceReference: "fixture:intune:managedDevices#noc-console-04" },
+    },
+  ];
+  return materializeSubjects(store, ORION, specs);
 }
 
 function materializeSubjects(
@@ -850,6 +927,7 @@ function seedApiKeys(store: MemoryStore): void {
     { tenantId: MERIDIAN, role: "owner", token: "sgk_demo_meridian_owner", subjectId: "user_meridian_owner" },
     { tenantId: VERO, role: "owner", token: "sgk_demo_vero_owner", subjectId: "user_vero_owner" },
     { tenantId: FORGE, role: "owner", token: "sgk_demo_forge_owner", subjectId: "user_forge_owner" },
+    { tenantId: ORION, role: "owner", token: "sgk_demo_orion_owner", subjectId: "user_orion_owner" },
   ];
   for (const key of keys) {
     store.putUser({

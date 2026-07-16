@@ -467,6 +467,15 @@ paths:
       responses:
         "200": { description: Flow health, break resolution, and grid intelligence }
 
+  /cp/v1/recommendations:
+    get:
+      operationId: cpRecommendations
+      tags: [control-plane]
+      security: []
+      summary: Learned-habit recommendations (advisory flow/signal improvements)
+      responses:
+        "200": { description: Advisory recommendations }
+
 components:
   securitySchemes:
     bearerAuth:

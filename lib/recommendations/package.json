@@ -1,0 +1,11 @@
+{
+  "name": "@workspace/recommendations",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@workspace/flows": "workspace:*"
+  },
+  "devDependencies": { "@types/node": "catalog:" }
+}

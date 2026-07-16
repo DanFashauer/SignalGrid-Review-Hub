@@ -15,6 +15,7 @@
     "@workspace/orchestration": "workspace:*",
     "@workspace/app-workflows": "workspace:*",
     "@workspace/flows": "workspace:*",
+    "@workspace/recommendations": "workspace:*",
     "@workspace/signalgrid-core": "workspace:*",
     "@workspace/signalgrid-simulator": "workspace:*",
     "cors": "^2.8.6",

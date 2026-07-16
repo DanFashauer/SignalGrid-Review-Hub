@@ -48,6 +48,18 @@ _(see `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` for the full app-workflow roadmap)
 
 ## Done (recent)
 
+- [x] Recommendations engine (`@workspace/recommendations`) — the Grid learns from
+      observed usage and PROPOSES improvements (never applies): relax a gate that's
+      always approved on healthy posture (one step), tighten an action showing
+      denials/overrides, add a candidate signal to a flow that keeps breaking or
+      runs hot, merge near-duplicate flows. Evidence-gated (min-sample threshold),
+      confidence-ranked, advisory only. Read API `GET /cp/v1/recommendations`;
+      proof:recommendations 15/15.
+
+- [x] Apple-inspired admin design law (`docs/ADMIN_DESIGN_PRINCIPLE.md`) —
+      progressive disclosure, only-necessary-data, one source of truth, cross-
+      surface consistency, calm-by-default; the test every admin surface must pass.
+
 - [x] Admin flow layer (`@workspace/flows`) — administrators configure signals +
       flows; the Grid runs them. Per-action approval policy (automated / admin /
       dual / downtime-only user override with DR safety nets); flow + signal health

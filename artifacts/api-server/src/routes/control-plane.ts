@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { ControlPlane, type TelemetryBatch } from "@workspace/control-plane";
 import { listFlows, evaluateFlowHealth, resolveFlowBreak, gridIntelligence, type SignalState } from "@workspace/flows";
+import { recommend, DEMO_USAGE } from "@workspace/recommendations";
 
 /**
  * `/cp/v1/*` — the SaaS **control-plane** surface (management, not decisions).
@@ -121,6 +122,13 @@ router.get("/cp/v1/flows/health", (_req, res) => {
     flows,
     grid: gridIntelligence(listFlows(), FLOW_SIGNAL_SNAPSHOT),
   });
+});
+
+// Learned-habit recommendations: from the observed usage history, advisory
+// proposals to improve flows/signals (automate/tighten an action, add a signal,
+// merge flows). Advisory only — nothing is changed here.
+router.get("/cp/v1/recommendations", (_req, res) => {
+  res.json({ note: "Advisory only — an admin reviews and applies. Nothing is changed by this endpoint.", recommendations: recommend(DEMO_USAGE, listFlows()) });
 });
 
 export default router;

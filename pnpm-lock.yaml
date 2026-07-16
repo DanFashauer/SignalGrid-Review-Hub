@@ -156,6 +156,9 @@ importers:
       '@workspace/orchestration':
         specifier: workspace:*
         version: link:../../lib/orchestration
+      '@workspace/recommendations':
+        specifier: workspace:*
+        version: link:../../lib/recommendations
       '@workspace/room-sim':
         specifier: workspace:*
         version: link:../../lib/room-sim
@@ -1434,6 +1437,16 @@ importers:
         specifier: 'catalog:'
         version: 25.6.2
 
+  lib/recommendations:
+    dependencies:
+      '@workspace/flows':
+        specifier: workspace:*
+        version: link:../flows
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.6.2
+
   lib/room-sim:
     dependencies:
       '@workspace/orchestration':
@@ -1488,6 +1501,9 @@ importers:
       '@workspace/orchestration':
         specifier: workspace:*
         version: link:../lib/orchestration
+      '@workspace/recommendations':
+        specifier: workspace:*
+        version: link:../lib/recommendations
       '@workspace/room-sim':
         specifier: workspace:*
         version: link:../lib/room-sim

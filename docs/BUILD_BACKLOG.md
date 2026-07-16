@@ -46,11 +46,10 @@ picking these up:
       release stand-in (an earlier HMAC-proof attempt was removed for exactly this
       reason). Until then, step-up completion is a clearly-labeled client-side
       SIMULATION in the demo UI (`completeAppStepUp`), never a server control.
-- [ ] **Embedded host-app demo UI (worker-side invisible flow)** — a mock host
-      app (e.g. a generic clinical app, no SignalGrid branding) that shows the loop
-      from the worker's view: normal use → a held action → a native prompt →
-      proceed, with the step-up completion clearly labeled as a demo simulation.
-      Reframes `artifacts/signalgrid-mobile-pwa` per `docs/EMBEDDED_UX_PRINCIPLE.md`.
+- [ ] **Reposition `signalgrid-mobile-pwa` as operator/support (not a worker
+      destination)** — the embedded-UX demo below now covers the worker-side
+      reference (option a); the remaining reconciliation is to reframe the
+      branded "My Access" app itself per `docs/EMBEDDED_UX_PRINCIPLE.md`.
 - [ ] **Per-integration workflow templates** — a starter catalog an integrator
       clones per app, plus a validation lint.
 
@@ -78,6 +77,18 @@ _These need the owner's call — an agent should not act on them unsupervised._
 _(see `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` for the full app-workflow roadmap)_
 
 ## Done (recent)
+
+- [x] Embedded host-app demo (worker-side invisible flow) —
+      `docs/embedded-host-app-demo.html` (published at `/embedded-demo.html`): a
+      generic clinical app ("Wardlink Chart", no SignalGrid branding in the phone
+      frame) showing the loop from the worker's view — open chart / view results
+      run with no friction (allow), a controlled med order is **held** for a
+      step-up, the app triggers a native-style authenticator, and only the
+      captured gesture releases it. A "behind the glass" panel (never seen by the
+      worker) shows the `allow` / `step_up` decision. Step-up completion is a
+      clearly-labeled demo simulation. Self-contained, theme-aware, no external
+      hosts; wired into the Pages deploy. Realizes option (a) of
+      `docs/EMBEDDED_UX_PRINCIPLE.md`.
 
 - [x] Control-plane management-plane for retail + industrial — the
       `@workspace/control-plane` fleet rollup now spans five verticals: added

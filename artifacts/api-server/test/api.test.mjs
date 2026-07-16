@@ -25,6 +25,7 @@ const KEYS = {
   atlas: "sgk_demo_atlas_owner",
   vero: "sgk_demo_vero_owner",
   forge: "sgk_demo_forge_owner",
+  orion: "sgk_demo_orion_owner",
 };
 
 let passed = 0;
@@ -79,7 +80,7 @@ async function run() {
 
   const keys = await req("GET", "/v1/keys");
   check("keys discovery is public (200)", keys.status === 200);
-  check("keys lists the seven demo keys", Array.isArray(keys.json?.keys) && keys.json.keys.length === 7);
+  check("keys lists the eight demo keys", Array.isArray(keys.json?.keys) && keys.json.keys.length === 8);
 
   // ── public catalog + simulator routes ────────────────────────────────────
   const integrations = await req("GET", "/integrations");
@@ -237,6 +238,23 @@ async function run() {
   check("app-workflows industrial (Forge) MES baseline-drift → step_up, interlock bypass held",
     mesGate.json?.decision?.outcome === "step_up" &&
     mesGate.json?.plan?.actions?.find((a) => a.key === "interlock.bypass")?.disposition === "step_up");
+
+  // Data-center / NOC now gates LIVE against its own seeded tenant (Orion),
+  // completing the six-vertical story: uptime-affecting actions are held.
+  const nocGate = await req("POST", "/v1/app-workflows/evaluate", {
+    token: KEYS.orion,
+    body: { integrationId: "network-config", identityRef: "noc.compliant", deviceRef: "noc-console-01" },
+  });
+  check("app-workflows data-center (Orion) network-config → 200 allow", nocGate.status === 200 && nocGate.json?.decision?.outcome === "allow");
+  check("app-workflows: NOC config push is assist, not auto (uptime-critical)",
+    nocGate.json?.plan?.actions?.find((a) => a.key === "config.push")?.disposition === "assist");
+  const powerGate = await req("POST", "/v1/app-workflows/evaluate", {
+    token: KEYS.orion,
+    body: { integrationId: "power-pdu", identityRef: "noc.noncompliant", deviceRef: "noc-console-02" },
+  });
+  check("app-workflows: NOC power-cycle blocked under restriction (non-compliant console)",
+    powerGate.json?.decision?.outcome === "restrict" &&
+    powerGate.json?.plan?.actions?.find((a) => a.key === "rack.powercycle")?.disposition === "blocked");
 
   // ── validation error ────────────────────────────────────────────────────
   const badBody = await req("POST", "/v1/decisions/evaluate", { token: KEYS.operator, body: { identityRef: "x" } });

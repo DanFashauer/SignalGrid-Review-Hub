@@ -14,12 +14,6 @@ picking these up:
 
 ## Now (next up)
 
-- [ ] **Data-center / NOC seeded tenant** — the only vertical still catalog-only.
-      Seed a NOC tenant in BOTH the core (so the `data_center` app catalog gates
-      live) and the control-plane (Fleet page / ops-intelligence), completing the
-      six-vertical story end to end. Deferred deliberately; owner OK'd retail +
-      industrial first.
-
 - [ ] **DDM / device-health signal connector (macOS 27)** — a fixture-first
       connector that normalizes Declarative Device Management health reporting +
       binary-control / declarative-privacy posture into the decision dimensions
@@ -70,6 +64,18 @@ _These need the owner's call — an agent should not act on them unsupervised._
 _(see `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` for the full app-workflow roadmap)_
 
 ## Done (recent)
+
+- [x] Data-center / NOC seeded tenant (Orion Data Centers) — the last vertical
+      that was catalog-only now has a seeded tenant in BOTH the core (workflows
+      matching the app-workflows catalog: noc-session / network-change /
+      power-control / incident-response / facilities-control / compute-ops, NOC
+      subjects spanning allow / restrict / step-up / deny, dock custody, policy,
+      connector, owner key `sgk_demo_orion_owner`) and the control-plane (site,
+      edge node, `noc_console` devices, signed bundle, telemetry). All **six**
+      app-workflow catalogs now gate against a live decision, and the admin Fleet
+      page + ops-intelligence span all six verticals. api test 113/113 (+ NOC
+      config-push-held + power-cycle-blocked-under-restriction), control-plane
+      proof 27/27, core proof 166/166. Completes the six-vertical story end to end.
 
 - [x] Preflight mirrors the docs-sanity CI job — the required-docs check + the
       affirmative-unsafe-claim scan are now a shared `scripts/docs-sanity.mjs`

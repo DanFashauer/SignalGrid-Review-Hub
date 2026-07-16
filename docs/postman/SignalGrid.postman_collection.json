@@ -864,6 +864,51 @@
               ]
             }
           }
+        },
+        {
+          "name": "List app-workflow integrations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/app-workflows/integrations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "app-workflows",
+                "integrations"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Gate an app workflow (EMR)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"integrationId\": \"emr-chart\",\n  \"identityRef\": \"nurse.compliant\",\n  \"deviceRef\": \"ipad-ward-01\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/app-workflows/evaluate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "app-workflows",
+                "evaluate"
+              ]
+            }
+          }
         }
       ]
     },

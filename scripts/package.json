@@ -23,6 +23,7 @@
     "autopilot:backlog-check": "tsx ./src/autopilot-backlog-check.ts",
     "level10:audit": "tsx ./src/level-10-audit.ts",
     "proof:orchestration": "tsx ./src/orchestration-proof.ts",
+    "proof:app-workflows": "tsx ./src/app-workflows-proof.ts",
     "proof:room-sim": "tsx ./src/room-sim-proof.ts",
     "build:room-console": "node ./build-room-console.mjs",
     "proof:signal-radar": "tsx ./src/signal-radar-proof.ts",
@@ -35,6 +36,7 @@
     "@workspace/signalgrid-simulator": "workspace:*",
     "@workspace/webauthn": "workspace:*",
     "@workspace/orchestration": "workspace:*",
+    "@workspace/app-workflows": "workspace:*",
     "@workspace/signal-radar": "workspace:*",
     "@workspace/control-plane": "workspace:*",
     "@workspace/room-sim": "workspace:*"

@@ -7,7 +7,8 @@ import {
   Network,
   Database,
   Server,
-  Grid
+  Grid,
+  AppWindow
 } from "lucide-react";
 import {
   Sidebar,
@@ -83,6 +84,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <Link href="/fleet">
                     <Server className="w-4 h-4 mr-2" />
                     <span>Fleet &amp; tenants</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location.startsWith("/app-workflows")}>
+                  <Link href="/app-workflows">
+                    <AppWindow className="w-4 h-4 mr-2" />
+                    <span>App workflows</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

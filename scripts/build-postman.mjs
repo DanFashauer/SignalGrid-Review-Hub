@@ -103,6 +103,8 @@ const v1Requests = [
   item("Webhook deliveries", "GET", "/v1/webhooks/deliveries"),
   item("Remediation requests", "GET", "/v1/remediation"),
   item("Approve a remediation", "POST", "/v1/remediation/{{remediationId}}/approve", { body: {} }),
+  item("List app-workflow integrations", "GET", "/v1/app-workflows/integrations"),
+  item("Gate an app workflow (EMR)", "POST", "/v1/app-workflows/evaluate", { body: { integrationId: "emr-chart", identityRef: "nurse.compliant", deviceRef: "ipad-ward-01" } }),
 ];
 const v1Folder = { name: "/v1 product API (bearer)", item: v1Requests };
 

@@ -25,8 +25,9 @@ import type {
  *
  * Five tenants exist across five verticals (healthcare / warehouse / global-fleet
  * / retail / industrial) so cross-tenant isolation can be exercised directly and
- * every app-workflow catalog gates against a live decision. All identities,
- * devices, tokens, and posture records are synthetic. Tokens are
+ * each of those five app-workflow catalogs gates against a live decision. (The
+ * data-center/NOC catalog remains catalog-only — no seeded tenant yet.) All
+ * identities, devices, tokens, and posture records are synthetic. Tokens are
  * obviously-fake demo strings, never real credentials. `credentialRef` values
  * are placeholders that show WHERE a real secret reference would live in the
  * private core — they are not secrets.

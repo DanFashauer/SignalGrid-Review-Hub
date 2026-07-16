@@ -61,7 +61,34 @@ export const controlPlane = {
   sync: (nodeId: string) => get<SyncPlan>(`/api/cp/v1/sync/${encodeURIComponent(nodeId)}`),
   policyBundle: (tenant: string) => get<PolicyBundle>(`/api/cp/v1/policy-bundle?tenant=${encodeURIComponent(tenant)}`),
   opsIntelligence: (tenant?: string) => get<OpsIntelligence>(`/api/cp/v1/ops-intelligence${tenant ? `?tenant=${encodeURIComponent(tenant)}` : ""}`),
+  flowsHealth: () => get<FlowsHealth>(`/api/cp/v1/flows/health`),
+  recommendations: () => get<{ recommendations: Recommendation[] }>(`/api/cp/v1/recommendations`).then((r) => r.recommendations),
+  signalDiscovery: () => get<SignalDiscovery>(`/api/cp/v1/signal-discovery`),
 };
+
+export interface FlowHealthRow {
+  flow: { id: string; name: string; supportTeam: string; itsm: string; severityOnBreak: string; autoHeal: { agent: string; autoResolves: boolean } | null };
+  health: { flowId: string; status: "healthy" | "degraded" | "broken"; brokenSignals: string[]; staleSignals: string[] };
+  resolution:
+    | { kind: "healthy" }
+    | { kind: "self_heal"; plan: { agent: string; autoResolves: boolean; steps: string[]; fallbackIncident: unknown } }
+    | { kind: "incident"; incident: { severity: string; supportTeam: string; itsm: string; summary: string } };
+}
+export interface FlowsHealth {
+  observedAt: string;
+  flows: FlowHealthRow[];
+  grid: { signalsWired: number; signalsHealthy: number; flowsTotal: number; flowsHealthy: number; meanSignalsPerFlow: number; smartnessScore: number };
+}
+export interface Recommendation {
+  id: string; kind: string; target: string; title: string; rationale: string; confidence: number; suggestedChange: string;
+}
+export interface DiscoveredSignal {
+  category: string; sourceId: string; sourceName: string; class: "evaluated" | "candidate" | "novel"; lifecycle: string; autoOnboardable: boolean; recommendation: string;
+}
+export interface SignalDiscovery {
+  summary: { sources: number; detected: number; recognized: number; candidate: number; novel: number; autoOnboardable: number; needsAdmin: number };
+  discovered: DiscoveredSignal[];
+}
 
 export const VERTICAL_LABEL: Record<Vertical, string> = {
   healthcare: "Healthcare",

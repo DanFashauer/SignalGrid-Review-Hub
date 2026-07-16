@@ -22,6 +22,7 @@ const PolicyDetail = named(() => import("@/pages/policies/PolicyDetail"), "Polic
 const SignalList = named(() => import("@/pages/signals/SignalList"), "SignalList");
 const Fleet = named(() => import("@/pages/Fleet"), "Fleet");
 const AppWorkflows = named(() => import("@/pages/AppWorkflows"), "AppWorkflows");
+const Intelligence = named(() => import("@/pages/Intelligence"), "Intelligence");
 
 const queryClient = new QueryClient();
 
@@ -41,6 +42,7 @@ function Router() {
           <Route path="/signals" component={SignalList} />
           <Route path="/fleet" component={Fleet} />
           <Route path="/app-workflows" component={AppWorkflows} />
+          <Route path="/intelligence" component={Intelligence} />
           <Route component={NotFound} />
         </Switch>
       </Suspense>

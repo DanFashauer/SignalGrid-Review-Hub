@@ -138,7 +138,6 @@ export function planAppSession(input: AppPlanInput): AppSessionPlan {
         }
         break;
       case "allow":
-      default:
         if (a.sensitive) {
           if (confirmed.has(a.key)) {
             disposition = "applied";
@@ -152,6 +151,12 @@ export function planAppSession(input: AppPlanInput): AppSessionPlan {
           disposition = "auto";
           reason = stepUpDone ? "Released after step-up" : "Trusted — performed automatically";
         }
+        break;
+      default:
+        // Fail closed on any unrecognized runtime outcome (untyped JSON / unsafe
+        // cast): never fall through to allow behaviour.
+        disposition = "blocked";
+        reason = "Denied — unrecognized decision outcome (fail closed)";
         break;
     }
 
@@ -181,7 +186,8 @@ function deriveMode(outcome: DecisionOutcome, actions: AppActionPlan[]): AppSess
   if (outcome === "deny") return "deny";
   if (outcome === "restrict") return "hold";
   if (outcome === "step_up") return "step_up";
-  return actions.some((a) => a.disposition === "assist") ? "assist" : "proceed";
+  if (outcome === "allow") return actions.some((a) => a.disposition === "assist") ? "assist" : "proceed";
+  return "deny"; // fail closed on an unrecognized outcome
 }
 
 function summarize(mode: AppSessionMode, integration: AppIntegration, confirmer: string, stepUpDone: boolean): string {

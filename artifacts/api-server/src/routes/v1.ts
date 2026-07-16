@@ -189,16 +189,17 @@ router.post("/v1/app-workflows/evaluate", (req: Request, res: Response) => {
   // The app's session maps to the integration's decision-core workflow.
   const evalReq = parseEvaluate({ ...body, workflowKey: integration.workflowKey });
   const decision = core.evaluate(token(req), evalReq);
-  const confirmedActionKeys = Array.isArray(body["confirmedActionKeys"])
-    ? (body["confirmedActionKeys"] as unknown[]).filter((x): x is string => typeof x === "string")
-    : [];
-  const stepUpSatisfied = body["stepUpSatisfied"] === true;
+  // Return the plan AS DECIDED. We deliberately do NOT accept caller-asserted
+  // `confirmedActionKeys` / `stepUpSatisfied` here: a request must never be able
+  // to promote a sensitive action to `applied` or release a step-up without
+  // server-side evidence. Human confirmation and step-up completion are separate,
+  // evidence-backed steps (the WebAuthn step-up path is the real gate); the
+  // pure planner helpers (confirmAppActions / completeAppStepUp) stay simulation-
+  // only for the console/tests.
   const plan = planAppSession({
     integration,
     outcome: decision.outcome,
     reasonCodes: decision.reasonCodes,
-    confirmedActionKeys,
-    stepUpSatisfied,
   });
   res.json(envelope(req, { decision, plan }));
 });

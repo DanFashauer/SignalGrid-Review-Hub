@@ -106,6 +106,14 @@ check("healthcare plan names the clinician",
 // ── determinism ───────────────────────────────────────────────────────────────
 check("plans are deterministic", JSON.stringify(planAppSession(base("allow"))) === JSON.stringify(planAppSession(base("allow"))));
 
+// ── fail closed on a malformed / unrecognized outcome ────────────────────────
+const malformed = planAppSession({ integration: emr, outcome: "sideways" as never, reasonCodes: [] });
+check("SAFETY: unrecognized outcome fails closed (mode deny, all blocked)",
+  malformed.mode === "deny" && malformed.actions.every((x) => x.disposition === "blocked"));
+const malformedConfirmed = planAppSession({ integration: emr, outcome: "bogus" as never, reasonCodes: [], confirmedActionKeys: ["order.place"], stepUpSatisfied: true });
+check("SAFETY: a caller-supplied confirmation/step-up cannot rescue a malformed outcome",
+  malformedConfirmed.actions.every((x) => x.disposition === "blocked"));
+
 // ── END TO END: the real decision core gates a nurse's app sessions ──────────
 const core = SignalGridCore.demo();
 const token = core.demoApiKeys().find((k) => k.tenantId === "tenant_northwind" && k.role === "operator")!.token;

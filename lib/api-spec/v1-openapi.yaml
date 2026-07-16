@@ -310,10 +310,8 @@ paths:
                 identityRef: { type: string }
                 deviceRef: { type: string }
                 requestContext: { type: object, additionalProperties: { type: string } }
-                confirmedActionKeys: { type: array, items: { type: string } }
-                stepUpSatisfied: { type: boolean }
       responses:
-        "200": { description: Decision + app-session plan }
+        "200": { description: Decision + app-session plan (as decided; no caller-asserted confirmation) }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
 

@@ -9,6 +9,9 @@
 //   5. A legacy stub credential (non-verifiable public key) FAILS CLOSED.
 //   6. An assertion WITHOUT the User-Verified flag is REJECTED (step-up needs UV).
 //   7. A look-alike origin (prefix, not exact) is REJECTED.
+//   8. Attestation statements: a valid `packed` self-attestation is ACCEPTED; a
+//      forged signature, an alg/key mismatch, an unsupported format, a malformed
+//      `none`, and a malformed `fido-u2f` all FAIL CLOSED.
 //
 // Run: pnpm --filter @workspace/scripts run proof:webauthn-verify
 
@@ -134,6 +137,99 @@ async function main() {
     },
   });
   check("registration with real attestation succeeds", reg.success === true);
+
+  // ── 1b. Attestation-statement verification (packed / none / unknown) ───────
+  // Register with a chosen attestationObject builder; each gets a fresh
+  // challenge + user so results are independent.
+  async function registerWith(
+    who: string,
+    build: (authData: Buffer, clientDataJSON: Buffer) => Buffer,
+  ) {
+    const chId = randomBytes(16).toString("base64url");
+    const ch = randomBytes(32).toString("base64url");
+    await webauthnStore.saveChallenge(chId, {
+      challenge: ch,
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      purpose: "registration",
+      userId: who,
+    });
+    const authData = buildAuthData(rpId, 0x45, 0, attestedCredentialData(credId, cose)); // UP+UV+AT
+    const cd = clientData("webauthn.create", ch, origin);
+    const attObj = build(authData, cd).toString("base64url");
+    return webauthn.verifyRegistration(who, chId, {
+      id: credIdStr,
+      rawId: credIdStr,
+      type: "public-key",
+      response: { clientDataJSON: cd.toString("base64url"), attestationObject: attObj },
+    });
+  }
+
+  // Valid `packed` self-attestation: the credential key signs authData||hash.
+  const packedOk = await registerWith("user-packed-ok", (authData, cd) => {
+    const sig = createSign("SHA256").update(Buffer.concat([authData, sha256(cd)])).sign(privateKey);
+    return cborMap([
+      ["fmt", cborText("packed")],
+      ["attStmt", cborMap([["alg", cborInt(-7)], ["sig", cborBytes(sig)]])],
+      ["authData", cborBytes(authData)],
+    ]);
+  });
+  check("valid packed self-attestation accepted", packedOk.success === true);
+
+  // Forged `packed` signature: a byte flipped in the signature must be rejected.
+  const packedBad = await registerWith("user-packed-bad", (authData, cd) => {
+    const sig = createSign("SHA256").update(Buffer.concat([authData, sha256(cd)])).sign(privateKey);
+    sig[sig.length - 1] ^= 0xff;
+    return cborMap([
+      ["fmt", cborText("packed")],
+      ["attStmt", cborMap([["alg", cborInt(-7)], ["sig", cborBytes(sig)]])],
+      ["authData", cborBytes(authData)],
+    ]);
+  });
+  check("forged packed self-attestation rejected", packedBad.success === false);
+
+  // `packed` with an alg that doesn't match the credential key must be rejected.
+  const packedAlg = await registerWith("user-packed-alg", (authData, cd) => {
+    const sig = createSign("SHA256").update(Buffer.concat([authData, sha256(cd)])).sign(privateKey);
+    return cborMap([
+      ["fmt", cborText("packed")],
+      ["attStmt", cborMap([["alg", cborInt(-257)], ["sig", cborBytes(sig)]])], // claims RS256 over an EC2 key
+      ["authData", cborBytes(authData)],
+    ]);
+  });
+  check("packed alg/key mismatch rejected", packedAlg.success === false);
+
+  // An unsupported attestation format (e.g. tpm) fails closed.
+  const unknownFmt = await registerWith("user-unknown-fmt", (authData) =>
+    cborMap([
+      ["fmt", cborText("tpm")],
+      ["attStmt", cborMap([["alg", cborInt(-7)], ["sig", cborBytes(randomBytes(64))]])],
+      ["authData", cborBytes(authData)],
+    ]),
+  );
+  check("unsupported attestation format fails closed", unknownFmt.success === false);
+
+  // `none` with a NON-empty statement is malformed and must be rejected.
+  const noneBad = await registerWith("user-none-bad", (authData) =>
+    cborMap([
+      ["fmt", cborText("none")],
+      ["attStmt", cborMap([["x", cborInt(1)]])],
+      ["authData", cborBytes(authData)],
+    ]),
+  );
+  check("none format with non-empty statement rejected", noneBad.success === false);
+
+  // `fido-u2f` missing its required x5c/sig is malformed and fails closed. (The
+  // positive x5c path shares X509Certificate.publicKey + ECDSA verify with the
+  // packed-x5c path; a full vector needs a real attestation cert, out of scope
+  // for a stdlib-only fixture.)
+  const u2fBad = await registerWith("user-u2f-bad", (authData) =>
+    cborMap([
+      ["fmt", cborText("fido-u2f")],
+      ["attStmt", cborMap([["sig", cborBytes(randomBytes(64))]])], // no x5c
+      ["authData", cborBytes(authData)],
+    ]),
+  );
+  check("fido-u2f without x5c fails closed", u2fBad.success === false);
 
   // Helper: run an assertion with a chosen signer + rpId + counter.
   async function runAssertion(opts: {

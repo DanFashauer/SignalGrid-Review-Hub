@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { listScenarios, runRoomEntry } from "@workspace/room-sim";
+import { listScenarios, runRoomEntry, tenantForScenario } from "@workspace/room-sim";
 import { core, DEMO_KEYS } from "../lib/core";
 
 /**
@@ -19,16 +19,17 @@ import { core, DEMO_KEYS } from "../lib/core";
  */
 const router: IRouter = Router();
 
-// A public-safe demo operator token for the Northwind (hospital) tenant.
-const NW_OPERATOR =
-  DEMO_KEYS.find((k) => k.tenant === "tenant_northwind" && k.role === "operator")?.token ??
-  DEMO_KEYS.find((k) => k.tenant === "tenant_northwind")?.token ??
-  "";
+// One public-safe demo token per tenant. Hospital scenarios run under Northwind,
+// warehouse scenarios under Atlas; cross-tenant evaluation is refused by design.
+function tokenForTenant(tenant: string): string {
+  const preferred = DEMO_KEYS.find((k) => k.tenant === tenant && (k.role === "operator" || k.role === "owner"));
+  return (preferred ?? DEMO_KEYS.find((k) => k.tenant === tenant))?.token ?? "";
+}
 
 router.get("/sim/room-entry/scenarios", (_req, res) => {
   res.json({
     demo: true,
-    note: "Synthetic smart-hospital scenarios (public-safe fixtures). No real hospital, patient, or vendor system is involved.",
+    note: "Synthetic Trusted-Entry scenarios across verticals (smart-hospital, warehouse, and global-fleet), public-safe fixtures. No real facility, patient, customer, or vendor system is involved.",
     scenarios: listScenarios(),
   });
 });
@@ -44,13 +45,14 @@ router.post("/sim/room-entry", (req, res) => {
     : [];
   const stepUpSatisfied = req.body?.stepUpSatisfied === true;
 
-  if (!NW_OPERATOR) {
-    res.status(500).json({ error: "seed_error", message: "Demo operator token unavailable" });
+  const token = tokenForTenant(tenantForScenario(scenarioId));
+  if (!token) {
+    res.status(500).json({ error: "seed_error", message: "Demo token unavailable for scenario tenant" });
     return;
   }
 
   try {
-    const result = runRoomEntry(core, NW_OPERATOR, scenarioId, { confirmedActionIds, stepUpSatisfied });
+    const result = runRoomEntry(core, token, scenarioId, { confirmedActionIds, stepUpSatisfied });
     res.json({ demo: true, ...result });
   } catch (err) {
     const message = err instanceof Error ? err.message : "evaluation failed";

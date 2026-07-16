@@ -36,12 +36,15 @@ function parseSpec(source: string): Set<string> {
   const lines = source.split("\n");
   let currentPath: string | null = null;
   for (const line of lines) {
-    const pathMatch = line.match(/^ {2}(\/v1\/\S*):\s*$/);
+    // Reset on ANY top-level path key (e.g. /cp/v1/*), not just /v1/*, so a
+    // later path's methods are never mis-attributed to the previous /v1 path.
+    const pathMatch = line.match(/^ {2}(\/\S*):\s*$/);
     if (pathMatch) {
       currentPath = pathMatch[1];
       continue;
     }
-    if (currentPath) {
+    // Only the /v1 surface is contract-checked here.
+    if (currentPath && currentPath.startsWith("/v1/")) {
       const methodMatch = line.match(/^ {4}([a-z]+):\s*$/);
       if (methodMatch && (METHODS as readonly string[]).includes(methodMatch[1])) {
         endpoints.add(`${methodMatch[1].toUpperCase()} ${currentPath}`);

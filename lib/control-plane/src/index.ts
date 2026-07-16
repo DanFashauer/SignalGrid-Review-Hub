@@ -186,6 +186,63 @@ export interface SyncPlan {
   checksum: string;
 }
 
+// ── operational intelligence (Phase 3 rollups) ───────────────────────────────
+// Derived from ingested telemetry + node status + sync state — an operator's
+// "where is friction / drift / risk concentrating" view across sites. All
+// deterministic; no clock is read.
+
+/** A node whose decisions carry disproportionate friction (step-up/restrict/deny). */
+export interface FrictionHotspot {
+  nodeId: string;
+  siteId: string;
+  siteName: string;
+  vertical: Vertical;
+  decisions: number;
+  /** (stepUp + restrict + deny) / decisions, 0..1 rounded to 4 dp. */
+  frictionRate: number;
+  stepUpRate: number;
+  restrictRate: number;
+  denyRate: number;
+}
+
+/** A node running a bundle behind the tenant's current target (config drift). */
+export interface PostureDrift {
+  nodeId: string;
+  siteName: string;
+  vertical: Vertical;
+  currentBundleVersion: number;
+  targetBundleVersion: number;
+  behindBy: number;
+}
+
+/** A node whose custody signal is weak: unreachable/degraded or stale sync. */
+export interface CustodyGap {
+  nodeId: string;
+  siteName: string;
+  vertical: Vertical;
+  status: EdgeStatus;
+  lastSyncMinsAgo: number;
+  reason: string;
+}
+
+export interface OpsIntelligence {
+  hotspots: FrictionHotspot[];
+  postureDrift: PostureDrift[];
+  custodyGaps: CustodyGap[];
+  summary: {
+    nodesWithTelemetry: number;
+    avgFrictionRate: number;
+    hotspotCount: number;
+    driftCount: number;
+    gapCount: number;
+  };
+}
+
+/** A node at/above this friction rate is flagged a hotspot. */
+export const HOTSPOT_FRICTION_THRESHOLD = 0.2;
+/** A node whose last sync is older than this (mins) is a custody/staleness gap. */
+export const STALE_SYNC_MINS = 60;
+
 // ── seed: three verticals, one plane ─────────────────────────────────────────
 
 interface Seed {
@@ -399,6 +456,92 @@ export class ControlPlane {
       devicesOnline: devices.filter((d) => d.online).length,
       decisions: decisionsFor(new Set(nodes.map((n) => n.id))),
       byVertical,
+    };
+  }
+
+  /**
+   * Operational-intelligence rollup (Phase 3): friction hotspots, posture/config
+   * drift, and custody gaps across a tenant's (or the whole fleet's) sites,
+   * derived from ingested telemetry + node status + sync state. Deterministic.
+   */
+  operationalIntelligence(tenantId?: string): OpsIntelligence {
+    const tenants = this.seed.tenants.filter((t) => !tenantId || t.id === tenantId);
+    const tenantById = new Map(tenants.map((t) => [t.id, t]));
+    const sites = this.seed.sites.filter((s) => tenantById.has(s.tenantId));
+    const siteById = new Map(sites.map((s) => [s.id, s]));
+    const nodes = this.seed.nodes.filter((n) => siteById.has(n.siteId));
+    const round4 = (x: number) => Math.round(x * 10000) / 10000;
+    const verticalOf = (siteId: string): Vertical =>
+      tenantById.get(siteById.get(siteId)?.tenantId ?? "")?.vertical ?? "healthcare";
+    const siteNameOf = (siteId: string): string => siteById.get(siteId)?.name ?? siteId;
+
+    // Friction hotspots — from telemetry, worst first.
+    const hotspots: FrictionHotspot[] = nodes
+      .map((n) => ({ n, t: this.seed.telemetry.get(n.id) }))
+      .filter((x): x is { n: EdgeNode; t: TelemetryBatch } => !!x.t && x.t.decisions > 0)
+      .map(({ n, t }) => {
+        const friction = t.stepUp + t.restrict + t.deny;
+        return {
+          nodeId: n.id,
+          siteId: n.siteId,
+          siteName: siteNameOf(n.siteId),
+          vertical: verticalOf(n.siteId),
+          decisions: t.decisions,
+          frictionRate: round4(friction / t.decisions),
+          stepUpRate: round4(t.stepUp / t.decisions),
+          restrictRate: round4(t.restrict / t.decisions),
+          denyRate: round4(t.deny / t.decisions),
+        };
+      })
+      .sort((a, b) => b.frictionRate - a.frictionRate || a.nodeId.localeCompare(b.nodeId));
+
+    // Posture/config drift — nodes behind the tenant's current bundle.
+    const postureDrift: PostureDrift[] = nodes
+      .map((n) => ({ n, plan: this.syncPlan(n.id) }))
+      .filter((x) => x.plan?.updateAvailable)
+      .map(({ n, plan }) => ({
+        nodeId: n.id,
+        siteName: siteNameOf(n.siteId),
+        vertical: verticalOf(n.siteId),
+        currentBundleVersion: plan!.currentBundleVersion,
+        targetBundleVersion: plan!.targetBundleVersion,
+        behindBy: plan!.targetBundleVersion - plan!.currentBundleVersion,
+      }))
+      .sort((a, b) => b.behindBy - a.behindBy || a.nodeId.localeCompare(b.nodeId));
+
+    // Custody gaps — unreachable/degraded nodes, or a stale last sync.
+    const custodyGaps: CustodyGap[] = nodes
+      .filter((n) => n.status !== "healthy" || n.lastSyncMinsAgo > STALE_SYNC_MINS)
+      .map((n) => {
+        const reasons: string[] = [];
+        if (n.status !== "healthy") reasons.push(`edge ${n.status}`);
+        if (n.lastSyncMinsAgo > STALE_SYNC_MINS) reasons.push(`last sync ${n.lastSyncMinsAgo}m ago`);
+        return {
+          nodeId: n.id,
+          siteName: siteNameOf(n.siteId),
+          vertical: verticalOf(n.siteId),
+          status: n.status,
+          lastSyncMinsAgo: n.lastSyncMinsAgo,
+          reason: reasons.join("; "),
+        };
+      })
+      .sort((a, b) => b.lastSyncMinsAgo - a.lastSyncMinsAgo || a.nodeId.localeCompare(b.nodeId));
+
+    const avgFrictionRate = hotspots.length
+      ? round4(hotspots.reduce((s, h) => s + h.frictionRate, 0) / hotspots.length)
+      : 0;
+
+    return {
+      hotspots,
+      postureDrift,
+      custodyGaps,
+      summary: {
+        nodesWithTelemetry: hotspots.length,
+        avgFrictionRate,
+        hotspotCount: hotspots.filter((h) => h.frictionRate >= HOTSPOT_FRICTION_THRESHOLD).length,
+        driftCount: postureDrift.length,
+        gapCount: custodyGaps.length,
+      },
     };
   }
 }

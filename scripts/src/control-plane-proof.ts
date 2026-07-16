@@ -67,6 +67,19 @@ function main() {
   check("warehouse vertical has devices", (warehouse?.devices ?? 0) > 0);
   check("edge health counts are sane", health.edgeHealthy <= health.edgeNodes && health.devicesOnline <= health.devices);
 
+  // 7. Operational-intelligence rollup (Phase 3).
+  // Push a high-friction batch into a known node and confirm it surfaces.
+  cp.ingestTelemetry({ nodeId: "edge_atlas_dc7", windowMins: 1440, decisions: 1000, allow: 400, stepUp: 300, restrict: 200, deny: 100 });
+  const ops = cp.operationalIntelligence();
+  const atlasHot = ops.hotspots.find((h) => h.nodeId === "edge_atlas_dc7");
+  check("ops rollup surfaces the high-friction node as a hotspot", !!atlasHot && atlasHot.frictionRate === 0.6);
+  check("ops hotspots are sorted worst-friction first", ops.hotspots.every((h, i) => i === 0 || ops.hotspots[i - 1].frictionRate >= h.frictionRate));
+  check("ops rollup flags the behind node as posture drift", ops.postureDrift.some((d) => d.nodeId === "edge_atlas_dc7" && d.behindBy > 0));
+  check("ops custody gaps only list non-healthy or stale-sync nodes", ops.custodyGaps.every((g) => g.status !== "healthy" || g.lastSyncMinsAgo > 60));
+  check("ops summary counts are consistent", ops.summary.driftCount === ops.postureDrift.length && ops.summary.gapCount === ops.custodyGaps.length && ops.summary.hotspotCount <= ops.hotspots.length);
+  const nwOps = cp.operationalIntelligence("tenant_northwind");
+  check("ops rollup is tenant-scoped (no atlas node under northwind)", nwOps.hotspots.every((h) => h.nodeId !== "edge_atlas_dc7") && nwOps.postureDrift.every((d) => d.nodeId !== "edge_atlas_dc7"));
+
   const total = passed + failures.length;
   console.log(`Control-plane proof: ${passed}/${total} assertions passed`);
   if (failures.length) {

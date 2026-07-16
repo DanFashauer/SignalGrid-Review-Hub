@@ -34,16 +34,26 @@ export type ActionDisposition =
 /** How sensitive is the physical space the workflow is firing in. */
 export type RoomSensitivity = "standard" | "elevated" | "controlled";
 
+/**
+ * Which vertical the space belongs to. It selects the downstream action
+ * catalog and the human-confirmation language (a clinician confirms a bedside
+ * PHI display; a supervisor confirms a controlled-area cage). Defaults to
+ * `clinical` when omitted, so existing hospital callers are unaffected.
+ */
+export type FacilityDomain = "clinical" | "warehouse" | "global_fleet";
+
 export interface RoomContext {
-  /** Room / bay identifier, e.g. "RM-412". */
+  /** Room / bay / zone identifier, e.g. "RM-412" or "CAGE-1". */
   roomId: string;
-  /** Care unit, e.g. "4 West · Med-Surg". */
+  /** Care unit or warehouse zone, e.g. "4 West · Med-Surg" or "DC-7 · High-value cage". */
   unit: string;
   sensitivity: RoomSensitivity;
-  /** The clinical workflow key the core evaluated (e.g. "clinical-session"). */
+  /** The workflow key the core evaluated (e.g. "clinical-session", "pick-pack"). */
   workflowKey: string;
-  /** Human label for the workflow, e.g. "Bedside care". */
+  /** Human label for the workflow, e.g. "Bedside care" or "Controlled-area entry". */
   workflowLabel: string;
+  /** Vertical this space belongs to. Defaults to `clinical` when omitted. */
+  domain?: FacilityDomain;
 }
 
 export interface DownstreamAction {
@@ -176,8 +186,179 @@ const CONTROLLED_EXTRAS: ActionSpec[] = [
   },
 ];
 
+// ── Warehouse catalog ────────────────────────────────────────────────────────
+// The same structural shape as the clinical catalog (a gated access action, a
+// non-sensitive session, an always-sensitive PII display, ambient prep, plus
+// controlled-area extras), so every Assist-model safety invariant carries over.
+const WAREHOUSE_CATALOG: ActionSpec[] = [
+  {
+    kind: "gate.unlock",
+    label: "Unlock zone gate",
+    targetSystem: "Access control (gate controller)",
+    sensitive: (r) => r.sensitivity !== "standard",
+    gatedByStepUp: true,
+  },
+  {
+    kind: "handheld.session.start",
+    label: "Start handheld scanner session",
+    targetSystem: "Mobile session broker",
+    sensitive: () => false,
+    gatedByStepUp: true,
+  },
+  {
+    kind: "task.assign",
+    label: "Assign pick/pack task to holder",
+    targetSystem: "Warehouse execution (WES/WMS)",
+    sensitive: () => false,
+    gatedByStepUp: true,
+  },
+  {
+    kind: "device.assign",
+    label: "Assign shared handheld to holder",
+    targetSystem: "Shared-device broker",
+    sensitive: (r) => r.sensitivity === "controlled",
+    gatedByStepUp: true,
+  },
+  {
+    kind: "environment.lighting",
+    label: "Set zone / pick-to-light preset",
+    targetSystem: "Facility automation",
+    sensitive: () => false,
+    gatedByStepUp: false,
+  },
+  {
+    kind: "manifest.display.activate",
+    label: "Activate order / manifest display",
+    targetSystem: "Packing display (customer PII)",
+    sensitive: () => true, // customer PII on the packing slip — always human-confirmed
+    gatedByStepUp: true,
+  },
+  {
+    kind: "alert.route",
+    label: "Route zone exceptions to holder",
+    targetSystem: "Warehouse alerting",
+    sensitive: () => false,
+    gatedByStepUp: false,
+  },
+  {
+    kind: "session.terminate.on_exit",
+    label: "Arm session close on zone exit",
+    targetSystem: "Session lifecycle",
+    sensitive: () => false,
+    gatedByStepUp: false,
+  },
+];
+
+// Controlled-area extras (high-value cage / hazmat) — both inherently sensitive
+// (a physical cage, a second person), so always human-confirmed on an allow.
+const WAREHOUSE_CONTROLLED_EXTRAS: ActionSpec[] = [
+  {
+    kind: "cage.unlock",
+    label: "Unlock high-value / hazmat cage",
+    targetSystem: "Automated cage / smart locker",
+    sensitive: () => true,
+    gatedByStepUp: true,
+  },
+  {
+    kind: "witness.require",
+    label: "Request supervisor witness",
+    targetSystem: "Warehouse witness workflow",
+    sensitive: () => true,
+    gatedByStepUp: true,
+  },
+];
+
+// ── Global-fleet catalog ─────────────────────────────────────────────────────
+// Vehicle-mount + cross-region shape, structurally identical to the others (a
+// gated access action, a non-sensitive session, an always-sensitive PII display,
+// ambient prep, plus regulated-cargo extras), so the safety invariants hold.
+const FLEET_CATALOG: ActionSpec[] = [
+  {
+    kind: "vehicle.unlock",
+    label: "Unlock vehicle / cargo compartment",
+    targetSystem: "Telematics access",
+    sensitive: (r) => r.sensitivity !== "standard",
+    gatedByStepUp: true,
+  },
+  {
+    kind: "mount.session.start",
+    label: "Start vehicle-mount session",
+    targetSystem: "Mobile session broker",
+    sensitive: () => false,
+    gatedByStepUp: true,
+  },
+  {
+    kind: "route.assign",
+    label: "Assign route / manifest to holder",
+    targetSystem: "Fleet dispatch (TMS)",
+    sensitive: () => false,
+    gatedByStepUp: true,
+  },
+  {
+    kind: "device.assign",
+    label: "Assign shared mount tablet to holder",
+    targetSystem: "Shared-device broker",
+    sensitive: (r) => r.sensitivity === "controlled",
+    gatedByStepUp: true,
+  },
+  {
+    kind: "environment.lighting",
+    label: "Set cab / cargo lighting preset",
+    targetSystem: "Vehicle automation",
+    sensitive: () => false,
+    gatedByStepUp: false,
+  },
+  {
+    kind: "manifest.display.activate",
+    label: "Activate manifest / cargo display",
+    targetSystem: "Cargo display (customer + regulated-cargo PII)",
+    sensitive: () => true, // regulated cargo + customer PII — always human-confirmed
+    gatedByStepUp: true,
+  },
+  {
+    kind: "alert.route",
+    label: "Route fleet exceptions to holder",
+    targetSystem: "Fleet alerting",
+    sensitive: () => false,
+    gatedByStepUp: false,
+  },
+  {
+    kind: "session.terminate.on_exit",
+    label: "Arm session close on vehicle egress",
+    targetSystem: "Session lifecycle",
+    sensitive: () => false,
+    gatedByStepUp: false,
+  },
+];
+
+// Cross-region / regulated-cargo extras — both inherently sensitive (a physical
+// seal, a dispatcher co-sign), so always human-confirmed on an allow.
+const FLEET_CONTROLLED_EXTRAS: ActionSpec[] = [
+  {
+    kind: "cargo.seal.release",
+    label: "Release regulated-cargo seal",
+    targetSystem: "Automated cargo seal",
+    sensitive: () => true,
+    gatedByStepUp: true,
+  },
+  {
+    kind: "witness.require",
+    label: "Request dispatcher co-sign",
+    targetSystem: "Fleet witness workflow",
+    sensitive: () => true,
+    gatedByStepUp: true,
+  },
+];
+
+const CATALOGS: Record<FacilityDomain, { catalog: ActionSpec[]; extras: ActionSpec[] }> = {
+  clinical: { catalog: CATALOG, extras: CONTROLLED_EXTRAS },
+  warehouse: { catalog: WAREHOUSE_CATALOG, extras: WAREHOUSE_CONTROLLED_EXTRAS },
+  global_fleet: { catalog: FLEET_CATALOG, extras: FLEET_CONTROLLED_EXTRAS },
+};
+
 function applicableSpecs(room: RoomContext): ActionSpec[] {
-  return room.sensitivity === "controlled" ? [...CATALOG, ...CONTROLLED_EXTRAS] : CATALOG;
+  const { catalog, extras } = CATALOGS[room.domain ?? "clinical"];
+  return room.sensitivity === "controlled" ? [...catalog, ...extras] : catalog;
 }
 
 const firstReason = (codes: string[], fallback: string): string =>
@@ -192,6 +373,9 @@ const firstReason = (codes: string[], fallback: string): string =>
 export function planOrchestration(input: PlanInput): OrchestrationPlan {
   const { outcome, reasonCodes, room } = input;
   const confirmed = new Set(input.confirmedActionIds ?? []);
+  // Who confirms a sensitive action, phrased for the vertical.
+  const confirmer =
+    room.domain === "warehouse" ? "supervisor" : room.domain === "global_fleet" ? "dispatcher" : "clinician";
 
   // A satisfied step-up releases the held actions: from here they behave exactly
   // as on an allow (non-sensitive auto, sensitive still human-confirmed).
@@ -235,11 +419,11 @@ export function planOrchestration(input: PlanInput): OrchestrationPlan {
         if (sensitive) {
           if (confirmed.has(id)) {
             disposition = "applied";
-            reason = "Confirmed by clinician";
+            reason = `Confirmed by ${confirmer}`;
           } else {
             disposition = "assist";
             requiresConfirmation = true;
-            reason = "Prepared — requires clinician confirmation (sensitive)";
+            reason = `Prepared — requires ${confirmer} confirmation (sensitive)`;
           }
         } else {
           disposition = "auto";
@@ -261,7 +445,7 @@ export function planOrchestration(input: PlanInput): OrchestrationPlan {
   });
 
   const mode = deriveMode(effective, actions);
-  return { mode, summary: summarize(mode, room, stepUpDone), actions };
+  return { mode, summary: summarize(mode, room, stepUpDone, confirmer), actions };
 }
 
 function deriveMode(outcome: DecisionOutcome, actions: DownstreamAction[]): OrchestrationMode {
@@ -272,13 +456,13 @@ function deriveMode(outcome: DecisionOutcome, actions: DownstreamAction[]): Orch
   return actions.some((a) => a.disposition === "assist") ? "assist" : "proceed";
 }
 
-function summarize(mode: OrchestrationMode, room: RoomContext, stepUpDone = false): string {
+function summarize(mode: OrchestrationMode, room: RoomContext, stepUpDone = false, confirmer = "clinician"): string {
   const after = stepUpDone ? " after step-up" : "";
   switch (mode) {
     case "proceed":
       return `Trusted presence — ${room.workflowLabel} prepared automatically in ${room.roomId}${after}.`;
     case "assist":
-      return `Environment prepared for ${room.workflowLabel} in ${room.roomId}${after}; sensitive actions await clinician confirmation.`;
+      return `Environment prepared for ${room.workflowLabel} in ${room.roomId}${after}; sensitive actions await ${confirmer} confirmation.`;
     case "step_up":
       return `Access held in ${room.roomId} pending a step-up (badge tap / biometric).`;
     case "hold":

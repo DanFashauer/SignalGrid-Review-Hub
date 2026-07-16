@@ -14,25 +14,50 @@ picking these up:
 
 ## Now (next up)
 
-- [ ] **Warehouse scenario pack** — add pick/pack + controlled-area scenarios to
-      the room-sim/console so the demo isn't hospital-only.
-
-## Next
-
-- [ ] **Global-fleet scenario pack** — vehicle-mount checkout + cross-region
-      session scenarios.
-- [ ] **Per-vertical policy bundles** — model distinct bundles per vertical and
-      show them distributing in the admin surface.
+_(backlog clear — scenario packs shipped for all three verticals; new ideas land here)_
 
 ## Later / vision
 
-- [ ] **Operational-intelligence rollups (Phase 3)** — friction hotspots,
-      posture drift, custody gaps across sites, from ingested telemetry.
-- [ ] **Attestation verification** — verify packed/fido-u2f attestation at
-      registration (today: `none` self-attested keys, which is acceptable but
-      narrower).
+_(nothing queued)_
 
 ## Done (recent)
+
+- [x] Operational-intelligence rollups (Phase 3) — `operationalIntelligence()`
+      on the control plane derives friction hotspots (from ingested telemetry),
+      posture/config drift (nodes behind target bundle), and custody gaps
+      (unreachable/degraded or stale-sync nodes) across sites, tenant-scoped.
+      Exposed at `GET /cp/v1/ops-intelligence` (OpenAPI + Postman) and surfaced
+      as a three-panel card on the admin Fleet page. Proof: control-plane 23/23.
+
+- [x] Attestation verification — registration now verifies the attestation
+      STATEMENT, not just the credential key. `none` (self-attested) is accepted;
+      `packed` and `fido-u2f` are cryptographically verified (authData ||
+      SHA-256(clientDataJSON), self- or x5c-attestation); any other format or a
+      bad signature is refused (fail-closed). Proof: webauthn-verify 14/14
+      (valid packed accepted; forged sig, alg/key mismatch, unsupported format,
+      malformed none, malformed fido-u2f all rejected).
+
+- [x] Global-fleet scenario pack — a third vertical (Meridian) added to the core
+      seed and the Trusted-Entry runner + console: vehicle-mount field session and
+      cross-region regulated-cargo checkout, across the full allow / step-up /
+      restrict / deny spectrum. Fleet orchestration catalog (vehicle unlock,
+      mount session, TMS route, cargo seal, dispatcher co-sign) + dispatcher
+      confirmation language, cross-tenant fail-closed. Proof: room-sim 39/39,
+      orchestration 40/40, core 166/166.
+
+- [x] Warehouse scenario pack — the Trusted-Entry runner + on-device console now
+      span two verticals: smart-hospital (Northwind) and warehouse (Atlas), with
+      pick-aisle and controlled high-value/hazmat cage scenarios across the full
+      allow / step-up / restrict / deny spectrum. Domain-aware orchestration
+      catalog (zone gate, handheld, WES/WMS task, cage, supervisor witness) +
+      confirmation language, cross-tenant fail-closed. Proof: room-sim 22/22,
+      orchestration 35/35. (Also fixed a pre-existing api-contract parser bug
+      where `/cp/v1/*` methods leaked onto the last `/v1` path.)
+
+- [x] Per-vertical policy bundles surfaced in the admin Fleet UI — each tenant
+      shows its signed bundle version + the workflow set it distributes
+      (healthcare: clinical-session/med-admin; warehouse: pick-pack/controlled-area;
+      global-fleet: field-session/vehicle-checkout). Reads `/api/cp/v1/policy-bundle`.
 
 - [x] Signed policy bundles — config-down bundle is HMAC-signed (authenticity)
       on top of the checksum (integrity); edge verifies signature before applying,

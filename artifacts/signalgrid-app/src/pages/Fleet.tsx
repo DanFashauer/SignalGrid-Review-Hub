@@ -30,8 +30,17 @@ export function Fleet() {
     enabled: nodeList.length > 0,
   });
 
+  const tenantList = tenants.data ?? [];
+  const bundles = useQuery({
+    queryKey: ["cp-bundles", tenantList.map((t) => t.id).join(",")],
+    queryFn: () => Promise.all(tenantList.map((t) => controlPlane.policyBundle(t.id))),
+    enabled: tenantList.length > 0,
+  });
+  const ops = useQuery({ queryKey: ["cp-ops"], queryFn: () => controlPlane.opsIntelligence() });
+
   const syncByNode = new Map<string, SyncPlan>((sync.data ?? []).map((s) => [s.nodeId, s]));
   const siteById = new Map<string, Site>((sites.data ?? []).map((s) => [s.id, s]));
+  const bundleByTenant = new Map((bundles.data ?? []).map((b) => [b.tenantId, b]));
 
   const h = health.data;
   const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 100) : 0);
@@ -73,6 +82,51 @@ export function Fleet() {
         </CardContent>
       </Card>
 
+      {/* Operational intelligence (Phase 3 rollup) */}
+      <Card className="border-border">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-mono uppercase tracking-wider text-muted-foreground">Operational intelligence</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Friction hotspots */}
+            <div className="border border-border rounded-lg p-4">
+              <div className="font-mono text-xs uppercase tracking-wider text-amber-400 mb-2">Friction hotspots</div>
+              {(ops.data?.hotspots ?? []).slice(0, 4).map((h) => (
+                <div key={h.nodeId} className="flex items-center justify-between text-xs font-mono py-1 border-b border-border/30 last:border-0">
+                  <span className="text-muted-foreground truncate mr-2" title={h.nodeId}>{h.siteName}</span>
+                  <span className={h.frictionRate >= 0.2 ? "text-amber-400" : "text-muted-foreground"}>{Math.round(h.frictionRate * 100)}%</span>
+                </div>
+              ))}
+              {ops.data && ops.data.hotspots.length === 0 && <div className="text-xs text-muted-foreground">No telemetry yet</div>}
+            </div>
+            {/* Posture / config drift */}
+            <div className="border border-border rounded-lg p-4">
+              <div className="font-mono text-xs uppercase tracking-wider text-primary mb-2">Posture / config drift</div>
+              {(ops.data?.postureDrift ?? []).slice(0, 4).map((d) => (
+                <div key={d.nodeId} className="flex items-center justify-between text-xs font-mono py-1 border-b border-border/30 last:border-0">
+                  <span className="text-muted-foreground truncate mr-2" title={d.nodeId}>{d.siteName}</span>
+                  <span className="text-amber-400">v{d.currentBundleVersion} → v{d.targetBundleVersion}</span>
+                </div>
+              ))}
+              {ops.data && ops.data.postureDrift.length === 0 && <div className="text-xs text-muted-foreground">All nodes on target bundle</div>}
+            </div>
+            {/* Custody gaps */}
+            <div className="border border-border rounded-lg p-4">
+              <div className="font-mono text-xs uppercase tracking-wider text-red-400 mb-2">Custody gaps</div>
+              {(ops.data?.custodyGaps ?? []).slice(0, 4).map((g) => (
+                <div key={g.nodeId} className="flex items-center justify-between text-xs font-mono py-1 border-b border-border/30 last:border-0">
+                  <span className="text-muted-foreground truncate mr-2" title={g.reason}>{g.siteName}</span>
+                  <span className="text-red-400 uppercase">{g.status}</span>
+                </div>
+              ))}
+              {ops.data && ops.data.custodyGaps.length === 0 && <div className="text-xs text-muted-foreground">No custody gaps</div>}
+            </div>
+          </div>
+          {!ops.data && <div className="text-sm text-muted-foreground mt-2">Loading operational intelligence…</div>}
+        </CardContent>
+      </Card>
+
       {/* Tenants → edge nodes with sync status */}
       <Card className="border-border">
         <CardHeader className="pb-2">
@@ -81,13 +135,28 @@ export function Fleet() {
         <CardContent className="space-y-5">
           {(tenants.data ?? []).map((t: Tenant) => {
             const tNodes = nodeList.filter((n) => siteById.get(n.siteId)?.tenantId === t.id);
+            const bundle = bundleByTenant.get(t.id);
             return (
               <div key={t.id}>
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
                   <span className="font-mono text-sm font-semibold">{t.name}</span>
                   <span className="font-mono text-[0.6rem] uppercase tracking-wider px-1.5 py-0.5 rounded border border-primary/30 text-primary">{VERTICAL_LABEL[t.vertical]}</span>
                   <span className="font-mono text-[0.6rem] uppercase tracking-wider px-1.5 py-0.5 rounded border border-border text-muted-foreground">tier {t.tier}</span>
+                  {bundle && (
+                    <span className="font-mono text-[0.6rem] uppercase tracking-wider px-1.5 py-0.5 rounded border border-emerald-400/30 text-emerald-400 inline-flex items-center gap-1" title={`checksum ${bundle.checksum.slice(0, 12)}… · signature ${bundle.signature.slice(0, 12)}…`}>
+                      <span className="w-1 h-1 rounded-full bg-emerald-400" />
+                      bundle v{bundle.version} · signed
+                    </span>
+                  )}
                 </div>
+                {bundle && (
+                  <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                    <span className="font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground">workflows</span>
+                    {bundle.workflows.map((w) => (
+                      <span key={w} className="font-mono text-[0.6rem] px-1.5 py-0.5 rounded bg-muted/40 text-muted-foreground">{w}</span>
+                    ))}
+                  </div>
+                )}
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs font-mono">
                     <thead>

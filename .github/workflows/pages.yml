@@ -48,11 +48,20 @@ jobs:
       - run: pnpm run build:room-console
       - name: Assemble site
         run: |
+          set -euo pipefail
           mkdir -p _site
           # Marketing site (signalgrid-web) at the root.
           cp -r artifacts/signalgrid-web/dist/public/. _site/
-          # SPA deep-link fallback: unknown paths (e.g. /pricing) serve index.html
-          # so client-side routing (wouter) resolves them instead of 404-ing.
+          # Per-route static shells so a DIRECT hit on a client-side route returns
+          # HTTP 200 (not the 404.html fallback, which Pages serves with a real
+          # 404 status). Each shell is the SPA index; wouter reads the URL and
+          # renders the right page. Keep this list in sync with the routes in
+          # artifacts/signalgrid-web/src/App.tsx.
+          for route in hardware pricing federal downloads about; do
+            mkdir -p "_site/$route"
+            cp _site/index.html "_site/$route/index.html"
+          done
+          # Last-resort fallback for genuinely-unknown paths (renders the SPA).
           cp _site/index.html _site/404.html
           # On-device demos preserved at their stable permanent-link paths.
           cp docs/room-entry-console.html _site/console.html

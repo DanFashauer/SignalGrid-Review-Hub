@@ -94,12 +94,12 @@ export function Intelligence() {
                     <td className="py-1.5 text-muted-foreground">{s.sourceName}</td>
                     <td className="py-1.5"><span className={`px-1.5 py-0.5 rounded border ${CLASS_STYLE[s.class]}`}>{s.class}</span></td>
                     <td className="py-1.5">
-                      {s.class === "evaluated" ? (
+                      {s.lifecycle === "active" ? (
                         <span className="text-emerald-400">active</span>
                       ) : s.autoOnboardable ? (
-                        <span className="text-primary">auto-onboarded</span>
+                        <span className="text-primary">proposed · will auto-onboard</span>
                       ) : (
-                        <span className="text-amber-400">needs admin</span>
+                        <span className="text-amber-400">proposed · needs admin</span>
                       )}
                     </td>
                   </tr>
@@ -108,7 +108,7 @@ export function Intelligence() {
               </tbody>
             </table>
           </div>
-          <p className="text-[0.68rem] text-muted-foreground font-mono pt-2">The more sources/APIs you open, the more the Grid detects and onboards. Unrecognized signals from an API source are onboarded automatically; others wait for an admin.</p>
+          <p className="text-[0.68rem] text-muted-foreground font-mono pt-2">Detected, not yet applied — the more sources/APIs you open, the more the Grid detects. An unrecognized signal from an API source is proposed to be onboarded automatically (a plan you see before it runs); others wait for an admin. Nothing is added to a source here.</p>
         </CardContent>
       </Card>
     </div>

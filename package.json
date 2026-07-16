@@ -33,6 +33,7 @@
     "proof:orchestration": "pnpm --filter @workspace/scripts run proof:orchestration",
     "proof:app-workflows": "pnpm --filter @workspace/scripts run proof:app-workflows",
     "proof:flows": "pnpm --filter @workspace/scripts run proof:flows",
+    "proof:recommendations": "pnpm --filter @workspace/scripts run proof:recommendations",
     "proof:room-sim": "pnpm --filter @workspace/scripts run proof:room-sim",
     "build:room-console": "pnpm --filter @workspace/scripts run build:room-console",
     "proof:signal-radar": "pnpm --filter @workspace/scripts run proof:signal-radar",

@@ -25,6 +25,7 @@
     "proof:orchestration": "tsx ./src/orchestration-proof.ts",
     "proof:app-workflows": "tsx ./src/app-workflows-proof.ts",
     "proof:flows": "tsx ./src/flows-proof.ts",
+    "proof:recommendations": "tsx ./src/recommendations-proof.ts",
     "proof:room-sim": "tsx ./src/room-sim-proof.ts",
     "build:room-console": "node ./build-room-console.mjs",
     "proof:signal-radar": "tsx ./src/signal-radar-proof.ts",
@@ -39,6 +40,7 @@
     "@workspace/orchestration": "workspace:*",
     "@workspace/app-workflows": "workspace:*",
     "@workspace/flows": "workspace:*",
+    "@workspace/recommendations": "workspace:*",
     "@workspace/signal-radar": "workspace:*",
     "@workspace/control-plane": "workspace:*",
     "@workspace/room-sim": "workspace:*"

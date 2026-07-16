@@ -1162,6 +1162,27 @@
               "type": "noauth"
             }
           }
+        },
+        {
+          "name": "Learned recommendations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cp/v1/recommendations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cp",
+                "v1",
+                "recommendations"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
         }
       ]
     }

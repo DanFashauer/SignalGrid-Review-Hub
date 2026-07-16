@@ -121,6 +121,7 @@ const cpRequests = [
   item("Operational intelligence", "GET", "/cp/v1/ops-intelligence", { auth: NOAUTH }),
   item("Admin flows (config)", "GET", "/cp/v1/flows", { auth: NOAUTH }),
   item("Flow + signal health", "GET", "/cp/v1/flows/health", { auth: NOAUTH }),
+  item("Learned recommendations", "GET", "/cp/v1/recommendations", { auth: NOAUTH }),
 ];
 const cpFolder = { name: "Control plane (/cp/v1)", item: cpRequests };
 

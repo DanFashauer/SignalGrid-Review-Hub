@@ -909,6 +909,33 @@
               ]
             }
           }
+        },
+        {
+          "name": "Complete a step-up (native gesture)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"integrationId\": \"bcma\",\n  \"identityRef\": \"nurse.baseline_drift\",\n  \"deviceRef\": \"ipad-ward-06\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/app-workflows/step-up",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "app-workflows",
+                "step-up"
+              ]
+            }
+          }
         }
       ]
     },

@@ -20,11 +20,11 @@ picking these up:
 
 ## Next
 
-- [ ] **In-app step-up loop (embedded, native prompt)** — when
-      `/v1/app-workflows/evaluate` returns `step_up`, the *host app* drives the
-      platform's native authenticator (Face ID / badge tap) via the hardened
-      WebAuthn path and re-requests, held actions releasing — no SignalGrid screen.
-      Governed by `docs/EMBEDDED_UX_PRINCIPLE.md`.
+- [ ] **Embedded host-app demo UI (worker-side invisible flow)** — a mock host
+      app (e.g. a generic clinical app, no SignalGrid branding) that shows the
+      whole loop from the worker's view: normal use → a held action → a native
+      prompt → proceed. Consumes the step-up mechanism below. Reframes
+      `artifacts/signalgrid-mobile-pwa` per `docs/EMBEDDED_UX_PRINCIPLE.md`.
 - [ ] **Reconcile the end-user surface with the embedded-UX law** —
       `artifacts/signalgrid-mobile-pwa` ("My Access") is a SignalGrid-branded
       end-user screen, which violates "the end user never opens SignalGrid."
@@ -38,6 +38,18 @@ picking these up:
 _(see `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` for the full app-workflow roadmap)_
 
 ## Done (recent)
+
+- [x] Server-issued step-up proof for app-workflows — held actions release only
+      on a server-verified, HMAC-signed proof bound to (identity, device,
+      workflow) with a short TTL, minted by `POST /v1/app-workflows/step-up`
+      after a native gesture (the seam where real WebAuthn assertion verification
+      plugs in). `evaluate` takes a `stepUpProof` (never a client boolean); a
+      forged / expired / wrong-actor proof is ignored and actions stay held.
+      Closes the review's approval-evidence gap. OpenAPI + Postman; api test
+      113/113 (full loop + fail-closed negatives). See `docs/EMBEDDED_UX_PRINCIPLE.md`.
+
+- [x] Embedded-UX design law captured (`docs/EMBEDDED_UX_PRINCIPLE.md`) — the end
+      user never touches SignalGrid; everything happens inside the host app.
 
 - [x] App-workflow gating (`@workspace/app-workflows`) — SignalGrid now gates
       APPLICATION actions, not just physical ones: an app calls it before a

@@ -310,8 +310,30 @@ paths:
                 identityRef: { type: string }
                 deviceRef: { type: string }
                 requestContext: { type: object, additionalProperties: { type: string } }
+                stepUpProof: { type: string, description: Server-issued proof from POST /v1/app-workflows/step-up; releases held actions when valid }
       responses:
-        "200": { description: Decision + app-session plan (as decided; no caller-asserted confirmation) }
+        "200": { description: Decision + app-session plan (as decided; held actions release only on a verified step-up proof) }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/app-workflows/step-up:
+    post:
+      operationId: completeAppStepUp
+      tags: [decisions]
+      summary: Complete a step-up (native gesture) — issues a server-signed proof to release held actions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [integrationId, identityRef, deviceRef]
+              properties:
+                integrationId: { type: string }
+                identityRef: { type: string }
+                deviceRef: { type: string }
+      responses:
+        "200": { description: Step-up proof (short-lived, bound to identity/device/workflow) }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
 

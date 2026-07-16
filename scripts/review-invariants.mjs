@@ -187,7 +187,10 @@ function stripComments(src) {
     (f.startsWith("site/") && f.endsWith(".html")));
   const hits = [];
   for (const f of scan) {
-    const body = read(f);
+    // DNS hostnames are case-insensitive, so lower-case the content before
+    // matching the (already-lowercase) host list — FONTS.GOOGLEAPIS.COM must
+    // trip the same as fonts.googleapis.com.
+    const body = read(f).toLowerCase();
     for (const host of VENDOR_HOSTS) if (body.includes(host)) hits.push(`${f} (${host})`);
   }
   if (hits.length) bad(`Public-safe web: third-party vendor host in a published artifact — ${hits.join(", ")}. Self-host it instead.`);

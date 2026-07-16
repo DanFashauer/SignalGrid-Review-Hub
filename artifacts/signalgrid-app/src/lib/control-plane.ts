@@ -6,7 +6,7 @@
 
 const BASE = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, "") ?? "";
 
-export type Vertical = "healthcare" | "warehouse" | "global_fleet";
+export type Vertical = "healthcare" | "warehouse" | "global_fleet" | "retail" | "industrial";
 export type EdgeStatus = "healthy" | "degraded" | "unreachable";
 
 export interface Tenant { id: string; name: string; vertical: Vertical; tier: string }
@@ -94,4 +94,6 @@ export const VERTICAL_LABEL: Record<Vertical, string> = {
   healthcare: "Healthcare",
   warehouse: "Warehouse",
   global_fleet: "Global fleet",
+  retail: "Retail",
+  industrial: "Industrial",
 };

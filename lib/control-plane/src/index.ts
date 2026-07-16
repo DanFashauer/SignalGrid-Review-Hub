@@ -54,6 +54,8 @@ const FIXTURE_SIGNING_KEYS: Record<string, string> = {
   tenant_northwind: "cpk_demo_northwind_signing",
   tenant_atlas: "cpk_demo_atlas_signing",
   tenant_meridian: "cpk_demo_meridian_signing",
+  tenant_vero: "cpk_demo_vero_signing",
+  tenant_forge: "cpk_demo_forge_signing",
 };
 
 function canonicalBundle(tenantId: string, version: number, workflows: string[]): string {
@@ -83,10 +85,17 @@ export function verifyBundleSignature(bundle: PolicyBundle): boolean {
 
 // ── domain model ─────────────────────────────────────────────────────────────
 
-export type Vertical = "healthcare" | "warehouse" | "global_fleet";
+export type Vertical = "healthcare" | "warehouse" | "global_fleet" | "retail" | "industrial";
 export type Tier = "dev" | "alpha" | "beta" | "prod";
 export type EdgeStatus = "healthy" | "degraded" | "unreachable";
-export type DeviceKind = "tablet" | "dock" | "badge_reader" | "rugged_scanner" | "vehicle_mount";
+export type DeviceKind =
+  | "tablet"
+  | "dock"
+  | "badge_reader"
+  | "rugged_scanner"
+  | "vehicle_mount"
+  | "pos_terminal"
+  | "hmi_panel";
 
 export interface Tenant {
   id: string;
@@ -243,7 +252,7 @@ export const HOTSPOT_FRICTION_THRESHOLD = 0.2;
 /** A node whose last sync is older than this (mins) is a custody/staleness gap. */
 export const STALE_SYNC_MINS = 60;
 
-// ── seed: three verticals, one plane ─────────────────────────────────────────
+// ── seed: five verticals, one plane ──────────────────────────────────────────
 
 interface Seed {
   tenants: Tenant[];
@@ -259,6 +268,8 @@ function buildSeed(): Seed {
     { id: "tenant_northwind", name: "Northwind Health", vertical: "healthcare", tier: "beta" },
     { id: "tenant_atlas", name: "Atlas Logistics", vertical: "warehouse", tier: "alpha" },
     { id: "tenant_meridian", name: "Meridian Field Ops", vertical: "global_fleet", tier: "alpha" },
+    { id: "tenant_vero", name: "Vero Markets", vertical: "retail", tier: "alpha" },
+    { id: "tenant_forge", name: "Forge Industrial", vertical: "industrial", tier: "alpha" },
   ];
 
   const sites: Site[] = [
@@ -267,6 +278,8 @@ function buildSeed(): Seed {
     { id: "site_atlas_dc7", tenantId: "tenant_atlas", name: "Atlas DC-7", region: "us-central" },
     { id: "site_mer_euw", tenantId: "tenant_meridian", name: "Meridian EU-West", region: "eu-west" },
     { id: "site_mer_apac", tenantId: "tenant_meridian", name: "Meridian APAC", region: "ap-southeast" },
+    { id: "site_vero_flagship", tenantId: "tenant_vero", name: "Vero Flagship Store", region: "us-west" },
+    { id: "site_forge_plant2", tenantId: "tenant_forge", name: "Forge Plant 2", region: "us-central" },
   ];
 
   const nodes: EdgeNode[] = [
@@ -275,6 +288,8 @@ function buildSeed(): Seed {
     { id: "edge_atlas_dc7", siteId: "site_atlas_dc7", coreVersion: "1.4.0", bundleVersion: 3, status: "degraded", lastSyncMinsAgo: 21 },
     { id: "edge_mer_euw", siteId: "site_mer_euw", coreVersion: "1.3.2", bundleVersion: 5, status: "healthy", lastSyncMinsAgo: 6 },
     { id: "edge_mer_apac", siteId: "site_mer_apac", coreVersion: "1.3.2", bundleVersion: 5, status: "unreachable", lastSyncMinsAgo: 143 },
+    { id: "edge_vero_flagship", siteId: "site_vero_flagship", coreVersion: "1.4.0", bundleVersion: 2, status: "healthy", lastSyncMinsAgo: 3 },
+    { id: "edge_forge_plant2", siteId: "site_forge_plant2", coreVersion: "1.3.2", bundleVersion: 1, status: "degraded", lastSyncMinsAgo: 34 },
   ];
 
   // A compact fleet across verticals — hospital iPads/docks/badge readers,
@@ -292,6 +307,10 @@ function buildSeed(): Seed {
     ["site_mer_euw", "vehicle_mount", 30, 27],
     ["site_mer_apac", "tablet", 40, 31],
     ["site_mer_apac", "vehicle_mount", 20, 12],
+    ["site_vero_flagship", "pos_terminal", 32, 31],
+    ["site_vero_flagship", "rugged_scanner", 18, 17],
+    ["site_forge_plant2", "hmi_panel", 24, 22],
+    ["site_forge_plant2", "tablet", 12, 11],
   ];
   const devices: FleetDevice[] = [];
   for (const [siteId, kind, count, online] of devicePlan) {
@@ -310,6 +329,8 @@ function buildSeed(): Seed {
     ["tenant_northwind", { version: 7, workflows: ["general-lookup", "clinical-session", "med-admin"] }],
     ["tenant_atlas", { version: 4, workflows: ["general-lookup", "pick-pack", "controlled-area"] }],
     ["tenant_meridian", { version: 5, workflows: ["general-lookup", "field-session", "vehicle-checkout"] }],
+    ["tenant_vero", { version: 2, workflows: ["general-lookup", "pos-session", "restricted-sale"] }],
+    ["tenant_forge", { version: 1, workflows: ["general-lookup", "line-ops"] }],
   ]);
 
   // Deterministic per-node telemetry (shift-shaped-ish, fixed).
@@ -320,6 +341,8 @@ function buildSeed(): Seed {
     ["edge_atlas_dc7", 9800],
     ["edge_mer_euw", 3600],
     ["edge_mer_apac", 1500],
+    ["edge_vero_flagship", 5200],
+    ["edge_forge_plant2", 2100],
   ];
   for (const [nodeId, decisions] of telePlan) {
     telemetry.set(nodeId, {
@@ -432,7 +455,7 @@ export class ControlPlane {
         .filter((t) => nodeIds.has(t.nodeId))
         .reduce((sum, t) => sum + t.decisions, 0);
 
-    const byVertical = (["healthcare", "warehouse", "global_fleet"] as Vertical[])
+    const byVertical = (["healthcare", "warehouse", "global_fleet", "retail", "industrial"] as Vertical[])
       .map((vertical) => {
         const vTenantIds = new Set(tenants.filter((t) => t.vertical === vertical).map((t) => t.id));
         const vSites = sites.filter((s) => vTenantIds.has(s.tenantId));

@@ -21,6 +21,9 @@
 //   4. Truth guard — a small, extensible denylist of internal over-claims that
 //      contradicted the code (e.g. "every catalog gates live" when one vertical
 //      is catalog-only, Codex #79). Extend as new lessons land.
+//   5. Public-safe web — no third-party vendor host (fonts/analytics/CDN) in a
+//      PUBLISHED web artifact; that would leak a visitor's IP to a vendor
+//      (Codex #81, fonts.googleapis.com). Self-host assets instead.
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
@@ -155,6 +158,43 @@ function stripComments(src) {
   }
   if (hits.length) bad(`Truth guard: internal over-claim found — ${hits.join(", ")}`);
   else ok("Truth guard: no known internal over-claim phrasings present");
+}
+
+// 5 — public-safe web: no third-party vendor host in a PUBLISHED web artifact ──
+// Anything the Pages deploy publishes (the web app + any static HTML we ship)
+// must not pull a resource from a third-party host — that would hand a visitor's
+// IP/metadata to a vendor, contrary to the no-vendor-calls rule and the "no
+// server, no data" framing. Fonts/analytics/CDNs are the usual offenders; this
+// is the class Codex #81 caught (fonts.googleapis.com). Extend the host list as
+// new vendors appear. Self-host assets (e.g. @fontsource) instead.
+{
+  const VENDOR_HOSTS = [
+    "fonts.googleapis.com",
+    "fonts.gstatic.com",
+    "google-analytics.com",
+    "googletagmanager.com",
+    "cdn.jsdelivr.net",
+    "unpkg.com",
+    "cdnjs.cloudflare.com",
+    "ajax.googleapis.com",
+  ];
+  // Published surfaces: the web marketing app's shell + source, and the static
+  // HTML files the Pages workflow copies into the site.
+  const scan = tracked.filter((f) =>
+    (f.startsWith("artifacts/signalgrid-web/") &&
+      (f.endsWith(".html") || f.endsWith(".ts") || f.endsWith(".tsx") || f.endsWith(".css"))) ||
+    (f.startsWith("docs/") && f.endsWith(".html")) ||
+    (f.startsWith("site/") && f.endsWith(".html")));
+  const hits = [];
+  for (const f of scan) {
+    // DNS hostnames are case-insensitive, so lower-case the content before
+    // matching the (already-lowercase) host list — FONTS.GOOGLEAPIS.COM must
+    // trip the same as fonts.googleapis.com.
+    const body = read(f).toLowerCase();
+    for (const host of VENDOR_HOSTS) if (body.includes(host)) hits.push(`${f} (${host})`);
+  }
+  if (hits.length) bad(`Public-safe web: third-party vendor host in a published artifact — ${hits.join(", ")}. Self-host it instead.`);
+  else ok("Public-safe web: no third-party vendor host in any published web artifact");
 }
 
 console.log("");

@@ -449,6 +449,24 @@ paths:
       responses:
         "200": { description: Operational-intelligence rollup }
 
+  /cp/v1/flows:
+    get:
+      operationId: cpListFlows
+      tags: [control-plane]
+      security: []
+      summary: List admin-configured flows (signals → actions with approval policy)
+      responses:
+        "200": { description: Flows }
+
+  /cp/v1/flows/health:
+    get:
+      operationId: cpFlowsHealth
+      tags: [control-plane]
+      security: []
+      summary: Flow + signal health with self-heal / incident resolution and a grid-intelligence score
+      responses:
+        "200": { description: Flow health, break resolution, and grid intelligence }
+
 components:
   securitySchemes:
     bearerAuth:

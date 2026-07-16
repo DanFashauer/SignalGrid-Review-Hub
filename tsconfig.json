@@ -5,6 +5,7 @@
   "references": [
     { "path": "./lib/orchestration" },
     { "path": "./lib/app-workflows" },
+    { "path": "./lib/flows" },
     { "path": "./lib/room-sim" },
     { "path": "./lib/signal-radar" },
     { "path": "./lib/control-plane" },

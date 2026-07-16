@@ -119,6 +119,8 @@ const cpRequests = [
   item("Ingest telemetry (up)", "POST", "/cp/v1/telemetry", { auth: NOAUTH, body: { nodeId: "{{nodeId}}", windowMins: 1440, decisions: 4200, allow: 3444, stepUp: 420, restrict: 210, deny: 126 } }),
   item("Fleet health rollup", "GET", "/cp/v1/health", { auth: NOAUTH }),
   item("Operational intelligence", "GET", "/cp/v1/ops-intelligence", { auth: NOAUTH }),
+  item("Admin flows (config)", "GET", "/cp/v1/flows", { auth: NOAUTH }),
+  item("Flow + signal health", "GET", "/cp/v1/flows/health", { auth: NOAUTH }),
 ];
 const cpFolder = { name: "Control plane (/cp/v1)", item: cpRequests };
 

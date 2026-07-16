@@ -204,6 +204,9 @@ function summarize(mode: AppSessionMode, integration: AppIntegration, confirmer:
       return `${integration.name}: limited — only low-risk actions permitted under restriction.`;
     case "deny":
       return `${integration.name}: denied; no action available. Recorded with reason.`;
+    default:
+      // Fail closed on an unrecognized mode at the untyped runtime boundary.
+      return `${integration.name}: denied; no action available (fail closed).`;
   }
 }
 

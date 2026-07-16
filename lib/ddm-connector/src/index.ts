@@ -109,7 +109,10 @@ export function normalizeDdmReport(report: DdmDeviceReport, nowIso: string): Ddm
     !deviceManaged ||
     report.binaryControl !== "enforced" ||
     report.privacy !== "declared" ||
-    report.health === "degraded" ||
+    // Any non-healthy health (degraded, but also unreporting/unknown, which leave
+    // deviceCompliance unknown) raises assurance — an ambiguous health signal
+    // must fail closed, not pass as standard.
+    report.health !== "healthy" ||
     // Anything other than a positively-fresh check-in raises assurance — an
     // unknown/unverifiable freshness must fail closed, not pass as standard.
     postureFreshness !== "fresh";

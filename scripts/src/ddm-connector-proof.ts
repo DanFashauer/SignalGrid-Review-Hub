@@ -63,6 +63,12 @@ check("unenrolled → raise step-up", byRef("mac-byod-01").assurance === "raise_
 check("SAFETY: only the fully-healthy device is assurance standard",
   signals.filter((s) => s.assurance === "standard").length === 1);
 
+// ── fail-closed on ambiguous health (unreporting/unknown) even if otherwise ok ─
+const unreporting: DdmDeviceReport = { deviceRef: "mac-unrep", enrolled: true, health: "unreporting", binaryControl: "enforced", privacy: "declared", lastCheckInAt: DEMO_DDM_REPORTS[0].lastCheckInAt };
+const ur = normalizeDdmReport(unreporting, DDM_OBSERVED_AT);
+check("unreporting health → compliance unknown", ur.deviceCompliance === "unknown");
+check("unreporting health (otherwise healthy posture) → raise step-up (fail closed)", ur.assurance === "raise_step_up");
+
 // ── fail-closed on a future-dated report (don't trust it) ─────────────────────
 const future: DdmDeviceReport = { deviceRef: "mac-future", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "declared", lastCheckInAt: "2099-01-01T00:00:00.000Z" };
 const fs = normalizeDdmReport(future, DDM_OBSERVED_AT);

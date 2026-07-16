@@ -8,9 +8,11 @@ version and Codex has less to find.
 ## The two layers
 
 ### 1. Mechanical — `pnpm run preflight`
-Runs the **entire CI gate suite locally** in one command (typecheck, build,
+Runs the **entire CI gate suite locally** in one command — a complete mirror of
+all three CI jobs (validation, docs-sanity, supply-chain): the invariant
+reviewer, docs sanity (required docs + unsafe-claim scan), typecheck, build,
 every proof, the API integration test, the safety gate, Postman/spec sync, and
-the invariant reviewer below). A green preflight means CI will be green.
+the CycloneDX SBOM sync. A green preflight means CI will be green.
 
 ```
 pnpm run preflight          # full suite — what CI runs

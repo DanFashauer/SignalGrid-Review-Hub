@@ -22,6 +22,7 @@ const quick = process.argv.includes("--quick");
 // are skipped only under --quick.
 const STEPS = [
   { name: "Invariant review (fail-closed / determinism / Assist / truth)", cmd: ["node", "scripts/review-invariants.mjs"] },
+  { name: "Docs sanity (required docs + unsafe-claim scan)", cmd: ["node", "scripts/docs-sanity.mjs"] },
   { name: "Typecheck (all packages)", cmd: ["pnpm", "run", "typecheck"] },
   { name: "Build (all packages)", cmd: ["pnpm", "run", "build"], heavy: true, env: { PORT: "3000", BASE_PATH: "/" } },
   { name: "Proof: intune-entra-posture", cmd: ["pnpm", "run", "proof:intune-entra-posture"] },

@@ -150,6 +150,9 @@ importers:
       '@workspace/control-plane':
         specifier: workspace:*
         version: link:../../lib/control-plane
+      '@workspace/flows':
+        specifier: workspace:*
+        version: link:../../lib/flows
       '@workspace/orchestration':
         specifier: workspace:*
         version: link:../../lib/orchestration
@@ -1370,6 +1373,12 @@ importers:
         specifier: 'catalog:'
         version: 25.6.2
 
+  lib/flows:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.6.2
+
   lib/integration-bridge:
     dependencies:
       '@workspace/integrations':
@@ -1473,6 +1482,9 @@ importers:
       '@workspace/control-plane':
         specifier: workspace:*
         version: link:../lib/control-plane
+      '@workspace/flows':
+        specifier: workspace:*
+        version: link:../lib/flows
       '@workspace/orchestration':
         specifier: workspace:*
         version: link:../lib/orchestration

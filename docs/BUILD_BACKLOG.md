@@ -48,6 +48,15 @@ _(see `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` for the full app-workflow roadmap)
 
 ## Done (recent)
 
+- [x] Admin flow layer (`@workspace/flows`) — administrators configure signals +
+      flows; the Grid runs them. Per-action approval policy (automated / admin /
+      dual / downtime-only user override with DR safety nets); flow + signal health
+      (healthy / degraded / broken); a broken flow **self-heals** via a configured
+      agent **or** raises an **ITSM-agnostic incident** (severity, support team,
+      target ITSM named, never called); a grid-intelligence score that rises as
+      more healthy signals feed more flows. Read API `GET /cp/v1/flows` +
+      `/cp/v1/flows/health`; proof:flows 26/26. See `docs/ADMIN_FLOWS.md`.
+
 - [x] Embedded-UX design law captured (`docs/EMBEDDED_UX_PRINCIPLE.md`) — the end
       user never touches SignalGrid; everything happens inside the host app, for
       every role (frontline to CEO) and every platform (mobile / web / macOS /

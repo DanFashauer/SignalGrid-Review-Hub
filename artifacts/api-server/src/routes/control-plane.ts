@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { ControlPlane, type TelemetryBatch } from "@workspace/control-plane";
+import { listFlows, evaluateFlowHealth, resolveFlowBreak, gridIntelligence, type SignalState } from "@workspace/flows";
 
 /**
  * `/cp/v1/*` — the SaaS **control-plane** surface (management, not decisions).
@@ -89,6 +90,37 @@ router.get("/cp/v1/health", (req, res) => {
 // custody gaps across sites, derived from ingested telemetry + node state.
 router.get("/cp/v1/ops-intelligence", (req, res) => {
   res.json(cp.operationalIntelligence(str(req.query.tenant)));
+});
+
+// ── Admin flows: what admins configure (signals → actions + approvals) and how
+// the Grid watches them. A public-safe fixture signal snapshot drives the health
+// so the self-heal-vs-incident behaviour is visible. Deterministic. ────────────
+const FLOW_SIGNAL_SNAPSHOT: SignalState[] = [
+  { id: "identity", status: "healthy" },
+  { id: "device_compliance", status: "healthy" },
+  { id: "badge_binding", status: "healthy" },
+  { id: "baseline", status: "broken" }, // breaks med-admin (incident) + network-change (self-heal)
+  { id: "custody", status: "healthy" },
+  { id: "change_window", status: "healthy" },
+];
+const FLOW_SNAPSHOT_AT = "2026-07-16T14:00:00.000Z";
+
+router.get("/cp/v1/flows", (_req, res) => {
+  res.json({ flows: listFlows() });
+});
+
+router.get("/cp/v1/flows/health", (_req, res) => {
+  const flows = listFlows().map((flow) => ({
+    flow: { id: flow.id, name: flow.name, supportTeam: flow.supportTeam, itsm: flow.itsm, severityOnBreak: flow.severityOnBreak, autoHeal: flow.autoHeal ?? null },
+    health: evaluateFlowHealth(flow, FLOW_SIGNAL_SNAPSHOT),
+    resolution: resolveFlowBreak(flow, FLOW_SIGNAL_SNAPSHOT, FLOW_SNAPSHOT_AT),
+  }));
+  res.json({
+    observedAt: FLOW_SNAPSHOT_AT,
+    signals: FLOW_SIGNAL_SNAPSHOT,
+    flows,
+    grid: gridIntelligence(listFlows(), FLOW_SIGNAL_SNAPSHOT),
+  });
 });
 
 export default router;

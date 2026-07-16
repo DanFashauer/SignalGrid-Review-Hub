@@ -1119,6 +1119,49 @@
               "type": "noauth"
             }
           }
+        },
+        {
+          "name": "Admin flows (config)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cp/v1/flows",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cp",
+                "v1",
+                "flows"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Flow + signal health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cp/v1/flows/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cp",
+                "v1",
+                "flows",
+                "health"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
         }
       ]
     }

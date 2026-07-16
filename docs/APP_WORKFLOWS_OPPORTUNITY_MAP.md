@@ -61,8 +61,12 @@ exactly to clinical safety.
 2. **App-integration API** (`/v1/app-workflows`) — the endpoint an app calls:
    "given this actor + device + context, what can this app do right now?" plus a
    single-action gate. Bearer-authed, runs the real decision core. *(P1 build.)*
-3. **In-app step-up** — when a decision is `step_up`, the app drives a WebAuthn
-   badge-tap / biometric (the hardened path already exists) and re-requests.
+3. **In-app step-up** — when a decision is `step_up`, the **host app** drives the
+   platform's *native* authenticator (Face ID / Touch ID / Windows Hello / badge
+   tap) via the hardened WebAuthn path and re-requests. The user sees only their
+   own app's familiar prompt — never a SignalGrid screen. This is the embedded-UX
+   law (`docs/EMBEDDED_UX_PRINCIPLE.md`): the end user does nothing SignalGrid-
+   specific; everything happens inside their app on the device, any platform.
 4. **Workflow templates** — per-vertical starter catalogs an integrator clones.
 5. **Admin surface** — an "App workflows" page: the integration catalog + a live
    gated-action preview per vertical.

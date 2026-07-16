@@ -20,9 +20,16 @@ picking these up:
 
 ## Next
 
-- [ ] **In-app step-up loop** — when `/v1/app-workflows/evaluate` returns
-      `step_up`, drive the hardened WebAuthn badge-tap / biometric and re-request,
-      showing held actions releasing. (See `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md`.)
+- [ ] **In-app step-up loop (embedded, native prompt)** — when
+      `/v1/app-workflows/evaluate` returns `step_up`, the *host app* drives the
+      platform's native authenticator (Face ID / badge tap) via the hardened
+      WebAuthn path and re-requests, held actions releasing — no SignalGrid screen.
+      Governed by `docs/EMBEDDED_UX_PRINCIPLE.md`.
+- [ ] **Reconcile the end-user surface with the embedded-UX law** —
+      `artifacts/signalgrid-mobile-pwa` ("My Access") is a SignalGrid-branded
+      end-user screen, which violates "the end user never opens SignalGrid."
+      Reframe it as a reference host-app embedding demo, or an operator/support
+      view — not a worker destination. See `docs/EMBEDDED_UX_PRINCIPLE.md`.
 - [ ] **Per-integration workflow templates** — a starter catalog an integrator
       clones per app, plus a validation lint.
 

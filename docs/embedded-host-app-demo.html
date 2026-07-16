@@ -57,6 +57,14 @@
   .act.secondary{background:#fff;color:var(--app);border:1px solid var(--app)}
   .hostmsg{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:.6rem .7rem;font-size:.76rem;margin-bottom:.6rem}
   .hostmsg.ok{background:#f0fdf4;border-color:#bbf7d0;color:#166534}
+  /* The host app's OWN confirmation dialog (an Assist step) — not a SignalGrid overlay. */
+  .confirmcard{background:#fff;border:1px solid var(--app);border-radius:11px;padding:.7rem .8rem;margin-bottom:.6rem}
+  .confirmcard .ct{font-weight:700;font-size:.82rem;color:var(--appink)}
+  .confirmcard .cd{color:var(--appsoft);font-size:.74rem;margin:.15rem 0 .55rem}
+  .confirmcard .cbtns{display:flex;gap:.5rem}
+  .confirmcard button{flex:1;border-radius:9px;padding:.5rem;font:inherit;font-weight:700;font-size:.78rem;cursor:pointer}
+  .confirmcard .cok{background:var(--app);color:#fff;border:none}
+  .confirmcard .cno{background:#fff;color:var(--appsoft);border:1px solid var(--appline)}
   .toast{position:absolute;left:12px;right:12px;bottom:12px;background:#0f172a;color:#fff;border-radius:11px;padding:.6rem .75rem;font-size:.76rem;opacity:0;transform:translateY(8px);transition:.25s;pointer-events:none}
   .toast.show{opacity:1;transform:none}
 
@@ -92,7 +100,7 @@
   .decision .hd{display:flex;justify-content:space-between;padding:.5rem .7rem;background:var(--card2);border-bottom:1px solid var(--line)}
   .decision .bd{padding:.55rem .7rem;color:var(--soft);white-space:pre-wrap}
   .verdict{font-weight:700;letter-spacing:.04em}
-  .v-allow{color:var(--allow)}.v-step_up{color:var(--stepup)}.v-restrict{color:var(--restrict)}.v-deny{color:var(--deny)}
+  .v-allow{color:var(--allow)}.v-step_up{color:var(--stepup)}.v-assist{color:var(--stepup)}.v-applied{color:var(--allow)}.v-restrict{color:var(--restrict)}.v-deny{color:var(--deny)}
   .why{color:var(--faint);font-size:.66rem;font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em}
   .principle{font-size:.78rem;color:var(--soft);border-left:2px solid var(--accent);padding:.1rem 0 .1rem .7rem;margin:0}
   .foot{margin-top:1.4rem;border-top:1px solid var(--line);padding-top:.9rem;color:var(--faint);font-size:.72rem;font-family:var(--mono);line-height:1.7}
@@ -131,6 +139,7 @@
               <div class="meta">Room 4B · MRN 00-DEMO · synthetic record</div>
             </div>
             <div id="rows"></div>
+            <div id="confirm"></div>
             <div id="hostmsg"></div>
             <button class="act" id="primary">Open chart</button>
           </div>
@@ -207,13 +216,20 @@
     { key:"order.place", label:"Place controlled med order", host:"", hostHold:"One quick check to confirm it's you on this shared device.",
       action:"order.place", verdict:"step_up", why:"BASELINE_DRIFTED · SHARED_DEVICE",
       body:"High-assurance action on a shared device → HELD. SignalGrid does not release it; it asks the app to capture a real native gesture. The order does not fire yet.",
-      step:{ b:"Place a controlled med order", s:"Sensitive → held for a step-up. This is where the native prompt appears." },
+      step:{ b:"Place a controlled med order", s:"Sensitive → held for a step-up, then an explicit confirmation. Two gates, not one." },
       needsStepUp:true },
   ];
-  var RELEASED = { host:"Controlled med order placed.", body:"Step-up satisfied by the device's authenticator → the held action is released and the order proceeds. In production this is a real WebAuthn assertion; here it is a labeled simulation.", why:"STEP_UP_SATISFIED", verdict:"allow" };
+  // After the step-up gesture the outcome flips to allow, but a critical action
+  // is not auto-placed: it sits at ASSIST until the clinician confirms in the
+  // app's own dialog (mirrors completeAppStepUp → still assist in the planner).
+  var ASSIST = { verdict:"assist", why:"STEP_UP_SATISFIED · AWAITING_CONFIRMATION",
+    body:"Step-up satisfied — but a critical action still requires an explicit confirmation in the app. SignalGrid holds it as ASSIST; the biometric alone does not place the order." };
+  var APPLIED = { host:"Controlled med order placed.", verdict:"applied", why:"CONFIRMED_BY_CLINICIAN",
+    body:"The clinician confirmed in the app's own dialog → the held action is applied and the order proceeds. Two gates cleared: a native step-up AND an explicit confirmation. In production the step-up is a real WebAuthn assertion; here it is a labeled simulation." };
 
-  var i = 0, awaitingStepUp = false, released = false;
+  var i = 0, awaitingStepUp = false, awaitingConfirm = false;
   var rows = document.getElementById("rows");
+  var confirmEl = document.getElementById("confirm");
   var hostmsg = document.getElementById("hostmsg");
   var primary = document.getElementById("primary");
   var toast = document.getElementById("toast");
@@ -279,22 +295,47 @@
   }
 
   function completeStepUp(){
-    // Clearly a simulation: releases the held action after the demo gesture.
+    // Step-up satisfied (clearly a simulation) → the action is NOT placed yet.
+    // It moves to ASSIST: the app shows its OWN confirmation dialog, mirroring
+    // the real planner where a critical action stays assist until confirmed.
     sheet.classList.remove("show");
     awaitingStepUp = false;
-    released = true;
-    // mark the held row as done
+    awaitingConfirm = true;
+    setDecision(STEPS[i].action, ASSIST.verdict, ASSIST.why, ASSIST.body);
+    hostmsg.innerHTML = '<div class="hostmsg">Identity confirmed. Now verify the order to place it.</div>';
+    confirmEl.innerHTML =
+      '<div class="confirmcard"><div class="ct">Verify controlled medication order</div>'+
+      '<div class="cd">Rivera, A. · Room 4B · this is the app’s own confirmation, not a SignalGrid screen.</div>'+
+      '<div class="cbtns"><button class="cno" id="cNo">Cancel</button><button class="cok" id="cOk">Confirm order</button></div></div>';
+    document.getElementById("cOk").addEventListener("click", confirmOrder);
+    document.getElementById("cNo").addEventListener("click", cancelConfirm);
+  }
+
+  function confirmOrder(){
+    // Explicit confirmation supplied → the held action is applied.
+    awaitingConfirm = false;
+    confirmEl.innerHTML = "";
     var held = rows.querySelector(".row.blocked");
     if(held){ held.classList.remove("blocked"); held.classList.add("done"); held.querySelector(".st").textContent = "DONE"; }
-    hostmsg.innerHTML = '<div class="hostmsg ok">'+RELEASED.host+'</div>';
-    setDecision(STEPS[i].action, RELEASED.verdict, RELEASED.why, RELEASED.body);
-    showToast(RELEASED.host);
+    hostmsg.innerHTML = '<div class="hostmsg ok">'+APPLIED.host+'</div>';
+    setDecision(STEPS[i].action, APPLIED.verdict, APPLIED.why, APPLIED.body);
+    showToast(APPLIED.host);
     i++;
     renderSteps();
     updatePrimary();
   }
 
-  primary.addEventListener("click", function(){ if(!awaitingStepUp) advance(); });
+  function cancelConfirm(){
+    // Fail-closed: no confirmation, no placement — even after a valid step-up.
+    awaitingConfirm = false;
+    confirmEl.innerHTML = "";
+    hostmsg.innerHTML = '<div class="hostmsg">Confirmation cancelled. The order stays held and was never placed.</div>';
+    setDecision(STEPS[i].action, "assist", "CONFIRMATION_DECLINED",
+      "Even with the step-up satisfied, no explicit confirmation means the critical action does not fire. Fail-closed.");
+    primary.disabled = false;
+  }
+
+  primary.addEventListener("click", function(){ if(!awaitingStepUp && !awaitingConfirm) advance(); });
   document.getElementById("sheetGo").addEventListener("click", completeStepUp);
   document.getElementById("sheetNo").addEventListener("click", function(){
     sheet.classList.remove("show");
@@ -304,8 +345,8 @@
     setDecision(STEPS[i].action, "step_up", "STEP_UP_NOT_SATISFIED", "The worker declined the check, so the held action never fires. Fail-closed: no gesture, no release.");
   });
   document.getElementById("reset").addEventListener("click", function(){
-    i = 0; awaitingStepUp = false; released = false;
-    rows.innerHTML = ""; hostmsg.innerHTML = "";
+    i = 0; awaitingStepUp = false; awaitingConfirm = false;
+    rows.innerHTML = ""; hostmsg.innerHTML = ""; confirmEl.innerHTML = "";
     setDecision("—","allow","","Press <strong>Open chart</strong> to begin.");
     decAction.textContent = "—"; decVerdict.textContent = "—"; decVerdict.className = "verdict";
     sheet.classList.remove("show");

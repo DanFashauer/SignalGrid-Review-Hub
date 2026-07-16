@@ -65,6 +65,16 @@ _(see `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` for the full app-workflow roadmap)
 
 ## Done (recent)
 
+- [x] signalgrid.app GitHub Pages deploy — the `Deploy site to Pages` workflow
+      now publishes the `signalgrid-web` marketing site at the apex custom domain
+      (base `/`), with the on-device console + battlecard preserved at
+      `/console.html` and `/battlecard.html` and an SPA `404.html` fallback so
+      deep links resolve. `site/CNAME` pins `signalgrid.app`. `docs/DOMAIN_SETUP.md`
+      has the exact Namecheap DNS records (4× A + AAAA + `www` CNAME), the
+      enforce-HTTPS / `.app` HSTS note, a WHOIS-privacy reminder, and a go-live
+      checklist. Workflow stays manual (`workflow_dispatch`) — the owner runs it
+      once after setting DNS + Pages source. Assemble verified locally.
+
 - [x] Self-review layer — a second reviewer that runs BEFORE every push so a
       change is proven correct the first time (`docs/SELF_REVIEW.md`). Two parts:
       `pnpm run preflight` runs the whole CI gate suite locally in one command

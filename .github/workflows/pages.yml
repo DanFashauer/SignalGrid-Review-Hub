@@ -1,15 +1,19 @@
-name: Deploy demo site to Pages
+name: Deploy site to Pages
 
-# Publishes the on-device demos (Trusted Room Entry console + battlecard) to
-# GitHub Pages, giving a permanent public link that opens on any device.
+# Publishes the SignalGrid marketing site (artifacts/signalgrid-web) to GitHub
+# Pages at the custom domain signalgrid.app, with the on-device demos (Trusted
+# Room Entry console + battlecard) preserved at stable sub-paths.
 #
 # Manual-only. The default GITHUB_TOKEN cannot enable Pages, so this runs on
 # demand (never automatically) to avoid failing until Pages is turned on.
 #
-# One-time setup, then it's a green one-click deploy:
+# One-time setup (see docs/DOMAIN_SETUP.md for the DNS + go-live checklist):
 #   1. Repo Settings → Pages → Source = "GitHub Actions".
-#   2. Actions tab → "Deploy demo site to Pages" → Run workflow.
-# Everything is public-safe static HTML — no server, no data.
+#   2. Point signalgrid.app's DNS at GitHub Pages (records in DOMAIN_SETUP.md).
+#   3. Actions tab → "Deploy site to Pages" → Run workflow.
+#   4. Settings → Pages → Custom domain shows signalgrid.app; tick "Enforce HTTPS".
+# Everything is public-safe static content — no server, no data. The site/CNAME
+# file pins the custom domain so Pages keeps serving signalgrid.app.
 on:
   workflow_dispatch:
 
@@ -37,14 +41,33 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      # Build the marketing site for the apex custom domain (base = "/").
+      - name: Build marketing site
+        run: BASE_PATH=/ pnpm --filter @workspace/signalgrid-web run build
       # Regenerate the on-device console from source so Pages is always current.
       - run: pnpm run build:room-console
       - name: Assemble site
         run: |
+          set -euo pipefail
           mkdir -p _site
-          cp site/index.html _site/index.html
+          # Marketing site (signalgrid-web) at the root.
+          cp -r artifacts/signalgrid-web/dist/public/. _site/
+          # Per-route static shells so a DIRECT hit on a client-side route returns
+          # HTTP 200 (not the 404.html fallback, which Pages serves with a real
+          # 404 status). Each shell is the SPA index; wouter reads the URL and
+          # renders the right page. Keep this list in sync with the routes in
+          # artifacts/signalgrid-web/src/App.tsx.
+          for route in hardware pricing federal downloads about; do
+            mkdir -p "_site/$route"
+            cp _site/index.html "_site/$route/index.html"
+          done
+          # Last-resort fallback for genuinely-unknown paths (renders the SPA).
+          cp _site/index.html _site/404.html
+          # On-device demos preserved at their stable permanent-link paths.
           cp docs/room-entry-console.html _site/console.html
           cp docs/competitive-battlecard.html _site/battlecard.html
+          # Pin the custom domain so Pages keeps serving signalgrid.app.
+          cp site/CNAME _site/CNAME
       - uses: actions/upload-pages-artifact@v3
         with: { path: _site }
 

@@ -26,8 +26,6 @@ picking these up:
 
 ## Later / vision
 
-- [ ] **Signed policy bundles** — sign the config-down bundle; verify signature
-      at the edge before applying (fail closed).
 - [ ] **Operational-intelligence rollups (Phase 3)** — friction hotspots,
       posture drift, custody gaps across sites, from ingested telemetry.
 - [ ] **Attestation verification** — verify packed/fido-u2f attestation at
@@ -35,6 +33,11 @@ picking these up:
       narrower).
 
 ## Done (recent)
+
+- [x] Signed policy bundles — config-down bundle is HMAC-signed (authenticity)
+      on top of the checksum (integrity); edge verifies signature before applying,
+      fail-closed on a checksum-valid forgery. Proofs updated (edge-sync 15/15,
+      control-plane 17/17).
 
 - [x] Telemetry-up wiring — real /v1 core decisions aggregated and ingested into
       the control-plane rollup (proof:telemetry-up, 7/7).

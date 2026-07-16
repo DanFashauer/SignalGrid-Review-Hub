@@ -48,6 +48,10 @@ const STEPS = [
   // then fail if the committed collection drifted.
   { name: "Postman collection committed in sync", cmd: ["bash", "-c", "pnpm run build:postman && git diff --exit-code docs/postman"] },
   { name: "Decision-latency pilot gate (bench)", cmd: ["pnpm", "run", "bench:decision-latency"] },
+  // Mirrors the supply-chain job's "SBOM is committed and up to date" gate:
+  // regenerate the CycloneDX SBOM and fail if it drifted (e.g. a new dependency
+  // was added but the committed SBOM wasn't regenerated).
+  { name: "CycloneDX SBOM committed in sync", cmd: ["bash", "-c", "pnpm run sbom && git diff --exit-code -- artifacts/sbom/cyclonedx.json"] },
 ];
 
 const results = [];

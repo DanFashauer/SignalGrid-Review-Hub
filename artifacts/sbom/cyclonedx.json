@@ -229,6 +229,20 @@
     },
     {
       "type": "library",
+      "name": "@fontsource/ibm-plex-mono",
+      "version": "5.2.7",
+      "bom-ref": "pkg:npm/%40fontsource/ibm-plex-mono@5.2.7",
+      "purl": "pkg:npm/%40fontsource/ibm-plex-mono@5.2.7"
+    },
+    {
+      "type": "library",
+      "name": "@fontsource/inter",
+      "version": "5.2.8",
+      "bom-ref": "pkg:npm/%40fontsource/inter@5.2.8",
+      "purl": "pkg:npm/%40fontsource/inter@5.2.8"
+    },
+    {
+      "type": "library",
       "name": "@gerrit0/mini-shiki",
       "version": "3.23.0",
       "bom-ref": "pkg:npm/%40gerrit0/mini-shiki@3.23.0",

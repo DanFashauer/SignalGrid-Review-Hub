@@ -29,13 +29,6 @@ picking these up:
       OS binary control rather than duplicating it. See
       `docs/MACOS_27_DDM_SIGNAL_OPPORTUNITY.md`. No live MDM calls.
 
-- [ ] **Preflight mirrors the docs-sanity CI job** — `pnpm run preflight` covers
-      the validation + supply-chain jobs but not the `docs-sanity` job (required
-      docs exist + the unsafe-claim denylist scan). Extract that job's logic into
-      a shared `scripts/docs-sanity.mjs` used by BOTH the workflow and preflight,
-      so a doc that trips the unsafe-claim scan fails preflight before the push
-      (same pattern as the SBOM gate). Small, tooling-only.
-
 ## Next
 
 - [ ] **In-app step-up completion (real, hardware-backed)** — releasing a held
@@ -77,6 +70,13 @@ _These need the owner's call — an agent should not act on them unsupervised._
 _(see `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` for the full app-workflow roadmap)_
 
 ## Done (recent)
+
+- [x] Preflight mirrors the docs-sanity CI job — the required-docs check + the
+      affirmative-unsafe-claim scan are now a shared `scripts/docs-sanity.mjs`
+      used by BOTH the CI `docs-sanity` job and `pnpm run preflight`. A doc that
+      trips the unsafe-claim denylist now fails preflight before the push, not
+      just in CI. Preflight is now a complete mirror of all three CI jobs
+      (validation, docs-sanity, supply-chain). `pnpm run docs:sanity` added.
 
 - [x] Embedded host-app demo (worker-side invisible flow) —
       `docs/embedded-host-app-demo.html` (published at `/embedded-demo.html`): a

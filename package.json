@@ -43,6 +43,7 @@
     "build:postman": "node scripts/build-postman.mjs",
     "check:postman": "node scripts/build-postman.mjs --check",
     "safety:check": "node scripts/safety-check.mjs",
+    "docs:sanity": "node scripts/docs-sanity.mjs",
     "review:invariants": "node scripts/review-invariants.mjs",
     "preflight": "node scripts/preflight.mjs",
     "proof:signal-discovery": "pnpm --filter @workspace/scripts run proof:signal-discovery"

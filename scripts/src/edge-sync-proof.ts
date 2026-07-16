@@ -12,7 +12,7 @@
 //
 // Run: pnpm --filter @workspace/scripts run proof:edge-sync
 
-import { ControlPlane, verifyBundleChecksum, type PolicyBundle } from "@workspace/control-plane";
+import { ControlPlane, verifyBundleChecksum, verifyBundleSignature, type PolicyBundle } from "@workspace/control-plane";
 
 let passed = 0;
 const failures: string[] = [];
@@ -42,6 +42,13 @@ function main() {
     const tamperedVersion: PolicyBundle = { ...bundle, version: bundle.version + 99 };
     check("tampered bundle (extra workflow) fails integrity", verifyBundleChecksum(tamperedWorkflows) === false);
     check("tampered bundle (version bump) fails integrity", verifyBundleChecksum(tamperedVersion) === false);
+
+    // Signature (authenticity): a genuine bundle verifies; a checksum-valid
+    // bundle with a bad/forged signature still fails (the attacker has no key).
+    check("pulled bundle signature verifies (authentic)", verifyBundleSignature(bundle));
+    const forgedSig: PolicyBundle = { ...bundle, signature: "0".repeat(bundle.signature.length) };
+    check("valid checksum but forged signature fails closed", verifyBundleChecksum(forgedSig) === true && verifyBundleSignature(forgedSig) === false);
+    check("tampered workflows fail signature too", verifyBundleSignature(tamperedWorkflows) === false);
   }
 
   // Apply the verified bundle → node advances to target.

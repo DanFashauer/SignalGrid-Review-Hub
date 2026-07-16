@@ -14,6 +14,8 @@
  * different frontlines from one plane.
  */
 
+import { createHmac, timingSafeEqual } from "crypto";
+
 // ── deterministic checksum (FNV-1a, dependency-free, browser-safe) ───────────
 
 function fnv1a(input: string): string {
@@ -37,6 +39,46 @@ function bundleChecksum(tenantId: string, version: number, workflows: string[]):
  */
 export function verifyBundleChecksum(bundle: PolicyBundle): boolean {
   return bundleChecksum(bundle.tenantId, bundle.version, bundle.workflows) === bundle.checksum;
+}
+
+// ── bundle signing (authenticity) ────────────────────────────────────────────
+//
+// The checksum proves a bundle wasn't corrupted; the signature proves it came
+// from the control plane (authenticity). We HMAC-SHA256 the canonical bundle
+// content with a per-tenant signing key so an edge node can refuse config that
+// isn't signed by the control plane it trusts — even a checksum-consistent
+// forgery fails. Keys here are PUBLIC-SAFE FIXTURES (obviously fake); a real
+// deployment would use per-tenant secrets or asymmetric signing.
+
+const FIXTURE_SIGNING_KEYS: Record<string, string> = {
+  tenant_northwind: "cpk_demo_northwind_signing",
+  tenant_atlas: "cpk_demo_atlas_signing",
+  tenant_meridian: "cpk_demo_meridian_signing",
+};
+
+function canonicalBundle(tenantId: string, version: number, workflows: string[]): string {
+  return `${tenantId}:${version}:${workflows.join(",")}`;
+}
+
+function bundleSignature(tenantId: string, version: number, workflows: string[]): string {
+  const key = FIXTURE_SIGNING_KEYS[tenantId] ?? "cpk_demo_unknown_signing";
+  return createHmac("sha256", key).update(canonicalBundle(tenantId, version, workflows)).digest("hex");
+}
+
+/**
+ * Verify a bundle's signature (authenticity) AND checksum (integrity) — the
+ * full check an edge node runs before applying pulled config. Constant-time
+ * signature comparison; fail closed on any mismatch or tampering.
+ */
+export function verifyBundleSignature(bundle: PolicyBundle): boolean {
+  if (!verifyBundleChecksum(bundle)) return false;
+  const expected = bundleSignature(bundle.tenantId, bundle.version, bundle.workflows);
+  if (typeof bundle.signature !== "string" || bundle.signature.length !== expected.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(bundle.signature, "hex"), Buffer.from(expected, "hex"));
+  } catch {
+    return false;
+  }
 }
 
 // ── domain model ─────────────────────────────────────────────────────────────
@@ -83,7 +125,8 @@ export interface PolicyBundle {
   tenantId: string;
   version: number;
   workflows: string[];
-  checksum: string;
+  checksum: string; // integrity (FNV over content)
+  signature: string; // authenticity (HMAC-SHA256 over content, fixture key)
 }
 
 /** A telemetry batch reported UP by an edge node. */
@@ -266,7 +309,13 @@ export class ControlPlane {
   getPolicyBundle(tenantId: string): PolicyBundle | null {
     const b = this.seed.bundles.get(tenantId);
     if (!b) return null;
-    return { tenantId, version: b.version, workflows: b.workflows, checksum: bundleChecksum(tenantId, b.version, b.workflows) };
+    return {
+      tenantId,
+      version: b.version,
+      workflows: b.workflows,
+      checksum: bundleChecksum(tenantId, b.version, b.workflows),
+      signature: bundleSignature(tenantId, b.version, b.workflows),
+    };
   }
 
   /**

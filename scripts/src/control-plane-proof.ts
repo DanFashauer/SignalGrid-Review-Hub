@@ -11,7 +11,7 @@
 //
 // Run: pnpm --filter @workspace/scripts run proof:control-plane
 
-import { ControlPlane } from "@workspace/control-plane";
+import { ControlPlane, verifyBundleSignature } from "@workspace/control-plane";
 
 let passed = 0;
 const failures: string[] = [];
@@ -43,6 +43,7 @@ function main() {
   check("policy bundle resolves", b1 !== null);
   check("policy-bundle checksum is deterministic", !!b1 && !!b2 && b1.checksum === b2.checksum);
   check("different tenants get different bundles", cp.getPolicyBundle("tenant_atlas")?.checksum !== b1?.checksum);
+  check("policy bundle is signed and verifies", !!b1 && verifyBundleSignature(b1));
 
   // 4. Sync plan: behind vs up-to-date.
   const behind = cp.syncPlan("edge_atlas_dc7"); // bundleVersion 3 < target 4

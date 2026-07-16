@@ -14,9 +14,13 @@ picking these up:
 
 ## Now (next up)
 
-- [ ] **Retail + industrial tenants in the core** — seed two more demo tenants so
-      the retail (POS / restricted-sale) and industrial (MES / SCADA-HMI) app
-      catalogs gate live, not catalog-only. Same pattern as the Meridian add.
+- [ ] **Control-plane management-plane for retail + industrial (+ data-center)** —
+      the `@workspace/control-plane` fleet rollup still models three verticals
+      (healthcare / warehouse / global-fleet). Extend its `Vertical` union, seed
+      sites + edge nodes + fleet devices for Vero (retail) and Forge (industrial)
+      — and optionally a NOC tenant — so the admin Fleet page and ops-intelligence
+      rollups span all of them, matching the core seed. Cosmetic/management only;
+      the decision core already gates these live.
 
 ## Next
 
@@ -36,11 +40,42 @@ picking these up:
 - [ ] **Per-integration workflow templates** — a starter catalog an integrator
       clones per app, plus a validation lint.
 
+## Owner-gated (needs a decision before an agent builds it)
+
+_These need the owner's call — an agent should not act on them unsupervised._
+
+- [ ] **IP / disclosure posture** ⚠️ **owner decision first.** Before ANY detailed
+      invention material is committed, the owner must confirm repo **visibility**
+      (public GitHub = a public disclosure that starts the US 12-month patent
+      clock and can bar patents abroad). Decisions the owner owns: file a
+      **provisional patent** for the embedded-on-dock method + retrofit module +
+      phone-case/locker embodiments; **trademark** "SignalGrid"; entity
+      formation; **LICENSE posture** (the repo currently has no explicit
+      proprietary notice — changing to "all rights reserved" or adding a LICENSE
+      is a business call). An agent MAY, once the owner OKs and confirms the repo
+      is private (or a private location is chosen): draft an invention-disclosure
+      document from the architecture, add copyright/CONFIDENTIAL headers, and
+      write a tiered-disclosure kit (public one-pager vs. NDA-gated technical
+      brief) + `docs/IP_AND_DISCLOSURE.md`. Do NOT commit a detailed provisional
+      spec into a public repo.
+
 ## Later / vision
 
 _(see `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` for the full app-workflow roadmap)_
 
 ## Done (recent)
+
+- [x] Retail + industrial tenants in the core — two new seeded demo tenants
+      (**Vero Markets** retail, **Forge Industrial** industrial) so the POS /
+      age-rx-restricted and MES / SCADA-HMI app catalogs gate against a **live
+      decision**, not a supplied one. Each has its own workflows (keys matching
+      the app-workflows catalog: `pos-session`/`restricted-sale`, `line-ops`),
+      shared-device policy, a spread of subjects (allow / restrict / step-up /
+      deny), benign dock custody, webhooks, resolution config, and an owner demo
+      key (`sgk_demo_vero_owner`, `sgk_demo_forge_owner`). Live in the admin
+      App-workflows page. core proof 166/166 (relative counts), api test 110/110
+      (+3 live retail/industrial gating assertions), safety gate green. The
+      control-plane management rollup still shows three verticals — see "Now".
 
 - [x] Data-center / NOC app catalog (P5) — a sixth vertical for
       `@workspace/app-workflows` gating the tools a NOC runs, with **uptime as

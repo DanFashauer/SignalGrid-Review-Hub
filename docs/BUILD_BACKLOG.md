@@ -21,8 +21,6 @@ picking these up:
 
 - [ ] **Global-fleet scenario pack** — vehicle-mount checkout + cross-region
       session scenarios.
-- [ ] **Per-vertical policy bundles** — model distinct bundles per vertical and
-      show them distributing in the admin surface.
 
 ## Later / vision
 
@@ -33,6 +31,11 @@ picking these up:
       narrower).
 
 ## Done (recent)
+
+- [x] Per-vertical policy bundles surfaced in the admin Fleet UI — each tenant
+      shows its signed bundle version + the workflow set it distributes
+      (healthcare: clinical-session/med-admin; warehouse: pick-pack/controlled-area;
+      global-fleet: field-session/vehicle-checkout). Reads `/api/cp/v1/policy-bundle`.
 
 - [x] Signed policy bundles — config-down bundle is HMAC-signed (authenticity)
       on top of the checksum (integrity); edge verifies signature before applying,

@@ -23,8 +23,10 @@ import type {
 /**
  * Deterministic, public-safe demo seed.
  *
- * Two tenants exist so cross-tenant isolation can be exercised directly. All
- * identities, devices, tokens, and posture records are synthetic. Tokens are
+ * Five tenants exist across five verticals (healthcare / warehouse / global-fleet
+ * / retail / industrial) so cross-tenant isolation can be exercised directly and
+ * every app-workflow catalog gates against a live decision. All identities,
+ * devices, tokens, and posture records are synthetic. Tokens are
  * obviously-fake demo strings, never real credentials. `credentialRef` values
  * are placeholders that show WHERE a real secret reference would live in the
  * private core — they are not secrets.
@@ -36,6 +38,8 @@ export interface SeededDemo {
     northwind: string;
     atlas: string;
     meridian: string;
+    vero: string;
+    forge: string;
   };
   tokens: {
     northwindOwner: string;
@@ -43,6 +47,8 @@ export interface SeededDemo {
     northwindAuditor: string;
     atlasOwner: string;
     meridianOwner: string;
+    veroOwner: string;
+    forgeOwner: string;
   };
   /** Per-connector fixture posture records, so a sync can be replayed. */
   fixtureRecords: Record<string, FixturePostureRecord[]>;
@@ -53,6 +59,8 @@ export interface SeededDemo {
 const NORTHWIND = "tenant_northwind";
 const ATLAS = "tenant_atlas";
 const MERIDIAN = "tenant_meridian";
+const VERO = "tenant_vero";
+const FORGE = "tenant_forge";
 
 export function seedDemoStore(clock: Clock): SeededDemo {
   const store = new MemoryStore();
@@ -76,6 +84,18 @@ export function seedDemoStore(clock: Clock): SeededDemo {
     name: "Meridian Field Ops (demo)",
     createdAt,
   });
+  seedTenant(store, {
+    tenantId: VERO,
+    slug: "vero-markets",
+    name: "Vero Markets (demo)",
+    createdAt,
+  });
+  seedTenant(store, {
+    tenantId: FORGE,
+    slug: "forge-industrial",
+    name: "Forge Industrial (demo)",
+    createdAt,
+  });
 
   // Northwind: hospital shared-device workflows.
   seedWorkflows(store, NORTHWIND, [
@@ -97,10 +117,26 @@ export function seedDemoStore(clock: Clock): SeededDemo {
     { key: "field-session", name: "Field vehicle-mount session", riskTier: "standard" },
     { key: "vehicle-checkout", name: "Cross-region vehicle checkout (regulated cargo)", riskTier: "critical" },
   ]);
+  // Vero: retail shared-device workflows. Keys match the app-workflows catalog
+  // (`pos-session`, `restricted-sale`) so the POS and age/rx-restricted app
+  // catalogs gate against a LIVE decision, not a supplied one.
+  seedWorkflows(store, VERO, [
+    { key: "general-lookup", name: "Store directory lookup", riskTier: "standard" },
+    { key: "pos-session", name: "Point-of-sale session", riskTier: "elevated" },
+    { key: "restricted-sale", name: "Age / rx-restricted sale", riskTier: "critical" },
+  ]);
+  // Forge: industrial line-operations workflow. Key matches the app-workflows
+  // catalog (`line-ops`) so the MES / SCADA-HMI catalog gates live.
+  seedWorkflows(store, FORGE, [
+    { key: "general-lookup", name: "Plant directory lookup", riskTier: "standard" },
+    { key: "line-ops", name: "Line operations (MES / SCADA-HMI)", riskTier: "critical" },
+  ]);
 
   seedPolicy(store, NORTHWIND, createdAt);
   seedPolicy(store, ATLAS, createdAt);
   seedPolicy(store, MERIDIAN, createdAt);
+  seedPolicy(store, VERO, createdAt);
+  seedPolicy(store, FORGE, createdAt);
 
   // Northwind subjects: a deliberate spread of posture outcomes.
   const northwindRecords = seedNorthwindSubjects(store);
@@ -108,19 +144,29 @@ export function seedDemoStore(clock: Clock): SeededDemo {
   const atlasRecords = seedAtlasSubjects(store);
   // Meridian (global-fleet) subjects: the same spread for vehicle-mount drivers.
   const meridianRecords = seedMeridianSubjects(store);
+  // Vero (retail) subjects: the same spread for POS cashiers.
+  const veroRecords = seedVeroSubjects(store);
+  // Forge (industrial) subjects: the same spread for line operators.
+  const forgeRecords = seedForgeSubjects(store);
 
   const northwindConnectorId = runConnector(store, clock, NORTHWIND, northwindRecords);
   const atlasConnectorId = runConnector(store, clock, ATLAS, atlasRecords);
   const meridianConnectorId = runConnector(store, clock, MERIDIAN, meridianRecords);
+  const veroConnectorId = runConnector(store, clock, VERO, veroRecords);
+  const forgeConnectorId = runConnector(store, clock, FORGE, forgeRecords);
 
   // DockBridge custody connectors: the hospital ingests via an app embedded in
   // the dock; the warehouse polls a locker vendor's event API. Both fixture-only.
   const northwindDockRecords = northwindDockCustody();
   const atlasDockRecords = atlasDockCustody();
   const meridianDockRecords = meridianDockCustody();
+  const veroDockRecords = veroDockCustody();
+  const forgeDockRecords = forgeDockCustody();
   const northwindDockId = runDockConnector(store, clock, NORTHWIND, "app_in_dock", northwindDockRecords);
   const atlasDockId = runDockConnector(store, clock, ATLAS, "vendor_api", atlasDockRecords);
   const meridianDockId = runDockConnector(store, clock, MERIDIAN, "vendor_api", meridianDockRecords);
+  const veroDockId = runDockConnector(store, clock, VERO, "vendor_api", veroDockRecords);
+  const forgeDockId = runDockConnector(store, clock, FORGE, "vendor_api", forgeDockRecords);
 
   // Dedicated SignalGrid SmartDock: the embedded smart-charging dock reports the
   // full custody/charge/tamper/dock/badge signal set natively. Optional hardware
@@ -138,6 +184,8 @@ export function seedDemoStore(clock: Clock): SeededDemo {
   seedWebhookEndpoints(store, NORTHWIND);
   seedWebhookEndpoints(store, ATLAS);
   seedWebhookEndpoints(store, MERIDIAN);
+  seedWebhookEndpoints(store, VERO);
+  seedWebhookEndpoints(store, FORGE);
 
   // Per-organization resolution flow control: the hospital routes worker steps
   // to badge/credential readers; the warehouse routes them to smart lockers.
@@ -156,29 +204,45 @@ export function seedDemoStore(clock: Clock): SeededDemo {
     primaryHardwareChannel: "smart_locker",
     autoProposeEnabled: true,
   });
+  store.putResolutionConfig({
+    tenantId: VERO,
+    primaryHardwareChannel: "smart_locker",
+    autoProposeEnabled: true,
+  });
+  store.putResolutionConfig({
+    tenantId: FORGE,
+    primaryHardwareChannel: "credential_reader",
+    autoProposeEnabled: true,
+  });
 
   seedApiKeys(store);
 
   return {
     store,
     clock,
-    tenants: { northwind: NORTHWIND, atlas: ATLAS, meridian: MERIDIAN },
+    tenants: { northwind: NORTHWIND, atlas: ATLAS, meridian: MERIDIAN, vero: VERO, forge: FORGE },
     tokens: {
       northwindOwner: "sgk_demo_northwind_owner",
       northwindOperator: "sgk_demo_northwind_operator",
       northwindAuditor: "sgk_demo_northwind_auditor",
       atlasOwner: "sgk_demo_atlas_owner",
       meridianOwner: "sgk_demo_meridian_owner",
+      veroOwner: "sgk_demo_vero_owner",
+      forgeOwner: "sgk_demo_forge_owner",
     },
     fixtureRecords: {
       [northwindConnectorId]: northwindRecords,
       [atlasConnectorId]: atlasRecords,
       [meridianConnectorId]: meridianRecords,
+      [veroConnectorId]: veroRecords,
+      [forgeConnectorId]: forgeRecords,
     },
     dockRecords: {
       [northwindDockId]: northwindDockRecords,
       [atlasDockId]: atlasDockRecords,
       [meridianDockId]: meridianDockRecords,
+      [veroDockId]: veroDockRecords,
+      [forgeDockId]: forgeDockRecords,
       [northwindSmartDockId]: northwindSmartDockRecords,
     },
   };
@@ -526,6 +590,26 @@ function meridianDockCustody(): DockCustodyRecord[] {
   }));
 }
 
+function veroDockCustody(): DockCustodyRecord[] {
+  // Benign charging-bay custody for every POS device, so the decisive signal in
+  // each scenario is posture / baseline / identity — not custody.
+  return ["pos-station-01", "pos-station-02", "pos-handheld-06", "pos-station-04"].map((ref, i) => ({
+    ...benignDock(ref, i + 1),
+    dockId: "bay-fixture-store-01",
+    bayId: `bay-${String(i + 1).padStart(2, "0")}`,
+  }));
+}
+
+function forgeDockCustody(): DockCustodyRecord[] {
+  // Benign cradle custody for every HMI panel, so the decisive signal in each
+  // scenario is posture / baseline / identity — not custody.
+  return ["hmi-panel-01", "hmi-panel-02", "hmi-panel-06", "hmi-panel-04"].map((ref, i) => ({
+    ...benignDock(ref, i + 1),
+    dockId: "cradle-fixture-plant-01",
+    bayId: `panel-${String(i + 1).padStart(2, "0")}`,
+  }));
+}
+
 function seedAtlasSubjects(store: MemoryStore): FixturePostureRecord[] {
   const fresh = "2026-07-13T14:00:00.000Z";
   const specs: SubjectSpec[] = [
@@ -584,6 +668,66 @@ function seedMeridianSubjects(store: MemoryStore): FixturePostureRecord[] {
     },
   ];
   return materializeSubjects(store, MERIDIAN, specs);
+}
+
+function seedVeroSubjects(store: MemoryStore): FixturePostureRecord[] {
+  const fresh = "2026-07-13T14:00:00.000Z";
+  const specs: SubjectSpec[] = [
+    {
+      identity: { externalRef: "cashier.compliant", displayName: "Compliant Cashier", state: "enabled", assignedRole: "cashier" },
+      device: { externalRef: "pos-station-01", name: "POS Station 01", osPlatform: "Android", osVersion: "14", ownerType: "corporate", managementAgent: "intune" },
+      posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, baseline: "aligned", sourceReference: "fixture:intune:managedDevices#pos-station-01" },
+    },
+    // Non-compliant POS terminal — device posture is the decisive signal (restrict).
+    {
+      identity: { externalRef: "cashier.noncompliant", displayName: "Cashier (non-compliant terminal)", state: "enabled", assignedRole: "cashier" },
+      device: { externalRef: "pos-station-02", name: "POS Station 02", osPlatform: "Android", osVersion: "12", ownerType: "corporate", managementAgent: "intune" },
+      posture: { identityEnabled: true, managed: true, compliance: "non_compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, sourceReference: "fixture:intune:managedDevices#pos-station-02" },
+    },
+    // Security-baseline drift — otherwise healthy, so the drift decides (step-up).
+    {
+      identity: { externalRef: "cashier.baseline_drift", displayName: "Cashier (baseline drift)", state: "enabled", assignedRole: "cashier" },
+      device: { externalRef: "pos-handheld-06", name: "POS Handheld 06", osPlatform: "Android", osVersion: "14", ownerType: "corporate", managementAgent: "intune" },
+      posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, baseline: "drifted", sourceReference: "fixture:intune:managedDevices#pos-handheld-06" },
+    },
+    // Disabled account — trust fails at the identity layer (deny).
+    {
+      identity: { externalRef: "cashier.disabled", displayName: "Disabled cashier account", state: "disabled", assignedRole: "cashier" },
+      device: { externalRef: "pos-station-04", name: "POS Station 04", osPlatform: "Android", osVersion: "14", ownerType: "corporate", managementAgent: "intune" },
+      posture: { identityEnabled: false, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, baseline: "aligned", sourceReference: "fixture:intune:managedDevices#pos-station-04" },
+    },
+  ];
+  return materializeSubjects(store, VERO, specs);
+}
+
+function seedForgeSubjects(store: MemoryStore): FixturePostureRecord[] {
+  const fresh = "2026-07-13T14:00:00.000Z";
+  const specs: SubjectSpec[] = [
+    {
+      identity: { externalRef: "operator.compliant", displayName: "Compliant Operator", state: "enabled", assignedRole: "line-operator" },
+      device: { externalRef: "hmi-panel-01", name: "HMI Panel 01", osPlatform: "Android", osVersion: "14", ownerType: "corporate", managementAgent: "intune" },
+      posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, baseline: "aligned", sourceReference: "fixture:intune:managedDevices#hmi-panel-01" },
+    },
+    // Non-compliant HMI tablet — device posture is the decisive signal (restrict).
+    {
+      identity: { externalRef: "operator.noncompliant", displayName: "Operator (non-compliant panel)", state: "enabled", assignedRole: "line-operator" },
+      device: { externalRef: "hmi-panel-02", name: "HMI Panel 02", osPlatform: "Android", osVersion: "12", ownerType: "corporate", managementAgent: "intune" },
+      posture: { identityEnabled: true, managed: true, compliance: "non_compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, sourceReference: "fixture:intune:managedDevices#hmi-panel-02" },
+    },
+    // Security-baseline drift — otherwise healthy, so the drift decides (step-up).
+    {
+      identity: { externalRef: "operator.baseline_drift", displayName: "Operator (baseline drift)", state: "enabled", assignedRole: "line-operator" },
+      device: { externalRef: "hmi-panel-06", name: "HMI Panel 06", osPlatform: "Android", osVersion: "14", ownerType: "corporate", managementAgent: "intune" },
+      posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, baseline: "drifted", sourceReference: "fixture:intune:managedDevices#hmi-panel-06" },
+    },
+    // Disabled account — trust fails at the identity layer (deny).
+    {
+      identity: { externalRef: "operator.disabled", displayName: "Disabled operator account", state: "disabled", assignedRole: "line-operator" },
+      device: { externalRef: "hmi-panel-04", name: "HMI Panel 04", osPlatform: "Android", osVersion: "14", ownerType: "corporate", managementAgent: "intune" },
+      posture: { identityEnabled: false, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, baseline: "aligned", sourceReference: "fixture:intune:managedDevices#hmi-panel-04" },
+    },
+  ];
+  return materializeSubjects(store, FORGE, specs);
 }
 
 function materializeSubjects(
@@ -703,6 +847,8 @@ function seedApiKeys(store: MemoryStore): void {
     { tenantId: NORTHWIND, role: "auditor", token: "sgk_demo_northwind_auditor", subjectId: "user_northwind_auditor" },
     { tenantId: ATLAS, role: "owner", token: "sgk_demo_atlas_owner", subjectId: "user_atlas_owner" },
     { tenantId: MERIDIAN, role: "owner", token: "sgk_demo_meridian_owner", subjectId: "user_meridian_owner" },
+    { tenantId: VERO, role: "owner", token: "sgk_demo_vero_owner", subjectId: "user_vero_owner" },
+    { tenantId: FORGE, role: "owner", token: "sgk_demo_forge_owner", subjectId: "user_forge_owner" },
   ];
   for (const key of keys) {
     store.putUser({

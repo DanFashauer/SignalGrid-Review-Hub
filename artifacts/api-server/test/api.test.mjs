@@ -23,6 +23,8 @@ const KEYS = {
   operator: "sgk_demo_northwind_operator",
   auditor: "sgk_demo_northwind_auditor",
   atlas: "sgk_demo_atlas_owner",
+  vero: "sgk_demo_vero_owner",
+  forge: "sgk_demo_forge_owner",
 };
 
 let passed = 0;
@@ -77,7 +79,7 @@ async function run() {
 
   const keys = await req("GET", "/v1/keys");
   check("keys discovery is public (200)", keys.status === 200);
-  check("keys lists the five demo keys", Array.isArray(keys.json?.keys) && keys.json.keys.length === 5);
+  check("keys lists the seven demo keys", Array.isArray(keys.json?.keys) && keys.json.keys.length === 7);
 
   // ── public catalog + simulator routes ────────────────────────────────────
   const integrations = await req("GET", "/integrations");
@@ -218,6 +220,23 @@ async function run() {
   check("app-workflows BCMA baseline-drift → step_up, controlled admin held",
     bcmaHeld.json?.decision?.outcome === "step_up" &&
     bcmaHeld.json?.plan?.actions?.find((a) => a.key === "controlled.administer")?.disposition === "step_up");
+
+  // Retail + industrial now gate LIVE against their own seeded tenants (not
+  // catalog-only): the POS and MES/SCADA-HMI catalogs run a real decision.
+  const posGate = await req("POST", "/v1/app-workflows/evaluate", {
+    token: KEYS.vero,
+    body: { integrationId: "restricted-sale", identityRef: "cashier.compliant", deviceRef: "pos-station-01" },
+  });
+  check("app-workflows retail (Vero) restricted-sale → 200 allow", posGate.status === 200 && posGate.json?.decision?.outcome === "allow");
+  check("app-workflows: retail age-restricted approval is assist, not auto (sensitive)",
+    posGate.json?.plan?.actions?.find((a) => a.key === "agerestricted.approve")?.disposition === "assist");
+  const mesGate = await req("POST", "/v1/app-workflows/evaluate", {
+    token: KEYS.forge,
+    body: { integrationId: "mes-scada", identityRef: "operator.baseline_drift", deviceRef: "hmi-panel-06" },
+  });
+  check("app-workflows industrial (Forge) MES baseline-drift → step_up, interlock bypass held",
+    mesGate.json?.decision?.outcome === "step_up" &&
+    mesGate.json?.plan?.actions?.find((a) => a.key === "interlock.bypass")?.disposition === "step_up");
 
   // ── validation error ────────────────────────────────────────────────────
   const badBody = await req("POST", "/v1/decisions/evaluate", { token: KEYS.operator, body: { identityRef: "x" } });

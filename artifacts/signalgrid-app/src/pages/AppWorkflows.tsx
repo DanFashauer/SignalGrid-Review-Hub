@@ -23,6 +23,8 @@ const DEMO_ACTOR: Partial<Record<AppVertical, { token: string; identityRef: stri
   healthcare: { token: "sgk_demo_northwind_operator", identityRef: "nurse.compliant", deviceRef: "ipad-ward-01" },
   warehouse: { token: "sgk_demo_atlas_owner", identityRef: "picker.compliant", deviceRef: "handheld-01" },
   global_fleet: { token: "sgk_demo_meridian_owner", identityRef: "driver.compliant", deviceRef: "vehicle-mount-01" },
+  retail: { token: "sgk_demo_vero_owner", identityRef: "cashier.compliant", deviceRef: "pos-station-01" },
+  industrial: { token: "sgk_demo_forge_owner", identityRef: "operator.compliant", deviceRef: "hmi-panel-01" },
 };
 
 const DISP_STYLE: Record<V1AppActionPlan["disposition"], string> = {

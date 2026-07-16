@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { ControlPlane, type TelemetryBatch } from "@workspace/control-plane";
 import { listFlows, evaluateFlowHealth, resolveFlowBreak, gridIntelligence, type SignalState } from "@workspace/flows";
 import { recommend, DEMO_USAGE } from "@workspace/recommendations";
+import { discover, planOnboarding, discoverySummary, DEMO_SOURCES, DEMO_OBSERVED } from "@workspace/signal-discovery";
 
 /**
  * `/cp/v1/*` — the SaaS **control-plane** surface (management, not decisions).
@@ -129,6 +130,20 @@ router.get("/cp/v1/flows/health", (_req, res) => {
 // merge flows). Advisory only — nothing is changed here.
 router.get("/cp/v1/recommendations", (_req, res) => {
   res.json({ note: "Advisory only — an admin reviews and applies. Nothing is changed by this endpoint.", recommendations: recommend(DEMO_USAGE, listFlows()) });
+});
+
+// Signal discovery: what the Grid detected across connected sources, and what it
+// would onboard automatically (source has an API) vs. flag for an admin. The
+// onboarding here is a plan/record — no real source is called.
+router.get("/cp/v1/signal-discovery", (_req, res) => {
+  const discovered = discover(DEMO_OBSERVED, DEMO_SOURCES);
+  res.json({
+    note: "Auto-onboarding is simulated — it produces the record the Grid would create; no source is called.",
+    sources: DEMO_SOURCES,
+    summary: discoverySummary(discovered, DEMO_SOURCES),
+    discovered,
+    onboarding: planOnboarding(discovered),
+  });
 });
 
 export default router;

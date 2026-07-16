@@ -162,6 +162,9 @@ importers:
       '@workspace/room-sim':
         specifier: workspace:*
         version: link:../../lib/room-sim
+      '@workspace/signal-discovery':
+        specifier: workspace:*
+        version: link:../../lib/signal-discovery
       '@workspace/signal-radar':
         specifier: workspace:*
         version: link:../../lib/signal-radar
@@ -1460,6 +1463,16 @@ importers:
         specifier: 'catalog:'
         version: 25.6.2
 
+  lib/signal-discovery:
+    dependencies:
+      '@workspace/signal-radar':
+        specifier: workspace:*
+        version: link:../signal-radar
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.6.2
+
   lib/signal-radar:
     dependencies:
       '@workspace/signalgrid-core':
@@ -1507,6 +1520,9 @@ importers:
       '@workspace/room-sim':
         specifier: workspace:*
         version: link:../lib/room-sim
+      '@workspace/signal-discovery':
+        specifier: workspace:*
+        version: link:../lib/signal-discovery
       '@workspace/signal-radar':
         specifier: workspace:*
         version: link:../lib/signal-radar

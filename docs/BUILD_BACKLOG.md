@@ -48,6 +48,15 @@ _(see `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` for the full app-workflow roadmap)
 
 ## Done (recent)
 
+- [x] Signal discovery + auto-onboarding (`@workspace/signal-discovery`) — tells
+      admins what signals were detected across connected sources, classifies each
+      (recognised / candidate / novel via signal-radar), and **auto-onboards** an
+      unrecognised signal when its source exposes an API/connector — otherwise
+      flags it for an admin (never silently added). Signal lifecycle
+      (discovered → proposed → onboarded → active). Read API
+      `GET /cp/v1/signal-discovery`; proof:signal-discovery 16/16. The more
+      sources/APIs a business opens, the more the Grid sees and uses.
+
 - [x] Recommendations engine (`@workspace/recommendations`) — the Grid learns from
       observed usage and PROPOSES improvements (never applies): relax a gate that's
       always approved on healthy posture (one step), tighten an action showing

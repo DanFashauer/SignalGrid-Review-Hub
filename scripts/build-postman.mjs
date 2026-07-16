@@ -122,6 +122,7 @@ const cpRequests = [
   item("Admin flows (config)", "GET", "/cp/v1/flows", { auth: NOAUTH }),
   item("Flow + signal health", "GET", "/cp/v1/flows/health", { auth: NOAUTH }),
   item("Learned recommendations", "GET", "/cp/v1/recommendations", { auth: NOAUTH }),
+  item("Signal discovery + auto-onboard", "GET", "/cp/v1/signal-discovery", { auth: NOAUTH }),
 ];
 const cpFolder = { name: "Control plane (/cp/v1)", item: cpRequests };
 

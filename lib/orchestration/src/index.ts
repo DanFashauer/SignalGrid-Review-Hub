@@ -474,6 +474,9 @@ function summarize(mode: OrchestrationMode, room: RoomContext, stepUpDone = fals
       return `Access limited in ${room.roomId}; only ambient preparation permitted.`;
     case "deny":
       return `Access denied in ${room.roomId}; nothing was actuated. Recorded with reason.`;
+    default:
+      // Fail closed on an unrecognized mode at the untyped runtime boundary.
+      return `Access denied in ${room.roomId}; nothing was actuated (fail closed).`;
   }
 }
 

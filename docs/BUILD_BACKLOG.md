@@ -65,6 +65,18 @@ _(see `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` for the full app-workflow roadmap)
 
 ## Done (recent)
 
+- [x] Self-review layer — a second reviewer that runs BEFORE every push so a
+      change is proven correct the first time (`docs/SELF_REVIEW.md`). Two parts:
+      `pnpm run preflight` runs the whole CI gate suite locally in one command
+      (typecheck / build / every proof / API test / safety / Postman sync), and
+      `pnpm run review:invariants` is a deterministic adversarial reviewer that
+      encodes the defect classes review keeps catching — fail-closed `default`
+      arms in every gating-lib switch (Codex #70), determinism in the pure
+      planners, critical⇒sensitive in the app catalog, and a truth-guard denylist
+      for internal over-claims (Codex #79). Wired into CI. On its first run it
+      caught two real fail-closed gaps (the app-workflow + orchestration
+      `summarize` switches had no default arm) — now fixed.
+
 - [x] Retail + industrial tenants in the core — two new seeded demo tenants
       (**Vero Markets** retail, **Forge Industrial** industrial) so the POS /
       age-rx-restricted and MES / SCADA-HMI app catalogs gate against a **live

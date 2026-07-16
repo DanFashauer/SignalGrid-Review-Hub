@@ -485,6 +485,15 @@ paths:
       responses:
         "200": { description: Discovery + onboarding plan }
 
+  /cp/v1/ddm:
+    get:
+      operationId: cpDdm
+      tags: [control-plane]
+      security: []
+      summary: DDM / device-health signals normalized to decision dimensions (macOS 27)
+      responses:
+        "200": { description: Normalized DDM signals + assurance hints }
+
 components:
   securitySchemes:
     bearerAuth:

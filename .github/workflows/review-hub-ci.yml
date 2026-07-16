@@ -91,6 +91,9 @@ jobs:
       - name: Signal-discovery (auto-onboarding) proof
         run: pnpm run proof:signal-discovery
 
+      - name: DDM / device-health connector proof
+        run: pnpm run proof:ddm-connector
+
       - name: Signal Radar (new-signal detection) proof
         run: pnpm run proof:signal-radar
 

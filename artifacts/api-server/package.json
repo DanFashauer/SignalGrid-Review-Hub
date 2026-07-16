@@ -26,6 +26,7 @@
     "@workspace/room-sim": "workspace:*",
     "@workspace/signal-radar": "workspace:*",
     "@workspace/control-plane": "workspace:*",
+    "@workspace/ddm-connector": "workspace:*",
     "@workspace/signal-discovery": "workspace:*"
   },
   "devDependencies": {

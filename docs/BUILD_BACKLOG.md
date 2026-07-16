@@ -14,15 +14,6 @@ picking these up:
 
 ## Now (next up)
 
-- [ ] **DDM / device-health signal connector (macOS 27)** — a fixture-first
-      connector that normalizes Declarative Device Management health reporting +
-      binary-control / declarative-privacy posture into the decision dimensions
-      the core already understands (device compliance, baseline alignment,
-      posture freshness), raising assurance where warranted (e.g. off-baseline
-      binary-control state nudges a sensitive action auto → step-up). Complements
-      OS binary control rather than duplicating it. See
-      `docs/MACOS_27_DDM_SIGNAL_OPPORTUNITY.md`. No live MDM calls.
-
 ## Next
 
 - [ ] **In-app step-up completion (real, hardware-backed)** — releasing a held
@@ -64,6 +55,18 @@ _These need the owner's call — an agent should not act on them unsupervised._
 _(see `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` for the full app-workflow roadmap)_
 
 ## Done (recent)
+
+- [x] DDM / device-health signal connector (`@workspace/ddm-connector`, macOS 27)
+      — normalizes a Declarative Device Management report (enrollment, health
+      reporting, binary-control state, declarative-privacy posture, last check-in)
+      into the core's decision dimensions (deviceManaged / deviceCompliance /
+      baselineCompliance / postureFreshness) plus an assurance hint. Fail-closed:
+      any weak posture only raises assurance (auto → step-up), never lowers it —
+      the proof caught and fixed a gap where an unknown/future-dated check-in
+      wasn't raising. Complements OS binary control (the OS decides what launches;
+      SignalGrid decides whether an action proceeds). Read API `GET /cp/v1/ddm`
+      (OpenAPI + Postman); proof:ddm-connector 28/28. See
+      `docs/MACOS_27_DDM_SIGNAL_OPPORTUNITY.md`.
 
 - [x] Data-center / NOC seeded tenant (Orion Data Centers) — the last vertical
       that was catalog-only now has a seeded tenant in BOTH the core (workflows

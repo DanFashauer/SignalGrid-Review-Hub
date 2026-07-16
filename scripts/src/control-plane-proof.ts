@@ -2,7 +2,8 @@
 //
 // Verifies the cloud-side management contract from docs/DEPLOYMENT_MODELS.md
 // on the deterministic fixture seed:
-//   1. Seeded across three verticals (healthcare / warehouse / global fleet).
+//   1. Seeded across five verticals (healthcare / warehouse / global fleet /
+//      retail / industrial).
 //   2. Tenant scoping — a tenant's site/node queries never leak another tenant.
 //   3. Policy-bundle checksum is deterministic (config-down integrity).
 //   4. Sync plan detects behind vs up-to-date edge nodes.
@@ -23,11 +24,12 @@ function check(name: string, ok: boolean) {
 function main() {
   const cp = ControlPlane.demo();
 
-  // 1. Three verticals.
+  // 1. Five verticals.
   const tenants = cp.listTenants();
   const verticals = new Set(tenants.map((t) => t.vertical));
-  check("seeded with 3 tenants", tenants.length === 3);
+  check("seeded with 5 tenants", tenants.length === 5);
   check("covers healthcare + warehouse + global_fleet", verticals.has("healthcare") && verticals.has("warehouse") && verticals.has("global_fleet"));
+  check("covers retail + industrial", verticals.has("retail") && verticals.has("industrial"));
 
   // 2. Tenant scoping — no cross-tenant leakage.
   const nwSites = cp.listSites("tenant_northwind");
@@ -62,9 +64,13 @@ function main() {
   const health = cp.fleetHealth();
   const healthcare = health.byVertical.find((v) => v.vertical === "healthcare");
   const warehouse = health.byVertical.find((v) => v.vertical === "warehouse");
-  check("fleet health spans all verticals", health.byVertical.length === 3);
+  const retail = health.byVertical.find((v) => v.vertical === "retail");
+  const industrial = health.byVertical.find((v) => v.vertical === "industrial");
+  check("fleet health spans all five verticals", health.byVertical.length === 5);
   check("healthcare vertical has multiple sites", (healthcare?.sites ?? 0) >= 2);
   check("warehouse vertical has devices", (warehouse?.devices ?? 0) > 0);
+  check("retail vertical has devices", (retail?.devices ?? 0) > 0);
+  check("industrial vertical has devices", (industrial?.devices ?? 0) > 0);
   check("edge health counts are sane", health.edgeHealthy <= health.edgeNodes && health.devicesOnline <= health.devices);
 
   // 7. Operational-intelligence rollup (Phase 3).

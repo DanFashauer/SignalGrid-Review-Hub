@@ -31,6 +31,7 @@ so they fail the build instead of shipping:
 | **Determinism** | no `Date.now` / `Math.random` in the pure planner libs | the decision core must be replayable from fixtures |
 | **Assist invariant** | no app-workflow action is `critical` yet non-sensitive | a high-consequence action must always require confirmation |
 | **Truth guard** | an extensible denylist of internal over-claims that contradicted the code | Codex #79 — "every catalog gates live" when one vertical is catalog-only |
+| **Public-safe web** | no third-party vendor host (fonts / analytics / CDN) in a published web artifact | Codex #81 — the marketing site loaded fonts from a Google CDN |
 
 The invariant reviewer is a *floor*, not a ceiling. For anything non-trivial,
 also do an **adversarial agent review of the diff before pushing** — read the

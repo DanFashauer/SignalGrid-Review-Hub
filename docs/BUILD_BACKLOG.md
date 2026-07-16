@@ -14,13 +14,11 @@ picking these up:
 
 ## Now (next up)
 
-- [ ] **Control-plane management-plane for retail + industrial (+ data-center)** —
-      the `@workspace/control-plane` fleet rollup still models three verticals
-      (healthcare / warehouse / global-fleet). Extend its `Vertical` union, seed
-      sites + edge nodes + fleet devices for Vero (retail) and Forge (industrial)
-      — and optionally a NOC tenant — so the admin Fleet page and ops-intelligence
-      rollups span all of them, matching the core seed. Cosmetic/management only;
-      the decision core already gates these live.
+- [ ] **Data-center / NOC seeded tenant** — the only vertical still catalog-only.
+      Seed a NOC tenant in BOTH the core (so the `data_center` app catalog gates
+      live) and the control-plane (Fleet page / ops-intelligence), completing the
+      six-vertical story end to end. Deferred deliberately; owner OK'd retail +
+      industrial first.
 
 ## Next
 
@@ -64,6 +62,22 @@ _These need the owner's call — an agent should not act on them unsupervised._
 _(see `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` for the full app-workflow roadmap)_
 
 ## Done (recent)
+
+- [x] Control-plane management-plane for retail + industrial — the
+      `@workspace/control-plane` fleet rollup now spans five verticals: added
+      **Vero Markets** (retail) and **Forge Industrial** (industrial) tenants
+      with sites, edge nodes, fleet devices (new `pos_terminal` / `hmi_panel`
+      kinds), signed policy bundles (keys matching the core), and telemetry, so
+      the admin **Fleet & tenants** page and ops-intelligence rollups show all
+      five. `Vertical` union + `VERTICAL_LABEL` extended on both the lib and the
+      app client; Fleet UI renders them automatically. proof:control-plane 26/26.
+      Data-center/NOC remains catalog-only (its seeded tenant is the next item).
+
+- [x] Invariant reviewer — public-safe-web check — `review:invariants` now also
+      fails on any third-party vendor host (fonts / analytics / CDN) in a
+      published web artifact (the Codex #81 font-CDN class), so a visitor's IP
+      can't leak to a vendor. Self-host assets instead. Fifth invariant in
+      `docs/SELF_REVIEW.md`.
 
 - [x] signalgrid.app GitHub Pages deploy — the `Deploy site to Pages` workflow
       now publishes the `signalgrid-web` marketing site at the apex custom domain

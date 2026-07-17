@@ -30,15 +30,15 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Enable GitHub Pages automatically if it isn't already, so this workflow
       # doesn't fail (and email) when Pages hasn't been turned on by hand.
       - name: Configure Pages (auto-enable)
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
         with:
           enablement: true
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       # Build the marketing site for the apex custom domain (base = "/").
@@ -70,7 +70,7 @@ jobs:
           cp docs/embedded-desktop-demo.html _site/desktop-demo.html
           # Pin the custom domain so Pages keeps serving signalgrid.app.
           cp site/CNAME _site/CNAME
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with: { path: _site }
 
   deploy:
@@ -81,4 +81,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

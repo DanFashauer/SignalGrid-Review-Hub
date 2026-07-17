@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Cross-platform parity: the same invisible SignalGrid flow on a macOS / Windows desktop app. The only per-platform difference is which native authenticator the app invokes.">
+<title>SignalGrid — The invisible flow (desktop demo)</title>
+<style>
+  :root{
+    --bg:#14171A;--panel:#191E22;--card:#1E2429;--card2:#232A30;--ink:#F2F0EA;--soft:#AEB4AF;--faint:#7f8781;
+    --line:#2A3137;--accent:#74ABA5;--allow:#6FA88C;--stepup:#C29A66;--restrict:#C99B6B;--deny:#C07474;
+    --mono:ui-monospace,"IBM Plex Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+    --app:#1f6feb;--appink:#0f172a;--appbg:#f3f5f8;--appline:#dfe4ea;--appsoft:#5b6673;--appdark:#0d1b2e;
+  }
+  @media (prefers-color-scheme:light){:root{
+    --bg:#F1EEE7;--panel:#FAF8F3;--card:#FFF;--card2:#F5F2EA;--ink:#1B1F21;--soft:#4C534E;--faint:#767c77;
+    --line:#E4DFD3;--accent:#38726D;--allow:#4E7B5E;--stepup:#96703B;--restrict:#8a6a3b;--deny:#8C4B4B;
+  }}
+  :root[data-theme="dark"]{--bg:#14171A;--panel:#191E22;--card:#1E2429;--card2:#232A30;--ink:#F2F0EA;--soft:#AEB4AF;--faint:#7f8781;--line:#2A3137;--accent:#74ABA5;}
+  :root[data-theme="light"]{--bg:#F1EEE7;--panel:#FAF8F3;--card:#FFF;--card2:#F5F2EA;--ink:#1B1F21;--soft:#4C534E;--faint:#767c77;--line:#E4DFD3;--accent:#38726D;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5;-webkit-text-size-adjust:100%}
+  .wrap{max-width:1220px;margin:0 auto;padding:clamp(1rem,3.5vw,2rem)}
+  header{display:flex;align-items:center;gap:.7rem;border-bottom:1px solid var(--line);padding-bottom:1.1rem;margin-bottom:1.1rem;flex-wrap:wrap}
+  .glyph{width:28px;height:28px;border-radius:7px;background:linear-gradient(150deg,var(--accent),color-mix(in srgb,var(--accent) 60%,#000));position:relative;flex:none}
+  .glyph::before,.glyph::after{content:"";position:absolute;background:var(--bg)}
+  .glyph::before{width:2px;height:58%;left:50%;top:21%;transform:translateX(-50%)}
+  .glyph::after{height:2px;width:58%;top:50%;left:21%;transform:translateY(-50%)}
+  .brand{font-family:var(--mono);font-weight:600}.brand span{color:var(--accent)}
+  .sub{margin-left:auto;font-family:var(--mono);font-size:.62rem;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);border:1px solid var(--line);padding:.28rem .55rem;border-radius:99px}
+  h1{font-size:1.14rem;margin:.1rem 0 .2rem}
+  .lead{color:var(--soft);font-size:.9rem;margin:0 0 1.2rem;max-width:82ch}
+  .plat{display:inline-flex;gap:.3rem;margin-left:.4rem}
+  .plat button{font:inherit;font-size:.72rem;font-family:var(--mono);border:1px solid var(--line);background:var(--card);color:var(--soft);border-radius:99px;padding:.2rem .6rem;cursor:pointer}
+  .plat button.on{border-color:var(--accent);color:var(--accent)}
+  .grid{display:grid;grid-template-columns:1fr 320px;gap:1.4rem;align-items:start}
+  @media (max-width:880px){.grid{grid-template-columns:1fr}}
+
+  /* Desktop window frame — the worker's own app. Not SignalGrid-styled. */
+  .win{background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.42);border:1px solid rgba(0,0,0,.15);position:relative;color:var(--appink)}
+  .titlebar{height:34px;background:#e9edf2;display:flex;align-items:center;gap:.5rem;padding:0 .7rem;border-bottom:1px solid var(--appline);position:relative}
+  .traffic{display:flex;gap:.4rem}
+  .traffic i{width:11px;height:11px;border-radius:99px;display:block}
+  .traffic .r{background:#ff5f57}.traffic .y{background:#febc2e}.traffic .g{background:#28c840}
+  .wintitle{position:absolute;left:0;right:0;text-align:center;font-size:.74rem;color:var(--appsoft);font-weight:600;pointer-events:none}
+  /* Windows variant: square controls on the right. */
+  .win.windows .titlebar{background:#f3f3f3}
+  .win.windows .traffic{display:none}
+  .winctrl{margin-left:auto;display:none;gap:0}
+  .win.windows .winctrl{display:flex}
+  .winctrl i{width:30px;height:22px;display:flex;align-items:center;justify-content:center;color:#5b6673;font-size:.7rem;font-style:normal}
+  .toolbar{background:var(--app);color:#fff;padding:.55rem .9rem;display:flex;align-items:center;gap:.6rem;font-size:.82rem}
+  .toolbar .logo{width:20px;height:20px;border-radius:5px;background:rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.66rem}
+  .toolbar .app{font-weight:700}
+  .toolbar .who{margin-left:auto;font-size:.62rem;opacity:.85}
+  .content{display:grid;grid-template-columns:150px 1fr;min-height:340px}
+  .side{background:#f7f9fb;border-right:1px solid var(--appline);padding:.7rem .5rem;font-size:.76rem}
+  .side .grp{color:var(--appsoft);font-size:.6rem;text-transform:uppercase;letter-spacing:.06em;margin:.4rem .3rem .25rem}
+  .side .it{padding:.34rem .5rem;border-radius:7px;color:#243}
+  .side .it.on{background:#e6effb;color:var(--app);font-weight:600}
+  .main{padding:.9rem 1rem}
+  .devhdr{font-weight:700;font-size:.9rem}
+  .devsub{color:var(--appsoft);font-size:.74rem;margin:.1rem 0 .7rem}
+  .op{background:#fff;border:1px solid var(--appline);border-radius:9px;padding:.55rem .7rem;margin-bottom:.5rem;display:flex;align-items:center;gap:.55rem;font-size:.8rem}
+  .op .ic{width:24px;height:24px;border-radius:6px;background:#eef2f7;display:flex;align-items:center;justify-content:center;flex:none}
+  .op .st{margin-left:auto;font-size:.6rem;font-weight:700;letter-spacing:.03em;color:var(--appsoft)}
+  .op.done .st{color:#15803d}.op.held .st{color:#b45309}
+  .actbtn{border:none;border-radius:8px;padding:.6rem .9rem;font:inherit;font-weight:700;font-size:.82rem;color:#fff;background:var(--app);cursor:pointer;margin-top:.3rem}
+  .actbtn:disabled{background:#9db4cf;cursor:default}
+  .msg{border-radius:8px;padding:.55rem .7rem;font-size:.76rem;margin-bottom:.55rem;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412}
+  .msg.ok{background:#f0fdf4;border-color:#bbf7d0;color:#166534}
+  .confirm{background:#fff;border:1px solid var(--app);border-radius:9px;padding:.6rem .75rem;margin-bottom:.55rem}
+  .confirm .t{font-weight:700;font-size:.8rem}
+  .confirm .d{color:var(--appsoft);font-size:.72rem;margin:.15rem 0 .5rem}
+  .confirm .b{display:flex;gap:.5rem}
+  .confirm button{flex:1;border-radius:8px;padding:.48rem;font:inherit;font-weight:700;font-size:.76rem;cursor:pointer}
+  .confirm .ok{background:var(--app);color:#fff;border:none}
+  .confirm .no{background:#fff;color:var(--appsoft);border:1px solid var(--appline)}
+
+  /* Native OS authenticator — clearly a DEMO simulation (Touch ID / Windows Hello). */
+  .osdim{position:absolute;inset:0;background:rgba(10,20,35,.5);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:.2s;z-index:9}
+  .osdim.show{opacity:1;pointer-events:auto}
+  .oscard{background:#f6f7f9;border-radius:12px;width:290px;padding:1.1rem 1rem 1.2rem;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.4);border:1px solid rgba(0,0,0,.2)}
+  .demopill{display:inline-block;font-family:var(--mono);font-size:.55rem;letter-spacing:.08em;text-transform:uppercase;background:#fef3c7;color:#92400e;border:1px solid #fde68a;border-radius:99px;padding:.18rem .5rem;margin-bottom:.6rem}
+  .osicon{width:46px;height:46px;margin:.1rem auto .5rem;border-radius:12px;border:2.5px solid var(--app);position:relative}
+  .osicon.hello{border-radius:99px}
+  .osicon::before{content:"";position:absolute;inset:11px;border:2px solid var(--app);opacity:.5;border-radius:inherit}
+  .oscard .t{font-weight:700;font-size:.86rem;color:var(--appink)}
+  .oscard .d{color:var(--appsoft);font-size:.72rem;margin:.2rem 0 .6rem}
+  .oscard .b{display:flex;gap:.5rem}
+  .oscard button{flex:1;border-radius:8px;padding:.5rem;font:inherit;font-weight:700;font-size:.76rem;cursor:pointer;border:1px solid var(--app)}
+  .oscard .go{background:var(--app);color:#fff}.oscard .no{background:#fff;color:var(--appsoft);border-color:var(--appline)}
+
+  .panel{display:flex;flex-direction:column;gap:1rem}
+  .panel h2{font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin:0 0 .1rem}
+  .note{font-size:.78rem;color:var(--soft);margin:0}
+  .pcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:1rem}
+  .decision{font-family:var(--mono);font-size:.72rem;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .decision .hd{display:flex;justify-content:space-between;padding:.5rem .7rem;background:var(--card2);border-bottom:1px solid var(--line)}
+  .decision .bd{padding:.55rem .7rem;color:var(--soft);white-space:pre-wrap}
+  .verdict{font-weight:700;letter-spacing:.04em}
+  .v-allow{color:var(--allow)}.v-step_up{color:var(--stepup)}.v-assist{color:var(--stepup)}.v-applied{color:var(--allow)}
+  .why{color:var(--faint);font-size:.66rem;font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em}
+  .principle{font-size:.78rem;color:var(--soft);border-left:2px solid var(--accent);padding:.1rem 0 .1rem .7rem;margin:0}
+  .reset{background:none;border:1px solid var(--line);color:var(--soft);border-radius:8px;padding:.4rem .7rem;font:inherit;font-size:.74rem;cursor:pointer}
+  .foot{margin-top:1.4rem;border-top:1px solid var(--line);padding-top:.9rem;color:var(--faint);font-size:.72rem;font-family:var(--mono);line-height:1.7}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="glyph"></div>
+    <div class="brand">SIGNAL<span>GRID</span></div>
+    <div class="sub">Desktop demo · fixture</div>
+  </header>
+  <h1>The invisible flow — on the desktop</h1>
+  <p class="lead">
+    Same trust layer, same Assist model as the mobile flow — here inside a generic NOC desktop app on
+    <strong>macOS / Windows</strong>. The engineer views topology with no friction, but a config push to a core
+    switch is held: the app asks for the platform's own authenticator, then its own change-confirmation, before
+    anything is pushed. The only per-platform difference is which native prompt appears.
+    <span class="plat"><button id="mac" class="on">macOS · Touch ID</button><button id="win">Windows · Hello</button></span>
+  </p>
+
+  <div class="grid">
+    <div>
+      <div class="win" id="deskwin">
+        <div class="titlebar">
+          <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+          <div class="wintitle">NetOps Console</div>
+          <div class="winctrl"><i>&#8211;</i><i>&#9633;</i><i>&#10005;</i></div>
+        </div>
+        <div class="toolbar"><div class="logo">N</div><div class="app">NetOps Console</div><div class="who">NOC engineer · Orion IAD1</div></div>
+        <div class="content">
+          <div class="side">
+            <div class="grp">Fabric</div>
+            <div class="it on">core-sw-01</div>
+            <div class="it">core-sw-02</div>
+            <div class="it">edge-rtr-07</div>
+            <div class="grp">Change</div>
+            <div class="it">Pending diffs</div>
+          </div>
+          <div class="main">
+            <div class="devhdr">core-sw-01</div>
+            <div class="devsub">Aggregation · IAD1 · uplinks 4×100G · fixture device</div>
+            <div id="ops"></div>
+            <div id="confirm"></div>
+            <div id="msg"></div>
+            <button class="actbtn" id="primary">View topology</button>
+          </div>
+        </div>
+        <div class="osdim" id="osdim">
+          <div class="oscard">
+            <span class="demopill" id="ospill">Demo · simulated Touch ID</span>
+            <div class="osicon" id="osicon"></div>
+            <div class="t" id="ostitle">Confirm it's you</div>
+            <div class="d">NetOps Console needs to verify this change on a shared workstation.</div>
+            <div class="b"><button class="no" id="osNo">Cancel</button><button class="go" id="osGo">Simulate</button></div>
+          </div>
+        </div>
+      </div>
+      <p style="text-align:center;font-size:.7rem;color:var(--faint);font-family:var(--mono);margin-top:.7rem">
+        No real biometric is used — the prompt is a demo stand-in for the platform's native authenticator.
+      </p>
+    </div>
+
+    <div class="panel">
+      <div><h2>Behind the glass</h2><p class="note">Mirrors <code>@workspace/app-workflows</code>: a config push is a <em>critical</em> action, so a step-up alone doesn't release it — it stays ASSIST until the engineer confirms in the app. Two gates, fail-closed.</p></div>
+      <div class="pcard">
+        <div class="decision">
+          <div class="hd"><span id="decAction">—</span><span class="verdict" id="decVerdict">—</span></div>
+          <div class="bd" id="decBody">Press <strong>View topology</strong> to begin.</div>
+        </div>
+        <p class="why" id="decWhy" style="margin:.5rem 0 0"></p>
+      </div>
+      <p class="principle">Identical behavior on macOS, Windows, web, and mobile. The worker uses their normal app; the trust layer is underneath, invisible.</p>
+      <button class="reset" id="reset">Restart demo</button>
+    </div>
+  </div>
+
+  <div class="foot">Public-safe fixture · synthetic devices, no real network · the authenticator prompt is a labeled simulation · mirrors the real <code>/v1/app-workflows/evaluate</code> Assist model · cross-platform parity per docs/EMBEDDED_UX_PRINCIPLE.md.</div>
+</div>
+
+<script>
+(function(){
+  var platform = "mac";
+  var STEPS = [
+    { label:"View topology", op:"View topology", host:"Topology loaded.", action:"topology.view", verdict:"allow", why:"TRUST_ESTABLISHED",
+      body:"Non-sensitive read → runs automatically. No gate." },
+    { label:"Stage config diff", op:"Stage config diff", host:"Diff staged for review.", action:"diff.stage", verdict:"allow", why:"TRUST_ESTABLISHED",
+      body:"Staging a diff is reviewable, not yet applied → allowed automatically." },
+    { label:"Push config to core-sw-01", op:"Push config to core-sw-01", action:"config.push", verdict:"step_up", why:"UPTIME_CRITICAL · SHARED_WORKSTATION",
+      body:"Uptime-affecting write to a core device → HELD. SignalGrid asks the app to capture a native gesture; the push does not fire yet.", needsStepUp:true },
+  ];
+  var ASSIST = { verdict:"assist", why:"STEP_UP_SATISFIED · AWAITING_CONFIRMATION",
+    body:"Step-up satisfied — but a critical change still needs an explicit confirmation in the app. SignalGrid holds it as ASSIST; the biometric alone does not push the config." };
+  var APPLIED = { host:"Config pushed to core-sw-01.", verdict:"applied", why:"CONFIRMED_BY_ENGINEER",
+    body:"The engineer confirmed in the app's own dialog → the held push is applied. Two gates cleared: a native step-up AND an explicit confirmation. In production the step-up is a real WebAuthn assertion; here it is a labeled simulation." };
+
+  var i=0, awaitingStepUp=false, awaitingConfirm=false, heldOp=null;
+  var ops=document.getElementById("ops"), confirmEl=document.getElementById("confirm"), msg=document.getElementById("msg");
+  var primary=document.getElementById("primary"), osdim=document.getElementById("osdim");
+  var decAction=document.getElementById("decAction"), decVerdict=document.getElementById("decVerdict"), decBody=document.getElementById("decBody"), decWhy=document.getElementById("decWhy");
+
+  function setPlatform(p){
+    platform=p;
+    document.getElementById("mac").classList.toggle("on", p==="mac");
+    document.getElementById("win").classList.toggle("on", p==="win");
+    document.getElementById("deskwin").classList.toggle("windows", p==="win");
+    document.getElementById("ospill").textContent = p==="mac" ? "Demo · simulated Touch ID" : "Demo · simulated Windows Hello";
+    document.getElementById("osicon").className = "osicon" + (p==="win" ? " hello" : "");
+    document.getElementById("osGo").textContent = p==="mac" ? "Simulate Touch ID" : "Simulate Windows Hello";
+    document.getElementById("ostitle").textContent = p==="mac" ? "Touch ID" : "Windows Hello";
+  }
+  document.getElementById("mac").onclick=function(){setPlatform("mac");};
+  document.getElementById("win").onclick=function(){setPlatform("win");};
+
+  function setDecision(a,v,why,body){ decAction.textContent=a; decVerdict.textContent=v.toUpperCase(); decVerdict.className="verdict v-"+v; decBody.innerHTML=body; decWhy.textContent=why?("reason · "+why):""; }
+  function addOp(label,state){ ops.insertAdjacentHTML("beforeend",'<div class="op '+state+'"><div class="ic">•</div><div>'+label+'</div><div class="st">'+(state==="done"?"DONE":"HELD")+'</div></div>'); return ops.lastElementChild; }
+  function updatePrimary(){ if(i>=STEPS.length){primary.textContent="All done ✓";primary.disabled=true;return;} primary.disabled=false; primary.textContent=STEPS[i].label; }
+
+  function advance(){
+    if(i>=STEPS.length) return;
+    var s=STEPS[i]; setDecision(s.action,s.verdict,s.why,s.body);
+    if(s.needsStepUp){ awaitingStepUp=true; msg.innerHTML='<div class="msg">One quick check to confirm it\'s you on this shared workstation.</div>'; if(!heldOp) heldOp=addOp(s.op,"held"); primary.disabled=true; osdim.classList.add("show"); return; }
+    msg.innerHTML='<div class="msg ok">'+s.host+'</div>'; addOp(s.op,"done"); i++; updatePrimary();
+  }
+  function completeStepUp(){
+    osdim.classList.remove("show"); awaitingStepUp=false; awaitingConfirm=true;
+    setDecision(STEPS[i].action,ASSIST.verdict,ASSIST.why,ASSIST.body);
+    msg.innerHTML='<div class="msg">Identity confirmed. Now confirm the change to push it.</div>';
+    confirmEl.innerHTML='<div class="confirm"><div class="t">Confirm config push · core-sw-01</div><div class="d">This is the app\'s own confirmation, not a SignalGrid screen.</div><div class="b"><button class="no" id="cNo">Cancel</button><button class="ok" id="cOk">Confirm push</button></div></div>';
+    document.getElementById("cOk").onclick=confirmChange; document.getElementById("cNo").onclick=cancelConfirm;
+  }
+  function confirmChange(){
+    awaitingConfirm=false; confirmEl.innerHTML="";
+    if(heldOp){heldOp.classList.remove("held");heldOp.classList.add("done");heldOp.querySelector(".st").textContent="DONE";} heldOp=null;
+    msg.innerHTML='<div class="msg ok">'+APPLIED.host+'</div>'; setDecision(STEPS[i].action,APPLIED.verdict,APPLIED.why,APPLIED.body); i++; updatePrimary();
+  }
+  function cancelConfirm(){
+    awaitingConfirm=false; confirmEl.innerHTML="";
+    msg.innerHTML='<div class="msg">Confirmation cancelled. The push stays held and was never applied.</div>';
+    setDecision(STEPS[i].action,"assist","CONFIRMATION_DECLINED","Even with the step-up satisfied, no explicit confirmation means the critical change does not fire. Fail-closed."); primary.disabled=false;
+  }
+  primary.onclick=function(){ if(!awaitingStepUp && !awaitingConfirm) advance(); };
+  document.getElementById("osGo").onclick=completeStepUp;
+  document.getElementById("osNo").onclick=function(){ osdim.classList.remove("show"); awaitingStepUp=false; primary.disabled=false; msg.innerHTML='<div class="msg">Cancelled. The action stays held — nothing was pushed.</div>'; setDecision(STEPS[i].action,"step_up","STEP_UP_NOT_SATISFIED","The engineer declined the check, so the held push never fires. Fail-closed: no gesture, no release."); };
+  document.getElementById("reset").onclick=function(){ i=0;awaitingStepUp=false;awaitingConfirm=false;heldOp=null; ops.innerHTML="";msg.innerHTML="";confirmEl.innerHTML=""; setDecision("—","allow","","Press <strong>View topology</strong> to begin."); decAction.textContent="—";decVerdict.textContent="—";decVerdict.className="verdict"; osdim.classList.remove("show"); updatePrimary(); };
+
+  setPlatform("mac"); updatePrimary();
+})();
+</script>
+</body>
+</html>

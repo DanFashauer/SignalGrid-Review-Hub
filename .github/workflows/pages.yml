@@ -67,6 +67,7 @@ jobs:
           cp docs/room-entry-console.html _site/console.html
           cp docs/competitive-battlecard.html _site/battlecard.html
           cp docs/embedded-host-app-demo.html _site/embedded-demo.html
+          cp docs/embedded-desktop-demo.html _site/desktop-demo.html
           # Pin the custom domain so Pages keeps serving signalgrid.app.
           cp site/CNAME _site/CNAME
       - uses: actions/upload-pages-artifact@v3

@@ -31,6 +31,7 @@
     "autopilot:backlog-check": "pnpm --filter @workspace/scripts run autopilot:backlog-check",
     "level10:audit": "pnpm --filter @workspace/scripts run level10:audit",
     "proof:orchestration": "pnpm --filter @workspace/scripts run proof:orchestration",
+    "dispatch": "node scripts/dev-dispatch.mjs",
     "proof:app-workflows": "pnpm --filter @workspace/scripts run proof:app-workflows",
     "proof:app-workflow-templates": "pnpm --filter @workspace/scripts run proof:app-workflow-templates",
     "proof:flows": "pnpm --filter @workspace/scripts run proof:flows",

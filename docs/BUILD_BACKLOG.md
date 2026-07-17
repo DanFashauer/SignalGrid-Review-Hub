@@ -30,8 +30,13 @@ picking these up:
       guidance"): a support lead's window into worker sessions that relays guidance
       with no worker-executed controls. `docs/EMBEDDED_UX_PRINCIPLE.md` (Reconciliation)
       and `docs/APP_SUITE_MATRIX.md` updated to match.
-- [ ] **Per-integration workflow templates** — a starter catalog an integrator
-      clones per app, plus a validation lint.
+- [x] **Per-integration workflow templates** — done. `@workspace/app-workflows`
+      now ships per-vertical starter templates (`starterTemplate` / `STARTER_TEMPLATES`)
+      an integrator clones, plus a fail-closed validation lint (`lintAppIntegration` /
+      `lintAppIntegrations`) that enforces the planner's safety invariants (critical ⇒
+      sensitive + gated, non-empty workflowKey, unique keys/ids). Proof:
+      `proof:app-workflow-templates` (20 assertions, in preflight + CI); guide:
+      `docs/APP_WORKFLOW_TEMPLATES.md`.
 
 ## Owner-gated (needs a decision before an agent builds it)
 

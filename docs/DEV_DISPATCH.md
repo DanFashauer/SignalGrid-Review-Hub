@@ -50,6 +50,23 @@ pnpm run dispatch "keep building the backlog while I'm out, open PRs as you go"
 4. **The default branch is `SignalGrid_Alpha`.** Feature work goes on a branch and
    lands via PR (so CI + Codex review run), then both copies pull the merged base.
 
+### One command: `pnpm run sync`
+
+Run it in either place and it does the safe dance for you — no git memorization:
+
+```bash
+pnpm run sync
+```
+
+- Refuses to touch anything if you have **uncommitted work** (commit or stash first).
+- **Behind** the remote → fast-forward pulls. **Ahead** → pushes.
+- **Diverged** (the branch moved in both places) → it stops and tells you exactly
+  how to reconcile; it never merges or force-pushes for you.
+- Notes when `SignalGrid_Alpha` has moved, so you know a rebase may be due.
+
+The habit: `pnpm run sync` when you sit down at a machine, and again before you
+walk away. That's the whole local↔cloud workflow.
+
 ## Local setup (one time)
 
 On your Mac or Windows (WSL or PowerShell):

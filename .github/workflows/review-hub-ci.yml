@@ -61,6 +61,9 @@ jobs:
       - name: Microsoft Graph sandbox proof
         run: pnpm run proof:microsoft-graph-sandbox
 
+      - name: Read-only Microsoft Graph connector proof
+        run: pnpm run proof:graph-connector
+
       - name: Connector emulator proof
         run: pnpm run proof:connector-emulator
 
@@ -72,6 +75,9 @@ jobs:
 
       - name: Observability (metrics endpoint) proof
         run: pnpm run proof:observability
+
+      - name: Enterprise auth (OIDC/JWT) proof
+        run: pnpm run proof:enterprise-auth
 
       - name: WebAuthn signature-verification proof
         run: pnpm run proof:webauthn-verify

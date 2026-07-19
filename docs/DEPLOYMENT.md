@@ -33,6 +33,34 @@ in-memory (the fixture-safe default used by the public build and CI).
 | `PORT` | API listen port. | `8080` |
 | `LOG_LEVEL` | pino log level. | `info` |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated browser origins allowed to call `/v1`. | none (deny all cross-origin) |
+| `OIDC_ISSUER` | Enterprise IdP issuer. Set ⇒ OIDC/JWT bearer auth on for `/v1`. | unset (demo keys) |
+| `OIDC_AUDIENCE` | Expected token audience (the API's app/client id). | unset |
+| `OIDC_JWKS_URI` | IdP JWKS endpoint (discovery `jwks_uri`). | unset |
+| `OIDC_TENANT_CLAIM` / `OIDC_ROLE_CLAIM` | Claims carrying the IdP tenant / role. | `tid` / `roles` |
+| `OIDC_TENANT_MAP` / `OIDC_ROLE_MAP` | JSON maps: IdP value → internal tenant id / role. | unset |
+| `GRAPH_ACCESS_TOKEN` | Read-only Microsoft Graph token for the posture connector. | unset (fixture mode) |
+
+## Enterprise sign-in (OIDC) — gated
+
+With `OIDC_ISSUER`, `OIDC_AUDIENCE`, and `OIDC_JWKS_URI` set, the `/v1` surface also
+accepts a real **OIDC JWT** bearer: the token's **RS256 signature** is verified
+against the IdP's JWKS and its **issuer / audience / expiry** are enforced, then
+the verified claims are mapped (`OIDC_TENANT_MAP` / `OIDC_ROLE_MAP`) to a
+tenant-scoped principal. `alg:none` and HMAC (`HS*`) tokens are rejected outright
+(algorithm-confusion defense). With the OIDC vars unset — the default — the API
+keeps using the public-safe demo bearer keys and nothing here runs. Wiring it to a
+real Entra/Okta/Auth0 tenant is a one-time configuration step, no code change.
+
+## Read-only Microsoft Graph connector — gated
+
+The read-only Graph posture connector reads **users + managed devices** and
+normalizes them to SignalGrid's posture vocabulary. It is **read-only by
+construction** (only GET requests are issued) and **gated exactly like every
+other integration**: it makes live Graph calls only on `beta`/`prod` **and** with
+`SIGNALGRID_LIVE_INTEGRATIONS=true` **and** `GRAPH_ACCESS_TOKEN` set — otherwise it
+runs in offline **fixture mode**. So it is safe to stand up for evaluation with no
+tenant, and its normalization/pagination/error paths are proven offline in CI
+(`pnpm run proof:graph-connector`).
 
 **Fixture-safe by default:** even at `SIGNALGRID_TIER=prod`, no live vendor calls
 are made unless `SIGNALGRID_LIVE_INTEGRATIONS=true` is also set — so this stack is

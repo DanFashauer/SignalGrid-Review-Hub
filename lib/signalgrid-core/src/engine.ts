@@ -34,6 +34,8 @@ import {
   type PolicyTestResult,
   type PolicyVersion,
   type Principal,
+  type PrincipalType,
+  type Role,
   type RemediationAction,
   type ResolutionPlan,
   type ResolutionSimulation,
@@ -97,6 +99,44 @@ export class SignalGridCore {
     const principal = authenticate(this.store, token);
     const tenant = this.requireTenant(principal.tenantId);
     return { principal, tenant };
+  }
+
+  /**
+   * Bind a principal that was authenticated by an EXTERNAL provider (the gated
+   * enterprise OIDC path) to its already-verified bearer token, so every
+   * existing tenant-scoped method resolves that token to this principal with no
+   * other change. The signature/claims of the token are verified upstream by
+   * `@workspace/enterprise-auth`; this method performs only authorization-side
+   * validation — the target tenant must exist and the role must be known — and
+   * fails closed otherwise. It never mints a tenant and never widens a role.
+   */
+  registerVerifiedPrincipal(
+    token: string,
+    input: { tenantId: string; role: Role; subjectId: string; principalType: PrincipalType; keyReference: string },
+  ): Principal {
+    const trimmed = token.trim();
+    if (!trimmed) {
+      throw new CoreError("unauthorized", "Missing bearer token.", 401);
+    }
+    // The tenant must already exist — an OIDC identity cannot conjure one.
+    this.requireTenant(input.tenantId);
+    const record: ApiKeyRecord = {
+      id: `evk_${input.tenantId}_${input.subjectId}`,
+      tenantId: input.tenantId,
+      principalType: input.principalType,
+      subjectId: input.subjectId,
+      role: input.role,
+      token: trimmed,
+      keyReference: input.keyReference,
+    };
+    this.store.putVerifiedKey(record);
+    return {
+      tenantId: record.tenantId,
+      principalType: record.principalType,
+      subjectId: record.subjectId,
+      role: record.role,
+      keyReference: record.keyReference,
+    };
   }
 
   evaluate(token: string, request: EvaluateRequest): EvaluateResult {

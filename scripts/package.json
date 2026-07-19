@@ -40,7 +40,9 @@
     "proof:decision-store-pg": "tsx ./src/decision-store-pg-proof.ts",
     "proof:session-store": "tsx ./src/session-store-proof.ts",
     "proof:session-store-pg": "tsx ./src/session-store-pg-proof.ts",
-    "proof:observability": "tsx ./src/observability-proof.ts"
+    "proof:observability": "tsx ./src/observability-proof.ts",
+    "proof:enterprise-auth": "tsx ./src/enterprise-auth-proof.ts",
+    "proof:graph-connector": "tsx ./src/graph-connector-proof.ts"
   },
   "dependencies": {
     "@workspace/app-workflows": "workspace:*",
@@ -57,7 +59,9 @@
     "@workspace/signalgrid-core": "workspace:*",
     "@workspace/signalgrid-simulator": "workspace:*",
     "@workspace/webauthn": "workspace:*",
-    "@workspace/persistence": "workspace:*"
+    "@workspace/persistence": "workspace:*",
+    "@workspace/enterprise-auth": "workspace:*",
+    "@workspace/integrations": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

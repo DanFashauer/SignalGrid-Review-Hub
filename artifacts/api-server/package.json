@@ -18,6 +18,7 @@
     "@workspace/recommendations": "workspace:*",
     "@workspace/signalgrid-core": "workspace:*",
     "@workspace/persistence": "workspace:*",
+    "@workspace/enterprise-auth": "workspace:*",
     "pg": "^8.13.1",
     "@workspace/signalgrid-simulator": "workspace:*",
     "cors": "^2.8.6",

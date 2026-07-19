@@ -70,6 +70,9 @@ jobs:
       - name: API integration test
         run: pnpm run test:api
 
+      - name: Observability (metrics endpoint) proof
+        run: pnpm run proof:observability
+
       - name: WebAuthn signature-verification proof
         run: pnpm run proof:webauthn-verify
 

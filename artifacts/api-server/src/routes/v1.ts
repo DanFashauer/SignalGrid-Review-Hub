@@ -4,6 +4,7 @@ import { CoreError, verifySnapshot, type EvaluateRequest } from "@workspace/sign
 import { getDecisionStore, getSessionStore, type Session } from "@workspace/persistence";
 import { listAppIntegrations, findAppIntegration, planAppSession } from "@workspace/app-workflows";
 import { core, DEMO_KEYS } from "../lib/core";
+import { decisionsTotal } from "../lib/metrics";
 import { requireTenantContext } from "../middlewares/context";
 import { v1RateLimiter } from "../middlewares/rateLimit";
 
@@ -42,6 +43,7 @@ router.post("/v1/decisions/evaluate", async (req: Request, res: Response, next: 
   try {
     const body = parseEvaluate(req.body);
     const result = core.evaluate(token(req), body);
+    decisionsTotal.inc({ outcome: result.outcome });
     const store = getDecisionStore();
     if (store) {
       // Persist the full decision + snapshot the core just produced.
@@ -121,6 +123,7 @@ router.post("/v1/sessions/start", async (req: Request, res: Response, next: Next
   try {
     const body = parseEvaluate(req.body);
     const result = core.evaluate(token(req), body);
+    decisionsTotal.inc({ outcome: result.outcome });
     const tenantId = core.context(token(req)).tenant.id;
     const ttlSeconds = clampTtl((req.body as Record<string, unknown>)?.["ttlSeconds"]);
     const now = Date.now();

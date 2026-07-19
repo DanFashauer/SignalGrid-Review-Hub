@@ -55,7 +55,8 @@
     "proof:ddm-connector": "pnpm --filter @workspace/scripts run proof:ddm-connector",
     "proof:decision-store-pg": "pnpm --filter @workspace/scripts run proof:decision-store-pg",
     "proof:session-store": "pnpm --filter @workspace/scripts run proof:session-store",
-    "proof:session-store-pg": "pnpm --filter @workspace/scripts run proof:session-store-pg"
+    "proof:session-store-pg": "pnpm --filter @workspace/scripts run proof:session-store-pg",
+    "proof:observability": "pnpm --filter @workspace/scripts run proof:observability"
   },
   "private": true,
   "devDependencies": {

@@ -104,21 +104,19 @@ export const requireTenantContext: RequestHandler = async (
     }
 
     if (enterpriseAuth) {
-      // OIDC is configured ⇒ it is the ONLY accepted credential. Verification
-      // failure THROWS (fail-closed); it never falls back to a weaker path, so a
-      // caller-supplied token cannot bypass OIDC to reach demo-key auth.
-      const outcome = await enterpriseAuth.authenticate(token, Date.now());
-      if (!outcome.ok) {
-        throw new CoreError("unauthorized", `Enterprise authentication failed: ${outcome.reason}`, 401);
-      }
-      // Bind the externally-verified principal to its token so downstream core
-      // methods resolve it unchanged.
+      // OIDC is configured ⇒ it is the ONLY accepted credential. This path is
+      // linear and fail-closed: `authenticateOrThrow` returns a verified identity
+      // or throws a 401 (caught below) — there is no boolean branch on the
+      // caller-supplied token and no fallback to a weaker path, mirroring the
+      // demo-key resolver `core.context`. The verified principal is bound to its
+      // token so downstream core methods resolve it unchanged.
+      const verified = await enterpriseAuth.authenticateOrThrow(token, Date.now());
       const principal = core.registerVerifiedPrincipal(token, {
-        tenantId: outcome.principal.tenantId,
-        role: outcome.principal.role,
-        subjectId: outcome.principal.subjectId,
-        principalType: outcome.principal.principalType,
-        keyReference: outcome.keyReference,
+        tenantId: verified.principal.tenantId,
+        role: verified.principal.role,
+        subjectId: verified.principal.subjectId,
+        principalType: verified.principal.principalType,
+        keyReference: verified.keyReference,
       });
       req.bearerToken = token;
       req.principal = principal;

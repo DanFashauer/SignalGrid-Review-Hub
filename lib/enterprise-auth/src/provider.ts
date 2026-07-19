@@ -1,3 +1,4 @@
+import { CoreError } from "@workspace/signalgrid-core";
 import { mapClaimsToPrincipal, type PrincipalInput } from "./claims";
 import { looksLikeJwt, type EnterpriseAuthConfig } from "./config";
 import { createJwksCache, type JwksCache, type JwksFetch } from "./jwks";
@@ -18,8 +19,20 @@ export type AuthenticateResult =
   | { ok: true; principal: PrincipalInput; keyReference: string }
   | { ok: false; reason: string };
 
+export interface VerifiedIdentity {
+  principal: PrincipalInput;
+  keyReference: string;
+}
+
 export interface EnterpriseAuthenticator {
+  /** Result-returning form — used by tests/proofs to assert the accept/reject matrix. */
   authenticate(token: string, nowMs: number): Promise<AuthenticateResult>;
+  /**
+   * Throw-based form for request handlers: returns a verified identity, or throws
+   * a fail-closed `CoreError(401)`. The caller stays purely linear (no boolean
+   * guard on the caller-supplied token), mirroring the demo-key resolver.
+   */
+  authenticateOrThrow(token: string, nowMs: number): Promise<VerifiedIdentity>;
 }
 
 export function createEnterpriseAuthenticator(
@@ -63,6 +76,14 @@ export function createEnterpriseAuthenticator(
       // Non-secret display reference for logs/audit — the subject, never the token.
       const keyReference = `oidc:${mapped.principal.subjectId}`;
       return { ok: true, principal: mapped.principal, keyReference };
+    },
+
+    async authenticateOrThrow(token: string, nowMs: number): Promise<VerifiedIdentity> {
+      const outcome = await this.authenticate(token, nowMs);
+      if (!outcome.ok) {
+        throw new CoreError("unauthorized", `Enterprise authentication failed: ${outcome.reason}`, 401);
+      }
+      return { principal: outcome.principal, keyReference: outcome.keyReference };
     },
   };
 }

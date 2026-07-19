@@ -196,3 +196,40 @@ jobs:
         env:
           DATABASE_URL: postgres://sg:sg@localhost:5432/signalgrid
         run: pnpm run proof:session-store-pg
+
+  deploy-stack:
+    name: Prod stack (Docker compose smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Build the API image and bring up the durable stack (api + Postgres) so
+      # the packaged deployment is proven, not just the source. DATABASE_URL in
+      # the compose file turns on the gated persistence layer.
+      - name: Build and start the durable stack
+        run: docker compose -f docker-compose.prod.yml up -d --build
+
+      - name: Wait for the API to be healthy
+        run: curl -sf --retry 60 --retry-delay 2 --retry-connrefused http://localhost:8080/api/healthz
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      # Exercises the running container stack end to end: a real decision is
+      # evaluated, read back from durable Postgres, its evidence verifies, cross-
+      # tenant reads are denied, and /metrics reflects the traffic.
+      - name: Smoke-test the running stack
+        env:
+          BASE_URL: http://localhost:8080
+        run: node scripts/smoke-stack.mjs
+
+      - name: Stack logs (on failure)
+        if: failure()
+        run: docker compose -f docker-compose.prod.yml logs --no-color
+
+      - name: Teardown
+        if: always()
+        run: docker compose -f docker-compose.prod.yml down -v

@@ -175,7 +175,10 @@ export class FleetDMAdapter {
     const signal: FleetDMPostureSignal = {
       hostUuid,
       platform: host.platform,
-      compliant: policies.every((p) => p.response === 'pass'),
+      // Fail closed: a host with NO policy results is "unknown", not compliant —
+      // `[].every(...)` is vacuously true, so require at least one policy AND all
+      // passing before treating the host as compliant.
+      compliant: policies.length > 0 && policies.every((p) => p.response === 'pass'),
       lastCheckAt: host.seen_time,
       policies,
       rawSignals: {

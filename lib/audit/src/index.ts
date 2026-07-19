@@ -79,19 +79,22 @@ const SECRET_KEYS = [
   "hmac",
 ];
 
+// Recurse through any value — arrays (at any depth) and nested objects — so a
+// secret buried in array-valued metadata (e.g. headers: [{ authorization: … }])
+// is redacted, not just top-level object members.
+function redactValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactValue);
+  if (typeof value === "object" && value !== null) return redactSecrets(value as Record<string, unknown>);
+  return value;
+}
+
 // Redact secrets from metadata
 function redactSecrets<T extends Record<string, unknown>>(meta: T): T {
   const redacted: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(meta)) {
     const lowerKey = key.toLowerCase();
     const isSecret = SECRET_KEYS.some((sk: string) => lowerKey.includes(sk));
-    if (isSecret) {
-      redacted[key] = "[REDACTED]";
-    } else if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-      redacted[key] = redactSecrets(value as Record<string, unknown>);
-    } else {
-      redacted[key] = value;
-    }
+    redacted[key] = isSecret ? "[REDACTED]" : redactValue(value);
   }
   return redacted as T;
 }

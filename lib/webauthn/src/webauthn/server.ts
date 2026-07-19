@@ -138,6 +138,19 @@ export async function verifyRegistration(
     return { success: false, error: 'Challenge not found or expired', timestamp };
   }
 
+  // Enforce expiry, purpose, and user binding independently of the backing
+  // store's TTL (the in-memory fallback has none): reject a stale challenge, one
+  // minted for authentication, or one bound to a different user.
+  if (Date.parse(challengeData.challenge.expiresAt) < Date.now()) {
+    return { success: false, error: 'Challenge expired', timestamp };
+  }
+  if (challengeData.challenge.purpose !== 'registration') {
+    return { success: false, error: 'Challenge purpose mismatch', timestamp };
+  }
+  if (challengeData.challenge.userId !== undefined && challengeData.challenge.userId !== userId) {
+    return { success: false, error: 'Challenge user mismatch', timestamp };
+  }
+
   // Parse client data JSON (WebAuthn base64url-encodes clientDataJSON).
   const clientData = JSON.parse(
     Buffer.from(response.response.clientDataJSON, 'base64url').toString()
@@ -276,6 +289,18 @@ export async function verifyAuthentication(
   const challengeData = await getAndDeleteChallenge(challengeId);
   if (!challengeData) {
     return { success: false, error: 'Challenge not found or expired', timestamp };
+  }
+
+  // Enforce expiry, purpose, and user binding independently of store TTL: reject
+  // a stale challenge, one minted for registration, or one bound to another user.
+  if (Date.parse(challengeData.challenge.expiresAt) < Date.now()) {
+    return { success: false, error: 'Challenge expired', timestamp };
+  }
+  if (challengeData.challenge.purpose !== 'authentication') {
+    return { success: false, error: 'Challenge purpose mismatch', timestamp };
+  }
+  if (challengeData.challenge.userId !== undefined && challengeData.challenge.userId !== userId) {
+    return { success: false, error: 'Challenge user mismatch', timestamp };
   }
 
   // Verify challenge matches (clientDataJSON is base64url-encoded).

@@ -6,6 +6,7 @@
 
 import { z } from 'zod';
 import { createLocationStore } from './store';
+import { validateLocationSignal } from './validate';
 import type { LocationSignal, LocationMode, LocationSource } from './types';
 
 // ============================================================================
@@ -95,8 +96,10 @@ export function parseRADIUSToLocation(
   const macAddress = radius.callingStationId || radius.macAddress;
   const normalizedMac = macAddress?.toLowerCase().replace(/[:-]/g, '');
   
-  // Determine device ID from MAC or username
-  const deviceId = normalizedMac || radius.userName || 'unknown';
+  // Determine device ID from MAC or username. Leave it EMPTY when neither is
+  // present — do not fabricate an 'unknown' identifier that would be stored as a
+  // real presence signal; the ingest path validates and drops an empty deviceId.
+  const deviceId = normalizedMac || radius.userName || '';
   
   // Infer location from network info
   // VLAN ID can be mapped to zone/building
@@ -182,9 +185,15 @@ export async function ingestRADIUS(
     wifiBssid: networkLocation.wifiBssid,
     metadata: networkLocation.metadata,
   };
-  
+
+  // Fail closed: validate the externally-sourced signal (real deviceId, sane
+  // observedAt) before it becomes a stored presence fact. Drop it if invalid.
+  if (!validateLocationSignal(signal).ok) {
+    return null;
+  }
+
   await store.upsert(signal);
-  
+
   return signal;
 }
 
@@ -215,9 +224,15 @@ export async function ingestDHCP(
     ip: networkLocation.ip,
     metadata: networkLocation.metadata,
   };
-  
+
+  // Fail closed: validate before storing (drops an empty/short deviceId, a
+  // future or stale observedAt) so a malformed lease can't become a presence fact.
+  if (!validateLocationSignal(signal).ok) {
+    return null;
+  }
+
   await store.upsert(signal);
-  
+
   return signal;
 }
 

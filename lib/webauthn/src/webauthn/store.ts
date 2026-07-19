@@ -176,11 +176,14 @@ export async function getAndDeleteChallenge(
     }
   }
 
+  // Always consume the in-memory copy, even when Redis served the read. The
+  // challenge is written to BOTH stores, so if only Redis is cleared the
+  // in-memory copy survives and a single-use challenge could be replayed. Delete
+  // it unconditionally; use it as the fallback value only when Redis had nothing.
+  const memResult = inMemoryChallenges.get(key) ?? null;
+  inMemoryChallenges.delete(key);
   if (!result) {
-    result = inMemoryChallenges.get(key) ?? null;
-    if (result) {
-      inMemoryChallenges.delete(key);
-    }
+    result = memResult;
   }
 
   return result;

@@ -106,19 +106,23 @@ export const requireTenantContext: RequestHandler = async (
     if (enterpriseAuth) {
       // OIDC is configured ⇒ it is the ONLY accepted credential. This path is
       // linear and fail-closed: `authenticateOrThrow` returns a verified identity
-      // or throws a 401 (caught below) — there is no boolean branch on the
-      // caller-supplied token and no fallback to a weaker path, mirroring the
-      // demo-key resolver `core.context`. The verified principal is bound to its
-      // token so downstream core methods resolve it unchanged.
+      // or throws a 401 (caught below) — no boolean branch on the caller-supplied
+      // token and no fallback to a weaker path, mirroring `core.context`.
       const verified = await enterpriseAuth.authenticateOrThrow(token, Date.now());
-      const principal = core.registerVerifiedPrincipal(token, {
+      // The raw bearer is consumed ONLY by verification above; it is never stored
+      // and never used as the downstream credential. We bind the verified
+      // principal under a fresh SERVER-MINTED opaque id and hand that to the rest
+      // of the request, so the caller's token cannot flow into the core registry
+      // or any later handler.
+      const sessionCredential = `oidc_${randomUUID()}`;
+      const principal = core.registerVerifiedPrincipal(sessionCredential, {
         tenantId: verified.principal.tenantId,
         role: verified.principal.role,
         subjectId: verified.principal.subjectId,
         principalType: verified.principal.principalType,
         keyReference: verified.keyReference,
       });
-      req.bearerToken = token;
+      req.bearerToken = sessionCredential;
       req.principal = principal;
       next();
       return;

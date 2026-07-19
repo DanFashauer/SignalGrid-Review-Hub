@@ -82,6 +82,9 @@ jobs:
       - name: App-workflows (application gating) proof
         run: pnpm run proof:app-workflows
 
+      - name: App-workflow templates + validation lint proof
+        run: pnpm run proof:app-workflow-templates
+
       - name: Flows (admin flow config + health) proof
         run: pnpm run proof:flows
 

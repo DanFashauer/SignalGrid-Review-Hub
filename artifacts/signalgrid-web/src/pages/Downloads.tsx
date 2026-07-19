@@ -35,13 +35,13 @@ const PLATFORMS = [
     icon: Smartphone,
     name: "Mobile PWA (iOS / Android)",
     subtitle: "Installable progressive web app",
-    desc: "One installable PWA serving both personas: the end-user 'My Access' worker surface (why a session was allowed/held + self-service steps) and the operator monitoring tabs. Native React Native/Expo shells are a documented next step.",
+    desc: "An installable operator/support PWA: an 'Access support' tab where a support lead triages a worker's session and sees the guidance to relay, plus operator monitoring tabs. The worker's own resolution stays embedded in their host app — no SignalGrid worker screen. Native React Native/Expo shells are a documented next step.",
     version: "PWA · pre-announcement",
     options: [
       { label: "Install via browser (Add to Home Screen)", ext: "", size: "", badge: "PWA" },
       { label: "Native iOS / Android shell", ext: "", size: "", badge: "PLANNED" },
     ],
-    features: ["'My Access' worker surface", "Self-service resolution steps", "Operator triage tabs", "Offline-capable (PWA)"],
+    features: ["Access-support triage", "Guidance to relay to workers", "Operator monitoring tabs", "Offline-capable (PWA)"],
   },
 ];
 

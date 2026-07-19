@@ -36,10 +36,10 @@ a persona app.
 | Platform | Administrative surface | End-user (frontline worker) surface |
 | -------- | ---------------------- | ----------------------------------- |
 | **Web** | `signalgrid-app` (responsive admin console: dashboard, decisions, policies, signals, integrations) + `signalgrid-review` Operator Console (core-driven) | `signalgrid-review` Worker Self-Service (core-driven: outcome + plain-language reason + self-service steps) |
-| **iOS** | `signalgrid-mobile-pwa` (installable PWA, operator triage) | `signalgrid-mobile-pwa` **My Access** worker surface (session start → outcome → self-service) |
-| **Android** | `signalgrid-mobile-pwa` (same PWA) | `signalgrid-mobile-pwa` **My Access** worker surface |
-| **macOS** | `signalgrid-desktop` (desktop-chromed operator console + ITSM hand-off) | (routes frontline workers to the mobile PWA / kiosk) |
-| **Windows** | `signalgrid-desktop` (same desktop shell) | (routes frontline workers to the mobile PWA / kiosk) |
+| **iOS** | `signalgrid-mobile-pwa` (installable PWA, operator/support triage; **Access support** tab) | Embedded in the worker's host app — no SignalGrid worker screen (reference: [`embedded-host-app-demo.html`](embedded-host-app-demo.html)) |
+| **Android** | `signalgrid-mobile-pwa` (same PWA) | Embedded in the worker's host app — no SignalGrid worker screen |
+| **macOS** | `signalgrid-desktop` (desktop-chromed operator console + ITSM hand-off) | Embedded in the worker's host app (reference: [`embedded-desktop-demo.html`](embedded-desktop-demo.html)) |
+| **Windows** | `signalgrid-desktop` (same desktop shell) | Embedded in the worker's host app (reference: [`embedded-desktop-demo.html`](embedded-desktop-demo.html)) |
 
 Notes:
 
@@ -64,11 +64,18 @@ run the policy lab (v1 vs v2), review the tamper-evident audit ledger, and
 approve simulated remediations. Homes: `signalgrid-app` (Web),
 `signalgrid-desktop` (macOS/Windows), `signalgrid-review` Operator Console.
 
-**End-user (frontline worker)** — start a session, see the outcome in plain
-language, and follow the self-service steps to resolve a block (refresh posture,
-return/dock the device, re-badge, or **re-apply the security baseline** when a
-device has drifted). Homes: `signalgrid-review` Worker Self-Service (Web) and the
-`signalgrid-mobile-pwa` **My Access** surface (iOS/Android).
+**End-user (frontline worker)** — start a session and see the outcome resolve in
+plain language, with the resolution (refresh posture, return/dock the device,
+re-badge, or **re-apply the security baseline** when a device has drifted)
+happening **inside the worker's own host app**, not a SignalGrid screen. Per
+[the embedded-UX design law](EMBEDDED_UX_PRINCIPLE.md) the worker never opens a
+SignalGrid app; the reference demonstrations of this embedded flow are
+[`embedded-host-app-demo.html`](embedded-host-app-demo.html) (mobile) and
+[`embedded-desktop-demo.html`](embedded-desktop-demo.html) (macOS/Windows). The
+`signalgrid-mobile-pwa` **Access support** tab is the operator/support-side
+window into these worker sessions — it relays guidance, it is not a worker
+destination. `signalgrid-review` Worker Self-Service (Web) remains a core-driven
+demonstration of the worker's plain-language view.
 
 ## Where the security-baseline (CIS) dimension shows up
 

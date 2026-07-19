@@ -37,6 +37,7 @@ const STEPS = [
   { name: "Proof: orchestration", cmd: ["pnpm", "run", "proof:orchestration"] },
   { name: "Proof: room-sim", cmd: ["pnpm", "run", "proof:room-sim"] },
   { name: "Proof: app-workflows", cmd: ["pnpm", "run", "proof:app-workflows"] },
+  { name: "Proof: app-workflow-templates", cmd: ["pnpm", "run", "proof:app-workflow-templates"] },
   { name: "Proof: flows", cmd: ["pnpm", "run", "proof:flows"] },
   { name: "Proof: recommendations", cmd: ["pnpm", "run", "proof:recommendations"] },
   { name: "Proof: signal-discovery", cmd: ["pnpm", "run", "proof:signal-discovery"] },

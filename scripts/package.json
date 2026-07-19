@@ -14,6 +14,7 @@
     "phase:summary-check": "tsx ./src/phase-summary-check.ts",
     "proof:api-contract": "tsx ./src/api-contract-proof.ts",
     "proof:app-workflows": "tsx ./src/app-workflows-proof.ts",
+    "proof:app-workflow-templates": "tsx ./src/app-workflow-templates-proof.ts",
     "proof:connector-emulator": "tsx ./src/connector-emulator-proof.ts",
     "proof:control-plane": "tsx ./src/control-plane-proof.ts",
     "proof:ddm-connector": "tsx ./src/ddm-connector-proof.ts",

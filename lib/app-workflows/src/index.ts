@@ -232,6 +232,19 @@ export function completeAppStepUp(input: AppPlanInput): AppSessionPlan {
 import { APP_INTEGRATIONS } from "./catalog";
 export { APP_INTEGRATIONS } from "./catalog";
 
+// Per-integration starter templates + the fail-closed validation lint.
+export {
+  APP_VERTICALS,
+  lintAppIntegration,
+  lintAppIntegrations,
+  catalogLintsClean,
+  starterTemplate,
+  STARTER_TEMPLATES,
+  type LintSeverity,
+  type AppIntegrationIssue,
+  type AppIntegrationLintResult,
+} from "./templates";
+
 export function listAppIntegrations(vertical?: AppVertical): AppIntegration[] {
   return APP_INTEGRATIONS.filter((i) => !vertical || i.vertical === vertical);
 }

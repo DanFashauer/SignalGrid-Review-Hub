@@ -1,18 +1,22 @@
 import React, { useState } from "react";
 import { OutcomeBadge } from "@/components/OutcomeBadge";
-import { ShieldCheck, RotateCcw, ChevronRight } from "lucide-react";
+import { LifeBuoy, ChevronRight } from "lucide-react";
 
 /**
- * My Access — the end-user (frontline worker) surface of the SignalGrid mobile
- * app (iOS/Android via PWA). It shows a worker why a session was allowed,
- * stepped up, or restricted, and the plain-language self-service steps to
- * resolve a block themselves — including re-applying a drifted security
- * (CIS/hardening) baseline.
+ * Access support — an OPERATOR / support-desk surface of the SignalGrid mobile
+ * app (iOS/Android via PWA). A support lead or floor supervisor looks at a
+ * worker's session here to see why it was allowed, stepped up, or restricted,
+ * and the plain-language guidance to relay to that worker.
  *
- * Public-safe and self-contained: this surface renders deterministic demo
- * scenarios that mirror the SignalGrid decision core's worker view. No live
- * decision call, credential, or production action is involved; every step is a
- * self-service instruction, never an executed change.
+ * This is deliberately NOT a worker destination. Per docs/EMBEDDED_UX_PRINCIPLE.md
+ * the end user never opens a SignalGrid app: the worker's own resolution happens
+ * invisibly inside their host app (re-dock refreshes posture, a native step-up
+ * re-verifies identity). This view is the operator's window into that flow, not
+ * the worker's — so it relays guidance rather than executing anything.
+ *
+ * Public-safe and self-contained: deterministic demo scenarios that mirror the
+ * decision core's worker view. No live decision call, credential, or production
+ * action is involved; every step is guidance, never an executed change.
  */
 
 type Outcome = "allow" | "step-up" | "restrict";
@@ -20,82 +24,89 @@ type Outcome = "allow" | "step-up" | "restrict";
 interface AccessScenario {
   id: string;
   device: string;
+  worker: string;
   workflow: string;
   outcome: Outcome;
   reason: string;
+  /** Guidance the operator relays; the worker's host app carries it out. */
   steps: string[];
-  /** True when following the steps and retrying is expected to reach allow. */
-  selfService: boolean;
+  /** True when the worker can resolve it on their device without an operator. */
+  selfResolving: boolean;
 }
 
 const SCENARIOS: AccessScenario[] = [
   {
     id: "ok",
     device: "Ward iPad 01",
+    worker: "Alex R. · Nurse",
     workflow: "Clinical session",
     outcome: "allow",
-    reason: "Your identity, device, and security baseline are all healthy and fresh.",
+    reason: "Identity, device, and security baseline are all healthy and fresh.",
     steps: [],
-    selfService: true,
+    selfResolving: true,
   },
   {
     id: "stale",
     device: "Ward iPad 03",
+    worker: "Priya S. · Nurse",
     workflow: "Clinical session",
     outcome: "step-up",
-    reason: "This device's compliance check is stale, so extra verification is needed first.",
+    reason: "This device's compliance check is stale, so the host app asks for extra verification first.",
     steps: [
-      "Reconnect the device (or return it to its dock) to refresh its compliance check.",
-      "Re-verify your identity if prompted.",
-      "Retry the session.",
+      "Have the worker reconnect the device (or return it to its dock) to refresh its compliance check.",
+      "The host app re-verifies identity with a native step-up if needed.",
+      "The session continues in place — no SignalGrid screen for the worker.",
     ],
-    selfService: true,
+    selfResolving: true,
   },
   {
     id: "baseline",
     device: "Ward iPad 06",
+    worker: "Jordan M. · Tech",
     workflow: "Clinical session",
     outcome: "step-up",
     reason: "This device has drifted from its security (CIS/hardening) baseline.",
     steps: [
-      "Return the device to its dock or reconnect it so the hardening profile re-applies.",
-      "Wait for the baseline to re-align (usually under a minute).",
-      "Retry the session.",
+      "Have the worker return the device to its dock so the hardening profile re-applies.",
+      "The baseline re-aligns automatically (usually under a minute).",
+      "The session continues once posture is fresh.",
     ],
-    selfService: true,
+    selfResolving: true,
   },
   {
     id: "overdue",
     device: "Loaner iPad 01",
+    worker: "Sam T. · Nurse",
     workflow: "Clinical session",
     outcome: "restrict",
     reason: "This loaner is overdue for return, so it's restricted until it's checked back in.",
     steps: [
-      "Return the device to its dock or bay to check it back in.",
-      "Pick up a checked-in device for your session, or retry after check-in.",
+      "Route the worker to a checked-in device for their session.",
+      "The loaner clears its restriction once it's returned to a dock or bay.",
     ],
-    selfService: true,
+    selfResolving: false,
   },
 ];
 
-export default function MyAccess() {
+export default function AccessSupport() {
   const [openId, setOpenId] = useState<string | null>("baseline");
 
   return (
     <div className="h-full w-full flex flex-col scroll-area p-4 space-y-5 pt-safe">
       <header className="flex items-center gap-2 pt-2">
-        <ShieldCheck className="text-primary" size={22} />
+        <LifeBuoy className="text-primary" size={22} />
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">My Access</h1>
-          <p className="text-sm text-muted-foreground">Alex R. · Nurse</p>
+          <h1 className="text-2xl font-bold tracking-tight">Access support</h1>
+          <p className="text-sm text-muted-foreground">Worker session triage · relay guidance</p>
         </div>
       </header>
 
       <div className="rounded-xl border border-border bg-card px-4 py-3">
-        <p className="font-mono text-[11px] tracking-widest text-primary">SIGNAL → YOUR MOVE</p>
+        <p className="font-mono text-[11px] tracking-widest text-primary">SIGNAL → GUIDANCE TO RELAY</p>
         <p className="mt-1 text-sm text-muted-foreground">
-          Tap a session to see the signal, the call, and the one thing you can do to
-          continue. The choice is yours — nothing is changed for you.
+          Tap a worker's session to see the signal, the call, and the guidance to
+          relay. The worker never opens SignalGrid — their resolution happens inside
+          their own app, invisibly.
         </p>
       </div>
 
@@ -113,7 +124,7 @@ export default function MyAccess() {
                     <span className="font-medium truncate">{s.device}</span>
                     <OutcomeBadge outcome={s.outcome} />
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">{s.workflow}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{s.worker} · {s.workflow}</p>
                 </div>
                 <ChevronRight
                   size={18}
@@ -127,12 +138,12 @@ export default function MyAccess() {
 
                   {s.steps.length === 0 ? (
                     <p className="text-sm text-green-400">
-                      You're good to go — no action needed.
+                      Nothing to relay — the session is running normally.
                     </p>
                   ) : (
                     <div className="space-y-2">
                       <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                        {s.selfService ? "Fix it yourself" : "Needs an operator"}
+                        {s.selfResolving ? "Resolves on the worker's device" : "Needs an operator"}
                       </p>
                       <ol className="space-y-2">
                         {s.steps.map((step, i) => (
@@ -144,12 +155,6 @@ export default function MyAccess() {
                           </li>
                         ))}
                       </ol>
-                      {s.selfService && (
-                        <button className="mt-2 w-full flex items-center justify-center gap-2 h-10 rounded-lg bg-primary/15 text-primary text-sm font-medium active:scale-[0.99] transition-transform">
-                          <RotateCcw size={15} />
-                          Retry after these steps
-                        </button>
-                      )}
                     </div>
                   )}
                 </div>
@@ -160,8 +165,8 @@ export default function MyAccess() {
       </div>
 
       <p className="text-[11px] text-muted-foreground/70 pt-1">
-        Demo view · deterministic scenarios · no live decision call or production
-        action.
+        Operator/support view · deterministic scenarios · no live decision call or
+        production action. The worker's resolution happens in their host app.
       </p>
     </div>
   );

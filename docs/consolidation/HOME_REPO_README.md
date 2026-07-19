@@ -57,7 +57,7 @@ lib/                       Source-only @workspace/* packages (TypeScript project
 artifacts/
   api-server                 /v1 decision API (runs without a database)
   signalgrid-app             Operator console (admin)
-  signalgrid-mobile-pwa      Operator + worker mobile surface
+  signalgrid-mobile-pwa      Operator/support mobile surface
   signalgrid-desktop         Desktop shell
   signalgrid-review          Public review / operator-console site
   signalgrid-web             Company website (marketing + About)

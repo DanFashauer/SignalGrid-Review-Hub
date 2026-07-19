@@ -37,7 +37,9 @@
     "sbom": "tsx ./src/generate-sbom.ts",
     "smoke:connector-emulator": "pnpm run proof:connector-emulator",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "proof:decision-store-pg": "tsx ./src/decision-store-pg-proof.ts"
+    "proof:decision-store-pg": "tsx ./src/decision-store-pg-proof.ts",
+    "proof:session-store": "tsx ./src/session-store-proof.ts",
+    "proof:session-store-pg": "tsx ./src/session-store-pg-proof.ts"
   },
   "dependencies": {
     "@workspace/app-workflows": "workspace:*",

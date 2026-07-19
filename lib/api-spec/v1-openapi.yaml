@@ -494,6 +494,55 @@ paths:
       responses:
         "200": { description: Normalized DDM signals + assurance hints }
 
+  /v1/sessions/start:
+    post:
+      operationId: startSession
+      tags: [sessions]
+      summary: Start a device session (gated by a decision), durable when configured
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EvaluateRequest" }
+      responses:
+        "200": { description: Session started with its gating decision }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/sessions/{id}:
+    get:
+      operationId: getSession
+      tags: [sessions]
+      summary: Get a session (expiry applied), tenant-scoped
+      responses:
+        "200": { description: Session }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/sessions/{id}/refresh:
+    post:
+      operationId: refreshSession
+      tags: [sessions]
+      summary: Extend an active session's TTL
+      responses:
+        "200": { description: Session refreshed }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/sessions/{id}/end:
+    post:
+      operationId: endSession
+      tags: [sessions]
+      summary: End a session (sign-out)
+      responses:
+        "200": { description: Session ended }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
 components:
   securitySchemes:
     bearerAuth:

@@ -909,6 +909,107 @@
               ]
             }
           }
+        },
+        {
+          "name": "Start a device session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identityRef\": \"nurse.compliant\",\n  \"deviceRef\": \"ipad-ward-01\",\n  \"workflowKey\": \"clinical-session\",\n  \"ttlSeconds\": 900\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/sessions/start",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "sessions",
+                "start"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get a session",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/sessions/{{sessionId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "sessions",
+                "{{sessionId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Refresh a session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/sessions/{{sessionId}}/refresh",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "sessions",
+                "{{sessionId}}",
+                "refresh"
+              ]
+            }
+          }
+        },
+        {
+          "name": "End a session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/sessions/{{sessionId}}/end",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "sessions",
+                "{{sessionId}}",
+                "end"
+              ]
+            }
+          }
         }
       ]
     },

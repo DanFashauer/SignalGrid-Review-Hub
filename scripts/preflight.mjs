@@ -35,6 +35,7 @@ const STEPS = [
   { name: "API integration test (boots the server)", cmd: ["pnpm", "run", "test:api"] },
   { name: "Proof: webauthn-verify", cmd: ["pnpm", "run", "proof:webauthn-verify"] },
   { name: "Proof: audit-ledger", cmd: ["pnpm", "run", "proof:audit-ledger"] },
+  { name: "Proof: session-store", cmd: ["pnpm", "run", "proof:session-store"] },
   { name: "Proof: orchestration", cmd: ["pnpm", "run", "proof:orchestration"] },
   { name: "Proof: room-sim", cmd: ["pnpm", "run", "proof:room-sim"] },
   { name: "Proof: app-workflows", cmd: ["pnpm", "run", "proof:app-workflows"] },

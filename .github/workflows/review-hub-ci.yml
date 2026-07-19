@@ -187,3 +187,9 @@ jobs:
         env:
           DATABASE_URL: postgres://sg:sg@localhost:5432/signalgrid
         run: pnpm run proof:decision-store-pg
+
+      # Durable session lifecycle: start/refresh/expire/end, isolation, durability.
+      - name: Durable session-store proof on Postgres
+        env:
+          DATABASE_URL: postgres://sg:sg@localhost:5432/signalgrid
+        run: pnpm run proof:session-store-pg

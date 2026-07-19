@@ -1,6 +1,7 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
+import { randomUUID } from "node:crypto";
 import { CoreError, verifySnapshot, type EvaluateRequest } from "@workspace/signalgrid-core";
-import { getDecisionStore } from "@workspace/persistence";
+import { getDecisionStore, getSessionStore, type Session } from "@workspace/persistence";
 import { listAppIntegrations, findAppIntegration, planAppSession } from "@workspace/app-workflows";
 import { core, DEMO_KEYS } from "../lib/core";
 import { requireTenantContext } from "../middlewares/context";
@@ -107,6 +108,71 @@ router.get("/v1/decisions/:id/evidence", async (req: Request, res: Response, nex
     const evidence = core.getSnapshot(token(req), decision.evidenceSnapshotId);
     const verified = core.verifyEvidence(token(req), evidence.id);
     res.json(envelope(req, { evidence, verified }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Sessions: durable start / refresh / end lifecycle ────────────────────────
+// A session is gated by a real decision at start, then kept alive by refreshes
+// until it ends or its TTL lapses. Sessions persist in-memory by default and to
+// Postgres when DATABASE_URL is set, so they survive a restart in production.
+router.post("/v1/sessions/start", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = parseEvaluate(req.body);
+    const result = core.evaluate(token(req), body);
+    const tenantId = core.context(token(req)).tenant.id;
+    const ttlSeconds = clampTtl((req.body as Record<string, unknown>)?.["ttlSeconds"]);
+    const now = Date.now();
+    const session: Session = {
+      id: `sess_${randomUUID()}`,
+      tenantId,
+      identityRef: body.identityRef,
+      deviceRef: body.deviceRef,
+      workflowKey: body.workflowKey,
+      status: "active",
+      outcome: result.outcome,
+      decisionId: result.decisionId,
+      createdAt: new Date(now).toISOString(),
+      lastSeenAt: new Date(now).toISOString(),
+      expiresAt: new Date(now + ttlSeconds * 1000).toISOString(),
+    };
+    await getSessionStore().start(session);
+    res.json(envelope(req, { session, decision: result }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/v1/sessions/:id", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenantId = core.context(token(req)).tenant.id;
+    const session = await getSessionStore().get(tenantId, param(req, "id"), Date.now());
+    if (!session) throw new CoreError("not_found", `Session "${param(req, "id")}" not found.`, 404);
+    res.json(envelope(req, { session }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/v1/sessions/:id/refresh", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenantId = core.context(token(req)).tenant.id;
+    const ttlSeconds = clampTtl((req.body as Record<string, unknown>)?.["ttlSeconds"]);
+    const session = await getSessionStore().refresh(tenantId, param(req, "id"), ttlSeconds, Date.now());
+    if (!session) throw new CoreError("not_found", `Session "${param(req, "id")}" not found.`, 404);
+    res.json(envelope(req, { session }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/v1/sessions/:id/end", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenantId = core.context(token(req)).tenant.id;
+    const session = await getSessionStore().end(tenantId, param(req, "id"));
+    if (!session) throw new CoreError("not_found", `Session "${param(req, "id")}" not found.`, 404);
+    res.json(envelope(req, { session }));
   } catch (err) {
     next(err);
   }
@@ -272,6 +338,14 @@ function token(req: Request): string {
 function param(req: Request, name: string): string {
   const value = (req.params as Record<string, string | string[]>)[name];
   return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
+}
+
+// Session TTL in seconds: default 15 min; clamped to [60s, 24h] so a caller
+// cannot request an unbounded (or zero) lifetime.
+function clampTtl(raw: unknown): number {
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n)) return 900;
+  return Math.min(86400, Math.max(60, Math.floor(n)));
 }
 
 function parseEvaluate(body: unknown): EvaluateRequest {

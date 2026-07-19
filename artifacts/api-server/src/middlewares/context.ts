@@ -79,12 +79,14 @@ const defaultJwksFetch: JwksFetch = (uri: string) =>
  * attaches it to the request. Fail-closed: a missing or unknown token is a 401,
  * never a default tenant.
  *
- * Two credential types are accepted. When enterprise OIDC is configured and the
- * bearer is a JWT, it is verified (RS256 signature + issuer/audience/expiry) by
- * `@workspace/enterprise-auth`, its claims are mapped to a tenant-scoped
- * principal, and that principal is bound to the token for the rest of the
- * request. Otherwise the bearer is resolved as a public-safe demo key. Either
- * way the tenant comes only from the authenticated credential, never the client.
+ * Exactly ONE credential type is accepted, chosen by SERVER configuration (never
+ * by the caller): when enterprise OIDC is configured, the bearer MUST be a valid
+ * OIDC JWT — it is verified (RS256 signature + issuer/audience/expiry) by
+ * `@workspace/enterprise-auth` and its claims mapped to a tenant-scoped principal;
+ * anything else is a 401. There is deliberately NO demo-key fallback in that mode,
+ * so a caller cannot present a non-JWT to route around OIDC. When OIDC is not
+ * configured (the fixture/CI default), the bearer is resolved as a public-safe
+ * demo key. Either way the tenant comes only from the authenticated credential.
  */
 export const requireTenantContext: RequestHandler = async (
   req: Request,
@@ -96,38 +98,36 @@ export const requireTenantContext: RequestHandler = async (
     if (!token) {
       throw new CoreError(
         "unauthorized",
-        "A Bearer token is required. Use one of the public-safe demo keys.",
+        "A Bearer token is required.",
         401,
       );
     }
 
-    // Authentication is fail-closed and NOT branched on the shape of the caller-
-    // supplied token. When enterprise OIDC is configured we always run the
-    // verifier: it returns a principal only for a cryptographically valid,
-    // mapped JWT and rejects everything else (a non-JWT bearer is rejected
-    // cheaply, before any network). The token flows in as DATA to be verified,
-    // never as a condition that could select a weaker path. A verified identity
-    // is bound to its token so downstream core methods resolve it unchanged.
     if (enterpriseAuth) {
+      // OIDC is configured ⇒ it is the ONLY accepted credential. Verification
+      // failure THROWS (fail-closed); it never falls back to a weaker path, so a
+      // caller-supplied token cannot bypass OIDC to reach demo-key auth.
       const outcome = await enterpriseAuth.authenticate(token, Date.now());
-      if (outcome.ok) {
-        const principal = core.registerVerifiedPrincipal(token, {
-          tenantId: outcome.principal.tenantId,
-          role: outcome.principal.role,
-          subjectId: outcome.principal.subjectId,
-          principalType: outcome.principal.principalType,
-          keyReference: outcome.keyReference,
-        });
-        req.bearerToken = token;
-        req.principal = principal;
-        next();
-        return;
+      if (!outcome.ok) {
+        throw new CoreError("unauthorized", `Enterprise authentication failed: ${outcome.reason}`, 401);
       }
+      // Bind the externally-verified principal to its token so downstream core
+      // methods resolve it unchanged.
+      const principal = core.registerVerifiedPrincipal(token, {
+        tenantId: outcome.principal.tenantId,
+        role: outcome.principal.role,
+        subjectId: outcome.principal.subjectId,
+        principalType: outcome.principal.principalType,
+        keyReference: outcome.keyReference,
+      });
+      req.bearerToken = token;
+      req.principal = principal;
+      next();
+      return;
     }
 
-    // Demo-key resolution — itself fail-closed: an unknown token is a 401, never
-    // a default tenant. Reached when OIDC is unconfigured, or when a token is not
-    // a valid OIDC JWT (e.g. a public-safe demo key).
+    // OIDC not configured (fixture/CI default): resolve the public-safe demo key.
+    // Fail-closed — an unknown token is a 401, never a default tenant.
     const { principal } = core.context(token);
     req.bearerToken = token;
     req.principal = principal;

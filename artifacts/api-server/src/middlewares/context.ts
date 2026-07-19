@@ -4,7 +4,6 @@ import { CoreError, type Principal } from "@workspace/signalgrid-core";
 import {
   createEnterpriseAuthenticator,
   loadEnterpriseAuthConfig,
-  looksLikeJwt,
   type EnterpriseAuthenticator,
   type JwksFetch,
 } from "@workspace/enterprise-auth";
@@ -102,27 +101,33 @@ export const requireTenantContext: RequestHandler = async (
       );
     }
 
-    if (enterpriseAuth && looksLikeJwt(token)) {
+    // Authentication is fail-closed and NOT branched on the shape of the caller-
+    // supplied token. When enterprise OIDC is configured we always run the
+    // verifier: it returns a principal only for a cryptographically valid,
+    // mapped JWT and rejects everything else (a non-JWT bearer is rejected
+    // cheaply, before any network). The token flows in as DATA to be verified,
+    // never as a condition that could select a weaker path. A verified identity
+    // is bound to its token so downstream core methods resolve it unchanged.
+    if (enterpriseAuth) {
       const outcome = await enterpriseAuth.authenticate(token, Date.now());
-      if (!outcome.ok) {
-        throw new CoreError("unauthorized", `Enterprise authentication failed: ${outcome.reason}`, 401);
+      if (outcome.ok) {
+        const principal = core.registerVerifiedPrincipal(token, {
+          tenantId: outcome.principal.tenantId,
+          role: outcome.principal.role,
+          subjectId: outcome.principal.subjectId,
+          principalType: outcome.principal.principalType,
+          keyReference: outcome.keyReference,
+        });
+        req.bearerToken = token;
+        req.principal = principal;
+        next();
+        return;
       }
-      // Bind the externally-verified principal to the token so every downstream
-      // core method resolves it, then attach for logging + handlers.
-      const principal = core.registerVerifiedPrincipal(token, {
-        tenantId: outcome.principal.tenantId,
-        role: outcome.principal.role,
-        subjectId: outcome.principal.subjectId,
-        principalType: outcome.principal.principalType,
-        keyReference: outcome.keyReference,
-      });
-      req.bearerToken = token;
-      req.principal = principal;
-      next();
-      return;
     }
 
-    // Resolve the demo key now so downstream logging and handlers share it.
+    // Demo-key resolution — itself fail-closed: an unknown token is a 401, never
+    // a default tenant. Reached when OIDC is unconfigured, or when a token is not
+    // a valid OIDC JWT (e.g. a public-safe demo key).
     const { principal } = core.context(token);
     req.bearerToken = token;
     req.principal = principal;

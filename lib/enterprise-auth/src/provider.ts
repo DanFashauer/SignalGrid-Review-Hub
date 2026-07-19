@@ -1,5 +1,5 @@
 import { mapClaimsToPrincipal, type PrincipalInput } from "./claims";
-import type { EnterpriseAuthConfig } from "./config";
+import { looksLikeJwt, type EnterpriseAuthConfig } from "./config";
 import { createJwksCache, type JwksCache, type JwksFetch } from "./jwks";
 import { verifyJwtRs256 } from "./jwt";
 
@@ -31,6 +31,12 @@ export function createEnterpriseAuthenticator(
 
   return {
     async authenticate(token: string, nowMs: number): Promise<AuthenticateResult> {
+      // Cheap structural pre-check so a non-JWT bearer (e.g. a demo key) is
+      // rejected here WITHOUT a JWKS fetch. This is not a security gate — the
+      // signature/claim verification below is — it just avoids needless network.
+      if (!looksLikeJwt(token)) {
+        return { ok: false, reason: "bearer is not a JWT" };
+      }
       let keys;
       try {
         keys = await jwks.get(nowMs);

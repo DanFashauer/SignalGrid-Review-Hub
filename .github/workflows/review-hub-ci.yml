@@ -135,3 +135,48 @@ jobs:
       # locally and in CI.
       - name: Docs sanity (required docs + unsafe-claim scan)
         run: node scripts/docs-sanity.mjs
+
+  durable-persistence:
+    name: Durable persistence (Postgres audit ledger)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: sg
+          POSTGRES_PASSWORD: sg
+          POSTGRES_DB: signalgrid
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sg"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.28.1
+          run_install: false
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Exercises the REAL durable path: writes/reads the tamper-evident audit
+      # ledger against a live Postgres, proving durability, redaction, tamper
+      # detection, and fork-free concurrency. The default (DATABASE_URL unset)
+      # in-memory path is covered separately by proof:audit-ledger.
+      - name: Durable audit-ledger proof on Postgres
+        env:
+          DATABASE_URL: postgres://sg:sg@localhost:5432/signalgrid
+        run: pnpm run proof:audit-ledger-pg

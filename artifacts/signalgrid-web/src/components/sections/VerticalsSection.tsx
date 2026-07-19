@@ -63,7 +63,7 @@ const VERTICALS = [
     badgeColor: "text-amber-400 bg-amber-400/10 border-amber-400/20",
     useCase: "Air-gapped deployments, classified workflow gating",
     detail:
-      "On-premise decision engine with zero external data transmission. Physical presence required for all sensitive workflow access. Full audit trail meets FedRAMP and CMMC requirements.",
+      "On-premise decision engine with zero external data transmission. Physical presence required for all sensitive workflow access. Audit trail designed to map to FedRAMP and CMMC control expectations — a design target, not a certification held.",
   },
   {
     name: "Enterprise IT / SOC",

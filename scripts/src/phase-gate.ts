@@ -144,10 +144,16 @@ if (unsafeClaims) {
   if (lane === "GREEN") lane = "YELLOW";
   reasons.push("unsafe claim scan matched protected wording for manual review");
 }
-if (missingValidation.length > 0)
+if (missingValidation.length > 0) {
+  // Documented-validation drift must actually move the lane, not just log a
+  // reason — otherwise a change that drops a required validation command from
+  // docs/VALIDATION_COMMANDS.md exits GREEN. Escalate to at least YELLOW (manual
+  // review); never downgrade an already-RED lane.
+  if (lane === "GREEN") lane = "YELLOW";
   reasons.push(
     `validation command documentation missing: ${missingValidation.join("; ")}`,
   );
+}
 
 console.log("Phase gate");
 console.log(`changedSource=${changedSource}`);

@@ -18,4 +18,5 @@ export * as siem from "./integrations/siem/webhook";
 export * as telemetry from "./integrations/telemetry/fleetdm";
 export * as telemetryTypes from "./integrations/telemetry/types";
 export * as webhooks from "./integrations/webhooks/dispatch";
+export * as graph from "./integrations/graph";
 export * as deviceRegistry from "./deviceRegistry";

@@ -1,67 +1,17 @@
 import { createHash } from "crypto";
 import { v4 as uuidv4 } from "uuid";
+import { getAuditBackend } from "./backend";
+import type { AuditEventType, Actor, Target, AuditRecord } from "./types";
 
-// Types
-export type AuditEventType =
-  | "badge.enroll"
-  | "badge.delete"
-  | "device.enroll"
-  | "device.update"
-  | "session.start"
-  | "session.poll"
-  | "session.end"
-  | "auth.failure"
-  | "asset.location.observed"
-  | "admin.access"
-  | "policy.matched"
-  | "policy.action.executed"
-  // Phase 4: Telemetry + Security events
-  | "telemetry.posture.updated"
-  | "telemetry.posture.missing"
-  | "telemetry.sync.completed"
-  | "telemetry.sync.completed_with_errors"
-  | "telemetry.sync.failed"
-  | "security.webauthn.registered"
-  | "security.webauthn.step_up.success"
-  | "security.webauthn.step_up.failure"
-  // Phase 5: SIEM events
-  | "siem.event.sent"
-  | "siem.event.failed"
-  // Phase 5: ITSM events
-  | "itsm.ticket.created"
-  | "itsm.ticket.failed"
-  // Phase 4: NAC events
-  | "nac.quarantine.applied"
-  | "nac.quarantine.cleared"
-  | "nac.quarantine.failed"
-  // Decision Flow Engine events
-  | "decision.validation.failed"
-  | "decision.allow"
-  | "decision.deny"
-  | "decision.step_up"
-  | "decision.engine_error";
-
-export type Actor = {
-  type: "device" | "admin" | "system" | "user";
-  id?: string;
-};
-
-export type Target = {
-  type: "badge" | "session" | "device";
-  id?: string;
-};
-
-export type AuditRecord = {
-  id: string;
-  ts: string;
-  requestId?: string;
-  actor: Actor;
-  eventType: AuditEventType;
-  target?: Target;
-  meta?: Record<string, unknown>;
-  prevHash: string;
-  hash: string;
-};
+// Types live in ./types so the storage backends can share them without a cycle.
+export type { AuditEventType, Actor, Target, AuditRecord } from "./types";
+export {
+  getAuditBackend,
+  setAuditBackend,
+  InMemoryAuditBackend,
+  PostgresAuditBackend,
+  type AuditBackend,
+} from "./backend";
 
 // Secret redaction keys
 const SECRET_KEYS = [
@@ -79,19 +29,22 @@ const SECRET_KEYS = [
   "hmac",
 ];
 
+// Recurse through any value — arrays (at any depth) and nested objects — so a
+// secret buried in array-valued metadata (e.g. headers: [{ authorization: … }])
+// is redacted, not just top-level object members.
+function redactValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactValue);
+  if (typeof value === "object" && value !== null) return redactSecrets(value as Record<string, unknown>);
+  return value;
+}
+
 // Redact secrets from metadata
 function redactSecrets<T extends Record<string, unknown>>(meta: T): T {
   const redacted: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(meta)) {
     const lowerKey = key.toLowerCase();
     const isSecret = SECRET_KEYS.some((sk: string) => lowerKey.includes(sk));
-    if (isSecret) {
-      redacted[key] = "[REDACTED]";
-    } else if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-      redacted[key] = redactSecrets(value as Record<string, unknown>);
-    } else {
-      redacted[key] = value;
-    }
+    redacted[key] = isSecret ? "[REDACTED]" : redactValue(value);
   }
   return redacted as T;
 }
@@ -123,42 +76,10 @@ function computeHash(recordWithoutHash: Omit<AuditRecord, "hash">, prevHash: str
   return createHash("sha256").update(payload).digest("hex");
 }
 
-// In-memory storage for development
-let inMemoryLedger: AuditRecord[] = [];
-let inMemoryHeadHash = "";
-
-// Redis-backed storage - optional, set when available
-let redis: any = null;
-let redisAvailable = false;
-
-// Initialize Redis connection if available
-// To enable Redis: bun add @upstash/redis and set REDIS_URL env var
-async function initRedis(): Promise<void> {
-  // Redis is optional - using in-memory storage by default
-  // To enable: install @upstash/redis and configure REDIS_URL
-  console.log("[auditLedger] Using in-memory storage (Redis optional)");
-  redisAvailable = false;
-}
-
-// Get current head hash
-async function getHeadHash(): Promise<string> {
-  if (!redisAvailable) {
-    return inMemoryHeadHash;
-  }
-  const head = await redis.get("audit:headHash");
-  return head || "";
-}
-
-// Set head hash
-async function setHeadHash(hash: string): Promise<void> {
-  if (!redisAvailable) {
-    inMemoryHeadHash = hash;
-    return;
-  }
-  await redis.set("audit:headHash", hash);
-}
-
-// Append record to ledger
+// Append record to ledger. Storage is delegated to the active backend
+// (in-memory by default; Postgres when DATABASE_URL is set). The record is
+// built INSIDE the backend's critical section so `prevHash` reflects the true
+// head at persist time and the hash chain cannot fork under concurrency.
 export async function appendAuditRecord(
   eventType: AuditEventType,
   actor: Actor,
@@ -168,48 +89,28 @@ export async function appendAuditRecord(
     requestId?: string;
   }
 ): Promise<AuditRecord> {
-  // Initialize Redis if not done
-  if (!redis && !redisAvailable) {
-    await initRedis();
-  }
-
-  const prevHash = await getHeadHash();
   const now = new Date().toISOString();
+  const meta = options?.meta ? redactSecrets(options.meta) : undefined;
 
-  const recordWithoutHash: Omit<AuditRecord, "hash"> = {
-    id: uuidv4(),
-    ts: now,
-    requestId: options?.requestId,
-    actor,
-    eventType,
-    target: options?.target,
-    meta: options?.meta ? redactSecrets(options.meta) : undefined,
-    prevHash,
-  };
-
-  const hash = computeHash(recordWithoutHash, prevHash);
-  const record: AuditRecord = { ...recordWithoutHash, hash };
-
-  if (redisAvailable) {
-    // Push to Redis list
-    await redis.rpush("audit:ledger", JSON.stringify(record));
-    await setHeadHash(hash);
-  } else {
-    // In-memory fallback
-    inMemoryLedger.push(record);
-    inMemoryHeadHash = hash;
-  }
-
-  return record;
+  return getAuditBackend().appendWithChain((prevHash) => {
+    const recordWithoutHash: Omit<AuditRecord, "hash"> = {
+      id: uuidv4(),
+      ts: now,
+      requestId: options?.requestId,
+      actor,
+      eventType,
+      target: options?.target,
+      meta,
+      prevHash,
+    };
+    const hash = computeHash(recordWithoutHash, prevHash);
+    return { ...recordWithoutHash, hash };
+  });
 }
 
-// Get audit records
+// Get audit records (insertion order), delegated to the active backend.
 export async function getAuditRecords(limit = 1000, offset = 0): Promise<AuditRecord[]> {
-  if (!redisAvailable) {
-    return inMemoryLedger.slice(offset, offset + limit);
-  }
-  const records = await redis.lrange("audit:ledger", offset, offset + limit - 1);
-  return records.map((r: string) => JSON.parse(r));
+  return getAuditBackend().getRecords(limit, offset);
 }
 
 // Verify the integrity of the ledger

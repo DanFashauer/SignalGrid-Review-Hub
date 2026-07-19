@@ -39,6 +39,18 @@ check("every action has a stable key + risk tier", APP_INTEGRATIONS.every((i) =>
 check("critical actions are always sensitive", APP_INTEGRATIONS.every((i) => i.actions.every((x) => x.riskTier !== "critical" || x.sensitive)));
 check("healthcare integrations exist (EMR/BCMA/messaging/alarms)", listAppIntegrations("healthcare").length >= 4);
 
+// ── SAFETY: the PLANNER enforces "sensitive never auto-fires" on its own inputs,
+//    independent of the authoring-time lint — a sensitive action mis-marked as
+//    non-gated is still blocked under restrict and held under step_up, not auto.
+const sensitiveUngated = {
+  id: "test-su", name: "t", category: "t", vertical: "healthcare" as const, workflowKey: "clinical-session",
+  actions: [{ key: "x.commit", label: "x", riskTier: "elevated" as const, sensitive: true, gatedByStepUp: false }],
+};
+check("SAFETY: sensitive+ungated action is BLOCKED under restrict (never auto)",
+  planAppSession({ integration: sensitiveUngated, outcome: "restrict", reasonCodes: [] }).actions[0].disposition === "blocked");
+check("SAFETY: sensitive+ungated action is HELD for step_up (never auto)",
+  planAppSession({ integration: sensitiveUngated, outcome: "step_up", reasonCodes: [] }).actions[0].disposition === "step_up");
+
 // ── allow: sensitive held, non-sensitive auto ────────────────────────────────
 const allow = planAppSession(base("allow"));
 check("allow mode is assist (EMR has sensitive actions)", allow.mode === "assist");

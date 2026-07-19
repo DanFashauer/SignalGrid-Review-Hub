@@ -277,7 +277,7 @@ export function planFlowActions(
     } else if (outcome === "deny" || outcome === "restrict") {
       disposition = "blocked";
       reason = outcome === "deny" ? "Denied — trust conditions not met" : "Restricted — action not permitted";
-    } else {
+    } else if (outcome === "allow" || (outcome === "step_up" && stepUpSatisfied)) {
       // allow, or a satisfied step-up: apply the admin's approval configuration.
       switch (a.approval) {
         case "automated":
@@ -299,6 +299,11 @@ export function planFlowActions(
           reason = "Unrecognized approval policy (fail closed)";
           break;
       }
+    } else {
+      // Fail closed on any unrecognized decision outcome (untyped JSON / a new
+      // core outcome / an unsafe cast) — never fall through to the allow path.
+      disposition = "blocked";
+      reason = "Denied — unrecognized decision outcome (fail closed)";
     }
     return { key: a.key, label: a.label, approval: a.approval, disposition, requiresApprovals, reason };
   });

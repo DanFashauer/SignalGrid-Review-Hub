@@ -15,6 +15,8 @@
     "proof:signalgrid-core": "pnpm --filter @workspace/scripts run proof:signalgrid-core",
     "proof:api-contract": "pnpm --filter @workspace/scripts run proof:api-contract",
     "proof:webauthn-verify": "pnpm --filter @workspace/scripts run proof:webauthn-verify",
+    "proof:audit-ledger": "pnpm --filter @workspace/scripts run proof:audit-ledger",
+    "proof:audit-ledger-pg": "pnpm --filter @workspace/scripts run proof:audit-ledger-pg",
     "test:api": "pnpm --filter @workspace/api-server run test:api",
     "bench:decision-latency": "pnpm --filter @workspace/scripts run bench:decision-latency",
     "sbom": "pnpm --filter @workspace/scripts run sbom",
@@ -50,7 +52,13 @@
     "review:invariants": "node scripts/review-invariants.mjs",
     "preflight": "node scripts/preflight.mjs",
     "proof:signal-discovery": "pnpm --filter @workspace/scripts run proof:signal-discovery",
-    "proof:ddm-connector": "pnpm --filter @workspace/scripts run proof:ddm-connector"
+    "proof:ddm-connector": "pnpm --filter @workspace/scripts run proof:ddm-connector",
+    "proof:decision-store-pg": "pnpm --filter @workspace/scripts run proof:decision-store-pg",
+    "proof:session-store": "pnpm --filter @workspace/scripts run proof:session-store",
+    "proof:session-store-pg": "pnpm --filter @workspace/scripts run proof:session-store-pg",
+    "proof:observability": "pnpm --filter @workspace/scripts run proof:observability",
+    "proof:enterprise-auth": "pnpm --filter @workspace/scripts run proof:enterprise-auth",
+    "proof:graph-connector": "pnpm --filter @workspace/scripts run proof:graph-connector"
   },
   "private": true,
   "devDependencies": {

@@ -446,8 +446,27 @@ export class ControlPlane {
    * caller supplies the numbers; no clock is read here.
    */
   ingestTelemetry(batch: TelemetryBatch): TelemetryBatch {
-    this.seed.telemetry.set(batch.nodeId, batch);
-    return batch;
+    // Sanitize on ingest so a malformed or inconsistent batch can't skew fleet
+    // rollups. Counts are clamped to non-negative integers, and `decisions` is
+    // held to be at least the sum of its outcome parts — that invariant is what
+    // keeps every derived rate (friction/stepUp/restrict/deny) inside [0,1]
+    // downstream. Deterministic: no clock is read.
+    const nonNeg = (x: number) => (Number.isFinite(x) && x > 0 ? Math.floor(x) : 0);
+    const allow = nonNeg(batch.allow);
+    const stepUp = nonNeg(batch.stepUp);
+    const restrict = nonNeg(batch.restrict);
+    const deny = nonNeg(batch.deny);
+    const sanitized: TelemetryBatch = {
+      nodeId: batch.nodeId,
+      windowMins: nonNeg(batch.windowMins),
+      allow,
+      stepUp,
+      restrict,
+      deny,
+      decisions: Math.max(nonNeg(batch.decisions), allow + stepUp + restrict + deny),
+    };
+    this.seed.telemetry.set(sanitized.nodeId, sanitized);
+    return sanitized;
   }
 
   /** Fleet-wide health rollup across every tenant, with a per-vertical breakdown. */

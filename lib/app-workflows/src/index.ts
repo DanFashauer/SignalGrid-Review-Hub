@@ -120,7 +120,10 @@ export function planAppSession(input: AppPlanInput): AppSessionPlan {
         reason = `Denied — ${firstReason(reasonCodes, "trust conditions not met")}`;
         break;
       case "restrict":
-        if (a.gatedByStepUp) {
+        // A sensitive action is never "low-risk", so it is blocked under a
+        // restriction regardless of the gatedByStepUp flag — the planner enforces
+        // "nothing sensitive auto-fires" on its own inputs, not via the linter.
+        if (a.gatedByStepUp || a.sensitive) {
           disposition = "blocked";
           reason = `Restricted — ${firstReason(reasonCodes, "elevated risk")}`;
         } else {
@@ -129,7 +132,9 @@ export function planAppSession(input: AppPlanInput): AppSessionPlan {
         }
         break;
       case "step_up":
-        if (a.gatedByStepUp) {
+        // Likewise hold a sensitive action for step-up even if it wasn't marked
+        // gated — a sensitive action must never auto-fire under a step-up decision.
+        if (a.gatedByStepUp || a.sensitive) {
           disposition = "step_up";
           requiresConfirmation = true;
           reason = `Held for step-up — ${firstReason(reasonCodes, "additional verification required")}`;

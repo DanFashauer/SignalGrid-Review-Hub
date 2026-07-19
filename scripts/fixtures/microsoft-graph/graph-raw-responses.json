@@ -1,0 +1,82 @@
+{
+  "fixtureName": "microsoft-graph-read-only-connector",
+  "fixtureVersion": "2026-07-19.v1",
+  "sourceSystem": "microsoft-graph-fixture",
+  "note": "Public-safe synthetic Microsoft Graph read responses (users + managedDevices). No real tenant, GUIDs, PII, or credentials. Shapes mirror Graph v1.0 so the read-only connector normalizes them exactly as it would live data.",
+  "accessToken": "graph-fixture-read-token",
+  "users": [
+    { "id": "user-0001", "userPrincipalName": "ward.nurse@example.test", "accountEnabled": true, "riskLevel": "none" },
+    { "id": "user-0002", "userPrincipalName": "former.nurse@example.test", "accountEnabled": false, "riskLevel": "none" },
+    { "id": "user-0003", "userPrincipalName": "risky.contractor@example.test", "accountEnabled": true, "riskLevel": "high" }
+  ],
+  "devices": [
+    {
+      "id": "device-1001",
+      "userId": "user-0001",
+      "userPrincipalName": "ward.nurse@example.test",
+      "deviceName": "ipad-ward-01",
+      "complianceState": "compliant",
+      "managementState": "managed",
+      "managementAgent": "mdm",
+      "deviceRegistrationState": "registered",
+      "lastSyncDateTime": "2026-07-19T11:30:00Z",
+      "operatingSystem": "iPadOS",
+      "osVersion": "17.5"
+    },
+    {
+      "id": "device-1002",
+      "userId": "user-0002",
+      "deviceName": "iphone-clinic-09",
+      "complianceState": "noncompliant",
+      "managementState": "managed",
+      "managementAgent": "mdm",
+      "deviceRegistrationState": "registered",
+      "lastSyncDateTime": "2026-07-19T09:15:00Z",
+      "operatingSystem": "iOS",
+      "osVersion": "17.4"
+    },
+    {
+      "id": "device-1003",
+      "userId": "user-0003",
+      "deviceName": "byod-laptop-77",
+      "complianceState": "compliant",
+      "managementState": "unmanaged",
+      "managementAgent": "unknown",
+      "deviceRegistrationState": "notRegistered",
+      "lastSyncDateTime": "2026-07-18T22:00:00Z",
+      "operatingSystem": "Windows",
+      "osVersion": "10.0.19045"
+    },
+    {
+      "id": "device-1004",
+      "userId": "user-0001",
+      "deviceName": "ipad-ward-02",
+      "complianceState": "",
+      "managementState": "managed",
+      "managementAgent": "mdm",
+      "deviceRegistrationState": "registered",
+      "lastSyncDateTime": "2026-07-19T10:00:00Z",
+      "operatingSystem": "iPadOS",
+      "osVersion": "17.5"
+    },
+    {
+      "id": "device-1005",
+      "userPrincipalName": "WARD.NURSE@example.test",
+      "deviceName": "shared-cart-15",
+      "complianceState": "inGracePeriod",
+      "managementState": "managed",
+      "managementAgent": "mdm",
+      "deviceRegistrationState": "registered",
+      "lastSyncDateTime": "2026-07-19T08:45:00Z",
+      "operatingSystem": "iPadOS",
+      "osVersion": "17.3"
+    }
+  ],
+  "expectedNormalized": {
+    "device-1001": { "subjectId": "user-0001", "identityStatus": "enabled", "userRisk": "none", "deviceComplianceState": "compliant", "deviceManagementState": "managed", "deviceRegistrationState": "registered" },
+    "device-1002": { "subjectId": "user-0002", "identityStatus": "disabled", "userRisk": "none", "deviceComplianceState": "non_compliant", "deviceManagementState": "managed", "deviceRegistrationState": "registered" },
+    "device-1003": { "subjectId": "user-0003", "identityStatus": "enabled", "userRisk": "high", "deviceComplianceState": "compliant", "deviceManagementState": "unmanaged", "deviceRegistrationState": "not_registered" },
+    "device-1004": { "subjectId": "user-0001", "identityStatus": "enabled", "userRisk": "none", "deviceComplianceState": "missing", "deviceManagementState": "managed", "deviceRegistrationState": "registered" },
+    "device-1005": { "subjectId": "user-0001", "identityStatus": "enabled", "userRisk": "none", "deviceComplianceState": "in_grace_period", "deviceManagementState": "managed", "deviceRegistrationState": "registered" }
+  }
+}

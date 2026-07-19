@@ -9,5 +9,3 @@ export const LOCATION_MAX_AGE_SECONDS = (() => {
   if (!Number.isFinite(parsed) || parsed < 30) return 120;
   return parsed;
 })();
-
-export const LOCATION_USE_REDIS = (process.env.LOCATION_USE_REDIS ?? "true") === "true";

@@ -36,6 +36,17 @@ export class MemoryStore {
   readonly memberships = new Map<string, Membership>();
   readonly apiKeys = new Map<string, ApiKeyRecord>();
 
+  // Ephemeral keys for principals authenticated by an EXTERNAL provider (the
+  // gated enterprise OIDC path): the bearer here is a JWT whose signature and
+  // claims were already verified upstream, so we bind it to a resolved principal
+  // and let the existing token→principal resolution serve every downstream call
+  // unchanged. Bounded FIFO so a stream of rotated tokens can never grow the map
+  // without limit. Keyed by the exact token — a JWT is a high-entropy verified
+  // credential, so an exact-match lookup carries no secret-guessing timing risk
+  // the way the static demo tokens do.
+  private readonly verifiedKeys = new Map<string, ApiKeyRecord>();
+  private static readonly MAX_VERIFIED_KEYS = 1024;
+
   private readonly identities = new Map<string, Identity>();
   private readonly devices = new Map<string, Device>();
   private readonly workflows = new Map<string, Workflow>();
@@ -85,9 +96,33 @@ export class MemoryStore {
     this.apiKeys.set(key.id, key);
   }
 
+  /**
+   * Bind an externally-verified principal to its (already-authenticated) bearer
+   * token. Bounded FIFO eviction keeps the registry from growing without limit.
+   */
+  putVerifiedKey(key: ApiKeyRecord): void {
+    if (
+      this.verifiedKeys.size >= MemoryStore.MAX_VERIFIED_KEYS &&
+      !this.verifiedKeys.has(key.token)
+    ) {
+      const oldest = this.verifiedKeys.keys().next().value;
+      if (oldest !== undefined) {
+        this.verifiedKeys.delete(oldest);
+      }
+    }
+    this.verifiedKeys.set(key.token, key);
+  }
+
   findApiKeyByToken(token: string): ApiKeyRecord | undefined {
-    // Compare with a length-independent equality so token lookup does not leak a
-    // per-character timing signal (see `constantTimeEquals`).
+    // Externally-verified tokens resolve by exact match first: their signature
+    // was already checked upstream, so there is no static secret to protect with
+    // a constant-time scan here.
+    const verified = this.verifiedKeys.get(token);
+    if (verified) {
+      return verified;
+    }
+    // Fixture demo keys: compare with a length-independent equality so token
+    // lookup does not leak a per-character timing signal (see `constantTimeEquals`).
     let match: ApiKeyRecord | undefined;
     for (const key of this.apiKeys.values()) {
       if (constantTimeEquals(key.token, token)) {

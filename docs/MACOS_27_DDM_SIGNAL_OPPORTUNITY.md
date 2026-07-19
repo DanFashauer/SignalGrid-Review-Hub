@@ -73,7 +73,7 @@ They answer **different questions on the same device**, so they compose:
   enforced, privacy declaration incomplete, health degraded, or a stale/unknown
   check-in) sets `raise_step_up` — which can only move a sensitive action
   **auto → step-up**, never relax it (fail-closed, proven). Read API
-  `GET /cp/v1/ddm`; proof:ddm-connector 28/28.
+  `GET /cp/v1/ddm`; proof:ddm-connector (run in CI).
 
 ## Still open (future work)
 

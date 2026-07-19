@@ -5,6 +5,11 @@ WORKDIR /app
 RUN corepack enable pnpm
 
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+# The root `preinstall` runs `node scripts/enforce-pnpm.cjs`, and `scripts` is a
+# workspace package — copy its manifest + the guard so the install resolves the
+# workspace and the preinstall hook both succeed (its src isn't needed to build
+# the API).
+COPY scripts/package.json scripts/enforce-pnpm.cjs ./scripts/
 COPY lib/ ./lib/
 COPY artifacts/api-server/ ./artifacts/api-server/
 
@@ -20,11 +25,13 @@ WORKDIR /app
 RUN corepack enable pnpm
 
 COPY --from=builder /app/pnpm-workspace.yaml /app/pnpm-lock.yaml /app/package.json ./
+COPY --from=builder /app/scripts/package.json /app/scripts/enforce-pnpm.cjs ./scripts/
 COPY --from=builder /app/lib/ ./lib/
 COPY --from=builder /app/artifacts/api-server/package.json ./artifacts/api-server/
 COPY --from=builder /app/artifacts/api-server/dist/ ./artifacts/api-server/dist/
 
-RUN pnpm install --frozen-lockfile --prod
+# CI=true so pnpm never prompts to purge a modules dir (non-interactive build).
+RUN CI=true pnpm install --frozen-lockfile --prod
 
 WORKDIR /app/artifacts/api-server
 

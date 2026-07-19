@@ -48,10 +48,16 @@ export function verifySignature(
   secret: string
 ): boolean {
   const expected = signPayload(payload, secret);
-  return crypto.timingSafeEqual(
-    Buffer.from(signature),
-    Buffer.from(expected)
-  );
+  const provided = Buffer.from(signature);
+  const expectedBuf = Buffer.from(expected);
+  // timingSafeEqual throws a RangeError on length-mismatched buffers, which a
+  // caller expecting a boolean would surface as a crash rather than a rejected
+  // signature. Length divergence already means the signatures differ, so fail
+  // closed (return false) instead of throwing.
+  if (provided.length !== expectedBuf.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(provided, expectedBuf);
 }
 
 /**

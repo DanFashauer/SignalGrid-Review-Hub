@@ -280,7 +280,7 @@ Consistent with [`AGENTS.md`](../AGENTS.md) and the launch plan, this design doe
 - no autonomous production remediation;
 - real authentication providers, secrets, tenant IDs, customer data, or PHI/PII;
 - real Microsoft Graph or vendor calls;
-- that SignalGrid replaces any system of record: it does not. SignalGrid does not
+- that SignalGrid does not replace any system of record. SignalGrid does not
   replace IAM, IGA, UEM/MDM, PACS, locker, dock, RTLS, or ITSM; they remain
   authoritative.
 

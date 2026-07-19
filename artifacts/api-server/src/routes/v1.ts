@@ -1,7 +1,10 @@
-import { Router, type IRouter, type Request, type Response } from "express";
-import { CoreError, type EvaluateRequest } from "@workspace/signalgrid-core";
+import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
+import { randomUUID } from "node:crypto";
+import { CoreError, verifySnapshot, type EvaluateRequest } from "@workspace/signalgrid-core";
+import { getDecisionStore, getSessionStore, type Session } from "@workspace/persistence";
 import { listAppIntegrations, findAppIntegration, planAppSession } from "@workspace/app-workflows";
 import { core, DEMO_KEYS } from "../lib/core";
+import { decisionsTotal } from "../lib/metrics";
 import { requireTenantContext } from "../middlewares/context";
 import { v1RateLimiter } from "../middlewares/rateLimit";
 
@@ -32,27 +35,150 @@ router.get("/v1/context", (req: Request, res: Response) => {
   res.json(envelope(req, { principal, tenant }));
 });
 
-router.post("/v1/decisions/evaluate", (req: Request, res: Response) => {
-  const body = parseEvaluate(req.body);
-  const result = core.evaluate(token(req), body);
-  res.json(envelope(req, { decision: result }));
+// The decision core stays pure/in-memory; when a durable store is configured
+// (DATABASE_URL set) each decision + its evidence snapshot is ALSO persisted, and
+// the read paths serve from the database so records survive a restart. With no
+// durable store the behavior is exactly as before (fixture-safe default).
+router.post("/v1/decisions/evaluate", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = parseEvaluate(req.body);
+    const result = core.evaluate(token(req), body);
+    decisionsTotal.inc({ outcome: result.outcome });
+    const store = getDecisionStore();
+    if (store) {
+      // Persist the full decision + snapshot the core just produced.
+      const decision = core.getDecision(token(req), result.decisionId);
+      const snapshot = core.getSnapshot(token(req), decision.evidenceSnapshotId);
+      await store.saveDecision(decision, snapshot);
+    }
+    res.json(envelope(req, { decision: result }));
+  } catch (err) {
+    next(err);
+  }
 });
 
-router.get("/v1/decisions", (req: Request, res: Response) => {
-  const decisions = core.listDecisions(token(req));
-  res.json(envelope(req, { decisions, total: decisions.length }));
+router.get("/v1/decisions", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const store = getDecisionStore();
+    if (store) {
+      const tenantId = core.context(token(req)).tenant.id;
+      const decisions = await store.listDecisions(tenantId);
+      res.json(envelope(req, { decisions, total: decisions.length }));
+      return;
+    }
+    const decisions = core.listDecisions(token(req));
+    res.json(envelope(req, { decisions, total: decisions.length }));
+  } catch (err) {
+    next(err);
+  }
 });
 
-router.get("/v1/decisions/:id", (req: Request, res: Response) => {
-  const decision = core.getDecision(token(req), param(req, "id"));
-  res.json(envelope(req, { decision }));
+router.get("/v1/decisions/:id", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const store = getDecisionStore();
+    if (store) {
+      const tenantId = core.context(token(req)).tenant.id;
+      // getDecision is keyed on (id, tenant_id): a cross-tenant id returns null,
+      // which we surface as the same 404 the in-memory path throws.
+      const decision = await store.getDecision(tenantId, param(req, "id"));
+      if (!decision) throw new CoreError("not_found", `Decision "${param(req, "id")}" not found.`, 404);
+      res.json(envelope(req, { decision }));
+      return;
+    }
+    const decision = core.getDecision(token(req), param(req, "id"));
+    res.json(envelope(req, { decision }));
+  } catch (err) {
+    next(err);
+  }
 });
 
-router.get("/v1/decisions/:id/evidence", (req: Request, res: Response) => {
-  const decision = core.getDecision(token(req), param(req, "id"));
-  const evidence = core.getSnapshot(token(req), decision.evidenceSnapshotId);
-  const verified = core.verifyEvidence(token(req), evidence.id);
-  res.json(envelope(req, { evidence, verified }));
+router.get("/v1/decisions/:id/evidence", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const store = getDecisionStore();
+    if (store) {
+      const tenantId = core.context(token(req)).tenant.id;
+      const decision = await store.getDecision(tenantId, param(req, "id"));
+      if (!decision) throw new CoreError("not_found", `Decision "${param(req, "id")}" not found.`, 404);
+      const evidence = await store.getSnapshot(tenantId, decision.evidenceSnapshotId);
+      if (!evidence) throw new CoreError("not_found", `Evidence snapshot "${decision.evidenceSnapshotId}" not found.`, 404);
+      // verifySnapshot recomputes the content digest — tamper-evidence works on
+      // the durable record independently of any in-memory state.
+      res.json(envelope(req, { evidence, verified: verifySnapshot(evidence) }));
+      return;
+    }
+    const decision = core.getDecision(token(req), param(req, "id"));
+    const evidence = core.getSnapshot(token(req), decision.evidenceSnapshotId);
+    const verified = core.verifyEvidence(token(req), evidence.id);
+    res.json(envelope(req, { evidence, verified }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Sessions: durable start / refresh / end lifecycle ────────────────────────
+// A session is gated by a real decision at start, then kept alive by refreshes
+// until it ends or its TTL lapses. Sessions persist in-memory by default and to
+// Postgres when DATABASE_URL is set, so they survive a restart in production.
+router.post("/v1/sessions/start", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = parseEvaluate(req.body);
+    const result = core.evaluate(token(req), body);
+    decisionsTotal.inc({ outcome: result.outcome });
+    const tenantId = core.context(token(req)).tenant.id;
+    const ttlSeconds = clampTtl((req.body as Record<string, unknown>)?.["ttlSeconds"]);
+    const now = Date.now();
+    const session: Session = {
+      id: `sess_${randomUUID()}`,
+      tenantId,
+      identityRef: body.identityRef,
+      deviceRef: body.deviceRef,
+      workflowKey: body.workflowKey,
+      status: "active",
+      outcome: result.outcome,
+      decisionId: result.decisionId,
+      createdAt: new Date(now).toISOString(),
+      lastSeenAt: new Date(now).toISOString(),
+      expiresAt: new Date(now + ttlSeconds * 1000).toISOString(),
+    };
+    await getSessionStore().start(session);
+    res.json(envelope(req, { session, decision: result }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/v1/sessions/:id", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenantId = core.context(token(req)).tenant.id;
+    const session = await getSessionStore().get(tenantId, param(req, "id"), Date.now());
+    if (!session) throw new CoreError("not_found", `Session "${param(req, "id")}" not found.`, 404);
+    res.json(envelope(req, { session }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/v1/sessions/:id/refresh", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenantId = core.context(token(req)).tenant.id;
+    const ttlSeconds = clampTtl((req.body as Record<string, unknown>)?.["ttlSeconds"]);
+    const session = await getSessionStore().refresh(tenantId, param(req, "id"), ttlSeconds, Date.now());
+    if (!session) throw new CoreError("not_found", `Session "${param(req, "id")}" not found.`, 404);
+    res.json(envelope(req, { session }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/v1/sessions/:id/end", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenantId = core.context(token(req)).tenant.id;
+    const session = await getSessionStore().end(tenantId, param(req, "id"));
+    if (!session) throw new CoreError("not_found", `Session "${param(req, "id")}" not found.`, 404);
+    res.json(envelope(req, { session }));
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.post("/v1/decisions/:id/simulate", (req: Request, res: Response) => {
@@ -215,6 +341,14 @@ function token(req: Request): string {
 function param(req: Request, name: string): string {
   const value = (req.params as Record<string, string | string[]>)[name];
   return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
+}
+
+// Session TTL in seconds: default 15 min; clamped to [60s, 24h] so a caller
+// cannot request an unbounded (or zero) lifetime.
+function clampTtl(raw: unknown): number {
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n)) return 900;
+  return Math.min(86400, Math.max(60, Math.floor(n)));
 }
 
 function parseEvaluate(body: unknown): EvaluateRequest {

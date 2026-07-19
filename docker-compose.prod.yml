@@ -1,0 +1,45 @@
+# Production-shaped topology: the SignalGrid API with DURABLE Postgres
+# persistence. This is the deploy profile that turns on the gated persistence
+# layer (audit ledger, decisions/evidence, sessions) via DATABASE_URL.
+#
+#   docker compose -f docker-compose.prod.yml up --build
+#
+# Fixture-safe by default: SIGNALGRID_TIER=prod sets the tier, but live vendor
+# calls stay OFF unless SIGNALGRID_LIVE_INTEGRATIONS=true is added explicitly, so
+# this stack makes no external calls out of the box.
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sg
+      POSTGRES_PASSWORD: sg
+      POSTGRES_DB: signalgrid
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sg -d signalgrid"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    volumes:
+      - sg_pgdata:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+      SIGNALGRID_TIER: prod
+      # Enabling durable persistence: with DATABASE_URL set, the audit ledger,
+      # decision/evidence store, and session store persist to Postgres.
+      DATABASE_URL: postgres://sg:sg@db:5432/signalgrid
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  sg_pgdata:

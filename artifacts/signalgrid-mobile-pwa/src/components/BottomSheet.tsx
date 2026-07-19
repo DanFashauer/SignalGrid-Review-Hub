@@ -16,8 +16,14 @@ export function BottomSheet({ open, onOpenChange, children, title }: BottomSheet
         <Drawer.Content className="bg-card flex flex-col rounded-t-[10px] h-[90%] mt-24 fixed bottom-0 left-0 right-0 z-50 focus:outline-none">
           <div className="p-4 bg-card rounded-t-[10px] flex-1 flex flex-col overflow-hidden">
             <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-muted-foreground/30 mb-6" />
-            {title && (
+            {/* Radix/vaul Dialog requires an accessible title. Always render one:
+                visibly when a title is provided, otherwise visually hidden (via
+                sr-only) so screen readers still get a label and the dev-mode
+                "missing Title" warning is silenced at every call site. */}
+            {title ? (
               <Drawer.Title className="text-lg font-bold mb-4 px-2">{title}</Drawer.Title>
+            ) : (
+              <Drawer.Title className="sr-only">Details</Drawer.Title>
             )}
             <div className="flex-1 overflow-y-auto scroll-area px-2">
               {children}

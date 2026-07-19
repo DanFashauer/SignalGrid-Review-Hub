@@ -7,6 +7,8 @@ import { logger } from "./lib/logger";
 import { requestContext } from "./middlewares/context";
 import { errorHandler } from "./middlewares/errors";
 import { globalRateLimiter } from "./middlewares/rateLimit";
+import { metricsMiddleware } from "./middlewares/metrics";
+import { renderMetrics } from "./lib/metrics";
 
 const app: Express = express();
 
@@ -61,6 +63,9 @@ app.use(
   }),
 );
 app.use(cors(corsOptions));
+// Record request count + latency for every request (before rate limiting so
+// throttled requests are still counted).
+app.use(metricsMiddleware);
 // Coarse limiter ahead of everything so unauthenticated public routes are
 // covered; the per-key /v1 limiter still applies its tighter bound downstream.
 app.use(globalRateLimiter);
@@ -72,6 +77,13 @@ app.use(requestContext);
 // the root for a friendly local URL: http://localhost:8080/console
 app.get(["/", "/console"], (_req, res) => {
   res.type("html").send(CONSOLE_HTML);
+});
+
+// Prometheus scrape endpoint (operational metrics). Unauthenticated and outside
+// the /v1 contract surface, per Prometheus convention; contains only aggregate
+// counters/latencies, never request payloads.
+app.get("/metrics", (_req, res) => {
+  res.type("text/plain; version=0.0.4").send(renderMetrics(Date.now()));
 });
 
 app.use("/api", router);

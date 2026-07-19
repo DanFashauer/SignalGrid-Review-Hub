@@ -12,6 +12,10 @@
 //   8. Attestation statements: a valid `packed` self-attestation is ACCEPTED; a
 //      forged signature, an alg/key mismatch, an unsupported format, a malformed
 //      `none`, and a malformed `fido-u2f` all FAIL CLOSED.
+//   9. Challenge lifecycle: a single-use challenge is consumed on first verify and
+//      REPLAY is rejected; an EXPIRED challenge is rejected; a PURPOSE mismatch
+//      (registration challenge used for auth) and a USER-binding mismatch are both
+//      rejected — the freshness/binding guards, not just the signature.
 //
 // Run: pnpm --filter @workspace/scripts run proof:webauthn-verify
 
@@ -289,6 +293,73 @@ async function main() {
   // ── 7. Look-alike origin rejected (exact match, not prefix) ────────────────
   const badOrigin = await runAssertion({ signer: privateKey, signCount: 9, originForAuth: origin + ".evil.com" });
   check("look-alike origin (prefix) rejected", badOrigin.success === false);
+
+  // ── Challenge-lifecycle negatives: replay, expiry, purpose/user binding ────
+  // Build a genuinely-signed assertion for a given saved challenge id, so we can
+  // exercise the lifecycle guards independently of the signature check.
+  function signedAssertion(challenge: string, signCount: number) {
+    const cd = clientData("webauthn.get", challenge, origin);
+    const authData = buildAuthData(rpId, 0x05, signCount); // UP+UV
+    const signature = createSign("SHA256").update(Buffer.concat([authData, sha256(cd)])).sign(privateKey);
+    return {
+      id: credIdStr,
+      rawId: credIdStr,
+      type: "public-key" as const,
+      response: {
+        clientDataJSON: cd.toString("base64url"),
+        authenticatorData: authData.toString("base64url"),
+        signature: signature.toString("base64url"),
+      },
+    };
+  }
+
+  // 8. A single-use challenge is consumed on first verify and cannot be replayed.
+  {
+    const chId = randomBytes(16).toString("base64url");
+    const ch = randomBytes(32).toString("base64url");
+    await webauthnStore.saveChallenge(chId, {
+      challenge: ch, expiresAt: new Date(Date.now() + 60_000).toISOString(), purpose: "authentication", userId,
+    });
+    const resp = signedAssertion(ch, 20);
+    const first = await webauthn.verifyAuthentication(userId, chId, resp);
+    const second = await webauthn.verifyAuthentication(userId, chId, resp);
+    check("challenge accepted on first use", first.success === true);
+    check("replayed challenge (same id) rejected on second use", second.success === false);
+  }
+
+  // 9. An expired challenge is rejected even with a valid signature (freshness is
+  //    enforced independently of any store TTL).
+  {
+    const chId = randomBytes(16).toString("base64url");
+    const ch = randomBytes(32).toString("base64url");
+    await webauthnStore.saveChallenge(chId, {
+      challenge: ch, expiresAt: new Date(Date.now() - 1000).toISOString(), purpose: "authentication", userId,
+    });
+    const res = await webauthn.verifyAuthentication(userId, chId, signedAssertion(ch, 21));
+    check("expired challenge rejected", res.success === false);
+  }
+
+  // 10. A registration-purpose challenge cannot complete authentication.
+  {
+    const chId = randomBytes(16).toString("base64url");
+    const ch = randomBytes(32).toString("base64url");
+    await webauthnStore.saveChallenge(chId, {
+      challenge: ch, expiresAt: new Date(Date.now() + 60_000).toISOString(), purpose: "registration", userId,
+    });
+    const res = await webauthn.verifyAuthentication(userId, chId, signedAssertion(ch, 22));
+    check("authentication with a registration-purpose challenge rejected", res.success === false);
+  }
+
+  // 11. A challenge bound to a different user cannot be used by this user.
+  {
+    const chId = randomBytes(16).toString("base64url");
+    const ch = randomBytes(32).toString("base64url");
+    await webauthnStore.saveChallenge(chId, {
+      challenge: ch, expiresAt: new Date(Date.now() + 60_000).toISOString(), purpose: "authentication", userId: "some-other-user",
+    });
+    const res = await webauthn.verifyAuthentication(userId, chId, signedAssertion(ch, 23));
+    check("challenge bound to a different user rejected", res.success === false);
+  }
 
   // ── 6. Legacy stub credential fails closed ────────────────────────────────
   const legacyUser = "user-legacy";

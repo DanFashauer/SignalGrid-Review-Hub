@@ -25,6 +25,7 @@ import {
 } from './store';
 import {
   extractCredentialPublicKey,
+  extractAuthData,
   verifyAssertionSignature,
   verifyAttestation,
   rpIdHashMatches,
@@ -138,6 +139,19 @@ export async function verifyRegistration(
     return { success: false, error: 'Challenge not found or expired', timestamp };
   }
 
+  // Enforce expiry, purpose, and user binding independently of the backing
+  // store's TTL (the in-memory fallback has none): reject a stale challenge, one
+  // minted for authentication, or one bound to a different user.
+  if (Date.parse(challengeData.challenge.expiresAt) < Date.now()) {
+    return { success: false, error: 'Challenge expired', timestamp };
+  }
+  if (challengeData.challenge.purpose !== 'registration') {
+    return { success: false, error: 'Challenge purpose mismatch', timestamp };
+  }
+  if (challengeData.challenge.userId !== undefined && challengeData.challenge.userId !== userId) {
+    return { success: false, error: 'Challenge user mismatch', timestamp };
+  }
+
   // Parse client data JSON (WebAuthn base64url-encodes clientDataJSON).
   const clientData = JSON.parse(
     Buffer.from(response.response.clientDataJSON, 'base64url').toString()
@@ -175,6 +189,26 @@ export async function verifyRegistration(
       error: `Attestation verification failed (${attestation.fmt}): ${attestation.error ?? 'invalid'}`,
       timestamp,
     };
+  }
+
+  // Validate the authenticatorData flags at registration the same way the
+  // authentication path does (WebAuthn §7.1 steps 13–15): the new credential
+  // must be bound to OUR rpId, the user must have been present, and — because we
+  // request `userVerification: required` in the options — the user must have been
+  // verified (biometric / PIN). Fail closed if authData can't be read.
+  const regAuthData = extractAuthData(response.response.attestationObject);
+  if (!regAuthData) {
+    return { success: false, error: 'Unreadable authenticator data', timestamp };
+  }
+  const config2 = getWebAuthnConfig();
+  if (!rpIdHashMatches(regAuthData, config2.rpId)) {
+    return { success: false, error: 'rpId hash mismatch', timestamp };
+  }
+  if (!isUserPresent(regAuthData)) {
+    return { success: false, error: 'User presence flag not set', timestamp };
+  }
+  if (!isUserVerified(regAuthData)) {
+    return { success: false, error: 'User verification required for registration', timestamp };
   }
 
   // Extract the attested credential public key from the attestation object.
@@ -276,6 +310,18 @@ export async function verifyAuthentication(
   const challengeData = await getAndDeleteChallenge(challengeId);
   if (!challengeData) {
     return { success: false, error: 'Challenge not found or expired', timestamp };
+  }
+
+  // Enforce expiry, purpose, and user binding independently of store TTL: reject
+  // a stale challenge, one minted for registration, or one bound to another user.
+  if (Date.parse(challengeData.challenge.expiresAt) < Date.now()) {
+    return { success: false, error: 'Challenge expired', timestamp };
+  }
+  if (challengeData.challenge.purpose !== 'authentication') {
+    return { success: false, error: 'Challenge purpose mismatch', timestamp };
+  }
+  if (challengeData.challenge.userId !== undefined && challengeData.challenge.userId !== userId) {
+    return { success: false, error: 'Challenge user mismatch', timestamp };
   }
 
   // Verify challenge matches (clientDataJSON is base64url-encoded).

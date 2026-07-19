@@ -1,0 +1,12 @@
+{
+  "name": "@workspace/persistence",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@workspace/signalgrid-core": "workspace:*",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": { "@types/node": "catalog:", "@types/pg": "^8.11.10" }
+}

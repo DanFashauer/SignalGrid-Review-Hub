@@ -30,8 +30,8 @@ export default function Overview() {
       ) : (
         <div className="grid grid-cols-2 gap-4">
           <MetricCard title="Total Decisions" value={formatNumber(metrics?.totalDecisions)} />
-          <MetricCard title="Allow Rate" value={`${(metrics?.allowRate || 0).toFixed(1)}%`} />
-          <MetricCard title="Restrict/Deny" value={`${(metrics?.restrictDenyRate || 0).toFixed(1)}%`} />
+          <MetricCard title="Allow Rate" value={`${((metrics?.allowRate || 0) * 100).toFixed(1)}%`} />
+          <MetricCard title="Restrict/Deny" value={`${((metrics?.restrictDenyRate || 0) * 100).toFixed(1)}%`} />
           <MetricCard title="Avg Latency" value={formatLatency(metrics?.avgLatencyMs)} />
         </div>
       )}

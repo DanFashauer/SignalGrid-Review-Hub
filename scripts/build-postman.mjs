@@ -105,6 +105,10 @@ const v1Requests = [
   item("Approve a remediation", "POST", "/v1/remediation/{{remediationId}}/approve", { body: {} }),
   item("List app-workflow integrations", "GET", "/v1/app-workflows/integrations"),
   item("Gate an app workflow (EMR)", "POST", "/v1/app-workflows/evaluate", { body: { integrationId: "emr-chart", identityRef: "nurse.compliant", deviceRef: "ipad-ward-01" } }),
+  item("Start a device session", "POST", "/v1/sessions/start", { body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session", ttlSeconds: 900 } }),
+  item("Get a session", "GET", "/v1/sessions/{{sessionId}}"),
+  item("Refresh a session", "POST", "/v1/sessions/{{sessionId}}/refresh", { body: {} }),
+  item("End a session", "POST", "/v1/sessions/{{sessionId}}/end", { body: {} }),
 ];
 const v1Folder = { name: "/v1 product API (bearer)", item: v1Requests };
 

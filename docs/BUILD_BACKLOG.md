@@ -82,7 +82,7 @@ _(see `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` for the full app-workflow roadmap)
       the proof caught and fixed a gap where an unknown/future-dated check-in
       wasn't raising. Complements OS binary control (the OS decides what launches;
       SignalGrid decides whether an action proceeds). Read API `GET /cp/v1/ddm`
-      (OpenAPI + Postman); proof:ddm-connector 28/28. See
+      (OpenAPI + Postman); proof:ddm-connector (run in CI). See
       `docs/MACOS_27_DDM_SIGNAL_OPPORTUNITY.md`.
 
 - [x] Data-center / NOC seeded tenant (Orion Data Centers) — the last vertical
@@ -123,7 +123,7 @@ _(see `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` for the full app-workflow roadmap)
       kinds), signed policy bundles (keys matching the core), and telemetry, so
       the admin **Fleet & tenants** page and ops-intelligence rollups show all
       five. `Vertical` union + `VERTICAL_LABEL` extended on both the lib and the
-      app client; Fleet UI renders them automatically. proof:control-plane 26/26.
+      app client; Fleet UI renders them automatically. proof:control-plane (run in CI).
       Data-center/NOC remains catalog-only (its seeded tenant is the next item).
 
 - [x] Invariant reviewer — public-safe-web check — `review:invariants` now also
@@ -175,8 +175,8 @@ _(see `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` for the full app-workflow roadmap)
       sensitive: held for confirmation on allow, step-up when required, blocked
       under restriction/deny; reads/acks stay available so a NOC can always SEE
       even when it may not ACT. Confirmation phrased for the shift lead. Live in
-      the admin App-workflows page; proof:app-workflows 41/41 (10 new NOC/uptime
-      safety assertions). See `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` §P5.
+      the admin App-workflows page; proof:app-workflows (run in CI; includes the
+      NOC/uptime safety assertions). See `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` §P5.
 
 - [x] Admin "Grid intelligence" console — one calm surface (design law) tying
       flow-health/self-heal + learned recommendations + signal-discovery, read
@@ -190,7 +190,7 @@ _(see `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` for the full app-workflow roadmap)
       unrecognised signal when its source exposes an API/connector — otherwise
       flags it for an admin (never silently added). Signal lifecycle
       (discovered → proposed → onboarded → active). Read API
-      `GET /cp/v1/signal-discovery`; proof:signal-discovery 16/16. The more
+      `GET /cp/v1/signal-discovery`; proof:signal-discovery (run in CI). The more
       sources/APIs a business opens, the more the Grid sees and uses.
 
 - [x] Recommendations engine (`@workspace/recommendations`) — the Grid learns from
@@ -199,7 +199,7 @@ _(see `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` for the full app-workflow roadmap)
       denials/overrides, add a candidate signal to a flow that keeps breaking or
       runs hot, merge near-duplicate flows. Evidence-gated (min-sample threshold),
       confidence-ranked, advisory only. Read API `GET /cp/v1/recommendations`;
-      proof:recommendations 15/15.
+      proof:recommendations (run in CI).
 
 - [x] Apple-inspired admin design law (`docs/ADMIN_DESIGN_PRINCIPLE.md`) —
       progressive disclosure, only-necessary-data, one source of truth, cross-
@@ -212,7 +212,7 @@ _(see `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` for the full app-workflow roadmap)
       agent **or** raises an **ITSM-agnostic incident** (severity, support team,
       target ITSM named, never called); a grid-intelligence score that rises as
       more healthy signals feed more flows. Read API `GET /cp/v1/flows` +
-      `/cp/v1/flows/health`; proof:flows 26/26. See `docs/ADMIN_FLOWS.md`.
+      `/cp/v1/flows/health`; proof:flows (run in CI). See `docs/ADMIN_FLOWS.md`.
 
 - [x] Embedded-UX design law captured (`docs/EMBEDDED_UX_PRINCIPLE.md`) — the end
       user never touches SignalGrid; everything happens inside the host app, for

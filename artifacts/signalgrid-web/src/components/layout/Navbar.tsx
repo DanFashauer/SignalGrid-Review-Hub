@@ -72,6 +72,9 @@ export default function Navbar() {
         <button
           className="md:hidden ml-auto p-2 rounded-md text-foreground/60 hover:text-foreground"
           onClick={() => setMobileOpen(o => !o)}
+          aria-label={mobileOpen ? "Close menu" : "Open menu"}
+          aria-expanded={mobileOpen}
+          aria-controls="mobile-nav"
         >
           {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
@@ -79,7 +82,7 @@ export default function Navbar() {
 
       {/* Mobile menu */}
       {mobileOpen && (
-        <div className="md:hidden border-t border-border/40 bg-background px-4 py-4 space-y-1">
+        <div id="mobile-nav" className="md:hidden border-t border-border/40 bg-background px-4 py-4 space-y-1">
           <a href="/#platform" className="block px-3 py-2 text-sm rounded hover:bg-muted text-foreground/70" onClick={() => setMobileOpen(false)}>Platform</a>
           {NAV_LINKS.map(({ href, label }) => (
             <Link key={href} href={href} className="block px-3 py-2 text-sm rounded hover:bg-muted text-foreground/70" onClick={() => setMobileOpen(false)}>{label}</Link>

@@ -80,8 +80,29 @@ const DENYLIST = [
   "EAL5+ certified",
   "FIPS 140-2 validated",
 ];
-// Boundary/disclaimer framing that must NOT be flagged (mirrors the CI allow-regex).
-const ALLOW = /not |does not|do not|no |avoid|guardrail|disclaimer|should not|must not|without claiming|no claim|doesn.t claim|not claim|git grep|denylist|unsafe-claim scan|validation command|pre-announcement|design target/i;
+// Docs whose PURPOSE is to enumerate the forbidden phrases (a "do not say" list),
+// so every denylist phrase legitimately appears there as a negative example — the
+// same file-level exemption review-invariants.mjs uses for its own guard docs.
+const META_FILES = new Set(["docs/PUBLIC_MESSAGING_GUARDRAILS.md"]);
+// Meta framing that legitimately references a denylist phrase as the guard's own
+// machinery or a negative example — never a real claim.
+const META = /denylist|unsafe-claim scan|validation command|git grep|guardrail|disclaimer|pre-announcement|design target/i;
+const NEGATOR = /\b(?:not|no|never|cannot|can'?t|isn'?t|does\s?not|doesn'?t|won'?t|without|avoid|should\s?not|must\s?not)\b/i;
+// A denylist phrase is disclaimer context ONLY when it is negated — i.e. a negator
+// appears BEFORE that occurrence on the line (negation scopes forward). The old
+// check exempted any line containing "no"/"not" ANYWHERE, so a real over-claim
+// slipped through if the line also said e.g. "no setup" after the claim. A line is
+// a bare claim if any occurrence of the phrase has no negator preceding it.
+function hasBareClaim(content, phrase) {
+  const lower = content.toLowerCase();
+  const p = phrase.toLowerCase();
+  let idx = lower.indexOf(p);
+  while (idx !== -1) {
+    if (!NEGATOR.test(content.slice(0, idx))) return true; // un-negated claim
+    idx = lower.indexOf(p, idx + p.length);
+  }
+  return false;
+}
 const SCAN_PATHS = [
   "README.md",
   "docs",
@@ -103,7 +124,13 @@ for (const phrase of DENYLIST) {
     out = ""; // git grep exits non-zero when there are no matches
   }
   for (const line of out.split("\n").filter(Boolean)) {
-    if (ALLOW.test(line)) continue;
+    // git grep line = "path:lineno:content" — split off the path + content.
+    const m = /^(.*?):\d+:(.*)$/.exec(line);
+    const path = m ? m[1] : "";
+    const content = m ? m[2] : line;
+    if (META_FILES.has(path)) continue;
+    if (META.test(content)) continue;
+    if (!hasBareClaim(content, phrase)) continue;
     problems.push(`Unsafe direct claim found for '${phrase}': ${line}`);
     claimHits += 1;
   }

@@ -6,6 +6,7 @@
 
 import { z } from 'zod';
 import { createLocationStore } from './store';
+import { validateLocationSignal } from './validate';
 import type { LocationSignal, LocationMode, LocationSource } from './types';
 
 // ============================================================================
@@ -95,8 +96,10 @@ export function parseRADIUSToLocation(
   const macAddress = radius.callingStationId || radius.macAddress;
   const normalizedMac = macAddress?.toLowerCase().replace(/[:-]/g, '');
   
-  // Determine device ID from MAC or username
-  const deviceId = normalizedMac || radius.userName || 'unknown';
+  // Determine device ID from MAC or username. Leave it EMPTY when neither is
+  // present — do not fabricate an 'unknown' identifier that would be stored as a
+  // real presence signal; the ingest path validates and drops an empty deviceId.
+  const deviceId = normalizedMac || radius.userName || '';
   
   // Infer location from network info
   // VLAN ID can be mapped to zone/building
@@ -132,15 +135,23 @@ export function parseDHCPToLocation(
 ): Omit<LocationSignal, 'deviceId' | 'observedAt' | 'source' | 'mode'> & { deviceId: string } {
   // Normalize MAC address
   const normalizedMac = dhcp.macAddress.toLowerCase().replace(/[:-]/g, '');
-  
-  // Circuit ID often contains location info (e.g., "VLAN100-Floor1")
-  const circuitParts = dhcp.circuitId?.split('-') || [];
-  
+
+  // Circuit ID (DHCP Option 82) is vendor-defined and often a single opaque
+  // token (hex, an interface name). Only treat it as a structured
+  // building/floor pair when it clearly matches the "BUILDING-FLOOR" shape —
+  // exactly two non-empty alphanumeric labels. Otherwise leave both undefined
+  // rather than reinterpreting an arbitrary string as an authoritative location
+  // identifier. No auth decision consumes these fields today; this keeps them
+  // honest for when one might.
+  const structured = dhcp.circuitId
+    ? /^([A-Za-z0-9]+)-([A-Za-z0-9]+)$/.exec(dhcp.circuitId)
+    : null;
+
   return {
     deviceId: normalizedMac,
     zoneId: dhcp.circuitId,
-    buildingId: circuitParts[0],
-    floorId: circuitParts[1],
+    buildingId: structured?.[1],
+    floorId: structured?.[2],
     ip: dhcp.ipAddress,
     metadata: {
       vlan: dhcp.circuitId,
@@ -182,9 +193,15 @@ export async function ingestRADIUS(
     wifiBssid: networkLocation.wifiBssid,
     metadata: networkLocation.metadata,
   };
-  
+
+  // Fail closed: validate the externally-sourced signal (real deviceId, sane
+  // observedAt) before it becomes a stored presence fact. Drop it if invalid.
+  if (!validateLocationSignal(signal).ok) {
+    return null;
+  }
+
   await store.upsert(signal);
-  
+
   return signal;
 }
 
@@ -215,9 +232,15 @@ export async function ingestDHCP(
     ip: networkLocation.ip,
     metadata: networkLocation.metadata,
   };
-  
+
+  // Fail closed: validate before storing (drops an empty/short deviceId, a
+  // future or stale observedAt) so a malformed lease can't become a presence fact.
+  if (!validateLocationSignal(signal).ok) {
+    return null;
+  }
+
   await store.upsert(signal);
-  
+
   return signal;
 }
 

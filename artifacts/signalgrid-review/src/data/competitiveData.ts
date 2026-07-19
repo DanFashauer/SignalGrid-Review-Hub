@@ -20,7 +20,7 @@ export const competitors: CompetitorRow[] = [
     sharedDeviceGap:
       "Conditional Access evaluates policy at login time and assumes a persistent user-device relationship. In shared-device scenarios where multiple workers use the same device across shifts, Conditional Access can't re-evaluate signals mid-session or distinguish shift-change risk events. It also doesn't natively consume ITSM or operational signals (e.g., open incident for the device) as policy inputs.",
     signalgridDifference:
-      "SignalGrid evaluates all four signal types at workflow execution time — not just at login. Shift changes, open incidents, and operational context are first-class inputs to the decision. SignalGrid complements Conditional Access rather than replacing it.",
+      "SignalGrid evaluates its trust signals at the moment a workflow action fires — not just at login — with physical custody and badge binding as first-class inputs. Consuming operational/ITSM signals (shift changes, open incidents) as decision inputs is a roadmap direction, not evaluated today. SignalGrid complements Conditional Access rather than being a substitute for it.",
     threat: "high",
   },
   {

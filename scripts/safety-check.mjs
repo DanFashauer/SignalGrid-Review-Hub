@@ -71,8 +71,18 @@ const isCode = (line) => { const t = line.trim(); return !(t.startsWith("//") ||
 // 4 — fixture-safe default ────────────────────────────────────────────────────
 {
   const tier = read("artifacts/api-server/src/lib/tier.ts");
-  if (/return\s+false/.test(tier) && /dev|alpha/.test(tier)) ok("Live integrations gated (fixture-safe by default)");
-  else bad("Tier gate: could not confirm isLiveIntegrationsEnabled fails safe for dev/alpha");
+  // Assert the ACTUAL fail-safe guard inside isLiveIntegrationsEnabled — not a
+  // decoupled "return false" + "dev/alpha" co-occurrence anywhere in the file
+  // (which would still pass if the guard were refactored to fail open). Scope to
+  // the function body and require: only beta/prod may be live, everything else
+  // returns false. Fail closed if the function or that guard is absent.
+  const fn = tier.match(/export function isLiveIntegrationsEnabled[\s\S]*?\n}/);
+  const guarded =
+    !!fn &&
+    /!==\s*["']beta["']\s*&&\s*[^)]*!==\s*["']prod["']/.test(fn[0]) &&
+    /return\s+false/.test(fn[0]);
+  if (guarded) ok("Live integrations fail safe by default (only beta/prod can enable; all other tiers return false)");
+  else bad("Tier gate: isLiveIntegrationsEnabled fail-safe guard (non-beta/prod → return false) not found");
 }
 
 console.log("");

@@ -27,11 +27,14 @@ export default function ScoreBar({
 }: ScoreBarProps) {
   const pct = Math.round((score / maxScore) * 100);
   const heights = { sm: "h-1", md: "h-1.5", lg: "h-2" };
+  // Honour the `animated` prop: only apply the width transition when animation is
+  // requested, so `animated={false}` renders the bar at its final width instantly.
+  const motion = animated ? "transition-all duration-1000 ease-out" : "";
 
   return (
     <div className={`w-full rounded-full overflow-hidden ${statusTrack[status]} ${heights[size]}`}>
       <div
-        className={`${heights[size]} rounded-full ${statusColors[status]} transition-all duration-1000 ease-out`}
+        className={`${heights[size]} rounded-full ${statusColors[status]} ${motion}`}
         style={{ width: `${pct}%` }}
       />
     </div>

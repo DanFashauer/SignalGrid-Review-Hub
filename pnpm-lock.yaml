@@ -1525,6 +1525,9 @@ importers:
       '@workspace/app-workflows':
         specifier: workspace:*
         version: link:../lib/app-workflows
+      '@workspace/audit':
+        specifier: workspace:*
+        version: link:../lib/audit
       '@workspace/control-plane':
         specifier: workspace:*
         version: link:../lib/control-plane

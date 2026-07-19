@@ -135,15 +135,23 @@ export function parseDHCPToLocation(
 ): Omit<LocationSignal, 'deviceId' | 'observedAt' | 'source' | 'mode'> & { deviceId: string } {
   // Normalize MAC address
   const normalizedMac = dhcp.macAddress.toLowerCase().replace(/[:-]/g, '');
-  
-  // Circuit ID often contains location info (e.g., "VLAN100-Floor1")
-  const circuitParts = dhcp.circuitId?.split('-') || [];
-  
+
+  // Circuit ID (DHCP Option 82) is vendor-defined and often a single opaque
+  // token (hex, an interface name). Only treat it as a structured
+  // building/floor pair when it clearly matches the "BUILDING-FLOOR" shape —
+  // exactly two non-empty alphanumeric labels. Otherwise leave both undefined
+  // rather than reinterpreting an arbitrary string as an authoritative location
+  // identifier. No auth decision consumes these fields today; this keeps them
+  // honest for when one might.
+  const structured = dhcp.circuitId
+    ? /^([A-Za-z0-9]+)-([A-Za-z0-9]+)$/.exec(dhcp.circuitId)
+    : null;
+
   return {
     deviceId: normalizedMac,
     zoneId: dhcp.circuitId,
-    buildingId: circuitParts[0],
-    floorId: circuitParts[1],
+    buildingId: structured?.[1],
+    floorId: structured?.[2],
     ip: dhcp.ipAddress,
     metadata: {
       vlan: dhcp.circuitId,

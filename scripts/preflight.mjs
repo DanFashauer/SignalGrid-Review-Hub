@@ -34,6 +34,7 @@ const STEPS = [
   { name: "OpenAPI contract check (proof:api-contract)", cmd: ["pnpm", "run", "proof:api-contract"] },
   { name: "API integration test (boots the server)", cmd: ["pnpm", "run", "test:api"] },
   { name: "Proof: webauthn-verify", cmd: ["pnpm", "run", "proof:webauthn-verify"] },
+  { name: "Proof: audit-ledger", cmd: ["pnpm", "run", "proof:audit-ledger"] },
   { name: "Proof: orchestration", cmd: ["pnpm", "run", "proof:orchestration"] },
   { name: "Proof: room-sim", cmd: ["pnpm", "run", "proof:room-sim"] },
   { name: "Proof: app-workflows", cmd: ["pnpm", "run", "proof:app-workflows"] },

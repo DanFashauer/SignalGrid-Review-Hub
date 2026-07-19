@@ -32,12 +32,14 @@
     "proof:signalgrid-simulator": "tsx ./src/signalgrid-simulator-proof.ts",
     "proof:telemetry-up": "tsx ./src/telemetry-up-proof.ts",
     "proof:webauthn-verify": "tsx ./src/webauthn-verify-proof.ts",
+    "proof:audit-ledger": "tsx ./src/audit-ledger-proof.ts",
     "sbom": "tsx ./src/generate-sbom.ts",
     "smoke:connector-emulator": "pnpm run proof:connector-emulator",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@workspace/app-workflows": "workspace:*",
+    "@workspace/audit": "workspace:*",
     "@workspace/control-plane": "workspace:*",
     "@workspace/ddm-connector": "workspace:*",
     "@workspace/flows": "workspace:*",

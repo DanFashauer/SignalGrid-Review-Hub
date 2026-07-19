@@ -169,6 +169,22 @@ export function sha256(data: Buffer): Buffer {
   return createHash('sha256').update(data).digest();
 }
 
+/**
+ * Extract the raw authenticatorData buffer from a base64url attestationObject,
+ * so the registration path can check the rpIdHash / UP / UV flags the same way
+ * the authentication path does. Returns null on any malformed input (fail closed).
+ */
+export function extractAuthData(attestationObjectB64: string): Buffer | null {
+  try {
+    const att = decodeFirst(Buffer.from(attestationObjectB64, 'base64url'));
+    if (!(att instanceof Map)) return null;
+    const authData = att.get('authData');
+    return Buffer.isBuffer(authData) ? authData : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The `signCount` (uint32) from an authenticatorData buffer. */
 export function readSignCount(authData: Buffer): number {
   return authData.readUInt32BE(33);

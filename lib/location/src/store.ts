@@ -1,5 +1,4 @@
 import type { LocationSignal } from "./types";
-import { LOCATION_USE_REDIS } from "./config";
 
 export type StoreBackend = {
   upsert(signal: LocationSignal): Promise<void>;
@@ -38,25 +37,16 @@ class InMemoryLocationStore implements StoreBackend {
   }
 }
 
-class RedisLocationStore implements StoreBackend {
-  constructor(private redis: any) {}
-  private key(deviceId: string) { return `loc:last:${deviceId.replace(/[\s:]/g, "_")}`; }
-  async upsert(signal: LocationSignal) { await this.redis.set(this.key(signal.deviceId), JSON.stringify(signal)); }
-  async getLast(deviceId: string) {
-    const raw = await this.redis.get(this.key(deviceId));
-    if (!raw) return null;
-    try { return JSON.parse(raw); } catch { return null; }
-  }
-}
-
 let singleton: StoreBackend | null = null;
 
+// Presence is held in-memory only: single-process, lost on restart, not shared
+// across instances. That is deliberate for this fixture-safe build — presence is
+// derived, short-lived (24h TTL), and never a system of record. A distributed
+// backend (e.g. Redis) would implement the same `StoreBackend` interface and be
+// selected here; it is intentionally not wired, rather than stubbed, so the code
+// never implies durability it does not provide.
 export async function createLocationStore(): Promise<StoreBackend> {
   if (singleton) return singleton;
-
-  // In production, you can enable Redis by setting LOCATION_USE_REDIS=true
-  // and implementing a Redis client helper in src/lib/backend/redisClient.ts
-  console.log("[Location] Using in-memory store");
   singleton = new InMemoryLocationStore();
   return singleton;
 }

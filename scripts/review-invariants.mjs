@@ -69,34 +69,102 @@ function stripComments(src) {
     .join("\n");
 }
 
+// Blank the TEXT of string and template literals (keeping delimiters + newlines,
+// so offsets and line numbers are preserved) so that braces or keywords inside a
+// literal are never mistaken for code structure. Template `${…}` expressions are
+// real code and are left intact via a small mode stack. This is what lets the
+// brace matcher below bound switch blocks correctly even when a `case` body
+// contains a string like `"}"` or a backtick template with `{`.
+function maskLiterals(src) {
+  const arr = src.split("");
+  const n = src.length;
+  const blank = (k) => { if (arr[k] !== "\n") arr[k] = " "; };
+  const stack = [{ mode: "code", depth: 0 }];
+  let i = 0;
+  while (i < n) {
+    const top = stack[stack.length - 1];
+    const c = src[i];
+    if (top.mode === "code") {
+      if (c === "\\") { i += 2; continue; }
+      if (c === "'") { stack.push({ mode: "sq" }); i++; continue; }
+      if (c === '"') { stack.push({ mode: "dq" }); i++; continue; }
+      if (c === "`") { stack.push({ mode: "tmpl" }); i++; continue; }
+      if (c === "{") { top.depth++; i++; continue; }
+      if (c === "}") {
+        if (top.depth === 0 && stack.length > 1) { stack.pop(); i++; continue; } // close ${…}
+        top.depth--; i++; continue;
+      }
+      i++; continue;
+    }
+    if (top.mode === "sq" || top.mode === "dq") {
+      const q = top.mode === "sq" ? "'" : '"';
+      if (c === "\\") { blank(i); blank(i + 1); i += 2; continue; }
+      if (c === q) { stack.pop(); i++; continue; }
+      blank(i); i++; continue;
+    }
+    // template literal
+    if (c === "\\") { blank(i); blank(i + 1); i += 2; continue; }
+    if (c === "`") { stack.pop(); i++; continue; }
+    if (c === "$" && src[i + 1] === "{") { stack.push({ mode: "code", depth: 0 }); i += 2; continue; }
+    blank(i); i++;
+  }
+  return arr.join("");
+}
+
+// Find every `switch (...) { … }` block (including nested ones) with proper,
+// literal-aware brace matching. Returns { kw, open, end } offsets.
+function findSwitchBlocks(code) {
+  const blocks = [];
+  let i = 0;
+  while ((i = code.indexOf("switch", i)) !== -1) {
+    const before = code[i - 1];
+    const after = code[i + 6];
+    // Must be the keyword, not part of an identifier (e.g. `switching`).
+    if ((before && /[A-Za-z0-9_$]/.test(before)) || (after && /[A-Za-z0-9_$]/.test(after))) {
+      i += 6; continue;
+    }
+    const open = code.indexOf("{", i);
+    if (open === -1) break;
+    let depth = 0, end = -1;
+    for (let j = open; j < code.length; j++) {
+      if (code[j] === "{") depth++;
+      else if (code[j] === "}") { depth--; if (depth === 0) { end = j; break; } }
+    }
+    if (end === -1) break;
+    blocks.push({ kw: i, open, end });
+    // Advance past the keyword (NOT past `end`) so nested switches are found too.
+    i += 6;
+  }
+  return blocks;
+}
+
 // 1 — fail-closed switches ─────────────────────────────────────────────────────
 // Every `switch (...) { ... }` in the gating libs must contain a `default:` arm.
 {
   const violations = [];
   const files = tracked.filter((f) => isTs(f) && inAny(f, GATING_LIBS));
   for (const f of files) {
-    const code = stripComments(read(f));
-    let i = 0;
-    while ((i = code.indexOf("switch", i)) !== -1) {
-      // Ensure it is the keyword, not part of an identifier.
-      const before = code[i - 1];
-      if (before && /[A-Za-z0-9_$]/.test(before)) { i += 6; continue; }
-      // Find the opening brace of the switch block after the condition's ")".
-      const open = code.indexOf("{", i);
-      if (open === -1) break;
-      // Brace-match to the block end.
-      let depth = 0, end = -1;
-      for (let j = open; j < code.length; j++) {
-        if (code[j] === "{") depth++;
-        else if (code[j] === "}") { depth--; if (depth === 0) { end = j; break; } }
+    // Mask literals AFTER stripping comments so neither prose nor string/template
+    // contents can spoof (or hide) a `{`, `}`, `switch`, or `default:`.
+    const code = maskLiterals(stripComments(read(f)));
+    const blocks = findSwitchBlocks(code);
+    for (const b of blocks) {
+      // Check THIS switch's own default arm — blank any nested switch blocks so a
+      // nested `default:` cannot satisfy an outer switch that lacks its own.
+      const body = code.slice(b.open, b.end + 1).split("");
+      for (const c of blocks) {
+        if (c === b) continue;
+        if (c.kw > b.open && c.end < b.end) {
+          for (let k = c.open; k <= c.end; k++) {
+            const idx = k - b.open;
+            if (body[idx] !== "\n") body[idx] = " ";
+          }
+        }
       }
-      if (end === -1) break;
-      const block = code.slice(open, end);
-      if (!/\bdefault\s*:/.test(block)) {
-        const line = code.slice(0, i).split("\n").length;
+      if (!/\bdefault\s*:/.test(body.join(""))) {
+        const line = code.slice(0, b.kw).split("\n").length;
         violations.push(`${f}:${line}`);
       }
-      i = end;
     }
   }
   if (violations.length) bad(`Fail-closed: switch without a default arm in a gating lib — ${violations.join(", ")}`);

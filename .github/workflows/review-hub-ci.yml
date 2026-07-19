@@ -73,6 +73,9 @@ jobs:
       - name: WebAuthn signature-verification proof
         run: pnpm run proof:webauthn-verify
 
+      - name: Audit-ledger (redaction + tamper-evident chain) proof
+        run: pnpm run proof:audit-ledger
+
       - name: Orchestration (Trust→Action) proof
         run: pnpm run proof:orchestration
 

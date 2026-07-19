@@ -66,6 +66,10 @@ check("sensitive action must be gated", hasError(
   { ...valid(), actions: [{ key: "x.write", label: "x", riskTier: "elevated", sensitive: true, gatedByStepUp: false }] },
   "sensitive-not-gated"));
 
+check("unknown risk tier is rejected (typo from JSON / unsafe cast → fail closed)", hasError(
+  { ...valid(), actions: [{ key: "x.op", label: "x", riskTier: "critcal" as AppIntegration["actions"][number]["riskTier"], sensitive: false, gatedByStepUp: false }] },
+  "action-risktier-unknown"));
+
 check("empty workflowKey is rejected", hasError({ ...valid(), workflowKey: "" }, "workflow-key-empty"));
 check("empty action list is rejected", hasError({ ...valid(), actions: [] }, "no-actions"));
 check("unknown vertical is rejected", hasError({ ...valid(), vertical: "aviation" as AppIntegration["vertical"] }, "vertical-unknown"));

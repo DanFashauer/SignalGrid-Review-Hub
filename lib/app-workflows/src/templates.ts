@@ -11,7 +11,7 @@
 // Pure, deterministic, public-safe — no Date.now / Math.random, generic app
 // CATEGORIES only (never a real vendor/product name, never PHI).
 
-import type { AppAction, AppIntegration, AppVertical } from "./index";
+import type { AppAction, AppIntegration, AppRiskTier, AppVertical } from "./index";
 
 /** The six supported verticals, as a runtime list (mirrors the AppVertical union). */
 export const APP_VERTICALS: readonly AppVertical[] = [
@@ -22,6 +22,9 @@ export const APP_VERTICALS: readonly AppVertical[] = [
   "retail",
   "data_center",
 ] as const;
+
+/** The supported risk tiers, as a runtime list (mirrors the AppRiskTier union). */
+export const RISK_TIERS: readonly AppRiskTier[] = ["standard", "elevated", "critical"] as const;
 
 export type LintSeverity = "error" | "warning";
 
@@ -70,6 +73,14 @@ function lintAction(a: AppAction, seen: Set<string>): AppIntegrationIssue[] {
   seen.add(key);
 
   if (!a.label?.trim()) issues.push(err("action-label-empty", `Action "${key}" has no label.`, key));
+
+  // Reject an unknown risk tier FIRST (fail closed). A candidate from JSON or an
+  // unsafe cast could carry a typo like "critcal" — neither "critical" nor
+  // "standard" — which would slip past every tier-specific safety check below and
+  // let a malformed action lint clean with sensitive:false / gatedByStepUp:false.
+  if (!RISK_TIERS.includes(a.riskTier as AppRiskTier)) {
+    issues.push(err("action-risktier-unknown", `Action "${key}" has unknown riskTier "${String(a.riskTier)}" — must be one of ${RISK_TIERS.join(", ")}.`, key));
+  }
 
   // ── SAFETY invariants (fail closed) ──────────────────────────────────────────
   // A critical action is irreversible / high-consequence: it must NEVER run

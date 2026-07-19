@@ -68,6 +68,8 @@ jobs:
           cp docs/competitive-battlecard.html _site/battlecard.html
           cp docs/embedded-host-app-demo.html _site/embedded-demo.html
           cp docs/embedded-desktop-demo.html _site/desktop-demo.html
+          # Public investor pitch deck (self-contained, public-safe).
+          cp docs/pitch-deck.html _site/pitch.html
           # Pin the custom domain so Pages keeps serving signalgrid.app.
           cp site/CNAME _site/CNAME
       - uses: actions/upload-pages-artifact@v3

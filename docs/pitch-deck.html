@@ -1,0 +1,235 @@
+<title>SignalGrid — Pitch Deck</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --bg:#14171A; --panel:#191E22; --card:#1E2429; --card2:#232A30;
+    --ink:#F2F0EA; --soft:#AEB4AF; --faint:#7f8781; --line:#2A3137;
+    --accent:#74ABA5; --allow:#6FA88C; --stepup:#C29A66; --restrict:#C99B6B; --deny:#C07474;
+    --mono:ui-monospace,"IBM Plex Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  }
+  @media (prefers-color-scheme:light){:root{
+    --bg:#F1EEE7; --panel:#FAF8F3; --card:#FFF; --card2:#F5F2EA;
+    --ink:#1B1F21; --soft:#4C534E; --faint:#767c77; --line:#E4DFD3;
+    --accent:#38726D; --allow:#4E7B5E; --stepup:#96703B; --restrict:#8a6a3b; --deny:#8C4B4B;
+  }}
+  :root[data-theme="dark"]{--bg:#14171A;--panel:#191E22;--card:#1E2429;--card2:#232A30;--ink:#F2F0EA;--soft:#AEB4AF;--faint:#7f8781;--line:#2A3137;--accent:#74ABA5;--allow:#6FA88C;--stepup:#C29A66;--restrict:#C99B6B;--deny:#C07474;}
+  :root[data-theme="light"]{--bg:#F1EEE7;--panel:#FAF8F3;--card:#FFF;--card2:#F5F2EA;--ink:#1B1F21;--soft:#4C534E;--faint:#767c77;--line:#E4DFD3;--accent:#38726D;--allow:#4E7B5E;--stepup:#96703B;--restrict:#8a6a3b;--deny:#8C4B4B;}
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5;-webkit-text-size-adjust:100%;
+    scroll-snap-type:y proximity}
+  .deck{max-width:1000px;margin:0 auto}
+  section{min-height:100svh;scroll-snap-align:start;display:flex;flex-direction:column;justify-content:center;
+    padding:clamp(1.4rem,5vw,4rem);border-bottom:1px solid var(--line);position:relative}
+  .num{position:absolute;top:1.2rem;right:clamp(1.4rem,5vw,4rem);font-family:var(--mono);font-size:.62rem;letter-spacing:.14em;color:var(--faint)}
+  .kicker{font-family:var(--mono);font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin-bottom:1rem}
+  h1{font-size:clamp(1.9rem,6vw,3.4rem);line-height:1.08;margin:0 0 1rem;text-wrap:balance;letter-spacing:-.015em}
+  h2{font-size:clamp(1.4rem,4.5vw,2.4rem);line-height:1.12;margin:0 0 1.1rem;text-wrap:balance;letter-spacing:-.01em}
+  h1 em,h2 em{font-style:normal;color:var(--accent)}
+  p{font-size:clamp(1rem,2.2vw,1.18rem);color:var(--soft);max-width:60ch;margin:0 0 1rem}
+  p strong{color:var(--ink)}
+  .big{font-size:clamp(1.15rem,2.6vw,1.4rem);color:var(--ink)}
+  .brandrow{display:flex;align-items:center;gap:.7rem;margin-bottom:2rem}
+  .glyph{width:34px;height:34px;border-radius:9px;background:linear-gradient(150deg,var(--accent),color-mix(in srgb,var(--accent) 55%,#000));position:relative;flex:none}
+  .glyph::before,.glyph::after{content:"";position:absolute;background:var(--bg)}
+  .glyph::before{width:2.5px;height:56%;left:50%;top:22%;transform:translateX(-50%)}
+  .glyph::after{height:2.5px;width:56%;top:50%;left:22%;transform:translateY(-50%)}
+  .brand{font-family:var(--mono);font-weight:600;font-size:1.15rem;letter-spacing:.02em}.brand span{color:var(--accent)}
+  .stage{display:inline-block;font-family:var(--mono);font-size:.64rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);border:1px solid var(--line);border-radius:99px;padding:.3rem .7rem;margin-top:1.4rem}
+  .chips{display:flex;flex-wrap:wrap;gap:.5rem;margin:.6rem 0 1rem}
+  .chip{font-family:var(--mono);font-size:.66rem;letter-spacing:.05em;text-transform:uppercase;border:1px solid var(--line);border-radius:99px;padding:.32rem .7rem;color:var(--soft)}
+  .chip b{font-weight:600}
+  .v-allow{color:var(--allow);border-color:color-mix(in srgb,var(--allow) 45%,var(--line))}
+  .v-stepup{color:var(--stepup);border-color:color-mix(in srgb,var(--stepup) 45%,var(--line))}
+  .v-restrict{color:var(--restrict);border-color:color-mix(in srgb,var(--restrict) 45%,var(--line))}
+  .v-deny{color:var(--deny);border-color:color-mix(in srgb,var(--deny) 45%,var(--line))}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-top:.6rem}
+  @media (max-width:680px){.grid{grid-template-columns:1fr}}
+  .cardi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:1rem 1.1rem}
+  .cardi .k{font-family:var(--mono);font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:.35rem}
+  .cardi p{font-size:.95rem;margin:0}
+  .flow{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;font-family:var(--mono);font-size:.8rem;color:var(--soft);margin:.4rem 0 1rem}
+  .flow b{color:var(--accent);font-weight:600}
+  .demos{display:flex;flex-direction:column;gap:.6rem;margin-top:.4rem;max-width:60ch}
+  a.demo{display:flex;align-items:center;gap:.7rem;text-decoration:none;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:.75rem .9rem;color:var(--ink);transition:border-color .15s,transform .15s}
+  a.demo:hover{border-color:var(--accent);transform:translateY(-1px)}
+  a.demo:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+  a.demo .dot{width:8px;height:8px;border-radius:99px;background:var(--accent);flex:none}
+  a.demo .t{font-weight:600;font-size:.95rem}a.demo .d{color:var(--faint);font-size:.78rem}
+  a.demo .go{margin-left:auto;font-family:var(--mono);font-size:.68rem;color:var(--accent)}
+  ul{margin:.4rem 0;padding-left:1.15rem;max-width:60ch}
+  li{font-size:clamp(1rem,2.2vw,1.12rem);color:var(--soft);margin:.5rem 0}li strong{color:var(--ink)}
+  .steps{display:grid;grid-template-columns:repeat(4,1fr);gap:.7rem;margin-top:.8rem}
+  @media (max-width:680px){.steps{grid-template-columns:1fr 1fr}}
+  .step{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:.9rem}
+  .step .s{font-family:var(--mono);font-size:.6rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+  .step .h{font-weight:700;margin:.3rem 0 .2rem;font-size:.98rem}
+  .step p{font-size:.86rem;margin:0}
+  .ask{background:linear-gradient(160deg,color-mix(in srgb,var(--accent) 14%,var(--card)),var(--card));border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line));border-radius:14px;padding:clamp(1.2rem,3vw,2rem)}
+  .foot{font-family:var(--mono);font-size:.72rem;color:var(--faint);margin-top:1.4rem}
+  .navhint{position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);background:color-mix(in srgb,var(--bg) 80%,transparent);border:1px solid var(--line);border-radius:99px;padding:.3rem .7rem;pointer-events:none;opacity:.85}
+  @media print{.navhint{display:none}section{min-height:auto;page-break-after:always;border:none}}
+</style>
+
+<div class="deck">
+
+  <!-- 1 — Title -->
+  <section>
+    <span class="num">01 / 11</span>
+    <div class="brandrow"><div class="glyph"></div><div class="brand">SIGNAL<span>GRID</span></div></div>
+    <div class="kicker">Context-aware trust for shared &amp; frontline devices</div>
+    <h1>The trust decision at the <em>moment of action</em> — invisible, on any shared device.</h1>
+    <p class="big">Should this person, on this shared device, in this context, be allowed to do this — right now? SignalGrid answers it in that instant, inside the app people already use.</p>
+    <span class="stage">Pre-production concept · live demos · seeking design partners + pre-seed</span>
+  </section>
+
+  <!-- 2 — Problem -->
+  <section>
+    <span class="num">02 / 11</span>
+    <div class="kicker">The problem</div>
+    <h2>Frontline work runs on <em>shared, roaming</em> devices — and no one decides the risky moment.</h2>
+    <p>A nurse pulls a controlled med on a ward tablet three clinicians used this hour. A picker overrides a safety hold. A NOC engineer pushes config to a core switch. Login told you <strong>who badged in</strong> — not who's holding it now, whether the device is in trusted custody, or whether <strong>this specific high-risk action</strong> should fire.</p>
+    <p>Today that decision is stitched across an IdP, a badge system, a UEM, an EDR and an ITSM — <strong>inconsistently, per app, with no single verdict and no single audit trail.</strong></p>
+  </section>
+
+  <!-- 3 — Insight -->
+  <section>
+    <span class="num">03 / 11</span>
+    <div class="kicker">The insight</div>
+    <h2>Identity is the wrong layer for a <em>per-action</em> decision.</h2>
+    <p class="big">Who logged in ≠ whether this action, on this device, in this moment, should proceed. That's a live decision — fusing presence, device custody, security baseline and workflow risk — and nothing owns it.</p>
+    <p>The right place to decide is <strong>above</strong> the login, at the moment of the action — vendor-neutral, so it works across the whole mixed stack.</p>
+  </section>
+
+  <!-- 4 — Solution -->
+  <section>
+    <span class="num">04 / 11</span>
+    <div class="kicker">The solution</div>
+    <h2>One verdict, rendered <em>invisibly</em> inside the host app.</h2>
+    <p>SignalGrid returns one of four outcomes for the action — and the app just acts on it. The end user never opens a "SignalGrid" app.</p>
+    <div class="chips">
+      <span class="chip v-allow"><b>ALLOW</b> · runs, invisible</span>
+      <span class="chip v-stepup"><b>STEP-UP</b> · one native gesture</span>
+      <span class="chip v-restrict"><b>RESTRICT</b> · low-risk only</span>
+      <span class="chip v-deny"><b>DENY</b> · held + logged</span>
+    </div>
+    <p>Fail-closed by design: nothing sensitive fires silently, and a critical action needs a real native gesture <strong>and</strong> an explicit in-app confirmation.</p>
+  </section>
+
+  <!-- 5 — Demo -->
+  <section>
+    <span class="num">05 / 11</span>
+    <div class="kicker">See it — the demos do the talking</div>
+    <h2>Live, clickable, public-safe.</h2>
+    <div class="demos">
+      <a class="demo" href="https://signalgrid.app/embedded-demo.html" target="_blank" rel="noopener"><span class="dot"></span><span><span class="t">The invisible flow (mobile clinical app)</span><br><span class="d">Open a chart friction-free; a controlled med order is held for a native gesture.</span></span><span class="go">open →</span></a>
+      <a class="demo" href="https://signalgrid.app/desktop-demo.html" target="_blank" rel="noopener"><span class="dot"></span><span><span class="t">Cross-platform parity (macOS / Windows)</span><br><span class="d">The same flow in a NOC desktop app — a config push held for step-up, then confirm.</span></span><span class="go">open →</span></a>
+      <a class="demo" href="https://signalgrid.app/console.html" target="_blank" rel="noopener"><span class="dot"></span><span><span class="t">Trusted room entry console</span><br><span class="d">The decision core running on-device, with the verdict and its reasons.</span></span><span class="go">open →</span></a>
+    </div>
+    <p class="foot">Synthetic data · no real network · the authenticator prompt is a labeled simulation.</p>
+  </section>
+
+  <!-- 6 — How it works -->
+  <section>
+    <span class="num">06 / 11</span>
+    <div class="kicker">How it works</div>
+    <h2>A vendor-neutral decision layer that sits <em>on top of</em> your stack.</h2>
+    <div class="flow"><b>badge / who</b> + <b>device custody &amp; tamper</b> + <b>security baseline</b> + <b>workflow risk</b> → <b>one verdict · one audit trail</b></div>
+    <div class="grid">
+      <div class="cardi"><div class="k">Consumes, doesn't replace</div><p>Takes the IAM / badge / UEM / EDR signals as inputs — it doesn't replace the login.</p></div>
+      <div class="cardi"><div class="k">Custody as a decision input</div><p>Is the shared device docked, in-hand, or tampered — and is the badged-in holder still the one using it?</p></div>
+      <div class="cardi"><div class="k">One plane, mixed fleet</div><p>A single allow/step-up/restrict/deny across every app and vendor, with one audit trail.</p></div>
+      <div class="cardi"><div class="k">Deterministic + fail-closed</div><p>Unknown or ambiguous input never grants access. The core is pure and provable.</p></div>
+    </div>
+  </section>
+
+  <!-- 7 — Why now -->
+  <section>
+    <span class="num">07 / 11</span>
+    <div class="kicker">Why now</div>
+    <h2>The per-action gap is widening — and the platform is moving our way.</h2>
+    <ul>
+      <li><strong>Mixed fleets are the norm.</strong> Shared and BYO devices across many vendors, with no one place fusing the per-action decision.</li>
+      <li><strong>Regulatory + audit pressure</strong> on high-risk frontline actions keeps rising, but the audit trail stays stitched-together.</li>
+      <li><strong>OS-level signals are getting richer</strong> (device management, binary-control, posture) — more inputs for exactly this kind of fused verdict.</li>
+    </ul>
+  </section>
+
+  <!-- 8 — Market -->
+  <section>
+    <span class="num">08 / 11</span>
+    <div class="kicker">Where it applies</div>
+    <h2>Six frontline verticals — one decision layer.</h2>
+    <div class="grid">
+      <div class="cardi"><div class="k">Healthcare</div><p>Controlled-substance pulls, overrides, discharge on shared ward devices.</p></div>
+      <div class="cardi"><div class="k">Warehouse / logistics</div><p>Inventory overrides, high-value / hazmat picks, safety-hold overrides.</p></div>
+      <div class="cardi"><div class="k">Industrial</div><p>Setpoint changes, line start/stop, safety-interlock bypass on HMI panels.</p></div>
+      <div class="cardi"><div class="k">Global fleet</div><p>Regulated-load reassignment, duty-log edits, remote seal release.</p></div>
+      <div class="cardi"><div class="k">Retail</div><p>Manager voids/refunds, age/rx-restricted sales, no-sale drawer opens.</p></div>
+      <div class="cardi"><div class="k">Data center / NOC</div><p>Config pushes, power-cycles, failovers — where uptime is the north star.</p></div>
+    </div>
+  </section>
+
+  <!-- 9 — Model -->
+  <section>
+    <span class="num">09 / 11</span>
+    <div class="kicker">Business model (design target)</div>
+    <h2>Software decision layer — with an optional hardware trust anchor.</h2>
+    <div class="grid">
+      <div class="cardi"><div class="k">Core — SaaS</div><p>Per-device / per-seat subscription for the decision layer and audit plane. Lands as an overlay, no rip-and-replace.</p></div>
+      <div class="cardi"><div class="k">Hardware — later</div><p>An embedded trust anchor in the dock / charging bay (custody + tamper at the source). Partner-built hardware, SignalGrid software.</p></div>
+    </div>
+    <p>Software first to prove the wedge and land design partners; the hardware anchor deepens the moat and the custody signal once funded.</p>
+  </section>
+
+  <!-- 10 — Roadmap -->
+  <section>
+    <span class="num">10 / 11</span>
+    <div class="kicker">Roadmap · where funding goes</div>
+    <h2>Concept → partner → pilot → hardware.</h2>
+    <div class="steps">
+      <div class="step"><div class="s">Today</div><div class="h">Concept + demos</div><p>Deterministic core, six verticals, clickable demos.</p></div>
+      <div class="step"><div class="s">Next</div><div class="h">Design partner</div><p>One frontline org, small low-risk pilot. Protect IP.</p></div>
+      <div class="step"><div class="s">Then</div><div class="h">Real-world pilot</div><p>Measured evidence on real (de-identified) signal.</p></div>
+      <div class="step"><div class="s">Funded</div><div class="h">Hardware anchor</div><p>Dock/bay proto with a hardware partner.</p></div>
+    </div>
+    <p style="margin-top:1rem">Pre-seed funds the first pilot, IP protection (provisional patent + trademark), and the first hardware prototype with a partner.</p>
+  </section>
+
+  <!-- 11 — Ask -->
+  <section>
+    <span class="num">11 / 11</span>
+    <div class="kicker">The ask</div>
+    <div class="ask">
+      <h2>Help me get the ball rolling.</h2>
+      <ul style="margin-bottom:.4rem">
+        <li><strong>Feedback</strong> — does the category and the wedge resonate; what am I missing?</li>
+        <li><strong>An intro to a design partner</strong> — a hospital, warehouse, or data-center/NOC for a small pilot.</li>
+        <li><strong>Pre-seed investment</strong> — to fund the first pilot, IP protection, and a hardware proto.</li>
+      </ul>
+      <p class="foot" style="margin-top:1rem">SignalGrid · signalgrid.app · pre-production review artifacts, not a shipping product · public-safe materials, no customer or patient data · deeper architecture under a mutual NDA.</p>
+    </div>
+  </section>
+
+</div>
+<div class="navhint" id="hint">↑ ↓ or scroll · 01 / 11</div>
+<script>
+  (function(){
+    var secs = Array.prototype.slice.call(document.querySelectorAll("section"));
+    var hint = document.getElementById("hint");
+    function current(){
+      var mid = window.scrollY + window.innerHeight/2, idx = 0;
+      secs.forEach(function(s,i){ if(s.offsetTop <= mid) idx = i; });
+      return idx;
+    }
+    function update(){ hint.textContent = "↑ ↓ or scroll · " + String(current()+1).padStart(2,"0") + " / 11"; }
+    window.addEventListener("scroll", update, {passive:true});
+    window.addEventListener("keydown", function(e){
+      if(e.key==="ArrowDown"||e.key==="PageDown"||e.key===" "){ e.preventDefault(); var n=Math.min(secs.length-1,current()+1); secs[n].scrollIntoView(); }
+      if(e.key==="ArrowUp"||e.key==="PageUp"){ e.preventDefault(); var p=Math.max(0,current()-1); secs[p].scrollIntoView(); }
+    });
+    update();
+  })();
+</script>

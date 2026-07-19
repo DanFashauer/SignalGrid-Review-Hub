@@ -18,6 +18,14 @@ description = "Public-safe demo fixtures — sgk_demo_* tokens are intentional a
 regexTarget = "line"
 regexes = [
   '''sgk_demo_[a-z_]+''',
+  # Deliberately-fake fixture literals used ONLY to PROVE secret redaction in the
+  # audit-ledger proofs (scripts/src/audit-ledger*-proof.ts). They are not real
+  # credentials; allowlisted by exact value so genuine high-entropy secrets in
+  # those same files are still caught. gitleaks scans each commit's diff in the PR
+  # range, so an inline `gitleaks:allow` added in a later commit can't cover the
+  # commit that first introduced the literal — a config allowlist can.
+  '''pg-s3cr3t-never-persisted''',
+  '''s3cr3t-should-never-appear''',
 ]
 # Documentation is prose + illustrative examples (e.g. `Authorization: Bearer …`,
 # vendor feature lists), which trip the generic-api-key / curl-auth-header rules.

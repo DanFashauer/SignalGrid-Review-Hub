@@ -36,7 +36,8 @@
     "proof:audit-ledger-pg": "tsx ./src/audit-ledger-pg-proof.ts",
     "sbom": "tsx ./src/generate-sbom.ts",
     "smoke:connector-emulator": "pnpm run proof:connector-emulator",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "proof:decision-store-pg": "tsx ./src/decision-store-pg-proof.ts"
   },
   "dependencies": {
     "@workspace/app-workflows": "workspace:*",
@@ -52,7 +53,8 @@
     "@workspace/signal-radar": "workspace:*",
     "@workspace/signalgrid-core": "workspace:*",
     "@workspace/signalgrid-simulator": "workspace:*",
-    "@workspace/webauthn": "workspace:*"
+    "@workspace/webauthn": "workspace:*",
+    "@workspace/persistence": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

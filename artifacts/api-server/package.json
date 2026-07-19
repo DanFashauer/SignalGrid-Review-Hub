@@ -17,6 +17,8 @@
     "@workspace/flows": "workspace:*",
     "@workspace/recommendations": "workspace:*",
     "@workspace/signalgrid-core": "workspace:*",
+    "@workspace/persistence": "workspace:*",
+    "pg": "^8.13.1",
     "@workspace/signalgrid-simulator": "workspace:*",
     "cors": "^2.8.6",
     "express": "^5.2.1",

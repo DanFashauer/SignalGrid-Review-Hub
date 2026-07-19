@@ -52,7 +52,8 @@
     "review:invariants": "node scripts/review-invariants.mjs",
     "preflight": "node scripts/preflight.mjs",
     "proof:signal-discovery": "pnpm --filter @workspace/scripts run proof:signal-discovery",
-    "proof:ddm-connector": "pnpm --filter @workspace/scripts run proof:ddm-connector"
+    "proof:ddm-connector": "pnpm --filter @workspace/scripts run proof:ddm-connector",
+    "proof:decision-store-pg": "pnpm --filter @workspace/scripts run proof:decision-store-pg"
   },
   "private": true,
   "devDependencies": {

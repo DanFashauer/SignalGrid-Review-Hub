@@ -34,7 +34,9 @@ if (!url) {
 let passed = 0;
 const failures: string[] = [];
 const check = (name: string, ok: boolean) => { ok ? (passed += 1) : failures.push(name); };
-const SECRET = "pg-s3cr3t-never-persisted";
+// A deliberately fake, obviously-not-real value used ONLY to prove it gets
+// redacted before it can reach the database. Not a credential. gitleaks:allow
+const SECRET = "pg-s3cr3t-never-persisted"; // gitleaks:allow
 
 async function main() {
   const pg = await import("pg");

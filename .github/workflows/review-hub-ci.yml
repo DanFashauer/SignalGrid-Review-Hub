@@ -211,7 +211,11 @@ jobs:
         run: docker compose -f docker-compose.prod.yml up -d --build
 
       - name: Wait for the API to be healthy
-        run: curl -sf --retry 60 --retry-delay 2 --retry-connrefused http://localhost:8080/api/healthz
+        # --retry-all-errors (not just --retry-connrefused): Docker's port proxy
+        # accepts the connection before Node finishes booting and then resets it,
+        # which surfaces as curl error 56 (recv failure), not a refusal — so we
+        # must retry on ALL transient errors, or the very first probe fails.
+        run: curl -sf --retry 60 --retry-delay 2 --retry-all-errors http://localhost:8080/api/healthz
 
       - name: Setup Node 22
         uses: actions/setup-node@v7

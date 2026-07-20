@@ -6,6 +6,7 @@ import type { ThreatVerdict } from "@workspace/integrations/edr-threat";
 import type { IdentityRiskVerdict } from "@workspace/integrations/identity-risk";
 import type { CustodyVerdict } from "@workspace/integrations/rtls-custody";
 import type { PeripheralVerdict } from "@workspace/integrations/peripheral-control";
+import type { DlpVerdict } from "@workspace/integrations/data-protection";
 import type { GraphPostureSignal } from "@workspace/integrations/graph";
 import type { Detection } from "@workspace/event-contract";
 import { ACTION_RANK } from "./compose";
@@ -58,6 +59,12 @@ export function fromPeripheral(v: PeripheralVerdict): ComposableSignal {
   // Peripheral-control actions (none|monitor|step_up|alert|restrict) are already
   // on the unified ladder.
   return { kind: "peripheral", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromDataProtection(v: DlpVerdict): ComposableSignal {
+  // Data-protection / DLP actions (none|monitor|step_up|alert|restrict|escalate)
+  // are already on the unified ladder.
+  return { kind: "data_protection", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 /** Cross-domain detection severity → unified action. */

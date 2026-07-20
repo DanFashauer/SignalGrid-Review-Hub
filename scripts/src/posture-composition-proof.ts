@@ -11,6 +11,7 @@ import {
   fromDevicePosture,
   fromLocation,
   fromCustody,
+  fromDataProtection,
   fromIdentityRisk,
   fromPeripheral,
   fromReachability,
@@ -22,6 +23,7 @@ import type { ThreatVerdict } from "@workspace/integrations/edr-threat";
 import type { IdentityRiskVerdict } from "@workspace/integrations/identity-risk";
 import type { CustodyVerdict } from "@workspace/integrations/rtls-custody";
 import type { PeripheralVerdict } from "@workspace/integrations/peripheral-control";
+import type { DlpVerdict } from "@workspace/integrations/data-protection";
 
 let passed = 0;
 const failures: string[] = [];
@@ -75,6 +77,14 @@ check("peripheral policy_unenforced → step_up",
   fromPeripheral(peripheral({ posture: "policy_unenforced", reasonCode: "POLICY_UNENFORCED", recommendedAction: "step_up" })).action === "step_up");
 check("peripheral no_removable → none, and its kind is 'peripheral'",
   fromPeripheral(peripheral({})).action === "none" && fromPeripheral(peripheral({})).kind === "peripheral");
+check("dlp confirmed_exfiltration → escalate",
+  fromDataProtection(dlp({ posture: "confirmed_exfiltration", reasonCode: "REGULATED_DATA_EGRESS", recommendedAction: "escalate" })).action === "escalate");
+check("dlp data_egress → alert",
+  fromDataProtection(dlp({ posture: "data_egress", reasonCode: "DATA_EGRESS", recommendedAction: "alert" })).action === "alert");
+check("dlp policy_unenforced → step_up",
+  fromDataProtection(dlp({ posture: "policy_unenforced", reasonCode: "POLICY_UNENFORCED", recommendedAction: "step_up" })).action === "step_up");
+check("dlp protected → none, and its kind is 'data_protection'",
+  fromDataProtection(dlp({})).action === "none" && fromDataProtection(dlp({})).kind === "data_protection");
 check("device posture disabled identity → escalate",
   fromDevicePosture(posture({ identityStatus: "disabled" })).action === "escalate");
 check("device posture non-compliant → restrict",
@@ -152,6 +162,16 @@ const withPeripheral = composeDeviceRisk([
 ]);
 check("an unauthorized+unencrypted writable USB (restrict) drives the fused verdict", withPeripheral.strongestAction === "restrict" && withPeripheral.riskTier === "blocked");
 check("the peripheral signal is retained as a driver, tagged kind 'peripheral'", withPeripheral.drivers.some((d) => d.kind === "peripheral" && d.action === "restrict"));
+
+// DLP fuses in: regulated data leaving via cloud/email (confirmed exfiltration)
+// escalates even on an otherwise-clean device.
+const withDlp = composeDeviceRisk([
+  fromDevicePosture(posture({})),                                                                    // none
+  fromPeripheral(peripheral({})),                                                                    // none (no removable)
+  fromDataProtection(dlp({ posture: "confirmed_exfiltration", reasonCode: "REGULATED_DATA_EGRESS", recommendedAction: "escalate", egressCount: 1 })), // escalate
+]);
+check("a regulated-data exfiltration (escalate) drives the fused verdict", withDlp.strongestAction === "escalate" && withDlp.riskTier === "blocked");
+check("the DLP signal is retained as a driver, tagged kind 'data_protection'", withDlp.drivers.some((d) => d.kind === "data_protection" && d.action === "escalate"));
 
 // tiers across the ladder
 check("all-calm signals ⇒ ok tier", composeDeviceRisk([fromDevicePosture(posture({})), fromReachability({ posture: "reachable", reasonCode: "CELLULAR_ONLINE", recommendedAction: "monitor", locatable: true })]).riskTier === "ok");
@@ -247,6 +267,20 @@ function peripheral(over: Partial<PeripheralVerdict>): PeripheralVerdict {
     writableRemovableCount: 0,
     policyEnforced: true,
     reasonCode: "NO_REMOVABLE",
+    recommendedAction: "none",
+    ...over,
+  };
+}
+
+// Build a DlpVerdict with sane "protected" defaults, overriding as needed.
+function dlp(over: Partial<DlpVerdict>): DlpVerdict {
+  return {
+    posture: "protected",
+    violationCount: 0,
+    egressCount: 0,
+    highestSeverity: "unknown",
+    dlpPolicyEnforced: true,
+    reasonCode: "NO_VIOLATIONS",
     recommendedAction: "none",
     ...over,
   };

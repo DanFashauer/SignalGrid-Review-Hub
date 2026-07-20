@@ -1,0 +1,28 @@
+{
+  "fixtureName": "data-protection",
+  "fixtureVersion": "2026-07-20.v1",
+  "note": "Public-safe synthetic DLP / data-protection inventory (illustrative violations, no real data, device, or tenant).",
+  "accessToken": "dlp-fixture-read-token",
+  "devices": {
+    "d-clean": {
+      "record": { "deviceId": "d-clean", "dlpPolicyEnforced": true, "violations": [], "source": "purview" },
+      "expected": { "posture": "protected", "reasonCode": "NO_VIOLATIONS", "recommendedAction": "none", "violationCount": 0, "egressCount": 0, "highestSeverity": "unknown", "dlpPolicyEnforced": true }
+    },
+    "d-contained": {
+      "record": { "deviceId": "d-contained", "dlpPolicyEnforced": true, "violations": [ { "violationId": "v-1", "channel": "cloud", "action": "blocked", "severity": "high", "dataClass": "pii" } ], "source": "netskope" },
+      "expected": { "posture": "monitored", "reasonCode": "VIOLATIONS_CONTAINED", "recommendedAction": "monitor", "violationCount": 1, "egressCount": 0, "highestSeverity": "high", "dlpPolicyEnforced": true }
+    },
+    "d-policy-off": {
+      "record": { "deviceId": "d-policy-off", "dlpPolicyEnforced": false, "violations": [], "source": "forcepoint" },
+      "expected": { "posture": "policy_unenforced", "reasonCode": "POLICY_UNENFORCED", "recommendedAction": "step_up", "violationCount": 0, "egressCount": 0, "highestSeverity": "unknown", "dlpPolicyEnforced": false }
+    },
+    "d-egress-low": {
+      "record": { "deviceId": "d-egress-low", "dlpPolicyEnforced": true, "violations": [ { "violationId": "v-2", "channel": "web", "action": "allowed", "severity": "low", "dataClass": "internal" } ], "source": "zscaler" },
+      "expected": { "posture": "data_egress", "reasonCode": "DATA_EGRESS", "recommendedAction": "alert", "violationCount": 1, "egressCount": 1, "highestSeverity": "low", "dlpPolicyEnforced": true }
+    },
+    "d-exfil-phi": {
+      "record": { "deviceId": "d-exfil-phi", "dlpPolicyEnforced": true, "violations": [ { "violationId": "v-3", "channel": "email", "action": "allowed", "severity": "critical", "dataClass": "phi" } ], "source": "purview" },
+      "expected": { "posture": "confirmed_exfiltration", "reasonCode": "REGULATED_DATA_EGRESS", "recommendedAction": "escalate", "violationCount": 1, "egressCount": 1, "highestSeverity": "critical", "dlpPolicyEnforced": true }
+    }
+  }
+}

@@ -68,7 +68,8 @@
     "proof:network-nac": "pnpm --filter @workspace/scripts run proof:network-nac",
     "proof:edr-threat": "pnpm --filter @workspace/scripts run proof:edr-threat",
     "proof:identity-risk": "pnpm --filter @workspace/scripts run proof:identity-risk",
-    "proof:rtls-custody": "pnpm --filter @workspace/scripts run proof:rtls-custody"
+    "proof:rtls-custody": "pnpm --filter @workspace/scripts run proof:rtls-custody",
+    "proof:peripheral-control": "pnpm --filter @workspace/scripts run proof:peripheral-control"
   },
   "private": true,
   "devDependencies": {

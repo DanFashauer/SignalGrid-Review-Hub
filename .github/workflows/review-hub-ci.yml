@@ -88,6 +88,9 @@ jobs:
       - name: RTLS / badge-dwell (physical custody) proof
         run: pnpm run proof:rtls-custody
 
+      - name: Removable-media / peripheral-control proof
+        run: pnpm run proof:peripheral-control
+
       - name: Posture-composition (unified signal fusion) proof
         run: pnpm run proof:posture-composition
 

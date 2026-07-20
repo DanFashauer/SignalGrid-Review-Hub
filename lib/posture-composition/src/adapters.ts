@@ -5,6 +5,7 @@ import type { NetworkVerdict } from "@workspace/integrations/network-nac";
 import type { ThreatVerdict } from "@workspace/integrations/edr-threat";
 import type { IdentityRiskVerdict } from "@workspace/integrations/identity-risk";
 import type { CustodyVerdict } from "@workspace/integrations/rtls-custody";
+import type { PeripheralVerdict } from "@workspace/integrations/peripheral-control";
 import type { GraphPostureSignal } from "@workspace/integrations/graph";
 import type { Detection } from "@workspace/event-contract";
 import { ACTION_RANK } from "./compose";
@@ -51,6 +52,12 @@ export function fromCustody(v: CustodyVerdict): ComposableSignal {
   // RTLS custody actions (none|monitor|locate|alert|escalate) are already on the
   // unified ladder.
   return { kind: "custody", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromPeripheral(v: PeripheralVerdict): ComposableSignal {
+  // Peripheral-control actions (none|monitor|step_up|alert|restrict) are already
+  // on the unified ladder.
+  return { kind: "peripheral", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 /** Cross-domain detection severity → unified action. */

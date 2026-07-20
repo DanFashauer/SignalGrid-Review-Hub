@@ -12,6 +12,7 @@ import {
   fromLocation,
   fromCustody,
   fromIdentityRisk,
+  fromPeripheral,
   fromReachability,
   fromThreat,
   fromVuln,
@@ -20,6 +21,7 @@ import {
 import type { ThreatVerdict } from "@workspace/integrations/edr-threat";
 import type { IdentityRiskVerdict } from "@workspace/integrations/identity-risk";
 import type { CustodyVerdict } from "@workspace/integrations/rtls-custody";
+import type { PeripheralVerdict } from "@workspace/integrations/peripheral-control";
 
 let passed = 0;
 const failures: string[] = [];
@@ -65,6 +67,14 @@ check("custody stale_fix → locate",
   fromCustody(custody({ posture: "stale_fix", reasonCode: "STALE_FIX", recommendedAction: "locate" })).action === "locate");
 check("custody in_zone → none, and its kind is 'custody'",
   fromCustody(custody({})).action === "none" && fromCustody(custody({})).kind === "custody");
+check("peripheral exfil_risk → restrict",
+  fromPeripheral(peripheral({ posture: "exfil_risk", reasonCode: "UNAUTHORIZED_UNENCRYPTED_MEDIA", recommendedAction: "restrict" })).action === "restrict");
+check("peripheral unencrypted_media → alert",
+  fromPeripheral(peripheral({ posture: "unencrypted_media", reasonCode: "UNENCRYPTED_WRITABLE_MEDIA", recommendedAction: "alert" })).action === "alert");
+check("peripheral policy_unenforced → step_up",
+  fromPeripheral(peripheral({ posture: "policy_unenforced", reasonCode: "POLICY_UNENFORCED", recommendedAction: "step_up" })).action === "step_up");
+check("peripheral no_removable → none, and its kind is 'peripheral'",
+  fromPeripheral(peripheral({})).action === "none" && fromPeripheral(peripheral({})).kind === "peripheral");
 check("device posture disabled identity → escalate",
   fromDevicePosture(posture({ identityStatus: "disabled" })).action === "escalate");
 check("device posture non-compliant → restrict",
@@ -132,6 +142,16 @@ const withCustody = composeDeviceRisk([
 ]);
 check("a device that left the monitored area (escalate) drives the fused verdict", withCustody.strongestAction === "escalate" && withCustody.riskTier === "blocked");
 check("the custody signal is retained as a driver, tagged kind 'custody'", withCustody.drivers.some((d) => d.kind === "custody" && d.action === "escalate"));
+
+// Removable-media fuses in: an unauthorized unencrypted writable USB on an
+// otherwise-compliant device composes to restrict/blocked.
+const withPeripheral = composeDeviceRisk([
+  fromDevicePosture(posture({})),                                                                 // none
+  fromCustody(custody({})),                                                                        // none (in-zone)
+  fromPeripheral(peripheral({ posture: "exfil_risk", reasonCode: "UNAUTHORIZED_UNENCRYPTED_MEDIA", recommendedAction: "restrict", writableRemovableCount: 1 })), // restrict
+]);
+check("an unauthorized+unencrypted writable USB (restrict) drives the fused verdict", withPeripheral.strongestAction === "restrict" && withPeripheral.riskTier === "blocked");
+check("the peripheral signal is retained as a driver, tagged kind 'peripheral'", withPeripheral.drivers.some((d) => d.kind === "peripheral" && d.action === "restrict"));
 
 // tiers across the ladder
 check("all-calm signals ⇒ ok tier", composeDeviceRisk([fromDevicePosture(posture({})), fromReachability({ posture: "reachable", reasonCode: "CELLULAR_ONLINE", recommendedAction: "monitor", locatable: true })]).riskTier === "ok");
@@ -214,6 +234,19 @@ function custody(over: Partial<CustodyVerdict>): CustodyVerdict {
     dwellSeconds: 120,
     badgeAssociated: true,
     reasonCode: "CUSTODY_OK",
+    recommendedAction: "none",
+    ...over,
+  };
+}
+
+// Build a PeripheralVerdict with sane "no_removable" defaults, overriding as needed.
+function peripheral(over: Partial<PeripheralVerdict>): PeripheralVerdict {
+  return {
+    posture: "no_removable",
+    removableCount: 0,
+    writableRemovableCount: 0,
+    policyEnforced: true,
+    reasonCode: "NO_REMOVABLE",
     recommendedAction: "none",
     ...over,
   };

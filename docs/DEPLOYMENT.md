@@ -46,6 +46,7 @@ in-memory (the fixture-safe default used by the public build and CI).
 | `EDR_ACCESS_TOKEN` | Read-only token for the EDR/EPP endpoint threat-state connector. | unset (fixture mode) |
 | `IDENTITY_RISK_ACCESS_TOKEN` | Read-only token for the identity/SSO sign-in-risk connector. | unset (fixture mode) |
 | `RTLS_ACCESS_TOKEN` | Read-only token for the RTLS/badge-dwell physical-custody connector. | unset (fixture mode) |
+| `PERIPHERAL_ACCESS_TOKEN` | Read-only token for the removable-media/peripheral-control connector. | unset (fixture mode) |
 
 ## Enterprise sign-in (OIDC) — gated
 
@@ -145,6 +146,28 @@ integration (live only on `beta`/`prod` + `SIGNALGRID_LIVE_INTEGRATIONS=true` +
 `RTLS_ACCESS_TOKEN`; otherwise fixture mode). Proven offline in CI
 (`pnpm run proof:rtls-custody`), and fused with the other dimensions by
 `@workspace/posture-composition`.
+
+## Removable-media / peripheral control — gated
+
+The data-exfiltration / malware-ingress surface: is an unauthorized or unencrypted
+removable device attached to the shared device? On a shared frontline (especially
+clinical) workstation, a writable USB drive is a real HIPAA/exfil and ingress
+vector. The read-only **peripheral-control connector** reads per-device attached-
+peripheral inventory + device-control policy state from a device-control platform
+(shaped for Microsoft Intune device control, Microsoft Defender for Endpoint device
+control, CrowdStrike Falcon Device Control, Ivanti Device Control, Forcepoint), and
+a **pure, deterministic evaluator** turns it into one posture (`no_removable` /
+`controlled` / `policy_unenforced` / `unencrypted_media` / `unauthorized_media` /
+`exfil_risk` / `unknown`) plus the action it warrants (`none` / `monitor` /
+`step_up` / `alert` / `restrict`). Fail-safe by construction: a writable removable
+whose **authorization or encryption we cannot confirm** is treated as the exfil/
+ingress surface it might be (never assumed safe), an **unknown access value** on a
+storage device is treated as writable, and a device with **no device-control
+coverage** is a blind spot (never "clean"). Read-only by construction and gated
+exactly like every other integration (live only on `beta`/`prod` +
+`SIGNALGRID_LIVE_INTEGRATIONS=true` + `PERIPHERAL_ACCESS_TOKEN`; otherwise fixture
+mode). Proven offline in CI (`pnpm run proof:peripheral-control`), and fused with
+the other dimensions by `@workspace/posture-composition`.
 
 **Fixture-safe by default:** even at `SIGNALGRID_TIER=prod`, no live vendor calls
 are made unless `SIGNALGRID_LIVE_INTEGRATIONS=true` is also set — so this stack is

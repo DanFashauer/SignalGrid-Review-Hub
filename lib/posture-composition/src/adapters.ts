@@ -2,6 +2,7 @@ import type { ReachabilityVerdict } from "@workspace/integrations/carrier";
 import type { LocationVerdict } from "@workspace/integrations/location-services";
 import type { VulnVerdict } from "@workspace/integrations/vuln-scan";
 import type { NetworkVerdict } from "@workspace/integrations/network-nac";
+import type { ThreatVerdict } from "@workspace/integrations/edr-threat";
 import type { GraphPostureSignal } from "@workspace/integrations/graph";
 import type { Detection } from "@workspace/event-contract";
 import { ACTION_RANK } from "./compose";
@@ -30,6 +31,12 @@ export function fromVuln(v: VulnVerdict): ComposableSignal {
 export function fromNetwork(v: NetworkVerdict): ComposableSignal {
   // Network/NAC actions (none|monitor|step_up|restrict) are already on the ladder.
   return { kind: "network", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromThreat(v: ThreatVerdict): ComposableSignal {
+  // EDR/EPP threat actions (none|monitor|step_up|alert|restrict|escalate) are
+  // already on the unified ladder.
+  return { kind: "threat", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 /** Cross-domain detection severity → unified action. */

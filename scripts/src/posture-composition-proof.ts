@@ -1,6 +1,6 @@
 // Posture-composition proof — pure and deterministic, no I/O.
 //
-// Proves the fusion of the five decision signals into one unified posture: the
+// Proves the fusion of the decision signals into one unified posture: the
 // strongest action across all signals wins (fail-safe — a calm signal never
 // dilutes a severe one), the risk tier follows from it, drivers come back
 // most-severe-first with stable ordering, and the per-dimension adapters map
@@ -11,9 +11,11 @@ import {
   fromDevicePosture,
   fromLocation,
   fromReachability,
+  fromThreat,
   fromVuln,
   type ComposableSignal,
 } from "@workspace/posture-composition";
+import type { ThreatVerdict } from "@workspace/integrations/edr-threat";
 
 let passed = 0;
 const failures: string[] = [];
@@ -33,6 +35,16 @@ check("vuln restrict → restrict",
   fromVuln({ posture: "critical_exposure", highestSeverity: "critical", findingCount: 1, exploitableCount: 1, reasonCode: "CRITICAL_OR_EXPLOITABLE", recommendedAction: "restrict" }).action === "restrict");
 check("detection critical → escalate",
   fromDetection({ code: "DOCK_TAMPER_WITH_NETWORK_LOSS", severity: "critical", reason: "x", correlationId: "c", evidenceEventIds: [] }).action === "escalate");
+check("threat critical_compromise → escalate",
+  fromThreat(threat({ posture: "critical_compromise", reasonCode: "CRITICAL_ACTIVE_THREAT", recommendedAction: "escalate", activeThreatCount: 1 })).action === "escalate");
+check("threat active_threat → restrict",
+  fromThreat(threat({ posture: "active_threat", reasonCode: "ACTIVE_THREAT", recommendedAction: "restrict", activeThreatCount: 1 })).action === "restrict");
+check("threat unprotected (agent absent) → alert",
+  fromThreat(threat({ posture: "unprotected", reasonCode: "AGENT_ABSENT", recommendedAction: "alert", protectionHealthy: false })).action === "alert");
+check("threat degraded_protection → step_up",
+  fromThreat(threat({ posture: "degraded_protection", reasonCode: "PROTECTION_DEGRADED", recommendedAction: "step_up", protectionHealthy: false })).action === "step_up");
+check("threat protected → none, and its kind is 'threat'",
+  fromThreat(threat({})).action === "none" && fromThreat(threat({})).kind === "threat");
 check("device posture disabled identity → escalate",
   fromDevicePosture(posture({ identityStatus: "disabled" })).action === "escalate");
 check("device posture non-compliant → restrict",
@@ -72,6 +84,15 @@ check("drivers are ordered most-severe first", u.drivers[0].action === "restrict
 const withDetection = composeDeviceRisk([...mixed, fromDetection({ code: "DOCK_TAMPER_WITH_NETWORK_LOSS", severity: "critical", reason: "x", correlationId: "c", evidenceEventIds: [] })]);
 check("a critical detection (escalate) outranks a restrict", withDetection.strongestAction === "escalate" && withDetection.riskTier === "blocked");
 
+// an active EDR threat fuses in and drives the verdict alongside the others.
+const withThreat = composeDeviceRisk([
+  fromDevicePosture(posture({})),                                                                 // none
+  fromReachability({ posture: "reachable", reasonCode: "CELLULAR_ONLINE", recommendedAction: "monitor", locatable: true }), // monitor
+  fromThreat(threat({ posture: "critical_compromise", reasonCode: "CRITICAL_ACTIVE_THREAT", recommendedAction: "escalate", activeThreatCount: 1, threatCount: 1 })), // escalate
+]);
+check("an active critical EDR threat (escalate) drives the fused verdict", withThreat.strongestAction === "escalate" && withThreat.riskTier === "blocked");
+check("the threat signal is retained as a driver, tagged kind 'threat'", withThreat.drivers.some((d) => d.kind === "threat" && d.action === "escalate"));
+
 // tiers across the ladder
 check("all-calm signals ⇒ ok tier", composeDeviceRisk([fromDevicePosture(posture({})), fromReachability({ posture: "reachable", reasonCode: "CELLULAR_ONLINE", recommendedAction: "monitor", locatable: true })]).riskTier === "ok");
 check("a step_up ⇒ at_risk tier", composeDeviceRisk([fromDevicePosture(posture({ deviceManagementState: "unmanaged" }))]).riskTier === "at_risk");
@@ -110,6 +131,20 @@ function posture(over: Partial<import("@workspace/integrations/graph").GraphPost
     deviceManagementState: "managed",
     deviceRegistrationState: "registered",
     deviceLastSeenAt: "2026-07-20T11:59:00Z",
+    ...over,
+  };
+}
+
+// Build a ThreatVerdict with sane "protected" defaults, overriding as needed.
+function threat(over: Partial<ThreatVerdict>): ThreatVerdict {
+  return {
+    posture: "protected",
+    highestThreatSeverity: "info",
+    threatCount: 0,
+    activeThreatCount: 0,
+    protectionHealthy: true,
+    reasonCode: "NO_THREATS_HEALTHY",
+    recommendedAction: "none",
     ...over,
   };
 }

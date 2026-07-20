@@ -1,0 +1,36 @@
+{
+  "fixtureName": "edr-threat",
+  "fixtureVersion": "2026-07-20.v1",
+  "note": "Public-safe synthetic EDR/EPP endpoint threat-state (illustrative detections, no real device or tenant data).",
+  "accessToken": "edr-fixture-read-token",
+  "endpoints": {
+    "ep-protected": {
+      "record": { "deviceId": "ep-protected", "agentInstalled": true, "agentRunning": true, "realtimeProtection": true, "signatureAgeHours": 2, "threats": [], "source": "defender" },
+      "expected": { "posture": "protected", "reasonCode": "NO_THREATS_HEALTHY", "recommendedAction": "none", "highestThreatSeverity": "unknown", "threatCount": 0, "activeThreatCount": 0, "protectionHealthy": true }
+    },
+    "ep-monitored": {
+      "record": { "deviceId": "ep-monitored", "agentInstalled": true, "agentRunning": true, "realtimeProtection": true, "signatureAgeHours": 6, "threats": [ { "threatId": "T-1001", "name": "EICAR-Test", "severity": "high", "remediationState": "quarantined", "category": "malware" } ], "source": "crowdstrike" },
+      "expected": { "posture": "monitored", "reasonCode": "THREATS_REMEDIATED", "recommendedAction": "monitor", "highestThreatSeverity": "high", "threatCount": 1, "activeThreatCount": 0, "protectionHealthy": true }
+    },
+    "ep-degraded-rtp-off": {
+      "record": { "deviceId": "ep-degraded-rtp-off", "agentInstalled": true, "agentRunning": true, "realtimeProtection": false, "signatureAgeHours": 5, "threats": [], "source": "sentinelone" },
+      "expected": { "posture": "degraded_protection", "reasonCode": "PROTECTION_DEGRADED", "recommendedAction": "step_up", "highestThreatSeverity": "unknown", "threatCount": 0, "activeThreatCount": 0, "protectionHealthy": false }
+    },
+    "ep-stale-sigs": {
+      "record": { "deviceId": "ep-stale-sigs", "agentInstalled": true, "agentRunning": true, "realtimeProtection": true, "signatureAgeHours": 120, "threats": [], "source": "jamf-protect" },
+      "expected": { "posture": "degraded_protection", "reasonCode": "PROTECTION_DEGRADED", "recommendedAction": "step_up", "highestThreatSeverity": "unknown", "threatCount": 0, "activeThreatCount": 0, "protectionHealthy": false }
+    },
+    "ep-unprotected": {
+      "record": { "deviceId": "ep-unprotected", "agentInstalled": true, "agentRunning": false, "realtimeProtection": false, "threats": [], "source": "defender" },
+      "expected": { "posture": "unprotected", "reasonCode": "AGENT_ABSENT", "recommendedAction": "alert", "highestThreatSeverity": "unknown", "threatCount": 0, "activeThreatCount": 0, "protectionHealthy": false }
+    },
+    "ep-active-medium": {
+      "record": { "deviceId": "ep-active-medium", "agentInstalled": true, "agentRunning": true, "realtimeProtection": true, "signatureAgeHours": 3, "threats": [ { "threatId": "T-2001", "name": "PUA.Adware", "severity": "medium", "remediationState": "active", "category": "pua" } ], "source": "sophos" },
+      "expected": { "posture": "active_threat", "reasonCode": "ACTIVE_THREAT", "recommendedAction": "restrict", "highestThreatSeverity": "medium", "threatCount": 1, "activeThreatCount": 1, "protectionHealthy": true }
+    },
+    "ep-critical": {
+      "record": { "deviceId": "ep-critical", "agentInstalled": true, "agentRunning": true, "realtimeProtection": true, "signatureAgeHours": 1, "threats": [ { "threatId": "T-3001", "name": "Ransom.Generic", "severity": "critical", "remediationState": "active", "category": "ransomware" }, { "threatId": "T-3002", "name": "Old.Trojan", "severity": "low", "remediationState": "removed", "category": "malware" } ], "source": "carbonblack" },
+      "expected": { "posture": "critical_compromise", "reasonCode": "CRITICAL_ACTIVE_THREAT", "recommendedAction": "escalate", "highestThreatSeverity": "critical", "threatCount": 2, "activeThreatCount": 1, "protectionHealthy": true }
+    }
+  }
+}

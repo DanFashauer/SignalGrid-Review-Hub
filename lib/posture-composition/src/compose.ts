@@ -29,7 +29,7 @@ const TIER_BY_ACTION: Record<UnifiedAction, RiskTier> = {
 };
 
 /**
- * Fuse per-dimension signals into one unified posture. Deterministic: the
+ * Fuse the per-dimension signals into one unified posture. Deterministic: the
  * strongest action across all signals wins (fail-safe — the most severe concern
  * is never diluted by calmer ones), the tier follows from it, and the drivers are
  * returned most-severe-first with stable ordering for equal ranks. With no

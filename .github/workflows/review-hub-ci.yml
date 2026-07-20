@@ -79,6 +79,9 @@ jobs:
       - name: Network / NAC (access posture) proof
         run: pnpm run proof:network-nac
 
+      - name: EDR / EPP (endpoint threat-state) proof
+        run: pnpm run proof:edr-threat
+
       - name: Posture-composition (unified signal fusion) proof
         run: pnpm run proof:posture-composition
 

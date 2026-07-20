@@ -65,7 +65,8 @@
     "proof:vuln-scan": "pnpm --filter @workspace/scripts run proof:vuln-scan",
     "proof:posture-composition": "pnpm --filter @workspace/scripts run proof:posture-composition",
     "proof:incident-playbook": "pnpm --filter @workspace/scripts run proof:incident-playbook",
-    "proof:network-nac": "pnpm --filter @workspace/scripts run proof:network-nac"
+    "proof:network-nac": "pnpm --filter @workspace/scripts run proof:network-nac",
+    "proof:edr-threat": "pnpm --filter @workspace/scripts run proof:edr-threat"
   },
   "private": true,
   "devDependencies": {

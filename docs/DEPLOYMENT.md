@@ -43,6 +43,7 @@ in-memory (the fixture-safe default used by the public build and CI).
 | `LOCATION_ACCESS_TOKEN` | Read-only token for the device location-services connector. | unset (fixture mode) |
 | `VULN_SCAN_ACCESS_TOKEN` | Read-only token for the vulnerability-scanner connector. | unset (fixture mode) |
 | `NAC_ACCESS_TOKEN` | Read-only token for the network/NAC posture connector. | unset (fixture mode) |
+| `EDR_ACCESS_TOKEN` | Read-only token for the EDR/EPP endpoint threat-state connector. | unset (fixture mode) |
 
 ## Enterprise sign-in (OIDC) — gated
 
@@ -79,6 +80,26 @@ device becomes a self-triaging event instead of something an admin must chase.
 Read-only by construction and gated exactly like every other integration (live
 only on `beta`/`prod` + `SIGNALGRID_LIVE_INTEGRATIONS=true` + `CARRIER_ACCESS_TOKEN`;
 otherwise fixture mode). Proven offline in CI (`pnpm run proof:carrier-reachability`).
+
+## EDR/EPP endpoint threat-state — gated
+
+The vulnerability connector answers "what known CVEs does this device carry?";
+the read-only **EDR/EPP connector** answers the other half — "is this endpoint
+actually protected, and is anything live on it right now?" It reads per-endpoint
+**agent health** (installed / running / real-time protection / signature age) and
+**threat detections** (with their remediation state) from an endpoint-protection
+platform (shaped for Microsoft Defender for Endpoint, CrowdStrike Falcon,
+SentinelOne, Jamf Protect, Sophos Intercept X, VMware Carbon Black), and a **pure,
+deterministic evaluator** fuses them into one posture (`protected` / `monitored` /
+`degraded_protection` / `unprotected` / `active_threat` / `critical_compromise` /
+`unknown`) plus the single action it warrants (`none` / `monitor` / `step_up` /
+`alert` / `restrict` / `escalate`). Fail-safe by construction: an absent/disabled
+agent is a **blind spot** (never "clean"), an unclassifiable detection is treated
+as **active**, and the worst active concern drives the verdict. Read-only by
+construction and gated exactly like every other integration (live only on
+`beta`/`prod` + `SIGNALGRID_LIVE_INTEGRATIONS=true` + `EDR_ACCESS_TOKEN`; otherwise
+fixture mode). Proven offline in CI (`pnpm run proof:edr-threat`), and fused with
+the other dimensions by `@workspace/posture-composition`.
 
 **Fixture-safe by default:** even at `SIGNALGRID_TIER=prod`, no live vendor calls
 are made unless `SIGNALGRID_LIVE_INTEGRATIONS=true` is also set — so this stack is

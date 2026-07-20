@@ -55,6 +55,7 @@ const PURE_LIBS = [
   "lib/recommendations/src/",
   "lib/signal-discovery/src/",
   "lib/event-contract/src/",
+  "lib/posture-composition/src/",
 ];
 const isTs = (f) => f.endsWith(".ts") && !f.endsWith(".d.ts");
 const inAny = (f, prefixes) => prefixes.some((p) => f.startsWith(p));

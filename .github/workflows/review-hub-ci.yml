@@ -76,6 +76,9 @@ jobs:
       - name: Vulnerability-scan (device risk posture) proof
         run: pnpm run proof:vuln-scan
 
+      - name: Posture-composition (unified signal fusion) proof
+        run: pnpm run proof:posture-composition
+
       - name: Connector emulator proof
         run: pnpm run proof:connector-emulator
 

@@ -46,7 +46,8 @@
     "proof:carrier-reachability": "tsx ./src/carrier-reachability-proof.ts",
     "proof:event-contract": "tsx ./src/event-contract-proof.ts",
     "proof:location-services": "tsx ./src/location-services-proof.ts",
-    "proof:vuln-scan": "tsx ./src/vuln-scan-proof.ts"
+    "proof:vuln-scan": "tsx ./src/vuln-scan-proof.ts",
+    "proof:posture-composition": "tsx ./src/posture-composition-proof.ts"
   },
   "dependencies": {
     "@workspace/app-workflows": "workspace:*",
@@ -66,7 +67,8 @@
     "@workspace/persistence": "workspace:*",
     "@workspace/enterprise-auth": "workspace:*",
     "@workspace/integrations": "workspace:*",
-    "@workspace/event-contract": "workspace:*"
+    "@workspace/event-contract": "workspace:*",
+    "@workspace/posture-composition": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

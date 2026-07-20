@@ -1,0 +1,12 @@
+{
+  "name": "@workspace/posture-composition",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@workspace/integrations": "workspace:*",
+    "@workspace/event-contract": "workspace:*"
+  },
+  "devDependencies": { "@types/node": "catalog:" }
+}

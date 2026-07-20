@@ -64,6 +64,9 @@ jobs:
       - name: Read-only Microsoft Graph connector proof
         run: pnpm run proof:graph-connector
 
+      - name: Carrier / post-exit reachability proof
+        run: pnpm run proof:carrier-reachability
+
       - name: Connector emulator proof
         run: pnpm run proof:connector-emulator
 

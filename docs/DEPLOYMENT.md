@@ -39,6 +39,7 @@ in-memory (the fixture-safe default used by the public build and CI).
 | `OIDC_TENANT_CLAIM` / `OIDC_ROLE_CLAIM` | Claims carrying the IdP tenant / role. | `tid` / `roles` |
 | `OIDC_TENANT_MAP` / `OIDC_ROLE_MAP` | JSON maps: IdP value → internal tenant id / role. | unset |
 | `GRAPH_ACCESS_TOKEN` | Read-only Microsoft Graph token for the posture connector. | unset (fixture mode) |
+| `CARRIER_ACCESS_TOKEN` | Read-only carrier/IoT-connectivity token for the reachability connector. | unset (fixture mode) |
 
 ## Enterprise sign-in (OIDC) — gated
 
@@ -61,6 +62,20 @@ other integration**: it makes live Graph calls only on `beta`/`prod` **and** wit
 runs in offline **fixture mode**. So it is safe to stand up for evaluation with no
 tenant, and its normalization/pagination/error paths are proven offline in CI
 (`pnpm run proof:graph-connector`).
+
+## Post-exit reachability (carrier connectivity) — gated
+
+Once a shared device leaves managed Wi-Fi, MDM "find/ring/lock" commands become
+opportunistic. The read-only **carrier reachability connector** reads per-SIM
+session + last-seen state from a carrier/IoT platform (shaped for Verizon
+ThingSpace, Cisco IoT Control Center, Twilio Super SIM), and a **pure,
+deterministic evaluator** turns it into a posture (`reachable` / `degraded` /
+`unreachable` / `wifi_only_blindspot`) plus the single self-managing playbook
+action it warrants (`monitor` / `locate` / `alert` / `escalate`) — so a lost
+device becomes a self-triaging event instead of something an admin must chase.
+Read-only by construction and gated exactly like every other integration (live
+only on `beta`/`prod` + `SIGNALGRID_LIVE_INTEGRATIONS=true` + `CARRIER_ACCESS_TOKEN`;
+otherwise fixture mode). Proven offline in CI (`pnpm run proof:carrier-reachability`).
 
 **Fixture-safe by default:** even at `SIGNALGRID_TIER=prod`, no live vendor calls
 are made unless `SIGNALGRID_LIVE_INTEGRATIONS=true` is also set — so this stack is

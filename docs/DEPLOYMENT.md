@@ -45,6 +45,7 @@ in-memory (the fixture-safe default used by the public build and CI).
 | `NAC_ACCESS_TOKEN` | Read-only token for the network/NAC posture connector. | unset (fixture mode) |
 | `EDR_ACCESS_TOKEN` | Read-only token for the EDR/EPP endpoint threat-state connector. | unset (fixture mode) |
 | `IDENTITY_RISK_ACCESS_TOKEN` | Read-only token for the identity/SSO sign-in-risk connector. | unset (fixture mode) |
+| `RTLS_ACCESS_TOKEN` | Read-only token for the RTLS/badge-dwell physical-custody connector. | unset (fixture mode) |
 
 ## Enterprise sign-in (OIDC) — gated
 
@@ -121,6 +122,28 @@ already skipped). Read-only by construction and gated exactly like every other
 integration (live only on `beta`/`prod` + `SIGNALGRID_LIVE_INTEGRATIONS=true` +
 `IDENTITY_RISK_ACCESS_TOKEN`; otherwise fixture mode). Proven offline in CI
 (`pnpm run proof:identity-risk`), and fused with the other dimensions by
+`@workspace/posture-composition`.
+
+## RTLS / badge-dwell physical custody — gated
+
+The physical-plane signal that ties the cyber dimensions back to the two-plane
+custody model: **where is the shared device physically, and is its custody
+consistent with the badge checkout?** The read-only **RTLS connector** reads
+per-device real-time zone, dwell, badge association, and egress state from a
+Real-Time Location System (shaped for CenTrak, Stanley/HID AeroScout, Zebra
+MotionWorks, Sonitor, Cisco Spaces, Kontakt.io), and a **pure, deterministic
+evaluator** turns it into one custody posture (`in_zone` / `stale_fix` /
+`off_zone` / `at_egress` / `abandoned` / `left_area` / `unknown`) plus the action
+it warrants (`none` / `monitor` / `locate` / `alert` / `escalate`). Distinct from
+location-services (GPS/geofence, on/off premises) — this is **indoor, zone-level,
+and custody-aware**. Fail-safe by construction: a device **not currently detected
+in the monitored area** is a custody breach (`escalate`), a **stale or
+unconfirmable fix** means "go locate it", an **unattended device with no checkout
+badge** is flagged abandoned, and an **untracked device** is a blind spot (never
+"in custody"). Read-only by construction and gated exactly like every other
+integration (live only on `beta`/`prod` + `SIGNALGRID_LIVE_INTEGRATIONS=true` +
+`RTLS_ACCESS_TOKEN`; otherwise fixture mode). Proven offline in CI
+(`pnpm run proof:rtls-custody`), and fused with the other dimensions by
 `@workspace/posture-composition`.
 
 **Fixture-safe by default:** even at `SIGNALGRID_TIER=prod`, no live vendor calls

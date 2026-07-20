@@ -4,6 +4,7 @@ import type { VulnVerdict } from "@workspace/integrations/vuln-scan";
 import type { NetworkVerdict } from "@workspace/integrations/network-nac";
 import type { ThreatVerdict } from "@workspace/integrations/edr-threat";
 import type { IdentityRiskVerdict } from "@workspace/integrations/identity-risk";
+import type { CustodyVerdict } from "@workspace/integrations/rtls-custody";
 import type { GraphPostureSignal } from "@workspace/integrations/graph";
 import type { Detection } from "@workspace/event-contract";
 import { ACTION_RANK } from "./compose";
@@ -44,6 +45,12 @@ export function fromIdentityRisk(v: IdentityRiskVerdict): ComposableSignal {
   // Identity / SSO sign-in-risk actions (none|monitor|step_up|alert|restrict|
   // escalate) are already on the unified ladder.
   return { kind: "identity", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromCustody(v: CustodyVerdict): ComposableSignal {
+  // RTLS custody actions (none|monitor|locate|alert|escalate) are already on the
+  // unified ladder.
+  return { kind: "custody", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 /** Cross-domain detection severity → unified action. */

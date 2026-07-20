@@ -51,7 +51,8 @@
     "proof:incident-playbook": "tsx ./src/incident-playbook-proof.ts",
     "proof:network-nac": "tsx ./src/network-nac-proof.ts",
     "proof:edr-threat": "tsx ./src/edr-threat-proof.ts",
-    "proof:identity-risk": "tsx ./src/identity-risk-proof.ts"
+    "proof:identity-risk": "tsx ./src/identity-risk-proof.ts",
+    "proof:rtls-custody": "tsx ./src/rtls-custody-proof.ts"
   },
   "dependencies": {
     "@workspace/app-workflows": "workspace:*",

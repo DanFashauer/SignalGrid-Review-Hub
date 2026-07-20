@@ -67,7 +67,8 @@
     "proof:incident-playbook": "pnpm --filter @workspace/scripts run proof:incident-playbook",
     "proof:network-nac": "pnpm --filter @workspace/scripts run proof:network-nac",
     "proof:edr-threat": "pnpm --filter @workspace/scripts run proof:edr-threat",
-    "proof:identity-risk": "pnpm --filter @workspace/scripts run proof:identity-risk"
+    "proof:identity-risk": "pnpm --filter @workspace/scripts run proof:identity-risk",
+    "proof:rtls-custody": "pnpm --filter @workspace/scripts run proof:rtls-custody"
   },
   "private": true,
   "devDependencies": {

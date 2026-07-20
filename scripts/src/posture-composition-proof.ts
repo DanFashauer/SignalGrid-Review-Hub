@@ -10,6 +10,7 @@ import {
   fromDetection,
   fromDevicePosture,
   fromLocation,
+  fromCustody,
   fromIdentityRisk,
   fromReachability,
   fromThreat,
@@ -18,6 +19,7 @@ import {
 } from "@workspace/posture-composition";
 import type { ThreatVerdict } from "@workspace/integrations/edr-threat";
 import type { IdentityRiskVerdict } from "@workspace/integrations/identity-risk";
+import type { CustodyVerdict } from "@workspace/integrations/rtls-custody";
 
 let passed = 0;
 const failures: string[] = [];
@@ -55,6 +57,14 @@ check("identity at_risk → step_up",
   fromIdentityRisk(identity({ posture: "at_risk", reasonCode: "MEDIUM_RISK_SIGNIN", recommendedAction: "step_up", riskLevel: "medium" })).action === "step_up");
 check("identity trusted → none, and its kind is 'identity'",
   fromIdentityRisk(identity({})).action === "none" && fromIdentityRisk(identity({})).kind === "identity");
+check("custody left_area → escalate",
+  fromCustody(custody({ posture: "left_area", reasonCode: "LEFT_AREA", recommendedAction: "escalate" })).action === "escalate");
+check("custody at_egress → alert",
+  fromCustody(custody({ posture: "at_egress", reasonCode: "AT_EGRESS", recommendedAction: "alert" })).action === "alert");
+check("custody stale_fix → locate",
+  fromCustody(custody({ posture: "stale_fix", reasonCode: "STALE_FIX", recommendedAction: "locate" })).action === "locate");
+check("custody in_zone → none, and its kind is 'custody'",
+  fromCustody(custody({})).action === "none" && fromCustody(custody({})).kind === "custody");
 check("device posture disabled identity → escalate",
   fromDevicePosture(posture({ identityStatus: "disabled" })).action === "escalate");
 check("device posture non-compliant → restrict",
@@ -112,6 +122,16 @@ const withIdentity = composeDeviceRisk([
 ]);
 check("a confirmed-compromised identity (escalate) drives the fused verdict on an otherwise-clean device", withIdentity.strongestAction === "escalate" && withIdentity.riskTier === "blocked");
 check("the identity signal is retained as a driver, tagged kind 'identity'", withIdentity.drivers.some((d) => d.kind === "identity" && d.action === "escalate"));
+
+// RTLS physical custody fuses in: a device that has left the monitored area
+// composes to escalate/blocked even when its cyber signals are calm.
+const withCustody = composeDeviceRisk([
+  fromDevicePosture(posture({})),                                                                 // none
+  fromVuln({ posture: "clean", highestSeverity: "info", findingCount: 0, exploitableCount: 0, reasonCode: "NO_FINDINGS", recommendedAction: "none" }), // none
+  fromCustody(custody({ posture: "left_area", reasonCode: "LEFT_AREA", recommendedAction: "escalate" })), // escalate
+]);
+check("a device that left the monitored area (escalate) drives the fused verdict", withCustody.strongestAction === "escalate" && withCustody.riskTier === "blocked");
+check("the custody signal is retained as a driver, tagged kind 'custody'", withCustody.drivers.some((d) => d.kind === "custody" && d.action === "escalate"));
 
 // tiers across the ladder
 check("all-calm signals ⇒ ok tier", composeDeviceRisk([fromDevicePosture(posture({})), fromReachability({ posture: "reachable", reasonCode: "CELLULAR_ONLINE", recommendedAction: "monitor", locatable: true })]).riskTier === "ok");
@@ -179,6 +199,21 @@ function identity(over: Partial<IdentityRiskVerdict>): IdentityRiskVerdict {
     highestDetectionGrade: null,
     mfaSatisfied: true,
     reasonCode: "NO_RISK",
+    recommendedAction: "none",
+    ...over,
+  };
+}
+
+// Build a CustodyVerdict with sane "in_zone" defaults, overriding as needed.
+function custody(over: Partial<CustodyVerdict>): CustodyVerdict {
+  return {
+    posture: "in_zone",
+    zoneId: "z1",
+    zoneType: "clinical",
+    fixAgeSeconds: 30,
+    dwellSeconds: 120,
+    badgeAssociated: true,
+    reasonCode: "CUSTODY_OK",
     recommendedAction: "none",
     ...over,
   };

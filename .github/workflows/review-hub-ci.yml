@@ -85,6 +85,9 @@ jobs:
       - name: Identity / SSO (sign-in risk) proof
         run: pnpm run proof:identity-risk
 
+      - name: RTLS / badge-dwell (physical custody) proof
+        run: pnpm run proof:rtls-custody
+
       - name: Posture-composition (unified signal fusion) proof
         run: pnpm run proof:posture-composition
 

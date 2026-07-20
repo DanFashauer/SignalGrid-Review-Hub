@@ -1,8 +1,9 @@
 // Unified device-posture composition: fuse the independent signal verdicts
 // (device posture, reachability, location, vulnerability, network/NAC, EDR/EPP
-// threat-state, identity/SSO sign-in risk, cross-domain detections) into ONE
-// decision-relevant answer — the strongest action any signal warrants and the
-// overall risk tier — with the drivers that produced it. Pure and deterministic.
+// threat-state, identity/SSO sign-in risk, RTLS physical custody, cross-domain
+// detections) into ONE decision-relevant answer — the strongest action any signal
+// warrants and the overall risk tier — with the drivers that produced it. Pure
+// and deterministic.
 
 /**
  * The single, unified action ladder every dimension maps onto, ordered from
@@ -39,6 +40,7 @@ export type SignalKind =
   | "network"
   | "threat"
   | "identity"
+  | "custody"
   | "detection";
 
 /** One dimension's contribution, already mapped onto the unified action ladder. */

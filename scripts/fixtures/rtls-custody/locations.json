@@ -1,0 +1,32 @@
+{
+  "fixtureName": "rtls-custody",
+  "fixtureVersion": "2026-07-20.v1",
+  "note": "Public-safe synthetic RTLS custody observations (illustrative zones, no real device, location, or tenant data).",
+  "accessToken": "rtls-fixture-read-token",
+  "locations": {
+    "d-in-zone": {
+      "record": { "deviceId": "d-in-zone", "zoneId": "ICU-4", "zoneType": "clinical", "zoneAuthorized": true, "fixAgeSeconds": 30, "dwellSeconds": 240, "badgeAssociated": true, "atEgress": false, "present": true, "source": "centrak" },
+      "expected": { "posture": "in_zone", "reasonCode": "CUSTODY_OK", "recommendedAction": "none", "zoneType": "clinical" }
+    },
+    "d-stale": {
+      "record": { "deviceId": "d-stale", "zoneId": "WARD-2", "zoneType": "clinical", "zoneAuthorized": true, "fixAgeSeconds": 1800, "dwellSeconds": 300, "badgeAssociated": true, "atEgress": false, "present": true, "source": "aeroscout" },
+      "expected": { "posture": "stale_fix", "reasonCode": "STALE_FIX", "recommendedAction": "locate", "zoneType": "clinical" }
+    },
+    "d-off-zone": {
+      "record": { "deviceId": "d-off-zone", "zoneId": "DOCK-1", "zoneType": "restricted", "zoneAuthorized": false, "fixAgeSeconds": 20, "dwellSeconds": 120, "badgeAssociated": true, "atEgress": false, "present": true, "source": "motionworks" },
+      "expected": { "posture": "off_zone", "reasonCode": "OFF_ZONE", "recommendedAction": "alert", "zoneType": "unauthorized" }
+    },
+    "d-egress": {
+      "record": { "deviceId": "d-egress", "zoneId": "EXIT-W", "zoneType": "egress", "zoneAuthorized": true, "fixAgeSeconds": 10, "dwellSeconds": 60, "badgeAssociated": true, "atEgress": true, "present": true, "source": "sonitor" },
+      "expected": { "posture": "at_egress", "reasonCode": "AT_EGRESS", "recommendedAction": "alert", "zoneType": "egress" }
+    },
+    "d-abandoned": {
+      "record": { "deviceId": "d-abandoned", "zoneId": "LOBBY-1", "zoneType": "public", "zoneAuthorized": true, "fixAgeSeconds": 90, "dwellSeconds": 7200, "badgeAssociated": false, "atEgress": false, "present": true, "source": "cisco-spaces" },
+      "expected": { "posture": "abandoned", "reasonCode": "ABANDONED", "recommendedAction": "alert", "zoneType": "public" }
+    },
+    "d-left": {
+      "record": { "deviceId": "d-left", "zoneId": "EXIT-E", "zoneType": "egress", "zoneAuthorized": true, "fixAgeSeconds": 300, "dwellSeconds": 30, "badgeAssociated": false, "atEgress": false, "present": false, "source": "centrak" },
+      "expected": { "posture": "left_area", "reasonCode": "LEFT_AREA", "recommendedAction": "escalate", "zoneType": "egress" }
+    }
+  }
+}

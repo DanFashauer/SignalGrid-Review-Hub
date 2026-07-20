@@ -42,6 +42,7 @@ in-memory (the fixture-safe default used by the public build and CI).
 | `CARRIER_ACCESS_TOKEN` | Read-only carrier/IoT-connectivity token for the reachability connector. | unset (fixture mode) |
 | `LOCATION_ACCESS_TOKEN` | Read-only token for the device location-services connector. | unset (fixture mode) |
 | `VULN_SCAN_ACCESS_TOKEN` | Read-only token for the vulnerability-scanner connector. | unset (fixture mode) |
+| `NAC_ACCESS_TOKEN` | Read-only token for the network/NAC posture connector. | unset (fixture mode) |
 
 ## Enterprise sign-in (OIDC) — gated
 

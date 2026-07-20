@@ -48,7 +48,8 @@
     "proof:location-services": "tsx ./src/location-services-proof.ts",
     "proof:vuln-scan": "tsx ./src/vuln-scan-proof.ts",
     "proof:posture-composition": "tsx ./src/posture-composition-proof.ts",
-    "proof:incident-playbook": "tsx ./src/incident-playbook-proof.ts"
+    "proof:incident-playbook": "tsx ./src/incident-playbook-proof.ts",
+    "proof:network-nac": "tsx ./src/network-nac-proof.ts"
   },
   "dependencies": {
     "@workspace/app-workflows": "workspace:*",

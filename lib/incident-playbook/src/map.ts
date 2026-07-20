@@ -157,6 +157,8 @@ function categoryForKind(kind: string): IncidentCategory {
     case "reachability":
     case "location":
       return "asset_device";
+    case "network":
+      return "security_compliance";
     case "detection":
       return "security_incident";
     default:

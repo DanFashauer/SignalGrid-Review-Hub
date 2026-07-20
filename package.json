@@ -64,7 +64,8 @@
     "proof:location-services": "pnpm --filter @workspace/scripts run proof:location-services",
     "proof:vuln-scan": "pnpm --filter @workspace/scripts run proof:vuln-scan",
     "proof:posture-composition": "pnpm --filter @workspace/scripts run proof:posture-composition",
-    "proof:incident-playbook": "pnpm --filter @workspace/scripts run proof:incident-playbook"
+    "proof:incident-playbook": "pnpm --filter @workspace/scripts run proof:incident-playbook",
+    "proof:network-nac": "pnpm --filter @workspace/scripts run proof:network-nac"
   },
   "private": true,
   "devDependencies": {

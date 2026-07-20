@@ -31,7 +31,13 @@ export const UNIFIED_ACTIONS: readonly UnifiedAction[] = [
 
 export type RiskTier = "ok" | "watch" | "at_risk" | "blocked";
 
-export type SignalKind = "device_posture" | "reachability" | "location" | "vulnerability" | "detection";
+export type SignalKind =
+  | "device_posture"
+  | "reachability"
+  | "location"
+  | "vulnerability"
+  | "network"
+  | "detection";
 
 /** One dimension's contribution, already mapped onto the unified action ladder. */
 export interface ComposableSignal {

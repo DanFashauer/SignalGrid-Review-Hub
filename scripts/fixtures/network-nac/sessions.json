@@ -1,0 +1,38 @@
+{
+  "fixtureName": "network-nac",
+  "fixtureVersion": "2026-07-20.v1",
+  "note": "Public-safe synthetic NAC/LAN session posture (no real devices, MACs, or topology). observedAt 2026-07-20T12:00:00Z; an auth older than 30m is stale.",
+  "accessToken": "nac-fixture-read-token",
+  "observedAt": "2026-07-20T12:00:00.000Z",
+  "sessions": [
+    {
+      "deviceId": "dev-trusted", "authState": "authenticated", "segment": "clinical-vlan-20", "switchPort": "sw3/gi1/0/12",
+      "nacCompliant": true, "lastAuthAt": "2026-07-20T11:55:00Z",
+      "expected": { "authState": "authenticated", "posture": "on_trusted_segment", "reasonCode": "AUTHENTICATED_TRUSTED_SEGMENT", "recommendedAction": "none" }
+    },
+    {
+      "deviceId": "dev-unauth", "authState": "rejected", "segment": "guest-vlan-99", "accessPoint": "ap-lobby-2",
+      "nacCompliant": false, "lastAuthAt": "2026-07-20T11:58:00Z",
+      "expected": { "authState": "unauthenticated", "posture": "unauthenticated", "reasonCode": "UNAUTHENTICATED_AT_CONNECTION", "recommendedAction": "restrict" }
+    },
+    {
+      "deviceId": "dev-quarantined", "authState": "isolated", "segment": "quarantine-vlan-666", "switchPort": "sw3/gi1/0/40",
+      "nacCompliant": false, "lastAuthAt": "2026-07-20T11:50:00Z",
+      "expected": { "authState": "quarantined", "posture": "quarantined", "reasonCode": "QUARANTINED_SEGMENT", "recommendedAction": "monitor" }
+    },
+    {
+      "deviceId": "dev-noncompliant", "authState": "authenticated", "segment": "clinical-vlan-20", "switchPort": "sw3/gi1/0/13",
+      "nacCompliant": false, "lastAuthAt": "2026-07-20T11:57:00Z",
+      "expected": { "authState": "authenticated", "posture": "network_unknown", "reasonCode": "NAC_NONCOMPLIANT", "recommendedAction": "step_up" }
+    },
+    {
+      "deviceId": "dev-stale", "authState": "authenticated", "segment": "clinical-vlan-20", "switchPort": "sw3/gi1/0/14",
+      "nacCompliant": true, "lastAuthAt": "2026-07-20T10:00:00Z",
+      "expected": { "authState": "authenticated", "posture": "network_unknown", "reasonCode": "STALE_NETWORK_STATE", "recommendedAction": "step_up" }
+    },
+    {
+      "deviceId": "dev-unknown", "segment": "clinical-vlan-20", "lastAuthAt": null,
+      "expected": { "authState": "unknown", "posture": "network_unknown", "reasonCode": "NETWORK_STATE_UNKNOWN", "recommendedAction": "monitor" }
+    }
+  ]
+}

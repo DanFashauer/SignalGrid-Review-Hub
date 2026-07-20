@@ -3,6 +3,7 @@ import type { LocationVerdict } from "@workspace/integrations/location-services"
 import type { VulnVerdict } from "@workspace/integrations/vuln-scan";
 import type { GraphPostureSignal } from "@workspace/integrations/graph";
 import type { Detection } from "@workspace/event-contract";
+import { ACTION_RANK } from "./compose";
 import type { ComposableSignal, UnifiedAction } from "./types";
 
 /**
@@ -33,32 +34,34 @@ export function fromDetection(d: Detection): ComposableSignal {
 }
 
 /**
- * Device posture (Graph/MDM) → unified action. Fail-safe: a disabled identity is
- * the strongest concern, then non-compliant, then unmanaged/missing posture, then
- * a high-risk user; a compliant managed device contributes nothing.
+ * Device posture (Graph/MDM) → unified action. Fail-safe and ORDER-PROOF: every
+ * matching condition contributes a candidate action, and the STRONGEST (highest
+ * rank on the unified ladder) wins — so a severe concern is never diluted by a
+ * calmer one that happens to be checked later. A compliant managed device with no
+ * risk factors contributes nothing (`none`). Ranks: escalate > restrict > alert >
+ * step_up, so e.g. a high-risk user (alert) on an unmanaged device (step_up)
+ * composes to `alert`, and any non-compliant/disabled state outranks both.
  */
 export function fromDevicePosture(s: GraphPostureSignal): ComposableSignal {
-  let action: UnifiedAction = "none";
-  let reason = "COMPLIANT_MANAGED";
+  const candidates: Array<{ action: UnifiedAction; reason: string }> = [];
+  if (s.identityStatus === "disabled") candidates.push({ action: "escalate", reason: "IDENTITY_DISABLED" });
+  if (s.deviceComplianceState === "non_compliant") candidates.push({ action: "restrict", reason: "DEVICE_NON_COMPLIANT" });
+  if (s.userRisk === "high") candidates.push({ action: "alert", reason: "USER_RISK_HIGH" });
+  if (s.deviceManagementState === "unmanaged") candidates.push({ action: "step_up", reason: "DEVICE_UNMANAGED" });
+  if (s.deviceComplianceState === "missing") candidates.push({ action: "step_up", reason: "COMPLIANCE_MISSING" });
 
-  if (s.userRisk === "high") {
-    action = "alert";
-    reason = "USER_RISK_HIGH";
-  }
-  if (s.deviceManagementState === "unmanaged" || s.deviceComplianceState === "missing") {
-    action = "step_up";
-    reason = s.deviceManagementState === "unmanaged" ? "DEVICE_UNMANAGED" : "COMPLIANCE_MISSING";
-  }
-  if (s.deviceComplianceState === "non_compliant") {
-    action = "restrict";
-    reason = "DEVICE_NON_COMPLIANT";
-  }
-  if (s.identityStatus === "disabled") {
-    action = "escalate";
-    reason = "IDENTITY_DISABLED";
-  }
+  const winner = candidates.reduce<{ action: UnifiedAction; reason: string }>(
+    (max, c) => (ACTION_RANK[c.action] > ACTION_RANK[max.action] ? c : max),
+    { action: "none", reason: "COMPLIANT_MANAGED" },
+  );
 
   const posture =
-    action === "none" ? "compliant" : action === "escalate" ? "identity_blocked" : action === "restrict" ? "non_compliant" : "degraded";
-  return { kind: "device_posture", posture, action, reason };
+    winner.action === "none"
+      ? "compliant"
+      : winner.action === "escalate"
+        ? "identity_blocked"
+        : winner.action === "restrict"
+          ? "non_compliant"
+          : "degraded";
+  return { kind: "device_posture", posture, action: winner.action, reason: winner.reason };
 }

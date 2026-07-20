@@ -39,8 +39,21 @@ check("device posture non-compliant → restrict",
   fromDevicePosture(posture({ deviceComplianceState: "non_compliant" })).action === "restrict");
 check("device posture unmanaged → step_up",
   fromDevicePosture(posture({ deviceManagementState: "unmanaged" })).action === "step_up");
+check("device posture high user-risk → alert",
+  fromDevicePosture(posture({ userRisk: "high" })).action === "alert");
 check("device posture compliant+managed → none",
   fromDevicePosture(posture({})).action === "none");
+
+// ── order-proof: the STRONGEST device-posture concern wins (a severe signal is
+// never diluted by a calmer one checked later — regression for the adapter bug) ──
+check("high user-risk (alert) is NOT diluted by unmanaged (step_up) → alert",
+  fromDevicePosture(posture({ userRisk: "high", deviceManagementState: "unmanaged" })).action === "alert");
+check("high user-risk (alert) is NOT diluted by missing compliance (step_up) → alert",
+  fromDevicePosture(posture({ userRisk: "high", deviceComplianceState: "missing" })).action === "alert");
+check("non-compliant (restrict) outranks a high-risk user (alert) → restrict",
+  fromDevicePosture(posture({ userRisk: "high", deviceComplianceState: "non_compliant" })).action === "restrict");
+check("disabled identity (escalate) outranks everything → escalate",
+  fromDevicePosture(posture({ identityStatus: "disabled", deviceComplianceState: "non_compliant", userRisk: "high" })).action === "escalate");
 
 // ── composition: strongest action wins, tier follows ──────────────────────────
 const mixed: ComposableSignal[] = [

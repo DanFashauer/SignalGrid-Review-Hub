@@ -1,0 +1,12 @@
+{
+  "name": "@workspace/incident-playbook",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@workspace/posture-composition": "workspace:*",
+    "@workspace/event-contract": "workspace:*"
+  },
+  "devDependencies": { "@types/node": "catalog:" }
+}

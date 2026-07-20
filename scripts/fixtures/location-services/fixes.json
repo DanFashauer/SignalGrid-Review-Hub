@@ -1,0 +1,39 @@
+{
+  "fixtureName": "location-services",
+  "fixtureVersion": "2026-07-20.v1",
+  "note": "Public-safe synthetic device location fixes (no real coordinates, devices, or people). observedAt is 2026-07-20T12:00:00Z; a fix older than 15m is stale. Privacy-minimized: geofence membership preferred over precise coordinates.",
+  "accessToken": "location-fixture-read-token",
+  "observedAt": "2026-07-20T12:00:00.000Z",
+  "fixes": [
+    {
+      "deviceId": "dev-onsite", "geofenceState": "inside", "geofenceId": "ward-3-west", "source": "wifi",
+      "accuracyMeters": 8, "capturedAt": "2026-07-20T11:57:00Z",
+      "expected": { "geofenceState": "inside", "hasPreciseCoordinates": false,
+        "posture": "on_premises", "reasonCode": "INSIDE_AUTHORIZED_GEOFENCE", "recommendedAction": "none", "locatable": true, "usesPreciseLocation": false }
+    },
+    {
+      "deviceId": "dev-offsite", "geofenceState": "outside", "geofenceId": "campus-main", "source": "gps",
+      "accuracyMeters": 12, "capturedAt": "2026-07-20T11:58:00Z", "latitude": 27.95, "longitude": -82.46,
+      "expected": { "geofenceState": "outside", "hasPreciseCoordinates": true,
+        "posture": "off_premises", "reasonCode": "OUTSIDE_AUTHORIZED_GEOFENCE", "recommendedAction": "locate", "locatable": true, "usesPreciseLocation": true }
+    },
+    {
+      "deviceId": "dev-stale", "geofenceState": "inside", "geofenceId": "ward-3-west", "source": "wifi",
+      "accuracyMeters": 10, "capturedAt": "2026-07-20T10:30:00Z",
+      "expected": { "geofenceState": "inside", "hasPreciseCoordinates": false,
+        "posture": "off_premises_stale", "reasonCode": "STALE_LOCATION_FIX", "recommendedAction": "locate", "locatable": true, "usesPreciseLocation": false }
+    },
+    {
+      "deviceId": "dev-nolocation", "geofenceState": "unknown", "source": "unknown",
+      "capturedAt": null,
+      "expected": { "geofenceState": "unknown", "hasPreciseCoordinates": false,
+        "posture": "location_unknown", "reasonCode": "NO_LOCATION", "recommendedAction": "monitor", "locatable": false, "usesPreciseLocation": false }
+    },
+    {
+      "deviceId": "dev-lostmode", "geofenceState": "outside", "geofenceId": "campus-main", "source": "mdm_lost_mode",
+      "accuracyMeters": 65, "capturedAt": "2026-07-20T11:59:30Z",
+      "expected": { "geofenceState": "outside", "hasPreciseCoordinates": false,
+        "posture": "off_premises", "reasonCode": "OUTSIDE_AUTHORIZED_GEOFENCE", "recommendedAction": "locate", "locatable": true, "usesPreciseLocation": false }
+    }
+  ]
+}

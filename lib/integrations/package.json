@@ -5,7 +5,15 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./graph": "./src/integrations/graph/index.ts"
+    "./graph": "./src/integrations/graph/index.ts",
+    "./carrier": "./src/integrations/carrier/index.ts",
+    "./location-services": "./src/integrations/location-services/index.ts",
+    "./vuln-scan": "./src/integrations/vuln-scan/index.ts",
+    "./network-nac": "./src/integrations/network-nac/index.ts",
+    "./edr-threat": "./src/integrations/edr-threat/index.ts",
+    "./identity-risk": "./src/integrations/identity-risk/index.ts",
+    "./rtls-custody": "./src/integrations/rtls-custody/index.ts",
+    "./peripheral-control": "./src/integrations/peripheral-control/index.ts"
   },
   "dependencies": {
     "ioredis": "^5.4.1",

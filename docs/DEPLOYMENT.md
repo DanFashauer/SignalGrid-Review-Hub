@@ -39,6 +39,14 @@ in-memory (the fixture-safe default used by the public build and CI).
 | `OIDC_TENANT_CLAIM` / `OIDC_ROLE_CLAIM` | Claims carrying the IdP tenant / role. | `tid` / `roles` |
 | `OIDC_TENANT_MAP` / `OIDC_ROLE_MAP` | JSON maps: IdP value → internal tenant id / role. | unset |
 | `GRAPH_ACCESS_TOKEN` | Read-only Microsoft Graph token for the posture connector. | unset (fixture mode) |
+| `CARRIER_ACCESS_TOKEN` | Read-only carrier/IoT-connectivity token for the reachability connector. | unset (fixture mode) |
+| `LOCATION_ACCESS_TOKEN` | Read-only token for the device location-services connector. | unset (fixture mode) |
+| `VULN_SCAN_ACCESS_TOKEN` | Read-only token for the vulnerability-scanner connector. | unset (fixture mode) |
+| `NAC_ACCESS_TOKEN` | Read-only token for the network/NAC posture connector. | unset (fixture mode) |
+| `EDR_ACCESS_TOKEN` | Read-only token for the EDR/EPP endpoint threat-state connector. | unset (fixture mode) |
+| `IDENTITY_RISK_ACCESS_TOKEN` | Read-only token for the identity/SSO sign-in-risk connector. | unset (fixture mode) |
+| `RTLS_ACCESS_TOKEN` | Read-only token for the RTLS/badge-dwell physical-custody connector. | unset (fixture mode) |
+| `PERIPHERAL_ACCESS_TOKEN` | Read-only token for the removable-media/peripheral-control connector. | unset (fixture mode) |
 
 ## Enterprise sign-in (OIDC) — gated
 
@@ -61,6 +69,105 @@ other integration**: it makes live Graph calls only on `beta`/`prod` **and** wit
 runs in offline **fixture mode**. So it is safe to stand up for evaluation with no
 tenant, and its normalization/pagination/error paths are proven offline in CI
 (`pnpm run proof:graph-connector`).
+
+## Post-exit reachability (carrier connectivity) — gated
+
+Once a shared device leaves managed Wi-Fi, MDM "find/ring/lock" commands become
+opportunistic. The read-only **carrier reachability connector** reads per-SIM
+session + last-seen state from a carrier/IoT platform (shaped for Verizon
+ThingSpace, Cisco IoT Control Center, Twilio Super SIM), and a **pure,
+deterministic evaluator** turns it into a posture (`reachable` / `degraded` /
+`unreachable` / `wifi_only_blindspot`) plus the single self-managing playbook
+action it warrants (`monitor` / `locate` / `alert` / `escalate`) — so a lost
+device becomes a self-triaging event instead of something an admin must chase.
+Read-only by construction and gated exactly like every other integration (live
+only on `beta`/`prod` + `SIGNALGRID_LIVE_INTEGRATIONS=true` + `CARRIER_ACCESS_TOKEN`;
+otherwise fixture mode). Proven offline in CI (`pnpm run proof:carrier-reachability`).
+
+## EDR/EPP endpoint threat-state — gated
+
+The vulnerability connector answers "what known CVEs does this device carry?";
+the read-only **EDR/EPP connector** answers the other half — "is this endpoint
+actually protected, and is anything live on it right now?" It reads per-endpoint
+**agent health** (installed / running / real-time protection / signature age) and
+**threat detections** (with their remediation state) from an endpoint-protection
+platform (shaped for Microsoft Defender for Endpoint, CrowdStrike Falcon,
+SentinelOne, Jamf Protect, Sophos Intercept X, VMware Carbon Black), and a **pure,
+deterministic evaluator** fuses them into one posture (`protected` / `monitored` /
+`degraded_protection` / `unprotected` / `active_threat` / `critical_compromise` /
+`unknown`) plus the single action it warrants (`none` / `monitor` / `step_up` /
+`alert` / `restrict` / `escalate`). Fail-safe by construction: an absent/disabled
+agent is a **blind spot** (never "clean"), an unclassifiable detection is treated
+as **active**, and the worst active concern drives the verdict. Read-only by
+construction and gated exactly like every other integration (live only on
+`beta`/`prod` + `SIGNALGRID_LIVE_INTEGRATIONS=true` + `EDR_ACCESS_TOKEN`; otherwise
+fixture mode). Proven offline in CI (`pnpm run proof:edr-threat`), and fused with
+the other dimensions by `@workspace/posture-composition`.
+
+## Identity / SSO sign-in risk — gated
+
+Every other dimension asks about the **device**; this one asks about the
+**person/session**: is the identity signing in actually who they claim, or is it
+compromised? The read-only **identity-risk connector** reads per-principal risk
+state + risk detections from an IdP's risk engine (shaped for Microsoft Entra ID
+Protection risky-users/risk-detections, Okta ThreatInsight, Ping Identity, Cisco
+Duo, Google Workspace context-aware access), and a **pure, deterministic
+evaluator** aggregates them into one posture (`trusted` / `low_risk` / `at_risk` /
+`high_risk` / `compromised` / `unknown`) plus the action it warrants (`none` /
+`monitor` / `step_up` / `alert` / `restrict` / `escalate`). Fail-safe by
+construction: a principal with **no IdP risk coverage** is a blind spot (never
+"trusted"), a **confirmed-compromised** identity escalates, an **unclassifiable
+detection** is never treated as benign, and a **risky sign-in that bypassed MFA**
+is treated as worse than one that didn't (a step-up can't fix a factor that was
+already skipped). Read-only by construction and gated exactly like every other
+integration (live only on `beta`/`prod` + `SIGNALGRID_LIVE_INTEGRATIONS=true` +
+`IDENTITY_RISK_ACCESS_TOKEN`; otherwise fixture mode). Proven offline in CI
+(`pnpm run proof:identity-risk`), and fused with the other dimensions by
+`@workspace/posture-composition`.
+
+## RTLS / badge-dwell physical custody — gated
+
+The physical-plane signal that ties the cyber dimensions back to the two-plane
+custody model: **where is the shared device physically, and is its custody
+consistent with the badge checkout?** The read-only **RTLS connector** reads
+per-device real-time zone, dwell, badge association, and egress state from a
+Real-Time Location System (shaped for CenTrak, Stanley/HID AeroScout, Zebra
+MotionWorks, Sonitor, Cisco Spaces, Kontakt.io), and a **pure, deterministic
+evaluator** turns it into one custody posture (`in_zone` / `stale_fix` /
+`off_zone` / `at_egress` / `abandoned` / `left_area` / `unknown`) plus the action
+it warrants (`none` / `monitor` / `locate` / `alert` / `escalate`). Distinct from
+location-services (GPS/geofence, on/off premises) — this is **indoor, zone-level,
+and custody-aware**. Fail-safe by construction: a device **not currently detected
+in the monitored area** is a custody breach (`escalate`), a **stale or
+unconfirmable fix** means "go locate it", an **unattended device with no checkout
+badge** is flagged abandoned, and an **untracked device** is a blind spot (never
+"in custody"). Read-only by construction and gated exactly like every other
+integration (live only on `beta`/`prod` + `SIGNALGRID_LIVE_INTEGRATIONS=true` +
+`RTLS_ACCESS_TOKEN`; otherwise fixture mode). Proven offline in CI
+(`pnpm run proof:rtls-custody`), and fused with the other dimensions by
+`@workspace/posture-composition`.
+
+## Removable-media / peripheral control — gated
+
+The data-exfiltration / malware-ingress surface: is an unauthorized or unencrypted
+removable device attached to the shared device? On a shared frontline (especially
+clinical) workstation, a writable USB drive is a real HIPAA/exfil and ingress
+vector. The read-only **peripheral-control connector** reads per-device attached-
+peripheral inventory + device-control policy state from a device-control platform
+(shaped for Microsoft Intune device control, Microsoft Defender for Endpoint device
+control, CrowdStrike Falcon Device Control, Ivanti Device Control, Forcepoint), and
+a **pure, deterministic evaluator** turns it into one posture (`no_removable` /
+`controlled` / `policy_unenforced` / `unencrypted_media` / `unauthorized_media` /
+`exfil_risk` / `unknown`) plus the action it warrants (`none` / `monitor` /
+`step_up` / `alert` / `restrict`). Fail-safe by construction: a writable removable
+whose **authorization or encryption we cannot confirm** is treated as the exfil/
+ingress surface it might be (never assumed safe), an **unknown access value** on a
+storage device is treated as writable, and a device with **no device-control
+coverage** is a blind spot (never "clean"). Read-only by construction and gated
+exactly like every other integration (live only on `beta`/`prod` +
+`SIGNALGRID_LIVE_INTEGRATIONS=true` + `PERIPHERAL_ACCESS_TOKEN`; otherwise fixture
+mode). Proven offline in CI (`pnpm run proof:peripheral-control`), and fused with
+the other dimensions by `@workspace/posture-composition`.
 
 **Fixture-safe by default:** even at `SIGNALGRID_TIER=prod`, no live vendor calls
 are made unless `SIGNALGRID_LIVE_INTEGRATIONS=true` is also set — so this stack is

@@ -1,0 +1,36 @@
+{
+  "fixtureName": "peripheral-control",
+  "fixtureVersion": "2026-07-20.v1",
+  "note": "Public-safe synthetic device-control / removable-media inventory (illustrative peripherals, no real device or tenant data).",
+  "accessToken": "peripheral-fixture-read-token",
+  "devices": {
+    "d-clean": {
+      "record": { "deviceId": "d-clean", "policyEnforced": true, "peripherals": [ { "peripheralId": "kbd-1", "class": "keyboard", "access": "allowed" } ], "source": "intune" },
+      "expected": { "posture": "no_removable", "reasonCode": "NO_REMOVABLE", "recommendedAction": "none", "removableCount": 0, "writableRemovableCount": 0, "policyEnforced": true }
+    },
+    "d-controlled-blocked": {
+      "record": { "deviceId": "d-controlled-blocked", "policyEnforced": true, "peripherals": [ { "peripheralId": "usb-1", "class": "mass_storage", "access": "blocked", "productName": "Generic USB" } ], "source": "defender" },
+      "expected": { "posture": "controlled", "reasonCode": "CONTROLLED_MEDIA", "recommendedAction": "monitor", "removableCount": 1, "writableRemovableCount": 0, "policyEnforced": true }
+    },
+    "d-controlled-encrypted": {
+      "record": { "deviceId": "d-controlled-encrypted", "policyEnforced": true, "peripherals": [ { "peripheralId": "usb-2", "class": "mass_storage", "access": "read_write", "authorized": true, "encrypted": true, "productName": "IronKey" } ], "source": "crowdstrike" },
+      "expected": { "posture": "controlled", "reasonCode": "CONTROLLED_MEDIA", "recommendedAction": "monitor", "removableCount": 1, "writableRemovableCount": 1, "policyEnforced": true }
+    },
+    "d-unencrypted": {
+      "record": { "deviceId": "d-unencrypted", "policyEnforced": true, "peripherals": [ { "peripheralId": "usb-3", "class": "mass_storage", "access": "read_write", "authorized": true, "encrypted": false, "productName": "SanDisk Cruzer" } ], "source": "intune" },
+      "expected": { "posture": "unencrypted_media", "reasonCode": "UNENCRYPTED_WRITABLE_MEDIA", "recommendedAction": "alert", "removableCount": 1, "writableRemovableCount": 1, "policyEnforced": true }
+    },
+    "d-unauthorized": {
+      "record": { "deviceId": "d-unauthorized", "policyEnforced": true, "peripherals": [ { "peripheralId": "usb-4", "class": "mass_storage", "access": "read_write", "authorized": false, "encrypted": true, "productName": "Unknown Vendor" } ], "source": "ivanti" },
+      "expected": { "posture": "unauthorized_media", "reasonCode": "UNAUTHORIZED_MEDIA", "recommendedAction": "alert", "removableCount": 1, "writableRemovableCount": 1, "policyEnforced": true }
+    },
+    "d-exfil": {
+      "record": { "deviceId": "d-exfil", "policyEnforced": true, "peripherals": [ { "peripheralId": "usb-5", "class": "mass_storage", "access": "read_write", "authorized": false, "encrypted": false, "productName": "Unbranded 128GB" } ], "source": "defender" },
+      "expected": { "posture": "exfil_risk", "reasonCode": "UNAUTHORIZED_UNENCRYPTED_MEDIA", "recommendedAction": "restrict", "removableCount": 1, "writableRemovableCount": 1, "policyEnforced": true }
+    },
+    "d-policy-off": {
+      "record": { "deviceId": "d-policy-off", "policyEnforced": false, "peripherals": [], "source": "intune" },
+      "expected": { "posture": "policy_unenforced", "reasonCode": "POLICY_UNENFORCED", "recommendedAction": "step_up", "removableCount": 0, "writableRemovableCount": 0, "policyEnforced": false }
+    }
+  }
+}

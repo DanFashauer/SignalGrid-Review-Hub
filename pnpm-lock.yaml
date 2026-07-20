@@ -1424,7 +1424,26 @@ importers:
         specifier: 'catalog:'
         version: 25.6.2
 
+  lib/event-contract:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.6.2
+
   lib/flows:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.6.2
+
+  lib/incident-playbook:
+    dependencies:
+      '@workspace/event-contract':
+        specifier: workspace:*
+        version: link:../event-contract
+      '@workspace/posture-composition':
+        specifier: workspace:*
+        version: link:../posture-composition
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -1500,6 +1519,19 @@ importers:
       '@types/pg':
         specifier: ^8.11.10
         version: 8.20.0
+
+  lib/posture-composition:
+    dependencies:
+      '@workspace/event-contract':
+        specifier: workspace:*
+        version: link:../event-contract
+      '@workspace/integrations':
+        specifier: workspace:*
+        version: link:../integrations
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.6.2
 
   lib/recommendations:
     dependencies:
@@ -1578,9 +1610,15 @@ importers:
       '@workspace/enterprise-auth':
         specifier: workspace:*
         version: link:../lib/enterprise-auth
+      '@workspace/event-contract':
+        specifier: workspace:*
+        version: link:../lib/event-contract
       '@workspace/flows':
         specifier: workspace:*
         version: link:../lib/flows
+      '@workspace/incident-playbook':
+        specifier: workspace:*
+        version: link:../lib/incident-playbook
       '@workspace/integrations':
         specifier: workspace:*
         version: link:../lib/integrations
@@ -1590,6 +1628,9 @@ importers:
       '@workspace/persistence':
         specifier: workspace:*
         version: link:../lib/persistence
+      '@workspace/posture-composition':
+        specifier: workspace:*
+        version: link:../lib/posture-composition
       '@workspace/recommendations':
         specifier: workspace:*
         version: link:../lib/recommendations

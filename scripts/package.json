@@ -43,7 +43,8 @@
     "proof:observability": "tsx ./src/observability-proof.ts",
     "proof:enterprise-auth": "tsx ./src/enterprise-auth-proof.ts",
     "proof:graph-connector": "tsx ./src/graph-connector-proof.ts",
-    "proof:carrier-reachability": "tsx ./src/carrier-reachability-proof.ts"
+    "proof:carrier-reachability": "tsx ./src/carrier-reachability-proof.ts",
+    "proof:event-contract": "tsx ./src/event-contract-proof.ts"
   },
   "dependencies": {
     "@workspace/app-workflows": "workspace:*",
@@ -62,7 +63,8 @@
     "@workspace/webauthn": "workspace:*",
     "@workspace/persistence": "workspace:*",
     "@workspace/enterprise-auth": "workspace:*",
-    "@workspace/integrations": "workspace:*"
+    "@workspace/integrations": "workspace:*",
+    "@workspace/event-contract": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

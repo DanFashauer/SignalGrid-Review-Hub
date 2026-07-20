@@ -67,6 +67,9 @@ jobs:
       - name: Carrier / post-exit reachability proof
         run: pnpm run proof:carrier-reachability
 
+      - name: Canonical event-contract proof (validation + cross-domain detections)
+        run: pnpm run proof:event-contract
+
       - name: Connector emulator proof
         run: pnpm run proof:connector-emulator
 

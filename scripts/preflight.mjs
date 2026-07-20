@@ -32,6 +32,7 @@ const STEPS = [
   { name: "Proof: microsoft-graph-sandbox", cmd: ["pnpm", "run", "proof:microsoft-graph-sandbox"] },
   { name: "Proof: graph-connector (read-only, gated)", cmd: ["pnpm", "run", "proof:graph-connector"] },
   { name: "Proof: carrier-reachability (post-exit, gated)", cmd: ["pnpm", "run", "proof:carrier-reachability"] },
+  { name: "Proof: event-contract (validation + cross-domain detections)", cmd: ["pnpm", "run", "proof:event-contract"] },
   { name: "Proof: connector-emulator", cmd: ["pnpm", "run", "proof:connector-emulator"] },
   { name: "OpenAPI contract check (proof:api-contract)", cmd: ["pnpm", "run", "proof:api-contract"] },
   { name: "API integration test (boots the server)", cmd: ["pnpm", "run", "test:api"] },

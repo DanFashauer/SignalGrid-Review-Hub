@@ -79,6 +79,9 @@ jobs:
       - name: Posture-composition (unified signal fusion) proof
         run: pnpm run proof:posture-composition
 
+      - name: Incident-playbook (decision to prioritized incident) proof
+        run: pnpm run proof:incident-playbook
+
       - name: Connector emulator proof
         run: pnpm run proof:connector-emulator
 

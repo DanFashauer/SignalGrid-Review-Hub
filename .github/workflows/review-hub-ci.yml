@@ -70,6 +70,12 @@ jobs:
       - name: Canonical event-contract proof (validation + cross-domain detections)
         run: pnpm run proof:event-contract
 
+      - name: Location-services (geofence posture) proof
+        run: pnpm run proof:location-services
+
+      - name: Vulnerability-scan (device risk posture) proof
+        run: pnpm run proof:vuln-scan
+
       - name: Connector emulator proof
         run: pnpm run proof:connector-emulator
 

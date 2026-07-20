@@ -6,7 +6,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./graph": "./src/integrations/graph/index.ts",
-    "./carrier": "./src/integrations/carrier/index.ts"
+    "./carrier": "./src/integrations/carrier/index.ts",
+    "./location-services": "./src/integrations/location-services/index.ts",
+    "./vuln-scan": "./src/integrations/vuln-scan/index.ts"
   },
   "dependencies": {
     "ioredis": "^5.4.1",

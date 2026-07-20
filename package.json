@@ -60,7 +60,9 @@
     "proof:enterprise-auth": "pnpm --filter @workspace/scripts run proof:enterprise-auth",
     "proof:graph-connector": "pnpm --filter @workspace/scripts run proof:graph-connector",
     "proof:carrier-reachability": "pnpm --filter @workspace/scripts run proof:carrier-reachability",
-    "proof:event-contract": "pnpm --filter @workspace/scripts run proof:event-contract"
+    "proof:event-contract": "pnpm --filter @workspace/scripts run proof:event-contract",
+    "proof:location-services": "pnpm --filter @workspace/scripts run proof:location-services",
+    "proof:vuln-scan": "pnpm --filter @workspace/scripts run proof:vuln-scan"
   },
   "private": true,
   "devDependencies": {

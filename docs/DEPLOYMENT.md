@@ -40,6 +40,8 @@ in-memory (the fixture-safe default used by the public build and CI).
 | `OIDC_TENANT_MAP` / `OIDC_ROLE_MAP` | JSON maps: IdP value → internal tenant id / role. | unset |
 | `GRAPH_ACCESS_TOKEN` | Read-only Microsoft Graph token for the posture connector. | unset (fixture mode) |
 | `CARRIER_ACCESS_TOKEN` | Read-only carrier/IoT-connectivity token for the reachability connector. | unset (fixture mode) |
+| `LOCATION_ACCESS_TOKEN` | Read-only token for the device location-services connector. | unset (fixture mode) |
+| `VULN_SCAN_ACCESS_TOKEN` | Read-only token for the vulnerability-scanner connector. | unset (fixture mode) |
 
 ## Enterprise sign-in (OIDC) — gated
 

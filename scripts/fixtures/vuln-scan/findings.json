@@ -1,0 +1,43 @@
+{
+  "fixtureName": "vuln-scan",
+  "fixtureVersion": "2026-07-20.v1",
+  "note": "Public-safe synthetic vulnerability findings (illustrative CVE ids, no real device or tenant data).",
+  "accessToken": "vuln-fixture-read-token",
+  "devices": {
+    "dev-critical": {
+      "findings": [
+        { "deviceId": "dev-critical", "cveId": "CVE-2026-0001", "severity": "critical", "cvssScore": 9.8, "exploitAvailable": true, "component": "webkit", "fixedVersion": "18.1", "source": "defender" },
+        { "deviceId": "dev-critical", "cveId": "CVE-2026-0002", "severity": "medium", "cvssScore": 5.4, "source": "defender" }
+      ],
+      "expected": { "posture": "critical_exposure", "highestSeverity": "critical", "reasonCode": "CRITICAL_OR_EXPLOITABLE", "recommendedAction": "restrict", "exploitableCount": 1, "findingCount": 2 }
+    },
+    "dev-exploitable-high": {
+      "findings": [
+        { "deviceId": "dev-exploitable-high", "cveId": "CVE-2026-0010", "severity": "high", "cvssScore": 8.1, "exploitAvailable": true, "source": "tenable" }
+      ],
+      "expected": { "posture": "critical_exposure", "highestSeverity": "high", "reasonCode": "CRITICAL_OR_EXPLOITABLE", "recommendedAction": "restrict", "exploitableCount": 1, "findingCount": 1 }
+    },
+    "dev-high": {
+      "findings": [
+        { "deviceId": "dev-high", "cveId": "CVE-2026-0020", "severity": "high", "cvssScore": 7.5, "exploitAvailable": false, "source": "qualys" }
+      ],
+      "expected": { "posture": "at_risk", "highestSeverity": "high", "reasonCode": "HIGH_SEVERITY_PRESENT", "recommendedAction": "patch", "exploitableCount": 0, "findingCount": 1 }
+    },
+    "dev-medium": {
+      "findings": [
+        { "deviceId": "dev-medium", "cvssScore": 5.0, "source": "rapid7" }
+      ],
+      "expected": { "posture": "low_risk", "highestSeverity": "medium", "reasonCode": "MEDIUM_SEVERITY_PRESENT", "recommendedAction": "patch", "exploitableCount": 0, "findingCount": 1 }
+    },
+    "dev-low": {
+      "findings": [
+        { "deviceId": "dev-low", "cveId": "CVE-2026-0040", "severity": "low", "cvssScore": 2.1, "source": "defender" }
+      ],
+      "expected": { "posture": "low_risk", "highestSeverity": "low", "reasonCode": "LOW_SEVERITY_ONLY", "recommendedAction": "monitor", "exploitableCount": 0, "findingCount": 1 }
+    },
+    "dev-clean": {
+      "findings": [],
+      "expected": { "posture": "clean", "highestSeverity": "info", "reasonCode": "NO_FINDINGS", "recommendedAction": "none", "exploitableCount": 0, "findingCount": 0 }
+    }
+  }
+}

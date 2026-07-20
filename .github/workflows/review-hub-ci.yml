@@ -82,6 +82,9 @@ jobs:
       - name: EDR / EPP (endpoint threat-state) proof
         run: pnpm run proof:edr-threat
 
+      - name: Identity / SSO (sign-in risk) proof
+        run: pnpm run proof:identity-risk
+
       - name: Posture-composition (unified signal fusion) proof
         run: pnpm run proof:posture-composition
 

@@ -44,6 +44,7 @@ in-memory (the fixture-safe default used by the public build and CI).
 | `VULN_SCAN_ACCESS_TOKEN` | Read-only token for the vulnerability-scanner connector. | unset (fixture mode) |
 | `NAC_ACCESS_TOKEN` | Read-only token for the network/NAC posture connector. | unset (fixture mode) |
 | `EDR_ACCESS_TOKEN` | Read-only token for the EDR/EPP endpoint threat-state connector. | unset (fixture mode) |
+| `IDENTITY_RISK_ACCESS_TOKEN` | Read-only token for the identity/SSO sign-in-risk connector. | unset (fixture mode) |
 
 ## Enterprise sign-in (OIDC) — gated
 
@@ -100,6 +101,27 @@ construction and gated exactly like every other integration (live only on
 `beta`/`prod` + `SIGNALGRID_LIVE_INTEGRATIONS=true` + `EDR_ACCESS_TOKEN`; otherwise
 fixture mode). Proven offline in CI (`pnpm run proof:edr-threat`), and fused with
 the other dimensions by `@workspace/posture-composition`.
+
+## Identity / SSO sign-in risk — gated
+
+Every other dimension asks about the **device**; this one asks about the
+**person/session**: is the identity signing in actually who they claim, or is it
+compromised? The read-only **identity-risk connector** reads per-principal risk
+state + risk detections from an IdP's risk engine (shaped for Microsoft Entra ID
+Protection risky-users/risk-detections, Okta ThreatInsight, Ping Identity, Cisco
+Duo, Google Workspace context-aware access), and a **pure, deterministic
+evaluator** aggregates them into one posture (`trusted` / `low_risk` / `at_risk` /
+`high_risk` / `compromised` / `unknown`) plus the action it warrants (`none` /
+`monitor` / `step_up` / `alert` / `restrict` / `escalate`). Fail-safe by
+construction: a principal with **no IdP risk coverage** is a blind spot (never
+"trusted"), a **confirmed-compromised** identity escalates, an **unclassifiable
+detection** is never treated as benign, and a **risky sign-in that bypassed MFA**
+is treated as worse than one that didn't (a step-up can't fix a factor that was
+already skipped). Read-only by construction and gated exactly like every other
+integration (live only on `beta`/`prod` + `SIGNALGRID_LIVE_INTEGRATIONS=true` +
+`IDENTITY_RISK_ACCESS_TOKEN`; otherwise fixture mode). Proven offline in CI
+(`pnpm run proof:identity-risk`), and fused with the other dimensions by
+`@workspace/posture-composition`.
 
 **Fixture-safe by default:** even at `SIGNALGRID_TIER=prod`, no live vendor calls
 are made unless `SIGNALGRID_LIVE_INTEGRATIONS=true` is also set — so this stack is

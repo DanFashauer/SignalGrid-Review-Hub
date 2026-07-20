@@ -10,12 +10,14 @@ import {
   fromDetection,
   fromDevicePosture,
   fromLocation,
+  fromIdentityRisk,
   fromReachability,
   fromThreat,
   fromVuln,
   type ComposableSignal,
 } from "@workspace/posture-composition";
 import type { ThreatVerdict } from "@workspace/integrations/edr-threat";
+import type { IdentityRiskVerdict } from "@workspace/integrations/identity-risk";
 
 let passed = 0;
 const failures: string[] = [];
@@ -45,6 +47,14 @@ check("threat degraded_protection → step_up",
   fromThreat(threat({ posture: "degraded_protection", reasonCode: "PROTECTION_DEGRADED", recommendedAction: "step_up", protectionHealthy: false })).action === "step_up");
 check("threat protected → none, and its kind is 'threat'",
   fromThreat(threat({})).action === "none" && fromThreat(threat({})).kind === "threat");
+check("identity compromised → escalate",
+  fromIdentityRisk(identity({ posture: "compromised", reasonCode: "CONFIRMED_COMPROMISED", recommendedAction: "escalate" })).action === "escalate");
+check("identity high_risk → restrict",
+  fromIdentityRisk(identity({ posture: "high_risk", reasonCode: "HIGH_RISK_SIGNIN", recommendedAction: "restrict", riskLevel: "high" })).action === "restrict");
+check("identity at_risk → step_up",
+  fromIdentityRisk(identity({ posture: "at_risk", reasonCode: "MEDIUM_RISK_SIGNIN", recommendedAction: "step_up", riskLevel: "medium" })).action === "step_up");
+check("identity trusted → none, and its kind is 'identity'",
+  fromIdentityRisk(identity({})).action === "none" && fromIdentityRisk(identity({})).kind === "identity");
 check("device posture disabled identity → escalate",
   fromDevicePosture(posture({ identityStatus: "disabled" })).action === "escalate");
 check("device posture non-compliant → restrict",
@@ -92,6 +102,16 @@ const withThreat = composeDeviceRisk([
 ]);
 check("an active critical EDR threat (escalate) drives the fused verdict", withThreat.strongestAction === "escalate" && withThreat.riskTier === "blocked");
 check("the threat signal is retained as a driver, tagged kind 'threat'", withThreat.drivers.some((d) => d.kind === "threat" && d.action === "escalate"));
+
+// identity/SSO sign-in risk fuses in: a compliant, reachable device whose USER
+// is confirmed-compromised composes to escalate/blocked — device fine, identity not.
+const withIdentity = composeDeviceRisk([
+  fromDevicePosture(posture({})),                                                                 // none
+  fromReachability({ posture: "reachable", reasonCode: "CELLULAR_ONLINE", recommendedAction: "monitor", locatable: true }), // monitor
+  fromIdentityRisk(identity({ posture: "compromised", reasonCode: "CONFIRMED_COMPROMISED", recommendedAction: "escalate", riskState: "confirmed_compromised" })), // escalate
+]);
+check("a confirmed-compromised identity (escalate) drives the fused verdict on an otherwise-clean device", withIdentity.strongestAction === "escalate" && withIdentity.riskTier === "blocked");
+check("the identity signal is retained as a driver, tagged kind 'identity'", withIdentity.drivers.some((d) => d.kind === "identity" && d.action === "escalate"));
 
 // tiers across the ladder
 check("all-calm signals ⇒ ok tier", composeDeviceRisk([fromDevicePosture(posture({})), fromReachability({ posture: "reachable", reasonCode: "CELLULAR_ONLINE", recommendedAction: "monitor", locatable: true })]).riskTier === "ok");
@@ -144,6 +164,21 @@ function threat(over: Partial<ThreatVerdict>): ThreatVerdict {
     activeThreatCount: 0,
     protectionHealthy: true,
     reasonCode: "NO_THREATS_HEALTHY",
+    recommendedAction: "none",
+    ...over,
+  };
+}
+
+// Build an IdentityRiskVerdict with sane "trusted" defaults, overriding as needed.
+function identity(over: Partial<IdentityRiskVerdict>): IdentityRiskVerdict {
+  return {
+    posture: "trusted",
+    riskLevel: "none",
+    riskState: "unknown",
+    detectionCount: 0,
+    highestDetectionGrade: null,
+    mfaSatisfied: true,
+    reasonCode: "NO_RISK",
     recommendedAction: "none",
     ...over,
   };

@@ -97,6 +97,9 @@ jobs:
       - name: Incident-playbook (decision to prioritized incident) proof
         run: pnpm run proof:incident-playbook
 
+      - name: Signal-fabric capstone (end-to-end fusion to incident) proof
+        run: pnpm run proof:fabric-scenario
+
       - name: Connector emulator proof
         run: pnpm run proof:connector-emulator
 

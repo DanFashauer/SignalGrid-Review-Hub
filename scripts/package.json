@@ -53,7 +53,8 @@
     "proof:edr-threat": "tsx ./src/edr-threat-proof.ts",
     "proof:identity-risk": "tsx ./src/identity-risk-proof.ts",
     "proof:rtls-custody": "tsx ./src/rtls-custody-proof.ts",
-    "proof:peripheral-control": "tsx ./src/peripheral-control-proof.ts"
+    "proof:peripheral-control": "tsx ./src/peripheral-control-proof.ts",
+    "proof:fabric-scenario": "tsx ./src/fabric-scenario-proof.ts"
   },
   "dependencies": {
     "@workspace/app-workflows": "workspace:*",

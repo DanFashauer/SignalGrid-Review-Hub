@@ -100,7 +100,7 @@ export interface ProvisioningResp {
   devices: ProvisioningDevice[];
   plan: { recordingId: string; deviceSerial: string; matched: boolean; mode: "simulated" | "enforced"; steps: ProvisioningStep[]; requiresApproval: number; willApplyAnything: boolean; reason: string };
 }
-export interface AppResilienceRow { appId: string; name: string; availability: string; mode: string; canProceed: boolean; requiredSafetyNets: string[] }
+export interface AppResilienceRow { appId: string; name: string; availability: string; mode: string; canProceed: boolean; requiredSafetyNets: string[]; reason: string }
 export interface AppResilienceResp {
   fleet: { apps: AppResilienceRow[]; total: number; normal: number; degraded: number; onFallback: number; blocked: number; workable: number; allWorkable: boolean };
 }

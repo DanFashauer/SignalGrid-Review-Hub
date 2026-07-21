@@ -44,6 +44,23 @@ nets**, at any availability.
   still use, and whether anything is `blocked` — so an outage's blast radius is one
   glance, not a scramble.
 
+## Seeing it — the operator surface
+
+The operator console (mobile PWA, `artifacts/signalgrid-app`) has an **App
+resilience** view that reads this rollup live from `GET /cp/v1/apps/resilience`:
+
+- a rollup of the suite — apps workable, on fallback, degraded, and **blocked**;
+- a **loud "Blocked" panel** that appears only when an app has no safe path
+  (escalate, don't improvise);
+- per-app posture with its availability, mode, the plain-language `reason`, and —
+  for a PHI app on a downtime fallback — the DR **safety nets** that must hold.
+
+The demo suite spans the clinical categories above (EHR, BCMA, patient portal,
+HIS, clinical comms, drug reference, billing) with availability chosen to exercise
+every mode, including a PHI app in outage **without** safety nets that resolves to
+`blocked_no_fallback` — the fail-safe made visible. The view is read-only; nothing
+is enforced.
+
 ## Boundary
 
 Availability is modeled/simulated here from an input, not scraped from a vendor

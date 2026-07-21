@@ -361,6 +361,76 @@ async function main() {
     check("challenge bound to a different user rejected", res.success === false);
   }
 
+  // ── 12. Signature-counter clone detection ────────────────────────────────
+  // Register a fresh credential, authenticate once to advance the stored
+  // signature counter to N, then submit a genuinely-signed assertion whose
+  // signCount is <= N. A real authenticator's counter strictly increases, so a
+  // valid signature reporting a non-increasing counter signals a CLONED
+  // authenticator (two devices sharing the key) and must be rejected — the
+  // clone guard, not the signature check.
+  {
+    const cloneUser = "user-clone-detect";
+    const { publicKey: clonePub, privateKey: clonePriv } = generateKeyPairSync("ec", { namedCurve: "P-256" });
+    const cloneJwk = clonePub.export({ format: "jwk" }) as { x: string; y: string };
+    const cloneCose = coseFromJwk(cloneJwk);
+    const cloneCredId = randomBytes(16);
+    const cloneCredIdStr = cloneCredId.toString("base64url");
+
+    // Register the credential (stored counter starts at 0).
+    const cloneRegChId = randomBytes(16).toString("base64url");
+    const cloneRegCh = randomBytes(32).toString("base64url");
+    await webauthnStore.saveChallenge(cloneRegChId, {
+      challenge: cloneRegCh, expiresAt: new Date(Date.now() + 60_000).toISOString(), purpose: "registration", userId: cloneUser,
+    });
+    const cloneRegAuth = buildAuthData(rpId, 0x45, 0, attestedCredentialData(cloneCredId, cloneCose)); // UP+UV+AT
+    const cloneRegCd = clientData("webauthn.create", cloneRegCh, origin);
+    const cloneAttObj = cborMap([
+      ["fmt", cborText("none")],
+      ["attStmt", cborMap([])],
+      ["authData", cborBytes(cloneRegAuth)],
+    ]).toString("base64url");
+    const cloneReg = await webauthn.verifyRegistration(cloneUser, cloneRegChId, {
+      id: cloneCredIdStr, rawId: cloneCredIdStr, type: "public-key",
+      response: { clientDataJSON: cloneRegCd.toString("base64url"), attestationObject: cloneAttObj },
+    });
+    check("clone-detect: registration succeeds", cloneReg.success === true);
+
+    // Genuine assertion signer for this credential at a chosen signCount.
+    async function cloneAssert(signCount: number) {
+      const chId = randomBytes(16).toString("base64url");
+      const ch = randomBytes(32).toString("base64url");
+      await webauthnStore.saveChallenge(chId, {
+        challenge: ch, expiresAt: new Date(Date.now() + 60_000).toISOString(), purpose: "authentication", userId: cloneUser,
+      });
+      const cd = clientData("webauthn.get", ch, origin);
+      const authData = buildAuthData(rpId, 0x05, signCount); // UP+UV
+      const signature = createSign("SHA256").update(Buffer.concat([authData, sha256(cd)])).sign(clonePriv);
+      return webauthn.verifyAuthentication(cloneUser, chId, {
+        id: cloneCredIdStr, rawId: cloneCredIdStr, type: "public-key",
+        response: {
+          clientDataJSON: cd.toString("base64url"),
+          authenticatorData: authData.toString("base64url"),
+          signature: signature.toString("base64url"),
+        },
+      });
+    }
+
+    const N = 10;
+    // Advance the stored counter to N with a genuine, strictly-increasing assertion.
+    const cloneAdvance = await cloneAssert(N);
+    check("clone-detect: genuine assertion advances counter to N", cloneAdvance.success === true);
+
+    // A fresh, genuinely-signed assertion whose signCount EQUALS N (not strictly
+    // greater) is what a cloned authenticator produces — reject it as a clone.
+    const cloneEqual = await cloneAssert(N);
+    check("clone-detect: signCount == N (non-increasing) rejected as clone", cloneEqual.success === false);
+
+    // A genuinely-signed assertion whose signCount is BELOW N (counter regression)
+    // must likewise be rejected.
+    const cloneLower = await cloneAssert(N - 4);
+    check("clone-detect: signCount < N (regression) rejected as clone", cloneLower.success === false);
+  }
+
   // ── 6. Legacy stub credential fails closed ────────────────────────────────
   const legacyUser = "user-legacy";
   await webauthnStore.addCredential(legacyUser, {

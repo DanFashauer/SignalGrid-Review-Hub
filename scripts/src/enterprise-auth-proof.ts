@@ -103,6 +103,16 @@ const cases: Case[] = [
     expectAccept: false,
   },
   {
+    name: "expired ~30s past exp but within 60s clock tolerance (accepted)",
+    token: signRs256({ header: validParts().header, payload: { ...validParts().payload, exp: secBase - 30, nbf: secBase - 300, iat: secBase - 300 } }),
+    expectAccept: true,
+  },
+  {
+    name: "expired ~90s past exp, beyond 60s clock tolerance (rejected)",
+    token: signRs256({ header: validParts().header, payload: { ...validParts().payload, exp: secBase - 90, nbf: secBase - 300, iat: secBase - 300 } }),
+    expectAccept: false,
+  },
+  {
     name: "not-yet-valid token (nbf in the future)",
     token: signRs256({ header: validParts().header, payload: { ...validParts().payload, nbf: secBase + 600, iat: secBase + 600 } }),
     expectAccept: false,

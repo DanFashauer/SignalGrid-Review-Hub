@@ -12,7 +12,7 @@
 //
 // Run: pnpm --filter @workspace/scripts run proof:control-plane
 
-import { ControlPlane, verifyBundleSignature } from "@workspace/control-plane";
+import { ControlPlane, verifyBundleSignature, verifyBundleChecksum } from "@workspace/control-plane";
 
 let passed = 0;
 const failures: string[] = [];
@@ -87,6 +87,27 @@ function main() {
   check("ops summary counts are consistent", ops.summary.driftCount === ops.postureDrift.length && ops.summary.gapCount === ops.custodyGaps.length && ops.summary.hotspotCount <= ops.hotspots.length);
   const nwOps = cp.operationalIntelligence("tenant_northwind");
   check("ops rollup is tenant-scoped (no atlas node under northwind)", nwOps.hotspots.every((h) => h.nodeId !== "edge_atlas_dc7") && nwOps.postureDrift.every((d) => d.nodeId !== "edge_atlas_dc7"));
+
+  // 8. Bundle authenticity fails closed on tampering.
+  // A valid signed bundle verifies on both integrity (checksum) and
+  // authenticity (signature); mutating its content or corrupting its signature
+  // must make the edge node refuse it.
+  const good = cp.getPolicyBundle("tenant_northwind");
+  check("pristine bundle passes checksum (integrity)", !!good && verifyBundleChecksum(good));
+  check("pristine bundle passes signature (authenticity)", !!good && verifyBundleSignature(good));
+
+  // Mutate the workflows but keep the advertised checksum/signature — the
+  // classic config-tampering attack. Both checks must fail closed.
+  const tamperedWorkflows = { ...good!, workflows: [...good!.workflows, "exfiltrate-phi"] };
+  check("tampered workflows fail the checksum (fail closed)", !verifyBundleChecksum(tamperedWorkflows));
+  check("tampered workflows fail the signature (fail closed)", !verifyBundleSignature(tamperedWorkflows));
+
+  // Flip one hex char of the signature — content (and thus checksum) is intact,
+  // but authenticity is broken: signature must fail, checksum still passes.
+  const flipHex = (c: string) => (c === "0" ? "1" : "0");
+  const forgedSig = { ...good!, signature: flipHex(good!.signature[0]) + good!.signature.slice(1) };
+  check("signature-only forgery still passes checksum (integrity intact)", verifyBundleChecksum(forgedSig));
+  check("signature-only forgery fails the signature (authenticity broken)", !verifyBundleSignature(forgedSig));
 
   const total = passed + failures.length;
   console.log(`Control-plane proof: ${passed}/${total} assertions passed`);

@@ -1067,6 +1067,119 @@ if (pending) {
   );
 }
 
+// ── 20. Fail-closed guardrail: an un-gated allow is suppressed on degraded ────
+//        critical evidence (ALLOW_SUPPRESSED_DEGRADED_EVIDENCE).
+//
+// The shipped policy gates its allow rule on `criticalSignalsPresent`. This
+// exercises the engine's independent, defense-in-depth backstop: even a rule set
+// whose allow rule is NOT gated on critical evidence cannot allow when critical
+// signals are degraded — the outcome is forced to step_up with the guardrail
+// reason code. Without the backstop this would (wrongly) allow.
+{
+  // A degraded evidence bundle: healthy in every gated dimension EXCEPT there is
+  // no device_encryption signal, so criticalSignalsPresent === false.
+  const identity: Identity = {
+    id: "id_ungated",
+    tenantId: "tenant_northwind",
+    externalRef: "nurse.ungated",
+    displayName: "Nurse",
+    state: "enabled",
+    assignedRole: "nurse",
+  };
+  const device: Device = {
+    id: "dev_ungated",
+    tenantId: "tenant_northwind",
+    externalRef: "ipad-ungated",
+    name: "Ward iPad",
+    osPlatform: "iPadOS",
+    osVersion: "18.5",
+    ownerType: "shared",
+    managementAgent: "intune",
+  };
+  const workflow: Workflow = {
+    id: "wf_ungated",
+    tenantId: "tenant_northwind",
+    key: "clinical-session",
+    name: "Clinical session",
+    riskTier: "elevated",
+  };
+  const sig = (
+    category: SignalCategory,
+    value: NormalizedSignal["value"],
+  ): NormalizedSignal => ({
+    id: `sig_ungated_${category}`,
+    tenantId: "tenant_northwind",
+    connectorId: "conn",
+    subjectType: "device",
+    subjectId: device.id,
+    category,
+    value,
+    observedAt: "2026-07-13T13:00:00.000Z",
+    freshness: "fresh",
+    sourceReference: "fixture:test",
+  });
+  const degradedEvidence = buildEvidence(identity, device, workflow, [
+    sig("device_compliance", "compliant"),
+    sig("device_management", true),
+    sig("os_support", true),
+    sig("posture_freshness", "fresh"),
+    // deliberately no device_encryption signal → deviceEncrypted "unknown"
+  ]);
+  check(
+    "guardrail: degraded evidence has criticalSignalsPresent === false",
+    degradedEvidence.criticalSignalsPresent === false,
+    `criticalSignalsPresent=${degradedEvidence.criticalSignalsPresent}`,
+  );
+
+  // A rule set whose allow rule is NOT gated on criticalSignalsPresent: it fires
+  // purely on a managed device and would, on its own, resolve to allow.
+  const ungatedRules = validatePolicyRules([
+    {
+      id: "ungated-allow",
+      description: "Allow a managed device, with no critical-evidence gate.",
+      match: [{ field: "deviceManaged", equals: true }],
+      outcome: "allow",
+      reasonCode: "TRUST_ESTABLISHED",
+      severity: "low",
+    },
+  ]);
+  const ungatedVersion = {
+    id: "pv_ungated_guardrail",
+    tenantId: "tenant_northwind",
+    policyId: "pol_ungated",
+    version: 99,
+    status: "draft" as const,
+    rules: ungatedRules,
+    createdAt: "2026-07-13T15:00:00.000Z",
+    digest: "unused-in-evaluation",
+  };
+  const ungated = evaluatePolicy(ungatedVersion, degradedEvidence);
+  check(
+    "guardrail: un-gated allow is suppressed to step_up on degraded evidence",
+    ungated.outcome === "step_up",
+    `got "${ungated.outcome}"`,
+  );
+  check(
+    "guardrail: suppression carries ALLOW_SUPPRESSED_DEGRADED_EVIDENCE",
+    ungated.reasonCodes.includes("ALLOW_SUPPRESSED_DEGRADED_EVIDENCE"),
+    `got [${ungated.reasonCodes.join(", ")}]`,
+  );
+  // Mutation sanity: the same rule set on INTACT critical evidence allows — proving
+  // the suppression above is driven by criticalSignalsPresent, not a dead rule.
+  const intactEvidence = buildEvidence(identity, device, workflow, [
+    sig("device_compliance", "compliant"),
+    sig("device_management", true),
+    sig("os_support", true),
+    sig("posture_freshness", "fresh"),
+    sig("device_encryption", true),
+  ]);
+  check(
+    "guardrail: same un-gated allow DOES allow on intact critical evidence",
+    intactEvidence.criticalSignalsPresent === true &&
+      evaluatePolicy(ungatedVersion, intactEvidence).outcome === "allow",
+  );
+}
+
 // ── Report ────────────────────────────────────────────────────────────────────
 
 const failed = assertions.filter((a) => !a.passed);

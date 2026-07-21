@@ -12,7 +12,13 @@
 //
 // Run: pnpm --filter @workspace/scripts run proof:audit-ledger
 
-import { appendAuditRecord, getAuditRecords, verifyLedger } from "@workspace/audit";
+import {
+  appendAuditRecord,
+  getAuditRecords,
+  verifyLedger,
+  setAuditBackend,
+  InMemoryAuditBackend,
+} from "@workspace/audit";
 
 let passed = 0;
 const failures: string[] = [];
@@ -68,6 +74,39 @@ async function main() {
   check("verifyLedger surfaces the expected vs actual hash on a break",
     typeof broken.expectedHash === "string" && typeof broken.actualHash === "string" &&
     broken.expectedHash !== broken.actualHash);
+
+  // ── 4. Mid-chain tamper is localized to a NON-ZERO index ────────────────────
+  // The index-0 tests above only exercise a break at the head. A chain is a
+  // chain because a break in the MIDDLE is caught AT the middle. Stage a clean
+  // 3-record chain on a fresh backend, then REORDER the two middle records
+  // (record[1] <-> record[2]) — a reorder that leaves each record's own hash
+  // intact but breaks the prevHash linkage — and assert the break is reported
+  // at the correct non-zero index, not at 0.
+  setAuditBackend(new InMemoryAuditBackend());
+  await appendAuditRecord("session.start", { type: "user", id: "chain-0" }, { meta: { step: 0 } });
+  await appendAuditRecord("session.poll", { type: "user", id: "chain-1" }, { meta: { step: 1 } });
+  await appendAuditRecord("session.end", { type: "user", id: "chain-2" }, { meta: { step: 2 } });
+
+  const chain = await getAuditRecords();
+  const chainClean = await verifyLedger();
+  check("a genuine 3-record chain verifies ok", chainClean.ok === true && chainClean.count === 3);
+
+  // Serve the same records with the two MIDDLE ones reordered. Each record's own
+  // hash is unchanged, so the break can only be the prevHash-linkage divergence
+  // at the first out-of-order record — index 1, not index 0.
+  const reordered = [chain[0], chain[2], chain[1]];
+  setAuditBackend({
+    appendWithChain: async () => { throw new Error("frozen ledger"); },
+    getRecords: async (limit: number, offset: number) => reordered.slice(offset, offset + limit),
+  });
+
+  const midBroken = await verifyLedger();
+  check("verifyLedger DETECTS a reordered middle record (not ok)", midBroken.ok === false);
+  check("mid-chain tamper is localized to the middle (non-zero) index",
+    midBroken.brokenAtIndex === 1);
+  check("the reordered record's prevHash diverges from the true predecessor's hash",
+    midBroken.expectedHash === chain[0].hash && midBroken.actualHash === chain[2].prevHash &&
+    midBroken.expectedHash !== midBroken.actualHash);
 
   const total = passed + failures.length;
   console.log(`Audit-ledger proof: ${passed}/${total} assertions passed`);

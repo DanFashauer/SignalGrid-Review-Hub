@@ -240,6 +240,13 @@ function assertBaselineCoverage(result: SimulatorRunResult): void {
   );
   assertions.push(
     assertion(
+      `${result.scenario.id}: baseline decision matches expected outcomes`,
+      result.status === "PASS",
+      `status=${result.status} expected=[${result.scenario.expectedOutcomes.join(",")}] actual=[${result.decision.outcomes.join(",")}]`,
+    ),
+  );
+  assertions.push(
+    assertion(
       `${result.scenario.id}: routed actions exist`,
       result.routedActions.length > 0,
     ),

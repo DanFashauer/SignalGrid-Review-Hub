@@ -22,6 +22,7 @@
     "proof:flows": "tsx ./src/flows-proof.ts",
     "proof:grid-coverage": "tsx ./src/grid-coverage-proof.ts",
     "proof:grid-config": "tsx ./src/grid-config-proof.ts",
+    "proof:app-resilience": "tsx ./src/app-resilience-proof.ts",
     "proof:intune-entra-posture": "tsx ./src/intune-entra-posture-proof.ts",
     "proof:microsoft-graph-sandbox": "tsx ./src/microsoft-graph-sandbox-proof.ts",
     "proof:orchestration": "tsx ./src/orchestration-proof.ts",

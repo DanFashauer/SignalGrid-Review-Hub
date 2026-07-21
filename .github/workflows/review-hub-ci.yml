@@ -145,6 +145,9 @@ jobs:
       - name: Grid-config (workflows as code — CI validation) proof
         run: pnpm run proof:grid-config
 
+      - name: App-resilience (cloud-app downtime, PHI-safe fallback) proof
+        run: pnpm run proof:app-resilience
+
       - name: Recommendations (learned-habit proposals) proof
         run: pnpm run proof:recommendations
 

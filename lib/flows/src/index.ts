@@ -369,6 +369,11 @@ export * from "./signal-sourcing";
 // situations) that the CI/CD pipeline validates before the Grid runs it (GitOps).
 export * from "./grid-config";
 
+// App resilience — turn a cloud app's availability (outage / maintenance /
+// degraded) into a resilience decision so staff keep working through downtime,
+// with PHI-safe fallbacks. Reduces the technology-as-bottleneck / device fatigue.
+export * from "./app-resilience";
+
 export function listFlows(): Flow[] {
   return DEMO_FLOWS;
 }

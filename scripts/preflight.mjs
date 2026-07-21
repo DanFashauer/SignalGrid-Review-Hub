@@ -61,6 +61,7 @@ const STEPS = [
   { name: "Proof: grid-config (workflows as code — CI validation)", cmd: ["pnpm", "run", "proof:grid-config"] },
   { name: "Proof: app-resilience (cloud-app downtime, PHI-safe fallback)", cmd: ["pnpm", "run", "proof:app-resilience"] },
   { name: "Proof: provisioning (zero-touch setup — record/validate/apply)", cmd: ["pnpm", "run", "proof:provisioning"] },
+  { name: "Proof: grid-lifecycle (capstone — 5 models end-to-end)", cmd: ["pnpm", "run", "proof:grid-lifecycle"] },
   { name: "Proof: recommendations", cmd: ["pnpm", "run", "proof:recommendations"] },
   { name: "Proof: signal-discovery", cmd: ["pnpm", "run", "proof:signal-discovery"] },
   { name: "Proof: ddm-connector", cmd: ["pnpm", "run", "proof:ddm-connector"] },

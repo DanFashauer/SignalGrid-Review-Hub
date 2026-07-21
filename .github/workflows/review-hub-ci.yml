@@ -151,6 +151,9 @@ jobs:
       - name: Provisioning (zero-touch setup — record/validate/apply) proof
         run: pnpm run proof:provisioning
 
+      - name: Grid-lifecycle (capstone — 5 models end-to-end) proof
+        run: pnpm run proof:grid-lifecycle
+
       - name: Recommendations (learned-habit proposals) proof
         run: pnpm run proof:recommendations
 

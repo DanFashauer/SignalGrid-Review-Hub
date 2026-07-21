@@ -478,6 +478,15 @@ async function run() {
 
   const resilience = await req("GET", "/cp/v1/apps/resilience");
   check("app resilience rollup responds with a fleet", resilience.status === 200 && typeof resilience.json?.fleet?.total === "number");
+  const resApps = resilience.json?.fleet?.apps ?? [];
+  const phiBlocked = resApps.find((a) => a.appId === "billing");
+  // Endpoint-level fail-safe: a PHI app in outage with a fallback but NO safety
+  // nets is blocked, never a workaround. (The general "PHI never on a fallback
+  // without nets, at any availability" invariant is pinned by proof:app-resilience;
+  // the response shape here doesn't carry handlesPhi, so we assert the concrete
+  // blocked case rather than a shape-fragile all-fallbacks predicate.)
+  check("app resilience blocks a PHI app in outage with no safety nets (fail-safe)", phiBlocked?.mode === "blocked_no_fallback" && phiBlocked?.canProceed === false && phiBlocked?.requiredSafetyNets?.length === 0);
+  check("app resilience surfaces a per-app reason", resApps.length > 0 && resApps.every((a) => typeof a.reason === "string" && a.reason.length > 0));
 
   // ── transport hygiene ───────────────────────────────────────────────────
   check("rate-limit headers present", allow.headers.get("ratelimit-limit") !== null);

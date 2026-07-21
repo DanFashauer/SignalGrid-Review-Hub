@@ -256,11 +256,19 @@ router.get("/cp/v1/grid/provisioning", (req, res) => {
   });
 });
 
+// The clinical app suite (categories, not vendor claims) — EHR, BCMA, patient
+// portal, HIS, clinical comms, drug reference, billing. Availability is an INPUT
+// (sourced like any signal). States are chosen to exercise every resilience mode,
+// including the loud fail-safe: a PHI app in outage with a fallback but NO safety
+// nets is BLOCKED, never dressed up as a workaround.
 const APP_SUITE: AppService[] = [
   { id: "ehr", name: "EHR", availability: "unplanned_outage", hasFallback: true, handlesPhi: true, safetyNets: ["DR checkpoint", "post-hoc reconciliation", "witness"] },
-  { id: "bcma", name: "BCMA", availability: "available", hasFallback: true, handlesPhi: true },
-  { id: "his", name: "HIS", availability: "degraded", hasFallback: false, handlesPhi: false },
-  { id: "billing", name: "Billing", availability: "planned_maintenance", hasFallback: true, handlesPhi: false },
+  { id: "bcma", name: "BCMA (barcode med admin)", availability: "available", hasFallback: true, handlesPhi: true },
+  { id: "portal", name: "Patient portal", availability: "degraded", hasFallback: false, handlesPhi: true },
+  { id: "his", name: "HIS", availability: "planned_maintenance", hasFallback: true, handlesPhi: true, safetyNets: ["read-only cache", "downtime forms"] },
+  { id: "comms", name: "Clinical comms", availability: "available", hasFallback: true, handlesPhi: false },
+  { id: "drugref", name: "Drug reference", availability: "unknown", hasFallback: false, handlesPhi: false },
+  { id: "billing", name: "Billing", availability: "unplanned_outage", hasFallback: true, handlesPhi: true, safetyNets: [] },
 ];
 router.get("/cp/v1/apps/resilience", (_req, res) => {
   res.json({

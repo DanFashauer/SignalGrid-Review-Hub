@@ -10,7 +10,8 @@ import {
   Grid,
   AppWindow,
   Sparkles,
-  MonitorSmartphone
+  MonitorSmartphone,
+  HeartPulse
 } from "lucide-react";
 import {
   Sidebar,
@@ -110,6 +111,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <Link href="/provisioning">
                     <MonitorSmartphone className="w-4 h-4 mr-2" />
                     <span>Device recorder</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location.startsWith("/app-resilience")}>
+                  <Link href="/app-resilience">
+                    <HeartPulse className="w-4 h-4 mr-2" />
+                    <span>App resilience</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

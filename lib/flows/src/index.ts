@@ -374,6 +374,11 @@ export * from "./grid-config";
 // with PHI-safe fallbacks. Reduces the technology-as-bottleneck / device fatigue.
 export * from "./app-resilience";
 
+// Zero-touch provisioning — a device setup recorded once as versionable config,
+// validated in CI, and replayed by the Grid on serial/network join. Simulated by
+// default; real enforcement only when an owner turns it on.
+export * from "./provisioning";
+
 export function listFlows(): Flow[] {
   return DEMO_FLOWS;
 }

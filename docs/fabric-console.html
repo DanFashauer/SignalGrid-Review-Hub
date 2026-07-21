@@ -3,21 +3,19 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>SignalGrid — the grid runs itself</title>
-<meta name="description" content="Read-only signals stream into the grid; the workflows you configure fuse them into one verdict and fire the response automatically. The more signals and workflows you add, the smarter the grid and the more of your infrastructure it controls. Public-safe: illustrative data, no live tenant, no action taken." />
-<meta property="og:title" content="SignalGrid — the grid runs itself" />
-<meta property="og:description" content="Signals in. One verdict. The workflow acts — automatically. Watch the real fusion logic decide across nine signals with no human in the loop." />
+<title>SignalGrid — build the grid</title>
+<meta name="description" content="You add signals and workflows. The grid does the rest — automatically. Every signal lets it see more; every workflow lets it do more. Watch coverage of real situations grow to 100% with no human in the loop. Public-safe: illustrative data, no live tenant, no action taken." />
+<meta property="og:title" content="SignalGrid — build the grid" />
+<meta property="og:description" content="Add signals and workflows; the grid handles the rest by itself. The more you add, the smarter it gets and the more of your infrastructure it controls." />
 <meta property="og:type" content="website" />
 <style>
   :root {
     --ground: #0b1020; --panel: #131b2e; --panel-2: #0e1526; --line: #22304a; --line-soft: #1a2438;
     --ink: #e8edf7; --ink-mut: #93a2be; --ink-faint: #5f6f8d;
     --accent: #8a7dff; --accent-ink: #b7aeff;
-    --ok: #3fbf6b; --watch: #e0a213; --at-risk: #f2712f; --blocked: #ef4d47;
-    --ok-bg: rgba(63,191,107,.13); --watch-bg: rgba(224,162,19,.14);
-    --at-risk-bg: rgba(242,113,47,.14); --blocked-bg: rgba(239,77,71,.15);
+    --ok: #3fbf6b; --watch: #e0a213; --blocked: #ef4d47;
+    --ok-bg: rgba(63,191,107,.13); --watch-bg: rgba(224,162,19,.14); --blocked-bg: rgba(239,77,71,.15);
     --shadow: 0 1px 0 rgba(255,255,255,.03), 0 12px 40px -18px rgba(0,0,0,.7);
-    --r: 12px;
     --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
   }
@@ -25,26 +23,23 @@
     :root {
       --ground: #eef1f7; --panel: #ffffff; --panel-2: #f4f6fb; --line: #dbe2ef; --line-soft: #e7ecf5;
       --ink: #141a28; --ink-mut: #566178; --ink-faint: #8794aa; --accent: #5b4ff0; --accent-ink: #4a3fd6;
-      --ok: #1f9d57; --watch: #b47c07; --at-risk: #d95a19; --blocked: #d63a34;
-      --ok-bg: rgba(31,157,87,.10); --watch-bg: rgba(180,124,7,.12);
-      --at-risk-bg: rgba(217,90,25,.11); --blocked-bg: rgba(214,58,52,.11);
+      --ok: #1f9d57; --watch: #b47c07; --blocked: #d63a34;
+      --ok-bg: rgba(31,157,87,.10); --watch-bg: rgba(180,124,7,.12); --blocked-bg: rgba(214,58,52,.11);
       --shadow: 0 1px 0 rgba(255,255,255,.6), 0 14px 40px -22px rgba(20,30,60,.35);
     }
   }
   :root[data-theme="dark"] {
     --ground: #0b1020; --panel: #131b2e; --panel-2: #0e1526; --line: #22304a; --line-soft: #1a2438;
     --ink: #e8edf7; --ink-mut: #93a2be; --ink-faint: #5f6f8d; --accent: #8a7dff; --accent-ink: #b7aeff;
-    --ok: #3fbf6b; --watch: #e0a213; --at-risk: #f2712f; --blocked: #ef4d47;
-    --ok-bg: rgba(63,191,107,.13); --watch-bg: rgba(224,162,19,.14);
-    --at-risk-bg: rgba(242,113,47,.14); --blocked-bg: rgba(239,77,71,.15);
+    --ok: #3fbf6b; --watch: #e0a213; --blocked: #ef4d47;
+    --ok-bg: rgba(63,191,107,.13); --watch-bg: rgba(224,162,19,.14); --blocked-bg: rgba(239,77,71,.15);
     --shadow: 0 1px 0 rgba(255,255,255,.03), 0 12px 40px -18px rgba(0,0,0,.7);
   }
   :root[data-theme="light"] {
     --ground: #eef1f7; --panel: #ffffff; --panel-2: #f4f6fb; --line: #dbe2ef; --line-soft: #e7ecf5;
     --ink: #141a28; --ink-mut: #566178; --ink-faint: #8794aa; --accent: #5b4ff0; --accent-ink: #4a3fd6;
-    --ok: #1f9d57; --watch: #b47c07; --at-risk: #d95a19; --blocked: #d63a34;
-    --ok-bg: rgba(31,157,87,.10); --watch-bg: rgba(180,124,7,.12);
-    --at-risk-bg: rgba(217,90,25,.11); --blocked-bg: rgba(214,58,52,.11);
+    --ok: #1f9d57; --watch: #b47c07; --blocked: #d63a34;
+    --ok-bg: rgba(31,157,87,.10); --watch-bg: rgba(180,124,7,.12); --blocked-bg: rgba(214,58,52,.11);
     --shadow: 0 1px 0 rgba(255,255,255,.6), 0 14px 40px -22px rgba(20,30,60,.35);
   }
 
@@ -53,16 +48,12 @@
   body {
     margin: 0; background: var(--ground); color: var(--ink);
     font-family: var(--sans); line-height: 1.5; font-feature-settings: "ss01";
-    background-image:
-      linear-gradient(var(--line-soft) 1px, transparent 1px),
-      linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
+    background-image: linear-gradient(var(--line-soft) 1px, transparent 1px), linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
     background-size: 46px 46px, 46px 46px; background-position: -1px -1px;
   }
-  .wrap { max-width: 1180px; margin: 0 auto; padding: 22px 20px 56px; }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 24px 20px 56px; }
 
-  /* header */
-  header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 8px 0 18px; }
-  .mark { display: flex; align-items: center; gap: 11px; }
+  header { display: flex; align-items: center; gap: 12px; padding: 4px 0 6px; }
   .glyph {
     width: 30px; height: 30px; border-radius: 8px; flex: none; position: relative;
     background: radial-gradient(120% 120% at 30% 20%, var(--accent), transparent 60%), var(--panel);
@@ -70,128 +61,74 @@
   }
   .glyph::before {
     content: ""; position: absolute; inset: 7px; border-radius: 3px;
-    background:
-      linear-gradient(var(--accent-ink) 1.5px, transparent 1.5px) 0 0/100% 5px,
-      linear-gradient(90deg, var(--accent-ink) 1.5px, transparent 1.5px) 0 0/5px 100%;
+    background: linear-gradient(var(--accent-ink) 1.5px, transparent 1.5px) 0 0/100% 5px, linear-gradient(90deg, var(--accent-ink) 1.5px, transparent 1.5px) 0 0/5px 100%;
     opacity: .5;
   }
   .brand { font-size: 19px; font-weight: 640; letter-spacing: -.02em; }
   .brand b { color: var(--ink); } .brand span { color: var(--accent-ink); }
-  .tagline { color: var(--ink-mut); font-size: 13.5px; margin-left: auto; max-width: 40ch; text-align: right; }
-  @media (max-width: 760px){ .tagline { display: none; } }
-  .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-faint); }
+  .thesis { font-size: 17px; letter-spacing: -.01em; color: var(--ink); margin: 12px 0 2px; max-width: 40ch; }
+  .thesis b { color: var(--accent-ink); font-weight: 640; }
+  .sub { color: var(--ink-mut); font-size: 13.5px; margin: 0 0 20px; max-width: 62ch; }
 
-  /* situation strip */
-  .strip { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 8px; }
-  .strip .lbl { margin-right: 2px; }
-  .chip {
-    font: 500 13px var(--sans); color: var(--ink-mut); cursor: pointer;
-    background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
-    padding: 7px 13px; transition: border-color .15s, color .15s, background .15s;
+  /* payoff meter */
+  .payoff { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); box-shadow: var(--shadow); padding: 16px 18px; margin-bottom: 20px; }
+  .payoff .top { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .payoff .big { font-family: var(--mono); font-weight: 800; font-size: 26px; letter-spacing: -.01em; color: var(--tone, var(--accent-ink)); transition: color .3s; font-variant-numeric: tabular-nums; }
+  .payoff .cap { font-size: 13px; color: var(--ink-mut); }
+  .payoff .stats { margin-left: auto; display: flex; gap: 16px; }
+  .payoff .stat { font-family: var(--mono); font-size: 12px; color: var(--ink-mut); }
+  .payoff .stat b { color: var(--ink); font-weight: 700; }
+  .bar { height: 8px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line-soft); margin-top: 13px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: var(--pct, 0%); background: var(--tone, var(--accent)); border-radius: 999px; transition: width .45s cubic-bezier(.4,0,.2,1), background .3s; }
+  @media (max-width: 560px){ .payoff .stats { margin-left: 0; width: 100%; } }
+
+  .cols { display: grid; grid-template-columns: 340px 1fr; gap: 18px; align-items: start; }
+  @media (max-width: 860px){ .cols { grid-template-columns: 1fr; } }
+
+  .h { font-family: var(--mono); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; margin: 0 0 10px; }
+  .h .n { color: var(--accent-ink); }
+  .group { margin-bottom: 18px; }
+
+  /* add-list (the only interaction) */
+  .add { display: flex; flex-direction: column; gap: 7px; }
+  .item {
+    display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; cursor: pointer;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+    color: var(--ink-mut); font: inherit; transition: border-color .15s, color .15s, background .15s;
   }
-  .chip:hover { color: var(--ink); border-color: var(--accent); }
-  .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .chip[aria-pressed="true"] { color: var(--ink); border-color: var(--accent); background: rgba(138,125,255,.10); font-weight: 600; }
-  .play {
-    margin-left: auto; display: inline-flex; align-items: center; gap: 7px;
-    font: 600 12px var(--mono); letter-spacing: .04em; color: var(--ink-mut);
-    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 11px; cursor: pointer;
+  .item:hover { border-color: var(--accent); color: var(--ink); }
+  .item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .item .tick {
+    width: 20px; height: 20px; border-radius: 6px; flex: none; border: 1px solid var(--line);
+    background: var(--panel-2); display: grid; place-items: center; color: transparent; transition: all .15s;
   }
-  .play:hover { color: var(--ink); border-color: var(--accent); }
-  .play:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .play .ic { width: 8px; height: 9px; flex: none; }
-  .situation-note { color: var(--ink-faint); font-size: 12.5px; margin: 0 0 18px; min-height: 1.2em; }
+  .item .tick svg { width: 12px; height: 12px; }
+  .item .nm { flex: 1; min-width: 0; }
+  .item .nm .t { font-size: 13.5px; font-weight: 600; color: var(--ink); letter-spacing: -.01em; }
+  .item .nm .d { font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint); letter-spacing: .02em; margin-top: 1px; }
+  .item .act { font-family: var(--mono); font-size: 10px; color: var(--ink-faint); text-align: right; }
+  .item[aria-pressed="true"] { background: rgba(138,125,255,.07); border-color: var(--accent); color: var(--ink); }
+  .item[aria-pressed="true"] .tick { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .item[aria-pressed="true"] .act { color: var(--accent-ink); }
 
-  /* console grid */
-  .console { display: grid; grid-template-columns: 1fr 396px; gap: 20px; align-items: start; }
-  @media (max-width: 920px){ .console { grid-template-columns: 1fr; } }
-
-  .panel-h {
-    font-family: var(--mono); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase;
-    color: var(--ink-faint); font-weight: 600; margin: 0 0 11px; display: flex; align-items: center; gap: 9px;
+  /* situation board (grid acts on its own) */
+  .board { display: flex; flex-direction: column; gap: 8px; }
+  .sit {
+    border: 1px solid var(--line); border-radius: 10px; background: var(--panel); box-shadow: var(--shadow);
+    padding: 11px 13px; position: relative; overflow: hidden;
   }
-  .panel-h .count { color: var(--accent-ink); }
+  .sit::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--tone, var(--line)); transition: background .25s; }
+  .sit .row { display: flex; align-items: center; gap: 10px; }
+  .sit .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tone, var(--ink-faint)); flex: none; box-shadow: 0 0 0 3px var(--tone-bg, transparent); transition: all .25s; }
+  .sit .label { font-size: 13.5px; font-weight: 600; color: var(--ink); flex: 1; letter-spacing: -.01em; }
+  .sit .state { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--tone, var(--ink-faint)); font-weight: 700; white-space: nowrap; }
+  .sit .detail { font-family: var(--mono); font-size: 11px; color: var(--ink-mut); margin: 6px 0 0 18px; line-height: 1.45; }
+  .sit .detail b { color: var(--tone, var(--ink)); font-weight: 600; }
+  .sit .detail .auto { color: var(--ok); }
 
-  /* the grid (read-only signal board) */
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  @media (max-width: 560px){ .grid { grid-template-columns: 1fr; } }
-  .sig {
-    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-    padding: 11px 12px; position: relative; overflow: hidden; box-shadow: var(--shadow);
-    display: flex; align-items: center; gap: 11px;
-  }
-  .sig::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--sev, var(--line)); transition: background .25s; }
-  .sig .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--sev, var(--ink-faint)); flex: none; box-shadow: 0 0 0 3px var(--sev-bg, transparent); transition: background .25s, box-shadow .25s; }
-  .sig .body { min-width: 0; flex: 1; }
-  .sig .name { font-size: 13px; font-weight: 600; letter-spacing: -.01em; }
-  .sig .read { font-family: var(--mono); font-size: 11.5px; color: var(--ink-mut); margin-top: 2px; }
-  .sig .read b { color: var(--sev, var(--ink)); font-weight: 600; }
-  .sig .plane { font-family: var(--mono); font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); }
-  .sig.calm { opacity: .82; }
-  .sig.add {
-    border-style: dashed; background: transparent; color: var(--ink-faint); justify-content: center;
-    font-family: var(--mono); font-size: 11.5px; letter-spacing: .03em;
-  }
-  .sig.add::before { display: none; }
-
-  /* decision + response column */
-  .out { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 14px; }
-  @media (max-width: 920px){ .out { position: static; } }
-
-  .verdict { border-radius: 16px; border: 1px solid var(--tier-line, var(--line)); background: var(--panel); box-shadow: var(--shadow); overflow: hidden; }
-  .verdict .head { padding: 15px 18px 14px; background: var(--tier-bg, var(--panel-2)); border-bottom: 1px solid var(--line); }
-  .verdict .row1 { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-  .tier { font-family: var(--mono); font-weight: 700; font-size: 28px; letter-spacing: -.01em; color: var(--tier-c, var(--ink)); line-height: 1; transition: color .25s; }
-  .decision { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--tier-c, var(--ink-mut)); border: 1px solid var(--tier-line, var(--line)); padding: 5px 9px; border-radius: 999px; background: var(--ground); }
-  .verdict .meta { margin-top: 9px; font-size: 12px; color: var(--ink-mut); }
-  .verdict .meta b { color: var(--tier-c, var(--ink)); font-weight: 600; }
-
-  .section { padding: 13px 18px; border-bottom: 1px solid var(--line-soft); }
-  .section:last-child { border-bottom: 0; }
-  .section h3 { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); margin: 0 0 10px; font-weight: 600; }
-
-  /* workflow */
-  .wf-name { display: flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 640; color: var(--ink); letter-spacing: -.01em; }
-  .wf-name .badge { font-family: var(--mono); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent-ink); border: 1px solid var(--accent); background: rgba(138,125,255,.10); border-radius: 5px; padding: 2px 6px; }
-  .wf-trigger { font-size: 11.5px; color: var(--ink-mut); margin: 7px 0 12px; font-family: var(--mono); line-height: 1.5; }
-  .wf-trigger .k { color: var(--ink-faint); }
-  .steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; counter-reset: s; }
-  .steps li { display: flex; align-items: flex-start; gap: 9px; font-size: 12.5px; color: var(--ink); }
-  .steps li::before {
-    counter-increment: s; content: counter(s); flex: none; width: 18px; height: 18px; border-radius: 50%;
-    background: var(--panel-2); border: 1px solid var(--line); color: var(--ink-mut);
-    font-family: var(--mono); font-size: 10px; font-weight: 700; display: grid; place-items: center; margin-top: 1px;
-  }
-  .steps li .auto { font-family: var(--mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--sev, var(--accent-ink)); margin-left: auto; align-self: center; white-space: nowrap; }
-  .quiet { color: var(--ink-mut); font-size: 12.5px; display: flex; align-items: center; gap: 9px; }
-  .quiet svg { color: var(--ok); flex: none; }
-
-  /* incident */
-  .inc-top { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
-  .prio { font-family: var(--mono); font-weight: 800; font-size: 16px; color: var(--tier-c, var(--ink)); }
-  .inc-desc { font-size: 12.5px; color: var(--ink); line-height: 1.35; }
-  .inc-row { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; font-size: 12px; }
-  .inc-row .k { color: var(--ink-faint); font-family: var(--mono); font-size: 11px; }
-  .inc-row .v { color: var(--ink); font-family: var(--mono); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
-  .flags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 9px; }
-  .flag { font-family: var(--mono); font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; padding: 3px 7px; border-radius: 6px; border: 1px solid var(--blocked); color: var(--blocked); background: var(--blocked-bg); }
-  .no-ticket { color: var(--ink-mut); font-size: 12.5px; }
-
-  /* grid-intelligence bar */
-  .intel { margin-top: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); box-shadow: var(--shadow); padding: 15px 18px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
-  .intel .stat { display: flex; align-items: baseline; gap: 7px; }
-  .intel .num { font-family: var(--mono); font-weight: 800; font-size: 22px; color: var(--accent-ink); letter-spacing: -.01em; }
-  .intel .stat span { font-size: 12px; color: var(--ink-mut); }
-  .intel .say { font-size: 12.5px; color: var(--ink-mut); max-width: 52ch; line-height: 1.5; border-left: 1px solid var(--line); padding-left: 18px; }
-  .intel .say b { color: var(--ink); font-weight: 600; }
-  @media (max-width: 640px){ .intel .say { border-left: 0; padding-left: 0; } }
-
-  footer { margin-top: 22px; color: var(--ink-faint); font-size: 12px; line-height: 1.6; }
-  footer code { font-family: var(--mono); color: var(--ink-mut); font-size: 11.5px; }
+  footer { margin-top: 24px; color: var(--ink-faint); font-size: 12px; line-height: 1.6; border-top: 1px solid var(--line-soft); padding-top: 14px; }
+  footer b { color: var(--ink-mut); } footer code { font-family: var(--mono); color: var(--ink-mut); font-size: 11.5px; }
   footer a { color: var(--accent-ink); text-decoration: none; } footer a:hover { text-decoration: underline; }
-  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; }
-  .legend span { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; color: var(--ink-mut); }
-  .legend i { width: 9px; height: 9px; border-radius: 2px; }
 
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -199,76 +136,46 @@
 <body>
 <div class="wrap">
   <header>
-    <div class="mark">
-      <div class="glyph" aria-hidden="true"></div>
-      <div class="brand"><b>Signal</b><span>Grid</span></div>
-    </div>
-    <p class="tagline">Signals in. One verdict. The workflow acts — <b>automatically</b>. No human in the loop at decision time.</p>
+    <div class="glyph" aria-hidden="true"></div>
+    <div class="brand"><b>Signal</b><span>Grid</span></div>
   </header>
 
-  <div class="strip" role="group" aria-label="Situations across the fleet">
-    <span class="eyebrow lbl">Situation</span>
-    <button class="chip" data-sc="healthy">Healthy checkout</button>
-    <button class="chip" data-sc="lost">Lost tablet after shift</button>
-    <button class="chip" data-sc="compromise">Compromised user + USB</button>
-    <button class="chip" data-sc="exfil">PHI exfiltration</button>
-    <button class="chip" data-sc="drift">Config drift</button>
-    <button class="play" id="play" aria-pressed="false">
-      <svg class="ic" viewBox="0 0 8 9" aria-hidden="true"><path d="M0 0l8 4.5L0 9z" fill="currentColor"/></svg>
-      <span id="playLbl">Auto-run</span>
-    </button>
-  </div>
-  <p class="situation-note" id="note" aria-live="polite"></p>
+  <p class="thesis">You add <b>signals</b> and <b>workflows</b>. The grid does the rest — <b>automatically</b>.</p>
+  <p class="sub">Every signal lets the grid <em>see</em> more; every workflow lets it <em>do</em> more. You never touch the actions — they run inside the workflows you built. The more you add, the more of the organization's infrastructure the grid controls on its own.</p>
 
-  <div class="console">
-    <section aria-label="The grid — live signals">
-      <h2 class="panel-h">The grid · <span class="count" id="sigCount">9</span> signals streaming <span aria-hidden="true">·</span> read-only</h2>
-      <div class="grid" id="grid"></div>
+  <div class="payoff" aria-live="polite">
+    <div class="top">
+      <span class="big" id="pctBig">0%</span>
+      <span class="cap" id="cap">of situations the grid handles by itself</span>
+      <div class="stats">
+        <span class="stat"><b id="sN">0</b> signals wired</span>
+        <span class="stat"><b id="wN">0</b> workflows active</span>
+      </div>
+    </div>
+    <div class="bar"><i id="barFill"></i></div>
+  </div>
+
+  <div class="cols">
+    <section aria-label="Configure the grid">
+      <div class="group">
+        <h2 class="h">Signals <span class="n" id="sCount"></span> — click to wire</h2>
+        <div class="add" id="signals"></div>
+      </div>
+      <div class="group">
+        <h2 class="h">Workflows <span class="n" id="wCount"></span> — click to activate</h2>
+        <div class="add" id="workflows"></div>
+      </div>
     </section>
 
-    <aside class="out">
-      <div class="verdict" id="verdict">
-        <div class="head">
-          <div class="row1">
-            <div class="tier" id="tier">OK</div>
-            <div class="decision" id="decision">allow</div>
-          </div>
-          <div class="meta" id="meta">The grid fused 9 signals · <b>nothing warrants action</b></div>
-        </div>
-
-        <div class="section">
-          <h3>Workflow — fires automatically</h3>
-          <div id="workflow"></div>
-        </div>
-
-        <div class="section">
-          <h3>Prioritized incident</h3>
-          <div id="incident"></div>
-        </div>
-      </div>
-    </aside>
-  </div>
-
-  <div class="intel" aria-label="Grid intelligence">
-    <div class="stat"><span class="num">9</span><span>signals wired</span></div>
-    <div class="stat"><span class="num">4</span><span>workflows active</span></div>
-    <p class="say">Every signal you add <b>sharpens</b> the grid's verdict; every workflow you add <b>extends its reach</b> across the organization's infrastructure. Adding is the product — the grid gets smarter and controls more on its own.</p>
+    <section aria-label="The grid runs itself">
+      <h2 class="h">The grid runs itself — situations across the floor</h2>
+      <div class="board" id="board"></div>
+    </section>
   </div>
 
   <footer>
-    <b style="color:var(--ink-mut)">How this works.</b> Each signal maps onto one action ladder —
-    <code>none · monitor · patch · locate · step_up · alert · restrict · escalate</code>. The grid takes the
-    <b style="color:var(--ink-mut)">strongest action any signal warrants</b> (fail-safe — a calm signal never dilutes a severe one), the risk tier
-    and allow / step-up / restrict / deny decision follow from it, a configured <b style="color:var(--ink-mut)">workflow executes the response</b>,
-    and one <code>Impact × Urgency</code> incident is opened (with the no-noise rule — a calm grid raises no ticket). This is the real fusion logic
-    (<a href="https://github.com/DanFashauer/SignalGrid-Review-Hub">Review Hub</a>, proven by <code>proof:fabric-scenario</code>) running on
-    illustrative data — <b style="color:var(--ink-mut)">no live tenant, no action taken</b>.
-    <div class="legend">
-      <span><i style="background:var(--ok)"></i>OK · allow</span>
-      <span><i style="background:var(--watch)"></i>Watch</span>
-      <span><i style="background:var(--at-risk)"></i>At risk · step-up</span>
-      <span><i style="background:var(--blocked)"></i>Blocked · restrict/deny</span>
-    </div>
+    <b>How this works.</b> Each situation is caught only when its <b>workflow is active</b> and the <b>signals it needs are wired</b> — then the grid carries out the response by itself, no human in the loop. Missing either one is a blind spot, and the fix is always to <b>add</b>. This mirrors the real fusion + orchestration logic in the
+    <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub">Review Hub</a> (proven by <code>proof:fabric-scenario</code>), running on illustrative data — <b>no live tenant, no action taken</b>.
   </footer>
 </div>
 
@@ -276,217 +183,115 @@
 (function () {
   "use strict";
 
-  var LADDER = ["none","monitor","patch","locate","step_up","alert","restrict","escalate"];
-  var RANK = {}; LADDER.forEach(function (a, i) { RANK[a] = i; });
-  var TIER = { none:"ok", monitor:"ok", patch:"watch", locate:"watch", step_up:"at_risk", alert:"at_risk", restrict:"blocked", escalate:"blocked" };
-  var TIER_LABEL = { ok:"OK", watch:"WATCH", at_risk:"AT RISK", blocked:"BLOCKED" };
-  var DECISION = { ok:"allow", watch:"allow · monitor", at_risk:"step-up", blocked:"restrict / deny" };
-  function sevVar(s){ return s==="ok"?"var(--ok)":s==="watch"?"var(--watch)":s==="at_risk"?"var(--at-risk)":s==="blocked"?"var(--blocked)":"var(--ink-faint)"; }
-  function sevBg(s){ return s==="ok"?"var(--ok-bg)":s==="watch"?"var(--watch-bg)":s==="at_risk"?"var(--at-risk-bg)":s==="blocked"?"var(--blocked-bg)":"transparent"; }
-  function sevOf(a){ return a==="none"?"none":TIER[a]; }
-
-  // Nine read-only signals; index 0 is always the calm baseline.
   var SIGNALS = [
-    { id:"reachability", name:"Post-exit reachability", plane:"carrier", states:[["Reachable","none"],["Degraded","locate"],["Wi-Fi blind spot","alert"],["Unreachable","escalate"]] },
-    { id:"location", name:"Location services", plane:"geofence", states:[["On-premises","none"],["Off-premises","locate"],["Stale fix","locate"],["Unknown","monitor"]] },
-    { id:"vulnerability", name:"Vulnerability scan", plane:"cve exposure", states:[["Clean","none"],["Low / medium","patch"],["High","patch"],["Critical / exploitable","restrict"]] },
-    { id:"network", name:"Network / NAC", plane:"access state", states:[["Trusted segment","none"],["Quarantined","monitor"],["NAC-noncompliant","step_up"],["Unauthenticated","restrict"]] },
-    { id:"threat", name:"EDR / EPP", plane:"endpoint threat", states:[["Protected","none"],["Degraded protection","step_up"],["Unprotected","alert"],["Active threat","restrict"],["Critical compromise","escalate"]] },
-    { id:"identity", name:"Identity / SSO", plane:"sign-in risk", states:[["Trusted","none"],["Low risk","monitor"],["At risk","step_up"],["High risk","restrict"],["Compromised","escalate"]] },
-    { id:"custody", name:"Physical custody", plane:"rtls · zone & badge", states:[["In zone","none"],["Stale fix","locate"],["Off-zone / egress","alert"],["Left the area","escalate"]] },
-    { id:"peripheral", name:"Removable media", plane:"usb / peripheral", states:[["None attached","none"],["Controlled","monitor"],["Policy unenforced","step_up"],["Unauthorized","alert"],["Exfil risk","restrict"]] },
-    { id:"data_protection", name:"Data protection", plane:"dlp · data egress", states:[["Protected","none"],["Monitored","monitor"],["Policy unenforced","step_up"],["Data egress","alert"],["Confirmed exfiltration","escalate"]] }
+    { id:"identity",     t:"Identity / SSO",        d:"sign-in risk" },
+    { id:"device",       t:"Device posture / EDR",  d:"endpoint threat" },
+    { id:"custody",      t:"Physical custody / RTLS", d:"zone & badge" },
+    { id:"network",      t:"Network / NAC",         d:"access state" },
+    { id:"data",         t:"Data protection / DLP", d:"data egress" },
+    { id:"reachability", t:"Reachability / carrier", d:"post-exit" }
   ];
-  var SHORT = { reachability:"Reachability", location:"Location", vulnerability:"Vulnerability", network:"Network / NAC", threat:"EDR / EPP", identity:"Identity", custody:"Custody", peripheral:"Removable media", data_protection:"Data protection" };
-  var ROUTE = { identity:"Identity & Access", vulnerability:"Vulnerability Management", reachability:"Endpoint / Mobility", location:"Endpoint / Mobility", custody:"Endpoint / Mobility", peripheral:"Endpoint / Mobility", network:"Security Operations", threat:"Security Operations", data_protection:"Security Operations" };
 
-  // Situations = events across the fleet. impact is a property of the device in
-  // that situation (not a user knob). readings set non-calm signal indices; the
-  // named workflow is the configured playbook that auto-fires on the verdict.
-  var SCENARIOS = {
-    healthy: {
-      note: "A clinician badges into a shared tablet mid-shift. Every signal reads clean — the grid allows and stays silent.",
-      impact: "high", readings: {}, workflow: null
-    },
-    lost: {
-      note: "A shift ends but a clinical tablet never returns to the dock. Custody and reachability drop — the grid acts before anyone files a ticket.",
-      impact: "high", readings: { reachability:3, location:1, custody:3 },
-      workflow: { name:"Lost-Device Response", trigger:"custody = left the area  AND  reachability = unreachable" }
-    },
-    compromise: {
-      note: "A user's sign-in turns malicious while unauthorized removable media is attached. The grid contains the account and the endpoint at once.",
-      impact: "high", readings: { identity:4, peripheral:4 },
-      workflow: { name:"Account-Compromise Containment", trigger:"identity = compromised  →  isolate account + endpoint" }
-    },
-    exfil: {
-      note: "DLP confirms regulated PHI leaving the device. The grid denies the channel and quarantines — the highest-severity path.",
-      impact: "high", readings: { data_protection:4 },
-      workflow: { name:"Data-Exfiltration Response", trigger:"dlp = confirmed exfiltration of regulated data" }
-    },
-    drift: {
-      note: "A shared workstation quietly slips out of baseline — protection degraded, sign-in risk rising. The grid steps access up and remediates.",
-      impact: "medium", readings: { vulnerability:1, threat:1, identity:2 },
-      workflow: { name:"Baseline-Drift Remediation", trigger:"posture drift — protection degraded AND sign-in risk elevated" }
-    }
-  };
+  // Each workflow needs signals and, when active + fed, runs its action by itself.
+  var WORKFLOWS = [
+    { id:"w_lost",   t:"Lost-Device Response",           needs:["custody","reachability"], act:"locate → restrict → escalate" },
+    { id:"w_acct",   t:"Account-Compromise Containment", needs:["identity","device"],      act:"deny session → isolate → step-up" },
+    { id:"w_exfil",  t:"Data-Exfiltration Response",     needs:["data"],                   act:"deny egress → quarantine" },
+    { id:"w_unmgd",  t:"Unmanaged-Access Block",         needs:["network","identity"],     act:"restrict to safe segment → step-up" },
+    { id:"w_drift",  t:"Baseline-Drift Remediation",     needs:["device"],                 act:"step-up → patch" },
+    { id:"w_tail",   t:"Tailgate Response",              needs:["custody"],                act:"alert → verify badge → restrict door" }
+  ];
 
-  // Automated steps derived from the fused drivers (strongest first, deduped).
-  var ACTION_STEP = {
-    escalate: ["Escalate to on-call + open major incident", "escalate"],
-    restrict: ["Restrict / isolate the device", "restrict"],
-    alert:    ["Alert Security Operations", "alert"],
-    step_up:  ["Force step-up re-authentication", "step_up"],
-    locate:   ["Locate device (RTLS + last-known fix)", "locate"],
-    patch:    ["Queue endpoint remediation / patch", "patch"],
-    monitor:  ["Raise monitoring", "monitor"]
-  };
+  // One situation per workflow — the event the grid catches when it's covered.
+  var SITUATIONS = [
+    { id:"s_lost",  label:"Lost tablet after shift",               wf:"w_lost" },
+    { id:"s_acct",  label:"Compromised sign-in mid-shift",         wf:"w_acct" },
+    { id:"s_exfil", label:"PHI leaving the device",               wf:"w_exfil" },
+    { id:"s_unmgd", label:"Unauthenticated device on the network", wf:"w_unmgd" },
+    { id:"s_drift", label:"Config drift on a shared workstation",  wf:"w_drift" },
+    { id:"s_tail",  label:"Tailgating at a controlled door",       wf:"w_tail" }
+  ];
 
-  var URGENCY = { none:null, monitor:null, patch:"low", locate:"low", step_up:"medium", alert:"high", restrict:"high", escalate:"critical" };
-  var MATRIX = { high:{low:"P3",medium:"P2",high:"P1",critical:"P1"}, medium:{low:"P4",medium:"P3",high:"P2",critical:"P1"}, low:{low:"P4",medium:"P4",high:"P3",critical:"P2"} };
-  var SLA = { P1:"15 min · 4 hours", P2:"1 hour · 8 hours", P3:"4 hours · 2 business days", P4:"1 business day · 5 business days" };
+  var wfById = {}; WORKFLOWS.forEach(function (w){ wfById[w.id] = w; });
+  var sigById = {}; SIGNALS.forEach(function (s){ sigById[s.id] = s; });
 
-  function compose(readings) {
-    var drivers = SIGNALS.map(function (s, i) {
-      var idx = readings[s.id] || 0;
-      var st = s.states[idx];
-      return { id:s.id, order:i, stateLabel:st[0], action:st[1], rank:RANK[st[1]] };
-    }).filter(function (d){ return d.action !== "none"; });
-    drivers.sort(function (a,b){ return b.rank - a.rank || a.order - b.order; });
-    var strongest = drivers.length ? drivers[0].action : "none";
-    return { drivers:drivers, strongest:strongest, tier:TIER[strongest] };
-  }
+  // Start partly built so there's room to grow (and blind spots to see).
+  var onSig = { identity:true, device:true, custody:true };
+  var onWf  = { w_acct:true, w_drift:true };
 
-  function autoSteps(drivers) {
-    var seen = {}, out = [];
-    drivers.forEach(function (d) {
-      var step = ACTION_STEP[d.action];
-      if (step && !seen[d.action]) { seen[d.action] = 1; out.push({ text:step[0], sev:sevOf(d.action) }); }
-    });
-    return out; // already strongest-first (drivers are sorted)
-  }
-
-  function incidentOf(v, impact) {
-    var urg = URGENCY[v.strongest];
-    if (!urg) return null;
-    var prio = MATRIX[impact][urg];
-    var lead = v.drivers[0];
-    return {
-      priority:prio, urgency:urg, impact:impact, route:ROUTE[lead.id] || "Service Desk", sla:SLA[prio],
-      escalate: prio === "P1", major: prio === "P1" && impact === "high",
-      desc: SHORT[lead.id] + " — " + lead.stateLabel.toLowerCase() + (v.drivers.length > 1 ? " (+" + (v.drivers.length-1) + " more driver" + (v.drivers.length>2?"s":"") + ")" : "")
-    };
-  }
-
-  // ── build the read-only grid ──────────────────────────────────────────────
-  var elGrid = document.getElementById("grid");
-  function buildGrid() {
-    var html = SIGNALS.map(function (s) {
-      return '<div class="sig" data-id="' + s.id + '">' +
-        '<span class="dot"></span>' +
-        '<div class="body"><div class="name">' + s.name + '</div><div class="read">reads <b class="rd"></b></div></div>' +
-        '<span class="plane">' + s.plane + '</span></div>';
-    }).join("");
-    html += '<div class="sig add" title="Wire another signal source — the grid gets smarter">+ add a signal</div>';
-    elGrid.innerHTML = html;
-  }
-
-  var els = {
-    tier: document.getElementById("tier"), decision: document.getElementById("decision"),
-    meta: document.getElementById("meta"), verdict: document.getElementById("verdict"),
-    workflow: document.getElementById("workflow"), incident: document.getElementById("incident"),
-    note: document.getElementById("note")
-  };
-
-  function checkSvg(){ return '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'; }
+  function checkSvg(){ return '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>'; }
   function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
-  function cap(s){ return s.charAt(0).toUpperCase() + s.slice(1); }
 
-  var current = "healthy";
-  function render(key) {
-    current = key;
-    var sc = SCENARIOS[key];
-    var v = compose(sc.readings);
-    els.note.textContent = sc.note;
-
-    // paint each signal tile (read-only)
-    SIGNALS.forEach(function (s) {
-      var tile = elGrid.querySelector('[data-id="' + s.id + '"]');
-      var st = s.states[sc.readings[s.id] || 0];
-      var sev = sevOf(st[1]);
-      var v1 = st[1] === "none" ? "var(--ink-faint)" : sevVar(sev);
-      var bg = st[1] === "none" ? "transparent" : sevBg(sev);
-      tile.style.setProperty("--sev", v1);
-      tile.style.setProperty("--sev-bg", bg);
-      tile.classList.toggle("calm", st[1] === "none");
-      tile.querySelector(".rd").textContent = st[0] + (st[1] === "none" ? "" : "  → " + st[1]);
-    });
-
-    // verdict
-    var tc = sevVar(v.tier), tbg = sevBg(v.tier);
-    els.verdict.style.setProperty("--tier-c", tc);
-    els.verdict.style.setProperty("--tier-bg", tbg);
-    els.verdict.style.setProperty("--tier-line", v.tier === "ok" ? "var(--line)" : tc);
-    els.tier.textContent = TIER_LABEL[v.tier];
-    els.decision.textContent = DECISION[v.tier];
-    els.meta.innerHTML = "The grid fused " + SIGNALS.length + " signals · " +
-      (v.drivers.length ? "<b>" + v.drivers.length + " warrant action</b>" : "<b>nothing warrants action</b>");
-
-    // workflow (fires automatically) — or quiet
-    if (!sc.workflow || !v.drivers.length) {
-      els.workflow.innerHTML = '<div class="quiet">' + checkSvg() + '<span>No workflow fires. A calm grid takes no action and raises no ticket — a normal device is nobody’s problem.</span></div>';
-    } else {
-      var steps = autoSteps(v.drivers);
-      els.workflow.innerHTML =
-        '<div class="wf-name">' + esc(sc.workflow.name) + ' <span class="badge">auto</span></div>' +
-        '<div class="wf-trigger"><span class="k">trigger:</span> ' + esc(sc.workflow.trigger) + '</div>' +
-        '<ol class="steps">' + steps.map(function (st) {
-          return '<li style="--sev:' + sevVar(st.sev) + '">' + esc(st.text) + '<span class="auto">auto</span></li>';
-        }).join("") + '</ol>';
+  function statusOf(sit) {
+    var w = wfById[sit.wf];
+    if (!onWf[w.id]) return { tone:"blocked", state:"blind spot", detail:"No workflow. Build <b>" + esc(w.t) + "</b> to handle this." };
+    var missing = w.needs.filter(function (n){ return !onSig[n]; });
+    if (missing.length) {
+      var names = missing.map(function (n){ return sigById[n].t; }).join(", ");
+      return { tone:"watch", state:"partial", detail:"<b>" + esc(w.t) + "</b> is active but needs the <b>" + esc(names) + "</b> signal" + (missing.length > 1 ? "s" : "") + ". Wire " + (missing.length > 1 ? "them" : "it") + "." };
     }
+    return { tone:"ok", state:"auto-handled", detail:"<b>" + esc(w.t) + "</b> fires by itself → <span class=\"auto\">" + esc(w.act) + "</span>" };
+  }
+  function toneVar(t){ return t==="ok"?"var(--ok)":t==="watch"?"var(--watch)":t==="blocked"?"var(--blocked)":"var(--ink-faint)"; }
+  function toneBg(t){ return t==="ok"?"var(--ok-bg)":t==="watch"?"var(--watch-bg)":t==="blocked"?"var(--blocked-bg)":"transparent"; }
 
-    // incident
-    var inc = incidentOf(v, sc.impact);
-    if (!inc) {
-      els.incident.innerHTML = '<div class="no-ticket">No incident raised — the no-noise rule keeps the queue clean.</div>';
-    } else {
-      var flags = "";
-      if (inc.major) flags += '<span class="flag">Major incident</span>';
-      if (inc.escalate) flags += '<span class="flag">On-call escalation</span>';
-      els.incident.innerHTML =
-        '<div class="inc-top"><span class="prio">' + inc.priority + '</span><span class="inc-desc">' + esc(inc.desc) + '</span></div>' +
-        '<div class="inc-row"><span class="k">priority</span><span class="v">' + cap(inc.impact) + ' impact × ' + cap(inc.urgency) + ' urgency</span></div>' +
-        '<div class="inc-row"><span class="k">route to</span><span class="v">' + esc(inc.route) + '</span></div>' +
-        '<div class="inc-row"><span class="k">sla</span><span class="v">respond ' + inc.sla.split(" · ")[0] + '</span></div>' +
-        (flags ? '<div class="flags">' + flags + '</div>' : '');
-    }
+  var elSig = document.getElementById("signals"), elWf = document.getElementById("workflows"), elBoard = document.getElementById("board");
 
-    // reflect pressed chip
-    document.querySelectorAll("[data-sc]").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.sc === key); });
+  function buildLists() {
+    elSig.innerHTML = SIGNALS.map(function (s) {
+      return '<button class="item" role="button" data-sig="' + s.id + '" aria-pressed="' + !!onSig[s.id] + '">' +
+        '<span class="tick">' + checkSvg() + '</span>' +
+        '<span class="nm"><span class="t">' + esc(s.t) + '</span><span class="d">' + esc(s.d) + '</span></span></button>';
+    }).join("");
+    elWf.innerHTML = WORKFLOWS.map(function (w) {
+      return '<button class="item" role="button" data-wf="' + w.id + '" aria-pressed="' + !!onWf[w.id] + '">' +
+        '<span class="tick">' + checkSvg() + '</span>' +
+        '<span class="nm"><span class="t">' + esc(w.t) + '</span><span class="d">needs ' + w.needs.map(function (n){ return sigById[n].t; }).join(" + ") + '</span></span>' +
+        '<span class="act">' + esc(w.act) + '</span></button>';
+    }).join("");
+    elSig.querySelectorAll("[data-sig]").forEach(function (b){ b.addEventListener("click", function (){ onSig[b.dataset.sig] = !onSig[b.dataset.sig]; render(); }); });
+    elWf.querySelectorAll("[data-wf]").forEach(function (b){ b.addEventListener("click", function (){ onWf[b.dataset.wf] = !onWf[b.dataset.wf]; render(); }); });
   }
 
-  // ── controls: pick a situation, or auto-run through them ───────────────────
-  document.querySelectorAll("[data-sc]").forEach(function (b) {
-    b.addEventListener("click", function () { stopPlay(); render(b.dataset.sc); });
-  });
+  var elPct = document.getElementById("pctBig"), elBar = document.getElementById("barFill"),
+      elSN = document.getElementById("sN"), elWN = document.getElementById("wN"),
+      elSCount = document.getElementById("sCount"), elWCount = document.getElementById("wCount"),
+      elPayoff = document.querySelector(".payoff");
 
-  var ORDER = ["healthy","lost","compromise","exfil","drift"];
-  var timer = null;
-  var playBtn = document.getElementById("play"), playLbl = document.getElementById("playLbl");
-  function stopPlay() {
-    if (timer) { clearInterval(timer); timer = null; }
-    playBtn.setAttribute("aria-pressed", "false"); playLbl.textContent = "Auto-run";
-  }
-  function startPlay() {
-    playBtn.setAttribute("aria-pressed", "true"); playLbl.textContent = "Stop";
-    timer = setInterval(function () {
-      var i = ORDER.indexOf(current);
-      render(ORDER[(i + 1) % ORDER.length]);
-    }, 3600);
-  }
-  playBtn.addEventListener("click", function () { timer ? stopPlay() : startPlay(); });
+  function render() {
+    // reflect toggles
+    elSig.querySelectorAll("[data-sig]").forEach(function (b){ b.setAttribute("aria-pressed", !!onSig[b.dataset.sig]); });
+    elWf.querySelectorAll("[data-wf]").forEach(function (b){ b.setAttribute("aria-pressed", !!onWf[b.dataset.wf]); });
 
-  buildGrid();
-  render("healthy");
+    // board
+    var handled = 0;
+    elBoard.innerHTML = SITUATIONS.map(function (sit) {
+      var st = statusOf(sit);
+      if (st.tone === "ok") handled += 1;
+      return '<div class="sit" style="--tone:' + toneVar(st.tone) + ';--tone-bg:' + toneBg(st.tone) + '">' +
+        '<div class="row"><span class="dot"></span><span class="label">' + esc(sit.label) + '</span><span class="state">' + st.state + '</span></div>' +
+        '<div class="detail">' + st.detail + '</div></div>';
+    }).join("");
+
+    // payoff
+    var total = SITUATIONS.length;
+    var pct = Math.round((handled / total) * 100);
+    var sOn = Object.keys(onSig).filter(function (k){ return onSig[k]; }).length;
+    var wOn = Object.keys(onWf).filter(function (k){ return onWf[k]; }).length;
+    var tone = pct === 100 ? "var(--ok)" : pct >= 50 ? "var(--accent-ink)" : pct > 0 ? "var(--watch)" : "var(--blocked)";
+    elPayoff.style.setProperty("--tone", tone);
+    elPayoff.style.setProperty("--pct", pct + "%");
+    elBar.style.setProperty("--pct", pct + "%");
+    elPct.textContent = pct + "%";
+    document.getElementById("cap").textContent = handled === total
+      ? "the grid handles every situation by itself" : "of situations the grid handles by itself (" + handled + "/" + total + ")";
+    elSN.textContent = sOn; elWN.textContent = wOn;
+    elSCount.textContent = sOn + "/" + SIGNALS.length;
+    elWCount.textContent = wOn + "/" + WORKFLOWS.length;
+  }
+
+  buildLists();
+  render();
 })();
 </script>
 </body>

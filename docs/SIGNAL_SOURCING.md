@@ -30,6 +30,13 @@ Modeled in code as `@workspace/flows` → `signal-sourcing.ts`
   costs more to stand up. `sourcingToSignalStates` still wires it (it is present and
   working); `fidelityOf` reports the reduced confidence so nothing over-trusts a
   signal the Grid had to synthesize.
+  - *A concrete, shipped example:* `signalgrid-mcp` (`DanFashauer/signalgrid-mcp`,
+    released) reads **macOS device security posture** — firewall, stealth mode,
+    FileVault, SIP, Gatekeeper — **directly from the endpoint, read-only**, where no
+    vendor API/MDM hook is assumed. That is exactly the `grid_collected` path: the
+    Grid obtaining a signal itself. It is honest about "unknown" (a check that can't
+    run returns unknown, never a false green), which is the same fail-safe discipline
+    the model enforces. See [API access & connectors](API_ACCESS_AND_CONNECTORS.md).
 - **Gaps are surfaced, never hidden.** An `unavailable` source yields **no signal
   state at all** — it reads as missing downstream (fail-safe). The Grid never
   reports a situation as autonomously handled when the signal it depends on cannot

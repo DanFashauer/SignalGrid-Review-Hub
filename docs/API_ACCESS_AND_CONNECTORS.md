@@ -100,6 +100,18 @@ options layered on it. Longer answer, honestly:
   ```json
   { "command": "node", "args": ["<repo>/artifacts/mcp-server/dist/index.mjs"] }
   ```
+- **`signalgrid-mcp` (device-posture source) — shipped, separate repo.** A distinct,
+  standalone **read-only** MCP server (`DanFashauer/signalgrid-mcp`, Python, released
+  at `v1.0.2`, 18 tools, 30 tests) that reads **macOS device security posture**
+  directly from the endpoint — firewall, stealth mode, FileVault, SIP, Gatekeeper,
+  and similar. It is the mirror image of the in-repo server: that one exposes
+  SignalGrid *as* tools; this one is a *signal source*. Because it collects posture
+  straight from the device rather than through a vendor API, it is the concrete
+  example of the **`grid_collected`** sourcing path (see
+  [Signal sourcing](SIGNAL_SOURCING.md) — "the Grid does the lifting"). It is a
+  shipped companion/reference, read-only and honest about "unknown" (a check that
+  can't run returns unknown, never a false green); it is **not** wired into the
+  decision core here.
   (or `pnpm --filter @workspace/mcp-server run dev` for tsx watch).
 
 If you tell me the specific system you want to connect (a UEM, a badge reader, a

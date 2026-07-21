@@ -1,6 +1,13 @@
 import { Router, type IRouter } from "express";
 import { ControlPlane, type TelemetryBatch } from "@workspace/control-plane";
-import { listFlows, evaluateFlowHealth, resolveFlowBreak, gridIntelligence, type SignalState } from "@workspace/flows";
+import {
+  listFlows, evaluateFlowHealth, resolveFlowBreak, gridIntelligence, type SignalState,
+  DEMO_FLOWS, GRID_SITUATIONS, evaluateGridCoverage,
+  lintGridConfig, gridConfigValid, summarizeGridConfig, type GridConfig,
+  sourcingToSignalStates, summarizeSourcing, type SignalSource,
+  planZeroTouchSetup, type DeviceSetupRecording,
+  fleetResilience, type AppService,
+} from "@workspace/flows";
 import { recommend, DEMO_USAGE } from "@workspace/recommendations";
 import { discover, planOnboarding, discoverySummary, DEMO_SOURCES, DEMO_OBSERVED } from "@workspace/signal-discovery";
 import { normalizeDdmReports, ddmSummary, DEMO_DDM_REPORTS, DDM_OBSERVED_AT } from "@workspace/ddm-connector";
@@ -159,6 +166,77 @@ router.get("/cp/v1/ddm", (_req, res) => {
     observedAt: DDM_OBSERVED_AT,
     summary: ddmSummary(signals, DEMO_DDM_REPORTS),
     signals,
+  });
+});
+
+// ── Build the grid: coverage, config, provisioning, resilience ──────────────────
+// The decision-fabric layer, live and queryable. Public-safe fixtures: the same
+// demo workflows/situations the proofs use, sourced by illustrative paths. Read-
+// only and deterministic; nothing is enforced, no device or vendor is contacted.
+// See docs/OPEN_ORCHESTRATION_VISION.md, SIGNAL_SOURCING.md, APP_RESILIENCE.md,
+// ZERO_TOUCH_PROVISIONING.md.
+
+// How each signal the demo workflows need reaches the Grid (API/native/grid-lifted).
+const GRID_SIGNAL_SOURCES: SignalSource[] = [
+  { id: "identity", name: "Identity / SSO", system: "Entra ID", method: "api" },
+  { id: "device_compliance", name: "Device compliance", system: "Intune", method: "api" },
+  { id: "badge_binding", name: "Badge binding", system: "RFID reader", method: "native" },
+  { id: "baseline", name: "Security baseline (CIS)", system: "baseline scanner", method: "grid_collected" },
+  { id: "change_window", name: "Approved change window", system: "ITSM", method: "native" },
+  { id: "custody", name: "Physical custody", system: "RTLS", method: "grid_collected" },
+];
+const GRID_CONFIG: GridConfig = { signals: GRID_SIGNAL_SOURCES, workflows: [...DEMO_FLOWS], situations: [...GRID_SITUATIONS] };
+
+router.get("/cp/v1/grid/coverage", (_req, res) => {
+  const wired = sourcingToSignalStates(GRID_SIGNAL_SOURCES);
+  res.json({
+    note: "Which situations the Grid handles on its own, given the active workflows + the signals it can source. Fixture data — read-only.",
+    sourcing: summarizeSourcing(GRID_SIGNAL_SOURCES),
+    coverage: evaluateGridCoverage(DEMO_FLOWS, GRID_SITUATIONS, wired),
+  });
+});
+
+router.get("/cp/v1/grid/config", (_req, res) => {
+  res.json({
+    note: "Workflows as code — the CI/CD validation the Grid runs on the declarative config before it runs the Grid. Read-only.",
+    valid: gridConfigValid(GRID_CONFIG),
+    summary: summarizeGridConfig(GRID_CONFIG),
+    issues: lintGridConfig(GRID_CONFIG),
+  });
+});
+
+const PROVISIONING_RECORDING: DeviceSetupRecording = {
+  id: "rec_clinical_tablet",
+  name: "Clinical tablet first-boot",
+  match: { serialPrefix: "CLIN-", model: "MediPad-X" },
+  triggers: ["first_boot", "network_join"],
+  steps: [
+    { key: "wifi", label: "Join clinical Wi-Fi", kind: "wifi" },
+    { key: "profile", label: "Install MDM profile", kind: "profile" },
+    { key: "emr", label: "Deploy EMR app", kind: "app_install" },
+    { key: "lockdown", label: "Apply kiosk restriction", kind: "restriction", sensitive: true },
+  ],
+};
+router.get("/cp/v1/grid/provisioning", (_req, res) => {
+  // Simulated by default — enforcement stays off until an owner enables it.
+  const plan = planZeroTouchSetup(PROVISIONING_RECORDING, { serial: "CLIN-00042", model: "MediPad-X", onNetwork: true });
+  res.json({
+    note: "Zero-touch device setup, simulated — enforcement is off, so steps are described, not executed. A sensitive step requires approval; a non-matching device is never touched.",
+    recording: PROVISIONING_RECORDING,
+    plan,
+  });
+});
+
+const APP_SUITE: AppService[] = [
+  { id: "ehr", name: "EHR", availability: "unplanned_outage", hasFallback: true, handlesPhi: true, safetyNets: ["DR checkpoint", "post-hoc reconciliation", "witness"] },
+  { id: "bcma", name: "BCMA", availability: "available", hasFallback: true, handlesPhi: true },
+  { id: "his", name: "HIS", availability: "degraded", hasFallback: false, handlesPhi: false },
+  { id: "billing", name: "Billing", availability: "planned_maintenance", hasFallback: true, handlesPhi: false },
+];
+router.get("/cp/v1/apps/resilience", (_req, res) => {
+  res.json({
+    note: "Turning each app's availability into a PHI-safe resilience decision so staff keep working through downtime. Fixture data; fallbacks described, not executed.",
+    fleet: fleetResilience(APP_SUITE),
   });
 });
 

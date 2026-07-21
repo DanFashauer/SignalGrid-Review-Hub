@@ -91,6 +91,9 @@ jobs:
       - name: Removable-media / peripheral-control proof
         run: pnpm run proof:peripheral-control
 
+      - name: Data-protection / DLP posture proof
+        run: pnpm run proof:data-protection
+
       - name: Posture-composition (unified signal fusion) proof
         run: pnpm run proof:posture-composition
 

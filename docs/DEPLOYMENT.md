@@ -47,6 +47,7 @@ in-memory (the fixture-safe default used by the public build and CI).
 | `IDENTITY_RISK_ACCESS_TOKEN` | Read-only token for the identity/SSO sign-in-risk connector. | unset (fixture mode) |
 | `RTLS_ACCESS_TOKEN` | Read-only token for the RTLS/badge-dwell physical-custody connector. | unset (fixture mode) |
 | `PERIPHERAL_ACCESS_TOKEN` | Read-only token for the removable-media/peripheral-control connector. | unset (fixture mode) |
+| `DLP_ACCESS_TOKEN` | Read-only token for the data-protection/DLP posture connector. | unset (fixture mode) |
 
 ## Enterprise sign-in (OIDC) — gated
 
@@ -168,6 +169,27 @@ exactly like every other integration (live only on `beta`/`prod` +
 `SIGNALGRID_LIVE_INTEGRATIONS=true` + `PERIPHERAL_ACCESS_TOKEN`; otherwise fixture
 mode). Proven offline in CI (`pnpm run proof:peripheral-control`), and fused with
 the other dimensions by `@workspace/posture-composition`.
+
+## Data-protection / DLP posture — gated
+
+The peripheral-control dimension covers the hardware exfil surface (attached
+removable media); this one covers the **data exfil surface across every channel** —
+a sensitive file leaving via cloud upload, personal email, web post, print, or
+clipboard is a data-loss event regardless of hardware. The read-only **DLP
+connector** reads per-device DLP policy state + recent violations from a data-
+protection platform (shaped for Microsoft Purview DLP, Forcepoint, Symantec/
+Broadcom DLP, Zscaler, Netskope), and a **pure, deterministic evaluator** turns
+them into one posture (`protected` / `monitored` / `policy_unenforced` /
+`data_egress` / `confirmed_exfiltration` / `unknown`) plus the action it warrants
+(`none` / `monitor` / `step_up` / `alert` / `restrict` / `escalate`). Fail-safe by
+construction: a violation whose outcome we **cannot confirm was blocked** is
+treated as data that may have left, **regulated data (PHI/PII/PCI) that egressed**
+escalates, unenforced DLP policy is a gap, and a device with **no DLP coverage** is
+a blind spot (never "protected"). Read-only by construction and gated exactly like
+every other integration (live only on `beta`/`prod` + `SIGNALGRID_LIVE_INTEGRATIONS=true`
++ `DLP_ACCESS_TOKEN`; otherwise fixture mode). Proven offline in CI
+(`pnpm run proof:data-protection`), and fused with the other dimensions by
+`@workspace/posture-composition`.
 
 **Fixture-safe by default:** even at `SIGNALGRID_TIER=prod`, no live vendor calls
 are made unless `SIGNALGRID_LIVE_INTEGRATIONS=true` is also set — so this stack is

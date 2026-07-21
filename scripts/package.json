@@ -54,6 +54,7 @@
     "proof:identity-risk": "tsx ./src/identity-risk-proof.ts",
     "proof:rtls-custody": "tsx ./src/rtls-custody-proof.ts",
     "proof:peripheral-control": "tsx ./src/peripheral-control-proof.ts",
+    "proof:data-protection": "tsx ./src/data-protection-proof.ts",
     "proof:fabric-scenario": "tsx ./src/fabric-scenario-proof.ts"
   },
   "dependencies": {

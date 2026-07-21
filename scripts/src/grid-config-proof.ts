@@ -71,6 +71,18 @@ check("a duplicate situation id is an error", codes(dupSit).includes("duplicate_
 const badMethod = base(); (badMethod.signals[0] as { method: string }).method = "carrier-pigeon";
 check("an invalid sourcing method is an error", codes(badMethod).includes("invalid_sourcing_method") && !gridConfigValid(badMethod));
 
+// error: a workflow with no actions (covered yet executes nothing — false green).
+const noActions = base(); noActions.workflows[0].actions = [];
+check("a workflow with no actions is an error", codes(noActions).includes("workflow_no_actions") && !gridConfigValid(noActions));
+
+// error: an unrecognized approval policy (runtime would fail-close it to blocked).
+const badApproval = base(); (badApproval.workflows[0].actions[0] as { approval: string }).approval = "auto";
+check("an invalid approval policy is an error", codes(badApproval).includes("invalid_approval_policy") && !gridConfigValid(badApproval));
+
+// error: a missing/empty id anywhere.
+const emptyId = base(); emptyId.signals[0].id = "";
+check("a missing/empty id is an error", codes(emptyId).includes("missing_id") && !gridConfigValid(emptyId));
+
 // warning: a declared signal no workflow uses.
 const unused = base(); unused.signals.push({ id: "spare", name: "Spare", system: "x", method: "api" });
 check("an unused signal is a warning (not an error)", warnCodes(unused).includes("unused_signal") && gridConfigValid(unused));
@@ -86,6 +98,11 @@ check("a required-but-unavailable signal is a gap warning", warnCodes(gap).inclu
 // ── validity semantics: warnings never block, errors always do ────────────────
 check("a config with only warnings is still valid", gridConfigValid(unused) && gridConfigValid(orphanWf) && gridConfigValid(gap));
 check("a config with any error is invalid", !gridConfigValid(dangling) && !gridConfigValid(empty) && !gridConfigValid(badMethod));
+
+// ── the coverage metric is null (not a reassuring number) on an INVALID config ─
+// Duplicate ids dedupe downstream and would otherwise read a false 100%.
+check("an invalid config reports no coverage number (null, not 100%)", summarizeGridConfig(dupSignal).coveragePctAtFullHealth === null && summarizeGridConfig(dangling).coveragePctAtFullHealth === null);
+check("a valid config still reports its real coverage number", summarizeGridConfig(unused).coveragePctAtFullHealth === 100);
 
 // ── determinism ──────────────────────────────────────────────────────────────
 check("lint is deterministic", JSON.stringify(lintGridConfig(committed)) === JSON.stringify(lintGridConfig(committed)));

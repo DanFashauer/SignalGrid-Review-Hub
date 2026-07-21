@@ -36,6 +36,10 @@ export interface GridConfigIssue {
 }
 
 const VALID_METHODS: readonly AcquisitionMethod[] = ["api", "native", "grid_collected", "unavailable"];
+// Mirrors ApprovalPolicy in ./index — an allowlist, so a typo'd/unknown approval
+// (which planFlowActions fail-closes to "blocked" at runtime) is caught at author
+// time instead of silently executing nothing.
+const VALID_APPROVALS: readonly string[] = ["automated", "admin_approval", "dual_approval", "user_override_on_downtime"];
 
 /**
  * Validate a grid config. Fail-safe by design: anything that would let the Grid
@@ -79,7 +83,20 @@ export function lintGridConfig(config: GridConfig): GridConfigIssue[] {
     }
   }
 
-  // Workflows: must require ≥1 signal, and every required signal must be declared.
+  // Every entity needs a non-empty id (an empty/missing id is un-referenceable).
+  const flagMissingId = (items: { id?: string }[], kind: string): void => {
+    items.forEach((it, i) => {
+      if (typeof it.id !== "string" || it.id.length === 0) {
+        errors.push({ severity: "error", code: "missing_id", subject: `${kind}[${i}]`, message: `A ${kind} at index ${i} has a missing or empty id.` });
+      }
+    });
+  };
+  flagMissingId(signals, "signal");
+  flagMissingId(workflows, "workflow");
+  flagMissingId(situations, "situation");
+
+  // Workflows: must require ≥1 signal AND declare ≥1 action, every required signal
+  // must be declared, and every action's approval policy must be recognized.
   const usedSignals = new Set<string>();
   for (const w of workflows) {
     const reqs = w.requiredSignals ?? [];
@@ -90,6 +107,15 @@ export function lintGridConfig(config: GridConfig): GridConfigIssue[] {
       usedSignals.add(sig);
       if (!signalIds.has(sig)) {
         errors.push({ severity: "error", code: "unknown_signal_ref", subject: w.id, message: `Workflow "${w.id}" requires signal "${sig}", which is not declared in signals.` });
+      }
+    }
+    const actions = w.actions ?? [];
+    if (actions.length === 0) {
+      errors.push({ severity: "error", code: "workflow_no_actions", subject: w.id, message: `Workflow "${w.id}" declares no actions; it would be reported as covered yet execute nothing (a false green).` });
+    }
+    for (const a of actions) {
+      if (!VALID_APPROVALS.includes(a.approval)) {
+        errors.push({ severity: "error", code: "invalid_approval_policy", subject: w.id, message: `Workflow "${w.id}" action "${a.key}" has an unrecognized approval policy "${String(a.approval)}"; expected one of ${VALID_APPROVALS.join(", ")} (it would be blocked at runtime).` });
       }
     }
   }
@@ -140,8 +166,13 @@ export interface GridConfigSummary {
   warnings: number;
   /** Sourcing rollup (vendor-integrated vs grid-lifted vs gap). */
   sourcing: ReturnType<typeof summarizeSourcing>;
-  /** Coverage the config achieves at full health (situations the Grid handles itself). */
-  coveragePctAtFullHealth: number;
+  /**
+   * Coverage the config achieves at full health (situations the Grid handles
+   * itself) — or `null` when the config has ERRORS, because coverage computed on
+   * an invalid config is not a trustworthy number (e.g. duplicate ids dedupe to a
+   * falsely reassuring 100%). Only meaningful when `errors === 0`.
+   */
+  coveragePctAtFullHealth: number | null;
 }
 
 /**
@@ -151,15 +182,17 @@ export interface GridConfigSummary {
  */
 export function summarizeGridConfig(config: GridConfig): GridConfigSummary {
   const issues = lintGridConfig(config);
+  const errors = issues.filter((i) => i.severity === "error").length;
   const wired: SignalState[] = sourcingToSignalStates(config.signals ?? []);
   const coverage = evaluateGridCoverage(config.workflows ?? [], config.situations ?? [], wired);
   return {
     signals: (config.signals ?? []).length,
     workflows: (config.workflows ?? []).length,
     situations: (config.situations ?? []).length,
-    errors: issues.filter((i) => i.severity === "error").length,
+    errors,
     warnings: issues.filter((i) => i.severity === "warning").length,
     sourcing: summarizeSourcing(config.signals ?? []),
-    coveragePctAtFullHealth: coverage.coveragePct,
+    // Only report coverage for a VALID config — never let an invalid one advertise 100%.
+    coveragePctAtFullHealth: errors === 0 ? coverage.coveragePct : null,
   };
 }

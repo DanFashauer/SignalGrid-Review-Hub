@@ -360,6 +360,11 @@ export { DEMO_FLOWS } from "./catalog";
 // workflows + wired signals (the model behind "build the grid").
 export * from "./grid-coverage";
 
+// Signal sourcing — HOW each signal reaches the Grid (API / native / grid-collected
+// / unavailable) and what that costs. The outcome depends on how the source
+// systems are configured.
+export * from "./signal-sourcing";
+
 export function listFlows(): Flow[] {
   return DEMO_FLOWS;
 }

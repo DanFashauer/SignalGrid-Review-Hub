@@ -106,6 +106,9 @@
   .item .nm { flex: 1; min-width: 0; }
   .item .nm .t { font-size: 13.5px; font-weight: 600; color: var(--ink); letter-spacing: -.01em; }
   .item .nm .d { font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint); letter-spacing: .02em; margin-top: 1px; }
+  .item .src { font-family: var(--mono); font-size: 9px; letter-spacing: .05em; text-transform: uppercase; padding: 2px 6px; border-radius: 5px; border: 1px solid var(--line); color: var(--ink-mut); white-space: nowrap; flex: none; }
+  .item .src-api, .item .src-native { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+  .item .src-collected { color: var(--accent-ink); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
   .item .act { font-family: var(--mono); font-size: 10px; color: var(--ink-faint); text-align: right; }
   .item[aria-pressed="true"] { background: rgba(138,125,255,.07); border-color: var(--accent); color: var(--ink); }
   .item[aria-pressed="true"] .tick { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -174,8 +177,10 @@
   </div>
 
   <footer>
-    <b>How this works.</b> Each situation is caught only when its <b>workflow is active</b> and the <b>signals it needs are wired</b> — then the grid carries out the response by itself, no human in the loop. Missing either one is a blind spot, and the fix is always to <b>add</b>. This mirrors the real fusion + orchestration logic in the
-    <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub">Review Hub</a> (proven by <code>proof:fabric-scenario</code>), running on illustrative data — <b>no live tenant, no action taken</b>.
+    <b>How this works.</b> Each situation is caught only when its <b>workflow is active</b> and the <b>signals it needs are wired</b> — then the grid carries out the response by itself, no human in the loop. Missing either one is a blind spot, and the fix is always to <b>add</b>.
+    Each signal tag shows <b>how</b> it reaches the grid: <code>via API</code> or <code>native</code> when the source system integrates, or <code>grid-collected</code> when it doesn&rsquo;t and the grid does the lifting itself — so the outcome depends on how your existing systems are configured (see <code>docs/SIGNAL_SOURCING.md</code>).
+    This mirrors the real fusion + orchestration logic in the
+    <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub">Review Hub</a> (proven by <code>proof:fabric-scenario</code> and <code>proof:grid-coverage</code>), running on illustrative data — <b>no live tenant, no action taken</b>.
   </footer>
 </div>
 
@@ -183,14 +188,18 @@
 (function () {
   "use strict";
 
+  // `src` = how this signal reaches the grid, dictated by the source system:
+  // api / native (the vendor integrates) · collected (no hook → the grid does the
+  // lifting itself). See docs/SIGNAL_SOURCING.md.
   var SIGNALS = [
-    { id:"identity",     t:"Identity / SSO",        d:"sign-in risk" },
-    { id:"device",       t:"Device posture / EDR",  d:"endpoint threat" },
-    { id:"custody",      t:"Physical custody / RTLS", d:"zone & badge" },
-    { id:"network",      t:"Network / NAC",         d:"access state" },
-    { id:"data",         t:"Data protection / DLP", d:"data egress" },
-    { id:"reachability", t:"Reachability / carrier", d:"post-exit" }
+    { id:"identity",     t:"Identity / SSO",        d:"sign-in risk",   src:"api" },
+    { id:"device",       t:"Device posture / EDR",  d:"endpoint threat", src:"api" },
+    { id:"custody",      t:"Physical custody / RTLS", d:"zone & badge",  src:"collected" },
+    { id:"network",      t:"Network / NAC",         d:"access state",   src:"native" },
+    { id:"data",         t:"Data protection / DLP", d:"data egress",    src:"api" },
+    { id:"reachability", t:"Reachability / carrier", d:"post-exit",     src:"collected" }
   ];
+  var SRC_LABEL = { api:"via API", native:"native", collected:"grid-collected" };
 
   // Each workflow needs signals and, when active + fed, runs its action by itself.
   var WORKFLOWS = [
@@ -241,7 +250,8 @@
     elSig.innerHTML = SIGNALS.map(function (s) {
       return '<button class="item" role="button" data-sig="' + s.id + '" aria-pressed="' + !!onSig[s.id] + '">' +
         '<span class="tick">' + checkSvg() + '</span>' +
-        '<span class="nm"><span class="t">' + esc(s.t) + '</span><span class="d">' + esc(s.d) + '</span></span></button>';
+        '<span class="nm"><span class="t">' + esc(s.t) + '</span><span class="d">' + esc(s.d) + '</span></span>' +
+        '<span class="src src-' + s.src + '" title="How this signal reaches the grid">' + SRC_LABEL[s.src] + '</span></button>';
     }).join("");
     elWf.innerHTML = WORKFLOWS.map(function (w) {
       return '<button class="item" role="button" data-wf="' + w.id + '" aria-pressed="' + !!onWf[w.id] + '">' +

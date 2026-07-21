@@ -13,8 +13,14 @@ import {
   DEMO_FLOWS,
   GRID_SITUATIONS,
   evaluateGridCoverage,
+  fidelityOf,
+  gridDoesLifting,
+  isWireable,
+  sourcingToSignalStates,
+  summarizeSourcing,
   type Flow,
   type GridSituation,
+  type SignalSource,
   type SignalState,
 } from "@workspace/flows";
 
@@ -142,6 +148,54 @@ check("a healthy duplicate workflow id cannot mask a broken twin", twinCov.situa
 // ── counting holds across a MIXED state (handled + partial + blind spot) ──────
 const mixed = evaluateGridCoverage(withoutControlled, GRID_SITUATIONS, missingCustody);
 check("handled+partial+blindSpots===total across a mixed state", mixed.handled + mixed.partial + mixed.blindSpots === mixed.total && mixed.total === GRID_SITUATIONS.length);
+
+// ── signal sourcing: HOW a signal reaches the grid dictates the outcome ───────
+// api/native → high fidelity; grid-collected (the grid does the lifting) → medium
+// (low if degraded); unavailable → none. Only `unavailable` cannot be wired.
+const src = (id: string, method: SignalSource["method"], degraded?: boolean): SignalSource => ({ id, name: id, system: "sys", method, degraded });
+check("api & native signals are high fidelity", fidelityOf(src("a", "api")) === "high" && fidelityOf(src("b", "native")) === "high");
+check("a grid-collected signal is medium fidelity (low if degraded)", fidelityOf(src("c", "grid_collected")) === "medium" && fidelityOf(src("d", "grid_collected", true)) === "low");
+check("an unavailable signal has no fidelity", fidelityOf(src("e", "unavailable")) === "none");
+check("only an unavailable signal is un-wireable", isWireable("api") && isWireable("native") && isWireable("grid_collected") && !isWireable("unavailable"));
+check("only a grid-collected signal means the grid does the lifting", gridDoesLifting("grid_collected") && !gridDoesLifting("api") && !gridDoesLifting("native") && !gridDoesLifting("unavailable"));
+
+// Fail-closed at the untyped boundary: an unknown/undefined method (from JSON)
+// must be treated as ungettable — no wired state, not wireable, no fidelity —
+// never wired as a present signal of unknown provenance.
+const unknownSources = [src("custody", "collector" as never), src("id2", undefined as never)];
+check("an unknown/undefined method yields no wired signal (fail-safe)", sourcingToSignalStates(unknownSources).length === 0);
+check("an unknown/undefined method is not wireable", !isWireable("collector" as never) && !isWireable(undefined as never));
+check("an unknown method has no fidelity (never undefined)", fidelityOf(src("z", "collector" as never)) === "none");
+// Strongest single oracle: the wired count must equal the summary's wireable
+// count for the SAME sources — catches any allowlist/denylist drift between them.
+const agreeMix = [src("a", "api"), src("b", "unavailable"), src("c", "collector" as never), src("d", "grid_collected")];
+check("wired signal count === summary.wireable (functions agree on the same input)", sourcingToSignalStates(agreeMix).length === summarizeSourcing(agreeMix).wireable);
+
+// An unavailable source yields NO signal state (fail-safe — never pretend to have it).
+const someUnavail = [src("identity", "api"), src("custody", "unavailable"), src("baseline", "grid_collected")];
+const derivedStates = sourcingToSignalStates(someUnavail);
+check("an unavailable source produces no wired signal (fail-safe)", !derivedStates.some((s) => s.id === "custody"));
+check("api and grid-collected sources are wired healthy", derivedStates.find((s) => s.id === "identity")?.status === "healthy" && derivedStates.find((s) => s.id === "baseline")?.status === "healthy");
+
+// Sourcing summary rolls up vendor-integrated vs grid-lifted vs gaps.
+const summ = summarizeSourcing([src("a", "api"), src("b", "native"), src("c", "grid_collected"), src("d", "unavailable")]);
+check("sourcing summary counts each path", summ.api === 1 && summ.native === 1 && summ.gridCollected === 1 && summ.unavailable === 1);
+check("wireable = api+native+grid-collected; vendorIntegrated = api+native", summ.wireable === 3 && summ.vendorIntegrated === 2 && summ.total === 4);
+
+// End-to-end: how the systems are configured dictates coverage.
+// (a) Every required signal available via API → the grid handles everything.
+const allApi: SignalSource[] = ALL_SIGNAL_IDS.map((id) => src(id, "api"));
+const covApi = evaluateGridCoverage(DEMO_FLOWS, GRID_SITUATIONS, sourcingToSignalStates(allApi));
+check("all signals API-sourced → full coverage", covApi.coveragePct === 100);
+// (b) The grid does the lifting for one required signal → still wired → still handled.
+const withLift: SignalSource[] = ALL_SIGNAL_IDS.map((id) => src(id, id === "custody" ? "grid_collected" : "api"));
+const covLift = evaluateGridCoverage(DEMO_FLOWS, GRID_SITUATIONS, sourcingToSignalStates(withLift));
+check("a grid-collected required signal still yields full coverage (grid does the lifting)", covLift.coveragePct === 100 && summarizeSourcing(withLift).gridCollected === 1);
+// (c) A required signal is unavailable → its situation drops (a real gap, fail-safe).
+const withGap: SignalSource[] = ALL_SIGNAL_IDS.map((id) => src(id, id === "custody" ? "unavailable" : "api"));
+const covGap = evaluateGridCoverage(DEMO_FLOWS, GRID_SITUATIONS, sourcingToSignalStates(withGap));
+const gapSit = covGap.situations.find((s) => s.workflowId === "flow_controlled_area")!;
+check("an unavailable required signal drops its situation (never a false green)", gapSit.status === "partial" && gapSit.missingSignals.includes("custody") && covGap.coveragePct < 100);
 
 // ── determinism ──────────────────────────────────────────────────────────────
 const a = evaluateGridCoverage(DEMO_FLOWS, GRID_SITUATIONS, missingCustody);

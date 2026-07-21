@@ -102,6 +102,24 @@ const serialOnly: DeviceSetupRecording = { ...good, match: { serialPrefix: "CLIN
 check("a serial-prefix-only recording matches on prefix", planZeroTouchSetup(serialOnly, { serial: "CLIN-9" }).matched === true);
 check("a serial-prefix-only recording rejects a non-prefixed serial", planZeroTouchSetup(serialOnly, { serial: "WARE-9" }).matched === false);
 
+// ── untyped-boundary fail-safety (=== true vs truthy) ──────────────────────────
+// The owner switch must be STRICTLY true — a truthy-not-true value still simulates.
+const truthySwitch = planZeroTouchSetup(good, clinDevice, { mode: "enforced", enforcementEnabled: "true" as unknown as boolean });
+check("enforcementEnabled truthy-not-true still simulates (nothing runs)", truthySwitch.willApplyAnything === false && truthySwitch.steps.every((s) => s.disposition === "held_simulated"));
+// An unrecognized mode (wrong case) falls back to simulated.
+const wrongCaseMode = planZeroTouchSetup(good, clinDevice, { mode: "ENFORCED" as unknown as "enforced", enforcementEnabled: true });
+check("an unrecognized mode falls back to simulated", wrongCaseMode.mode === "simulated" && wrongCaseMode.willApplyAnything === false);
+
+// A non-boolean `sensitive` (from JSON) is invalid — so it can never auto-apply.
+const strSensitive = clone(); (strSensitive.steps[3] as { sensitive: unknown }).sensitive = "true";
+check("a non-boolean sensitive value is an error", errCodes(strSensitive).includes("invalid_sensitive_flag") && !setupRecordingValid(strSensitive));
+check("a recording with a mistyped sensitive flag is never applied", planZeroTouchSetup(strSensitive, clinDevice, { mode: "enforced", enforcementEnabled: true }).willApplyAnything === false);
+
+// The validity gate blocks apply for an invalid-but-has-steps recording, not just
+// the empty-steps case — a matching device under enforcement still applies nothing.
+const invalidHasSteps = clone(); (invalidHasSteps.triggers as string[]) = ["whenever"]; // invalid_trigger, steps intact
+check("an invalid-but-populated recording is never applied", !setupRecordingValid(invalidHasSteps) && planZeroTouchSetup(invalidHasSteps, clinDevice, { mode: "enforced", enforcementEnabled: true }).matched === false);
+
 // Determinism.
 const a = planZeroTouchSetup(good, clinDevice, { mode: "enforced", enforcementEnabled: true });
 const b = planZeroTouchSetup(good, clinDevice, { mode: "enforced", enforcementEnabled: true });

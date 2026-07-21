@@ -114,7 +114,13 @@ export function lintSetupRecording(rec: DeviceSetupRecording): SetupRecordingIss
     if (!SETUP_STEP_KINDS.includes(s.kind)) {
       errors.push({ severity: "error", code: "invalid_step_kind", subject: rec.id, message: `Recording "${rec.id}" step "${s.key}" has an unrecognized kind "${String(s.kind)}"; expected one of ${SETUP_STEP_KINDS.join(", ")}.` });
     }
-    if (s.sensitive === true) {
+    // A non-boolean `sensitive` (from untyped JSON — e.g. the string "true", 1)
+    // is an ERROR: a strict `=== true` check would read it as NOT sensitive and
+    // auto-apply a step meant to require approval. Reject it at authoring so it
+    // never reaches apply. Only an explicit boolean is allowed.
+    if (s.sensitive !== undefined && typeof s.sensitive !== "boolean") {
+      errors.push({ severity: "error", code: "invalid_sensitive_flag", subject: rec.id, message: `Recording "${rec.id}" step "${s.key}" has a non-boolean sensitive value "${String(s.sensitive)}"; expected true or false.` });
+    } else if (s.sensitive === true) {
       warnings.push({ severity: "warning", code: "sensitive_step", subject: rec.id, message: `Recording "${rec.id}" step "${s.key}" is sensitive — it will require approval before any real apply.` });
     }
   }
@@ -209,7 +215,11 @@ export function planZeroTouchSetup(
     if (!reallyEnforcing) {
       return { key: s.key, label: s.label, kind: s.kind, disposition: "held_simulated", reason: "Simulated — enforcement is off; step described, not executed." };
     }
-    if (s.sensitive === true) {
+    // Fail closed: any sensitive value that is not explicitly `false` (and not
+    // absent) is treated as sensitive. `=== true` alone would let a mistyped
+    // "true"/1 auto-apply; lint already rejects a non-boolean sensitive, so this
+    // is defense-in-depth behind the validity gate.
+    if (s.sensitive !== false && s.sensitive !== undefined) {
       return { key: s.key, label: s.label, kind: s.kind, disposition: "approval_required", reason: "Sensitive step — requires administrator approval before it runs." };
     }
     return { key: s.key, label: s.label, kind: s.kind, disposition: "auto_apply", reason: "Applied automatically by the Grid." };

@@ -467,6 +467,14 @@ async function run() {
 
   const provisioning = await req("GET", "/cp/v1/grid/provisioning");
   check("provisioning plan is simulated (nothing auto-applies)", provisioning.status === 200 && provisioning.json?.plan?.willApplyAnything === false && provisioning.json?.plan?.matched === true);
+  check("provisioning surfaces the recording + its validation", provisioning.json?.recordingValid === true && Array.isArray(provisioning.json?.issues));
+  check("provisioning exposes preset devices for the Designer preview", Array.isArray(provisioning.json?.devices) && provisioning.json.devices.length >= 2);
+  const provMatch = await req("GET", "/cp/v1/grid/provisioning?serial=CLIN-00042");
+  check("provisioning matches a device with the recording's serial prefix", provMatch.json?.plan?.matched === true && provMatch.json?.plan?.steps?.length > 0);
+  const provNoMatch = await req("GET", "/cp/v1/grid/provisioning?serial=WARE-88120");
+  check("provisioning never touches a non-matching device (fail-safe)", provNoMatch.json?.plan?.matched === false && provNoMatch.json?.plan?.steps?.length === 0 && provNoMatch.json?.plan?.willApplyAnything === false);
+  const provProto = await req("GET", "/cp/v1/grid/provisioning?serial=constructor");
+  check("provisioning serial lookup is prototype-safe (constructor is an ad-hoc, non-matching device)", provProto.status === 200 && provProto.json?.device?.serial === "constructor" && provProto.json?.plan?.matched === false);
 
   const resilience = await req("GET", "/cp/v1/apps/resilience");
   check("app resilience rollup responds with a fleet", resilience.status === 200 && typeof resilience.json?.fleet?.total === "number");

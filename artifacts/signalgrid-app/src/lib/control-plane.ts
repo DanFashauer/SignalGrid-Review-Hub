@@ -66,7 +66,7 @@ export const controlPlane = {
   signalDiscovery: () => get<SignalDiscovery>(`/api/cp/v1/signal-discovery`),
   gridCoverage: () => get<GridCoverageResp>(`/api/cp/v1/grid/coverage`),
   gridConfig: () => get<GridConfigResp>(`/api/cp/v1/grid/config`),
-  provisioning: () => get<ProvisioningResp>(`/api/cp/v1/grid/provisioning`),
+  provisioning: (serial?: string) => get<ProvisioningResp>(`/api/cp/v1/grid/provisioning${serial ? `?serial=${encodeURIComponent(serial)}` : ""}`),
   appResilience: () => get<AppResilienceResp>(`/api/cp/v1/apps/resilience`),
 };
 
@@ -82,8 +82,23 @@ export interface GridConfigResp {
   summary: { signals: number; workflows: number; situations: number; errors: number; warnings: number; coveragePctAtFullHealth: number | null };
   issues: Array<{ severity: "error" | "warning"; code: string; subject: string; message: string }>;
 }
+export type StepDisposition = "auto_apply" | "approval_required" | "held_simulated";
+export interface ProvisioningStep { key: string; label: string; kind: string; disposition: StepDisposition; reason: string }
+export interface RecordingStep { key: string; label: string; kind: string; sensitive?: boolean; gridLifted?: boolean }
+export interface DeviceSetupRecording {
+  id: string; name: string;
+  match: { serialPrefix?: string; model?: string };
+  triggers: string[];
+  steps: RecordingStep[];
+}
+export interface ProvisioningDevice { serial: string; model?: string; onNetwork?: boolean }
 export interface ProvisioningResp {
-  plan: { deviceSerial: string; matched: boolean; mode: "simulated" | "enforced"; steps: Array<{ key: string; label: string; kind: string; disposition: string }>; requiresApproval: number; willApplyAnything: boolean };
+  recording: DeviceSetupRecording;
+  recordingValid: boolean;
+  issues: Array<{ severity: "error" | "warning"; code: string; subject: string; message: string }>;
+  device: ProvisioningDevice;
+  devices: ProvisioningDevice[];
+  plan: { recordingId: string; deviceSerial: string; matched: boolean; mode: "simulated" | "enforced"; steps: ProvisioningStep[]; requiresApproval: number; willApplyAnything: boolean; reason: string };
 }
 export interface AppResilienceRow { appId: string; name: string; availability: string; mode: string; canProceed: boolean; requiredSafetyNets: string[] }
 export interface AppResilienceResp {

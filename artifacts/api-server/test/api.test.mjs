@@ -462,8 +462,17 @@ async function run() {
   check("grid coverage handles every situation (fixture fully sourced)", coverage.json?.coverage?.coveragePct === 100);
   check("grid coverage reports sourcing (some grid-lifted)", coverage.json?.sourcing?.gridCollected > 0);
 
+  const sourcing = await req("GET", "/cp/v1/grid/sourcing");
+  check("grid sourcing responds with per-signal rows + summary", sourcing.status === 200 && Array.isArray(sourcing.json?.signals) && typeof sourcing.json?.summary?.total === "number");
+  const srcSignals = sourcing.json?.signals ?? [];
+  const gap = srcSignals.find((r) => r.method === "unavailable");
+  check("grid sourcing surfaces a gap (unavailable → not wireable, no fidelity)", gap?.wireable === false && gap?.fidelity === "none");
+  check("grid sourcing marks vendor-integrated signals high fidelity + not grid-lifted", srcSignals.filter((r) => r.method === "api" || r.method === "native").every((r) => r.fidelity === "high" && r.wireable === true && r.gridLifted === false));
+  check("grid sourcing marks grid-collected as the Grid doing the lifting", srcSignals.filter((r) => r.method === "grid_collected").every((r) => r.gridLifted === true && r.wireable === true));
+
   const gridConfig = await req("GET", "/cp/v1/grid/config");
   check("grid config validates clean", gridConfig.status === 200 && gridConfig.json?.valid === true);
+  check("grid config warns on the unwired gap signal (surfaced, not blocking)", (gridConfig.json?.summary?.warnings ?? 0) >= 1);
 
   const provisioning = await req("GET", "/cp/v1/grid/provisioning");
   check("provisioning plan is simulated (nothing auto-applies)", provisioning.status === 200 && provisioning.json?.plan?.willApplyAnything === false && provisioning.json?.plan?.matched === true);

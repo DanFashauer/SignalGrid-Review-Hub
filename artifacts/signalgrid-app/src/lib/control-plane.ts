@@ -65,6 +65,7 @@ export const controlPlane = {
   recommendations: () => get<{ recommendations: Recommendation[] }>(`/api/cp/v1/recommendations`).then((r) => r.recommendations),
   signalDiscovery: () => get<SignalDiscovery>(`/api/cp/v1/signal-discovery`),
   gridCoverage: () => get<GridCoverageResp>(`/api/cp/v1/grid/coverage`),
+  gridSourcing: () => get<GridSourcingResp>(`/api/cp/v1/grid/sourcing`),
   gridConfig: () => get<GridConfigResp>(`/api/cp/v1/grid/config`),
   provisioning: (serial?: string) => get<ProvisioningResp>(`/api/cp/v1/grid/provisioning${serial ? `?serial=${encodeURIComponent(serial)}` : ""}`),
   appResilience: () => get<AppResilienceResp>(`/api/cp/v1/apps/resilience`),
@@ -77,6 +78,10 @@ export interface GridCoverageResp {
   sourcing: SourcingSummary;
   coverage: { situations: SituationCoverageRow[]; handled: number; partial: number; blindSpots: number; total: number; coveragePct: number };
 }
+export type AcquisitionMethod = "api" | "native" | "grid_collected" | "unavailable";
+export type Fidelity = "high" | "medium" | "low" | "none";
+export interface SignalSourceRow { id: string; name: string; system: string; method: AcquisitionMethod; fidelity: Fidelity; wireable: boolean; gridLifted: boolean }
+export interface GridSourcingResp { summary: SourcingSummary; signals: SignalSourceRow[] }
 export interface GridConfigResp {
   valid: boolean;
   summary: { signals: number; workflows: number; situations: number; errors: number; warnings: number; coveragePctAtFullHealth: number | null };

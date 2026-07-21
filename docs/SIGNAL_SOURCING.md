@@ -61,6 +61,23 @@ carries a caveat this model makes explicit: *what you can add, and at what fidel
 is dictated by what your existing systems support* — and where they support nothing,
 the Grid does the lifting or the gap is named.
 
+## Seeing it — the operator surface
+
+The operator console (mobile PWA, `artifacts/signalgrid-app`) has a **Signal
+sourcing** view that reads this live from `GET /cp/v1/grid/sourcing`:
+
+- a rollup — wireable / vendor-integrated / grid-lifted / **gaps**;
+- a **Gaps panel** that appears only when a signal is `unavailable`, naming the
+  fix (add an integration, stand up a collector, or accept the gap);
+- a per-signal table: signal → source system → **path** (API / native /
+  grid-collected / gap) → **fidelity** → who does the work.
+
+The demo signal set is deliberately mixed: vendor-integrated signals at high
+fidelity, a grid-collected signal marked **low** fidelity (a coarse proxy the Grid
+had to synthesize), and one genuine **gap** (a legacy nurse-call system with no API)
+— so the honest boundary is visible on screen, not just asserted. The view is
+read-only.
+
 ## Boundary
 
 This does not claim SignalGrid can extract data a vendor does not expose without

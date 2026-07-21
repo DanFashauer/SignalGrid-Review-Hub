@@ -70,7 +70,13 @@ export interface ResiliencePosture {
  *    dressed up as "fine". A PHI app is NEVER put on a fallback without safety nets.
  */
 export function resolveAppResilience(app: AppService): ResiliencePosture {
-  const nets = app.safetyNets ?? [];
+  // Blank/whitespace entries are not real safety nets — trim and drop them so a
+  // net of `[""]` can never unlock a PHI fallback.
+  const nets = (app.safetyNets ?? []).map((s) => s.trim()).filter(Boolean);
+  // Fail-safe on the PHI flag: treat an app as regulated UNLESS it is explicitly
+  // marked non-PHI. A missing/undefined handlesPhi (untyped JSON) must not skip
+  // the safety-net gate.
+  const isPhi = app.handlesPhi !== false;
   const base = { appId: app.id, name: app.name, availability: app.availability };
 
   if (app.availability === "available") {
@@ -79,20 +85,25 @@ export function resolveAppResilience(app: AppService): ResiliencePosture {
   if (app.availability === "degraded") {
     return { ...base, mode: "degraded_monitor", canProceed: true, requiredSafetyNets: [], reason: `${app.name} is degraded — proceeding while the Grid watches it.` };
   }
-  if (app.availability === "unknown") {
-    return { ...base, mode: "degraded_monitor", canProceed: true, requiredSafetyNets: [], reason: `${app.name} availability is unverified — proceeding, flagged (never assumed healthy).` };
+
+  // A downtime fallback path is reached ONLY by the two explicit down states.
+  if (app.availability === "planned_maintenance" || app.availability === "unplanned_outage") {
+    const kind = app.availability === "planned_maintenance" ? "in a maintenance window" : "in an unplanned outage";
+    if (!app.hasFallback) {
+      return { ...base, mode: "blocked_no_fallback", canProceed: false, requiredSafetyNets: [], reason: `${app.name} is ${kind} and no fallback is prepared — no safe way to proceed. Escalate; do not improvise.` };
+    }
+    if (isPhi && nets.length === 0) {
+      // Fail-safe: never run a PHI downtime workaround without its DR safety nets.
+      return { ...base, mode: "blocked_no_fallback", canProceed: false, requiredSafetyNets: [], reason: `${app.name} is ${kind}; a fallback exists but this app handles regulated data and no DR safety nets are configured — blocked until they are.` };
+    }
+    return { ...base, mode: "downtime_fallback", canProceed: true, requiredSafetyNets: isPhi ? nets : [], reason: `${app.name} is ${kind} — on its prepared downtime fallback${isPhi ? ` (safety nets: ${nets.join(", ")})` : ""}.` };
   }
 
-  // planned_maintenance or unplanned_outage — the app is not usable directly.
-  const kind = app.availability === "planned_maintenance" ? "in a maintenance window" : "in an unplanned outage";
-  if (!app.hasFallback) {
-    return { ...base, mode: "blocked_no_fallback", canProceed: false, requiredSafetyNets: [], reason: `${app.name} is ${kind} and no fallback is prepared — no safe way to proceed. Escalate; do not improvise.` };
-  }
-  if (app.handlesPhi && nets.length === 0) {
-    // Fail-safe: never run a PHI downtime workaround without its DR safety nets.
-    return { ...base, mode: "blocked_no_fallback", canProceed: false, requiredSafetyNets: [], reason: `${app.name} is ${kind}; a fallback exists but this app handles regulated data and no DR safety nets are configured — blocked until they are.` };
-  }
-  return { ...base, mode: "downtime_fallback", canProceed: true, requiredSafetyNets: app.handlesPhi ? nets : [], reason: `${app.name} is ${kind} — on its prepared downtime fallback${app.handlesPhi ? ` (safety nets: ${nets.join(", ")})` : ""}.` };
+  // `unknown` — and, fail-safe, ANY unrecognized/undefined availability — proceed
+  // but flagged. It is NEVER treated as `available`/`normal`, and it never reaches
+  // the downtime_fallback default, so an unrecognized state can't be reported
+  // workable-by-default.
+  return { ...base, mode: "degraded_monitor", canProceed: true, requiredSafetyNets: [], reason: `${app.name} availability is unverified (${String(app.availability)}) — proceeding, flagged (never assumed healthy).` };
 }
 
 export interface FleetResilience {

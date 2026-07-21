@@ -68,6 +68,24 @@ const phiInvariant = phiStates.every((av) => {
 });
 check("a PHI app with no safety nets is NEVER on a downtime fallback (any availability)", phiInvariant);
 
+// ── fail-safe at the untyped boundary (out-of-type / undefined availability) ──
+// An availability the system doesn't recognize must never be treated as healthy
+// or silently workable-by-default — it can't reach the downtime_fallback default.
+const weird = resolveAppResilience(app({ availability: "AVAILABLE" as never, hasFallback: true, handlesPhi: false }));
+check("out-of-type availability is never 'normal'", weird.mode !== "normal");
+check("out-of-type availability is not silently a workable downtime_fallback", weird.mode === "degraded_monitor");
+const undef = resolveAppResilience(app({ availability: undefined as never, hasFallback: true, handlesPhi: true, safetyNets: [] }));
+check("undefined availability + PHI + no nets is never downtime_fallback", undef.mode !== "downtime_fallback");
+
+// Fail-safe PHI flag: a missing/undefined handlesPhi is treated as PHI, so the
+// safety-net gate is not skipped for an app that omitted the flag.
+const phiMissingFlag = resolveAppResilience({ id: "x", name: "X", availability: "unplanned_outage", hasFallback: true, handlesPhi: undefined as never, safetyNets: [] });
+check("a missing handlesPhi flag defaults to PHI (safety-net gate not skipped)", phiMissingFlag.mode === "blocked_no_fallback" && !phiMissingFlag.canProceed);
+
+// Blank/whitespace safety nets are not real nets and must not unlock a PHI fallback.
+const blankNets = resolveAppResilience(app({ availability: "unplanned_outage", hasFallback: true, handlesPhi: true, safetyNets: ["  ", ""] }));
+check("whitespace-only safety nets do not unlock a PHI fallback", blankNets.mode === "blocked_no_fallback" && !blankNets.canProceed);
+
 // A down app is NEVER reported as able to proceed without a real path.
 const downStates: AppService["availability"][] = ["planned_maintenance", "unplanned_outage"];
 const downInvariant = downStates.every((av) => {

@@ -5,7 +5,7 @@ import {
   DEMO_FLOWS, GRID_SITUATIONS, evaluateGridCoverage,
   lintGridConfig, gridConfigValid, summarizeGridConfig, type GridConfig,
   sourcingToSignalStates, summarizeSourcing, type SignalSource,
-  planZeroTouchSetup, type DeviceSetupRecording,
+  planZeroTouchSetup, lintSetupRecording, setupRecordingValid, type DeviceSetupRecording,
   fleetResilience, type AppService,
 } from "@workspace/flows";
 import { recommend, DEMO_USAGE } from "@workspace/recommendations";
@@ -217,12 +217,41 @@ const PROVISIONING_RECORDING: DeviceSetupRecording = {
     { key: "lockdown", label: "Apply kiosk restriction", kind: "restriction", sensitive: true },
   ],
 };
-router.get("/cp/v1/grid/provisioning", (_req, res) => {
+// Preset devices the Designer preview can plan against — one that matches the
+// recording and one that deliberately does NOT, so the fail-safe ("a non-matching
+// device is never touched") is visible in the mobile app, not just claimed.
+const PROVISIONING_DEVICES: Record<string, { serial: string; model?: string; onNetwork?: boolean }> = {
+  "CLIN-00042": { serial: "CLIN-00042", model: "MediPad-X", onNetwork: true },
+  "WARE-88120": { serial: "WARE-88120", model: "ScanPad-2", onNetwork: true },
+};
+const DEFAULT_PROVISIONING_SERIAL = "CLIN-00042";
+
+router.get("/cp/v1/grid/provisioning", (req, res) => {
   // Simulated by default — enforcement stays off until an owner enables it.
-  const plan = planZeroTouchSetup(PROVISIONING_RECORDING, { serial: "CLIN-00042", model: "MediPad-X", onNetwork: true });
+  // Optional ?serial=/?model= previews the plan against a chosen device; a
+  // serial not in the preset set is planned as an ad-hoc device (which will
+  // simply not match unless it fits the recording's selector — fail-safe).
+  const serialRaw = req.query.serial;
+  const modelRaw = req.query.model;
+  const serial = typeof serialRaw === "string" && serialRaw.length > 0 ? serialRaw : DEFAULT_PROVISIONING_SERIAL;
+  // hasOwnProperty-guarded lookup — a plain-object index walks the prototype
+  // chain, so `?serial=constructor`/`__proto__` would otherwise resolve to an
+  // inherited member and produce a garbage device. Own keys only.
+  const preset = Object.prototype.hasOwnProperty.call(PROVISIONING_DEVICES, serial) ? PROVISIONING_DEVICES[serial] : undefined;
+  const device = preset ?? {
+    serial,
+    model: typeof modelRaw === "string" && modelRaw.length > 0 ? modelRaw : undefined,
+    onNetwork: true,
+  };
+  const plan = planZeroTouchSetup(PROVISIONING_RECORDING, device);
+  const issues = lintSetupRecording(PROVISIONING_RECORDING);
   res.json({
     note: "Zero-touch device setup, simulated — enforcement is off, so steps are described, not executed. A sensitive step requires approval; a non-matching device is never touched.",
     recording: PROVISIONING_RECORDING,
+    recordingValid: setupRecordingValid(PROVISIONING_RECORDING),
+    issues,
+    device,
+    devices: Object.values(PROVISIONING_DEVICES),
     plan,
   });
 });

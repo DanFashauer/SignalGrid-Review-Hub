@@ -44,6 +44,24 @@ ever handing the Grid unattended authority it wasn't explicitly granted. Real
 enforcement stays off until an owner turns it on; until then this is a faithful
 plan you can inspect, not an action taken.
 
+## Seeing it — the operator surface
+
+The operator console (mobile PWA, `artifacts/signalgrid-app`) has a **Device
+recorder** view that reads this model live from `GET /cp/v1/grid/provisioning`:
+
+- the **recording** rendered as the Designer artifact — match selectors, triggers,
+  and the ordered steps with their kind and any `sensitive` / `gridLifted` marker;
+- the **validation** state (`recordingValid` + `issues`), the same CI check the
+  pipeline runs before the Grid replays it;
+- a **zero-touch plan preview** you can point at a device. Pass `?serial=` to plan
+  against a chosen device: a serial matching the recording's prefix shows the
+  simulated per-step disposition (`held_simulated` while enforcement is off); a
+  non-matching serial (e.g. `WARE-88120` against a `CLIN-` recording) shows the
+  device **untouched** — the fail-safe, visible rather than merely claimed.
+
+The view is read-only and simulated end to end; it never enrolls or contacts a
+device. It is the "see the mobile app in action" surface for provisioning.
+
 ## Boundary
 
 No device is contacted by this module — it is a pure planner over a recording and

@@ -456,6 +456,21 @@ async function run() {
   });
   check("atlas key cannot resolve northwind subjects (404)", atlasEval.status === 404);
 
+  // ── build-the-grid control-plane surface (decision-fabric layer, live) ───
+  const coverage = await req("GET", "/cp/v1/grid/coverage");
+  check("grid coverage responds 200", coverage.status === 200);
+  check("grid coverage handles every situation (fixture fully sourced)", coverage.json?.coverage?.coveragePct === 100);
+  check("grid coverage reports sourcing (some grid-lifted)", coverage.json?.sourcing?.gridCollected > 0);
+
+  const gridConfig = await req("GET", "/cp/v1/grid/config");
+  check("grid config validates clean", gridConfig.status === 200 && gridConfig.json?.valid === true);
+
+  const provisioning = await req("GET", "/cp/v1/grid/provisioning");
+  check("provisioning plan is simulated (nothing auto-applies)", provisioning.status === 200 && provisioning.json?.plan?.willApplyAnything === false && provisioning.json?.plan?.matched === true);
+
+  const resilience = await req("GET", "/cp/v1/apps/resilience");
+  check("app resilience rollup responds with a fleet", resilience.status === 200 && typeof resilience.json?.fleet?.total === "number");
+
   // ── transport hygiene ───────────────────────────────────────────────────
   check("rate-limit headers present", allow.headers.get("ratelimit-limit") !== null);
   check("security header x-content-type-options set", allow.headers.get("x-content-type-options") === "nosniff");

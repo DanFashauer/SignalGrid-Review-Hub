@@ -64,7 +64,31 @@ export const controlPlane = {
   flowsHealth: () => get<FlowsHealth>(`/api/cp/v1/flows/health`),
   recommendations: () => get<{ recommendations: Recommendation[] }>(`/api/cp/v1/recommendations`).then((r) => r.recommendations),
   signalDiscovery: () => get<SignalDiscovery>(`/api/cp/v1/signal-discovery`),
+  gridCoverage: () => get<GridCoverageResp>(`/api/cp/v1/grid/coverage`),
+  gridConfig: () => get<GridConfigResp>(`/api/cp/v1/grid/config`),
+  provisioning: () => get<ProvisioningResp>(`/api/cp/v1/grid/provisioning`),
+  appResilience: () => get<AppResilienceResp>(`/api/cp/v1/apps/resilience`),
 };
+
+// ── Build-the-grid surface (decision-fabric layer) ──────────────────────────────
+export interface SourcingSummary { total: number; api: number; native: number; gridCollected: number; unavailable: number; wireable: number; vendorIntegrated: number }
+export interface SituationCoverageRow { situationId: string; label: string; workflowId: string; status: "auto_handled" | "partial" | "blind_spot"; missingSignals: string[]; reason: string }
+export interface GridCoverageResp {
+  sourcing: SourcingSummary;
+  coverage: { situations: SituationCoverageRow[]; handled: number; partial: number; blindSpots: number; total: number; coveragePct: number };
+}
+export interface GridConfigResp {
+  valid: boolean;
+  summary: { signals: number; workflows: number; situations: number; errors: number; warnings: number; coveragePctAtFullHealth: number | null };
+  issues: Array<{ severity: "error" | "warning"; code: string; subject: string; message: string }>;
+}
+export interface ProvisioningResp {
+  plan: { deviceSerial: string; matched: boolean; mode: "simulated" | "enforced"; steps: Array<{ key: string; label: string; kind: string; disposition: string }>; requiresApproval: number; willApplyAnything: boolean };
+}
+export interface AppResilienceRow { appId: string; name: string; availability: string; mode: string; canProceed: boolean; requiredSafetyNets: string[] }
+export interface AppResilienceResp {
+  fleet: { apps: AppResilienceRow[]; total: number; normal: number; degraded: number; onFallback: number; blocked: number; workable: number; allWorkable: boolean };
+}
 
 export interface FlowHealthRow {
   flow: { id: string; name: string; supportTeam: string; itsm: string; severityOnBreak: string; autoHeal: { agent: string; autoResolves: boolean } | null };

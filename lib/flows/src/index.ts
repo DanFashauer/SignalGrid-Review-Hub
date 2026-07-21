@@ -356,6 +356,29 @@ export function gridIntelligence(flows: Flow[], signalStates: SignalState[]): Gr
 import { DEMO_FLOWS } from "./catalog";
 export { DEMO_FLOWS } from "./catalog";
 
+// Grid coverage — which situations the Grid handles on its own given the active
+// workflows + wired signals (the model behind "build the grid").
+export * from "./grid-coverage";
+
+// Signal sourcing — HOW each signal reaches the Grid (API / native / grid-collected
+// / unavailable) and what that costs. The outcome depends on how the source
+// systems are configured.
+export * from "./signal-sourcing";
+
+// Grid config — workflows as code: a declarative grid (signals + workflows +
+// situations) that the CI/CD pipeline validates before the Grid runs it (GitOps).
+export * from "./grid-config";
+
+// App resilience — turn a cloud app's availability (outage / maintenance /
+// degraded) into a resilience decision so staff keep working through downtime,
+// with PHI-safe fallbacks. Reduces the technology-as-bottleneck / device fatigue.
+export * from "./app-resilience";
+
+// Zero-touch provisioning — a device setup recorded once as versionable config,
+// validated in CI, and replayed by the Grid on serial/network join. Simulated by
+// default; real enforcement only when an owner turns it on.
+export * from "./provisioning";
+
 export function listFlows(): Flow[] {
   return DEMO_FLOWS;
 }

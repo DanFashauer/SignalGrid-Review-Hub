@@ -65,6 +65,8 @@ jobs:
           cp _site/index.html _site/404.html
           # On-device demos preserved at their stable permanent-link paths.
           cp docs/room-entry-console.html _site/console.html
+          # Live decision fabric — 9 signals fuse to one verdict + one incident.
+          cp docs/fabric-console.html _site/fabric.html
           cp docs/competitive-battlecard.html _site/battlecard.html
           cp docs/embedded-host-app-demo.html _site/embedded-demo.html
           cp docs/embedded-desktop-demo.html _site/desktop-demo.html

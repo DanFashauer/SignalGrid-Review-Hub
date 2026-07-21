@@ -139,6 +139,21 @@ jobs:
       - name: Flows (admin flow config + health) proof
         run: pnpm run proof:flows
 
+      - name: Grid-coverage (build the grid — situations handled) proof
+        run: pnpm run proof:grid-coverage
+
+      - name: Grid-config (workflows as code — CI validation) proof
+        run: pnpm run proof:grid-config
+
+      - name: App-resilience (cloud-app downtime, PHI-safe fallback) proof
+        run: pnpm run proof:app-resilience
+
+      - name: Provisioning (zero-touch setup — record/validate/apply) proof
+        run: pnpm run proof:provisioning
+
+      - name: Grid-lifecycle (capstone — 5 models end-to-end) proof
+        run: pnpm run proof:grid-lifecycle
+
       - name: Recommendations (learned-habit proposals) proof
         run: pnpm run proof:recommendations
 

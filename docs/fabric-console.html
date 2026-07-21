@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SignalGrid — build the grid</title>
+<meta name="description" content="You add signals and workflows. The grid does the rest — automatically. Every signal lets it see more; every workflow lets it do more. Watch coverage of real situations grow to 100% with no human in the loop. Public-safe: illustrative data, no live tenant, no action taken." />
+<meta property="og:title" content="SignalGrid — build the grid" />
+<meta property="og:description" content="Add signals and workflows; the grid handles the rest by itself. The more you add, the smarter it gets and the more of your infrastructure it controls." />
+<meta property="og:type" content="website" />
+<style>
+  :root {
+    --ground: #0b1020; --panel: #131b2e; --panel-2: #0e1526; --line: #22304a; --line-soft: #1a2438;
+    --ink: #e8edf7; --ink-mut: #93a2be; --ink-faint: #5f6f8d;
+    --accent: #8a7dff; --accent-ink: #b7aeff;
+    --ok: #3fbf6b; --watch: #e0a213; --blocked: #ef4d47;
+    --ok-bg: rgba(63,191,107,.13); --watch-bg: rgba(224,162,19,.14); --blocked-bg: rgba(239,77,71,.15);
+    --shadow: 0 1px 0 rgba(255,255,255,.03), 0 12px 40px -18px rgba(0,0,0,.7);
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --ground: #eef1f7; --panel: #ffffff; --panel-2: #f4f6fb; --line: #dbe2ef; --line-soft: #e7ecf5;
+      --ink: #141a28; --ink-mut: #566178; --ink-faint: #8794aa; --accent: #5b4ff0; --accent-ink: #4a3fd6;
+      --ok: #1f9d57; --watch: #b47c07; --blocked: #d63a34;
+      --ok-bg: rgba(31,157,87,.10); --watch-bg: rgba(180,124,7,.12); --blocked-bg: rgba(214,58,52,.11);
+      --shadow: 0 1px 0 rgba(255,255,255,.6), 0 14px 40px -22px rgba(20,30,60,.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0b1020; --panel: #131b2e; --panel-2: #0e1526; --line: #22304a; --line-soft: #1a2438;
+    --ink: #e8edf7; --ink-mut: #93a2be; --ink-faint: #5f6f8d; --accent: #8a7dff; --accent-ink: #b7aeff;
+    --ok: #3fbf6b; --watch: #e0a213; --blocked: #ef4d47;
+    --ok-bg: rgba(63,191,107,.13); --watch-bg: rgba(224,162,19,.14); --blocked-bg: rgba(239,77,71,.15);
+    --shadow: 0 1px 0 rgba(255,255,255,.03), 0 12px 40px -18px rgba(0,0,0,.7);
+  }
+  :root[data-theme="light"] {
+    --ground: #eef1f7; --panel: #ffffff; --panel-2: #f4f6fb; --line: #dbe2ef; --line-soft: #e7ecf5;
+    --ink: #141a28; --ink-mut: #566178; --ink-faint: #8794aa; --accent: #5b4ff0; --accent-ink: #4a3fd6;
+    --ok: #1f9d57; --watch: #b47c07; --blocked: #d63a34;
+    --ok-bg: rgba(31,157,87,.10); --watch-bg: rgba(180,124,7,.12); --blocked-bg: rgba(214,58,52,.11);
+    --shadow: 0 1px 0 rgba(255,255,255,.6), 0 14px 40px -22px rgba(20,30,60,.35);
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--sans); line-height: 1.5; font-feature-settings: "ss01";
+    background-image: linear-gradient(var(--line-soft) 1px, transparent 1px), linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
+    background-size: 46px 46px, 46px 46px; background-position: -1px -1px;
+  }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 24px 20px 56px; }
+
+  header { display: flex; align-items: center; gap: 12px; padding: 4px 0 6px; }
+  .glyph {
+    width: 30px; height: 30px; border-radius: 8px; flex: none; position: relative;
+    background: radial-gradient(120% 120% at 30% 20%, var(--accent), transparent 60%), var(--panel);
+    border: 1px solid var(--line); box-shadow: inset 0 0 0 1px rgba(138,125,255,.15);
+  }
+  .glyph::before {
+    content: ""; position: absolute; inset: 7px; border-radius: 3px;
+    background: linear-gradient(var(--accent-ink) 1.5px, transparent 1.5px) 0 0/100% 5px, linear-gradient(90deg, var(--accent-ink) 1.5px, transparent 1.5px) 0 0/5px 100%;
+    opacity: .5;
+  }
+  .brand { font-size: 19px; font-weight: 640; letter-spacing: -.02em; }
+  .brand b { color: var(--ink); } .brand span { color: var(--accent-ink); }
+  .thesis { font-size: 17px; letter-spacing: -.01em; color: var(--ink); margin: 12px 0 2px; max-width: 40ch; }
+  .thesis b { color: var(--accent-ink); font-weight: 640; }
+  .sub { color: var(--ink-mut); font-size: 13.5px; margin: 0 0 20px; max-width: 62ch; }
+
+  /* payoff meter */
+  .payoff { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); box-shadow: var(--shadow); padding: 16px 18px; margin-bottom: 20px; }
+  .payoff .top { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .payoff .big { font-family: var(--mono); font-weight: 800; font-size: 26px; letter-spacing: -.01em; color: var(--tone, var(--accent-ink)); transition: color .3s; font-variant-numeric: tabular-nums; }
+  .payoff .cap { font-size: 13px; color: var(--ink-mut); }
+  .payoff .stats { margin-left: auto; display: flex; gap: 16px; }
+  .payoff .stat { font-family: var(--mono); font-size: 12px; color: var(--ink-mut); }
+  .payoff .stat b { color: var(--ink); font-weight: 700; }
+  .bar { height: 8px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line-soft); margin-top: 13px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: var(--pct, 0%); background: var(--tone, var(--accent)); border-radius: 999px; transition: width .45s cubic-bezier(.4,0,.2,1), background .3s; }
+  @media (max-width: 560px){ .payoff .stats { margin-left: 0; width: 100%; } }
+
+  .cols { display: grid; grid-template-columns: 340px 1fr; gap: 18px; align-items: start; }
+  @media (max-width: 860px){ .cols { grid-template-columns: 1fr; } }
+
+  .h { font-family: var(--mono); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; margin: 0 0 10px; }
+  .h .n { color: var(--accent-ink); }
+  .group { margin-bottom: 18px; }
+
+  /* add-list (the only interaction) */
+  .add { display: flex; flex-direction: column; gap: 7px; }
+  .item {
+    display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; cursor: pointer;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+    color: var(--ink-mut); font: inherit; transition: border-color .15s, color .15s, background .15s;
+  }
+  .item:hover { border-color: var(--accent); color: var(--ink); }
+  .item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .item .tick {
+    width: 20px; height: 20px; border-radius: 6px; flex: none; border: 1px solid var(--line);
+    background: var(--panel-2); display: grid; place-items: center; color: transparent; transition: all .15s;
+  }
+  .item .tick svg { width: 12px; height: 12px; }
+  .item .nm { flex: 1; min-width: 0; }
+  .item .nm .t { font-size: 13.5px; font-weight: 600; color: var(--ink); letter-spacing: -.01em; }
+  .item .nm .d { font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint); letter-spacing: .02em; margin-top: 1px; }
+  .item .src { font-family: var(--mono); font-size: 9px; letter-spacing: .05em; text-transform: uppercase; padding: 2px 6px; border-radius: 5px; border: 1px solid var(--line); color: var(--ink-mut); white-space: nowrap; flex: none; }
+  .item .src-api, .item .src-native { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+  .item .src-collected { color: var(--accent-ink); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+  .item .act { font-family: var(--mono); font-size: 10px; color: var(--ink-faint); text-align: right; }
+  .item[aria-pressed="true"] { background: rgba(138,125,255,.07); border-color: var(--accent); color: var(--ink); }
+  .item[aria-pressed="true"] .tick { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .item[aria-pressed="true"] .act { color: var(--accent-ink); }
+
+  /* situation board (grid acts on its own) */
+  .board { display: flex; flex-direction: column; gap: 8px; }
+  .sit {
+    border: 1px solid var(--line); border-radius: 10px; background: var(--panel); box-shadow: var(--shadow);
+    padding: 11px 13px; position: relative; overflow: hidden;
+  }
+  .sit::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--tone, var(--line)); transition: background .25s; }
+  .sit .row { display: flex; align-items: center; gap: 10px; }
+  .sit .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tone, var(--ink-faint)); flex: none; box-shadow: 0 0 0 3px var(--tone-bg, transparent); transition: all .25s; }
+  .sit .label { font-size: 13.5px; font-weight: 600; color: var(--ink); flex: 1; letter-spacing: -.01em; }
+  .sit .state { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--tone, var(--ink-faint)); font-weight: 700; white-space: nowrap; }
+  .sit .detail { font-family: var(--mono); font-size: 11px; color: var(--ink-mut); margin: 6px 0 0 18px; line-height: 1.45; }
+  .sit .detail b { color: var(--tone, var(--ink)); font-weight: 600; }
+  .sit .detail .auto { color: var(--ok); }
+
+  footer { margin-top: 24px; color: var(--ink-faint); font-size: 12px; line-height: 1.6; border-top: 1px solid var(--line-soft); padding-top: 14px; }
+  footer b { color: var(--ink-mut); } footer code { font-family: var(--mono); color: var(--ink-mut); font-size: 11.5px; }
+  footer a { color: var(--accent-ink); text-decoration: none; } footer a:hover { text-decoration: underline; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="glyph" aria-hidden="true"></div>
+    <div class="brand"><b>Signal</b><span>Grid</span></div>
+  </header>
+
+  <p class="thesis">You add <b>signals</b> and <b>workflows</b>. The grid does the rest — <b>automatically</b>.</p>
+  <p class="sub">Every signal lets the grid <em>see</em> more; every workflow lets it <em>do</em> more. You never touch the actions — they run inside the workflows you built. The more you add, the more of the organization's infrastructure the grid controls on its own.</p>
+
+  <div class="payoff" aria-live="polite">
+    <div class="top">
+      <span class="big" id="pctBig">0%</span>
+      <span class="cap" id="cap">of situations the grid handles by itself</span>
+      <div class="stats">
+        <span class="stat"><b id="sN">0</b> signals wired</span>
+        <span class="stat"><b id="wN">0</b> workflows active</span>
+      </div>
+    </div>
+    <div class="bar"><i id="barFill"></i></div>
+  </div>
+
+  <div class="cols">
+    <section aria-label="Configure the grid">
+      <div class="group">
+        <h2 class="h">Signals <span class="n" id="sCount"></span> — click to wire</h2>
+        <div class="add" id="signals"></div>
+      </div>
+      <div class="group">
+        <h2 class="h">Workflows <span class="n" id="wCount"></span> — click to activate</h2>
+        <div class="add" id="workflows"></div>
+      </div>
+    </section>
+
+    <section aria-label="The grid runs itself">
+      <h2 class="h">The grid runs itself — situations across the floor</h2>
+      <div class="board" id="board"></div>
+    </section>
+  </div>
+
+  <footer>
+    <b>How this works.</b> Each situation is caught only when its <b>workflow is active</b> and the <b>signals it needs are wired</b> — then the grid carries out the response by itself, no human in the loop. Missing either one is a blind spot, and the fix is always to <b>add</b>.
+    Each signal tag shows <b>how</b> it reaches the grid: <code>via API</code> or <code>native</code> when the source system integrates, or <code>grid-collected</code> when it doesn&rsquo;t and the grid does the lifting itself — so the outcome depends on how your existing systems are configured (see <code>docs/SIGNAL_SOURCING.md</code>).
+    This mirrors the real fusion + orchestration logic in the
+    <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub">Review Hub</a> (proven by <code>proof:fabric-scenario</code> and <code>proof:grid-coverage</code>), running on illustrative data — <b>no live tenant, no action taken</b>.
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // `src` = how this signal reaches the grid, dictated by the source system:
+  // api / native (the vendor integrates) · collected (no hook → the grid does the
+  // lifting itself). See docs/SIGNAL_SOURCING.md.
+  var SIGNALS = [
+    { id:"identity",     t:"Identity / SSO",        d:"sign-in risk",   src:"api" },
+    { id:"device",       t:"Device posture / EDR",  d:"endpoint threat", src:"api" },
+    { id:"custody",      t:"Physical custody / RTLS", d:"zone & badge",  src:"collected" },
+    { id:"network",      t:"Network / NAC",         d:"access state",   src:"native" },
+    { id:"data",         t:"Data protection / DLP", d:"data egress",    src:"api" },
+    { id:"reachability", t:"Reachability / carrier", d:"post-exit",     src:"collected" }
+  ];
+  var SRC_LABEL = { api:"via API", native:"native", collected:"grid-collected" };
+
+  // Each workflow needs signals and, when active + fed, runs its action by itself.
+  var WORKFLOWS = [
+    { id:"w_lost",   t:"Lost-Device Response",           needs:["custody","reachability"], act:"locate → restrict → escalate" },
+    { id:"w_acct",   t:"Account-Compromise Containment", needs:["identity","device"],      act:"deny session → isolate → step-up" },
+    { id:"w_exfil",  t:"Data-Exfiltration Response",     needs:["data"],                   act:"deny egress → quarantine" },
+    { id:"w_unmgd",  t:"Unmanaged-Access Block",         needs:["network","identity"],     act:"restrict to safe segment → step-up" },
+    { id:"w_drift",  t:"Baseline-Drift Remediation",     needs:["device"],                 act:"step-up → patch" },
+    { id:"w_tail",   t:"Tailgate Response",              needs:["custody"],                act:"alert → verify badge → restrict door" }
+  ];
+
+  // One situation per workflow — the event the grid catches when it's covered.
+  var SITUATIONS = [
+    { id:"s_lost",  label:"Lost tablet after shift",               wf:"w_lost" },
+    { id:"s_acct",  label:"Compromised sign-in mid-shift",         wf:"w_acct" },
+    { id:"s_exfil", label:"PHI leaving the device",               wf:"w_exfil" },
+    { id:"s_unmgd", label:"Unauthenticated device on the network", wf:"w_unmgd" },
+    { id:"s_drift", label:"Config drift on a shared workstation",  wf:"w_drift" },
+    { id:"s_tail",  label:"Tailgating at a controlled door",       wf:"w_tail" }
+  ];
+
+  var wfById = {}; WORKFLOWS.forEach(function (w){ wfById[w.id] = w; });
+  var sigById = {}; SIGNALS.forEach(function (s){ sigById[s.id] = s; });
+
+  // Start partly built so there's room to grow (and blind spots to see).
+  var onSig = { identity:true, device:true, custody:true };
+  var onWf  = { w_acct:true, w_drift:true };
+
+  function checkSvg(){ return '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>'; }
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+  function statusOf(sit) {
+    var w = wfById[sit.wf];
+    if (!onWf[w.id]) return { tone:"blocked", state:"blind spot", detail:"No workflow. Build <b>" + esc(w.t) + "</b> to handle this." };
+    var missing = w.needs.filter(function (n){ return !onSig[n]; });
+    if (missing.length) {
+      var names = missing.map(function (n){ return sigById[n].t; }).join(", ");
+      return { tone:"watch", state:"partial", detail:"<b>" + esc(w.t) + "</b> is active but needs the <b>" + esc(names) + "</b> signal" + (missing.length > 1 ? "s" : "") + ". Wire " + (missing.length > 1 ? "them" : "it") + "." };
+    }
+    return { tone:"ok", state:"auto-handled", detail:"<b>" + esc(w.t) + "</b> fires by itself → <span class=\"auto\">" + esc(w.act) + "</span>" };
+  }
+  function toneVar(t){ return t==="ok"?"var(--ok)":t==="watch"?"var(--watch)":t==="blocked"?"var(--blocked)":"var(--ink-faint)"; }
+  function toneBg(t){ return t==="ok"?"var(--ok-bg)":t==="watch"?"var(--watch-bg)":t==="blocked"?"var(--blocked-bg)":"transparent"; }
+
+  var elSig = document.getElementById("signals"), elWf = document.getElementById("workflows"), elBoard = document.getElementById("board");
+
+  function buildLists() {
+    elSig.innerHTML = SIGNALS.map(function (s) {
+      return '<button class="item" role="button" data-sig="' + s.id + '" aria-pressed="' + !!onSig[s.id] + '">' +
+        '<span class="tick">' + checkSvg() + '</span>' +
+        '<span class="nm"><span class="t">' + esc(s.t) + '</span><span class="d">' + esc(s.d) + '</span></span>' +
+        '<span class="src src-' + s.src + '" title="How this signal reaches the grid">' + SRC_LABEL[s.src] + '</span></button>';
+    }).join("");
+    elWf.innerHTML = WORKFLOWS.map(function (w) {
+      return '<button class="item" role="button" data-wf="' + w.id + '" aria-pressed="' + !!onWf[w.id] + '">' +
+        '<span class="tick">' + checkSvg() + '</span>' +
+        '<span class="nm"><span class="t">' + esc(w.t) + '</span><span class="d">needs ' + w.needs.map(function (n){ return sigById[n].t; }).join(" + ") + '</span></span>' +
+        '<span class="act">' + esc(w.act) + '</span></button>';
+    }).join("");
+    elSig.querySelectorAll("[data-sig]").forEach(function (b){ b.addEventListener("click", function (){ onSig[b.dataset.sig] = !onSig[b.dataset.sig]; render(); }); });
+    elWf.querySelectorAll("[data-wf]").forEach(function (b){ b.addEventListener("click", function (){ onWf[b.dataset.wf] = !onWf[b.dataset.wf]; render(); }); });
+  }
+
+  var elPct = document.getElementById("pctBig"), elBar = document.getElementById("barFill"),
+      elSN = document.getElementById("sN"), elWN = document.getElementById("wN"),
+      elSCount = document.getElementById("sCount"), elWCount = document.getElementById("wCount"),
+      elPayoff = document.querySelector(".payoff");
+
+  function render() {
+    // reflect toggles
+    elSig.querySelectorAll("[data-sig]").forEach(function (b){ b.setAttribute("aria-pressed", !!onSig[b.dataset.sig]); });
+    elWf.querySelectorAll("[data-wf]").forEach(function (b){ b.setAttribute("aria-pressed", !!onWf[b.dataset.wf]); });
+
+    // board
+    var handled = 0;
+    elBoard.innerHTML = SITUATIONS.map(function (sit) {
+      var st = statusOf(sit);
+      if (st.tone === "ok") handled += 1;
+      return '<div class="sit" style="--tone:' + toneVar(st.tone) + ';--tone-bg:' + toneBg(st.tone) + '">' +
+        '<div class="row"><span class="dot"></span><span class="label">' + esc(sit.label) + '</span><span class="state">' + st.state + '</span></div>' +
+        '<div class="detail">' + st.detail + '</div></div>';
+    }).join("");
+
+    // payoff
+    var total = SITUATIONS.length;
+    var pct = Math.round((handled / total) * 100);
+    var sOn = Object.keys(onSig).filter(function (k){ return onSig[k]; }).length;
+    var wOn = Object.keys(onWf).filter(function (k){ return onWf[k]; }).length;
+    var tone = pct === 100 ? "var(--ok)" : pct >= 50 ? "var(--accent-ink)" : pct > 0 ? "var(--watch)" : "var(--blocked)";
+    elPayoff.style.setProperty("--tone", tone);
+    elPayoff.style.setProperty("--pct", pct + "%");
+    elBar.style.setProperty("--pct", pct + "%");
+    elPct.textContent = pct + "%";
+    document.getElementById("cap").textContent = handled === total
+      ? "the grid handles every situation by itself" : "of situations the grid handles by itself (" + handled + "/" + total + ")";
+    elSN.textContent = sOn; elWN.textContent = wOn;
+    elSCount.textContent = sOn + "/" + SIGNALS.length;
+    elWCount.textContent = wOn + "/" + WORKFLOWS.length;
+  }
+
+  buildLists();
+  render();
+})();
+</script>
+</body>
+</html>

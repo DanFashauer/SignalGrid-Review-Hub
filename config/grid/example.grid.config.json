@@ -1,0 +1,57 @@
+{
+  "_comment": "Workflows as code — a declarative grid an organization commits to Git. The CI/CD pipeline validates it on every change (pnpm run proof:grid-config) before the Grid runs it. Public-safe illustrative example: no tenant, no secrets, no real endpoints.",
+  "signals": [
+    { "id": "identity", "name": "Identity / SSO sign-in risk", "system": "Entra ID", "method": "api" },
+    { "id": "device_compliance", "name": "Device compliance / posture", "system": "Intune", "method": "api" },
+    { "id": "baseline", "name": "Security-baseline (CIS) alignment", "system": "baseline scanner", "method": "grid_collected" },
+    { "id": "custody", "name": "Physical custody", "system": "RTLS", "method": "grid_collected" },
+    { "id": "change_window", "name": "Approved change window", "system": "ITSM", "method": "native" }
+  ],
+  "workflows": [
+    {
+      "id": "flow_med_admin",
+      "name": "Medication administration",
+      "description": "Controlled-substance administration on a shared clinical device.",
+      "requiredSignals": ["identity", "device_compliance", "baseline"],
+      "actions": [
+        { "key": "bcma.open", "label": "Open BCMA session", "approval": "automated" },
+        { "key": "controlled.administer", "label": "Administer controlled substance", "approval": "dual_approval" }
+      ],
+      "supportTeam": "Clinical Ops",
+      "itsm": "servicedesk",
+      "severityOnBreak": "sev2"
+    },
+    {
+      "id": "flow_controlled_area",
+      "name": "Controlled-area entry",
+      "description": "Badge-gated entry to a controlled area with a shared handheld.",
+      "requiredSignals": ["identity", "custody"],
+      "actions": [
+        { "key": "gate.unlock", "label": "Unlock zone gate", "approval": "admin_approval" }
+      ],
+      "supportTeam": "Facilities",
+      "itsm": "servicenow",
+      "severityOnBreak": "sev3",
+      "autoHeal": { "agent": "custody-reconcile-bot", "autoResolves": false }
+    },
+    {
+      "id": "flow_network_change",
+      "name": "Network change",
+      "description": "Config push to a core network device from a shared workstation.",
+      "requiredSignals": ["identity", "device_compliance", "change_window"],
+      "actions": [
+        { "key": "config.stage", "label": "Stage a config diff", "approval": "automated" },
+        { "key": "config.push", "label": "Push config to a core device", "approval": "dual_approval" }
+      ],
+      "supportTeam": "NOC",
+      "itsm": "opsgenie",
+      "severityOnBreak": "sev1",
+      "autoHeal": { "agent": "config-rollback-bot", "autoResolves": true }
+    }
+  ],
+  "situations": [
+    { "id": "sit_med_admin", "label": "Unsafe medication administration on a shared device", "workflowId": "flow_med_admin" },
+    { "id": "sit_controlled_area", "label": "Unbadged entry to a controlled area", "workflowId": "flow_controlled_area" },
+    { "id": "sit_network_change", "label": "Unauthorized network change from a shared workstation", "workflowId": "flow_network_change" }
+  ]
+}

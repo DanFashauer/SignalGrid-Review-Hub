@@ -128,6 +128,10 @@ const cpRequests = [
   item("Learned recommendations", "GET", "/cp/v1/recommendations", { auth: NOAUTH }),
   item("Signal discovery + auto-onboard", "GET", "/cp/v1/signal-discovery", { auth: NOAUTH }),
   item("DDM / device-health signals (macOS 27)", "GET", "/cp/v1/ddm", { auth: NOAUTH }),
+  item("Grid coverage (situations handled)", "GET", "/cp/v1/grid/coverage", { auth: NOAUTH }),
+  item("Grid config (workflows as code — validation)", "GET", "/cp/v1/grid/config", { auth: NOAUTH }),
+  item("Zero-touch provisioning plan (simulated)", "GET", "/cp/v1/grid/provisioning", { auth: NOAUTH }),
+  item("App resilience (downtime, PHI-safe)", "GET", "/cp/v1/apps/resilience", { auth: NOAUTH }),
 ];
 const cpFolder = { name: "Control plane (/cp/v1)", item: cpRequests };
 

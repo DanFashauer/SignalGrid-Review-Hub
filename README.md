@@ -2,6 +2,13 @@
 
 SignalGrid is a runtime decision layer and Operational Trust Orchestration platform for shared, mobile, and frontline environments. At the moment a workflow fires it fuses the evidence the deterministic core evaluates today — identity state, device posture, physical custody (DockBridge), security-baseline (CIS) alignment, device owner type, and workflow risk — into a single allow / step-up / restrict / deny decision. Broader signal-source categories (network/cellular, session/shift, and operational SIEM/ITSM signals) are candidate/roadmap, not decision inputs today. See [What SignalGrid Does Today](docs/WHAT_SIGNALGRID_DOES_TODAY.md) for the exact implemented-vs-candidate boundary.
 
+## Live demo — build the grid
+
+An interactive, public-safe console with one idea: **you add signals and workflows; the grid does the rest — automatically.** Every signal lets the grid *see* more; every workflow lets it *do* more. Toggle signals and workflows on and watch coverage of real situations (lost tablet, compromised sign-in, PHI exfiltration, unmanaged access, config drift, tailgating) climb toward 100% — each caught only when its workflow is active and the signals it needs are wired, then handled by the grid with **no human in the loop**. You never touch the actions; they run inside the workflows you built. The more you add, the more of the organization's infrastructure the grid controls on its own. It mirrors the **real fusion + orchestration logic** ([`lib/posture-composition`](lib/posture-composition)) on illustrative data — no live tenant, no action taken — the same logic proven end-to-end by `pnpm run proof:fabric-scenario`.
+
+- Source: [`docs/fabric-console.html`](docs/fabric-console.html) (self-contained, offline)
+- Published at `https://signalgrid.app/fabric.html` once the [Pages workflow](.github/workflows/pages.yml) is run
+
 ## What this repository is
 
 **DanFashauer/SignalGrid-Review-Hub** is the public working surface for SignalGrid pre-production planning, post-launch review, public visibility, and external validation. It is where reviewers can understand the product direction, validate the story, inspect public roadmap assumptions, and discuss integration priorities without requiring access to the protected core source repository.

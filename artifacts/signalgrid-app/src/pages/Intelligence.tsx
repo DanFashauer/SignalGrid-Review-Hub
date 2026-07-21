@@ -7,6 +7,8 @@ import { controlPlane, type FlowHealthRow, type DiscoveredSignal } from "@/lib/c
 // only necessary data, one source of truth (all read live from /cp/v1).
 
 const STATUS_DOT: Record<string, string> = { healthy: "bg-emerald-400", degraded: "bg-amber-400", broken: "bg-red-400" };
+const COV_DOT: Record<string, string> = { auto_handled: "bg-emerald-400", partial: "bg-amber-400", blind_spot: "bg-red-400" };
+const COV_TEXT: Record<string, string> = { auto_handled: "text-emerald-400", partial: "text-amber-400", blind_spot: "text-red-400" };
 const CLASS_STYLE: Record<string, string> = {
   evaluated: "border-emerald-400/30 text-emerald-400",
   candidate: "border-amber-400/30 text-amber-400",
@@ -17,6 +19,15 @@ export function Intelligence() {
   const flows = useQuery({ queryKey: ["cp-flows-health"], queryFn: () => controlPlane.flowsHealth() });
   const recs = useQuery({ queryKey: ["cp-recs"], queryFn: () => controlPlane.recommendations() });
   const disc = useQuery({ queryKey: ["cp-discovery"], queryFn: () => controlPlane.signalDiscovery() });
+  const covQ = useQuery({ queryKey: ["cp-grid-coverage"], queryFn: () => controlPlane.gridCoverage() });
+  const cfgQ = useQuery({ queryKey: ["cp-grid-config"], queryFn: () => controlPlane.gridConfig() });
+  const provQ = useQuery({ queryKey: ["cp-provisioning"], queryFn: () => controlPlane.provisioning() });
+  const resQ = useQuery({ queryKey: ["cp-app-resilience"], queryFn: () => controlPlane.appResilience() });
+
+  const cov = covQ.data;
+  const cfg = cfgQ.data;
+  const prov = provQ.data;
+  const appRes = resQ.data;
 
   const grid = flows.data?.grid;
   const attention = (flows.data?.flows ?? []).filter((f) => f.health.status !== "healthy");
@@ -29,6 +40,38 @@ export function Intelligence() {
         <h1 className="text-3xl font-bold tracking-tight">Grid intelligence</h1>
         <p className="text-muted-foreground mt-1 font-mono text-sm">FLOW HEALTH · RECOMMENDATIONS · SIGNAL DISCOVERY (FIXTURE)</p>
       </div>
+
+      {/* Build the grid — the decision-fabric layer, live from /cp/v1 */}
+      <Card className="border-primary/30">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-mono uppercase tracking-wider text-primary">Build the grid · situations handled autonomously</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Metric label="Coverage" value={cov ? `${cov.coverage.coveragePct}%` : "-"} sub={cov ? `${cov.coverage.handled}/${cov.coverage.total} situations` : ""} accent={cov && cov.coverage.coveragePct === 100 ? "text-emerald-400" : "text-amber-400"} />
+            <Metric label="Signals sourced" value={cov ? `${cov.sourcing.wireable}/${cov.sourcing.total}` : "-"} sub={cov ? `${cov.sourcing.vendorIntegrated} vendor · ${cov.sourcing.gridCollected} grid-lifted` : ""} />
+            <Metric label="Config" value={cfg ? (cfg.valid ? "valid" : "invalid") : "-"} sub={cfg ? `${cfg.summary.errors} errors · ${cfg.summary.warnings} warnings` : ""} accent={cfg ? (cfg.valid ? "text-emerald-400" : "text-red-400") : undefined} />
+            <Metric label="Apps workable" value={appRes ? `${appRes.fleet.workable}/${appRes.fleet.total}` : "-"} sub={appRes ? (appRes.fleet.blocked ? `${appRes.fleet.blocked} blocked` : "all workable") : ""} accent={appRes ? (appRes.fleet.blocked ? "text-amber-400" : "text-emerald-400") : undefined} />
+          </div>
+          <div className="space-y-1.5">
+            {(cov?.coverage.situations ?? []).map((s) => (
+              <div key={s.situationId} className="flex items-center justify-between gap-3 text-xs font-mono">
+                <span className="inline-flex items-center gap-2 min-w-0">
+                  <span className={`w-1.5 h-1.5 rounded-full ${COV_DOT[s.status] ?? "bg-muted"}`} />
+                  <span className="truncate">{s.label}</span>
+                </span>
+                <span className={`shrink-0 uppercase ${COV_TEXT[s.status] ?? "text-muted-foreground"}`}>
+                  {s.status.replace(/_/g, " ")}{s.missingSignals.length > 0 ? ` · needs ${s.missingSignals.join(", ")}` : ""}
+                </span>
+              </div>
+            ))}
+            {!cov && <div className="text-sm text-muted-foreground">Loading…</div>}
+          </div>
+          <p className="text-[0.68rem] text-muted-foreground font-mono">
+            Add a signal and the Grid sees more; add a workflow and it does more. Provisioning is simulated{prov ? ` (${prov.plan.requiresApproval} step${prov.plan.requiresApproval === 1 ? "" : "s"} would await approval)` : ""}; enforcement stays off until an owner enables it. Read live from <span className="text-muted-foreground">/cp/v1</span> — nothing is enforced.
+          </p>
+        </CardContent>
+      </Card>
 
       {/* Rollup — the few numbers that matter */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

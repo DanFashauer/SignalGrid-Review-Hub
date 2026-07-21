@@ -4,7 +4,7 @@ import {
   listFlows, evaluateFlowHealth, resolveFlowBreak, gridIntelligence, type SignalState,
   DEMO_FLOWS, GRID_SITUATIONS, evaluateGridCoverage,
   lintGridConfig, gridConfigValid, summarizeGridConfig, type GridConfig,
-  sourcingToSignalStates, summarizeSourcing, type SignalSource,
+  sourcingToSignalStates, summarizeSourcing, fidelityOf, isWireable, gridDoesLifting, type SignalSource,
   planZeroTouchSetup, lintSetupRecording, setupRecordingValid, type DeviceSetupRecording,
   fleetResilience, type AppService,
 } from "@workspace/flows";
@@ -183,7 +183,11 @@ const GRID_SIGNAL_SOURCES: SignalSource[] = [
   { id: "badge_binding", name: "Badge binding", system: "RFID reader", method: "native" },
   { id: "baseline", name: "Security baseline (CIS)", system: "baseline scanner", method: "grid_collected" },
   { id: "change_window", name: "Approved change window", system: "ITSM", method: "native" },
-  { id: "custody", name: "Physical custody", system: "RTLS", method: "grid_collected" },
+  { id: "custody", name: "Physical custody", system: "RTLS", method: "grid_collected", degraded: true },
+  // A real gap: a legacy nurse-call system with no API and no way for the Grid to
+  // collect it. It is surfaced as unavailable (a gap, never a false "we have it"),
+  // and — because no workflow requires it yet — it is a lint WARNING, not an error.
+  { id: "nurse_call", name: "Nurse-call events", system: "legacy nurse-call", method: "unavailable" },
 ];
 const GRID_CONFIG: GridConfig = { signals: GRID_SIGNAL_SOURCES, workflows: [...DEMO_FLOWS], situations: [...GRID_SITUATIONS] };
 
@@ -193,6 +197,26 @@ router.get("/cp/v1/grid/coverage", (_req, res) => {
     note: "Which situations the Grid handles on its own, given the active workflows + the signals it can source. Fixture data — read-only.",
     sourcing: summarizeSourcing(GRID_SIGNAL_SOURCES),
     coverage: evaluateGridCoverage(DEMO_FLOWS, GRID_SITUATIONS, wired),
+  });
+});
+
+router.get("/cp/v1/grid/sourcing", (_req, res) => {
+  // How each signal reaches the Grid dictates the outcome — api/native (the vendor
+  // integrates), grid_collected (the Grid does the lifting, lower fidelity), or
+  // unavailable (a real gap). Read-only.
+  const signals = GRID_SIGNAL_SOURCES.map((s) => ({
+    id: s.id,
+    name: s.name,
+    system: s.system,
+    method: s.method,
+    fidelity: fidelityOf(s),
+    wireable: isWireable(s.method),
+    gridLifted: gridDoesLifting(s.method),
+  }));
+  res.json({
+    note: "How each signal is obtained — vendor-integrated (api/native), grid-collected (the Grid does the lifting), or a gap (unavailable). Read-only.",
+    summary: summarizeSourcing(GRID_SIGNAL_SOURCES),
+    signals,
   });
 });
 

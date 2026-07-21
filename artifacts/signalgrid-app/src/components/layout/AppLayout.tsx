@@ -11,7 +11,8 @@ import {
   AppWindow,
   Sparkles,
   MonitorSmartphone,
-  HeartPulse
+  HeartPulse,
+  Radio
 } from "lucide-react";
 import {
   Sidebar,
@@ -119,6 +120,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <Link href="/app-resilience">
                     <HeartPulse className="w-4 h-4 mr-2" />
                     <span>App resilience</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location.startsWith("/signal-sourcing")}>
+                  <Link href="/signal-sourcing">
+                    <Radio className="w-4 h-4 mr-2" />
+                    <span>Signal sourcing</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

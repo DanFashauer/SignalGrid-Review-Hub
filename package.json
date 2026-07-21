@@ -39,6 +39,7 @@
     "proof:app-workflow-templates": "pnpm --filter @workspace/scripts run proof:app-workflow-templates",
     "proof:flows": "pnpm --filter @workspace/scripts run proof:flows",
     "proof:grid-coverage": "pnpm --filter @workspace/scripts run proof:grid-coverage",
+    "proof:grid-config": "pnpm --filter @workspace/scripts run proof:grid-config",
     "proof:recommendations": "pnpm --filter @workspace/scripts run proof:recommendations",
     "proof:room-sim": "pnpm --filter @workspace/scripts run proof:room-sim",
     "build:room-console": "pnpm --filter @workspace/scripts run build:room-console",

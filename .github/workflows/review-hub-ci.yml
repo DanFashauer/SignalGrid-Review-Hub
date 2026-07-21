@@ -142,6 +142,9 @@ jobs:
       - name: Grid-coverage (build the grid — situations handled) proof
         run: pnpm run proof:grid-coverage
 
+      - name: Grid-config (workflows as code — CI validation) proof
+        run: pnpm run proof:grid-config
+
       - name: Recommendations (learned-habit proposals) proof
         run: pnpm run proof:recommendations
 

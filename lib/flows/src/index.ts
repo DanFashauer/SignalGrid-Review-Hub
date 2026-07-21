@@ -365,6 +365,10 @@ export * from "./grid-coverage";
 // systems are configured.
 export * from "./signal-sourcing";
 
+// Grid config — workflows as code: a declarative grid (signals + workflows +
+// situations) that the CI/CD pipeline validates before the Grid runs it (GitOps).
+export * from "./grid-config";
+
 export function listFlows(): Flow[] {
   return DEMO_FLOWS;
 }

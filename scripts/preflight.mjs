@@ -58,6 +58,7 @@ const STEPS = [
   { name: "Proof: app-workflow-templates", cmd: ["pnpm", "run", "proof:app-workflow-templates"] },
   { name: "Proof: flows", cmd: ["pnpm", "run", "proof:flows"] },
   { name: "Proof: grid-coverage (build the grid — situations handled)", cmd: ["pnpm", "run", "proof:grid-coverage"] },
+  { name: "Proof: grid-config (workflows as code — CI validation)", cmd: ["pnpm", "run", "proof:grid-config"] },
   { name: "Proof: recommendations", cmd: ["pnpm", "run", "proof:recommendations"] },
   { name: "Proof: signal-discovery", cmd: ["pnpm", "run", "proof:signal-discovery"] },
   { name: "Proof: ddm-connector", cmd: ["pnpm", "run", "proof:ddm-connector"] },

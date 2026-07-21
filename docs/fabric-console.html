@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SignalGrid — Live Decision Fabric</title>
+<meta name="description" content="Nine read-only device, identity, physical and data signals fuse into one allow / step-up / restrict / deny verdict and one prioritized incident — live, deterministic, and public-safe. No live tenant, no action taken." />
+<meta property="og:title" content="SignalGrid — Live Decision Fabric" />
+<meta property="og:description" content="Nine read-only signals, one verdict, one prioritized incident. Watch the real fusion logic run on illustrative data — no install, no tenant, no action taken." />
+<meta property="og:type" content="website" />
+<style>
+  :root {
+    --ground: #0b1020;
+    --panel: #131b2e;
+    --panel-2: #0e1526;
+    --line: #22304a;
+    --line-soft: #1a2438;
+    --ink: #e8edf7;
+    --ink-mut: #93a2be;
+    --ink-faint: #5f6f8d;
+    --accent: #8a7dff;
+    --accent-ink: #b7aeff;
+    --ok: #3fbf6b;
+    --watch: #e0a213;
+    --at-risk: #f2712f;
+    --blocked: #ef4d47;
+    --ok-bg: rgba(63,191,107,.13);
+    --watch-bg: rgba(224,162,19,.14);
+    --at-risk-bg: rgba(242,113,47,.14);
+    --blocked-bg: rgba(239,77,71,.15);
+    --shadow: 0 1px 0 rgba(255,255,255,.03), 0 12px 40px -18px rgba(0,0,0,.7);
+    --r: 12px;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --ground: #eef1f7; --panel: #ffffff; --panel-2: #f4f6fb; --line: #dbe2ef;
+      --line-soft: #e7ecf5; --ink: #141a28; --ink-mut: #566178; --ink-faint: #8794aa;
+      --accent: #5b4ff0; --accent-ink: #4a3fd6;
+      --ok: #1f9d57; --watch: #b47c07; --at-risk: #d95a19; --blocked: #d63a34;
+      --ok-bg: rgba(31,157,87,.10); --watch-bg: rgba(180,124,7,.12);
+      --at-risk-bg: rgba(217,90,25,.11); --blocked-bg: rgba(214,58,52,.11);
+      --shadow: 0 1px 0 rgba(255,255,255,.6), 0 14px 40px -22px rgba(20,30,60,.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0b1020; --panel: #131b2e; --panel-2: #0e1526; --line: #22304a; --line-soft: #1a2438;
+    --ink: #e8edf7; --ink-mut: #93a2be; --ink-faint: #5f6f8d; --accent: #8a7dff; --accent-ink: #b7aeff;
+    --ok: #3fbf6b; --watch: #e0a213; --at-risk: #f2712f; --blocked: #ef4d47;
+    --ok-bg: rgba(63,191,107,.13); --watch-bg: rgba(224,162,19,.14);
+    --at-risk-bg: rgba(242,113,47,.14); --blocked-bg: rgba(239,77,71,.15);
+    --shadow: 0 1px 0 rgba(255,255,255,.03), 0 12px 40px -18px rgba(0,0,0,.7);
+  }
+  :root[data-theme="light"] {
+    --ground: #eef1f7; --panel: #ffffff; --panel-2: #f4f6fb; --line: #dbe2ef; --line-soft: #e7ecf5;
+    --ink: #141a28; --ink-mut: #566178; --ink-faint: #8794aa; --accent: #5b4ff0; --accent-ink: #4a3fd6;
+    --ok: #1f9d57; --watch: #b47c07; --at-risk: #d95a19; --blocked: #d63a34;
+    --ok-bg: rgba(31,157,87,.10); --watch-bg: rgba(180,124,7,.12);
+    --at-risk-bg: rgba(217,90,25,.11); --blocked-bg: rgba(214,58,52,.11);
+    --shadow: 0 1px 0 rgba(255,255,255,.6), 0 14px 40px -22px rgba(20,30,60,.35);
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--sans); line-height: 1.5;
+    font-feature-settings: "ss01";
+    background-image:
+      linear-gradient(var(--line-soft) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
+    background-size: 46px 46px, 46px 46px;
+    background-position: -1px -1px;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 22px 20px 64px; }
+
+  /* ── header ─────────────────────────────────────────────── */
+  header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 8px 0 22px; }
+  .mark { display: flex; align-items: center; gap: 11px; }
+  .glyph {
+    width: 30px; height: 30px; border-radius: 8px; flex: none; position: relative;
+    background: radial-gradient(120% 120% at 30% 20%, var(--accent), transparent 60%), var(--panel);
+    border: 1px solid var(--line); box-shadow: inset 0 0 0 1px rgba(138,125,255,.15);
+  }
+  .glyph::before, .glyph::after {
+    content: ""; position: absolute; inset: 7px; border-radius: 3px;
+    background:
+      linear-gradient(var(--accent-ink) 1.5px, transparent 1.5px) 0 0/100% 5px,
+      linear-gradient(90deg, var(--accent-ink) 1.5px, transparent 1.5px) 0 0/5px 100%;
+    opacity: .5;
+  }
+  .glyph::after { inset: 12px; opacity: 0; background: var(--accent); border-radius: 2px; box-shadow: 0 0 10px var(--accent); }
+  .brand { font-size: 19px; font-weight: 640; letter-spacing: -.02em; }
+  .brand b { color: var(--ink); }
+  .brand span { color: var(--accent-ink); }
+  .tagline { color: var(--ink-mut); font-size: 13.5px; margin-left: auto; max-width: 42ch; text-align: right; }
+  @media (max-width: 720px){ .tagline { display: none; } }
+
+  .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-faint); }
+
+  /* ── scenario bar ───────────────────────────────────────── */
+  .scenarios { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 20px; }
+  .scenarios .lbl { margin-right: 4px; }
+  .chip {
+    font: 500 13px var(--sans); color: var(--ink-mut); cursor: pointer;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+    padding: 7px 13px; transition: border-color .15s, color .15s, background .15s;
+  }
+  .chip:hover { color: var(--ink); border-color: var(--accent); }
+  .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .chip.reset { color: var(--ink-faint); }
+
+  /* ── main grid ──────────────────────────────────────────── */
+  .console { display: grid; grid-template-columns: 1fr 380px; gap: 20px; align-items: start; }
+  @media (max-width: 900px){ .console { grid-template-columns: 1fr; } }
+
+  .signals { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 560px){ .signals { grid-template-columns: 1fr; } }
+
+  .signal {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--r);
+    padding: 13px 14px 14px; position: relative; overflow: hidden; box-shadow: var(--shadow);
+  }
+  .signal::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    background: var(--stripe, var(--line)); transition: background .2s;
+  }
+  .signal .top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+  .signal .name { font-size: 14px; font-weight: 600; letter-spacing: -.01em; }
+  .signal .plane { font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); }
+  .states { display: flex; flex-wrap: wrap; gap: 5px; }
+  .state {
+    font: 500 12px var(--sans); color: var(--ink-mut); cursor: pointer;
+    background: var(--panel-2); border: 1px solid var(--line-soft); border-radius: 7px;
+    padding: 5px 9px; transition: all .13s;
+  }
+  .state:hover { color: var(--ink); border-color: var(--line); }
+  .state:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .state[aria-pressed="true"] {
+    color: var(--sev, var(--ink)); border-color: var(--sev, var(--accent));
+    background: var(--sev-bg, var(--panel)); font-weight: 600;
+  }
+  .signal .contrib {
+    margin-top: 11px; padding-top: 10px; border-top: 1px dashed var(--line-soft);
+    display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11.5px;
+  }
+  .contrib .k { color: var(--ink-faint); letter-spacing: .04em; }
+  .contrib .v { color: var(--sev, var(--ink-mut)); font-weight: 600; letter-spacing: .02em; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--sev, var(--ink-faint)); flex: none; box-shadow: 0 0 0 3px var(--sev-bg, transparent); }
+
+  /* ── verdict panel ──────────────────────────────────────── */
+  .verdict-col { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 14px; }
+  @media (max-width: 900px){ .verdict-col { position: static; } }
+
+  .verdict {
+    border-radius: 16px; border: 1px solid var(--tier-line, var(--line)); background: var(--panel);
+    box-shadow: var(--shadow); overflow: hidden;
+  }
+  .verdict .head {
+    padding: 16px 18px 14px; background: var(--tier-bg, var(--panel-2));
+    border-bottom: 1px solid var(--line);
+  }
+  .verdict .row1 { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .tier {
+    font-family: var(--mono); font-weight: 700; font-size: 30px; letter-spacing: -.01em;
+    color: var(--tier-c, var(--ink)); line-height: 1; transition: color .2s;
+  }
+  .tier-tag {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--tier-c, var(--ink-mut)); border: 1px solid var(--tier-line, var(--line));
+    padding: 4px 8px; border-radius: 999px; background: var(--ground);
+  }
+  .action-line { margin-top: 12px; display: flex; align-items: baseline; gap: 8px; }
+  .action-line .k { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); }
+  .action-line .v { font-family: var(--mono); font-size: 15px; font-weight: 700; color: var(--tier-c, var(--ink)); letter-spacing: .02em; }
+  .meta { margin-top: 6px; font-size: 12px; color: var(--ink-mut); }
+
+  .drivers { padding: 12px 18px 4px; }
+  .drivers h3, .incident h3 {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--ink-faint); margin: 4px 0 10px; font-weight: 600;
+  }
+  .driver { display: flex; align-items: center; gap: 9px; padding: 6px 0; border-bottom: 1px solid var(--line-soft); }
+  .driver:last-child { border-bottom: 0; }
+  .driver .nm { font-size: 12.5px; color: var(--ink); flex: 1; min-width: 0; }
+  .driver .nm small { color: var(--ink-faint); font-family: var(--mono); font-size: 10.5px; letter-spacing: .03em; }
+  .driver .act { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--sev); letter-spacing: .03em; }
+  .rankbar { width: 46px; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; flex: none; }
+  .rankbar i { display: block; height: 100%; background: var(--sev); width: var(--w, 0%); }
+  .calm { padding: 4px 0 12px; color: var(--ink-mut); font-size: 12.5px; }
+
+  .incident { padding: 4px 18px 18px; }
+  .inc-card {
+    border: 1px solid var(--tier-line, var(--line)); border-radius: 11px; overflow: hidden; background: var(--panel-2);
+  }
+  .inc-top { display: flex; align-items: center; gap: 10px; padding: 11px 13px; background: var(--tier-bg, var(--panel-2)); border-bottom: 1px solid var(--line); }
+  .prio { font-family: var(--mono); font-weight: 800; font-size: 17px; color: var(--tier-c, var(--ink)); }
+  .inc-top .desc { font-size: 12.5px; color: var(--ink); line-height: 1.35; }
+  .inc-rows { padding: 6px 13px 11px; }
+  .inc-row { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; font-size: 12px; border-bottom: 1px solid var(--line-soft); }
+  .inc-row:last-child { border-bottom: 0; }
+  .inc-row .k { color: var(--ink-faint); font-family: var(--mono); font-size: 11px; letter-spacing: .04em; }
+  .inc-row .v { color: var(--ink); font-family: var(--mono); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+  .flags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .flag { font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; padding: 3px 7px; border-radius: 6px; border: 1px solid var(--blocked); color: var(--blocked); background: var(--blocked-bg); }
+  .no-inc { padding: 15px 18px 20px; }
+  .no-inc .big { font-family: var(--mono); font-weight: 700; font-size: 15px; color: var(--ok); display: flex; align-items: center; gap: 8px; }
+  .no-inc p { color: var(--ink-mut); font-size: 12.5px; margin: 8px 0 0; }
+
+  .impact-ctl { display: flex; align-items: center; gap: 8px; padding: 12px 18px 16px; border-top: 1px solid var(--line-soft); }
+  .impact-ctl .k { font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); }
+  .seg { display: inline-flex; background: var(--panel-2); border: 1px solid var(--line-soft); border-radius: 8px; padding: 2px; }
+  .seg button { font: 600 11.5px var(--mono); letter-spacing: .04em; color: var(--ink-mut); background: none; border: 0; cursor: pointer; padding: 4px 10px; border-radius: 6px; }
+  .seg button[aria-pressed="true"] { background: var(--panel); color: var(--ink); box-shadow: var(--shadow); }
+  .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  footer { margin-top: 30px; color: var(--ink-faint); font-size: 12px; line-height: 1.6; border-top: 1px solid var(--line-soft); padding-top: 16px; }
+  footer code { font-family: var(--mono); color: var(--ink-mut); font-size: 11.5px; }
+  footer b { color: var(--ink-mut); font-weight: 600; }
+  footer a { color: var(--accent-ink); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; color: var(--ink-mut); }
+  .legend i { width: 9px; height: 9px; border-radius: 2px; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="mark">
+      <div class="glyph" aria-hidden="true"></div>
+      <div class="brand"><b>Signal</b><span>Grid</span></div>
+    </div>
+    <p class="tagline">Nine device, identity, physical &amp; data signals — fused into one verdict and one prioritized incident. Live, deterministic, read-only.</p>
+  </header>
+
+  <div class="scenarios" role="group" aria-label="Scenario presets">
+    <span class="eyebrow lbl">Scenario</span>
+    <button class="chip" data-scenario="healthy">Healthy checkout</button>
+    <button class="chip" data-scenario="lost">Lost tablet after shift</button>
+    <button class="chip" data-scenario="compromise">Compromised user + USB</button>
+    <button class="chip" data-scenario="exfil">PHI exfiltration</button>
+    <button class="chip" data-scenario="drift">Config drift</button>
+    <button class="chip reset" data-scenario="healthy">Reset</button>
+  </div>
+
+  <div class="console">
+    <section class="signals" id="signals" aria-label="Signal inputs"></section>
+
+    <aside class="verdict-col">
+      <div class="verdict" id="verdict">
+        <div class="head">
+          <div class="row1">
+            <div class="tier" id="tier">OK</div>
+            <div class="tier-tag" id="tierTag">nominal</div>
+          </div>
+          <div class="action-line">
+            <span class="k">strongest action</span>
+            <span class="v" id="strongest">none</span>
+          </div>
+          <div class="meta" id="meta">9 signals composed · nothing warrants action</div>
+        </div>
+
+        <div class="drivers">
+          <h3>Risk drivers · strongest first</h3>
+          <div id="drivers"></div>
+        </div>
+
+        <div class="incident">
+          <h3>Prioritized incident</h3>
+          <div id="incident"></div>
+        </div>
+
+        <div class="impact-ctl">
+          <span class="k">Device impact</span>
+          <div class="seg" role="group" aria-label="Business impact of the device">
+            <button data-impact="low">Low</button>
+            <button data-impact="medium">Med</button>
+            <button data-impact="high" aria-pressed="true">High</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <footer>
+    <b>How this works.</b> Every signal maps onto one action ladder —
+    <code>none · monitor · patch · locate · step_up · alert · restrict · escalate</code>.
+    The composed verdict is the <b>strongest action any signal warrants</b> (fail-safe: a calm signal never dilutes a severe one),
+    the risk tier follows from it, and the incident priority is <code>Impact × Urgency</code> on the ITSM matrix — with the no-noise rule
+    that a calm fabric raises <b>no ticket</b>. This is the real fusion logic, running on illustrative fixture data — no live tenant, no action taken.
+    The same logic is proven end-to-end by <code>pnpm run proof:fabric-scenario</code> in the
+    <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub">SignalGrid Review Hub</a>.
+    <div class="legend">
+      <span><i style="background:var(--ok)"></i>OK</span>
+      <span><i style="background:var(--watch)"></i>Watch</span>
+      <span><i style="background:var(--at-risk)"></i>At risk</span>
+      <span><i style="background:var(--blocked)"></i>Blocked</span>
+    </div>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ── the unified action ladder (rank), tier map, and severity color ──────────
+  var LADDER = ["none","monitor","patch","locate","step_up","alert","restrict","escalate"];
+  var RANK = {}; LADDER.forEach(function (a, i) { RANK[a] = i; });
+  var TIER = { none:"ok", monitor:"ok", patch:"watch", locate:"watch", step_up:"at_risk", alert:"at_risk", restrict:"blocked", escalate:"blocked" };
+  var TIER_LABEL = { ok:"OK", watch:"WATCH", at_risk:"AT RISK", blocked:"BLOCKED" };
+  var TIER_TAG = { ok:"nominal", watch:"keep watching", at_risk:"needs attention", blocked:"stop / escalate" };
+  function sevOf(action) {
+    var t = TIER[action];
+    if (action === "none") return "none";
+    return t; // ok | watch | at_risk | blocked
+  }
+  function sevVar(sev) {
+    return sev === "ok" ? "var(--ok)" : sev === "watch" ? "var(--watch)" :
+           sev === "at_risk" ? "var(--at-risk)" : sev === "blocked" ? "var(--blocked)" : "var(--ink-faint)";
+  }
+  function sevBg(sev) {
+    return sev === "ok" ? "var(--ok-bg)" : sev === "watch" ? "var(--watch-bg)" :
+           sev === "at_risk" ? "var(--at-risk-bg)" : sev === "blocked" ? "var(--blocked-bg)" : "transparent";
+  }
+
+  // ── the nine signals + their selectable states (each contributes one action) ─
+  var SIGNALS = [
+    { id:"reachability", name:"Post-exit reachability", plane:"carrier", states:[
+      ["Reachable","monitor"],["Degraded","locate"],["Wi-Fi blind spot","alert"],["Unreachable","escalate"] ] },
+    { id:"location", name:"Location services", plane:"geofence", states:[
+      ["On-premises","none"],["Off-premises","locate"],["Stale fix","locate"],["Unknown","monitor"] ] },
+    { id:"vulnerability", name:"Vulnerability scan", plane:"cve exposure", states:[
+      ["Clean","none"],["Low / medium","patch"],["High","patch"],["Critical / exploitable","restrict"] ] },
+    { id:"network", name:"Network / NAC", plane:"access state", states:[
+      ["Trusted segment","none"],["Quarantined","monitor"],["NAC-noncompliant","step_up"],["Unauthenticated","restrict"] ] },
+    { id:"threat", name:"EDR / EPP", plane:"endpoint threat", states:[
+      ["Protected","none"],["Degraded protection","step_up"],["Unprotected","alert"],["Active threat","restrict"],["Critical compromise","escalate"] ] },
+    { id:"identity", name:"Identity / SSO", plane:"sign-in risk", states:[
+      ["Trusted","none"],["Low risk","monitor"],["At risk","step_up"],["High risk","restrict"],["Compromised","escalate"] ] },
+    { id:"custody", name:"Physical custody", plane:"rtls · zone & badge", states:[
+      ["In zone","none"],["Stale fix","locate"],["Off-zone / egress","alert"],["Left the area","escalate"] ] },
+    { id:"peripheral", name:"Removable media", plane:"usb / peripheral", states:[
+      ["None attached","none"],["Controlled","monitor"],["Policy unenforced","step_up"],["Unauthorized","alert"],["Exfil risk","restrict"] ] },
+    { id:"data_protection", name:"Data protection", plane:"dlp · data egress", states:[
+      ["Protected","none"],["Monitored","monitor"],["Policy unenforced","step_up"],["Data egress","alert"],["Confirmed exfiltration","escalate"] ] }
+  ];
+  var SHORT = { reachability:"Reachability", location:"Location", vulnerability:"Vulnerability",
+    network:"Network / NAC", threat:"EDR / EPP", identity:"Identity", custody:"Custody",
+    peripheral:"Removable media", data_protection:"Data protection" };
+  var ROUTE = { identity:"Identity & Access", vulnerability:"Vulnerability Management",
+    reachability:"Endpoint / Mobility", location:"Endpoint / Mobility", custody:"Endpoint / Mobility",
+    peripheral:"Endpoint / Mobility", network:"Security Operations", threat:"Security Operations",
+    data_protection:"Security Operations" };
+
+  // selected state index per signal
+  var sel = {}; SIGNALS.forEach(function (s) { sel[s.id] = 0; });
+  var impact = "high";
+
+  var SCENARIOS = {
+    healthy:  {},
+    lost:     { reachability:3, location:1, custody:3 },
+    compromise:{ identity:4, peripheral:4 },
+    exfil:    { data_protection:4 },
+    drift:    { network:2, threat:1, identity:2 }
+  };
+
+  // ── incident model: urgency from action, Impact × Urgency → priority ─────────
+  var URGENCY = { none:null, monitor:null, patch:"low", locate:"low", step_up:"medium", alert:"high", restrict:"high", escalate:"critical" };
+  var MATRIX = {
+    high:   { low:"P3", medium:"P2", high:"P1", critical:"P1" },
+    medium: { low:"P4", medium:"P3", high:"P2", critical:"P1" },
+    low:    { low:"P4", medium:"P4", high:"P3", critical:"P2" }
+  };
+  var SLA = { P1:"15 min · 4 hours", P2:"1 hour · 8 hours", P3:"4 hours · 2 business days", P4:"1 business day · 5 business days" };
+
+  function compose() {
+    var drivers = SIGNALS.map(function (s) {
+      var st = s.states[sel[s.id]];
+      return { id:s.id, name:s.name, stateLabel:st[0], action:st[1], rank:RANK[st[1]] };
+    }).filter(function (d) { return d.action !== "none"; });
+    drivers.sort(function (a, b) { return b.rank - a.rank || SIGNALS.findIndex(function(s){return s.id===a.id;}) - SIGNALS.findIndex(function(s){return s.id===b.id;}); });
+    var strongest = drivers.length ? drivers[0].action : "none";
+    return { drivers: drivers, strongest: strongest, tier: TIER[strongest], count: SIGNALS.length };
+  }
+  function incident(v) {
+    var urg = URGENCY[v.strongest];
+    if (!urg) return null;
+    var prio = MATRIX[impact][urg];
+    var lead = v.drivers[0];
+    return {
+      priority: prio, urgency: urg, impact: impact,
+      category: ROUTE[lead.id] || "Service Desk",
+      sla: SLA[prio],
+      escalate: prio === "P1",
+      major: prio === "P1" && impact === "high",
+      desc: SHORT[lead.id] + " — " + lead.stateLabel.toLowerCase() + (v.drivers.length > 1 ? " (+" + (v.drivers.length - 1) + " more driver" + (v.drivers.length > 2 ? "s" : "") + ")" : "")
+    };
+  }
+
+  // ── render ───────────────────────────────────────────────────────────────
+  var elSignals = document.getElementById("signals");
+  function buildSignals() {
+    elSignals.innerHTML = "";
+    SIGNALS.forEach(function (s) {
+      var card = document.createElement("div"); card.className = "signal"; card.dataset.id = s.id;
+      var states = s.states.map(function (st, i) {
+        return '<button class="state" role="button" aria-pressed="' + (sel[s.id] === i) + '" data-i="' + i + '">' + st[0] + '</button>';
+      }).join("");
+      card.innerHTML =
+        '<div class="top"><span class="name">' + s.name + '</span><span class="plane">' + s.plane + '</span></div>' +
+        '<div class="states">' + states + '</div>' +
+        '<div class="contrib"><span class="dot"></span><span class="k">contributes</span> <span class="v"></span></div>';
+      elSignals.appendChild(card);
+      card.querySelectorAll(".state").forEach(function (b) {
+        b.addEventListener("click", function () { sel[s.id] = +b.dataset.i; render(); });
+      });
+    });
+  }
+
+  function paintSignals() {
+    SIGNALS.forEach(function (s) {
+      var card = elSignals.querySelector('[data-id="' + s.id + '"]');
+      var st = s.states[sel[s.id]];
+      var sev = sevOf(st[1]);
+      card.style.setProperty("--stripe", st[1] === "none" ? "var(--line)" : sevVar(sev));
+      card.querySelectorAll(".state").forEach(function (b) {
+        var on = +b.dataset.i === sel[s.id];
+        b.setAttribute("aria-pressed", on);
+        var bsev = sevOf(s.states[+b.dataset.i][1]);
+        b.style.setProperty("--sev", sevVar(bsev));
+        b.style.setProperty("--sev-bg", sevBg(bsev));
+      });
+      var contrib = card.querySelector(".contrib");
+      contrib.style.setProperty("--sev", st[1] === "none" ? "var(--ink-faint)" : sevVar(sev));
+      contrib.style.setProperty("--sev-bg", st[1] === "none" ? "transparent" : sevBg(sev));
+      contrib.querySelector(".v").textContent = st[1];
+    });
+  }
+
+  var elTier = document.getElementById("tier"), elTierTag = document.getElementById("tierTag"),
+      elStrong = document.getElementById("strongest"), elMeta = document.getElementById("meta"),
+      elDrivers = document.getElementById("drivers"), elIncident = document.getElementById("incident"),
+      elVerdict = document.getElementById("verdict");
+
+  function render() {
+    paintSignals();
+    var v = compose();
+    var tc = sevVar(v.tier), tbg = sevBg(v.tier);
+    elVerdict.style.setProperty("--tier-c", tc);
+    elVerdict.style.setProperty("--tier-bg", tbg);
+    elVerdict.style.setProperty("--tier-line", v.tier === "ok" ? "var(--line)" : tc);
+    elTier.textContent = TIER_LABEL[v.tier];
+    elTierTag.textContent = TIER_TAG[v.tier];
+    elStrong.textContent = v.strongest;
+    elMeta.textContent = v.count + " signals composed · " +
+      (v.drivers.length ? v.drivers.length + " warranting action" : "nothing warrants action");
+
+    if (!v.drivers.length) {
+      elDrivers.innerHTML = '<div class="calm">All nine signals are calm. Nothing is escalated — the fabric stays quiet.</div>';
+    } else {
+      elDrivers.innerHTML = v.drivers.map(function (d) {
+        var sev = sevOf(d.action);
+        var w = Math.round((d.rank / 7) * 100);
+        return '<div class="driver" style="--sev:' + sevVar(sev) + '">' +
+          '<span class="nm">' + SHORT[d.id] + ' <small>' + d.stateLabel + '</small></span>' +
+          '<span class="rankbar"><i style="--w:' + w + '%"></i></span>' +
+          '<span class="act">' + d.action + '</span></div>';
+      }).join("");
+    }
+
+    var inc = incident(v);
+    if (!inc) {
+      elIncident.innerHTML =
+        '<div class="no-inc"><div class="big">' + checkSvg() + 'No incident raised</div>' +
+        '<p>The no-noise rule: a calm fabric generates zero tickets. A normal device is nobody’s problem.</p></div>';
+    } else {
+      var flags = "";
+      if (inc.major) flags += '<span class="flag">Major incident</span>';
+      if (inc.escalate) flags += '<span class="flag">On-call escalation</span>';
+      elIncident.innerHTML =
+        '<div class="inc-card">' +
+          '<div class="inc-top"><span class="prio">' + inc.priority + '</span><span class="desc">' + inc.desc + '</span></div>' +
+          '<div class="inc-rows">' +
+            row("Priority", inc.priority + "  ·  " + cap(inc.impact) + " impact × " + cap(inc.urgency) + " urgency") +
+            row("Route to", inc.category) +
+            row("SLA", "respond " + inc.sla.split(" · ")[0] + " · resolve " + inc.sla.split(" · ")[1]) +
+          '</div>' +
+          (flags ? '<div style="padding:0 13px 12px"><div class="flags">' + flags + '</div></div>' : '') +
+        '</div>';
+    }
+  }
+  function row(k, v) { return '<div class="inc-row"><span class="k">' + k + '</span><span class="v">' + v + '</span></div>'; }
+  function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+  function checkSvg() { return '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true" style="flex:none"><path d="M3.5 8.5l3 3 6-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'; }
+
+  // ── controls ─────────────────────────────────────────────────────────────
+  document.querySelectorAll("[data-scenario]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      SIGNALS.forEach(function (s) { sel[s.id] = 0; });
+      var sc = SCENARIOS[b.dataset.scenario] || {};
+      Object.keys(sc).forEach(function (k) { sel[k] = sc[k]; });
+      render();
+    });
+  });
+  document.querySelectorAll("[data-impact]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      impact = b.dataset.impact;
+      document.querySelectorAll("[data-impact]").forEach(function (x) { x.setAttribute("aria-pressed", x === b); });
+      render();
+    });
+  });
+
+  buildSignals();
+  render();
+})();
+</script>
+</body>
+</html>

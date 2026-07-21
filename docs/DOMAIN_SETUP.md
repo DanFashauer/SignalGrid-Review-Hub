@@ -12,6 +12,7 @@ content — no server, no data.
 |---|---|
 | `https://signalgrid.app/` | Marketing site (signalgrid-web), incl. `/hardware`, `/pricing`, `/federal` via SPA routing |
 | `https://signalgrid.app/console.html` | Trusted Room Entry on-device console demo |
+| `https://signalgrid.app/fabric.html` | Live decision fabric — 9 signals fuse to one verdict + one prioritized incident |
 | `https://signalgrid.app/battlecard.html` | Competitive battlecard |
 
 `site/CNAME` pins the custom domain; a `404.html` fallback lets deep links into

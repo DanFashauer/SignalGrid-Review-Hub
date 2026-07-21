@@ -24,6 +24,15 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Alpha to public pre-production parity](ALPHA_TO_PUBLIC_PREPROD_PARITY.md): maps DEV Alpha learnings into Review Hub, private core, redesign, deferred, or archive categories.
 - [Roadmap to private core](ROADMAP_TO_PRIVATE_CORE.md): defines how validated public concepts move toward protected core implementation.
 
+### The decision fabric — build the grid
+
+- [Open orchestration vision](OPEN_ORCHESTRATION_VISION.md): the open, central, GitOps-native decision-orchestration direction (config-as-code, zero-touch provisioning, "decisions on your behalf") and its honest boundary — what is built (`lib/posture-composition`, `lib/flows` grid-coverage / signal-sourcing / grid-config / app-resilience) vs roadmap.
+- [Signal sourcing](SIGNAL_SOURCING.md): how each signal reaches the Grid — API / native integration / grid-collected (the Grid does the lifting) / unavailable (a real gap) — so coverage honestly reflects how the source systems are configured. Modeled in `@workspace/flows` signal-sourcing; proven by `proof:grid-coverage`.
+- [Application resilience](APP_RESILIENCE.md): turning a cloud app's availability (unplanned outage / maintenance window / degraded) into a PHI-safe resilience decision so clinical staff keep working through downtime. Modeled in `@workspace/flows` app-resilience; proven by `proof:app-resilience`.
+- Workflows as code: a declarative grid ([`config/grid/example.grid.config.json`](../config/grid/example.grid.config.json)) the CI/CD pipeline validates on every change (`@workspace/flows` grid-config; `proof:grid-config`) before the Grid runs it.
+- [Inspiration & positioning references](inspiration/INSPIRATION.md): the IAM-landscape framing (Domains → Capabilities → Outcomes) mapped to SignalGrid, plus verdict-first XDR fusion and the NIST SP 800-207 policy-engine model.
+- Live demo (self-contained, offline): [`docs/fabric-console.html`](fabric-console.html) — add signals + workflows and watch the Grid handle real situations by itself.
+
 ## Strategy and roadmap
 
 - [SignalGrid real-life simulator](SIGNALGRID_REAL_LIFE_SIMULATOR.md): explains the public-safe deterministic simulator foundation and its runtime trust layers.

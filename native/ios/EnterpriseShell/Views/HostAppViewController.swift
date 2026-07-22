@@ -22,12 +22,19 @@ final class HostAppViewController: UIViewController {
     struct ScriptedStep {
         let key: String
         let label: String
-        let outcome: AppWorkflows.DecisionOutcome
-        let reasonCodes: [String]
+        /// The normalized signals present when this action is attempted. The
+        /// DecisionEngine computes the verdict + reason codes from these — nothing
+        /// is hand-set. Empty defaults to a trusted identity+posture context.
+        let signals: [DecisionEngine.Signal]
         var hostHold: String = ""      // shown while HELD for a step-up
         var hostDone: String = ""      // shown when the action completes
         var hostBlocked: String = ""   // the app's OWN message on restrict/deny
         var confirmTitle: String = ""  // the app's own confirmation dialog title
+    }
+
+    /// The live decision for a step, computed from its signal context.
+    private func decision(for step: ScriptedStep) -> DecisionEngine.Result {
+        DecisionEngine.evaluate(step.signals)
     }
 
     struct HostAppConfig {
@@ -252,23 +259,26 @@ final class HostAppViewController: UIViewController {
     @objc private func primaryTapped() {
         SessionStateManager.shared.userDidInteract()
         guard let step = currentStep else { return }
+        let d = decision(for: step)                       // verdict computed from signals
+        let why = d.reasonCodes.joined(separator: " · ")
         let input = AppWorkflows.AppPlanInput(
-            integration: config.integration, outcome: step.outcome, reasonCodes: step.reasonCodes)
+            integration: config.integration, outcome: d.outcome, reasonCodes: d.reasonCodes)
         let plan = AppWorkflows.gateAppAction(input, step.key)
         AuditLogger.shared.log(event: .assistActionEvaluated, metadata: [
-            "action": step.key, "disposition": plan?.disposition.rawValue ?? "?"])
+            "action": step.key, "outcome": d.outcome.rawValue,
+            "disposition": plan?.disposition.rawValue ?? "?"])
 
         switch plan?.disposition {
         case .auto:
-            setGlass(step.key, "auto", step.reasonCodes.joined(separator: " · "),
+            setGlass(step.key, "auto", why,
                      "Non-sensitive action on a trusted session → runs automatically. The worker sees no gate.")
             AuditLogger.shared.log(event: .assistActionAuto, metadata: ["action": step.key])
             addRow(step.label, state: .done)
             showBanner(step.hostDone, kind: .ok)
             advance()
         case .blocked:
-            let verdict = step.outcome.rawValue // restrict / deny
-            setGlass(step.key, verdict, step.reasonCodes.joined(separator: " · "),
+            let verdict = d.outcome.rawValue // restrict / deny
+            setGlass(step.key, verdict, why,
                      "Blocked — the action isn't available on this device in this context. The app shows its OWN message; SignalGrid never appears. Fail-closed: nothing fires.")
             AuditLogger.shared.log(event: .assistActionBlocked, metadata: [
                 "action": step.key, "outcome": verdict])
@@ -276,10 +286,10 @@ final class HostAppViewController: UIViewController {
             showBanner(step.hostBlocked, kind: .blocked)
             advance()
         case .step_up:
-            setGlass(step.key, "step_up", step.reasonCodes.joined(separator: " · "),
+            setGlass(step.key, "step_up", why,
                      "High-assurance action → HELD. SignalGrid does not release it; it asks the app to capture a real native gesture. It does not fire yet.")
             AuditLogger.shared.log(event: .assistStepUpRequested, metadata: [
-                "action": step.key, "reason": step.reasonCodes.joined(separator: ",")])
+                "action": step.key, "reason": why])
             addRow(step.label, state: .held)
             showBanner(step.hostHold, kind: .hold)
             flow = .awaitingStepUp
@@ -333,8 +343,9 @@ final class HostAppViewController: UIViewController {
     /// Step-up satisfied → the action is NOT placed yet if it is sensitive; it stays
     /// ASSIST until an explicit confirmation (mirrors completeAppStepUp).
     private func stepUpSatisfied(_ step: ScriptedStep) {
+        let d = decision(for: step)
         var input = AppWorkflows.AppPlanInput(
-            integration: config.integration, outcome: step.outcome, reasonCodes: step.reasonCodes)
+            integration: config.integration, outcome: d.outcome, reasonCodes: d.reasonCodes)
         let plan = AppWorkflows.completeAppStepUp(input)
         let action = plan.actions.first { $0.key == step.key }
         AuditLogger.shared.log(event: .assistStepUpSatisfied, metadata: ["action": step.key])
@@ -378,16 +389,17 @@ final class HostAppViewController: UIViewController {
     }
 
     private func confirmAction(_ step: ScriptedStep) {
+        let d = decision(for: step)
         var input = AppWorkflows.AppPlanInput(
-            integration: config.integration, outcome: step.outcome, reasonCodes: step.reasonCodes)
-        input.stepUpSatisfied = (step.outcome == .step_up)
+            integration: config.integration, outcome: d.outcome, reasonCodes: d.reasonCodes)
+        input.stepUpSatisfied = (d.outcome == .step_up)
         let plan = AppWorkflows.confirmAppActions(input, [step.key])
         let action = plan.actions.first { $0.key == step.key }
         AuditLogger.shared.log(event: .assistActionConfirmed, metadata: ["action": step.key])
         AuditLogger.shared.log(event: .assistActionApplied, metadata: ["action": step.key])
         setGlass(step.key, action?.disposition.rawValue ?? "applied",
                  "CONFIRMED_BY_\(confirmer.uppercased().replacingOccurrences(of: " ", with: "_"))",
-                 "The \(confirmer) confirmed in the app's own dialog → the held action is applied. \(step.outcome == .step_up ? "Two gates cleared: a native step-up AND an explicit confirmation." : "One gate cleared: an explicit confirmation.")")
+                 "The \(confirmer) confirmed in the app's own dialog → the held action is applied. \(d.outcome == .step_up ? "Two gates cleared: a native step-up AND an explicit confirmation." : "One gate cleared: an explicit confirmation.")")
         markHeldRowDone()
         showBanner(step.hostDone, kind: .ok)
         advance()
@@ -568,6 +580,11 @@ final class HostAppViewController: UIViewController {
             scheduleAutoTick(after: 2.4)
         case .awaitingConfirm:
             guard let step = currentStep else { return }
+            if DemoMode.assistDecline {
+                // Fail-closed demo: decline the confirmation → nothing fires.
+                dismiss(animated: false) { [weak self] in self?.confirmDeclined(step) }
+                return // stop the walk on the declined state
+            }
             dismiss(animated: false) { [weak self] in self?.confirmAction(step) }
             scheduleAutoTick(after: 2.4)
         case .finished:
@@ -605,12 +622,14 @@ extension HostAppViewController {
             subjectTitle: "Rivera, A.",
             subjectMeta: "Room 4B · MRN 00-DEMO · synthetic record",
             steps: [
-                ScriptedStep(key: "chart.open", label: "Open chart", outcome: .allow,
-                             reasonCodes: ["TRUST_ESTABLISHED"], hostDone: "Chart opened."),
-                ScriptedStep(key: "results.view", label: "View lab results", outcome: .allow,
-                             reasonCodes: ["TRUST_ESTABLISHED"], hostDone: "Results shown."),
-                ScriptedStep(key: "order.place", label: "Place controlled med order", outcome: .step_up,
-                             reasonCodes: ["BASELINE_DRIFTED", "SHARED_DEVICE"],
+                // Trusted identity + fresh posture → engine returns allow.
+                ScriptedStep(key: "chart.open", label: "Open chart",
+                             signals: [.authenticated, .postureObserved], hostDone: "Chart opened."),
+                ScriptedStep(key: "results.view", label: "View lab results",
+                             signals: [.authenticated, .postureObserved], hostDone: "Results shown."),
+                // Stale posture on the shared device → engine returns step_up (POSTURE_STALE).
+                ScriptedStep(key: "order.place", label: "Place controlled med order",
+                             signals: [.authenticated, .postureObserved, .staleCheckin],
                              hostHold: "One quick check to confirm it's you on this shared device.",
                              hostDone: "Controlled med order placed.",
                              confirmTitle: "Verify controlled medication order"),
@@ -629,15 +648,17 @@ extension HostAppViewController {
             subjectTitle: "Order SO-4471 · Aisle 12",
             subjectMeta: "Tote T-88 · synthetic order",
             steps: [
-                ScriptedStep(key: "task.accept", label: "Accept pick task", outcome: .allow,
-                             reasonCodes: ["TRUST_ESTABLISHED"], hostDone: "Task accepted."),
-                ScriptedStep(key: "pick.confirm", label: "Confirm pick", outcome: .allow,
-                             reasonCodes: ["TRUST_ESTABLISHED"], hostDone: "Pick confirmed."),
-                ScriptedStep(key: "inventory.adjust", label: "Adjust inventory", outcome: .restrict,
-                             reasonCodes: ["POSTURE_STALE"],
+                ScriptedStep(key: "task.accept", label: "Accept pick task",
+                             signals: [.authenticated, .postureObserved], hostDone: "Task accepted."),
+                ScriptedStep(key: "pick.confirm", label: "Confirm pick",
+                             signals: [.authenticated, .postureObserved], hostDone: "Pick confirmed."),
+                // Non-compliant device → engine returns restrict (DEVICE_NON_COMPLIANT).
+                ScriptedStep(key: "inventory.adjust", label: "Adjust inventory",
+                             signals: [.authenticated, .postureObserved, .nonCompliant],
                              hostBlocked: "Inventory adjust isn't available on this device right now."),
-                ScriptedStep(key: "highvalue.release", label: "Release high-value pick", outcome: .step_up,
-                             reasonCodes: ["WRONG_ZONE", "SHARED_DEVICE"],
+                // Stale posture → engine returns step_up (POSTURE_STALE).
+                ScriptedStep(key: "highvalue.release", label: "Release high-value pick",
+                             signals: [.authenticated, .postureObserved, .staleCheckin],
                              hostHold: "Quick check to confirm it's you before releasing a high-value pick.",
                              hostDone: "High-value pick released.",
                              confirmTitle: "Verify high-value pick release"),

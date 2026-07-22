@@ -99,6 +99,13 @@ enum DemoMode {
             || ProcessInfo.processInfo.arguments.contains("-DemoAssistAuto")
     }
 
+    /// When enabled (`-DemoAssistDecline`), the auto-walk declines the confirmation
+    /// so the fail-closed "nothing fires" state can be captured.
+    static var assistDecline: Bool {
+        UserDefaults.standard.bool(forKey: "DemoAssistDecline")
+            || ProcessInfo.processInfo.arguments.contains("-DemoAssistDecline")
+    }
+
     /// Building/area the device is deployed in (`-DemoLocation warehouse|clinic|office`).
     /// Drives which role + app workspace the user is provisioned with — mirroring how the
     /// SignalGrid control plane configures a persona by workflow and location.

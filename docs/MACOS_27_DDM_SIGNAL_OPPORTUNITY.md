@@ -75,6 +75,32 @@ They answer **different questions on the same device**, so they compose:
   **auto → step-up**, never relax it (fail-closed, proven). Read API
   `GET /cp/v1/ddm`; proof:ddm-connector (run in CI).
 
+## Update-enforcement currency — the OS-27 cutover fail-safe
+
+macOS/iOS **27 makes legacy MDM software-update enforcement a silent no-op** — the
+old command "doesn't fail; it's gone," so a device can keep *looking* managed and
+reporting "compliant" while nothing is actually enforcing patches. That is exactly
+the failure the Grid's core law exists for: **unknown / stale ≠ healthy.**
+
+The connector models `updateEnforcement` (how a device delivers update enforcement)
+against its `osMajor` and derives an `enforcementCurrency`:
+
+  | Enforcement × OS | `enforcementCurrency` | Effect |
+  |---|---|---|
+  | `declarative` (DDM) | `current` | trusted — enforcement is live |
+  | `legacy` on OS **27+** | `dead` | silently a no-op — "compliant" not trusted |
+  | `legacy` on a known **pre-27** | `at_risk` | works now, dies on the upgrade |
+  | `legacy` on an **unverifiable** OS | `at_risk` | can't confirm it still works — never `current` |
+  | `none` | `dead` | nothing enforcing at all |
+  | unreported / unmapped | `unknown` | fail-safe — cannot confirm |
+
+Anything other than a provably `current` enforcement sets `raise_step_up`, so a
+device that reports **healthy + enforced + declared + fresh** but is still on
+legacy update enforcement under OS 27 **does not pass as standard** — the Grid
+surfaces the silent drift as a decision instead of trusting a claim a dead
+mechanism made. `ddmSummary` exposes `enforcementDead` / `enforcementAtRisk` for a
+one-glance fleet view of the migration risk described in Apple's OS-27 rollout.
+
 ## Still open (future work)
 
 - A macOS desktop host-app demo showing the same invisible Assist flow the

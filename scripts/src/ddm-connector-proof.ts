@@ -14,6 +14,7 @@ import {
   normalizeDdmReport,
   normalizeDdmReports,
   ddmSummary,
+  enforcementCurrencyOf,
   DEMO_DDM_REPORTS,
   DDM_OBSERVED_AT,
   type DdmDeviceReport,
@@ -59,6 +60,20 @@ check("unreporting → raise step-up", byRef("mac-noc-07").assurance === "raise_
 check("unenrolled → not managed", byRef("mac-byod-01").deviceManaged === false);
 check("unenrolled → raise step-up", byRef("mac-byod-01").assurance === "raise_step_up");
 
+// ── update-enforcement currency (OS-27 cutover, fail-safe) ────────────────────
+// THE core case: a device that looks perfect (enrolled, enforced, declared, fresh)
+// but whose update enforcement is legacy on OS 27 — silently a no-op. "Compliant"
+// is not trustworthy, so it must raise, not pass as standard.
+check("legacy enforcement on OS 27 → currency dead", byRef("mac-noc-08").enforcementCurrency === "dead");
+check("SILENT-DEATH CASE: an otherwise-perfect device with dead enforcement raises step-up", byRef("mac-noc-08").assurance === "raise_step_up");
+check("legacy enforcement on pre-27 → currency at_risk (dies on upgrade)", byRef("mac-noc-09").enforcementCurrency === "at_risk");
+check("at-risk enforcement → raise step-up", byRef("mac-noc-09").assurance === "raise_step_up");
+check("no enforcement configured → currency dead", byRef("mac-noc-10").enforcementCurrency === "dead");
+check("declarative enforcement → currency current", byRef("mac-noc-01").enforcementCurrency === "current");
+// Fail-safe units: only an exact 'declarative' is current; everything unverifiable is not.
+check("legacy + unknown OS → at_risk (cannot confirm pre-cutover, never current)", enforcementCurrencyOf({ deviceRef: "x", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "declared", lastCheckInAt: DEMO_DDM_REPORTS[0].lastCheckInAt, updateEnforcement: "legacy" }) === "at_risk");
+check("unreported enforcement → currency unknown (fail-safe, raises)", byRef("mac-noc-07").enforcementCurrency === "unknown");
+
 // ── SAFETY: a weak posture NEVER yields assurance 'standard' ───────────────────
 check("SAFETY: only the fully-healthy device is assurance standard",
   signals.filter((s) => s.assurance === "standard").length === 1);
@@ -80,10 +95,12 @@ check("normalization is deterministic", JSON.stringify(normalizeDdmReports(DEMO_
 
 // ── summary ───────────────────────────────────────────────────────────────────
 const sum = ddmSummary(signals, DEMO_DDM_REPORTS);
-check("summary counts 8 devices", sum.devices === 8);
-check("summary counts managed devices", sum.managed === 7);
-check("summary counts binary-enforced devices", sum.binaryEnforced === 4);
-check("summary raiseStepUp = all but the healthy one", sum.raiseStepUp === 7);
+check("summary counts 11 devices", sum.devices === 11);
+check("summary counts managed devices", sum.managed === 10);
+check("summary counts binary-enforced devices", sum.binaryEnforced === 7);
+check("summary counts dead update enforcement (legacy-on-27 / none)", sum.enforcementDead === 2);
+check("summary counts at-risk update enforcement (legacy pre-27)", sum.enforcementAtRisk === 1);
+check("summary raiseStepUp = all but the one healthy+current device", sum.raiseStepUp === 10);
 
 const total = passed + failures.length;
 console.log(`DDM-connector proof: ${passed}/${total} assertions passed`);

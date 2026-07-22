@@ -315,11 +315,14 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
                 // Badge was enrolled, proceed to authentication
                 await beginAuthentication()
             } else if enrollmentResponse.needsProvisioning {
-                // Badge needs provisioning, continue with enrollment flow
-                // The UI should show enrollment instructions
-                // User would need to complete enrollment through another method
-                // For now, return to locked idle with message
-                transition(to: .lockedIdle, error: SessionError.enrollmentRequired)
+                // Stay on the enrollment screen so the user can read the guidance and
+                // choose "Try Another Badge" or "Contact Administrator". Previously this
+                // bounced straight back to lockedIdle, flashing the screen away before it
+                // could be read. The EnrollingViewController's own actions drive next steps.
+                AuditLogger.shared.log(event: .badgeEnrollmentStarted, metadata: [
+                    "badgeId": maskBadgeId(badgeId),
+                    "instructions": enrollmentResponse.enrollmentInstructions ?? ""
+                ])
             } else {
                 // Cannot enroll badge
                 transition(to: .lockedIdle, error: SessionError.enrollmentNotAvailable)

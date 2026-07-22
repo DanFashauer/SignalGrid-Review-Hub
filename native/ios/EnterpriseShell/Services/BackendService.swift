@@ -68,7 +68,7 @@ final class BackendService {
         deviceSerial: String
     ) async throws -> StartSessionResponse {
         #if targetEnvironment(simulator)
-        if DemoMode.isEnabled { return DemoMode.startSessionResponse(badgeId: badgeId) }
+        if DemoMode.isEnabled { return DemoMode.unenrolled ? DemoMode.unenrolledStartResponse() : DemoMode.startSessionResponse(badgeId: badgeId) }
         #endif
         let url = URL(string: "\(Self.baseUrl)/api/sessions/start")!
         
@@ -205,6 +205,9 @@ final class BackendService {
         deviceId: String,
         deviceSerial: String
     ) async throws -> BadgeEnrollmentResponse {
+        #if targetEnvironment(simulator)
+        if DemoMode.isEnabled { return DemoMode.enrollmentCheckResponse() }
+        #endif
         let url = URL(string: "\(Self.baseUrl)/api/badges/check-enrollment")!
         
         var request = URLRequest(url: url)

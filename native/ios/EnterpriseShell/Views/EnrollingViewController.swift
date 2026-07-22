@@ -115,6 +115,16 @@ final class EnrollingViewController: UIViewController {
         // Reset to show we're checking enrollment
         activityIndicator.startAnimating()
     }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // The enrollment determination resolves quickly; stop the spinner so the
+        // "not registered" guidance and its action buttons are the clear final state
+        // (rather than spinning forever behind the message).
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+            self?.activityIndicator.stopAnimating()
+        }
+    }
     
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)

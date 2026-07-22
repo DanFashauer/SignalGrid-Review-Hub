@@ -12,7 +12,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     ) {
         guard let windowScene = (scene as? UIWindowScene) else { return }
 
-        window = UIWindow(windowScene: windowScene)
+        window = SessionWindow(windowScene: windowScene)
 
         // Set up the root view controller based on session state
         let rootViewController = SessionStateManager.shared.currentViewController()

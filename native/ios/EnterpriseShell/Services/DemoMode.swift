@@ -70,26 +70,44 @@ enum DemoMode {
             || ProcessInfo.processInfo.arguments.contains("-DemoAutoEnd")
     }
 
+    /// When enabled (`-DemoIdleLock`), the persona uses a short idle timeout so the
+    /// inactivity auto-lock can be demonstrated in seconds instead of minutes.
+    static var idleLock: Bool {
+        UserDefaults.standard.bool(forKey: "DemoIdleLock")
+            || ProcessInfo.processInfo.arguments.contains("-DemoIdleLock")
+    }
+
+    /// Building/area the device is deployed in (`-DemoLocation warehouse|clinic|office`).
+    /// Drives which role + app workspace the user is provisioned with — mirroring how the
+    /// SignalGrid control plane configures a persona by workflow and location.
+    static var location: String {
+        (UserDefaults.standard.string(forKey: "DemoLocation") ?? "office").lowercased()
+    }
+
     static func persona() -> Persona {
-        Persona(
-            roleId: "demo-operator",
-            roleName: "Shift Operator",
-            permissions: ["session.start", "session.end", "dashboard.view"],
+        let p = locationProfile(location)
+        return Persona(
+            roleId: p.roleId,
+            roleName: p.roleName,
+            permissions: ["session.start", "session.end", "dashboard.view", "apps.launch"],
             workspaceConfig: WorkspaceConfig(
                 layout: .grid,
-                visibleModules: ["dashboard", "tasks"],
+                visibleModules: ["dashboard", "apps", "tasks"],
                 dashboardWidgets: [
                     DashboardWidget(id: "w-status", type: "status", title: "Session Status", position: 0, config: [:]),
-                    DashboardWidget(id: "w-tasks", type: "tasks", title: "My Tasks", position: 1, config: [:])
+                    DashboardWidget(id: "w-location", type: "location", title: p.area, position: 1, config: [:])
                 ],
-                theme: ThemeConfig(primaryColor: "#0A84FF", accentColor: "#30D158", logoUrl: nil)
+                theme: ThemeConfig(primaryColor: p.color, accentColor: "#30D158", logoUrl: nil)
             ),
             appLaunchConfig: AppLaunchConfig(
-                requiredApps: [], optionalApps: [], autoLaunchApps: [], defaultApp: "none"
+                requiredApps: p.required,
+                optionalApps: p.optional,
+                autoLaunchApps: [], // don't auto-open; show the configured home page
+                defaultApp: p.required.first?.appId ?? "none"
             ),
             restrictions: SessionRestrictions(
                 maxSessionDuration: 3600,
-                idleTimeout: 300,
+                idleTimeout: idleLock ? 8 : 300,
                 allowCopyPaste: true,
                 allowScreenCapture: false,
                 allowPrint: false,
@@ -98,6 +116,49 @@ enum DemoMode {
                 blockedFeatures: []
             )
         )
+    }
+
+    private static func app(_ id: String, _ name: String, _ url: String) -> EnterpriseApp {
+        EnterpriseApp(appId: id, bundleId: "com.enterprise.\(id)", displayName: name, launchUrl: url, isDeepLink: false)
+    }
+
+    private struct LocationProfile {
+        let roleId: String, roleName: String, area: String, color: String
+        let required: [EnterpriseApp], optional: [EnterpriseApp]
+    }
+
+    /// Role + app workspace per deployment location. In production these come from the
+    /// control plane's persona/app-catalog config keyed by workflow + building/area.
+    private static func locationProfile(_ location: String) -> LocationProfile {
+        switch location {
+        case "warehouse":
+            return LocationProfile(
+                roleId: "warehouse-operator", roleName: "Warehouse Operator",
+                area: "Dock 4 · Building B", color: "#FF9500",
+                required: [app("scanner", "Scanner", "https://example.com/scanner"),
+                           app("picklist", "Pick List", "https://example.com/picklist"),
+                           app("inventory", "Inventory", "https://example.com/inventory")],
+                optional: [app("directory", "Directory", "https://example.com/directory"),
+                           app("safety", "Safety", "https://example.com/safety")])
+        case "clinic", "hospital":
+            return LocationProfile(
+                roleId: "clinical-operator", roleName: "Clinical Operator",
+                area: "Ward 3 · North Wing", color: "#5E5CE6",
+                required: [app("ehr", "Patient Chart", "https://example.com/ehr"),
+                           app("rounds", "Rounds", "https://example.com/rounds"),
+                           app("meds", "Med Admin", "https://example.com/meds")],
+                optional: [app("directory", "Directory", "https://example.com/directory"),
+                           app("protocols", "Protocols", "https://example.com/protocols")])
+        default: // office
+            return LocationProfile(
+                roleId: "shift-operator", roleName: "Shift Operator",
+                area: "Floor 2 · HQ", color: "#0A84FF",
+                required: [app("timeclock", "Time Clock", "https://example.com/timeclock"),
+                           app("tasks", "Task Board", "https://example.com/tasks"),
+                           app("email", "Email", "https://example.com/email")],
+                optional: [app("directory", "Directory", "https://example.com/directory"),
+                           app("kb", "Knowledge Base", "https://example.com/kb")])
+        }
     }
 }
 

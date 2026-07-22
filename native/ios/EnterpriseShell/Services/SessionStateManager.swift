@@ -437,8 +437,14 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
     
     private func launchRequiredApps(for persona: Persona) async {
         let launcher = AppLauncher.shared
-        
-        for app in persona.appLaunchConfig.requiredApps {
+        let config = persona.appLaunchConfig
+        let autoIds = Set(config.autoLaunchApps)
+
+        // Only auto-launch apps explicitly flagged in autoLaunchApps; the rest appear
+        // on the home page for the user to open. Previously this opened EVERY required
+        // app on provisioning, immediately switching away from the configured workspace.
+        let toLaunch = (config.requiredApps + config.optionalApps).filter { autoIds.contains($0.appId) }
+        for app in toLaunch {
             do {
                 try await launcher.launchEnterpriseApp(app)
             } catch {
@@ -722,6 +728,14 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
     private func handleSessionTimeout() {
         AuditLogger.shared.log(event: .sessionTimeout, metadata: nil)
         endSession(userInitiated: false)
+    }
+
+    /// Reset the inactivity timeout in response to genuine user interaction.
+    /// The 60s activity heartbeat deliberately does NOT call this — otherwise the
+    /// session could never idle-out. Wired to real touches via SessionWindow.
+    func userDidInteract() {
+        guard currentState == .activeSession else { return }
+        startTimeoutTimer()
     }
     
     // MARK: - Session Validation

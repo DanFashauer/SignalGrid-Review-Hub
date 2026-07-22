@@ -545,7 +545,18 @@ final class HostAppViewController: UIViewController {
         glassVerdict.text = verdict.uppercased()
         glassVerdict.textColor = verdictColor(verdict)
         glassBody.text = body
-        glassWhy.text = "reason · \(why)"
+        glassWhy.text = "reason · \(why)\nsource · \(decisionSource.rawValue)"
+    }
+
+    /// Which decision service produced the panel's verdicts. The synchronous flow is
+    /// driven by the on-device engine; a control-plane backend (when configured) is
+    /// available via RemoteDecisionService and used with on-device fallback.
+    private var decisionSource: DecisionSource {
+        #if targetEnvironment(simulator)
+        return DemoMode.backendURL != nil && !(DemoMode.backendToken ?? "").isEmpty ? .controlPlane : .onDevice
+        #else
+        return .onDevice
+        #endif
     }
 
     private func verdictColor(_ v: String) -> UIColor {

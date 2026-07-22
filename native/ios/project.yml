@@ -55,6 +55,7 @@ targets:
       - path: EnterpriseShellTests
       - path: EnterpriseShell/Services/DecisionEngine.swift
       - path: EnterpriseShell/Services/AppWorkflows.swift
+      - path: EnterpriseShell/Services/DecisionService.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.enterprise.shell.tests

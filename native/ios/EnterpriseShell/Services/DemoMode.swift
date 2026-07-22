@@ -106,6 +106,18 @@ enum DemoMode {
             || ProcessInfo.processInfo.arguments.contains("-DemoAssistDecline")
     }
 
+    /// Optional control-plane base URL (`-DemoBackendURL https://host`). When set with
+    /// a token, the app resolves a RemoteDecisionService; otherwise it stays on-device.
+    static var backendURL: URL? {
+        guard let s = UserDefaults.standard.string(forKey: "DemoBackendURL"), let u = URL(string: s) else { return nil }
+        return u
+    }
+
+    /// Bearer token for the control plane (`-DemoBackendToken <tok>`).
+    static var backendToken: String? {
+        UserDefaults.standard.string(forKey: "DemoBackendToken")
+    }
+
     /// Building/area the device is deployed in (`-DemoLocation warehouse|clinic|office`).
     /// Drives which role + app workspace the user is provisioned with — mirroring how the
     /// SignalGrid control plane configures a persona by workflow and location.

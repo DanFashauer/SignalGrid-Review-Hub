@@ -7,7 +7,7 @@ final class LockedIdleViewController: UIViewController {
     
     private lazy var backgroundView: UIView = {
         let view = UIView()
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = SG.background
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
     }()
@@ -15,8 +15,8 @@ final class LockedIdleViewController: UIViewController {
     private lazy var logoImageView: UIImageView = {
         let imageView = UIImageView()
         imageView.contentMode = .scaleAspectFit
-        imageView.image = UIImage(systemName: "building.2")
-        imageView.tintColor = .systemBlue
+        imageView.image = UIImage(systemName: "square.grid.3x3.fill")
+        imageView.tintColor = SG.primary
         imageView.translatesAutoresizingMaskIntoConstraints = false
         return imageView
     }()
@@ -24,9 +24,9 @@ final class LockedIdleViewController: UIViewController {
     private lazy var titleLabel: UILabel = {
         let label = UILabel()
         label.text = "Enterprise Device"
-        label.font = UIFont.systemFont(ofSize: 28, weight: .bold)
+        label.font = SG.sans(28, .bold)
         label.textAlignment = .center
-        label.textColor = .label
+        label.textColor = SG.foreground
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
     }()
@@ -34,9 +34,9 @@ final class LockedIdleViewController: UIViewController {
     private lazy var instructionLabel: UILabel = {
         let label = UILabel()
         label.text = "Tap your badge to begin session"
-        label.font = UIFont.systemFont(ofSize: 18, weight: .medium)
+        label.font = SG.sans(18, .medium)
         label.textAlignment = .center
-        label.textColor = .secondaryLabel
+        label.textColor = SG.mutedFg
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
     }()
@@ -45,22 +45,23 @@ final class LockedIdleViewController: UIViewController {
         let imageView = UIImageView()
         imageView.contentMode = .scaleAspectFit
         imageView.image = UIImage(systemName: "creditcard.fill")
-        imageView.tintColor = .systemGray3
+        imageView.tintColor = SG.accent
         imageView.translatesAutoresizingMaskIntoConstraints = false
         return imageView
     }()
     
     private lazy var statusLabel: UILabel = {
         let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 14, weight: .regular)
+        label.font = SG.sans(14, .regular)
         label.textAlignment = .center
-        label.textColor = .tertiaryLabel
+        label.textColor = SG.mutedFg
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
     }()
     
     private lazy var activityIndicator: UIActivityIndicatorView = {
         let indicator = UIActivityIndicatorView(style: .medium)
+        indicator.color = SG.mutedFg
         indicator.hidesWhenStopped = true
         indicator.translatesAutoresizingMaskIntoConstraints = false
         return indicator
@@ -68,9 +69,9 @@ final class LockedIdleViewController: UIViewController {
     
     private lazy var errorLabel: UILabel = {
         let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 14, weight: .medium)
+        label.font = SG.sans(14, .medium)
         label.textAlignment = .center
-        label.textColor = .systemRed
+        label.textColor = SG.deny
         label.numberOfLines = 0
         label.translatesAutoresizingMaskIntoConstraints = false
         label.isHidden = true
@@ -243,12 +244,12 @@ final class LockedIdleViewController: UIViewController {
     
     private func updateReaderStatus() {
         if BadgeReaderManager.shared.isConnected {
-            statusLabel.text = "Badge reader connected - Ready to scan"
-            statusLabel.textColor = .systemGreen
+            statusLabel.text = "Badge reader connected — Ready to scan"
+            statusLabel.textColor = SG.accent
             activityIndicator.stopAnimating()
         } else {
             statusLabel.text = "No badge reader detected"
-            statusLabel.textColor = .systemOrange
+            statusLabel.textColor = SG.mutedFg
             activityIndicator.startAnimating()
         }
     }

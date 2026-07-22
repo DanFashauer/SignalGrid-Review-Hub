@@ -33,7 +33,7 @@ final class ActiveSessionViewController: UIViewController {
     
     private lazy var profileHeaderView: UIView = {
         let view = UIView()
-        view.backgroundColor = .systemBlue
+        view.backgroundColor = SG.primary
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
     }()
@@ -85,7 +85,7 @@ final class ActiveSessionViewController: UIViewController {
     
     private lazy var sessionStatusBar: UIView = {
         let view = UIView()
-        view.backgroundColor = .secondarySystemBackground
+        view.backgroundColor = SG.card
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
     }()
@@ -93,7 +93,7 @@ final class ActiveSessionViewController: UIViewController {
     private lazy var sessionIcon: UIImageView = {
         let imageView = UIImageView()
         imageView.image = UIImage(systemName: "clock.fill")
-        imageView.tintColor = .systemGreen
+        imageView.tintColor = SG.accent
         imageView.contentMode = .scaleAspectFit
         imageView.translatesAutoresizingMaskIntoConstraints = false
         return imageView
@@ -102,7 +102,7 @@ final class ActiveSessionViewController: UIViewController {
     private lazy var sessionStatusLabel: UILabel = {
         let label = UILabel()
         label.font = UIFont.systemFont(ofSize: 14, weight: .medium)
-        label.textColor = .label
+        label.textColor = SG.foreground
         label.text = "Session Active"
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
@@ -111,7 +111,7 @@ final class ActiveSessionViewController: UIViewController {
     private lazy var sessionTimerLabel: UILabel = {
         let label = UILabel()
         label.font = UIFont.monospacedDigitSystemFont(ofSize: 14, weight: .semibold)
-        label.textColor = .systemGreen
+        label.textColor = SG.accent
         label.textAlignment = .right
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
@@ -122,7 +122,7 @@ final class ActiveSessionViewController: UIViewController {
         button.setTitle("End Session", for: .normal)
         button.setTitleColor(.white, for: .normal)
         button.titleLabel?.font = UIFont.systemFont(ofSize: 14, weight: .semibold)
-        button.backgroundColor = .systemRed
+        button.backgroundColor = SG.deny
         button.layer.cornerRadius = 8
         button.addTarget(self, action: #selector(endSessionTapped), for: .touchUpInside)
         button.translatesAutoresizingMaskIntoConstraints = false
@@ -133,8 +133,8 @@ final class ActiveSessionViewController: UIViewController {
     
     private lazy var requiredAppsHeader: UILabel = {
         let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 18, weight: .bold)
-        label.textColor = .label
+        label.font = SG.sans(18, .bold)
+        label.textColor = SG.foreground
         label.text = "Required Apps"
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
@@ -156,8 +156,8 @@ final class ActiveSessionViewController: UIViewController {
     
     private lazy var optionalAppsHeader: UILabel = {
         let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 18, weight: .bold)
-        label.textColor = .label
+        label.font = SG.sans(18, .bold)
+        label.textColor = SG.foreground
         label.text = "Available Apps"
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
@@ -181,8 +181,8 @@ final class ActiveSessionViewController: UIViewController {
     
     private lazy var quickActionsHeader: UILabel = {
         let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 18, weight: .bold)
-        label.textColor = .label
+        label.font = SG.sans(18, .bold)
+        label.textColor = SG.foreground
         label.text = "Quick Actions"
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
@@ -201,8 +201,8 @@ final class ActiveSessionViewController: UIViewController {
     
     private lazy var restrictionsHeader: UILabel = {
         let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 18, weight: .bold)
-        label.textColor = .label
+        label.font = SG.sans(18, .bold)
+        label.textColor = SG.foreground
         label.text = "Session Restrictions"
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
@@ -268,7 +268,7 @@ final class ActiveSessionViewController: UIViewController {
     // MARK: - Setup
     
     private func setupUI() {
-        view.backgroundColor = .systemGroupedBackground
+        view.backgroundColor = SG.background
         
         // Add scroll view
         view.addSubview(scrollView)
@@ -430,7 +430,7 @@ final class ActiveSessionViewController: UIViewController {
         let lockButton = createQuickActionButton(
             icon: "lock.fill",
             title: "Lock",
-            color: .systemOrange
+            color: SG.accent
         )
         lockButton.addTarget(self, action: #selector(lockDeviceTapped), for: .touchUpInside)
         
@@ -438,7 +438,7 @@ final class ActiveSessionViewController: UIViewController {
         let refreshButton = createQuickActionButton(
             icon: "arrow.clockwise",
             title: "Refresh",
-            color: .systemBlue
+            color: SG.accent
         )
         refreshButton.addTarget(self, action: #selector(refreshSessionTapped), for: .touchUpInside)
         
@@ -446,7 +446,7 @@ final class ActiveSessionViewController: UIViewController {
         let hostAppButton = createQuickActionButton(
             icon: "cross.case.fill",
             title: "Host App",
-            color: .systemTeal
+            color: SG.accent
         )
         hostAppButton.addTarget(self, action: #selector(hostAppTapped), for: .touchUpInside)
 
@@ -454,7 +454,7 @@ final class ActiveSessionViewController: UIViewController {
         let helpButton = createQuickActionButton(
             icon: "questionmark.circle.fill",
             title: "Help",
-            color: .systemPurple
+            color: SG.accent
         )
         helpButton.addTarget(self, action: #selector(helpTapped), for: .touchUpInside)
 
@@ -531,7 +531,7 @@ final class ActiveSessionViewController: UIViewController {
         
         // Update header color based on theme if available
         if let primaryColor = session.persona.workspaceConfig.theme.primaryColor as String? {
-            profileHeaderView.backgroundColor = UIColor(hex: primaryColor) ?? .systemBlue
+            profileHeaderView.backgroundColor = UIColor(hex: primaryColor) ?? SG.primary
         }
         
         // Configure restrictions
@@ -565,25 +565,25 @@ final class ActiveSessionViewController: UIViewController {
     
     private func addRestrictionItem(icon: String, title: String, value: String) {
         let container = UIView()
-        container.backgroundColor = .secondarySystemGroupedBackground
+        container.backgroundColor = SG.card
         container.layer.cornerRadius = 8
         container.translatesAutoresizingMaskIntoConstraints = false
         
         let iconView = UIImageView(image: UIImage(systemName: icon))
-        iconView.tintColor = .systemBlue
+        iconView.tintColor = SG.accent
         iconView.contentMode = .scaleAspectFit
         iconView.translatesAutoresizingMaskIntoConstraints = false
         
         let titleLabel = UILabel()
         titleLabel.text = title
         titleLabel.font = UIFont.systemFont(ofSize: 14, weight: .medium)
-        titleLabel.textColor = .label
+        titleLabel.textColor = SG.foreground
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         
         let valueLabel = UILabel()
         valueLabel.text = value
         valueLabel.font = UIFont.systemFont(ofSize: 14, weight: .regular)
-        valueLabel.textColor = .secondaryLabel
+        valueLabel.textColor = SG.mutedFg
         valueLabel.textAlignment = .right
         valueLabel.translatesAutoresizingMaskIntoConstraints = false
         
@@ -650,15 +650,15 @@ final class ActiveSessionViewController: UIViewController {
             
             // Change color based on remaining time
             if remaining < 60 {
-                sessionTimerLabel.textColor = .systemRed
+                sessionTimerLabel.textColor = SG.deny
             } else if remaining < 300 {
-                sessionTimerLabel.textColor = .systemOrange
+                sessionTimerLabel.textColor = SG.review
             } else {
-                sessionTimerLabel.textColor = .systemGreen
+                sessionTimerLabel.textColor = SG.accent
             }
         } else {
             sessionTimerLabel.text = "Expired"
-            sessionTimerLabel.textColor = .systemRed
+            sessionTimerLabel.textColor = SG.deny
         }
     }
     
@@ -727,7 +727,7 @@ final class ActiveSessionViewController: UIViewController {
         let toast = UILabel()
         toast.text = message
         toast.textColor = .white
-        toast.backgroundColor = .systemGreen
+        toast.backgroundColor = SG.allow
         toast.textAlignment = .center
         toast.font = UIFont.systemFont(ofSize: 14, weight: .medium)
         toast.layer.cornerRadius = 8
@@ -865,7 +865,7 @@ extension ActiveSessionViewController: UICollectionViewDelegateFlowLayout {
 final class HomeScreenAppCell: UICollectionViewCell {
     private lazy var iconContainerView: UIView = {
         let view = UIView()
-        view.backgroundColor = .systemBlue.withAlphaComponent(0.1)
+        view.backgroundColor = SG.primary.withAlphaComponent(0.18)
         view.layer.cornerRadius = 20
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
@@ -874,14 +874,15 @@ final class HomeScreenAppCell: UICollectionViewCell {
     private lazy var iconImageView: UIImageView = {
         let imageView = UIImageView()
         imageView.contentMode = .scaleAspectFit
-        imageView.tintColor = .systemBlue
+        imageView.tintColor = SG.accent
         imageView.translatesAutoresizingMaskIntoConstraints = false
         return imageView
     }()
     
     private lazy var titleLabel: UILabel = {
         let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 12, weight: .medium)
+        label.font = SG.sans(12, .medium)
+        label.textColor = SG.foreground
         label.textAlignment = .center
         label.numberOfLines = 2
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -890,7 +891,7 @@ final class HomeScreenAppCell: UICollectionViewCell {
     
     private lazy var statusIndicator: UIView = {
         let view = UIView()
-        view.backgroundColor = .systemGreen
+        view.backgroundColor = SG.allow
         view.layer.cornerRadius = 4
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
@@ -940,9 +941,9 @@ final class HomeScreenAppCell: UICollectionViewCell {
         
         // Check if app has a deep link
         if app.isDeepLink {
-            statusIndicator.backgroundColor = .systemBlue
+            statusIndicator.backgroundColor = SG.accent
         } else {
-            statusIndicator.backgroundColor = .systemGreen
+            statusIndicator.backgroundColor = SG.allow
         }
     }
 }

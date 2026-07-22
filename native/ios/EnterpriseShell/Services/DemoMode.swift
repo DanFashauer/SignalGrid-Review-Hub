@@ -138,7 +138,7 @@ enum DemoMode {
                     DashboardWidget(id: "w-status", type: "status", title: "Session Status", position: 0, config: [:]),
                     DashboardWidget(id: "w-location", type: "location", title: p.area, position: 1, config: [:])
                 ],
-                theme: ThemeConfig(primaryColor: p.color, accentColor: "#30D158", logoUrl: nil)
+                theme: ThemeConfig(primaryColor: p.color, accentColor: "#5E8F73", logoUrl: nil)
             ),
             appLaunchConfig: AppLaunchConfig(
                 requiredApps: p.required,
@@ -175,7 +175,7 @@ enum DemoMode {
         case "warehouse":
             return LocationProfile(
                 roleId: "warehouse-operator", roleName: "Warehouse Operator",
-                area: "Dock 4 · Building B", color: "#FF9500",
+                area: "Dock 4 · Building B", color: "#4F8C87",
                 required: [app("scanner", "Scanner", "https://example.com/scanner"),
                            app("picklist", "Pick List", "https://example.com/picklist"),
                            app("inventory", "Inventory", "https://example.com/inventory")],
@@ -184,7 +184,7 @@ enum DemoMode {
         case "clinic", "hospital":
             return LocationProfile(
                 roleId: "clinical-operator", roleName: "Clinical Operator",
-                area: "Ward 3 · North Wing", color: "#5E5CE6",
+                area: "Ward 3 · North Wing", color: "#4F8C87",
                 required: [app("ehr", "Patient Chart", "https://example.com/ehr"),
                            app("rounds", "Rounds", "https://example.com/rounds"),
                            app("meds", "Med Admin", "https://example.com/meds")],
@@ -193,7 +193,7 @@ enum DemoMode {
         default: // office
             return LocationProfile(
                 roleId: "shift-operator", roleName: "Shift Operator",
-                area: "Floor 2 · HQ", color: "#0A84FF",
+                area: "Floor 2 · HQ", color: "#4F8C87",
                 required: [app("timeclock", "Time Clock", "https://example.com/timeclock"),
                            app("tasks", "Task Board", "https://example.com/tasks"),
                            app("email", "Email", "https://example.com/email")],

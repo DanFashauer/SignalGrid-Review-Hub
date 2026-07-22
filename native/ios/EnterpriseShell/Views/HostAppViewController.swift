@@ -507,7 +507,7 @@ final class HostAppViewController: UIViewController {
     // MARK: - Behind the glass (operator-only)
 
     private func buildGlassPanel() {
-        glassPanel.backgroundColor = UIColor(red: 0.098, green: 0.118, blue: 0.137, alpha: 1)
+        glassPanel.backgroundColor = SG.card
         glassPanel.layer.cornerRadius = 14
         glassPanel.translatesAutoresizingMaskIntoConstraints = false
         glassPanel.isHidden = true
@@ -516,17 +516,17 @@ final class HostAppViewController: UIViewController {
         let heading = UILabel()
         heading.text = "BEHIND THE GLASS · operator view · the worker never sees this"
         heading.font = .monospacedSystemFont(ofSize: 9, weight: .semibold)
-        heading.textColor = UIColor(red: 0.454, green: 0.671, blue: 0.647, alpha: 1)
+        heading.textColor = SG.accent
         heading.numberOfLines = 0
 
         glassAction.font = .monospacedSystemFont(ofSize: 12, weight: .medium)
         glassAction.textColor = .white
         glassVerdict.font = .monospacedSystemFont(ofSize: 15, weight: .bold)
         glassBody.font = .systemFont(ofSize: 12)
-        glassBody.textColor = UIColor(white: 0.75, alpha: 1)
+        glassBody.textColor = SG.mutedFg
         glassBody.numberOfLines = 0
         glassWhy.font = .monospacedSystemFont(ofSize: 10, weight: .regular)
-        glassWhy.textColor = UIColor(white: 0.55, alpha: 1)
+        glassWhy.textColor = SG.mutedFg.withAlphaComponent(0.7)
         glassWhy.numberOfLines = 0
 
         let s = UIStackView(arrangedSubviews: [heading, glassAction, glassVerdict, glassBody, glassWhy])
@@ -571,14 +571,7 @@ final class HostAppViewController: UIViewController {
         #endif
     }
 
-    private func verdictColor(_ v: String) -> UIColor {
-        switch v {
-        case "auto", "applied": return UIColor(red: 0.435, green: 0.659, blue: 0.549, alpha: 1)
-        case "step_up", "assist": return UIColor(red: 0.761, green: 0.604, blue: 0.4, alpha: 1)
-        case "blocked", "deny", "restrict": return UIColor(red: 0.753, green: 0.455, blue: 0.455, alpha: 1)
-        default: return .white
-        }
-    }
+    private func verdictColor(_ v: String) -> UIColor { SG.decisionColor(v) }
 
     // MARK: - Auto-walk (simulator screenshot driver)
 

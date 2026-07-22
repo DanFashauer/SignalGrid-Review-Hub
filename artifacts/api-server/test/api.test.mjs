@@ -456,6 +456,12 @@ async function run() {
   });
   check("atlas key cannot resolve northwind subjects (404)", atlasEval.status === 404);
 
+  // ── DDM (macOS 27) — enforcement-currency fail-safe ──────────────────────
+  const ddm = await req("GET", "/cp/v1/ddm");
+  check("ddm surfaces update-enforcement currency + a dead-enforcement count", ddm.status === 200 && typeof ddm.json?.summary?.enforcementDead === "number" && ddm.json.summary.enforcementDead >= 1);
+  const deadEnf = (ddm.json?.signals ?? []).find((s) => s.enforcementCurrency === "dead");
+  check("ddm: a device with dead update enforcement raises step-up (not trusted as patched)", deadEnf && deadEnf.assurance === "raise_step_up");
+
   // ── build-the-grid control-plane surface (decision-fabric layer, live) ───
   const coverage = await req("GET", "/cp/v1/grid/coverage");
   check("grid coverage responds 200", coverage.status === 200);

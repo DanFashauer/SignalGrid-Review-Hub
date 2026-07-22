@@ -62,6 +62,20 @@ Jamf remains responsible for Apple device lifecycle management, app/profile depl
 
 The sequence remains conservative: Microsoft Intune / Entra is the first concrete proof; Jamf is a high-value follow-on proof for Apple-heavy shared-device and frontline environments; Fleet / Workspace ONE / broader UEM paths follow after that. Review Hub does not claim a current Jamf partnership, integration, certification, production deployment, or replacement claim.
 
+## macOS endpoint posture — the grid-collected path (built, fixture-backed)
+
+Where an Apple UEM (Jamf, Intune) is present, SignalGrid consumes its posture via that vendor's API — the `api` acquisition path. But many Macs are **not** enrolled, and no cloud API hands you a Mac's live security state faithfully in real time. That is the `grid_collected` path (see [Signal sourcing](SIGNAL_SOURCING.md)): SignalGrid reads the endpoint itself, **read-only**, and does the lifting.
+
+The `macos-posture` connector (`lib/integrations/src/integrations/macos-posture`) implements exactly this. It ingests a read-only posture report from the companion open-source [`signalgrid-mcp`](https://github.com/DanFashauer/signalgrid-mcp) server — SIP, FileVault, Gatekeeper, firewall, MDM enrollment, auto-update settings, and whether XProtect definitions are readable — and normalizes it into one endpoint-hardening posture the fabric fuses (`fromMacosPosture` → a `device_posture` signal on the unified action ladder).
+
+It is fail-safe by construction, mirroring the MCP server's own discipline:
+
+- A hardening control the collector reports **off** → the device is `weakened` and the verdict restricts.
+- A control whose state **could not be read** (needs elevation, missing binary, timeout) → `unverified`, which *raises* the assurance bar (step-up). Unknown ≠ off, and unknown ≠ on — an unreadable Mac is **never** fused as compliant.
+- A Mac with **no report at all** is a blind spot (`unknown`), never `hardened`.
+
+Proven fully offline by `pnpm run proof:macos-posture` (deterministic, no device access, no network). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid changes no macOS setting — every signal is read-only, and this is not a vendor partnership or certification claim.
+
 ## Frontline context signal roadmap
 
 Future healthcare and frontline context signals are documented in [Frontline context signals roadmap](FRONTLINE_CONTEXT_SIGNALS.md). These include Intune enrollment restrictions, device limits, iOS/iPadOS enrollment type, Apple Business Manager / ADE state, supervision, Jamf Pro context, Kontakt.io / RTLS candidate signals, location, staff safety alerts, nurse call events, dock/return-station events, and badge / QR / NFC physical context. They are not first-proof requirements; they become follow-on or future roadmap inputs after the Microsoft posture proof and UEM posture model are grounded.

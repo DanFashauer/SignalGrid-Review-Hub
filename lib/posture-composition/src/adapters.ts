@@ -8,6 +8,7 @@ import type { CustodyVerdict } from "@workspace/integrations/rtls-custody";
 import type { PeripheralVerdict } from "@workspace/integrations/peripheral-control";
 import type { DlpVerdict } from "@workspace/integrations/data-protection";
 import type { CredentialExposureVerdict } from "@workspace/integrations/credential-exposure";
+import type { MacosPostureVerdict } from "@workspace/integrations/macos-posture";
 import type { GraphPostureSignal } from "@workspace/integrations/graph";
 import type { Detection } from "@workspace/event-contract";
 import { ACTION_RANK } from "./compose";
@@ -73,6 +74,14 @@ export function fromCredentialExposure(v: CredentialExposureVerdict): Composable
   // are already on the unified ladder. A live high-value secret on the endpoint
   // escalates — contain the blast radius of a device assumed compromised.
   return { kind: "credential_exposure", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromMacosPosture(v: MacosPostureVerdict): ComposableSignal {
+  // macOS endpoint-hardening from the grid_collected path (signalgrid-mcp). Its
+  // actions (none|monitor|step_up|alert|restrict|escalate) are already on the
+  // unified ladder. Fail-safe: a disabled control restricts, and an unverifiable
+  // control steps up — an unreadable Mac is never fused as compliant.
+  return { kind: "device_posture", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 /** Cross-domain detection severity → unified action. */

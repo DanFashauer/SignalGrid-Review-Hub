@@ -61,6 +61,7 @@
     "proof:peripheral-control": "tsx ./src/peripheral-control-proof.ts",
     "proof:data-protection": "tsx ./src/data-protection-proof.ts",
     "proof:credential-exposure": "tsx ./src/credential-exposure-proof.ts",
+    "proof:macos-posture": "tsx ./src/macos-posture-proof.ts",
     "proof:fabric-scenario": "tsx ./src/fabric-scenario-proof.ts"
   },
   "dependencies": {

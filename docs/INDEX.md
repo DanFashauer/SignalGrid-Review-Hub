@@ -35,6 +35,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Zero-touch provisioning](ZERO_TOUCH_PROVISIONING.md): a device setup recorded once (Designer / Device Action Recorder) as versionable config, CI-validated, and replayed by the Grid on serial/network join — simulated by default, real enforcement only when an owner enables it. `@workspace/flows` provisioning; `proof:provisioning`.
 - [Inspiration & positioning references](inspiration/INSPIRATION.md): the IAM-landscape framing (Domains → Capabilities → Outcomes) mapped to SignalGrid, plus verdict-first XDR fusion and the NIST SP 800-207 policy-engine model.
 - [Operator console — Build the grid surfaces](OPERATOR_GRID_CONSOLE.md): the mobile PWA's capstone Grid overview plus five read-only detail views (grid intelligence, device recorder, app resilience, signal sourcing, grid config), each mapped to its `/cp/v1` read and `@workspace/flows` model — the "see the grid in action" entry point.
+- [Architecture — signals in, decisions out](architecture.html): a one-page, self-contained diagram of the whole fabric — every vendor system / database / cloud-SaaS as a read-only signal, fused into one verdict (allow/step-up/restrict/deny), orchestrated out (verdict · incident · action · webhook · audit), with the honest sourcing boundary and built-vs-roadmap marked.
 - Live demo (self-contained, offline): [`docs/fabric-console.html`](fabric-console.html) — add signals + workflows and watch the Grid handle real situations by itself.
 
 ## Strategy and roadmap

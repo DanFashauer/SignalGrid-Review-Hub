@@ -44,6 +44,7 @@ reads as an over-claim.
 | Signal sourcing — API / native / grid-collected / gap | Built (`lib/flows` signal-sourcing, proof, operator view) |
 | **Workflows as code** — declarative config, CI-validated | Built (`lib/flows` grid-config, proof, operator view) |
 | Zero-touch provisioning · Designer · Device Action Recorder | Built, simulated (`lib/flows` provisioning, proof, Device Recorder operator view); real apply stays owner-gated |
+| Teardown-proof — prove the reversal before deploy | Built, simulated (`lib/flows` provisioning-teardown, proof); a recording is not deploy-ready until a dependency-ordered, fail-safe teardown is proven — see [Teardown-proof](PROVISIONING_TEARDOWN_PROOF.md) |
 | Application resilience — work through cloud downtime, PHI-safely | Built (`lib/flows` app-resilience, proof, operator view) |
 | Real write-back "act plane" (quarantine/lock/revoke) | Roadmap — approval-gated, simulated until an owner enables it |
 

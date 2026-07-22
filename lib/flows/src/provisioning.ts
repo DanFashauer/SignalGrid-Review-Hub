@@ -56,6 +56,13 @@ export interface DeviceSetupRecording {
   match: DeviceMatch;
   triggers: SetupTrigger[];
   steps: SetupStep[];
+  /**
+   * The recorded REVERSAL of this setup. Optional in the type for back-compat, but
+   * a recording is not deploy-ready until it is present and proven — see
+   * `provisioning-teardown.ts` (`deployReady`). Prove the retreat before you trust
+   * the deploy.
+   */
+  teardown?: import("./provisioning-teardown").TeardownPlanSpec;
 }
 
 // ── validation ────────────────────────────────────────────────────────────────

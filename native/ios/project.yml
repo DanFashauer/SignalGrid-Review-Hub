@@ -45,15 +45,35 @@ targets:
     # screen and broken capabilities. The committed files are used as-is via the
     # INFOPLIST_FILE and CODE_SIGN_ENTITLEMENTS build settings above.
 
+  # Hermetic logic tests for the decision engine + Assist planner ports. These
+  # compile the pure-Foundation port sources directly (no host app, no UIKit), so
+  # they run fast and reliably in CI without launching the simulator app.
+  EnterpriseShellTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: EnterpriseShellTests
+      - path: EnterpriseShell/Services/DecisionEngine.swift
+      - path: EnterpriseShell/Services/AppWorkflows.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.enterprise.shell.tests
+        GENERATE_INFOPLIST_FILE: "YES"
+        SWIFT_VERSION: "5.9"
+        TARGETED_DEVICE_FAMILY: "1,2"
+
 schemes:
   EnterpriseShell:
     build:
       targets:
         EnterpriseShell: all
+        EnterpriseShellTests: [test]
     run:
       config: Debug
     test:
       config: Debug
+      targets:
+        - EnterpriseShellTests
     profile:
       config: Release
     analyze:

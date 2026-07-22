@@ -157,6 +157,9 @@ jobs:
       - name: Provisioning (zero-touch setup — record/validate/apply) proof
         run: pnpm run proof:provisioning
 
+      - name: Provisioning teardown-proof (prove the retreat before deploy)
+        run: pnpm run proof:provisioning-teardown
+
       - name: Grid-lifecycle (capstone — 5 models end-to-end) proof
         run: pnpm run proof:grid-lifecycle
 

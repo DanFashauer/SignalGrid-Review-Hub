@@ -56,6 +56,13 @@ export interface DeviceSetupRecording {
   match: DeviceMatch;
   triggers: SetupTrigger[];
   steps: SetupStep[];
+  /**
+   * The recorded REVERSAL of this setup. Optional in the type for back-compat, but
+   * a recording is not deploy-ready until it is present and proven — see
+   * `provisioning-teardown.ts` (`deployReady`). Prove the retreat before you trust
+   * the deploy.
+   */
+  teardown?: import("./provisioning-teardown").TeardownPlanSpec;
 }
 
 // ── validation ────────────────────────────────────────────────────────────────
@@ -171,7 +178,7 @@ export interface PlanOptions {
   enforcementEnabled?: boolean;
 }
 
-function deviceMatches(rec: DeviceSetupRecording, device: ProvisioningDevice): boolean {
+export function deviceMatches(rec: DeviceSetupRecording, device: ProvisioningDevice): boolean {
   const m = rec.match ?? {};
   const hasSelector = (typeof m.serialPrefix === "string" && m.serialPrefix.length > 0) || (typeof m.model === "string" && m.model.length > 0);
   if (!hasSelector) return false; // fail closed — never match everything

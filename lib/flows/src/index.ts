@@ -371,6 +371,7 @@ export function gridIntelligence(flows: Flow[], signalStates: SignalState[]): Gr
 
 import { DEMO_FLOWS } from "./catalog";
 export { DEMO_FLOWS } from "./catalog";
+export { FACTORY_FLOWS, FACTORY_SITUATIONS, FACTORY_SIGNAL_SOURCES } from "./factory";
 
 // Grid coverage — which situations the Grid handles on its own given the active
 // workflows + wired signals (the model behind "build the grid").

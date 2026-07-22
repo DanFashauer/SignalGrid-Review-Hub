@@ -92,6 +92,16 @@ Fail-safe by construction, matched to the plant-floor stakes:
 
 Proven fully offline by `pnpm run proof:ot-posture` (34 checks, no plant access, no network). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid changes no device setting — every signal is read-only, and this is not a vendor partnership or certification claim.
 
+## Factory-floor workflows — automating the plant (built, fixture-backed)
+
+The OT posture connector answers *how trustworthy is this industrial device?*; the factory workflow pack (`lib/flows/src/factory.ts`) is what the Grid **does** about it — the same allow / step-up / restrict / deny discipline applied to plant-floor actions, owner- and accountability-governed:
+
+- **PLC firmware update** — staging is automated; the actual push is **dual-approval**; an emergency rollback is a safety-netted downtime override (last-known-good image + auto-revert + line-stop interlock) so a bad flash never bricks the line.
+- **Production line command** — reading status is automated; issuing a command needs **admin approval**; an e-stop override is safety-netted.
+- **OT exposure containment** — monitor is automated; restrict is admin-approved; **segment/quarantine is dual-approval** (it can stop a line).
+
+Proven by `pnpm run proof:factory-flows` (16 checks, fully offline): the pack validates as governance-complete config, covers its factory situations at health, and **fails safe** — an ungettable OT signal propagates to a coverage gap (never a false green), surfaced as `required_signal_unavailable`. The riskiest plant actions can never auto-run.
+
 ## Frontline context signal roadmap
 
 Future healthcare and frontline context signals are documented in [Frontline context signals roadmap](FRONTLINE_CONTEXT_SIGNALS.md). These include Intune enrollment restrictions, device limits, iOS/iPadOS enrollment type, Apple Business Manager / ADE state, supervision, Jamf Pro context, Kontakt.io / RTLS candidate signals, location, staff safety alerts, nurse call events, dock/return-station events, and badge / QR / NFC physical context. They are not first-proof requirements; they become follow-on or future roadmap inputs after the Microsoft posture proof and UEM posture model are grounded.

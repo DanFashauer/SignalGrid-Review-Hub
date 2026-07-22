@@ -163,6 +163,9 @@ jobs:
       - name: Provisioning teardown-proof (prove the retreat before deploy)
         run: pnpm run proof:provisioning-teardown
 
+      - name: Factory-floor workflows (manufacturing/OT) proof
+        run: pnpm run proof:factory-flows
+
       - name: Grid-lifecycle (capstone — 6 models, provision→decommission) proof
         run: pnpm run proof:grid-lifecycle
 

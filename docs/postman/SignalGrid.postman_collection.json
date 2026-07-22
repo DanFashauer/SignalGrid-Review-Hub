@@ -1350,6 +1350,28 @@
           }
         },
         {
+          "name": "Signal sourcing (api / native / grid-collected / gap)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cp/v1/grid/sourcing",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cp",
+                "v1",
+                "grid",
+                "sourcing"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
           "name": "Grid config (workflows as code — validation)",
           "request": {
             "method": "GET",

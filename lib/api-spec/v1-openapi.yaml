@@ -494,6 +494,57 @@ paths:
       responses:
         "200": { description: Normalized DDM signals + assurance hints }
 
+  /cp/v1/grid/coverage:
+    get:
+      operationId: cpGridCoverage
+      tags: [control-plane]
+      security: []
+      summary: Which situations the Grid handles on its own, given active workflows + sourced signals
+      responses:
+        "200": { description: Sourcing summary + per-situation coverage }
+
+  /cp/v1/grid/sourcing:
+    get:
+      operationId: cpGridSourcing
+      tags: [control-plane]
+      security: []
+      summary: How each signal reaches the Grid — api / native / grid-collected / gap — and at what fidelity
+      responses:
+        "200": { description: Sourcing summary + per-signal path and fidelity }
+
+  /cp/v1/grid/config:
+    get:
+      operationId: cpGridConfig
+      tags: [control-plane]
+      security: []
+      summary: Workflows as code — the declarative grid and the CI validation run before it runs
+      responses:
+        "200": { description: Validation result, summary, issues, and the declarative config }
+
+  /cp/v1/grid/provisioning:
+    get:
+      operationId: cpGridProvisioning
+      tags: [control-plane]
+      security: []
+      summary: Zero-touch device setup plan (simulated) — a non-matching device is never touched
+      parameters:
+        - name: serial
+          in: query
+          required: false
+          schema: { type: string }
+          description: Preview the plan against a chosen device serial (defaults to a matching preset).
+      responses:
+        "200": { description: Recording, validation, chosen device, preset devices, and the simulated plan }
+
+  /cp/v1/apps/resilience:
+    get:
+      operationId: cpAppsResilience
+      tags: [control-plane]
+      security: []
+      summary: Each app's availability turned into a PHI-safe resilience decision (fallbacks described, not executed)
+      responses:
+        "200": { description: Fleet resilience rollup with per-app posture }
+
   /v1/sessions/start:
     post:
       operationId: startSession

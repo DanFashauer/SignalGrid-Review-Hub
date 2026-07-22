@@ -19,8 +19,11 @@ SignalGrid's api-server exposes two surfaces on one origin (default
 - **`/cp/v1` control-plane surface** (no auth in the demo) — the SaaS management
   plane: tenants, sites, edge nodes (local decision planes), fleet devices,
   policy bundles pushed **down** (checksummed), telemetry ingested **up**, and a
-  fleet-health rollup with a per-vertical breakdown. The control plane manages
-  and distributes; it never decides — the edge core does. See
+  fleet-health rollup with a per-vertical breakdown. It also serves the read-only
+  **build-the-grid** reads behind the operator console (see
+  [`OPERATOR_GRID_CONSOLE.md`](./OPERATOR_GRID_CONSOLE.md)) — `grid/coverage`,
+  `grid/sourcing`, `grid/config`, `grid/provisioning`, and `apps/resilience`. The
+  control plane manages and distributes; it never decides — the edge core does. See
   [`DEPLOYMENT_MODELS.md`](./DEPLOYMENT_MODELS.md).
 
 The authoritative machine-readable contract for `/v1` is
@@ -29,10 +32,12 @@ The authoritative machine-readable contract for `/v1` is
 ## Ways to connect — pick the one that fits
 
 ### 1. Postman collection (import and click)
-A ready-made collection covering **every** endpoint (public + `/v1`) is committed
-at [`docs/postman/`](./postman/):
+A ready-made collection covering **every** endpoint (public + `/v1` + the
+`/cp/v1` control plane, including the build-the-grid reads — grid coverage,
+signal sourcing, config, provisioning, and app resilience) is committed at
+[`docs/postman/`](./postman/):
 
-- `SignalGrid.postman_collection.json` — 38 requests in three folders, with
+- `SignalGrid.postman_collection.json` — 63 requests in three folders, with
   example bodies.
 - `SignalGrid.postman_environment.json` — `base_url` + a demo `token` + the path
   variables (`decisionId`, `policyId`, …).

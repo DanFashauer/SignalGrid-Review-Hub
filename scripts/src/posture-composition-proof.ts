@@ -12,6 +12,7 @@ import {
   fromLocation,
   fromCustody,
   fromDataProtection,
+  fromCredentialExposure,
   fromIdentityRisk,
   fromPeripheral,
   fromReachability,
@@ -24,6 +25,7 @@ import type { IdentityRiskVerdict } from "@workspace/integrations/identity-risk"
 import type { CustodyVerdict } from "@workspace/integrations/rtls-custody";
 import type { PeripheralVerdict } from "@workspace/integrations/peripheral-control";
 import type { DlpVerdict } from "@workspace/integrations/data-protection";
+import type { CredentialExposureVerdict } from "@workspace/integrations/credential-exposure";
 
 let passed = 0;
 const failures: string[] = [];
@@ -85,6 +87,14 @@ check("dlp policy_unenforced → step_up",
   fromDataProtection(dlp({ posture: "policy_unenforced", reasonCode: "POLICY_UNENFORCED", recommendedAction: "step_up" })).action === "step_up");
 check("dlp protected → none, and its kind is 'data_protection'",
   fromDataProtection(dlp({})).action === "none" && fromDataProtection(dlp({})).kind === "data_protection");
+check("credential-exposure active_credential_exposed → escalate",
+  fromCredentialExposure(credx({ posture: "active_credential_exposed", reasonCode: "HIGH_VALUE_SECRET_EXPOSED", recommendedAction: "escalate" })).action === "escalate");
+check("credential-exposure secrets_exposed → alert",
+  fromCredentialExposure(credx({ posture: "secrets_exposed", reasonCode: "SECRETS_EXPOSED", recommendedAction: "alert" })).action === "alert");
+check("credential-exposure scanner_unenrolled → step_up",
+  fromCredentialExposure(credx({ posture: "scanner_unenrolled", reasonCode: "SCANNER_UNENROLLED", recommendedAction: "step_up" })).action === "step_up");
+check("credential-exposure clean → none, and its kind is 'credential_exposure'",
+  fromCredentialExposure(credx({})).action === "none" && fromCredentialExposure(credx({})).kind === "credential_exposure");
 check("device posture disabled identity → escalate",
   fromDevicePosture(posture({ identityStatus: "disabled" })).action === "escalate");
 check("device posture non-compliant → restrict",
@@ -281,6 +291,20 @@ function dlp(over: Partial<DlpVerdict>): DlpVerdict {
     highestSeverity: "unknown",
     dlpPolicyEnforced: true,
     reasonCode: "NO_VIOLATIONS",
+    recommendedAction: "none",
+    ...over,
+  };
+}
+
+// Build a CredentialExposureVerdict with sane "clean" defaults, overriding as needed.
+function credx(over: Partial<CredentialExposureVerdict>): CredentialExposureVerdict {
+  return {
+    posture: "clean",
+    findingCount: 0,
+    exposedCount: 0,
+    highestSeverity: "unknown",
+    scannerEnrolled: true,
+    reasonCode: "NO_FINDINGS",
     recommendedAction: "none",
     ...over,
   };

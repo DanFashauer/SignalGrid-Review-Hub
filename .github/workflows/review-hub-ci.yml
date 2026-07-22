@@ -94,6 +94,9 @@ jobs:
       - name: Data-protection / DLP posture proof
         run: pnpm run proof:data-protection
 
+      - name: Credential-exposure (endpoint secrets) proof
+        run: pnpm run proof:credential-exposure
+
       - name: Posture-composition (unified signal fusion) proof
         run: pnpm run proof:posture-composition
 

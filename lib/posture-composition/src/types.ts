@@ -44,6 +44,7 @@ export type SignalKind =
   | "custody"
   | "peripheral"
   | "data_protection"
+  | "credential_exposure"
   | "detection";
 
 /** One dimension's contribution, already mapped onto the unified action ladder. */

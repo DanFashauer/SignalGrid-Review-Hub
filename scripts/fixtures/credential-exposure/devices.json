@@ -1,0 +1,28 @@
+{
+  "fixtureName": "credential-exposure",
+  "fixtureVersion": "2026-07-22.v1",
+  "note": "Public-safe synthetic endpoint secret-exposure inventory (illustrative findings only — no real secrets, device, or tenant). Models the developer/AI-agent laptop threat surface.",
+  "accessToken": "credx-fixture-read-token",
+  "devices": {
+    "c-clean": {
+      "record": { "deviceId": "c-clean", "scannerEnrolled": true, "findings": [], "source": "gitguardian" },
+      "expected": { "posture": "clean", "reasonCode": "NO_FINDINGS", "recommendedAction": "none", "findingCount": 0, "exposedCount": 0, "highestSeverity": "unknown", "scannerEnrolled": true }
+    },
+    "c-remediated": {
+      "record": { "deviceId": "c-remediated", "scannerEnrolled": true, "findings": [ { "findingId": "f-1", "location": "shell_history", "kind": "api_token", "severity": "high", "validity": "active", "remediation": "remediated" } ], "source": "gitguardian" },
+      "expected": { "posture": "remediated", "reasonCode": "FINDINGS_REMEDIATED", "recommendedAction": "monitor", "findingCount": 1, "exposedCount": 0, "highestSeverity": "high", "scannerEnrolled": true }
+    },
+    "c-scanner-off": {
+      "record": { "deviceId": "c-scanner-off", "scannerEnrolled": false, "findings": [], "source": "wiz" },
+      "expected": { "posture": "scanner_unenrolled", "reasonCode": "SCANNER_UNENROLLED", "recommendedAction": "step_up", "findingCount": 0, "exposedCount": 0, "highestSeverity": "unknown", "scannerEnrolled": false }
+    },
+    "c-secret-low": {
+      "record": { "deviceId": "c-secret-low", "scannerEnrolled": true, "findings": [ { "findingId": "f-2", "location": "dotenv", "kind": "generic_secret", "severity": "low", "validity": "active", "remediation": "open" } ], "source": "truffle" },
+      "expected": { "posture": "secrets_exposed", "reasonCode": "SECRETS_EXPOSED", "recommendedAction": "alert", "findingCount": 1, "exposedCount": 1, "highestSeverity": "low", "scannerEnrolled": true }
+    },
+    "c-agent-key": {
+      "record": { "deviceId": "c-agent-key", "scannerEnrolled": true, "findings": [ { "findingId": "f-3", "location": "agent_config", "kind": "cloud_key", "severity": "critical", "validity": "active", "remediation": "open" } ], "source": "gitguardian" },
+      "expected": { "posture": "active_credential_exposed", "reasonCode": "HIGH_VALUE_SECRET_EXPOSED", "recommendedAction": "escalate", "findingCount": 1, "exposedCount": 1, "highestSeverity": "critical", "scannerEnrolled": true }
+    }
+  }
+}

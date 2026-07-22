@@ -82,10 +82,16 @@ export type AcquisitionMethod = "api" | "native" | "grid_collected" | "unavailab
 export type Fidelity = "high" | "medium" | "low" | "none";
 export interface SignalSourceRow { id: string; name: string; system: string; method: AcquisitionMethod; fidelity: Fidelity; wireable: boolean; gridLifted: boolean }
 export interface GridSourcingResp { summary: SourcingSummary; signals: SignalSourceRow[] }
+export interface GridConfigSignal { id: string; name: string; system: string; method: AcquisitionMethod }
+export interface GridConfigAction { key: string; label: string; approval: string }
+export interface GridConfigWorkflow { id: string; name: string; requiredSignals: string[]; actions: GridConfigAction[]; supportTeam: string; severityOnBreak: string }
+export interface GridConfigSituation { id: string; label: string; workflowId: string }
+export interface GridDeclarativeConfig { signals: GridConfigSignal[]; workflows: GridConfigWorkflow[]; situations: GridConfigSituation[] }
 export interface GridConfigResp {
   valid: boolean;
   summary: { signals: number; workflows: number; situations: number; errors: number; warnings: number; coveragePctAtFullHealth: number | null };
   issues: Array<{ severity: "error" | "warning"; code: string; subject: string; message: string }>;
+  config: GridDeclarativeConfig;
 }
 export type StepDisposition = "auto_apply" | "approval_required" | "held_simulated";
 export interface ProvisioningStep { key: string; label: string; kind: string; disposition: StepDisposition; reason: string }

@@ -41,9 +41,10 @@ reads as an over-claim.
 | Signal fusion → one verdict + one incident | Built (`lib/posture-composition`, `lib/incident-playbook`) |
 | Configurable workflows + health/self-heal/approvals | Built (`lib/flows`) |
 | Grid coverage — what the Grid handles on its own | Built (`lib/flows` grid-coverage, proof) |
-| Signal sourcing — API / native / grid-collected / gap | Built (`lib/flows` signal-sourcing, proof) |
-| **Workflows as code** — declarative config, CI-validated | Built (`lib/flows` grid-config, proof) |
-| Zero-touch provisioning · Designer · Device Action Recorder | Roadmap |
+| Signal sourcing — API / native / grid-collected / gap | Built (`lib/flows` signal-sourcing, proof, operator view) |
+| **Workflows as code** — declarative config, CI-validated | Built (`lib/flows` grid-config, proof, operator view) |
+| Zero-touch provisioning · Designer · Device Action Recorder | Built, simulated (`lib/flows` provisioning, proof, Device Recorder operator view); real apply stays owner-gated |
+| Application resilience — work through cloud downtime, PHI-safely | Built (`lib/flows` app-resilience, proof, operator view) |
 | Real write-back "act plane" (quarantine/lock/revoke) | Roadmap — approval-gated, simulated until an owner enables it |
 
 ## The honest boundary

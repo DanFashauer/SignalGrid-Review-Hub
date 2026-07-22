@@ -221,11 +221,26 @@ router.get("/cp/v1/grid/sourcing", (_req, res) => {
 });
 
 router.get("/cp/v1/grid/config", (_req, res) => {
+  // A lean projection of the declarative grid — the versionable artifact an org
+  // commits to Git — so the operator view can render what the pipeline validates.
+  const config = {
+    signals: GRID_CONFIG.signals.map((s) => ({ id: s.id, name: s.name, system: s.system, method: s.method })),
+    workflows: GRID_CONFIG.workflows.map((w) => ({
+      id: w.id,
+      name: w.name,
+      requiredSignals: w.requiredSignals,
+      actions: w.actions.map((a) => ({ key: a.key, label: a.label, approval: a.approval })),
+      supportTeam: w.supportTeam,
+      severityOnBreak: w.severityOnBreak,
+    })),
+    situations: GRID_CONFIG.situations.map((s) => ({ id: s.id, label: s.label, workflowId: s.workflowId })),
+  };
   res.json({
     note: "Workflows as code — the CI/CD validation the Grid runs on the declarative config before it runs the Grid. Read-only.",
     valid: gridConfigValid(GRID_CONFIG),
     summary: summarizeGridConfig(GRID_CONFIG),
     issues: lintGridConfig(GRID_CONFIG),
+    config,
   });
 });
 

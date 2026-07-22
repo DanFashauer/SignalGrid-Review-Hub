@@ -26,6 +26,7 @@ const Intelligence = named(() => import("@/pages/Intelligence"), "Intelligence")
 const Provisioning = named(() => import("@/pages/Provisioning"), "Provisioning");
 const AppResilience = named(() => import("@/pages/AppResilience"), "AppResilience");
 const SignalSourcing = named(() => import("@/pages/SignalSourcing"), "SignalSourcing");
+const GridConfig = named(() => import("@/pages/GridConfig"), "GridConfig");
 
 const queryClient = new QueryClient();
 
@@ -49,6 +50,7 @@ function Router() {
           <Route path="/provisioning" component={Provisioning} />
           <Route path="/app-resilience" component={AppResilience} />
           <Route path="/signal-sourcing" component={SignalSourcing} />
+          <Route path="/grid-config" component={GridConfig} />
           <Route component={NotFound} />
         </Switch>
       </Suspense>

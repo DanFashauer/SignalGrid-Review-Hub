@@ -76,6 +76,7 @@
     "proof:rtls-custody": "pnpm --filter @workspace/scripts run proof:rtls-custody",
     "proof:peripheral-control": "pnpm --filter @workspace/scripts run proof:peripheral-control",
     "proof:data-protection": "pnpm --filter @workspace/scripts run proof:data-protection",
+    "proof:credential-exposure": "pnpm --filter @workspace/scripts run proof:credential-exposure",
     "proof:fabric-scenario": "pnpm --filter @workspace/scripts run proof:fabric-scenario"
   },
   "private": true,

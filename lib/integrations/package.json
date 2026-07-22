@@ -14,7 +14,8 @@
     "./identity-risk": "./src/integrations/identity-risk/index.ts",
     "./rtls-custody": "./src/integrations/rtls-custody/index.ts",
     "./peripheral-control": "./src/integrations/peripheral-control/index.ts",
-    "./data-protection": "./src/integrations/data-protection/index.ts"
+    "./data-protection": "./src/integrations/data-protection/index.ts",
+    "./credential-exposure": "./src/integrations/credential-exposure/index.ts"
   },
   "dependencies": {
     "ioredis": "^5.4.1",

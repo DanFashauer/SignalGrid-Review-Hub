@@ -103,11 +103,6 @@ final class HostAppViewController: UIViewController {
         bar.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(bar)
 
-        let eye = UIButton(type: .system)
-        eye.setImage(UIImage(systemName: "eye"), for: .normal)
-        eye.addTarget(self, action: #selector(toggleGlass), for: .touchUpInside)
-        eye.translatesAutoresizingMaskIntoConstraints = false
-
         let title = UILabel()
         title.text = config.appName
         title.font = .systemFont(ofSize: 17, weight: .semibold)
@@ -119,19 +114,34 @@ final class HostAppViewController: UIViewController {
         done.addTarget(self, action: #selector(close), for: .touchUpInside)
         done.translatesAutoresizingMaskIntoConstraints = false
 
-        bar.addSubview(eye); bar.addSubview(title); bar.addSubview(done)
+        bar.addSubview(title); bar.addSubview(done)
         NSLayoutConstraint.activate([
             bar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             bar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             bar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             bar.heightAnchor.constraint(equalToConstant: 48),
-            eye.leadingAnchor.constraint(equalTo: bar.leadingAnchor, constant: 16),
-            eye.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
             title.centerXAnchor.constraint(equalTo: bar.centerXAnchor),
             title.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
             done.trailingAnchor.constraint(equalTo: bar.trailingAnchor, constant: -16),
             done.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
         ])
+
+        // The "behind the glass" operator instrumentation is a SIMULATOR-ONLY demo
+        // affordance. On a real device the worker must never see SignalGrid — the
+        // reveal toggle is compiled out entirely (the panel is unreachable), so it
+        // cannot be used to break the invisible-gate containment.
+        #if targetEnvironment(simulator)
+        let eye = UIButton(type: .system)
+        eye.setImage(UIImage(systemName: "eye"), for: .normal)
+        eye.addTarget(self, action: #selector(toggleGlass), for: .touchUpInside)
+        eye.translatesAutoresizingMaskIntoConstraints = false
+        bar.addSubview(eye)
+        NSLayoutConstraint.activate([
+            eye.leadingAnchor.constraint(equalTo: bar.leadingAnchor, constant: 16),
+            eye.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
+        ])
+        #endif
+
         topBarBottom = bar.bottomAnchor
     }
 
@@ -535,10 +545,12 @@ final class HostAppViewController: UIViewController {
         ])
     }
 
+    #if targetEnvironment(simulator)
     @objc private func toggleGlass() {
         glassVisible.toggle()
         glassPanel.isHidden = !glassVisible
     }
+    #endif
 
     private func setGlass(_ action: String, _ verdict: String, _ why: String, _ body: String) {
         glassAction.text = "action · \(action)"

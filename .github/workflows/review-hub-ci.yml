@@ -160,7 +160,7 @@ jobs:
       - name: Provisioning teardown-proof (prove the retreat before deploy)
         run: pnpm run proof:provisioning-teardown
 
-      - name: Grid-lifecycle (capstone — 5 models end-to-end) proof
+      - name: Grid-lifecycle (capstone — 6 models, provision→decommission) proof
         run: pnpm run proof:grid-lifecycle
 
       - name: Recommendations (learned-habit proposals) proof

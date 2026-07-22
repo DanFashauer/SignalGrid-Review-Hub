@@ -15,6 +15,10 @@
 //                    coverage gap (fail-safe propagation).
 //   5. RESILE      — mid-shift the EHR has an unplanned outage; staff keep working
 //                    on a PHI-safe fallback — but never without safety nets.
+//   6. DECOMMISSION— the tablet is retired; but it is only deploy-ready in the
+//                    first place because its REVERSAL was proven (dependency-
+//                    ordered, clean-state-verified), rehearsed simulated. Signals
+//                    in, decisions made, and a clean, proven exit.
 //
 // Fully offline, deterministic, public-safe.
 //
@@ -27,6 +31,9 @@ import {
   gridConfigValid,
   lintGridConfig,
   planZeroTouchSetup,
+  planTeardown,
+  deployReady,
+  teardownProven,
   resolveAppResilience,
   fleetResilience,
   setupRecordingValid,
@@ -57,9 +64,21 @@ const recording: DeviceSetupRecording = {
   steps: [
     { key: "wifi", label: "Join clinical Wi-Fi", kind: "wifi" },
     { key: "profile", label: "Install MDM profile", kind: "profile" },
-    { key: "emr", label: "Deploy EMR app", kind: "app_install" },
+    { key: "emr", label: "Deploy EMR app + management extension", kind: "app_install" },
     { key: "lockdown", label: "Apply kiosk restriction", kind: "restriction", sensitive: true },
   ],
+  // The reversal, recorded up front — deploy-ready means the retreat is proven.
+  // Dependency order: deactivate the app/extension first (restart-gated), then the
+  // restriction, the Wi-Fi, and the MDM profile LAST; end with a clean-state check.
+  teardown: {
+    steps: [
+      { key: "emr", label: "Deactivate + remove EMR extension", action: "deactivate", requiresRestart: true },
+      { key: "lockdown", label: "Remove kiosk restriction", action: "remove", sensitive: true },
+      { key: "wifi", label: "Remove Wi-Fi config", action: "remove" },
+      { key: "profile", label: "Remove MDM profile", action: "remove" },
+    ],
+    verifyClean: true,
+  },
 };
 const tablet = { serial: "CLIN-00042", model: "MediPad-X", onNetwork: true };
 check("the provisioning recording is valid", setupRecordingValid(recording));
@@ -116,11 +135,27 @@ check("the same EHR outage WITHOUT safety nets is blocked (PHI fail-safe holds)"
 const fleet = fleetResilience(suite);
 check("the app suite rollup is consistent (nothing blocked here)", fleet.total === 3 && fleet.blocked === 0 && fleet.workable === 3);
 
+// ── 6. DECOMMISSION — the tablet is retired only because its reversal is proven ─
+// The recording is deploy-ready only because a dependency-ordered, clean-state-
+// verified teardown was recorded up front (setup valid AND teardown proven).
+check("the tablet is deploy-ready — its reversal was proven, not deferred", teardownProven(recording) && deployReady(recording));
+// Rehearse the decommission: simulated by default, nothing removed for real, but
+// the clean-state check is part of the plan.
+const decommission = planTeardown(recording, tablet);
+check("decommission is a simulated rehearsal by default (nothing removed for real)", decommission.matched && decommission.willRemoveAnything === false && decommission.steps.every((s) => s.disposition === "held_simulated"));
+check("the decommission rehearsal deactivates the extension first, profile last, and verifies clean", decommission.steps[0].key === "emr" && decommission.steps[0].action === "deactivate" && decommission.steps[decommission.steps.length - 1].key === "profile" && decommission.verifiesClean);
+// Fail-safe both ways: an unrelated device is never torn down by this recording…
+check("an unrelated device is never decommissioned by the tablet recording", planTeardown(recording, { serial: "WARE-1", model: "Handheld" }).matched === false);
+// …and without the recorded reversal, the SAME setup is NOT deploy-ready.
+const noReversal: DeviceSetupRecording = { ...recording, teardown: undefined };
+check("strip the recorded reversal and the setup is no longer deploy-ready (retreat unproven)", setupRecordingValid(noReversal) && !deployReady(noReversal));
+
 // ── determinism of the whole lifecycle ──────────────────────────────────────────
 const run = () => JSON.stringify({
   provision: planZeroTouchSetup(recording, tablet),
   coverage: evaluateGridCoverage(DEMO_FLOWS, GRID_SITUATIONS, sourcingToSignalStates(sources)),
   ehr: resolveAppResilience(suite[0]),
+  decommission: planTeardown(recording, tablet),
 });
 check("the end-to-end lifecycle is deterministic", run() === run());
 

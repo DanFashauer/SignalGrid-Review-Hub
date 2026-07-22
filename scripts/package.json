@@ -25,6 +25,7 @@
     "proof:app-resilience": "tsx ./src/app-resilience-proof.ts",
     "proof:provisioning": "tsx ./src/provisioning-proof.ts",
     "proof:provisioning-teardown": "tsx ./src/provisioning-teardown-proof.ts",
+    "proof:factory-flows": "tsx ./src/factory-flows-proof.ts",
     "proof:grid-lifecycle": "tsx ./src/grid-lifecycle-proof.ts",
     "proof:intune-entra-posture": "tsx ./src/intune-entra-posture-proof.ts",
     "proof:microsoft-graph-sandbox": "tsx ./src/microsoft-graph-sandbox-proof.ts",

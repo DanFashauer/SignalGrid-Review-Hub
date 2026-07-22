@@ -107,6 +107,11 @@ enum AppWorkflows {
         codes.first ?? fallback
     }
 
+    /// Who confirms a sensitive action for this integration's vertical.
+    static func confirmer(for integration: AppIntegration) -> String {
+        defaultConfirmer[integration.vertical] ?? "supervisor"
+    }
+
     // MARK: - Planner (mirrors planAppSession)
 
     static func planAppSession(_ input: AppPlanInput) -> AppSessionPlan {
@@ -235,4 +240,23 @@ enum AppWorkflows {
             AppAction("discharge.release", "Release discharge", .critical),
         ]
     )
+
+    /// WMS / WES — the warehouse reference integration (mirrors catalog.ts).
+    static let wms = AppIntegration(
+        id: "wms",
+        name: "WMS / WES",
+        category: "Warehouse execution",
+        vertical: "warehouse",
+        workflowKey: "pick-pack",
+        actions: [
+            AppAction("task.accept", "Accept a pick task", .standard),
+            AppAction("pick.confirm", "Confirm a pick", .standard),
+            AppAction("inventory.adjust", "Adjust inventory", .elevated),
+            AppAction("highvalue.release", "Release a high-value / hazmat pick", .critical),
+        ]
+    )
+
+    static func integration(forVertical vertical: String) -> AppIntegration {
+        vertical == "warehouse" ? wms : emrChart
+    }
 }

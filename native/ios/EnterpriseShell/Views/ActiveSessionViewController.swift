@@ -240,7 +240,8 @@ final class ActiveSessionViewController: UIViewController {
         // Demo: auto-open the embedded Assist host-app demo (invisible gate flow).
         if DemoMode.assist {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-                self?.present(HostAppViewController(), animated: true)
+                guard let self else { return }
+                self.present(HostAppViewController(config: HostAppViewController.forLocation(DemoMode.location)), animated: true)
             }
         }
         // Demo: auto-end the session after a beat so the terminate -> teardown ->
@@ -469,7 +470,17 @@ final class ActiveSessionViewController: UIViewController {
     /// inside the kiosk, like ManagedAppViewController.
     @objc private func hostAppTapped() {
         SessionStateManager.shared.userDidInteract()
-        present(HostAppViewController(), animated: true)
+        present(HostAppViewController(config: hostAppConfig()), animated: true)
+    }
+
+    /// The host app matching the deployment location (clinic → clinical chart,
+    /// warehouse → warehouse handheld). Same invisible gate, different app.
+    private func hostAppConfig() -> HostAppViewController.HostAppConfig {
+        #if targetEnvironment(simulator)
+        return HostAppViewController.forLocation(DemoMode.location)
+        #else
+        return HostAppViewController.clinical()
+        #endif
     }
     
     private func createQuickActionButton(icon: String, title: String, color: UIColor) -> UIButton {

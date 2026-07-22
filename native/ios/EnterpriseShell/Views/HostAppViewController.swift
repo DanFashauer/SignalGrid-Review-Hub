@@ -1,50 +1,62 @@
 import UIKit
 import LocalAuthentication
 
-/// The invisible embedded flow, native.
+/// The invisible embedded flow, native — and vertical-agnostic.
 ///
-/// This is the product's core design law (`EMBEDDED_UX_PRINCIPLE.md`): the worker
-/// only ever sees THEIR OWN app — here a generic clinical chart, deliberately not
-/// SignalGrid-branded. The trust layer runs underneath. Non-sensitive actions run
-/// with no friction; a sensitive action is HELD until the worker satisfies a
-/// native step-up (Face ID / Touch ID) AND confirms in the app's own dialog. The
-/// decisions come from `AppWorkflows` — the native port of `@workspace/app-workflows`.
+/// The product's design law (`EMBEDDED_UX_PRINCIPLE.md`): the worker only ever
+/// sees THEIR OWN app, deliberately not SignalGrid-branded. The trust layer runs
+/// underneath. Non-sensitive actions run with no friction (`allow` → auto); a
+/// sensitive action is HELD until the worker satisfies a native step-up (Face ID /
+/// Touch ID) AND confirms in the app's own dialog (`step_up` → `assist` →
+/// `applied`); a restricted/denied action is blocked and the app shows ITS OWN
+/// message. Decisions come from `AppWorkflows` — the native port of the real
+/// `@workspace/app-workflows` planner.
 ///
-/// The "behind the glass" panel is operator-only demo instrumentation showing the
-/// allow / step_up / assist / applied verdict the core returned. The worker never
-/// sees it in production; here it is a labeled toggle for the demo.
+/// The behavior is identical across industries — only the app, the subject, and
+/// who confirms change. This VC is config-driven so the same gate renders a
+/// clinical chart or a warehouse handheld with no branching in the flow logic.
 final class HostAppViewController: UIViewController {
 
-    // MARK: - Scripted flow (mirrors embedded-host-app-demo.html)
+    // MARK: - Config
 
-    private struct DemoStep {
+    struct ScriptedStep {
         let key: String
         let label: String
-        let needsStepUp: Bool
-        let hostDone: String
-        let hostHold: String
+        let outcome: AppWorkflows.DecisionOutcome
+        let reasonCodes: [String]
+        var hostHold: String = ""      // shown while HELD for a step-up
+        var hostDone: String = ""      // shown when the action completes
+        var hostBlocked: String = ""   // the app's OWN message on restrict/deny
+        var confirmTitle: String = ""  // the app's own confirmation dialog title
     }
 
-    private let steps: [DemoStep] = [
-        DemoStep(key: "chart.open", label: "Open chart", needsStepUp: false,
-                 hostDone: "Chart opened.", hostHold: ""),
-        DemoStep(key: "results.view", label: "View lab results", needsStepUp: false,
-                 hostDone: "Results shown.", hostHold: ""),
-        DemoStep(key: "order.place", label: "Place controlled med order", needsStepUp: true,
-                 hostDone: "Controlled med order placed.",
-                 hostHold: "One quick check to confirm it's you on this shared device."),
-    ]
-
-    // The order.place decision the core returns for a shared device with drift.
-    private var stepUpInput: AppWorkflows.AppPlanInput {
-        AppWorkflows.AppPlanInput(
-            integration: AppWorkflows.emrChart,
-            outcome: .step_up,
-            reasonCodes: ["BASELINE_DRIFTED", "SHARED_DEVICE"]
-        )
+    struct HostAppConfig {
+        let integration: AppWorkflows.AppIntegration
+        let appName: String
+        let appInitial: String
+        let brandColor: UIColor
+        let whoLabel: String
+        let subjectTitle: String
+        let subjectMeta: String
+        let steps: [ScriptedStep]
     }
 
+    private let config: HostAppConfig
+    private var confirmer: String { AppWorkflows.confirmer(for: config.integration) }
+
+    init(config: HostAppConfig) {
+        self.config = config
+        super.init(nibName: nil, bundle: nil)
+        modalPresentationStyle = .fullScreen
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    // MARK: - Flow state
+
+    private enum FlowState { case idle, awaitingStepUp, awaitingConfirm, finished }
+    private var flow: FlowState = .idle
     private var stepIndex = 0
+    private var currentStep: ScriptedStep? { stepIndex < config.steps.count ? config.steps[stepIndex] : nil }
 
     // MARK: - UI
 
@@ -53,8 +65,9 @@ final class HostAppViewController: UIViewController {
     private let rowsStack = UIStackView()
     private let hostBanner = UILabel()
     private let primaryButton = UIButton(type: .system)
+    private var topBarBottom: NSLayoutYAxisAnchor!
+    private var appBarBottom: NSLayoutYAxisAnchor!
 
-    /// Operator-only instrumentation (hidden by default).
     private var glassVisible = false
     private let glassPanel = UIView()
     private let glassAction = UILabel()
@@ -62,48 +75,20 @@ final class HostAppViewController: UIViewController {
     private let glassBody = UILabel()
     private let glassWhy = UILabel()
 
-    // Host app brand color (a generic clinical app — NOT SignalGrid).
-    private let appColor = UIColor(red: 0.043, green: 0.388, blue: 0.808, alpha: 1) // #0B63CE
-
     override func viewDidLoad() {
         super.viewDidLoad()
-        modalPresentationStyle = .fullScreen
-        view.backgroundColor = UIColor(red: 0.965, green: 0.973, blue: 0.984, alpha: 1) // #F6F8FB
+        view.backgroundColor = UIColor(red: 0.965, green: 0.973, blue: 0.984, alpha: 1)
         buildTopBar()
         buildAppBar()
         buildBody()
         buildGlassPanel()
         renderStep()
         AuditLogger.shared.log(event: .appLaunched, metadata: [
-            "appId": AppWorkflows.emrChart.id, "mode": "embedded_assist"
-        ])
+            "appId": config.integration.id, "mode": "embedded_assist"])
         startAutoDemoIfNeeded()
     }
 
-    #if targetEnvironment(simulator)
-    /// Self-walk the full gate flow so each state can be captured without taps.
-    private func startAutoDemoIfNeeded() {
-        guard DemoMode.assistAuto else { return }
-        glassVisible = true
-        glassPanel.isHidden = false
-        let q = DispatchQueue.main
-        q.asyncAfter(deadline: .now() + 1.0) { [weak self] in self?.primaryTapped() } // open chart → auto
-        q.asyncAfter(deadline: .now() + 2.2) { [weak self] in self?.primaryTapped() } // view results → auto
-        q.asyncAfter(deadline: .now() + 3.4) { [weak self] in self?.primaryTapped() } // order → HELD (step_up)
-        q.asyncAfter(deadline: .now() + 6.0) { [weak self] in
-            guard let self, self.stepIndex < self.steps.count else { return }
-            self.stepUpSatisfied(self.steps[self.stepIndex])                            // → ASSIST + confirm dialog
-        }
-        q.asyncAfter(deadline: .now() + 8.6) { [weak self] in
-            guard let self, self.stepIndex < self.steps.count else { return }
-            self.dismiss(animated: false) { self.confirmOrder(self.steps[self.stepIndex]) } // → APPLIED
-        }
-    }
-    #else
-    private func startAutoDemoIfNeeded() {}
-    #endif
-
-    // MARK: - Kiosk top bar (matches ManagedAppViewController containment)
+    // MARK: - Top bar (kiosk containment, matches ManagedAppViewController)
 
     private func buildTopBar() {
         let bar = UIView()
@@ -111,14 +96,13 @@ final class HostAppViewController: UIViewController {
         bar.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(bar)
 
-        // Operator-only "behind the glass" toggle (a demo affordance).
         let eye = UIButton(type: .system)
         eye.setImage(UIImage(systemName: "eye"), for: .normal)
         eye.addTarget(self, action: #selector(toggleGlass), for: .touchUpInside)
         eye.translatesAutoresizingMaskIntoConstraints = false
 
         let title = UILabel()
-        title.text = "Wardlink Chart"
+        title.text = config.appName
         title.font = .systemFont(ofSize: 17, weight: .semibold)
         title.translatesAutoresizingMaskIntoConstraints = false
 
@@ -144,18 +128,14 @@ final class HostAppViewController: UIViewController {
         topBarBottom = bar.bottomAnchor
     }
 
-    private var topBarBottom: NSLayoutYAxisAnchor!
-    private var appBarBottom: NSLayoutYAxisAnchor!
-
     private func buildAppBar() {
-        // The host app's OWN identity bar (generic clinical app, no SignalGrid).
         let appBar = UIView()
-        appBar.backgroundColor = appColor
+        appBar.backgroundColor = config.brandColor
         appBar.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(appBar)
 
         let logo = UILabel()
-        logo.text = "W"
+        logo.text = config.appInitial
         logo.textColor = .white
         logo.font = .systemFont(ofSize: 15, weight: .heavy)
         logo.textAlignment = .center
@@ -165,13 +145,13 @@ final class HostAppViewController: UIViewController {
         logo.translatesAutoresizingMaskIntoConstraints = false
 
         let name = UILabel()
-        name.text = "Wardlink Chart"
+        name.text = config.appName
         name.textColor = .white
         name.font = .systemFont(ofSize: 16, weight: .bold)
         name.translatesAutoresizingMaskIntoConstraints = false
 
         let who = UILabel()
-        who.text = "RN · Shared iPad"
+        who.text = config.whoLabel
         who.textColor = UIColor.white.withAlphaComponent(0.85)
         who.font = .systemFont(ofSize: 12, weight: .regular)
         who.translatesAutoresizingMaskIntoConstraints = false
@@ -214,16 +194,17 @@ final class HostAppViewController: UIViewController {
             stack.widthAnchor.constraint(equalTo: scrollView.widthAnchor, constant: -32),
         ])
 
-        // Patient card (synthetic record, no PHI).
+        // Subject card (synthetic — patient / order / asset, no PII).
         let card = cardView()
-        let ptName = UILabel()
-        ptName.text = "Rivera, A."
-        ptName.font = .systemFont(ofSize: 17, weight: .bold)
-        let ptMeta = UILabel()
-        ptMeta.text = "Room 4B · MRN 00-DEMO · synthetic record"
-        ptMeta.font = .systemFont(ofSize: 12)
-        ptMeta.textColor = .secondaryLabel
-        let cardStack = UIStackView(arrangedSubviews: [ptName, ptMeta])
+        let subjTitle = UILabel()
+        subjTitle.text = config.subjectTitle
+        subjTitle.font = .systemFont(ofSize: 17, weight: .bold)
+        let subjMeta = UILabel()
+        subjMeta.text = config.subjectMeta
+        subjMeta.font = .systemFont(ofSize: 12)
+        subjMeta.textColor = .secondaryLabel
+        subjMeta.numberOfLines = 0
+        let cardStack = UIStackView(arrangedSubviews: [subjTitle, subjMeta])
         cardStack.axis = .vertical
         cardStack.spacing = 2
         cardStack.translatesAutoresizingMaskIntoConstraints = false
@@ -236,12 +217,10 @@ final class HostAppViewController: UIViewController {
         ])
         stack.addArrangedSubview(card)
 
-        // Completed/held action rows.
         rowsStack.axis = .vertical
         rowsStack.spacing = 8
         stack.addArrangedSubview(rowsStack)
 
-        // Host app's own status banner.
         hostBanner.numberOfLines = 0
         hostBanner.font = .systemFont(ofSize: 13, weight: .medium)
         hostBanner.layer.cornerRadius = 10
@@ -249,8 +228,7 @@ final class HostAppViewController: UIViewController {
         hostBanner.isHidden = true
         stack.addArrangedSubview(hostBanner)
 
-        // Primary action button.
-        primaryButton.backgroundColor = appColor
+        primaryButton.backgroundColor = config.brandColor
         primaryButton.setTitleColor(.white, for: .normal)
         primaryButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .bold)
         primaryButton.layer.cornerRadius = 10
@@ -269,55 +247,72 @@ final class HostAppViewController: UIViewController {
         return v
     }
 
-    // MARK: - Flow
+    // MARK: - Flow (disposition-driven; identical across verticals)
 
     @objc private func primaryTapped() {
         SessionStateManager.shared.userDidInteract()
-        guard stepIndex < steps.count else { return }
-        let step = steps[stepIndex]
+        guard let step = currentStep else { return }
+        let input = AppWorkflows.AppPlanInput(
+            integration: config.integration, outcome: step.outcome, reasonCodes: step.reasonCodes)
+        let plan = AppWorkflows.gateAppAction(input, step.key)
+        AuditLogger.shared.log(event: .assistActionEvaluated, metadata: [
+            "action": step.key, "disposition": plan?.disposition.rawValue ?? "?"])
 
-        if step.needsStepUp {
-            evaluateAndHold(step)
-        } else {
-            // Non-sensitive read → the planner returns `auto` → runs immediately.
-            let input = AppWorkflows.AppPlanInput(
-                integration: AppWorkflows.emrChart, outcome: .allow,
-                reasonCodes: ["TRUST_ESTABLISHED"])
-            let plan = AppWorkflows.gateAppAction(input, step.key)
-            setGlass(step.key, plan?.disposition.rawValue ?? "auto", "TRUST_ESTABLISHED",
+        switch plan?.disposition {
+        case .auto:
+            setGlass(step.key, "auto", step.reasonCodes.joined(separator: " · "),
                      "Non-sensitive action on a trusted session → runs automatically. The worker sees no gate.")
             AuditLogger.shared.log(event: .assistActionAuto, metadata: ["action": step.key])
-            addRow(step.label, held: false)
-            showBanner(step.hostDone, ok: true)
-            stepIndex += 1
-            renderStep()
+            addRow(step.label, state: .done)
+            showBanner(step.hostDone, kind: .ok)
+            advance()
+        case .blocked:
+            let verdict = step.outcome.rawValue // restrict / deny
+            setGlass(step.key, verdict, step.reasonCodes.joined(separator: " · "),
+                     "Blocked — the action isn't available on this device in this context. The app shows its OWN message; SignalGrid never appears. Fail-closed: nothing fires.")
+            AuditLogger.shared.log(event: .assistActionBlocked, metadata: [
+                "action": step.key, "outcome": verdict])
+            addRow(step.label, state: .blocked)
+            showBanner(step.hostBlocked, kind: .blocked)
+            advance()
+        case .step_up:
+            setGlass(step.key, "step_up", step.reasonCodes.joined(separator: " · "),
+                     "High-assurance action → HELD. SignalGrid does not release it; it asks the app to capture a real native gesture. It does not fire yet.")
+            AuditLogger.shared.log(event: .assistStepUpRequested, metadata: [
+                "action": step.key, "reason": step.reasonCodes.joined(separator: ",")])
+            addRow(step.label, state: .held)
+            showBanner(step.hostHold, kind: .hold)
+            flow = .awaitingStepUp
+            primaryButton.isEnabled = false
+            #if targetEnvironment(simulator)
+            if DemoMode.assistAuto { return }
+            #endif
+            requestNativeStepUp(step)
+        case .assist:
+            // allow + sensitive, no step-up needed → straight to the app's own confirm.
+            setGlass(step.key, "assist", "SENSITIVE · AWAITING_CONFIRMATION",
+                     "Sensitive action prepared — but it requires an explicit \(confirmer) confirmation in the app. Not fired yet.")
+            addRow(step.label, state: .held)
+            flow = .awaitingConfirm
+            primaryButton.isEnabled = false
+            presentConfirm(step)
+        default:
+            break
         }
     }
 
-    /// A sensitive action → HELD. SignalGrid does not release it; it asks the app
-    /// to capture a real native gesture. The order does not fire yet.
-    private func evaluateAndHold(_ step: DemoStep) {
-        let plan = AppWorkflows.gateAppAction(stepUpInput, step.key)   // → .step_up
-        setGlass(step.key, plan?.disposition.rawValue ?? "step_up", "BASELINE_DRIFTED · SHARED_DEVICE",
-                 "High-assurance action on a shared device → HELD. SignalGrid does not release it; it asks the app to capture a real native gesture. The order does not fire yet.")
-        AuditLogger.shared.log(event: .assistStepUpRequested, metadata: [
-            "action": step.key, "reason": "BASELINE_DRIFTED,SHARED_DEVICE"])
-        addRow(step.label, held: true)
-        showBanner(step.hostHold, ok: false)
-        primaryButton.isEnabled = false
-        #if targetEnvironment(simulator)
-        if DemoMode.assistAuto { return } // auto-walk satisfies the step-up on a timer
-        #endif
-        requestNativeStepUp(step)
+    private func advance() {
+        stepIndex += 1
+        flow = .idle
+        renderStep()
     }
 
-    /// Trigger the device's OWN authenticator (Face ID / Touch ID). Falls back to a
-    /// clearly-labeled simulated authenticator when biometrics aren't available
-    /// (e.g. an unconfigured simulator) — the demo stand-in the reference uses.
-    private func requestNativeStepUp(_ step: DemoStep) {
+    /// Trigger the device's OWN authenticator. Falls back to a clearly-labeled
+    /// simulated authenticator when biometrics aren't available.
+    private func requestNativeStepUp(_ step: ScriptedStep) {
         let context = LAContext()
         var authError: NSError?
-        let reason = "Verify it's you before placing a controlled order on this shared device."
+        let reason = "Verify it's you before this action on a shared device."
         if context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &authError) {
             context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) { [weak self] ok, _ in
                 DispatchQueue.main.async {
@@ -325,99 +320,107 @@ final class HostAppViewController: UIViewController {
                 }
             }
         } else {
-            presentSimulatedAuthenticator(step)
+            let sheet = UIAlertController(
+                title: "Confirm it's you",
+                message: "Demo · simulated authenticator\n\n\(config.appName) needs to verify this action on a shared device. No real biometric is used.",
+                preferredStyle: .alert)
+            sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in self?.stepUpDeclined(step) })
+            sheet.addAction(UIAlertAction(title: "Simulate Face ID", style: .default) { [weak self] _ in self?.stepUpSatisfied(step) })
+            present(sheet, animated: true)
         }
     }
 
-    private func presentSimulatedAuthenticator(_ step: DemoStep) {
-        let sheet = UIAlertController(
-            title: "Confirm it's you",
-            message: "Demo · simulated authenticator\n\nWardlink needs to verify this action on a shared device. No real biometric is used.",
-            preferredStyle: .alert)
-        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in
-            self?.stepUpDeclined(step)
-        })
-        sheet.addAction(UIAlertAction(title: "Simulate Face ID", style: .default) { [weak self] _ in
-            self?.stepUpSatisfied(step)
-        })
-        present(sheet, animated: true)
-    }
-
-    /// Step-up satisfied → the action is NOT placed yet. A critical action stays
-    /// ASSIST: the app shows its OWN confirmation dialog (mirrors completeAppStepUp
-    /// → still assist in the planner).
-    private func stepUpSatisfied(_ step: DemoStep) {
-        let plan = AppWorkflows.completeAppStepUp(stepUpInput)
-        let action = plan.actions.first { $0.key == step.key }   // → .assist
+    /// Step-up satisfied → the action is NOT placed yet if it is sensitive; it stays
+    /// ASSIST until an explicit confirmation (mirrors completeAppStepUp).
+    private func stepUpSatisfied(_ step: ScriptedStep) {
+        var input = AppWorkflows.AppPlanInput(
+            integration: config.integration, outcome: step.outcome, reasonCodes: step.reasonCodes)
+        let plan = AppWorkflows.completeAppStepUp(input)
+        let action = plan.actions.first { $0.key == step.key }
         AuditLogger.shared.log(event: .assistStepUpSatisfied, metadata: ["action": step.key])
-        setGlass(step.key, action?.disposition.rawValue ?? "assist", "STEP_UP_SATISFIED · AWAITING_CONFIRMATION",
-                 "Step-up satisfied — but a critical action still requires an explicit confirmation in the app. SignalGrid holds it as ASSIST; the biometric alone does not place the order.")
-        showBanner("Identity confirmed. Now verify the order to place it.", ok: false)
-        AuditLogger.shared.log(event: .assistActionAwaitingConfirmation, metadata: ["action": step.key])
 
-        let confirm = UIAlertController(
-            title: "Verify controlled medication order",
-            message: "Rivera, A. · Room 4B\nThis is the app's own confirmation, not a SignalGrid screen.",
-            preferredStyle: .alert)
-        confirm.addAction(UIAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in
-            self?.confirmDeclined(step)
-        })
-        confirm.addAction(UIAlertAction(title: "Confirm order", style: .default) { [weak self] _ in
-            self?.confirmOrder(step)
-        })
-        present(confirm, animated: true)
+        if action?.disposition == .assist {
+            setGlass(step.key, "assist", "STEP_UP_SATISFIED · AWAITING_CONFIRMATION",
+                     "Step-up satisfied — but a critical action still requires an explicit confirmation in the app. SignalGrid holds it as ASSIST; the biometric alone does not fire it.")
+            showBanner("Identity confirmed. Now confirm to proceed.", kind: .hold)
+            AuditLogger.shared.log(event: .assistActionAwaitingConfirmation, metadata: ["action": step.key])
+            flow = .awaitingConfirm
+            presentConfirm(step)
+        } else {
+            // Gated-but-not-sensitive → released after the step-up.
+            input.stepUpSatisfied = true
+            setGlass(step.key, "applied", "RELEASED_AFTER_STEP_UP",
+                     "Step-up satisfied and the action is not sensitive → released. One gate cleared.")
+            markHeldRowDone()
+            showBanner(step.hostDone, kind: .ok)
+            AuditLogger.shared.log(event: .assistActionApplied, metadata: ["action": step.key])
+            advance()
+        }
     }
 
-    private func stepUpDeclined(_ step: DemoStep) {
-        // Fail-closed: no gesture, no release.
+    private func stepUpDeclined(_ step: ScriptedStep) {
         setGlass(step.key, "step_up", "STEP_UP_NOT_SATISFIED",
                  "The worker declined the check, so the held action never fires. Fail-closed: no gesture, no release.")
         AuditLogger.shared.log(event: .assistStepUpFailed, metadata: ["action": step.key])
-        showBanner("Cancelled. The action stays held — nothing was placed.", ok: false)
+        showBanner("Cancelled. The action stays held — nothing fired.", kind: .hold)
+        flow = .idle
         primaryButton.isEnabled = true
     }
 
-    private func confirmOrder(_ step: DemoStep) {
-        // Explicit confirmation supplied → the held action is applied.
-        var input = stepUpInput
-        input.stepUpSatisfied = true
-        let plan = AppWorkflows.confirmAppActions(input, [step.key])
-        let action = plan.actions.first { $0.key == step.key }   // → .applied
-        AuditLogger.shared.log(event: .assistActionConfirmed, metadata: ["action": step.key])
-        AuditLogger.shared.log(event: .assistActionApplied, metadata: ["action": step.key])
-        setGlass(step.key, action?.disposition.rawValue ?? "applied", "CONFIRMED_BY_CLINICIAN",
-                 "The clinician confirmed in the app's own dialog → the held action is applied and the order proceeds. Two gates cleared: a native step-up AND an explicit confirmation.")
-        markHeldRowDone()
-        showBanner(step.hostDone, ok: true)
-        stepIndex += 1
-        renderStep()
+    private func presentConfirm(_ step: ScriptedStep) {
+        let confirm = UIAlertController(
+            title: step.confirmTitle.isEmpty ? "Verify \(step.label)" : step.confirmTitle,
+            message: "\(config.subjectTitle)\nThis is the app's own confirmation, not a SignalGrid screen.",
+            preferredStyle: .alert)
+        confirm.addAction(UIAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in self?.confirmDeclined(step) })
+        confirm.addAction(UIAlertAction(title: "Confirm", style: .default) { [weak self] _ in self?.confirmAction(step) })
+        present(confirm, animated: true)
     }
 
-    private func confirmDeclined(_ step: DemoStep) {
-        // Fail-closed even after a valid step-up.
+    private func confirmAction(_ step: ScriptedStep) {
+        var input = AppWorkflows.AppPlanInput(
+            integration: config.integration, outcome: step.outcome, reasonCodes: step.reasonCodes)
+        input.stepUpSatisfied = (step.outcome == .step_up)
+        let plan = AppWorkflows.confirmAppActions(input, [step.key])
+        let action = plan.actions.first { $0.key == step.key }
+        AuditLogger.shared.log(event: .assistActionConfirmed, metadata: ["action": step.key])
+        AuditLogger.shared.log(event: .assistActionApplied, metadata: ["action": step.key])
+        setGlass(step.key, action?.disposition.rawValue ?? "applied",
+                 "CONFIRMED_BY_\(confirmer.uppercased().replacingOccurrences(of: " ", with: "_"))",
+                 "The \(confirmer) confirmed in the app's own dialog → the held action is applied. \(step.outcome == .step_up ? "Two gates cleared: a native step-up AND an explicit confirmation." : "One gate cleared: an explicit confirmation.")")
+        markHeldRowDone()
+        showBanner(step.hostDone, kind: .ok)
+        advance()
+    }
+
+    private func confirmDeclined(_ step: ScriptedStep) {
         setGlass(step.key, "assist", "CONFIRMATION_DECLINED",
-                 "Even with the step-up satisfied, no explicit confirmation means the critical action does not fire. Fail-closed.")
+                 "No explicit confirmation means the action does not fire — even with a satisfied step-up. Fail-closed.")
         AuditLogger.shared.log(event: .assistActionBlocked, metadata: ["action": step.key, "reason": "confirmation_declined"])
-        showBanner("Confirmation cancelled. The order stays held and was never placed.", ok: false)
+        showBanner("Confirmation cancelled. Nothing fired.", kind: .hold)
+        flow = .idle
         primaryButton.isEnabled = true
     }
 
     // MARK: - Rendering
 
     private func renderStep() {
-        if stepIndex >= steps.count {
+        if currentStep == nil {
+            flow = .finished
             primaryButton.setTitle("All done ✓", for: .normal)
             primaryButton.isEnabled = false
             primaryButton.backgroundColor = .systemGray3
             return
         }
         primaryButton.isEnabled = true
-        primaryButton.setTitle(steps[stepIndex].label, for: .normal)
+        primaryButton.setTitle(currentStep?.label, for: .normal)
     }
 
-    private func addRow(_ label: String, held: Bool) {
+    private enum RowState { case done, held, blocked }
+
+    private func addRow(_ label: String, state: RowState) {
         let row = UIView()
-        row.tag = held ? 99 : 0
+        row.tag = state == .held ? 99 : 0
         row.backgroundColor = .systemBackground
         row.layer.cornerRadius = 10
         row.layer.borderWidth = 1
@@ -431,11 +434,14 @@ final class HostAppViewController: UIViewController {
         lbl.translatesAutoresizingMaskIntoConstraints = false
 
         let status = UILabel()
-        status.text = held ? "HELD" : "DONE"
-        status.font = .systemFont(ofSize: 11, weight: .heavy)
-        status.textColor = held ? .systemOrange : .systemGreen
         status.tag = 1
+        status.font = .systemFont(ofSize: 11, weight: .heavy)
         status.translatesAutoresizingMaskIntoConstraints = false
+        switch state {
+        case .done:    status.text = "DONE";    status.textColor = .systemGreen
+        case .held:    status.text = "HELD";    status.textColor = .systemOrange
+        case .blocked: status.text = "BLOCKED"; status.textColor = .systemRed
+        }
 
         row.addSubview(lbl); row.addSubview(status)
         NSLayoutConstraint.activate([
@@ -451,20 +457,25 @@ final class HostAppViewController: UIViewController {
         guard let row = rowsStack.arrangedSubviews.first(where: { $0.tag == 99 }) else { return }
         row.tag = 0
         if let status = row.viewWithTag(1) as? UILabel {
-            status.text = "DONE"
-            status.textColor = .systemGreen
+            status.text = "DONE"; status.textColor = .systemGreen
         }
     }
 
-    private func showBanner(_ text: String, ok: Bool) {
+    private enum BannerKind { case ok, hold, blocked }
+
+    private func showBanner(_ text: String, kind: BannerKind) {
         hostBanner.isHidden = text.isEmpty
         hostBanner.text = "  " + text
-        if ok {
+        switch kind {
+        case .ok:
             hostBanner.backgroundColor = UIColor.systemGreen.withAlphaComponent(0.12)
             hostBanner.textColor = UIColor(red: 0.086, green: 0.396, blue: 0.204, alpha: 1)
-        } else {
+        case .hold:
             hostBanner.backgroundColor = UIColor.systemOrange.withAlphaComponent(0.14)
             hostBanner.textColor = UIColor(red: 0.6, green: 0.204, blue: 0.07, alpha: 1)
+        case .blocked:
+            hostBanner.backgroundColor = UIColor.systemRed.withAlphaComponent(0.12)
+            hostBanner.textColor = UIColor(red: 0.6, green: 0.15, blue: 0.15, alpha: 1)
         }
     }
 
@@ -526,15 +537,110 @@ final class HostAppViewController: UIViewController {
         switch v {
         case "auto", "applied": return UIColor(red: 0.435, green: 0.659, blue: 0.549, alpha: 1)
         case "step_up", "assist": return UIColor(red: 0.761, green: 0.604, blue: 0.4, alpha: 1)
-        case "blocked", "deny": return UIColor(red: 0.753, green: 0.455, blue: 0.455, alpha: 1)
+        case "blocked", "deny", "restrict": return UIColor(red: 0.753, green: 0.455, blue: 0.455, alpha: 1)
         default: return .white
         }
     }
+
+    // MARK: - Auto-walk (simulator screenshot driver)
+
+    #if targetEnvironment(simulator)
+    private func startAutoDemoIfNeeded() {
+        guard DemoMode.assistAuto else { return }
+        glassVisible = true
+        glassPanel.isHidden = false
+        scheduleAutoTick(after: 1.2)
+    }
+
+    private func scheduleAutoTick(after: TimeInterval) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + after) { [weak self] in self?.autoTick() }
+    }
+
+    private func autoTick() {
+        switch flow {
+        case .idle:
+            guard currentStep != nil else { return }
+            primaryTapped()
+            scheduleAutoTick(after: 2.4)
+        case .awaitingStepUp:
+            guard let step = currentStep else { return }
+            stepUpSatisfied(step)
+            scheduleAutoTick(after: 2.4)
+        case .awaitingConfirm:
+            guard let step = currentStep else { return }
+            dismiss(animated: false) { [weak self] in self?.confirmAction(step) }
+            scheduleAutoTick(after: 2.4)
+        case .finished:
+            return
+        }
+    }
+    #else
+    private func startAutoDemoIfNeeded() {}
+    #endif
 
     // MARK: - Close
 
     @objc private func close() {
         SessionStateManager.shared.userDidInteract()
         dismiss(animated: true)
+    }
+}
+
+// MARK: - Vertical configs (same gate, different app / subject / confirmer)
+
+extension HostAppViewController {
+
+    static func forLocation(_ location: String) -> HostAppConfig {
+        location == "warehouse" ? warehouse() : clinical()
+    }
+
+    /// Healthcare — a generic clinical chart (mirrors embedded-host-app-demo.html).
+    static func clinical() -> HostAppConfig {
+        HostAppConfig(
+            integration: AppWorkflows.emrChart,
+            appName: "Wardlink Chart",
+            appInitial: "W",
+            brandColor: UIColor(red: 0.043, green: 0.388, blue: 0.808, alpha: 1), // #0B63CE
+            whoLabel: "RN · Shared iPad",
+            subjectTitle: "Rivera, A.",
+            subjectMeta: "Room 4B · MRN 00-DEMO · synthetic record",
+            steps: [
+                ScriptedStep(key: "chart.open", label: "Open chart", outcome: .allow,
+                             reasonCodes: ["TRUST_ESTABLISHED"], hostDone: "Chart opened."),
+                ScriptedStep(key: "results.view", label: "View lab results", outcome: .allow,
+                             reasonCodes: ["TRUST_ESTABLISHED"], hostDone: "Results shown."),
+                ScriptedStep(key: "order.place", label: "Place controlled med order", outcome: .step_up,
+                             reasonCodes: ["BASELINE_DRIFTED", "SHARED_DEVICE"],
+                             hostHold: "One quick check to confirm it's you on this shared device.",
+                             hostDone: "Controlled med order placed.",
+                             confirmTitle: "Verify controlled medication order"),
+            ])
+    }
+
+    /// Warehouse — a generic handheld execution app. Shows the SAME gate with a
+    /// different confirmer (supervisor) plus a restrict→BLOCKED branch.
+    static func warehouse() -> HostAppConfig {
+        HostAppConfig(
+            integration: AppWorkflows.wms,
+            appName: "StockPilot WES",
+            appInitial: "S",
+            brandColor: UIColor(red: 0.761, green: 0.255, blue: 0.047, alpha: 1), // #C2410C
+            whoLabel: "Picker · Shared handheld",
+            subjectTitle: "Order SO-4471 · Aisle 12",
+            subjectMeta: "Tote T-88 · synthetic order",
+            steps: [
+                ScriptedStep(key: "task.accept", label: "Accept pick task", outcome: .allow,
+                             reasonCodes: ["TRUST_ESTABLISHED"], hostDone: "Task accepted."),
+                ScriptedStep(key: "pick.confirm", label: "Confirm pick", outcome: .allow,
+                             reasonCodes: ["TRUST_ESTABLISHED"], hostDone: "Pick confirmed."),
+                ScriptedStep(key: "inventory.adjust", label: "Adjust inventory", outcome: .restrict,
+                             reasonCodes: ["POSTURE_STALE"],
+                             hostBlocked: "Inventory adjust isn't available on this device right now."),
+                ScriptedStep(key: "highvalue.release", label: "Release high-value pick", outcome: .step_up,
+                             reasonCodes: ["WRONG_ZONE", "SHARED_DEVICE"],
+                             hostHold: "Quick check to confirm it's you before releasing a high-value pick.",
+                             hostDone: "High-value pick released.",
+                             confirmTitle: "Verify high-value pick release"),
+            ])
     }
 }

@@ -78,6 +78,20 @@ It is fail-safe by construction, mirroring the MCP server's own discipline:
 
 Proven fully offline by `pnpm run proof:macos-posture` (deterministic, no device access, no network). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid changes no macOS setting — every signal is read-only, and this is not a vendor partnership or certification claim.
 
+## OT / IIoT edge-device posture — the factory floor (built, fixture-backed)
+
+The manufacturing floor is the purest case for the `grid_collected` path. A PLC, RTU, HMI, or brownfield machine cannot run an agent, exposes no vendor API, and speaks Modbus / OPC-UA / DNP3 — so SignalGrid reads what an **edge gateway** can observe about the device (read-only) and turns it into one posture the fabric fuses. Where even the gateway can't see it, that is a gap, never a green.
+
+The `ot-posture` connector (`lib/integrations/src/integrations/ot-posture`) normalizes an edge-gateway report — firmware currency, patchability (brownfield/EOL), network segmentation (a device on a **flat** network reachable from IT is a Purdue-model violation), unauthenticated-protocol exposure, and gateway liveness — into an OT device-trust verdict (`fromOtPosture` → an `ot_posture` signal on the unified action ladder).
+
+Fail-safe by construction, matched to the plant-floor stakes:
+
+- a **flat network**, an **unauthenticated OT protocol reachable beyond the cell**, or an **end-of-life / unpatchable** device that can never be secured → `restrict` (the risk is structural — contain it);
+- a **stale gateway** (we're blind to the device) or any **unreadable** control → `step_up` (never trust silence);
+- an unrecognized value normalizes to the safe `unknown`; a device **no gateway sees** is a blind spot, never `secure`.
+
+Proven fully offline by `pnpm run proof:ot-posture` (34 checks, no plant access, no network). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid changes no device setting — every signal is read-only, and this is not a vendor partnership or certification claim.
+
 ## Frontline context signal roadmap
 
 Future healthcare and frontline context signals are documented in [Frontline context signals roadmap](FRONTLINE_CONTEXT_SIGNALS.md). These include Intune enrollment restrictions, device limits, iOS/iPadOS enrollment type, Apple Business Manager / ADE state, supervision, Jamf Pro context, Kontakt.io / RTLS candidate signals, location, staff safety alerts, nurse call events, dock/return-station events, and badge / QR / NFC physical context. They are not first-proof requirements; they become follow-on or future roadmap inputs after the Microsoft posture proof and UEM posture model are grounded.

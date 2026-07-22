@@ -31,12 +31,19 @@ Modeled in code as `@workspace/flows` → `signal-sourcing.ts`
   working); `fidelityOf` reports the reduced confidence so nothing over-trusts a
   signal the Grid had to synthesize.
   - *A concrete, shipped example:* `signalgrid-mcp` (`DanFashauer/signalgrid-mcp`,
-    released) reads **macOS device security posture** — firewall, stealth mode,
-    FileVault, SIP, Gatekeeper — **directly from the endpoint, read-only**, where no
-    vendor API/MDM hook is assumed. That is exactly the `grid_collected` path: the
-    Grid obtaining a signal itself. It is honest about "unknown" (a check that can't
-    run returns unknown, never a false green), which is the same fail-safe discipline
-    the model enforces. See [API access & connectors](API_ACCESS_AND_CONNECTORS.md).
+    released) reads **macOS device posture** — device identity, OS build, security
+    controls (firewall, stealth mode, FileVault, SIP, Gatekeeper), MDM enrollment,
+    patch/update state, XProtect currency, network posture, persistence, and backup
+    state — **directly from the endpoint, read-only**, where no vendor API/MDM hook
+    is assumed. That is exactly the `grid_collected` path: the Grid obtaining a signal
+    itself. It is honest about "unknown" (a check that can't run returns unknown, never
+    a false green), the same fail-safe discipline this model enforces. The server also
+    **self-describes** how each of those signals plugs into this model — the MCP
+    resource `signalgrid://sourcing` publishes, for every posture section, the fabric
+    signal it feeds, its acquisition method (`grid_collected`), and its fidelity
+    (`medium` — authoritative but self-collected, so never over-trusted), pinned by a
+    test so it can't drift from the signals the server actually emits. See
+    [API access & connectors](API_ACCESS_AND_CONNECTORS.md).
 - **Gaps are surfaced, never hidden.** An `unavailable` source yields **no signal
   state at all** — it reads as missing downstream (fail-safe). The Grid never
   reports a situation as autonomously handled when the signal it depends on cannot

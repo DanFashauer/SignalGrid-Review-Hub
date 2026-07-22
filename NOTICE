@@ -1,0 +1,55 @@
+SignalGrid Review Hub
+Copyright (c) 2026 Daniel Fashauer. All rights reserved.
+
+------------------------------------------------------------------------
+What this notice covers
+------------------------------------------------------------------------
+
+This repository (DanFashauer/SignalGrid-Review-Hub) is the PUBLIC,
+public-safe reference and review surface for SignalGrid. The source code in
+this repository is released under the MIT License (see the LICENSE file);
+that grant applies to the code files in this repository and nothing else.
+
+The following are NOT licensed by the MIT grant and remain all rights
+reserved:
+
+  - The name and mark "SignalGrid" and any associated logos or brand
+    assets. "SignalGrid" is claimed as a trademark of Daniel Fashauer /
+    the SignalGrid entity. The MIT license on the code does not grant any
+    trademark rights; it does not permit use of the SignalGrid name or
+    marks to endorse, promote, or name derived products or services.
+
+  - The proprietary SignalGrid core (the private decision/orchestration
+    implementation), the hardware/enclosure designs, and any invention
+    disclosures. These live in private repositories and are not published
+    here. This public repository contains only a public-safe reference
+    subset (see docs/REPO_LINEAGE.md for the split).
+
+  - Written documentation, diagrams, and non-code assets in this
+    repository are Copyright (c) 2026 Daniel Fashauer, all rights
+    reserved, except where a file states otherwise.
+
+------------------------------------------------------------------------
+Provenance and dated record
+------------------------------------------------------------------------
+
+The git history of the SignalGrid repositories is a contemporaneous,
+timestamped, authored record of conception and development. It is
+preserved deliberately and should not be rewritten.
+
+------------------------------------------------------------------------
+No warranty / not production software
+------------------------------------------------------------------------
+
+SignalGrid is at a concept / pre-production stage. This repository is a
+buildable prototype and review surface, not production software, and makes
+no compliance, certification, or partnership claims. See
+docs/PUBLIC_MESSAGING_GUARDRAILS.md.
+
+------------------------------------------------------------------------
+Third-party components
+------------------------------------------------------------------------
+
+This project depends on third-party open-source packages, each governed by
+its own license. Those licenses are retained in the respective package
+distributions and are not superseded by this notice.

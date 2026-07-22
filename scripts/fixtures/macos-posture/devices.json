@@ -1,0 +1,144 @@
+{
+  "accessToken": "sg-macos-fixture-token",
+  "devices": {
+    "hardened-managed": {
+      "deviceId": "mac-hardened-01",
+      "report": {
+        "os": { "product_version": "15.5", "build_version": "24F74" },
+        "security": {
+          "sip": { "enabled": true },
+          "filevault": { "enabled": true },
+          "gatekeeper": { "enabled": true },
+          "firewall": { "enabled": true }
+        },
+        "mdm": { "mdm_enrolled": true, "dep_enrolled": true },
+        "updates": { "AutomaticCheckEnabled": true, "AutomaticallyInstallMacOSUpdates": true },
+        "xprotect": { "xprotect_definitions": "2183" }
+      },
+      "expected": {
+        "posture": "hardened",
+        "reasonCode": "FULLY_HARDENED",
+        "recommendedAction": "none",
+        "controlsOffCount": 0,
+        "controlsUnknownCount": 0,
+        "mdmEnrolled": true,
+        "osVersion": "15.5"
+      }
+    },
+    "filevault-off": {
+      "deviceId": "mac-fvoff-02",
+      "report": {
+        "os": { "product_version": "15.5", "build_version": "24F74" },
+        "security": {
+          "sip": { "enabled": true },
+          "filevault": { "enabled": false },
+          "gatekeeper": { "enabled": true },
+          "firewall": { "enabled": true }
+        },
+        "mdm": { "mdm_enrolled": true },
+        "updates": { "AutomaticCheckEnabled": true },
+        "xprotect": { "xprotect_definitions": "2183" }
+      },
+      "expected": {
+        "posture": "weakened",
+        "reasonCode": "HARDENING_CONTROL_OFF",
+        "recommendedAction": "restrict",
+        "controlsOffCount": 1,
+        "controlsUnknownCount": 0,
+        "mdmEnrolled": true,
+        "osVersion": "15.5"
+      }
+    },
+    "unmanaged": {
+      "deviceId": "mac-unmanaged-03",
+      "report": {
+        "os": { "product_version": "14.6" },
+        "security": {
+          "sip": { "enabled": true },
+          "filevault": { "enabled": true },
+          "gatekeeper": { "enabled": true },
+          "firewall": { "enabled": true }
+        },
+        "mdm": { "mdm_enrolled": false },
+        "updates": { "AutomaticCheckEnabled": true },
+        "xprotect": { "xprotect_definitions": "2183" }
+      },
+      "expected": {
+        "posture": "unmanaged",
+        "reasonCode": "DEVICE_UNMANAGED",
+        "recommendedAction": "step_up",
+        "controlsOffCount": 0,
+        "controlsUnknownCount": 0,
+        "mdmEnrolled": false,
+        "osVersion": "14.6"
+      }
+    },
+    "unverifiable": {
+      "deviceId": "mac-unknown-04",
+      "report": {
+        "os": { "product_version": "not found: sw_vers (probe unavailable)" },
+        "security": { "error": "csrutil unavailable — check could not run" },
+        "mdm": { "mdm_enrolled": null },
+        "updates": { "AutomaticCheckEnabled": null, "AutomaticallyInstallMacOSUpdates": null },
+        "xprotect": { "xprotect_definitions": "unavailable: not found: defaults" }
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "HARDENING_STATE_UNKNOWN",
+        "recommendedAction": "step_up",
+        "controlsOffCount": 0,
+        "controlsUnknownCount": 7,
+        "mdmEnrolled": null,
+        "osVersion": null
+      }
+    },
+    "patch-lagging": {
+      "deviceId": "mac-patchlag-05",
+      "report": {
+        "os": { "product_version": "15.4" },
+        "security": {
+          "sip": { "enabled": true },
+          "filevault": { "enabled": true },
+          "gatekeeper": { "enabled": true },
+          "firewall": { "enabled": true }
+        },
+        "mdm": { "mdm_enrolled": true },
+        "updates": { "AutomaticCheckEnabled": false, "AutomaticallyInstallMacOSUpdates": false },
+        "xprotect": { "xprotect_definitions": "2183" }
+      },
+      "expected": {
+        "posture": "patch_lagging",
+        "reasonCode": "AUTO_UPDATE_OFF",
+        "recommendedAction": "monitor",
+        "controlsOffCount": 0,
+        "controlsUnknownCount": 0,
+        "mdmEnrolled": true,
+        "osVersion": "15.4"
+      }
+    },
+    "worst-of-several": {
+      "deviceId": "mac-worst-06",
+      "report": {
+        "os": { "product_version": "13.7" },
+        "security": {
+          "sip": { "enabled": true },
+          "filevault": { "enabled": false },
+          "gatekeeper": { "enabled": true },
+          "firewall": { "enabled": true }
+        },
+        "mdm": { "mdm_enrolled": false },
+        "updates": { "AutomaticCheckEnabled": false },
+        "xprotect": { "xprotect_definitions": "2183" }
+      },
+      "expected": {
+        "posture": "weakened",
+        "reasonCode": "HARDENING_CONTROL_OFF",
+        "recommendedAction": "restrict",
+        "controlsOffCount": 1,
+        "controlsUnknownCount": 0,
+        "mdmEnrolled": false,
+        "osVersion": "13.7"
+      }
+    }
+  }
+}

@@ -97,6 +97,9 @@ jobs:
       - name: Credential-exposure (endpoint secrets) proof
         run: pnpm run proof:credential-exposure
 
+      - name: macOS endpoint-posture (grid-collected) proof
+        run: pnpm run proof:macos-posture
+
       - name: Posture-composition (unified signal fusion) proof
         run: pnpm run proof:posture-composition
 

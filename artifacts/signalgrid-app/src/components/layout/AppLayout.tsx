@@ -12,7 +12,8 @@ import {
   Sparkles,
   MonitorSmartphone,
   HeartPulse,
-  Radio
+  Radio,
+  FileCode
 } from "lucide-react";
 import {
   Sidebar,
@@ -99,6 +100,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+            </SidebarMenu>
+            <div className="px-4 pt-4 pb-1 text-[10px] font-mono uppercase tracking-wider text-muted-foreground/70">Build the grid</div>
+            <SidebarMenu className="px-2 gap-1">
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location.startsWith("/intelligence")}>
                   <Link href="/intelligence">
@@ -128,6 +132,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <Link href="/signal-sourcing">
                     <Radio className="w-4 h-4 mr-2" />
                     <span>Signal sourcing</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location.startsWith("/grid-config")}>
+                  <Link href="/grid-config">
+                    <FileCode className="w-4 h-4 mr-2" />
+                    <span>Grid config</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

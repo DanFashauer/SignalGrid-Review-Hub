@@ -397,9 +397,12 @@ final class HostAppViewController: UIViewController {
         let action = plan.actions.first { $0.key == step.key }
         AuditLogger.shared.log(event: .assistActionConfirmed, metadata: ["action": step.key])
         AuditLogger.shared.log(event: .assistActionApplied, metadata: ["action": step.key])
+        let gatesCleared = d.outcome == .step_up
+            ? "Two gates cleared: a native step-up AND an explicit confirmation."
+            : "One gate cleared: an explicit confirmation."
         setGlass(step.key, action?.disposition.rawValue ?? "applied",
                  "CONFIRMED_BY_\(confirmer.uppercased().replacingOccurrences(of: " ", with: "_"))",
-                 "The \(confirmer) confirmed in the app's own dialog → the held action is applied. \(d.outcome == .step_up ? "Two gates cleared: a native step-up AND an explicit confirmation." : "One gate cleared: an explicit confirmation.")")
+                 "The \(confirmer) confirmed in the app's own dialog → the held action is applied. \(gatesCleared)")
         markHeldRowDone()
         showBanner(step.hostDone, kind: .ok)
         advance()

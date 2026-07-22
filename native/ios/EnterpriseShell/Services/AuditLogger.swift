@@ -83,6 +83,17 @@ final class AuditLogger {
         case badgeReaderProviderError
         case badgeReaderProviderStateChange
         case sessionStateChanged
+
+        // Embedded Assist gate (app-workflows Assist model)
+        case assistActionEvaluated
+        case assistActionAuto
+        case assistStepUpRequested
+        case assistStepUpSatisfied
+        case assistStepUpFailed
+        case assistActionAwaitingConfirmation
+        case assistActionConfirmed
+        case assistActionApplied
+        case assistActionBlocked
     }
 
     // MARK: - Properties

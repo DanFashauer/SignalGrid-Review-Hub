@@ -64,5 +64,7 @@
     </array>
     <key>NSExternalAccessoryManualSelect</key>
     <true/>
+    <key>NSFaceIDUsageDescription</key>
+    <string>Verify it's you before performing a sensitive action on this shared device.</string>
 </dict>
 </plist>

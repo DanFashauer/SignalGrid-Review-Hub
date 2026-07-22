@@ -84,6 +84,21 @@ enum DemoMode {
             || ProcessInfo.processInfo.arguments.contains("-DemoOpenApp")
     }
 
+    /// When enabled (`-DemoAssist`), the embedded Assist host-app demo auto-opens so
+    /// the invisible-gate flow (allow → step-up → confirm → applied) can be shown.
+    static var assist: Bool {
+        UserDefaults.standard.bool(forKey: "DemoAssist")
+            || ProcessInfo.processInfo.arguments.contains("-DemoAssist")
+    }
+
+    /// When enabled (`-DemoAssistAuto`), the embedded host-app demo self-walks the
+    /// full gate flow (auto reads → held step-up → confirm → applied) so each state
+    /// can be captured without manual taps.
+    static var assistAuto: Bool {
+        UserDefaults.standard.bool(forKey: "DemoAssistAuto")
+            || ProcessInfo.processInfo.arguments.contains("-DemoAssistAuto")
+    }
+
     /// Building/area the device is deployed in (`-DemoLocation warehouse|clinic|office`).
     /// Drives which role + app workspace the user is provisioned with — mirroring how the
     /// SignalGrid control plane configures a persona by workflow and location.

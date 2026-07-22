@@ -237,6 +237,12 @@ final class ActiveSessionViewController: UIViewController {
                 self?.present(ManagedAppViewController(app: app, url: url), animated: true)
             }
         }
+        // Demo: auto-open the embedded Assist host-app demo (invisible gate flow).
+        if DemoMode.assist {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                self?.present(HostAppViewController(), animated: true)
+            }
+        }
         // Demo: auto-end the session after a beat so the terminate -> teardown ->
         // lockedIdle flow can be exercised without tapping "End Session".
         if DemoMode.autoEnd {
@@ -435,6 +441,14 @@ final class ActiveSessionViewController: UIViewController {
         )
         refreshButton.addTarget(self, action: #selector(refreshSessionTapped), for: .touchUpInside)
         
+        // Host app (embedded Assist flow) — the invisible-gate reference.
+        let hostAppButton = createQuickActionButton(
+            icon: "cross.case.fill",
+            title: "Host App",
+            color: .systemTeal
+        )
+        hostAppButton.addTarget(self, action: #selector(hostAppTapped), for: .touchUpInside)
+
         // Help action
         let helpButton = createQuickActionButton(
             icon: "questionmark.circle.fill",
@@ -442,10 +456,20 @@ final class ActiveSessionViewController: UIViewController {
             color: .systemPurple
         )
         helpButton.addTarget(self, action: #selector(helpTapped), for: .touchUpInside)
-        
+
         quickActionsStack.addArrangedSubview(lockButton)
+        quickActionsStack.addArrangedSubview(hostAppButton)
         quickActionsStack.addArrangedSubview(refreshButton)
         quickActionsStack.addArrangedSubview(helpButton)
+    }
+
+    /// Open the embedded Assist host-app demo — a generic, un-branded host app with
+    /// the invisible SignalGrid gate underneath (allow → auto, sensitive → native
+    /// step-up + host confirm, per EMBEDDED_UX_PRINCIPLE.md). Presented contained
+    /// inside the kiosk, like ManagedAppViewController.
+    @objc private func hostAppTapped() {
+        SessionStateManager.shared.userDidInteract()
+        present(HostAppViewController(), animated: true)
     }
     
     private func createQuickActionButton(icon: String, title: String, color: UIColor) -> UIButton {

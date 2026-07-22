@@ -9,6 +9,7 @@ import type { PeripheralVerdict } from "@workspace/integrations/peripheral-contr
 import type { DlpVerdict } from "@workspace/integrations/data-protection";
 import type { CredentialExposureVerdict } from "@workspace/integrations/credential-exposure";
 import type { MacosPostureVerdict } from "@workspace/integrations/macos-posture";
+import type { OtPostureVerdict } from "@workspace/integrations/ot-posture";
 import type { GraphPostureSignal } from "@workspace/integrations/graph";
 import type { Detection } from "@workspace/event-contract";
 import { ACTION_RANK } from "./compose";
@@ -74,6 +75,15 @@ export function fromCredentialExposure(v: CredentialExposureVerdict): Composable
   // are already on the unified ladder. A live high-value secret on the endpoint
   // escalates — contain the blast radius of a device assumed compromised.
   return { kind: "credential_exposure", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromOtPosture(v: OtPostureVerdict): ComposableSignal {
+  // OT/IIoT edge-device posture from the grid_collected path (an edge gateway
+  // reading a PLC/RTU/HMI that can't run an agent). Actions are already on the
+  // unified ladder. Fail-safe: a flat network / exposed protocol / unpatchable
+  // device restricts; a stale gateway or unreadable control steps up — an
+  // unseen OT device is never fused as secure.
+  return { kind: "ot_posture", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromMacosPosture(v: MacosPostureVerdict): ComposableSignal {

@@ -100,6 +100,9 @@ jobs:
       - name: macOS endpoint-posture (grid-collected) proof
         run: pnpm run proof:macos-posture
 
+      - name: OT / IIoT edge-device posture (grid-collected) proof
+        run: pnpm run proof:ot-posture
+
       - name: Posture-composition (unified signal fusion) proof
         run: pnpm run proof:posture-composition
 

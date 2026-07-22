@@ -117,6 +117,68 @@ check("collector sentinel strings normalize to null/unknown", sentinel.osVersion
 const junk = normalizeReport("j", { os: { product_version: "%Su" }, xprotect: { xprotect_definitions: "%Su" } } as MacosPostureReportRaw);
 check("a '%'-format junk string normalizes to null/unknown (not fabricated)", junk.osVersion === null && junk.malwareDefs === "unknown");
 
+// ── system extensions (stranded / conflicting agent) ───────────────────────────
+// A hardened Mac EXCEPT a stranded security extension — the residual agent is a
+// real hardening gap (it blocks reinstall of protection).
+const HARDENED = {
+  os: { product_version: "15.5" },
+  security: { sip: { enabled: true }, filevault: { enabled: true }, gatekeeper: { enabled: true }, firewall: { enabled: true } },
+  mdm: { mdm_enrolled: true },
+  updates: { AutomaticCheckEnabled: true },
+  xprotect: { xprotect_definitions: "2183" },
+} as unknown as MacosPostureReportRaw;
+const stranded = evaluateMacosPosture(normalizeReport("mac-strand", {
+  ...HARDENED,
+  system_extensions: { available: true, reliable: true, residual_count: 1, extensions: [{ category: "com.apple.system_extension.endpoint_security", status: "residual", enabled: false }] },
+} as MacosPostureReportRaw));
+check("a stranded security extension → weakened/restrict (blocks protection reinstall)", stranded.posture === "weakened" && stranded.recommendedAction === "restrict" && stranded.reasonCode === "SECURITY_EXTENSION_STRANDED");
+
+// Two enabled endpoint-security extensions → conflict.
+const conflict = evaluateMacosPosture(normalizeReport("mac-conflict", {
+  ...HARDENED,
+  system_extensions: { available: true, reliable: true, residual_count: 0, extensions: [
+    { category: "com.apple.system_extension.endpoint_security", status: "active", enabled: true },
+    { category: "com.apple.system_extension.endpoint_security", status: "active", enabled: true },
+  ] },
+} as MacosPostureReportRaw));
+check("two enabled endpoint-security extensions → conflict/restrict", conflict.reasonCode === "SECURITY_EXTENSION_CONFLICT" && conflict.recommendedAction === "restrict");
+
+// A system_extensions section provided but UNREADABLE raises the bar (fail-safe).
+const sxUnreliable = evaluateMacosPosture(normalizeReport("mac-sxbad", {
+  ...HARDENED,
+  system_extensions: { available: false },
+} as MacosPostureReportRaw));
+check("an unreadable system_extensions section → unverified/step_up (not a silent pass)", sxUnreliable.controlsUnknown.includes("system_extensions") && sxUnreliable.recommendedAction === "step_up");
+
+// An ABSENT section is NOT a factor — a hardened Mac stays hardened (we do not
+// raise the bar for a signal we never claimed to assess).
+const noSx = evaluateMacosPosture(normalizeReport("mac-nosx", HARDENED));
+check("an absent system_extensions section does not penalize a hardened Mac", noSx.posture === "hardened" && noSx.sysextResidual === null);
+
+// Regression (review MAJOR): a reliable section with an UNREADABLE extension list
+// must not silently assert "no conflict" — it raises the bar instead.
+const sxNoExts = evaluateMacosPosture(normalizeReport("mac-noexts", {
+  ...HARDENED,
+  system_extensions: { available: true, reliable: true, residual_count: 0 },
+} as MacosPostureReportRaw));
+check("a reliable section without a readable extension list → unverified/step_up (no silent 'no conflict')", sxNoExts.controlsUnknown.includes("system_extensions") && sxNoExts.recommendedAction === "step_up" && sxNoExts.sysextConflict === null);
+
+// Regression (review MAJOR): a present-but-non-object section (null / string) is a
+// degraded read, NOT "not assessed" — it raises the bar.
+const sxNull = evaluateMacosPosture(normalizeReport("mac-sxnull", {
+  ...HARDENED,
+  system_extensions: null,
+} as unknown as MacosPostureReportRaw));
+check("a present-but-null system_extensions section → unverified/step_up (not a silent pass)", sxNull.controlsUnknown.includes("system_extensions") && sxNull.recommendedAction === "step_up");
+
+// Regression (review MINOR): a sentinel/negative residual_count is unreadable, not
+// zero — it raises the bar rather than reading clean.
+const sxBadCount = evaluateMacosPosture(normalizeReport("mac-badcount", {
+  ...HARDENED,
+  system_extensions: { available: true, reliable: true, residual_count: -1, extensions: [] },
+} as MacosPostureReportRaw));
+check("a negative/sentinel residual_count → unverified/step_up (not clean)", sxBadCount.controlsUnknown.includes("system_extensions") && sxBadCount.recommendedAction === "step_up");
+
 // Determinism.
 const d = await connector.fetchPosture(fixture.devices["filevault-off"].deviceId);
 check("evaluator is deterministic", JSON.stringify(evaluateMacosPosture(d)) === JSON.stringify(evaluateMacosPosture(d)));

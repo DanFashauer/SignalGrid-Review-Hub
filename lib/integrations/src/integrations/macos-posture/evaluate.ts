@@ -63,8 +63,18 @@ export function evaluateMacosPosture(
   if (posture.mdmEnrolled === null) controlsUnknown.push("mdm");
   if (posture.malwareDefs === "unknown") controlsUnknown.push("xprotect");
   if (posture.autoUpdate === "unknown") controlsUnknown.push("auto_update");
+  // A system_extensions section that was provided but could not be trusted raises
+  // the bar (never a silent pass); an ABSENT section is simply not a factor.
+  if (posture.sysextUnreliable) controlsUnknown.push("system_extensions");
 
-  const base = { controlsOff, controlsUnknown, mdmEnrolled: posture.mdmEnrolled, osVersion: posture.osVersion };
+  const base = {
+    controlsOff,
+    controlsUnknown,
+    mdmEnrolled: posture.mdmEnrolled,
+    osVersion: posture.osVersion,
+    sysextResidual: posture.sysextResidual,
+    sysextConflict: posture.sysextConflict,
+  };
 
   // No report at all → unknown (blind spot). Fail-safe: this RAISES the bar to
   // step_up, the same as an unreadable report — never `monitor`, because
@@ -93,6 +103,19 @@ export function evaluateMacosPosture(
   // silent-failure guard: a probe that could not run must not read as compliant.
   if (controlsUnknown.length > 0) {
     candidates.push({ posture: "unverified", action: "step_up", reason: "HARDENING_STATE_UNKNOWN" });
+  }
+
+  // A stranded security extension (still registered after its app is gone) is a
+  // real hardening gap — it occupies the slot and can block reinstall of
+  // protection. Treat like a disabled control.
+  if (posture.sysextResidual !== null && posture.sysextResidual > 0) {
+    candidates.push({ posture: "weakened", action: "restrict", reason: "SECURITY_EXTENSION_STRANDED" });
+  }
+
+  // Two enabled endpoint-security extensions fighting — a conflict that degrades
+  // protection on the endpoint.
+  if (posture.sysextConflict === true) {
+    candidates.push({ posture: "weakened", action: "restrict", reason: "SECURITY_EXTENSION_CONFLICT" });
   }
 
   // Auto-update explicitly disabled — the endpoint will drift out of patch currency.

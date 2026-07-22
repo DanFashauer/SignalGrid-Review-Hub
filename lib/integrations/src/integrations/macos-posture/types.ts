@@ -50,6 +50,16 @@ export interface MacosPostureReportRaw {
     [k: string]: unknown;
   };
   xprotect?: { xprotect_definitions?: unknown; [k: string]: unknown };
+  /** Optional enrichment from signalgrid_system_extensions. When absent it is
+   *  simply not assessed (contributes nothing); when present-but-unreadable it
+   *  raises the bar (see evaluate). */
+  system_extensions?: {
+    available?: unknown;
+    reliable?: unknown;
+    residual_count?: unknown;
+    extensions?: Array<{ category?: unknown; status?: unknown; enabled?: unknown }>;
+    [k: string]: unknown;
+  };
   [k: string]: unknown;
 }
 
@@ -66,6 +76,14 @@ export interface NormalizedMacosPosture {
   mdmEnrolled: boolean | null;
   autoUpdate: MacosControl;
   malwareDefs: MacosDefsState;
+  /** Stranded security extensions (registered after their app is gone). null =
+   *  not assessed or unreadable. > 0 = a real hardening concern (blocks reinstall). */
+  sysextResidual: number | null;
+  /** Two+ enabled endpoint-security extensions fighting. null = not assessed/unreadable. */
+  sysextConflict: boolean | null;
+  /** True when a system_extensions section WAS provided but could not be trusted
+   *  (available/reliable false, or counts unreadable) — raises the bar, fail-safe. */
+  sysextUnreliable: boolean;
   source: string;
 }
 
@@ -87,6 +105,8 @@ export type MacosReasonCode =
   | "DEVICE_UNMANAGED"
   | "HARDENING_STATE_UNKNOWN"
   | "HARDENING_CONTROL_OFF"
+  | "SECURITY_EXTENSION_STRANDED"
+  | "SECURITY_EXTENSION_CONFLICT"
   | "NOT_COVERED";
 
 /** All members are on the unified action ladder used by posture-composition. */
@@ -102,6 +122,10 @@ export interface MacosPostureVerdict {
   controlsUnknown: string[];
   mdmEnrolled: boolean | null;
   osVersion: string | null;
+  /** Stranded security extensions counted (null = not assessed/unreadable). */
+  sysextResidual: number | null;
+  /** Conflicting endpoint-security extensions (null = not assessed/unreadable). */
+  sysextConflict: boolean | null;
 }
 
 export type MacosPostureConnectorErrorCode =

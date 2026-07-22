@@ -178,7 +178,7 @@ export interface PlanOptions {
   enforcementEnabled?: boolean;
 }
 
-function deviceMatches(rec: DeviceSetupRecording, device: ProvisioningDevice): boolean {
+export function deviceMatches(rec: DeviceSetupRecording, device: ProvisioningDevice): boolean {
   const m = rec.match ?? {};
   const hasSelector = (typeof m.serialPrefix === "string" && m.serialPrefix.length > 0) || (typeof m.model === "string" && m.model.length > 0);
   if (!hasSelector) return false; // fail closed — never match everything

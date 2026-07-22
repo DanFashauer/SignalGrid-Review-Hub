@@ -17,7 +17,7 @@
 // Pure and deterministic. No device is contacted here.
 
 import type { SetupStep, SetupStepKind, DeviceSetupRecording, ProvisioningDevice } from "./provisioning";
-import { setupRecordingValid } from "./provisioning";
+import { setupRecordingValid, deviceMatches } from "./provisioning";
 
 /** What a teardown step does to reverse a setup step. */
 export type TeardownAction = "deactivate" | "remove" | "unbind" | "revoke";
@@ -123,11 +123,24 @@ export function lintTeardown(rec: DeviceSetupRecording): TeardownIssue[] {
       errors.push({ severity: "error", code: "teardown_step_unmatched", subject: id, message: `Recording "${id}" teardown step "${t.key}" reverses no setup step.` });
       continue;
     }
+    // The reversed step's kind MUST be a recognized SetupStepKind — every
+    // kind-specific fail-safe below (deactivate-not-delete, restart, dependency
+    // order) keys off it, so an unknown/typo'd/masked kind must fail here rather
+    // than silently skip those guarantees. Defense-in-depth behind setup lint,
+    // which independently rejects such a recording.
+    if (!(setup.kind in TEARDOWN_ORDER)) {
+      errors.push({ severity: "error", code: "teardown_unknown_setup_kind", subject: id, message: `Recording "${id}" teardown step "${t.key}" reverses a setup step of unrecognized kind "${String(setup.kind)}"; its reversal cannot be proven safe.` });
+    }
     if (!TEARDOWN_ACTIONS.includes(t.action)) {
       errors.push({ severity: "error", code: "invalid_teardown_action", subject: id, message: `Recording "${id}" teardown step "${t.key}" has an unrecognized action "${String(t.action)}"; expected one of ${TEARDOWN_ACTIONS.join(", ")}.` });
     }
     if (t.sensitive !== undefined && typeof t.sensitive !== "boolean") {
       errors.push({ severity: "error", code: "invalid_teardown_sensitive_flag", subject: id, message: `Recording "${id}" teardown step "${t.key}" has a non-boolean sensitive value "${String(t.sensitive)}".` });
+    }
+    // requiresRestart is strict-boolean too (symmetric with sensitive): a mistyped
+    // "true"/1 must not silently drop the restart-state hold.
+    if (t.requiresRestart !== undefined && typeof t.requiresRestart !== "boolean") {
+      errors.push({ severity: "error", code: "invalid_teardown_restart_flag", subject: id, message: `Recording "${id}" teardown step "${t.key}" has a non-boolean requiresRestart value "${String(t.requiresRestart)}".` });
     }
     // The agent/extension: must be DEACTIVATED (not merely removed) and must
     // acknowledge the restart before the reversal is trusted complete.
@@ -198,7 +211,11 @@ export interface TeardownStepPlan {
 export interface TeardownPlan {
   recordingId: string;
   deviceSerial: string;
+  /** The recording's teardown is proven safe (reversal validated). */
   proven: boolean;
+  /** The recording is deploy-ready (setup valid AND teardown proven) AND this
+   *  device matches the recording. Only a matched, deploy-ready plan can execute. */
+  matched: boolean;
   mode: TeardownMode;
   steps: TeardownStepPlan[];
   requiresApproval: number;
@@ -216,8 +233,14 @@ export interface TeardownPlanOptions {
 }
 
 /**
- * Plan a device decommission. Fail-safe, mirroring planZeroTouchSetup:
- *  - a recording whose teardown is NOT proven is never executed (proven:false);
+ * Plan a device decommission. Fail-safe, with the SAME gates as
+ * planZeroTouchSetup — a real removal requires a valid, proven, matched recording:
+ *  - a recording that is NOT deploy-ready (setup invalid OR teardown unproven) is
+ *    never executed. This is the load-bearing gate: `teardownProven` alone is not
+ *    enough, because its kind-specific guarantees (deactivate-not-delete, restart,
+ *    order) key off a setup kind that a malformed recording could mask — so the
+ *    executor gates on `deployReady`, never `teardownProven` in isolation;
+ *  - a device that does not match the recording's selector is NEVER touched;
  *  - real removal happens ONLY when enforcementEnabled === true AND mode ===
  *    "enforced"; otherwise every step is held_simulated (a dry-run rehearsal);
  *  - even enforced, a sensitive removal is approval_required, never auto;
@@ -231,13 +254,19 @@ export function planTeardown(
   const mode: TeardownMode = opts.mode === "enforced" ? "enforced" : "simulated";
   const reallyEnforcing = mode === "enforced" && opts.enforcementEnabled === true;
   const proven = teardownProven(rec);
+  const ready = deployReady(rec);
   const base = { recordingId: typeof rec.id === "string" ? rec.id : "", deviceSerial: device.serial, mode, proven };
 
-  if (!proven) {
-    return { ...base, steps: [], requiresApproval: 0, willRemoveAnything: false, verifiesClean: false, reason: `Recording "${base.recordingId}" teardown is not proven — not executed. Rehearse and fix the reversal first.` };
+  // Not deploy-ready (invalid setup OR unproven teardown) → never executed.
+  if (!ready) {
+    return { ...base, matched: false, steps: [], requiresApproval: 0, willRemoveAnything: false, verifiesClean: false, reason: `Recording "${base.recordingId}" is not deploy-ready (setup invalid or teardown unproven) — not executed. Rehearse and fix the reversal first.` };
+  }
+  // Device does not match the recording → never touched (same as apply).
+  if (!deviceMatches(rec, device)) {
+    return { ...base, matched: false, steps: [], requiresApproval: 0, willRemoveAnything: false, verifiesClean: false, reason: `Device ${device.serial} does not match recording "${base.recordingId}" — not touched.` };
   }
 
-  const teardown = rec.teardown as TeardownPlanSpec; // proven ⇒ present & shaped
+  const teardown = rec.teardown as TeardownPlanSpec; // deploy-ready ⇒ present & shaped
   const steps: TeardownStepPlan[] = teardown.steps.map((t) => {
     const requiresRestart = t.requiresRestart === true;
     if (!reallyEnforcing) {
@@ -256,5 +285,5 @@ export function planTeardown(
   const reason = reallyEnforcing
     ? `Enforced decommission: ${steps.filter((s) => s.disposition === "auto_remove").length} auto, ${requiresApproval} awaiting approval, then a clean-state check.`
     : `Proven — ${steps.length} reversal steps rehearsed, all simulated (enforcement off), clean-state check included.`;
-  return { ...base, steps, requiresApproval, willRemoveAnything, verifiesClean: teardown.verifyClean === true, reason };
+  return { ...base, matched: true, steps, requiresApproval, willRemoveAnything, verifiesClean: teardown.verifyClean === true, reason };
 }

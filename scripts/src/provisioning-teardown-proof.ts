@@ -135,15 +135,38 @@ check("enforced + enabled: the sensitive lockdown removal requires approval", li
 check("enforced plan preserves dependency order (agent before pppc)", live.steps.findIndex((s) => s.key === "agent") < live.steps.findIndex((s) => s.key === "pppc"));
 check("enforced plan removes something and still verifies clean", live.willRemoveAnything === true && live.verifiesClean === true);
 
-// A non-matching device is never touched even with a proven teardown.
+// Regression (review MAJOR): a non-matching device is NEVER touched, even under
+// enforced mode with a proven teardown — same gate as planZeroTouchSetup.
 const otherDevice = { serial: "XXXX-9999" };
-const matched = planTeardown(good, otherDevice, { mode: "enforced", enforcementEnabled: true });
-// (planTeardown does not re-check device match — that is provisioning's job — but a
-// proven plan on a wrong-serial device still must not auto-run against reality; the
-// operator flow gates on setup match. Here we assert the plan is deterministic.)
+const wrongDevice = planTeardown(good, otherDevice, { mode: "enforced", enforcementEnabled: true });
+check("a non-matching device is never touched (matched:false, no removal)", wrongDevice.matched === false && wrongDevice.steps.length === 0 && wrongDevice.willRemoveAnything === false);
+
+// Regression (review BLOCKER): a recording whose SETUP is invalid (a typo'd kind)
+// but whose teardown looks 'proven' must NOT execute a real removal. Gating on
+// deployReady (not teardownProven alone) is what closes the stranding hole.
+const typoKind: DeviceSetupRecording = {
+  id: "rec_typo",
+  name: "Typo'd kind",
+  match: { serialPrefix: "CMAC-" },
+  triggers: ["first_boot"],
+  // "appinstall" is NOT a valid SetupStepKind — setup is invalid, so NOT deploy-ready.
+  steps: [{ key: "agent", label: "Install agent", kind: "appinstall" as never }],
+  teardown: { verifyClean: true, steps: [{ key: "agent", label: "Remove agent", action: "remove" }] },
+};
+check("an invalid setup kind is not deploy-ready (setup invalid)", !setupRecordingValid(typoKind) && !deployReady(typoKind));
+check("lintTeardown also flags the unknown reversed kind (defense-in-depth)", lintTeardown(typoKind).some((i) => i.code === "teardown_unknown_setup_kind"));
+const typoPlan = planTeardown(typoKind, { serial: "CMAC-0002" }, { mode: "enforced", enforcementEnabled: true });
+check("an invalid recording NEVER auto-removes (no stranded extension)", typoPlan.matched === false && typoPlan.willRemoveAnything === false && typoPlan.steps.length === 0);
+
+// Regression (review MINOR): a non-boolean requiresRestart is rejected (symmetric
+// with sensitive) so a mistyped flag can't silently drop the restart hold.
+const badRestart: DeviceSetupRecording = {
+  ...good,
+  teardown: { verifyClean: true, steps: good.teardown!.steps.map((s) => (s.key === "wifi" ? { ...s, requiresRestart: "true" as never } : s)) },
+};
+check("a non-boolean requiresRestart → invalid_teardown_restart_flag", errCodes(badRestart).includes("invalid_teardown_restart_flag"));
+
 check("planner is deterministic", JSON.stringify(planTeardown(good, device)) === JSON.stringify(planTeardown(good, device)));
-void matched;
-void otherDevice;
 
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);

@@ -68,6 +68,55 @@ function autoUpdate(updates: MacosPostureReportRaw["updates"]): MacosControl {
 }
 
 /**
+ * Fold an optional system_extensions section (from signalgrid_system_extensions)
+ * into three fail-safe fields. Distinguishes three cases:
+ *  - section ABSENT → not assessed; contributes nothing (residual/conflict null,
+ *    unreliable false). We do not raise the bar for a signal we never claimed.
+ *  - section present but available/reliable false, or counts unreadable →
+ *    unreliable=true (raises the bar), counts null.
+ *  - section present and trustworthy → residual count + conflict boolean.
+ */
+function normalizeSysext(sxRaw: unknown): {
+  residual: number | null;
+  conflict: boolean | null;
+  unreliable: boolean;
+} {
+  // ONLY a truly absent section is "not assessed". Any present-but-degraded value
+  // (null, a string, a number — a section that couldn't produce an object) must
+  // raise the bar, not pass silently.
+  if (sxRaw === undefined) return { residual: null, conflict: null, unreliable: false };
+  if (sxRaw === null || typeof sxRaw !== "object") return { residual: null, conflict: null, unreliable: true };
+  const sx = sxRaw as { available?: unknown; reliable?: unknown; residual_count?: unknown; extensions?: unknown };
+  if (sx.available !== true || sx.reliable !== true) {
+    return { residual: null, conflict: null, unreliable: true };
+  }
+  // A residual count must be a non-negative integer; a sentinel (-1) / NaN / non-number
+  // is unreadable, not zero.
+  const rc = sx.residual_count;
+  const residual = typeof rc === "number" && Number.isInteger(rc) && rc >= 0 ? rc : null;
+  // Conflict needs the extension list. If it's not a readable array we CANNOT
+  // assert "no conflict" — asserting false would be a silent pass. Mark it
+  // unassessable (conflict null) and raise the bar.
+  if (!Array.isArray(sx.extensions)) {
+    return { residual, conflict: null, unreliable: true };
+  }
+  // A conflict is 2+ ENABLED, ACTIVE endpoint-security extensions (two EDRs fighting).
+  // Consumes the MCP tool's normalized status ("active"); compared case-insensitively.
+  const activeEndpointSecurity = sx.extensions.filter((e): boolean => {
+    if (!e || typeof e !== "object") return false;
+    const x = e as { category?: unknown; status?: unknown; enabled?: unknown };
+    return (
+      typeof x.category === "string" && x.category.toLowerCase().includes("endpoint_security") &&
+      String(x.status).toLowerCase() === "active" && x.enabled === true
+    );
+  }).length;
+  const conflict = activeEndpointSecurity >= 2;
+  // reliable claimed but the count is unreadable/invalid → still fail-safe.
+  if (residual === null) return { residual: null, conflict, unreliable: true };
+  return { residual, conflict, unreliable: false };
+}
+
+/**
  * Normalize a raw signalgrid-mcp posture report into the fabric's shape.
  * `deviceId` is supplied by the collector context (the report itself is about
  * "this Mac"); `source` labels the bridge/collector. Defensive throughout: a
@@ -81,6 +130,7 @@ export function normalizeReport(
   const sec = report.security ?? {};
   const mdm = report.mdm ?? {};
   const os = report.os ?? {};
+  const sysext = normalizeSysext(report.system_extensions);
   return {
     sourceSystem: "macos-posture",
     deviceId,
@@ -92,6 +142,9 @@ export function normalizeReport(
     mdmEnrolled: typeof mdm.mdm_enrolled === "boolean" ? mdm.mdm_enrolled : null,
     autoUpdate: autoUpdate(report.updates),
     malwareDefs: malwareDefs(report.xprotect?.xprotect_definitions),
+    sysextResidual: sysext.residual,
+    sysextConflict: sysext.conflict,
+    sysextUnreliable: sysext.unreliable,
     source,
   };
 }

@@ -68,6 +68,8 @@ Where an Apple UEM (Jamf, Intune) is present, SignalGrid consumes its posture vi
 
 The `macos-posture` connector (`lib/integrations/src/integrations/macos-posture`) implements exactly this. It ingests a read-only posture report from the companion open-source [`signalgrid-mcp`](https://github.com/DanFashauer/signalgrid-mcp) server — SIP, FileVault, Gatekeeper, firewall, MDM enrollment, auto-update settings, and whether XProtect definitions are readable — and normalizes it into one endpoint-hardening posture the fabric fuses (`fromMacosPosture` → a `device_posture` signal on the unified action ladder).
 
+When the report includes the optional system-extension inventory (from the read-only `signalgrid_system_extensions` tool), the connector also folds in a **stranded / conflicting security-agent** signal: a security extension still registered after its app is gone (it blocks reinstall of protection) → `weakened`/restrict; two enabled endpoint-security extensions (a conflict) → `weakened`/restrict; a section provided but unreadable → `unverified`/step-up. An **absent** section is simply not assessed (it never penalizes a device for a signal it didn't claim).
+
 It is fail-safe by construction, mirroring the MCP server's own discipline:
 
 - A hardening control the collector reports **off** → the device is `weakened` and the verdict restricts.

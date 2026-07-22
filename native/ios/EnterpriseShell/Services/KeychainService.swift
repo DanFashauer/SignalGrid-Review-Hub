@@ -32,7 +32,7 @@ final class KeychainService {
         // Delete existing item first
         delete(forKey: key)
         
-        let query: [String: Any] = [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: serviceName,
             kSecAttrAccount as String: key,
@@ -54,7 +54,7 @@ final class KeychainService {
     
     /// Retrieve data from Keychain
     func retrieve(forKey key: String) throws -> Data? {
-        let query: [String: Any] = [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: serviceName,
             kSecAttrAccount as String: key,
@@ -83,7 +83,7 @@ final class KeychainService {
     
     /// Delete item from Keychain
     func delete(forKey key: String) {
-        let query: [String: Any] = [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: serviceName,
             kSecAttrAccount as String: key
@@ -100,7 +100,7 @@ final class KeychainService {
     
     /// Check if item exists in Keychain
     func exists(forKey key: String) -> Bool {
-        let query: [String: Any] = [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: serviceName,
             kSecAttrAccount as String: key,
@@ -236,19 +236,6 @@ enum KeychainError: LocalizedError {
             return "Failed to encode data for Keychain"
         case .decodingFailed:
             return "Failed to decode data from Keychain"
-        }
-    }
-}
-
-// MARK: - SecItemDelete Extension
-
-private extension SecItemDelete {
-    static func delete(_ query: CFDictionary) {
-        let status = SecItemDelete(query)
-        // Ignore not found errors
-        if status != errSecSuccess && status != errSecItemNotFound {
-            // Log error in production
-            print("Keychain delete error: \(status)")
         }
     }
 }

@@ -25,7 +25,7 @@ final class BLEBadgeReaderProvider: NSObject, BadgeReaderProvider {
     
     var providerId: String { "ble_\(uuidPrefix)" }
     var displayName: String { "BLE Badge Reader" }
-    var isConnected: Bool { peripheral?.state == .connected }
+    var isConnected: Bool { connectedPeripheral?.state == .connected }
     
     weak var delegate: BadgeReaderProviderDelegate?
     

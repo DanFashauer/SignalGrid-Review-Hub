@@ -103,6 +103,17 @@ final class LockedIdleViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         updateReaderStatus()
+        #if targetEnvironment(simulator)
+        // The simulator has no badge-reader hardware. If launched with
+        // `-SimulateBadge <id>`, inject that badge so the session flow can be
+        // exercised end-to-end without a physical reader.
+        if let badge = UserDefaults.standard.string(forKey: "SimulateBadge"), !badge.isEmpty {
+            UserDefaults.standard.removeObject(forKey: "SimulateBadge")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                SessionStateManager.shared.onBadgeScanned(badge)
+            }
+        }
+        #endif
     }
     
     deinit {

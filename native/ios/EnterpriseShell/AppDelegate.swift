@@ -32,10 +32,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         configurationForConnecting connectingSceneSession: UISceneSession,
         options: UIScene.ConnectionOptions
     ) -> UISceneConfiguration {
-        return UISceneConfiguration(
+        let config = UISceneConfiguration(
             name: "Default Configuration",
             sessionRole: connectingSceneSession.role
         )
+        // Assign the delegate from the real Swift type — the Info.plist string
+        // lookup (NSClassFromString) was silently failing, so willConnect never
+        // fired and no window was created (black screen).
+        config.delegateClass = SceneDelegate.self
+        return config
     }
     
     func application(

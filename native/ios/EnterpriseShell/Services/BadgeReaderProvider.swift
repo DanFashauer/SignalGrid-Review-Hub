@@ -1,6 +1,13 @@
 import Foundation
 import UIKit
 
+/// Stub: the HTTP-webhook badge reader is not yet implemented. This placeholder
+/// lets the passive HTTP webhook provider compile; setup()/stop() are no-ops
+/// until a real embedded HTTP listener is added.
+private final class HTTPServer {
+    func stop() {}
+}
+
 /// Protocol defining the interface for badge reader providers
 /// Allows integration with any badge reader system (USB, Bluetooth, NFC, serial, etc.)
 protocol BadgeReaderProvider: AnyObject {

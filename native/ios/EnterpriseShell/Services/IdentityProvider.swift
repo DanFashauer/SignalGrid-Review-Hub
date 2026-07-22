@@ -419,8 +419,13 @@ final class MDMIdentityProvider: IdentityProvider {
     }
     
     func authenticate(credentials: AuthenticationCredentials, persona: Persona) async throws -> AuthenticationResult {
-        // Use MDM to get user identity
-        guard let userId = credentials.mdmUserId ?? await queryMDMForUser() else {
+        // Use MDM to get user identity. (Can't use `??` with an async call on the
+        // right-hand side — the autoclosure isn't async — so resolve explicitly.)
+        var resolvedUserId = credentials.mdmUserId
+        if resolvedUserId == nil {
+            resolvedUserId = try await queryMDMForUser()
+        }
+        guard let userId = resolvedUserId else {
             throw IdentityProviderError.mdmNotAvailable
         }
         

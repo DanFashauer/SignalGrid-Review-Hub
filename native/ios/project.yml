@@ -38,16 +38,12 @@ targets:
         LD_RUNPATH_SEARCH_PATHS:
           - $(inherited)
           - "@executable_path/Frameworks"
-    entitlements:
-      path: EnterpriseShell/EnterpriseShell.entitlements
-    info:
-      path: EnterpriseShell/Info.plist
-      properties:
-        UISupportedInterfaceOrientations~ipad:
-          - UIInterfaceOrientationPortrait
-          - UIInterfaceOrientationPortraitUpsideDown
-          - UIInterfaceOrientationLandscapeLeft
-          - UIInterfaceOrientationLandscapeRight
+    # NOTE: intentionally no `info:` or `entitlements:` block here. Those make
+    # XcodeGen GENERATE (and thus overwrite) the hand-maintained Info.plist and
+    # entitlements, which strips the scene manifest, launch screen, background
+    # modes, external-accessory config, and permission strings — causing a black
+    # screen and broken capabilities. The committed files are used as-is via the
+    # INFOPLIST_FILE and CODE_SIGN_ENTITLEMENTS build settings above.
 
 schemes:
   EnterpriseShell:

@@ -98,7 +98,7 @@ final class TerminatingViewController: UIViewController {
     private func createStepView(step: String) -> UIView {
         let container = UIView()
         
-        let indicator = UIActivityIndicatorView(style: .small)
+        let indicator = UIActivityIndicatorView(style: .medium)
         indicator.tag = 100
         indicator.hidesWhenStopped = true
         indicator.translatesAutoresizingMaskIntoConstraints = false

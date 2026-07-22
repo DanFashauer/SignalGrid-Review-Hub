@@ -12,8 +12,8 @@ final class ProviderConfigurationService {
     
     /// Complete application configuration
     struct AppConfiguration: Codable {
-        let badgeReader: BadgeReaderConfig
-        let identityProvider: IdentityProviderConfig
+        var badgeReader: BadgeReaderConfig
+        var identityProvider: IdentityProviderConfig
         let security: SecurityConfig
         let backend: BackendConfig
         
@@ -296,7 +296,7 @@ extension ProviderConfigurationService {
             baudRate: nil,
             mdmProvider: MDMProviderConfig(
                 providerType: .microsoftIntune,
-                enrollmentEndpoint: nil,
+                enrollmentEndpoint: "",
                 apiKey: nil,
                 certificatePath: nil,
                 additionalConfig: nil
@@ -323,7 +323,7 @@ extension ProviderConfigurationService {
             samlLogoutUrl: nil,
             certificate: nil,
             mdmProvider: nil,
-            enrollmentEndpoint: nil,
+            enrollmentEndpoint: "",
             mfaProvider: nil,
             mfaApiKey: nil,
             mfaHost: nil,
@@ -350,7 +350,7 @@ extension ProviderConfigurationService {
             samlLogoutUrl: nil,
             certificate: nil,
             mdmProvider: nil,
-            enrollmentEndpoint: nil,
+            enrollmentEndpoint: "",
             mfaProvider: .duo,
             mfaApiKey: nil,
             mfaHost: nil,
@@ -377,7 +377,7 @@ extension ProviderConfigurationService {
             samlLogoutUrl: nil,
             certificate: nil,
             mdmProvider: nil,
-            enrollmentEndpoint: nil,
+            enrollmentEndpoint: "",
             mfaProvider: .duo,
             mfaApiKey: nil,
             mfaHost: nil,

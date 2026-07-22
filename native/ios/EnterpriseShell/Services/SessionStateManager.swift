@@ -3,7 +3,7 @@ import UIKit
 
 /// Manages the session lifecycle state machine
 /// Now uses configurable BadgeReaderProvider and IdentityProvider for flexibility
-final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate {
+final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, BadgeReaderManagerDelegate {
     
     // MARK: - Singleton
     
@@ -254,11 +254,12 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate {
             if let provider = identityProvider {
                 authResult = try await provider.authenticate(credentials: credentials, persona: persona)
             } else {
-                // Fallback to legacy OIDC auth if provider not configured
-                authResult = try await OIDCAuthService.shared.authenticate(
-                    sessionToken: sessionToken,
-                    persona: persona
-                )
+                // FLAGGED (get-it-building): OIDCAuthService returns OIDCTokenResult,
+                // which is NOT adapted to AuthenticationResult here — assigning it was a
+                // type error. Rather than guess the mapping, fail closed and require a
+                // configured identity provider. TODO: add an OIDCTokenResult ->
+                // AuthenticationResult adapter to restore this legacy fallback.
+                throw SessionError.authenticationFailed("No identity provider configured")
             }
             
             // Create session data
@@ -274,7 +275,8 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate {
             )
             
             currentSession = session
-            
+            AuditLogger.shared.currentSessionId = session.sessionId
+
             // Transition to provisioning
             transition(to: .provisioning)
             
@@ -492,7 +494,7 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate {
             AuditLogger.shared.log(event: .sessionEnded, metadata: [
                 "sessionId": session.sessionId,
                 "reason": reason.rawValue,
-                "duration": session.startedAt.timeIntervalSinceNow
+                "duration": String(-session.startedAt.timeIntervalSinceNow)
             ])
             
         } catch {
@@ -534,6 +536,7 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate {
         
         // Reset session data
         currentSession = nil
+        AuditLogger.shared.currentSessionId = nil
         capturedBadgeId = nil
         lastError = nil
     }
@@ -809,13 +812,6 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate {
         }
     }
     
-    private func maskBadgeId(_ badgeId: String) -> String {
-        guard badgeId.count > 4 else { return "****" }
-        let prefix = String(badgeId.prefix(2))
-        let suffix = String(badgeId.suffix(2))
-        return "\(prefix)****\(suffix)"
-    }
-    
     private func handleError(_ error: Error) {
         DispatchQueue.main.async {
             self.lastError = error
@@ -842,6 +838,28 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate {
     
     func badgeReaderDidDisconnect(_ manager: BadgeReaderManager) {
         AuditLogger.shared.log(event: .badgeReaderDisconnected, metadata: nil)
+    }
+
+    // MARK: - BadgeReaderProviderDelegate
+
+    func badgeReader(_ provider: BadgeReaderProvider, didReadBadge badgeId: String) {
+        DispatchQueue.main.async { [weak self] in
+            self?.handleBadgeTap(badgeId)
+        }
+    }
+
+    func badgeReader(_ provider: BadgeReaderProvider, didFailWithError error: Error) {
+        AuditLogger.shared.log(event: .badgeReaderError, metadata: [
+            "error": error.localizedDescription
+        ])
+    }
+
+    func badgeReaderDidDisconnect(_ provider: BadgeReaderProvider) {
+        AuditLogger.shared.log(event: .badgeReaderDisconnected, metadata: nil)
+    }
+
+    func badgeReaderDidConnect(_ provider: BadgeReaderProvider) {
+        AuditLogger.shared.log(event: .badgeReaderConnected, metadata: nil)
     }
 }
 

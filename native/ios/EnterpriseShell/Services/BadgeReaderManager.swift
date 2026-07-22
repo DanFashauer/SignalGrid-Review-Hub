@@ -52,7 +52,7 @@ final class BadgeReaderManager: NSObject {
         
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(accessoryDidDisconnect),
+            selector: #selector(handleAccessoryDisconnectNotification),
             name: .EAAccessoryDidDisconnect,
             object: nil
         )
@@ -226,7 +226,7 @@ final class BadgeReaderManager: NSObject {
         }
     }
     
-    @objc private func accessoryDidDisconnect(_ notification: Notification) {
+    @objc private func handleAccessoryDisconnectNotification(_ notification: Notification) {
         guard let userInfo = notification.userInfo,
               let accessory = userInfo[EAAccessoryKey] as? EAAccessory,
               accessory == connectedAccessory else {

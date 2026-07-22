@@ -479,6 +479,8 @@ async function run() {
   const gridConfig = await req("GET", "/cp/v1/grid/config");
   check("grid config validates clean", gridConfig.status === 200 && gridConfig.json?.valid === true);
   check("grid config warns on the unwired gap signal (surfaced, not blocking)", (gridConfig.json?.summary?.warnings ?? 0) >= 1);
+  check("grid config surfaces a governance scorecard (ownership + accountability)", typeof gridConfig.json?.governance?.workflows === "number" && gridConfig.json.governance.owned === gridConfig.json.governance.workflows && gridConfig.json.governance.complete === true);
+  check("grid config workflows carry owner + accountable governance fields", (gridConfig.json?.config?.workflows ?? []).every((w) => "owner" in w && "accountable" in w));
   check("grid config returns the declarative artifact (signals + workflows + situations)", Array.isArray(gridConfig.json?.config?.signals) && gridConfig.json.config.signals.length > 0 && Array.isArray(gridConfig.json?.config?.workflows) && gridConfig.json.config.workflows.length > 0 && Array.isArray(gridConfig.json?.config?.situations));
   check("grid config workflows carry required signals + approval-gated actions", (gridConfig.json?.config?.workflows ?? []).every((w) => Array.isArray(w.requiredSignals) && Array.isArray(w.actions) && w.actions.every((a) => typeof a.approval === "string")));
 

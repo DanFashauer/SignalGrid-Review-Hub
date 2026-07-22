@@ -3,7 +3,7 @@ import { ControlPlane, type TelemetryBatch } from "@workspace/control-plane";
 import {
   listFlows, evaluateFlowHealth, resolveFlowBreak, gridIntelligence, type SignalState,
   DEMO_FLOWS, GRID_SITUATIONS, evaluateGridCoverage,
-  lintGridConfig, gridConfigValid, summarizeGridConfig, type GridConfig,
+  lintGridConfig, gridConfigValid, summarizeGridConfig, governanceScorecard, type GridConfig,
   sourcingToSignalStates, summarizeSourcing, fidelityOf, isWireable, gridDoesLifting, type SignalSource,
   planZeroTouchSetup, lintSetupRecording, setupRecordingValid, type DeviceSetupRecording,
   fleetResilience, type AppService,
@@ -232,6 +232,8 @@ router.get("/cp/v1/grid/config", (_req, res) => {
       actions: w.actions.map((a) => ({ key: a.key, label: a.label, approval: a.approval })),
       supportTeam: w.supportTeam,
       severityOnBreak: w.severityOnBreak,
+      owner: w.owner ?? null,
+      accountable: w.accountable ?? null,
     })),
     situations: GRID_CONFIG.situations.map((s) => ({ id: s.id, label: s.label, workflowId: s.workflowId })),
   };
@@ -240,6 +242,7 @@ router.get("/cp/v1/grid/config", (_req, res) => {
     valid: gridConfigValid(GRID_CONFIG),
     summary: summarizeGridConfig(GRID_CONFIG),
     issues: lintGridConfig(GRID_CONFIG),
+    governance: governanceScorecard(GRID_CONFIG),
     config,
   });
 });

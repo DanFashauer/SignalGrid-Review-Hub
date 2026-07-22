@@ -84,13 +84,15 @@ export interface SignalSourceRow { id: string; name: string; system: string; met
 export interface GridSourcingResp { summary: SourcingSummary; signals: SignalSourceRow[] }
 export interface GridConfigSignal { id: string; name: string; system: string; method: AcquisitionMethod }
 export interface GridConfigAction { key: string; label: string; approval: string }
-export interface GridConfigWorkflow { id: string; name: string; requiredSignals: string[]; actions: GridConfigAction[]; supportTeam: string; severityOnBreak: string }
+export interface GridConfigWorkflow { id: string; name: string; requiredSignals: string[]; actions: GridConfigAction[]; supportTeam: string; severityOnBreak: string; owner: string | null; accountable: string | null }
+export interface GovernanceScorecard { workflows: number; owned: number; accountable: number; autoActing: number; autoActingUnaccountable: number; governanceGaps: number; complete: boolean }
 export interface GridConfigSituation { id: string; label: string; workflowId: string }
 export interface GridDeclarativeConfig { signals: GridConfigSignal[]; workflows: GridConfigWorkflow[]; situations: GridConfigSituation[] }
 export interface GridConfigResp {
   valid: boolean;
   summary: { signals: number; workflows: number; situations: number; errors: number; warnings: number; coveragePctAtFullHealth: number | null };
   issues: Array<{ severity: "error" | "warning"; code: string; subject: string; message: string }>;
+  governance: GovernanceScorecard;
   config: GridDeclarativeConfig;
 }
 export type StepDisposition = "auto_apply" | "approval_required" | "held_simulated";

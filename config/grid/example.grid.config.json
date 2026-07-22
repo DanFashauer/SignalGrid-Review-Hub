@@ -19,7 +19,9 @@
       ],
       "supportTeam": "Clinical Ops",
       "itsm": "servicedesk",
-      "severityOnBreak": "sev2"
+      "severityOnBreak": "sev2",
+      "owner": "Clinical Informatics",
+      "accountable": "Chief Medical Information Officer"
     },
     {
       "id": "flow_controlled_area",
@@ -32,7 +34,9 @@
       "supportTeam": "Facilities",
       "itsm": "servicenow",
       "severityOnBreak": "sev3",
-      "autoHeal": { "agent": "custody-reconcile-bot", "autoResolves": false }
+      "autoHeal": { "agent": "custody-reconcile-bot", "autoResolves": false },
+      "owner": "Facilities Security",
+      "accountable": "Site Security Lead"
     },
     {
       "id": "flow_network_change",
@@ -46,7 +50,9 @@
       "supportTeam": "NOC",
       "itsm": "opsgenie",
       "severityOnBreak": "sev1",
-      "autoHeal": { "agent": "config-rollback-bot", "autoResolves": true }
+      "autoHeal": { "agent": "config-rollback-bot", "autoResolves": true },
+      "owner": "Network Engineering",
+      "accountable": "Infrastructure Risk Owner"
     }
   ],
   "situations": [

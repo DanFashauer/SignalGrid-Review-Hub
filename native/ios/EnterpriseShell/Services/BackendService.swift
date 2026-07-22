@@ -106,6 +106,9 @@ final class BackendService {
     
     /// End an active session
     func endSession(sessionId: String, reason: SessionEndReason) async throws -> EndSessionResponse {
+        #if targetEnvironment(simulator)
+        if DemoMode.isEnabled { return DemoMode.endSessionResponse() }
+        #endif
         let url = URL(string: "\(Self.baseUrl)/api/sessions/\(sessionId)/end")!
         
         var request = URLRequest(url: url)
@@ -145,6 +148,9 @@ final class BackendService {
     
     /// Send audit data for a session
     func sendAuditData(sessionId: String, auditData: AuditData) async throws {
+        #if targetEnvironment(simulator)
+        if DemoMode.isEnabled { return }
+        #endif
         let url = URL(string: "\(Self.baseUrl)/api/sessions/\(sessionId)/audit")!
         
         var request = URLRequest(url: url)

@@ -224,6 +224,20 @@ final class ActiveSessionViewController: UIViewController {
         configureWithSession()
         startTimers()
     }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        #if targetEnvironment(simulator)
+        // Demo: auto-end the session after a beat so the terminate -> teardown ->
+        // lockedIdle flow can be exercised without tapping "End Session".
+        if DemoMode.autoEnd {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+                guard SessionStateManager.shared.currentState == .activeSession else { return }
+                SessionStateManager.shared.endSession(userInitiated: true)
+            }
+        }
+        #endif
+    }
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)

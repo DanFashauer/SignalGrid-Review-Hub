@@ -34,6 +34,18 @@ enum DemoMode {
         )
     }
 
+    /// Canned successful session-end response (teardown demo).
+    static func endSessionResponse() -> EndSessionResponse {
+        EndSessionResponse(success: true, error: nil)
+    }
+
+    /// When enabled (`-DemoAutoEnd`), ActiveSession auto-ends after a short delay
+    /// so the terminate -> teardown -> lockedIdle flow can be demonstrated.
+    static var autoEnd: Bool {
+        UserDefaults.standard.bool(forKey: "DemoAutoEnd")
+            || ProcessInfo.processInfo.arguments.contains("-DemoAutoEnd")
+    }
+
     static func persona() -> Persona {
         Persona(
             roleId: "demo-operator",

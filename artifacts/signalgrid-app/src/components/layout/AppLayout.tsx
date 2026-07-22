@@ -13,7 +13,8 @@ import {
   MonitorSmartphone,
   HeartPulse,
   Radio,
-  FileCode
+  FileCode,
+  LayoutGrid
 } from "lucide-react";
 import {
   Sidebar,
@@ -103,6 +104,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </SidebarMenu>
             <div className="px-4 pt-4 pb-1 text-[10px] font-mono uppercase tracking-wider text-muted-foreground/70">Build the grid</div>
             <SidebarMenu className="px-2 gap-1">
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/grid"}>
+                  <Link href="/grid">
+                    <LayoutGrid className="w-4 h-4 mr-2" />
+                    <span>Grid overview</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location.startsWith("/intelligence")}>
                   <Link href="/intelligence">

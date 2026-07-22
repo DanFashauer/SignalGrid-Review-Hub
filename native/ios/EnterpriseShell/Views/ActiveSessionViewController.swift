@@ -228,6 +228,15 @@ final class ActiveSessionViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         #if targetEnvironment(simulator)
+        // Demo: auto-open the first workspace app in the in-app managed browser to show
+        // app access staying native/contained inside the kiosk (not external Safari).
+        if DemoMode.openApp,
+           let app = SessionStateManager.shared.currentSession?.persona.appLaunchConfig.requiredApps.first,
+           let urlString = app.launchUrl, let url = URL(string: urlString) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+                self?.present(ManagedAppViewController(app: app, url: url), animated: true)
+            }
+        }
         // Demo: auto-end the session after a beat so the terminate -> teardown ->
         // lockedIdle flow can be exercised without tapping "End Session".
         if DemoMode.autoEnd {
@@ -772,7 +781,22 @@ extension ActiveSessionViewController: UICollectionViewDelegate {
         }
         
         guard let selectedApp = app else { return }
-        
+
+        // Kiosk containment: a web app opens in an in-app managed browser so the device
+        // stays NATIVE and contained inside EnterpriseShell — it must not hand off to the
+        // external Safari app, which would let a user leave the locked kiosk. Only true
+        // native/deep-link apps launch through the OS via AppLauncher.
+        if !selectedApp.isDeepLink,
+           let urlString = selectedApp.launchUrl,
+           let url = URL(string: urlString),
+           ["http", "https"].contains((url.scheme ?? "").lowercased()) {
+            AuditLogger.shared.log(event: .appLaunched, metadata: [
+                "appId": selectedApp.appId, "mode": "managed_webview"
+            ])
+            present(ManagedAppViewController(app: selectedApp, url: url), animated: true)
+            return
+        }
+
         Task {
             do {
                 try await AppLauncher.shared.launchEnterpriseApp(selectedApp)

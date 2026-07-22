@@ -77,6 +77,13 @@ enum DemoMode {
             || ProcessInfo.processInfo.arguments.contains("-DemoIdleLock")
     }
 
+    /// When enabled (`-DemoOpenApp`), the first workspace app auto-opens in the in-app
+    /// managed browser to demonstrate that app access stays native/contained.
+    static var openApp: Bool {
+        UserDefaults.standard.bool(forKey: "DemoOpenApp")
+            || ProcessInfo.processInfo.arguments.contains("-DemoOpenApp")
+    }
+
     /// Building/area the device is deployed in (`-DemoLocation warehouse|clinic|office`).
     /// Drives which role + app workspace the user is provisioned with — mirroring how the
     /// SignalGrid control plane configures a persona by workflow and location.

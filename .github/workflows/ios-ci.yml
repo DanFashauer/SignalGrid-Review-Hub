@@ -8,12 +8,10 @@ on:
     branches: [main, SignalGrid_Alpha]
     paths:
       - 'native/ios/**'
-      - '.swiftlint.yml'
   pull_request:
     branches: [main, SignalGrid_Alpha]
     paths:
       - 'native/ios/**'
-      - '.swiftlint.yml'
 
 
 jobs:
@@ -88,7 +86,7 @@ jobs:
         run: brew install swiftlint
 
       - name: Run SwiftLint
-        run: swiftlint --config ../.swiftlint.yml
+        run: swiftlint --config .swiftlint.yml
         working-directory: native/ios
 
       - name: Security Analysis

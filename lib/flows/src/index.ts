@@ -41,6 +41,18 @@ export interface FlowAction {
 
 export type FlowSeverity = "sev1" | "sev2" | "sev3";
 
+// ── governance (who owns the decision, who accepts the risk) ─────────────────
+// A runtime decision layer grants access; governance decides who *should* have it.
+// The technology is only half the problem — a workflow that acts on its own with
+// nobody accountable is the classic IAM failure ("if nobody owns the decisions,
+// the technology won't fix the problem"). These OPTIONAL fields make ownership and
+// accountability first-class and lintable. `approval` on each action already
+// captures "who approves"; these capture "who owns" and "who accepts the risk".
+//
+//   • owner       — the team/role that owns this workflow (the decision).
+//   • accountable — the team/role that accepts the residual risk when it runs
+//                   (especially for an automated, no-human-in-the-loop action).
+
 /** How a broken flow is handled — self-heal via an agent, or raise an incident. */
 export interface AutoHeal {
   /** The agent/bot that offloads the smart remediation (simulated). */
@@ -65,6 +77,10 @@ export interface Flow {
   severityOnBreak: FlowSeverity;
   /** If set, the flow self-heals via this agent before/instead of an incident. */
   autoHeal?: AutoHeal;
+  /** Governance: the team/role that owns this workflow (the decision). */
+  owner?: string;
+  /** Governance: the team/role that accepts the residual risk when it runs. */
+  accountable?: string;
 }
 
 // ── signal health (observed) ────────────────────────────────────────────────

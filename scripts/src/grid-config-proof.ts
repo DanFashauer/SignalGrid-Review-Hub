@@ -18,6 +18,7 @@ import {
   gridConfigValid,
   lintGridConfig,
   summarizeGridConfig,
+  governanceScorecard,
   type GridConfig,
 } from "@workspace/flows";
 
@@ -103,6 +104,31 @@ check("a config with any error is invalid", !gridConfigValid(dangling) && !gridC
 // Duplicate ids dedupe downstream and would otherwise read a false 100%.
 check("an invalid config reports no coverage number (null, not 100%)", summarizeGridConfig(dupSignal).coveragePctAtFullHealth === null && summarizeGridConfig(dangling).coveragePctAtFullHealth === null);
 check("a valid config still reports its real coverage number", summarizeGridConfig(unused).coveragePctAtFullHealth === 100);
+
+// ── governance: ownership + accountability ("who should have it") ─────────────
+// The committed golden config is governance-complete: every workflow owned, and
+// nothing the Grid does automatically is left with nobody accepting the risk.
+const gov = governanceScorecard(committed);
+check("committed config: every workflow is owned", gov.owned === gov.workflows && gov.workflows > 0);
+check("committed config: every workflow has an accountable risk-owner", gov.accountable === gov.workflows);
+check("committed config: governance scorecard is complete (no gaps)", gov.complete === true && gov.governanceGaps === 0);
+check("committed config: auto-acting workflows are all accountable", gov.autoActingUnaccountable === 0);
+
+// warning (not error): a workflow with no owner — nobody owns the decision.
+const unowned = base(); delete unowned.workflows[0].owner;
+check("an unowned workflow is a governance warning (not an error)", warnCodes(unowned).includes("workflow_unowned") && gridConfigValid(unowned));
+check("an unowned workflow shows a governance gap in the scorecard", governanceScorecard(unowned).governanceGaps >= 1 && governanceScorecard(unowned).complete === false);
+
+// warning: an AUTO-acting workflow (flow_network_change has an automated action)
+// with no accountable risk-owner — the Grid acts on its own with nobody on the hook.
+const unaccountable = base(); delete unaccountable.workflows[2].accountable;
+check("an auto-acting workflow with no accountable is a governance warning", warnCodes(unaccountable).includes("auto_action_unaccountable") && gridConfigValid(unaccountable));
+
+// a NON-auto workflow (flow_controlled_area, admin-approval only) without an
+// accountable does NOT trigger the auto-unaccountable rule — the rule targets
+// autonomous action specifically.
+const nonAutoNoAcct = base(); delete nonAutoNoAcct.workflows[1].accountable;
+check("a non-auto workflow without accountable does not fire the auto-unaccountable rule", !warnCodes(nonAutoNoAcct).includes("auto_action_unaccountable"));
 
 // ── determinism ──────────────────────────────────────────────────────────────
 check("lint is deterministic", JSON.stringify(lintGridConfig(committed)) === JSON.stringify(lintGridConfig(committed)));

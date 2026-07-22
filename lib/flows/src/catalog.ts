@@ -22,6 +22,8 @@ export const DEMO_FLOWS: Flow[] = [
     supportTeam: "Clinical Ops",
     itsm: "servicedesk",
     severityOnBreak: "sev2",
+    owner: "Clinical Informatics",
+    accountable: "Chief Medical Information Officer",
   },
 
   // Data center / NOC: uptime-critical. Broken signal SELF-HEALS via a bot
@@ -41,6 +43,8 @@ export const DEMO_FLOWS: Flow[] = [
     itsm: "opsgenie",
     severityOnBreak: "sev1",
     autoHeal: { agent: "config-rollback-bot", autoResolves: true },
+    owner: "Network Engineering",
+    accountable: "Infrastructure Risk Owner",
   },
 
   // Warehouse: mostly automated, one approval. Broken signal tries a bot but the
@@ -59,5 +63,7 @@ export const DEMO_FLOWS: Flow[] = [
     itsm: "servicenow",
     severityOnBreak: "sev3",
     autoHeal: { agent: "custody-reconcile-bot", autoResolves: false },
+    owner: "Facilities Security",
+    accountable: "Site Security Lead",
   },
 ];

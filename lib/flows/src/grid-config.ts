@@ -150,7 +150,70 @@ export function lintGridConfig(config: GridConfig): GridConfigIssue[] {
     }
   }
 
+  // Governance warnings — "technology grants access; governance decides who should
+  // have it." A workflow with no declared owner, or one that runs an automated
+  // (no-human-in-the-loop) action with nobody accepting the residual risk, is a
+  // governance gap: the Grid would act on someone's behalf with nobody accountable.
+  // Surfaced, never blocking — governance is a separate axis from technical validity.
+  for (const w of workflows) {
+    if (!hasOwner(w)) {
+      warnings.push({ severity: "warning", code: "workflow_unowned", subject: w.id, message: `Workflow "${w.id}" has no declared owner — nobody owns this decision. Assign an owner (governance decides who should have access, not just the technology).` });
+    }
+    const autoActing = (w.actions ?? []).some((a) => a.approval === "automated");
+    if (autoActing && !hasAccountable(w)) {
+      warnings.push({ severity: "warning", code: "auto_action_unaccountable", subject: w.id, message: `Workflow "${w.id}" runs an automated action but declares no accountable risk-owner — the Grid would act on its own with nobody accepting the risk. Assign an accountable owner.` });
+    }
+  }
+
   return [...errors, ...warnings];
+}
+
+function hasOwner(w: Flow): boolean {
+  return typeof w.owner === "string" && w.owner.trim().length > 0;
+}
+function hasAccountable(w: Flow): boolean {
+  return typeof w.accountable === "string" && w.accountable.trim().length > 0;
+}
+
+/** A governance readiness scorecard for a config — ownership + accountability. */
+export interface GovernanceScorecard {
+  workflows: number;
+  /** Workflows with a declared owner. */
+  owned: number;
+  /** Workflows with a declared accountable risk-owner. */
+  accountable: number;
+  /** Workflows that run ≥1 automated (no-human-in-the-loop) action. */
+  autoActing: number;
+  /** Auto-acting workflows with NO accountable risk-owner — the sharpest gap. */
+  autoActingUnaccountable: number;
+  /** Workflows carrying any governance gap (unowned, or auto-acting-unaccountable). */
+  governanceGaps: number;
+  /** True only when every workflow is owned AND no auto-acting workflow is unaccountable. */
+  complete: boolean;
+}
+
+/**
+ * Score a config's governance maturity — the "clear ownership + shared
+ * accountability" checklist as a computed number, separate from technical
+ * validity. `complete` is the honest bar: every decision owned, and nothing the
+ * Grid does automatically is left with no one accepting the risk.
+ */
+export function governanceScorecard(config: GridConfig): GovernanceScorecard {
+  const workflows = config.workflows ?? [];
+  const owned = workflows.filter(hasOwner).length;
+  const accountable = workflows.filter(hasAccountable).length;
+  const autoActingWfs = workflows.filter((w) => (w.actions ?? []).some((a) => a.approval === "automated"));
+  const autoActingUnaccountable = autoActingWfs.filter((w) => !hasAccountable(w)).length;
+  const governanceGaps = workflows.filter((w) => !hasOwner(w) || ((w.actions ?? []).some((a) => a.approval === "automated") && !hasAccountable(w))).length;
+  return {
+    workflows: workflows.length,
+    owned,
+    accountable,
+    autoActing: autoActingWfs.length,
+    autoActingUnaccountable,
+    governanceGaps,
+    complete: governanceGaps === 0,
+  };
 }
 
 /** True when the config has zero ERROR-severity issues (warnings are allowed). */

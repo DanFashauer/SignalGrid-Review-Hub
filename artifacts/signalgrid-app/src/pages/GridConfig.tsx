@@ -53,8 +53,16 @@ export function GridConfig() {
               {warnings.map((w, i) => <div key={`w${i}`} className="text-xs font-mono text-amber-400">! {w.code} · {w.subject}: {w.message}</div>)}
             </div>
           )}
+          {data?.governance && (
+            <div className="flex items-center gap-2 text-xs font-mono">
+              <span className={`px-2 py-0.5 rounded border ${data.governance.complete ? "border-emerald-400/30 text-emerald-400" : "border-amber-400/30 text-amber-400"}`}>
+                Governance {data.governance.complete ? "complete" : `${data.governance.governanceGaps} gap${data.governance.governanceGaps === 1 ? "" : "s"}`}
+              </span>
+              <span className="text-muted-foreground">{data.governance.owned}/{data.governance.workflows} owned · {data.governance.accountable}/{data.governance.workflows} accountable</span>
+            </div>
+          )}
           <p className="text-[0.68rem] text-muted-foreground font-mono">
-            Coverage at full health: {data?.summary.coveragePctAtFullHealth ?? "—"}{data?.summary.coveragePctAtFullHealth != null ? "%" : ""} · the same declarative config lives at <span className="text-muted-foreground">config/grid/example.grid.config.json</span>.
+            Technology grants access; governance decides who should have it. Coverage at full health: {data?.summary.coveragePctAtFullHealth ?? "—"}{data?.summary.coveragePctAtFullHealth != null ? "%" : ""} · the same declarative config lives at <span className="text-muted-foreground">config/grid/example.grid.config.json</span>.
           </p>
         </CardContent>
       </Card>
@@ -115,6 +123,10 @@ function WorkflowRow({ w }: { w: GridConfigWorkflow }) {
       <div className="flex items-center justify-between gap-3 text-xs font-mono">
         <span className="min-w-0 truncate"><span className="text-muted-foreground">{w.id}</span> · {w.name}</span>
         <span className="shrink-0 text-muted-foreground uppercase">{w.severityOnBreak} · {w.supportTeam}</span>
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-0.5 pl-1 text-[0.62rem] font-mono">
+        <span className={w.owner ? "text-muted-foreground" : "text-amber-400"}>owner: {w.owner ?? "— unowned"}</span>
+        <span className={w.accountable ? "text-muted-foreground" : "text-amber-400"}>accountable: {w.accountable ?? "— none"}</span>
       </div>
       <div className="flex flex-wrap gap-1 pl-1">
         <span className="text-[0.62rem] text-muted-foreground font-mono self-center">needs</span>

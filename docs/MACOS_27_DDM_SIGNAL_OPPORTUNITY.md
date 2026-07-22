@@ -101,6 +101,14 @@ surfaces the silent drift as a decision instead of trusting a claim a dead
 mechanism made. `ddmSummary` exposes `enforcementDead` / `enforcementAtRisk` for a
 one-glance fleet view of the migration risk described in Apple's OS-27 rollout.
 
+> **Source of truth for Apple items.** Confirm OS-27 device-management specifics
+> against Apple's official release notes:
+> [iOS & iPadOS 27 release notes](https://developer.apple.com/documentation/ios-ipados-release-notes/ios-ipados-27-release-notes)
+> (27 is in beta as of this writing). This model treats the legacy-update-enforcement
+> deprecation as the widely-reported OS-27 change and, being fail-safe, would flag
+> an unverifiable enforcement path regardless — but the authoritative behavior for a
+> given tenant should be verified in the official notes and on the OS-27 beta.
+
 ## Still open (future work)
 
 - A macOS desktop host-app demo showing the same invisible Assist flow the

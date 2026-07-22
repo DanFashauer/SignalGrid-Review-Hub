@@ -5,12 +5,12 @@ name: iOS CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, SignalGrid_Alpha]
     paths:
       - 'native/ios/**'
       - '.swiftlint.yml'
   pull_request:
-    branches: [main]
+    branches: [main, SignalGrid_Alpha]
     paths:
       - 'native/ios/**'
       - '.swiftlint.yml'
@@ -45,13 +45,22 @@ jobs:
             xcodegen generate
           fi
 
+      - name: Pick an available iOS simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];ids=[x['udid'] for k,v in d.items() if 'iOS' in k for x in v if x.get('isAvailable')];print(ids[0] if ids else '')")
+          if [ -z "$UDID" ]; then echo "No available iOS simulator" >&2; exit 1; fi
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          echo "Using simulator $UDID"
+
       - name: Build EnterpriseShell
         working-directory: native/ios
         run: |
           xcodebuild -project EnterpriseShell.xcodeproj \
             -scheme EnterpriseShell \
             -configuration Debug \
-            -destination 'platform=iOS Simulator,name=iPhone 15' \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            CODE_SIGNING_ALLOWED=NO \
             build
 
       - name: Run unit tests
@@ -59,7 +68,8 @@ jobs:
         run: |
           xcodebuild -project EnterpriseShell.xcodeproj \
             -scheme EnterpriseShell \
-            -destination 'platform=iOS Simulator,name=iPhone 15' \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            CODE_SIGNING_ALLOWED=NO \
             test
 
   lint-and-security:

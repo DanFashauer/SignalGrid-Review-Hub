@@ -76,6 +76,18 @@ final class BadgeCapturedViewController: UIViewController {
         super.viewDidLoad()
         setupUI()
     }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // Advance from badge-captured to authentication. Previously nothing drove
+        // this transition, so the session dead-ended here showing "Authenticating…"
+        // without ever authenticating. Brief delay lets the user see the recognized
+        // badge first; guarded so a Cancel tap can't race it.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            guard SessionStateManager.shared.currentState == .badgeCaptured else { return }
+            SessionStateManager.shared.transition(to: .authenticating)
+        }
+    }
     
     // MARK: - Setup
     

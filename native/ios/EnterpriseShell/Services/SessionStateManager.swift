@@ -375,8 +375,18 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
             // Launch required apps
             await launchRequiredApps(for: session.persona)
             
-            // Save session to secure storage
+            // Save session to secure storage. In an UNSIGNED simulator build the
+            // keychain has no entitlement and returns errSecMissingEntitlement (-34018);
+            // don't let that abort the demo lifecycle (real/signed builds persist normally).
+            #if targetEnvironment(simulator)
+            if DemoMode.isEnabled {
+                try? KeychainService.shared.saveSession(session)
+            } else {
+                try KeychainService.shared.saveSession(session)
+            }
+            #else
             try KeychainService.shared.saveSession(session)
+            #endif
             
             // Transition to active session
             transition(to: .activeSession)

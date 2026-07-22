@@ -194,6 +194,9 @@ final class ProviderConfigurationService {
     
     /// Get the configured identity provider
     func getIdentityProvider() -> IdentityProvider? {
+        #if targetEnvironment(simulator)
+        if DemoMode.isEnabled { return DemoIdentityProvider() }
+        #endif
         return identityProvider
     }
     

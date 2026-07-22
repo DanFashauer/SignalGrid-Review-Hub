@@ -79,7 +79,12 @@ final class LockedIdleViewController: UIViewController {
     
     private var badgeReaderObserver: NSObjectProtocol?
     private var stateChangeObserver: NSObjectProtocol?
-    
+
+    #if targetEnvironment(simulator)
+    /// Ensures `-SimulateBadge` injects only once (see viewDidAppear).
+    private static var didInjectSimulatedBadge = false
+    #endif
+
     // MARK: - Lifecycle
     
     override func viewDidLoad() {
@@ -105,10 +110,13 @@ final class LockedIdleViewController: UIViewController {
         updateReaderStatus()
         #if targetEnvironment(simulator)
         // The simulator has no badge-reader hardware. If launched with
-        // `-SimulateBadge <id>`, inject that badge so the session flow can be
-        // exercised end-to-end without a physical reader.
-        if let badge = UserDefaults.standard.string(forKey: "SimulateBadge"), !badge.isEmpty {
-            UserDefaults.standard.removeObject(forKey: "SimulateBadge")
+        // `-SimulateBadge <id>`, inject that badge ONCE so the session flow can be
+        // exercised without a physical reader. (The launch arg lives in the argument
+        // domain and can't be cleared via removeObject, so guard with a static flag
+        // to avoid re-injecting every time we return to LockedIdle.)
+        if !Self.didInjectSimulatedBadge,
+           let badge = UserDefaults.standard.string(forKey: "SimulateBadge"), !badge.isEmpty {
+            Self.didInjectSimulatedBadge = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                 SessionStateManager.shared.onBadgeScanned(badge)
             }

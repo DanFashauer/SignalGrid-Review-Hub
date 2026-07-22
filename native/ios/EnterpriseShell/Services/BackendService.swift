@@ -67,6 +67,9 @@ final class BackendService {
         deviceId: String,
         deviceSerial: String
     ) async throws -> StartSessionResponse {
+        #if targetEnvironment(simulator)
+        if DemoMode.isEnabled { return DemoMode.startSessionResponse(badgeId: badgeId) }
+        #endif
         let url = URL(string: "\(Self.baseUrl)/api/sessions/start")!
         
         var request = URLRequest(url: url)

@@ -55,6 +55,16 @@
       "deviceId": "mac-attest-11",
       "report": { "attestable": true, "chain": "verified", "freshness": "fresh", "sip": "off", "secureBoot": "permissive", "thirdPartyKextAllowed": true },
       "expected": { "posture": "attested_compromised", "reasonCode": "ATTESTED_SIP_DISABLED", "recommendedAction": "escalate", "criticalFindingsCount": 2, "unknownSignalsCount": 0, "hardwareRooted": true }
+    },
+    "conflict-sip-off": {
+      "deviceId": "mac-attest-12",
+      "report": { "attestable": false, "chain": "verified", "freshness": "fresh", "sip": "off", "secureBoot": "full", "thirdPartyKextAllowed": false },
+      "expected": { "posture": "attested_compromised", "reasonCode": "ATTESTED_SIP_DISABLED", "recommendedAction": "escalate", "criticalFindingsCount": 1, "unknownSignalsCount": 1, "hardwareRooted": true }
+    },
+    "conflict-clean": {
+      "deviceId": "mac-attest-13",
+      "report": { "attestable": false, "chain": "verified", "freshness": "fresh", "sip": "on", "secureBoot": "full", "thirdPartyKextAllowed": false },
+      "expected": { "posture": "unverified", "reasonCode": "ATTESTATION_CONFLICT", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "hardwareRooted": true }
     }
   }
 }

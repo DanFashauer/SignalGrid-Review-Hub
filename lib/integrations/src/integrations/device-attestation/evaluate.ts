@@ -65,13 +65,28 @@ export function evaluateAttestation(
     return { ...base, posture: "unknown", reasonCode: "NOT_COVERED", recommendedAction: "step_up", hardwareRooted: false };
   }
 
+  // Does the report carry ANY attestation evidence — a chain, or a decoded fact?
+  const carriesAttestation =
+    posture.chain !== "unknown" ||
+    posture.attestedSip !== "unknown" ||
+    posture.attestedSecureBoot !== "unknown" ||
+    posture.attestedKextAllowed !== null;
+
   // Provably NOT attestation-capable (e.g. Intel) → abstain. Attestation is an
   // assurance upgrade, not a universal requirement — penalizing hardware that
   // cannot attest would be wrong; its baseline posture is gated elsewhere. Only an
   // explicit `false` abstains; `null`/unknown capability still expects attestation.
-  if (posture.attestable === false) {
+  // GUARD: abstain ONLY when the report is self-consistent — declares incapable AND
+  // carries no attestation. A report that says the device cannot attest yet still
+  // presents a chain or attested facts is malformed or tampered; it must NEVER
+  // abstain to `none` (fail closed). Such a contradiction falls through below, where
+  // any proven-bad fact still drives the verdict and the best case is floored at
+  // step_up — never the top tier.
+  if (posture.attestable === false && !carriesAttestation) {
     return { ...base, posture: "not_attestable", reasonCode: "NOT_ATTESTABLE", recommendedAction: "none", hardwareRooted: false };
   }
+  // `attestable === false` here implies `carriesAttestation` — a self-contradiction.
+  const attestabilityConflict = posture.attestable === false;
 
   // From here the device is (or may be) capable, so a fresh, root-verified
   // attestation is EXPECTED.
@@ -82,9 +97,14 @@ export function evaluateAttestation(
     // grant, never the top tier. Distinguish the reason for the operator.
     if (posture.chain === "unknown") unknownSignals.push("chain");
     if (posture.freshness === "unknown") unknownSignals.push("freshness");
+    if (attestabilityConflict) unknownSignals.push("attestable_conflict");
     let reasonCode: AttestationReasonCode;
     let pos: AttestationPosture;
-    if (posture.chain === "unverifiable") {
+    if (attestabilityConflict) {
+      // A "can't attest" flag paired with an actual (but unusable) attestation.
+      reasonCode = "ATTESTATION_CONFLICT";
+      pos = "unverified";
+    } else if (posture.chain === "unverifiable") {
       // A chain was presented but did not validate to Apple's root — tamper/replay.
       reasonCode = "ATTESTATION_UNVERIFIABLE";
       pos = "unattested";
@@ -104,6 +124,15 @@ export function evaluateAttestation(
   // worst-concern-wins. The chain is genuine regardless of whether the news is good.
   const hardwareRooted = true;
   const candidates: Candidate[] = [];
+
+  // A genuine, root-verified chain paired with an `attestable: false` claim is
+  // self-contradictory: the chain is real, but the report cannot be wholly trusted.
+  // Floor the verdict at step_up so a contradictory report can NEVER reach the top
+  // tier; a proven-bad fact below still outranks it (worst-concern-wins).
+  if (attestabilityConflict) {
+    unknownSignals.push("attestable_conflict");
+    candidates.push({ posture: "unverified", action: "step_up", reason: "ATTESTATION_CONFLICT" });
+  }
 
   // Cryptographically-proven SIP disabled — the strongest negative on a shared
   // device (integrity protection off, and it can't be a misread).
@@ -126,10 +155,14 @@ export function evaluateAttestation(
 
   // A verified chain but an attested fact we could not read is not the top tier —
   // raise the bar rather than assume healthy.
+  const hasUnknownAttestedFact =
+    posture.attestedSip === "unknown" ||
+    posture.attestedSecureBoot === "unknown" ||
+    posture.attestedKextAllowed === null;
   if (posture.attestedSip === "unknown") unknownSignals.push("attested_sip");
   if (posture.attestedSecureBoot === "unknown") unknownSignals.push("attested_secure_boot");
   if (posture.attestedKextAllowed === null) unknownSignals.push("attested_kext");
-  if (unknownSignals.length > 0) {
+  if (hasUnknownAttestedFact) {
     candidates.push({ posture: "unverified", action: "step_up", reason: "ATTESTATION_STATE_UNKNOWN" });
   }
 

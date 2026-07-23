@@ -121,6 +121,19 @@ check("a non-boolean attestable/kext flag is null (unknown), never a fabricated 
 const worst = evaluateAttestation(await connector.fetchAttestation(fixture.devices["worst-of-several"].deviceId));
 check("worst-concern-wins: attested SIP off (escalate) outranks the restricts/step_ups", worst.recommendedAction === "escalate" && worst.criticalFindings.length === 2);
 
+// Fail closed on a SELF-CONTRADICTORY report. A bridge that returns
+// attestable:false while ALSO presenting a fresh verified chain is malformed or
+// tampered — it must NOT abstain to none. A conflicting chain proving SIP off must
+// still escalate, and a conflicting "clean" chain must never reach the top tier.
+const conflictBad = evaluateAttestation(await connector.fetchAttestation(fixture.devices["conflict-sip-off"].deviceId));
+check("attestable:false + verified chain proving SIP off → escalate, NEVER not_attestable/none", conflictBad.posture === "attested_compromised" && conflictBad.recommendedAction === "escalate" && conflictBad.criticalFindings.includes("attested_sip_disabled"));
+const conflictClean = evaluateAttestation(await connector.fetchAttestation(fixture.devices["conflict-clean"].deviceId));
+check("attestable:false + verified 'healthy' chain → step_up (fail closed), NEVER attested_hardened/none", conflictClean.posture === "unverified" && conflictClean.reasonCode === "ATTESTATION_CONFLICT" && conflictClean.recommendedAction === "step_up");
+check("a self-contradictory report never composes to the 'ok' tier", composeDeviceRisk([fromAttestation(conflictClean)]).riskTier !== "ok");
+// The consistent Intel abstain still holds — only a self-consistent incapable
+// report (no chain, no attested facts) abstains to none.
+check("a self-CONSISTENT not-capable report still abstains (none) — the guard is surgical", intel.posture === "not_attestable" && intel.recommendedAction === "none");
+
 // Determinism.
 const d = await connector.fetchAttestation(fixture.devices["secureboot-permissive"].deviceId);
 check("evaluator is deterministic", JSON.stringify(evaluateAttestation(d)) === JSON.stringify(evaluateAttestation(d)));

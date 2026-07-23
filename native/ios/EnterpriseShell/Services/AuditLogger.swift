@@ -94,6 +94,19 @@ final class AuditLogger {
         case assistActionConfirmed
         case assistActionApplied
         case assistActionBlocked
+
+        // Data-protection / anti-tamper
+        case screenshotDetected
+        case screenRecordingStarted
+        case screenRecordingStopped
+        case pasteboardCleared
+
+        // Kiosk lock (Autonomous Single App Mode)
+        case kioskLockEngaged
+        case kioskLockFailed
+        case kioskUnlocked
+        case kioskRecoveryOverride
+        case kioskRecoveryDenied
     }
 
     // MARK: - Properties

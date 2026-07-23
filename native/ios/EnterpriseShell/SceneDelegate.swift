@@ -21,7 +21,14 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         
         // Observe session state changes
         observeSessionStateChanges()
-        
+
+        // Take control of the device: lock the shell into Autonomous Single App
+        // Mode so the user cannot leave the kiosk (no-op until MDM-supervised).
+        KioskController.shared.enforceLock()
+
+        // Attach the screen-capture guard (redacts on recording, audits screenshots).
+        ScreenCaptureGuard.shared.attach(to: window)
+
         // Log scene connection
         AuditLogger.shared.log(event: .sceneConnected, metadata: [
             "sessionId": SessionStateManager.shared.currentSessionId ?? "none"
@@ -33,6 +40,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
     
     func sceneDidBecomeActive(_ scene: UIScene) {
+        // Re-assert the kiosk lock every time we become active — if ASAM was ever
+        // dropped, this puts the device back under the shell's control.
+        KioskController.shared.enforceLock()
         // Validate session when becoming active
         Task {
             await SessionStateManager.shared.validateActiveSession()

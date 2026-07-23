@@ -637,13 +637,18 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
     private func performDeviceCleanup() {
         // Reset badge reader state
         resetBadgeReaderState()
-        
+
         // Clear any pending network requests
         cancelPendingRequests()
-        
+
         // Reset device to ready state
         resetDeviceToReadyState()
-        
+
+        // Wipe the system pasteboard so one user's copied data (a chart value, an
+        // order number) can't be pasted by the NEXT user of this shared device.
+        UIPasteboard.general.items = []
+        AuditLogger.shared.log(event: .pasteboardCleared, metadata: nil)
+
         AuditLogger.shared.log(event: .deviceCleanupComplete, metadata: [
             "timestamp": ISO8601DateFormatter().string(from: Date())
         ])

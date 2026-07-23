@@ -78,6 +78,19 @@ final class LockedIdleViewController: UIViewController {
         return label
     }()
     
+    /// Disaster-recovery override — a discreet affordance shown ONLY when a company
+    /// has opted in (`KioskConfig.allowManualOverride`). Off by default.
+    private lazy var recoveryButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.setTitle("Disaster recovery", for: .normal)
+        button.setTitleColor(SG.mutedFg.withAlphaComponent(0.6), for: .normal)
+        button.titleLabel?.font = SG.sans(12, .regular)
+        button.addTarget(self, action: #selector(recoveryTapped), for: .touchUpInside)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.isHidden = true
+        return button
+    }()
+
     private var badgeReaderObserver: NSObjectProtocol?
     private var stateChangeObserver: NSObjectProtocol?
 
@@ -145,8 +158,12 @@ final class LockedIdleViewController: UIViewController {
         view.addSubview(activityIndicator)
         view.addSubview(statusLabel)
         view.addSubview(errorLabel)
-        
+        view.addSubview(recoveryButton)
+        recoveryButton.isHidden = !KioskConfig.allowManualOverride
+
         NSLayoutConstraint.activate([
+            recoveryButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            recoveryButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
             // Background
             backgroundView.topAnchor.constraint(equalTo: view.topAnchor),
             backgroundView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -256,6 +273,37 @@ final class LockedIdleViewController: UIViewController {
     
     @objc private func accessoryDisconnected() {
         updateReaderStatus()
+    }
+
+    /// Disaster-recovery override: prompt for the admin recovery code and, if valid,
+    /// release the kiosk lock so the device can be serviced without a badge. Only
+    /// reachable when a company has opted in (KioskConfig.allowManualOverride).
+    @objc private func recoveryTapped() {
+        let alert = UIAlertController(
+            title: "Disaster Recovery",
+            message: "Releasing the kiosk lock is logged and not recommended. Enter the admin recovery code.",
+            preferredStyle: .alert)
+        alert.addTextField { field in
+            field.isSecureTextEntry = true
+            field.keyboardType = .numberPad
+            field.placeholder = "Recovery code"
+        }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Unlock", style: .destructive) { [weak self] _ in
+            let code = alert.textFields?.first?.text ?? ""
+            if KioskController.shared.attemptRecoveryOverride(code: code) {
+                self?.showRecoveryResult("Kiosk lock released for recovery.", ok: true)
+            } else {
+                self?.showRecoveryResult("Recovery code rejected.", ok: false)
+            }
+        })
+        present(alert, animated: true)
+    }
+
+    private func showRecoveryResult(_ message: String, ok: Bool) {
+        errorLabel.text = message
+        errorLabel.textColor = ok ? SG.accent : SG.deny
+        errorLabel.isHidden = false
     }
     
     private func animateBadgeIcon() {

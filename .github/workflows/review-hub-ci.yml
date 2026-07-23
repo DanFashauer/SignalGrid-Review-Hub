@@ -109,6 +109,9 @@ jobs:
       - name: IAM / access-governance runtime posture proof
         run: pnpm run proof:access-governance
 
+      - name: Hardware-rooted device-attestation proof
+        run: pnpm run proof:device-attestation
+
       - name: Posture-composition (unified signal fusion) proof
         run: pnpm run proof:posture-composition
 

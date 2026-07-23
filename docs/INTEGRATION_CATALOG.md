@@ -119,6 +119,21 @@ Fail-safe by construction, matched to a shared frontline session's stakes:
 
 Proven fully offline by `pnpm run proof:access-governance` (55 checks, no directory access, no network). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid changes no entitlement — every signal is read-only, and this is not a vendor partnership or certification claim.
 
+## Hardware-rooted device attestation — the assurance dimension (built, fixture-backed)
+
+Every other posture signal SignalGrid fuses is, at bottom, **self-reported**: an MDM agent, a grid probe, or an EDR sensor tells us the device is healthy, and we trust the reporter. A tampered device can lie to its own agent. Managed Device Attestation closes that gap — the attested facts (SIP, Secure Boot, kext policy, OS version, serial) are signed by the **Secure Enclave** and delivered in an X.509 chain that validates to Apple's Enterprise Attestation Root. The `device-attestation` connector (`lib/integrations/src/integrations/device-attestation`) consumes an attestation-bridge record whose DER chain has already been verified to that root (the leaf OIDs `1.2.840.113635.100.8.*` are the same ones pinned in `macos-posture`/`ddm-connector`'s Apple schema) and folds it into one **assurance** verdict (`fromAttestation` → an `attestation` signal on the unified action ladder).
+
+The assurance model is the whole point — a cryptographic proof outranks any self-report, in both directions:
+
+- a **fresh, root-verified** attestation proving a healthy state (SIP on, Secure Boot full, no third-party kexts) is the **only** path to the top tier → `attested_hardened`/`none`, and the only verdict marked `hardwareRooted` — you cannot argue with the Secure Enclave;
+- a **proven** bad state is the strongest negative SignalGrid can raise: attested **SIP disabled** → `escalate` (`attested_compromised`), attested **permissive** Secure Boot → `restrict` (`attested_reduced`);
+- a **reduced** Secure Boot level or an attested **third-party kext** allowance → `step_up` (governance drift, cryptographically confirmed);
+- an **expected-but-unverifiable** chain (stripped, replayed, or failed to validate) or a **stale** attestation → `step_up` — a missing proof is a tamper signal, never a grant;
+- hardware **provably not attestation-capable** (Intel Macs, no Secure Enclave) → `not_attestable`/`none` — it **abstains**: attestation is an assurance *upgrade*, not a universal requirement, and the baseline posture is gated by the other dimensions;
+- an unrecognized value normalizes to the safe `unknown`, a non-boolean flag becomes `null` (never a fabricated `true`), and a device no attestation source covers is a blind spot (`unknown`/`step_up`), never attested-secure.
+
+Proven fully offline by `pnpm run proof:device-attestation` (46 checks, no network, no keys). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid verifies attestation and decides on it — it issues no certificates and mints no attestations; every signal is read-only, and this is not an Apple partnership or certification claim.
+
 ## Frontline context signal roadmap
 
 Future healthcare and frontline context signals are documented in [Frontline context signals roadmap](FRONTLINE_CONTEXT_SIGNALS.md). These include Intune enrollment restrictions, device limits, iOS/iPadOS enrollment type, Apple Business Manager / ADE state, supervision, Jamf Pro context, Kontakt.io / RTLS candidate signals, location, staff safety alerts, nurse call events, dock/return-station events, and badge / QR / NFC physical context. They are not first-proof requirements; they become follow-on or future roadmap inputs after the Microsoft posture proof and UEM posture model are grounded.

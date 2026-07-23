@@ -100,6 +100,9 @@ jobs:
       - name: macOS endpoint-posture (grid-collected) proof
         run: pnpm run proof:macos-posture
 
+      - name: macOS posture ↔ apple/device-management schema alignment proof
+        run: pnpm run proof:macos-apple-schema
+
       - name: OT / IIoT edge-device posture (grid-collected) proof
         run: pnpm run proof:ot-posture
 

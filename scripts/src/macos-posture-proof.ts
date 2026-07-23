@@ -223,6 +223,55 @@ check("prod WITHOUT live flag stays fixture", resolveMacosPostureConnector({ SIG
 check("prod + live but NO token stays fixture", resolveMacosPostureConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" }).mode === "fixture");
 check("prod + live + token resolves live", resolveMacosPostureConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", MACOS_POSTURE_ACCESS_TOKEN: "t" }).mode === "live");
 
+// ── cross-repo posture-report CONTRACT (consumer side) ────────────────────────
+// The single-source contract with signalgrid-mcp: the connector proves it
+// consumes the canonical report `example` to the documented verdict, and that the
+// example actually contains every section/control the contract requires the MCP
+// server to emit. The MCP side (tests/test_posture_contract.py) proves its live
+// signalgrid_posture_report() still emits that shape; `pnpm run verify:all` runs
+// both against this one file so neither side can drift silently.
+interface PostureContract {
+  requiredSections: string[];
+  requiredSecurityControls: string[];
+  requiredFields: Record<string, string[]>;
+  example: MacosPostureReportRaw;
+  expected: { posture: string; reasonCode: string; recommendedAction: string };
+}
+const contractPath = resolve(dirname(fileURLToPath(import.meta.url)), "../../lib/integrations/src/integrations/macos-posture/contract/posture-report.contract.json");
+const contract = JSON.parse(await readFile(contractPath, "utf8")) as PostureContract;
+// Walk a dot-path (e.g. "security.sip") to the parent dict, or undefined if any
+// hop is missing / not an object.
+const atPath = (root: Record<string, unknown>, path: string): Record<string, unknown> | undefined => {
+  let cur: unknown = root;
+  for (const seg of path.split(".")) {
+    if (typeof cur !== "object" || cur === null) return undefined;
+    cur = (cur as Record<string, unknown>)[seg];
+  }
+  return typeof cur === "object" && cur !== null ? (cur as Record<string, unknown>) : undefined;
+};
+const contractVerdict = evaluateMacosPosture(normalizeReport("mac-contract", contract.example));
+check("contract: connector consumes the canonical MCP report to the documented verdict", contractVerdict.posture === contract.expected.posture && contractVerdict.reasonCode === contract.expected.reasonCode && contractVerdict.recommendedAction === contract.expected.recommendedAction);
+// Give the `os` section consumer-side teeth: the verdict ladder ignores osVersion,
+// so without this a connector regression that stopped reading `os` would slip past
+// the verdict check. Assert the connector actually extracted it from os.product_version.
+const exampleBody = contract.example as Record<string, unknown>;
+const exampleOs = (exampleBody.os ?? {}) as Record<string, unknown>;
+check("contract: connector extracts osVersion from the os section", contractVerdict.osVersion === (exampleOs.product_version ?? null));
+// Fixture self-consistency: the example itself declares every section/control the
+// contract requires the MCP server to emit (the producer test enforces the server
+// actually emits them; this keeps the example honest with the contract).
+check("contract: example is self-consistent — declares every requiredSection", contract.requiredSections.every((s) => s in exampleBody));
+const exampleSecurity = (exampleBody.security ?? {}) as Record<string, unknown>;
+check("contract: example is self-consistent — declares every requiredSecurityControl", contract.requiredSecurityControls.every((c) => c in exampleSecurity));
+// The example must carry every NESTED leaf key the connector reads — so the
+// requiredFields spec (which the producer test enforces on the live MCP report)
+// stays honest with a report the connector actually consumes to `hardened`.
+const fieldsOk = Object.entries(contract.requiredFields).every(([path, leaves]) => {
+  const parent = atPath(exampleBody, path);
+  return parent !== undefined && leaves.every((k) => k in parent);
+});
+check("contract: example is self-consistent — carries every requiredFields nested leaf", fieldsOk);
+
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

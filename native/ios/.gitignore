@@ -5,3 +5,5 @@ EnterpriseShell.xcodeproj/
 DerivedData/
 # run-ios.sh screenshots
 *.png
+# …but asset-catalog images (app icon, etc.) are real tracked assets, not screenshots.
+!EnterpriseShell/Resources/Assets.xcassets/**/*.png

@@ -46,6 +46,7 @@ export type SignalKind =
   | "data_protection"
   | "credential_exposure"
   | "ot_posture"
+  | "access_governance"
   | "detection";
 
 /** One dimension's contribution, already mapped onto the unified action ladder. */

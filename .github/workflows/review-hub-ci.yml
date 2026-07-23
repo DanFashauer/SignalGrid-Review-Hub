@@ -103,6 +103,9 @@ jobs:
       - name: OT / IIoT edge-device posture (grid-collected) proof
         run: pnpm run proof:ot-posture
 
+      - name: IAM / access-governance runtime posture proof
+        run: pnpm run proof:access-governance
+
       - name: Posture-composition (unified signal fusion) proof
         run: pnpm run proof:posture-composition
 

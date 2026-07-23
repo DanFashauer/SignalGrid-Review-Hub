@@ -81,6 +81,7 @@
     "proof:credential-exposure": "pnpm --filter @workspace/scripts run proof:credential-exposure",
     "proof:macos-posture": "pnpm --filter @workspace/scripts run proof:macos-posture",
     "proof:ot-posture": "pnpm --filter @workspace/scripts run proof:ot-posture",
+    "proof:access-governance": "pnpm --filter @workspace/scripts run proof:access-governance",
     "proof:fabric-scenario": "pnpm --filter @workspace/scripts run proof:fabric-scenario"
   },
   "private": true,

@@ -85,6 +85,11 @@
       "deviceId": "tab-ward-17",
       "report": { "state": "active", "binding": "bound", "assurance": "mfa", "freshness": "fresh", "idpReachable": true, "subject": "nurse.prevshift", "expectedSubject": "nurse.jsmith" },
       "expected": { "posture": "leftover_session", "reasonCode": "SESSION_SUBJECT_MISMATCH", "recommendedAction": "escalate", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "subjectBound": false }
+    },
+    "bound-reachability-unreported": {
+      "deviceId": "tab-ward-18",
+      "report": { "state": "active", "binding": "bound", "assurance": "mfa", "freshness": "fresh", "subject": "nurse.jsmith", "expectedSubject": "nurse.jsmith" },
+      "expected": { "posture": "bound_weak", "reasonCode": "IDP_UNREACHABLE", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "subjectBound": true }
     }
   }
 }

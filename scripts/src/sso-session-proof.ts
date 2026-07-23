@@ -125,6 +125,12 @@ check("a contradictory-subject 'bound' session → escalate, NEVER bound_strong/
 const nearExpiry = evaluateSsoSession(await connector.fetchSession(fixture.devices["bound-near-expiry"].deviceId));
 check("a near-expiry bound session → step_up (not a calm monitor that composes to 'ok')", nearExpiry.recommendedAction === "step_up" && composeDeviceRisk([fromSsoSession(nearExpiry)]).riskTier !== "ok");
 
+// The grant demands POSITIVE verification: a bound+active+MFA+fresh session whose
+// reachability was NOT reported (idpReachable null) must NOT grant — fail closed.
+const reachUnreported = evaluateSsoSession(await connector.fetchSession(fixture.devices["bound-reachability-unreported"].deviceId));
+check("a bound session with UNREPORTED IdP reachability → step_up, never bound_strong/none", reachUnreported.recommendedAction === "step_up" && reachUnreported.posture !== "bound_strong");
+check("only an explicit idpReachable:true can back a grant (null never composes to 'ok')", composeDeviceRisk([fromSsoSession(reachUnreported)]).riskTier !== "ok");
+
 // A bound session with a weak/unreadable factor raises the bar rather than granting.
 const noMfa = evaluateSsoSession(await connector.fetchSession(fixture.devices["bound-no-mfa"].deviceId));
 check("a bound single-factor session → step_up (re-auth to MFA), still subjectBound", noMfa.posture === "bound_weak" && noMfa.recommendedAction === "step_up" && noMfa.subjectBound === true);
@@ -143,7 +149,7 @@ for (const name of names) {
   const v = evaluateSsoSession(await connector.fetchSession(fixture.devices[name].deviceId));
   if (v.recommendedAction === "none" && v.posture === "bound_strong") {
     const r = fixture.devices[name].report;
-    check(`only a confirmed active+bound+MFA+fresh session grants (${name})`, r.state === "active" && r.binding === "bound" && (r.assurance === "mfa" || r.assurance === "phishing_resistant") && r.freshness === "fresh" && r.idpReachable !== false);
+    check(`only a confirmed active+bound+MFA+fresh+reachable session grants (${name})`, r.state === "active" && r.binding === "bound" && (r.assurance === "mfa" || r.assurance === "phishing_resistant") && r.freshness === "fresh" && r.idpReachable === true);
   }
 }
 

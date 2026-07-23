@@ -130,6 +130,15 @@ export function evaluateSsoSession(
     candidates.push({ posture: "bound_weak", action: "step_up", reason: "SESSION_STATE_UNKNOWN" });
   }
 
+  // The grant requires POSITIVE verification. An explicit `idpReachable: false`
+  // returned as an outage earlier; a MISSING/unreported reachability (null) means
+  // the bound facts may be a stale or cached IdP view we could not confirm — it must
+  // never grant the top tier. Raise the bar rather than trust an unverified session.
+  if (session.idpReachable !== true) {
+    unknownSignals.push("idp_reachable");
+    candidates.push({ posture: "bound_weak", action: "step_up", reason: "IDP_UNREACHABLE" });
+  }
+
   const winner = candidates.reduce<Candidate>(
     (max, c) => (ACTION_SEVERITY[c.action] > ACTION_SEVERITY[max.action] ? c : max),
     { posture: "bound_strong", action: "none", reason: "BOUND_MFA_FRESH" },

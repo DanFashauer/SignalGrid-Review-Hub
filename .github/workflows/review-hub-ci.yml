@@ -121,6 +121,9 @@ jobs:
       - name: Incident-playbook (decision to prioritized incident) proof
         run: pnpm run proof:incident-playbook
 
+      - name: Fabric decision-evals (golden multi-signal decision quality) proof
+        run: pnpm run proof:fabric-evals
+
       - name: Signal-fabric capstone (end-to-end fusion to incident) proof
         run: pnpm run proof:fabric-scenario
 

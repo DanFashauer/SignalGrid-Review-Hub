@@ -125,6 +125,26 @@ enum DemoMode {
         (UserDefaults.standard.string(forKey: "DemoLocation") ?? "office").lowercased()
     }
 
+    /// The zone the device is actually sensed in (`-DemoZone warehouse`). iOS can't
+    /// sense position here, so this is injected; `nil` ⇒ matches `location` (no
+    /// mismatch). Use e.g. `-DemoLocation clinic -DemoZone warehouse` to force a
+    /// zone mismatch → deny.
+    static var zone: String? {
+        guard let z = UserDefaults.standard.string(forKey: "DemoZone"), !z.isEmpty else { return nil }
+        return z.lowercased()
+    }
+
+    /// Comma-separated conditions to inject that iOS can't natively detect
+    /// (`-DemoSignal stale,non_compliant,security_risk,remediated`). Drives the
+    /// live signal context so allow → step_up → restrict can be demonstrated.
+    static var injectedSignals: Set<String> {
+        guard let raw = UserDefaults.standard.string(forKey: "DemoSignal") else { return [] }
+        return Set(raw.lowercased()
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty })
+    }
+
     static func persona() -> Persona {
         let p = locationProfile(location)
         return Persona(

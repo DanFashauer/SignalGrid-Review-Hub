@@ -22,19 +22,22 @@ final class HostAppViewController: UIViewController {
     struct ScriptedStep {
         let key: String
         let label: String
-        /// The normalized signals present when this action is attempted. The
-        /// DecisionEngine computes the verdict + reason codes from these — nothing
-        /// is hand-set. Empty defaults to a trusted identity+posture context.
-        let signals: [DecisionEngine.Signal]
         var hostHold: String = ""      // shown while HELD for a step-up
         var hostDone: String = ""      // shown when the action completes
         var hostBlocked: String = ""   // the app's OWN message on restrict/deny
         var confirmTitle: String = ""  // the app's own confirmation dialog title
     }
 
-    /// The live decision for a step, computed from its signal context.
-    private func decision(for step: ScriptedStep) -> DecisionEngine.Result {
-        DecisionEngine.evaluate(step.signals)
+    /// The session-scoped verdict, computed once from the LIVE signal + location
+    /// context (posture + deployment zone + demo injection) and routed through
+    /// `DecisionService` (on-device engine, or the control plane when configured).
+    /// The per-action difference (auto vs assist vs blocked) comes from the action's
+    /// risk tier via `AppWorkflows`, not from per-step signals.
+    private var cachedDecision: DecisionResult?
+    private func currentDecision() -> DecisionResult {
+        cachedDecision ?? DecisionResult(
+            outcome: .step_up, reasonCodes: ["DECISION_PENDING"],
+            explanation: "Evaluating device trust…", source: .onDevice)
     }
 
     struct HostAppConfig {
@@ -90,9 +93,78 @@ final class HostAppViewController: UIViewController {
         buildBody()
         buildGlassPanel()
         renderStep()
+        primaryButton.isEnabled = false   // held until the session verdict resolves
         AuditLogger.shared.log(event: .appLaunched, metadata: [
             "appId": config.integration.id, "mode": "embedded_assist"])
-        startAutoDemoIfNeeded()
+        evaluateSessionDecision()
+    }
+
+    // MARK: - Live session decision (signals + location → verdict)
+
+    /// Gather the live context, resolve the decision service, evaluate ONCE, cache
+    /// the verdict, then release the UI. Runs the async decision off the tap path so
+    /// the existing synchronous flow (tap → step-up → confirm) is unchanged.
+    private func evaluateSessionDecision() {
+        let ctx = buildEnvironmentContext()
+        let service = DecisionServiceProvider.resolve(
+            backendURL: configuredBackendURL, bearerToken: configuredBackendToken)
+        Task { @MainActor in
+            let result = await AccessDecision.evaluate(
+                ctx, integration: config.integration,
+                identityRef: SessionStateManager.shared.currentSession?.userId ?? "operator",
+                deviceRef: DeviceInfo.identifier,
+                via: service)
+            self.cachedDecision = result
+            AuditLogger.shared.log(event: .assistActionEvaluated, metadata: [
+                "scope": "session", "outcome": result.outcome.rawValue,
+                "reason": result.reasonCodes.joined(separator: "|"),
+                "source": result.source.rawValue])
+            self.renderStep()
+            self.startAutoDemoIfNeeded()
+        }
+    }
+
+    /// Build the live context from the posture iOS genuinely exposes, the deployment
+    /// zone, and (simulator-only) demo injection for conditions iOS can't sense.
+    private func buildEnvironmentContext() -> SignalContext.EnvironmentContext {
+        let authenticated = SessionStateManager.shared.currentSession != nil
+        let screenCaptured = UIScreen.main.isCaptured
+        let sessionStale = SessionStateManager.shared.currentSession?.isExpired ?? false
+        let lockedOut = (SecurityManager.shared.getSecurityStatus()["isLockedOut"] as? Bool) ?? false
+
+        var expectedZone = "default"
+        var detectedZone: String? = "default"   // match by default → no zone deny
+        var injected: Set<String> = []
+        #if targetEnvironment(simulator)
+        expectedZone = DemoMode.location
+        detectedZone = DemoMode.zone ?? DemoMode.location
+        injected = DemoMode.injectedSignals
+        #endif
+
+        return SignalContext.EnvironmentContext(
+            authenticated: authenticated,
+            expectedZone: expectedZone,
+            detectedZone: detectedZone,
+            screenCaptured: screenCaptured,
+            sessionStale: sessionStale,
+            lockedOut: lockedOut,
+            injected: injected)
+    }
+
+    private var configuredBackendURL: URL? {
+        #if targetEnvironment(simulator)
+        return DemoMode.backendURL
+        #else
+        return nil
+        #endif
+    }
+
+    private var configuredBackendToken: String? {
+        #if targetEnvironment(simulator)
+        return DemoMode.backendToken
+        #else
+        return nil
+        #endif
     }
 
     // MARK: - Top bar (kiosk containment, matches ManagedAppViewController)
@@ -269,7 +341,7 @@ final class HostAppViewController: UIViewController {
     @objc private func primaryTapped() {
         SessionStateManager.shared.userDidInteract()
         guard let step = currentStep else { return }
-        let d = decision(for: step)                       // verdict computed from signals
+        let d = currentDecision()                         // session verdict (signals + location)
         let why = d.reasonCodes.joined(separator: " · ")
         let input = AppWorkflows.AppPlanInput(
             integration: config.integration, outcome: d.outcome, reasonCodes: d.reasonCodes)
@@ -293,7 +365,9 @@ final class HostAppViewController: UIViewController {
             AuditLogger.shared.log(event: .assistActionBlocked, metadata: [
                 "action": step.key, "outcome": verdict])
             addRow(step.label, state: .blocked)
-            showBanner(step.hostBlocked, kind: .blocked)
+            showBanner(step.hostBlocked.isEmpty
+                       ? "\(config.appName): not available on this device in this location."
+                       : step.hostBlocked, kind: .blocked)
             advance()
         case .step_up:
             setGlass(step.key, "step_up", why,
@@ -353,7 +427,7 @@ final class HostAppViewController: UIViewController {
     /// Step-up satisfied → the action is NOT placed yet if it is sensitive; it stays
     /// ASSIST until an explicit confirmation (mirrors completeAppStepUp).
     private func stepUpSatisfied(_ step: ScriptedStep) {
-        let d = decision(for: step)
+        let d = currentDecision()
         var input = AppWorkflows.AppPlanInput(
             integration: config.integration, outcome: d.outcome, reasonCodes: d.reasonCodes)
         let plan = AppWorkflows.completeAppStepUp(input)
@@ -399,7 +473,7 @@ final class HostAppViewController: UIViewController {
     }
 
     private func confirmAction(_ step: ScriptedStep) {
-        let d = decision(for: step)
+        let d = currentDecision()
         var input = AppWorkflows.AppPlanInput(
             integration: config.integration, outcome: d.outcome, reasonCodes: d.reasonCodes)
         input.stepUpSatisfied = (d.outcome == .step_up)
@@ -560,15 +634,11 @@ final class HostAppViewController: UIViewController {
         glassWhy.text = "reason · \(why)\nsource · \(decisionSource.rawValue)"
     }
 
-    /// Which decision service produced the panel's verdicts. The synchronous flow is
-    /// driven by the on-device engine; a control-plane backend (when configured) is
-    /// available via RemoteDecisionService and used with on-device fallback.
+    /// Which decision service actually produced the session verdict — reported by the
+    /// resolved `DecisionResult` (on-device engine, or control plane when a backend is
+    /// configured, with on-device fallback).
     private var decisionSource: DecisionSource {
-        #if targetEnvironment(simulator)
-        return DemoMode.backendURL != nil && !(DemoMode.backendToken ?? "").isEmpty ? .controlPlane : .onDevice
-        #else
-        return .onDevice
-        #endif
+        cachedDecision?.source ?? .onDevice
     }
 
     private func verdictColor(_ v: String) -> UIColor { SG.decisionColor(v) }
@@ -640,15 +710,12 @@ extension HostAppViewController {
             whoLabel: "RN · Shared iPad",
             subjectTitle: "Rivera, A.",
             subjectMeta: "Room 4B · MRN 00-DEMO · synthetic record",
+            // Verdicts come from the LIVE session context (posture + zone + injection),
+            // not per-step signals; each action's disposition follows its risk tier.
             steps: [
-                // Trusted identity + fresh posture → engine returns allow.
-                ScriptedStep(key: "chart.open", label: "Open chart",
-                             signals: [.authenticated, .postureObserved], hostDone: "Chart opened."),
-                ScriptedStep(key: "results.view", label: "View lab results",
-                             signals: [.authenticated, .postureObserved], hostDone: "Results shown."),
-                // Stale posture on the shared device → engine returns step_up (POSTURE_STALE).
+                ScriptedStep(key: "chart.open", label: "Open chart", hostDone: "Chart opened."),
+                ScriptedStep(key: "results.view", label: "View lab results", hostDone: "Results shown."),
                 ScriptedStep(key: "order.place", label: "Place controlled med order",
-                             signals: [.authenticated, .postureObserved, .staleCheckin],
                              hostHold: "One quick check to confirm it's you on this shared device.",
                              hostDone: "Controlled med order placed.",
                              confirmTitle: "Verify controlled medication order"),
@@ -667,17 +734,11 @@ extension HostAppViewController {
             subjectTitle: "Order SO-4471 · Aisle 12",
             subjectMeta: "Tote T-88 · synthetic order",
             steps: [
-                ScriptedStep(key: "task.accept", label: "Accept pick task",
-                             signals: [.authenticated, .postureObserved], hostDone: "Task accepted."),
-                ScriptedStep(key: "pick.confirm", label: "Confirm pick",
-                             signals: [.authenticated, .postureObserved], hostDone: "Pick confirmed."),
-                // Non-compliant device → engine returns restrict (DEVICE_NON_COMPLIANT).
+                ScriptedStep(key: "task.accept", label: "Accept pick task", hostDone: "Task accepted."),
+                ScriptedStep(key: "pick.confirm", label: "Confirm pick", hostDone: "Pick confirmed."),
                 ScriptedStep(key: "inventory.adjust", label: "Adjust inventory",
-                             signals: [.authenticated, .postureObserved, .nonCompliant],
                              hostBlocked: "Inventory adjust isn't available on this device right now."),
-                // Stale posture → engine returns step_up (POSTURE_STALE).
                 ScriptedStep(key: "highvalue.release", label: "Release high-value pick",
-                             signals: [.authenticated, .postureObserved, .staleCheckin],
                              hostHold: "Quick check to confirm it's you before releasing a high-value pick.",
                              hostDone: "High-value pick released.",
                              confirmTitle: "Verify high-value pick release"),

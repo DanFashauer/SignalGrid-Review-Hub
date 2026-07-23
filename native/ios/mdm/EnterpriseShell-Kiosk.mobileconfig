@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>PayloadType</key>
+    <string>Configuration</string>
+    <key>PayloadVersion</key>
+    <integer>1</integer>
+    <key>PayloadIdentifier</key>
+    <string>com.enterprise.shell.kiosk</string>
+    <key>PayloadUUID</key>
+    <string>A53CEB90-D532-4AF1-9046-71EB40980F02</string>
+    <key>PayloadDisplayName</key>
+    <string>SignalGrid Enterprise Shell — Kiosk Lockdown</string>
+    <key>PayloadDescription</key>
+    <string>Locks a SUPERVISED, MDM-enrolled device to Enterprise Shell: Single App Mode (device is captive to the shell), the app is non-removable, and Autonomous Single App Mode is permitted so the shell can self-lock between users. Requires supervision — this does nothing on an unsupervised device or the simulator.</string>
+    <key>PayloadOrganization</key>
+    <string>SignalGrid</string>
+    <key>PayloadScope</key>
+    <string>System</string>
+    <key>PayloadRemovalDisallowed</key>
+    <true/>
+    <key>PayloadContent</key>
+    <array>
+        <dict>
+            <key>PayloadType</key>
+            <string>com.apple.app_lock</string>
+            <key>PayloadIdentifier</key>
+            <string>com.enterprise.shell.kiosk.singleappmode</string>
+            <key>PayloadUUID</key>
+            <string>6A2A8320-68AF-44A4-84C6-7A5355B29A82</string>
+            <key>PayloadVersion</key>
+            <integer>1</integer>
+            <key>PayloadDisplayName</key>
+            <string>Single App Mode — Enterprise Shell</string>
+            <!-- Locks the device to Enterprise Shell. The Home screen is never
+                 reachable, so the app cannot be closed OR removed, and iOS
+                 auto-relaunches it if it ever exits. -->
+            <key>App</key>
+            <dict>
+                <key>Identifier</key>
+                <string>com.enterprise.shell</string>
+                <key>Options</key>
+                <dict>
+                    <key>DisableAutoLock</key>
+                    <true/>
+                    <key>DisableTouch</key>
+                    <false/>
+                    <key>DisableDeviceRotation</key>
+                    <false/>
+                    <key>DisableVolumeButtons</key>
+                    <false/>
+                    <key>DisableRinger</key>
+                    <false/>
+                    <key>DisableSleepWakeButton</key>
+                    <false/>
+                </dict>
+                <key>UserEnabledOptions</key>
+                <dict/>
+            </dict>
+        </dict>
+        <dict>
+            <key>PayloadType</key>
+            <string>com.apple.applicationaccess</string>
+            <key>PayloadIdentifier</key>
+            <string>com.enterprise.shell.kiosk.restrictions</string>
+            <key>PayloadUUID</key>
+            <string>2D010AC6-9424-47D8-A996-604D13A44116</string>
+            <key>PayloadVersion</key>
+            <integer>1</integer>
+            <key>PayloadDisplayName</key>
+            <string>Restrictions — non-removable app + ASAM permitted</string>
+            <!-- Belt-and-suspenders: the app cannot be deleted, and the shell is
+                 allowed to enter Autonomous Single App Mode itself (KioskController). -->
+            <key>allowAppRemoval</key>
+            <false/>
+            <key>AutonomousSingleAppModePermittedAppIDs</key>
+            <array>
+                <string>com.enterprise.shell</string>
+            </array>
+        </dict>
+    </array>
+</dict>
+</plist>

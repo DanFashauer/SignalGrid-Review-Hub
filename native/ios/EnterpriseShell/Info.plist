@@ -22,6 +22,12 @@
     <string>1</string>
     <key>LSRequiresIPhoneOS</key>
     <true/>
+    <!-- Kiosk: force full screen. Without this, iPadOS lets Split View / Slide Over /
+         Stage Manager put the shell in a resizable floating window — which both looks
+         broken and lets a user shove the "kiosk" aside. A kiosk must always own the
+         whole screen and never be windowed or multitasked. -->
+    <key>UIRequiresFullScreen</key>
+    <true/>
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>

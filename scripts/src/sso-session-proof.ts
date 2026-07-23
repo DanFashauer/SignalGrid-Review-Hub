@@ -131,6 +131,14 @@ const reachUnreported = evaluateSsoSession(await connector.fetchSession(fixture.
 check("a bound session with UNREPORTED IdP reachability → step_up, never bound_strong/none", reachUnreported.recommendedAction === "step_up" && reachUnreported.posture !== "bound_strong");
 check("only an explicit idpReachable:true can back a grant (null never composes to 'ok')", composeDeviceRisk([fromSsoSession(reachUnreported)]).riskTier !== "ok");
 
+// A `bound` label is only trusted with corroborating subject evidence: an
+// unreadable/error subject (a lookup failure) downgrades the binding to unknown, so
+// an evidence-free "bound" can never grant.
+const noSubjectEvidence = await connector.fetchSession(fixture.devices["bound-no-subject-evidence"].deviceId);
+check("an uncorroborated 'bound' (unreadable subject) normalizes to unknown", noSubjectEvidence.binding === "unknown" && noSubjectEvidence.subject === null);
+const noSubjectV = evaluateSsoSession(noSubjectEvidence);
+check("a bound label without both subjects readable+equal → step_up, never bound_strong/none", noSubjectV.recommendedAction === "step_up" && noSubjectV.posture !== "bound_strong" && noSubjectV.subjectBound === false);
+
 // A bound session with a weak/unreadable factor raises the bar rather than granting.
 const noMfa = evaluateSsoSession(await connector.fetchSession(fixture.devices["bound-no-mfa"].deviceId));
 check("a bound single-factor session → step_up (re-auth to MFA), still subjectBound", noMfa.posture === "bound_weak" && noMfa.recommendedAction === "step_up" && noMfa.subjectBound === true);

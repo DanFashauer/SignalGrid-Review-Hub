@@ -90,6 +90,11 @@
       "deviceId": "tab-ward-18",
       "report": { "state": "active", "binding": "bound", "assurance": "mfa", "freshness": "fresh", "subject": "nurse.jsmith", "expectedSubject": "nurse.jsmith" },
       "expected": { "posture": "bound_weak", "reasonCode": "IDP_UNREACHABLE", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "subjectBound": true }
+    },
+    "bound-no-subject-evidence": {
+      "deviceId": "tab-ward-19",
+      "report": { "state": "active", "binding": "bound", "assurance": "mfa", "freshness": "fresh", "idpReachable": true, "subject": "not found", "expectedSubject": "nurse.jsmith" },
+      "expected": { "posture": "unverified", "reasonCode": "SESSION_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "subjectBound": false }
     }
   }
 }

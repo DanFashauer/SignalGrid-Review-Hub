@@ -50,14 +50,18 @@ export function normalizeReport(
   const subject = readableString(report.subject);
   const expectedSubject = readableString(report.expectedSubject);
   let binding = oneOf<SessionBinding>(report.binding, ["bound", "mismatched", "unbound", "unknown"], "unknown");
-  // Fail closed on a SELF-CONTRADICTORY report: a `bound` (or any) label paired with
-  // two readable subjects that DIFFER is a leftover/hijacked session mislabeled. The
-  // subject comparison is ground truth on a shared device, so force `mismatched`
-  // regardless of the label — never let a contradictory report normalize to a
-  // bindable, grantable state. (This only ever makes the verdict more conservative;
-  // it never fabricates `bound`.)
-  if (subject !== null && expectedSubject !== null && subject !== expectedSubject) {
-    binding = "mismatched";
+  // The subject comparison is the ground-truth PROOF that the session belongs to the
+  // checked-out holder, so the binding is corroborated against it — fail closed:
+  //  - both subjects readable and DIFFER → `mismatched` (a mislabeled leftover);
+  //  - a `bound` label WITHOUT both subjects readable and equal is uncorroborated —
+  //    downgrade it to `unknown` so an evidence-free "bound" can never enable a grant
+  //    (a lookup failure or error string in either field must not produce an allow).
+  // This only ever makes the verdict more conservative; it never fabricates `bound`,
+  // and non-bound labels (already non-granting) pass through unchanged.
+  if (subject !== null && expectedSubject !== null) {
+    if (subject !== expectedSubject) binding = "mismatched";
+  } else if (binding === "bound") {
+    binding = "unknown";
   }
   return {
     sourceSystem: "sso-session",

@@ -47,17 +47,29 @@ export function normalizeReport(
   report: SsoSessionReportRaw,
   source = "sso-session-bridge",
 ): NormalizedSsoSession {
+  const subject = readableString(report.subject);
+  const expectedSubject = readableString(report.expectedSubject);
+  let binding = oneOf<SessionBinding>(report.binding, ["bound", "mismatched", "unbound", "unknown"], "unknown");
+  // Fail closed on a SELF-CONTRADICTORY report: a `bound` (or any) label paired with
+  // two readable subjects that DIFFER is a leftover/hijacked session mislabeled. The
+  // subject comparison is ground truth on a shared device, so force `mismatched`
+  // regardless of the label — never let a contradictory report normalize to a
+  // bindable, grantable state. (This only ever makes the verdict more conservative;
+  // it never fabricates `bound`.)
+  if (subject !== null && expectedSubject !== null && subject !== expectedSubject) {
+    binding = "mismatched";
+  }
   return {
     sourceSystem: "sso-session",
     deviceId,
     state: oneOf<SsoSessionState>(report.state, ["active", "expired", "none", "unknown"], "unknown"),
-    binding: oneOf<SessionBinding>(report.binding, ["bound", "mismatched", "unbound", "unknown"], "unknown"),
+    binding,
     assurance: oneOf<SessionAssurance>(report.assurance, ["phishing_resistant", "mfa", "single_factor", "unknown"], "unknown"),
     freshness: oneOf<SessionFreshness>(report.freshness, ["fresh", "near_expiry", "expired", "unknown"], "unknown"),
     // Only an explicit boolean is trusted; anything else is null (not reported).
     idpReachable: typeof report.idpReachable === "boolean" ? report.idpReachable : null,
-    subject: readableString(report.subject),
-    expectedSubject: readableString(report.expectedSubject),
+    subject,
+    expectedSubject,
     source,
   };
 }

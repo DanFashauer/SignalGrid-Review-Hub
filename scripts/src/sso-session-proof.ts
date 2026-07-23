@@ -108,6 +108,23 @@ check("an uncovered device composes to at_risk, NEVER the 'ok' tier", composeDev
 const unreachable = evaluateSsoSession(await connector.fetchSession(fixture.devices["idp-unreachable"].deviceId));
 check("an unverifiable session (IdP unreachable) → step_up, never 'none', not subjectBound", unreachable.posture === "unverified" && unreachable.recommendedAction === "step_up" && unreachable.subjectBound === false);
 
+// An IdP OUTAGE must not soften a locally-known leftover: a mismatch is determined
+// from the device session subject, not the IdP, so it still escalates during an outage.
+const leftoverOutage = evaluateSsoSession(await connector.fetchSession(fixture.devices["leftover-idp-unreachable"].deviceId));
+check("a leftover session during an IdP outage still ESCALATES (not downgraded to step_up)", leftoverOutage.recommendedAction === "escalate" && leftoverOutage.criticalFindings.includes("session_subject_mismatch"));
+
+// A self-contradictory report — `bound` label but the two subjects differ — is
+// forced to `mismatched` by the normalizer and can never grant.
+const contradictory = await connector.fetchSession(fixture.devices["contradictory-subjects"].deviceId);
+check("a bound label with contradictory subjects normalizes to mismatched", contradictory.binding === "mismatched");
+const contradictoryV = evaluateSsoSession(contradictory);
+check("a contradictory-subject 'bound' session → escalate, NEVER bound_strong/none", contradictoryV.recommendedAction === "escalate" && contradictoryV.posture === "leftover_session");
+
+// A near-expiry bound session raises the bar — `monitor` would compose to 'ok' and
+// open no incident, silently passing a renewal-window session.
+const nearExpiry = evaluateSsoSession(await connector.fetchSession(fixture.devices["bound-near-expiry"].deviceId));
+check("a near-expiry bound session → step_up (not a calm monitor that composes to 'ok')", nearExpiry.recommendedAction === "step_up" && composeDeviceRisk([fromSsoSession(nearExpiry)]).riskTier !== "ok");
+
 // A bound session with a weak/unreadable factor raises the bar rather than granting.
 const noMfa = evaluateSsoSession(await connector.fetchSession(fixture.devices["bound-no-mfa"].deviceId));
 check("a bound single-factor session → step_up (re-auth to MFA), still subjectBound", noMfa.posture === "bound_weak" && noMfa.recommendedAction === "step_up" && noMfa.subjectBound === true);

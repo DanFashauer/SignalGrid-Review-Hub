@@ -61,32 +61,35 @@ export function evaluateSsoSession(
     return { ...base, posture: "unknown", reasonCode: "NOT_COVERED", recommendedAction: "step_up", subjectBound: false };
   }
 
-  // Could not reach the IdP to verify the session → cannot trust it for this
-  // session's decision. Raise the bar; never grant.
-  if (session.idpReachable === false) {
-    return { ...base, posture: "unverified", reasonCode: "IDP_UNREACHABLE", recommendedAction: "step_up", subjectBound: false };
-  }
-
   // The current holder is not the session's subject → a leftover/hijacked session.
   // The strongest negative on a shared device: a live one escalates; an expired-
-  // but-present one still restricts (contain the leftover). Checked BEFORE the
-  // no-session and bound branches so a mismatch can never masquerade as clean.
+  // but-present one still restricts (contain the leftover). This is a LOCALLY-known
+  // fact (subject vs badge-holder) that does not need the IdP, so it is checked
+  // BEFORE the IdP-outage downgrade below — an outage must never soften a leftover.
   if (session.binding === "mismatched") {
     criticalFindings.push("session_subject_mismatch");
     const action: SsoSessionAction = session.state === "active" ? "escalate" : "restrict";
     return { ...base, posture: "leftover_session", reasonCode: "SESSION_SUBJECT_MISMATCH", recommendedAction: action, subjectBound: false };
   }
 
+  // An ACTIVE session attributable to no known holder → contain it. Also a locally-
+  // known containment fact, kept above the IdP-outage downgrade for the same reason.
+  if (session.state === "active" && session.binding === "unbound") {
+    criticalFindings.push("unbound_active_session");
+    return { ...base, posture: "unbound_session", reasonCode: "UNBOUND_ACTIVE_SESSION", recommendedAction: "restrict", subjectBound: false };
+  }
+
+  // Could not reach the IdP to VERIFY the session → cannot trust its liveness /
+  // assurance / freshness for this decision. Raise the bar; never grant. (The two
+  // strongest, locally-determinable concerns above are already handled.)
+  if (session.idpReachable === false) {
+    return { ...base, posture: "unverified", reasonCode: "IDP_UNREACHABLE", recommendedAction: "step_up", subjectBound: false };
+  }
+
   // No live session to judge → baseline. Authentication is gated by the flow, not
   // penalized here. (Distinct from the uncovered gap above.)
   if (session.state === "none") {
     return { ...base, posture: "no_session", reasonCode: "NO_ACTIVE_SESSION", recommendedAction: "none", subjectBound: false };
-  }
-
-  // An ACTIVE session attributable to no known holder → contain it.
-  if (session.state === "active" && session.binding === "unbound") {
-    criticalFindings.push("unbound_active_session");
-    return { ...base, posture: "unbound_session", reasonCode: "UNBOUND_ACTIVE_SESSION", recommendedAction: "restrict", subjectBound: false };
   }
 
   // Anything not POSITIVELY bound to the current holder cannot grant — an unknown
@@ -110,7 +113,10 @@ export function evaluateSsoSession(
     const reason = session.state === "unknown" ? "SESSION_STATE_UNKNOWN" : "SESSION_EXPIRED";
     candidates.push({ posture: "bound_weak", action: "step_up", reason });
   } else if (session.freshness === "near_expiry") {
-    candidates.push({ posture: "bound_weak", action: "monitor", reason: "SESSION_NEAR_EXPIRY" });
+    // Inside the renewal window → re-authenticate. `monitor` would compose to the
+    // 'ok' tier and open no incident, letting a near-expiry session pass unchecked;
+    // the contract requires near/past-expiry bound sessions to raise the bar.
+    candidates.push({ posture: "bound_weak", action: "step_up", reason: "SESSION_NEAR_EXPIRY" });
   } else if (session.freshness === "unknown") {
     unknownSignals.push("freshness");
     candidates.push({ posture: "bound_weak", action: "step_up", reason: "SESSION_STATE_UNKNOWN" });

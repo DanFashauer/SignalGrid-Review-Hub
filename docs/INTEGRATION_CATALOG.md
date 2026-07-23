@@ -149,7 +149,9 @@ Fail-safe by construction, matched to a shared frontline session's stakes:
 - **no active session** is the baseline (`no_session` / `none`) — authentication is gated by the workflow, not penalized here;
 - only a **bound, MFA-backed, fresh** session grants the top tier (`bound_strong` / `none`, marked `subjectBound`); the IdP being **unreachable** or the binding **unknown** never grants — it steps up; an unrecognized value normalizes to the safe `unknown`, never a fabricated `bound`/`active`.
 
-Proven fully offline by `pnpm run proof:sso-session` (62 checks, no network, no keys). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid reads and decides on the evaluated session state — it changes no session and mints no tokens; every signal is read-only, and this is not an Okta / Microsoft / Ping partnership or certification claim.
+It also fails closed on self-contradictory reports: a `bound` label whose two subjects **differ** is normalized to `mismatched` (the subject comparison is ground truth); the locally-determinable concerns (a subject mismatch, an active unbound session) are evaluated **before** the IdP-outage downgrade, so an IdP being unreachable can never soften a leftover from `escalate` to `step_up`; and a **near-expiry** bound session raises the bar rather than passing as a calm monitor.
+
+Proven fully offline by `pnpm run proof:sso-session` (70 checks, no network, no keys). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid reads and decides on the evaluated session state — it changes no session and mints no tokens; every signal is read-only, and this is not an Okta / Microsoft / Ping partnership or certification claim.
 
 ## Frontline context signal roadmap
 

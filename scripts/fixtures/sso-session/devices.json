@@ -23,7 +23,7 @@
     },
     "unbound-active": {
       "deviceId": "tab-ward-05",
-      "report": { "state": "active", "binding": "unbound", "assurance": "mfa", "freshness": "fresh", "idpReachable": true, "subject": "svc.kiosk", "expectedSubject": "nurse.jsmith" },
+      "report": { "state": "active", "binding": "unbound", "assurance": "mfa", "freshness": "fresh", "idpReachable": true, "subject": null, "expectedSubject": "nurse.jsmith" },
       "expected": { "posture": "unbound_session", "reasonCode": "UNBOUND_ACTIVE_SESSION", "recommendedAction": "restrict", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "subjectBound": false }
     },
     "no-session": {
@@ -39,7 +39,7 @@
     "bound-near-expiry": {
       "deviceId": "tab-ward-08",
       "report": { "state": "active", "binding": "bound", "assurance": "mfa", "freshness": "near_expiry", "idpReachable": true, "subject": "nurse.jsmith", "expectedSubject": "nurse.jsmith" },
-      "expected": { "posture": "bound_weak", "reasonCode": "SESSION_NEAR_EXPIRY", "recommendedAction": "monitor", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "subjectBound": true }
+      "expected": { "posture": "bound_weak", "reasonCode": "SESSION_NEAR_EXPIRY", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "subjectBound": true }
     },
     "bound-expired": {
       "deviceId": "tab-ward-09",
@@ -73,8 +73,18 @@
     },
     "unbound-state-unknown": {
       "deviceId": "tab-ward-15",
-      "report": { "state": "garbled", "binding": "unbound", "assurance": "mfa", "freshness": "fresh", "idpReachable": true, "subject": "svc.kiosk", "expectedSubject": "nurse.jsmith" },
+      "report": { "state": "garbled", "binding": "unbound", "assurance": "mfa", "freshness": "fresh", "idpReachable": true, "subject": null, "expectedSubject": "nurse.jsmith" },
       "expected": { "posture": "unverified", "reasonCode": "SESSION_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "subjectBound": false }
+    },
+    "leftover-idp-unreachable": {
+      "deviceId": "tab-ward-16",
+      "report": { "state": "active", "binding": "mismatched", "assurance": "mfa", "freshness": "fresh", "idpReachable": false, "subject": "nurse.prevshift", "expectedSubject": "nurse.jsmith" },
+      "expected": { "posture": "leftover_session", "reasonCode": "SESSION_SUBJECT_MISMATCH", "recommendedAction": "escalate", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "subjectBound": false }
+    },
+    "contradictory-subjects": {
+      "deviceId": "tab-ward-17",
+      "report": { "state": "active", "binding": "bound", "assurance": "mfa", "freshness": "fresh", "idpReachable": true, "subject": "nurse.prevshift", "expectedSubject": "nurse.jsmith" },
+      "expected": { "posture": "leftover_session", "reasonCode": "SESSION_SUBJECT_MISMATCH", "recommendedAction": "escalate", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "subjectBound": false }
     }
   }
 }

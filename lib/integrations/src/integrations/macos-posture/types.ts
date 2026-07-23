@@ -91,6 +91,40 @@ export interface NormalizedMacosPosture {
 export const CORE_CONTROLS = ["sip", "fileVault", "gatekeeper", "firewall"] as const;
 export type CoreControl = (typeof CORE_CONTROLS)[number];
 
+/** The substantive posture fields on NormalizedMacosPosture — the ones that carry
+ *  an observed device-security fact (excludes the meta fields sourceSystem /
+ *  deviceId / source and the derived sysextUnreliable flag). The Apple-schema
+ *  alignment proof asserts every one of these is mapped to its canonical Apple
+ *  provenance, so adding a new posture field forces a deliberate mapping decision. */
+export const NORMALIZED_MACOS_POSTURE_FIELDS = [
+  "sip",
+  "fileVault",
+  "gatekeeper",
+  "firewall",
+  "mdmEnrolled",
+  "autoUpdate",
+  "malwareDefs",
+  "sysextResidual",
+  "sysextConflict",
+  "osVersion",
+] as const;
+export type NormalizedMacosPostureField = (typeof NORMALIZED_MACOS_POSTURE_FIELDS)[number];
+
+/** Meta fields on NormalizedMacosPosture that carry no device-security fact (so
+ *  they are deliberately NOT in NORMALIZED_MACOS_POSTURE_FIELDS / the Apple map). */
+type MacosPostureMetaField = "sourceSystem" | "deviceId" | "source" | "sysextUnreliable";
+
+// Compile-time bridges giving the hand-maintained field list real teeth against the
+// interface: (1) every listed field is a genuine key of NormalizedMacosPosture, and
+// (2) the listed fields + meta fields EXHAUSTIVELY cover the interface — so adding a
+// new field to NormalizedMacosPosture without listing it (or marking it meta) is a
+// compile error, forcing a deliberate Apple-provenance mapping decision.
+const _macosFieldsAreRealKeys: readonly (keyof NormalizedMacosPosture)[] = NORMALIZED_MACOS_POSTURE_FIELDS;
+type _MacosUncoveredField = Exclude<keyof NormalizedMacosPosture, NormalizedMacosPostureField | MacosPostureMetaField>;
+const _macosNoUncoveredField: _MacosUncoveredField extends never ? true : false = true;
+void _macosFieldsAreRealKeys;
+void _macosNoUncoveredField;
+
 export type MacosPosture =
   | "hardened"
   | "patch_lagging"

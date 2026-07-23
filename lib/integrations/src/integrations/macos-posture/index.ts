@@ -8,6 +8,7 @@ import { MacosPostureConnectorError, type MacosPostureReportRaw } from "./types"
 export * from "./types";
 export * from "./evaluate";
 export * from "./macos-connector";
+export * from "./apple-schema";
 export { createMockMacosTransport, type MockMacosOptions } from "./mock-transport";
 
 /**

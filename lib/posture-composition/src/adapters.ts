@@ -11,6 +11,7 @@ import type { CredentialExposureVerdict } from "@workspace/integrations/credenti
 import type { MacosPostureVerdict } from "@workspace/integrations/macos-posture";
 import type { OtPostureVerdict } from "@workspace/integrations/ot-posture";
 import type { AccessGovernanceVerdict } from "@workspace/integrations/access-governance";
+import type { AttestationVerdict } from "@workspace/integrations/device-attestation";
 import type { GraphPostureSignal } from "@workspace/integrations/graph";
 import type { Detection } from "@workspace/event-contract";
 import { ACTION_RANK } from "./compose";
@@ -97,6 +98,17 @@ export function fromAccessGovernance(v: AccessGovernanceVerdict): ComposableSign
   // restricts; standing (not JIT) privilege or a stale certification steps up — an
   // unverified or uncovered grant is never fused as authorized.
   return { kind: "access_governance", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromAttestation(v: AttestationVerdict): ComposableSignal {
+  // Hardware-rooted Managed Device Attestation — the top assurance tier. Its
+  // actions (none|monitor|step_up|alert|restrict|escalate) are already on the
+  // unified ladder. Fail-safe: a cryptographically-PROVEN bad state (attested SIP
+  // off → escalate; permissive secure boot → restrict) is the strongest negative;
+  // an expected-but-unverifiable/stale attestation steps up; only a proven-healthy
+  // fresh attestation contributes 'none', and hardware provably not attestation-
+  // capable abstains — an unverified attestation is never fused as attested-secure.
+  return { kind: "attestation", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromMacosPosture(v: MacosPostureVerdict): ComposableSignal {

@@ -150,15 +150,32 @@ function buildIncident(input: {
 
 function categoryForKind(kind: string): IncidentCategory {
   switch (kind) {
+    // Device / endpoint integrity & posture — self-reported or hardware-proven.
+    // `attestation` mirrors its self-reported twin `device_posture`: a hardware-
+    // rooted SIP-disabled verdict must route to a security owner, never the generic
+    // Service Desk. `ot_posture` is the OT/IIoT device-posture sibling.
     case "device_posture":
+    case "attestation":
+    case "ot_posture":
+      return "security_compliance";
+    // Identity, authorization & data-governance signals.
+    case "identity":
+    case "access_governance":
+    case "data_protection":
+      return "security_compliance";
+    case "network":
       return "security_compliance";
     case "vulnerability":
       return "security_vulnerability";
+    // Physical custody & endpoint peripheral handling.
     case "reachability":
     case "location":
+    case "custody":
+    case "peripheral":
       return "asset_device";
-    case "network":
-      return "security_compliance";
+    // Active security incidents — live threats, exposed credentials, detections.
+    case "threat":
+    case "credential_exposure":
     case "detection":
       return "security_incident";
     default:

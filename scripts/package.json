@@ -67,6 +67,7 @@
     "proof:macos-apple-schema": "tsx ./src/macos-apple-schema-proof.ts",
     "proof:ot-posture": "tsx ./src/ot-posture-proof.ts",
     "proof:access-governance": "tsx ./src/access-governance-proof.ts",
+    "proof:device-attestation": "tsx ./src/device-attestation-proof.ts",
     "proof:fabric-scenario": "tsx ./src/fabric-scenario-proof.ts"
   },
   "dependencies": {

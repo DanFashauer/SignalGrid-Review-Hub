@@ -1,0 +1,80 @@
+{
+  "accessToken": "sg-attest-fixture-token",
+  "devices": {
+    "attested-hardened": {
+      "deviceId": "mac-attest-01",
+      "report": { "attestable": true, "chain": "verified", "freshness": "fresh", "sip": "on", "secureBoot": "full", "thirdPartyKextAllowed": false, "serial": "C02ABC", "osVersion": "15.5" },
+      "expected": { "posture": "attested_hardened", "reasonCode": "FULLY_ATTESTED", "recommendedAction": "none", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "hardwareRooted": true }
+    },
+    "attested-sip-off": {
+      "deviceId": "mac-attest-02",
+      "report": { "attestable": true, "chain": "verified", "freshness": "fresh", "sip": "off", "secureBoot": "full", "thirdPartyKextAllowed": false },
+      "expected": { "posture": "attested_compromised", "reasonCode": "ATTESTED_SIP_DISABLED", "recommendedAction": "escalate", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "hardwareRooted": true }
+    },
+    "secureboot-permissive": {
+      "deviceId": "mac-attest-03",
+      "report": { "attestable": true, "chain": "verified", "freshness": "fresh", "sip": "on", "secureBoot": "permissive", "thirdPartyKextAllowed": false },
+      "expected": { "posture": "attested_reduced", "reasonCode": "ATTESTED_SECUREBOOT_PERMISSIVE", "recommendedAction": "restrict", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "hardwareRooted": true }
+    },
+    "secureboot-reduced": {
+      "deviceId": "mac-attest-04",
+      "report": { "attestable": true, "chain": "verified", "freshness": "fresh", "sip": "on", "secureBoot": "reduced", "thirdPartyKextAllowed": false },
+      "expected": { "posture": "attested_reduced", "reasonCode": "ATTESTED_SECUREBOOT_REDUCED", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "hardwareRooted": true }
+    },
+    "kext-allowed": {
+      "deviceId": "mac-attest-05",
+      "report": { "attestable": true, "chain": "verified", "freshness": "fresh", "sip": "on", "secureBoot": "full", "thirdPartyKextAllowed": true },
+      "expected": { "posture": "attested_reduced", "reasonCode": "ATTESTED_KEXT_ALLOWED", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "hardwareRooted": true }
+    },
+    "unverifiable": {
+      "deviceId": "mac-attest-06",
+      "report": { "attestable": true, "chain": "unverifiable", "freshness": "unknown", "sip": "unknown", "secureBoot": "unknown", "thirdPartyKextAllowed": null },
+      "expected": { "posture": "unattested", "reasonCode": "ATTESTATION_UNVERIFIABLE", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "hardwareRooted": false }
+    },
+    "stale": {
+      "deviceId": "mac-attest-07",
+      "report": { "attestable": true, "chain": "verified", "freshness": "stale", "sip": "on", "secureBoot": "full", "thirdPartyKextAllowed": false },
+      "expected": { "posture": "unattested", "reasonCode": "ATTESTATION_STALE", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "hardwareRooted": false }
+    },
+    "not-attestable": {
+      "deviceId": "mac-intel-08",
+      "report": { "attestable": false, "chain": "unknown", "freshness": "unknown", "sip": "unknown", "secureBoot": "unknown", "thirdPartyKextAllowed": null },
+      "expected": { "posture": "not_attestable", "reasonCode": "NOT_ATTESTABLE", "recommendedAction": "none", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "hardwareRooted": false }
+    },
+    "capability-unknown": {
+      "deviceId": "mac-attest-09",
+      "report": { "attestable": null, "chain": "unknown", "freshness": "unknown", "sip": "unknown", "secureBoot": "unknown", "thirdPartyKextAllowed": null },
+      "expected": { "posture": "unverified", "reasonCode": "ATTESTATION_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 2, "hardwareRooted": false }
+    },
+    "verified-sip-unreadable": {
+      "deviceId": "mac-attest-10",
+      "report": { "attestable": true, "chain": "verified", "freshness": "fresh", "sip": "unknown", "secureBoot": "full", "thirdPartyKextAllowed": false },
+      "expected": { "posture": "unverified", "reasonCode": "ATTESTATION_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "hardwareRooted": true }
+    },
+    "worst-of-several": {
+      "deviceId": "mac-attest-11",
+      "report": { "attestable": true, "chain": "verified", "freshness": "fresh", "sip": "off", "secureBoot": "permissive", "thirdPartyKextAllowed": true },
+      "expected": { "posture": "attested_compromised", "reasonCode": "ATTESTED_SIP_DISABLED", "recommendedAction": "escalate", "criticalFindingsCount": 2, "unknownSignalsCount": 0, "hardwareRooted": true }
+    },
+    "conflict-sip-off": {
+      "deviceId": "mac-attest-12",
+      "report": { "attestable": false, "chain": "verified", "freshness": "fresh", "sip": "off", "secureBoot": "full", "thirdPartyKextAllowed": false },
+      "expected": { "posture": "attested_compromised", "reasonCode": "ATTESTED_SIP_DISABLED", "recommendedAction": "escalate", "criticalFindingsCount": 1, "unknownSignalsCount": 1, "hardwareRooted": true }
+    },
+    "conflict-clean": {
+      "deviceId": "mac-attest-13",
+      "report": { "attestable": false, "chain": "verified", "freshness": "fresh", "sip": "on", "secureBoot": "full", "thirdPartyKextAllowed": false },
+      "expected": { "posture": "unverified", "reasonCode": "ATTESTATION_CONFLICT", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "hardwareRooted": true }
+    },
+    "conflict-freshness-only": {
+      "deviceId": "mac-attest-14",
+      "report": { "attestable": false, "chain": "unknown", "freshness": "stale", "sip": "unknown", "secureBoot": "unknown", "thirdPartyKextAllowed": null },
+      "expected": { "posture": "unverified", "reasonCode": "ATTESTATION_CONFLICT", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 2, "hardwareRooted": false }
+    },
+    "conflict-identity-only": {
+      "deviceId": "mac-attest-15",
+      "report": { "attestable": false, "chain": "unknown", "freshness": "unknown", "sip": "unknown", "secureBoot": "unknown", "thirdPartyKextAllowed": null, "serial": "C02XYZ123", "osVersion": "15.5" },
+      "expected": { "posture": "unverified", "reasonCode": "ATTESTATION_CONFLICT", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 3, "hardwareRooted": false }
+    }
+  }
+}

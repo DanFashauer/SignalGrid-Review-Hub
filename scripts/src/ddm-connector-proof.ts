@@ -17,6 +17,10 @@ import {
   enforcementCurrencyOf,
   DEMO_DDM_REPORTS,
   DDM_OBSERVED_AT,
+  DDM_APPLE_SCHEMA_VERSION,
+  DDM_APPLE_STATUS_ITEMS,
+  DDM_REPORT_APPLE_ALIASES,
+  DDM_REPORT_FIELDS,
   type DdmDeviceReport,
 } from "@workspace/ddm-connector";
 
@@ -89,6 +93,32 @@ const future: DdmDeviceReport = { deviceRef: "mac-future", enrolled: true, healt
 const fs = normalizeDdmReport(future, DDM_OBSERVED_AT);
 check("future-dated check-in → freshness unknown (not fresh)", fs.postureFreshness === "unknown");
 check("future-dated check-in → raise step-up (fail closed)", fs.assurance === "raise_step_up");
+
+// ── apple/device-management schema alignment (drift guard) ────────────────────
+// Each substantive DdmDeviceReport field is mapped to its canonical Apple DDM
+// status-item provenance (or declared config/transport-only), and every referenced
+// key is in the pinned catalog — so a schema change on a new OS release fails here
+// instead of drifting silently. Pinned to the SAME version as macos-posture.
+check("DDM alignment pins a schema version (never HEAD)", /^\d+\.\d+$/.test(DDM_APPLE_SCHEMA_VERSION));
+const ddmAliasFields = Object.keys(DDM_REPORT_APPLE_ALIASES).sort();
+const ddmFields = [...DDM_REPORT_FIELDS].sort();
+check("alias map covers EXACTLY the substantive DdmDeviceReport fields", ddmAliasFields.length === ddmFields.length && ddmAliasFields.every((k, i) => k === ddmFields[i]));
+const ddmStatusItems = new Set<string>(DDM_APPLE_STATUS_ITEMS);
+for (const field of DDM_REPORT_FIELDS) {
+  const alias = DDM_REPORT_APPLE_ALIASES[field];
+  check(`${field}: has a mapping entry`, alias !== undefined);
+  if (alias.ddmStatusItem !== undefined) {
+    check(`${field}: DDM status item '${alias.ddmStatusItem}' is in the pinned catalog`, ddmStatusItems.has(alias.ddmStatusItem));
+  }
+  // Traceable: maps to a DDM status item, or explicitly declares it is config-/
+  // transport-only (a note) — never silently unmapped.
+  check(`${field}: is traceable (DDM status item) or declared config/transport-only`, alias.ddmStatusItem !== undefined || (typeof alias.note === "string" && alias.note.length > 0));
+}
+// Honesty: config-declared / transport-level facts must NOT claim a status item.
+for (const field of ["binaryControl", "privacy", "lastCheckInAt"] as const) {
+  check(`${field}: no fabricated DDM status key (config/transport-only)`, DDM_REPORT_APPLE_ALIASES[field].ddmStatusItem === undefined && typeof DDM_REPORT_APPLE_ALIASES[field].note === "string");
+}
+check("osMajor → device.operating-system.version", DDM_REPORT_APPLE_ALIASES.osMajor.ddmStatusItem === "device.operating-system.version");
 
 // ── determinism ───────────────────────────────────────────────────────────────
 check("normalization is deterministic", JSON.stringify(normalizeDdmReports(DEMO_DDM_REPORTS, DDM_OBSERVED_AT)) === JSON.stringify(signals));

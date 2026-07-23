@@ -22,6 +22,22 @@ pnpm run preflight --quick  # skip the heavy web/app builds for a fast loop
 It stops at the first failing gate and prints the failing output, so there is no
 guessing about what broke.
 
+#### Decision-quality evals — `pnpm run proof:fabric-evals`
+
+Each connector's proof checks *one* dimension's logic in isolation. The
+**fabric decision-evals** are the layer above: a curated golden set of end-to-end,
+multi-signal scenarios (a leftover SSO session on an attested-hardened device, a
+proven-compromised endpoint, worst-of-four concurrent negatives, …) scored against
+the **fused** outcome — the composed risk verdict *and* the routed incident. It
+catches cross-fabric "decision drift" no single-connector proof can: a change that
+quietly lets one dimension dilute another, mis-orders worst-concern-wins, or
+mis-routes the top driver passes every connector proof yet fails here. Beyond
+matching each scenario, it enforces two fabric-wide invariants computed
+independently of the fixtures — *fail-safe* (any signal beyond monitoring ⟹ never
+the healthy `ok` tier) and *worst-concern-wins* (the fused action is exactly the
+most-severe signal's) — so a regression surfaces as a nonzero violation count, not
+a silently-wrong verdict.
+
 #### One command across both repos — `pnpm run verify:all`
 
 The macOS device-trust signals come from the companion open-source

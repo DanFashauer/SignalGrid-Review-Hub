@@ -161,6 +161,7 @@ function categoryForKind(kind: string): IncidentCategory {
     // Identity, authorization & data-governance signals.
     case "identity":
     case "access_governance":
+    case "sso_session":
     case "data_protection":
       return "security_compliance";
     case "network":

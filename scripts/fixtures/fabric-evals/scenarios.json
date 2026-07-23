@@ -1,0 +1,139 @@
+{
+  "impactForIncident": "high",
+  "scenarios": [
+    {
+      "id": "clean-ward-tablet",
+      "description": "Fully healthy shared tablet: bound MFA session, attested-hardened, compliant device.",
+      "signals": [
+        { "kind": "sso_session", "posture": "bound_strong", "action": "none", "reason": "BOUND_MFA_FRESH" },
+        { "kind": "attestation", "posture": "attested_hardened", "action": "none", "reason": "FULLY_ATTESTED" },
+        { "kind": "device_posture", "posture": "compliant", "action": "none", "reason": "COMPLIANT_MANAGED" }
+      ],
+      "expected": { "riskTier": "ok", "strongestAction": "none", "opensIncident": false }
+    },
+    {
+      "id": "calm-monitoring-only",
+      "description": "Only informational monitoring signals — stays ok, opens NO incident (no ticket noise).",
+      "signals": [
+        { "kind": "network", "posture": "observed", "action": "monitor", "reason": "BASELINE_OBSERVED" },
+        { "kind": "device_posture", "posture": "compliant", "action": "none", "reason": "COMPLIANT_MANAGED" }
+      ],
+      "expected": { "riskTier": "ok", "strongestAction": "monitor", "opensIncident": false }
+    },
+    {
+      "id": "leftover-session-on-pristine-device",
+      "description": "Hardware-hardened, attested device — but a LEFTOVER SSO session. The fabric MUST block on the session even though the device is pristine (the cross-dimension fail-safe).",
+      "signals": [
+        { "kind": "sso_session", "posture": "leftover_session", "action": "escalate", "reason": "SESSION_SUBJECT_MISMATCH" },
+        { "kind": "attestation", "posture": "attested_hardened", "action": "none", "reason": "FULLY_ATTESTED" },
+        { "kind": "device_posture", "posture": "compliant", "action": "none", "reason": "COMPLIANT_MANAGED" }
+      ],
+      "expected": { "riskTier": "blocked", "strongestAction": "escalate", "opensIncident": true, "incidentAssignmentGroup": "Identity & Access", "incidentPriority": "P1" }
+    },
+    {
+      "id": "attested-compromised-device",
+      "description": "Cryptographically-proven SIP disabled outranks an otherwise-clean posture.",
+      "signals": [
+        { "kind": "attestation", "posture": "attested_compromised", "action": "escalate", "reason": "ATTESTED_SIP_DISABLED" },
+        { "kind": "device_posture", "posture": "compliant", "action": "none", "reason": "COMPLIANT_MANAGED" }
+      ],
+      "expected": { "riskTier": "blocked", "strongestAction": "escalate", "opensIncident": true, "incidentAssignmentGroup": "Identity & Access", "incidentPriority": "P1" }
+    },
+    {
+      "id": "active-endpoint-threat-dominates",
+      "description": "A live EDR threat outranks a clean session and a lesser vuln — routes to SecOps.",
+      "signals": [
+        { "kind": "threat", "posture": "active_threat", "action": "escalate", "reason": "MALWARE_RUNNING" },
+        { "kind": "sso_session", "posture": "bound_strong", "action": "none", "reason": "BOUND_MFA_FRESH" },
+        { "kind": "vulnerability", "posture": "at_risk", "action": "step_up", "reason": "OPEN_CVES" }
+      ],
+      "expected": { "riskTier": "blocked", "strongestAction": "escalate", "opensIncident": true, "incidentAssignmentGroup": "Security Operations (SecOps)", "incidentPriority": "P1" }
+    },
+    {
+      "id": "removable-media-restrict-wins",
+      "description": "A restrict from peripheral control outranks a step_up identity risk — Endpoint / Mobility owns it.",
+      "signals": [
+        { "kind": "peripheral", "posture": "blocked_media", "action": "restrict", "reason": "UNSANCTIONED_MASS_STORAGE" },
+        { "kind": "identity", "posture": "at_risk", "action": "step_up", "reason": "MEDIUM_RISK_SIGNIN" },
+        { "kind": "device_posture", "posture": "compliant", "action": "none", "reason": "COMPLIANT_MANAGED" }
+      ],
+      "expected": { "riskTier": "blocked", "strongestAction": "restrict", "opensIncident": true, "incidentAssignmentGroup": "Endpoint / Mobility", "incidentPriority": "P1" }
+    },
+    {
+      "id": "physical-custody-alert",
+      "description": "An RTLS custody alert is at_risk tier but high urgency — a P1 incident from an at_risk posture (priority and tier are distinct axes).",
+      "signals": [
+        { "kind": "custody", "posture": "out_of_zone", "action": "alert", "reason": "DEVICE_LEFT_ZONE" },
+        { "kind": "sso_session", "posture": "bound_strong", "action": "none", "reason": "BOUND_MFA_FRESH" }
+      ],
+      "expected": { "riskTier": "at_risk", "strongestAction": "alert", "opensIncident": true, "incidentAssignmentGroup": "Endpoint / Mobility", "incidentPriority": "P1" }
+    },
+    {
+      "id": "session-step-up-watchlist",
+      "description": "A bound but single-factor session steps up — at_risk, a P2 to Identity & Access.",
+      "signals": [
+        { "kind": "sso_session", "posture": "bound_weak", "action": "step_up", "reason": "SESSION_NO_MFA" },
+        { "kind": "attestation", "posture": "attested_hardened", "action": "none", "reason": "FULLY_ATTESTED" }
+      ],
+      "expected": { "riskTier": "at_risk", "strongestAction": "step_up", "opensIncident": true, "incidentAssignmentGroup": "Identity & Access", "incidentPriority": "P2" }
+    },
+    {
+      "id": "vuln-patch-watch",
+      "description": "A patchable vuln is the watch tier — opens a low-urgency P3 to Vulnerability Management.",
+      "signals": [
+        { "kind": "vulnerability", "posture": "patch_available", "action": "patch", "reason": "PATCH_AVAILABLE" }
+      ],
+      "expected": { "riskTier": "watch", "strongestAction": "patch", "opensIncident": true, "incidentAssignmentGroup": "Vulnerability Management", "incidentPriority": "P3" }
+    },
+    {
+      "id": "locate-watch",
+      "description": "A locate action (find the device) is the watch tier — a medium-urgency P2 to Endpoint / Mobility.",
+      "signals": [
+        { "kind": "location", "posture": "stale_fix", "action": "locate", "reason": "STALE_LOCATION" }
+      ],
+      "expected": { "riskTier": "watch", "strongestAction": "locate", "opensIncident": true, "incidentAssignmentGroup": "Endpoint / Mobility", "incidentPriority": "P2" }
+    },
+    {
+      "id": "access-governance-leaver",
+      "description": "A Leaver still transacting escalates — Identity & Access, P1.",
+      "signals": [
+        { "kind": "access_governance", "posture": "ungoverned", "action": "escalate", "reason": "LEAVER_STILL_ACTIVE" }
+      ],
+      "expected": { "riskTier": "blocked", "strongestAction": "escalate", "opensIncident": true, "incidentAssignmentGroup": "Identity & Access", "incidentPriority": "P1" }
+    },
+    {
+      "id": "credential-exposure-secops",
+      "description": "Exposed endpoint credentials route to SecOps, not Identity & Access.",
+      "signals": [
+        { "kind": "credential_exposure", "posture": "exposed", "action": "restrict", "reason": "PLAINTEXT_SECRETS" }
+      ],
+      "expected": { "riskTier": "blocked", "strongestAction": "restrict", "opensIncident": true, "incidentAssignmentGroup": "Security Operations (SecOps)", "incidentPriority": "P1" }
+    },
+    {
+      "id": "ot-posture-degraded",
+      "description": "A degraded OT/IIoT edge device steps up — routes with the device-posture family to Identity & Access.",
+      "signals": [
+        { "kind": "ot_posture", "posture": "degraded", "action": "step_up", "reason": "STALE_FIRMWARE" },
+        { "kind": "network", "posture": "observed", "action": "monitor", "reason": "BASELINE_OBSERVED" }
+      ],
+      "expected": { "riskTier": "at_risk", "strongestAction": "step_up", "opensIncident": true, "incidentAssignmentGroup": "Identity & Access", "incidentPriority": "P2" }
+    },
+    {
+      "id": "worst-of-four-bad-signals",
+      "description": "Four concurrent negatives — worst-concern-wins picks the escalate; a lesser restrict/alert/step_up never dilutes it.",
+      "signals": [
+        { "kind": "sso_session", "posture": "leftover_session", "action": "escalate", "reason": "SESSION_SUBJECT_MISMATCH" },
+        { "kind": "attestation", "posture": "attested_reduced", "action": "restrict", "reason": "ATTESTED_SECUREBOOT_PERMISSIVE" },
+        { "kind": "threat", "posture": "suspicious", "action": "alert", "reason": "SUSPICIOUS_BEHAVIOR" },
+        { "kind": "vulnerability", "posture": "at_risk", "action": "step_up", "reason": "OPEN_CVES" }
+      ],
+      "expected": { "riskTier": "blocked", "strongestAction": "escalate", "opensIncident": true, "incidentAssignmentGroup": "Identity & Access", "incidentPriority": "P1" }
+    },
+    {
+      "id": "no-signals-at-all",
+      "description": "An empty signal set composes to ok/none and opens no incident (a device with zero coverage is handled by the coverage gates upstream, not invented here).",
+      "signals": [],
+      "expected": { "riskTier": "ok", "strongestAction": "none", "opensIncident": false }
+    }
+  ]
+}

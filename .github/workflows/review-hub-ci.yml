@@ -112,11 +112,17 @@ jobs:
       - name: Hardware-rooted device-attestation proof
         run: pnpm run proof:device-attestation
 
+      - name: SSO session-binding proof
+        run: pnpm run proof:sso-session
+
       - name: Posture-composition (unified signal fusion) proof
         run: pnpm run proof:posture-composition
 
       - name: Incident-playbook (decision to prioritized incident) proof
         run: pnpm run proof:incident-playbook
+
+      - name: Fabric decision-evals (golden multi-signal decision quality) proof
+        run: pnpm run proof:fabric-evals
 
       - name: Signal-fabric capstone (end-to-end fusion to incident) proof
         run: pnpm run proof:fabric-scenario

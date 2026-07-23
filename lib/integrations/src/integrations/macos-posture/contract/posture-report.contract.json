@@ -1,0 +1,24 @@
+{
+  "$comment": "CROSS-REPO CONTRACT — single source of truth for the signalgrid-mcp posture_report shape the macos-posture connector consumes. The Review-Hub side proves the connector consumes `example` to `expected` (folded into proof:macos-posture). The signalgrid-mcp side proves its live signalgrid_posture_report() still EMITS every requiredSection + requiredSecurityControl (tests/test_posture_contract.py, which reads this file when SIGNALGRID_CONTRACT_PATH is set). `pnpm run verify:all` runs both against this one file. Change the shape on either side and a gate fails instead of the two drifting silently.",
+  "schemaVersion": 1,
+  "requiredSections": ["os", "security", "mdm", "updates", "xprotect"],
+  "requiredSecurityControls": ["sip", "filevault", "gatekeeper", "firewall"],
+  "example": {
+    "identity": { "serial": "FIXTURE0SERIAL", "hardware_uuid": "00000000-0000-0000-0000-000000000000" },
+    "os": { "product_version": "15.5", "build_version": "24F74" },
+    "security": {
+      "sip": { "raw": "System Integrity Protection status: enabled.", "enabled": true },
+      "filevault": { "raw": "FileVault is On.", "enabled": true },
+      "gatekeeper": { "raw": "assessments enabled", "enabled": true },
+      "firewall": { "raw": "Firewall is enabled. (State = 1)", "enabled": true }
+    },
+    "mdm": { "mdm_enrolled": true, "dep_enrolled": true },
+    "updates": { "AutomaticCheckEnabled": true, "AutomaticallyInstallMacOSUpdates": true },
+    "xprotect": { "xprotect_definitions": "2183" }
+  },
+  "expected": {
+    "posture": "hardened",
+    "reasonCode": "FULLY_HARDENED",
+    "recommendedAction": "none"
+  }
+}

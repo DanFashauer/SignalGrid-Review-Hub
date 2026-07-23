@@ -223,6 +223,36 @@ check("prod WITHOUT live flag stays fixture", resolveMacosPostureConnector({ SIG
 check("prod + live but NO token stays fixture", resolveMacosPostureConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" }).mode === "fixture");
 check("prod + live + token resolves live", resolveMacosPostureConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", MACOS_POSTURE_ACCESS_TOKEN: "t" }).mode === "live");
 
+// ── cross-repo posture-report CONTRACT (consumer side) ────────────────────────
+// The single-source contract with signalgrid-mcp: the connector proves it
+// consumes the canonical report `example` to the documented verdict, and that the
+// example actually contains every section/control the contract requires the MCP
+// server to emit. The MCP side (tests/test_posture_contract.py) proves its live
+// signalgrid_posture_report() still emits that shape; `pnpm run verify:all` runs
+// both against this one file so neither side can drift silently.
+interface PostureContract {
+  requiredSections: string[];
+  requiredSecurityControls: string[];
+  example: MacosPostureReportRaw;
+  expected: { posture: string; reasonCode: string; recommendedAction: string };
+}
+const contractPath = resolve(dirname(fileURLToPath(import.meta.url)), "../../lib/integrations/src/integrations/macos-posture/contract/posture-report.contract.json");
+const contract = JSON.parse(await readFile(contractPath, "utf8")) as PostureContract;
+const contractVerdict = evaluateMacosPosture(normalizeReport("mac-contract", contract.example));
+check("contract: connector consumes the canonical MCP report to the documented verdict", contractVerdict.posture === contract.expected.posture && contractVerdict.reasonCode === contract.expected.reasonCode && contractVerdict.recommendedAction === contract.expected.recommendedAction);
+// Give the `os` section consumer-side teeth: the verdict ladder ignores osVersion,
+// so without this a connector regression that stopped reading `os` would slip past
+// the verdict check. Assert the connector actually extracted it from os.product_version.
+const exampleBody = contract.example as Record<string, unknown>;
+const exampleOs = (exampleBody.os ?? {}) as Record<string, unknown>;
+check("contract: connector extracts osVersion from the os section", contractVerdict.osVersion === (exampleOs.product_version ?? null));
+// Fixture self-consistency: the example itself declares every section/control the
+// contract requires the MCP server to emit (the producer test enforces the server
+// actually emits them; this keeps the example honest with the contract).
+check("contract: example is self-consistent — declares every requiredSection", contract.requiredSections.every((s) => s in exampleBody));
+const exampleSecurity = (exampleBody.security ?? {}) as Record<string, unknown>;
+check("contract: example is self-consistent — declares every requiredSecurityControl", contract.requiredSecurityControls.every((c) => c in exampleSecurity));
+
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

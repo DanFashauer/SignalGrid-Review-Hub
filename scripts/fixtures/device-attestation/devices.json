@@ -70,6 +70,11 @@
       "deviceId": "mac-attest-14",
       "report": { "attestable": false, "chain": "unknown", "freshness": "stale", "sip": "unknown", "secureBoot": "unknown", "thirdPartyKextAllowed": null },
       "expected": { "posture": "unverified", "reasonCode": "ATTESTATION_CONFLICT", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 2, "hardwareRooted": false }
+    },
+    "conflict-identity-only": {
+      "deviceId": "mac-attest-15",
+      "report": { "attestable": false, "chain": "unknown", "freshness": "unknown", "sip": "unknown", "secureBoot": "unknown", "thirdPartyKextAllowed": null, "serial": "C02XYZ123", "osVersion": "15.5" },
+      "expected": { "posture": "unverified", "reasonCode": "ATTESTATION_CONFLICT", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 3, "hardwareRooted": false }
     }
   }
 }

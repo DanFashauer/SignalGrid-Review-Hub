@@ -66,15 +66,18 @@ export function evaluateAttestation(
   }
 
   // Does the report carry ANY attestation evidence — a chain, a freshness result,
-  // or a decoded fact? A freshness verdict is itself decoded attestation output, so
-  // it counts: a report claiming `attestable:false` while echoing a fresh/stale
-  // freshness is as self-contradictory as one carrying a chain.
+  // a decoded control, or a signed identity fact? All are decoded attestation
+  // output, so any of them counts: a report claiming `attestable:false` while
+  // echoing a fresh/stale freshness, an attested serial, or an attested OS version
+  // is as self-contradictory as one carrying a chain.
   const carriesAttestation =
     posture.chain !== "unknown" ||
     posture.freshness !== "unknown" ||
     posture.attestedSip !== "unknown" ||
     posture.attestedSecureBoot !== "unknown" ||
-    posture.attestedKextAllowed !== null;
+    posture.attestedKextAllowed !== null ||
+    posture.attestedSerial !== null ||
+    posture.attestedOsVersion !== null;
 
   // Provably NOT attestation-capable (e.g. Intel) → abstain. Attestation is an
   // assurance upgrade, not a universal requirement — penalizing hardware that

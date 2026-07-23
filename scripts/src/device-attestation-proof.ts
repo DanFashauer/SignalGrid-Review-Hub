@@ -134,6 +134,10 @@ check("a self-contradictory report never composes to the 'ok' tier", composeDevi
 // fresh/stale freshness (even with chain/facts unknown) is a conflict, not an abstain.
 const conflictFresh = evaluateAttestation(await connector.fetchAttestation(fixture.devices["conflict-freshness-only"].deviceId));
 check("attestable:false + a decoded freshness → step_up conflict, NEVER not_attestable/none", conflictFresh.reasonCode === "ATTESTATION_CONFLICT" && conflictFresh.recommendedAction === "step_up" && conflictFresh.posture !== "not_attestable");
+// A signed identity fact (serial / OS version) is decoded attestation output too —
+// attestable:false alongside one is a conflict, not an abstain.
+const conflictIdentity = evaluateAttestation(await connector.fetchAttestation(fixture.devices["conflict-identity-only"].deviceId));
+check("attestable:false + an attested serial/OS → step_up conflict, NEVER not_attestable/none", conflictIdentity.reasonCode === "ATTESTATION_CONFLICT" && conflictIdentity.recommendedAction === "step_up" && conflictIdentity.posture !== "not_attestable");
 // The consistent Intel abstain still holds — only a self-consistent incapable
 // report (no chain, no attested facts) abstains to none.
 check("a self-CONSISTENT not-capable report still abstains (none) — the guard is surgical", intel.posture === "not_attestable" && intel.recommendedAction === "none");

@@ -65,9 +65,13 @@ export function evaluateAttestation(
     return { ...base, posture: "unknown", reasonCode: "NOT_COVERED", recommendedAction: "step_up", hardwareRooted: false };
   }
 
-  // Does the report carry ANY attestation evidence — a chain, or a decoded fact?
+  // Does the report carry ANY attestation evidence — a chain, a freshness result,
+  // or a decoded fact? A freshness verdict is itself decoded attestation output, so
+  // it counts: a report claiming `attestable:false` while echoing a fresh/stale
+  // freshness is as self-contradictory as one carrying a chain.
   const carriesAttestation =
     posture.chain !== "unknown" ||
+    posture.freshness !== "unknown" ||
     posture.attestedSip !== "unknown" ||
     posture.attestedSecureBoot !== "unknown" ||
     posture.attestedKextAllowed !== null;

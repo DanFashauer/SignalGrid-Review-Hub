@@ -65,6 +65,11 @@
       "deviceId": "mac-attest-13",
       "report": { "attestable": false, "chain": "verified", "freshness": "fresh", "sip": "on", "secureBoot": "full", "thirdPartyKextAllowed": false },
       "expected": { "posture": "unverified", "reasonCode": "ATTESTATION_CONFLICT", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "hardwareRooted": true }
+    },
+    "conflict-freshness-only": {
+      "deviceId": "mac-attest-14",
+      "report": { "attestable": false, "chain": "unknown", "freshness": "stale", "sip": "unknown", "secureBoot": "unknown", "thirdPartyKextAllowed": null },
+      "expected": { "posture": "unverified", "reasonCode": "ATTESTATION_CONFLICT", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 2, "hardwareRooted": false }
     }
   }
 }

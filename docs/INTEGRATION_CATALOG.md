@@ -125,7 +125,8 @@ Every other posture signal SignalGrid fuses is, at bottom, **self-reported**: an
 
 The assurance model is the whole point — a cryptographic proof outranks any self-report, in both directions:
 
-- a **fresh, root-verified** attestation proving a healthy state (SIP on, Secure Boot full, no third-party kexts) is the **only** path to the top tier → `attested_hardened`/`none`, and the only verdict marked `hardwareRooted` — you cannot argue with the Secure Enclave;
+- a **fresh, root-verified** attestation proving a healthy state (SIP on, Secure Boot full, no third-party kexts) is the **only** path that *grants* the top tier → `attested_hardened`/`none` — you cannot argue with the Secure Enclave;
+- every verdict backed by a fresh, root-verified chain is marked `hardwareRooted` — including the proven-bad ones below (the chain is genuine regardless of whether the news is good); `hardwareRooted` means "a real hardware attestation stands behind this verdict," **not** "attested-healthy," so it is never a substitute for the action;
 - a **proven** bad state is the strongest negative SignalGrid can raise: attested **SIP disabled** → `escalate` (`attested_compromised`), attested **permissive** Secure Boot → `restrict` (`attested_reduced`);
 - a **reduced** Secure Boot level or an attested **third-party kext** allowance → `step_up` (governance drift, cryptographically confirmed);
 - an **expected-but-unverifiable** chain (stripped, replayed, or failed to validate) or a **stale** attestation → `step_up` — a missing proof is a tamper signal, never a grant;

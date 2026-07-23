@@ -100,6 +100,14 @@ const nonElevatedUnknownMon = evaluateAccessGovernancePosture(
 );
 check("session-monitoring is not an unknown for a non-privileged session", nonElevatedUnknownMon.unknownSignals.length === 0 && nonElevatedUnknownMon.posture === "authorized");
 
+// …but an ELEVATED session whose monitoring state is unreadable DOES count session
+// monitoring as unknown → step_up (fail-safe: never assume an unrecorded elevated
+// session is monitored). Pins evaluate.ts's isElevated+null-monitoring branch.
+const elevatedUnknownMon = evaluateAccessGovernancePosture(
+  normalizeReport("em", { account: { status: "active" }, entitlement: { scope: "in_scope" }, certification: { state: "certified" }, sod: { conflict: false }, privilege: { mode: "standing", sessionMonitored: null } } as AccessGovernanceReportRaw),
+);
+check("session-monitoring IS an unknown for an elevated session with an unreadable monitored flag", elevatedUnknownMon.unknownSignals.includes("session_monitoring") && elevatedUnknownMon.unknownSignals.length === 1 && elevatedUnknownMon.posture === "standing_privilege" && elevatedUnknownMon.recommendedAction === "step_up");
+
 // Worst-concern-wins: leaver + out-of-scope + decertified + sod + unmonitored →
 // escalate (the leaver), never diluted by the restricts/step_ups below it.
 const worst = evaluateAccessGovernancePosture(await connector.fetchPosture(fixture.principals["worst-of-several"].principalId));
@@ -120,7 +128,7 @@ const leaver = evaluateAccessGovernancePosture(await connector.fetchPosture(fixt
 const signal = fromAccessGovernance(leaver);
 check("fromAccessGovernance emits an access_governance signal", signal.kind === "access_governance");
 const composed = composeDeviceRisk([signal]);
-check("fabric fuses a leaver-still-active principal into a restrict-or-stronger verdict", ["restrict", "escalate"].includes(composed.strongestAction));
+check("fabric fuses a leaver-still-active principal into an escalate verdict", composed.strongestAction === "escalate");
 
 const authorized = fromAccessGovernance(evaluateAccessGovernancePosture(await connector.fetchPosture(fixture.principals["authorized"].principalId)));
 check("a fully-authorized principal contributes 'none' to the fabric", authorized.action === "none");

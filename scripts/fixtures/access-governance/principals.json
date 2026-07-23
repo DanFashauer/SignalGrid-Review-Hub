@@ -111,6 +111,28 @@
       },
       "expected": { "posture": "standing_privilege", "reasonCode": "STANDING_PRIVILEGE", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0 }
     },
+    "jit-active-monitored": {
+      "principalId": "u-nora-jit-ok",
+      "report": {
+        "account": { "status": "active" },
+        "entitlement": { "scope": "in_scope" },
+        "certification": { "state": "certified" },
+        "sod": { "conflict": false },
+        "privilege": { "mode": "jit_active", "sessionMonitored": true }
+      },
+      "expected": { "posture": "authorized", "reasonCode": "FULLY_AUTHORIZED", "recommendedAction": "none", "criticalFindingsCount": 0, "unknownSignalsCount": 0 }
+    },
+    "jit-active-unmonitored": {
+      "principalId": "u-omar-jit-unmon",
+      "report": {
+        "account": { "status": "active" },
+        "entitlement": { "scope": "in_scope" },
+        "certification": { "state": "certified" },
+        "sod": { "conflict": false },
+        "privilege": { "mode": "jit_active", "sessionMonitored": false }
+      },
+      "expected": { "posture": "unmonitored_privilege", "reasonCode": "UNMONITORED_PRIVILEGED_SESSION", "recommendedAction": "restrict", "criticalFindingsCount": 1, "unknownSignalsCount": 0 }
+    },
     "over-privileged": {
       "principalId": "u-judy-overbroad",
       "report": {

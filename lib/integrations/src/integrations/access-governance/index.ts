@@ -59,12 +59,27 @@ export function makeDefaultAccessGovernanceTransport(baseUrl: string): AccessGov
       signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) {
+      // 401 / 403 / 407 are authorization-class failures; any other non-2xx is an
+      // upstream fault. The status travels with the typed error.
+      const authClass = res.status === 401 || res.status === 403 || res.status === 407;
       throw new AccessGovernanceConnectorError(
-        res.status === 401 ? "auth_failed" : "upstream_error",
+        authClass ? "auth_failed" : "upstream_error",
         `bridge returned ${res.status}`,
         res.status,
       );
     }
-    return (await res.json()) as AccessGovernanceReportRaw;
+    let body: unknown;
+    try {
+      body = await res.json();
+    } catch {
+      throw new AccessGovernanceConnectorError("bad_response", "bridge returned a non-JSON body", res.status);
+    }
+    // A JSON null / array / scalar is not a report shape — surface a typed
+    // bad_response rather than letting a native TypeError leak out of
+    // normalizeReport (which would bypass the connector's error contract).
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      throw new AccessGovernanceConnectorError("bad_response", "bridge returned a non-object body", res.status);
+    }
+    return body as AccessGovernanceReportRaw;
   };
 }

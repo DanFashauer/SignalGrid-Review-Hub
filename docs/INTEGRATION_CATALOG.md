@@ -115,7 +115,7 @@ Fail-safe by construction, matched to a shared frontline session's stakes:
 - an **over-privileged** (not least-privilege) role, a **stale / never-attested** certification, or **standing** (not JIT) privilege → `step_up` (governance drift);
 - an unrecognized value normalizes to the safe `unknown`, and any unreadable governance signal steps up; a principal **no IGA source observes** is a blind spot (`unknown`), never `authorized`.
 
-Proven fully offline by `pnpm run proof:access-governance` (50 checks, no directory access, no network). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid changes no entitlement — every signal is read-only, and this is not a vendor partnership or certification claim.
+Proven fully offline by `pnpm run proof:access-governance` (55 checks, no directory access, no network). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid changes no entitlement — every signal is read-only, and this is not a vendor partnership or certification claim.
 
 ## Frontline context signal roadmap
 

@@ -48,6 +48,7 @@ export type SignalKind =
   | "ot_posture"
   | "access_governance"
   | "attestation"
+  | "sso_session"
   | "detection";
 
 /** One dimension's contribution, already mapped onto the unified action ladder. */

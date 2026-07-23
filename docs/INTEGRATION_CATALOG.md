@@ -135,6 +135,22 @@ The assurance model is the whole point — a cryptographic proof outranks any se
 
 Proven fully offline by `pnpm run proof:device-attestation` (60 checks, no network, no keys). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. The trust boundary is deliberate: an upstream read-only bridge performs the X.509 chain verification to Apple's Enterprise Attestation Root and decodes the leaf OIDs; **SignalGrid consumes that already-verified record** — it normalizes and decides on it, and does not itself perform the crypto, issue certificates, or mint attestations. Every signal is read-only, and this is not an Apple partnership or certification claim.
 
+## SSO session-binding — the shared-device identity dimension (built, fixture-backed)
+
+Single Sign-On has become the enterprise identity control layer, but SSO's failure mode on a **shared, badge-checked-out frontline device** is different from the desk-bound case none of SignalGrid's other identity dimensions catch. `identity-risk` scores the *sign-in* (Entra ID Protection / Okta ThreatInsight risk); `access-governance` answers *is this principal authorized*. Neither asks the shared-device question: **is the live SSO session sitting on THIS tablet actually the current badge-holder's, is it MFA-backed, and is it still fresh?** The single worst frontline failure is a **leftover session** — the previous shift's nurse walked away and their Okta/Entra session is still live on the cart, so the next person silently inherits someone else's authenticated identity.
+
+The `sso-session` connector (`lib/integrations/src/integrations/sso-session`) normalizes an IdP session-state bridge's already-evaluated view of the session bound to the current device session — its state (active / expired / none), its **binding** (is the session subject the checked-out badge-holder, a *different* principal, or attributable to nobody), its authenticator **assurance** (phishing-resistant / MFA / single-factor), and its **freshness** — into one session-binding verdict (`fromSsoSession` → an `sso_session` signal on the unified action ladder). It consumes the evaluated session state; it never mints, refreshes, or revokes a token (that stays with the IdP).
+
+Fail-safe by construction, matched to a shared frontline session's stakes:
+
+- a **leftover session** whose subject ≠ the current badge-holder is the strongest negative: a **live** one → `escalate` (someone else's authenticated identity is on the device); an expired-but-cached one → `restrict` (still contain the leftover);
+- an **active session bound to no known holder** → `restrict` (contain it);
+- a session **bound** to the current holder but backed only by a **single factor**, **near or past its expiry**, or with an **unreadable** assurance/freshness → `step_up` (re-authenticate to a stronger, fresher session);
+- **no active session** is the baseline (`no_session` / `none`) — authentication is gated by the workflow, not penalized here;
+- only a **bound, MFA-backed, fresh** session grants the top tier (`bound_strong` / `none`, marked `subjectBound`); the IdP being **unreachable** or the binding **unknown** never grants — it steps up; an unrecognized value normalizes to the safe `unknown`, never a fabricated `bound`/`active`.
+
+Proven fully offline by `pnpm run proof:sso-session` (62 checks, no network, no keys). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid reads and decides on the evaluated session state — it changes no session and mints no tokens; every signal is read-only, and this is not an Okta / Microsoft / Ping partnership or certification claim.
+
 ## Frontline context signal roadmap
 
 Future healthcare and frontline context signals are documented in [Frontline context signals roadmap](FRONTLINE_CONTEXT_SIGNALS.md). These include Intune enrollment restrictions, device limits, iOS/iPadOS enrollment type, Apple Business Manager / ADE state, supervision, Jamf Pro context, Kontakt.io / RTLS candidate signals, location, staff safety alerts, nurse call events, dock/return-station events, and badge / QR / NFC physical context. They are not first-proof requirements; they become follow-on or future roadmap inputs after the Microsoft posture proof and UEM posture model are grounded.

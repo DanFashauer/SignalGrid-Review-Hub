@@ -112,6 +112,9 @@ jobs:
       - name: Hardware-rooted device-attestation proof
         run: pnpm run proof:device-attestation
 
+      - name: SSO session-binding proof
+        run: pnpm run proof:sso-session
+
       - name: Posture-composition (unified signal fusion) proof
         run: pnpm run proof:posture-composition
 

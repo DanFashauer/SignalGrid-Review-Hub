@@ -68,6 +68,7 @@
     "proof:ot-posture": "tsx ./src/ot-posture-proof.ts",
     "proof:access-governance": "tsx ./src/access-governance-proof.ts",
     "proof:device-attestation": "tsx ./src/device-attestation-proof.ts",
+    "proof:sso-session": "tsx ./src/sso-session-proof.ts",
     "proof:fabric-scenario": "tsx ./src/fabric-scenario-proof.ts"
   },
   "dependencies": {

@@ -85,6 +85,7 @@
     "proof:ot-posture": "pnpm --filter @workspace/scripts run proof:ot-posture",
     "proof:access-governance": "pnpm --filter @workspace/scripts run proof:access-governance",
     "proof:device-attestation": "pnpm --filter @workspace/scripts run proof:device-attestation",
+    "proof:sso-session": "pnpm --filter @workspace/scripts run proof:sso-session",
     "proof:fabric-scenario": "pnpm --filter @workspace/scripts run proof:fabric-scenario"
   },
   "private": true,

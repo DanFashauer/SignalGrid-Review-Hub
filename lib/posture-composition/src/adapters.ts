@@ -12,6 +12,7 @@ import type { MacosPostureVerdict } from "@workspace/integrations/macos-posture"
 import type { OtPostureVerdict } from "@workspace/integrations/ot-posture";
 import type { AccessGovernanceVerdict } from "@workspace/integrations/access-governance";
 import type { AttestationVerdict } from "@workspace/integrations/device-attestation";
+import type { SsoSessionVerdict } from "@workspace/integrations/sso-session";
 import type { GraphPostureSignal } from "@workspace/integrations/graph";
 import type { Detection } from "@workspace/event-contract";
 import { ACTION_RANK } from "./compose";
@@ -109,6 +110,17 @@ export function fromAttestation(v: AttestationVerdict): ComposableSignal {
   // fresh attestation contributes 'none', and hardware provably not attestation-
   // capable abstains — an unverified attestation is never fused as attested-secure.
   return { kind: "attestation", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromSsoSession(v: SsoSessionVerdict): ComposableSignal {
+  // Live SSO session-binding on a shared, badge-checked-out device. Its actions
+  // (none|monitor|step_up|alert|restrict|escalate) are already on the unified
+  // ladder. Fail-safe: a leftover session whose subject ≠ the current badge-holder
+  // is the strongest negative (a live one escalates, an expired one restricts); an
+  // active session bound to nobody restricts; a single-factor / near- or past-expiry
+  // / unreadable bound session steps up; only a bound, MFA-backed, fresh session
+  // contributes 'none'. No active session is the baseline; unknown is never bound.
+  return { kind: "sso_session", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromMacosPosture(v: MacosPostureVerdict): ComposableSignal {

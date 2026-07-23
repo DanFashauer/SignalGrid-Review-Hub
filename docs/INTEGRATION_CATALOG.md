@@ -102,6 +102,21 @@ The OT posture connector answers *how trustworthy is this industrial device?*; t
 
 Proven by `pnpm run proof:factory-flows` (16 checks, fully offline): the pack validates as governance-complete config, covers its factory situations at health, and **fails safe** — an ungettable OT signal propagates to a coverage gap (never a false green), surfaced as `required_signal_unavailable`. The riskiest plant actions can never auto-run.
 
+## IAM / access-governance — the runtime authorization dimension (built, fixture-backed)
+
+Identity and Access Management is five pillars — identity lifecycle, authentication, authorization, governance, and privileged access. SignalGrid already covers the authentication pillar (the `identity-risk` connector normalizes IdP sign-in risk and MFA state) and touches physical custody (`rtls-custody`, badge-binding) and endpoint secrets (`credential-exposure`). The `access-governance` connector (`lib/integrations/src/integrations/access-governance`) closes the loop for a **shared, badge-checked-out session** by answering the one runtime question none of those do: *is THIS principal actually allowed to do THIS, and is that grant still governed?*
+
+It normalizes an IGA/PAM bridge's already-evaluated state for the identity bound to the session — account-lifecycle standing (active vs a **Leaver**/disabled/orphaned account still transacting), entitlement scope (least-privilege vs over-broad vs out-of-scope), access-certification freshness and **segregation-of-duties**, and privileged-access state (**standing vs just-in-time**, plus whether an elevated session is monitored) — into one authorization/governance verdict (`fromAccessGovernance` → an `access_governance` signal on the unified action ladder). It consumes the evaluated governance state; it does **not** re-pull raw directory group membership (the `graph`/`uem` connectors own that read).
+
+Fail-safe by construction, matched to a shared frontline session's stakes:
+
+- a **Leaver** or **disabled** account still transacting → `escalate` (that identity should no longer be able to act at all);
+- an **orphaned** account, an **out-of-scope** or **decertified** entitlement, a **segregation-of-duties conflict**, an **expired JIT window** still in use, or an **unmonitored privileged session** → `restrict` (the grant is ungoverned — contain it);
+- an **over-privileged** (not least-privilege) role, a **stale / never-attested** certification, or **standing** (not JIT) privilege → `step_up` (governance drift);
+- an unrecognized value normalizes to the safe `unknown`, and any unreadable governance signal steps up; a principal **no IGA source observes** is a blind spot (`unknown`), never `authorized`.
+
+Proven fully offline by `pnpm run proof:access-governance` (55 checks, no directory access, no network). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid changes no entitlement — every signal is read-only, and this is not a vendor partnership or certification claim.
+
 ## Frontline context signal roadmap
 
 Future healthcare and frontline context signals are documented in [Frontline context signals roadmap](FRONTLINE_CONTEXT_SIGNALS.md). These include Intune enrollment restrictions, device limits, iOS/iPadOS enrollment type, Apple Business Manager / ADE state, supervision, Jamf Pro context, Kontakt.io / RTLS candidate signals, location, staff safety alerts, nurse call events, dock/return-station events, and badge / QR / NFC physical context. They are not first-proof requirements; they become follow-on or future roadmap inputs after the Microsoft posture proof and UEM posture model are grounded.

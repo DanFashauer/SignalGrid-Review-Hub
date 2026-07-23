@@ -1,0 +1,186 @@
+{
+  "accessToken": "sg-accessgov-fixture-token",
+  "principals": {
+    "authorized": {
+      "principalId": "u-alice-line3",
+      "report": {
+        "account": { "status": "active" },
+        "entitlement": { "scope": "in_scope" },
+        "certification": { "state": "certified" },
+        "sod": { "conflict": false },
+        "privilege": { "mode": "none" }
+      },
+      "expected": { "posture": "authorized", "reasonCode": "FULLY_AUTHORIZED", "recommendedAction": "none", "criticalFindingsCount": 0, "unknownSignalsCount": 0 }
+    },
+    "leaver-active": {
+      "principalId": "u-bob-departed",
+      "report": {
+        "account": { "status": "leaver_pending" },
+        "entitlement": { "scope": "in_scope" },
+        "certification": { "state": "certified" },
+        "sod": { "conflict": false },
+        "privilege": { "mode": "none" }
+      },
+      "expected": { "posture": "leaver_active", "reasonCode": "LEAVER_STILL_ACTIVE", "recommendedAction": "escalate", "criticalFindingsCount": 1, "unknownSignalsCount": 0 }
+    },
+    "disabled-active": {
+      "principalId": "u-carol-suspended",
+      "report": {
+        "account": { "status": "disabled" },
+        "entitlement": { "scope": "in_scope" },
+        "certification": { "state": "certified" },
+        "sod": { "conflict": false },
+        "privilege": { "mode": "none" }
+      },
+      "expected": { "posture": "disabled_active", "reasonCode": "ACCOUNT_DISABLED_ACTIVE", "recommendedAction": "escalate", "criticalFindingsCount": 1, "unknownSignalsCount": 0 }
+    },
+    "orphaned": {
+      "principalId": "svc-orphan-07",
+      "report": {
+        "account": { "status": "orphaned" },
+        "entitlement": { "scope": "in_scope" },
+        "certification": { "state": "certified" },
+        "sod": { "conflict": false },
+        "privilege": { "mode": "none" }
+      },
+      "expected": { "posture": "orphaned", "reasonCode": "ACCOUNT_ORPHANED", "recommendedAction": "restrict", "criticalFindingsCount": 1, "unknownSignalsCount": 0 }
+    },
+    "out-of-scope": {
+      "principalId": "u-dan-wrongapp",
+      "report": {
+        "account": { "status": "active" },
+        "entitlement": { "scope": "out_of_scope" },
+        "certification": { "state": "certified" },
+        "sod": { "conflict": false },
+        "privilege": { "mode": "none" }
+      },
+      "expected": { "posture": "unscoped", "reasonCode": "ENTITLEMENT_OUT_OF_SCOPE", "recommendedAction": "restrict", "criticalFindingsCount": 1, "unknownSignalsCount": 0 }
+    },
+    "decertified": {
+      "principalId": "u-erin-revoked",
+      "report": {
+        "account": { "status": "active" },
+        "entitlement": { "scope": "in_scope" },
+        "certification": { "state": "decertified" },
+        "sod": { "conflict": false },
+        "privilege": { "mode": "none" }
+      },
+      "expected": { "posture": "uncertified", "reasonCode": "ENTITLEMENT_DECERTIFIED", "recommendedAction": "restrict", "criticalFindingsCount": 1, "unknownSignalsCount": 0 }
+    },
+    "sod-conflict": {
+      "principalId": "u-frank-sod",
+      "report": {
+        "account": { "status": "active" },
+        "entitlement": { "scope": "in_scope" },
+        "certification": { "state": "certified" },
+        "sod": { "conflict": true },
+        "privilege": { "mode": "none" }
+      },
+      "expected": { "posture": "sod_conflict", "reasonCode": "SOD_CONFLICT", "recommendedAction": "restrict", "criticalFindingsCount": 1, "unknownSignalsCount": 0 }
+    },
+    "jit-expired": {
+      "principalId": "u-grace-jitexp",
+      "report": {
+        "account": { "status": "active" },
+        "entitlement": { "scope": "in_scope" },
+        "certification": { "state": "certified" },
+        "sod": { "conflict": false },
+        "privilege": { "mode": "jit_expired", "sessionMonitored": true }
+      },
+      "expected": { "posture": "stale_privilege", "reasonCode": "PRIVILEGE_WINDOW_EXPIRED", "recommendedAction": "restrict", "criticalFindingsCount": 1, "unknownSignalsCount": 0 }
+    },
+    "unmonitored-privilege": {
+      "principalId": "u-heidi-standing-unmon",
+      "report": {
+        "account": { "status": "active" },
+        "entitlement": { "scope": "in_scope" },
+        "certification": { "state": "certified" },
+        "sod": { "conflict": false },
+        "privilege": { "mode": "standing", "sessionMonitored": false }
+      },
+      "expected": { "posture": "unmonitored_privilege", "reasonCode": "UNMONITORED_PRIVILEGED_SESSION", "recommendedAction": "restrict", "criticalFindingsCount": 1, "unknownSignalsCount": 0 }
+    },
+    "standing-privilege": {
+      "principalId": "u-ivan-standing-mon",
+      "report": {
+        "account": { "status": "active" },
+        "entitlement": { "scope": "in_scope" },
+        "certification": { "state": "certified" },
+        "sod": { "conflict": false },
+        "privilege": { "mode": "standing", "sessionMonitored": true }
+      },
+      "expected": { "posture": "standing_privilege", "reasonCode": "STANDING_PRIVILEGE", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0 }
+    },
+    "jit-active-monitored": {
+      "principalId": "u-nora-jit-ok",
+      "report": {
+        "account": { "status": "active" },
+        "entitlement": { "scope": "in_scope" },
+        "certification": { "state": "certified" },
+        "sod": { "conflict": false },
+        "privilege": { "mode": "jit_active", "sessionMonitored": true }
+      },
+      "expected": { "posture": "authorized", "reasonCode": "FULLY_AUTHORIZED", "recommendedAction": "none", "criticalFindingsCount": 0, "unknownSignalsCount": 0 }
+    },
+    "jit-active-unmonitored": {
+      "principalId": "u-omar-jit-unmon",
+      "report": {
+        "account": { "status": "active" },
+        "entitlement": { "scope": "in_scope" },
+        "certification": { "state": "certified" },
+        "sod": { "conflict": false },
+        "privilege": { "mode": "jit_active", "sessionMonitored": false }
+      },
+      "expected": { "posture": "unmonitored_privilege", "reasonCode": "UNMONITORED_PRIVILEGED_SESSION", "recommendedAction": "restrict", "criticalFindingsCount": 1, "unknownSignalsCount": 0 }
+    },
+    "over-privileged": {
+      "principalId": "u-judy-overbroad",
+      "report": {
+        "account": { "status": "active" },
+        "entitlement": { "scope": "over_privileged" },
+        "certification": { "state": "certified" },
+        "sod": { "conflict": false },
+        "privilege": { "mode": "none" }
+      },
+      "expected": { "posture": "over_privileged", "reasonCode": "OVER_PRIVILEGED", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0 }
+    },
+    "recert-due": {
+      "principalId": "u-karl-recert",
+      "report": {
+        "account": { "status": "active" },
+        "entitlement": { "scope": "in_scope" },
+        "certification": { "state": "recert_due" },
+        "sod": { "conflict": false },
+        "privilege": { "mode": "none" }
+      },
+      "expected": { "posture": "uncertified", "reasonCode": "CERT_STALE", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0 }
+    },
+    "never-certified": {
+      "principalId": "u-lena-neverattested",
+      "report": {
+        "account": { "status": "active" },
+        "entitlement": { "scope": "in_scope" },
+        "certification": { "state": "never_certified" },
+        "sod": { "conflict": false },
+        "privilege": { "mode": "none" }
+      },
+      "expected": { "posture": "uncertified", "reasonCode": "CERT_STALE", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0 }
+    },
+    "unreadable": {
+      "principalId": "u-ghost-08",
+      "report": {},
+      "expected": { "posture": "unverified", "reasonCode": "GOVERNANCE_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 5 }
+    },
+    "worst-of-several": {
+      "principalId": "u-mallory-worst",
+      "report": {
+        "account": { "status": "leaver_pending" },
+        "entitlement": { "scope": "out_of_scope" },
+        "certification": { "state": "decertified" },
+        "sod": { "conflict": true },
+        "privilege": { "mode": "standing", "sessionMonitored": false }
+      },
+      "expected": { "posture": "leaver_active", "reasonCode": "LEAVER_STILL_ACTIVE", "recommendedAction": "escalate", "criticalFindingsCount": 5, "unknownSignalsCount": 0 }
+    }
+  }
+}

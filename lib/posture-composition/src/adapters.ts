@@ -10,6 +10,7 @@ import type { DlpVerdict } from "@workspace/integrations/data-protection";
 import type { CredentialExposureVerdict } from "@workspace/integrations/credential-exposure";
 import type { MacosPostureVerdict } from "@workspace/integrations/macos-posture";
 import type { OtPostureVerdict } from "@workspace/integrations/ot-posture";
+import type { AccessGovernanceVerdict } from "@workspace/integrations/access-governance";
 import type { GraphPostureSignal } from "@workspace/integrations/graph";
 import type { Detection } from "@workspace/event-contract";
 import { ACTION_RANK } from "./compose";
@@ -84,6 +85,18 @@ export function fromOtPosture(v: OtPostureVerdict): ComposableSignal {
   // device restricts; a stale gateway or unreadable control steps up — an
   // unseen OT device is never fused as secure.
   return { kind: "ot_posture", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromAccessGovernance(v: AccessGovernanceVerdict): ComposableSignal {
+  // IAM / access-governance runtime authorization for the identity bound to a
+  // badge-checked-out session — "is this principal ALLOWED to do this, and is that
+  // grant still governed?". Its actions (none|monitor|step_up|alert|restrict|
+  // escalate) are already on the unified ladder. Fail-safe: a leaver/disabled
+  // account still transacting escalates; an orphaned account / out-of-scope or
+  // decertified entitlement / SoD conflict / expired or unmonitored privilege
+  // restricts; standing (not JIT) privilege or a stale certification steps up — an
+  // unverified or uncovered grant is never fused as authorized.
+  return { kind: "access_governance", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromMacosPosture(v: MacosPostureVerdict): ComposableSignal {

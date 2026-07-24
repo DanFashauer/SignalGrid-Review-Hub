@@ -125,6 +125,14 @@ export function evaluateOAuthConsent(
   // without an explicit idpReachable===true, the clean state may be a stale/cached
   // view, so it NEVER grants. (An explicit false is the same — an outage.)
   if (candidates.length === 0) {
+    // A POSITIVE risky-grant count that contradicts the clean assessment (we found no
+    // risky fact, or the bridge reports no grants at all) is a self-contradictory /
+    // ambiguous high-risk report — fail closed, never grant. The count is the bridge's
+    // own tally of risky grants; if it says >0, do not out-vote it with a clean read.
+    if (consent.riskyGrantCount !== null && consent.riskyGrantCount > 0) {
+      unknownSignals.push("risky_grant_count_conflict");
+      return { ...base, posture: "unverified", reasonCode: "CONSENT_STATE_UNKNOWN", recommendedAction: "step_up", governanceConfirmed: false };
+    }
     if (consent.idpReachable !== true) {
       unknownSignals.push("idp_reachable");
       return { ...base, posture: "unverified", reasonCode: "IDP_UNREACHABLE", recommendedAction: "step_up", governanceConfirmed: false };

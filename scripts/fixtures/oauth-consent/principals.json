@@ -75,6 +75,16 @@
       "principalId": "nurse.signin",
       "report": { "grants": "present", "consentType": "user", "publisher": "verified", "scope": "least", "workloadCredential": "none", "idpReachable": true, "riskyGrantCount": 0 },
       "expected": { "posture": "governed", "reasonCode": "GOVERNED_CONSENT", "recommendedAction": "none", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "governanceConfirmed": true }
+    },
+    "count-conflict-no-grants": {
+      "principalId": "nurse.countconflict1",
+      "report": { "grants": "none", "consentType": "unknown", "publisher": "unknown", "scope": "unknown", "workloadCredential": "none", "idpReachable": true, "riskyGrantCount": 1 },
+      "expected": { "posture": "unverified", "reasonCode": "CONSENT_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "governanceConfirmed": false }
+    },
+    "count-conflict-clean-present": {
+      "principalId": "nurse.countconflict2",
+      "report": { "grants": "present", "consentType": "admin", "publisher": "verified", "scope": "least", "workloadCredential": "managed", "idpReachable": true, "riskyGrantCount": 2 },
+      "expected": { "posture": "unverified", "reasonCode": "CONSENT_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "governanceConfirmed": false }
     }
   }
 }

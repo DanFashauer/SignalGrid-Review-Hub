@@ -113,6 +113,7 @@ const PUB = ["verified", "unverified", "unknown"] as const;
 const SCOPE = ["least", "broad", "full_access", "unknown"] as const;
 const WL = ["managed", "unmanaged_secret", "none", "unknown"] as const;
 const REACH = [true, false, null] as const;
+const COUNT = [null, 0, 2] as const;
 let combos = 0;
 let noneCount = 0;
 let mismatches = 0;
@@ -121,34 +122,37 @@ for (const grants of GRANTS)
     for (const publisher of PUB)
       for (const scope of SCOPE)
         for (const workloadCredential of WL)
-          for (const idpReachable of REACH) {
-            combos += 1;
-            const v = evaluateOAuthConsent({
-              sourceSystem: "oauth-consent",
-              principalId: "enum",
-              grants,
-              consentType,
-              publisher,
-              scope,
-              workloadCredential,
-              idpReachable,
-              riskyGrantCount: null,
-              source: "enum",
-            });
-            const expectedNone =
-              idpReachable === true &&
-              (grants === "none" ||
-                (grants === "present" &&
-                  (consentType === "admin" || consentType === "user") &&
-                  publisher === "verified" &&
-                  scope === "least" &&
-                  (workloadCredential === "managed" || workloadCredential === "none")));
-            const isNone = v.recommendedAction === "none";
-            if (isNone) noneCount += 1;
-            if (isNone !== expectedNone) mismatches += 1;
-            if (isNone && v.governanceConfirmed !== true) mismatches += 1;
-          }
-check(`exhaustive: over all ${combos} input combinations, action 'none' is emitted for EXACTLY the positively-confirmed clean states (mismatches=${mismatches})`, mismatches === 0 && combos === 1296);
+          for (const idpReachable of REACH)
+            for (const riskyGrantCount of COUNT) {
+              combos += 1;
+              const v = evaluateOAuthConsent({
+                sourceSystem: "oauth-consent",
+                principalId: "enum",
+                grants,
+                consentType,
+                publisher,
+                scope,
+                workloadCredential,
+                idpReachable,
+                riskyGrantCount,
+                source: "enum",
+              });
+              const positiveCount = riskyGrantCount !== null && riskyGrantCount > 0;
+              const expectedNone =
+                !positiveCount &&
+                idpReachable === true &&
+                (grants === "none" ||
+                  (grants === "present" &&
+                    (consentType === "admin" || consentType === "user") &&
+                    publisher === "verified" &&
+                    scope === "least" &&
+                    (workloadCredential === "managed" || workloadCredential === "none")));
+              const isNone = v.recommendedAction === "none";
+              if (isNone) noneCount += 1;
+              if (isNone !== expectedNone) mismatches += 1;
+              if (isNone && v.governanceConfirmed !== true) mismatches += 1;
+            }
+check(`exhaustive: over all ${combos} input combinations, action 'none' is emitted for EXACTLY the positively-confirmed clean states (mismatches=${mismatches})`, mismatches === 0 && combos === 3888);
 check("exhaustive: some clean states DO grant (the enumeration is not vacuous)", noneCount > 0);
 
 // Unknown ≠ governed: an unrecognized enum value normalizes to the safe unknown.

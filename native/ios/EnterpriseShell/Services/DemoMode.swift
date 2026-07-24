@@ -153,6 +153,21 @@ enum DemoMode {
         return v > 0 ? v : nil
     }
 
+    /// Seconds after the host app opens to simulate the session going stale
+    /// (`-DemoStaleAfter 4`) — freshness is time-based, so this drives the live
+    /// re-evaluation path deterministically. `nil` ⇒ off.
+    static var staleAfter: TimeInterval? {
+        let v = UserDefaults.standard.double(forKey: "DemoStaleAfter")
+        return v > 0 ? v : nil
+    }
+
+    /// Seconds after the host app opens to simulate a security lockout engaging
+    /// (`-DemoLockoutAfter 4`). `nil` ⇒ off.
+    static var lockoutAfter: TimeInterval? {
+        let v = UserDefaults.standard.double(forKey: "DemoLockoutAfter")
+        return v > 0 ? v : nil
+    }
+
     static func persona() -> Persona {
         let p = locationProfile(location)
         return Persona(

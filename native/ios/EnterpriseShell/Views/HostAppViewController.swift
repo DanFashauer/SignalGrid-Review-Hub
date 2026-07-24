@@ -39,9 +39,16 @@ final class HostAppViewController: UIViewController {
             outcome: .step_up, reasonCodes: ["DECISION_PENDING"],
             explanation: "Evaluating device trust…", source: .onDevice)
     }
-    /// Simulator-only stand-in for `UIScreen.isCaptured` (which can't be toggled from
-    /// simctl), so the live re-evaluation path can be demonstrated. Always false on device.
+    /// Simulator-only stand-ins for posture that can't be toggled from simctl
+    /// (`UIScreen.isCaptured`, token expiry, security lockout), so the live
+    /// re-evaluation path can be demonstrated. Always false on device.
     private var simulatedScreenCapture = false
+    private var simulatedStale = false
+    private var simulatedLockout = false
+    /// Fingerprint of the posture inputs used for the last evaluation, so the poll /
+    /// notifications only re-evaluate when something actually changed.
+    private var postureFingerprint = ""
+    private var posturePollTimer: Timer?
 
     struct HostAppConfig {
         let integration: AppWorkflows.AppIntegration
@@ -99,15 +106,22 @@ final class HostAppViewController: UIViewController {
         primaryButton.isEnabled = false   // held until the session verdict resolves
         AuditLogger.shared.log(event: .appLaunched, metadata: [
             "appId": config.integration.id, "mode": "embedded_assist"])
-        // Posture is live for the whole session: if screen recording starts/stops
-        // while the app is open, re-evaluate the gate (see screenCaptureDidChange).
+        // Posture is live for the WHOLE session: screen recording (event), session
+        // state/freshness and security lockout (notification + a time-based poll) all
+        // re-evaluate the gate mid-session. See checkPostureChange.
         NotificationCenter.default.addObserver(
             self, selector: #selector(screenCaptureDidChange),
             name: UIScreen.capturedDidChangeNotification, object: nil)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(sessionStateDidChange),
+            name: .sessionStateDidChange, object: nil)
         evaluateSessionDecision(isInitial: true)
     }
 
-    deinit { NotificationCenter.default.removeObserver(self) }
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+        posturePollTimer?.invalidate()
+    }
 
     // MARK: - Live session decision (signals + location → verdict)
 
@@ -133,8 +147,10 @@ final class HostAppViewController: UIViewController {
                 "reason": result.reasonCodes.joined(separator: "|"),
                 "source": result.source.rawValue])
             if isInitial {
+                self.postureFingerprint = self.postureFingerprintNow()
                 self.renderStep()
-                self.scheduleDemoScreenCaptureIfNeeded()
+                self.scheduleDemoPostureChangesIfNeeded()
+                self.startPosturePoll()
                 self.startAutoDemoIfNeeded()
             } else {
                 self.applyReevaluation(previous: previous, result: result)
@@ -142,10 +158,44 @@ final class HostAppViewController: UIViewController {
         }
     }
 
-    /// Called when `UIScreen.isCaptured` flips (real recording/mirroring) — or the
-    /// simulator stand-in fires. Re-evaluates the session verdict live.
-    @objc private func screenCaptureDidChange() {
-        evaluateSessionDecision(isInitial: false, reason: "screen_capture_changed")
+    // MARK: - Live posture change detection
+
+    /// Live posture inputs, from what iOS genuinely exposes (+ simulator stand-ins).
+    private func livePosture() -> (screenCaptured: Bool, stale: Bool, lockedOut: Bool) {
+        let screenCaptured = UIScreen.main.isCaptured || simulatedScreenCapture
+        let stale = (SessionStateManager.shared.currentSession?.isExpired ?? false) || simulatedStale
+        let lockedOut = ((SecurityManager.shared.getSecurityStatus()["isLockedOut"] as? Bool) ?? false) || simulatedLockout
+        return (screenCaptured, stale, lockedOut)
+    }
+
+    private func postureFingerprintNow() -> String {
+        let p = livePosture()
+        return "\(p.screenCaptured)|\(p.stale)|\(p.lockedOut)"
+    }
+
+    /// The single, deduped entry point: re-evaluate the gate ONLY when a posture
+    /// input actually changed since the last evaluation. Fed by the screen-capture
+    /// event, the session-state notification, and the time-based poll.
+    private func checkPostureChange(reason: String) {
+        let fp = postureFingerprintNow()
+        guard fp != postureFingerprint else { return }
+        postureFingerprint = fp
+        evaluateSessionDecision(isInitial: false, reason: reason)
+    }
+
+    /// `UIScreen.isCaptured` flipped (real recording/mirroring) or the sim stand-in fired.
+    @objc private func screenCaptureDidChange() { checkPostureChange(reason: "screen_capture_changed") }
+
+    /// The session state/freshness changed (token refresh, activity, expiry-driven transition).
+    @objc private func sessionStateDidChange() { checkPostureChange(reason: "session_state_changed") }
+
+    /// Freshness (token expiry) and lockout are time-based with no event, so poll for
+    /// them; the fingerprint gate makes this a no-op until something actually changes.
+    private func startPosturePoll() {
+        posturePollTimer?.invalidate()
+        posturePollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            self?.checkPostureChange(reason: "posture_poll")
+        }
     }
 
     /// Reflect a mid-session verdict change in the host app's OWN UI (SignalGrid
@@ -159,33 +209,51 @@ final class HostAppViewController: UIViewController {
                  tightened
                  ? "Posture changed mid-session → the gate tightened live. Actions are re-evaluated against the new verdict."
                  : "Posture recovered mid-session → the gate re-opened. Trusted actions run again.")
-        showBanner(tightened
-                   ? "Screen recording detected — some actions are now unavailable."
-                   : "Screen recording stopped — access restored.",
+        showBanner(postureBanner(tightened: tightened, reasons: result.reasonCodes),
                    kind: tightened ? .blocked : .ok)
         if flow == .idle { renderStep() }
     }
 
-    /// Simulator-only: flip the screen-capture stand-in after a delay so the live
-    /// re-evaluation path can be captured in a screenshot walk (`-DemoScreenCaptureAfter`).
-    private func scheduleDemoScreenCaptureIfNeeded() {
-        #if targetEnvironment(simulator)
-        guard let after = DemoMode.screenCaptureAfter, after > 0 else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + after) { [weak self] in
-            guard let self = self else { return }
-            self.simulatedScreenCapture = true
-            self.screenCaptureDidChange()
+    /// The host app's OWN message for a posture change, derived from the reason codes
+    /// (never mentions SignalGrid).
+    private func postureBanner(tightened: Bool, reasons: [String]) -> String {
+        guard tightened else { return "Device posture recovered — access restored." }
+        if reasons.contains("POSTURE_STALE") || reasons.contains("STATE_FRESHNESS_FAILURE") {
+            return "Device check-in is stale — some actions now require re-verification."
         }
+        if reasons.contains("SECURITY_RISK_ESCALATION") { return "Security risk detected — some actions are now unavailable." }
+        if reasons.contains("DEVICE_NON_COMPLIANT") { return "Device is out of compliance — some actions are now unavailable." }
+        if reasons.contains("ZONE_MISMATCH") || reasons.contains("ZONE_UNKNOWN") { return "Device is outside its authorized zone — access denied." }
+        return "Device posture changed — some actions are now unavailable."
+    }
+
+    /// Simulator-only: flip a posture stand-in after a delay so each live
+    /// re-evaluation trigger can be captured in a screenshot walk
+    /// (`-DemoScreenCaptureAfter` / `-DemoStaleAfter` / `-DemoLockoutAfter`).
+    private func scheduleDemoPostureChangesIfNeeded() {
+        #if targetEnvironment(simulator)
+        scheduleDemoFlip(DemoMode.screenCaptureAfter, reason: "screen_capture_changed") { $0.simulatedScreenCapture = true }
+        scheduleDemoFlip(DemoMode.staleAfter, reason: "session_stale") { $0.simulatedStale = true }
+        scheduleDemoFlip(DemoMode.lockoutAfter, reason: "lockout_engaged") { $0.simulatedLockout = true }
         #endif
     }
+
+    #if targetEnvironment(simulator)
+    private func scheduleDemoFlip(_ after: TimeInterval?, reason: String, _ flip: @escaping (HostAppViewController) -> Void) {
+        guard let after = after, after > 0 else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + after) { [weak self] in
+            guard let self = self else { return }
+            flip(self)
+            self.checkPostureChange(reason: reason)
+        }
+    }
+    #endif
 
     /// Build the live context from the posture iOS genuinely exposes, the deployment
     /// zone, and (simulator-only) demo injection for conditions iOS can't sense.
     private func buildEnvironmentContext() -> SignalContext.EnvironmentContext {
         let authenticated = SessionStateManager.shared.currentSession != nil
-        let screenCaptured = UIScreen.main.isCaptured || simulatedScreenCapture
-        let sessionStale = SessionStateManager.shared.currentSession?.isExpired ?? false
-        let lockedOut = (SecurityManager.shared.getSecurityStatus()["isLockedOut"] as? Bool) ?? false
+        let posture = livePosture()
 
         var expectedZone = "default"
         var detectedZone: String? = "default"   // match by default → no zone deny
@@ -200,9 +268,9 @@ final class HostAppViewController: UIViewController {
             authenticated: authenticated,
             expectedZone: expectedZone,
             detectedZone: detectedZone,
-            screenCaptured: screenCaptured,
-            sessionStale: sessionStale,
-            lockedOut: lockedOut,
+            screenCaptured: posture.screenCaptured,
+            sessionStale: posture.stale,
+            lockedOut: posture.lockedOut,
             injected: injected)
     }
 

@@ -78,7 +78,15 @@ final class AuditLogger {
         case providerConfigurationUpdated
         case badgeReceived
         case badgeReaderProviderInitialized
-    
+        case badgeReaderProviderStateChange
+        case badgeReaderProviderError
+        case badgeReaderDidConnect
+        case badgeReaderDidDisconnect
+
+        // Session state (observed by SceneDelegate)
+        case sessionStateChanged
+    }
+
     // MARK: - Properties
     
     private var eventQueue: [AuditLogEntry] = []

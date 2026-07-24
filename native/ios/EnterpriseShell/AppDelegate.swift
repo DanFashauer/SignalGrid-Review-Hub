@@ -7,15 +7,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
-        // Initialize core services
+        // Initialize core services. `SessionStateManager.shared` configures the
+        // active badge-reader provider (setup + delegate) in its initializer via the
+        // BadgeReaderProvider abstraction — the app must NOT wire the legacy
+        // BadgeReaderManager directly here, or it would overwrite the provider's own
+        // delegate registration and bypass the validated badge path.
         _ = SessionStateManager.shared
         _ = KeychainService.shared
         _ = AuditLogger.shared
-        
-        // Configure badge reader
-        BadgeReaderManager.shared.setup()
-        BadgeReaderManager.shared.delegate = SessionStateManager.shared
-        
+
         // Log app launch
         AuditLogger.shared.log(event: .appLaunched, metadata: [
             "deviceId": DeviceInfo.identifier,

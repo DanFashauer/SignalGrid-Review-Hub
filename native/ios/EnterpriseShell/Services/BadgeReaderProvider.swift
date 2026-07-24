@@ -324,19 +324,21 @@ final class HTTPWebhookBadgeReaderProvider: BadgeReaderProvider {
     weak var delegate: BadgeReaderProviderDelegate?
     
     private var config: BadgeReaderConfig?
-    private var httpServer: HTTPServer?
-    
+    // NOTE: a concrete HTTP listener is not bundled in this build. Badge events are
+    // delivered via `processIncomingBadge(badgeId:metadata:)` (e.g. from an app
+    // extension or a push), so this provider holds no server instance to tear down.
+
     func setup() {
-        // Start HTTP server to listen for badge events
-        // Configuration would come from BadgeReaderConfig
+        // Passive listener — nothing to start here. Configuration would come from
+        // BadgeReaderConfig once a concrete HTTP listener is wired in.
         AuditLogger.shared.log(event: .badgeReaderProviderInitialized, metadata: [
             "provider": displayName,
             "type": BadgeReaderType.httpWebhook.rawValue
         ])
     }
-    
+
     func teardown() {
-        httpServer?.stop()
+        // No server instance held; nothing to stop.
     }
     
     func resetReaderState() {

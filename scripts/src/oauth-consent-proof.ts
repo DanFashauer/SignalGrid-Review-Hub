@@ -113,7 +113,9 @@ const PUB = ["verified", "unverified", "unknown"] as const;
 const SCOPE = ["least", "broad", "full_access", "unknown"] as const;
 const WL = ["managed", "unmanaged_secret", "none", "unknown"] as const;
 const REACH = [true, false, null] as const;
-const COUNT = [null, 0, 2] as const;
+// Cover a valid clean count (0), a positive count, absence (null), and MALFORMED
+// counts (negative, non-integer) — only exactly 0 (or null) may reach a grant.
+const COUNT = [null, 0, 2, -1, 1.5] as const;
 let combos = 0;
 let noneCount = 0;
 let mismatches = 0;
@@ -137,7 +139,8 @@ for (const grants of GRANTS)
                 riskyGrantCount,
                 source: "enum",
               });
-              const positiveCount = riskyGrantCount !== null && riskyGrantCount > 0;
+              // A reported count is "bad" (blocks a grant) unless it is exactly 0.
+              const positiveCount = riskyGrantCount !== null && riskyGrantCount !== 0;
               // A "none" report is only clean if it is self-consistent (no positive
               // risky field value); a "present" report must be fully clean.
               const noneConsistent =
@@ -159,7 +162,7 @@ for (const grants of GRANTS)
               if (isNone !== expectedNone) mismatches += 1;
               if (isNone && v.governanceConfirmed !== true) mismatches += 1;
             }
-check(`exhaustive: over all ${combos} input combinations, action 'none' is emitted for EXACTLY the positively-confirmed clean states (mismatches=${mismatches})`, mismatches === 0 && combos === 3888);
+check(`exhaustive: over all ${combos} input combinations, action 'none' is emitted for EXACTLY the positively-confirmed clean states (mismatches=${mismatches})`, mismatches === 0 && combos === 6480);
 check("exhaustive: some clean states DO grant (the enumeration is not vacuous)", noneCount > 0);
 
 // Unknown ≠ governed: an unrecognized enum value normalizes to the safe unknown.

@@ -125,11 +125,13 @@ export function evaluateOAuthConsent(
   // without an explicit idpReachable===true, the clean state may be a stale/cached
   // view, so it NEVER grants. (An explicit false is the same — an outage.)
   if (candidates.length === 0) {
-    // A POSITIVE risky-grant count that contradicts the clean assessment (we found no
-    // risky fact, or the bridge reports no grants at all) is a self-contradictory /
-    // ambiguous high-risk report — fail closed, never grant. The count is the bridge's
-    // own tally of risky grants; if it says >0, do not out-vote it with a clean read.
-    if (consent.riskyGrantCount !== null && consent.riskyGrantCount > 0) {
+    // The bridge's own risky-grant tally must AGREE with the clean read to grant: the
+    // only clean count is exactly 0. A reported count that is anything else — positive
+    // (real risky grants it didn't detail), or malformed (negative / non-integer) — is
+    // a self-contradictory / ambiguous high-risk report (AGENTS.md L28). Fail closed;
+    // do not out-vote the bridge's count with a clean field read. (A null count is
+    // "not reported" and is fine — the field-level checks above already gate the grant.)
+    if (consent.riskyGrantCount !== null && consent.riskyGrantCount !== 0) {
       unknownSignals.push("risky_grant_count_conflict");
       return { ...base, posture: "unverified", reasonCode: "CONSENT_STATE_UNKNOWN", recommendedAction: "step_up", governanceConfirmed: false };
     }

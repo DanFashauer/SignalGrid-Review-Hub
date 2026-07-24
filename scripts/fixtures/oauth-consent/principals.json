@@ -90,6 +90,11 @@
       "principalId": "nurse.noneconflict",
       "report": { "grants": "none", "consentType": "unknown", "publisher": "unknown", "scope": "full_access", "workloadCredential": "none", "idpReachable": true, "riskyGrantCount": 0 },
       "expected": { "posture": "unverified", "reasonCode": "CONSENT_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "governanceConfirmed": false }
+    },
+    "negative-count-conflict": {
+      "principalId": "nurse.negcount",
+      "report": { "grants": "none", "consentType": "unknown", "publisher": "unknown", "scope": "unknown", "workloadCredential": "none", "idpReachable": true, "riskyGrantCount": -1 },
+      "expected": { "posture": "unverified", "reasonCode": "CONSENT_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "governanceConfirmed": false }
     }
   }
 }

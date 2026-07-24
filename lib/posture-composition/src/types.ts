@@ -49,6 +49,7 @@ export type SignalKind =
   | "access_governance"
   | "attestation"
   | "sso_session"
+  | "oauth_consent"
   | "detection";
 
 /** One dimension's contribution, already mapped onto the unified action ladder. */

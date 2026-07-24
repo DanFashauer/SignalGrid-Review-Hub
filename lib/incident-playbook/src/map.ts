@@ -162,6 +162,7 @@ function categoryForKind(kind: string): IncidentCategory {
     case "identity":
     case "access_governance":
     case "sso_session":
+    case "oauth_consent":
     case "data_protection":
       return "security_compliance";
     case "network":

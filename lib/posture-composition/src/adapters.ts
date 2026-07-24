@@ -13,6 +13,7 @@ import type { OtPostureVerdict } from "@workspace/integrations/ot-posture";
 import type { AccessGovernanceVerdict } from "@workspace/integrations/access-governance";
 import type { AttestationVerdict } from "@workspace/integrations/device-attestation";
 import type { SsoSessionVerdict } from "@workspace/integrations/sso-session";
+import type { OAuthConsentVerdict } from "@workspace/integrations/oauth-consent";
 import type { GraphPostureSignal } from "@workspace/integrations/graph";
 import type { Detection } from "@workspace/event-contract";
 import { ACTION_RANK } from "./compose";
@@ -121,6 +122,16 @@ export function fromSsoSession(v: SsoSessionVerdict): ComposableSignal {
   // / unreadable bound session steps up; only a bound, MFA-backed, fresh session
   // contributes 'none'. No active session is the baseline; unknown is never bound.
   return { kind: "sso_session", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromOAuthConsent(v: OAuthConsentVerdict): ComposableSignal {
+  // OAuth-consent / workload-identity — what third-party apps can do ON BEHALF OF
+  // the session's principal via a delegated grant. Its actions are already on the
+  // unified ladder. Fail-safe: an illicit consent grant (consent-phishing) escalates;
+  // a full-access grant not admin-governed restricts; over-scoped / unverified-
+  // publisher / unmanaged-workload-secret steps up; only a positively-confirmed
+  // governed (or no-) grant contributes 'none'. Unknown is never fused as governed.
+  return { kind: "oauth_consent", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromMacosPosture(v: MacosPostureVerdict): ComposableSignal {

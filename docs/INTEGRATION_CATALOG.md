@@ -153,6 +153,21 @@ It also fails closed on self-contradictory or unverifiable reports: a `bound` la
 
 Proven fully offline by `pnpm run proof:sso-session` (78 checks, no network, no keys). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid reads and decides on the evaluated session state — it changes no session and mints no tokens; every signal is read-only, and this is not an Okta / Microsoft / Ping partnership or certification claim.
 
+## OAuth-consent / workload identity — the delegated-access dimension (built, fixture-backed)
+
+The IAM landscape's "allow an app to access another app" problem (OAuth 2.0) is distinct from every other identity dimension SignalGrid fuses: `identity-risk` scores the sign-in, `sso-session` checks the live session, `access-governance` answers what the **human** is entitled to. None of them ask what **third-party apps and workload identities can do ON BEHALF OF** that human via a delegated OAuth grant. On a shared, badge-checked-out device the session inherits the badge-holder's identity — so a live **illicit consent grant** (the classic consent-phishing attack, where a user is tricked into granting a malicious app broad access), an **over-scoped** third-party app, an **unverified-publisher** app, or a **service principal with a long-lived unmanaged secret** is a session-relevant risk that would otherwise be invisible.
+
+The `oauth-consent` connector (`lib/integrations/src/integrations/oauth-consent`) normalizes an OAuth/consent-governance bridge's already-evaluated view of the **riskiest delegated grant** on the session's principal (Microsoft Entra enterprise apps / OAuth grants, Okta OAuth, Google Workspace app access) — grant presence, consent type (**admin-consented** vs the **user-consented** phishing vector), publisher verification, scope breadth, and workload-credential hygiene — into one governance verdict (`fromOAuthConsent` → an `oauth_consent` signal on the unified action ladder). It consumes the evaluated grant state; it **revokes nothing** (that stays with the IdP).
+
+Fail-safe by construction, matched to a shared frontline session's stakes:
+
+- the **illicit consent** signature (a **user**-consented, **unverified**-publisher app with **broad/full** scope) is the strongest negative → `escalate`;
+- a **full-access** grant that is not admin-governed → `restrict` (contain the broad delegated access); an admin-consented full-access grant, a merely **broad** scope, an **unverified** publisher, or an **unmanaged workload secret** → `step_up`;
+- the **only** paths that contribute a grant are a positively-confirmed clean state — a **known** consent type (admin- or user-consented) + verified publisher + least scope + managed/no workload, **or** no grants at all — **and only with the IdP confirmed reachable** (`idpReachable === true`); an **unknown** consent type (like any other unknown field) never grants, and the IdP unreachable or **unreported**, or an unknown grant state, all step up;
+- an unrecognized value normalizes to the safe `unknown`, never a fabricated `present`/`verified`/`admin`.
+
+Proven fully offline by `pnpm run proof:oauth-consent` (55 checks, no network, no keys). Live calls are gated exactly like every other connector. SignalGrid reads and decides on the evaluated grant state — it revokes no grant and changes no consent; every signal is read-only, and this is not a Microsoft / Okta / Google partnership or certification claim.
+
 ## Frontline context signal roadmap
 
 Future healthcare and frontline context signals are documented in [Frontline context signals roadmap](FRONTLINE_CONTEXT_SIGNALS.md). These include Intune enrollment restrictions, device limits, iOS/iPadOS enrollment type, Apple Business Manager / ADE state, supervision, Jamf Pro context, Kontakt.io / RTLS candidate signals, location, staff safety alerts, nurse call events, dock/return-station events, and badge / QR / NFC physical context. They are not first-proof requirements; they become follow-on or future roadmap inputs after the Microsoft posture proof and UEM posture model are grounded.

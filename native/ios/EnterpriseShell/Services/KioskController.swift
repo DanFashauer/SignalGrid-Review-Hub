@@ -29,11 +29,13 @@ final class KioskController {
     private(set) var isLocked = false
     private(set) var isRecoveryUnlocked = false
 
-    /// Enforce the kiosk lock. Call whenever the app becomes active so the device
-    /// stays captive to the shell the ENTIRE time it is running — including the
-    /// badge-locked idle screen, not only during an active session.
+    /// Enforce the kiosk lock — but ONLY when an admin has opted in
+    /// (`KioskConfig.singleAppModeEnabled`, default OFF). By default this is a no-op,
+    /// so the device is never held captive and behaves like a normal iPhone. When an
+    /// MDM/managed config turns it on, call this whenever the app becomes active so
+    /// the shell stays locked the entire time it runs (including the idle screen).
     func enforceLock() {
-        guard KioskConfig.singleAppModeEnabled else { return }
+        guard KioskConfig.singleAppModeEnabled else { return }   // default OFF → normal iPhone
         guard !isRecoveryUnlocked else { return }        // a sanctioned recovery exit is active
         guard !isLocked else { return }                  // already locked
         UIAccessibility.requestGuidedAccessSession(enabled: true) { [weak self] success in
@@ -83,10 +85,19 @@ final class KioskController {
 /// with safe defaults for an unmanaged/dev build.
 enum KioskConfig {
 
-    /// Whether the shell locks itself into ASAM. Default ON — this is a locked
-    /// shared-device kiosk. An MDM/managed config can turn it off for staging.
+    /// Whether the shell locks itself into ASAM. **Default OFF** — the device
+    /// functions like a normal iPhone (Home, App Switcher, Settings, and every other
+    /// installed app all work). SignalGrid still runs the badge / auth / trust flow
+    /// and sits underneath as the embedded gate; it does not hold the device captive.
+    ///
+    /// A locked shared-device kiosk is an explicit ADMIN opt-in, delivered by the
+    /// backend / MDM managed config (`SingleAppModeEnabled = true`, and the
+    /// supervision profile must authorize this bundle for ASAM). Even then, WHICH
+    /// other apps the device may run is enforced by MDM restrictions the backend
+    /// applies (`com.apple.applicationaccess` allowlist) — an app cannot restrict
+    /// other apps itself. This flag only governs whether THIS shell self-locks.
     static var singleAppModeEnabled: Bool {
-        managedBool("SingleAppModeEnabled", default: true)
+        managedBool("SingleAppModeEnabled", default: false)
     }
 
     /// Disaster-recovery manual override. OFF by default and NOT recommended — a

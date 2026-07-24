@@ -138,10 +138,17 @@ for (const grants of GRANTS)
                 source: "enum",
               });
               const positiveCount = riskyGrantCount !== null && riskyGrantCount > 0;
+              // A "none" report is only clean if it is self-consistent (no positive
+              // risky field value); a "present" report must be fully clean.
+              const noneConsistent =
+                scope !== "broad" &&
+                scope !== "full_access" &&
+                publisher !== "unverified" &&
+                workloadCredential !== "unmanaged_secret";
               const expectedNone =
                 !positiveCount &&
                 idpReachable === true &&
-                (grants === "none" ||
+                ((grants === "none" && noneConsistent) ||
                   (grants === "present" &&
                     (consentType === "admin" || consentType === "user") &&
                     publisher === "verified" &&

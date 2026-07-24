@@ -133,6 +133,21 @@ export function evaluateOAuthConsent(
       unknownSignals.push("risky_grant_count_conflict");
       return { ...base, posture: "unverified", reasonCode: "CONSENT_STATE_UNKNOWN", recommendedAction: "step_up", governanceConfirmed: false };
     }
+    // A "none" report that nonetheless carries a POSITIVE risky field value (a
+    // full-access/broad scope, an unverified publisher, or an unmanaged workload
+    // secret) is self-contradictory — no grants, yet risky grant detail. The risky
+    // fields above are only evaluated for `present`, so a "none" report would
+    // otherwise sail through here; fail closed instead of granting.
+    if (
+      consent.grants === "none" &&
+      (consent.scope === "broad" ||
+        consent.scope === "full_access" ||
+        consent.publisher === "unverified" ||
+        consent.workloadCredential === "unmanaged_secret")
+    ) {
+      unknownSignals.push("no_grants_conflict");
+      return { ...base, posture: "unverified", reasonCode: "CONSENT_STATE_UNKNOWN", recommendedAction: "step_up", governanceConfirmed: false };
+    }
     if (consent.idpReachable !== true) {
       unknownSignals.push("idp_reachable");
       return { ...base, posture: "unverified", reasonCode: "IDP_UNREACHABLE", recommendedAction: "step_up", governanceConfirmed: false };

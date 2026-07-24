@@ -1,0 +1,86 @@
+{
+  "accessToken": "sg-ot-fixture-token",
+  "devices": {
+    "secure-plc": {
+      "deviceId": "plc-line3-01",
+      "report": {
+        "deviceType": "plc",
+        "vendor": "Acme",
+        "firmware": { "status": "current", "patchable": true },
+        "network": { "segmentation": "segmented", "insecure_protocol_exposed": false, "protocols": ["opcua-tls"] },
+        "gateway": { "liveness": "live" }
+      },
+      "expected": { "posture": "secure", "reasonCode": "FULLY_SECURE", "recommendedAction": "none", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "deviceType": "plc" }
+    },
+    "flat-network": {
+      "deviceId": "plc-flat-02",
+      "report": {
+        "deviceType": "plc",
+        "firmware": { "status": "current", "patchable": true },
+        "network": { "segmentation": "flat", "insecure_protocol_exposed": false },
+        "gateway": { "liveness": "live" }
+      },
+      "expected": { "posture": "unsegmented", "reasonCode": "FLAT_NETWORK", "recommendedAction": "restrict", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "deviceType": "plc" }
+    },
+    "exposed-protocol": {
+      "deviceId": "rtu-exposed-03",
+      "report": {
+        "deviceType": "rtu",
+        "firmware": { "status": "current", "patchable": true },
+        "network": { "segmentation": "segmented", "insecure_protocol_exposed": true, "protocols": ["modbus"] },
+        "gateway": { "liveness": "live" }
+      },
+      "expected": { "posture": "exposed", "reasonCode": "INSECURE_PROTOCOL_EXPOSED", "recommendedAction": "restrict", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "deviceType": "rtu" }
+    },
+    "eol-plc": {
+      "deviceId": "plc-legacy-04",
+      "report": {
+        "deviceType": "plc",
+        "firmware": { "status": "eol", "patchable": false },
+        "network": { "segmentation": "segmented", "insecure_protocol_exposed": false },
+        "gateway": { "liveness": "live" }
+      },
+      "expected": { "posture": "unpatchable", "reasonCode": "FIRMWARE_EOL", "recommendedAction": "restrict", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "deviceType": "plc" }
+    },
+    "stale-gateway": {
+      "deviceId": "hmi-stale-05",
+      "report": {
+        "deviceType": "hmi",
+        "firmware": { "status": "current", "patchable": true },
+        "network": { "segmentation": "segmented", "insecure_protocol_exposed": false },
+        "gateway": { "liveness": "stale" }
+      },
+      "expected": { "posture": "blind", "reasonCode": "GATEWAY_STALE", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "deviceType": "hmi" }
+    },
+    "outdated": {
+      "deviceId": "sensor-old-06",
+      "report": {
+        "deviceType": "sensor",
+        "firmware": { "status": "outdated", "patchable": true },
+        "network": { "segmentation": "segmented", "insecure_protocol_exposed": false },
+        "gateway": { "liveness": "live" }
+      },
+      "expected": { "posture": "outdated", "reasonCode": "FIRMWARE_OUTDATED", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "deviceType": "sensor" }
+    },
+    "unreadable": {
+      "deviceId": "plc-unknown-07",
+      "report": {
+        "deviceType": "not found: gateway probe",
+        "firmware": { "status": "mystery", "patchable": null },
+        "network": { "segmentation": null, "insecure_protocol_exposed": null },
+        "gateway": { "liveness": "unknown" }
+      },
+      "expected": { "posture": "unverified", "reasonCode": "OT_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 5, "deviceType": null }
+    },
+    "worst-of-several": {
+      "deviceId": "plc-worst-08",
+      "report": {
+        "deviceType": "plc",
+        "firmware": { "status": "eol", "patchable": false },
+        "network": { "segmentation": "flat", "insecure_protocol_exposed": true },
+        "gateway": { "liveness": "stale" }
+      },
+      "expected": { "posture": "unsegmented", "reasonCode": "FLAT_NETWORK", "recommendedAction": "restrict", "criticalFindingsCount": 3, "unknownSignalsCount": 0, "deviceType": "plc" }
+    }
+  }
+}

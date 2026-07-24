@@ -22,6 +22,46 @@ pnpm run preflight --quick  # skip the heavy web/app builds for a fast loop
 It stops at the first failing gate and prints the failing output, so there is no
 guessing about what broke.
 
+#### Decision-quality evals — `pnpm run proof:fabric-evals`
+
+Each connector's proof checks *one* dimension's logic in isolation. The
+**fabric decision-evals** are the layer above: a curated golden set of end-to-end,
+multi-signal scenarios (a leftover SSO session on an attested-hardened device, a
+proven-compromised endpoint, worst-of-four concurrent negatives, …) scored against
+the **fused** outcome — the composed risk verdict *and* the routed incident. It
+catches cross-fabric "decision drift" no single-connector proof can: a change that
+quietly lets one dimension dilute another, mis-orders worst-concern-wins, or
+mis-routes the top driver passes every connector proof yet fails here. Beyond
+matching each scenario, it enforces two fabric-wide invariants computed
+independently of the fixtures — *fail-safe* (any signal beyond monitoring ⟹ never
+the healthy `ok` tier) and *worst-concern-wins* (the fused action is exactly the
+most-severe signal's) — so a regression surfaces as a nonzero violation count, not
+a silently-wrong verdict.
+
+#### One command across both repos — `pnpm run verify:all`
+
+The macOS device-trust signals come from the companion open-source
+[`signalgrid-mcp`](https://github.com/DanFashauer/signalgrid-mcp) server, which
+lives in its own repo (the public/private boundary stays intact — see
+[IP_AND_LICENSING](IP_AND_LICENSING.md)). `verify:all` runs **both** halves in one
+shot: the Review-Hub `preflight` above, then the MCP server's `pytest`, tied
+together by the shared **posture-report contract**
+(`lib/integrations/src/integrations/macos-posture/contract/posture-report.contract.json`).
+The Review-Hub side proves the `macos-posture` connector consumes that report
+shape; the MCP side proves its `signalgrid_posture_report` still emits it — so a
+change on either side that would break the other fails a gate instead of drifting
+silently.
+
+```
+pnpm run verify:all                 # finds signalgrid-mcp as a sibling clone
+SIGNALGRID_MCP_PATH=/path pnpm run verify:all   # or point it explicitly
+pnpm run verify:all --require-mcp   # fail (don't skip) if the MCP checkout is absent
+```
+
+If the MCP checkout isn't found it prints how to get it and continues with the
+Review-Hub side. Each repo's own CI still guards its half of the contract
+independently; `verify:all` is the local convenience that runs the pair together.
+
 ### 2. Adversarial — the invariant reviewer + an agent read
 `pnpm run review:invariants` is a deterministic, dependency-free "second
 reviewer" that encodes the classes of defect this repo's reviews keep catching,

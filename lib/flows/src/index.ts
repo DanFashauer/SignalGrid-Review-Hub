@@ -371,6 +371,7 @@ export function gridIntelligence(flows: Flow[], signalStates: SignalState[]): Gr
 
 import { DEMO_FLOWS } from "./catalog";
 export { DEMO_FLOWS } from "./catalog";
+export { FACTORY_FLOWS, FACTORY_SITUATIONS, FACTORY_SIGNAL_SOURCES } from "./factory";
 
 // Grid coverage — which situations the Grid handles on its own given the active
 // workflows + wired signals (the model behind "build the grid").
@@ -394,6 +395,7 @@ export * from "./app-resilience";
 // validated in CI, and replayed by the Grid on serial/network join. Simulated by
 // default; real enforcement only when an owner turns it on.
 export * from "./provisioning";
+export * from "./provisioning-teardown";
 
 export function listFlows(): Flow[] {
   return DEMO_FLOWS;

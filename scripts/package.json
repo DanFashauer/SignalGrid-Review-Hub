@@ -24,6 +24,8 @@
     "proof:grid-config": "tsx ./src/grid-config-proof.ts",
     "proof:app-resilience": "tsx ./src/app-resilience-proof.ts",
     "proof:provisioning": "tsx ./src/provisioning-proof.ts",
+    "proof:provisioning-teardown": "tsx ./src/provisioning-teardown-proof.ts",
+    "proof:factory-flows": "tsx ./src/factory-flows-proof.ts",
     "proof:grid-lifecycle": "tsx ./src/grid-lifecycle-proof.ts",
     "proof:intune-entra-posture": "tsx ./src/intune-entra-posture-proof.ts",
     "proof:microsoft-graph-sandbox": "tsx ./src/microsoft-graph-sandbox-proof.ts",
@@ -61,6 +63,13 @@
     "proof:peripheral-control": "tsx ./src/peripheral-control-proof.ts",
     "proof:data-protection": "tsx ./src/data-protection-proof.ts",
     "proof:credential-exposure": "tsx ./src/credential-exposure-proof.ts",
+    "proof:macos-posture": "tsx ./src/macos-posture-proof.ts",
+    "proof:macos-apple-schema": "tsx ./src/macos-apple-schema-proof.ts",
+    "proof:ot-posture": "tsx ./src/ot-posture-proof.ts",
+    "proof:access-governance": "tsx ./src/access-governance-proof.ts",
+    "proof:device-attestation": "tsx ./src/device-attestation-proof.ts",
+    "proof:sso-session": "tsx ./src/sso-session-proof.ts",
+    "proof:fabric-evals": "tsx ./src/fabric-evals-proof.ts",
     "proof:fabric-scenario": "tsx ./src/fabric-scenario-proof.ts"
   },
   "dependencies": {

@@ -74,6 +74,21 @@ check("step_up + low impact → P4", stepUpInc?.priority === "P4");
 check("device_posture driver routes to Identity & Access", stepUpInc?.assignmentGroup === "Identity & Access");
 check("P4 does not escalate / is not major", stepUpInc?.escalate === false && stepUpInc?.majorIncident === false);
 
+// Every composable SignalKind must route to a SECURITY owner, never the generic
+// Service Desk — a hardware-rooted attested-compromised device especially. A driver
+// falling through to "general" would silently delay response for a critical signal.
+const routeOf = (kind: string): string | undefined =>
+  mapPostureToIncident(posture("escalate", kind), { impact: "high", correlationId: `r-${kind}` })?.assignmentGroup;
+check("attestation (hardware-rooted) routes to a security owner, NOT Service Desk", routeOf("attestation") === "Identity & Access");
+check("access_governance routes to Identity & Access", routeOf("access_governance") === "Identity & Access");
+check("ot_posture routes to a security owner", routeOf("ot_posture") === "Identity & Access");
+check("threat routes to Security Operations (SecOps)", routeOf("threat") === "Security Operations (SecOps)");
+check("credential_exposure routes to Security Operations (SecOps)", routeOf("credential_exposure") === "Security Operations (SecOps)");
+check("custody / peripheral route to Endpoint / Mobility", routeOf("custody") === "Endpoint / Mobility" && routeOf("peripheral") === "Endpoint / Mobility");
+check("identity / data_protection route to Identity & Access", routeOf("identity") === "Identity & Access" && routeOf("data_protection") === "Identity & Access");
+check("sso_session (leftover-session risk) routes to Identity & Access", routeOf("sso_session") === "Identity & Access");
+check("NO composable posture kind falls through to the generic Service Desk", ["device_posture","reachability","location","vulnerability","network","threat","identity","custody","peripheral","data_protection","credential_exposure","ot_posture","access_governance","attestation","sso_session"].every((k) => routeOf(k) !== "Service Desk"));
+
 // ── no-noise rule: calm signals open no incident ──────────────────────────────
 check("monitor posture opens NO incident", mapPostureToIncident(posture("monitor"), { impact: "high", correlationId: "c3" }) === null);
 check("none posture opens NO incident", mapPostureToIncident(posture("none"), { impact: "high", correlationId: "c4" }) === null);

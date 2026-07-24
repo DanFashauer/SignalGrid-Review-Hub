@@ -235,3 +235,4 @@ export function ddmSummary(signals: DdmSignal[], reports: DdmDeviceReport[]): Dd
 
 import { DEMO_DDM_REPORTS, DDM_OBSERVED_AT } from "./fixture";
 export { DEMO_DDM_REPORTS, DDM_OBSERVED_AT } from "./fixture";
+export * from "./apple-schema";

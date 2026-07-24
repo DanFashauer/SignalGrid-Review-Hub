@@ -97,11 +97,32 @@ jobs:
       - name: Credential-exposure (endpoint secrets) proof
         run: pnpm run proof:credential-exposure
 
+      - name: macOS endpoint-posture (grid-collected) proof
+        run: pnpm run proof:macos-posture
+
+      - name: macOS posture ↔ apple/device-management schema alignment proof
+        run: pnpm run proof:macos-apple-schema
+
+      - name: OT / IIoT edge-device posture (grid-collected) proof
+        run: pnpm run proof:ot-posture
+
+      - name: IAM / access-governance runtime posture proof
+        run: pnpm run proof:access-governance
+
+      - name: Hardware-rooted device-attestation proof
+        run: pnpm run proof:device-attestation
+
+      - name: SSO session-binding proof
+        run: pnpm run proof:sso-session
+
       - name: Posture-composition (unified signal fusion) proof
         run: pnpm run proof:posture-composition
 
       - name: Incident-playbook (decision to prioritized incident) proof
         run: pnpm run proof:incident-playbook
+
+      - name: Fabric decision-evals (golden multi-signal decision quality) proof
+        run: pnpm run proof:fabric-evals
 
       - name: Signal-fabric capstone (end-to-end fusion to incident) proof
         run: pnpm run proof:fabric-scenario
@@ -154,7 +175,13 @@ jobs:
       - name: Provisioning (zero-touch setup — record/validate/apply) proof
         run: pnpm run proof:provisioning
 
-      - name: Grid-lifecycle (capstone — 5 models end-to-end) proof
+      - name: Provisioning teardown-proof (prove the retreat before deploy)
+        run: pnpm run proof:provisioning-teardown
+
+      - name: Factory-floor workflows (manufacturing/OT) proof
+        run: pnpm run proof:factory-flows
+
+      - name: Grid-lifecycle (capstone — 6 models, provision→decommission) proof
         run: pnpm run proof:grid-lifecycle
 
       - name: Recommendations (learned-habit proposals) proof

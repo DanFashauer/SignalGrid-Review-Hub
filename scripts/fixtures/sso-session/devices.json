@@ -1,0 +1,100 @@
+{
+  "accessToken": "sg-sso-fixture-token",
+  "devices": {
+    "bound-strong": {
+      "deviceId": "tab-ward-01",
+      "report": { "state": "active", "binding": "bound", "assurance": "phishing_resistant", "freshness": "fresh", "idpReachable": true, "subject": "nurse.jsmith", "expectedSubject": "nurse.jsmith" },
+      "expected": { "posture": "bound_strong", "reasonCode": "BOUND_MFA_FRESH", "recommendedAction": "none", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "subjectBound": true }
+    },
+    "bound-mfa": {
+      "deviceId": "tab-ward-02",
+      "report": { "state": "active", "binding": "bound", "assurance": "mfa", "freshness": "fresh", "idpReachable": true, "subject": "nurse.apatel", "expectedSubject": "nurse.apatel" },
+      "expected": { "posture": "bound_strong", "reasonCode": "BOUND_MFA_FRESH", "recommendedAction": "none", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "subjectBound": true }
+    },
+    "leftover-active": {
+      "deviceId": "tab-ward-03",
+      "report": { "state": "active", "binding": "mismatched", "assurance": "mfa", "freshness": "fresh", "idpReachable": true, "subject": "nurse.prevshift", "expectedSubject": "nurse.jsmith" },
+      "expected": { "posture": "leftover_session", "reasonCode": "SESSION_SUBJECT_MISMATCH", "recommendedAction": "escalate", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "subjectBound": false }
+    },
+    "leftover-expired": {
+      "deviceId": "tab-ward-04",
+      "report": { "state": "expired", "binding": "mismatched", "assurance": "mfa", "freshness": "expired", "idpReachable": true, "subject": "nurse.prevshift", "expectedSubject": "nurse.jsmith" },
+      "expected": { "posture": "leftover_session", "reasonCode": "SESSION_SUBJECT_MISMATCH", "recommendedAction": "restrict", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "subjectBound": false }
+    },
+    "unbound-active": {
+      "deviceId": "tab-ward-05",
+      "report": { "state": "active", "binding": "unbound", "assurance": "mfa", "freshness": "fresh", "idpReachable": true, "subject": null, "expectedSubject": "nurse.jsmith" },
+      "expected": { "posture": "unbound_session", "reasonCode": "UNBOUND_ACTIVE_SESSION", "recommendedAction": "restrict", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "subjectBound": false }
+    },
+    "no-session": {
+      "deviceId": "tab-ward-06",
+      "report": { "state": "none", "binding": "unknown", "assurance": "unknown", "freshness": "unknown", "idpReachable": true, "subject": null, "expectedSubject": "nurse.jsmith" },
+      "expected": { "posture": "no_session", "reasonCode": "NO_ACTIVE_SESSION", "recommendedAction": "none", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "subjectBound": false }
+    },
+    "bound-no-mfa": {
+      "deviceId": "tab-ward-07",
+      "report": { "state": "active", "binding": "bound", "assurance": "single_factor", "freshness": "fresh", "idpReachable": true, "subject": "nurse.jsmith", "expectedSubject": "nurse.jsmith" },
+      "expected": { "posture": "bound_weak", "reasonCode": "SESSION_NO_MFA", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "subjectBound": true }
+    },
+    "bound-near-expiry": {
+      "deviceId": "tab-ward-08",
+      "report": { "state": "active", "binding": "bound", "assurance": "mfa", "freshness": "near_expiry", "idpReachable": true, "subject": "nurse.jsmith", "expectedSubject": "nurse.jsmith" },
+      "expected": { "posture": "bound_weak", "reasonCode": "SESSION_NEAR_EXPIRY", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "subjectBound": true }
+    },
+    "bound-expired": {
+      "deviceId": "tab-ward-09",
+      "report": { "state": "expired", "binding": "bound", "assurance": "mfa", "freshness": "expired", "idpReachable": true, "subject": "nurse.jsmith", "expectedSubject": "nurse.jsmith" },
+      "expected": { "posture": "bound_weak", "reasonCode": "SESSION_EXPIRED", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "subjectBound": false }
+    },
+    "idp-unreachable": {
+      "deviceId": "tab-ward-10",
+      "report": { "state": "active", "binding": "bound", "assurance": "mfa", "freshness": "fresh", "idpReachable": false, "subject": "nurse.jsmith", "expectedSubject": "nurse.jsmith" },
+      "expected": { "posture": "unverified", "reasonCode": "IDP_UNREACHABLE", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "subjectBound": false }
+    },
+    "binding-unknown": {
+      "deviceId": "tab-ward-11",
+      "report": { "state": "active", "binding": "unknown", "assurance": "mfa", "freshness": "fresh", "idpReachable": true, "subject": "nurse.jsmith", "expectedSubject": "nurse.jsmith" },
+      "expected": { "posture": "unverified", "reasonCode": "SESSION_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "subjectBound": false }
+    },
+    "bound-fresh-unreadable-assurance": {
+      "deviceId": "tab-ward-12",
+      "report": { "state": "active", "binding": "bound", "assurance": "unknown", "freshness": "fresh", "idpReachable": true, "subject": "nurse.jsmith", "expectedSubject": "nurse.jsmith" },
+      "expected": { "posture": "bound_weak", "reasonCode": "SESSION_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "subjectBound": true }
+    },
+    "worst-of-several": {
+      "deviceId": "tab-ward-13",
+      "report": { "state": "active", "binding": "mismatched", "assurance": "single_factor", "freshness": "expired", "idpReachable": true, "subject": "nurse.prevshift", "expectedSubject": "nurse.jsmith" },
+      "expected": { "posture": "leftover_session", "reasonCode": "SESSION_SUBJECT_MISMATCH", "recommendedAction": "escalate", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "subjectBound": false }
+    },
+    "bound-state-unknown": {
+      "deviceId": "tab-ward-14",
+      "report": { "state": "garbled", "binding": "bound", "assurance": "mfa", "freshness": "fresh", "idpReachable": true, "subject": "nurse.jsmith", "expectedSubject": "nurse.jsmith" },
+      "expected": { "posture": "bound_weak", "reasonCode": "SESSION_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "subjectBound": false }
+    },
+    "unbound-state-unknown": {
+      "deviceId": "tab-ward-15",
+      "report": { "state": "garbled", "binding": "unbound", "assurance": "mfa", "freshness": "fresh", "idpReachable": true, "subject": null, "expectedSubject": "nurse.jsmith" },
+      "expected": { "posture": "unverified", "reasonCode": "SESSION_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "subjectBound": false }
+    },
+    "leftover-idp-unreachable": {
+      "deviceId": "tab-ward-16",
+      "report": { "state": "active", "binding": "mismatched", "assurance": "mfa", "freshness": "fresh", "idpReachable": false, "subject": "nurse.prevshift", "expectedSubject": "nurse.jsmith" },
+      "expected": { "posture": "leftover_session", "reasonCode": "SESSION_SUBJECT_MISMATCH", "recommendedAction": "escalate", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "subjectBound": false }
+    },
+    "contradictory-subjects": {
+      "deviceId": "tab-ward-17",
+      "report": { "state": "active", "binding": "bound", "assurance": "mfa", "freshness": "fresh", "idpReachable": true, "subject": "nurse.prevshift", "expectedSubject": "nurse.jsmith" },
+      "expected": { "posture": "leftover_session", "reasonCode": "SESSION_SUBJECT_MISMATCH", "recommendedAction": "escalate", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "subjectBound": false }
+    },
+    "bound-reachability-unreported": {
+      "deviceId": "tab-ward-18",
+      "report": { "state": "active", "binding": "bound", "assurance": "mfa", "freshness": "fresh", "subject": "nurse.jsmith", "expectedSubject": "nurse.jsmith" },
+      "expected": { "posture": "bound_weak", "reasonCode": "IDP_UNREACHABLE", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "subjectBound": true }
+    },
+    "bound-no-subject-evidence": {
+      "deviceId": "tab-ward-19",
+      "report": { "state": "active", "binding": "bound", "assurance": "mfa", "freshness": "fresh", "idpReachable": true, "subject": "not found", "expectedSubject": "nurse.jsmith" },
+      "expected": { "posture": "unverified", "reasonCode": "SESSION_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "subjectBound": false }
+    }
+  }
+}

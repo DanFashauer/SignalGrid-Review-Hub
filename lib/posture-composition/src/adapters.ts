@@ -8,6 +8,11 @@ import type { CustodyVerdict } from "@workspace/integrations/rtls-custody";
 import type { PeripheralVerdict } from "@workspace/integrations/peripheral-control";
 import type { DlpVerdict } from "@workspace/integrations/data-protection";
 import type { CredentialExposureVerdict } from "@workspace/integrations/credential-exposure";
+import type { MacosPostureVerdict } from "@workspace/integrations/macos-posture";
+import type { OtPostureVerdict } from "@workspace/integrations/ot-posture";
+import type { AccessGovernanceVerdict } from "@workspace/integrations/access-governance";
+import type { AttestationVerdict } from "@workspace/integrations/device-attestation";
+import type { SsoSessionVerdict } from "@workspace/integrations/sso-session";
 import type { GraphPostureSignal } from "@workspace/integrations/graph";
 import type { Detection } from "@workspace/event-contract";
 import { ACTION_RANK } from "./compose";
@@ -73,6 +78,57 @@ export function fromCredentialExposure(v: CredentialExposureVerdict): Composable
   // are already on the unified ladder. A live high-value secret on the endpoint
   // escalates — contain the blast radius of a device assumed compromised.
   return { kind: "credential_exposure", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromOtPosture(v: OtPostureVerdict): ComposableSignal {
+  // OT/IIoT edge-device posture from the grid_collected path (an edge gateway
+  // reading a PLC/RTU/HMI that can't run an agent). Actions are already on the
+  // unified ladder. Fail-safe: a flat network / exposed protocol / unpatchable
+  // device restricts; a stale gateway or unreadable control steps up — an
+  // unseen OT device is never fused as secure.
+  return { kind: "ot_posture", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromAccessGovernance(v: AccessGovernanceVerdict): ComposableSignal {
+  // IAM / access-governance runtime authorization for the identity bound to a
+  // badge-checked-out session — "is this principal ALLOWED to do this, and is that
+  // grant still governed?". Its actions (none|monitor|step_up|alert|restrict|
+  // escalate) are already on the unified ladder. Fail-safe: a leaver/disabled
+  // account still transacting escalates; an orphaned account / out-of-scope or
+  // decertified entitlement / SoD conflict / expired or unmonitored privilege
+  // restricts; standing (not JIT) privilege or a stale certification steps up — an
+  // unverified or uncovered grant is never fused as authorized.
+  return { kind: "access_governance", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromAttestation(v: AttestationVerdict): ComposableSignal {
+  // Hardware-rooted Managed Device Attestation — the top assurance tier. Its
+  // actions (none|monitor|step_up|alert|restrict|escalate) are already on the
+  // unified ladder. Fail-safe: a cryptographically-PROVEN bad state (attested SIP
+  // off → escalate; permissive secure boot → restrict) is the strongest negative;
+  // an expected-but-unverifiable/stale attestation steps up; only a proven-healthy
+  // fresh attestation contributes 'none', and hardware provably not attestation-
+  // capable abstains — an unverified attestation is never fused as attested-secure.
+  return { kind: "attestation", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromSsoSession(v: SsoSessionVerdict): ComposableSignal {
+  // Live SSO session-binding on a shared, badge-checked-out device. Its actions
+  // (none|monitor|step_up|alert|restrict|escalate) are already on the unified
+  // ladder. Fail-safe: a leftover session whose subject ≠ the current badge-holder
+  // is the strongest negative (a live one escalates, an expired one restricts); an
+  // active session bound to nobody restricts; a single-factor / near- or past-expiry
+  // / unreadable bound session steps up; only a bound, MFA-backed, fresh session
+  // contributes 'none'. No active session is the baseline; unknown is never bound.
+  return { kind: "sso_session", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromMacosPosture(v: MacosPostureVerdict): ComposableSignal {
+  // macOS endpoint-hardening from the grid_collected path (signalgrid-mcp). Its
+  // actions (none|monitor|step_up|alert|restrict|escalate) are already on the
+  // unified ladder. Fail-safe: a disabled control restricts, and an unverifiable
+  // control steps up — an unreadable Mac is never fused as compliant.
+  return { kind: "device_posture", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 /** Cross-domain detection severity → unified action. */

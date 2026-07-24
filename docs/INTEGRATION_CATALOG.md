@@ -62,6 +62,97 @@ Jamf remains responsible for Apple device lifecycle management, app/profile depl
 
 The sequence remains conservative: Microsoft Intune / Entra is the first concrete proof; Jamf is a high-value follow-on proof for Apple-heavy shared-device and frontline environments; Fleet / Workspace ONE / broader UEM paths follow after that. Review Hub does not claim a current Jamf partnership, integration, certification, production deployment, or replacement claim.
 
+## macOS endpoint posture — the grid-collected path (built, fixture-backed)
+
+Where an Apple UEM (Jamf, Intune) is present, SignalGrid consumes its posture via that vendor's API — the `api` acquisition path. But many Macs are **not** enrolled, and no cloud API hands you a Mac's live security state faithfully in real time. That is the `grid_collected` path (see [Signal sourcing](SIGNAL_SOURCING.md)): SignalGrid reads the endpoint itself, **read-only**, and does the lifting.
+
+The `macos-posture` connector (`lib/integrations/src/integrations/macos-posture`) implements exactly this. It ingests a read-only posture report from the companion open-source [`signalgrid-mcp`](https://github.com/DanFashauer/signalgrid-mcp) server — SIP, FileVault, Gatekeeper, firewall, MDM enrollment, auto-update settings, and whether XProtect definitions are readable — and normalizes it into one endpoint-hardening posture the fabric fuses (`fromMacosPosture` → a `device_posture` signal on the unified action ladder).
+
+When the report includes the optional system-extension inventory (from the read-only `signalgrid_system_extensions` tool), the connector also folds in a **stranded / conflicting security-agent** signal: a security extension still registered after its app is gone (it blocks reinstall of protection) → `weakened`/restrict; two enabled endpoint-security extensions (a conflict) → `weakened`/restrict; a section provided but unreadable → `unverified`/step-up. An **absent** section is simply not assessed (it never penalizes a device for a signal it didn't claim).
+
+It is fail-safe by construction, mirroring the MCP server's own discipline:
+
+- A hardening control the collector reports **off** → the device is `weakened` and the verdict restricts.
+- A control whose state **could not be read** (needs elevation, missing binary, timeout) → `unverified`, which *raises* the assurance bar (step-up). Unknown ≠ off, and unknown ≠ on — an unreadable Mac is **never** fused as compliant.
+- A Mac with **no report at all** is a blind spot (`unknown`), never `hardened`.
+
+Proven fully offline by `pnpm run proof:macos-posture` (deterministic, no device access, no network). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid changes no macOS setting — every signal is read-only, and this is not a vendor partnership or certification claim.
+
+**Aligned to Apple's canonical schema.** Each normalized posture field carries its provenance in [`apple/device-management`](https://github.com/apple/device-management) (Apple's MIT-licensed, machine-readable MDM + Declarative Device Management schema, pinned at version 26.4): `sip` → `SystemIntegrityProtectionEnabled`, `fileVault` → `FDE_Enabled` (+ DDM `diskmanagement.filevault.enabled`), `firewall` → `FirewallSettings.FirewallEnabled`, and so on — plus the Managed Device Attestation leaf-cert OIDs (e.g. the attested SIP status `1.2.840.113635.100.8.13.1`) reserved for a future hardware-rooted attestation tier. On-device-only signals with no MDM/DDM key (Gatekeeper, XProtect, system extensions) are declared as such rather than given a fabricated key. `pnpm run proof:macos-apple-schema` (48 checks, offline) asserts every posture field is mapped and every referenced key is in the pinned Apple catalog, so a schema change on a new OS release surfaces as a failing check instead of silent drift. Aligning to these names is adoption of a public standard, not a code dependency or vendor partnership.
+
+## OT / IIoT edge-device posture — the factory floor (built, fixture-backed)
+
+The manufacturing floor is the purest case for the `grid_collected` path. A PLC, RTU, HMI, or brownfield machine cannot run an agent, exposes no vendor API, and speaks Modbus / OPC-UA / DNP3 — so SignalGrid reads what an **edge gateway** can observe about the device (read-only) and turns it into one posture the fabric fuses. Where even the gateway can't see it, that is a gap, never a green.
+
+The `ot-posture` connector (`lib/integrations/src/integrations/ot-posture`) normalizes an edge-gateway report — firmware currency, patchability (brownfield/EOL), network segmentation (a device on a **flat** network reachable from IT is a Purdue-model violation), unauthenticated-protocol exposure, and gateway liveness — into an OT device-trust verdict (`fromOtPosture` → an `ot_posture` signal on the unified action ladder).
+
+Fail-safe by construction, matched to the plant-floor stakes:
+
+- a **flat network**, an **unauthenticated OT protocol reachable beyond the cell**, or an **end-of-life / unpatchable** device that can never be secured → `restrict` (the risk is structural — contain it);
+- a **stale gateway** (we're blind to the device) or any **unreadable** control → `step_up` (never trust silence);
+- an unrecognized value normalizes to the safe `unknown`; a device **no gateway sees** is a blind spot, never `secure`.
+
+Proven fully offline by `pnpm run proof:ot-posture` (34 checks, no plant access, no network). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid changes no device setting — every signal is read-only, and this is not a vendor partnership or certification claim.
+
+## Factory-floor workflows — automating the plant (built, fixture-backed)
+
+The OT posture connector answers *how trustworthy is this industrial device?*; the factory workflow pack (`lib/flows/src/factory.ts`) is what the Grid **does** about it — the same allow / step-up / restrict / deny discipline applied to plant-floor actions, owner- and accountability-governed:
+
+- **PLC firmware update** — staging is automated; the actual push is **dual-approval**; an emergency rollback is a safety-netted downtime override (last-known-good image + auto-revert + line-stop interlock) so a bad flash never bricks the line.
+- **Production line command** — reading status is automated; issuing a command needs **admin approval**; an e-stop override is safety-netted.
+- **OT exposure containment** — monitor is automated; restrict is admin-approved; **segment/quarantine is dual-approval** (it can stop a line).
+
+Proven by `pnpm run proof:factory-flows` (16 checks, fully offline): the pack validates as governance-complete config, covers its factory situations at health, and **fails safe** — an ungettable OT signal propagates to a coverage gap (never a false green), surfaced as `required_signal_unavailable`. The riskiest plant actions can never auto-run.
+
+## IAM / access-governance — the runtime authorization dimension (built, fixture-backed)
+
+Identity and Access Management is five pillars — identity lifecycle, authentication, authorization, governance, and privileged access. SignalGrid already covers the authentication pillar (the `identity-risk` connector normalizes IdP sign-in risk and MFA state) and touches physical custody (`rtls-custody`, badge-binding) and endpoint secrets (`credential-exposure`). The `access-governance` connector (`lib/integrations/src/integrations/access-governance`) closes the loop for a **shared, badge-checked-out session** by answering the one runtime question none of those do: *is THIS principal actually allowed to do THIS, and is that grant still governed?*
+
+It normalizes an IGA/PAM bridge's already-evaluated state for the identity bound to the session — account-lifecycle standing (active vs a **Leaver**/disabled/orphaned account still transacting), entitlement scope (least-privilege vs over-broad vs out-of-scope), access-certification freshness and **segregation-of-duties**, and privileged-access state (**standing vs just-in-time**, plus whether an elevated session is monitored) — into one authorization/governance verdict (`fromAccessGovernance` → an `access_governance` signal on the unified action ladder). It consumes the evaluated governance state; it does **not** re-pull raw directory group membership (the `graph`/`uem` connectors own that read).
+
+Fail-safe by construction, matched to a shared frontline session's stakes:
+
+- a **Leaver** or **disabled** account still transacting → `escalate` (that identity should no longer be able to act at all);
+- an **orphaned** account, an **out-of-scope** or **decertified** entitlement, a **segregation-of-duties conflict**, an **expired JIT window** still in use, or an **unmonitored privileged session** → `restrict` (the grant is ungoverned — contain it);
+- an **over-privileged** (not least-privilege) role, a **stale / never-attested** certification, or **standing** (not JIT) privilege → `step_up` (governance drift);
+- an unrecognized value normalizes to the safe `unknown`, and any unreadable governance signal steps up; a principal **no IGA source observes** is a blind spot (`unknown`), never `authorized`.
+
+Proven fully offline by `pnpm run proof:access-governance` (55 checks, no directory access, no network). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid changes no entitlement — every signal is read-only, and this is not a vendor partnership or certification claim.
+
+## Hardware-rooted device attestation — the assurance dimension (built, fixture-backed)
+
+Every other posture signal SignalGrid fuses is, at bottom, **self-reported**: an MDM agent, a grid probe, or an EDR sensor tells us the device is healthy, and we trust the reporter. A tampered device can lie to its own agent. Managed Device Attestation closes that gap — the attested facts (SIP, Secure Boot, kext policy, OS version, serial) are signed by the **Secure Enclave** and delivered in an X.509 chain that validates to Apple's Enterprise Attestation Root. The `device-attestation` connector (`lib/integrations/src/integrations/device-attestation`) consumes an attestation-bridge record whose DER chain has already been verified to that root (the leaf OIDs `1.2.840.113635.100.8.*` are the same ones pinned in `macos-posture`/`ddm-connector`'s Apple schema) and folds it into one **assurance** verdict (`fromAttestation` → an `attestation` signal on the unified action ladder).
+
+The assurance model is the whole point — a cryptographic proof outranks any self-report, in both directions:
+
+- a **fresh, root-verified** attestation proving a healthy state (SIP on, Secure Boot full, no third-party kexts) is the **only** path that *grants* the top tier → `attested_hardened`/`none` — you cannot argue with the Secure Enclave;
+- every verdict backed by a fresh, root-verified chain is marked `hardwareRooted` — including the proven-bad ones below (the chain is genuine regardless of whether the news is good); `hardwareRooted` means "a real hardware attestation stands behind this verdict," **not** "attested-healthy," so it is never a substitute for the action;
+- a **proven** bad state is the strongest negative SignalGrid can raise: attested **SIP disabled** → `escalate` (`attested_compromised`), attested **permissive** Secure Boot → `restrict` (`attested_reduced`);
+- a **reduced** Secure Boot level or an attested **third-party kext** allowance → `step_up` (governance drift, cryptographically confirmed);
+- an **expected-but-unverifiable** chain (stripped, replayed, or failed to validate) or a **stale** attestation → `step_up` — a missing proof is a tamper signal, never a grant;
+- hardware **provably not attestation-capable** (Intel Macs, no Secure Enclave) → `not_attestable`/`none` — it **abstains**: attestation is an assurance *upgrade*, not a universal requirement, and the baseline posture is gated by the other dimensions. The abstain is granted **only** to a *self-consistent* report (declares incapable **and** carries no chain or attested facts); a report that claims `attestable:false` yet still presents a verified chain is malformed/tampered — it never abstains, it fails closed (a conflicting chain proving SIP off still `escalate`s; a conflicting "clean" chain is floored at `step_up`, never the top tier);
+- an unrecognized value normalizes to the safe `unknown`, a non-boolean flag becomes `null` (never a fabricated `true`), and a device no attestation source covers is a blind spot (`unknown`/`step_up`), never attested-secure.
+
+Proven fully offline by `pnpm run proof:device-attestation` (60 checks, no network, no keys). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. The trust boundary is deliberate: an upstream read-only bridge performs the X.509 chain verification to Apple's Enterprise Attestation Root and decodes the leaf OIDs; **SignalGrid consumes that already-verified record** — it normalizes and decides on it, and does not itself perform the crypto, issue certificates, or mint attestations. Every signal is read-only, and this is not an Apple partnership or certification claim.
+
+## SSO session-binding — the shared-device identity dimension (built, fixture-backed)
+
+Single Sign-On has become the enterprise identity control layer, but SSO's failure mode on a **shared, badge-checked-out frontline device** is different from the desk-bound case none of SignalGrid's other identity dimensions catch. `identity-risk` scores the *sign-in* (Entra ID Protection / Okta ThreatInsight risk); `access-governance` answers *is this principal authorized*. Neither asks the shared-device question: **is the live SSO session sitting on THIS tablet actually the current badge-holder's, is it MFA-backed, and is it still fresh?** The single worst frontline failure is a **leftover session** — the previous shift's nurse walked away and their Okta/Entra session is still live on the cart, so the next person silently inherits someone else's authenticated identity.
+
+The `sso-session` connector (`lib/integrations/src/integrations/sso-session`) normalizes an IdP session-state bridge's already-evaluated view of the session bound to the current device session — its state (active / expired / none), its **binding** (is the session subject the checked-out badge-holder, a *different* principal, or attributable to nobody), its authenticator **assurance** (phishing-resistant / MFA / single-factor), and its **freshness** — into one session-binding verdict (`fromSsoSession` → an `sso_session` signal on the unified action ladder). It consumes the evaluated session state; it never mints, refreshes, or revokes a token (that stays with the IdP).
+
+Fail-safe by construction, matched to a shared frontline session's stakes:
+
+- a **leftover session** whose subject ≠ the current badge-holder is the strongest negative: a **live** one → `escalate` (someone else's authenticated identity is on the device); an expired-but-cached one → `restrict` (still contain the leftover);
+- an **active session bound to no known holder** → `restrict` (contain it);
+- a session **bound** to the current holder but backed only by a **single factor**, **near or past its expiry**, or with an **unreadable** assurance/freshness → `step_up` (re-authenticate to a stronger, fresher session);
+- **no active session** is the baseline (`no_session` / `none`) — authentication is gated by the workflow, not penalized here;
+- only a **bound, MFA-backed, fresh** session with **positively-confirmed IdP reachability** (`idpReachable === true`) grants the top tier (`bound_strong` / `none`, marked `subjectBound`); the IdP being **unreachable**, reachability **unreported** (`null`), or the binding **unknown** never grants — it steps up; an unrecognized value normalizes to the safe `unknown`, never a fabricated `bound`/`active`.
+
+It also fails closed on self-contradictory or unverifiable reports: a `bound` label is trusted only with **corroborating subject evidence** — both subjects readable and equal; two readable subjects that **differ** normalize to `mismatched`, and a `bound` label with a missing/unreadable subject (a lookup failure or error string) is downgraded to `unknown` so an evidence-free "bound" can never grant. The locally-determinable concerns (a subject mismatch, an active unbound session) are evaluated **before** the IdP-outage downgrade, so an IdP being unreachable can never soften a leftover from `escalate` to `step_up`; and a **near-expiry** bound session raises the bar rather than passing as a calm monitor.
+
+Proven fully offline by `pnpm run proof:sso-session` (78 checks, no network, no keys). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid reads and decides on the evaluated session state — it changes no session and mints no tokens; every signal is read-only, and this is not an Okta / Microsoft / Ping partnership or certification claim.
+
 ## Frontline context signal roadmap
 
 Future healthcare and frontline context signals are documented in [Frontline context signals roadmap](FRONTLINE_CONTEXT_SIGNALS.md). These include Intune enrollment restrictions, device limits, iOS/iPadOS enrollment type, Apple Business Manager / ADE state, supervision, Jamf Pro context, Kontakt.io / RTLS candidate signals, location, staff safety alerts, nurse call events, dock/return-station events, and badge / QR / NFC physical context. They are not first-proof requirements; they become follow-on or future roadmap inputs after the Microsoft posture proof and UEM posture model are grounded.

@@ -21,6 +21,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 ## Core orientation
 
 - [Repository lineage](REPO_LINEAGE.md): explains the public/private repository split and what belongs in each repository.
+- [IP & licensing posture](IP_AND_LICENSING.md): how SignalGrid's IP is held today (copyright/MIT public code, trademark on the name, trade-secret core/hardware, patent timing) and the open decisions to settle with counsel — plus the publication boundary that keeps patent options open. Not legal advice.
 - [Alpha to public pre-production parity](ALPHA_TO_PUBLIC_PREPROD_PARITY.md): maps DEV Alpha learnings into Review Hub, private core, redesign, deferred, or archive categories.
 - [Roadmap to private core](ROADMAP_TO_PRIVATE_CORE.md): defines how validated public concepts move toward protected core implementation.
 
@@ -28,6 +29,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 
 - [Open orchestration vision](OPEN_ORCHESTRATION_VISION.md): the open, central, GitOps-native decision-orchestration direction (config-as-code, zero-touch provisioning, "decisions on your behalf") and its honest boundary — what is built (`lib/posture-composition`, `lib/flows` grid-coverage / signal-sourcing / grid-config / app-resilience) vs roadmap.
 - [Signal sourcing](SIGNAL_SOURCING.md): how each signal reaches the Grid — API / native integration / grid-collected (the Grid does the lifting) / unavailable (a real gap) — so coverage honestly reflects how the source systems are configured. Modeled in `@workspace/flows` signal-sourcing; proven by `proof:grid-coverage`.
+- [Teardown-proof](PROVISIONING_TEARDOWN_PROOF.md): prove the retreat before you trust the deploy — a device-setup recording is not deploy-ready until its reversal is proven (every step reversed, the system extension deactivated + restart-gated, the allow profile removed last in dependency order, a clean-state check), with an owner-gated, simulated-by-default decommission rehearsal. `@workspace/flows` provisioning-teardown; proven by `proof:provisioning-teardown`.
 - [Credential-exposure signal](CREDENTIAL_EXPOSURE_SIGNAL.md): endpoint secret-exposure (shell history / `.env` / CLI caches / AI-agent configs & logs) as a read-only decision signal — SignalGrid consumes a detection tool's verdict (GitGuardian/Wiz/Truffle/Microsoft) and turns it into allow/step-up/restrict/deny to contain the blast radius of a device assumed compromised. It does not scan or remediate. Modeled in `@workspace/integrations` credential-exposure; proven by `proof:credential-exposure`.
 - [Application resilience](APP_RESILIENCE.md): turning a cloud app's availability (unplanned outage / maintenance window / degraded) into a PHI-safe resilience decision so clinical staff keep working through downtime. Modeled in `@workspace/flows` app-resilience; proven by `proof:app-resilience`.
 - Workflows as code: a declarative grid ([`config/grid/example.grid.config.json`](../config/grid/example.grid.config.json)) the CI/CD pipeline validates on every change (`@workspace/flows` grid-config; `proof:grid-config`) before the Grid runs it.
@@ -35,6 +37,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Zero-touch provisioning](ZERO_TOUCH_PROVISIONING.md): a device setup recorded once (Designer / Device Action Recorder) as versionable config, CI-validated, and replayed by the Grid on serial/network join — simulated by default, real enforcement only when an owner enables it. `@workspace/flows` provisioning; `proof:provisioning`.
 - [Inspiration & positioning references](inspiration/INSPIRATION.md): the IAM-landscape framing (Domains → Capabilities → Outcomes) mapped to SignalGrid, plus verdict-first XDR fusion and the NIST SP 800-207 policy-engine model.
 - [Operator console — Build the grid surfaces](OPERATOR_GRID_CONSOLE.md): the mobile PWA's capstone Grid overview plus five read-only detail views (grid intelligence, device recorder, app resilience, signal sourcing, grid config), each mapped to its `/cp/v1` read and `@workspace/flows` model — the "see the grid in action" entry point.
+- [Architecture — signals in, decisions out](architecture.html): a one-page, self-contained diagram of the whole fabric — every vendor system / database / cloud-SaaS as a read-only signal, fused into one verdict (allow/step-up/restrict/deny), orchestrated out (verdict · incident · action · webhook · audit), with the honest sourcing boundary and built-vs-roadmap marked.
 - Live demo (self-contained, offline): [`docs/fabric-console.html`](fabric-console.html) — add signals + workflows and watch the Grid handle real situations by itself.
 
 ## Strategy and roadmap

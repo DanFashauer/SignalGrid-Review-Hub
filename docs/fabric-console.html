@@ -198,6 +198,8 @@
     { id:"network",      t:"Network / NAC",         d:"access state",   src:"native" },
     { id:"data",         t:"Data protection / DLP", d:"data egress",    src:"api" },
     { id:"secrets",      t:"Credential exposure",   d:"endpoint secrets", src:"api" },
+    { id:"macos",        t:"macOS endpoint hardening", d:"SIP / FileVault / MDM", src:"collected" },
+    { id:"ot",           t:"OT / IIoT device posture", d:"PLC / edge gateway", src:"collected" },
     { id:"reachability", t:"Reachability / carrier", d:"post-exit",     src:"collected" }
   ];
   var SRC_LABEL = { api:"via API", native:"native", collected:"grid-collected" };
@@ -210,6 +212,8 @@
     { id:"w_cred",   t:"Exposed-Credential Containment",  needs:["secrets","identity"],     act:"restrict app access → step-up → incident" },
     { id:"w_unmgd",  t:"Unmanaged-Access Block",         needs:["network","identity"],     act:"restrict to safe segment → step-up" },
     { id:"w_drift",  t:"Baseline-Drift Remediation",     needs:["device"],                 act:"step-up → patch" },
+    { id:"w_hard",   t:"Endpoint-Hardening Enforcement",  needs:["macos"],                  act:"step-up → restrict on weakened" },
+    { id:"w_ot",     t:"OT Exposure Containment",         needs:["ot"],                     act:"restrict exposed device → segment → incident" },
     { id:"w_tail",   t:"Tailgate Response",              needs:["custody"],                act:"alert → verify badge → restrict door" }
   ];
 
@@ -221,6 +225,10 @@
     { id:"s_cred",  label:"Live cloud key in an AI-agent config",  wf:"w_cred" },
     { id:"s_unmgd", label:"Unauthenticated device on the network", wf:"w_unmgd" },
     { id:"s_drift", label:"Config drift on a shared workstation",  wf:"w_drift" },
+    { id:"s_hard",  label:"FileVault off / unmanaged on a shared Mac", wf:"w_hard" },
+    { id:"s_strand", label:"Security agent stranded after a bad uninstall", wf:"w_hard" },
+    { id:"s_otflat", label:"A PLC reachable from the office network", wf:"w_ot" },
+    { id:"s_oteol",  label:"Unpatchable legacy machine on the line",  wf:"w_ot" },
     { id:"s_tail",  label:"Tailgating at a controlled door",       wf:"w_tail" }
   ];
 

@@ -39,6 +39,9 @@ final class HostAppViewController: UIViewController {
             outcome: .step_up, reasonCodes: ["DECISION_PENDING"],
             explanation: "Evaluating device trust…", source: .onDevice)
     }
+    /// Simulator-only stand-in for `UIScreen.isCaptured` (which can't be toggled from
+    /// simctl), so the live re-evaluation path can be demonstrated. Always false on device.
+    private var simulatedScreenCapture = false
 
     struct HostAppConfig {
         let integration: AppWorkflows.AppIntegration
@@ -96,19 +99,28 @@ final class HostAppViewController: UIViewController {
         primaryButton.isEnabled = false   // held until the session verdict resolves
         AuditLogger.shared.log(event: .appLaunched, metadata: [
             "appId": config.integration.id, "mode": "embedded_assist"])
-        evaluateSessionDecision()
+        // Posture is live for the whole session: if screen recording starts/stops
+        // while the app is open, re-evaluate the gate (see screenCaptureDidChange).
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(screenCaptureDidChange),
+            name: UIScreen.capturedDidChangeNotification, object: nil)
+        evaluateSessionDecision(isInitial: true)
     }
+
+    deinit { NotificationCenter.default.removeObserver(self) }
 
     // MARK: - Live session decision (signals + location → verdict)
 
-    /// Gather the live context, resolve the decision service, evaluate ONCE, cache
-    /// the verdict, then release the UI. Runs the async decision off the tap path so
-    /// the existing synchronous flow (tap → step-up → confirm) is unchanged.
-    private func evaluateSessionDecision() {
+    /// Gather the live context, resolve the decision service, evaluate, cache the
+    /// verdict. On initial open it releases the UI + starts the demo; on a later
+    /// re-evaluation (posture changed mid-session) it reflects the new verdict.
+    /// Runs the async decision off the tap path so the synchronous flow is unchanged.
+    private func evaluateSessionDecision(isInitial: Bool, reason: String = "session_open") {
         let ctx = buildEnvironmentContext()
         let service = DecisionServiceProvider.resolve(
             backendURL: configuredBackendURL, bearerToken: configuredBackendToken)
         Task { @MainActor in
+            let previous = self.cachedDecision?.outcome
             let result = await AccessDecision.evaluate(
                 ctx, integration: config.integration,
                 identityRef: SessionStateManager.shared.currentSession?.userId ?? "operator",
@@ -116,19 +128,62 @@ final class HostAppViewController: UIViewController {
                 via: service)
             self.cachedDecision = result
             AuditLogger.shared.log(event: .assistActionEvaluated, metadata: [
-                "scope": "session", "outcome": result.outcome.rawValue,
+                "scope": "session", "trigger": reason,
+                "outcome": result.outcome.rawValue,
                 "reason": result.reasonCodes.joined(separator: "|"),
                 "source": result.source.rawValue])
-            self.renderStep()
-            self.startAutoDemoIfNeeded()
+            if isInitial {
+                self.renderStep()
+                self.scheduleDemoScreenCaptureIfNeeded()
+                self.startAutoDemoIfNeeded()
+            } else {
+                self.applyReevaluation(previous: previous, result: result)
+            }
         }
+    }
+
+    /// Called when `UIScreen.isCaptured` flips (real recording/mirroring) — or the
+    /// simulator stand-in fires. Re-evaluates the session verdict live.
+    @objc private func screenCaptureDidChange() {
+        evaluateSessionDecision(isInitial: false, reason: "screen_capture_changed")
+    }
+
+    /// Reflect a mid-session verdict change in the host app's OWN UI (SignalGrid
+    /// never appears). Subsequent actions already read the refreshed verdict via
+    /// `currentDecision()`, so this only surfaces the change and refreshes controls.
+    private func applyReevaluation(previous: AppWorkflows.DecisionOutcome?, result: DecisionResult) {
+        guard previous != result.outcome else { return }
+        let why = result.reasonCodes.joined(separator: " · ")
+        let tightened = result.outcome != .allow
+        setGlass("session", result.outcome.rawValue, why,
+                 tightened
+                 ? "Posture changed mid-session → the gate tightened live. Actions are re-evaluated against the new verdict."
+                 : "Posture recovered mid-session → the gate re-opened. Trusted actions run again.")
+        showBanner(tightened
+                   ? "Screen recording detected — some actions are now unavailable."
+                   : "Screen recording stopped — access restored.",
+                   kind: tightened ? .blocked : .ok)
+        if flow == .idle { renderStep() }
+    }
+
+    /// Simulator-only: flip the screen-capture stand-in after a delay so the live
+    /// re-evaluation path can be captured in a screenshot walk (`-DemoScreenCaptureAfter`).
+    private func scheduleDemoScreenCaptureIfNeeded() {
+        #if targetEnvironment(simulator)
+        guard let after = DemoMode.screenCaptureAfter, after > 0 else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + after) { [weak self] in
+            guard let self = self else { return }
+            self.simulatedScreenCapture = true
+            self.screenCaptureDidChange()
+        }
+        #endif
     }
 
     /// Build the live context from the posture iOS genuinely exposes, the deployment
     /// zone, and (simulator-only) demo injection for conditions iOS can't sense.
     private func buildEnvironmentContext() -> SignalContext.EnvironmentContext {
         let authenticated = SessionStateManager.shared.currentSession != nil
-        let screenCaptured = UIScreen.main.isCaptured
+        let screenCaptured = UIScreen.main.isCaptured || simulatedScreenCapture
         let sessionStale = SessionStateManager.shared.currentSession?.isExpired ?? false
         let lockedOut = (SecurityManager.shared.getSecurityStatus()["isLockedOut"] as? Bool) ?? false
 

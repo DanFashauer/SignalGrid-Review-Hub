@@ -145,6 +145,14 @@ enum DemoMode {
             .filter { !$0.isEmpty })
     }
 
+    /// Seconds after the host app opens to simulate screen recording starting
+    /// (`-DemoScreenCaptureAfter 4`). `UIScreen.isCaptured` can't be toggled from
+    /// simctl, so this drives the live re-evaluation path for demos. `nil` ⇒ off.
+    static var screenCaptureAfter: TimeInterval? {
+        let v = UserDefaults.standard.double(forKey: "DemoScreenCaptureAfter")
+        return v > 0 ? v : nil
+    }
+
     static func persona() -> Persona {
         let p = locationProfile(location)
         return Persona(

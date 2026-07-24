@@ -82,7 +82,7 @@ final class LockedIdleViewController: UIViewController {
     /// has opted in (`KioskConfig.allowManualOverride`). Off by default.
     private lazy var recoveryButton: UIButton = {
         let button = UIButton(type: .system)
-        button.setTitle("Disaster recovery", for: .normal)
+        button.setTitle("Manual login", for: .normal)
         button.setTitleColor(SG.mutedFg.withAlphaComponent(0.6), for: .normal)
         button.titleLabel?.font = SG.sans(12, .regular)
         button.addTarget(self, action: #selector(recoveryTapped), for: .touchUpInside)
@@ -128,11 +128,18 @@ final class LockedIdleViewController: UIViewController {
         // exercised without a physical reader. (The launch arg lives in the argument
         // domain and can't be cleared via removeObject, so guard with a static flag
         // to avoid re-injecting every time we return to LockedIdle.)
-        if !Self.didInjectSimulatedBadge,
-           let badge = UserDefaults.standard.string(forKey: "SimulateBadge"), !badge.isEmpty {
-            Self.didInjectSimulatedBadge = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                SessionStateManager.shared.onBadgeScanned(badge)
+        if !Self.didInjectSimulatedBadge {
+            if let badge = UserDefaults.standard.string(forKey: "SimulateBadge"), !badge.isEmpty {
+                Self.didInjectSimulatedBadge = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    SessionStateManager.shared.onBadgeScanned(badge)
+                }
+            } else if UserDefaults.standard.bool(forKey: "SimulateManualLogin"), KioskConfig.allowManualOverride {
+                // Demo the manual-override login path (no code entry): -SimulateManualLogin YES
+                Self.didInjectSimulatedBadge = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    SessionStateManager.shared.beginManualOverrideLogin()
+                }
             }
         }
         #endif
@@ -280,21 +287,22 @@ final class LockedIdleViewController: UIViewController {
     /// reachable when a company has opted in (KioskConfig.allowManualOverride).
     @objc private func recoveryTapped() {
         let alert = UIAlertController(
-            title: "Disaster Recovery",
-            message: "Releasing the kiosk lock is logged and not recommended. Enter the admin recovery code.",
+            title: "Manual login",
+            message: "Sign in without a badge using the admin-issued login code. This is logged.",
             preferredStyle: .alert)
         alert.addTextField { field in
             field.isSecureTextEntry = true
             field.keyboardType = .numberPad
-            field.placeholder = "Recovery code"
+            field.placeholder = "Login code"
         }
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Unlock", style: .destructive) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: "Log in", style: .default) { [weak self] _ in
             let code = alert.textFields?.first?.text ?? ""
-            if KioskController.shared.attemptRecoveryOverride(code: code) {
-                self?.showRecoveryResult("Kiosk lock released for recovery.", ok: true)
+            if KioskConfig.validateRecoveryCode(code) {
+                self?.showRecoveryResult("Manual login accepted.", ok: true)
+                SessionStateManager.shared.beginManualOverrideLogin()
             } else {
-                self?.showRecoveryResult("Recovery code rejected.", ok: false)
+                self?.showRecoveryResult("Login code rejected.", ok: false)
             }
         })
         present(alert, animated: true)

@@ -209,7 +209,21 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
         // Transition to badge captured state
         transition(to: .badgeCaptured)
     }
-    
+
+    /// Manual override login — an alternative to a badge, gated by org opt-in
+    /// (`KioskConfig.allowManualOverride`). The admin recovery code has already
+    /// authorized it, so it skips badge-format validation and starts a REAL
+    /// authenticated session (not just a kiosk release): it flows badgeCaptured →
+    /// authenticating → provisioning → activeSession, and the kiosk-until-auth
+    /// lifecycle unlocks the device on activeSession (re-locking when it ends).
+    func beginManualOverrideLogin() {
+        guard KioskConfig.allowManualOverride else { return }
+        guard currentState == .lockedIdle else { return }
+        AuditLogger.shared.log(event: .authenticationStarted, metadata: ["method": "manual_override"])
+        capturedBadgeId = "MANUAL-OVERRIDE"
+        transition(to: .badgeCaptured)
+    }
+
     // MARK: - Authentication Flow
     
     private func beginAuthentication() async {

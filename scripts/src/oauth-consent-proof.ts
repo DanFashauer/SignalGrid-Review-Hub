@@ -22,9 +22,11 @@ import {
   guardReadOnly,
   normalizeReport,
   resolveOAuthConsentConnector,
+  type NormalizedOAuthConsent,
   type OAuthConsentReportRaw,
 } from "@workspace/integrations/oauth-consent";
 import { composeDeviceRisk, fromOAuthConsent } from "@workspace/posture-composition";
+import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 
 interface Expected {
   posture: string;
@@ -107,63 +109,52 @@ check("no grants but reachability UNREPORTED → step_up (positive verification 
 // (admin OR user) + verified publisher + least scope + managed/no workload with the
 // IdP reachable, OR no grants with the IdP reachable — and for nothing else. Any
 // unknown/missing value on ANY field must fall out of the grant.
-const GRANTS = ["present", "none", "unknown"] as const;
-const CONSENT = ["admin", "user", "unknown"] as const;
-const PUB = ["verified", "unverified", "unknown"] as const;
-const SCOPE = ["least", "broad", "full_access", "unknown"] as const;
-const WL = ["managed", "unmanaged_secret", "none", "unknown"] as const;
-const REACH = [true, false, null] as const;
-// Cover a valid clean count (0), a positive count, absence (null), and MALFORMED
-// counts (negative, non-integer) — only exactly 0 (or null) may reach a grant.
-const COUNT = [null, 0, 2, -1, 1.5] as const;
-let combos = 0;
-let noneCount = 0;
-let mismatches = 0;
-for (const grants of GRANTS)
-  for (const consentType of CONSENT)
-    for (const publisher of PUB)
-      for (const scope of SCOPE)
-        for (const workloadCredential of WL)
-          for (const idpReachable of REACH)
-            for (const riskyGrantCount of COUNT) {
-              combos += 1;
-              const v = evaluateOAuthConsent({
-                sourceSystem: "oauth-consent",
-                principalId: "enum",
-                grants,
-                consentType,
-                publisher,
-                scope,
-                workloadCredential,
-                idpReachable,
-                riskyGrantCount,
-                source: "enum",
-              });
-              // A reported count is "bad" (blocks a grant) unless it is exactly 0.
-              const positiveCount = riskyGrantCount !== null && riskyGrantCount !== 0;
-              // A "none" report is only clean if it is self-consistent (no positive
-              // risky field value); a "present" report must be fully clean.
-              const noneConsistent =
-                scope !== "broad" &&
-                scope !== "full_access" &&
-                publisher !== "unverified" &&
-                workloadCredential !== "unmanaged_secret";
-              const expectedNone =
-                !positiveCount &&
-                idpReachable === true &&
-                ((grants === "none" && noneConsistent) ||
-                  (grants === "present" &&
-                    (consentType === "admin" || consentType === "user") &&
-                    publisher === "verified" &&
-                    scope === "least" &&
-                    (workloadCredential === "managed" || workloadCredential === "none")));
-              const isNone = v.recommendedAction === "none";
-              if (isNone) noneCount += 1;
-              if (isNone !== expectedNone) mismatches += 1;
-              if (isNone && v.governanceConfirmed !== true) mismatches += 1;
-            }
-check(`exhaustive: over all ${combos} input combinations, action 'none' is emitted for EXACTLY the positively-confirmed clean states (mismatches=${mismatches})`, mismatches === 0 && combos === 6480);
-check("exhaustive: some clean states DO grant (the enumeration is not vacuous)", noneCount > 0);
+const domains = {
+  grants: ["present", "none", "unknown"],
+  consentType: ["admin", "user", "unknown"],
+  publisher: ["verified", "unverified", "unknown"],
+  scope: ["least", "broad", "full_access", "unknown"],
+  workloadCredential: ["managed", "unmanaged_secret", "none", "unknown"],
+  idpReachable: [true, false, null],
+  // Cover a valid clean count (0), a positive count, absence (null), and MALFORMED
+  // counts (negative, non-integer) — only exactly 0 (or null) may reach a grant.
+  riskyGrantCount: [null, 0, 2, -1, 1.5],
+};
+const enumRes = enumerateGrantSafety({
+  domains,
+  build: (c) =>
+    ({ sourceSystem: "oauth-consent", principalId: "enum", source: "enum", ...c }) as NormalizedOAuthConsent,
+  evaluate: evaluateOAuthConsent,
+  actionOf: (v) => v.recommendedAction,
+  confirmedWhenNone: (v) => v.governanceConfirmed === true,
+  positivelyClean: (c) => {
+    const { grants, consentType, publisher, scope, workloadCredential, idpReachable, riskyGrantCount } = c;
+    // A reported count is "bad" (blocks a grant) unless it is exactly 0.
+    const positiveCount = riskyGrantCount !== null && riskyGrantCount !== 0;
+    // A "none" report is only clean if it is self-consistent (no positive risky
+    // field value); a "present" report must be fully clean.
+    const noneConsistent =
+      scope !== "broad" &&
+      scope !== "full_access" &&
+      publisher !== "unverified" &&
+      workloadCredential !== "unmanaged_secret";
+    return (
+      !positiveCount &&
+      idpReachable === true &&
+      ((grants === "none" && noneConsistent) ||
+        (grants === "present" &&
+          (consentType === "admin" || consentType === "user") &&
+          publisher === "verified" &&
+          scope === "least" &&
+          (workloadCredential === "managed" || workloadCredential === "none")))
+    );
+  },
+});
+check(
+  `exhaustive: over all ${enumRes.combos} input combinations, action 'none' is emitted for EXACTLY the positively-confirmed clean states (mismatches=${enumRes.mismatches}${enumRes.firstMismatch ? ", first=" + enumRes.firstMismatch : ""})`,
+  enumRes.mismatches === 0 && enumRes.combos === productOf(domains) && enumRes.combos === 6480,
+);
+check("exhaustive: some clean states DO grant (the enumeration is not vacuous)", enumRes.noneCount > 0);
 
 // Unknown ≠ governed: an unrecognized enum value normalizes to the safe unknown.
 const norm = normalizeReport("n", { grants: "totally", consentType: "sorta", publisher: "vibes", scope: "wide", workloadCredential: "maybe" } as OAuthConsentReportRaw);

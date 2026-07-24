@@ -21,9 +21,11 @@ import {
   guardReadOnly,
   normalizeReport,
   resolveSsoSessionConnector,
+  type NormalizedSsoSession,
   type SsoSessionReportRaw,
 } from "@workspace/integrations/sso-session";
 import { composeDeviceRisk, fromSsoSession } from "@workspace/posture-composition";
+import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 
 interface Expected {
   posture: string;
@@ -151,15 +153,49 @@ check("an unknown-liveness bound session never composes to the 'ok' tier", compo
 const unboundUnknownState = evaluateSsoSession(await connector.fetchSession(fixture.devices["unbound-state-unknown"].deviceId));
 check("an UNBOUND session with unknown liveness (fresh+MFA) → step_up, never granted", unboundUnknownState.recommendedAction === "step_up" && unboundUnknownState.posture !== "bound_strong");
 check("no bound_strong verdict is ever emitted without subjectBound", boundUnknownState.posture !== "bound_strong" && (strong.posture !== "bound_strong" || strong.subjectBound === true));
-// Exhaustive: the ONLY fixture that reaches 'none'/bound_strong is a confirmed
-// active + bound + MFA + fresh session — enumerate every fixture and assert it.
-for (const name of names) {
-  const v = evaluateSsoSession(await connector.fetchSession(fixture.devices[name].deviceId));
-  if (v.recommendedAction === "none" && v.posture === "bound_strong") {
-    const r = fixture.devices[name].report;
-    check(`only a confirmed active+bound+MFA+fresh+reachable session grants (${name})`, r.state === "active" && r.binding === "bound" && (r.assurance === "mfa" || r.assurance === "phishing_resistant") && r.freshness === "fresh" && r.idpReachable === true);
-  }
-}
+// Exhaustive: brute-force the ENTIRE normalized input space the evaluator reads
+// (not fixture-bound), so the proof genuinely CONSTRAINS the allow path. Action
+// "none" is emitted by exactly two legitimate postures and nothing else:
+//   • the bound_strong GRANT — an active, bound, MFA/phishing-resistant, fresh
+//     session with the IdP confirmed reachable (subjectBound); and
+//   • the no_session BASELINE — no live session to judge, not attributable to a
+//     leftover (binding ≠ mismatched) and not during a confirmed IdP outage.
+// Any unknown/missing value on a decisive field must fall out of the grant.
+const domains = {
+  state: ["active", "expired", "none", "unknown"],
+  binding: ["bound", "mismatched", "unbound", "unknown"],
+  assurance: ["phishing_resistant", "mfa", "single_factor", "unknown"],
+  freshness: ["fresh", "near_expiry", "expired", "unknown"],
+  idpReachable: [true, false, null],
+};
+const enumRes = enumerateGrantSafety({
+  domains,
+  build: (c) =>
+    ({ sourceSystem: "sso-session", deviceId: "enum", subject: null, expectedSubject: null, source: "enum", ...c }) as NormalizedSsoSession,
+  evaluate: evaluateSsoSession,
+  actionOf: (v) => v.recommendedAction,
+  // Every grant is EITHER a subject-bound bound_strong OR an unbound no_session
+  // baseline — no other posture may ever contribute 'none'.
+  confirmedWhenNone: (v) =>
+    (v.posture === "bound_strong" && v.subjectBound === true) ||
+    (v.posture === "no_session" && v.subjectBound === false),
+  positivelyClean: (c) => {
+    const { state, binding, assurance, freshness, idpReachable } = c;
+    const boundStrong =
+      binding === "bound" &&
+      state === "active" &&
+      freshness === "fresh" &&
+      (assurance === "mfa" || assurance === "phishing_resistant") &&
+      idpReachable === true;
+    const noSessionBaseline = state === "none" && binding !== "mismatched" && idpReachable !== false;
+    return boundStrong || noSessionBaseline;
+  },
+});
+check(
+  `exhaustive: over all ${enumRes.combos} input combinations, action 'none' is emitted for EXACTLY the bound_strong grant + no_session baseline (mismatches=${enumRes.mismatches}${enumRes.firstMismatch ? ", first=" + enumRes.firstMismatch : ""})`,
+  enumRes.mismatches === 0 && enumRes.combos === productOf(domains) && enumRes.combos === 768,
+);
+check("exhaustive: some clean states DO grant (the enumeration is not vacuous)", enumRes.noneCount > 0);
 
 // Unknown ≠ bound: an unrecognized enum value normalizes to the safe unknown.
 const norm = normalizeReport("n", { state: "totally-live", binding: "sorta", assurance: "vibes", freshness: "recent" } as SsoSessionReportRaw);

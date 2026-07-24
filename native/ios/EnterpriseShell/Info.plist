@@ -72,5 +72,15 @@
     <true/>
     <key>NSFaceIDUsageDescription</key>
     <string>Verify it's you before performing a sensitive action on this shared device.</string>
+    <!-- App Transport Security: ATS stays fully enforced for internet endpoints — a
+         production SignalGrid control plane MUST be HTTPS. NSAllowsLocalNetworking
+         permits cleartext ONLY to local/dev hosts (localhost, *.local, link-local),
+         so the embedded gate's dev/demo control plane (-DemoBackendURL http://…)
+         resolves on a real device without weakening security for real traffic. -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+    </dict>
 </dict>
 </plist>

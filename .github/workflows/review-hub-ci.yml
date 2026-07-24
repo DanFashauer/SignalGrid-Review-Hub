@@ -118,6 +118,9 @@ jobs:
       - name: OAuth-consent / workload-identity proof
         run: pnpm run proof:oauth-consent
 
+      - name: Grant-safety harness self-proof (allow-path brute-force detector)
+        run: pnpm run proof:grant-safety
+
       - name: Posture-composition (unified signal fusion) proof
         run: pnpm run proof:posture-composition
 

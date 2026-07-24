@@ -12,10 +12,10 @@ final class ProviderConfigurationService {
     
     /// Complete application configuration
     struct AppConfiguration: Codable {
-        let badgeReader: BadgeReaderConfig
-        let identityProvider: IdentityProviderConfig
-        let security: SecurityConfig
-        let backend: BackendConfig
+        var badgeReader: BadgeReaderConfig
+        var identityProvider: IdentityProviderConfig
+        var security: SecurityConfig
+        var backend: BackendConfig
         
         /// Default configuration - can be overridden
         static let `default` = AppConfiguration(

@@ -29,7 +29,10 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate {
         currentState == .activeSession && currentSession?.isActive == true
     }
     
-    private var stateTransitionQueue = DispatchQueue(label: "com.enterprise.shell.stateQueue")
+    /// A validated badge captured while a session was still active, to be picked up
+    /// AFTER the current session has fully torn down (the shared-device hand-off).
+    /// Kept separate from `capturedBadgeId` so it survives `clearLocalSessionData()`.
+    private var pendingBadgeId: String?
     private var activityTimer: Timer?
     private var timeoutTimer: Timer?
     private let timeoutGracePeriod: TimeInterval = 5.0
@@ -64,11 +67,20 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate {
     
     // MARK: - State Transitions
     
-    /// Transition to a new state with validation
+    /// Transition to a new state with validation.
+    ///
+    /// The whole transition — validation, the `@Published` state mutation, and the
+    /// enter/exit actions — runs on the MAIN thread. `currentState`/`currentSession`
+    /// are read from the main thread throughout the app (view controllers, timers,
+    /// `isSessionActive`), so confining every mutation to main removes the data race
+    /// on the security-critical session state and keeps Combine events on-main.
+    /// `.async` (never sync) means it is safe to call from any thread without
+    /// deadlock; nested transitions (e.g. badgeCaptured → authenticating) queue in
+    /// order rather than re-entering.
     func transition(to newState: SessionState, error: Error? = nil) {
-        stateTransitionQueue.async { [weak self] in
+        DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
-            
+
             // Validate transition
             guard self.currentState.allowedTransitions.contains(newState) else {
                 let invalidTransitionError = SessionError.invalidStateTransition(
@@ -78,28 +90,26 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate {
                 self.handleError(invalidTransitionError)
                 return
             }
-            
+
             let previousState = self.currentState
-            
+
             // Execute state-specific entry/exit actions
             self.exitState(previousState)
             self.currentState = newState
             self.enterState(newState)
-            
+
             // Notify observers
-            DispatchQueue.main.async {
-                self.lastError = error
-                NotificationCenter.default.post(
-                    name: .sessionStateDidChange,
-                    object: nil,
-                    userInfo: [
-                        SessionStateNotificationKeys.newState: newState,
-                        SessionStateNotificationKeys.previousState: previousState,
-                        SessionStateNotificationKeys.error: error as Any
-                    ]
-                )
-            }
-            
+            self.lastError = error
+            NotificationCenter.default.post(
+                name: .sessionStateDidChange,
+                object: nil,
+                userInfo: [
+                    SessionStateNotificationKeys.newState: newState,
+                    SessionStateNotificationKeys.previousState: previousState,
+                    SessionStateNotificationKeys.error: error as Any
+                ]
+            )
+
             // Log state transition
             AuditLogger.shared.log(event: .stateTransition, metadata: [
                 "previousState": previousState.rawValue,
@@ -125,11 +135,22 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate {
         case .lockedIdle:
             cleanupCurrentSession()
             capturedBadgeId = nil
-            
+            // If a badge was tapped while the previous session was still active, the
+            // session has now fully torn down — resume the deferred hand-off for the
+            // new holder. `pendingBadgeId` deliberately survived the wipe above.
+            if let pending = pendingBadgeId {
+                pendingBadgeId = nil
+                // Already validated + rate-limited when the tap arrived during the
+                // now-torn-down session; don't double-count it against the limiter.
+                onBadgeScanned(pending, deferredReplay: true)
+            }
+
         case .badgeCaptured:
-            // Badge ID is already set before transition
-            break
-            
+            // Badge ID is already set; advance into authentication. (Without this the
+            // machine dead-ends here — a captured badge never authenticates.)
+            transition(to: .authenticating)
+
+
         case .authenticating:
             // Begin OIDC authentication flow
             Task {
@@ -163,46 +184,73 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate {
     
     // MARK: - Badge Handling
     
-    /// Called when a badge is scanned (from BadgeReaderProviderDelegate)
-    func onBadgeScanned(_ badgeId: String) {
-        guard currentState == .lockedIdle else {
+    /// The single, validated entry point for EVERY badge read (wired from the
+    /// active `BadgeReaderProvider`). Security checks run first and apply in every
+    /// state, so no reader callback can bypass format validation or rate limiting.
+    ///
+    /// `deferredReplay` is set only when the state machine resumes a hand-off it
+    /// already validated and rate-limited moments ago (a badge tapped during an
+    /// active session, replayed once teardown reaches `.lockedIdle`). Re-checking
+    /// there would count the same physical tap twice against the rate limiter, so
+    /// the security gate is skipped for that one internal replay.
+    func onBadgeScanned(_ badgeId: String, deferredReplay: Bool = false) {
+        if !deferredReplay {
+            // SECURITY: Validate badge ID format before doing anything with it. A
+            // rejected badge NEVER affects an active session (a garbage read must not
+            // tear down a legitimate user); it only surfaces feedback while locked.
+            let validationResult = SecurityManager.shared.validateBadgeId(badgeId)
+            if !validationResult.valid {
+                AuditLogger.shared.log(event: .securitySuspiciousBadge, metadata: [
+                    "badgeId": maskBadgeId(badgeId),
+                    "reason": validationResult.error ?? "invalid_format"
+                ])
+                if currentState == .lockedIdle { lastError = SessionError.invalidBadgeFormat }
+                return
+            }
+
+            // SECURITY: Rate-limit before processing (same "never disturb an active
+            // session" rule applies).
+            let rateLimitResult = SecurityManager.shared.isBadgeScanAllowed(badgeId: badgeId)
+            if !rateLimitResult.allowed {
+                AuditLogger.shared.log(event: .securityRateLimitExceeded, metadata: [
+                    "badgeId": maskBadgeId(badgeId),
+                    "reason": rateLimitResult.reason ?? "rate_limit_exceeded"
+                ])
+                if currentState == .lockedIdle { lastError = SessionError.rateLimited }
+                return
+            }
+        }
+
+        switch currentState {
+        case .lockedIdle:
+            // Ready to authenticate.
+            capturedBadgeId = badgeId
+            AuditLogger.shared.log(event: .badgeScanned, metadata: [
+                "badgeId": maskBadgeId(badgeId)
+            ])
+            transition(to: .badgeCaptured)
+
+        case .activeSession:
+            // Shared-device hand-off: a validated badge tapped during an active
+            // session ENDS that session (full token + data wipe) and starts fresh
+            // for the new holder. The new badge is stashed in `pendingBadgeId` and
+            // resumed only once teardown reaches `.lockedIdle`, so the next user can
+            // never inherit the previous session.
+            AuditLogger.shared.log(event: .badgeTapDuringActiveSession, metadata: [
+                "previousSessionId": currentSessionId ?? "none",
+                "newBadgeId": maskBadgeId(badgeId)
+            ])
+            pendingBadgeId = badgeId
+            endSession(userInitiated: true)
+
+        default:
+            // Mid-flow (authenticating / provisioning / terminating / …). Ignore the
+            // tap rather than interrupt an in-flight transition.
             AuditLogger.shared.log(event: .badgeScannedUnexpectedState, metadata: [
                 "badgeId": maskBadgeId(badgeId),
                 "currentState": currentState.rawValue
             ])
-            return
         }
-        
-        // SECURITY: Validate badge ID format before processing
-        let validationResult = SecurityManager.shared.validateBadgeId(badgeId)
-        if !validationResult.valid {
-            AuditLogger.shared.log(event: .securitySuspiciousBadge, metadata: [
-                "badgeId": maskBadgeId(badgeId),
-                "reason": validationResult.error ?? "invalid_format"
-            ])
-            transition(to: .lockedIdle, error: SessionError.invalidBadgeFormat)
-            return
-        }
-        
-        // SECURITY: Check rate limiting before processing
-        let rateLimitResult = SecurityManager.shared.isBadgeScanAllowed(badgeId: badgeId)
-        if !rateLimitResult.allowed {
-            AuditLogger.shared.log(event: .securityRateLimitExceeded, metadata: [
-                "badgeId": maskBadgeId(badgeId),
-                "reason": rateLimitResult.reason ?? "rate_limit_exceeded"
-            ])
-            transition(to: .lockedIdle, error: SessionError.rateLimited)
-            return
-        }
-        
-        capturedBadgeId = badgeId
-        
-        AuditLogger.shared.log(event: .badgeScanned, metadata: [
-            "badgeId": maskBadgeId(badgeId)
-        ])
-        
-        // Transition to badge captured state
-        transition(to: .badgeCaptured)
     }
     
     // MARK: - Authentication Flow
@@ -212,10 +260,11 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate {
             transition(to: .lockedIdle, error: SessionError.missingBadgeId)
             return
         }
-        
-        // Notify UI to show authenticating state
-        transition(to: .authenticating)
-        
+
+        // Already in `.authenticating` (this runs from enterState(.authenticating)).
+        // The previous redundant `transition(to: .authenticating)` was an illegal
+        // self-transition that logged a spurious "Invalid state transition" error.
+
         do {
             // Step 1: Validate badge with backend and get session token
             let startSessionResponse = try await BackendService.shared.startSession(
@@ -462,10 +511,21 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate {
             transition(to: .lockedIdle)
             return
         }
-        
+
+        // Capture what the (networked) revoke/audit/end calls need, THEN wipe every
+        // local secret immediately — before any await. If the process is killed
+        // mid-teardown (crash / OOM / force-quit), no token or session data can be
+        // left behind for the next user to inherit. The in-flight network calls use
+        // the captured copies.
+        let capturedAccessToken = session.accessToken
+        let capturedSessionId = session.sessionId
+        let capturedStartedAt = session.startedAt
+        let sessionForAudit = session
+        clearLocalSessionData()
+
         do {
-            // Step 1: Revoke identity provider tokens
-            if let accessToken = session.accessToken {
+            // Step 1: Revoke identity provider tokens (using the captured token).
+            if let accessToken = capturedAccessToken {
                 if let provider = identityProvider {
                     try await provider.revokeAuthentication(token: accessToken)
                 } else {
@@ -473,34 +533,31 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate {
                     try await OIDCAuthService.shared.revokeToken(accessToken)
                 }
             }
-            
-            // Step 2: Send audit logs to backend
-            try await sendSessionAudit(session: session, reason: reason)
-            
-            // Step 3: Notify backend of session end
+
+            // Step 2: Send audit logs to backend.
+            try await sendSessionAudit(session: sessionForAudit, reason: reason)
+
+            // Step 3: Notify backend of session end.
             try await BackendService.shared.endSession(
-                sessionId: session.sessionId,
+                sessionId: capturedSessionId,
                 reason: reason
             )
-            
-            // Step 4: Clear all local data
-            clearLocalSessionData()
-            
-            // Transition to locked idle
+
+            // Transition to locked idle (local data already wiped above).
             transition(to: .lockedIdle)
-            
+
             AuditLogger.shared.log(event: .sessionEnded, metadata: [
-                "sessionId": session.sessionId,
+                "sessionId": capturedSessionId,
                 "reason": reason.rawValue,
-                "duration": session.startedAt.timeIntervalSinceNow
+                "duration": capturedStartedAt.timeIntervalSinceNow
             ])
-            
+
         } catch {
             AuditLogger.shared.log(event: .sessionTerminationError, metadata: [
                 "error": error.localizedDescription
             ])
-            // Still clear local data and return to locked state
-            clearLocalSessionData()
+            // Local data was already cleared before the network calls; just return
+            // to the locked state.
             transition(to: .lockedIdle)
         }
     }
@@ -523,19 +580,26 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate {
     }
     
     private func clearLocalSessionData() {
-        // Clear Keychain items
+        // The persistent-secret wipe runs SYNCHRONOUSLY, immediately — this may be
+        // called from the background teardown Task and must complete before any
+        // further await, so a crash can't leave a token behind.
         KeychainService.shared.clearAllSessionData()
-        
-        // Clear UserDefaults session data
         clearUserDefaultsSessionData()
-        
-        // Clear any cached data
         clearCacheData()
-        
-        // Reset session data
-        currentSession = nil
-        capturedBadgeId = nil
-        lastError = nil
+
+        // The in-memory @Published resets, however, must occur on the main thread
+        // (Combine/UI delivery). Marshal them there when called off-main; run inline
+        // when already on main to preserve synchronous semantics for the UI path.
+        let resetPublishedState = { [weak self] in
+            self?.currentSession = nil
+            self?.capturedBadgeId = nil
+            self?.lastError = nil
+        }
+        if Thread.isMainThread {
+            resetPublishedState()
+        } else {
+            DispatchQueue.main.async(execute: resetPublishedState)
+        }
     }
     
     private func clearUserDefaultsSessionData() {
@@ -772,50 +836,15 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate {
     // MARK: - Persistence
     
     private func loadPersistedState() {
-        // Check for any persisted session state on launch
-        // For security, we start in lockedIdle state
+        // For security, always start locked AND wipe any secrets a prior run may have
+        // left behind — e.g. if the app was killed mid-session. A cold start must
+        // never inherit the previous user's token or session data.
         currentState = .lockedIdle
+        clearLocalSessionData()
     }
-    
+
     // MARK: - Helpers
-    
-    /// Handle badge tap from hardware reader - clears session if active and starts new auth
-    func handleBadgeTap(_ badgeId: String) {
-        // If there's an active session, clear it first
-        if currentState == .activeSession {
-            AuditLogger.shared.log(event: .badgeTapDuringActiveSession, metadata: [
-                "previousSessionId": currentSessionId ?? "none",
-                "newBadgeId": maskBadgeId(badgeId)
-            ])
-            
-            // Immediately clear all session data and transition to locked idle
-            // This ensures clean state for new badge authentication
-            clearLocalSessionData()
-            
-            // Stop any running timers
-            stopActivityTimer()
-            stopTimeoutTimer()
-            
-            // Transition to locked idle state (ready for new badge authentication)
-            transition(to: .lockedIdle)
-            
-            // Start authentication process with new badge
-            capturedBadgeId = badgeId
-            transition(to: .authenticating)
-        } else {
-            // No active session - start new authentication
-            capturedBadgeId = badgeId
-            transition(to: .authenticating)
-        }
-    }
-    
-    private func maskBadgeId(_ badgeId: String) -> String {
-        guard badgeId.count > 4 else { return "****" }
-        let prefix = String(badgeId.prefix(2))
-        let suffix = String(badgeId.suffix(2))
-        return "\(prefix)****\(suffix)"
-    }
-    
+
     private func handleError(_ error: Error) {
         DispatchQueue.main.async {
             self.lastError = error
@@ -825,22 +854,28 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate {
         }
     }
     
-    // MARK: - BadgeReaderManagerDelegate
-    
-    func badgeReader(_ manager: BadgeReaderManager, didReadBadge badgeId: String) {
-        // Handle badge read event from hardware reader
+    // MARK: - BadgeReaderProviderDelegate
+
+    func badgeReader(_ provider: BadgeReaderProvider, didReadBadge badgeId: String) {
+        // Route EVERY badge read through the validated entry point. Provider
+        // callbacks can arrive on background queues (BLE / stream), so hop to main —
+        // where all session state lives.
         DispatchQueue.main.async { [weak self] in
-            self?.handleBadgeTap(badgeId)
+            self?.onBadgeScanned(badgeId)
         }
     }
-    
-    func badgeReader(_ manager: BadgeReaderManager, didFailWithError error: Error) {
+
+    func badgeReader(_ provider: BadgeReaderProvider, didFailWithError error: Error) {
         AuditLogger.shared.log(event: .badgeReaderError, metadata: [
             "error": error.localizedDescription
         ])
     }
-    
-    func badgeReaderDidDisconnect(_ manager: BadgeReaderManager) {
+
+    func badgeReaderDidConnect(_ provider: BadgeReaderProvider) {
+        AuditLogger.shared.log(event: .badgeReaderConnected, metadata: nil)
+    }
+
+    func badgeReaderDidDisconnect(_ provider: BadgeReaderProvider) {
         AuditLogger.shared.log(event: .badgeReaderDisconnected, metadata: nil)
     }
 }

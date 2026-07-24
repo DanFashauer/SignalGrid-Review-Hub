@@ -32,19 +32,19 @@ final class KeychainService {
         // Delete existing item first
         delete(forKey: key)
         
-        let query: [String: Any] = [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: serviceName,
             kSecAttrAccount as String: key,
             kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         ]
-        
+
         // Add access group if configured
         if let group = accessGroup {
             query[kSecAttrAccessGroup as String] = group
         }
-        
+
         let status = SecItemAdd(query as CFDictionary, nil)
         
         guard status == errSecSuccess else {
@@ -236,19 +236,6 @@ enum KeychainError: LocalizedError {
             return "Failed to encode data for Keychain"
         case .decodingFailed:
             return "Failed to decode data from Keychain"
-        }
-    }
-}
-
-// MARK: - SecItemDelete Extension
-
-private extension SecItemDelete {
-    static func delete(_ query: CFDictionary) {
-        let status = SecItemDelete(query)
-        // Ignore not found errors
-        if status != errSecSuccess && status != errSecItemNotFound {
-            // Log error in production
-            print("Keychain delete error: \(status)")
         }
     }
 }

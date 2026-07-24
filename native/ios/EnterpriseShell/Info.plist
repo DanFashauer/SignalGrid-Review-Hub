@@ -44,10 +44,6 @@
         <key>UIColorName</key>
         <string>LaunchBackground</string>
     </dict>
-    <key>UIRequiredDeviceCapabilities</key>
-    <array>
-        <string>armv7</string>
-    </array>
     <key>UISupportedInterfaceOrientations~ipad</key>
     <array>
         <string>UIInterfaceOrientationPortrait</string>
@@ -64,5 +60,15 @@
     </array>
     <key>NSExternalAccessoryManualSelect</key>
     <true/>
+    <!-- Required so EASession(accessory:forProtocol:) can open USB-C/Lightning badge
+         readers; without it EASession init returns nil and readers never connect. -->
+    <key>UISupportedExternalAccessoryProtocols</key>
+    <array>
+        <string>com.enterprise.badgereader</string>
+    </array>
+    <!-- Required on iOS 13+: the OS terminates the app on first CBCentralManager use
+         (the selectable BLE badge-reader provider) if this key is absent. -->
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>Enterprise Shell connects to a Bluetooth badge reader to authenticate users on this shared device.</string>
 </dict>
 </plist>

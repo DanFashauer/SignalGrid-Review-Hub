@@ -57,7 +57,7 @@ final class SecurityManager {
     private func initializeDeviceBinding() {
         // Generate or retrieve device binding key
         // This binds sessions to this specific device
-        if let existingKey = KeychainService.shared.retrieve(forKey: "device_binding_key"),
+        if let existingKey = try? KeychainService.shared.retrieve(forKey: "device_binding_key"),
            let key = String(data: existingKey, encoding: .utf8) {
             deviceBindingKey = key
         } else {
@@ -242,7 +242,7 @@ final class SecurityManager {
         request.setValue(nonce, forHTTPHeaderField: "X-Request-Nonce")
         
         // Create signature base (canonicalized format)
-        var signatureBase = "\(request.httpMethod ?? "GET")\|\(request.url?.absoluteString ?? "")"
+        var signatureBase = "\(request.httpMethod ?? "GET")|\(request.url?.absoluteString ?? "")"
         signatureBase += "\(timestamp)"
         signatureBase += "\(nonce)"
         

@@ -125,7 +125,9 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
         case .lockedIdle:
             cleanupCurrentSession()
             capturedBadgeId = nil
-            
+            // Kiosk-lock the idle shared device until someone authenticates.
+            KioskController.shared.enforceLock()
+
         case .badgeCaptured:
             // Badge ID is already set before transition
             break
@@ -152,7 +154,10 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
         case .activeSession:
             startActivityTimer()
             startTimeoutTimer()
-            
+            // Authenticated → release the kiosk so the device is usable normally
+            // (still constrained to admin-configured apps/policy via MDM).
+            KioskController.shared.releaseLock(reason: "authenticated_session")
+
         case .terminating:
             // Begin session teardown
             Task {

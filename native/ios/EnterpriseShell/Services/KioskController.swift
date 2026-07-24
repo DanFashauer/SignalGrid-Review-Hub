@@ -29,29 +29,37 @@ final class KioskController {
     private(set) var isLocked = false
     private(set) var isRecoveryUnlocked = false
 
-    /// Enforce the kiosk lock — but ONLY when an admin has opted in
-    /// (`KioskConfig.singleAppModeEnabled`, default OFF). By default this is a no-op,
-    /// so the device is never held captive and behaves like a normal iPhone. When an
-    /// MDM/managed config turns it on, call this whenever the app becomes active so
-    /// the shell stays locked the entire time it runs (including the idle screen).
+    /// Lock the IDLE device into Autonomous Single App Mode, so a shared device is
+    /// held captive to the badge / login screen until someone authenticates. Called
+    /// when the session machine enters `.lockedIdle` and on scene-active while still
+    /// idle. Gated by `KioskConfig.singleAppModeEnabled`; a no-op on unsupervised/dev
+    /// devices. Released once an authenticated session begins (see `releaseLock`).
+    /// Safe to call from any thread — the UIKit request is marshaled to main.
     func enforceLock() {
-        guard KioskConfig.singleAppModeEnabled else { return }   // default OFF → normal iPhone
-        guard !isRecoveryUnlocked else { return }        // a sanctioned recovery exit is active
-        guard !isLocked else { return }                  // already locked
-        UIAccessibility.requestGuidedAccessSession(enabled: true) { [weak self] success in
-            self?.isLocked = success
-            AuditLogger.shared.log(
-                event: success ? .kioskLockEngaged : .kioskLockFailed,
-                metadata: ["asam": success ? "engaged" : "unavailable_needs_mdm_supervision"])
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            guard KioskConfig.singleAppModeEnabled else { return }   // org opt-out → normal iPhone
+            guard !self.isRecoveryUnlocked else { return }   // a sanctioned override is active
+            guard !self.isLocked else { return }             // already locked
+            UIAccessibility.requestGuidedAccessSession(enabled: true) { success in
+                self.isLocked = success
+                AuditLogger.shared.log(
+                    event: success ? .kioskLockEngaged : .kioskLockFailed,
+                    metadata: ["asam": success ? "engaged" : "unavailable_needs_mdm_supervision"])
+            }
         }
     }
 
-    /// Release the lock. Only used for a sanctioned exit (disaster recovery) — never
-    /// on badge-out (the device must STAY captive between users).
+    /// Release the kiosk lock so the device returns to normal use. Called when an
+    /// authenticated session begins (badge, or a manual override login if the org
+    /// allows) and for a sanctioned recovery exit. The device RE-LOCKS when the
+    /// session ends and the machine returns to `.lockedIdle`. Any-thread safe.
     func releaseLock(reason: String) {
-        UIAccessibility.requestGuidedAccessSession(enabled: false) { [weak self] success in
-            if success { self?.isLocked = false }
-            AuditLogger.shared.log(event: .kioskUnlocked, metadata: ["reason": reason])
+        DispatchQueue.main.async { [weak self] in
+            UIAccessibility.requestGuidedAccessSession(enabled: false) { success in
+                if success { self?.isLocked = false }
+                AuditLogger.shared.log(event: .kioskUnlocked, metadata: ["reason": reason])
+            }
         }
     }
 
@@ -85,19 +93,18 @@ final class KioskController {
 /// with safe defaults for an unmanaged/dev build.
 enum KioskConfig {
 
-    /// Whether the shell locks itself into ASAM. **Default OFF** — the device
-    /// functions like a normal iPhone (Home, App Switcher, Settings, and every other
-    /// installed app all work). SignalGrid still runs the badge / auth / trust flow
-    /// and sits underneath as the embedded gate; it does not hold the device captive.
-    ///
-    /// A locked shared-device kiosk is an explicit ADMIN opt-in, delivered by the
-    /// backend / MDM managed config (`SingleAppModeEnabled = true`, and the
-    /// supervision profile must authorize this bundle for ASAM). Even then, WHICH
-    /// other apps the device may run is enforced by MDM restrictions the backend
-    /// applies (`com.apple.applicationaccess` allowlist) — an app cannot restrict
-    /// other apps itself. This flag only governs whether THIS shell self-locks.
+    /// Whether the shell runs the **kiosk-until-auth** model. **Default ON.** A shared
+    /// device is held captive to the badge / login screen while IDLE (pre-auth); once
+    /// a worker authenticates (badge, or a manual override login if the org allows),
+    /// the lock is released and the device is usable like a normal iPhone — then
+    /// constrained to the apps/policy the admin configured on the backend, which is
+    /// enforced by MDM restrictions (`com.apple.applicationaccess` allowlist), NOT by
+    /// this app (an app cannot restrict which other apps the OS runs). It re-locks when
+    /// the session ends. An org can opt out via managed config (`SingleAppModeEnabled
+    /// = false`). Requires MDM supervision to actually engage — a no-op on dev/personal
+    /// devices, which simply run the shell as a normal app.
     static var singleAppModeEnabled: Bool {
-        managedBool("SingleAppModeEnabled", default: false)
+        managedBool("SingleAppModeEnabled", default: true)
     }
 
     /// Disaster-recovery manual override. OFF by default and NOT recommended — a

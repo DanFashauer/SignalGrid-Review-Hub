@@ -114,6 +114,16 @@ const derived = await connector.fetchAccess(fixture.entries["subject-mismatch-de
 check("a subject mismatch normalizes identityMatched to false", derived.identityMatched === false);
 check("a subject-mismatched 'granted' entry → escalate, NEVER physical_access_ok/none", evaluatePacsAccess(derived).recommendedAction === "escalate");
 
+// The subject comparison only ever DOWNGRADES — an explicit identityMatched:false
+// that contradicts EQUAL subjects is a self-contradictory report and must fail
+// closed (never upgraded to a match/grant), while equal subjects with no flag
+// positively corroborate a match.
+const contradiction = await connector.fetchAccess(fixture.entries["contradiction-flag-false-subjects-equal"].deviceId);
+check("an explicit identityMatched:false with EQUAL subjects stays false (contradiction fails closed, never upgraded)", contradiction.identityMatched === false);
+check("a contradictory false/equal-subjects entry → escalate, NEVER granted", evaluatePacsAccess(contradiction).recommendedAction === "escalate");
+const corroborated = await connector.fetchAccess(fixture.entries["subjects-corroborate-clean"].deviceId);
+check("equal subjects with no explicit flag positively confirm the match (identityMatched=true)", corroborated.identityMatched === true);
+
 // Exhaustive: brute-force the ENTIRE normalized input space (not fixture-bound), so
 // the proof genuinely CONSTRAINS the allow path. Action "none" is emitted for EXACTLY
 // a positively-confirmed authorized entry — granted, authorized, anti-passback-ok, a

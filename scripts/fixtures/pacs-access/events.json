@@ -76,6 +76,16 @@
       "report": { "accessResult": "granted", "credentialType": "biometric", "authorization": "authorized", "antipassback": "ok", "doorState": "secured", "pacsSubject": "nurse.jones", "expectedSubject": "nurse.smith", "bridgeReachable": true },
       "expected": { "posture": "identity_mismatch", "reasonCode": "IDENTITY_MISMATCH", "recommendedAction": "escalate", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "physicalAccessConfirmed": false }
     },
+    "subjects-corroborate-clean": {
+      "deviceId": "ipad-ward-17",
+      "report": { "accessResult": "granted", "credentialType": "biometric", "authorization": "authorized", "antipassback": "ok", "doorState": "secured", "pacsSubject": "nurse.adams", "expectedSubject": "nurse.adams", "bridgeReachable": true },
+      "expected": { "posture": "physical_access_ok", "reasonCode": "PHYSICAL_ACCESS_GRANTED", "recommendedAction": "none", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "physicalAccessConfirmed": true }
+    },
+    "contradiction-flag-false-subjects-equal": {
+      "deviceId": "ipad-ward-18",
+      "report": { "accessResult": "granted", "credentialType": "card", "authorization": "authorized", "antipassback": "ok", "doorState": "secured", "identityMatched": false, "pacsSubject": "nurse.adams", "expectedSubject": "nurse.adams", "bridgeReachable": true },
+      "expected": { "posture": "identity_mismatch", "reasonCode": "IDENTITY_MISMATCH", "recommendedAction": "escalate", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "physicalAccessConfirmed": false }
+    },
     "worst-of-several": {
       "deviceId": "ipad-ward-16",
       "report": { "accessResult": "denied", "credentialType": "card", "authorization": "revoked", "antipassback": "violation", "doorState": "forced", "identityMatched": false, "bridgeReachable": true },

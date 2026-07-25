@@ -58,14 +58,21 @@ export function normalizeReport(
   const pacsSubject = readableString(report.pacsSubject);
   const expectedSubject = readableString(report.expectedSubject);
   let identityMatched = boolOrNull(report.identityMatched);
-  // The subject comparison is the ground-truth PROOF the holder is the checked-out
-  // device holder, so identityMatched is corroborated against it — fail closed:
-  //  - both subjects readable and DIFFER → identityMatched=false (a mislabeled entry);
-  //  - both readable and EQUAL → identityMatched=true;
-  //  - otherwise fall back to the reported flag (a lookup failure can't fabricate a
-  //    match). This only ever makes the verdict more conservative.
+  // The subject comparison corroborates the reported match, and only ever makes the
+  // verdict MORE conservative — it never upgrades a reported mismatch to a match:
+  //  - both subjects readable and DIFFER → force identityMatched=false (a mislabeled
+  //    entry; a `true` flag that contradicts the subjects is not trusted);
+  //  - both readable and EQUAL, and the flag was NOT explicitly false → confirm true
+  //    (the subjects positively corroborate the match);
+  //  - both readable and EQUAL but the flag is explicitly `false` → a self-
+  //    contradictory report (flag says mismatch, subjects say match): keep false
+  //    (fail closed — a contradiction never resolves toward a grant).
   if (pacsSubject !== null && expectedSubject !== null) {
-    identityMatched = pacsSubject === expectedSubject;
+    if (pacsSubject !== expectedSubject) {
+      identityMatched = false;
+    } else if (identityMatched === null) {
+      identityMatched = true;
+    }
   }
   return {
     sourceSystem: "pacs-access",

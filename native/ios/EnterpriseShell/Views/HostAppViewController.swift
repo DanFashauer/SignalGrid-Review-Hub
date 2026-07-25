@@ -137,8 +137,8 @@ final class HostAppViewController: UIViewController {
             let previous = self.cachedDecision?.outcome
             let result = await AccessDecision.evaluate(
                 ctx, integration: config.integration,
-                identityRef: SessionStateManager.shared.currentSession?.userId ?? "operator",
-                deviceRef: DeviceInfo.identifier,
+                identityRef: backendIdentityRef,
+                deviceRef: backendDeviceRef,
                 via: service)
             self.cachedDecision = result
             AuditLogger.shared.log(event: .assistActionEvaluated, metadata: [
@@ -288,6 +288,21 @@ final class HostAppViewController: UIViewController {
         #else
         return nil
         #endif
+    }
+
+    /// Refs sent to the control plane. Real refs come from the session/device; a demo
+    /// may override with tenant-seeded refs so a real control-plane verdict is returned.
+    private var backendIdentityRef: String {
+        #if targetEnvironment(simulator)
+        if let id = DemoMode.backendIdentity, !id.isEmpty { return id }
+        #endif
+        return SessionStateManager.shared.currentSession?.userId ?? "operator"
+    }
+    private var backendDeviceRef: String {
+        #if targetEnvironment(simulator)
+        if let d = DemoMode.backendDevice, !d.isEmpty { return d }
+        #endif
+        return DeviceInfo.identifier
     }
 
     // MARK: - Top bar (kiosk containment, matches ManagedAppViewController)

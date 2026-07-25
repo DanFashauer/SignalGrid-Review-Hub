@@ -118,6 +118,13 @@ enum DemoMode {
         UserDefaults.standard.string(forKey: "DemoBackendToken")
     }
 
+    /// Optional identity/device refs to send to a control-plane backend, so a demo
+    /// can use TENANT-SEEDED refs (`-DemoBackendIdentity nurse.compliant`
+    /// `-DemoBackendDevice ipad-ward-01`) and get a real control-plane verdict rather
+    /// than a fail-closed fallback (the demo session's own refs aren't seeded).
+    static var backendIdentity: String? { UserDefaults.standard.string(forKey: "DemoBackendIdentity") }
+    static var backendDevice: String? { UserDefaults.standard.string(forKey: "DemoBackendDevice") }
+
     /// Building/area the device is deployed in (`-DemoLocation warehouse|clinic|office`).
     /// Drives which role + app workspace the user is provisioned with — mirroring how the
     /// SignalGrid control plane configures a persona by workflow and location.

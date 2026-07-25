@@ -820,7 +820,11 @@ final class HostAppViewController: UIViewController {
 extension HostAppViewController {
 
     static func forLocation(_ location: String) -> HostAppConfig {
-        location == "warehouse" ? warehouse() : clinical()
+        switch location {
+        case "warehouse": return warehouse()
+        case "government", "gov", "public_sector": return government()
+        default: return clinical()
+        }
     }
 
     /// Healthcare — a generic clinical chart (mirrors embedded-host-app-demo.html).
@@ -865,6 +869,31 @@ extension HostAppViewController {
                              hostHold: "Quick check to confirm it's you before releasing a high-value pick.",
                              hostDone: "High-value pick released.",
                              confirmTitle: "Verify high-value pick release"),
+            ])
+    }
+
+    /// Government / public sector — a benefits/case-management app. Same gate; the
+    /// confirmer is the authorizing officer; eligibility/payment are sensitive.
+    static func government() -> HostAppConfig {
+        HostAppConfig(
+            integration: AppWorkflows.caseManagement,
+            appName: "StateCase",
+            appInitial: "G",
+            brandColor: UIColor(red: 0.101, green: 0.357, blue: 0.290, alpha: 1), // gov green #1A5B4A
+            whoLabel: "Case officer · Shared workstation",
+            subjectTitle: "Case #NW-2207 · Rivera, A.",
+            subjectMeta: "Program: benefits · synthetic record",
+            steps: [
+                ScriptedStep(key: "case.open", label: "Open case", hostDone: "Case opened."),
+                ScriptedStep(key: "record.view", label: "View eligibility record", hostDone: "Record shown."),
+                ScriptedStep(key: "eligibility.adjudicate", label: "Adjudicate eligibility",
+                             hostHold: "Confirm it's you before adjudicating eligibility on this shared device.",
+                             hostDone: "Eligibility adjudicated.",
+                             confirmTitle: "Verify eligibility adjudication"),
+                ScriptedStep(key: "payment.release", label: "Release benefit payment",
+                             hostHold: "Confirm before releasing a benefit payment.",
+                             hostDone: "Benefit payment released.",
+                             confirmTitle: "Verify benefit payment release"),
             ])
     }
 }

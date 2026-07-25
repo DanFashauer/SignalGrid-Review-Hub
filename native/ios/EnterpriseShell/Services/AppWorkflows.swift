@@ -101,6 +101,7 @@ enum AppWorkflows {
         "global_fleet": "dispatcher",
         "retail": "manager",
         "data_center": "shift lead",
+        "government": "authorizing officer",
     ]
 
     private static func firstReason(_ codes: [String], _ fallback: String) -> String {
@@ -256,7 +257,27 @@ enum AppWorkflows {
         ]
     )
 
+    /// Government / public sector — a benefits/case-management app (mirrors catalog.ts).
+    static let caseManagement = AppIntegration(
+        id: "case-management",
+        name: "Benefits / case management",
+        category: "Public benefits",
+        vertical: "government",
+        workflowKey: "gov-case-session",
+        actions: [
+            AppAction("case.open", "Open a constituent case", .elevated),
+            AppAction("record.view", "View benefits / eligibility record", .elevated),
+            AppAction("note.document", "Document a case note", .standard),
+            AppAction("eligibility.adjudicate", "Adjudicate eligibility", .critical),
+            AppAction("payment.release", "Release a benefit payment", .critical),
+        ]
+    )
+
     static func integration(forVertical vertical: String) -> AppIntegration {
-        vertical == "warehouse" ? wms : emrChart
+        switch vertical {
+        case "warehouse": return wms
+        case "government": return caseManagement
+        default: return emrChart
+        }
     }
 }

@@ -514,12 +514,28 @@ public struct AuditEvent: Codable, Hashable, Identifiable, Sendable {
     public let recordedAt: String
     public let previousDigest: String
     public let digest: String
+
+    // The /v1/audit API sends `seq` and `prevDigest`; map them to the model names.
+    enum CodingKeys: String, CodingKey {
+        case id, tenantId
+        case sequence = "seq"
+        case type, actor, subject, summary, references, recordedAt
+        case previousDigest = "prevDigest"
+        case digest
+    }
 }
 
 public struct AuditChain: Codable, Hashable, Sendable {
     public let valid: Bool
     public let eventCount: Int
     public let firstInvalidSequence: Int?
+
+    // The /v1/audit API sends `length` and `brokenAtSeq`; map to the model names.
+    enum CodingKeys: String, CodingKey {
+        case valid
+        case eventCount = "length"
+        case firstInvalidSequence = "brokenAtSeq"
+    }
 }
 
 public struct AuditResponse: Codable, Hashable, Sendable {
@@ -590,6 +606,27 @@ public struct AppActionPlan: Codable, Hashable, Identifiable, Sendable {
     public let disposition: AppActionDisposition
     public let requiresConfirmation: Bool
     public let reason: String
+
+    // A public memberwise init is required so host-app consumers (e.g. WardlinkDemo)
+    // can construct/override a plan across the module boundary; the default
+    // memberwise init of a public struct is only `internal`.
+    public init(
+        key: String,
+        label: String,
+        riskTier: AppRiskTier,
+        sensitive: Bool,
+        disposition: AppActionDisposition,
+        requiresConfirmation: Bool,
+        reason: String
+    ) {
+        self.key = key
+        self.label = label
+        self.riskTier = riskTier
+        self.sensitive = sensitive
+        self.disposition = disposition
+        self.requiresConfirmation = requiresConfirmation
+        self.reason = reason
+    }
 }
 
 public enum AppSessionMode: String, Codable, Hashable, Sendable {

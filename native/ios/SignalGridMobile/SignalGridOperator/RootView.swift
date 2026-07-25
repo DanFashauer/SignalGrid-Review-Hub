@@ -24,7 +24,7 @@ struct RootView: View {
         .signalGridSurface()
         .task {
             if model.context == nil {
-                await model.bootstrap()
+                await model.startup()
             }
         }
     }

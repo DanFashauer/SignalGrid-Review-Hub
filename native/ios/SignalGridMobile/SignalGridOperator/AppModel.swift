@@ -77,6 +77,29 @@ final class AppModel {
         await bootstrap()
     }
 
+    /// Startup entry point. On the simulator, Settings can't be typed into via
+    /// simctl, so `-LiveBaseURL <url> -LiveToken <token>` auto-connects to the live
+    /// API for demos/testing; otherwise it does the normal offline-demo bootstrap.
+    func startup() async {
+        let d = UserDefaults.standard
+        if let base = d.string(forKey: "LiveBaseURL"), !base.isEmpty,
+           let token = d.string(forKey: "LiveToken"), !token.isEmpty,
+           let url = URL(string: base) {
+            // Launch-arg live connect for demos. Use the token IN-MEMORY only — an
+            // unsigned simulator build has no Keychain entitlement (errSecMissingEntitlement
+            // -34018), so connectLive()'s keychain.save() would fail. The Settings-driven
+            // path still persists to Keychain on a signed build.
+            defaults.set(base, forKey: "signalgrid.baseURL")
+            baseURLText = base
+            tokenPresent = true
+            mode = .live
+            api = LiveSignalGridAPI(configuration: APIConfiguration(baseURL: url, bearerToken: token))
+            await bootstrap()
+        } else {
+            await bootstrap()
+        }
+    }
+
     func useDemoMode() async {
         mode = .demo
         api = MockSignalGridAPI()

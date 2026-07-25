@@ -21,28 +21,24 @@ import {
  *    trail), or one that was NEVER approved → RESTRICT (contain);
  *  - a LONG-LIVED credential or a PENDING approval → STEP_UP; anything unreadable, or
  *    the bridge unreachable, → STEP_UP (never trust silence);
- *  - only two states contribute 'none': a positively-confirmed HUMAN actor, or a
- *    non-human identity confirmed FULLY governed — registered, short-lived token,
- *    least privilege, approved, and recorded. Worst-concern-wins.
+ *  - exactly ONE state contributes 'none': a non-human identity confirmed FULLY
+ *    governed — registered, short-lived token, least privilege, approved, and recorded.
+ *    A confirmed HUMAN actor contributes 'monitor', which composes to the same healthy
+ *    tier but asserts nothing this dimension did not verify. Worst-concern-wins.
  *
- * A HUMAN actor is not judged on the agent-governance fields at all: registry
- * membership, agent approval, and agent recording are meaningless for a person, and
- * a human's credential lifetime and privilege are already covered by the
- * `token-binding` and `access-governance` dimensions. This mirrors how
- * `access-governance` treats session monitoring as moot for a non-elevated
- * principal — the fields are not merely ignored, they do not apply.
+ * A HUMAN actor is still not judged on the agent-governance fields that cannot apply
+ * to a person — registry membership, agent approval, agent recording — but that no
+ * longer buys a grant. Credential lifetime IS judged, for every actor, because nothing
+ * else in the fabric models TTL.
  *
- * That branch is safe only in concert with `normalizeReport`, which refuses to emit
- * `actorType === "human"` for a report that is malformed or that asserts governance
- * state no person can hold. Read the two together — neither is fail-safe alone, and
- * this file additionally refuses to grant on a malformed report so the allow path does
- * not DEPEND on the normalizer having voided the label.
- *
- * The honest limit of this dimension: it trusts the bridge's actor classification. A
- * bridge that simply lies — reporting a clean, silent `"human"` for an AI agent — is
- * granted, and no amount of field cross-checking here can catch that. What the checks
- * buy is that the lie must be CONSISTENT and well-formed; a sloppy or half-hearted one
- * fails closed.
+ * The honest limit, and why the human branch no longer grants: this dimension trusts
+ * the bridge's actor classification, and a bridge that simply lies — reporting a clean,
+ * well-formed `"human"` for an AI agent — cannot be caught by cross-checking the other
+ * fields. That was tolerable when the lie had to be consistent AND well-formed; it was
+ * not tolerable as the basis of a GRANT. Confirming that a person is a person is the
+ * job of the dimensions that check evidence — `sso-session` (whose session is live),
+ * `pacs-access` (who badged in), `access-governance` (what they are entitled to). This
+ * one reports what it actually knows and lets those carry the identity claim.
  *
  * `covered=false` = no governance result was returned for this actor → unknown (a
  * gap), step_up.
@@ -206,13 +202,27 @@ export function evaluateAgentIdentity(
     candidates.push({ posture: "unverified", action: "step_up", reason: "BRIDGE_UNREACHABLE" });
   }
 
-  // Worst-concern-wins. The seed is the grant appropriate to the actor: a confirmed
-  // human, or a fully-governed non-human identity. It survives only if NO candidate
-  // was raised. (An unreadable actor type always raises one, so the non-human seed
-  // can never be reached by an actor we could not identify.)
+  // Worst-concern-wins. ONE state grants: a non-human identity confirmed governed on
+  // every field. A confirmed human seeds `monitor`, not `none`.
+  //
+  // That asymmetry is the whole point, and it was learned the hard way. This dimension
+  // exists because an actor label cannot be trusted — and an earlier design then granted
+  // on the strength of an actor label alone, reading none of the governance fields for a
+  // human. Six consecutive adversarial reviews each found a way into that branch: a
+  // contradictory report, a value we could not parse, a key in a spelling we ignore, a
+  // key on the prototype. Every one was a different route to the same door. The door is
+  // now gone: there is no verdict this dimension can reach where an unconfirmed input
+  // produces `none`.
+  //
+  // `monitor` is deliberate, not a downgrade in disguise. It composes to the healthy
+  // `ok` tier exactly as `none` does, so a legitimate person on a ward device is not
+  // impeded; what changes is that this dimension no longer ASSERTS a clean bill of
+  // health it never verified. Confirming a person is genuinely a person is the identity
+  // dimensions' job — `sso-session`, `pacs-access`, `access-governance` — and they do it
+  // against evidence rather than a label.
   const seed: Candidate =
     actor.actorType === "human"
-      ? { posture: "human_actor", action: "none", reason: "HUMAN_ACTOR" }
+      ? { posture: "human_actor", action: "monitor", reason: "HUMAN_ACTOR" }
       : { posture: "governed_agent", action: "none", reason: "GOVERNED_AGENT" };
   const winner = candidates.reduce<Candidate>(
     (max, c) => (ACTION_SEVERITY[c.action] > ACTION_SEVERITY[max.action] ? c : max),

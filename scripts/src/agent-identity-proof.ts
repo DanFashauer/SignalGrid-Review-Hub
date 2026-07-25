@@ -6,8 +6,9 @@
 // agent or a service account — whether that identity is governed. An unregistered
 // agent, an expired approval, or a standing never-expiring credential is the
 // non-human equivalent of a leaver still holding a key: escalate. An over-scoped,
-// unscoped, unrecorded, or never-approved agent is contained. Only a confirmed human,
-// or a fully-governed non-human identity, contributes 'none'. No network.
+// unscoped, unrecorded, or never-approved agent is contained. Only a fully-governed
+// non-human identity contributes 'none'; a confirmed human contributes 'monitor',
+// because a label alone is not evidence. No network.
 //
 // It also proves the fabric fuses this dimension: fromAgentIdentity → an
 // agent_identity ComposableSignal on the unified ladder, worst-concern-wins.
@@ -83,20 +84,25 @@ for (const name of names) {
 
 // ── NHI governance invariants ───────────────────────────────────────────────────
 
-// The two legitimate grants: a confirmed human, and a fully-governed non-human.
+// THE allow path — one branch, not two. A fully-governed non-human identity is the only
+// state that grants. A confirmed human is reported and monitored, not certified: this
+// dimension cannot verify that a "human" label is a person, so it does not claim to.
+// The label-only grant is what six consecutive reviews each found a route into.
 const human = evaluateAgentIdentity(await connector.fetchActor(fixture.actors["human-actor"].deviceId));
-check("a confirmed human actor → human_actor/none, governed, NOT flagged non-human", human.posture === "human_actor" && human.recommendedAction === "none" && human.actorGoverned === true && human.nonHumanActor === false);
+check("a confirmed human actor → human_actor/MONITOR, never a grant, never flagged non-human", human.posture === "human_actor" && human.recommendedAction === "monitor" && human.actorGoverned === false && human.nonHumanActor === false);
+check("a human actor still composes to the healthy 'ok' tier — monitoring is not friction", composeDeviceRisk([fromAgentIdentity(human)]).riskTier === "ok");
 const governed = evaluateAgentIdentity(await connector.fetchActor(fixture.actors["governed-agent"].deviceId));
 check("a registered + short-lived + least-privilege + approved + recorded agent → governed_agent/none", governed.posture === "governed_agent" && governed.recommendedAction === "none" && governed.actorGoverned === true && governed.nonHumanActor === true);
 check("a governed agent composes to the 'ok' tier", composeDeviceRisk([fromAgentIdentity(governed)]).riskTier === "ok");
 
 // ── the human branch, and the two ways its claim is voided ─────────────────────
 //
-// The human branch grants WITHOUT reading the governance fields, because they have no
-// bearing on a person. Its safety therefore rests entirely on whether the "human"
-// claim can be trusted. Two things void it — and one thing deliberately does NOT.
+// The claim-voiding logic is retained even though the human branch no longer grants:
+// it is what routes a self-contradictory report into the agent branch, where the
+// governance facts it asserted are actually judged. Without it such a report would be
+// monitored rather than escalated.
 const humanSilent = evaluateAgentIdentity(await connector.fetchActor(fixture.actors["human-actor-explicit-unknowns"].deviceId));
-check("a human report that is explicitly 'unknown' on every governance field still grants", humanSilent.posture === "human_actor" && humanSilent.recommendedAction === "none");
+check("a human report explicitly 'unknown' on every governance field is monitored, not granted", humanSilent.posture === "human_actor" && humanSilent.recommendedAction === "monitor");
 
 // (a) DOES NOT void: the truthful human answers. A bridge emitting one uniform row
 // shape per actor populates these columns for people too — `agentRegistered:false`
@@ -105,14 +111,14 @@ check("a human report that is explicitly 'unknown' on every governance field sti
 // (which `access-governance` does model). Punishing an honest bridge for answering
 // accurately would make the dimension unusable in practice.
 const humanUniform = evaluateAgentIdentity(await connector.fetchActor(fixture.actors["human-uniform-schema-bridge"].deviceId));
-check("a uniform-schema bridge answering truthfully for a PERSON still grants (honest reports are not punished)", humanUniform.posture === "human_actor" && humanUniform.recommendedAction === "none" && humanUniform.criticalFindings.length === 0);
+check("a uniform-schema bridge answering truthfully for a PERSON is not punished", humanUniform.posture === "human_actor" && humanUniform.recommendedAction === "monitor" && humanUniform.criticalFindings.length === 0);
 // JSON null is the wire spelling of "no value", not an unreadable assertion. A bridge
 // that emits a fixed row shape with nulls rather than omitting keys is being honest,
 // and must behave identically to omission — otherwise the same defect returns in a
 // different encoding.
 const humanNulls = normalizeReport("n", { actorType: "human", agentRegistered: null, tokenLifetime: null, scopeState: null, approvalState: null, recordingState: null, bridgeReachable: true } as AgentIdentityReportRaw);
 check("JSON null on every governance field behaves as ABSENT, not as malformed", humanNulls.reportIntegrity === "clean" && humanNulls.actorType === "human");
-check("...and therefore still grants, exactly as omitting the keys would", evaluateAgentIdentity(humanNulls).recommendedAction === "none");
+check("...and behaves exactly as omitting the keys would", evaluateAgentIdentity(humanNulls).recommendedAction === "monitor");
 
 // (a-bis) BUT credential lifetime is NOT deferred, because nothing else models it.
 // `token-binding` carries proof-of-possession (binding, key protection, attestation,
@@ -253,18 +259,16 @@ const enumRes = enumerateGrantSafety({
   // may contribute 'none', and both must be marked actorGoverned.
   confirmedWhenNone: (v) =>
     v.actorGoverned === true &&
-    ((v.posture === "human_actor" && v.nonHumanActor === false && v.actorClassification === "human") ||
-      (v.posture === "governed_agent" && v.nonHumanActor === true && v.actorClassification === "non_human")),
+    v.posture === "governed_agent" &&
+    v.nonHumanActor === true &&
+    v.actorClassification === "non_human",
   positivelyClean: (c) => {
     const { actorType, agentRegistered, tokenLifetime, scopeState, approvalState, recordingState, bridgeReachable, reportIntegrity } = c;
     if (reportIntegrity !== "clean") return false;
     if (bridgeReachable !== true) return false;
-    // At the NORMALIZED layer a confirmed human is not judged on the governance fields
-    // that do not apply to a person — but credential lifetime does apply, and no other
-    // dimension in the fabric models TTL, so an asserted standing or long-lived
-    // credential denies for a human too. Note what this branch does NOT prove: that a
-    // "human" label is trustworthy. That is the normalizer's job, quantified in pass 2.
-    if (actorType === "human") return tokenLifetime !== "standing" && tokenLifetime !== "long_lived";
+    // ONE branch grants. A confirmed human seeds `monitor`, never `none`, so the actor
+    // label alone can no longer produce a grant — which is what six consecutive reviews
+    // kept finding a way through.
     if (actorType !== "agent" && actorType !== "service_account") return false;
     return (
       agentRegistered === true &&
@@ -276,7 +280,7 @@ const enumRes = enumerateGrantSafety({
   },
 });
 check(
-  `exhaustive (normalized): over all ${enumRes.combos} normalized states, action 'none' is emitted for EXACTLY a confirmed human or a fully-governed non-human identity, and never on a malformed report (mismatches=${enumRes.mismatches}${enumRes.firstMismatch ? ", first=" + enumRes.firstMismatch : ""})`,
+  `exhaustive (normalized): over all ${enumRes.combos} normalized states, action 'none' is emitted for EXACTLY a fully-governed non-human identity — never on an actor label alone, never on a malformed report (mismatches=${enumRes.mismatches}${enumRes.firstMismatch ? ", first=" + enumRes.firstMismatch : ""})`,
   enumRes.mismatches === 0 && enumRes.combos === productOf(domains) && enumRes.combos === 17280,
 );
 check("exhaustive (normalized): some clean states DO grant (the enumeration is not vacuous)", enumRes.noneCount > 0);
@@ -308,20 +312,9 @@ const rawDomains = {
   __alias: ["absent", "present"],
 };
 
-// The clean predicate is written as POSITIVE ALLOWLISTS of raw wire values — the
-// contract a bridge must satisfy — not as the negation of the normalizer's guard.
-// That independence is what lets it catch a guard that loses a condition: drop
-// "pending" from the guard and this still says a human report asserting it is not
-// clean. These are the raw values a report describing a PERSON may carry.
-const HUMAN_TRUTHFUL_RAW: Record<string, readonly unknown[]> = {
-  agentRegistered: [undefined, null, false], // a person holds no NHI registry entry
-  approvalState: [undefined, null, "unknown", "none"], // no agent-approval workflow governs a person
-  // Credential lifetime DOES apply to a person and nothing else in the fabric models
-  // TTL, so only silence or a short-lived credential is clean here.
-  tokenLifetime: [undefined, null, "unknown", "short_lived"],
-  scopeState: [undefined, null, "unknown", "least_privilege", "over_scoped", "unscoped"],
-  recordingState: [undefined, null, "unknown", "recorded", "unrecorded"],
-};
+// The clean predicate is written as a POSITIVE ALLOWLIST of raw wire values — the
+// contract a bridge must satisfy — not as the negation of the normalizer's guards.
+// That independence is what lets it catch a guard that silently loses a condition.
 const rawEnumRes = enumerateGrantSafety({
   domains: rawDomains,
   build: (c) => {
@@ -334,16 +327,14 @@ const rawEnumRes = enumerateGrantSafety({
   actionOf: (v) => v.recommendedAction,
   confirmedWhenNone: (v) =>
     v.actorGoverned === true &&
-    ((v.posture === "human_actor" && v.nonHumanActor === false && v.actorClassification === "human") ||
-      (v.posture === "governed_agent" && v.nonHumanActor === true && v.actorClassification === "non_human")),
+    v.posture === "governed_agent" &&
+    v.nonHumanActor === true &&
+    v.actorClassification === "non_human",
   positivelyClean: (c) => {
     // A key we do not understand means the envelope was not understood.
     if (c.__alias === "present") return false;
     // Liveness must be an actual boolean true — "true" and 1 are not confirmations.
     if (c.bridgeReachable !== true) return false;
-    if (c.actorType === "human") {
-      return Object.keys(HUMAN_TRUTHFUL_RAW).every((k) => HUMAN_TRUTHFUL_RAW[k].includes(c[k]));
-    }
     if (c.actorType !== "agent" && c.actorType !== "service_account") return false;
     return (
       c.agentRegistered === true &&
@@ -355,7 +346,7 @@ const rawEnumRes = enumerateGrantSafety({
   },
 });
 check(
-  `exhaustive (raw wire): over all ${rawEnumRes.combos} raw reports — including junk enum spellings, JSON nulls, string-quoted booleans, numbers, arrays, objects and an aliased extra key — normalizeReport + evaluate grant ONLY a trustworthy human claim or a fully-governed non-human identity (mismatches=${rawEnumRes.mismatches}${rawEnumRes.firstMismatch ? ", first=" + rawEnumRes.firstMismatch : ""})`,
+  `exhaustive (raw wire): over all ${rawEnumRes.combos} raw reports — including junk enum spellings, JSON nulls, string-quoted booleans, numbers, arrays, objects and an aliased extra key — normalizeReport + evaluate grant ONLY a fully-governed non-human identity (mismatches=${rawEnumRes.mismatches}${rawEnumRes.firstMismatch ? ", first=" + rawEnumRes.firstMismatch : ""})`,
   rawEnumRes.mismatches === 0 && rawEnumRes.combos === productOf(rawDomains) && rawEnumRes.combos === 870912,
 );
 check("exhaustive (raw wire): some raw reports DO grant (the enumeration is not vacuous)", rawEnumRes.noneCount > 0);
@@ -490,7 +481,7 @@ check("evaluator is deterministic", JSON.stringify(evaluateAgentIdentity(d)) ===
 const signal = fromAgentIdentity(unregistered);
 check("fromAgentIdentity emits an agent_identity signal", signal.kind === "agent_identity");
 check("fabric fuses an unregistered agent into an escalate verdict", composeDeviceRisk([signal]).strongestAction === "escalate");
-check("a confirmed human contributes 'none' to the fabric", fromAgentIdentity(human).action === "none");
+check("a confirmed human contributes 'monitor' to the fabric, not 'none'", fromAgentIdentity(human).action === "monitor");
 
 // ── connector guarantees ──────────────────────────────────────────────────────
 

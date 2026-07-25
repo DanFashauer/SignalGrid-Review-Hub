@@ -80,10 +80,11 @@ export const AGENT_IDENTITY_REPORT_KEYS = [
  *  recognized value, or the report carried a key this connector does not understand.
  *  This is the distinction the normalized enums cannot express on their own: they
  *  collapse "the report said nothing" and "the report said something we could not
- *  read" into the same `"unknown"` sentinel. For a non-human that collapse is safe —
- *  `"unknown"` denies. For a human claim it is not, because the human branch grants
- *  WITHOUT reading those fields, so an unreadable assertion would be laundered into
- *  silence and wave the report through. `reportIntegrity` keeps the two apart. */
+ *  read" into the same `"unknown"` sentinel. `"unknown"` denies on every field that
+ *  gates the grant, so the collapse is safe for the allow path — but it still erases
+ *  the difference between a bridge that said nothing and one whose answer we could not
+ *  read, which an operator needs and a contradiction check needs.
+ *  `reportIntegrity` keeps the two apart. */
 export type ReportIntegrity = "clean" | "malformed";
 
 /** The normalized, vendor-neutral agent-identity posture — one shape the fabric reads. */
@@ -154,9 +155,11 @@ export interface AgentIdentityVerdict {
   criticalFindings: string[];
   /** Governance facts whose state could NOT be determined (raise the bar). */
   unknownSignals: string[];
-  /** True when the actor is a confirmed human, OR a non-human identity confirmed
-   *  fully governed (registered + short-lived + least-privilege + approved +
-   *  recorded). Never true for an unverified or ungoverned actor. */
+  /** True ONLY for a non-human identity confirmed fully governed — registered,
+   *  short-lived, least-privilege, approved and recorded. Deliberately NOT true for a
+   *  confirmed human: this dimension cannot verify that a "human" label is a person, so
+   *  it does not certify one. A human actor is reported `human_actor` / `monitor`, which
+   *  composes to the same healthy tier without asserting a governance conclusion. */
   actorGoverned: boolean;
   /** True only when the actor is positively confirmed NON-human — lets the fabric
    *  and operators distinguish "a governed agent did this" from "a person did this".

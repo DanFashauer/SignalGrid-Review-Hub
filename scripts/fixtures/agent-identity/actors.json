@@ -3,138 +3,568 @@
   "actors": {
     "human-actor": {
       "deviceId": "ipad-ward-01",
-      "report": { "actorType": "human", "bridgeReachable": true },
-      "expected": { "posture": "human_actor", "reasonCode": "HUMAN_ACTOR", "recommendedAction": "none", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "actorGoverned": true, "nonHumanActor": false, "actorClassification": "human" }
+      "report": {
+        "actorType": "human",
+        "bridgeReachable": true
+      },
+      "expected": {
+        "posture": "human_actor",
+        "reasonCode": "HUMAN_ACTOR",
+        "recommendedAction": "monitor",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 0,
+        "actorGoverned": false,
+        "nonHumanActor": false,
+        "actorClassification": "human"
+      }
     },
     "human-actor-explicit-unknowns": {
       "deviceId": "ipad-ward-02",
-      "report": { "actorType": "human", "tokenLifetime": "unknown", "scopeState": "unknown", "approvalState": "unknown", "recordingState": "unknown", "bridgeReachable": true },
-      "expected": { "posture": "human_actor", "reasonCode": "HUMAN_ACTOR", "recommendedAction": "none", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "actorGoverned": true, "nonHumanActor": false, "actorClassification": "human" }
+      "report": {
+        "actorType": "human",
+        "tokenLifetime": "unknown",
+        "scopeState": "unknown",
+        "approvalState": "unknown",
+        "recordingState": "unknown",
+        "bridgeReachable": true
+      },
+      "expected": {
+        "posture": "human_actor",
+        "reasonCode": "HUMAN_ACTOR",
+        "recommendedAction": "monitor",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 0,
+        "actorGoverned": false,
+        "nonHumanActor": false,
+        "actorClassification": "human"
+      }
     },
     "human-uniform-schema-bridge": {
       "deviceId": "ipad-ward-03",
-      "report": { "actorType": "human", "agentRegistered": false, "tokenLifetime": "short_lived", "scopeState": "over_scoped", "approvalState": "none", "recordingState": "unrecorded", "bridgeReachable": true },
-      "expected": { "posture": "human_actor", "reasonCode": "HUMAN_ACTOR", "recommendedAction": "none", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "actorGoverned": true, "nonHumanActor": false, "actorClassification": "human" }
+      "report": {
+        "actorType": "human",
+        "agentRegistered": false,
+        "tokenLifetime": "short_lived",
+        "scopeState": "over_scoped",
+        "approvalState": "none",
+        "recordingState": "unrecorded",
+        "bridgeReachable": true
+      },
+      "expected": {
+        "posture": "human_actor",
+        "reasonCode": "HUMAN_ACTOR",
+        "recommendedAction": "monitor",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 0,
+        "actorGoverned": false,
+        "nonHumanActor": false,
+        "actorClassification": "human"
+      }
     },
     "governed-agent": {
       "deviceId": "ipad-ward-04",
-      "report": { "actorType": "agent", "agentRegistered": true, "tokenLifetime": "short_lived", "scopeState": "least_privilege", "approvalState": "approved", "recordingState": "recorded", "bridgeReachable": true },
-      "expected": { "posture": "governed_agent", "reasonCode": "GOVERNED_AGENT", "recommendedAction": "none", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "actorGoverned": true, "nonHumanActor": true, "actorClassification": "non_human" }
+      "report": {
+        "actorType": "agent",
+        "agentRegistered": true,
+        "tokenLifetime": "short_lived",
+        "scopeState": "least_privilege",
+        "approvalState": "approved",
+        "recordingState": "recorded",
+        "bridgeReachable": true
+      },
+      "expected": {
+        "posture": "governed_agent",
+        "reasonCode": "GOVERNED_AGENT",
+        "recommendedAction": "none",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 0,
+        "actorGoverned": true,
+        "nonHumanActor": true,
+        "actorClassification": "non_human"
+      }
     },
     "governed-service-account": {
       "deviceId": "ipad-ward-05",
-      "report": { "actorType": "service_account", "agentRegistered": true, "tokenLifetime": "short_lived", "scopeState": "least_privilege", "approvalState": "approved", "recordingState": "recorded", "bridgeReachable": true },
-      "expected": { "posture": "governed_agent", "reasonCode": "GOVERNED_AGENT", "recommendedAction": "none", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "actorGoverned": true, "nonHumanActor": true, "actorClassification": "non_human" }
+      "report": {
+        "actorType": "service_account",
+        "agentRegistered": true,
+        "tokenLifetime": "short_lived",
+        "scopeState": "least_privilege",
+        "approvalState": "approved",
+        "recordingState": "recorded",
+        "bridgeReachable": true
+      },
+      "expected": {
+        "posture": "governed_agent",
+        "reasonCode": "GOVERNED_AGENT",
+        "recommendedAction": "none",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 0,
+        "actorGoverned": true,
+        "nonHumanActor": true,
+        "actorClassification": "non_human"
+      }
     },
     "unregistered-agent": {
       "deviceId": "ipad-ward-06",
-      "report": { "actorType": "agent", "agentRegistered": false, "tokenLifetime": "short_lived", "scopeState": "least_privilege", "approvalState": "approved", "recordingState": "recorded", "bridgeReachable": true },
-      "expected": { "posture": "unregistered_agent", "reasonCode": "UNREGISTERED_AGENT", "recommendedAction": "escalate", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "actorGoverned": false, "nonHumanActor": true, "actorClassification": "non_human" }
+      "report": {
+        "actorType": "agent",
+        "agentRegistered": false,
+        "tokenLifetime": "short_lived",
+        "scopeState": "least_privilege",
+        "approvalState": "approved",
+        "recordingState": "recorded",
+        "bridgeReachable": true
+      },
+      "expected": {
+        "posture": "unregistered_agent",
+        "reasonCode": "UNREGISTERED_AGENT",
+        "recommendedAction": "escalate",
+        "criticalFindingsCount": 1,
+        "unknownSignalsCount": 0,
+        "actorGoverned": false,
+        "nonHumanActor": true,
+        "actorClassification": "non_human"
+      }
     },
     "approval-expired": {
       "deviceId": "ipad-ward-07",
-      "report": { "actorType": "agent", "agentRegistered": true, "tokenLifetime": "short_lived", "scopeState": "least_privilege", "approvalState": "expired", "recordingState": "recorded", "bridgeReachable": true },
-      "expected": { "posture": "ungoverned_agent", "reasonCode": "APPROVAL_EXPIRED", "recommendedAction": "escalate", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "actorGoverned": false, "nonHumanActor": true, "actorClassification": "non_human" }
+      "report": {
+        "actorType": "agent",
+        "agentRegistered": true,
+        "tokenLifetime": "short_lived",
+        "scopeState": "least_privilege",
+        "approvalState": "expired",
+        "recordingState": "recorded",
+        "bridgeReachable": true
+      },
+      "expected": {
+        "posture": "ungoverned_agent",
+        "reasonCode": "APPROVAL_EXPIRED",
+        "recommendedAction": "escalate",
+        "criticalFindingsCount": 1,
+        "unknownSignalsCount": 0,
+        "actorGoverned": false,
+        "nonHumanActor": true,
+        "actorClassification": "non_human"
+      }
     },
     "standing-credential": {
       "deviceId": "ipad-ward-08",
-      "report": { "actorType": "service_account", "agentRegistered": true, "tokenLifetime": "standing", "scopeState": "least_privilege", "approvalState": "approved", "recordingState": "recorded", "bridgeReachable": true },
-      "expected": { "posture": "weak_agent_credential", "reasonCode": "STANDING_CREDENTIAL", "recommendedAction": "escalate", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "actorGoverned": false, "nonHumanActor": true, "actorClassification": "non_human" }
+      "report": {
+        "actorType": "service_account",
+        "agentRegistered": true,
+        "tokenLifetime": "standing",
+        "scopeState": "least_privilege",
+        "approvalState": "approved",
+        "recordingState": "recorded",
+        "bridgeReachable": true
+      },
+      "expected": {
+        "posture": "weak_agent_credential",
+        "reasonCode": "STANDING_CREDENTIAL",
+        "recommendedAction": "escalate",
+        "criticalFindingsCount": 1,
+        "unknownSignalsCount": 0,
+        "actorGoverned": false,
+        "nonHumanActor": true,
+        "actorClassification": "non_human"
+      }
     },
     "unscoped-agent": {
       "deviceId": "ipad-ward-09",
-      "report": { "actorType": "agent", "agentRegistered": true, "tokenLifetime": "short_lived", "scopeState": "unscoped", "approvalState": "approved", "recordingState": "recorded", "bridgeReachable": true },
-      "expected": { "posture": "over_scoped_agent", "reasonCode": "AGENT_UNSCOPED", "recommendedAction": "restrict", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "actorGoverned": false, "nonHumanActor": true, "actorClassification": "non_human" }
+      "report": {
+        "actorType": "agent",
+        "agentRegistered": true,
+        "tokenLifetime": "short_lived",
+        "scopeState": "unscoped",
+        "approvalState": "approved",
+        "recordingState": "recorded",
+        "bridgeReachable": true
+      },
+      "expected": {
+        "posture": "over_scoped_agent",
+        "reasonCode": "AGENT_UNSCOPED",
+        "recommendedAction": "restrict",
+        "criticalFindingsCount": 1,
+        "unknownSignalsCount": 0,
+        "actorGoverned": false,
+        "nonHumanActor": true,
+        "actorClassification": "non_human"
+      }
     },
     "over-scoped-agent": {
       "deviceId": "ipad-ward-10",
-      "report": { "actorType": "agent", "agentRegistered": true, "tokenLifetime": "short_lived", "scopeState": "over_scoped", "approvalState": "approved", "recordingState": "recorded", "bridgeReachable": true },
-      "expected": { "posture": "over_scoped_agent", "reasonCode": "AGENT_OVER_SCOPED", "recommendedAction": "restrict", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "actorGoverned": false, "nonHumanActor": true, "actorClassification": "non_human" }
+      "report": {
+        "actorType": "agent",
+        "agentRegistered": true,
+        "tokenLifetime": "short_lived",
+        "scopeState": "over_scoped",
+        "approvalState": "approved",
+        "recordingState": "recorded",
+        "bridgeReachable": true
+      },
+      "expected": {
+        "posture": "over_scoped_agent",
+        "reasonCode": "AGENT_OVER_SCOPED",
+        "recommendedAction": "restrict",
+        "criticalFindingsCount": 1,
+        "unknownSignalsCount": 0,
+        "actorGoverned": false,
+        "nonHumanActor": true,
+        "actorClassification": "non_human"
+      }
     },
     "unrecorded-agent": {
       "deviceId": "ipad-ward-11",
-      "report": { "actorType": "agent", "agentRegistered": true, "tokenLifetime": "short_lived", "scopeState": "least_privilege", "approvalState": "approved", "recordingState": "unrecorded", "bridgeReachable": true },
-      "expected": { "posture": "unrecorded_agent", "reasonCode": "AGENT_UNRECORDED", "recommendedAction": "restrict", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "actorGoverned": false, "nonHumanActor": true, "actorClassification": "non_human" }
+      "report": {
+        "actorType": "agent",
+        "agentRegistered": true,
+        "tokenLifetime": "short_lived",
+        "scopeState": "least_privilege",
+        "approvalState": "approved",
+        "recordingState": "unrecorded",
+        "bridgeReachable": true
+      },
+      "expected": {
+        "posture": "unrecorded_agent",
+        "reasonCode": "AGENT_UNRECORDED",
+        "recommendedAction": "restrict",
+        "criticalFindingsCount": 1,
+        "unknownSignalsCount": 0,
+        "actorGoverned": false,
+        "nonHumanActor": true,
+        "actorClassification": "non_human"
+      }
     },
     "never-approved": {
       "deviceId": "ipad-ward-12",
-      "report": { "actorType": "agent", "agentRegistered": true, "tokenLifetime": "short_lived", "scopeState": "least_privilege", "approvalState": "none", "recordingState": "recorded", "bridgeReachable": true },
-      "expected": { "posture": "ungoverned_agent", "reasonCode": "APPROVAL_ABSENT", "recommendedAction": "restrict", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "actorGoverned": false, "nonHumanActor": true, "actorClassification": "non_human" }
+      "report": {
+        "actorType": "agent",
+        "agentRegistered": true,
+        "tokenLifetime": "short_lived",
+        "scopeState": "least_privilege",
+        "approvalState": "none",
+        "recordingState": "recorded",
+        "bridgeReachable": true
+      },
+      "expected": {
+        "posture": "ungoverned_agent",
+        "reasonCode": "APPROVAL_ABSENT",
+        "recommendedAction": "restrict",
+        "criticalFindingsCount": 1,
+        "unknownSignalsCount": 0,
+        "actorGoverned": false,
+        "nonHumanActor": true,
+        "actorClassification": "non_human"
+      }
     },
     "long-lived-credential": {
       "deviceId": "ipad-ward-13",
-      "report": { "actorType": "agent", "agentRegistered": true, "tokenLifetime": "long_lived", "scopeState": "least_privilege", "approvalState": "approved", "recordingState": "recorded", "bridgeReachable": true },
-      "expected": { "posture": "weak_agent_credential", "reasonCode": "LONG_LIVED_CREDENTIAL", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "actorGoverned": false, "nonHumanActor": true, "actorClassification": "non_human" }
+      "report": {
+        "actorType": "agent",
+        "agentRegistered": true,
+        "tokenLifetime": "long_lived",
+        "scopeState": "least_privilege",
+        "approvalState": "approved",
+        "recordingState": "recorded",
+        "bridgeReachable": true
+      },
+      "expected": {
+        "posture": "weak_agent_credential",
+        "reasonCode": "LONG_LIVED_CREDENTIAL",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 0,
+        "actorGoverned": false,
+        "nonHumanActor": true,
+        "actorClassification": "non_human"
+      }
     },
     "approval-pending": {
       "deviceId": "ipad-ward-14",
-      "report": { "actorType": "agent", "agentRegistered": true, "tokenLifetime": "short_lived", "scopeState": "least_privilege", "approvalState": "pending", "recordingState": "recorded", "bridgeReachable": true },
-      "expected": { "posture": "ungoverned_agent", "reasonCode": "APPROVAL_PENDING", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "actorGoverned": false, "nonHumanActor": true, "actorClassification": "non_human" }
+      "report": {
+        "actorType": "agent",
+        "agentRegistered": true,
+        "tokenLifetime": "short_lived",
+        "scopeState": "least_privilege",
+        "approvalState": "pending",
+        "recordingState": "recorded",
+        "bridgeReachable": true
+      },
+      "expected": {
+        "posture": "ungoverned_agent",
+        "reasonCode": "APPROVAL_PENDING",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 0,
+        "actorGoverned": false,
+        "nonHumanActor": true,
+        "actorClassification": "non_human"
+      }
     },
     "registry-unreported": {
       "deviceId": "ipad-ward-15",
-      "report": { "actorType": "agent", "tokenLifetime": "short_lived", "scopeState": "least_privilege", "approvalState": "approved", "recordingState": "recorded", "bridgeReachable": true },
-      "expected": { "posture": "unverified", "reasonCode": "AGENT_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "actorGoverned": false, "nonHumanActor": true, "actorClassification": "non_human" }
+      "report": {
+        "actorType": "agent",
+        "tokenLifetime": "short_lived",
+        "scopeState": "least_privilege",
+        "approvalState": "approved",
+        "recordingState": "recorded",
+        "bridgeReachable": true
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "AGENT_STATE_UNKNOWN",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "actorGoverned": false,
+        "nonHumanActor": true,
+        "actorClassification": "non_human"
+      }
     },
     "actor-type-reported-unknown": {
       "deviceId": "ipad-ward-16",
-      "report": { "actorType": "unknown", "agentRegistered": true, "tokenLifetime": "short_lived", "scopeState": "least_privilege", "approvalState": "approved", "recordingState": "recorded", "bridgeReachable": true },
-      "expected": { "posture": "unverified", "reasonCode": "AGENT_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "actorGoverned": false, "nonHumanActor": false, "actorClassification": "unclassified" }
+      "report": {
+        "actorType": "unknown",
+        "agentRegistered": true,
+        "tokenLifetime": "short_lived",
+        "scopeState": "least_privilege",
+        "approvalState": "approved",
+        "recordingState": "recorded",
+        "bridgeReachable": true
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "AGENT_STATE_UNKNOWN",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "actorGoverned": false,
+        "nonHumanActor": false,
+        "actorClassification": "unclassified"
+      }
     },
     "actor-type-garbled": {
       "deviceId": "ipad-ward-17",
-      "report": { "actorType": "garbled", "agentRegistered": true, "tokenLifetime": "short_lived", "scopeState": "least_privilege", "approvalState": "approved", "recordingState": "recorded", "bridgeReachable": true },
-      "expected": { "posture": "unverified", "reasonCode": "REPORT_MALFORMED", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 2, "actorGoverned": false, "nonHumanActor": false, "actorClassification": "unclassified" }
+      "report": {
+        "actorType": "garbled",
+        "agentRegistered": true,
+        "tokenLifetime": "short_lived",
+        "scopeState": "least_privilege",
+        "approvalState": "approved",
+        "recordingState": "recorded",
+        "bridgeReachable": true
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "REPORT_MALFORMED",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 2,
+        "actorGoverned": false,
+        "nonHumanActor": false,
+        "actorClassification": "unclassified"
+      }
     },
     "human-with-registry-contradiction": {
       "deviceId": "ipad-ward-18",
-      "report": { "actorType": "human", "agentRegistered": true, "bridgeReachable": true },
-      "expected": { "posture": "unverified", "reasonCode": "AGENT_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 5, "actorGoverned": false, "nonHumanActor": false, "actorClassification": "unclassified" }
+      "report": {
+        "actorType": "human",
+        "agentRegistered": true,
+        "bridgeReachable": true
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "AGENT_STATE_UNKNOWN",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 5,
+        "actorGoverned": false,
+        "nonHumanActor": false,
+        "actorClassification": "unclassified"
+      }
     },
     "human-with-agent-approval-contradiction": {
       "deviceId": "ipad-ward-19",
-      "report": { "actorType": "human", "approvalState": "approved", "bridgeReachable": true },
-      "expected": { "posture": "unverified", "reasonCode": "AGENT_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 5, "actorGoverned": false, "nonHumanActor": false, "actorClassification": "unclassified" }
+      "report": {
+        "actorType": "human",
+        "approvalState": "approved",
+        "bridgeReachable": true
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "AGENT_STATE_UNKNOWN",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 5,
+        "actorGoverned": false,
+        "nonHumanActor": false,
+        "actorClassification": "unclassified"
+      }
     },
     "human-claiming-agent-governance": {
       "deviceId": "ipad-ward-20",
-      "report": { "actorType": "human", "tokenLifetime": "standing", "scopeState": "unscoped", "approvalState": "expired", "recordingState": "unrecorded", "bridgeReachable": true },
-      "expected": { "posture": "ungoverned_agent", "reasonCode": "APPROVAL_EXPIRED", "recommendedAction": "escalate", "criticalFindingsCount": 4, "unknownSignalsCount": 2, "actorGoverned": false, "nonHumanActor": false, "actorClassification": "unclassified" }
+      "report": {
+        "actorType": "human",
+        "tokenLifetime": "standing",
+        "scopeState": "unscoped",
+        "approvalState": "expired",
+        "recordingState": "unrecorded",
+        "bridgeReachable": true
+      },
+      "expected": {
+        "posture": "ungoverned_agent",
+        "reasonCode": "APPROVAL_EXPIRED",
+        "recommendedAction": "escalate",
+        "criticalFindingsCount": 4,
+        "unknownSignalsCount": 2,
+        "actorGoverned": false,
+        "nonHumanActor": false,
+        "actorClassification": "unclassified"
+      }
     },
     "human-with-unparseable-governance": {
       "deviceId": "ipad-ward-21",
-      "report": { "actorType": "human", "agentRegistered": "false", "tokenLifetime": "standing_credential", "scopeState": "no_scope", "approvalState": "lapsed", "recordingState": "no_recording", "bridgeReachable": true },
-      "expected": { "posture": "unverified", "reasonCode": "REPORT_MALFORMED", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 7, "actorGoverned": false, "nonHumanActor": false, "actorClassification": "unclassified" }
+      "report": {
+        "actorType": "human",
+        "agentRegistered": "false",
+        "tokenLifetime": "standing_credential",
+        "scopeState": "no_scope",
+        "approvalState": "lapsed",
+        "recordingState": "no_recording",
+        "bridgeReachable": true
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "REPORT_MALFORMED",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 7,
+        "actorGoverned": false,
+        "nonHumanActor": false,
+        "actorClassification": "unclassified"
+      }
     },
     "human-with-stringified-boolean": {
       "deviceId": "ipad-ward-22",
-      "report": { "actorType": "human", "agentRegistered": "true", "bridgeReachable": true },
-      "expected": { "posture": "unverified", "reasonCode": "REPORT_MALFORMED", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 7, "actorGoverned": false, "nonHumanActor": false, "actorClassification": "unclassified" }
+      "report": {
+        "actorType": "human",
+        "agentRegistered": "true",
+        "bridgeReachable": true
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "REPORT_MALFORMED",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 7,
+        "actorGoverned": false,
+        "nonHumanActor": false,
+        "actorClassification": "unclassified"
+      }
     },
     "human-with-aliased-keys": {
       "deviceId": "ipad-ward-23",
-      "report": { "actorType": "human", "agent_registered": false, "token_lifetime": "standing", "bridgeReachable": true },
-      "expected": { "posture": "unverified", "reasonCode": "REPORT_MALFORMED", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 7, "actorGoverned": false, "nonHumanActor": false, "actorClassification": "unclassified" }
+      "report": {
+        "actorType": "human",
+        "agent_registered": false,
+        "token_lifetime": "standing",
+        "bridgeReachable": true
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "REPORT_MALFORMED",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 7,
+        "actorGoverned": false,
+        "nonHumanActor": false,
+        "actorClassification": "unclassified"
+      }
     },
     "bridge-reachability-malformed": {
       "deviceId": "ipad-ward-24",
-      "report": { "actorType": "agent", "agentRegistered": true, "tokenLifetime": "short_lived", "scopeState": "least_privilege", "approvalState": "approved", "recordingState": "recorded", "bridgeReachable": 1 },
-      "expected": { "posture": "unverified", "reasonCode": "REPORT_MALFORMED", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 2, "actorGoverned": false, "nonHumanActor": true, "actorClassification": "non_human" }
+      "report": {
+        "actorType": "agent",
+        "agentRegistered": true,
+        "tokenLifetime": "short_lived",
+        "scopeState": "least_privilege",
+        "approvalState": "approved",
+        "recordingState": "recorded",
+        "bridgeReachable": 1
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "REPORT_MALFORMED",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 2,
+        "actorGoverned": false,
+        "nonHumanActor": true,
+        "actorClassification": "non_human"
+      }
     },
     "bridge-unreachable": {
       "deviceId": "ipad-ward-25",
-      "report": { "actorType": "agent", "agentRegistered": true, "tokenLifetime": "short_lived", "scopeState": "least_privilege", "approvalState": "approved", "recordingState": "recorded", "bridgeReachable": false },
-      "expected": { "posture": "unverified", "reasonCode": "BRIDGE_UNREACHABLE", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "actorGoverned": false, "nonHumanActor": true, "actorClassification": "non_human" }
+      "report": {
+        "actorType": "agent",
+        "agentRegistered": true,
+        "tokenLifetime": "short_lived",
+        "scopeState": "least_privilege",
+        "approvalState": "approved",
+        "recordingState": "recorded",
+        "bridgeReachable": false
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "BRIDGE_UNREACHABLE",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 0,
+        "actorGoverned": false,
+        "nonHumanActor": true,
+        "actorClassification": "non_human"
+      }
     },
     "reachability-unreported": {
       "deviceId": "ipad-ward-26",
-      "report": { "actorType": "human" },
-      "expected": { "posture": "unverified", "reasonCode": "BRIDGE_UNREACHABLE", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "actorGoverned": false, "nonHumanActor": false, "actorClassification": "human" }
+      "report": {
+        "actorType": "human"
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "BRIDGE_UNREACHABLE",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "actorGoverned": false,
+        "nonHumanActor": false,
+        "actorClassification": "human"
+      }
     },
     "worst-of-several": {
       "deviceId": "ipad-ward-27",
-      "report": { "actorType": "agent", "agentRegistered": false, "tokenLifetime": "standing", "scopeState": "unscoped", "approvalState": "expired", "recordingState": "unrecorded", "bridgeReachable": true },
-      "expected": { "posture": "unregistered_agent", "reasonCode": "UNREGISTERED_AGENT", "recommendedAction": "escalate", "criticalFindingsCount": 5, "unknownSignalsCount": 0, "actorGoverned": false, "nonHumanActor": true, "actorClassification": "non_human" }
+      "report": {
+        "actorType": "agent",
+        "agentRegistered": false,
+        "tokenLifetime": "standing",
+        "scopeState": "unscoped",
+        "approvalState": "expired",
+        "recordingState": "unrecorded",
+        "bridgeReachable": true
+      },
+      "expected": {
+        "posture": "unregistered_agent",
+        "reasonCode": "UNREGISTERED_AGENT",
+        "recommendedAction": "escalate",
+        "criticalFindingsCount": 5,
+        "unknownSignalsCount": 0,
+        "actorGoverned": false,
+        "nonHumanActor": true,
+        "actorClassification": "non_human"
+      }
     }
   }
 }

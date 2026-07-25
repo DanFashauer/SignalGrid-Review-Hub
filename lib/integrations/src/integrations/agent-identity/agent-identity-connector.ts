@@ -47,13 +47,33 @@ export function normalizeReport(
 ): NormalizedAgentIdentity {
   let actorType = oneOf<ActorType>(report.actorType, ["human", "agent", "service_account", "unknown"], "unknown");
   const agentRegistered = boolOrNull(report.agentRegistered);
-  // Self-consistency: agent-registry membership is meaningless for a person. A report
-  // claiming a HUMAN actor while also asserting a registry state (true OR false) is
-  // describing two different kinds of actor at once — treat the actor type as
-  // unreadable and fail closed, rather than granting on the human fast-path where the
-  // agent-governance fields are deliberately not evaluated. This only ever makes the
-  // verdict more conservative: `unknown` never grants.
-  if (actorType === "human" && agentRegistered !== null) {
+  const tokenLifetime = oneOf<TokenLifetime>(report.tokenLifetime, ["short_lived", "long_lived", "standing", "unknown"], "unknown");
+  const scopeState = oneOf<ScopeState>(report.scopeState, ["least_privilege", "over_scoped", "unscoped", "unknown"], "unknown");
+  const approvalState = oneOf<ApprovalState>(report.approvalState, ["approved", "pending", "none", "expired", "unknown"], "unknown");
+  const recordingState = oneOf<RecordingState>(report.recordingState, ["recorded", "unrecorded", "unknown"], "unknown");
+
+  // Self-consistency. The evaluator grants a HUMAN actor without inspecting a single
+  // governance field: registry membership, agent approval and agent recording have no
+  // meaning for a person, and a human's credential lifetime and privilege belong to
+  // the `token-binding` and `access-governance` dimensions. That fast-path is only
+  // safe if the report is genuinely describing a person — so a "human" report must be
+  // SILENT on governance: registry membership unreported, every governance enum
+  // unknown. Asserting any of it means the report describes two kinds of actor at
+  // once, the actor label cannot be trusted, and we fail closed.
+  //
+  // Checking EVERY field rather than registry membership alone is the whole point.
+  // `boolOrNull` maps an omitted or malformed `agentRegistered` to null, so a guard
+  // keyed on that one boolean is defeated by simply leaving it out — exactly what a
+  // sloppy or hostile bridge does. This only ever moves toward `unknown`, which never
+  // grants; a genuinely silent human report is untouched.
+  if (
+    actorType === "human" &&
+    (agentRegistered !== null ||
+      tokenLifetime !== "unknown" ||
+      scopeState !== "unknown" ||
+      approvalState !== "unknown" ||
+      recordingState !== "unknown")
+  ) {
     actorType = "unknown";
   }
   return {
@@ -61,10 +81,10 @@ export function normalizeReport(
     deviceId,
     actorType,
     agentRegistered,
-    tokenLifetime: oneOf<TokenLifetime>(report.tokenLifetime, ["short_lived", "long_lived", "standing", "unknown"], "unknown"),
-    scopeState: oneOf<ScopeState>(report.scopeState, ["least_privilege", "over_scoped", "unscoped", "unknown"], "unknown"),
-    approvalState: oneOf<ApprovalState>(report.approvalState, ["approved", "pending", "none", "expired", "unknown"], "unknown"),
-    recordingState: oneOf<RecordingState>(report.recordingState, ["recorded", "unrecorded", "unknown"], "unknown"),
+    tokenLifetime,
+    scopeState,
+    approvalState,
+    recordingState,
     bridgeReachable: boolOrNull(report.bridgeReachable),
     source,
   };

@@ -46,8 +46,10 @@ export type RecordingState = "recorded" | "unrecorded" | "unknown";
  *  field may degrade to null / an error string). */
 export interface AgentIdentityReportRaw {
   actorType?: unknown; // human | agent | service_account | unknown
-  /** Is this non-human identity present in the agent/NHI registry? */
-  agentRegistered?: boolean | null;
+  /** Is this non-human identity present in the agent/NHI registry? Typed
+   *  `unknown` like every sibling field: a non-boolean must be visibly possible so
+   *  the normalizer, not the type, is what makes it safe. */
+  agentRegistered?: unknown;
   tokenLifetime?: unknown; // short_lived | long_lived | standing | unknown
   scopeState?: unknown; // least_privilege | over_scoped | unscoped | unknown
   approvalState?: unknown; // approved | pending | none | expired | unknown
@@ -107,7 +109,9 @@ export interface AgentIdentityVerdict {
   posture: AgentIdentityPosture;
   reasonCode: AgentIdentityReasonCode;
   recommendedAction: AgentIdentityAction;
-  /** Containment-level findings (unregistered agent, expired approval, standing credential). */
+  /** Containment-level findings — every escalate- and restrict-level condition
+   *  contributes one (unregistered agent, expired/absent approval, standing
+   *  credential, over-scoped or unscoped agent, unrecorded agent). */
   criticalFindings: string[];
   /** Governance facts whose state could NOT be determined (raise the bar). */
   unknownSignals: string[];

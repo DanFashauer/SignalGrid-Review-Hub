@@ -31,6 +31,12 @@ import {
  * `access-governance` treats session monitoring as moot for a non-elevated
  * principal — the fields are not merely ignored, they do not apply.
  *
+ * That branch is safe ONLY because `actorType === "human"` is unreachable for a report
+ * that asserts governance state: the normalizer forces any such self-contradictory
+ * report to an unreadable actor type, which lands in the non-human branch below and is
+ * judged on the very facts it asserted. Read this function together with
+ * `normalizeReport` — neither is fail-safe alone.
+ *
  * `covered=false` = no governance result was returned for this actor → unknown (a
  * gap), step_up.
  */
@@ -67,100 +73,113 @@ export function evaluateAgentIdentity(
   const base = { criticalFindings, unknownSignals, deviceId: actor.deviceId, nonHumanActor: nonHuman };
 
   // No governance result at all → a gap. Raise the bar (never a governed grant).
+  // Nothing about the actor is confirmed here, so it is not reported as non-human.
   if (!covered) {
-    return { ...base, posture: "unknown", reasonCode: "NOT_COVERED", recommendedAction: "step_up", actorGoverned: false };
+    return { ...base, nonHumanActor: false, posture: "unknown", reasonCode: "NOT_COVERED", recommendedAction: "step_up", actorGoverned: false };
   }
 
-  // We cannot tell WHO is acting. That is the whole question this dimension answers,
-  // so an unreadable actor type can never grant.
+  const candidates: Candidate[] = [];
+
+  // Governance facts are collected for any actor that is NOT a confirmed human —
+  // including one whose type is unreadable. A known-bad governance fact (an
+  // unregistered identity, a lapsed approval, a standing credential) is known-bad
+  // whether or not we could read the actor label or reach the bridge, so these are
+  // gathered BEFORE the unknown/liveness gates below rather than being short-circuited
+  // by them. Otherwise a single unreachable-bridge flag would silently demote a shadow
+  // agent from escalate to step_up and erase its findings.
+  //
+  // They are NOT collected for a confirmed human: those fields have no human meaning,
+  // and the normalizer has already forced any "human" report that carries them to an
+  // unreadable type.
+  if (actor.actorType !== "human") {
+    // ── escalate: this identity should not be acting at all ────────────────────
+    if (actor.agentRegistered === false) {
+      criticalFindings.push("unregistered_agent");
+      candidates.push({ posture: "unregistered_agent", action: "escalate", reason: "UNREGISTERED_AGENT" });
+    }
+    if (actor.approvalState === "expired") {
+      criticalFindings.push("approval_expired");
+      candidates.push({ posture: "ungoverned_agent", action: "escalate", reason: "APPROVAL_EXPIRED" });
+    }
+    if (actor.tokenLifetime === "standing") {
+      criticalFindings.push("standing_credential");
+      candidates.push({ posture: "weak_agent_credential", action: "escalate", reason: "STANDING_CREDENTIAL" });
+    }
+
+    // ── restrict: contain an ungoverned or unauditable agent ───────────────────
+    // Every restrict-level condition contributes a critical finding, matching the
+    // sibling connectors.
+    if (actor.scopeState === "unscoped") {
+      criticalFindings.push("agent_unscoped");
+      candidates.push({ posture: "over_scoped_agent", action: "restrict", reason: "AGENT_UNSCOPED" });
+    } else if (actor.scopeState === "over_scoped") {
+      criticalFindings.push("agent_over_scoped");
+      candidates.push({ posture: "over_scoped_agent", action: "restrict", reason: "AGENT_OVER_SCOPED" });
+    }
+    if (actor.recordingState === "unrecorded") {
+      criticalFindings.push("agent_unrecorded");
+      candidates.push({ posture: "unrecorded_agent", action: "restrict", reason: "AGENT_UNRECORDED" });
+    }
+    if (actor.approvalState === "none") {
+      criticalFindings.push("approval_absent");
+      candidates.push({ posture: "ungoverned_agent", action: "restrict", reason: "APPROVAL_ABSENT" });
+    }
+
+    // ── step_up: governance drift, or anything unreadable ──────────────────────
+    if (actor.tokenLifetime === "long_lived") {
+      candidates.push({ posture: "weak_agent_credential", action: "step_up", reason: "LONG_LIVED_CREDENTIAL" });
+    } else if (actor.tokenLifetime === "unknown") {
+      unknownSignals.push("token_lifetime");
+      candidates.push({ posture: "unverified", action: "step_up", reason: "AGENT_STATE_UNKNOWN" });
+    }
+    if (actor.approvalState === "pending") {
+      candidates.push({ posture: "ungoverned_agent", action: "step_up", reason: "APPROVAL_PENDING" });
+    } else if (actor.approvalState === "unknown") {
+      unknownSignals.push("approval_state");
+      candidates.push({ posture: "unverified", action: "step_up", reason: "AGENT_STATE_UNKNOWN" });
+    }
+    if (actor.scopeState === "unknown") {
+      unknownSignals.push("scope_state");
+      candidates.push({ posture: "unverified", action: "step_up", reason: "AGENT_STATE_UNKNOWN" });
+    }
+    if (actor.recordingState === "unknown") {
+      unknownSignals.push("recording_state");
+      candidates.push({ posture: "unverified", action: "step_up", reason: "AGENT_STATE_UNKNOWN" });
+    }
+    // Registry membership must be POSITIVELY confirmed. An explicit false escalated
+    // above; a null means we cannot confirm the identity is in the inventory at all.
+    if (actor.agentRegistered === null) {
+      unknownSignals.push("agent_registered");
+      candidates.push({ posture: "unverified", action: "step_up", reason: "AGENT_STATE_UNKNOWN" });
+    }
+  }
+
+  // We cannot tell WHO is acting — the whole question this dimension answers. Raised
+  // as a candidate (not a short-circuit) so any known-bad fact above still outranks it.
   if (actor.actorType === "unknown") {
     unknownSignals.push("actor_type");
-    return { ...base, posture: "unverified", reasonCode: "AGENT_STATE_UNKNOWN", recommendedAction: "step_up", actorGoverned: false };
+    candidates.push({ posture: "unverified", action: "step_up", reason: "AGENT_STATE_UNKNOWN" });
   }
 
   // The grant demands POSITIVE verification of liveness: without an explicit
   // bridgeReachable===true the read may be stale/cached. Applies to human and
-  // non-human alike, and is checked first so an outage never grants either.
+  // non-human alike — a human actor with unreported reachability does not grant.
   if (actor.bridgeReachable !== true) {
     if (actor.bridgeReachable === null) unknownSignals.push("bridge_reachable");
-    return { ...base, posture: "unverified", reasonCode: "BRIDGE_UNREACHABLE", recommendedAction: "step_up", actorGoverned: false };
+    candidates.push({ posture: "unverified", action: "step_up", reason: "BRIDGE_UNREACHABLE" });
   }
 
-  // A confirmed HUMAN actor. The agent-governance fields below do not apply to a
-  // person — there is no registry entry, agent approval, or agent recording for a
-  // human — so they are not evaluated. The human's own credential and privilege are
-  // judged by the token-binding and access-governance dimensions.
-  if (actor.actorType === "human") {
-    return { ...base, posture: "human_actor", reasonCode: "HUMAN_ACTOR", recommendedAction: "none", actorGoverned: true };
-  }
-
-  // From here the actor is a NON-HUMAN identity (agent or service account) and must
-  // be fully governed to act.
-  const candidates: Candidate[] = [];
-
-  // ── escalate: this identity should not be acting at all ──────────────────────
-  if (actor.agentRegistered === false) {
-    criticalFindings.push("unregistered_agent");
-    candidates.push({ posture: "unregistered_agent", action: "escalate", reason: "UNREGISTERED_AGENT" });
-  }
-  if (actor.approvalState === "expired") {
-    criticalFindings.push("approval_expired");
-    candidates.push({ posture: "ungoverned_agent", action: "escalate", reason: "APPROVAL_EXPIRED" });
-  }
-  if (actor.tokenLifetime === "standing") {
-    criticalFindings.push("standing_credential");
-    candidates.push({ posture: "weak_agent_credential", action: "escalate", reason: "STANDING_CREDENTIAL" });
-  }
-
-  // ── restrict: contain an ungoverned or unauditable agent ─────────────────────
-  if (actor.scopeState === "unscoped") {
-    criticalFindings.push("agent_unscoped");
-    candidates.push({ posture: "over_scoped_agent", action: "restrict", reason: "AGENT_UNSCOPED" });
-  } else if (actor.scopeState === "over_scoped") {
-    candidates.push({ posture: "over_scoped_agent", action: "restrict", reason: "AGENT_OVER_SCOPED" });
-  }
-  if (actor.recordingState === "unrecorded") {
-    criticalFindings.push("agent_unrecorded");
-    candidates.push({ posture: "unrecorded_agent", action: "restrict", reason: "AGENT_UNRECORDED" });
-  }
-  if (actor.approvalState === "none") {
-    candidates.push({ posture: "ungoverned_agent", action: "restrict", reason: "APPROVAL_ABSENT" });
-  }
-
-  // ── step_up: governance drift, or anything unreadable ────────────────────────
-  if (actor.tokenLifetime === "long_lived") {
-    candidates.push({ posture: "weak_agent_credential", action: "step_up", reason: "LONG_LIVED_CREDENTIAL" });
-  } else if (actor.tokenLifetime === "unknown") {
-    unknownSignals.push("token_lifetime");
-    candidates.push({ posture: "unverified", action: "step_up", reason: "AGENT_STATE_UNKNOWN" });
-  }
-  if (actor.approvalState === "pending") {
-    candidates.push({ posture: "ungoverned_agent", action: "step_up", reason: "APPROVAL_PENDING" });
-  } else if (actor.approvalState === "unknown") {
-    unknownSignals.push("approval_state");
-    candidates.push({ posture: "unverified", action: "step_up", reason: "AGENT_STATE_UNKNOWN" });
-  }
-  if (actor.scopeState === "unknown") {
-    unknownSignals.push("scope_state");
-    candidates.push({ posture: "unverified", action: "step_up", reason: "AGENT_STATE_UNKNOWN" });
-  }
-  if (actor.recordingState === "unknown") {
-    unknownSignals.push("recording_state");
-    candidates.push({ posture: "unverified", action: "step_up", reason: "AGENT_STATE_UNKNOWN" });
-  }
-  // Registry membership must be POSITIVELY confirmed. An explicit false escalated
-  // above; a null means we cannot confirm the identity is in the inventory at all.
-  if (actor.agentRegistered === null) {
-    unknownSignals.push("agent_registered");
-    candidates.push({ posture: "unverified", action: "step_up", reason: "AGENT_STATE_UNKNOWN" });
-  }
-
-  // Worst-concern-wins. The seed is the fully-governed grant; it survives only if NO
-  // candidate was raised — a registered, short-lived, least-privilege, approved,
-  // recorded non-human identity.
+  // Worst-concern-wins. The seed is the grant appropriate to the actor: a confirmed
+  // human, or a fully-governed non-human identity. It survives only if NO candidate
+  // was raised. (An unreadable actor type always raises one, so the non-human seed
+  // can never be reached by an actor we could not identify.)
+  const seed: Candidate =
+    actor.actorType === "human"
+      ? { posture: "human_actor", action: "none", reason: "HUMAN_ACTOR" }
+      : { posture: "governed_agent", action: "none", reason: "GOVERNED_AGENT" };
   const winner = candidates.reduce<Candidate>(
     (max, c) => (ACTION_SEVERITY[c.action] > ACTION_SEVERITY[max.action] ? c : max),
-    { posture: "governed_agent", action: "none", reason: "GOVERNED_AGENT" },
+    seed,
   );
 
   return {

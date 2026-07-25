@@ -84,6 +84,21 @@ export function evaluateDeviceManagementHealth(
     candidates.push({ posture: "unverified", action: "step_up", reason: "REPORT_MALFORMED" });
   }
 
+  // Check-in freshness is judged FIRST. Severity ordering is unaffected — the reduce
+  // below picks by action rank, so the restricts still outrank everything here. What
+  // this buys is the TIE: several conditions emit step_up, worst-concern-wins keeps the
+  // first candidate on a tie, and a device that has gone silent is the root cause of
+  // every softer reading downstream of it. "This device stopped reporting" is the more
+  // useful headline than "its config drifted" — the drift reading is stale anyway.
+  if (health.checkInFreshness === "never") {
+    candidates.push({ posture: "stale_management", action: "step_up", reason: "CHECKIN_NEVER" });
+  } else if (health.checkInFreshness === "stale") {
+    candidates.push({ posture: "stale_management", action: "step_up", reason: "CHECKIN_STALE" });
+  } else if (health.checkInFreshness === "unknown") {
+    unknownSignals.push("check_in_freshness");
+    candidates.push({ posture: "unverified", action: "step_up", reason: "MANAGEMENT_STATE_UNKNOWN" });
+  }
+
   // ── restrict: the management plane is not actually governing this device ───────
   if (health.enrollmentState === "retired") {
     criticalFindings.push("enrollment_retired");
@@ -104,20 +119,11 @@ export function evaluateDeviceManagementHealth(
     candidates.push({ posture: "unverified", action: "step_up", reason: "MANAGEMENT_STATE_UNKNOWN" });
   }
 
-  // ── step_up: governed, but the governance is drifting or going quiet ───────────
+  // ── step_up: governed, but the configuration is drifting ──────────────────────
   if (health.policyDrift === "drifted") {
     candidates.push({ posture: "drifted_config", action: "step_up", reason: "POLICY_DRIFTED" });
   } else if (health.policyDrift === "unknown") {
     unknownSignals.push("policy_drift");
-    candidates.push({ posture: "unverified", action: "step_up", reason: "MANAGEMENT_STATE_UNKNOWN" });
-  }
-
-  if (health.checkInFreshness === "never") {
-    candidates.push({ posture: "stale_management", action: "step_up", reason: "CHECKIN_NEVER" });
-  } else if (health.checkInFreshness === "stale") {
-    candidates.push({ posture: "stale_management", action: "step_up", reason: "CHECKIN_STALE" });
-  } else if (health.checkInFreshness === "unknown") {
-    unknownSignals.push("check_in_freshness");
     candidates.push({ posture: "unverified", action: "step_up", reason: "MANAGEMENT_STATE_UNKNOWN" });
   }
 

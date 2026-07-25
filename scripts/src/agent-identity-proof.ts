@@ -146,6 +146,12 @@ check("but it is NOT reported as a confirmed non-human actor — we never classi
 // parsed value, is what makes it an assertion.
 const unparseable = await connector.fetchActor(fixture.actors["human-with-unparseable-governance"].deviceId);
 check("vendor-variant spellings on every governance field mark the report malformed", unparseable.reportIntegrity === "malformed");
+// The NORMALIZER voids the human claim on a malformed report, independently of the
+// evaluator's own refusal. Both defences exist because neither is redundant: removing
+// the evaluator's integrity refusal alone reopens grants on aliased-key reports, and
+// this assertion is what keeps the normalizer's half honest — grant-ness alone cannot
+// see it, so without this check the condition would be load-bearing and unproven.
+check("the normalizer ALSO voids the human claim on a malformed report", unparseable.actorType === "unknown");
 check("...and every one of them still normalizes to the lossy 'unknown' sentinel (which is exactly why integrity is tracked separately)", unparseable.tokenLifetime === "unknown" && unparseable.scopeState === "unknown" && unparseable.approvalState === "unknown" && unparseable.recordingState === "unknown" && unparseable.agentRegistered === null);
 const unparseableV = evaluateAgentIdentity(unparseable);
 check("a malformed 'human' report NEVER grants", unparseableV.recommendedAction === "step_up" && unparseableV.actorGoverned === false);
@@ -158,10 +164,6 @@ check("snake_case key aliases are an unrecognized envelope, not silence", aliase
 // transport hands us a JSON.parse result where every key is own+enumerable+string, but
 // the transport is injectable: an in-process adapter returning a class instance or a
 // Proxy could otherwise hide a governance assertion where Object.keys cannot see it.
-const protoHidden = Object.create({ agent_registered: true, approval_state: "approved" }) as AgentIdentityReportRaw;
-protoHidden.actorType = "human";
-protoHidden.bridgeReachable = true;
-check("a governance key inherited from the PROTOTYPE is still an unrecognized envelope", normalizeReport("p", protoHidden).reportIntegrity === "malformed");
 const nonEnumerable = { actorType: "human", bridgeReachable: true } as AgentIdentityReportRaw;
 Object.defineProperty(nonEnumerable, "agent_registered", { value: true, enumerable: false });
 check("a NON-ENUMERABLE unknown key is caught (Object.keys would miss it)", normalizeReport("ne", nonEnumerable).reportIntegrity === "malformed");
@@ -362,6 +364,73 @@ check("exhaustive (raw wire): some raw reports DO grant (the enumeration is not 
 let malformedSeen = 0;
 for (const v of rawDomains.tokenLifetime) if (v === "forever") malformedSeen += 1;
 check("exhaustive (raw wire): the space actually contains unparseable values on every field", malformedSeen === 1 && rawDomains.agentRegistered.includes("true") && rawDomains.recordingState.some((v) => typeof v === "object" && v !== null && !Array.isArray(v)));
+
+// Pass 3 — PARSE FIDELITY, over the same raw space.
+//
+// Passes 1 and 2 only observe grant-ness, and most malformed values already normalize
+// to a denying sentinel — so an individual integrity condition can be deleted without
+// either pass noticing. Mutation testing confirmed three conditions were invisible that
+// way, including the `malformed ||` term the previous commit existed to add. This pass
+// asserts the integrity flag directly, against an independent allowlist of wire values.
+const PARSEABLE_RAW: Record<string, readonly unknown[]> = {
+  actorType: [undefined, null, "human", "agent", "service_account", "unknown"],
+  agentRegistered: [undefined, null, true, false],
+  tokenLifetime: [undefined, null, "short_lived", "long_lived", "standing", "unknown"],
+  scopeState: [undefined, null, "least_privilege", "over_scoped", "unscoped", "unknown"],
+  approvalState: [undefined, null, "approved", "pending", "none", "expired", "unknown"],
+  recordingState: [undefined, null, "recorded", "unrecorded", "unknown"],
+  bridgeReachable: [undefined, null, true, false],
+};
+const integrityRes = enumerateGrantSafety({
+  domains: rawDomains,
+  build: (c) => {
+    const { __alias, ...wire } = c;
+    const raw = { ...wire } as AgentIdentityReportRaw;
+    if (__alias === "present") raw.agent_registered = true;
+    return normalizeReport("enum", raw, "enum");
+  },
+  evaluate: (n) => n,
+  actionOf: (n) => (n.reportIntegrity === "clean" ? "none" : "malformed"),
+  positivelyClean: (c) =>
+    c.__alias !== "present" &&
+    Object.keys(PARSEABLE_RAW).every((k) => PARSEABLE_RAW[k].includes(c[k])),
+});
+check(
+  `parse fidelity: over all ${integrityRes.combos} raw reports, reportIntegrity is 'clean' for EXACTLY the reports whose every field carries a parseable wire value and which carry no unrecognized key (mismatches=${integrityRes.mismatches}${integrityRes.firstMismatch ? ", first=" + integrityRes.firstMismatch : ""})`,
+  integrityRes.mismatches === 0 && integrityRes.combos === productOf(rawDomains),
+);
+check("parse fidelity: both outcomes occur (the pass is not vacuous)", integrityRes.noneCount > 0 && integrityRes.noneCount < integrityRes.combos);
+
+// ── own-property discipline ────────────────────────────────────────────────────
+// An inherited value is the PROTOTYPE's claim, not this report's. Reading it as a
+// confirmation was a real defect: a report with ZERO own keys granted.
+const inherited = normalizeReport("inh", Object.create({
+  actorType: "agent", agentRegistered: true, tokenLifetime: "short_lived",
+  scopeState: "least_privilege", approvalState: "approved", recordingState: "recorded",
+  bridgeReachable: true,
+}) as AgentIdentityReportRaw);
+check("a report with ZERO own keys asserts nothing — every field falls to unknown", inherited.actorType === "unknown" && inherited.agentRegistered === null && inherited.bridgeReachable === null);
+check("...and therefore cannot grant", evaluateAgentIdentity(inherited).recommendedAction !== "none");
+// A polluted global prototype is likewise not an assertion this report made.
+const proto = Object.prototype as unknown as Record<string, unknown>;
+proto.actorType = "human";
+try {
+  const polluted = normalizeReport("pol", { bridgeReachable: true } as AgentIdentityReportRaw);
+  check("a polluted Object.prototype is not read as a confirmation", polluted.actorType === "unknown" && evaluateAgentIdentity(polluted).recommendedAction !== "none");
+} finally {
+  delete proto.actorType;
+}
+// A hostile Proxy can always lie about its own keys; the point is that lying now costs
+// it the grant. Hiding descriptors makes every field read ABSENT, which denies.
+const hidden = new Proxy(
+  { actorType: "agent", agentRegistered: true, tokenLifetime: "short_lived", scopeState: "least_privilege", approvalState: "approved", recordingState: "recorded", bridgeReachable: true, agent_registered: false },
+  { ownKeys: () => [], getOwnPropertyDescriptor: () => undefined },
+) as AgentIdentityReportRaw;
+check("a Proxy that hides its own properties reads as ABSENT and cannot grant", evaluateAgentIdentity(normalizeReport("px", hidden)).recommendedAction !== "none");
+// A non-object body must fail closed, not throw an untyped TypeError out of the
+// normalizer (the shipped HTTP transport rejects these, but the transport is injectable).
+const notAnObject = normalizeReport("s", "ERR: upstream timeout" as unknown as AgentIdentityReportRaw);
+check("a non-object report is malformed, not a thrown TypeError", notAnObject.reportIntegrity === "malformed" && evaluateAgentIdentity(notAnObject).recommendedAction !== "none");
 
 // Unknown ≠ governed: an unrecognized enum value normalizes to the safe unknown.
 const norm = normalizeReport("n", { actorType: "robot", tokenLifetime: "forever", approvalState: "maybe" } as AgentIdentityReportRaw);

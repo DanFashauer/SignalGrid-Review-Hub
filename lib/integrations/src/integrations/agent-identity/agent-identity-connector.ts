@@ -63,22 +63,45 @@ function boolMalformed(v: unknown): boolean {
   return typeof v !== "boolean";
 }
 
-/** Does the report carry any key this connector does not understand?
+/** Read a field ONLY if the report asserts it as an OWN property.
  *
- *  Walks the PROTOTYPE CHAIN and uses `Reflect.ownKeys`, not `Object.keys`. The shipped
- *  HTTP transport hands us a `JSON.parse` result, where every key is an own enumerable
- *  string — but `AgentIdentityTransport` is injectable, so an in-process bridge adapter
- *  may return a class instance or a Proxy. A governance assertion hiding on the
- *  prototype, behind `enumerable: false`, or under a symbol would otherwise be invisible
- *  to the check that is this connector's only defence against key aliasing. A class
- *  instance therefore fails closed (its prototype carries a constructor) — deliberate:
- *  the transport contract is a plain JSON object. */
+ *  This is the load-bearing rule, and it replaces an earlier prototype-chain walk that
+ *  got the threat model backwards. An inherited value is not something this report
+ *  said — it is something its prototype said — so it must not be readable as a
+ *  confirmation. Reading own-only means:
+ *
+ *   - `Object.create({ actorType: "human", bridgeReachable: true })` — a report with
+ *     ZERO own keys — asserts nothing, so every field falls to the safe unknown and it
+ *     cannot grant. The walk version read those inherited values and granted.
+ *   - a polluted `Object.prototype.actorType` is invisible here, where a walk that
+ *     stopped *at* `Object.prototype` would read it while never inspecting it for
+ *     unrecognized keys.
+ *   - a hostile Proxy that hides properties from `getOwnPropertyDescriptor` now makes
+ *     its own fields read as ABSENT — which denies. A Proxy can always lie; the point
+ *     is that lying now costs it the grant instead of buying one.
+ *
+ *  It also removes the unbounded prototype walk entirely: a Proxy whose
+ *  `getPrototypeOf` returned a fresh object each call made that loop non-terminating. */
+function ownValue(report: object, key: string): unknown {
+  return Object.prototype.hasOwnProperty.call(report, key)
+    ? (report as Record<string, unknown>)[key]
+    : undefined;
+}
+
+/** Is this a plain JSON-shaped object at all? The shipped HTTP transport already
+ *  rejects non-objects and arrays, but the transport is injectable and `Reflect.ownKeys`
+ *  throws on a primitive — so an injected adapter returning a string must fail closed,
+ *  not throw an untyped TypeError out of the normalizer. */
+function isPlainReport(report: unknown): report is object {
+  return typeof report === "object" && report !== null && !Array.isArray(report);
+}
+
+/** Does the report carry any OWN key this connector does not understand? A symbol key
+ *  counts — it is an assertion in a spelling we ignore. */
 function hasUnrecognizedKey(report: object, known: readonly string[]): boolean {
-  for (let o: object | null = report; o !== null && o !== Object.prototype; o = Object.getPrototypeOf(o) as object | null) {
-    for (const k of Reflect.ownKeys(o)) {
-      if (typeof k === "symbol") return true;
-      if (!known.includes(k)) return true;
-    }
+  for (const k of Reflect.ownKeys(report)) {
+    if (typeof k === "symbol") return true;
+    if (!known.includes(k)) return true;
   }
   return false;
 }
@@ -90,28 +113,42 @@ export function normalizeReport(
   report: AgentIdentityReportRaw,
   source = "agent-identity-bridge",
 ): NormalizedAgentIdentity {
-  let actorType = oneOf<ActorType>(report.actorType, ["human", "agent", "service_account", "unknown"], "unknown");
-  const agentRegistered = boolOrNull(report.agentRegistered);
-  const tokenLifetime = oneOf<TokenLifetime>(report.tokenLifetime, ["short_lived", "long_lived", "standing", "unknown"], "unknown");
-  const scopeState = oneOf<ScopeState>(report.scopeState, ["least_privilege", "over_scoped", "unscoped", "unknown"], "unknown");
-  const approvalState = oneOf<ApprovalState>(report.approvalState, ["approved", "pending", "none", "expired", "unknown"], "unknown");
-  const recordingState = oneOf<RecordingState>(report.recordingState, ["recorded", "unrecorded", "unknown"], "unknown");
+  // Every read is OWN-ONLY. An inherited value is the prototype's claim, not this
+  // report's, and must not be readable as a confirmation.
+  const plain = isPlainReport(report);
+  const raw = {
+    actorType: plain ? ownValue(report, "actorType") : undefined,
+    agentRegistered: plain ? ownValue(report, "agentRegistered") : undefined,
+    tokenLifetime: plain ? ownValue(report, "tokenLifetime") : undefined,
+    scopeState: plain ? ownValue(report, "scopeState") : undefined,
+    approvalState: plain ? ownValue(report, "approvalState") : undefined,
+    recordingState: plain ? ownValue(report, "recordingState") : undefined,
+    bridgeReachable: plain ? ownValue(report, "bridgeReachable") : undefined,
+  };
+
+  let actorType = oneOf<ActorType>(raw.actorType, ["human", "agent", "service_account", "unknown"], "unknown");
+  const agentRegistered = boolOrNull(raw.agentRegistered);
+  const tokenLifetime = oneOf<TokenLifetime>(raw.tokenLifetime, ["short_lived", "long_lived", "standing", "unknown"], "unknown");
+  const scopeState = oneOf<ScopeState>(raw.scopeState, ["least_privilege", "over_scoped", "unscoped", "unknown"], "unknown");
+  const approvalState = oneOf<ApprovalState>(raw.approvalState, ["approved", "pending", "none", "expired", "unknown"], "unknown");
+  const recordingState = oneOf<RecordingState>(raw.recordingState, ["recorded", "unrecorded", "unknown"], "unknown");
 
   // ── report integrity ────────────────────────────────────────────────────────
   // A field that is present but unparseable is an ASSERTION WE COULD NOT READ, which
   // is not the same thing as silence. So is a key we do not understand at all: a
   // bridge sending `agent_registered` alongside `actorType: "human"` is asserting
-  // registry state in a spelling we ignore. Both mark the report malformed.
-  const unknownKey = hasUnrecognizedKey(report, AGENT_IDENTITY_REPORT_KEYS);
+  // registry state in a spelling we ignore. Both mark the report malformed — as does
+  // a report that is not a plain object at all.
   const malformed =
-    unknownKey ||
-    enumMalformed(report.actorType, ["human", "agent", "service_account", "unknown"]) ||
-    enumMalformed(report.tokenLifetime, ["short_lived", "long_lived", "standing", "unknown"]) ||
-    enumMalformed(report.scopeState, ["least_privilege", "over_scoped", "unscoped", "unknown"]) ||
-    enumMalformed(report.approvalState, ["approved", "pending", "none", "expired", "unknown"]) ||
-    enumMalformed(report.recordingState, ["recorded", "unrecorded", "unknown"]) ||
-    boolMalformed(report.agentRegistered) ||
-    boolMalformed(report.bridgeReachable);
+    !plain ||
+    hasUnrecognizedKey(report, AGENT_IDENTITY_REPORT_KEYS) ||
+    enumMalformed(raw.actorType, ["human", "agent", "service_account", "unknown"]) ||
+    enumMalformed(raw.tokenLifetime, ["short_lived", "long_lived", "standing", "unknown"]) ||
+    enumMalformed(raw.scopeState, ["least_privilege", "over_scoped", "unscoped", "unknown"]) ||
+    enumMalformed(raw.approvalState, ["approved", "pending", "none", "expired", "unknown"]) ||
+    enumMalformed(raw.recordingState, ["recorded", "unrecorded", "unknown"]) ||
+    boolMalformed(raw.agentRegistered) ||
+    boolMalformed(raw.bridgeReachable);
   const reportIntegrity: ReportIntegrity = malformed ? "malformed" : "clean";
 
   // ── is the "human" claim trustworthy? ───────────────────────────────────────
@@ -157,7 +194,7 @@ export function normalizeReport(
     scopeState,
     approvalState,
     recordingState,
-    bridgeReachable: boolOrNull(report.bridgeReachable),
+    bridgeReachable: boolOrNull(raw.bridgeReachable),
     reportIntegrity,
     source,
   };

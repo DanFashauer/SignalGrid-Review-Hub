@@ -101,19 +101,26 @@ const stale = evaluateDeviceManagementHealth(await connector.fetchHealth(fixture
 check("a STALE check-in → step_up (the posture snapshot has silently expired)", stale.posture === "stale_management" && stale.reasonCode === "CHECKIN_STALE");
 check("a stale device never composes to 'ok'", composeDeviceRisk([fromDeviceManagementHealth(stale)]).riskTier !== "ok");
 
-// The consistency guard: a device that has NEVER reported cannot have been OBSERVED on
-// its baseline or in policy scope. Those claims are derived from a check-in that never
-// happened, so they are demoted — and only ever demoted.
+// A device that has NEVER checked in is the dimension's motivating case — a ward iPad
+// that went silent — and the verdict must be able to NAME it. An earlier draft demoted
+// the surrounding claims to `unknown` on the reasoning that they were derived from a
+// check-in that never happened; measured over the full raw space that changed the action
+// on zero reports while making CHECKIN_NEVER unreachable at the wire layer entirely.
+// The normalizer now reports what the bridge said, and the evaluator judges it.
 const never = await connector.fetchHealth(fixture.devices["checkin-never"].deviceId);
-check("a device that NEVER checked in cannot be confirmed on-baseline — the claim is demoted to unknown", never.policyDrift === "unknown" && never.complianceCoverage === "unknown");
+check("a device that NEVER checked in reports its own reason code, not a generic unknown", evaluateDeviceManagementHealth(never).reasonCode === "CHECKIN_NEVER");
 check("...and it never grants", evaluateDeviceManagementHealth(never).recommendedAction === "step_up" && evaluateDeviceManagementHealth(never).managementEffective === false);
-const retiredNorm = await connector.fetchHealth(fixture.devices["enrollment-retired"].deviceId);
-check("a retired device is not 'covered' by a policy however the bridge summarized it", retiredNorm.complianceCoverage === "unknown");
-// The guard only DOWNGRADES. A guard that could also promote unknown → covered when the
-// surrounding fields looked agreeable would manufacture the confirmation the grant
-// demands. Feeding it an already-unknown report must leave it unknown.
+// Ordering is load-bearing for diagnosis: every one of these is step_up, and
+// worst-concern-wins keeps the FIRST candidate on a tie, so a silent device outranks the
+// softer readings that are downstream of its silence.
+const neverAndDrifted = normalizeReport("nd", { checkInFreshness: "never", policyDrift: "drifted", complianceCoverage: "covered", enrollmentState: "enrolled", managementReachable: true });
+check("a silent device outranks its own (stale) drift reading in the reason code", evaluateDeviceManagementHealth(neverAndDrifted).reasonCode === "CHECKIN_NEVER");
+// Severity still wins over ordering — a restrict beats any step_up regardless of order.
+const neverAndRetired = normalizeReport("nr", { checkInFreshness: "never", policyDrift: "on_baseline", complianceCoverage: "covered", enrollmentState: "retired", managementReachable: true });
+check("but a RESTRICT still outranks it — ordering only breaks ties within a severity", evaluateDeviceManagementHealth(neverAndRetired).recommendedAction === "restrict" && evaluateDeviceManagementHealth(neverAndRetired).reasonCode === "ENROLLMENT_RETIRED");
+// The normalizer reports what the bridge said and never manufactures a confirmation.
 const stillUnknown = normalizeReport("g", { checkInFreshness: "fresh", policyDrift: "unknown", complianceCoverage: "unknown", enrollmentState: "enrolled", managementReachable: true });
-check("the consistency guard NEVER promotes an unknown to a confirmation", stillUnknown.policyDrift === "unknown" && stillUnknown.complianceCoverage === "unknown");
+check("an unknown is never promoted to a confirmation", stillUnknown.policyDrift === "unknown" && stillUnknown.complianceCoverage === "unknown");
 
 // No management result at all → a gap → step_up (never an effective-management grant).
 const noCov = evaluateDeviceManagementHealth(normalizeReport("ghost", {}), { covered: false });
@@ -138,11 +145,19 @@ check("an unrecognized key means the envelope was not understood", aliased.repor
 // transport hands us a JSON.parse result, but the transport is injectable — an
 // in-process adapter returning a class instance or Proxy could otherwise hide an
 // assertion where Object.keys cannot see it.
-const protoHidden = Object.create({ policy_drift: "drifted" }) as DeviceManagementHealthReportRaw;
-protoHidden.checkInFreshness = "fresh"; protoHidden.policyDrift = "on_baseline";
-protoHidden.complianceCoverage = "covered"; protoHidden.enrollmentState = "enrolled";
-protoHidden.managementReachable = true;
-check("a key inherited from the PROTOTYPE is still an unrecognized envelope", normalizeReport("p", protoHidden).reportIntegrity === "malformed");
+const inherited = normalizeReport("inh", Object.create({
+  checkInFreshness: "fresh", policyDrift: "on_baseline", complianceCoverage: "covered",
+  enrollmentState: "enrolled", managementReachable: true,
+}) as DeviceManagementHealthReportRaw);
+check("a report with ZERO own keys asserts nothing — every field falls to unknown", inherited.checkInFreshness === "unknown" && inherited.managementReachable === null);
+check("...and therefore cannot grant", evaluateDeviceManagementHealth(inherited).recommendedAction !== "none");
+const hidden = new Proxy(
+  { checkInFreshness: "fresh", policyDrift: "on_baseline", complianceCoverage: "covered", enrollmentState: "enrolled", managementReachable: true, policy_drift: "drifted" },
+  { ownKeys: () => [], getOwnPropertyDescriptor: () => undefined },
+) as DeviceManagementHealthReportRaw;
+check("a Proxy that hides its own properties reads as ABSENT and cannot grant", evaluateDeviceManagementHealth(normalizeReport("px", hidden)).recommendedAction !== "none");
+const notAnObject = normalizeReport("s", "ERR: graph timeout" as unknown as DeviceManagementHealthReportRaw);
+check("a non-object report is malformed, not a thrown TypeError", notAnObject.reportIntegrity === "malformed" && evaluateDeviceManagementHealth(notAnObject).recommendedAction !== "none");
 check("a plain parsed-JSON report is NOT flagged by the prototype walk", normalizeReport("j", JSON.parse('{"checkInFreshness":"fresh"}') as DeviceManagementHealthReportRaw).reportIntegrity === "clean");
 // JSON null is the wire spelling of "no value", not an unreadable assertion — a bridge
 // emitting a fixed row shape with nulls is being honest and must behave as omission.
@@ -257,6 +272,42 @@ check(
 );
 check("exhaustive (raw wire): some raw reports DO grant (the enumeration is not vacuous)", rawEnumRes.noneCount > 0);
 check("exhaustive (raw wire): exactly ONE raw report grants — the five-way confirmation is unique", rawEnumRes.noneCount === 1);
+
+// Pass 3 — PARSE FIDELITY, over the same raw space.
+//
+// Passes 1 and 2 only ever observe grant-ness, and every malformed value already
+// normalizes to a denying `unknown`. That makes each individual integrity condition
+// INVISIBLE to them: deleting one changes `reportIntegrity` but not the action, so the
+// enumeration stays at 0 mismatches and the condition is load-bearing but unproven.
+// Mutation testing found exactly that hole. This pass closes it by asserting the
+// integrity flag itself against an independent positive allowlist of wire values.
+const PARSEABLE_RAW: Record<string, readonly unknown[]> = {
+  checkInFreshness: [undefined, null, "fresh", "stale", "never", "unknown"],
+  policyDrift: [undefined, null, "on_baseline", "drifted", "unknown"],
+  complianceCoverage: [undefined, null, "covered", "uncovered", "unknown"],
+  enrollmentState: [undefined, null, "enrolled", "failed", "retired", "unknown"],
+  managementReachable: [undefined, null, true, false],
+};
+const integrityRes = enumerateGrantSafety({
+  domains: rawDomains,
+  build: (c) => {
+    const { __alias, ...wire } = c;
+    const raw = { ...wire } as DeviceManagementHealthReportRaw;
+    if (__alias === "present") raw.policy_drift = "drifted";
+    return normalizeReport("enum", raw, "enum");
+  },
+  // The normalized report IS the verdict for this pass; "none" stands for "clean".
+  evaluate: (n) => n,
+  actionOf: (n) => (n.reportIntegrity === "clean" ? "none" : "malformed"),
+  positivelyClean: (c) =>
+    c.__alias !== "present" &&
+    Object.keys(PARSEABLE_RAW).every((k) => PARSEABLE_RAW[k].includes(c[k])),
+});
+check(
+  `parse fidelity: over all ${integrityRes.combos} raw reports, reportIntegrity is 'clean' for EXACTLY the reports whose every field carries a parseable wire value and which carry no unrecognized key (mismatches=${integrityRes.mismatches}${integrityRes.firstMismatch ? ", first=" + integrityRes.firstMismatch : ""})`,
+  integrityRes.mismatches === 0 && integrityRes.combos === productOf(rawDomains),
+);
+check("parse fidelity: both outcomes occur (the pass is not vacuous)", integrityRes.noneCount > 0 && integrityRes.noneCount < integrityRes.combos);
 
 // Worst-concern-wins: the restrict outranks the drift/check-in step_ups.
 const worst = evaluateDeviceManagementHealth(await connector.fetchHealth(fixture.devices["worst-of-several"].deviceId));

@@ -61,20 +61,32 @@ function boolMalformed(v: unknown): boolean {
   return typeof v !== "boolean";
 }
 
-/** Does the report carry any key this connector does not understand?
- *
- *  Walks the PROTOTYPE CHAIN and uses `Reflect.ownKeys`, not `Object.keys`. The shipped
- *  HTTP transport hands us a `JSON.parse` result where every key is an own enumerable
- *  string, but the transport is injectable — an in-process adapter may return a class
- *  instance or a Proxy, and an assertion hiding on the prototype, behind
- *  `enumerable: false`, or under a symbol would otherwise be invisible. A class instance
- *  fails closed; the transport contract is a plain JSON object. */
+/** Read a field ONLY if the report asserts it as an OWN property. An inherited value is
+ *  the prototype's claim, not this report's, so it must not read as a confirmation:
+ *  `Object.create({ checkInFreshness: "fresh", ... })` asserts nothing and cannot grant,
+ *  and a polluted `Object.prototype` is invisible here. Own-only also removes any need
+ *  to walk the prototype chain — a Proxy whose `getPrototypeOf` returns a fresh object
+ *  each call would make that walk non-terminating. A Proxy that hides its own
+ *  descriptors now reads as ABSENT, which denies. */
+function ownValue(report: object, key: string): unknown {
+  return Object.prototype.hasOwnProperty.call(report, key)
+    ? (report as Record<string, unknown>)[key]
+    : undefined;
+}
+
+/** Is this a plain JSON-shaped object at all? `Reflect.ownKeys` throws on a primitive,
+ *  and the transport is injectable, so a non-object must fail closed rather than throw
+ *  an untyped TypeError out of the normalizer. */
+function isPlainReport(report: unknown): report is object {
+  return typeof report === "object" && report !== null && !Array.isArray(report);
+}
+
+/** Does the report carry any OWN key this connector does not understand? A symbol key
+ *  counts — it is an assertion in a spelling we ignore. */
 function hasUnrecognizedKey(report: object, known: readonly string[]): boolean {
-  for (let o: object | null = report; o !== null && o !== Object.prototype; o = Object.getPrototypeOf(o) as object | null) {
-    for (const k of Reflect.ownKeys(o)) {
-      if (typeof k === "symbol") return true;
-      if (!known.includes(k)) return true;
-    }
+  for (const k of Reflect.ownKeys(report)) {
+    if (typeof k === "symbol") return true;
+    if (!known.includes(k)) return true;
   }
   return false;
 }
@@ -91,37 +103,41 @@ export function normalizeReport(
   report: DeviceManagementHealthReportRaw,
   source = "device-management-health-bridge",
 ): NormalizedDeviceManagementHealth {
-  const checkInFreshness = oneOf<CheckInFreshness>(report.checkInFreshness, CHECK_IN, "unknown");
-  let policyDrift = oneOf<PolicyDrift>(report.policyDrift, DRIFT, "unknown");
-  let complianceCoverage = oneOf<ComplianceCoverage>(report.complianceCoverage, COVERAGE, "unknown");
-  const enrollmentState = oneOf<EnrollmentState>(report.enrollmentState, ENROLLMENT, "unknown");
+  // Every read is OWN-ONLY — see `ownValue`.
+  const plain = isPlainReport(report);
+  const raw = {
+    checkInFreshness: plain ? ownValue(report, "checkInFreshness") : undefined,
+    policyDrift: plain ? ownValue(report, "policyDrift") : undefined,
+    complianceCoverage: plain ? ownValue(report, "complianceCoverage") : undefined,
+    enrollmentState: plain ? ownValue(report, "enrollmentState") : undefined,
+    managementReachable: plain ? ownValue(report, "managementReachable") : undefined,
+  };
 
-  const unknownKey = hasUnrecognizedKey(report, DEVICE_MANAGEMENT_HEALTH_REPORT_KEYS);
+  const checkInFreshness = oneOf<CheckInFreshness>(raw.checkInFreshness, CHECK_IN, "unknown");
+  const policyDrift = oneOf<PolicyDrift>(raw.policyDrift, DRIFT, "unknown");
+  const complianceCoverage = oneOf<ComplianceCoverage>(raw.complianceCoverage, COVERAGE, "unknown");
+  const enrollmentState = oneOf<EnrollmentState>(raw.enrollmentState, ENROLLMENT, "unknown");
+
   const malformed =
-    unknownKey ||
-    enumMalformed(report.checkInFreshness, CHECK_IN) ||
-    enumMalformed(report.policyDrift, DRIFT) ||
-    enumMalformed(report.complianceCoverage, COVERAGE) ||
-    enumMalformed(report.enrollmentState, ENROLLMENT) ||
-    boolMalformed(report.managementReachable);
+    !plain ||
+    hasUnrecognizedKey(report, DEVICE_MANAGEMENT_HEALTH_REPORT_KEYS) ||
+    enumMalformed(raw.checkInFreshness, CHECK_IN) ||
+    enumMalformed(raw.policyDrift, DRIFT) ||
+    enumMalformed(raw.complianceCoverage, COVERAGE) ||
+    enumMalformed(raw.enrollmentState, ENROLLMENT) ||
+    boolMalformed(raw.managementReachable);
   const reportIntegrity: ReportIntegrity = malformed ? "malformed" : "clean";
 
-  // Self-consistency. Both of these positive claims are DERIVED from the device having
-  // reported: a device that has never checked in cannot have been observed on its
-  // baseline, and a device whose enrollment failed or was retired is not in scope of a
-  // compliance policy however the bridge summarized it. Where the claim is unfounded we
-  // demote it to `unknown`.
-  //
-  // This only ever DOWNGRADES. A guard that could also promote `unknown` → `covered`
-  // when the surrounding fields looked agreeable would be manufacturing the very
-  // confirmation the grant is supposed to demand.
-  if (checkInFreshness === "never") {
-    if (policyDrift === "on_baseline") policyDrift = "unknown";
-    if (complianceCoverage === "covered") complianceCoverage = "unknown";
-  }
-  if ((enrollmentState === "failed" || enrollmentState === "retired") && complianceCoverage === "covered") {
-    complianceCoverage = "unknown";
-  }
+  // NOTE — there is deliberately no "consistency guard" here demoting `on_baseline` /
+  // `covered` to `unknown` when the device has never checked in. An earlier draft had
+  // one, on the reasoning that those claims are derived from a check-in that never
+  // happened. Measured over the full raw space it changed the recommended action on
+  // ZERO reports and grant-ness on ZERO reports — `never` already denies on its own —
+  // while changing the reason code on eight, in every case replacing a specific
+  // diagnosis with a generic one. Worse, by rewriting `policyDrift` it made
+  // `CHECKIN_NEVER` unreachable at the wire layer entirely: the dimension's motivating
+  // case, a ward iPad that stopped checking in, could not be NAMED by its own verdict.
+  // A guard that buys no safety and costs the operator the reason is not worth having.
 
   return {
     sourceSystem: "device-management-health",
@@ -130,7 +146,7 @@ export function normalizeReport(
     policyDrift,
     complianceCoverage,
     enrollmentState,
-    managementReachable: boolOrNull(report.managementReachable),
+    managementReachable: boolOrNull(raw.managementReachable),
     reportIntegrity,
     source,
   };

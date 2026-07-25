@@ -61,8 +61,9 @@ detects holes rather than always passing.
 
 Connectors whose full allow-path is currently constrained this way (mismatches=0
 over the full product): **oauth-consent** (6,480), **sso-session** (768),
-**access-governance** (4,500), **ot-posture** (324). These are the enum-field
-"trust grant" dimensions where the unknown-reaches-grant class is most acute.
+**access-governance** (4,500), **ot-posture** (324), **token-binding** (1,296).
+These are the enum-field "trust grant" dimensions where the unknown-reaches-grant
+class is most acute; new connectors adopt the harness from the start.
 The remaining grant-emitting connectors are a tracked follow-up: the
 list-aggregation dimensions (`credential-exposure`, `data-protection`,
 `edr-threat`, `vuln-scan`, `peripheral-control`, `identity-risk`) grant only on an

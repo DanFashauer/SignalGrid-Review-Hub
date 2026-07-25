@@ -118,6 +118,9 @@ jobs:
       - name: OAuth-consent / workload-identity proof
         run: pnpm run proof:oauth-consent
 
+      - name: Token-binding / proof-of-possession proof
+        run: pnpm run proof:token-binding
+
       - name: Grant-safety harness self-proof (allow-path brute-force detector)
         run: pnpm run proof:grant-safety
 

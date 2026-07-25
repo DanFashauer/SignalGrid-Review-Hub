@@ -168,6 +168,22 @@ Fail-safe by construction, matched to a shared frontline session's stakes:
 
 Proven fully offline by `pnpm run proof:oauth-consent` (63 checks, no network, no keys). Live calls are gated exactly like every other connector. SignalGrid reads and decides on the evaluated grant state — it revokes no grant and changes no consent; every signal is read-only, and this is not a Microsoft / Okta / Google partnership or certification claim.
 
+## Token binding / proof-of-possession — the replayable-token dimension (built, fixture-backed)
+
+`sso-session` asks whether the live session is the current badge-holder's, MFA-backed, and fresh. This dimension asks an RFC-level question about that same session's **access token**: is it **sender-constrained** — cryptographically bound to a key held on THIS device (**DPoP**, RFC 9449; or **mutual-TLS**, RFC 8705) — or a plain **bearer** token that anyone who copies it can replay from anywhere? On a shared, badge-checked-out device a bearer access token left in shared storage is replayable by the next user or by a token thief off the device; a proof-of-possession token bound to a hardware key in the Secure Enclave / TPM cannot be presented from another machine. The single worst signature this catches is a bound token whose PoP key belongs to a **different** device — a token minted elsewhere and presented here (an exfiltrated/stolen bound token).
+
+The `token-binding` connector (`lib/integrations/src/integrations/token-binding`) normalizes a token-inspection bridge's already-evaluated view of the session's token — its binding mechanism (DPoP / mTLS / bearer), where the proof-of-possession key lives (attested **hardware** vs exportable **software** vs none), whether the token is **audience-restricted**, and whether the key/cert is bound to **this** device — into one token-binding verdict (`fromTokenBinding` → a `token_binding` signal on the unified action ladder). It consumes the evaluated binding state; it never mints, refreshes, binds, or revokes a token (that stays with the IdP / resource server).
+
+Fail-safe by construction, matched to a shared frontline session's stakes:
+
+- a bound token whose PoP key belongs to **another device** (a stolen bound token) is the strongest negative → `escalate`;
+- an **unbound bearer** token (or one with no PoP key) is replayable → `restrict` (contain — require a sender-constrained token / re-auth);
+- a sender-constrained token that is **weakened** — an exportable **software** key, an **unattested** "hardware" key, or a token that is **not audience-restricted** — or whose binding we cannot read, or whose bridge was unreachable → `step_up`;
+- the **only** path that contributes a grant is a positively-confirmed sender-constrained token — DPoP or mTLS, an **attested hardware** key, audience-restricted, bound to **this** device, with the bridge **reachable** — every other state, and every unknown/unreported field, raises the bar;
+- an unrecognized value normalizes to the safe `unknown`, and a self-contradictory `bearer`-token-with-a-`hardware`-key report is forced to `keyProtection: none` (fail closed) so it can never read as a protected key.
+
+Proven fully offline by `pnpm run proof:token-binding` (52 checks, no network, no keys) — including a brute-force enumeration of the **entire 1,296-combination** normalized input space asserting action `none` is emitted for *exactly* the positively-confirmed sender-constrained tokens (0 mismatches), via the shared grant-safety harness. Live calls are gated exactly like every other connector. SignalGrid reads and decides on the evaluated binding state — it mints and binds no tokens; every signal is read-only, and this is not a partnership or certification claim.
+
 ## Frontline context signal roadmap
 
 Future healthcare and frontline context signals are documented in [Frontline context signals roadmap](FRONTLINE_CONTEXT_SIGNALS.md). These include Intune enrollment restrictions, device limits, iOS/iPadOS enrollment type, Apple Business Manager / ADE state, supervision, Jamf Pro context, Kontakt.io / RTLS candidate signals, location, staff safety alerts, nurse call events, dock/return-station events, and badge / QR / NFC physical context. They are not first-proof requirements; they become follow-on or future roadmap inputs after the Microsoft posture proof and UEM posture model are grounded.

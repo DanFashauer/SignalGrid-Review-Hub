@@ -1,0 +1,65 @@
+{
+  "accessToken": "sg-token-binding-fixture-token",
+  "devices": {
+    "dpop-hardware-clean": {
+      "deviceId": "ipad-ward-01",
+      "report": { "binding": "dpop", "keyProtection": "hardware", "keyAttested": true, "audienceRestricted": true, "boundToDevice": true, "bridgeReachable": true },
+      "expected": { "posture": "sender_constrained", "reasonCode": "SENDER_CONSTRAINED_TOKEN", "recommendedAction": "none", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "senderConstrained": true }
+    },
+    "mtls-hardware-clean": {
+      "deviceId": "ipad-ward-02",
+      "report": { "binding": "mtls", "keyProtection": "hardware", "keyAttested": true, "audienceRestricted": true, "boundToDevice": true, "bridgeReachable": true },
+      "expected": { "posture": "sender_constrained", "reasonCode": "SENDER_CONSTRAINED_TOKEN", "recommendedAction": "none", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "senderConstrained": true }
+    },
+    "bearer-token": {
+      "deviceId": "ipad-ward-03",
+      "report": { "binding": "bearer", "keyProtection": "none", "keyAttested": true, "audienceRestricted": true, "boundToDevice": true, "bridgeReachable": true },
+      "expected": { "posture": "bearer_token", "reasonCode": "UNBOUND_BEARER_TOKEN", "recommendedAction": "restrict", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "senderConstrained": false }
+    },
+    "device-mismatch": {
+      "deviceId": "ipad-ward-04",
+      "report": { "binding": "dpop", "keyProtection": "hardware", "keyAttested": true, "audienceRestricted": true, "boundToDevice": false, "bridgeReachable": true },
+      "expected": { "posture": "token_device_mismatch", "reasonCode": "TOKEN_DEVICE_MISMATCH", "recommendedAction": "escalate", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "senderConstrained": false }
+    },
+    "software-key": {
+      "deviceId": "ipad-ward-05",
+      "report": { "binding": "dpop", "keyProtection": "software", "keyAttested": true, "audienceRestricted": true, "boundToDevice": true, "bridgeReachable": true },
+      "expected": { "posture": "weak_binding", "reasonCode": "SOFTWARE_BOUND_KEY", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "senderConstrained": false }
+    },
+    "key-not-attested": {
+      "deviceId": "ipad-ward-06",
+      "report": { "binding": "dpop", "keyProtection": "hardware", "keyAttested": false, "audienceRestricted": true, "boundToDevice": true, "bridgeReachable": true },
+      "expected": { "posture": "weak_binding", "reasonCode": "KEY_NOT_ATTESTED", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "senderConstrained": false }
+    },
+    "not-audience-restricted": {
+      "deviceId": "ipad-ward-07",
+      "report": { "binding": "mtls", "keyProtection": "hardware", "keyAttested": true, "audienceRestricted": false, "boundToDevice": true, "bridgeReachable": true },
+      "expected": { "posture": "weak_binding", "reasonCode": "TOKEN_NOT_AUDIENCE_RESTRICTED", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "senderConstrained": false }
+    },
+    "binding-unknown": {
+      "deviceId": "ipad-ward-08",
+      "report": { "binding": "garbled", "keyProtection": "hardware", "keyAttested": true, "audienceRestricted": true, "boundToDevice": true, "bridgeReachable": true },
+      "expected": { "posture": "unverified", "reasonCode": "BINDING_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "senderConstrained": false }
+    },
+    "bridge-unreachable": {
+      "deviceId": "ipad-ward-09",
+      "report": { "binding": "dpop", "keyProtection": "hardware", "keyAttested": true, "audienceRestricted": true, "boundToDevice": true, "bridgeReachable": false },
+      "expected": { "posture": "unverified", "reasonCode": "BRIDGE_UNREACHABLE", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "senderConstrained": false }
+    },
+    "reachability-unreported": {
+      "deviceId": "ipad-ward-10",
+      "report": { "binding": "dpop", "keyProtection": "hardware", "keyAttested": true, "audienceRestricted": true, "boundToDevice": true },
+      "expected": { "posture": "unverified", "reasonCode": "BRIDGE_UNREACHABLE", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "senderConstrained": false }
+    },
+    "worst-of-several": {
+      "deviceId": "ipad-ward-11",
+      "report": { "binding": "bearer", "keyProtection": "none", "keyAttested": true, "audienceRestricted": true, "boundToDevice": false, "bridgeReachable": true },
+      "expected": { "posture": "token_device_mismatch", "reasonCode": "TOKEN_DEVICE_MISMATCH", "recommendedAction": "escalate", "criticalFindingsCount": 2, "unknownSignalsCount": 0, "senderConstrained": false }
+    },
+    "bearer-with-hardware-claim": {
+      "deviceId": "ipad-ward-12",
+      "report": { "binding": "bearer", "keyProtection": "hardware", "keyAttested": true, "audienceRestricted": true, "boundToDevice": true, "bridgeReachable": true },
+      "expected": { "posture": "bearer_token", "reasonCode": "UNBOUND_BEARER_TOKEN", "recommendedAction": "restrict", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "senderConstrained": false }
+    }
+  }
+}

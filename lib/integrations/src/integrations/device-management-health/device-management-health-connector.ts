@@ -64,10 +64,10 @@ function boolMalformed(v: unknown): boolean {
 /** Read a field ONLY if the report asserts it as an OWN property. An inherited value is
  *  the prototype's claim, not this report's, so it must not read as a confirmation:
  *  `Object.create({ checkInFreshness: "fresh", ... })` asserts nothing and cannot grant,
- *  and a polluted `Object.prototype` is invisible here. Own-only also removes any need
- *  to walk the prototype chain — a Proxy whose `getPrototypeOf` returns a fresh object
- *  each call would make that walk non-terminating. A Proxy that hides its own
- *  descriptors now reads as ABSENT, which denies. */
+ *  and a polluted `Object.prototype` is invisible here. This governs READS only — the
+ *  unrecognized-key scan below still walks the chain, because an inherited key is an
+ *  assertion even though its value is not read. A Proxy that hides its own descriptors
+ *  reads as ABSENT, which denies. */
 function ownValue(report: object, key: string): unknown {
   return Object.prototype.hasOwnProperty.call(report, key)
     ? (report as Record<string, unknown>)[key]
@@ -108,6 +108,13 @@ function hasUnrecognizedKey(report: object, known: readonly string[]): boolean {
     for (let depth = 0; o !== null && o !== Object.prototype; depth += 1) {
       if (depth >= MAX_PROTOTYPE_DEPTH) return true;
       for (const k of Reflect.ownKeys(o)) {
+        // Beyond the report's own level, ANY key is unrecognized — including one we
+        // understand. This is the sharp edge an earlier revision got wrong by flagging
+        // only misspelled inherited keys. A correctly-spelled inherited `agentRegistered`
+        // is a STRONGER assertion than a misspelled one, not a weaker one, and because
+        // values are read own-only it would otherwise be asserted by the report and
+        // read by nobody: `report.agentRegistered === true` while the verdict grants.
+        if (depth > 0) return true;
         if (typeof k === "symbol") return true;
         if (!known.includes(k)) return true;
       }

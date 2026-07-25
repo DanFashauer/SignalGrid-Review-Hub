@@ -160,6 +160,12 @@ check("...so a report whose own keys all confirm still cannot grant", evaluateDe
 const symbolKeyed = Object.assign({}, { checkInFreshness: "fresh", policyDrift: "on_baseline", complianceCoverage: "covered", enrollmentState: "enrolled", managementReachable: true }) as DeviceManagementHealthReportRaw;
 (symbolKeyed as Record<symbol, unknown>)[Symbol.for("policyDrift")] = "drifted";
 check("a SYMBOL-keyed assertion is an unrecognized envelope", normalizeReport("sym", symbolKeyed).reportIntegrity === "malformed");
+const knownOnProto = Object.assign(Object.create({ policyDrift: "on_baseline" }), { checkInFreshness: "fresh", complianceCoverage: "covered", enrollmentState: "enrolled", managementReachable: true }) as DeviceManagementHealthReportRaw;
+check("a RECOGNIZED key inherited from the prototype is an unrecognized envelope", normalizeReport("kp", knownOnProto).reportIntegrity === "malformed");
+check("...and cannot grant", evaluateDeviceManagementHealth(normalizeReport("kp", knownOnProto)).recommendedAction !== "none");
+const throwingKeys = new Proxy({ checkInFreshness: "fresh", policyDrift: "on_baseline", complianceCoverage: "covered", enrollmentState: "enrolled", managementReachable: true }, { ownKeys: () => { throw new Error("hostile"); } }) as DeviceManagementHealthReportRaw;
+check("a Proxy that THROWS from ownKeys fails closed, it does not grant", evaluateDeviceManagementHealth(normalizeReport("tk", throwingKeys)).recommendedAction !== "none");
+check("a null report body is malformed, not an untyped TypeError", normalizeReport("nb", null as unknown as DeviceManagementHealthReportRaw).reportIntegrity === "malformed");
 const endlessProto = (): object => new Proxy({}, { getPrototypeOf: () => endlessProto(), ownKeys: () => [] });
 check("a Proxy with an endless prototype chain terminates and fails closed", normalizeReport("ep", endlessProto() as DeviceManagementHealthReportRaw).reportIntegrity === "malformed");
 check("an ARRAY report is malformed, never a grant", normalizeReport("arr", [] as unknown as DeviceManagementHealthReportRaw).reportIntegrity === "malformed");
@@ -194,7 +200,7 @@ check("a non-boolean managementReachable is null, never fabricated", boolNorm.ma
 const shouty = normalizeReport("s", { checkInFreshness: " FRESH ", enrollmentState: "Enrolled" });
 check("case/whitespace variants are canonicalized, not treated as malformed", shouty.reportIntegrity === "clean" && shouty.checkInFreshness === "fresh" && shouty.enrollmentState === "enrolled");
 
-// ── exhaustive, in TWO passes over two DIFFERENT spaces ────────────────────────
+// ── exhaustive, in THREE passes over two DIFFERENT spaces ──────────────────────
 //
 // Pass 1 quantifies over the NORMALIZED space (including reportIntegrity) against the
 // evaluator alone: action "none" is emitted for exactly the five-way confirmation, and

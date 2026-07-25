@@ -80,8 +80,9 @@ function boolMalformed(v: unknown): boolean {
  *     its own fields read as ABSENT — which denies. A Proxy can always lie; the point
  *     is that lying now costs it the grant instead of buying one.
  *
- *  It also removes the unbounded prototype walk entirely: a Proxy whose
- *  `getPrototypeOf` returned a fresh object each call made that loop non-terminating. */
+ *  Note this governs READS only. The unrecognized-key scan below still walks the
+ *  chain — bounded — because an inherited key is still an assertion even though its
+ *  value is not read. */
 function ownValue(report: object, key: string): unknown {
   return Object.prototype.hasOwnProperty.call(report, key)
     ? (report as Record<string, unknown>)[key]
@@ -123,6 +124,13 @@ function hasUnrecognizedKey(report: object, known: readonly string[]): boolean {
     for (let depth = 0; o !== null && o !== Object.prototype; depth += 1) {
       if (depth >= MAX_PROTOTYPE_DEPTH) return true;
       for (const k of Reflect.ownKeys(o)) {
+        // Beyond the report's own level, ANY key is unrecognized — including one we
+        // understand. This is the sharp edge an earlier revision got wrong by flagging
+        // only misspelled inherited keys. A correctly-spelled inherited `agentRegistered`
+        // is a STRONGER assertion than a misspelled one, not a weaker one, and because
+        // values are read own-only it would otherwise be asserted by the report and
+        // read by nobody: `report.agentRegistered === true` while the verdict grants.
+        if (depth > 0) return true;
         if (typeof k === "symbol") return true;
         if (!known.includes(k)) return true;
       }

@@ -227,7 +227,7 @@ const noReach = evaluateAgentIdentity(await connector.fetchActor(fixture.actors[
 check("even a HUMAN actor with UNREPORTED bridge reachability → step_up, never granted", noReach.reasonCode === "BRIDGE_UNREACHABLE" && noReach.recommendedAction === "step_up" && noReach.actorGoverned === false);
 check("only an explicit bridgeReachable:true can back a grant (null never composes to 'ok')", composeDeviceRisk([fromAgentIdentity(noReach)]).riskTier !== "ok");
 
-// Exhaustive, in TWO passes over two DIFFERENT spaces.
+// Exhaustive, in THREE passes over two DIFFERENT spaces.
 //
 // Pass 1 quantifies over the NORMALIZED space — every value the normalizer can emit,
 // including `reportIntegrity` — against the evaluator alone. It proves the evaluator
@@ -426,6 +426,26 @@ const aliasTwoUp = Object.assign(Object.create(Object.create({ token_lifetime: "
 check("...at any depth in the chain, not just one level up", normalizeReport("a2", aliasTwoUp).reportIntegrity === "malformed");
 const symbolOnProto = Object.assign(Object.create({ [Symbol.for("agentRegistered")]: true }), { actorType: "agent", agentRegistered: true, tokenLifetime: "short_lived", scopeState: "least_privilege", approvalState: "approved", recordingState: "recorded", bridgeReachable: true }) as AgentIdentityReportRaw;
 check("...including a SYMBOL-keyed assertion on the prototype", normalizeReport("as", symbolOnProto).reportIntegrity === "malformed");
+// The sharp edge: a CORRECTLY-SPELLED inherited governance key. It is a stronger
+// assertion than a misspelled one, not a weaker one — and because values are read
+// own-only, it would otherwise be asserted by the report and read by nobody, so the
+// verdict granted while `report.agentRegistered` answered `true` on that same object.
+const knownOnProto = Object.assign(
+  Object.create({ agentRegistered: true, approvalState: "approved", tokenLifetime: "standing" }),
+  { actorType: "human", bridgeReachable: true },
+) as AgentIdentityReportRaw;
+check("a RECOGNIZED governance key inherited from the prototype is an unrecognized envelope", normalizeReport("kp", knownOnProto).reportIntegrity === "malformed");
+check("...so the human fast-path cannot be reached by hiding governance state on the prototype", evaluateAgentIdentity(normalizeReport("kp", knownOnProto)).recommendedAction !== "none");
+for (const key of ["agentRegistered", "approvalState", "tokenLifetime", "scopeState", "recordingState"]) {
+  const one = Object.assign(Object.create({ [key]: key === "agentRegistered" ? true : "unknown" }), { actorType: "human", bridgeReachable: true }) as AgentIdentityReportRaw;
+  check(`...for every governance field individually (${key})`, evaluateAgentIdentity(normalizeReport("k1", one)).recommendedAction !== "none");
+}
+// The scan's catch is load-bearing: a Proxy that THROWS from ownKeys must fail closed.
+const throwingKeys = new Proxy({ actorType: "human", bridgeReachable: true }, {
+  ownKeys: () => { throw new Error("hostile"); },
+}) as AgentIdentityReportRaw;
+check("a Proxy that THROWS from ownKeys fails closed, it does not grant", evaluateAgentIdentity(normalizeReport("tk", throwingKeys)).recommendedAction !== "none");
+check("a null report body is malformed, not an untyped TypeError", normalizeReport("nb", null as unknown as AgentIdentityReportRaw).reportIntegrity === "malformed");
 // The walk is bounded: a Proxy returning a fresh prototype on every call must not hang.
 const endlessProto = (): object => new Proxy({}, { getPrototypeOf: () => endlessProto(), ownKeys: () => [] });
 check("a Proxy with an endless prototype chain terminates and fails closed", normalizeReport("ep", endlessProto() as AgentIdentityReportRaw).reportIntegrity === "malformed");

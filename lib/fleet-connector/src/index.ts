@@ -176,3 +176,8 @@ export function fleetSummary(signals: FleetSignal[], reports: FleetHostReport[])
 }
 
 export { DEMO_FLEET_REPORTS, FLEET_OBSERVED_AT } from "./fixture";
+export {
+  FleetClient, toHostReport, fetchTransport,
+  type AccessOutcome, type FleetRequest, type FleetResponse,
+  type FleetTransport, type FleetClientConfig, type FleetActuation,
+} from "./client";

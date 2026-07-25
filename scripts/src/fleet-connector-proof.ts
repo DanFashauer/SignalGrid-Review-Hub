@@ -17,7 +17,11 @@ import {
   fleetSummary,
   DEMO_FLEET_REPORTS,
   FLEET_OBSERVED_AT,
+  FleetClient,
+  toHostReport,
   type FleetHostReport,
+  type FleetRequest,
+  type FleetResponse,
 } from "@workspace/fleet-connector";
 
 let passed = 0;
@@ -91,6 +95,39 @@ check("summary counts 6 enforceable (supervised)", sum.enforceable === 6);
 check("summary counts 5 disk-encrypted", sum.diskEncrypted === 5);
 check("summary counts 3 non-compliant", sum.nonCompliant === 3);
 check("summary raiseStepUp = all but the one healthy+supervised host", sum.raiseStepUp === 7);
+
+// ── enforcement client (decision -> Fleet), stubbed transport ─────────────────
+const requests: FleetRequest[] = [];
+const stub = async (req: FleetRequest): Promise<FleetResponse> => {
+  requests.push(req);
+  if (req.path === "/api/v1/fleet/hosts") {
+    return { status: 200, json: { hosts: [
+      { id: 42, uuid: "UUID-42", hostname: "ipad-ward-01", mdm: { enrollment_status: "On (automatic)" }, disk_encryption_enabled: true, os_version: "iOS 26.1", seen_time: FLEET_OBSERVED_AT },
+      { id: 7, uuid: "UUID-7", hostname: "iphone-personal", mdm: { enrollment_status: "Off" }, disk_encryption_enabled: false, os_version: "iOS 24.0", seen_time: FLEET_OBSERVED_AT },
+    ] } };
+  }
+  return { status: 200, json: {} };
+};
+const client = new FleetClient({ baseUrl: "https://fleet.example", token: "t", transport: stub, normalTeamId: 1, restrictedTeamId: 9 });
+
+const hosts = await client.listHostPosture();
+check("client maps Fleet hosts → reports", hosts.length === 2 && hosts[0].hostRef === "UUID-42");
+check("On (automatic) → managed + supervised", hosts[0].mdmEnrolled === true && hosts[0].supervised === true);
+check("disk_encryption_enabled true → diskEncryption on", hosts[0].diskEncryption === "on");
+check("os_version 'iOS 26.1' → osMajor 26", hosts[0].osMajor === 26);
+check("'Off' enrollment → not managed, not supervised", hosts[1].mdmEnrolled === false && hosts[1].supervised === false);
+
+const r1 = await client.applyDecision(42, "restrict");
+check("restrict → restricted team (tightened)", r1.teamId === 9 && r1.tightened === true);
+check("deny → restricted team (tightened)", (await client.applyDecision(42, "deny")).tightened === true);
+check("allow → normal team (relaxed)", (await client.applyDecision(42, "allow")).teamId === 1);
+check("step_up → normal team (not tightened)", (await client.applyDecision(42, "step_up")).tightened === false);
+check("transfer request carries host + team", requests.some((r) => r.path === "/api/v1/fleet/hosts/transfer" && (r.body as any).hosts[0] === 42));
+
+const failClient = new FleetClient({ baseUrl: "x", token: "t", transport: async () => ({ status: 500, json: {} }), normalTeamId: 1, restrictedTeamId: 9 });
+let threw = false;
+try { await failClient.applyDecision(1, "allow"); } catch { threw = true; }
+check("fail-closed: non-2xx transfer throws", threw === true);
 
 const total = passed + failures.length;
 console.log(`Fleet-connector proof: ${passed}/${total} assertions passed`);

@@ -19,6 +19,7 @@ final class AppModel {
     var decisions: [Decision] = []
     var connectors: [Connector] = []
     var policies: [Policy] = []
+    var fleetPosture: FleetPosture?
     var audit: AuditResponse?
     var appIntegrations: [AppIntegration] = []
     var activeSession: Session?
@@ -67,6 +68,8 @@ final class AppModel {
             policies = try await policiesValue
             audit = try await auditValue
             appIntegrations = try await integrationsValue
+            // Fleet (open-source MDM) posture via the control plane — non-fatal.
+            fleetPosture = try? await api.fetchFleetPosture()
             lastRefresh = Date()
         } catch {
             errorMessage = error.localizedDescription

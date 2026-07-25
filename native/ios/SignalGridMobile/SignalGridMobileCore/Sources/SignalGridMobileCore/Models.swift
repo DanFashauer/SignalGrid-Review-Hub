@@ -699,3 +699,44 @@ public struct TrustScenario: Identifiable, Hashable, Sendable {
         self.expectedOutcome = expectedOutcome
     }
 }
+
+// MARK: - Fleet (open-source MDM) posture — GET /cp/v1/fleet-mdm
+
+public struct FleetPostureHost: Codable, Hashable, Identifiable, Sendable {
+    public var id: String { hostRef }
+    public let hostRef: String
+    public let deviceManaged: Bool
+    public let deviceCompliance: String
+    public let baselineCompliance: String
+    public let postureFreshness: String
+    public let enforceable: Bool
+    public let assurance: String
+    public let rationale: String
+    public init(hostRef: String, deviceManaged: Bool, deviceCompliance: String, baselineCompliance: String, postureFreshness: String, enforceable: Bool, assurance: String, rationale: String) {
+        self.hostRef = hostRef; self.deviceManaged = deviceManaged; self.deviceCompliance = deviceCompliance
+        self.baselineCompliance = baselineCompliance; self.postureFreshness = postureFreshness
+        self.enforceable = enforceable; self.assurance = assurance; self.rationale = rationale
+    }
+}
+
+public struct FleetPostureSummary: Codable, Hashable, Sendable {
+    public let hosts: Int
+    public let managed: Int
+    public let enforceable: Int
+    public let diskEncrypted: Int
+    public let nonCompliant: Int
+    public let raiseStepUp: Int
+    public init(hosts: Int, managed: Int, enforceable: Int, diskEncrypted: Int, nonCompliant: Int, raiseStepUp: Int) {
+        self.hosts = hosts; self.managed = managed; self.enforceable = enforceable
+        self.diskEncrypted = diskEncrypted; self.nonCompliant = nonCompliant; self.raiseStepUp = raiseStepUp
+    }
+}
+
+public struct FleetPosture: Codable, Hashable, Sendable {
+    public let observedAt: String
+    public let summary: FleetPostureSummary
+    public let signals: [FleetPostureHost]
+    public init(observedAt: String, summary: FleetPostureSummary, signals: [FleetPostureHost]) {
+        self.observedAt = observedAt; self.summary = summary; self.signals = signals
+    }
+}

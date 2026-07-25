@@ -180,6 +180,17 @@ public actor MockSignalGridAPI: SignalGridAPI {
 
     public func fetchConnectors() async throws -> [Connector] { connectors }
 
+    public func fetchFleetPosture() async throws -> FleetPosture {
+        FleetPosture(
+            observedAt: "2026-07-16T14:00:00.000Z",
+            summary: FleetPostureSummary(hosts: 3, managed: 3, enforceable: 2, diskEncrypted: 2, nonCompliant: 1, raiseStepUp: 2),
+            signals: [
+                FleetPostureHost(hostRef: "ipad-ward-01", deviceManaged: true, deviceCompliance: "compliant", baselineCompliance: "aligned", postureFreshness: "fresh", enforceable: true, assurance: "standard", rationale: "Fleet posture healthy — enrolled, supervised, encrypted, fresh"),
+                FleetPostureHost(hostRef: "ipad-ward-02", deviceManaged: true, deviceCompliance: "non_compliant", baselineCompliance: "drifted", postureFreshness: "fresh", enforceable: true, assurance: "raise_step_up", rationale: "disk encryption off"),
+                FleetPostureHost(hostRef: "ipad-byod-01", deviceManaged: true, deviceCompliance: "compliant", baselineCompliance: "aligned", postureFreshness: "fresh", enforceable: false, assurance: "raise_step_up", rationale: "unsupervised (kiosk/allowlist/non-removable cannot engage)"),
+            ])
+    }
+
     public func fetchSyncRuns(connectorId: String) async throws -> [ConnectorSyncRun] {
         syncRuns[connectorId] ?? []
     }

@@ -53,6 +53,7 @@ public protocol SignalGridAPI: Sendable {
     func fetchConnectors() async throws -> [Connector]
     func fetchSyncRuns(connectorId: String) async throws -> [ConnectorSyncRun]
     func syncConnector(id: String) async throws -> ConnectorSyncRun
+    func fetchFleetPosture() async throws -> FleetPosture
 
     func fetchPolicies() async throws -> [Policy]
     func fetchPolicyVersions(policyId: String) async throws -> [PolicyVersion]
@@ -88,6 +89,11 @@ public actor LiveSignalGridAPI: SignalGridAPI {
     public func fetchMetrics() async throws -> MetricsSummary {
         let response: MetricsEnvelope = try await request(path: "v1/metrics")
         return response.metrics
+    }
+
+    public func fetchFleetPosture() async throws -> FleetPosture {
+        // Control-plane route: GET /api/cp/v1/fleet-mdm (Fleet osquery host posture).
+        try await request(path: "cp/v1/fleet-mdm")
     }
 
     public func fetchDecisions() async throws -> [Decision] {

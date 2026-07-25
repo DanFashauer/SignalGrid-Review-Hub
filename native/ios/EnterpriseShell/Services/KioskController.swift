@@ -24,10 +24,32 @@ import UIKit
 final class KioskController {
 
     static let shared = KioskController()
-    private init() {}
+    private init() {
+        // Observe MANUAL Guided Access (triple-click side button). An app can't START
+        // Guided Access — only the OS/user can — but this lets a device WITHOUT MDM
+        // supervision be locked for testing/low-MDM deployments, and the shell then
+        // recognizes it as an active kiosk. ASAM (requestGuidedAccessSession) remains
+        // the supervised, app-requested path.
+        NotificationCenter.default.addObserver(
+            forName: UIAccessibility.guidedAccessStatusDidChangeNotification,
+            object: nil, queue: .main) { [weak self] _ in self?.guidedAccessChanged() }
+    }
 
     private(set) var isLocked = false
     private(set) var isRecoveryUnlocked = false
+
+    /// True when the device is ACTUALLY captive — either app-requested ASAM
+    /// (`isLocked`) or a manually-enabled Guided Access session (the no-MDM
+    /// alternative). Use this to verify the kiosk in testing without supervision.
+    var isKioskActive: Bool { isLocked || UIAccessibility.isGuidedAccessEnabled }
+
+    private func guidedAccessChanged() {
+        let on = UIAccessibility.isGuidedAccessEnabled
+        if on { isLocked = true }   // reflect a manual Guided Access lock as active
+        AuditLogger.shared.log(
+            event: on ? .kioskLockEngaged : .kioskUnlocked,
+            metadata: ["mode": "guided_access_manual"])
+    }
 
     /// Lock the IDLE device into Autonomous Single App Mode, so a shared device is
     /// held captive to the badge / login screen until someone authenticates. Called

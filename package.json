@@ -61,6 +61,7 @@
     "verify:all": "node scripts/verify-all.mjs",
     "proof:signal-discovery": "pnpm --filter @workspace/scripts run proof:signal-discovery",
     "proof:ddm-connector": "pnpm --filter @workspace/scripts run proof:ddm-connector",
+    "proof:fleet-connector": "pnpm --filter @workspace/scripts run proof:fleet-connector",
     "proof:decision-store-pg": "pnpm --filter @workspace/scripts run proof:decision-store-pg",
     "proof:session-store": "pnpm --filter @workspace/scripts run proof:session-store",
     "proof:session-store-pg": "pnpm --filter @workspace/scripts run proof:session-store-pg",

@@ -75,6 +75,7 @@ const STEPS = [
   { name: "Proof: recommendations", cmd: ["pnpm", "run", "proof:recommendations"] },
   { name: "Proof: signal-discovery", cmd: ["pnpm", "run", "proof:signal-discovery"] },
   { name: "Proof: ddm-connector", cmd: ["pnpm", "run", "proof:ddm-connector"] },
+  { name: "Proof: fleet-connector", cmd: ["pnpm", "run", "proof:fleet-connector"] },
   { name: "Proof: signal-radar", cmd: ["pnpm", "run", "proof:signal-radar"] },
   { name: "Proof: control-plane", cmd: ["pnpm", "run", "proof:control-plane"] },
   { name: "Proof: edge-sync", cmd: ["pnpm", "run", "proof:edge-sync"] },

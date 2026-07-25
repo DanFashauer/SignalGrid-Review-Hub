@@ -24,6 +24,15 @@ what real APIs actually expose, instead of from an invented shape.
 
 ## Physical access control (PACS) → `pacs-access`
 
+> **Acronym warning — this one bites in healthcare.** In this repo **PACS** always means
+> *Physical Access Control System* (doors, turnstiles, badge readers). In a hospital,
+> **PACS** far more commonly means *Picture Archiving and Communication System* — the
+> medical-imaging store that sits beside RIS and VNA. Both systems are present in the
+> same building, and a clinical stakeholder hearing "PACS integration" will assume
+> imaging unless told otherwise. Say "physical access control" in full on first use in
+> any customer-facing material.
+
+
 The [`pacs-access`](INTEGRATION_CATALOG.md) dimension was designed against these
 surfaces. Two independent vendors were studied to keep the normalized shape
 vendor-neutral rather than modeled on any single product.

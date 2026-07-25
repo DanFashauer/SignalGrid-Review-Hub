@@ -1,0 +1,308 @@
+{
+  "accessToken": "sg-device-management-health-fixture-token",
+  "devices": {
+    "managed-healthy": {
+      "deviceId": "ipad-ward-01",
+      "report": {
+        "checkInFreshness": "fresh",
+        "policyDrift": "on_baseline",
+        "complianceCoverage": "covered",
+        "enrollmentState": "enrolled",
+        "managementReachable": true
+      },
+      "expected": {
+        "posture": "managed_healthy",
+        "reasonCode": "MANAGEMENT_HEALTHY",
+        "recommendedAction": "none",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 0,
+        "managementEffective": true
+      }
+    },
+    "enrollment-retired": {
+      "deviceId": "ipad-ward-02",
+      "report": {
+        "checkInFreshness": "fresh",
+        "policyDrift": "on_baseline",
+        "complianceCoverage": "covered",
+        "enrollmentState": "retired",
+        "managementReachable": true
+      },
+      "expected": {
+        "posture": "unenrolled_device",
+        "reasonCode": "ENROLLMENT_RETIRED",
+        "recommendedAction": "restrict",
+        "criticalFindingsCount": 1,
+        "unknownSignalsCount": 0,
+        "managementEffective": false
+      }
+    },
+    "enrollment-failed": {
+      "deviceId": "ipad-ward-03",
+      "report": {
+        "checkInFreshness": "fresh",
+        "policyDrift": "on_baseline",
+        "complianceCoverage": "uncovered",
+        "enrollmentState": "failed",
+        "managementReachable": true
+      },
+      "expected": {
+        "posture": "unenrolled_device",
+        "reasonCode": "ENROLLMENT_FAILED",
+        "recommendedAction": "restrict",
+        "criticalFindingsCount": 2,
+        "unknownSignalsCount": 0,
+        "managementEffective": false
+      }
+    },
+    "compliance-uncovered": {
+      "deviceId": "ipad-ward-04",
+      "report": {
+        "checkInFreshness": "fresh",
+        "policyDrift": "on_baseline",
+        "complianceCoverage": "uncovered",
+        "enrollmentState": "enrolled",
+        "managementReachable": true
+      },
+      "expected": {
+        "posture": "unmanaged_device",
+        "reasonCode": "COMPLIANCE_UNCOVERED",
+        "recommendedAction": "restrict",
+        "criticalFindingsCount": 1,
+        "unknownSignalsCount": 0,
+        "managementEffective": false
+      }
+    },
+    "policy-drifted": {
+      "deviceId": "ipad-ward-05",
+      "report": {
+        "checkInFreshness": "fresh",
+        "policyDrift": "drifted",
+        "complianceCoverage": "covered",
+        "enrollmentState": "enrolled",
+        "managementReachable": true
+      },
+      "expected": {
+        "posture": "drifted_config",
+        "reasonCode": "POLICY_DRIFTED",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 0,
+        "managementEffective": false
+      }
+    },
+    "checkin-stale": {
+      "deviceId": "ipad-ward-06",
+      "report": {
+        "checkInFreshness": "stale",
+        "policyDrift": "on_baseline",
+        "complianceCoverage": "covered",
+        "enrollmentState": "enrolled",
+        "managementReachable": true
+      },
+      "expected": {
+        "posture": "stale_management",
+        "reasonCode": "CHECKIN_STALE",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 0,
+        "managementEffective": false
+      }
+    },
+    "checkin-never": {
+      "deviceId": "ipad-ward-07",
+      "report": {
+        "checkInFreshness": "never",
+        "policyDrift": "on_baseline",
+        "complianceCoverage": "covered",
+        "enrollmentState": "enrolled",
+        "managementReachable": true
+      },
+      "expected": {
+        "posture": "stale_management",
+        "reasonCode": "CHECKIN_NEVER",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 0,
+        "managementEffective": false
+      }
+    },
+    "checkin-never-nothing-claimed": {
+      "deviceId": "ipad-ward-08",
+      "report": {
+        "checkInFreshness": "never",
+        "policyDrift": "unknown",
+        "complianceCoverage": "unknown",
+        "enrollmentState": "enrolled",
+        "managementReachable": true
+      },
+      "expected": {
+        "posture": "stale_management",
+        "reasonCode": "CHECKIN_NEVER",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 2,
+        "managementEffective": false
+      }
+    },
+    "enrollment-unknown": {
+      "deviceId": "ipad-ward-09",
+      "report": {
+        "checkInFreshness": "fresh",
+        "policyDrift": "on_baseline",
+        "complianceCoverage": "covered",
+        "managementReachable": true
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "MANAGEMENT_STATE_UNKNOWN",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "managementEffective": false
+      }
+    },
+    "coverage-unknown": {
+      "deviceId": "ipad-ward-10",
+      "report": {
+        "checkInFreshness": "fresh",
+        "policyDrift": "on_baseline",
+        "enrollmentState": "enrolled",
+        "managementReachable": true
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "MANAGEMENT_STATE_UNKNOWN",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "managementEffective": false
+      }
+    },
+    "drift-unknown": {
+      "deviceId": "ipad-ward-11",
+      "report": {
+        "checkInFreshness": "fresh",
+        "complianceCoverage": "covered",
+        "enrollmentState": "enrolled",
+        "managementReachable": true
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "MANAGEMENT_STATE_UNKNOWN",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "managementEffective": false
+      }
+    },
+    "management-unreachable": {
+      "deviceId": "ipad-ward-12",
+      "report": {
+        "checkInFreshness": "fresh",
+        "policyDrift": "on_baseline",
+        "complianceCoverage": "covered",
+        "enrollmentState": "enrolled",
+        "managementReachable": false
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "MANAGEMENT_UNREACHABLE",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 0,
+        "managementEffective": false
+      }
+    },
+    "reachability-unreported": {
+      "deviceId": "ipad-ward-13",
+      "report": {
+        "checkInFreshness": "fresh",
+        "policyDrift": "on_baseline",
+        "complianceCoverage": "covered",
+        "enrollmentState": "enrolled"
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "MANAGEMENT_UNREACHABLE",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "managementEffective": false
+      }
+    },
+    "report-malformed-enum": {
+      "deviceId": "ipad-ward-14",
+      "report": {
+        "checkInFreshness": "very_old",
+        "policyDrift": "on_baseline",
+        "complianceCoverage": "covered",
+        "enrollmentState": "enrolled",
+        "managementReachable": true
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "REPORT_MALFORMED",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 2,
+        "managementEffective": false
+      }
+    },
+    "report-malformed-boolean": {
+      "deviceId": "ipad-ward-15",
+      "report": {
+        "checkInFreshness": "fresh",
+        "policyDrift": "on_baseline",
+        "complianceCoverage": "covered",
+        "enrollmentState": "enrolled",
+        "managementReachable": "true"
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "REPORT_MALFORMED",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 2,
+        "managementEffective": false
+      }
+    },
+    "report-aliased-keys": {
+      "deviceId": "ipad-ward-16",
+      "report": {
+        "checkInFreshness": "fresh",
+        "policyDrift": "on_baseline",
+        "complianceCoverage": "covered",
+        "enrollmentState": "enrolled",
+        "managementReachable": true,
+        "policy_drift": "drifted"
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "REPORT_MALFORMED",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "managementEffective": false
+      }
+    },
+    "worst-of-several": {
+      "deviceId": "ipad-ward-17",
+      "report": {
+        "checkInFreshness": "never",
+        "policyDrift": "drifted",
+        "complianceCoverage": "uncovered",
+        "enrollmentState": "retired",
+        "managementReachable": false
+      },
+      "expected": {
+        "posture": "unenrolled_device",
+        "reasonCode": "ENROLLMENT_RETIRED",
+        "recommendedAction": "restrict",
+        "criticalFindingsCount": 2,
+        "unknownSignalsCount": 0,
+        "managementEffective": false
+      }
+    }
+  }
+}

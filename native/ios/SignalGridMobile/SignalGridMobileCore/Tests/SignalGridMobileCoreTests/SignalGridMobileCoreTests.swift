@@ -148,3 +148,77 @@ final class SignalGridMobileCoreTests: XCTestCase {
         XCTAssertEqual(AppSessionMode.deny.rawValue, "deny")
     }
 }
+
+// MARK: - Step-up gate
+//
+// The decision path is pure Swift so it is verified on every platform, including the
+// Linux CI box that has no biometric hardware at all.
+
+private struct StubAuthenticator: StepUpAuthenticating {
+    let outcome: StepUpOutcome
+    let recorder: Recorder
+
+    final class Recorder: @unchecked Sendable {
+        var reasons: [StepUpReason] = []
+    }
+
+    func challenge(reason: StepUpReason) async -> StepUpOutcome {
+        recorder.reasons.append(reason)
+        return outcome
+    }
+}
+
+final class StepUpGateTests: XCTestCase {
+    func testOnlyStepUpTriggersAChallenge() {
+        XCTAssertTrue(StepUpGate.requiresChallenge(for: .stepUp))
+        // A refusal is not a step-up. Challenging for one would imply the action becomes
+        // available if the person authenticates, and it does not.
+        XCTAssertFalse(StepUpGate.requiresChallenge(for: .allow))
+        XCTAssertFalse(StepUpGate.requiresChallenge(for: .restrict))
+        XCTAssertFalse(StepUpGate.requiresChallenge(for: .deny))
+    }
+
+    func testAllowNeverPromptsThePerson() async {
+        let rec = StubAuthenticator.Recorder()
+        let gate = StepUpGate(authenticator: StubAuthenticator(outcome: .satisfied, recorder: rec))
+        let result = await gate.evaluate(outcome: .allow, reason: .posture)
+        XCTAssertNil(result)
+        XCTAssertTrue(rec.reasons.isEmpty, "an allow verdict must not interrupt the clinician")
+        XCTAssertTrue(StepUpGate.permits(result))
+    }
+
+    func testSatisfiedChallengePermitsTheAction() async {
+        let rec = StubAuthenticator.Recorder()
+        let gate = StepUpGate(authenticator: StubAuthenticator(outcome: .satisfied, recorder: rec))
+        let result = await gate.evaluate(outcome: .stepUp, reason: .custody)
+        XCTAssertEqual(result, .satisfied)
+        XCTAssertEqual(rec.reasons, [.custody])
+        XCTAssertTrue(StepUpGate.permits(result))
+    }
+
+    func testRefusedChallengeWithholdsTheAction() async {
+        let gate = StepUpGate(authenticator: StubAuthenticator(outcome: .refused("cancelled"), recorder: .init()))
+        let result = await gate.evaluate(outcome: .stepUp, reason: .privilegedAction)
+        XCTAssertFalse(StepUpGate.permits(result))
+    }
+
+    func testUnavailableAuthenticatorIsNotAFreePass() async {
+        // "We could not ask" is not "they answered". A device with no biometric
+        // hardware must not be more permissive than one that asked and was refused —
+        // the same discipline the server-side connectors apply to an unreadable signal.
+        let gate = StepUpGate(authenticator: StubAuthenticator(outcome: .unavailable("no hardware"), recorder: .init()))
+        let result = await gate.evaluate(outcome: .stepUp, reason: .staleSession)
+        XCTAssertFalse(StepUpGate.permits(result))
+    }
+
+    func testEveryReasonCarriesASpecificPrompt() {
+        // A vague prompt teaches people to approve reflexively, which defeats the
+        // control. Each reason must say what actually changed.
+        let reasons: [StepUpReason] = [.posture, .custody, .privilegedAction, .staleSession]
+        for reason in reasons {
+            XCTAssertTrue(reason.localizedReason.contains("Confirm it's you"))
+            XCTAssertGreaterThan(reason.localizedReason.count, 30, "\(reason) prompt is too vague to be meaningful")
+        }
+        XCTAssertEqual(Set(reasons.map(\.localizedReason)).count, reasons.count, "prompts must be distinguishable")
+    }
+}

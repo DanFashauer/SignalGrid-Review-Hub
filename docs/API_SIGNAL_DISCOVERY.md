@@ -165,6 +165,56 @@ and recovery-key escrow / LAPS rotation state.
 modelled (`checkInFreshness`, `policyDrift`, `complianceCoverage`, `enrollmentState`);
 recovery-key escrow / LAPS rotation state is **not** yet modelled and remains open.
 
+## Cross-checks against vendor reference material
+
+Reference diagrams are useful mainly as a *check*: they either confirm a dimension is
+modelled correctly or name a signal we do not carry. Recording both outcomes keeps this
+file honest — most of the time the answer is "already covered", and saying so is worth
+as much as finding a gap.
+
+### Privileged Access Management (PAM) lifecycle — ✅ already covered
+
+The standard PAM wheel (track assets & privileges → attribute-based access control →
+monitor privilege assignment vs usage → zero trust → record & audit → monitor & alert →
+temporary privilege escalation) maps almost entirely onto the existing
+[`access-governance`](INTEGRATION_CATALOG.md) dimension:
+
+| PAM stage | Existing field |
+| --- | --- |
+| Temporary privilege escalation | `privilege`: `jit_active` / `jit_expired` / `standing` |
+| Record and audit | `privilegedSessionMonitored` |
+| Monitor assignment of privileges | `entitlementScope`: `over_privileged` / `out_of_scope` |
+| Recertification | `certification`: `recert_due` / `never_certified` / `decertified` |
+| Leaver / orphan handling | `accountStatus`: `orphaned` / `leaver_pending` |
+| Separation of duty | `sodConflict` |
+
+**One nuance not distinctly modelled:** privilege assignment *versus actual usage* — an
+entitlement that was granted, never revoked, and never exercised. Today that would have
+to arrive already judged as `over_privileged`. Whether it deserves its own field depends
+on whether real IGA bridges expose usage telemetry separately; recorded as open, not
+queued.
+
+### Intune as a Zero Trust engine — ✅ positioning confirmed, ❓ one gap
+
+The framing that "device compliance data is meaningless in isolation; its value is
+realized when the health proof reaches the identity plane before access is granted" is
+the same thesis this product is built on, and the Conditional Access comparison it
+implies is already handled honestly in
+[COMPETITIVE_ENTRA](COMPETITIVE_ENTRA.md) — including the note that SignalGrid must
+*stop* claiming Entra cannot do per-action step-up. The real-time health telemetry it
+names (firewall state, BitLocker/encryption, antivirus health, OS patch level) is
+already carried by `macos-posture` and `intune-entra-posture`.
+
+**Gap: Proactive Remediation health.** Intune's detection-and-remediation script
+framework runs on a recurring schedule to find and fix configuration drift. It appears
+in two independent Intune sources (as workload ID 9 in the on-demand sync path, and as a
+headline capability here) and has **zero** mentions anywhere in this repo. It matters
+because `device-management-health` already reports `policyDrift: drifted` — and a
+drifted device whose remediation scripts are *also* failing is materially worse than one
+where self-healing is still running. Queued alongside the MDM/IME check-in split.
+
+---
+
 ---
 
 ## Method

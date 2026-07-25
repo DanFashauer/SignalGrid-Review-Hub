@@ -15,7 +15,7 @@ verdict into a runtime **allow / step-up / restrict / deny** decision that
 Modeled in `@workspace/integrations` → `credential-exposure`
 (`evaluateCredentialExposure`, `CredentialExposureConnector`), fused via
 `@workspace/posture-composition` (`fromCredentialExposure`), and proven by
-`pnpm run proof:credential-exposure` (26 checks, fully offline).
+`pnpm run proof:credential-exposure` (28 checks, fully offline).
 
 ## The honest boundary — consume, don't detect
 

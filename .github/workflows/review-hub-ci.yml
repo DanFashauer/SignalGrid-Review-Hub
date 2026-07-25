@@ -127,6 +127,11 @@ jobs:
       - name: Grant-safety harness self-proof (allow-path brute-force detector)
         run: pnpm run proof:grant-safety
 
+      # Documented proof check-counts are evidence; evidence that silently drifts is
+      # worse than none. Fails if any "(N checks)" in docs/ disagrees with the proof.
+      - name: Proof-count sync (docs match their proofs)
+        run: pnpm run check:proof-counts
+
       - name: Posture-composition (unified signal fusion) proof
         run: pnpm run proof:posture-composition
 

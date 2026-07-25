@@ -151,6 +151,18 @@ const inherited = normalizeReport("inh", Object.create({
 }) as DeviceManagementHealthReportRaw);
 check("a report with ZERO own keys asserts nothing — every field falls to unknown", inherited.checkInFreshness === "unknown" && inherited.managementReachable === null);
 check("...and therefore cannot grant", evaluateDeviceManagementHealth(inherited).recommendedAction !== "none");
+// Own-only READS and the chain SCAN are deliberately asymmetric — see the connector.
+// An inherited value confirms nothing, but an inherited UNRECOGNIZED key is still an
+// assertion in a spelling we ignore.
+const aliasOnProto = Object.assign(Object.create({ policy_drift: "drifted" }), { checkInFreshness: "fresh", policyDrift: "on_baseline", complianceCoverage: "covered", enrollmentState: "enrolled", managementReachable: true }) as DeviceManagementHealthReportRaw;
+check("an unrecognized key INHERITED from the prototype is still an unrecognized envelope", normalizeReport("ap", aliasOnProto).reportIntegrity === "malformed");
+check("...so a report whose own keys all confirm still cannot grant", evaluateDeviceManagementHealth(normalizeReport("ap", aliasOnProto)).recommendedAction !== "none");
+const symbolKeyed = Object.assign({}, { checkInFreshness: "fresh", policyDrift: "on_baseline", complianceCoverage: "covered", enrollmentState: "enrolled", managementReachable: true }) as DeviceManagementHealthReportRaw;
+(symbolKeyed as Record<symbol, unknown>)[Symbol.for("policyDrift")] = "drifted";
+check("a SYMBOL-keyed assertion is an unrecognized envelope", normalizeReport("sym", symbolKeyed).reportIntegrity === "malformed");
+const endlessProto = (): object => new Proxy({}, { getPrototypeOf: () => endlessProto(), ownKeys: () => [] });
+check("a Proxy with an endless prototype chain terminates and fails closed", normalizeReport("ep", endlessProto() as DeviceManagementHealthReportRaw).reportIntegrity === "malformed");
+check("an ARRAY report is malformed, never a grant", normalizeReport("arr", [] as unknown as DeviceManagementHealthReportRaw).reportIntegrity === "malformed");
 const hidden = new Proxy(
   { checkInFreshness: "fresh", policyDrift: "on_baseline", complianceCoverage: "covered", enrollmentState: "enrolled", managementReachable: true, policy_drift: "drifted" },
   { ownKeys: () => [], getOwnPropertyDescriptor: () => undefined },

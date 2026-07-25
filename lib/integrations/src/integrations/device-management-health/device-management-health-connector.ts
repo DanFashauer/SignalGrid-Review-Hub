@@ -81,14 +81,43 @@ function isPlainReport(report: unknown): report is object {
   return typeof report === "object" && report !== null && !Array.isArray(report);
 }
 
-/** Does the report carry any OWN key this connector does not understand? A symbol key
- *  counts — it is an assertion in a spelling we ignore. */
+/** Depth bound for the prototype scan below. A Proxy may return a fresh object from
+ *  `getPrototypeOf` on every call, so the walk must be bounded rather than trusting it
+ *  to terminate. Exceeding the bound means we could not establish what the report
+ *  carries — which is a failure to understand it, so it fails closed. */
+const MAX_PROTOTYPE_DEPTH = 64;
+
+/** Does the report carry any key this connector does not understand?
+ *
+ *  This scan walks the PROTOTYPE CHAIN even though every VALUE read is own-only, and the
+ *  asymmetry is deliberate — an earlier revision collapsed the two and reopened a hole.
+ *  Reading own-only is right: an inherited value is the prototype's claim, not this
+ *  report's, so it must not be usable as a confirmation. But *scanning* own-only is
+ *  wrong: an inherited `agent_registered` is still a governance assertion in a spelling
+ *  we ignore, and this scan is the only thing that notices it. Narrowing both together
+ *  let a report grant while ordinary property access on that same object answered
+ *  `report.agent_registered === false`.
+ *
+ *  A symbol key counts. A class instance fails closed (its prototype carries
+ *  `constructor`) — deliberate: the transport contract is a plain JSON object. A
+ *  `JSON.parse` result is unaffected, since its prototype is `Object.prototype` and the
+ *  walk stops there. */
 function hasUnrecognizedKey(report: object, known: readonly string[]): boolean {
-  for (const k of Reflect.ownKeys(report)) {
-    if (typeof k === "symbol") return true;
-    if (!known.includes(k)) return true;
+  try {
+    let o: object | null = report;
+    for (let depth = 0; o !== null && o !== Object.prototype; depth += 1) {
+      if (depth >= MAX_PROTOTYPE_DEPTH) return true;
+      for (const k of Reflect.ownKeys(o)) {
+        if (typeof k === "symbol") return true;
+        if (!known.includes(k)) return true;
+      }
+      o = Object.getPrototypeOf(o) as object | null;
+    }
+    return false;
+  } catch {
+    // A hostile Proxy can throw from `ownKeys` or `getPrototypeOf`. We learned nothing.
+    return true;
   }
-  return false;
 }
 
 const CHECK_IN = ["fresh", "stale", "never", "unknown"] as const;

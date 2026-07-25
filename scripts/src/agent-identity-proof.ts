@@ -411,6 +411,25 @@ const inherited = normalizeReport("inh", Object.create({
 }) as AgentIdentityReportRaw);
 check("a report with ZERO own keys asserts nothing — every field falls to unknown", inherited.actorType === "unknown" && inherited.agentRegistered === null && inherited.bridgeReachable === null);
 check("...and therefore cannot grant", evaluateAgentIdentity(inherited).recommendedAction !== "none");
+// Own-only READS and the chain SCAN are deliberately asymmetric. An inherited value
+// cannot confirm anything — but an inherited UNRECOGNIZED key is still a governance
+// assertion in a spelling we ignore, and the scan is the only thing that sees it.
+// Collapsing the two once let a report grant while `report.agent_registered` answered
+// `false` on that very object.
+const aliasOnProto = Object.assign(
+  Object.create({ agent_registered: false }),
+  { actorType: "agent", agentRegistered: true, tokenLifetime: "short_lived", scopeState: "least_privilege", approvalState: "approved", recordingState: "recorded", bridgeReachable: true },
+) as AgentIdentityReportRaw;
+check("an unrecognized governance key INHERITED from the prototype is still an unrecognized envelope", normalizeReport("ap", aliasOnProto).reportIntegrity === "malformed");
+check("...so a report whose own keys all confirm still cannot grant", evaluateAgentIdentity(normalizeReport("ap", aliasOnProto)).recommendedAction !== "none");
+const aliasTwoUp = Object.assign(Object.create(Object.create({ token_lifetime: "standing" })), { actorType: "agent", agentRegistered: true, tokenLifetime: "short_lived", scopeState: "least_privilege", approvalState: "approved", recordingState: "recorded", bridgeReachable: true }) as AgentIdentityReportRaw;
+check("...at any depth in the chain, not just one level up", normalizeReport("a2", aliasTwoUp).reportIntegrity === "malformed");
+const symbolOnProto = Object.assign(Object.create({ [Symbol.for("agentRegistered")]: true }), { actorType: "agent", agentRegistered: true, tokenLifetime: "short_lived", scopeState: "least_privilege", approvalState: "approved", recordingState: "recorded", bridgeReachable: true }) as AgentIdentityReportRaw;
+check("...including a SYMBOL-keyed assertion on the prototype", normalizeReport("as", symbolOnProto).reportIntegrity === "malformed");
+// The walk is bounded: a Proxy returning a fresh prototype on every call must not hang.
+const endlessProto = (): object => new Proxy({}, { getPrototypeOf: () => endlessProto(), ownKeys: () => [] });
+check("a Proxy with an endless prototype chain terminates and fails closed", normalizeReport("ep", endlessProto() as AgentIdentityReportRaw).reportIntegrity === "malformed");
+check("an ARRAY report is malformed, never a grant", normalizeReport("arr", [] as unknown as AgentIdentityReportRaw).reportIntegrity === "malformed");
 // A polluted global prototype is likewise not an assertion this report made.
 const proto = Object.prototype as unknown as Record<string, unknown>;
 proto.actorType = "human";

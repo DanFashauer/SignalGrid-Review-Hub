@@ -1,4 +1,5 @@
 import {
+  type ActorClassification,
   type AgentIdentityAction,
   type AgentIdentityPosture,
   type AgentIdentityReasonCode,
@@ -31,11 +32,17 @@ import {
  * `access-governance` treats session monitoring as moot for a non-elevated
  * principal — the fields are not merely ignored, they do not apply.
  *
- * That branch is safe ONLY because `actorType === "human"` is unreachable for a report
- * that asserts governance state: the normalizer forces any such self-contradictory
- * report to an unreadable actor type, which lands in the non-human branch below and is
- * judged on the very facts it asserted. Read this function together with
- * `normalizeReport` — neither is fail-safe alone.
+ * That branch is safe only in concert with `normalizeReport`, which refuses to emit
+ * `actorType === "human"` for a report that is malformed or that asserts governance
+ * state no person can hold. Read the two together — neither is fail-safe alone, and
+ * this file additionally refuses to grant on a malformed report so the allow path does
+ * not DEPEND on the normalizer having voided the label.
+ *
+ * The honest limit of this dimension: it trusts the bridge's actor classification. A
+ * bridge that simply lies — reporting a clean, silent `"human"` for an AI agent — is
+ * granted, and no amount of field cross-checking here can catch that. What the checks
+ * buy is that the lie must be CONSISTENT and well-formed; a sloppy or half-hearted one
+ * fails closed.
  *
  * `covered=false` = no governance result was returned for this actor → unknown (a
  * gap), step_up.
@@ -70,15 +77,32 @@ export function evaluateAgentIdentity(
   const criticalFindings: string[] = [];
   const unknownSignals: string[] = [];
   const nonHuman = actor.actorType === "agent" || actor.actorType === "service_account";
-  const base = { criticalFindings, unknownSignals, deviceId: actor.deviceId, nonHumanActor: nonHuman };
+  const classification: ActorClassification =
+    actor.actorType === "human" ? "human" : nonHuman ? "non_human" : "unclassified";
+  const base = {
+    criticalFindings,
+    unknownSignals,
+    deviceId: actor.deviceId,
+    nonHumanActor: nonHuman,
+    actorClassification: classification,
+  };
 
   // No governance result at all → a gap. Raise the bar (never a governed grant).
   // Nothing about the actor is confirmed here, so it is not reported as non-human.
   if (!covered) {
-    return { ...base, nonHumanActor: false, posture: "unknown", reasonCode: "NOT_COVERED", recommendedAction: "step_up", actorGoverned: false };
+    return { ...base, nonHumanActor: false, actorClassification: "unclassified", posture: "unknown", reasonCode: "NOT_COVERED", recommendedAction: "step_up", actorGoverned: false };
   }
 
   const candidates: Candidate[] = [];
+
+  // Defence in depth. The normalizer already voids a "human" claim on a malformed
+  // report, so in practice this fires only for a non-human or already-unreadable
+  // actor — but the grant must not DEPEND on that having happened. A report we could
+  // not fully parse is never a grant, whatever its fields normalized to.
+  if (actor.reportIntegrity !== "clean") {
+    unknownSignals.push("report_integrity");
+    candidates.push({ posture: "unverified", action: "step_up", reason: "REPORT_MALFORMED" });
+  }
 
   // Governance facts are collected for any actor that is NOT a confirmed human —
   // including one whose type is unreadable. A known-bad governance fact (an

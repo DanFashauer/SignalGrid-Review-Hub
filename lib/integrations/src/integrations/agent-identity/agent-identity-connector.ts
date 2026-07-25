@@ -8,12 +8,14 @@
 // no write path (it registers no agent, mints no token, and revokes no access).
 
 import {
+  AGENT_IDENTITY_REPORT_KEYS,
   AgentIdentityConnectorError,
   type AgentIdentityReportRaw,
   type ActorType,
   type ApprovalState,
   type NormalizedAgentIdentity,
   type RecordingState,
+  type ReportIntegrity,
   type ScopeState,
   type TokenLifetime,
 } from "./types";
@@ -38,6 +40,25 @@ function boolOrNull(v: unknown): boolean | null {
   return typeof v === "boolean" ? v : null;
 }
 
+/** Did the report ASSERT something here that we could not parse?
+ *
+ *  `oneOf` and `boolOrNull` are lossy by design: they collapse "absent" and
+ *  "unreadable" into the same safe sentinel. That is correct for deciding a value, and
+ *  wrong for deciding whether the report was UNDERSTOOD — the human branch grants
+ *  without reading these fields, so an unreadable assertion would otherwise be
+ *  laundered into silence. These two predicates recover the distinction. A field is
+ *  malformed when it is present and does not parse; absent is never malformed. */
+function enumMalformed(v: unknown, allowed: readonly string[]): boolean {
+  if (v === undefined) return false;
+  if (typeof v !== "string") return true;
+  return !allowed.includes(v.trim().toLowerCase());
+}
+
+function boolMalformed(v: unknown): boolean {
+  if (v === undefined || v === null) return false;
+  return typeof v !== "boolean";
+}
+
 /** Normalize an agent-governance report. Defensive throughout: a missing/errored
  *  field yields the fail-safe unknown/null, never a fabricated "human"/"approved". */
 export function normalizeReport(
@@ -52,30 +73,59 @@ export function normalizeReport(
   const approvalState = oneOf<ApprovalState>(report.approvalState, ["approved", "pending", "none", "expired", "unknown"], "unknown");
   const recordingState = oneOf<RecordingState>(report.recordingState, ["recorded", "unrecorded", "unknown"], "unknown");
 
-  // Self-consistency. The evaluator grants a HUMAN actor without inspecting a single
-  // governance field: registry membership, agent approval and agent recording have no
-  // meaning for a person, and a human's credential lifetime and privilege belong to
-  // the `token-binding` and `access-governance` dimensions. That fast-path is only
-  // safe if the report is genuinely describing a person — so a "human" report must be
-  // SILENT on governance: registry membership unreported, every governance enum
-  // unknown. Asserting any of it means the report describes two kinds of actor at
-  // once, the actor label cannot be trusted, and we fail closed.
+  // ── report integrity ────────────────────────────────────────────────────────
+  // A field that is present but unparseable is an ASSERTION WE COULD NOT READ, which
+  // is not the same thing as silence. So is a key we do not understand at all: a
+  // bridge sending `agent_registered` alongside `actorType: "human"` is asserting
+  // registry state in a spelling we ignore. Both mark the report malformed.
+  const unknownKey = Object.keys(report).some(
+    (k) => !(AGENT_IDENTITY_REPORT_KEYS as readonly string[]).includes(k),
+  );
+  const malformed =
+    unknownKey ||
+    enumMalformed(report.actorType, ["human", "agent", "service_account", "unknown"]) ||
+    enumMalformed(report.tokenLifetime, ["short_lived", "long_lived", "standing", "unknown"]) ||
+    enumMalformed(report.scopeState, ["least_privilege", "over_scoped", "unscoped", "unknown"]) ||
+    enumMalformed(report.approvalState, ["approved", "pending", "none", "expired", "unknown"]) ||
+    enumMalformed(report.recordingState, ["recorded", "unrecorded", "unknown"]) ||
+    boolMalformed(report.agentRegistered) ||
+    boolMalformed(report.bridgeReachable);
+  const reportIntegrity: ReportIntegrity = malformed ? "malformed" : "clean";
+
+  // ── is the "human" claim trustworthy? ───────────────────────────────────────
+  // The evaluator grants a HUMAN actor without inspecting the governance fields,
+  // because a person has no NHI registry entry and no agent approval, and their
+  // credential lifetime and privilege belong to `token-binding` and
+  // `access-governance`. That fast-path is only safe if the "human" claim can be
+  // trusted, so we void it in exactly two situations.
   //
-  // Checking EVERY field rather than registry membership alone is the whole point.
-  // `boolOrNull` maps an omitted or malformed `agentRegistered` to null, so a guard
-  // keyed on that one boolean is defeated by simply leaving it out — exactly what a
-  // sloppy or hostile bridge does. This only ever moves toward `unknown`, which never
-  // grants; a genuinely silent human report is untouched.
-  if (
+  // 1. The report is MALFORMED. We cannot tell whether what it asserted contradicts
+  //    the claim, so we must not act as though it asserted nothing. This is the case
+  //    a guard written against the NORMALIZED values cannot see: `oneOf` has already
+  //    turned `"lapsed"`, `["standing"]` and `"ERR: upstream timeout"` into
+  //    `"unknown"`, and `boolOrNull` has turned `"true"` and `1` into `null`.
+  //
+  // 2. The report asserts governance state that CANNOT be true of a person:
+  //    membership in the agent/NHI registry, or an agent-approval workflow governing
+  //    this actor. Note what is deliberately absent from that list — `agentRegistered:
+  //    false` and `approvalState: "none"` are the TRUTHFUL answers for a human, and
+  //    `tokenLifetime` / `scopeState` / `recordingState` all have real human meanings
+  //    (a person's credential, a person's privilege, a recorded PAM session). A bridge
+  //    that emits one uniform row shape per actor populates those columns for people
+  //    too, and must not be punished for answering honestly.
+  //
+  // Voiding only ever moves toward `unknown`, which never grants.
+  const humanClaimUntrustworthy =
     actorType === "human" &&
-    (agentRegistered !== null ||
-      tokenLifetime !== "unknown" ||
-      scopeState !== "unknown" ||
-      approvalState !== "unknown" ||
-      recordingState !== "unknown")
-  ) {
+    (malformed ||
+      agentRegistered === true ||
+      approvalState === "approved" ||
+      approvalState === "pending" ||
+      approvalState === "expired");
+  if (humanClaimUntrustworthy) {
     actorType = "unknown";
   }
+
   return {
     sourceSystem: "agent-identity",
     deviceId,
@@ -86,6 +136,7 @@ export function normalizeReport(
     approvalState,
     recordingState,
     bridgeReachable: boolOrNull(report.bridgeReachable),
+    reportIntegrity,
     source,
   };
 }

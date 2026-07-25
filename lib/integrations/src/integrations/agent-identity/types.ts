@@ -43,21 +43,48 @@ export type ApprovalState = "approved" | "pending" | "none" | "expired" | "unkno
 export type RecordingState = "recorded" | "unrecorded" | "unknown";
 
 /** Raw agent-governance report about one actor on one device (loosely typed — any
- *  field may degrade to null / an error string). */
+ *  field may degrade to null / an error string).
+ *
+ *  EVERY field is typed `unknown`, including the booleans. A non-boolean must be
+ *  visibly possible at the type level so that the normalizer — not the compiler — is
+ *  what makes the value safe. A bridge is an external system: it can and does emit
+ *  `"true"`, `1`, `["standing"]`, or `"ERR: upstream timeout"` in any of these slots. */
 export interface AgentIdentityReportRaw {
   actorType?: unknown; // human | agent | service_account | unknown
-  /** Is this non-human identity present in the agent/NHI registry? Typed
-   *  `unknown` like every sibling field: a non-boolean must be visibly possible so
-   *  the normalizer, not the type, is what makes it safe. */
+  /** Is this non-human identity present in the agent/NHI registry? */
   agentRegistered?: unknown;
   tokenLifetime?: unknown; // short_lived | long_lived | standing | unknown
   scopeState?: unknown; // least_privilege | over_scoped | unscoped | unknown
   approvalState?: unknown; // approved | pending | none | expired | unknown
   recordingState?: unknown; // recorded | unrecorded | unknown
   /** Was the governance bridge reachable to evaluate this actor? */
-  bridgeReachable?: boolean | null;
+  bridgeReachable?: unknown;
   [k: string]: unknown;
 }
+
+/** The exact set of keys this connector understands. A raw report carrying anything
+ *  else is not fully understood — see `reportIntegrity`. */
+export const AGENT_IDENTITY_REPORT_KEYS = [
+  "actorType",
+  "agentRegistered",
+  "tokenLifetime",
+  "scopeState",
+  "approvalState",
+  "recordingState",
+  "bridgeReachable",
+] as const;
+
+/** Did the raw report parse cleanly into the normalized shape?
+ *
+ *  `malformed` means at least one field was PRESENT but could not be parsed into a
+ *  recognized value, or the report carried a key this connector does not understand.
+ *  This is the distinction the normalized enums cannot express on their own: they
+ *  collapse "the report said nothing" and "the report said something we could not
+ *  read" into the same `"unknown"` sentinel. For a non-human that collapse is safe —
+ *  `"unknown"` denies. For a human claim it is not, because the human branch grants
+ *  WITHOUT reading those fields, so an unreadable assertion would be laundered into
+ *  silence and wave the report through. `reportIntegrity` keeps the two apart. */
+export type ReportIntegrity = "clean" | "malformed";
 
 /** The normalized, vendor-neutral agent-identity posture — one shape the fabric reads. */
 export interface NormalizedAgentIdentity {
@@ -72,6 +99,10 @@ export interface NormalizedAgentIdentity {
   approvalState: ApprovalState;
   recordingState: RecordingState;
   bridgeReachable: boolean | null;
+  /** Whether the raw report parsed cleanly. The evaluator refuses to grant on a
+   *  `malformed` report even if every normalized field looks clean — defence in depth,
+   *  so the allow path does not depend on the normalizer having voided the label. */
+  reportIntegrity: ReportIntegrity;
   source: string;
 }
 
@@ -100,7 +131,15 @@ export type AgentIdentityReasonCode =
   | "APPROVAL_ABSENT"
   | "AGENT_STATE_UNKNOWN"
   | "BRIDGE_UNREACHABLE"
+  | "REPORT_MALFORMED"
   | "NOT_COVERED";
+
+/** How confidently the actor was classified. Distinct from `nonHumanActor`, which is
+ *  the strictly-positive "confirmed non-human". An `unclassified` actor is one whose
+ *  label we could not read or could not trust — it is NEITHER a confirmed person nor a
+ *  confirmed machine, and an agent-shaped posture may still be reported for it on the
+ *  strength of the governance facts the report did assert. */
+export type ActorClassification = "human" | "non_human" | "unclassified";
 
 /** All members are on the unified action ladder used by posture-composition. */
 export type AgentIdentityAction = "none" | "monitor" | "step_up" | "alert" | "restrict" | "escalate";
@@ -120,8 +159,17 @@ export interface AgentIdentityVerdict {
    *  recorded). Never true for an unverified or ungoverned actor. */
   actorGoverned: boolean;
   /** True only when the actor is positively confirmed NON-human — lets the fabric
-   *  and operators distinguish "a governed agent did this" from "a person did this". */
+   *  and operators distinguish "a governed agent did this" from "a person did this".
+   *
+   *  Deliberately strict, and therefore NOT the field to route NHI triage on: a report
+   *  whose actor label was unreadable can still produce an agent-shaped posture (say
+   *  `unregistered_agent`) while this stays false, because we never confirmed what was
+   *  acting. Route on `actorClassification !== "human"` to catch those; use this only
+   *  when you specifically mean "confirmed machine". */
   nonHumanActor: boolean;
+  /** Three-way actor classification — the field to route on. `unclassified` covers
+   *  both an unreadable label and one we refused to trust. */
+  actorClassification: ActorClassification;
   deviceId: string;
 }
 

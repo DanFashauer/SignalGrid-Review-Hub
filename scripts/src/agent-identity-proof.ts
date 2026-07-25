@@ -36,6 +36,7 @@ interface Expected {
   unknownSignalsCount: number;
   actorGoverned: boolean;
   nonHumanActor: boolean;
+  actorClassification: string;
 }
 interface Fixture {
   accessToken: string;
@@ -75,6 +76,7 @@ for (const name of names) {
     v.unknownSignals.length === spec.expected.unknownSignalsCount &&
     v.actorGoverned === spec.expected.actorGoverned &&
     v.nonHumanActor === spec.expected.nonHumanActor &&
+    v.actorClassification === spec.expected.actorClassification &&
     v.deviceId === spec.deviceId;
   check(`evaluate ${name} → ${spec.expected.posture}/${spec.expected.recommendedAction}`, ok);
 }
@@ -88,25 +90,64 @@ const governed = evaluateAgentIdentity(await connector.fetchActor(fixture.actors
 check("a registered + short-lived + least-privilege + approved + recorded agent → governed_agent/none", governed.posture === "governed_agent" && governed.recommendedAction === "none" && governed.actorGoverned === true && governed.nonHumanActor === true);
 check("a governed agent composes to the 'ok' tier", composeDeviceRisk([fromAgentIdentity(governed)]).riskTier === "ok");
 
-// The human branch grants WITHOUT reading the agent-governance fields, because those
-// fields have no meaning for a person. That fast-path is only sound if a "human"
-// report is SILENT on agent governance — so the normalizer forces any report that
-// claims a human while carrying substantive governance state to an unreadable actor
-// type. Silence may be omission or an explicit "unknown"; both still grant.
+// ── the human branch, and the two ways its claim is voided ─────────────────────
+//
+// The human branch grants WITHOUT reading the governance fields, because they have no
+// bearing on a person. Its safety therefore rests entirely on whether the "human"
+// claim can be trusted. Two things void it — and one thing deliberately does NOT.
 const humanSilent = evaluateAgentIdentity(await connector.fetchActor(fixture.actors["human-actor-explicit-unknowns"].deviceId));
-check("a human report that is explicitly 'unknown' on every agent field still grants", humanSilent.posture === "human_actor" && humanSilent.recommendedAction === "none");
-// The exact input that a registry-only contradiction guard let through: a "human"
-// carrying a standing credential, no scope, a lapsed approval and no audit trail,
-// with agentRegistered simply omitted. It must NOT reach the human grant.
+check("a human report that is explicitly 'unknown' on every governance field still grants", humanSilent.posture === "human_actor" && humanSilent.recommendedAction === "none");
+
+// (a) DOES NOT void: the truthful human answers. A bridge emitting one uniform row
+// shape per actor populates these columns for people too — `agentRegistered:false`
+// (a person holds no NHI registry entry), `approvalState:"none"` (no agent-approval
+// workflow governs a person), an unrecorded session, a long-lived or broadly-scoped
+// human credential (owned by token-binding / access-governance). Punishing an honest
+// bridge for answering accurately would make the dimension unusable in practice.
+const humanUniform = evaluateAgentIdentity(await connector.fetchActor(fixture.actors["human-uniform-schema-bridge"].deviceId));
+check("a uniform-schema bridge answering truthfully for a PERSON still grants (honest reports are not punished)", humanUniform.posture === "human_actor" && humanUniform.recommendedAction === "none" && humanUniform.criticalFindings.length === 0);
+
+// (b) VOIDS: governance state no person can hold — membership in the NHI registry, or
+// an agent-approval workflow governing this actor.
+const humanRegistry = await connector.fetchActor(fixture.actors["human-with-registry-contradiction"].deviceId);
+check("a 'human' claimed to be IN the agent registry voids the actor label", humanRegistry.actorType === "unknown");
+const humanApproval = await connector.fetchActor(fixture.actors["human-with-agent-approval-contradiction"].deviceId);
+check("a 'human' carrying an agent-approval state voids the actor label", humanApproval.actorType === "unknown");
+// The exact input that a registry-only guard let through: a "human" with a standing
+// credential, no scope, a lapsed approval and no audit trail, agentRegistered OMITTED.
 const humanClaimed = await connector.fetchActor(fixture.actors["human-claiming-agent-governance"].deviceId);
-check("a 'human' carrying agent-governance state normalizes actorType to unknown even with agentRegistered OMITTED", humanClaimed.actorType === "unknown");
+check("that claim is voided even with agentRegistered omitted (boolOrNull cannot launder it)", humanClaimed.actorType === "unknown");
 const humanClaimedV = evaluateAgentIdentity(humanClaimed);
-check("that report escalates on its own governance facts instead of granting", humanClaimedV.recommendedAction === "escalate" && humanClaimedV.actorGoverned === false && humanClaimedV.criticalFindings.includes("approval_expired"));
-check("it is NOT reported as a confirmed non-human actor (the label was unreadable)", humanClaimedV.nonHumanActor === false);
-// A single agent-only field is enough to void the human label — the guard is not
-// keyed on registry membership alone.
-const humanRecording = evaluateAgentIdentity(await connector.fetchActor(fixture.actors["human-with-recording-contradiction"].deviceId));
-check("a lone contradictory recordingState voids the human fast-path and restricts", humanRecording.recommendedAction === "restrict" && humanRecording.criticalFindings.includes("agent_unrecorded"));
+check("it escalates on its own governance facts instead of granting", humanClaimedV.recommendedAction === "escalate" && humanClaimedV.actorGoverned === false && humanClaimedV.criticalFindings.includes("approval_expired"));
+check("but it is NOT reported as a confirmed non-human actor — we never classified it", humanClaimedV.nonHumanActor === false && humanClaimedV.actorClassification === "unclassified");
+
+// (c) VOIDS: a report we could not parse. This is the channel a guard written against
+// the NORMALIZED values cannot see — `oneOf` has already turned "lapsed" and
+// ["standing"] into "unknown", and `boolOrNull` has turned "true" and 1 into null, so
+// an assertion we failed to read becomes indistinguishable from silence. Presence, not
+// parsed value, is what makes it an assertion.
+const unparseable = await connector.fetchActor(fixture.actors["human-with-unparseable-governance"].deviceId);
+check("vendor-variant spellings on every governance field mark the report malformed", unparseable.reportIntegrity === "malformed");
+check("...and every one of them still normalizes to the lossy 'unknown' sentinel (which is exactly why integrity is tracked separately)", unparseable.tokenLifetime === "unknown" && unparseable.scopeState === "unknown" && unparseable.approvalState === "unknown" && unparseable.recordingState === "unknown" && unparseable.agentRegistered === null);
+const unparseableV = evaluateAgentIdentity(unparseable);
+check("a malformed 'human' report NEVER grants", unparseableV.recommendedAction === "step_up" && unparseableV.actorGoverned === false);
+check("a malformed report never composes to the 'ok' tier", composeDeviceRisk([fromAgentIdentity(unparseableV)]).riskTier !== "ok");
+const stringBool = evaluateAgentIdentity(await connector.fetchActor(fixture.actors["human-with-stringified-boolean"].deviceId));
+check("a string-quoted boolean (agentRegistered:'true') is an assertion, not silence", stringBool.reasonCode === "REPORT_MALFORMED" && stringBool.actorGoverned === false);
+const aliased = evaluateAgentIdentity(await connector.fetchActor(fixture.actors["human-with-aliased-keys"].deviceId));
+check("snake_case key aliases are an unrecognized envelope, not silence", aliased.reasonCode === "REPORT_MALFORMED" && aliased.actorGoverned === false);
+// Case and whitespace do not open a hole either: oneOf trims + lowercases first, so
+// the guard sees the canonical value.
+const shouty = normalizeReport("s", { actorType: " HUMAN ", approvalState: " EXPIRED " } as AgentIdentityReportRaw);
+check("case/whitespace variants are canonicalized before the claim is judged", shouty.reportIntegrity === "clean" && shouty.actorType === "unknown");
+// Defence in depth: the evaluator refuses a malformed report even if the normalizer
+// somehow handed it a clean-looking human. The grant must not DEPEND on the voiding.
+const forged = evaluateAgentIdentity({
+  sourceSystem: "agent-identity", deviceId: "forged", source: "test", actorType: "human",
+  agentRegistered: null, tokenLifetime: "unknown", scopeState: "unknown", approvalState: "unknown",
+  recordingState: "unknown", bridgeReachable: true, reportIntegrity: "malformed",
+});
+check("the EVALUATOR independently refuses a malformed report, even a clean-looking human", forged.recommendedAction === "step_up" && forged.actorGoverned === false);
 
 // The strongest negatives: an identity that should not be acting at all.
 const unregistered = evaluateAgentIdentity(await connector.fetchActor(fixture.actors["unregistered-agent"].deviceId));
@@ -133,35 +174,28 @@ check("an uncovered actor is 'unknown'/step_up, never governed", noCov.posture =
 check("an uncovered actor composes to at_risk, NEVER the 'ok' tier", composeDeviceRisk([fromAgentIdentity(noCov)]).riskTier !== "ok");
 
 // We cannot tell WHO is acting — the whole question this dimension answers.
-const unknownActor = evaluateAgentIdentity(await connector.fetchActor(fixture.actors["actor-type-unknown"].deviceId));
+const unknownActor = evaluateAgentIdentity(await connector.fetchActor(fixture.actors["actor-type-reported-unknown"].deviceId));
 check("an unreadable actorType → step_up, never governed", unknownActor.reasonCode === "AGENT_STATE_UNKNOWN" && unknownActor.recommendedAction === "step_up" && unknownActor.actorGoverned === false);
 
-// A self-contradictory report — a HUMAN actor carrying agent-registry state — is
-// forced to an unreadable actorType by the normalizer and can never take the human
-// fast-path (where the agent-governance fields are deliberately not evaluated).
-const contradiction = await connector.fetchActor(fixture.actors["human-with-registry-contradiction"].deviceId);
-check("a 'human' actor with agent-registry state normalizes actorType to unknown", contradiction.actorType === "unknown");
-check("a contradictory human/agent-registry report → step_up, NEVER the human grant", evaluateAgentIdentity(contradiction).recommendedAction === "step_up");
+// An actor whose label the bridge itself reported as unreadable is still judged on the
+// governance facts it DID assert — a shadow agent's standing credential is known-bad
+// whether or not we could read the label. But it is never reported as a confirmed
+// machine, which is why `actorClassification` exists alongside `nonHumanActor`.
+const garbled = evaluateAgentIdentity(await connector.fetchActor(fixture.actors["actor-type-garbled"].deviceId));
+check("a garbled actorType is malformed, not merely unknown", garbled.reasonCode === "REPORT_MALFORMED" && garbled.actorClassification === "unclassified");
+check("an agent-shaped posture on an unclassified actor is routable via actorClassification", humanClaimedV.posture === "ungoverned_agent" && humanClaimedV.nonHumanActor === false && humanClaimedV.actorClassification !== "human");
 
 // The grant demands POSITIVE verification of liveness — for humans too.
 const noReach = evaluateAgentIdentity(await connector.fetchActor(fixture.actors["reachability-unreported"].deviceId));
 check("even a HUMAN actor with UNREPORTED bridge reachability → step_up, never granted", noReach.reasonCode === "BRIDGE_UNREACHABLE" && noReach.recommendedAction === "step_up" && noReach.actorGoverned === false);
 check("only an explicit bridgeReachable:true can back a grant (null never composes to 'ok')", composeDeviceRisk([fromAgentIdentity(noReach)]).riskTier !== "ok");
 
-// Exhaustive, in TWO passes.
+// Exhaustive, in TWO passes over two DIFFERENT spaces.
 //
-// Pass 1 brute-forces the ENTIRE NORMALIZED input space against the evaluator alone,
-// so the proof genuinely CONSTRAINS the allow path: action "none" is emitted for
-// EXACTLY two states — a confirmed HUMAN actor, or a fully-governed non-human
-// identity — and for nothing else.
-//
-// Pass 2 replays the SAME space as RAW bridge reports through `normalizeReport`, so
-// the normalizer's self-contradiction guard is actually executed. This matters: the
-// evaluator's human branch does not read the agent-governance fields at all, so pass 1
-// can only prove the evaluator is internally consistent. What makes the human branch
-// SAFE is that a report claiming a human while carrying governance state never reaches
-// it — and only pass 2 exercises that. Pass 2's clean predicate is correspondingly
-// stricter: a granting human report must be silent on every governance field.
+// Pass 1 quantifies over the NORMALIZED space — every value the normalizer can emit,
+// including `reportIntegrity` — against the evaluator alone. It proves the evaluator
+// never grants on a value it should not, and that it refuses a malformed report
+// independently of whether the normalizer voided the label.
 const domains = {
   actorType: ["human", "agent", "service_account", "unknown"],
   agentRegistered: [true, false, null],
@@ -170,6 +204,7 @@ const domains = {
   approvalState: ["approved", "pending", "none", "expired", "unknown"],
   recordingState: ["recorded", "unrecorded", "unknown"],
   bridgeReachable: [true, false, null],
+  reportIntegrity: ["clean", "malformed"],
 };
 const enumRes = enumerateGrantSafety({
   domains,
@@ -181,15 +216,16 @@ const enumRes = enumerateGrantSafety({
   // may contribute 'none', and both must be marked actorGoverned.
   confirmedWhenNone: (v) =>
     v.actorGoverned === true &&
-    ((v.posture === "human_actor" && v.nonHumanActor === false) ||
-      (v.posture === "governed_agent" && v.nonHumanActor === true)),
+    ((v.posture === "human_actor" && v.nonHumanActor === false && v.actorClassification === "human") ||
+      (v.posture === "governed_agent" && v.nonHumanActor === true && v.actorClassification === "non_human")),
   positivelyClean: (c) => {
-    const { actorType, agentRegistered, tokenLifetime, scopeState, approvalState, recordingState, bridgeReachable } = c;
+    const { actorType, agentRegistered, tokenLifetime, scopeState, approvalState, recordingState, bridgeReachable, reportIntegrity } = c;
+    if (reportIntegrity !== "clean") return false;
     if (bridgeReachable !== true) return false;
     // At the NORMALIZED layer a confirmed human is by design not judged on the
-    // agent-governance fields — they do not apply to a person. This branch is only
-    // reachable because the normalizer refuses to emit actorType "human" alongside
-    // governance state at all; pass 2 below is what proves that.
+    // governance fields — they do not apply to a person. Note what this branch does
+    // NOT prove: that a "human" label is trustworthy. That is the normalizer's job,
+    // and pass 2 is where it is quantified over.
     if (actorType === "human") return true;
     if (actorType !== "agent" && actorType !== "service_account") return false;
     return (
@@ -202,60 +238,74 @@ const enumRes = enumerateGrantSafety({
   },
 });
 check(
-  `exhaustive: over all ${enumRes.combos} input combinations, action 'none' is emitted for EXACTLY a confirmed human or a fully-governed non-human identity (mismatches=${enumRes.mismatches}${enumRes.firstMismatch ? ", first=" + enumRes.firstMismatch : ""})`,
-  enumRes.mismatches === 0 && enumRes.combos === productOf(domains) && enumRes.combos === 8640,
+  `exhaustive (normalized): over all ${enumRes.combos} normalized states, action 'none' is emitted for EXACTLY a confirmed human or a fully-governed non-human identity, and never on a malformed report (mismatches=${enumRes.mismatches}${enumRes.firstMismatch ? ", first=" + enumRes.firstMismatch : ""})`,
+  enumRes.mismatches === 0 && enumRes.combos === productOf(domains) && enumRes.combos === 17280,
 );
-check("exhaustive: some clean states DO grant (the enumeration is not vacuous)", enumRes.noneCount > 0);
+check("exhaustive (normalized): some clean states DO grant (the enumeration is not vacuous)", enumRes.noneCount > 0);
 
-// Pass 2 — the SAME space, replayed as raw bridge reports through normalizeReport +
-// evaluate. Every well-formed enum value here is its own normalized value, so the only
-// thing pass 2 adds is the normalizer itself — which is exactly the point: the human
-// grant now demands a report that is SILENT on agent governance (registry membership
-// unreported and every governance enum "unknown"). Any report claiming a human while
-// asserting governance state is forced to an unreadable actor type and cannot grant.
+// Pass 2 quantifies over the RAW WIRE space — and unlike pass 1 it includes the
+// MALFORMED values a real bridge emits, which is the whole point. The shared harness
+// asks for "every malformed/unknown sentinel the field can hold"; for a raw report
+// those are a junk enum spelling, a string-quoted boolean, a number, an array, an
+// object, and an omitted key. A pass built only from well-formed values would make
+// `normalizeReport` the identity function and prove nothing about the parse layer.
+const rawDomains = {
+  actorType: ["human", "agent", "service_account", "unknown", "garbled", 7],
+  agentRegistered: [true, false, null, undefined, "true", 1],
+  tokenLifetime: ["short_lived", "long_lived", "standing", "unknown", undefined, "forever"],
+  scopeState: ["least_privilege", "over_scoped", "unscoped", "unknown", undefined, ["unscoped"]],
+  approvalState: ["approved", "pending", "none", "expired", "unknown", undefined, "lapsed"],
+  recordingState: ["recorded", "unrecorded", "unknown", undefined, {}],
+  bridgeReachable: [true, false, null, undefined, "true", 1],
+};
+
+// The clean predicate is written as POSITIVE ALLOWLISTS of raw wire values — the
+// contract a bridge must satisfy — not as the negation of the normalizer's guard.
+// That independence is what lets it catch a guard that loses a condition: drop
+// "pending" from the guard and this still says a human report asserting it is not
+// clean. These are the raw values a report describing a PERSON may carry.
+const HUMAN_TRUTHFUL_RAW: Record<string, readonly unknown[]> = {
+  agentRegistered: [undefined, null, false], // a person holds no NHI registry entry
+  approvalState: [undefined, "unknown", "none"], // no agent-approval workflow governs a person
+  tokenLifetime: [undefined, "unknown", "short_lived", "long_lived", "standing"],
+  scopeState: [undefined, "unknown", "least_privilege", "over_scoped", "unscoped"],
+  recordingState: [undefined, "unknown", "recorded", "unrecorded"],
+};
 const rawEnumRes = enumerateGrantSafety({
-  domains,
+  domains: rawDomains,
   build: (c) => normalizeReport("enum", c as AgentIdentityReportRaw, "enum"),
   evaluate: evaluateAgentIdentity,
   actionOf: (v) => v.recommendedAction,
   confirmedWhenNone: (v) =>
     v.actorGoverned === true &&
-    ((v.posture === "human_actor" && v.nonHumanActor === false) ||
-      (v.posture === "governed_agent" && v.nonHumanActor === true)),
+    ((v.posture === "human_actor" && v.nonHumanActor === false && v.actorClassification === "human") ||
+      (v.posture === "governed_agent" && v.nonHumanActor === true && v.actorClassification === "non_human")),
   positivelyClean: (c) => {
-    const { actorType, agentRegistered, tokenLifetime, scopeState, approvalState, recordingState, bridgeReachable } = c;
-    if (bridgeReachable !== true) return false;
-    if (actorType === "human") {
-      // Silence is the whole requirement: a person has no registry entry, no agent
-      // approval and no agent recording, and their credential lifetime and privilege
-      // belong to token-binding / access-governance. Asserting any of it here means
-      // the report is describing two kinds of actor at once.
-      return (
-        agentRegistered === null &&
-        tokenLifetime === "unknown" &&
-        scopeState === "unknown" &&
-        approvalState === "unknown" &&
-        recordingState === "unknown"
-      );
+    // Liveness must be an actual boolean true — "true" and 1 are not confirmations.
+    if (c.bridgeReachable !== true) return false;
+    if (c.actorType === "human") {
+      return Object.keys(HUMAN_TRUTHFUL_RAW).every((k) => HUMAN_TRUTHFUL_RAW[k].includes(c[k]));
     }
-    if (actorType !== "agent" && actorType !== "service_account") return false;
+    if (c.actorType !== "agent" && c.actorType !== "service_account") return false;
     return (
-      agentRegistered === true &&
-      tokenLifetime === "short_lived" &&
-      scopeState === "least_privilege" &&
-      approvalState === "approved" &&
-      recordingState === "recorded"
+      c.agentRegistered === true &&
+      c.tokenLifetime === "short_lived" &&
+      c.scopeState === "least_privilege" &&
+      c.approvalState === "approved" &&
+      c.recordingState === "recorded"
     );
   },
 });
 check(
-  `exhaustive end-to-end: over all ${rawEnumRes.combos} RAW reports pushed through normalizeReport, action 'none' requires a SILENT human report or a fully-governed non-human identity (mismatches=${rawEnumRes.mismatches}${rawEnumRes.firstMismatch ? ", first=" + rawEnumRes.firstMismatch : ""})`,
-  rawEnumRes.mismatches === 0 && rawEnumRes.combos === productOf(domains) && rawEnumRes.combos === 8640,
+  `exhaustive (raw wire): over all ${rawEnumRes.combos} raw reports — including junk enum spellings, string-quoted booleans, numbers, arrays and objects on every field — normalizeReport + evaluate grant ONLY a trustworthy human claim or a fully-governed non-human identity (mismatches=${rawEnumRes.mismatches}${rawEnumRes.firstMismatch ? ", first=" + rawEnumRes.firstMismatch : ""})`,
+  rawEnumRes.mismatches === 0 && rawEnumRes.combos === productOf(rawDomains) && rawEnumRes.combos === 272160,
 );
-check("exhaustive end-to-end: some raw reports DO grant (the enumeration is not vacuous)", rawEnumRes.noneCount > 0);
-// The normalizer is strictly narrowing: pushing the same space through it can only
-// remove grants, never add them. A contradictory 'human' is the difference.
-check("the normalizer strictly SHRINKS the grant set (contradictory 'human' reports fall out)", rawEnumRes.noneCount < enumRes.noneCount);
+check("exhaustive (raw wire): some raw reports DO grant (the enumeration is not vacuous)", rawEnumRes.noneCount > 0);
+// Malformed input is a real share of that space, so the malformed path is genuinely
+// exercised rather than being a corner the domains happen to miss.
+let malformedSeen = 0;
+for (const v of rawDomains.tokenLifetime) if (v === "forever") malformedSeen += 1;
+check("exhaustive (raw wire): the space actually contains unparseable values on every field", malformedSeen === 1 && rawDomains.agentRegistered.includes("true") && rawDomains.recordingState.some((v) => typeof v === "object" && v !== null && !Array.isArray(v)));
 
 // Unknown ≠ governed: an unrecognized enum value normalizes to the safe unknown.
 const norm = normalizeReport("n", { actorType: "robot", tokenLifetime: "forever", approvalState: "maybe" } as AgentIdentityReportRaw);

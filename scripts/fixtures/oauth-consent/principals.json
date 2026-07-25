@@ -1,0 +1,100 @@
+{
+  "accessToken": "sg-oauth-fixture-token",
+  "principals": {
+    "governed-clean": {
+      "principalId": "nurse.jsmith",
+      "report": { "grants": "present", "consentType": "admin", "publisher": "verified", "scope": "least", "workloadCredential": "managed", "idpReachable": true, "riskyGrantCount": 0 },
+      "expected": { "posture": "governed", "reasonCode": "GOVERNED_CONSENT", "recommendedAction": "none", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "governanceConfirmed": true }
+    },
+    "no-grants": {
+      "principalId": "nurse.apatel",
+      "report": { "grants": "none", "consentType": "unknown", "publisher": "unknown", "scope": "unknown", "workloadCredential": "none", "idpReachable": true, "riskyGrantCount": 0 },
+      "expected": { "posture": "no_grants", "reasonCode": "NO_RISKY_GRANTS", "recommendedAction": "none", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "governanceConfirmed": true }
+    },
+    "illicit-consent": {
+      "principalId": "nurse.phished",
+      "report": { "grants": "present", "consentType": "user", "publisher": "unverified", "scope": "broad", "workloadCredential": "none", "idpReachable": true, "riskyGrantCount": 1 },
+      "expected": { "posture": "illicit_grant", "reasonCode": "ILLICIT_CONSENT_GRANT", "recommendedAction": "escalate", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "governanceConfirmed": false }
+    },
+    "full-access-user": {
+      "principalId": "nurse.overshare",
+      "report": { "grants": "present", "consentType": "user", "publisher": "verified", "scope": "full_access", "workloadCredential": "none", "idpReachable": true, "riskyGrantCount": 1 },
+      "expected": { "posture": "over_scoped", "reasonCode": "FULL_ACCESS_GRANT", "recommendedAction": "restrict", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "governanceConfirmed": false }
+    },
+    "full-access-admin": {
+      "principalId": "svc.backup",
+      "report": { "grants": "present", "consentType": "admin", "publisher": "verified", "scope": "full_access", "workloadCredential": "managed", "idpReachable": true, "riskyGrantCount": 0 },
+      "expected": { "posture": "over_scoped", "reasonCode": "FULL_ACCESS_ADMIN_CONSENTED", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "governanceConfirmed": false }
+    },
+    "broad-scope": {
+      "principalId": "nurse.broad",
+      "report": { "grants": "present", "consentType": "admin", "publisher": "verified", "scope": "broad", "workloadCredential": "none", "idpReachable": true, "riskyGrantCount": 1 },
+      "expected": { "posture": "over_scoped", "reasonCode": "BROAD_SCOPE_GRANT", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "governanceConfirmed": false }
+    },
+    "unverified-publisher": {
+      "principalId": "nurse.unverified",
+      "report": { "grants": "present", "consentType": "admin", "publisher": "unverified", "scope": "least", "workloadCredential": "none", "idpReachable": true, "riskyGrantCount": 1 },
+      "expected": { "posture": "unverified_app", "reasonCode": "UNVERIFIED_PUBLISHER", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "governanceConfirmed": false }
+    },
+    "workload-secret": {
+      "principalId": "svc.legacy",
+      "report": { "grants": "present", "consentType": "admin", "publisher": "verified", "scope": "least", "workloadCredential": "unmanaged_secret", "idpReachable": true, "riskyGrantCount": 1 },
+      "expected": { "posture": "workload_exposed", "reasonCode": "UNMANAGED_WORKLOAD_SECRET", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "governanceConfirmed": false }
+    },
+    "idp-unreachable": {
+      "principalId": "nurse.offline",
+      "report": { "grants": "present", "consentType": "admin", "publisher": "verified", "scope": "least", "workloadCredential": "managed", "idpReachable": false, "riskyGrantCount": 0 },
+      "expected": { "posture": "unverified", "reasonCode": "IDP_UNREACHABLE", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "governanceConfirmed": false }
+    },
+    "reachability-unreported": {
+      "principalId": "nurse.noreach",
+      "report": { "grants": "none", "consentType": "unknown", "publisher": "unknown", "scope": "unknown", "workloadCredential": "none", "riskyGrantCount": 0 },
+      "expected": { "posture": "unverified", "reasonCode": "IDP_UNREACHABLE", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "governanceConfirmed": false }
+    },
+    "grants-unknown": {
+      "principalId": "nurse.unknowngrants",
+      "report": { "grants": "garbled", "consentType": "admin", "publisher": "verified", "scope": "least", "workloadCredential": "managed", "idpReachable": true, "riskyGrantCount": 0 },
+      "expected": { "posture": "unverified", "reasonCode": "CONSENT_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "governanceConfirmed": false }
+    },
+    "scope-unknown": {
+      "principalId": "nurse.unknownscope",
+      "report": { "grants": "present", "consentType": "admin", "publisher": "verified", "scope": "garbled", "workloadCredential": "managed", "idpReachable": true, "riskyGrantCount": 1 },
+      "expected": { "posture": "unverified", "reasonCode": "CONSENT_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "governanceConfirmed": false }
+    },
+    "worst-of-several": {
+      "principalId": "nurse.worst",
+      "report": { "grants": "present", "consentType": "user", "publisher": "unverified", "scope": "full_access", "workloadCredential": "unmanaged_secret", "idpReachable": true, "riskyGrantCount": 3 },
+      "expected": { "posture": "illicit_grant", "reasonCode": "ILLICIT_CONSENT_GRANT", "recommendedAction": "escalate", "criticalFindingsCount": 2, "unknownSignalsCount": 0, "governanceConfirmed": false }
+    },
+    "consent-type-unknown": {
+      "principalId": "nurse.unknownconsent",
+      "report": { "grants": "present", "consentType": "garbled", "publisher": "verified", "scope": "least", "workloadCredential": "managed", "idpReachable": true, "riskyGrantCount": 1 },
+      "expected": { "posture": "unverified", "reasonCode": "CONSENT_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "governanceConfirmed": false }
+    },
+    "user-consent-clean": {
+      "principalId": "nurse.signin",
+      "report": { "grants": "present", "consentType": "user", "publisher": "verified", "scope": "least", "workloadCredential": "none", "idpReachable": true, "riskyGrantCount": 0 },
+      "expected": { "posture": "governed", "reasonCode": "GOVERNED_CONSENT", "recommendedAction": "none", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "governanceConfirmed": true }
+    },
+    "count-conflict-no-grants": {
+      "principalId": "nurse.countconflict1",
+      "report": { "grants": "none", "consentType": "unknown", "publisher": "unknown", "scope": "unknown", "workloadCredential": "none", "idpReachable": true, "riskyGrantCount": 1 },
+      "expected": { "posture": "unverified", "reasonCode": "CONSENT_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "governanceConfirmed": false }
+    },
+    "count-conflict-clean-present": {
+      "principalId": "nurse.countconflict2",
+      "report": { "grants": "present", "consentType": "admin", "publisher": "verified", "scope": "least", "workloadCredential": "managed", "idpReachable": true, "riskyGrantCount": 2 },
+      "expected": { "posture": "unverified", "reasonCode": "CONSENT_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "governanceConfirmed": false }
+    },
+    "no-grants-with-risky-detail": {
+      "principalId": "nurse.noneconflict",
+      "report": { "grants": "none", "consentType": "unknown", "publisher": "unknown", "scope": "full_access", "workloadCredential": "none", "idpReachable": true, "riskyGrantCount": 0 },
+      "expected": { "posture": "unverified", "reasonCode": "CONSENT_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "governanceConfirmed": false }
+    },
+    "negative-count-conflict": {
+      "principalId": "nurse.negcount",
+      "report": { "grants": "none", "consentType": "unknown", "publisher": "unknown", "scope": "unknown", "workloadCredential": "none", "idpReachable": true, "riskyGrantCount": -1 },
+      "expected": { "posture": "unverified", "reasonCode": "CONSENT_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "governanceConfirmed": false }
+    }
+  }
+}

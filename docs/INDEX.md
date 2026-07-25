@@ -51,6 +51,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Milestone strategy](MILESTONE_STRATEGY.md): uses tags/releases rather than messy repository copies.
 - [Mobile and platform strategy](MOBILE_AND_PLATFORM_STRATEGY.md): describes operator mobile, admin companion, PWA, desktop, and endpoint-agent boundaries.
 - [Integration catalog](INTEGRATION_CATALOG.md): lists integration categories, first proof direction, and vendor-claim boundaries.
+- [API signal discovery](API_SIGNAL_DISCOVERY.md): living research catalog of public, read-only vendor APIs studied as candidate signal sources, and how each maps onto a normalized decision dimension.
 - [Signal Source Catalog](SIGNAL_SOURCE_CATALOG.md): organizes candidate input systems, ownership layers, normalized signal categories, decision impact, and future connector priority.
 - [Cloud Connector Emulator Harness](CLOUD_CONNECTOR_EMULATOR_HARNESS.md): documents deterministic cloud connector validation without live vendor access.
 - [Connector Emulator Scenarios](CONNECTOR_EMULATOR_SCENARIOS.md): lists synthetic scenario packs, expected outcomes, route owners, and approval gates.

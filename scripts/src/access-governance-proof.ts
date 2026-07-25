@@ -24,8 +24,10 @@ import {
   normalizeReport,
   resolveAccessGovernanceConnector,
   type AccessGovernanceReportRaw,
+  type NormalizedAccessGovernancePosture,
 } from "@workspace/integrations/access-governance";
 import { composeDeviceRisk, fromAccessGovernance } from "@workspace/posture-composition";
+import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 
 interface Expected {
   posture: string;
@@ -154,6 +156,54 @@ check("dev tier resolves to fixture mode", resolveAccessGovernanceConnector({ SI
 check("prod WITHOUT live flag stays fixture", resolveAccessGovernanceConnector({ SIGNALGRID_TIER: "prod" }).mode === "fixture");
 check("prod + live but NO token stays fixture", resolveAccessGovernanceConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" }).mode === "fixture");
 check("prod + live + token resolves live", resolveAccessGovernanceConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", ACCESS_GOVERNANCE_ACCESS_TOKEN: "t" }).mode === "live");
+
+// ── exhaustive allow-path safety ────────────────────────────────────────────────
+//
+// Brute-force the ENTIRE normalized input space (not fixture-bound), so the proof
+// genuinely CONSTRAINS the grant path. The evaluator may emit action "none" (the
+// `authorized` posture) for EXACTLY a positively-confirmed clean state — an active
+// account, an in-scope entitlement, a current certification, no SoD conflict, and
+// either no active elevation OR a JIT-active elevation whose session is CONFIRMED
+// monitored — and for nothing else. Any unknown/malformed value on any decisive
+// field (an unknown status/scope/certification, a null SoD, a standing or expired
+// privilege, an unmonitored/unknown-monitoring elevation) must fall out of the grant.
+const domains = {
+  accountStatus: ["active", "disabled", "orphaned", "leaver_pending", "unknown"],
+  entitlementScope: ["in_scope", "over_privileged", "out_of_scope", "unknown"],
+  certification: ["certified", "recert_due", "decertified", "never_certified", "unknown"],
+  sodConflict: [true, false, null],
+  privilege: ["none", "jit_active", "jit_expired", "standing", "unknown"],
+  privilegedSessionMonitored: [true, false, null],
+};
+const enumRes = enumerateGrantSafety({
+  domains,
+  build: (c) =>
+    ({ sourceSystem: "access-governance", principalId: "enum", source: "enum", ...c }) as NormalizedAccessGovernancePosture,
+  evaluate: evaluateAccessGovernancePosture,
+  actionOf: (v) => v.recommendedAction,
+  // Only the `authorized` posture may ever contribute 'none'.
+  confirmedWhenNone: (v) => v.posture === "authorized" && v.reasonCode === "FULLY_AUTHORIZED",
+  positivelyClean: (c) => {
+    const { accountStatus, entitlementScope, certification, sodConflict, privilege, privilegedSessionMonitored } = c;
+    // Session monitoring is only meaningful for an ACTIVE elevation; a JIT-active
+    // session must be confirmed monitored, and a non-elevated principal has nothing
+    // to monitor. A standing/expired/unknown privilege never grants.
+    const privilegeClean =
+      privilege === "none" || (privilege === "jit_active" && privilegedSessionMonitored === true);
+    return (
+      accountStatus === "active" &&
+      entitlementScope === "in_scope" &&
+      certification === "certified" &&
+      sodConflict === false &&
+      privilegeClean
+    );
+  },
+});
+check(
+  `exhaustive: over all ${enumRes.combos} input combinations, action 'none' is emitted for EXACTLY the positively-confirmed authorized states (mismatches=${enumRes.mismatches}${enumRes.firstMismatch ? ", first=" + enumRes.firstMismatch : ""})`,
+  enumRes.mismatches === 0 && enumRes.combos === productOf(domains) && enumRes.combos === 4500,
+);
+check("exhaustive: some clean states DO grant (the enumeration is not vacuous)", enumRes.noneCount > 0);
 
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);

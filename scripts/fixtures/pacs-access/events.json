@@ -1,0 +1,95 @@
+{
+  "accessToken": "sg-pacs-access-fixture-token",
+  "entries": {
+    "clean-biometric-badge-in": {
+      "deviceId": "ipad-ward-01",
+      "report": { "accessResult": "granted", "credentialType": "biometric", "authorization": "authorized", "antipassback": "ok", "doorState": "secured", "identityMatched": true, "bridgeReachable": true },
+      "expected": { "posture": "physical_access_ok", "reasonCode": "PHYSICAL_ACCESS_GRANTED", "recommendedAction": "none", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "physicalAccessConfirmed": true }
+    },
+    "clean-card-badge-in": {
+      "deviceId": "ipad-ward-02",
+      "report": { "accessResult": "granted", "credentialType": "card", "authorization": "authorized", "antipassback": "ok", "doorState": "secured", "identityMatched": true, "bridgeReachable": true },
+      "expected": { "posture": "physical_access_ok", "reasonCode": "PHYSICAL_ACCESS_GRANTED", "recommendedAction": "none", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "physicalAccessConfirmed": true }
+    },
+    "access-denied": {
+      "deviceId": "ipad-ward-03",
+      "report": { "accessResult": "denied", "credentialType": "card", "authorization": "authorized", "antipassback": "ok", "doorState": "secured", "identityMatched": true, "bridgeReachable": true },
+      "expected": { "posture": "access_denied", "reasonCode": "ACCESS_DENIED", "recommendedAction": "escalate", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "physicalAccessConfirmed": false }
+    },
+    "credential-revoked": {
+      "deviceId": "ipad-ward-04",
+      "report": { "accessResult": "granted", "credentialType": "card", "authorization": "revoked", "antipassback": "ok", "doorState": "secured", "identityMatched": true, "bridgeReachable": true },
+      "expected": { "posture": "credential_revoked", "reasonCode": "CREDENTIAL_REVOKED", "recommendedAction": "escalate", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "physicalAccessConfirmed": false }
+    },
+    "identity-mismatch": {
+      "deviceId": "ipad-ward-05",
+      "report": { "accessResult": "granted", "credentialType": "biometric", "authorization": "authorized", "antipassback": "ok", "doorState": "secured", "identityMatched": false, "bridgeReachable": true },
+      "expected": { "posture": "identity_mismatch", "reasonCode": "IDENTITY_MISMATCH", "recommendedAction": "escalate", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "physicalAccessConfirmed": false }
+    },
+    "tailgating": {
+      "deviceId": "ipad-ward-06",
+      "report": { "accessResult": "granted", "credentialType": "card", "authorization": "authorized", "antipassback": "violation", "doorState": "secured", "identityMatched": true, "bridgeReachable": true },
+      "expected": { "posture": "antipassback_breach", "reasonCode": "ANTIPASSBACK_VIOLATION", "recommendedAction": "restrict", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "physicalAccessConfirmed": false }
+    },
+    "door-forced": {
+      "deviceId": "ipad-ward-07",
+      "report": { "accessResult": "granted", "credentialType": "card", "authorization": "authorized", "antipassback": "ok", "doorState": "forced", "identityMatched": true, "bridgeReachable": true },
+      "expected": { "posture": "door_forced", "reasonCode": "DOOR_FORCED", "recommendedAction": "restrict", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "physicalAccessConfirmed": false }
+    },
+    "out-of-schedule": {
+      "deviceId": "ipad-ward-08",
+      "report": { "accessResult": "granted", "credentialType": "card", "authorization": "out_of_schedule", "antipassback": "ok", "doorState": "secured", "identityMatched": true, "bridgeReachable": true },
+      "expected": { "posture": "out_of_bounds", "reasonCode": "OUT_OF_SCHEDULE", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "physicalAccessConfirmed": false }
+    },
+    "out-of-zone": {
+      "deviceId": "ipad-ward-09",
+      "report": { "accessResult": "granted", "credentialType": "mobile", "authorization": "out_of_zone", "antipassback": "ok", "doorState": "secured", "identityMatched": true, "bridgeReachable": true },
+      "expected": { "posture": "out_of_bounds", "reasonCode": "OUT_OF_ZONE", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "physicalAccessConfirmed": false }
+    },
+    "door-held-open": {
+      "deviceId": "ipad-ward-10",
+      "report": { "accessResult": "granted", "credentialType": "card", "authorization": "authorized", "antipassback": "ok", "doorState": "held_open", "identityMatched": true, "bridgeReachable": true },
+      "expected": { "posture": "door_held", "reasonCode": "DOOR_HELD_OPEN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "physicalAccessConfirmed": false }
+    },
+    "bridge-unreachable": {
+      "deviceId": "ipad-ward-11",
+      "report": { "accessResult": "granted", "credentialType": "card", "authorization": "authorized", "antipassback": "ok", "doorState": "secured", "identityMatched": true, "bridgeReachable": false },
+      "expected": { "posture": "unverified", "reasonCode": "BRIDGE_UNREACHABLE", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "physicalAccessConfirmed": false }
+    },
+    "reachability-unreported": {
+      "deviceId": "ipad-ward-12",
+      "report": { "accessResult": "granted", "credentialType": "card", "authorization": "authorized", "antipassback": "ok", "doorState": "secured", "identityMatched": true },
+      "expected": { "posture": "unverified", "reasonCode": "BRIDGE_UNREACHABLE", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "physicalAccessConfirmed": false }
+    },
+    "credential-unknown": {
+      "deviceId": "ipad-ward-13",
+      "report": { "accessResult": "granted", "credentialType": "garbled", "authorization": "authorized", "antipassback": "ok", "doorState": "secured", "identityMatched": true, "bridgeReachable": true },
+      "expected": { "posture": "unverified", "reasonCode": "PACS_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "physicalAccessConfirmed": false }
+    },
+    "identity-unreported": {
+      "deviceId": "ipad-ward-14",
+      "report": { "accessResult": "granted", "credentialType": "card", "authorization": "authorized", "antipassback": "ok", "doorState": "secured", "bridgeReachable": true },
+      "expected": { "posture": "unverified", "reasonCode": "PACS_STATE_UNKNOWN", "recommendedAction": "step_up", "criticalFindingsCount": 0, "unknownSignalsCount": 1, "physicalAccessConfirmed": false }
+    },
+    "subject-mismatch-derived": {
+      "deviceId": "ipad-ward-15",
+      "report": { "accessResult": "granted", "credentialType": "biometric", "authorization": "authorized", "antipassback": "ok", "doorState": "secured", "pacsSubject": "nurse.jones", "expectedSubject": "nurse.smith", "bridgeReachable": true },
+      "expected": { "posture": "identity_mismatch", "reasonCode": "IDENTITY_MISMATCH", "recommendedAction": "escalate", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "physicalAccessConfirmed": false }
+    },
+    "subjects-corroborate-clean": {
+      "deviceId": "ipad-ward-17",
+      "report": { "accessResult": "granted", "credentialType": "biometric", "authorization": "authorized", "antipassback": "ok", "doorState": "secured", "pacsSubject": "nurse.adams", "expectedSubject": "nurse.adams", "bridgeReachable": true },
+      "expected": { "posture": "physical_access_ok", "reasonCode": "PHYSICAL_ACCESS_GRANTED", "recommendedAction": "none", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "physicalAccessConfirmed": true }
+    },
+    "contradiction-flag-false-subjects-equal": {
+      "deviceId": "ipad-ward-18",
+      "report": { "accessResult": "granted", "credentialType": "card", "authorization": "authorized", "antipassback": "ok", "doorState": "secured", "identityMatched": false, "pacsSubject": "nurse.adams", "expectedSubject": "nurse.adams", "bridgeReachable": true },
+      "expected": { "posture": "identity_mismatch", "reasonCode": "IDENTITY_MISMATCH", "recommendedAction": "escalate", "criticalFindingsCount": 1, "unknownSignalsCount": 0, "physicalAccessConfirmed": false }
+    },
+    "worst-of-several": {
+      "deviceId": "ipad-ward-16",
+      "report": { "accessResult": "denied", "credentialType": "card", "authorization": "revoked", "antipassback": "violation", "doorState": "forced", "identityMatched": false, "bridgeReachable": true },
+      "expected": { "posture": "access_denied", "reasonCode": "ACCESS_DENIED", "recommendedAction": "escalate", "criticalFindingsCount": 5, "unknownSignalsCount": 0, "physicalAccessConfirmed": false }
+    }
+  }
+}

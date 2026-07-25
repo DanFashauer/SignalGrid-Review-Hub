@@ -119,6 +119,16 @@
       "expected": { "riskTier": "at_risk", "strongestAction": "step_up", "opensIncident": true, "incidentAssignmentGroup": "Identity & Access", "incidentPriority": "P2" }
     },
     {
+      "id": "illicit-oauth-grant-on-clean-device",
+      "description": "A hardware-attested, bound-session device — but the badge-holder's identity carries an illicit OAuth consent grant (consent-phishing). The fabric must escalate on the delegated-access risk even though the device itself is pristine.",
+      "signals": [
+        { "kind": "oauth_consent", "posture": "illicit_grant", "action": "escalate", "reason": "ILLICIT_CONSENT_GRANT" },
+        { "kind": "attestation", "posture": "attested_hardened", "action": "none", "reason": "FULLY_ATTESTED" },
+        { "kind": "sso_session", "posture": "bound_strong", "action": "none", "reason": "BOUND_MFA_FRESH" }
+      ],
+      "expected": { "riskTier": "blocked", "strongestAction": "escalate", "opensIncident": true, "incidentAssignmentGroup": "Identity & Access", "incidentPriority": "P1" }
+    },
+    {
       "id": "worst-of-four-bad-signals",
       "description": "Four concurrent negatives — worst-concern-wins picks the escalate; a lesser restrict/alert/step_up never dilutes it.",
       "signals": [

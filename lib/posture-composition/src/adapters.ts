@@ -13,6 +13,9 @@ import type { OtPostureVerdict } from "@workspace/integrations/ot-posture";
 import type { AccessGovernanceVerdict } from "@workspace/integrations/access-governance";
 import type { AttestationVerdict } from "@workspace/integrations/device-attestation";
 import type { SsoSessionVerdict } from "@workspace/integrations/sso-session";
+import type { OAuthConsentVerdict } from "@workspace/integrations/oauth-consent";
+import type { TokenBindingVerdict } from "@workspace/integrations/token-binding";
+import type { PacsAccessVerdict } from "@workspace/integrations/pacs-access";
 import type { GraphPostureSignal } from "@workspace/integrations/graph";
 import type { Detection } from "@workspace/event-contract";
 import { ACTION_RANK } from "./compose";
@@ -121,6 +124,38 @@ export function fromSsoSession(v: SsoSessionVerdict): ComposableSignal {
   // / unreadable bound session steps up; only a bound, MFA-backed, fresh session
   // contributes 'none'. No active session is the baseline; unknown is never bound.
   return { kind: "sso_session", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromOAuthConsent(v: OAuthConsentVerdict): ComposableSignal {
+  // OAuth-consent / workload-identity — what third-party apps can do ON BEHALF OF
+  // the session's principal via a delegated grant. Its actions are already on the
+  // unified ladder. Fail-safe: an illicit consent grant (consent-phishing) escalates;
+  // a full-access grant not admin-governed restricts; over-scoped / unverified-
+  // publisher / unmanaged-workload-secret steps up; only a positively-confirmed
+  // governed (or no-) grant contributes 'none'. Unknown is never fused as governed.
+  return { kind: "oauth_consent", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromTokenBinding(v: TokenBindingVerdict): ComposableSignal {
+  // Token-binding / proof-of-possession — is the session's access token sender-
+  // constrained (DPoP/mTLS, bound to a hardware key on THIS device) or a replayable
+  // bearer. Its actions are already on the unified ladder. Fail-safe: a bound token
+  // whose key belongs to another device escalates (a stolen bound token); an unbound
+  // bearer token restricts (replayable); a software-key / unattested / non-audience-
+  // restricted / unverified token steps up; only a positively-confirmed sender-
+  // constrained token contributes 'none'. Unknown is never fused as bound.
+  return { kind: "token_binding", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromPacsAccess(v: PacsAccessVerdict): ComposableSignal {
+  // Physical access-control (PACS) — did the badge-holder legitimately badge into
+  // this controlled area, are they authorized right now, and is the door secure. Its
+  // actions are already on the unified ladder. Fail-safe: a denied/revoked entry or a
+  // PACS holder ≠ the checked-out device holder escalates; an anti-passback
+  // (tailgating) violation or a forced door restricts; an out-of-schedule/zone entry
+  // or a held door steps up; only a positively-confirmed authorized entry at a secure
+  // door contributes 'none'. Unknown is never fused as a confirmed physical entry.
+  return { kind: "pacs_access", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromMacosPosture(v: MacosPostureVerdict): ComposableSignal {

@@ -21,9 +21,11 @@ import {
   guardReadOnly,
   normalizeReport,
   resolveOtPostureConnector,
+  type NormalizedOtPosture,
   type OtDeviceReportRaw,
 } from "@workspace/integrations/ot-posture";
 import { composeDeviceRisk, fromOtPosture } from "@workspace/posture-composition";
+import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 
 interface Expected {
   posture: string;
@@ -135,6 +137,48 @@ check("dev tier resolves to fixture mode", resolveOtPostureConnector({ SIGNALGRI
 check("prod WITHOUT live flag stays fixture", resolveOtPostureConnector({ SIGNALGRID_TIER: "prod" }).mode === "fixture");
 check("prod + live but NO token stays fixture", resolveOtPostureConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" }).mode === "fixture");
 check("prod + live + token resolves live", resolveOtPostureConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", OT_POSTURE_ACCESS_TOKEN: "t" }).mode === "live");
+
+// ── exhaustive allow-path safety ────────────────────────────────────────────────
+//
+// Brute-force the ENTIRE normalized input space (not fixture-bound), so the proof
+// genuinely CONSTRAINS the grant path. The evaluator may emit action "none" (the
+// `secure` posture) for EXACTLY a positively-confirmed clean state — current
+// firmware, a device confirmed patchable, a segmented network, a confirmed-absent
+// insecure protocol, and a live gateway — and for nothing else. Any unknown/
+// malformed value on any decisive field (unknown firmware, a null patchable/
+// protocol flag, a flat/unknown segmentation, a stale/unknown gateway) must fall
+// out of the grant (the evaluator's unknownSignals → step_up guard).
+const domains = {
+  firmware: ["current", "outdated", "eol", "unknown"],
+  patchable: [true, false, null],
+  segmentation: ["segmented", "flat", "unknown"],
+  insecureProtocolExposed: [true, false, null],
+  gatewayLiveness: ["live", "stale", "unknown"],
+};
+const enumRes = enumerateGrantSafety({
+  domains,
+  build: (c) =>
+    ({ sourceSystem: "ot-posture", deviceId: "enum", deviceType: null, source: "enum", ...c }) as NormalizedOtPosture,
+  evaluate: evaluateOtPosture,
+  actionOf: (v) => v.recommendedAction,
+  // Only the `secure` posture may ever contribute 'none'.
+  confirmedWhenNone: (v) => v.posture === "secure" && v.reasonCode === "FULLY_SECURE",
+  positivelyClean: (c) => {
+    const { firmware, patchable, segmentation, insecureProtocolExposed, gatewayLiveness } = c;
+    return (
+      firmware === "current" &&
+      patchable === true &&
+      segmentation === "segmented" &&
+      insecureProtocolExposed === false &&
+      gatewayLiveness === "live"
+    );
+  },
+});
+check(
+  `exhaustive: over all ${enumRes.combos} input combinations, action 'none' is emitted for EXACTLY the positively-confirmed secure states (mismatches=${enumRes.mismatches}${enumRes.firstMismatch ? ", first=" + enumRes.firstMismatch : ""})`,
+  enumRes.mismatches === 0 && enumRes.combos === productOf(domains) && enumRes.combos === 324,
+);
+check("exhaustive: some clean states DO grant (the enumeration is not vacuous)", enumRes.noneCount > 0);
 
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);

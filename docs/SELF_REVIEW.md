@@ -38,6 +38,43 @@ the healthy `ok` tier) and *worst-concern-wins* (the fused action is exactly the
 most-severe signal's) — so a regression surfaces as a nonzero violation count, not
 a silently-wrong verdict.
 
+#### Allow-path grant-safety — `pnpm run proof:grant-safety`
+
+The fabric's most safety-critical output is the **allow** verdict — a connector
+emitting action `none`. The recurring defect class this repo's reviews keep
+catching is an *unknown / missing / malformed / self-contradictory* input reaching
+that grant (an unknown enum read as "clean", a `null` sub-signal trusted as "yes").
+A hand-picked fixture set can miss the exact hole.
+
+`scripts/src/lib/grant-safety.ts` is a shared harness that **brute-forces the
+entire normalized input space** of a connector (the cartesian product of every
+field's candidate values — including the malformed/unknown sentinels the
+normalizer can produce) and asserts action `none` is emitted for **exactly** the
+states the proof declares positively-confirmed clean, and for nothing else. The
+clean predicate is written from the connector's *intended* positive-confirmation
+contract, independent of the code, so a real allow-path hole surfaces as a nonzero
+mismatch rather than being silently re-described. `proof:grant-safety` is the
+harness's own self-proof: alongside a correct predicate it runs **negative
+controls** (deliberately too-strict / too-loose predicates, and a grant that fails
+its confirmation invariant) and asserts each is *caught* — proving the enumeration
+detects holes rather than always passing.
+
+Connectors whose full allow-path is currently constrained this way (mismatches=0
+over the full product): **oauth-consent** (6,480), **sso-session** (768),
+**access-governance** (4,500), **ot-posture** (324), **token-binding** (1,296),
+**pacs-access** (8,100). These are the enum-field "trust grant" dimensions where
+the unknown-reaches-grant class is most acute; new connectors adopt the harness
+from the start.
+The remaining grant-emitting connectors are a tracked follow-up: the
+list-aggregation dimensions (`credential-exposure`, `data-protection`,
+`edr-threat`, `vuln-scan`, `peripheral-control`, `identity-risk`) grant only on an
+*empty* qualifying-findings list and need a list-shaped enumeration rather than a
+scalar product; `device-attestation` already ships a bespoke conflict-consistency
+proof; and `macos-posture`, `network-nac`, `rtls-custody`, and `location-services`
+are queued for the same treatment (network-nac's unknown-freshness grant is
+flagged there as a candidate to tighten). Scoping is explicit here so coverage is
+never mistaken for complete.
+
 #### One command across both repos — `pnpm run verify:all`
 
 The macOS device-trust signals come from the companion open-source

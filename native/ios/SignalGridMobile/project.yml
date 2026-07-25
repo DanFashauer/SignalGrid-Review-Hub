@@ -1,0 +1,76 @@
+name: SignalGridMobile
+options:
+  minimumXcodeGenVersion: 2.41.0
+  deploymentTarget:
+    iOS: "17.0"
+  groupSortPosition: top
+  createIntermediateGroups: true
+
+packages:
+  SignalGridMobileCore:
+    path: SignalGridMobileCore
+
+targets:
+  SignalGridOperator:
+    type: application
+    platform: iOS
+    sources:
+      - path: SignalGridOperator
+        excludes:
+          - Info.plist
+          - Assets.xcassets
+    resources:
+      - path: SignalGridOperator/Assets.xcassets
+    dependencies:
+      - package: SignalGridMobileCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.signalgrid.operator.demo
+        PRODUCT_NAME: SignalGrid
+        INFOPLIST_FILE: SignalGridOperator/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "6.0"
+        ENABLE_PREVIEWS: YES
+        SUPPORTS_MACCATALYST: NO
+
+  WardlinkDemo:
+    type: application
+    platform: iOS
+    sources:
+      - path: WardlinkDemo
+        excludes:
+          - Info.plist
+          - Assets.xcassets
+    resources:
+      - path: WardlinkDemo/Assets.xcassets
+    dependencies:
+      - package: SignalGridMobileCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.signalgrid.wardlink.demo
+        PRODUCT_NAME: Wardlink
+        INFOPLIST_FILE: WardlinkDemo/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "6.0"
+        ENABLE_PREVIEWS: YES
+        SUPPORTS_MACCATALYST: NO
+
+schemes:
+  SignalGridOperator:
+    build:
+      targets:
+        SignalGridOperator: all
+    run:
+      config: Debug
+  WardlinkDemo:
+    build:
+      targets:
+        WardlinkDemo: all
+    run:
+      config: Debug

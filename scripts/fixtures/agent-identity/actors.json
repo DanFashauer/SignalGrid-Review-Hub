@@ -13,7 +13,7 @@
     },
     "human-uniform-schema-bridge": {
       "deviceId": "ipad-ward-03",
-      "report": { "actorType": "human", "agentRegistered": false, "tokenLifetime": "long_lived", "scopeState": "over_scoped", "approvalState": "none", "recordingState": "unrecorded", "bridgeReachable": true },
+      "report": { "actorType": "human", "agentRegistered": false, "tokenLifetime": "short_lived", "scopeState": "over_scoped", "approvalState": "none", "recordingState": "unrecorded", "bridgeReachable": true },
       "expected": { "posture": "human_actor", "reasonCode": "HUMAN_ACTOR", "recommendedAction": "none", "criticalFindingsCount": 0, "unknownSignalsCount": 0, "actorGoverned": true, "nonHumanActor": false, "actorClassification": "human" }
     },
     "governed-agent": {

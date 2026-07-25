@@ -157,6 +157,7 @@ function categoryForKind(kind: string): IncidentCategory {
     case "device_posture":
     case "attestation":
     case "ot_posture":
+    case "device_management_health":
       return "security_compliance";
     // Identity, authorization & data-governance signals.
     case "identity":

@@ -101,11 +101,29 @@ check("a human report that is explicitly 'unknown' on every governance field sti
 // (a) DOES NOT void: the truthful human answers. A bridge emitting one uniform row
 // shape per actor populates these columns for people too — `agentRegistered:false`
 // (a person holds no NHI registry entry), `approvalState:"none"` (no agent-approval
-// workflow governs a person), an unrecorded session, a long-lived or broadly-scoped
-// human credential (owned by token-binding / access-governance). Punishing an honest
-// bridge for answering accurately would make the dimension unusable in practice.
+// workflow governs a person), an unrecorded session, a broadly-scoped human privilege
+// (which `access-governance` does model). Punishing an honest bridge for answering
+// accurately would make the dimension unusable in practice.
 const humanUniform = evaluateAgentIdentity(await connector.fetchActor(fixture.actors["human-uniform-schema-bridge"].deviceId));
 check("a uniform-schema bridge answering truthfully for a PERSON still grants (honest reports are not punished)", humanUniform.posture === "human_actor" && humanUniform.recommendedAction === "none" && humanUniform.criticalFindings.length === 0);
+// JSON null is the wire spelling of "no value", not an unreadable assertion. A bridge
+// that emits a fixed row shape with nulls rather than omitting keys is being honest,
+// and must behave identically to omission — otherwise the same defect returns in a
+// different encoding.
+const humanNulls = normalizeReport("n", { actorType: "human", agentRegistered: null, tokenLifetime: null, scopeState: null, approvalState: null, recordingState: null, bridgeReachable: true } as AgentIdentityReportRaw);
+check("JSON null on every governance field behaves as ABSENT, not as malformed", humanNulls.reportIntegrity === "clean" && humanNulls.actorType === "human");
+check("...and therefore still grants, exactly as omitting the keys would", evaluateAgentIdentity(humanNulls).recommendedAction === "none");
+
+// (a-bis) BUT credential lifetime is NOT deferred, because nothing else models it.
+// `token-binding` carries proof-of-possession (binding, key protection, attestation,
+// audience) and no TTL field at all, and `access-governance`'s "standing" is a PAM
+// elevation window, not credential expiry. A human with a never-expiring credential
+// would otherwise be read and discarded by every dimension in the fabric.
+const humanStanding = evaluateAgentIdentity(normalizeReport("h", { actorType: "human", tokenLifetime: "standing", bridgeReachable: true } as AgentIdentityReportRaw));
+check("a HUMAN with a standing never-expiring credential escalates — no other dimension models TTL", humanStanding.recommendedAction === "escalate" && humanStanding.criticalFindings.includes("standing_credential"));
+check("...and never composes to the 'ok' tier", composeDeviceRisk([fromAgentIdentity(humanStanding)]).riskTier !== "ok");
+const humanLongLived = evaluateAgentIdentity(normalizeReport("h2", { actorType: "human", tokenLifetime: "long_lived", bridgeReachable: true } as AgentIdentityReportRaw));
+check("a HUMAN with a long-lived credential steps up", humanLongLived.recommendedAction === "step_up" && humanLongLived.actorGoverned === false);
 
 // (b) VOIDS: governance state no person can hold — membership in the NHI registry, or
 // an agent-approval workflow governing this actor.
@@ -136,6 +154,23 @@ const stringBool = evaluateAgentIdentity(await connector.fetchActor(fixture.acto
 check("a string-quoted boolean (agentRegistered:'true') is an assertion, not silence", stringBool.reasonCode === "REPORT_MALFORMED" && stringBool.actorGoverned === false);
 const aliased = evaluateAgentIdentity(await connector.fetchActor(fixture.actors["human-with-aliased-keys"].deviceId));
 check("snake_case key aliases are an unrecognized envelope, not silence", aliased.reasonCode === "REPORT_MALFORMED" && aliased.actorGoverned === false);
+// The key scan walks the PROTOTYPE CHAIN with Reflect.ownKeys. The shipped HTTP
+// transport hands us a JSON.parse result where every key is own+enumerable+string, but
+// the transport is injectable: an in-process adapter returning a class instance or a
+// Proxy could otherwise hide a governance assertion where Object.keys cannot see it.
+const protoHidden = Object.create({ agent_registered: true, approval_state: "approved" }) as AgentIdentityReportRaw;
+protoHidden.actorType = "human";
+protoHidden.bridgeReachable = true;
+check("a governance key inherited from the PROTOTYPE is still an unrecognized envelope", normalizeReport("p", protoHidden).reportIntegrity === "malformed");
+const nonEnumerable = { actorType: "human", bridgeReachable: true } as AgentIdentityReportRaw;
+Object.defineProperty(nonEnumerable, "agent_registered", { value: true, enumerable: false });
+check("a NON-ENUMERABLE unknown key is caught (Object.keys would miss it)", normalizeReport("ne", nonEnumerable).reportIntegrity === "malformed");
+const symbolKeyed = { actorType: "human", bridgeReachable: true } as AgentIdentityReportRaw;
+(symbolKeyed as Record<symbol, unknown>)[Symbol.for("agentRegistered")] = true;
+check("a SYMBOL-keyed assertion is caught", normalizeReport("sym", symbolKeyed).reportIntegrity === "malformed");
+// A plain JSON.parse result is unaffected — the common path stays clean.
+check("a plain parsed-JSON report is NOT flagged by the prototype walk", normalizeReport("j", JSON.parse('{"actorType":"human","bridgeReachable":true}') as AgentIdentityReportRaw).reportIntegrity === "clean");
+check("a JSON-delivered __proto__ key IS flagged (it is an own key after parse)", normalizeReport("pp", JSON.parse('{"actorType":"human","bridgeReachable":true,"__proto__":{"x":1}}') as AgentIdentityReportRaw).reportIntegrity === "malformed");
 // Case and whitespace do not open a hole either: oneOf trims + lowercases first, so
 // the guard sees the canonical value.
 const shouty = normalizeReport("s", { actorType: " HUMAN ", approvalState: " EXPIRED " } as AgentIdentityReportRaw);
@@ -222,11 +257,12 @@ const enumRes = enumerateGrantSafety({
     const { actorType, agentRegistered, tokenLifetime, scopeState, approvalState, recordingState, bridgeReachable, reportIntegrity } = c;
     if (reportIntegrity !== "clean") return false;
     if (bridgeReachable !== true) return false;
-    // At the NORMALIZED layer a confirmed human is by design not judged on the
-    // governance fields — they do not apply to a person. Note what this branch does
-    // NOT prove: that a "human" label is trustworthy. That is the normalizer's job,
-    // and pass 2 is where it is quantified over.
-    if (actorType === "human") return true;
+    // At the NORMALIZED layer a confirmed human is not judged on the governance fields
+    // that do not apply to a person — but credential lifetime does apply, and no other
+    // dimension in the fabric models TTL, so an asserted standing or long-lived
+    // credential denies for a human too. Note what this branch does NOT prove: that a
+    // "human" label is trustworthy. That is the normalizer's job, quantified in pass 2.
+    if (actorType === "human") return tokenLifetime !== "standing" && tokenLifetime !== "long_lived";
     if (actorType !== "agent" && actorType !== "service_account") return false;
     return (
       agentRegistered === true &&
@@ -249,14 +285,25 @@ check("exhaustive (normalized): some clean states DO grant (the enumeration is n
 // those are a junk enum spelling, a string-quoted boolean, a number, an array, an
 // object, and an omitted key. A pass built only from well-formed values would make
 // `normalizeReport` the identity function and prove nothing about the parse layer.
+// `null` appears on the enum fields too: it is the standard wire spelling of "no
+// value" (the raw type documents every field as able to degrade to it), and a bridge
+// emitting a fixed row shape with nulls rather than omitting keys is being honest. It
+// must behave as absence, not as an unreadable assertion — otherwise the honest-bridge
+// defect just reappears in a different encoding.
+//
+// `__alias` is a build-time toggle, not a wire field: when set it adds a snake_case
+// governance key to the raw report. Without it the unrecognized-key branch of the
+// integrity check is structurally unreachable by this enumeration — it would be
+// load-bearing and unproven, resting on two hand-written fixtures.
 const rawDomains = {
-  actorType: ["human", "agent", "service_account", "unknown", "garbled", 7],
+  actorType: ["human", "agent", "service_account", "unknown", "garbled", null],
   agentRegistered: [true, false, null, undefined, "true", 1],
-  tokenLifetime: ["short_lived", "long_lived", "standing", "unknown", undefined, "forever"],
+  tokenLifetime: ["short_lived", "long_lived", "standing", "unknown", undefined, "forever", null],
   scopeState: ["least_privilege", "over_scoped", "unscoped", "unknown", undefined, ["unscoped"]],
-  approvalState: ["approved", "pending", "none", "expired", "unknown", undefined, "lapsed"],
-  recordingState: ["recorded", "unrecorded", "unknown", undefined, {}],
+  approvalState: ["approved", "pending", "none", "expired", "unknown", undefined, "lapsed", null],
+  recordingState: ["recorded", "unrecorded", "unknown", undefined, {}, null],
   bridgeReachable: [true, false, null, undefined, "true", 1],
+  __alias: ["absent", "present"],
 };
 
 // The clean predicate is written as POSITIVE ALLOWLISTS of raw wire values — the
@@ -266,14 +313,21 @@ const rawDomains = {
 // clean. These are the raw values a report describing a PERSON may carry.
 const HUMAN_TRUTHFUL_RAW: Record<string, readonly unknown[]> = {
   agentRegistered: [undefined, null, false], // a person holds no NHI registry entry
-  approvalState: [undefined, "unknown", "none"], // no agent-approval workflow governs a person
-  tokenLifetime: [undefined, "unknown", "short_lived", "long_lived", "standing"],
-  scopeState: [undefined, "unknown", "least_privilege", "over_scoped", "unscoped"],
-  recordingState: [undefined, "unknown", "recorded", "unrecorded"],
+  approvalState: [undefined, null, "unknown", "none"], // no agent-approval workflow governs a person
+  // Credential lifetime DOES apply to a person and nothing else in the fabric models
+  // TTL, so only silence or a short-lived credential is clean here.
+  tokenLifetime: [undefined, null, "unknown", "short_lived"],
+  scopeState: [undefined, null, "unknown", "least_privilege", "over_scoped", "unscoped"],
+  recordingState: [undefined, null, "unknown", "recorded", "unrecorded"],
 };
 const rawEnumRes = enumerateGrantSafety({
   domains: rawDomains,
-  build: (c) => normalizeReport("enum", c as AgentIdentityReportRaw, "enum"),
+  build: (c) => {
+    const { __alias, ...wire } = c;
+    const raw = { ...wire } as AgentIdentityReportRaw;
+    if (__alias === "present") raw.agent_registered = true;
+    return normalizeReport("enum", raw, "enum");
+  },
   evaluate: evaluateAgentIdentity,
   actionOf: (v) => v.recommendedAction,
   confirmedWhenNone: (v) =>
@@ -281,6 +335,8 @@ const rawEnumRes = enumerateGrantSafety({
     ((v.posture === "human_actor" && v.nonHumanActor === false && v.actorClassification === "human") ||
       (v.posture === "governed_agent" && v.nonHumanActor === true && v.actorClassification === "non_human")),
   positivelyClean: (c) => {
+    // A key we do not understand means the envelope was not understood.
+    if (c.__alias === "present") return false;
     // Liveness must be an actual boolean true — "true" and 1 are not confirmations.
     if (c.bridgeReachable !== true) return false;
     if (c.actorType === "human") {
@@ -297,8 +353,8 @@ const rawEnumRes = enumerateGrantSafety({
   },
 });
 check(
-  `exhaustive (raw wire): over all ${rawEnumRes.combos} raw reports — including junk enum spellings, string-quoted booleans, numbers, arrays and objects on every field — normalizeReport + evaluate grant ONLY a trustworthy human claim or a fully-governed non-human identity (mismatches=${rawEnumRes.mismatches}${rawEnumRes.firstMismatch ? ", first=" + rawEnumRes.firstMismatch : ""})`,
-  rawEnumRes.mismatches === 0 && rawEnumRes.combos === productOf(rawDomains) && rawEnumRes.combos === 272160,
+  `exhaustive (raw wire): over all ${rawEnumRes.combos} raw reports — including junk enum spellings, JSON nulls, string-quoted booleans, numbers, arrays, objects and an aliased extra key — normalizeReport + evaluate grant ONLY a trustworthy human claim or a fully-governed non-human identity (mismatches=${rawEnumRes.mismatches}${rawEnumRes.firstMismatch ? ", first=" + rawEnumRes.firstMismatch : ""})`,
+  rawEnumRes.mismatches === 0 && rawEnumRes.combos === productOf(rawDomains) && rawEnumRes.combos === 870912,
 );
 check("exhaustive (raw wire): some raw reports DO grant (the enumeration is not vacuous)", rawEnumRes.noneCount > 0);
 // Malformed input is a real share of that space, so the malformed path is genuinely

@@ -17,6 +17,7 @@ import type { OAuthConsentVerdict } from "@workspace/integrations/oauth-consent"
 import type { TokenBindingVerdict } from "@workspace/integrations/token-binding";
 import type { PacsAccessVerdict } from "@workspace/integrations/pacs-access";
 import type { AgentIdentityVerdict } from "@workspace/integrations/agent-identity";
+import type { DeviceManagementHealthVerdict } from "@workspace/integrations/device-management-health";
 import type { GraphPostureSignal } from "@workspace/integrations/graph";
 import type { Detection } from "@workspace/event-contract";
 import { ACTION_RANK } from "./compose";
@@ -168,6 +169,18 @@ export function fromAgentIdentity(v: AgentIdentityVerdict): ComposableSignal {
   // fully-governed non-human identity, contributes 'none'. Unknown is never fused as
   // governed — an actor we cannot identify never grants.
   return { kind: "agent_identity", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromDeviceManagementHealth(v: DeviceManagementHealthVerdict): ComposableSignal {
+  // Management-plane health — is this device still under EFFECTIVE management, and on
+  // the baseline it was assigned. This is what gives the other device signals an
+  // expiry: a device that stopped checking in reports its last-known posture forever.
+  // Its actions are already on the unified ladder. Fail-safe: a retired or failed
+  // enrollment, or a device no compliance policy covers, restricts; drift, a stale or
+  // absent check-in, an unreachable plane, and anything unreadable step up. Only a
+  // device confirmed fresh + on-baseline + covered + enrolled + reachable contributes
+  // 'none' — a management plane we could not reach never grants.
+  return { kind: "device_management_health", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromMacosPosture(v: MacosPostureVerdict): ComposableSignal {

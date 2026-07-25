@@ -125,10 +125,6 @@ export function evaluateAgentIdentity(
       criticalFindings.push("approval_expired");
       candidates.push({ posture: "ungoverned_agent", action: "escalate", reason: "APPROVAL_EXPIRED" });
     }
-    if (actor.tokenLifetime === "standing") {
-      criticalFindings.push("standing_credential");
-      candidates.push({ posture: "weak_agent_credential", action: "escalate", reason: "STANDING_CREDENTIAL" });
-    }
 
     // ── restrict: contain an ungoverned or unauditable agent ───────────────────
     // Every restrict-level condition contributes a critical finding, matching the
@@ -150,9 +146,7 @@ export function evaluateAgentIdentity(
     }
 
     // ── step_up: governance drift, or anything unreadable ──────────────────────
-    if (actor.tokenLifetime === "long_lived") {
-      candidates.push({ posture: "weak_agent_credential", action: "step_up", reason: "LONG_LIVED_CREDENTIAL" });
-    } else if (actor.tokenLifetime === "unknown") {
+    if (actor.tokenLifetime === "unknown") {
       unknownSignals.push("token_lifetime");
       candidates.push({ posture: "unverified", action: "step_up", reason: "AGENT_STATE_UNKNOWN" });
     }
@@ -176,6 +170,25 @@ export function evaluateAgentIdentity(
       unknownSignals.push("agent_registered");
       candidates.push({ posture: "unverified", action: "step_up", reason: "AGENT_STATE_UNKNOWN" });
     }
+  }
+
+  // Credential lifetime is judged for EVERY actor, human included — the one governance
+  // field that is not deferred elsewhere. The original boundary claim was wrong on the
+  // facts: `token-binding` models proof-of-possession (binding, key protection,
+  // attestation, audience restriction) and carries no TTL field at all, and
+  // `access-governance`'s "standing" describes a PAM elevation window, not credential
+  // expiry. So nothing else in the fabric can express "this credential never expires",
+  // and a human report asserting it would otherwise be read and then discarded.
+  //
+  // Only an ASSERTED concern counts here. Silence still defers: the human grant does
+  // not require this field to be positively confirmed, only that it not assert a
+  // problem. (For a non-human, `unknown` is separately a step_up above — a machine
+  // identity must confirm every field.)
+  if (actor.tokenLifetime === "standing") {
+    criticalFindings.push("standing_credential");
+    candidates.push({ posture: "weak_agent_credential", action: "escalate", reason: "STANDING_CREDENTIAL" });
+  } else if (actor.tokenLifetime === "long_lived") {
+    candidates.push({ posture: "weak_agent_credential", action: "step_up", reason: "LONG_LIVED_CREDENTIAL" });
   }
 
   // We cannot tell WHO is acting — the whole question this dimension answers. Raised

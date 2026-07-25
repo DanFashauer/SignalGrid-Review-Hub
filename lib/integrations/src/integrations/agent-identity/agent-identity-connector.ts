@@ -49,7 +49,11 @@ function boolOrNull(v: unknown): boolean | null {
  *  laundered into silence. These two predicates recover the distinction. A field is
  *  malformed when it is present and does not parse; absent is never malformed. */
 function enumMalformed(v: unknown, allowed: readonly string[]): boolean {
-  if (v === undefined) return false;
+  // `null` counts as ABSENT, not as an unreadable assertion. It is the standard wire
+  // spelling of "no value" — `types.ts` documents every field as able to degrade to
+  // null — and treating it as malformed would punish an honest bridge that emits a
+  // fixed row shape with nulls instead of omitting keys. `boolMalformed` agrees.
+  if (v === undefined || v === null) return false;
   if (typeof v !== "string") return true;
   return !allowed.includes(v.trim().toLowerCase());
 }
@@ -57,6 +61,26 @@ function enumMalformed(v: unknown, allowed: readonly string[]): boolean {
 function boolMalformed(v: unknown): boolean {
   if (v === undefined || v === null) return false;
   return typeof v !== "boolean";
+}
+
+/** Does the report carry any key this connector does not understand?
+ *
+ *  Walks the PROTOTYPE CHAIN and uses `Reflect.ownKeys`, not `Object.keys`. The shipped
+ *  HTTP transport hands us a `JSON.parse` result, where every key is an own enumerable
+ *  string — but `AgentIdentityTransport` is injectable, so an in-process bridge adapter
+ *  may return a class instance or a Proxy. A governance assertion hiding on the
+ *  prototype, behind `enumerable: false`, or under a symbol would otherwise be invisible
+ *  to the check that is this connector's only defence against key aliasing. A class
+ *  instance therefore fails closed (its prototype carries a constructor) — deliberate:
+ *  the transport contract is a plain JSON object. */
+function hasUnrecognizedKey(report: object, known: readonly string[]): boolean {
+  for (let o: object | null = report; o !== null && o !== Object.prototype; o = Object.getPrototypeOf(o) as object | null) {
+    for (const k of Reflect.ownKeys(o)) {
+      if (typeof k === "symbol") return true;
+      if (!known.includes(k)) return true;
+    }
+  }
+  return false;
 }
 
 /** Normalize an agent-governance report. Defensive throughout: a missing/errored
@@ -78,9 +102,7 @@ export function normalizeReport(
   // is not the same thing as silence. So is a key we do not understand at all: a
   // bridge sending `agent_registered` alongside `actorType: "human"` is asserting
   // registry state in a spelling we ignore. Both mark the report malformed.
-  const unknownKey = Object.keys(report).some(
-    (k) => !(AGENT_IDENTITY_REPORT_KEYS as readonly string[]).includes(k),
-  );
+  const unknownKey = hasUnrecognizedKey(report, AGENT_IDENTITY_REPORT_KEYS);
   const malformed =
     unknownKey ||
     enumMalformed(report.actorType, ["human", "agent", "service_account", "unknown"]) ||

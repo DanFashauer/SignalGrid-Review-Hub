@@ -50,6 +50,7 @@ export type SignalKind =
   | "attestation"
   | "sso_session"
   | "oauth_consent"
+  | "token_binding"
   | "detection";
 
 /** One dimension's contribution, already mapped onto the unified action ladder. */

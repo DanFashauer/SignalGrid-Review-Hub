@@ -14,6 +14,7 @@ import type { AccessGovernanceVerdict } from "@workspace/integrations/access-gov
 import type { AttestationVerdict } from "@workspace/integrations/device-attestation";
 import type { SsoSessionVerdict } from "@workspace/integrations/sso-session";
 import type { OAuthConsentVerdict } from "@workspace/integrations/oauth-consent";
+import type { TokenBindingVerdict } from "@workspace/integrations/token-binding";
 import type { GraphPostureSignal } from "@workspace/integrations/graph";
 import type { Detection } from "@workspace/event-contract";
 import { ACTION_RANK } from "./compose";
@@ -132,6 +133,17 @@ export function fromOAuthConsent(v: OAuthConsentVerdict): ComposableSignal {
   // publisher / unmanaged-workload-secret steps up; only a positively-confirmed
   // governed (or no-) grant contributes 'none'. Unknown is never fused as governed.
   return { kind: "oauth_consent", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromTokenBinding(v: TokenBindingVerdict): ComposableSignal {
+  // Token-binding / proof-of-possession — is the session's access token sender-
+  // constrained (DPoP/mTLS, bound to a hardware key on THIS device) or a replayable
+  // bearer. Its actions are already on the unified ladder. Fail-safe: a bound token
+  // whose key belongs to another device escalates (a stolen bound token); an unbound
+  // bearer token restricts (replayable); a software-key / unattested / non-audience-
+  // restricted / unverified token steps up; only a positively-confirmed sender-
+  // constrained token contributes 'none'. Unknown is never fused as bound.
+  return { kind: "token_binding", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromMacosPosture(v: MacosPostureVerdict): ComposableSignal {

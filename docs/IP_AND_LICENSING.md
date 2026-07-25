@@ -53,7 +53,28 @@ one another:
    Before any *further* public disclosure — especially of the hardware and the
    core fusion method — an attorney should assess what remains protectable and
    whether a provisional application should lock a priority date. Until then,
-   the hardware and core method stay private.
+   the hardware and core method stay private. Three facts drive that rule:
+
+   - **First-to-file.** Since the America Invents Act (2011) the US awards
+     priority to the first *filer*, not the first inventor. A self-mailed or
+     self-emailed dated envelope — the so-called "poor man's patent" — does
+     **not** establish patent rights; the USPTO says so directly. Do not rely
+     on it in place of a filing.
+   - **Jurisdictions differ, and the difference is one-way.** The US allows a
+     one-year grace period following the inventor's *own* disclosure. The EPO,
+     China, Japan and most other jurisdictions apply **absolute novelty**: any
+     public disclosure before filing forfeits those rights immediately and
+     permanently. Publishing first is therefore irreversible outside the US.
+   - **A provisional application is the low-cost bridge.** It establishes a real
+     priority date and supports "patent pending" for twelve months, which is
+     usually enough time to decide on a full filing. Check the current USPTO fee
+     schedule for micro-/small-entity rates rather than relying on a quoted
+     figure.
+
+   A confidential invention-disclosure record is maintained **offline** (not in
+   this repository). It captures the unpublished hardware concepts and lists the
+   first-publication dates of the already-public hardware-adjacent documents, so
+   counsel can assess grace-period exposure quickly.
 
 4. **IP assignment to the entity.** Once an entity is formed, assign the IP
    (code, designs, marks, any patents) from the individual to the company. This
@@ -71,6 +92,11 @@ one another:
 
 When in doubt, treat it as private until counsel says otherwise. It is easy to
 move something from private to public later; it is impossible to un-disclose.
+
+This applies to *every* public channel, not just this repository: a website, a
+demo video, a conference talk, a trade-show display, a social post, or a pitch
+deck shown to a non-NDA audience each counts as a public disclosure. The
+publication boundary is only as strong as the least careful channel.
 
 ## Honest expectations
 

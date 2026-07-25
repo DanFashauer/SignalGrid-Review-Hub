@@ -124,6 +124,9 @@ jobs:
       - name: Physical access-control (PACS) proof
         run: pnpm run proof:pacs-access
 
+      - name: Agentic / non-human-identity (NHI) proof
+        run: pnpm run proof:agent-identity
+
       - name: Grant-safety harness self-proof (allow-path brute-force detector)
         run: pnpm run proof:grant-safety
 

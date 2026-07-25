@@ -23,7 +23,8 @@
     "./sso-session": "./src/integrations/sso-session/index.ts",
     "./oauth-consent": "./src/integrations/oauth-consent/index.ts",
     "./token-binding": "./src/integrations/token-binding/index.ts",
-    "./pacs-access": "./src/integrations/pacs-access/index.ts"
+    "./pacs-access": "./src/integrations/pacs-access/index.ts",
+    "./agent-identity": "./src/integrations/agent-identity/index.ts"
   },
   "dependencies": {
     "ioredis": "^5.4.1",

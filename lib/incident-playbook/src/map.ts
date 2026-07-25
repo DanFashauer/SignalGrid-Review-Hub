@@ -165,6 +165,7 @@ function categoryForKind(kind: string): IncidentCategory {
     case "oauth_consent":
     case "token_binding":
     case "pacs_access":
+    case "agent_identity":
     case "data_protection":
       return "security_compliance";
     case "network":

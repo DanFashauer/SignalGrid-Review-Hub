@@ -16,6 +16,7 @@ import type { SsoSessionVerdict } from "@workspace/integrations/sso-session";
 import type { OAuthConsentVerdict } from "@workspace/integrations/oauth-consent";
 import type { TokenBindingVerdict } from "@workspace/integrations/token-binding";
 import type { PacsAccessVerdict } from "@workspace/integrations/pacs-access";
+import type { AgentIdentityVerdict } from "@workspace/integrations/agent-identity";
 import type { GraphPostureSignal } from "@workspace/integrations/graph";
 import type { Detection } from "@workspace/event-contract";
 import { ACTION_RANK } from "./compose";
@@ -156,6 +157,17 @@ export function fromPacsAccess(v: PacsAccessVerdict): ComposableSignal {
   // or a held door steps up; only a positively-confirmed authorized entry at a secure
   // door contributes 'none'. Unknown is never fused as a confirmed physical entry.
   return { kind: "pacs_access", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromAgentIdentity(v: AgentIdentityVerdict): ComposableSignal {
+  // Agentic / non-human identity — WHO is taking this action, and if it is not a
+  // person, is that identity governed. Its actions are already on the unified ladder.
+  // Fail-safe: an unregistered agent, an expired approval, or a standing credential
+  // escalates; an over-scoped/unscoped, unrecorded, or never-approved agent restricts;
+  // a long-lived credential or pending approval steps up; only a confirmed human, or a
+  // fully-governed non-human identity, contributes 'none'. Unknown is never fused as
+  // governed — an actor we cannot identify never grants.
+  return { kind: "agent_identity", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromMacosPosture(v: MacosPostureVerdict): ComposableSignal {

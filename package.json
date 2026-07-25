@@ -90,6 +90,7 @@
     "proof:oauth-consent": "pnpm --filter @workspace/scripts run proof:oauth-consent",
     "proof:token-binding": "pnpm --filter @workspace/scripts run proof:token-binding",
     "proof:pacs-access": "pnpm --filter @workspace/scripts run proof:pacs-access",
+    "proof:agent-identity": "pnpm --filter @workspace/scripts run proof:agent-identity",
     "proof:grant-safety": "pnpm --filter @workspace/scripts run proof:grant-safety",
     "proof:fabric-evals": "pnpm --filter @workspace/scripts run proof:fabric-evals",
     "proof:fabric-scenario": "pnpm --filter @workspace/scripts run proof:fabric-scenario"

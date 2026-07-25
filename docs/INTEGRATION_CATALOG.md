@@ -200,6 +200,24 @@ Fail-safe by construction, matched to a shared frontline session's stakes:
 
 Proven fully offline by `pnpm run proof:pacs-access` (68 checks, no network, no door control) — including a brute-force enumeration of the **entire 8,100-combination** normalized input space asserting action `none` is emitted for *exactly* the positively-confirmed authorized entries (0 mismatches), via the shared grant-safety harness. Live calls are gated exactly like every other connector. SignalGrid reads and decides on the evaluated access state — it changes no door and revokes no credential; every signal is read-only, and this is not a vendor partnership or certification claim.
 
+## Agentic / non-human identity — the "who is actually acting" dimension (built, fixture-backed)
+
+Every other identity dimension in the fabric assumes a **person** is acting: `sso-session` asks whose session is live, `pacs-access` asks who badged in, `access-governance` asks what that human is entitled to. None of them ask the question that matters once AI agents and service accounts begin acting on a shared frontline device: **is this action being taken by a human at all — and if it is being taken by a non-human identity, is that identity governed?**
+
+The `agent-identity` connector (`lib/integrations/src/integrations/agent-identity`) normalizes an agent-governance bridge's already-evaluated view of the actor behind an action — its **type** (human / AI agent / service account), its presence in the **agent/NHI registry**, the **lifetime** of the credential backing the action (short-lived / long-lived / standing), its **scope** (least-privilege / over-scoped / unscoped), the **human-in-the-loop approval** state, and whether the actor's activity is being **recorded** — into one governance verdict (`fromAgentIdentity` → an `agent_identity` signal on the unified action ladder). It registers no agent, mints no token, and revokes no access.
+
+This is distinct from `oauth-consent`, which asks about the *credential hygiene* of a workload ("is its secret managed?"). This dimension asks about an identity **taking an action in a live session right now**.
+
+Fail-safe by construction, treating a non-human identity like a privileged access request:
+
+- an **unregistered** non-human identity (a shadow agent absent from the inventory), an **expired** approval (approval lapsed but access persisted — the non-human equivalent of a leaver still holding a key), or a **standing** never-expiring credential is the strongest negative → `escalate`;
+- an **over-scoped** or entirely **unscoped** agent, one acting **unrecorded** (no audit trail), or one **never approved** → `restrict` (contain);
+- a **long-lived** credential or a **pending** approval → `step_up`; anything unreadable, or the bridge unreachable, → `step_up`;
+- only two states contribute a grant: a **positively-confirmed human** actor, or a non-human identity confirmed **fully governed** — registered + short-lived + least-privilege + approved + recorded — and both only with the bridge confirmed reachable;
+- a **human** actor is deliberately *not* judged on the agent-governance fields: registry membership, agent approval, and agent recording do not apply to a person, and a human's credential lifetime and privilege are already covered by `token-binding` and `access-governance`. This mirrors how `access-governance` treats session monitoring as moot for a non-elevated principal. A self-contradictory report — a "human" actor carrying agent-registry state — is forced to an unreadable actor type and fails closed.
+
+Proven fully offline by `pnpm run proof:agent-identity` (72 checks, no network) — including a brute-force enumeration of the **entire 8,640-combination** normalized input space asserting action `none` is emitted for *exactly* those two states (0 mismatches), via the shared grant-safety harness. Live calls are gated exactly like every other connector. SignalGrid reads and decides on the evaluated governance state — it grants no agent access and revokes none; every signal is read-only, and this is not a vendor partnership or certification claim.
+
 ## Frontline context signal roadmap
 
 Future healthcare and frontline context signals are documented in [Frontline context signals roadmap](FRONTLINE_CONTEXT_SIGNALS.md). These include Intune enrollment restrictions, device limits, iOS/iPadOS enrollment type, Apple Business Manager / ADE state, supervision, Jamf Pro context, Kontakt.io / RTLS candidate signals, location, staff safety alerts, nurse call events, dock/return-station events, and badge / QR / NFC physical context. They are not first-proof requirements; they become follow-on or future roadmap inputs after the Microsoft posture proof and UEM posture model are grounded.

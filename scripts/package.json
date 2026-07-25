@@ -76,7 +76,8 @@
     "proof:device-management-health": "tsx ./src/device-management-health-proof.ts",
     "proof:grant-safety": "tsx ./src/grant-safety-proof.ts",
     "proof:fabric-evals": "tsx ./src/fabric-evals-proof.ts",
-    "proof:fabric-scenario": "tsx ./src/fabric-scenario-proof.ts"
+    "proof:fabric-scenario": "tsx ./src/fabric-scenario-proof.ts",
+    "proof:pim-activation": "tsx ./src/pim-activation-proof.ts"
   },
   "dependencies": {
     "@workspace/app-workflows": "workspace:*",
@@ -98,7 +99,8 @@
     "@workspace/integrations": "workspace:*",
     "@workspace/event-contract": "workspace:*",
     "@workspace/posture-composition": "workspace:*",
-    "@workspace/incident-playbook": "workspace:*"
+    "@workspace/incident-playbook": "workspace:*",
+    "@workspace/pim-activation": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

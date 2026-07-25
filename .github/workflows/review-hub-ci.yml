@@ -130,6 +130,9 @@ jobs:
       - name: Device-management-health / config-drift proof
         run: pnpm run proof:device-management-health
 
+      - name: PIM activation decision proof
+        run: pnpm run proof:pim-activation
+
       - name: Grant-safety harness self-proof (allow-path brute-force detector)
         run: pnpm run proof:grant-safety
 

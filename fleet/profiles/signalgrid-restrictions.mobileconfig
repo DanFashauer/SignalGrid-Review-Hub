@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  SignalGrid shared-device restrictions (SUPERVISED devices only).
+  Delivered as a Fleet custom configuration profile. Enforces:
+   - Autonomous Single App Mode authorization for the shell (kiosk-until-auth).
+   - Released-device app allowlist (only admin-configured apps run).
+   - Non-removable install: the worker cannot delete the shell; only MDM (Fleet)
+     or the SignalGrid admin console (over the Fleet API) can retire it.
+  NOTE: these keys take effect ONLY on a supervised device (ADE/ABM). On an
+  unsupervised device they are ignored by iOS.
+-->
+<plist version="1.0">
+<dict>
+  <key>PayloadDisplayName</key>
+  <string>SignalGrid Shared Device Restrictions</string>
+  <key>PayloadIdentifier</key>
+  <string>com.signalgrid.restrictions</string>
+  <key>PayloadType</key>
+  <string>Configuration</string>
+  <key>PayloadUUID</key>
+  <string>7B0E9F52-2C41-4A0E-9E2C-000000000001</string>
+  <key>PayloadVersion</key>
+  <integer>1</integer>
+  <key>PayloadContent</key>
+  <array>
+    <dict>
+      <key>PayloadType</key>
+      <string>com.apple.applicationaccess</string>
+      <key>PayloadIdentifier</key>
+      <string>com.signalgrid.restrictions.applicationaccess</string>
+      <key>PayloadUUID</key>
+      <string>7B0E9F52-2C41-4A0E-9E2C-000000000002</string>
+      <key>PayloadVersion</key>
+      <integer>1</integer>
+      <key>PayloadDisplayName</key>
+      <string>SignalGrid Restrictions</string>
+
+      <!-- Kiosk-until-auth: authorize the shell for Autonomous Single App Mode. -->
+      <key>AutonomousSingleAppModePermittedAppIDs</key>
+      <array>
+        <string>com.enterprise.shell</string>
+      </array>
+
+      <!-- Released device is restricted to the admin-configured apps only.
+           Mirror the persona appLaunchConfig; edit per deployment. -->
+      <key>allowlistedAppBundleIDs</key>
+      <array>
+        <string>com.enterprise.shell</string>
+        <string>com.acme.emr</string>
+        <string>com.acme.wms</string>
+      </array>
+
+      <!-- Non-removable: no Home-screen "Remove App"; MDM/admin-console only. -->
+      <key>allowAppRemoval</key>
+      <false/>
+      <!-- Optional: also lock the App Store so nothing new is side-loaded. -->
+      <key>allowUIAppInstallation</key>
+      <false/>
+    </dict>
+  </array>
+</dict>
+</plist>

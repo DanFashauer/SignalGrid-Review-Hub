@@ -1,0 +1,29 @@
+# Fleet GitOps — SignalGrid shared-device team.
+# Apply:  fleetctl apply -f fleet/teams/signalgrid-shared-devices.yml
+# Fleet is the source of truth; the SignalGrid admin console drives changes over
+# the Fleet REST API (assign hosts to this team on `restrict`/`deny`, relax on `allow`).
+apiVersion: v1
+kind: team
+spec:
+  team:
+    name: SignalGrid Shared Devices
+    # osquery posture feeds SignalGrid signals; keep hosts reporting frequently.
+    agent_options:
+      config:
+        options:
+          distributed_interval: 60
+          logger_tls_period: 60
+    mdm:
+      macos_updates: {}
+      ios_updates: {}
+      # The supervised restrictions profile (kiosk allowlist + non-removable).
+      # Managed App Config for com.enterprise.shell (SingleAppModeEnabled /
+      # AllowManualOverride / RecoveryCode) is set as the app's managed
+      # configuration when Fleet installs it as a managed app.
+      macos_settings:
+        custom_settings:
+          - path: ../profiles/signalgrid-restrictions.mobileconfig
+      # iOS/iPadOS get the same restrictions profile (supervised only).
+      ios_settings:
+        custom_settings:
+          - path: ../profiles/signalgrid-restrictions.mobileconfig

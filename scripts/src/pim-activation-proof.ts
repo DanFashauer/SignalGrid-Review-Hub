@@ -181,6 +181,62 @@ check("parse fidelity: both outcomes occur (not vacuous)", integrityRes.noneCoun
 const d1 = normalizeActivationRequest("det", CONFIRMED);
 check("evaluator is deterministic", JSON.stringify(evaluatePimActivation(d1)) === JSON.stringify(evaluatePimActivation(d1)));
 
+
+// ── end-to-end: the grid's own verdict drives the PIM decision ─────────────────
+//
+// Everything above takes `deviceRiskTier` as a given. That is exactly the weak point:
+// a field is only as trustworthy as whatever sets it, and the product claim rests on
+// this tier being the FUSED verdict of real connectors rather than something a caller
+// typed. These checks close that gap by running actual connector verdicts through
+// composeDeviceRisk and into the activation decision.
+const e2eMod = await import("@workspace/posture-composition");
+const { composeDeviceRisk, fromAgentIdentity, fromDeviceManagementHealth } = e2eMod;
+const { deviceRiskTierFromPosture } = await import("@workspace/pim-activation");
+const ai = await import("@workspace/integrations/agent-identity");
+const dmh = await import("@workspace/integrations/device-management-health");
+
+const activationFor = (tier: string) => ev({ ...CONFIRMED, deviceRiskTier: tier });
+
+// A retired enrollment restricts → blocked tier → elevation refused, from real verdicts.
+const retiredDevice = dmh.evaluateDeviceManagementHealth(
+  dmh.normalizeReport("d", { checkInFreshness: "fresh", policyDrift: "on_baseline", complianceCoverage: "covered", enrollmentState: "retired", managementReachable: true }),
+);
+const retiredTier = deviceRiskTierFromPosture(composeDeviceRisk([fromDeviceManagementHealth(retiredDevice)]));
+check("a RETIRED enrollment fuses to the 'blocked' tier", retiredTier === "blocked");
+check("...and that tier alone refuses the elevation of a verified on-call engineer", activationFor(retiredTier).outcome === "Denied");
+
+// A shadow agent escalates → blocked → refused.
+const shadowAgent = ai.evaluateAgentIdentity(
+  ai.normalizeReport("a", { actorType: "agent", agentRegistered: false, tokenLifetime: "short_lived", scopeState: "least_privilege", approvalState: "approved", recordingState: "recorded", bridgeReachable: true }),
+);
+const shadowTier = deviceRiskTierFromPosture(composeDeviceRisk([fromAgentIdentity(shadowAgent)]));
+check("an UNREGISTERED agent acting on the device fuses to 'blocked'", shadowTier === "blocked");
+check("...and refuses the elevation too", activationFor(shadowTier).outcome === "Denied");
+
+// A fully-governed agent + healthy device fuses to ok, and DOES auto-approve.
+const governedAgent = ai.evaluateAgentIdentity(
+  ai.normalizeReport("a", { actorType: "agent", agentRegistered: true, tokenLifetime: "short_lived", scopeState: "least_privilege", approvalState: "approved", recordingState: "recorded", bridgeReachable: true }),
+);
+const healthyDevice = dmh.evaluateDeviceManagementHealth(
+  dmh.normalizeReport("d", { checkInFreshness: "fresh", policyDrift: "on_baseline", complianceCoverage: "covered", enrollmentState: "enrolled", managementReachable: true }),
+);
+const healthyTier = deviceRiskTierFromPosture(composeDeviceRisk([fromAgentIdentity(governedAgent), fromDeviceManagementHealth(healthyDevice)]));
+check("a governed agent on a healthy device fuses to 'ok'", healthyTier === "ok");
+check("...and the elevation auto-approves — the happy path is genuinely reachable end to end", activationFor(healthyTier).outcome === "AutoApproved");
+
+// The trap: an EMPTY grid reports riskTier 'ok' with zero signals. "Nothing is known to
+// be wrong" is not "confirmed healthy", and an automatic privileged elevation must rest
+// on the second. A device not yet onboarded, every connector unreachable, or a misrouted
+// device id would otherwise be indistinguishable from a device that reported clean.
+const emptyPosture = composeDeviceRisk([]);
+check("an EMPTY grid still reports riskTier 'ok' (composeDeviceRisk is right to)", emptyPosture.riskTier === "ok" && emptyPosture.signalCount === 0);
+check("...but maps to 'unknown', because no signals is not a clean bill of health", deviceRiskTierFromPosture(emptyPosture) === "unknown");
+check("...so an unonboarded or unreachable device routes to the approver group, never auto-approved", activationFor(deviceRiskTierFromPosture(emptyPosture)).outcome === "Approved");
+
+// Worst-concern-wins survives the bridge: one blocked signal among healthy ones still blocks.
+const mixedTier = deviceRiskTierFromPosture(composeDeviceRisk([fromAgentIdentity(governedAgent), fromDeviceManagementHealth(retiredDevice)]));
+check("worst-concern-wins survives the bridge: one blocked dimension among healthy ones still refuses", mixedTier === "blocked" && activationFor(mixedTier).outcome === "Denied");
+
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

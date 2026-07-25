@@ -78,7 +78,7 @@ It is fail-safe by construction, mirroring the MCP server's own discipline:
 
 Proven fully offline by `pnpm run proof:macos-posture` (deterministic, no device access, no network). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid changes no macOS setting — every signal is read-only, and this is not a vendor partnership or certification claim.
 
-**Aligned to Apple's canonical schema.** Each normalized posture field carries its provenance in [`apple/device-management`](https://github.com/apple/device-management) (Apple's MIT-licensed, machine-readable MDM + Declarative Device Management schema, pinned at version 26.4): `sip` → `SystemIntegrityProtectionEnabled`, `fileVault` → `FDE_Enabled` (+ DDM `diskmanagement.filevault.enabled`), `firewall` → `FirewallSettings.FirewallEnabled`, and so on — plus the Managed Device Attestation leaf-cert OIDs (e.g. the attested SIP status `1.2.840.113635.100.8.13.1`) reserved for a future hardware-rooted attestation tier. On-device-only signals with no MDM/DDM key (Gatekeeper, XProtect, system extensions) are declared as such rather than given a fabricated key. `pnpm run proof:macos-apple-schema` (48 checks, offline) asserts every posture field is mapped and every referenced key is in the pinned Apple catalog, so a schema change on a new OS release surfaces as a failing check instead of silent drift. Aligning to these names is adoption of a public standard, not a code dependency or vendor partnership.
+**Aligned to Apple's canonical schema.** Each normalized posture field carries its provenance in [`apple/device-management`](https://github.com/apple/device-management) (Apple's MIT-licensed, machine-readable MDM + Declarative Device Management schema, pinned at version 26.4): `sip` → `SystemIntegrityProtectionEnabled`, `fileVault` → `FDE_Enabled` (+ DDM `diskmanagement.filevault.enabled`), `firewall` → `FirewallSettings.FirewallEnabled`, and so on — plus the Managed Device Attestation leaf-cert OIDs (e.g. the attested SIP status `1.2.840.113635.100.8.13.1`) reserved for a future hardware-rooted attestation tier. On-device-only signals with no MDM/DDM key (Gatekeeper, XProtect, system extensions) are declared as such rather than given a fabricated key. `pnpm run proof:macos-apple-schema` (52 checks, offline) asserts every posture field is mapped and every referenced key is in the pinned Apple catalog, so a schema change on a new OS release surfaces as a failing check instead of silent drift. Aligning to these names is adoption of a public standard, not a code dependency or vendor partnership.
 
 ## OT / IIoT edge-device posture — the factory floor (built, fixture-backed)
 
@@ -92,7 +92,7 @@ Fail-safe by construction, matched to the plant-floor stakes:
 - a **stale gateway** (we're blind to the device) or any **unreadable** control → `step_up` (never trust silence);
 - an unrecognized value normalizes to the safe `unknown`; a device **no gateway sees** is a blind spot, never `secure`.
 
-Proven fully offline by `pnpm run proof:ot-posture` (34 checks, no plant access, no network). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid changes no device setting — every signal is read-only, and this is not a vendor partnership or certification claim.
+Proven fully offline by `pnpm run proof:ot-posture` (37 checks, no plant access, no network). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid changes no device setting — every signal is read-only, and this is not a vendor partnership or certification claim.
 
 ## Factory-floor workflows — automating the plant (built, fixture-backed)
 
@@ -117,7 +117,7 @@ Fail-safe by construction, matched to a shared frontline session's stakes:
 - an **over-privileged** (not least-privilege) role, a **stale / never-attested** certification, or **standing** (not JIT) privilege → `step_up` (governance drift);
 - an unrecognized value normalizes to the safe `unknown`, and any unreadable governance signal steps up; a principal **no IGA source observes** is a blind spot (`unknown`), never `authorized`.
 
-Proven fully offline by `pnpm run proof:access-governance` (55 checks, no directory access, no network). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid changes no entitlement — every signal is read-only, and this is not a vendor partnership or certification claim.
+Proven fully offline by `pnpm run proof:access-governance` (57 checks, no directory access, no network). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid changes no entitlement — every signal is read-only, and this is not a vendor partnership or certification claim.
 
 ## Hardware-rooted device attestation — the assurance dimension (built, fixture-backed)
 

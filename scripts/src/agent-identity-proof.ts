@@ -137,6 +137,18 @@ const humanRegistry = await connector.fetchActor(fixture.actors["human-with-regi
 check("a 'human' claimed to be IN the agent registry voids the actor label", humanRegistry.actorType === "unknown");
 const humanApproval = await connector.fetchActor(fixture.actors["human-with-agent-approval-contradiction"].deviceId);
 check("a 'human' carrying an agent-approval state voids the actor label", humanApproval.actorType === "unknown");
+// Each voiding value needs its own check: they are separate terms in the guard, and
+// `pending` lost its only coverage when the raw human allowlist was deleted as dead.
+// It was not entirely dead — it was the one thing pinning this term.
+for (const state of ["approved", "pending", "expired"]) {
+  const v = normalizeReport("va", { actorType: "human", approvalState: state, bridgeReachable: true } as AgentIdentityReportRaw);
+  const action = evaluateAgentIdentity(v).recommendedAction;
+  // Voided in every case. The resulting action differs by how bad the asserted fact is —
+  // `expired` is a known-bad governance fact and escalates once the report lands in the
+  // agent branch, while `approved`/`pending` only raise unknowns — so the invariant is
+  // that the label is voided and the report is judged, not that it lands on one rung.
+  check(`...for every agent-approval state a person cannot hold (${state})`, v.actorType === "unknown" && action !== "none" && action !== "monitor");
+}
 // The exact input that a registry-only guard let through: a "human" with a standing
 // credential, no scope, a lapsed approval and no audit trail, agentRegistered OMITTED.
 const humanClaimed = await connector.fetchActor(fixture.actors["human-claiming-agent-governance"].deviceId);
@@ -255,8 +267,8 @@ const enumRes = enumerateGrantSafety({
     ({ sourceSystem: "agent-identity", deviceId: "enum", source: "enum", ...c }) as NormalizedAgentIdentity,
   evaluate: evaluateAgentIdentity,
   actionOf: (v) => v.recommendedAction,
-  // Every grant is EITHER a human actor OR a governed non-human — no other posture
-  // may contribute 'none', and both must be marked actorGoverned.
+  // ONE posture may contribute 'none': a governed non-human, marked actorGoverned. A
+  // human actor seeds 'monitor' and is never certified by this dimension.
   confirmedWhenNone: (v) =>
     v.actorGoverned === true &&
     v.posture === "governed_agent" &&
@@ -426,16 +438,25 @@ const knownOnProto = Object.assign(
   { actorType: "human", bridgeReachable: true },
 ) as AgentIdentityReportRaw;
 check("a RECOGNIZED governance key inherited from the prototype is an unrecognized envelope", normalizeReport("kp", knownOnProto).reportIntegrity === "malformed");
-check("...so the human fast-path cannot be reached by hiding governance state on the prototype", evaluateAgentIdentity(normalizeReport("kp", knownOnProto)).recommendedAction !== "none");
-for (const key of ["agentRegistered", "approvalState", "tokenLifetime", "scopeState", "recordingState"]) {
-  const one = Object.assign(Object.create({ [key]: key === "agentRegistered" ? true : "unknown" }), { actorType: "human", bridgeReachable: true }) as AgentIdentityReportRaw;
-  check(`...for every governance field individually (${key})`, evaluateAgentIdentity(normalizeReport("k1", one)).recommendedAction !== "none");
+check("...so a hidden governance assertion cannot be laundered past the integrity check", evaluateAgentIdentity(normalizeReport("kp", knownOnProto)).recommendedAction !== "none");
+// These hostile shapes are labelled `agent`, NOT `human`, and that is deliberate. Since
+// a confirmed human seeds `monitor`, asserting `!== "none"` on a human report is
+// satisfied no matter what the normalizer does — the assertion would look like coverage
+// while proving nothing. The non-human branch is the only one that grants, so it is the
+// only branch on which "does this hostile shape reach a grant?" is a real question.
+const GOVERNED_OWN = { actorType: "agent", agentRegistered: true, tokenLifetime: "short_lived", scopeState: "least_privilege", approvalState: "approved", recordingState: "recorded", bridgeReachable: true };
+for (const key of ["agent_registered", "approval_state", "token_lifetime", "scope_state", "recording_state"]) {
+  const one = Object.assign(Object.create({ [key]: "contradiction" }), GOVERNED_OWN) as AgentIdentityReportRaw;
+  const n = normalizeReport("k1", one);
+  check(`...for an inherited unrecognized key on a would-be GRANTING report (${key})`, n.reportIntegrity === "malformed" && evaluateAgentIdentity(n).recommendedAction !== "none");
 }
-// The scan's catch is load-bearing: a Proxy that THROWS from ownKeys must fail closed.
-const throwingKeys = new Proxy({ actorType: "human", bridgeReachable: true }, {
+// The scan's catch is load-bearing on the GRANT path: a Proxy that throws from ownKeys
+// must mark the report malformed, not be quietly treated as carrying no unknown keys.
+const throwingKeys = new Proxy({ ...GOVERNED_OWN }, {
   ownKeys: () => { throw new Error("hostile"); },
 }) as AgentIdentityReportRaw;
-check("a Proxy that THROWS from ownKeys fails closed, it does not grant", evaluateAgentIdentity(normalizeReport("tk", throwingKeys)).recommendedAction !== "none");
+const throwingNorm = normalizeReport("tk", throwingKeys);
+check("a Proxy that THROWS from ownKeys is malformed, and does not reach the governed-agent grant", throwingNorm.reportIntegrity === "malformed" && evaluateAgentIdentity(throwingNorm).recommendedAction !== "none");
 check("a null report body is malformed, not an untyped TypeError", normalizeReport("nb", null as unknown as AgentIdentityReportRaw).reportIntegrity === "malformed");
 // The walk is bounded: a Proxy returning a fresh prototype on every call must not hang.
 const endlessProto = (): object => new Proxy({}, { getPrototypeOf: () => endlessProto(), ownKeys: () => [] });

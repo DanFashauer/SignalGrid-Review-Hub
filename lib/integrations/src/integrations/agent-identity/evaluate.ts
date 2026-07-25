@@ -177,7 +177,7 @@ export function evaluateAgentIdentity(
   // and a human report asserting it would otherwise be read and then discarded.
   //
   // Only an ASSERTED concern counts here. Silence still defers: the human grant does
-  // not require this field to be positively confirmed, only that it not assert a
+  // no longer grants at all, so this field need not be positively confirmed for it — only
   // problem. (For a non-human, `unknown` is separately a step_up above — a machine
   // identity must confirm every field.)
   if (actor.tokenLifetime === "standing") {

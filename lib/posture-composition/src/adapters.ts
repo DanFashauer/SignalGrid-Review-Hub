@@ -166,8 +166,10 @@ export function fromAgentIdentity(v: AgentIdentityVerdict): ComposableSignal {
   // Fail-safe: an unregistered agent, an expired approval, or a standing credential
   // escalates; an over-scoped/unscoped, unrecorded, or never-approved agent restricts;
   // a long-lived credential or pending approval steps up; only a confirmed human, or a
-  // fully-governed non-human identity, contributes 'none'. Unknown is never fused as
-  // governed — an actor we cannot identify never grants.
+  // fully-governed non-human identity contributes 'none'. A confirmed human contributes
+  // 'monitor' — the same healthy tier, without certifying an actor label this dimension
+  // cannot verify. Unknown is never fused as governed; an actor we cannot identify never
+  // grants.
   return { kind: "agent_identity", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 

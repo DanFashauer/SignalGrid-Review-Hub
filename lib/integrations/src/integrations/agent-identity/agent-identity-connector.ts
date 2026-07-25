@@ -44,7 +44,7 @@ function boolOrNull(v: unknown): boolean | null {
  *
  *  `oneOf` and `boolOrNull` are lossy by design: they collapse "absent" and
  *  "unreadable" into the same safe sentinel. That is correct for deciding a value, and
- *  wrong for deciding whether the report was UNDERSTOOD — the human branch grants
+ *  wrong for deciding whether the report was UNDERSTOOD — the human branch reads
  *  without reading these fields, so an unreadable assertion would otherwise be
  *  laundered into silence. These two predicates recover the distinction. A field is
  *  malformed when it is present and does not parse; absent is never malformed. */
@@ -189,10 +189,12 @@ export function normalizeReport(
   const reportIntegrity: ReportIntegrity = malformed ? "malformed" : "clean";
 
   // ── is the "human" claim trustworthy? ───────────────────────────────────────
-  // The evaluator grants a HUMAN actor without inspecting the governance fields,
+  // The evaluator does not inspect the governance fields for a HUMAN actor,
   // because a person has no NHI registry entry and no agent approval, and their
   // credential lifetime and privilege belong to `token-binding` and
-  // `access-governance`. That fast-path is only safe if the "human" claim can be
+  // `access-governance`. Since that branch no longer grants, this guard is no longer
+  // the last line of defence — but it is still what routes a self-contradictory report
+  // into the agent branch, where the facts it asserted are judged. It matters if the "human" claim can be
   // trusted, so we void it in exactly two situations.
   //
   // 1. The report is MALFORMED. We cannot tell whether what it asserted contradicts

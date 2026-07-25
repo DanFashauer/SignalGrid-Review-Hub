@@ -34,7 +34,7 @@ const base = (outcome: AppPlanInput["outcome"], reasonCodes: string[] = []): App
 });
 
 // ── catalog integrity ─────────────────────────────────────────────────────────
-check("catalog spans six verticals", new Set(APP_INTEGRATIONS.map((i) => i.vertical)).size === 6);
+check("catalog spans seven verticals", new Set(APP_INTEGRATIONS.map((i) => i.vertical)).size === 7);
 check("every action has a stable key + risk tier", APP_INTEGRATIONS.every((i) => i.actions.every((x) => x.key && x.riskTier)));
 check("critical actions are always sensitive", APP_INTEGRATIONS.every((i) => i.actions.every((x) => x.riskTier !== "critical" || x.sensitive)));
 check("healthcare integrations exist (EMR/BCMA/messaging/alarms)", listAppIntegrations("healthcare").length >= 4);

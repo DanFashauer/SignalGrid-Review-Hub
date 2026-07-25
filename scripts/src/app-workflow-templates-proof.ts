@@ -1,7 +1,7 @@
 // Proof: per-integration workflow templates + validation lint
 // (@workspace/app-workflows).
 //
-//   • every starter template lints clean and spans all six verticals;
+//   • every starter template lints clean and spans all seven verticals;
 //   • the shipping catalog itself passes the linter (the lint is not vacuous);
 //   • the linter FAILS CLOSED on unsafe integrations — a critical action that
 //     isn't sensitive/gated, a sensitive-but-ungated action, an empty

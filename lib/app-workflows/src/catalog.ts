@@ -274,4 +274,33 @@ export const APP_INTEGRATIONS: AppIntegration[] = [
       a("cluster.cordon", "Cordon a cluster", "critical"),
     ],
   },
+
+  // ── Government / public sector ──────────────────────────────────────────────
+  {
+    id: "case-management",
+    name: "Benefits / case management",
+    category: "Public benefits",
+    vertical: "government",
+    workflowKey: "gov-case-session",
+    actions: [
+      a("case.open", "Open a constituent case", "elevated"),
+      a("record.view", "View benefits / eligibility record", "elevated"),
+      a("note.document", "Document a case note", "standard"),
+      a("eligibility.adjudicate", "Adjudicate eligibility", "critical"),
+      a("payment.release", "Release a benefit payment", "critical"),
+    ],
+  },
+  {
+    id: "secure-facility",
+    name: "Secure facility access",
+    category: "Physical access control",
+    vertical: "government",
+    workflowKey: "gov-facility-access",
+    actions: [
+      a("badge.verify", "Verify badge / credential", "standard", { gated: false }),
+      a("door.request", "Request door unlock", "elevated"),
+      a("restricted.enter", "Enter a restricted zone", "critical"),
+      a("escort.authorize", "Authorize a visitor escort", "critical"),
+    ],
+  },
 ];

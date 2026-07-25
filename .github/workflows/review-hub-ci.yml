@@ -121,6 +121,9 @@ jobs:
       - name: Token-binding / proof-of-possession proof
         run: pnpm run proof:token-binding
 
+      - name: Physical access-control (PACS) proof
+        run: pnpm run proof:pacs-access
+
       - name: Grant-safety harness self-proof (allow-path brute-force detector)
         run: pnpm run proof:grant-safety
 

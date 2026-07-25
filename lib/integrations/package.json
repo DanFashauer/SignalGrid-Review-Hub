@@ -22,7 +22,8 @@
     "./device-attestation": "./src/integrations/device-attestation/index.ts",
     "./sso-session": "./src/integrations/sso-session/index.ts",
     "./oauth-consent": "./src/integrations/oauth-consent/index.ts",
-    "./token-binding": "./src/integrations/token-binding/index.ts"
+    "./token-binding": "./src/integrations/token-binding/index.ts",
+    "./pacs-access": "./src/integrations/pacs-access/index.ts"
   },
   "dependencies": {
     "ioredis": "^5.4.1",

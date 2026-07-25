@@ -15,6 +15,7 @@ import type { AttestationVerdict } from "@workspace/integrations/device-attestat
 import type { SsoSessionVerdict } from "@workspace/integrations/sso-session";
 import type { OAuthConsentVerdict } from "@workspace/integrations/oauth-consent";
 import type { TokenBindingVerdict } from "@workspace/integrations/token-binding";
+import type { PacsAccessVerdict } from "@workspace/integrations/pacs-access";
 import type { GraphPostureSignal } from "@workspace/integrations/graph";
 import type { Detection } from "@workspace/event-contract";
 import { ACTION_RANK } from "./compose";
@@ -144,6 +145,17 @@ export function fromTokenBinding(v: TokenBindingVerdict): ComposableSignal {
   // restricted / unverified token steps up; only a positively-confirmed sender-
   // constrained token contributes 'none'. Unknown is never fused as bound.
   return { kind: "token_binding", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromPacsAccess(v: PacsAccessVerdict): ComposableSignal {
+  // Physical access-control (PACS) — did the badge-holder legitimately badge into
+  // this controlled area, are they authorized right now, and is the door secure. Its
+  // actions are already on the unified ladder. Fail-safe: a denied/revoked entry or a
+  // PACS holder ≠ the checked-out device holder escalates; an anti-passback
+  // (tailgating) violation or a forced door restricts; an out-of-schedule/zone entry
+  // or a held door steps up; only a positively-confirmed authorized entry at a secure
+  // door contributes 'none'. Unknown is never fused as a confirmed physical entry.
+  return { kind: "pacs_access", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromMacosPosture(v: MacosPostureVerdict): ComposableSignal {

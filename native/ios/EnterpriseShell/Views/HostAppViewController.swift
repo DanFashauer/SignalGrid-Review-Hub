@@ -823,6 +823,10 @@ extension HostAppViewController {
         switch location {
         case "warehouse": return warehouse()
         case "government", "gov", "public_sector": return government()
+        case "industrial": return industrial()
+        case "global_fleet", "fleet", "logistics": return globalFleet()
+        case "retail": return retail()
+        case "data_center", "datacenter", "noc": return dataCenter()
         default: return clinical()
         }
     }
@@ -894,6 +898,82 @@ extension HostAppViewController {
                              hostHold: "Confirm before releasing a benefit payment.",
                              hostDone: "Benefit payment released.",
                              confirmTitle: "Verify benefit payment release"),
+            ])
+    }
+
+    /// Industrial — a line-operations / SCADA-HMI app.
+    static func industrial() -> HostAppConfig {
+        HostAppConfig(
+            integration: AppWorkflows.mesScada,
+            appName: "LineOps HMI", appInitial: "L",
+            brandColor: UIColor(red: 0.902, green: 0.490, blue: 0.133, alpha: 1), // amber
+            whoLabel: "Operator · Shared HMI",
+            subjectTitle: "Line 3 · Extruder A",
+            subjectMeta: "Shift B · synthetic telemetry",
+            steps: [
+                ScriptedStep(key: "line.status", label: "View line status", hostDone: "Line status shown."),
+                ScriptedStep(key: "event.ack", label: "Acknowledge event", hostDone: "Event acknowledged."),
+                ScriptedStep(key: "setpoint.change", label: "Change a setpoint",
+                             hostHold: "Confirm it's you before changing a setpoint on this shared HMI.",
+                             hostDone: "Setpoint changed.",
+                             confirmTitle: "Verify setpoint change"),
+            ])
+    }
+
+    /// Global fleet — a transportation-management / dispatch app.
+    static func globalFleet() -> HostAppConfig {
+        HostAppConfig(
+            integration: AppWorkflows.tmsDispatch,
+            appName: "DispatchPro", appInitial: "D",
+            brandColor: UIColor(red: 0.149, green: 0.388, blue: 0.714, alpha: 1), // blue
+            whoLabel: "Driver · Shared cab tablet",
+            subjectTitle: "Load LD-8842 · Dallas → Denver",
+            subjectMeta: "Manifest MF-77 · synthetic load",
+            steps: [
+                ScriptedStep(key: "manifest.view", label: "View manifest", hostDone: "Manifest shown."),
+                ScriptedStep(key: "load.accept", label: "Accept load", hostDone: "Load accepted."),
+                ScriptedStep(key: "crossregion.checkout", label: "Cross-region checkout",
+                             hostHold: "Confirm before a cross-region checkout.",
+                             hostDone: "Cross-region checkout complete.",
+                             confirmTitle: "Verify cross-region checkout"),
+            ])
+    }
+
+    /// Retail — a point-of-sale app.
+    static func retail() -> HostAppConfig {
+        HostAppConfig(
+            integration: AppWorkflows.pos,
+            appName: "RegisterOne", appInitial: "R",
+            brandColor: UIColor(red: 0.612, green: 0.153, blue: 0.361, alpha: 1), // magenta
+            whoLabel: "Associate · Shared register",
+            subjectTitle: "Register 4 · Store 118",
+            subjectMeta: "Txn 0042 · synthetic sale",
+            steps: [
+                ScriptedStep(key: "price.lookup", label: "Look up a price", hostDone: "Price shown."),
+                ScriptedStep(key: "sale.ring", label: "Ring a sale", hostDone: "Sale rung."),
+                ScriptedStep(key: "refund.void", label: "Manager void / refund",
+                             hostHold: "Confirm it's you before a manager void / refund.",
+                             hostDone: "Void / refund applied.",
+                             confirmTitle: "Verify manager void / refund"),
+            ])
+    }
+
+    /// Data center — a DCIM / change-management app.
+    static func dataCenter() -> HostAppConfig {
+        HostAppConfig(
+            integration: AppWorkflows.dcimChange,
+            appName: "GridDCIM", appInitial: "N",
+            brandColor: UIColor(red: 0.200, green: 0.549, blue: 0.549, alpha: 1), // teal
+            whoLabel: "NOC engineer · Shared console",
+            subjectTitle: "Change CR-3391 · Row 12",
+            subjectMeta: "DC-East · synthetic change",
+            steps: [
+                ScriptedStep(key: "topology.view", label: "View topology", hostDone: "Topology shown."),
+                ScriptedStep(key: "change.open", label: "Open change record", hostDone: "Change opened."),
+                ScriptedStep(key: "change.execute", label: "Execute a change",
+                             hostHold: "Confirm it's you before executing a change.",
+                             hostDone: "Change executed.",
+                             confirmTitle: "Verify change execution"),
             ])
     }
 }

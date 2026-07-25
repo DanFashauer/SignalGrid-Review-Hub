@@ -273,10 +273,59 @@ enum AppWorkflows {
         ]
     )
 
+    /// Industrial — line operations / SCADA-HMI (mirrors catalog.ts).
+    static let mesScada = AppIntegration(
+        id: "mes-scada", name: "MES / SCADA-HMI", category: "Line operations",
+        vertical: "industrial", workflowKey: "line-ops",
+        actions: [
+            AppAction("line.status", "View line status", .standard, gated: false),
+            AppAction("event.ack", "Acknowledge an event", .standard),
+            AppAction("setpoint.change", "Change a setpoint", .critical),
+            AppAction("line.startstop", "Start / stop a line", .critical),
+            AppAction("interlock.bypass", "Bypass a safety interlock", .critical),
+        ])
+
+    /// Global fleet — transportation management / dispatch (mirrors catalog.ts).
+    static let tmsDispatch = AppIntegration(
+        id: "tms-dispatch", name: "TMS / dispatch", category: "Transportation management",
+        vertical: "global_fleet", workflowKey: "field-session",
+        actions: [
+            AppAction("manifest.view", "View manifest", .standard, gated: false),
+            AppAction("load.accept", "Accept a load", .standard),
+            AppAction("load.reassign", "Reassign a regulated load", .elevated),
+            AppAction("crossregion.checkout", "Cross-region checkout", .critical),
+        ])
+
+    /// Retail — point of sale (mirrors catalog.ts).
+    static let pos = AppIntegration(
+        id: "pos", name: "POS", category: "Point of sale",
+        vertical: "retail", workflowKey: "pos-session",
+        actions: [
+            AppAction("price.lookup", "Look up a price", .standard, gated: false),
+            AppAction("sale.ring", "Ring a sale", .standard),
+            AppAction("drawer.nosale", "No-sale drawer open", .critical),
+            AppAction("refund.void", "Manager void / refund", .critical),
+        ])
+
+    /// Data center — DCIM / change management (mirrors catalog.ts).
+    static let dcimChange = AppIntegration(
+        id: "dcim-change", name: "DCIM / change mgmt", category: "Data-center infrastructure",
+        vertical: "data_center", workflowKey: "noc-session",
+        actions: [
+            AppAction("topology.view", "View topology / capacity", .standard, gated: false),
+            AppAction("change.open", "Open a change record", .elevated),
+            AppAction("change.execute", "Execute a change", .critical),
+            AppAction("freeze.bypass", "Bypass a change freeze", .critical),
+        ])
+
     static func integration(forVertical vertical: String) -> AppIntegration {
         switch vertical {
         case "warehouse": return wms
         case "government": return caseManagement
+        case "industrial": return mesScada
+        case "global_fleet": return tmsDispatch
+        case "retail": return pos
+        case "data_center": return dcimChange
         default: return emrChart
         }
     }

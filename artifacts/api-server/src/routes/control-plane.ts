@@ -1,6 +1,13 @@
 import { Router, type IRouter } from "express";
 import { ControlPlane, type TelemetryBatch } from "@workspace/control-plane";
-import { listFlows, evaluateFlowHealth, resolveFlowBreak, gridIntelligence, type SignalState } from "@workspace/flows";
+import {
+  listFlows, evaluateFlowHealth, resolveFlowBreak, gridIntelligence, type SignalState,
+  DEMO_FLOWS, GRID_SITUATIONS, evaluateGridCoverage,
+  lintGridConfig, gridConfigValid, summarizeGridConfig, governanceScorecard, type GridConfig,
+  sourcingToSignalStates, summarizeSourcing, fidelityOf, isWireable, gridDoesLifting, type SignalSource,
+  planZeroTouchSetup, lintSetupRecording, setupRecordingValid, type DeviceSetupRecording,
+  fleetResilience, type AppService,
+} from "@workspace/flows";
 import { recommend, DEMO_USAGE } from "@workspace/recommendations";
 import { discover, planOnboarding, discoverySummary, DEMO_SOURCES, DEMO_OBSERVED } from "@workspace/signal-discovery";
 import { normalizeDdmReports, ddmSummary, DEMO_DDM_REPORTS, DDM_OBSERVED_AT } from "@workspace/ddm-connector";
@@ -174,6 +181,156 @@ router.get("/cp/v1/fleet-mdm", (_req, res) => {
     observedAt: FLEET_OBSERVED_AT,
     summary: fleetSummary(signals, DEMO_FLEET_REPORTS),
     signals,
+  });
+});
+
+// ── Build the grid: coverage, config, provisioning, resilience ──────────────────
+// The decision-fabric layer, live and queryable. Public-safe fixtures: the same
+// demo workflows/situations the proofs use, sourced by illustrative paths. Read-
+// only and deterministic; nothing is enforced, no device or vendor is contacted.
+// See docs/OPEN_ORCHESTRATION_VISION.md, SIGNAL_SOURCING.md, APP_RESILIENCE.md,
+// ZERO_TOUCH_PROVISIONING.md.
+
+// How each signal the demo workflows need reaches the Grid (API/native/grid-lifted).
+const GRID_SIGNAL_SOURCES: SignalSource[] = [
+  { id: "identity", name: "Identity / SSO", system: "Entra ID", method: "api" },
+  { id: "device_compliance", name: "Device compliance", system: "Intune", method: "api" },
+  { id: "badge_binding", name: "Badge binding", system: "RFID reader", method: "native" },
+  { id: "baseline", name: "Security baseline (CIS)", system: "baseline scanner", method: "grid_collected" },
+  { id: "change_window", name: "Approved change window", system: "ITSM", method: "native" },
+  { id: "custody", name: "Physical custody", system: "RTLS", method: "grid_collected", degraded: true },
+  // A real gap: a legacy nurse-call system with no API and no way for the Grid to
+  // collect it. It is surfaced as unavailable (a gap, never a false "we have it"),
+  // and — because no workflow requires it yet — it is a lint WARNING, not an error.
+  { id: "nurse_call", name: "Nurse-call events", system: "legacy nurse-call", method: "unavailable" },
+];
+const GRID_CONFIG: GridConfig = { signals: GRID_SIGNAL_SOURCES, workflows: [...DEMO_FLOWS], situations: [...GRID_SITUATIONS] };
+
+router.get("/cp/v1/grid/coverage", (_req, res) => {
+  const wired = sourcingToSignalStates(GRID_SIGNAL_SOURCES);
+  res.json({
+    note: "Which situations the Grid handles on its own, given the active workflows + the signals it can source. Fixture data — read-only.",
+    sourcing: summarizeSourcing(GRID_SIGNAL_SOURCES),
+    coverage: evaluateGridCoverage(DEMO_FLOWS, GRID_SITUATIONS, wired),
+  });
+});
+
+router.get("/cp/v1/grid/sourcing", (_req, res) => {
+  // How each signal reaches the Grid dictates the outcome — api/native (the vendor
+  // integrates), grid_collected (the Grid does the lifting, lower fidelity), or
+  // unavailable (a real gap). Read-only.
+  const signals = GRID_SIGNAL_SOURCES.map((s) => ({
+    id: s.id,
+    name: s.name,
+    system: s.system,
+    method: s.method,
+    fidelity: fidelityOf(s),
+    wireable: isWireable(s.method),
+    gridLifted: gridDoesLifting(s.method),
+  }));
+  res.json({
+    note: "How each signal is obtained — vendor-integrated (api/native), grid-collected (the Grid does the lifting), or a gap (unavailable). Read-only.",
+    summary: summarizeSourcing(GRID_SIGNAL_SOURCES),
+    signals,
+  });
+});
+
+router.get("/cp/v1/grid/config", (_req, res) => {
+  // A lean projection of the declarative grid — the versionable artifact an org
+  // commits to Git — so the operator view can render what the pipeline validates.
+  const config = {
+    signals: GRID_CONFIG.signals.map((s) => ({ id: s.id, name: s.name, system: s.system, method: s.method })),
+    workflows: GRID_CONFIG.workflows.map((w) => ({
+      id: w.id,
+      name: w.name,
+      requiredSignals: w.requiredSignals,
+      actions: w.actions.map((a) => ({ key: a.key, label: a.label, approval: a.approval })),
+      supportTeam: w.supportTeam,
+      severityOnBreak: w.severityOnBreak,
+      owner: w.owner ?? null,
+      accountable: w.accountable ?? null,
+    })),
+    situations: GRID_CONFIG.situations.map((s) => ({ id: s.id, label: s.label, workflowId: s.workflowId })),
+  };
+  res.json({
+    note: "Workflows as code — the CI/CD validation the Grid runs on the declarative config before it runs the Grid. Read-only.",
+    valid: gridConfigValid(GRID_CONFIG),
+    summary: summarizeGridConfig(GRID_CONFIG),
+    issues: lintGridConfig(GRID_CONFIG),
+    governance: governanceScorecard(GRID_CONFIG),
+    config,
+  });
+});
+
+const PROVISIONING_RECORDING: DeviceSetupRecording = {
+  id: "rec_clinical_tablet",
+  name: "Clinical tablet first-boot",
+  match: { serialPrefix: "CLIN-", model: "MediPad-X" },
+  triggers: ["first_boot", "network_join"],
+  steps: [
+    { key: "wifi", label: "Join clinical Wi-Fi", kind: "wifi" },
+    { key: "profile", label: "Install MDM profile", kind: "profile" },
+    { key: "emr", label: "Deploy EMR app", kind: "app_install" },
+    { key: "lockdown", label: "Apply kiosk restriction", kind: "restriction", sensitive: true },
+  ],
+};
+// Preset devices the Designer preview can plan against — one that matches the
+// recording and one that deliberately does NOT, so the fail-safe ("a non-matching
+// device is never touched") is visible in the mobile app, not just claimed.
+const PROVISIONING_DEVICES: Record<string, { serial: string; model?: string; onNetwork?: boolean }> = {
+  "CLIN-00042": { serial: "CLIN-00042", model: "MediPad-X", onNetwork: true },
+  "WARE-88120": { serial: "WARE-88120", model: "ScanPad-2", onNetwork: true },
+};
+const DEFAULT_PROVISIONING_SERIAL = "CLIN-00042";
+
+router.get("/cp/v1/grid/provisioning", (req, res) => {
+  // Simulated by default — enforcement stays off until an owner enables it.
+  // Optional ?serial=/?model= previews the plan against a chosen device; a
+  // serial not in the preset set is planned as an ad-hoc device (which will
+  // simply not match unless it fits the recording's selector — fail-safe).
+  const serialRaw = req.query.serial;
+  const modelRaw = req.query.model;
+  const serial = typeof serialRaw === "string" && serialRaw.length > 0 ? serialRaw : DEFAULT_PROVISIONING_SERIAL;
+  // hasOwnProperty-guarded lookup — a plain-object index walks the prototype
+  // chain, so `?serial=constructor`/`__proto__` would otherwise resolve to an
+  // inherited member and produce a garbage device. Own keys only.
+  const preset = Object.prototype.hasOwnProperty.call(PROVISIONING_DEVICES, serial) ? PROVISIONING_DEVICES[serial] : undefined;
+  const device = preset ?? {
+    serial,
+    model: typeof modelRaw === "string" && modelRaw.length > 0 ? modelRaw : undefined,
+    onNetwork: true,
+  };
+  const plan = planZeroTouchSetup(PROVISIONING_RECORDING, device);
+  const issues = lintSetupRecording(PROVISIONING_RECORDING);
+  res.json({
+    note: "Zero-touch device setup, simulated — enforcement is off, so steps are described, not executed. A sensitive step requires approval; a non-matching device is never touched.",
+    recording: PROVISIONING_RECORDING,
+    recordingValid: setupRecordingValid(PROVISIONING_RECORDING),
+    issues,
+    device,
+    devices: Object.values(PROVISIONING_DEVICES),
+    plan,
+  });
+});
+
+// The clinical app suite (categories, not vendor claims) — EHR, BCMA, patient
+// portal, HIS, clinical comms, drug reference, billing. Availability is an INPUT
+// (sourced like any signal). States are chosen to exercise every resilience mode,
+// including the loud fail-safe: a PHI app in outage with a fallback but NO safety
+// nets is BLOCKED, never dressed up as a workaround.
+const APP_SUITE: AppService[] = [
+  { id: "ehr", name: "EHR", availability: "unplanned_outage", hasFallback: true, handlesPhi: true, safetyNets: ["DR checkpoint", "post-hoc reconciliation", "witness"] },
+  { id: "bcma", name: "BCMA (barcode med admin)", availability: "available", hasFallback: true, handlesPhi: true },
+  { id: "portal", name: "Patient portal", availability: "degraded", hasFallback: false, handlesPhi: true },
+  { id: "his", name: "HIS", availability: "planned_maintenance", hasFallback: true, handlesPhi: true, safetyNets: ["read-only cache", "downtime forms"] },
+  { id: "comms", name: "Clinical comms", availability: "available", hasFallback: true, handlesPhi: false },
+  { id: "drugref", name: "Drug reference", availability: "unknown", hasFallback: false, handlesPhi: false },
+  { id: "billing", name: "Billing", availability: "unplanned_outage", hasFallback: true, handlesPhi: true, safetyNets: [] },
+];
+router.get("/cp/v1/apps/resilience", (_req, res) => {
+  res.json({
+    note: "Turning each app's availability into a PHI-safe resilience decision so staff keep working through downtime. Fixture data; fallbacks described, not executed.",
+    fleet: fleetResilience(APP_SUITE),
   });
 });
 

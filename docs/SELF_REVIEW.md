@@ -70,14 +70,31 @@ the unknown-reaches-grant class is most acute; new connectors adopt the harness
 from the start.
 
 Two of them also pin the NUMBER of granting shapes, not just the absence of
-mismatches: `device-management-health` at exactly three and `link-usability` at
-exactly six. A mismatch count of zero proves the grant path admits nothing
-unconfirmed; it does not prove the path stayed as narrow as it was designed to be,
-because widening the clean predicate and widening the implementation together stays
-at zero. Pinning the count makes an extra route into the grant a test failure
-rather than a silent widening, and both connectors now also carry a mutation-test
-record — 11 deliberate weakenings applied and reverted on
-`device-management-health`, every one caught.
+mismatches: `device-management-health` and `link-usability` at exactly three each,
+**over their enumerated wire spaces**. A mismatch count of zero proves the grant
+path admits nothing unconfirmed; it does not prove the path stayed as narrow as it
+was designed to be, because widening the clean predicate and widening the
+implementation together stays at zero. Pinning the count makes an extra route into
+the grant a test failure rather than a silent widening. The scope qualifier is not
+decoration: `link-usability`'s own proof asserts a route *outside* its enumeration,
+where a Proxy that lies in `ownKeys` while still answering
+`getOwnPropertyDescriptor` keeps its values readable and grants.
+
+`link-usability` reached three the hard way, and the episode is the argument for
+pinning the count at all. It shipped granting **six** shapes; adversarial review
+confirmed the count was correct and then asked what the six *were*, and found three
+of them self-contradictory — a report asserting no roaming domain exists while also
+reporting observed roaming behaviour. Counting the grants is necessary and not
+sufficient; someone still has to read them.
+
+Both connectors carry a mutation-test record. On `device-management-health`, 11
+deliberate weakenings were applied and reverted, every one caught — two of them had
+previously left the proof green. On `link-usability`, review ran 65; 62 were killed,
+and the three survivors were the real findings, now fixed. A follow-up pass of seven
+targeted mutations killed four and left three that are **inert at current
+severities** — a contradiction candidate already outranks what they guard — and
+those three are labelled as such in the source rather than left looking
+load-bearing.
 
 The remaining grant-emitting connectors are a tracked follow-up: the
 list-aggregation dimensions (`credential-exposure`, `data-protection`,

@@ -245,9 +245,10 @@ parts of the answer are already structural and which are still owed.
 These are additions to the private production core, listed here so the gap is recorded
 rather than discovered:
 
-1. **Signed verdicts.** A consumer must be able to verify that an `allow` originated from
-   the evaluator and was not injected in transit or at rest. The webhook HMAC covers
-   delivery, not the decision itself.
+1. ~~**Signed verdicts.**~~ **Shape built** — see below. A consumer must be able to verify
+   that an `allow` originated from the evaluator and was not injected in transit or at
+   rest; the webhook HMAC covers delivery, not the decision itself. What remains for the
+   private core is key custody and asymmetric signing, not the contract.
 2. **Per-tenant connector credentials**, so the blast radius of a stolen credential is one
    hospital rather than the fleet — replacing the process-global environment token.
 3. **A bounded `AutoApproved` surface** — rate, scope, and time limits on automatic
@@ -261,6 +262,58 @@ Non-claims, stated as plainly as the rest: nothing here asserts that SignalGrid 
 a ransomware incident, reduces patient harm, or satisfies any regulatory obligation. The
 figures cited above are third-party research about the sector, reproduced as context for
 a design decision. They are not outcomes this product claims to produce.
+
+### Verdict attestation, as built
+
+`lib/verdict-attestation` is the public-core half of item 1: the envelope, the
+verification contract, and the fail-closed behaviour. The production core swaps the
+sealing primitive for asymmetric signing with real key custody; the contract does not
+change, and the contract is what carries the safety.
+
+The design decision worth arguing about is what happens when verification FAILS. The
+obvious answer — return an error and let the caller decide — is how this class of control
+stops working in practice: a status field a caller may ignore is a status field some
+caller eventually ignores, and the first such caller silently re-opens the hole. So
+`openVerdict` never hands back a usable grant it could not verify. An unverifiable verdict
+comes back with its action raised to `step_up` and its reason replaced with
+`VERDICT_UNVERIFIED`, which means **a caller that never inspects the status still cannot
+act on a forged `allow`**. The proof asserts exactly that across the whole enumerated
+space, not just the happy path.
+
+Three details are load-bearing and easy to get wrong in the other direction:
+
+- **The degrade is one-directional.** A verdict that already says `restrict` is not
+  lowered to `step_up` by a verification failure. Failing to confirm a verdict is never a
+  reason to trust a device *more* than the unverified claim about it did.
+- **`step_up`, not `escalate`.** A failed verification means we do not know the truth; it
+  does not mean the device is compromised. Escalating every unverifiable read would make a
+  key-rotation mistake indistinguishable from an attack, and the first noisy week would
+  end with the control switched off.
+- **The verdict object is copied, never mutated.** The caller is often holding the
+  original for an audit record, and rewriting it underneath them would corrupt exactly the
+  evidence this is meant to protect.
+
+`tenantId` is bound *inside* the sealed payload rather than sitting alongside it, so a
+genuine, correctly-sealed `allow` for one hospital does not transfer to another — the hub
+threat above, closed at the cryptographic layer rather than by policy. `alg` is checked
+for membership in an allowlist and never used to *select* a verifier, which is the
+algorithm-confusion mistake that has broken signed-token schemes repeatedly; the verifier
+comes from the keyring entry. An unknown `keyId` is a refusal rather than a fallback to
+trying every key, because a verifier that roams its ring is an oracle for which keys
+exist.
+
+Canonicalization is its own small module for a reason: a seal is only as good as the bytes
+it covers, and `JSON.stringify` guarantees neither that two different verdicts serialize
+differently (it maps `NaN` and `Infinity` alike to `null`) nor that one verdict serializes
+the same way twice (key order follows insertion order). The canonical form is key-sorted
+and own-property-only, so a polluted prototype cannot change what a signature covers, and
+it returns an `UNCANONICAL` sentinel rather than throwing — a hostile value fails closed
+inside a verification path instead of exploding out of it.
+
+Proven offline by `pnpm run proof:verdict-attestation` (64 checks): 288 envelope states
+enumerated across tamper site, key, algorithm, clock and replay, with **exactly one**
+verifying, and — separately asserted through `openVerdict` — **exactly one** yielding a
+usable `none`.
 
 ## What the private production core must add
 

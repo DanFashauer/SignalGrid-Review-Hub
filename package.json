@@ -93,6 +93,7 @@
     "proof:agent-identity": "pnpm --filter @workspace/scripts run proof:agent-identity",
     "proof:device-management-health": "pnpm --filter @workspace/scripts run proof:device-management-health",
     "proof:link-usability": "pnpm --filter @workspace/scripts run proof:link-usability",
+    "proof:verdict-attestation": "pnpm --filter @workspace/scripts run proof:verdict-attestation",
     "proof:grant-safety": "pnpm --filter @workspace/scripts run proof:grant-safety",
     "proof:fabric-evals": "pnpm --filter @workspace/scripts run proof:fabric-evals",
     "proof:fabric-scenario": "pnpm --filter @workspace/scripts run proof:fabric-scenario",

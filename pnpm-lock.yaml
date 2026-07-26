@@ -1590,6 +1590,12 @@ importers:
 
   lib/signalgrid-simulator: {}
 
+  lib/verdict-attestation:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.6.2
+
   lib/webauthn:
     dependencies:
       '@workspace/audit':
@@ -1662,6 +1668,9 @@ importers:
       '@workspace/signalgrid-simulator':
         specifier: workspace:*
         version: link:../lib/signalgrid-simulator
+      '@workspace/verdict-attestation':
+        specifier: workspace:*
+        version: link:../lib/verdict-attestation
       '@workspace/webauthn':
         specifier: workspace:*
         version: link:../lib/webauthn

@@ -75,6 +75,7 @@
     "proof:agent-identity": "tsx ./src/agent-identity-proof.ts",
     "proof:device-management-health": "tsx ./src/device-management-health-proof.ts",
     "proof:link-usability": "tsx ./src/link-usability-proof.ts",
+    "proof:verdict-attestation": "tsx ./src/verdict-attestation-proof.ts",
     "proof:grant-safety": "tsx ./src/grant-safety-proof.ts",
     "proof:fabric-evals": "tsx ./src/fabric-evals-proof.ts",
     "proof:fabric-scenario": "tsx ./src/fabric-scenario-proof.ts",
@@ -101,7 +102,8 @@
     "@workspace/event-contract": "workspace:*",
     "@workspace/posture-composition": "workspace:*",
     "@workspace/incident-playbook": "workspace:*",
-    "@workspace/pim-activation": "workspace:*"
+    "@workspace/pim-activation": "workspace:*",
+    "@workspace/verdict-attestation": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

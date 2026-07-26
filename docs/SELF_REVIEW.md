@@ -63,10 +63,22 @@ Connectors whose full allow-path is currently constrained this way (mismatches=0
 over the full product): **oauth-consent** (6,480), **sso-session** (768),
 **access-governance** (4,500), **ot-posture** (324), **token-binding** (1,296),
 **pacs-access** (8,100), **agent-identity** (17,280 normalized + 870,912 raw + a parse-fidelity pass over the raw space),
-**device-management-health** (21,600 normalized + 1,354,752 raw + a parse-fidelity pass). These are the enum-field
+**device-management-health** (21,600 normalized + 1,354,752 raw + a parse-fidelity pass),
+**link-usability** (6,480 normalized + 217,728 raw + a parse-fidelity pass). These are the enum-field
 "trust grant" dimensions where
 the unknown-reaches-grant class is most acute; new connectors adopt the harness
 from the start.
+
+Two of them also pin the NUMBER of granting shapes, not just the absence of
+mismatches: `device-management-health` at exactly three and `link-usability` at
+exactly six. A mismatch count of zero proves the grant path admits nothing
+unconfirmed; it does not prove the path stayed as narrow as it was designed to be,
+because widening the clean predicate and widening the implementation together stays
+at zero. Pinning the count makes an extra route into the grant a test failure
+rather than a silent widening, and both connectors now also carry a mutation-test
+record — 11 deliberate weakenings applied and reverted on
+`device-management-health`, every one caught.
+
 The remaining grant-emitting connectors are a tracked follow-up: the
 list-aggregation dimensions (`credential-exposure`, `data-protection`,
 `edr-threat`, `vuln-scan`, `peripheral-control`, `identity-risk`) grant only on an

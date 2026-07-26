@@ -178,10 +178,13 @@ export function fromDeviceManagementHealth(v: DeviceManagementHealthVerdict): Co
   // the baseline it was assigned. This is what gives the other device signals an
   // expiry: a device that stopped checking in reports its last-known posture forever.
   // Its actions are already on the unified ladder. Fail-safe: a retired or failed
-  // enrollment, or a device no compliance policy covers, restricts; drift, a stale or
-  // absent check-in, an unreachable plane, and anything unreadable step up. Only a
-  // device confirmed fresh + on-baseline + covered + enrolled + reachable contributes
-  // 'none' — a management plane we could not reach never grants.
+  // enrollment, or a device no compliance policy covers, restricts; a detected but
+  // unremediated defect alerts; drift, a stale or absent check-in on EITHER delivery
+  // channel, a remediation script that could not run, an unreachable plane, and anything
+  // unreadable step up. Only a device confirmed fresh on the MDM channel + fresh (or
+  // confirmed agent-less) on the agent channel + remediation-healthy + on-baseline +
+  // covered + enrolled + reachable contributes 'none' — a management plane we could not
+  // reach never grants.
   return { kind: "device_management_health", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 

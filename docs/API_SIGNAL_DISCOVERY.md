@@ -171,8 +171,10 @@ and recovery-key escrow / LAPS rotation state.
 
 **Status: built.** Shipped as the `device-management-health` dimension — see
 [INTEGRATION_CATALOG](INTEGRATION_CATALOG.md). Four of the five signals above are
-modelled (`checkInFreshness`, `policyDrift`, `complianceCoverage`, `enrollmentState`);
-recovery-key escrow / LAPS rotation state is **not** yet modelled and remains open.
+modelled, with check-in staleness split across **both** delivery channels
+(`mdmCheckInFreshness`, `agentCheckInFreshness`) alongside `remediationHealth`,
+`policyDrift`, `complianceCoverage` and `enrollmentState`; recovery-key escrow / LAPS
+rotation state is **not** yet modelled and remains open.
 
 ## Cross-checks against vendor reference material
 
@@ -214,13 +216,20 @@ implies is already handled honestly in
 names (firewall state, BitLocker/encryption, antivirus health, OS patch level) is
 already carried by `macos-posture` and `intune-entra-posture`.
 
-**Gap: Proactive Remediation health.** Intune's detection-and-remediation script
-framework runs on a recurring schedule to find and fix configuration drift. It appears
+**Proactive Remediation health — closed.** Intune's detection-and-remediation script
+framework runs on a recurring schedule to find and fix configuration drift. It appeared
 in two independent Intune sources (as workload ID 9 in the on-demand sync path, and as a
-headline capability here) and has **zero** mentions anywhere in this repo. It matters
-because `device-management-health` already reports `policyDrift: drifted` — and a
+headline capability here) and had **zero** mentions anywhere in this repo. It mattered
+because `device-management-health` already reported `policyDrift: drifted` — and a
 drifted device whose remediation scripts are *also* failing is materially worse than one
-where self-healing is still running. Queued alongside the MDM/IME check-in split.
+where self-healing is still running.
+
+Now modelled as `remediationHealth`, shipped together with the MDM/agent check-in split
+it was queued alongside. A detection that **found something and was never fixed** is
+graded `alert` — a confirmed fact about the device, so it outranks every unknown-driven
+`step_up`, but not a `restrict`, because a Remediations pair is arbitrary customer script
+and the severity of what it found is not knowable from here. A script that **could not
+run** is graded `step_up`: that is a broken delivery channel, not a known defect.
 
 ---
 

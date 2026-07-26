@@ -9,12 +9,14 @@
 import {
   DEVICE_MANAGEMENT_HEALTH_REPORT_KEYS,
   DeviceManagementHealthConnectorError,
-  type CheckInFreshness,
+  type AgentCheckInFreshness,
   type ComplianceCoverage,
   type DeviceManagementHealthReportRaw,
   type EnrollmentState,
+  type MdmCheckInFreshness,
   type NormalizedDeviceManagementHealth,
   type PolicyDrift,
+  type RemediationHealth,
   type ReportIntegrity,
 } from "./types";
 
@@ -127,7 +129,9 @@ function hasUnrecognizedKey(report: object, known: readonly string[]): boolean {
   }
 }
 
-const CHECK_IN = ["fresh", "stale", "never", "unknown"] as const;
+const MDM_CHECK_IN = ["fresh", "stale", "never", "unknown"] as const;
+const AGENT_CHECK_IN = ["fresh", "stale", "never", "not_applicable", "unknown"] as const;
+const REMEDIATION = ["healthy", "issues_detected", "failed", "not_applicable", "unknown"] as const;
 const DRIFT = ["on_baseline", "drifted", "unknown"] as const;
 const COVERAGE = ["covered", "uncovered", "unknown"] as const;
 const ENROLLMENT = ["enrolled", "failed", "retired", "unknown"] as const;
@@ -142,14 +146,18 @@ export function normalizeReport(
   // Every read is OWN-ONLY — see `ownValue`.
   const plain = isPlainReport(report);
   const raw = {
-    checkInFreshness: plain ? ownValue(report, "checkInFreshness") : undefined,
+    mdmCheckInFreshness: plain ? ownValue(report, "mdmCheckInFreshness") : undefined,
+    agentCheckInFreshness: plain ? ownValue(report, "agentCheckInFreshness") : undefined,
+    remediationHealth: plain ? ownValue(report, "remediationHealth") : undefined,
     policyDrift: plain ? ownValue(report, "policyDrift") : undefined,
     complianceCoverage: plain ? ownValue(report, "complianceCoverage") : undefined,
     enrollmentState: plain ? ownValue(report, "enrollmentState") : undefined,
     managementReachable: plain ? ownValue(report, "managementReachable") : undefined,
   };
 
-  const checkInFreshness = oneOf<CheckInFreshness>(raw.checkInFreshness, CHECK_IN, "unknown");
+  const mdmCheckInFreshness = oneOf<MdmCheckInFreshness>(raw.mdmCheckInFreshness, MDM_CHECK_IN, "unknown");
+  const agentCheckInFreshness = oneOf<AgentCheckInFreshness>(raw.agentCheckInFreshness, AGENT_CHECK_IN, "unknown");
+  const remediationHealth = oneOf<RemediationHealth>(raw.remediationHealth, REMEDIATION, "unknown");
   const policyDrift = oneOf<PolicyDrift>(raw.policyDrift, DRIFT, "unknown");
   const complianceCoverage = oneOf<ComplianceCoverage>(raw.complianceCoverage, COVERAGE, "unknown");
   const enrollmentState = oneOf<EnrollmentState>(raw.enrollmentState, ENROLLMENT, "unknown");
@@ -157,7 +165,9 @@ export function normalizeReport(
   const malformed =
     !plain ||
     hasUnrecognizedKey(report, DEVICE_MANAGEMENT_HEALTH_REPORT_KEYS) ||
-    enumMalformed(raw.checkInFreshness, CHECK_IN) ||
+    enumMalformed(raw.mdmCheckInFreshness, MDM_CHECK_IN) ||
+    enumMalformed(raw.agentCheckInFreshness, AGENT_CHECK_IN) ||
+    enumMalformed(raw.remediationHealth, REMEDIATION) ||
     enumMalformed(raw.policyDrift, DRIFT) ||
     enumMalformed(raw.complianceCoverage, COVERAGE) ||
     enumMalformed(raw.enrollmentState, ENROLLMENT) ||
@@ -174,11 +184,21 @@ export function normalizeReport(
   // `CHECKIN_NEVER` unreachable at the wire layer entirely: the dimension's motivating
   // case, a ward iPad that stopped checking in, could not be NAMED by its own verdict.
   // A guard that buys no safety and costs the operator the reason is not worth having.
+  //
+  // The same reasoning governs the two channel fields: a report claiming the device has
+  // no agent channel while also reporting a state only that channel can produce is
+  // self-contradictory, and self-contradictory input must never grant — but the
+  // normalizer does not resolve it by rewriting either value. It reports both, and the
+  // EVALUATOR raises the contradiction as its own candidate with its own reason code.
+  // Rewriting here would erase the very fields an operator needs to see to know which
+  // side of the report to fix.
 
   return {
     sourceSystem: "device-management-health",
     deviceId,
-    checkInFreshness,
+    mdmCheckInFreshness,
+    agentCheckInFreshness,
+    remediationHealth,
     policyDrift,
     complianceCoverage,
     enrollmentState,

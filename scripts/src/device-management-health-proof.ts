@@ -26,6 +26,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  DEVICE_MANAGEMENT_HEALTH_REPORT_KEYS,
   DeviceManagementHealthConnector,
   DeviceManagementHealthConnectorError,
   createMockDeviceManagementHealthTransport,
@@ -143,6 +144,28 @@ check("...so a bridge that simply omits the field cannot grant by omission", age
 const inconsistent = evaluateDeviceManagementHealth(await connector.fetchHealth(fixture.devices["channel-report-inconsistent"].deviceId));
 check("'no agent channel' + 'remediations healthy' is self-contradictory → step_up, never a grant", inconsistent.reasonCode === "CHANNEL_REPORT_INCONSISTENT" && inconsistent.managementEffective === false);
 check("...and the contradiction is the headline, so the operator fixes the bridge, not the device", inconsistent.posture === "unverified" && inconsistent.unknownSignals.includes("channel_consistency"));
+// The guard has THREE remediation terms and the first draft only ever exercised one of
+// them. Mutation-testing found that deleting either of the other two left the proof at
+// 141/141 green while silently changing the reason code — the exact "load-bearing but
+// unproven" state pass 3 exists to prevent, reopened in new code. One fixture per term.
+const inconsistentFailed = evaluateDeviceManagementHealth(await connector.fetchHealth(fixture.devices["channel-inconsistent-remediation-failed"].deviceId));
+check("'no agent channel' + 'remediation script FAILED' is contradictory too, and says so", inconsistentFailed.reasonCode === "CHANNEL_REPORT_INCONSISTENT");
+// The sharpest of the three. `issues_detected` alerts, and alert outranks this step_up,
+// so before the fix the contradiction was never the headline and the verdict carried
+// `remediation_issues_detected` in criticalFindings — a field documented as CONFIRMED
+// KNOWN-BAD FACTS — sourced from the half of the report it had just disbelieved.
+const inconsistentDetected = evaluateDeviceManagementHealth(await connector.fetchHealth(fixture.devices["channel-inconsistent-issues-detected"].deviceId));
+check("'no agent channel' + 'defect detected' does NOT alert — a disbelieved claim is not evidence", inconsistentDetected.reasonCode === "CHANNEL_REPORT_INCONSISTENT" && inconsistentDetected.recommendedAction === "step_up");
+check("...and the disbelieved claim is NOT cited as a confirmed fact", inconsistentDetected.criticalFindings.length === 0);
+// An agent that has NEVER run cannot have produced a remediation result either. The
+// guard originally covered only `not_applicable`, and the repo's own `agent-checkin-never`
+// fixture was an uncaught instance of the contradiction it failed to model.
+const inconsistentNever = evaluateDeviceManagementHealth(await connector.fetchHealth(fixture.devices["channel-inconsistent-agent-never"].deviceId));
+check("an agent that NEVER ran cannot have reported a remediation result — also contradictory", inconsistentNever.reasonCode === "CHANNEL_REPORT_INCONSISTENT");
+// Silence is not contradiction. "No agent channel" + "remediation state unreported" is
+// an honest report of a platform with neither, and must read as a plain unknown.
+const silentNotContradictory = normalizeReport("sn", { mdmCheckInFreshness: "fresh", agentCheckInFreshness: "not_applicable", policyDrift: "on_baseline", complianceCoverage: "covered", enrollmentState: "enrolled", managementReachable: true });
+check("'no agent channel' + remediation UNREPORTED is silence, not contradiction", evaluateDeviceManagementHealth(silentNotContradictory).reasonCode === "MANAGEMENT_STATE_UNKNOWN" && !evaluateDeviceManagementHealth(silentNotContradictory).unknownSignals.includes("channel_consistency"));
 // The old single field is now an UNRECOGNIZED key. A bridge still emitting it fails
 // loudly rather than being half-read as an MDM-only check-in.
 const legacy = await connector.fetchHealth(fixture.devices["legacy-checkin-key"].deviceId);
@@ -174,7 +197,7 @@ check("a RESTRICT still outranks a detected defect — the alert only wins among
 // that went silent — and the verdict must be able to NAME it. An earlier draft demoted
 // the surrounding claims to `unknown` on the reasoning that they were derived from a
 // check-in that never happened; measured over the full raw space that changed the action
-// on zero reports while making CHECKIN_NEVER unreachable at the wire layer entirely.
+// on zero reports while making MDM_CHECKIN_NEVER unreachable at the wire layer entirely.
 // The normalizer now reports what the bridge said, and the evaluator judges it.
 const never = await connector.fetchHealth(fixture.devices["mdm-checkin-never"].deviceId);
 check("a device that NEVER checked in reports its own reason code, not a generic unknown", evaluateDeviceManagementHealth(never).reasonCode === "MDM_CHECKIN_NEVER");
@@ -200,6 +223,14 @@ check("an uncovered device composes to at_risk, NEVER the 'ok' tier", composeDev
 const noReach = evaluateDeviceManagementHealth(await connector.fetchHealth(fixture.devices["reachability-unreported"].deviceId));
 check("UNREPORTED management reachability → step_up, never granted", noReach.reasonCode === "MANAGEMENT_UNREACHABLE" && noReach.managementEffective === false);
 check("only an explicit managementReachable:true can back a grant (null never composes to 'ok')", composeDeviceRisk([fromDeviceManagementHealth(noReach)]).riskTier !== "ok");
+// An explicit `false` is the plane saying it did not answer for this device — a fact,
+// not a gap — so it is judged near the top rather than last. Measured before the fix:
+// MANAGEMENT_UNREACHABLE headlined 9 of 1,037,232 raw reports while 172,872 of them
+// carried an explicit false, because an asserted negative was losing the step_up tie to
+// any generic MANAGEMENT_STATE_UNKNOWN from one unreadable field.
+const assertedUnreachable = evaluateDeviceManagementHealth(await connector.fetchHealth(fixture.devices["unreachable-outranks-an-unknown-field"].deviceId));
+check("an ASSERTED 'the plane did not answer' outranks a generic unknown from another field", assertedUnreachable.reasonCode === "MANAGEMENT_UNREACHABLE");
+check("...but it is not a critical finding — that field is facts about the DEVICE, and this is a fact about the read", assertedUnreachable.criticalFindings.length === 0);
 
 // Report integrity: a field PRESENT but unparseable is an assertion we could not read,
 // which is not the same as silence. The allowlist folds both into "unknown", so
@@ -252,7 +283,38 @@ const hidden = new Proxy(
   { ...CLEAN_WIRE, agent_check_in_freshness: "stale" },
   { ownKeys: () => [], getOwnPropertyDescriptor: () => undefined },
 ) as DeviceManagementHealthReportRaw;
-check("a Proxy that hides its own properties reads as ABSENT and cannot grant", evaluateDeviceManagementHealth(normalizeReport("px", hidden)).recommendedAction !== "none");
+check("a Proxy that hides BOTH its keys and its descriptors reads as ABSENT and cannot grant", evaluateDeviceManagementHealth(normalizeReport("px", hidden)).recommendedAction !== "none");
+// The honest limit, asserted rather than implied. A Proxy that hides a key from `ownKeys`
+// while still answering `getOwnPropertyDescriptor` keeps its values readable, so the key
+// scan sees nothing and the report grants. This is disclosed in INTEGRATION_CATALOG —
+// a Proxy can always lie about its own shape — and the previous check's name ("hides its
+// own properties") read as if it covered this, which it does not. Pinning the real
+// behaviour means the disclosure cannot silently drift away from the code.
+const hidesKeysOnly = new Proxy(
+  { ...CLEAN_WIRE, agent_check_in_freshness: "stale" },
+  { ownKeys: () => [...DEVICE_MANAGEMENT_HEALTH_REPORT_KEYS] },
+) as DeviceManagementHealthReportRaw;
+check("KNOWN LIMIT: a Proxy that hides only its KEYS keeps its values and does grant — a Proxy can always lie about its shape", evaluateDeviceManagementHealth(normalizeReport("pk", hidesKeysOnly)).recommendedAction === "none");
+// A report that IS Object.prototype was never scanned at all: the walk's stop condition
+// `o !== Object.prototype` was evaluated before the first iteration, so a polluted
+// prototype normalized to clean and granted. `isPlainReport` now excludes it.
+const pollutionKeys = Object.keys(CLEAN_WIRE) as (keyof typeof CLEAN_WIRE)[];
+for (const k of pollutionKeys) (Object.prototype as Record<string, unknown>)[k] = CLEAN_WIRE[k];
+const asPrototype = normalizeReport("op", Object.prototype as DeviceManagementHealthReportRaw);
+for (const k of pollutionKeys) delete (Object.prototype as Record<string, unknown>)[k];
+check("a report that IS Object.prototype is malformed — the chain terminus is not the report", asPrototype.reportIntegrity === "malformed");
+check("...and a polluted prototype passed as the report cannot grant", evaluateDeviceManagementHealth(asPrototype).recommendedAction !== "none");
+// An own ACCESSOR that throws must land where every unreadable report lands, not escape
+// as a bare Error. isPlainReport and the key scan both fail closed for this reason; the
+// seven field reads were the one gap in that story.
+const throwingAccessor = Object.defineProperty({ ...CLEAN_WIRE }, "policyDrift", {
+  get() { throw new Error("hostile accessor"); }, enumerable: true, configurable: true,
+}) as DeviceManagementHealthReportRaw;
+let accessorThrew = false;
+let accessorNormalized: ReturnType<typeof normalizeReport> | null = null;
+try { accessorNormalized = normalizeReport("ta", throwingAccessor); } catch { accessorThrew = true; }
+check("an own accessor that THROWS does not escape the normalizer as an untyped Error", accessorThrew === false);
+check("...it is malformed and cannot grant", accessorNormalized?.reportIntegrity === "malformed" && evaluateDeviceManagementHealth(accessorNormalized!).recommendedAction !== "none");
 const notAnObject = normalizeReport("s", "ERR: graph timeout" as unknown as DeviceManagementHealthReportRaw);
 check("a non-object report is malformed, not a thrown TypeError", notAnObject.reportIntegrity === "malformed" && evaluateDeviceManagementHealth(notAnObject).recommendedAction !== "none");
 check("a plain parsed-JSON report is NOT flagged by the prototype walk", normalizeReport("j", JSON.parse('{"mdmCheckInFreshness":"fresh"}') as DeviceManagementHealthReportRaw).reportIntegrity === "clean");
@@ -296,6 +358,16 @@ check("case/whitespace variants are canonicalized, not treated as malformed", sh
 const channelsConsistent = (agent: unknown, remediation: unknown): boolean =>
   (agent === "fresh" && (remediation === "healthy" || remediation === "not_applicable")) ||
   (agent === "not_applicable" && remediation === "not_applicable");
+
+/** The full contradiction relation, stated independently of the evaluator's guard. A
+ *  remediation state is AGENT-PRODUCED when only a run of the agent channel could have
+ *  yielded it; a channel the bridge says does not exist, or has never once run, cannot
+ *  have produced one. Silence (`unknown`) is not agent-produced and so not a
+ *  contradiction — it is an ordinary gap. Used only for the reason-code assertions
+ *  below; `channelsConsistent` above remains the grant contract. */
+const channelsContradictory = (agent: unknown, remediation: unknown): boolean =>
+  (agent === "not_applicable" || agent === "never") &&
+  (remediation === "healthy" || remediation === "issues_detected" || remediation === "failed");
 
 const domains = {
   mdmCheckInFreshness: ["fresh", "stale", "never", "unknown"],
@@ -351,14 +423,39 @@ check("exhaustive (normalized): exactly THREE channel shapes grant — live-agen
 // to the raw report. Without it the unrecognized-key branch of the integrity check
 // would be load-bearing and structurally unreachable by this enumeration.
 const rawDomains = {
+  // Every enum field carries the same six wire CLASSES: the allowed spellings, an
+  // omitted key, a JSON null, and a junk value. The two new fields were originally
+  // asymmetric — `agentCheckInFreshness` omitted `null` and `remediationHealth` omitted
+  // the literal `"unknown"` — while `PARSEABLE_RAW` below listed both, so the
+  // parse-fidelity pass advertised coverage of two cells it never produced.
   mdmCheckInFreshness: ["fresh", "stale", "never", "unknown", undefined, null, "very_old"],
-  agentCheckInFreshness: ["fresh", "stale", "never", "not_applicable", "unknown", undefined, 7],
-  remediationHealth: ["healthy", "issues_detected", "failed", "not_applicable", undefined, null, "green"],
+  agentCheckInFreshness: ["fresh", "stale", "never", "not_applicable", "unknown", undefined, null, 7],
+  remediationHealth: ["healthy", "issues_detected", "failed", "not_applicable", "unknown", undefined, null, "green"],
   policyDrift: ["on_baseline", "drifted", "unknown", undefined, null, ["drifted"]],
   complianceCoverage: ["covered", "uncovered", "unknown", undefined, null, {}],
   enrollmentState: ["enrolled", "failed", "retired", "unknown", undefined, null, "pending_enrollment"],
   managementReachable: [true, false, null, undefined, "true", 1],
   __alias: ["absent", "present"],
+};
+// Pass 2 also carries a free rider. The harness calls `evaluate` once per combination,
+// so wrapping it audits the ENTIRE raw space at zero extra cost — which is what finding
+// #2 needed: grant-ness cannot see a claim being cited from a disbelieved report,
+// because both readings deny. Counting it directly can.
+let contradictoryCount = 0;
+let citedWhileContradictory = 0;
+const evaluateAndAudit = (n: NormalizedDeviceManagementHealth): ReturnType<typeof evaluateDeviceManagementHealth> => {
+  const v = evaluateDeviceManagementHealth(n);
+  if (channelsContradictory(n.agentCheckInFreshness, n.remediationHealth)) {
+    contradictoryCount += 1;
+    if (
+      v.reasonCode === "REMEDIATION_ISSUES_DETECTED" ||
+      v.reasonCode === "REMEDIATION_FAILED" ||
+      v.criticalFindings.includes("remediation_issues_detected")
+    ) {
+      citedWhileContradictory += 1;
+    }
+  }
+  return v;
 };
 const rawEnumRes = enumerateGrantSafety({
   domains: rawDomains,
@@ -368,7 +465,7 @@ const rawEnumRes = enumerateGrantSafety({
     if (__alias === "present") raw.policy_drift = "drifted";
     return normalizeReport("enum", raw, "enum");
   },
-  evaluate: evaluateDeviceManagementHealth,
+  evaluate: evaluateAndAudit,
   actionOf: (v) => v.recommendedAction,
   confirmedWhenNone: (v) =>
     v.managementEffective === true &&
@@ -389,10 +486,14 @@ const rawEnumRes = enumerateGrantSafety({
 });
 check(
   `exhaustive (raw wire): over all ${rawEnumRes.combos} raw reports — including junk enum spellings, JSON nulls, string-quoted booleans, numbers, arrays, objects and an aliased extra key — normalizeReport + evaluate grant ONLY the seven-way confirmation (mismatches=${rawEnumRes.mismatches}${rawEnumRes.firstMismatch ? ", first=" + rawEnumRes.firstMismatch : ""})`,
-  rawEnumRes.mismatches === 0 && rawEnumRes.combos === productOf(rawDomains) && rawEnumRes.combos === 1037232,
+  rawEnumRes.mismatches === 0 && rawEnumRes.combos === productOf(rawDomains) && rawEnumRes.combos === 1354752,
 );
 check("exhaustive (raw wire): some raw reports DO grant (the enumeration is not vacuous)", rawEnumRes.noneCount > 0);
 check("exhaustive (raw wire): exactly THREE raw reports grant — one per consistent channel shape, and nothing else", rawEnumRes.noneCount === 3);
+check(
+  `exhaustive (raw wire): across all ${contradictoryCount} self-contradictory reports, NOT ONE cites the disbelieved remediation claim — no REMEDIATION_* reason code and no remediation critical finding (violations=${citedWhileContradictory})`,
+  citedWhileContradictory === 0 && contradictoryCount > 0,
+);
 
 // Pass 3 — PARSE FIDELITY, over the same raw space.
 //

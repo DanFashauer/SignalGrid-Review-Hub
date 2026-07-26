@@ -65,7 +65,7 @@ function boolMalformed(v: unknown): boolean {
 
 /** Read a field ONLY if the report asserts it as an OWN property. An inherited value is
  *  the prototype's claim, not this report's, so it must not read as a confirmation:
- *  `Object.create({ checkInFreshness: "fresh", ... })` asserts nothing and cannot grant,
+ *  `Object.create({ mdmCheckInFreshness: "fresh", ... })` asserts nothing and cannot grant,
  *  and a polluted `Object.prototype` is invisible here. This governs READS only — the
  *  unrecognized-key scan below still walks the chain, because an inherited key is an
  *  assertion even though its value is not read. A Proxy that hides its own descriptors
@@ -78,9 +78,24 @@ function ownValue(report: object, key: string): unknown {
 
 /** Is this a plain JSON-shaped object at all? `Reflect.ownKeys` throws on a primitive,
  *  and the transport is injectable, so a non-object must fail closed rather than throw
- *  an untyped TypeError out of the normalizer. */
+ *  an untyped TypeError out of the normalizer.
+ *
+ *  Two of the three clauses are deliberately REDUNDANT, and saying so is the point —
+ *  a reader should not have to mutation-test the file to learn which conditions carry
+ *  weight. `!Array.isArray` is belt-and-braces: an array already fails the key scan on
+ *  its own `length`. `report !== Object.prototype` is NOT redundant, and it closes a
+ *  real hole: the scan's loop condition is `o !== Object.prototype`, evaluated before
+ *  the first iteration, so a report that IS `Object.prototype` was never scanned at all
+ *  and a polluted prototype normalized to a clean, granting verdict. The stop condition
+ *  answers "have we reached the chain terminus", which is not the same question as
+ *  "is this the report". */
 function isPlainReport(report: unknown): report is object {
-  return typeof report === "object" && report !== null && !Array.isArray(report);
+  return (
+    typeof report === "object" &&
+    report !== null &&
+    !Array.isArray(report) &&
+    report !== Object.prototype
+  );
 }
 
 /** Depth bound for the prototype scan below. A Proxy may return a fresh object from
@@ -117,6 +132,11 @@ function hasUnrecognizedKey(report: object, known: readonly string[]): boolean {
         // values are read own-only it would otherwise be asserted by the report and
         // read by nobody: `report.agentRegistered === true` while the verdict grants.
         if (depth > 0) return true;
+        // Redundant by construction — `known` holds only strings, so the
+        // `includes` below already rejects every symbol. Kept as an explicit
+        // statement of intent so a future edit that widens `known` cannot quietly
+        // start accepting symbol keys, and flagged as redundant so nobody mistakes
+        // it for a load-bearing guard.
         if (typeof k === "symbol") return true;
         if (!known.includes(k)) return true;
       }
@@ -144,15 +164,33 @@ export function normalizeReport(
   source = "device-management-health-bridge",
 ): NormalizedDeviceManagementHealth {
   // Every read is OWN-ONLY — see `ownValue`.
+  //
+  // The reads are wrapped because a property can be an ACCESSOR that throws. `isPlainReport`
+  // exists so a non-object fails closed rather than throwing an untyped TypeError out of
+  // the normalizer, and `hasUnrecognizedKey` catches for the same reason; leaving these
+  // seven reads unguarded left the one hole in that story, where an own getter would
+  // propagate a bare `Error` out of `fetchHealth` instead of a typed connector error. A
+  // report we could not even read the fields of is unreadable by definition, so it lands
+  // where every unreadable report lands: all values absent, integrity malformed.
   const plain = isPlainReport(report);
+  let readFailed = false;
+  const read = (key: string): unknown => {
+    if (!plain) return undefined;
+    try {
+      return ownValue(report, key);
+    } catch {
+      readFailed = true;
+      return undefined;
+    }
+  };
   const raw = {
-    mdmCheckInFreshness: plain ? ownValue(report, "mdmCheckInFreshness") : undefined,
-    agentCheckInFreshness: plain ? ownValue(report, "agentCheckInFreshness") : undefined,
-    remediationHealth: plain ? ownValue(report, "remediationHealth") : undefined,
-    policyDrift: plain ? ownValue(report, "policyDrift") : undefined,
-    complianceCoverage: plain ? ownValue(report, "complianceCoverage") : undefined,
-    enrollmentState: plain ? ownValue(report, "enrollmentState") : undefined,
-    managementReachable: plain ? ownValue(report, "managementReachable") : undefined,
+    mdmCheckInFreshness: read("mdmCheckInFreshness"),
+    agentCheckInFreshness: read("agentCheckInFreshness"),
+    remediationHealth: read("remediationHealth"),
+    policyDrift: read("policyDrift"),
+    complianceCoverage: read("complianceCoverage"),
+    enrollmentState: read("enrollmentState"),
+    managementReachable: read("managementReachable"),
   };
 
   const mdmCheckInFreshness = oneOf<MdmCheckInFreshness>(raw.mdmCheckInFreshness, MDM_CHECK_IN, "unknown");
@@ -164,6 +202,7 @@ export function normalizeReport(
 
   const malformed =
     !plain ||
+    readFailed ||
     hasUnrecognizedKey(report, DEVICE_MANAGEMENT_HEALTH_REPORT_KEYS) ||
     enumMalformed(raw.mdmCheckInFreshness, MDM_CHECK_IN) ||
     enumMalformed(raw.agentCheckInFreshness, AGENT_CHECK_IN) ||
@@ -181,7 +220,7 @@ export function normalizeReport(
   // ZERO reports and grant-ness on ZERO reports — `never` already denies on its own —
   // while changing the reason code on eight, in every case replacing a specific
   // diagnosis with a generic one. Worse, by rewriting `policyDrift` it made
-  // `CHECKIN_NEVER` unreachable at the wire layer entirely: the dimension's motivating
+  // `MDM_CHECKIN_NEVER` unreachable at the wire layer entirely: the dimension's motivating
   // case, a ward iPad that stopped checking in, could not be NAMED by its own verdict.
   // A guard that buys no safety and costs the operator the reason is not worth having.
   //

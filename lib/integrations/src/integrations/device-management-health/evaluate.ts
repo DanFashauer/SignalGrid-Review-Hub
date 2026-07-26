@@ -22,7 +22,8 @@ import {
  *  - a RETIRED or FAILED enrollment, or a device no compliance policy even covers,
  *    means the management plane is not actually governing it → RESTRICT (contain);
  *  - a DETECTED, UNREMEDIATED defect is a confirmed fact about the device rather
- *    than a gap in what we know → ALERT;
+ *    than a gap in what we know → ALERT (but only from a report whose two channel
+ *    fields agree — see the consistency guard below);
  *  - CONFIG DRIFT (applied config no longer matches the assigned baseline), a
  *    device that has NEVER checked in on either channel, one whose check-in has
  *    gone STALE on either channel, a remediation script that could not run, or a
@@ -97,19 +98,51 @@ export function evaluateDeviceManagementHealth(
     candidates.push({ posture: "unverified", action: "step_up", reason: "REPORT_MALFORMED" });
   }
 
-  // A report that contradicts itself is judged before anything derived from it. The
-  // bridge cannot both assert this platform has NO agent channel and report a state only
-  // that channel produces; one of the two is wrong and we do not know which. Raised
-  // first so it wins the tie among step_ups — the operator's next action is to fix the
-  // bridge mapping, not the device.
-  if (
-    health.agentCheckInFreshness === "not_applicable" &&
+  // A report that contradicts itself is judged before anything derived from it, and
+  // — decisively — nothing derived from the disbelieved half is judged AT ALL.
+  //
+  // The bridge cannot assert that the agent channel does not exist (or has never once
+  // run) while also reporting a state only a run of that channel can produce. One of the
+  // two is wrong and we do not know which, so neither is usable.
+  //
+  // The first draft of this guard raised its candidate and then went on to judge the
+  // remediation fields anyway. That was wrong twice over. `issues_detected` alerts, and
+  // `alert` outranks this `step_up`, so on a contradictory report the contradiction was
+  // never the headline — the shipped comment claiming "the operator's next action is to
+  // fix the bridge mapping, not the device" was false on every one of those reports.
+  // Worse, the verdict then carried `remediation_issues_detected` in `criticalFindings`,
+  // a field documented as CONFIRMED KNOWN-BAD FACTS, sourced from exactly the half of the
+  // report it had just declared unbelievable. Measured over the raw wire space, 21,168
+  // reports asserted a critical finding while flagging `channel_consistency`. A
+  // dimension does not get to disbelieve a claim and cite it in the same breath.
+  const channelReportInconsistent =
+    (health.agentCheckInFreshness === "not_applicable" || health.agentCheckInFreshness === "never") &&
     (health.remediationHealth === "healthy" ||
       health.remediationHealth === "issues_detected" ||
-      health.remediationHealth === "failed")
-  ) {
+      health.remediationHealth === "failed");
+  if (channelReportInconsistent) {
     unknownSignals.push("channel_consistency");
     candidates.push({ posture: "unverified", action: "step_up", reason: "CHANNEL_REPORT_INCONSISTENT" });
+  }
+
+  // An explicit `false` is the management plane telling us it did NOT answer for this
+  // device — a known-bad fact, not a gap, and it makes every other field in the report a
+  // value the bridge is repeating rather than one the plane just confirmed. It is judged
+  // here, near the top, for the same reason `issues_detected` outranks the unknowns.
+  //
+  // It was originally raised last, alongside the `null` case, and the cost was measured
+  // rather than guessed: `MANAGEMENT_UNREACHABLE` was the headline on 9 of 1,037,232 raw
+  // reports while 172,872 of them — one in six — carried an explicit
+  // `managementReachable: false`. An asserted negative was losing the step_up tie to any
+  // generic `MANAGEMENT_STATE_UNKNOWN` from a single unreadable field, which is the
+  // opposite of what worst-concern-wins is for. The `null` case stays where it was: a
+  // field the bridge never mentioned is a gap like any other.
+  //
+  // It does NOT contribute a `criticalFindings` entry. That field is documented as
+  // confirmed known-bad facts about THIS DEVICE, and "the plane did not answer" is a
+  // fact about the read, not about the iPad.
+  if (health.managementReachable === false) {
+    candidates.push({ posture: "unverified", action: "step_up", reason: "MANAGEMENT_UNREACHABLE" });
   }
 
   // MDM check-in freshness is judged next. Severity ordering is unaffected — the reduce
@@ -156,15 +189,22 @@ export function evaluateDeviceManagementHealth(
   // It is not a `restrict`: a Remediations pair is arbitrary customer script, so the
   // severity of what it detected is unknown to us. Containing every device with any
   // open detection would make the strongest action mean nothing.
-  if (health.remediationHealth === "issues_detected") {
-    criticalFindings.push("remediation_issues_detected");
-    candidates.push({ posture: "unremediated_defect", action: "alert", reason: "REMEDIATION_ISSUES_DETECTED" });
-  } else if (health.remediationHealth === "failed") {
-    // The script could not run — a broken delivery channel, not a known defect.
-    candidates.push({ posture: "stale_agent_channel", action: "step_up", reason: "REMEDIATION_FAILED" });
-  } else if (health.remediationHealth === "unknown") {
+  // Guarded by `!channelReportInconsistent`: when the report contradicts itself about the
+  // agent channel, its remediation claim is not evidence of anything and is not judged.
+  // `unknown` is outside the guard because it is not an agent-produced state — a bridge
+  // that says "no agent channel" and "remediation state unreported" is silent, not
+  // self-contradictory, and silence still denies on its own.
+  if (health.remediationHealth === "unknown") {
     unknownSignals.push("remediation_health");
     candidates.push({ posture: "unverified", action: "step_up", reason: "MANAGEMENT_STATE_UNKNOWN" });
+  } else if (!channelReportInconsistent) {
+    if (health.remediationHealth === "issues_detected") {
+      criticalFindings.push("remediation_issues_detected");
+      candidates.push({ posture: "unremediated_defect", action: "alert", reason: "REMEDIATION_ISSUES_DETECTED" });
+    } else if (health.remediationHealth === "failed") {
+      // The script could not run — a broken delivery channel, not a known defect.
+      candidates.push({ posture: "stale_agent_channel", action: "step_up", reason: "REMEDIATION_FAILED" });
+    }
   }
 
   // ── restrict: the management plane is not actually governing this device ───────
@@ -195,10 +235,12 @@ export function evaluateDeviceManagementHealth(
     candidates.push({ posture: "unverified", action: "step_up", reason: "MANAGEMENT_STATE_UNKNOWN" });
   }
 
-  // The grant demands POSITIVE confirmation that the management plane answered for
-  // this device. Without an explicit true the read may be stale or cached.
-  if (health.managementReachable !== true) {
-    if (health.managementReachable === null) unknownSignals.push("management_reachable");
+  // The grant demands POSITIVE confirmation that the management plane answered for this
+  // device. Without an explicit true the read may be stale or cached. The explicit
+  // `false` was already judged above as a known-bad fact; this is the UNREPORTED case —
+  // a gap, so it is raised late among the step_ups, after every named diagnosis.
+  if (health.managementReachable === null) {
+    unknownSignals.push("management_reachable");
     candidates.push({ posture: "unverified", action: "step_up", reason: "MANAGEMENT_UNREACHABLE" });
   }
 

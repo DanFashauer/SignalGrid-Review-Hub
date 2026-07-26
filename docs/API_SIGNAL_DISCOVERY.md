@@ -218,14 +218,27 @@ already carried by `macos-posture` and `intune-entra-posture`.
 
 **Proactive Remediation health — closed.** Intune's detection-and-remediation script
 framework runs on a recurring schedule to find and fix configuration drift. It appeared
-in two independent Intune sources (as workload ID 9 in the on-demand sync path, and as a
-headline capability here) and had **zero** mentions anywhere in this repo. It mattered
+in two places in this sweep and had **zero** mentions anywhere in this repo. One of the
+two needs a correction that the original note did not make: the "workload ID 9" mapping
+comes from a **reverse-engineered enum** inside the Intune Management Extension's
+`SidecarNotification` assembly, published on a third-party blog and gated behind a
+feature flight. It is corroborating detail, not a Microsoft-published API, and calling it
+an independent *source* overstated it. The same correction applies to "DirectSync",
+which appears in **zero** Microsoft documentation and in any case tags a push-delivered
+sync notification rather than naming a transport — it has been removed from
+INTEGRATION_CATALOG. In a sweep whose entire argument is "read the primary source",
+quoting an internal enum string as vendor nomenclature is the failure mode to avoid. It mattered
 because `device-management-health` already reported `policyDrift: drifted` — and a
 drifted device whose remediation scripts are *also* failing is materially worse than one
 where self-healing is still running.
 
 Now modelled as `remediationHealth`, shipped together with the MDM/agent check-in split
-it was queued alongside. A detection that **found something and was never fixed** is
+it was queued alongside. Scope, verified against Microsoft Learn rather than assumed:
+Remediations are **Windows-only** — the prerequisites require Windows Enterprise/Pro/
+Education with Windows E3/E5, and the Intune Management Extension is what runs them. The
+macOS Intune agent carries shell scripts, custom attributes and DMG/PKG installs, and
+does *not* carry Remediations; an earlier draft of the catalog claimed macOS parity here
+and was wrong. A detection that **found something and was never fixed** is
 graded `alert` — a confirmed fact about the device, so it outranks every unknown-driven
 `step_up`, but not a `restrict`, because a Remediations pair is arbitrary customer script
 and the severity of what it found is not knowable from here. A script that **could not

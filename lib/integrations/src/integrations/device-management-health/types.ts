@@ -26,12 +26,21 @@
 //
 //   MDM channel   — configuration profiles, compliance policies, the settings
 //                   catalog. On Windows this is OMA-DM; on Apple platforms it is
-//                   the Apple MDM protocol. This is what `lastSyncDateTime`
-//                   reports, and it is the number a console shows.
+//                   the Apple MDM protocol. This is the number a console shows.
+//                   Graph documents `lastSyncDateTime` only as "the last successful
+//                   sync with Intune" and names no channel; reading it as the MDM
+//                   channel is an inference from documented behaviour (a console
+//                   Sync initiates an MDM check-in but does not force an agent
+//                   check-in), not a documented guarantee.
 //   AGENT channel — the Intune Management Extension (Windows) or the Intune agent
-//                   (macOS), reached via DirectSync. It carries the workloads the
-//                   MDM channel cannot: Win32 app delivery, PowerShell/shell
-//                   scripts, and Remediations.
+//                   (macOS). It carries the workloads the MDM channel cannot, and
+//                   the two platforms carry DIFFERENT ones: on Windows, Win32 app
+//                   delivery, PowerShell scripts and Remediations; on macOS, shell
+//                   scripts, custom attributes and DMG/PKG installs. Remediations
+//                   are documented by Microsoft as Windows-only — an earlier draft
+//                   of this comment claimed macOS parity and was wrong. The agent
+//                   check-in is documented as INDEPENDENT of the MDM check-in,
+//                   which is the whole reason this field exists.
 //
 // A device can be perfectly fresh on the MDM channel while its agent has not run
 // for weeks. Profiles and compliance evaluation stay current; app installs,
@@ -50,8 +59,9 @@ export type MdmCheckInFreshness = "fresh" | "stale" | "never" | "unknown";
  *
  *  `not_applicable` is a POSITIVE assertion from the bridge that this device's
  *  platform has no agent channel at all, and it is load-bearing: iOS/iPadOS has no
- *  Intune Management Extension, so on a ward iPad every workload rides the MDM
- *  channel already judged by `mdmCheckInFreshness`. Without it the fleet this
+ *  Intune Management Extension, so on a ward iPad every device-management workload
+ *  rides the MDM channel already judged by `mdmCheckInFreshness`. (App Protection
+ *  Policies are a separate non-MDM channel on iOS — hence the qualifier.) Without it the fleet this
  *  product exists for could never be confirmed healthy. It has to be ASSERTED —
  *  silence is still `unknown`, and `unknown` still denies. */
 export type AgentCheckInFreshness = "fresh" | "stale" | "never" | "not_applicable" | "unknown";

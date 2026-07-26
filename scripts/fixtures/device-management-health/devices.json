@@ -206,7 +206,7 @@
       "report": {
         "mdmCheckInFreshness": "fresh",
         "agentCheckInFreshness": "never",
-        "remediationHealth": "healthy",
+        "remediationHealth": "not_applicable",
         "policyDrift": "on_baseline",
         "complianceCoverage": "covered",
         "enrollmentState": "enrolled",
@@ -353,6 +353,86 @@
       "expected": {
         "posture": "unverified",
         "reasonCode": "CHANNEL_REPORT_INCONSISTENT",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "managementEffective": false
+      }
+    },
+    "channel-inconsistent-remediation-failed": {
+      "deviceId": "ipad-ward-20",
+      "report": {
+        "mdmCheckInFreshness": "fresh",
+        "agentCheckInFreshness": "not_applicable",
+        "remediationHealth": "failed",
+        "policyDrift": "on_baseline",
+        "complianceCoverage": "covered",
+        "enrollmentState": "enrolled",
+        "managementReachable": true
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "CHANNEL_REPORT_INCONSISTENT",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "managementEffective": false
+      }
+    },
+    "channel-inconsistent-issues-detected": {
+      "deviceId": "ipad-ward-21",
+      "report": {
+        "mdmCheckInFreshness": "fresh",
+        "agentCheckInFreshness": "not_applicable",
+        "remediationHealth": "issues_detected",
+        "policyDrift": "on_baseline",
+        "complianceCoverage": "covered",
+        "enrollmentState": "enrolled",
+        "managementReachable": true
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "CHANNEL_REPORT_INCONSISTENT",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "managementEffective": false
+      }
+    },
+    "channel-inconsistent-agent-never": {
+      "deviceId": "wincart-11",
+      "report": {
+        "mdmCheckInFreshness": "fresh",
+        "agentCheckInFreshness": "never",
+        "remediationHealth": "healthy",
+        "policyDrift": "on_baseline",
+        "complianceCoverage": "covered",
+        "enrollmentState": "enrolled",
+        "managementReachable": true
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "CHANNEL_REPORT_INCONSISTENT",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "managementEffective": false
+      }
+    },
+    "unreachable-outranks-an-unknown-field": {
+      "deviceId": "ipad-ward-22",
+      "report": {
+        "mdmCheckInFreshness": "fresh",
+        "agentCheckInFreshness": "not_applicable",
+        "remediationHealth": "not_applicable",
+        "policyDrift": "unknown",
+        "complianceCoverage": "covered",
+        "enrollmentState": "enrolled",
+        "managementReachable": false
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "MANAGEMENT_UNREACHABLE",
         "recommendedAction": "step_up",
         "criticalFindingsCount": 0,
         "unknownSignalsCount": 1,
@@ -560,7 +640,7 @@
       "deviceId": "ipad-ward-17",
       "report": {
         "mdmCheckInFreshness": "never",
-        "agentCheckInFreshness": "never",
+        "agentCheckInFreshness": "stale",
         "remediationHealth": "issues_detected",
         "policyDrift": "drifted",
         "complianceCoverage": "uncovered",

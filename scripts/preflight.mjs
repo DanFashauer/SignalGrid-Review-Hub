@@ -23,6 +23,7 @@ const quick = process.argv.includes("--quick");
 const STEPS = [
   { name: "Invariant review (fail-closed / determinism / Assist / truth)", cmd: ["node", "scripts/review-invariants.mjs"] },
   { name: "Docs sanity (required docs + unsafe-claim scan)", cmd: ["node", "scripts/docs-sanity.mjs"] },
+  { name: "Docs\u2194proof FIGURE guard (a measured number must still be one)", cmd: ["node", "scripts/check-proof-figures.mjs"] },
   { name: "Proof-count sync (documented check counts match their proofs)", cmd: ["node", "scripts/check-proof-counts.mjs"] },
   { name: "Typecheck (all packages)", cmd: ["pnpm", "run", "typecheck"] },
   { name: "Build (all packages)", cmd: ["pnpm", "run", "build"], heavy: true, env: { PORT: "3000", BASE_PATH: "/" } },

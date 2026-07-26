@@ -91,6 +91,9 @@ function ownValue(report: object, key: string): unknown {
  *  its own `length` — and is labelled redundant so nobody mistakes it for load-bearing. */
 function isPlainReport(report: unknown): report is object {
   return (
+    // Redundant, established by mutation testing: a primitive or a function reaching the
+    // key scan makes `Reflect.ownKeys` throw or return unrecognized keys, so it ends at
+    // `malformed` either way. Kept as a plain statement of the transport contract.
     typeof report === "object" &&
     // Redundant: `hasOwnProperty.call(null, …)` throws, which the wrapped read below
     // catches into `readFailed`, which forces malformed anyway. Kept for legibility.

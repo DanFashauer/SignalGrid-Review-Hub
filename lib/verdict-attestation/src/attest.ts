@@ -44,6 +44,10 @@ function digestsEqual(a: string, b: string): boolean {
   try {
     return timingSafeEqual(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"));
   } catch {
+    // UNREACHABLE, and labelled rather than left looking load-bearing: `timingSafeEqual`
+    // throws only on a length mismatch, which the line above has already refused. Kept
+    // because "an exception here is not a match" is the rule we want if that ever stops
+    // being the only way it throws. Mutation-guard allowlisted with this reason.
     return false;
   }
 }
@@ -117,6 +121,10 @@ function attestationMalformed(a: unknown): boolean {
       typeof own("tenantId") !== "string" ||
       typeof own("nonce") !== "string" ||
       typeof own("digest") !== "string" ||
+      // The `typeof` half is REDUNDANT with the `isFinite` half — any non-number fails
+      // `Number.isFinite` too — and is labelled so rather than left looking load-bearing.
+      // Kept because the pair states the intent (a finite number, not merely something
+      // finite-ish) and reads as one contract. Mutation-guard allowlisted.
       typeof own("issuedAt") !== "number" ||
       !Number.isFinite(own("issuedAt") as number)
     );

@@ -179,6 +179,58 @@ let accessorThrew = false;
 try { verifyVerdict(throwingVerdict, RING, opts()); } catch { accessorThrew = true; }
 check("a throwing accessor on the envelope does not escape the verifier", accessorThrew === false);
 
+// ── every refusal term is individually pinned ────────────────────────────────
+//
+// Added after the mutation guard reported 13 of 19 mutations SURVIVING this file. The
+// enumeration below observes only accept-ness, and every malformed envelope is refused by
+// SOME term, so deleting any single one changed nothing observable — the exact blind spot
+// that harness exists to find, in code written an hour earlier. Each term now has a case
+// that only it catches.
+// Asserting the REASON, not merely the refusal, is what makes these load-bearing. Every
+// one of these fields has a downstream check that would also refuse a wrong-typed value —
+// a numeric `keyId` matches no keyring entry, a numeric `tenantId` fails the tenant
+// comparison, a numeric `nonce` changes the sealed bytes. So a test that only asserted
+// "refused" left every type check deletable. But the reasons differ, and the difference
+// matters to whoever reads it: `unknown_key` sends an operator hunting for a rotation
+// problem, when the truth is that the envelope was malformed.
+for (const [field, bad] of [
+  ["alg", 7], ["keyId", 7], ["tenantId", 7], ["nonce", 7], ["digest", 7], ["issuedAt", "now"],
+] as const) {
+  const env = { verdict: ALLOW, attestation: { ...sealed.attestation, [field]: bad } };
+  const st = verifyVerdict(env, RING, opts()) as { verified: boolean; failure?: string };
+  check(`a wrong-typed \`${field}\` is refused AS MALFORMED, not mis-diagnosed as a key/tenant/digest problem`, st.verified === false && st.failure === "envelope_malformed");
+}
+// `verdict` and `attestation` must be OWN properties of the envelope. Without that check
+// an inherited `verdict` would be read and — since the digest was computed over exactly
+// that value — would VERIFY. A prototype-supplied verdict is the prototype's claim, not
+// the sender's.
+const inheritedVerdict = Object.create({ verdict: ALLOW }) as Record<string, unknown>;
+inheritedVerdict.attestation = sealed.attestation;
+check("an INHERITED verdict is refused — a prototype-supplied verdict is not the sender's claim", verifyVerdict(inheritedVerdict, RING, opts()).verified === false);
+// A hostile Proxy in the attestation position must fail closed, not escape.
+const hostileAtt = { verdict: ALLOW, attestation: new Proxy({ ...sealed.attestation }, { ownKeys: () => { throw new Error("hostile"); } }) };
+let hostileThrew = false;
+let hostileVerified: boolean | null = null;
+try { hostileVerified = verifyVerdict(hostileAtt, RING, opts()).verified; } catch { hostileThrew = true; }
+check("a Proxy attestation that THROWS from ownKeys fails closed without escaping", hostileThrew === false && hostileVerified === false);
+const throwingAttAccessor = { ...sealed.attestation };
+Object.defineProperty(throwingAttAccessor, "digest", { get() { throw new Error("hostile"); }, enumerable: true, configurable: true });
+let attAccessorThrew = false;
+let attAccessorVerified: boolean | null = null;
+try { attAccessorVerified = verifyVerdict({ verdict: ALLOW, attestation: throwingAttAccessor }, RING, opts()).verified; } catch { attAccessorThrew = true; }
+check("a throwing accessor on an attestation field fails closed without escaping", attAccessorThrew === false && attAccessorVerified === false);
+
+// Seal-side guards. Sealing is producer-side, so these throw rather than degrade — but
+// they were entirely untested until the mutation guard said so.
+const sealThrows = (fn: () => unknown): string | null => {
+  try { fn(); return null; } catch (err) { return err instanceof Error ? err.message : String(err); }
+};
+check("sealing with an UNSUPPORTED alg is refused, with a message naming the alg", (sealThrows(() => sealVerdict(ALLOW, { ...KEY, alg: "none" as never }, { tenantId: TENANT, issuedAt: NOW })) ?? "").includes("unsupported alg"));
+check("sealing with an EMPTY secret is refused", (sealThrows(() => sealVerdict(ALLOW, { ...KEY, secret: "" }, { tenantId: TENANT, issuedAt: NOW })) ?? "").includes("non-empty"));
+// This asserted only that *a* throw happened, which any downstream failure satisfies.
+// Naming the message pins the guard that is supposed to produce it.
+check("sealing an uncanonicalizable verdict names THAT as the reason, not whatever fails next", (sealThrows(() => sealVerdict({ bad: NaN }, KEY, { tenantId: TENANT, issuedAt: NOW })) ?? "").includes("not canonicalizable"));
+
 // ── canonicalization: the bytes a seal covers ─────────────────────────────────
 //
 // If two different verdicts can canonicalize the same, one can be swapped for the other
@@ -298,6 +350,7 @@ check(`exhaustive (openVerdict): across all 288 states, exactly ONE yields a usa
 check("sealing is deterministic for a fixed nonce and clock", seal(ALLOW).attestation.digest === seal(ALLOW).attestation.digest);
 check("two different verdicts never seal alike", seal(ALLOW).attestation.digest !== seal(RESTRICT).attestation.digest);
 
+console.log(`figures=states=${enumRes.combos},verifying=${enumRes.noneCount},usableGrants=${usableGrants}`);
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

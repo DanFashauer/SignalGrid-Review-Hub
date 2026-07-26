@@ -310,10 +310,20 @@ and own-property-only, so a polluted prototype cannot change what a signature co
 it returns an `UNCANONICAL` sentinel rather than throwing — a hostile value fails closed
 inside a verification path instead of exploding out of it.
 
-Proven offline by `pnpm run proof:verdict-attestation` (64 checks): 288 envelope states
+Proven offline by `pnpm run proof:verdict-attestation` (76 checks): 288 envelope states
 enumerated across tamper site, key, algorithm, clock and replay, with **exactly one**
 verifying, and — separately asserted through `openVerdict` — **exactly one** yielding a
 usable `none`.
+
+The count moved from 64 to 76 within an hour of being written, and by a route worth
+recording. The new mutation guard was pointed at this package and reported **13 of 19
+mutations surviving** — thirteen conditions here could be deleted with the proof still
+green. Most were type checks whose deletion changed the failure *reason* without changing
+the refusal: a numeric `keyId` still fails, but as `unknown_key` rather than
+`envelope_malformed`, which sends an operator hunting a key-rotation problem that does not
+exist. Asserting the reason instead of merely the refusal made them load-bearing. The two
+that remain are genuinely unreachable, labelled as such in the source, and allowlisted with
+reasons. Code written an hour ago is not a reason to trust it more than anything else.
 
 ## What the private production core must add
 

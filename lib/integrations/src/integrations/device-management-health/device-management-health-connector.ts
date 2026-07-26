@@ -90,6 +90,18 @@ function ownValue(report: object, key: string): unknown {
  *  answers "have we reached the chain terminus", which is not the same question as
  *  "is this the report". */
 function isPlainReport(report: unknown): report is object {
+  // Three of these four clauses are REDUNDANT, established by mutation testing rather
+  // than assumed, and labelled so a reader can tell defence-in-depth from load-bearing.
+  // A primitive or a function reaching the scan makes `Reflect.ownKeys` throw or return
+  // unrecognized keys; `hasOwnProperty.call(null, …)` throws into the wrapped read and
+  // sets `readFailed`; an array fails the scan on its own `length`. Every one ends at
+  // `malformed` regardless. They are kept because "the transport contract is a plain
+  // JSON object" is the rule, and each states one clause of it plainly.
+  //
+  // `report !== Object.prototype` is the exception and is genuinely load-bearing: the
+  // scan's stop condition is `o !== Object.prototype`, evaluated before the first
+  // iteration, so a report that IS the prototype was never scanned at all and a polluted
+  // prototype normalized to clean and granted.
   return (
     typeof report === "object" &&
     report !== null &&

@@ -523,6 +523,7 @@ check("prod WITHOUT live flag stays fixture", resolveLinkUsabilityConnector({ SI
 check("prod + live but NO token stays fixture", resolveLinkUsabilityConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" }).mode === "fixture");
 check("prod + live + token resolves live", resolveLinkUsabilityConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", LINK_USABILITY_ACCESS_TOKEN: "t" }).mode === "live");
 
+console.log(`figures=normalized=${enumRes.combos},raw=${rawEnumRes.combos},grants=${rawEnumRes.noneCount},contradictory=${contradictoryCount},roamContradictory=${roamContradictoryCount}`);
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

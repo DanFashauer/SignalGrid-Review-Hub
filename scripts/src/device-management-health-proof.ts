@@ -443,6 +443,12 @@ const rawDomains = {
 // because both readings deny. Counting it directly can.
 let contradictoryCount = 0;
 let citedWhileContradictory = 0;
+// Figures the docs DISCLOSE as costs of the candidate ordering. They were originally
+// measured by a throwaway script and quoted in prose, which is how the previous pair of
+// disclosure numbers went stale by a factor of 64. Counted here so they cannot.
+let driftedGeneric = 0;
+let unreachableHeadline = 0;
+let explicitUnreachable = 0;
 const evaluateAndAudit = (n: NormalizedDeviceManagementHealth): ReturnType<typeof evaluateDeviceManagementHealth> => {
   const v = evaluateDeviceManagementHealth(n);
   if (channelsContradictory(n.agentCheckInFreshness, n.remediationHealth)) {
@@ -455,6 +461,9 @@ const evaluateAndAudit = (n: NormalizedDeviceManagementHealth): ReturnType<typeo
       citedWhileContradictory += 1;
     }
   }
+  if (n.policyDrift === "drifted" && v.reasonCode === "MANAGEMENT_STATE_UNKNOWN") driftedGeneric += 1;
+  if (v.reasonCode === "MANAGEMENT_UNREACHABLE") unreachableHeadline += 1;
+  if (n.managementReachable === false) explicitUnreachable += 1;
   return v;
 };
 const rawEnumRes = enumerateGrantSafety({
@@ -570,6 +579,9 @@ check("prod WITHOUT live flag stays fixture", resolveDeviceManagementHealthConne
 check("prod + live but NO token stays fixture", resolveDeviceManagementHealthConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" }).mode === "fixture");
 check("prod + live + token resolves live", resolveDeviceManagementHealthConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", DEVICE_MANAGEMENT_HEALTH_ACCESS_TOKEN: "t" }).mode === "live");
 
+// One machine-readable line, derived from the SAME variables the checks above asserted
+// on — not restated by hand, which is the mistake this feeds a guard against.
+console.log(`figures=normalized=${enumRes.combos},raw=${rawEnumRes.combos},grants=${rawEnumRes.noneCount},contradictory=${contradictoryCount},driftedGeneric=${driftedGeneric},unreachableHeadline=${unreachableHeadline},explicitUnreachable=${explicitUnreachable}`);
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

@@ -140,6 +140,9 @@ jobs:
       - name: Proof — verdict attestation (forged verdicts degrade)
         run: pnpm run proof:verdict-attestation
 
+      - name: Docs↔proof figure guard
+        run: node scripts/check-proof-figures.mjs
+
       - name: PIM activation decision proof
         run: pnpm run proof:pim-activation
 

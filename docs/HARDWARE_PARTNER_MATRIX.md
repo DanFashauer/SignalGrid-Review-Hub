@@ -62,7 +62,7 @@ Two reading notes, because both directions of this table are easy to get wrong:
 | Flags a device as missing / unaccounted for | RTLS custody vocabulary — `NOT_TRACKED`, `ABANDONED`, `LEFT_AREA` | **Already modeled**, in the [RTLS custody dimension](../lib/integrations/src/integrations/rtls-custody/) rather than the dock enums. "Missing" is a location question, not a bay-state question. |
 | Flags a broken bay or port | `dockState = faulted` | **Already modeled**, and already a `restrict` rule (`DOCK_FAULTED`). |
 | Reports current charge level | `chargeState = low` / `critical` | **Already modeled.** `critical` is a `step_up` rule (`BATTERY_CRITICAL`); `low` is a modeled value with **no rule attached** — it is evidence, not a trigger. |
-| Predicts a failing battery (health/degradation, not level) | Battery health | **Already claimed, not yet built.** [SignalGrid SmartDock](SIGNALGRID_SMARTDOCK.md) already calls charge state, battery health, and charge faults first-class custody signals, and the DEX layer lists battery and thermal health among the signals it consumes. There is no normalized battery-health field in the custody schema and no rule that reads one, so this is a **stated capability without an implementation** — the gap to close is the claim, not the concept. |
+| Predicts a failing battery (health/degradation, not level) | `batteryHealth = failing` | **Now modeled**, and a `restrict` rule (`BATTERY_FAILING`). This entry previously recorded it as a stated capability with no implementation; that gap was the reason it got built. The distinction that earns it a field: charging clears a low battery and cannot clear a failing one, so without it a worker is routed to a charging bay forever for a device that needs a new battery. `degraded` is carried as evidence with **no rule**, the same treatment `chargeState: low` gets. |
 | Automatically releases the most-charged device | Dispensing actuation | **Not performed here, and not a strategy commitment either way.** Review Hub performs no dock action at all. SmartDock's own physical enforcement (badge latch, charge management, out-of-service hold) is designed but **simulated and approval-gated**, so "SignalGrid never actuates hardware" would be the wrong lesson to draw — the accurate statement is that no actuation is executed in this repo, and any that ships is approval-gated. |
 | Usage analytics, peak-hour demand, user trends | — | **Out of scope.** Fleet-utilization analytics and procurement sizing are a different product. |
 | Device shrink / loss reduction | Downstream of `custodyState` | **Not a signal.** It is an outcome a custody system may claim; SignalGrid should not restate a vendor's shrink figure as a fact. |
@@ -83,11 +83,12 @@ Two cautions when reading vendor material in this category:
 - **"Over-the-air software updates" from a charging kiosk is a management-plane
   claim, and it is currently unmodelled.** If a custody device can push software to
   the devices it holds, it is an update channel, and a signal source that can also
-  change the device is not a read-only signal source. This is an **open gap**:
-  [Product Core Threat Model](PRODUCT_CORE_THREAT_MODEL.md) is scoped to the
-  software core (middleware, store, connector sync, policy engine, audit) and does
-  not today cover firmware or hardware update paths. Naming the gap here is not the
-  same as covering it.
+  change the device is not a read-only signal source. The
+  [Product Core Threat Model](PRODUCT_CORE_THREAT_MODEL.md) now analyses this
+  directly, under *The custody device as an update channel* — including the case
+  where one compromised dock corrupts both the device and the custody evidence
+  SignalGrid uses to judge it. That section states what is owed and confirms that
+  **nothing is implemented against it yet**; the analysis is not the mitigation.
 
 ## Non-goals
 

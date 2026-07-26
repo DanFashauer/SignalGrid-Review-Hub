@@ -233,6 +233,35 @@ export type DockState =
   | "faulted"
   | "offline"
   | "unknown";
+/**
+ * Battery HEALTH, which is a different question from `ChargeState`.
+ *
+ * `chargeState` answers "how full is it right now" — a state charging changes.
+ * `batteryHealth` answers "can this battery still hold a shift" — a state
+ * charging does NOT change. The distinction is the reason this field exists:
+ * without it, a device whose battery can no longer hold charge reports `low`,
+ * gets routed the self-service step "dock it and charge it", comes back `low`,
+ * and loops forever on a fix that cannot work. `failing` is the state that
+ * says the remedy is a battery, not a bay.
+ *
+ *  - healthy:  holds expected capacity for a shift,
+ *  - degraded: measurably reduced capacity but still serviceable — evidence
+ *              only, deliberately carrying NO rule (see policy.ts),
+ *  - failing:  will not hold a shift; needs replacement, not charging,
+ *  - unknown:  no battery-health read.
+ *
+ * On `unknown`, and stated precisely because an earlier draft of this comment
+ * called it "fail-safe" and that was not true. `unknown` is never *labelled*
+ * healthy, but no rule keys on it and it is excluded from
+ * `deriveCriticalSignalsPresent`, so a device with no health read is *treated*
+ * exactly like a healthy one — `allow` / `TRUST_ESTABLISHED`. That matches how
+ * every other custody signal handles absence, and it is deliberate: a rule on
+ * `unknown` would step up every device in every fleet whose docks cannot measure
+ * capacity, which is most of them today. But under this repo's own standard —
+ * a grant requires positive confirmation of every input — it is an honest gap,
+ * not a safe default, and calling it "fail-safe" would have hidden that.
+ */
+export type BatteryHealthState = "healthy" | "degraded" | "failing" | "unknown";
 
 export type SignalCategory =
   | "identity_state"
@@ -243,6 +272,7 @@ export type SignalCategory =
   | "posture_freshness"
   | "custody_state"
   | "charge_state"
+  | "battery_health"
   | "tamper_state"
   | "dock_state"
   | "security_baseline"
@@ -279,6 +309,7 @@ export type EvidenceField =
   | "criticalSignalsPresent"
   | "custodyState"
   | "chargeState"
+  | "batteryHealth"
   | "tamperState"
   | "dockState"
   | "baselineState"
@@ -296,6 +327,7 @@ export type RuleCondition =
   | { field: "workflowRiskTier"; in: RiskTier[] }
   | { field: "custodyState"; in: CustodyState[] }
   | { field: "chargeState"; in: ChargeState[] }
+  | { field: "batteryHealth"; in: BatteryHealthState[] }
   | { field: "tamperState"; in: TamperState[] }
   | { field: "dockState"; in: DockState[] }
   | { field: "baselineState"; in: BaselineState[] }
@@ -349,6 +381,11 @@ export interface DecisionEvidence {
   /** Physical-custody / DockBridge hardware context (default "unknown"). */
   custodyState: CustodyState;
   dockChargeState: ChargeState;
+  /**
+   * Battery health (default "unknown"). Distinct from `dockChargeState`: this is
+   * the state charging cannot change. See BatteryHealthState.
+   */
+  batteryHealth: BatteryHealthState;
   tamperState: TamperState;
   /**
    * Dock/SmartDock hardware state (default "unknown"). A `faulted` or `offline`

@@ -203,7 +203,7 @@ real secret is stored.
 | `connectorId` | `string` | Producing connector. |
 | `subjectType` | `SubjectType` | `device` \| `identity`. |
 | `subjectId` | `string` | The `Device` or `Identity` observed. |
-| `category` | `SignalCategory` | `identity_state` \| `device_compliance` \| `device_management` \| `device_encryption` \| `os_support` \| `posture_freshness` \| `custody_state` \| `charge_state` \| `tamper_state` \| `dock_state` \| `security_baseline` \| `badge_binding`. |
+| `category` | `SignalCategory` | `identity_state` \| `device_compliance` \| `device_management` \| `device_encryption` \| `os_support` \| `posture_freshness` \| `custody_state` \| `charge_state` \| `battery_health` \| `tamper_state` \| `dock_state` \| `security_baseline` \| `badge_binding`. |
 | `value` | `string \| number \| boolean \| null` | Normalized value. |
 | `observedAt` | `string` | When the source observed it. |
 | `freshness` | `Freshness` | `fresh` \| `stale` \| `expired` \| `missing` \| `unknown`. |
@@ -299,7 +299,9 @@ child of `Policy` / `PolicyVersion` so the model reflects its intended shape.
 > healthy value. Its dimensions are: `identityEnabled`, `deviceManaged`,
 > `deviceCompliance`, `deviceEncrypted`, `osSupported`, `ownerType`,
 > `postureFreshness`, `workflowRiskTier`, the physical-custody fields
-> `custodyState` / `dockChargeState` / `tamperState` / `dockState` (the dock's
+> `custodyState` / `dockChargeState` / `batteryHealth` (battery capacity, not
+> fill level — `failing` restricts and charging cannot clear it) / `tamperState` /
+> `dockState` (the dock's
 > own hardware state — `faulted`/`offline` restrict or step up; see
 > [SignalGrid SmartDock](SIGNALGRID_SMARTDOCK.md)), the security-baseline field
 > `baselineCompliance` (`BaselineState`: `aligned` \| `partial` \| `drifted` \|

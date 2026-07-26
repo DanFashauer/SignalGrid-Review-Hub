@@ -42,12 +42,12 @@ fidelity and in real time:
 | --------------------- | --- |
 | **Presence & binding** | The device and the badge are physically seated in a known bay; the person→shared-device binding is asserted by the dock, not inferred. |
 | **Badge custody** | The reader case in the dock reports `present` / `removed` / `forced` continuously — a badge pulled or torn is a signal in milliseconds, not at next check-in. |
-| **Smart charging** | Charge state, battery health, and charge faults are first-class custody signals, so a device that could die mid-workflow is stepped up before it is handed out. |
+| **Smart charging** | Charge state and battery **health** are separate first-class custody signals, because charging fixes one and not the other. A *critically* low battery steps up and clears when the device charges (`low` is carried as evidence with no rule); a *failing* battery restricts and deliberately cannot be cleared by re-docking (`BATTERY_FAILING`). Charge *faults* remain a design target on real hardware, not a modelled signal. |
 | **Tamper evidence** | The dock is the tamper witness for the device+badge it holds; a suspected or confirmed tamper changes the runtime decision. |
 | **Offline tolerance** | An on-prem SmartDock can buffer custody events through a network blip and reconcile deterministically when connectivity returns. |
 
-These map one-to-one onto signals the core already evaluates today
-(`custody_state`, `charge_state`, `tamper_state`, `dock_state`, `badge_binding`),
+These map onto signals the core already evaluates today (`custody_state`,
+`charge_state`, `battery_health`, `tamper_state`, `dock_state`, `badge_binding`),
 so SmartDock is not a new decision surface — it is a higher-fidelity source for
 the surface that already exists. See
 [What SignalGrid Does Today](WHAT_SIGNALGRID_DOES_TODAY.md).

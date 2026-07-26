@@ -404,9 +404,19 @@ function DecisionDetail({
           )}
           {evidence.dockChargeState !== "unknown" && (
             <EvidenceRow
-              label="Battery"
+              label="Battery charge"
               value={evidence.dockChargeState}
               tone={evidence.dockChargeState === "critical" ? "warn" : undefined}
+            />
+          )}
+          {/* Rendered separately from charge, and it has to be: a failing battery
+              can sit next to `charged`, so without its own row an operator sees a
+              RESTRICT with no visible cause. */}
+          {evidence.batteryHealth !== "unknown" && (
+            <EvidenceRow
+              label="Battery health"
+              value={evidence.batteryHealth}
+              tone={evidence.batteryHealth === "failing" ? "warn" : undefined}
             />
           )}
           {evidence.tamperState !== "unknown" && evidence.tamperState !== "none" && (

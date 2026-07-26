@@ -36,14 +36,15 @@ test today:
 | Badge binding (reader case) | present / removed / forced / absent / unknown — who is bound to the shared device right now |
 | Critical signals present | derived fail-closed gate — `allow` is suppressed when a critical input is degraded |
 
-### The 12 normalized signal categories
+### The 13 normalized signal categories
 
-The connector layer normalizes source data into exactly **12 signal categories**
+The connector layer normalizes source data into exactly **13 signal categories**
 that feed the evidence above:
 
 `identity_state`, `device_compliance`, `device_management`, `device_encryption`,
 `os_support`, `posture_freshness`, `custody_state`, `charge_state`,
-`tamper_state`, `dock_state`, `security_baseline`, `badge_binding`.
+`battery_health`, `tamper_state`, `dock_state`, `security_baseline`,
+`badge_binding`.
 
 ### The four outcomes
 

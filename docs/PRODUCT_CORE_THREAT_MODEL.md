@@ -325,6 +325,84 @@ exist. Asserting the reason instead of merely the refusal made them load-bearing
 that remain are genuinely unreachable, labelled as such in the source, and allowlisted with
 reasons. Code written an hour ago is not a reason to trust it more than anything else.
 
+## The custody device as an update channel
+
+This section exists because the threat model did not cover it, and the gap was
+found by writing a partner-matrix entry rather than by any gate here. That is
+worth stating plainly: nothing in this document's STRIDE pass would have caught
+it, because the pass is scoped to the software core and a charging dock is not
+software this repo runs.
+
+**The problem.** SignalGrid treats custody hardware — docks, cradles, lockers,
+dispensing kiosks — as a **read-only signal source**. Vendors in this category
+routinely also advertise **over-the-air software updates to the devices they
+hold**. Both statements can be true of the same box, and if they are, the
+"read-only signal source" framing is wrong in a way that matters:
+
+- A device that can **push software** to a shared clinical iPad or a warehouse
+  handheld is a **management-plane component**, with the same reach as an MDM,
+  and a compromise of it is a fleet-wide code-execution event rather than a
+  reporting-integrity event.
+- It is also a **custody signal source SignalGrid trusts**. So a compromised
+  dock could change the device AND report the custody, charge, tamper, and
+  battery state that SignalGrid uses to decide whether that device is trustworthy
+  — corrupting the evidence and the subject together. Every other signal source
+  in this fabric can lie about a device; this one can lie about a device it just
+  modified.
+- The blast radius is concentrated by design. Custody hardware is deployed
+  exactly where shared devices congregate, so one dock is a bottleneck for every
+  device that passes through it, across shifts.
+
+**What SignalGrid does about it today: nothing preventive.** There is no firmware
+attestation for custody hardware, no signature requirement on dock-delivered
+updates, no separation between the reporting channel and the update channel, and
+no signal that would distinguish a dock that updates devices from one that does
+not. `dockState: faulted` and `offline` cover a dock that has *stopped working*;
+nothing covers a dock that is *working for someone else*.
+
+Three things that do exist should be named, because "nothing at all" would be
+the wrong kind of modesty — they are **detective and structural, not
+preventive**, and none of them stops a compromised dock:
+
+- Every custody signal carries `connectorId` and `sourceReference` into the
+  hash-chained audit ledger, so a compromised dock's reports are **attributable
+  and tamper-evident after the fact**.
+- `Connector.ingestionMode` already distinguishes app-in-dock / vendor API /
+  edge gateway / embedded SmartDock, so it is the natural place for the
+  write-path capability declaration below to live — the field exists, the
+  capability question is simply not asked yet.
+- `runDockSync` refuses any non-fixture connector, so **no real custody hardware
+  is trusted anywhere in this repository**. The exposure described here is a
+  property of the product this core is shaped like, not of the core itself.
+
+**What is owed before this is claimed as covered.** These are requirements, not
+implementations, and they belong with the other production-core items below:
+
+- A **capability declaration** per custody connector — does this hardware have a
+  write path to the device? — so an update-capable dock is at least *visible* as
+  a management-plane component rather than silently classed as a sensor.
+- **Attestation of the dock's own firmware** before its custody reports are
+  treated as evidence, which is the same argument `verdict-attestation` makes
+  about a verdict: an unverifiable claim should not be usable.
+- **Separation of duties between the reporting and update channels**, so the
+  component that vouches for a device's integrity is not the component that most
+  recently changed it.
+- **Supply-chain review of the hardware vendor**, which this document does not
+  cover for any vendor today.
+
+**A related weakness, pre-existing and general.** An unrecognized enum value on
+ANY signal degrades silently to `unknown`, and `unknown` is permissive for every
+custody dimension. So a later-timestamped junk value can erase a real adverse
+read and restore `allow` — a compromised or merely buggy source can *unsay* a
+finding by following it with nonsense. This is not specific to custody hardware
+and was not introduced by the battery-health work; it is recorded here because
+the update-channel analysis is what made its reachability concrete.
+
+Until those exist, the accurate public statement is that SignalGrid consumes
+custody signals from hardware whose own integrity it does not verify, and the
+[Hardware Partner Matrix](HARDWARE_PARTNER_MATRIX.md) asks every candidate
+vendor whether their device is also an update channel.
+
 ## What the private production core must add
 
 The public core establishes the shapes and fail-closed behaviors; production

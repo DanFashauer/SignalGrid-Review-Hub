@@ -11,6 +11,20 @@ on:
       - SignalGrid_Alpha
   workflow_dispatch:
 
+# Supersede an in-flight run when a newer commit lands on the same ref, and say so.
+#
+# Without this, pushing three commits in half an hour left earlier runs to be abandoned
+# and reported as `failure` with no logs (404, because they never uploaded). That is
+# genuinely hard to tell apart from a real regression, and it cost a careful diagnosis:
+# the only thing that distinguished them was noticing the superset commit had passed the
+# same job. `cancel-in-progress` makes the outcome `cancelled` — an unambiguous status —
+# and stops paying for runs whose result nobody will read.
+#
+# Scoped per workflow AND per ref, so concurrent PRs never cancel each other.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 

@@ -14,6 +14,7 @@ import {
   type Priority,
   type Urgency,
 } from "@workspace/incident-playbook";
+import { SIGNAL_KINDS } from "@workspace/posture-composition";
 import type { UnifiedPosture, UnifiedAction } from "@workspace/posture-composition";
 import type { Detection } from "@workspace/event-contract";
 
@@ -88,10 +89,16 @@ check("custody / peripheral route to Endpoint / Mobility", routeOf("custody") ==
 check("identity / data_protection route to Identity & Access", routeOf("identity") === "Identity & Access" && routeOf("data_protection") === "Identity & Access");
 check("sso_session (leftover-session risk) routes to Identity & Access", routeOf("sso_session") === "Identity & Access");
 check("oauth_consent (delegated-grant risk) routes to Identity & Access", routeOf("oauth_consent") === "Identity & Access");
-// This list drifted behind `SignalKind`: five kinds had been added to the union and to
-// `categoryForKind` without being added here, so their routing was ungated. Adversarial
-// review caught it on `link_usability`; the other four were already missing.
-check("NO composable posture kind falls through to the generic Service Desk", ["device_posture","reachability","location","vulnerability","network","threat","identity","custody","peripheral","data_protection","credential_exposure","ot_posture","access_governance","attestation","sso_session","oauth_consent","token_binding","pacs_access","agent_identity","device_management_health","link_usability"].every((k) => routeOf(k) !== "Service Desk"));
+// Iterates SIGNAL_KINDS itself rather than a hand-copied list. The hand-copy drifted
+// FIVE kinds behind the union — token_binding, pacs_access, agent_identity,
+// device_management_health and link_usability were all added to `categoryForKind` with
+// their routing ungated, and adversarial review noticed only because the newest one was
+// under the microscope. `SignalKind` is now derived from that array, so a kind added
+// tomorrow is covered here the moment it exists. `detection` is excluded deliberately:
+// it is an event kind rather than a composable posture dimension.
+const POSTURE_KINDS = SIGNAL_KINDS.filter((k) => k !== "detection");
+const misrouted = POSTURE_KINDS.filter((k) => routeOf(k) === "Service Desk");
+check(`NO composable posture kind falls through to the generic Service Desk (checked all ${POSTURE_KINDS.length}${misrouted.length ? ", misrouted: " + misrouted.join(", ") : ""})`, misrouted.length === 0);
 
 // ── no-noise rule: calm signals open no incident ──────────────────────────────
 check("monitor posture opens NO incident", mapPostureToIncident(posture("monitor"), { impact: "high", correlationId: "c3" }) === null);

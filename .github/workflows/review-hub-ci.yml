@@ -18,6 +18,10 @@ jobs:
   validation:
     name: Typecheck, build, and proof scaffold
     runs-on: ubuntu-latest
+    # Bounded so a regression that makes a proof HANG (an unbounded prototype walk
+    # against a Proxy returning a fresh prototype each call) fails red instead of
+    # silently consuming the default job timeout.
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v7

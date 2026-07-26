@@ -414,6 +414,118 @@
         "linkUsable": false
       }
     },
+    "inconsistent-no-roam-domain-yet-stable": {
+      "deviceId": "pdt-roam-stable",
+      "report": {
+        "associationState": "associated",
+        "linkProgress": "carrying_traffic",
+        "roamCapability": "not_applicable",
+        "roamHealth": "stable",
+        "linkLatencyClass": "nominal",
+        "controllerReachable": true
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "LINK_REPORT_INCONSISTENT",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "linkUsable": false
+      }
+    },
+    "inconsistent-no-roam-domain-yet-sticky": {
+      "deviceId": "pdt-roam-sticky",
+      "report": {
+        "associationState": "associated",
+        "linkProgress": "carrying_traffic",
+        "roamCapability": "not_applicable",
+        "roamHealth": "sticky",
+        "linkLatencyClass": "nominal",
+        "controllerReachable": true
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "LINK_REPORT_INCONSISTENT",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "linkUsable": false
+      }
+    },
+    "inconsistent-no-roam-domain-yet-excessive": {
+      "deviceId": "pdt-roam-excessive",
+      "report": {
+        "associationState": "associated",
+        "linkProgress": "carrying_traffic",
+        "roamCapability": "not_applicable",
+        "roamHealth": "excessive",
+        "linkLatencyClass": "nominal",
+        "controllerReachable": true
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "LINK_REPORT_INCONSISTENT",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "linkUsable": false
+      }
+    },
+    "inconsistent-roaming-capable-yet-no-behaviour": {
+      "deviceId": "pdt-roam-mirror",
+      "report": {
+        "associationState": "associated",
+        "linkProgress": "carrying_traffic",
+        "roamCapability": "basic",
+        "roamHealth": "not_applicable",
+        "linkLatencyClass": "nominal",
+        "controllerReachable": true
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "LINK_REPORT_INCONSISTENT",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "linkUsable": false
+      }
+    },
+    "association-unreported": {
+      "deviceId": "pdt-aisle-26",
+      "report": {
+        "linkProgress": "carrying_traffic",
+        "roamCapability": "fast_transition",
+        "roamHealth": "stable",
+        "linkLatencyClass": "nominal",
+        "controllerReachable": true
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "LINK_STATE_UNKNOWN",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "linkUsable": false
+      }
+    },
+    "not-associated-with-ladder-silent": {
+      "deviceId": "pdt-aisle-27",
+      "report": {
+        "associationState": "not_associated",
+        "roamCapability": "fast_transition",
+        "roamHealth": "stable",
+        "linkLatencyClass": "nominal",
+        "controllerReachable": true
+      },
+      "expected": {
+        "posture": "link_absent",
+        "reasonCode": "NOT_ASSOCIATED",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "linkUsable": false
+      }
+    },
     "report-malformed-enum": {
       "deviceId": "pdt-aisle-22",
       "report": {

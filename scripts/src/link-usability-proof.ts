@@ -112,6 +112,24 @@ check("ASSOCIATED with nothing getting through → alert + a critical finding (a
 check("...and it never composes to 'ok'", composeDeviceRisk([fromLinkUsability(quiet)]).riskTier !== "ok");
 const absent = evaluateLinkUsability(await connector.fetchLink(fixture.devices["not-associated"].deviceId));
 check("a device plainly NOT associated is graded step_up — the honest failure", absent.recommendedAction === "step_up" && absent.posture === "link_absent");
+// An ASSERTED "not on the network" with the progress ladder silent — an ordinary shape
+// when a controller simply has no client entry. This reported a generic
+// LINK_STATE_UNKNOWN until review measured the branch: its guard was satisfied 360 times
+// across the normalized space and its candidate won ZERO times, because the ladder's
+// `unknown` had already pushed at the same severity and won the tie by being first. A
+// confirmed fact suppressed by a gap, which is the inversion this evaluator forbids for
+// `controllerReachable === false` forty lines earlier. Same principle, now applied to
+// both asserted negatives.
+const absentLadderSilent = evaluateLinkUsability(await connector.fetchLink(fixture.devices["not-associated-with-ladder-silent"].deviceId));
+check("an ASSERTED 'not associated' with the ladder SILENT names itself, it is not buried by the gap", absentLadderSilent.reasonCode === "NOT_ASSOCIATED" && absentLadderSilent.posture === "link_absent");
+check("...and the gap is still reported alongside it", absentLadderSilent.unknownSignals.includes("link_progress"));
+// The `!== \"not_associated\"` clause stops a device absent on BOTH fields raising the
+// same finding twice — load-bearing now that association is judged first.
+check("a device absent on BOTH fields raises NOT_ASSOCIATED once, not twice", absent.unknownSignals.length === 0 && absent.criticalFindings.length === 0);
+// Finding 7: association state was the one field with no unreported fixture, which is
+// why deleting its unknownSignals push left the proof green.
+const assocUnreported = evaluateLinkUsability(await connector.fetchLink(fixture.devices["association-unreported"].deviceId));
+check("an UNREPORTED association state is a gap that denies, and is named in unknownSignals", assocUnreported.reasonCode === "LINK_STATE_UNKNOWN" && assocUnreported.unknownSignals.includes("association_state"));
 // The inversion, asserted. A device that is visibly offline is safe to reason about;
 // one that reports connected while carrying nothing keeps manufacturing fresh-looking
 // confirmations for every other dimension that grants on reachability.
@@ -165,6 +183,25 @@ for (const [name, label] of [
 }
 const reverseInconsistent = evaluateLinkUsability(await connector.fetchLink(fixture.devices["inconsistent-associated-yet-absent"].deviceId));
 check("the reverse direction ('associated' + 'not associated' rung) is caught too", reverseInconsistent.reasonCode === "LINK_REPORT_INCONSISTENT");
+// The SECOND contradiction relation, in the same six fields, missed by the first draft
+// and found by adversarial review. `roamCapability: not_applicable` asserts there is NO
+// roaming domain; `roamHealth` reports observed roaming BEHAVIOUR. A report claiming both
+// is self-contradictory in exactly the way association-versus-progress is — and three of
+// the six shapes that granted were incoherent in precisely this way.
+for (const label of ["stable", "sticky", "excessive"] as const) {
+  const v = evaluateLinkUsability(await connector.fetchLink(fixture.devices[`inconsistent-no-roam-domain-yet-${label}`].deviceId));
+  check(`'no roaming domain' + observed roaming '${label}' is self-contradictory → step_up, never a grant`, v.reasonCode === "LINK_REPORT_INCONSISTENT" && v.linkUsable === false);
+}
+const roamMirror = evaluateLinkUsability(await connector.fetchLink(fixture.devices["inconsistent-roaming-capable-yet-no-behaviour"].deviceId));
+check("the mirror — a live roaming capability with NO behaviour to report — is caught too", roamMirror.reasonCode === "LINK_REPORT_INCONSISTENT");
+check("...and the disbelieved roam claim is not cited", roamMirror.unknownSignals.includes("roam_report_consistency") && roamMirror.criticalFindings.length === 0);
+// Why this mattered beyond taxonomy: roamCapability is deliberately not graded, so
+// `not_applicable` was a free pass through the only check that field has — and it is
+// exactly the value a bridge hardcodes for "we do not model this". It is the nearest
+// thing to `unknown` on the wire while being the one spelling that granted, which
+// inverted this dimension's own rule that silence denies.
+const freePass = normalizeReport("fp", { associationState: "associated", linkProgress: "carrying_traffic", roamCapability: "not_applicable", roamHealth: "stable", linkLatencyClass: "nominal", controllerReachable: true });
+check("a bridge hardcoding roamCapability 'not_applicable' beside live behaviour no longer grants", evaluateLinkUsability(freePass).linkUsable === false);
 // The disbelieved half is not judged AT ALL — a dimension does not get to disbelieve a
 // claim and cite it in the same breath. This is carried in from a review finding on
 // device-management-health rather than rediscovered the same way.
@@ -262,8 +299,12 @@ check("case/whitespace variants are canonicalized, not treated as malformed", sh
 const linkClean = (c: Record<string, unknown>): boolean =>
   c.associationState === "associated" &&
   c.linkProgress === "carrying_traffic" &&
-  (c.roamCapability === "fast_transition" || c.roamCapability === "basic" || c.roamCapability === "not_applicable") &&
-  (c.roamHealth === "stable" || c.roamHealth === "not_applicable") &&
+  // Coherent roam PAIRS, not an independent product of the two fields. A live roaming
+  // domain reports stable behaviour; no roaming domain reports no behaviour. The first
+  // draft treated these as independent and admitted three incoherent combinations.
+  ((c.roamCapability === "fast_transition" && c.roamHealth === "stable") ||
+    (c.roamCapability === "basic" && c.roamHealth === "stable") ||
+    (c.roamCapability === "not_applicable" && c.roamHealth === "not_applicable")) &&
   c.linkLatencyClass === "nominal" &&
   c.controllerReachable === true;
 
@@ -272,6 +313,11 @@ const linkContradictory = (assoc: unknown, progress: unknown): boolean =>
   (assoc === "not_associated" &&
     (progress === "carrying_traffic" || progress === "dns_failing" || progress === "dhcp_failing" || progress === "associated_only")) ||
   (assoc === "associated" && progress === "not_associated");
+
+/** The roam contradiction relation, stated independently of the evaluator's guard. */
+const roamContradictory = (cap: unknown, health: unknown): boolean =>
+  (cap === "not_applicable" && (health === "stable" || health === "sticky" || health === "excessive")) ||
+  ((cap === "fast_transition" || cap === "basic") && health === "not_applicable");
 
 // Pass 1 — the NORMALIZED space (including reportIntegrity) against the evaluator alone.
 const domains = {
@@ -303,7 +349,26 @@ check("exhaustive (normalized): some clean states DO grant (the enumeration is n
 // Six: three roam capabilities × two roam-health shapes (stable, or no roaming domain).
 // Pinning the count is what makes a seventh route into the grant a test failure rather
 // than a silent widening.
-check("exhaustive (normalized): exactly SIX shapes grant — 3 roam capabilities × 2 roam-health states", enumRes.noneCount === 6);
+check("exhaustive (normalized): exactly THREE shapes grant — one per COHERENT roam pair, down from six once the roam contradiction was modelled", enumRes.noneCount === 3);
+// Grant-ness is not the only thing worth pinning. `linkUsable` is a separate field, and
+// nothing previously stopped it drifting away from `action === "none"` — mutation E38
+// (widening it to accept `monitor`) survived, because no candidate happens to emit
+// `monitor`. Asserted directly over the whole normalized space instead.
+let usableDisagreements = 0;
+let reachableActions = new Set<string>();
+const dKeys = Object.keys(domains);
+const walkNorm = (i: number, acc: Record<string, unknown>): void => {
+  if (i === dKeys.length) {
+    const v = evaluateLinkUsability({ sourceSystem: "link-usability", deviceId: "n", source: "n", ...acc } as NormalizedLinkUsability);
+    reachableActions.add(v.recommendedAction);
+    if (v.linkUsable !== (v.recommendedAction === "none")) usableDisagreements += 1;
+    return;
+  }
+  for (const val of domains[dKeys[i] as keyof typeof domains]) walkNorm(i + 1, { ...acc, [dKeys[i]]: val });
+};
+walkNorm(0, {});
+check(`exhaustive (normalized): linkUsable agrees with action === 'none' on every one of the ${enumRes.combos} states (disagreements=${usableDisagreements})`, usableDisagreements === 0);
+check(`exhaustive (normalized): only none/step_up/alert are reachable — the wider ladder type is shared, not all of it used (reachable=${[...reachableActions].sort().join("/")})`, reachableActions.size === 3 && reachableActions.has("none") && reachableActions.has("step_up") && reachableActions.has("alert"));
 
 // Pass 2 — the RAW WIRE space, carrying the MALFORMED values a real bridge emits. Built
 // only from well-formed values, `normalizeReport` would be the identity function here
@@ -327,6 +392,8 @@ const rawDomains = {
 // needs, since grant-ness cannot see it (both readings deny).
 let contradictoryCount = 0;
 let citedWhileContradictory = 0;
+let roamContradictoryCount = 0;
+let roamCitedWhileContradictory = 0;
 const evaluateAndAudit = (n: NormalizedLinkUsability): ReturnType<typeof evaluateLinkUsability> => {
   const v = evaluateLinkUsability(n);
   if (linkContradictory(n.associationState, n.linkProgress)) {
@@ -336,6 +403,10 @@ const evaluateAndAudit = (n: NormalizedLinkUsability): ReturnType<typeof evaluat
         v.reasonCode === "DHCP_FAILING") {
       citedWhileContradictory += 1;
     }
+  }
+  if (roamContradictory(n.roamCapability, n.roamHealth)) {
+    roamContradictoryCount += 1;
+    if (v.reasonCode === "ROAM_STICKY" || v.reasonCode === "ROAM_EXCESSIVE") roamCitedWhileContradictory += 1;
   }
   return v;
 };
@@ -361,10 +432,20 @@ check(
   rawEnumRes.mismatches === 0 && rawEnumRes.combos === productOf(rawDomains) && rawEnumRes.combos === 217728,
 );
 check("exhaustive (raw wire): some raw reports DO grant (the enumeration is not vacuous)", rawEnumRes.noneCount > 0);
-check("exhaustive (raw wire): exactly SIX raw reports grant — the six-way confirmation is unique", rawEnumRes.noneCount === 6);
+check("exhaustive (raw wire): exactly THREE raw reports grant — one per coherent roam pair", rawEnumRes.noneCount === 3);
 check(
-  `exhaustive (raw wire): across all ${contradictoryCount} self-contradictory reports, NOT ONE cites the disbelieved half — no ladder reason code and no critical finding (violations=${citedWhileContradictory})`,
+  `exhaustive (raw wire): across all ${contradictoryCount} ladder-contradictory reports, NOT ONE cites the disbelieved half — no ladder reason code and no critical finding (violations=${citedWhileContradictory})`,
   citedWhileContradictory === 0 && contradictoryCount > 0,
+);
+// Weaker than its ladder counterpart, and labelled so. The ladder audit is load-bearing:
+// `associated_only`/`dns_failing`/`dhcp_failing` ALERT, so without the guard they would
+// outrank the contradiction and the check goes red. The roam candidates are `step_up`,
+// equal to the contradiction's own severity and pushed after it, so this holds whether or
+// not the roam guard exists. It pins the OUTCOME, not the guard — the guard is documented
+// in `evaluate.ts` as inert at current severities rather than being claimed as proven.
+check(
+  `exhaustive (raw wire): across all ${roamContradictoryCount} ROAM-contradictory reports, the verdict never HEADLINES the disbelieved roam behaviour (violations=${roamCitedWhileContradictory})`,
+  roamCitedWhileContradictory === 0 && roamContradictoryCount > 0,
 );
 
 // Pass 3 — PARSE FIDELITY, over the same raw space.

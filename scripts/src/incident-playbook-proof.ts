@@ -88,7 +88,10 @@ check("custody / peripheral route to Endpoint / Mobility", routeOf("custody") ==
 check("identity / data_protection route to Identity & Access", routeOf("identity") === "Identity & Access" && routeOf("data_protection") === "Identity & Access");
 check("sso_session (leftover-session risk) routes to Identity & Access", routeOf("sso_session") === "Identity & Access");
 check("oauth_consent (delegated-grant risk) routes to Identity & Access", routeOf("oauth_consent") === "Identity & Access");
-check("NO composable posture kind falls through to the generic Service Desk", ["device_posture","reachability","location","vulnerability","network","threat","identity","custody","peripheral","data_protection","credential_exposure","ot_posture","access_governance","attestation","sso_session","oauth_consent"].every((k) => routeOf(k) !== "Service Desk"));
+// This list drifted behind `SignalKind`: five kinds had been added to the union and to
+// `categoryForKind` without being added here, so their routing was ungated. Adversarial
+// review caught it on `link_usability`; the other four were already missing.
+check("NO composable posture kind falls through to the generic Service Desk", ["device_posture","reachability","location","vulnerability","network","threat","identity","custody","peripheral","data_protection","credential_exposure","ot_posture","access_governance","attestation","sso_session","oauth_consent","token_binding","pacs_access","agent_identity","device_management_health","link_usability"].every((k) => routeOf(k) !== "Service Desk"));
 
 // ── no-noise rule: calm signals open no incident ──────────────────────────────
 check("monitor posture opens NO incident", mapPostureToIncident(posture("monitor"), { impact: "high", correlationId: "c3" }) === null);

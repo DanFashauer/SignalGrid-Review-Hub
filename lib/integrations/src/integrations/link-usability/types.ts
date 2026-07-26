@@ -41,14 +41,25 @@ export type AssociationState = "associated" | "not_associated" | "unknown";
 /** How far up the connection ladder the device's most recent attempts actually got.
  *
  *  Wireless dashboards report these as distinct rungs rather than one boolean — a
- *  Meraki-class API, for instance, returns separate counts for failed association,
- *  failed authentication, failed DHCP and failed DNS. That separation is the entire
- *  primitive this dimension needs, because a client can clear association and then fail
- *  at DHCP or DNS, which is exactly "connected but nothing works".
+ *  Meraki-class API, for instance, exposes separate association, authentication, DHCP
+ *  and DNS counters across its wireless connection-stats endpoints. That separation is
+ *  the entire primitive this dimension needs, because a client can clear association and
+ *  then fail at DHCP or DNS, which is exactly "connected but nothing works".
  *
  *  `associated_only` is the headline state: the bridge affirmatively reports that
  *  association succeeded and that NO higher rung completed. It is not a gap in what we
- *  know — it is a positive report that nothing got through. */
+ *  know — it is a positive report that nothing got through.
+ *
+ *  NOTE FOR BRIDGE IMPLEMENTERS — there is deliberately no `auth_failing` rung, even
+ *  though the vendor APIs this ladder is modelled on do count failed authentication
+ *  separately. Authentication is `network-nac`'s question, and duplicating it here would
+ *  produce two verdicts on one fact. **An 802.1X/EAP failure belongs in `network-nac`,
+ *  not here** — do not map it to `associated_only`. Doing so reports it as a usability
+ *  problem (alert) while `network-nac` independently reports it as an admission problem
+ *  (restrict); worst-concern-wins keeps the outcome safe, but the fabric then
+ *  double-counts one failure as two, and the operator sees two incidents for one cause.
+ *  If your controller cannot distinguish "authenticated but nothing got through" from
+ *  "authentication failed", report `unknown` here and let `network-nac` carry it. */
 export type LinkProgress =
   | "carrying_traffic"
   | "dns_failing"
@@ -59,11 +70,24 @@ export type LinkProgress =
 
 /** What roaming support the device and infrastructure actually negotiated.
  *
- *  `fast_transition` covers the 802.11r/k/v family. `basic` is not a defect and does not
- *  deny — plenty of healthy fleets roam without it — but it materially raises the odds
- *  of the sticky-client behaviour below, so an operator needs to see it. `not_applicable`
- *  is a positive assertion that this device has no roaming domain at all (wired, or a
- *  single-AP site). Silence is `unknown`, and `unknown` denies like everywhere else. */
+ *  `fast_transition` means 802.11r — *Fast BSS Transition*, and the only one of the
+ *  commonly-grouped three that actually makes a transition fast. (802.11k is Radio
+ *  Resource Measurement, which helps a client CHOOSE a target; 802.11v is BSS Transition
+ *  Management, which lets infrastructure STEER one. They are usually deployed alongside
+ *  r, which is why "802.11r/k/v" is fair shorthand for the deployment and wrong as a
+ *  description of what provides fast transition.)
+ *
+ *  `basic` is not a defect and does not deny — plenty of healthy fleets roam without
+ *  fast transition — but it materially raises the odds of the sticky-client behaviour
+ *  below, so an operator needs to see it. `not_applicable` is a positive assertion that
+ *  this device has no roaming domain at all (wired, or a single-AP site). Silence is
+ *  `unknown`, and `unknown` denies like everywhere else.
+ *
+ *  Because `not_applicable` is a positive claim about the SITE while `roamHealth` is a
+ *  report of observed BEHAVIOUR, the two can contradict each other, and the evaluator
+ *  refuses that pair rather than granting on it — see `roamReportInconsistent`. That
+ *  contradiction was missed in this dimension's first draft, and it let three of its six
+ *  granting shapes through incoherent. */
 export type RoamCapability = "fast_transition" | "basic" | "not_applicable" | "unknown";
 
 /** Observed roaming BEHAVIOUR, as distinct from capability.

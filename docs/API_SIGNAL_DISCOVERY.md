@@ -178,17 +178,33 @@ rotation state is **not** yet modelled and remains open.
 
 ## Wireless link quality → `link-usability`
 
-Sources: the Meraki Dashboard API v1 (`getNetworkWirelessClientConnectionStats`, which
-returns **separate** counts for failed association, failed authentication, failed DHCP
-and failed DNS; `getNetworkWirelessClientLatencyStats`, which bands latency by traffic
-class), Zebra's Wi-Fi Manager CSP (a documented RSSI roam threshold, default −65 dBm, and
-an 802.11r Fast Transition roam algorithm), and the sticky-client behaviour documented
-independently by Juniper Mist and Ruckus.
+Sources: the Meraki Dashboard API v1, Zebra's Wi-Fi Manager CSP (a documented RSSI roam
+threshold, default −65 dBm, and an 802.11r Fast BSS Transition roam algorithm), and the
+sticky-client behaviour documented independently by Juniper Mist and Ruckus.
+
+**Correction, and worth recording because of how it was found.** An earlier version of
+this entry credited the rung-by-rung failure counts to
+`getNetworkWirelessClientConnectionStats` — the **singular**, per-client endpoint. Meraki's
+own published OpenAPI spec shows that call returning `{ assoc, auth, dhcp, success }`:
+four fields, **no `dns`**, and counts of attempts rather than of failures. The five-field
+failure schema does exist, but on the **plural / device / network** siblings —
+`getNetworkWirelessClientsConnectionStats`, `getDeviceWirelessConnectionStats`,
+`getNetworkWirelessConnectionStats`, `getNetworkWirelessDevicesConnectionStats`. The
+primitive this dimension needs is real; the endpoint originally cited for it was not the
+one that carries it. A plain web search returns the hallucinated `dns` field for the
+singular endpoint — the vendor's own spec is what catches it, which is the whole argument
+for reading primary sources rather than summaries of them.
 
 The decisive primitive is the **separation of the connection ladder into rungs**. One
 boolean "connected" cannot express a client that clears association and then fails at
-DHCP or DNS — which is precisely the failure operators describe as "coverage is fine but
-it keeps dropping". A dashboard that counts the rungs separately can.
+DHCP or DNS. A dashboard that counts the rungs separately can.
+
+On naming: **802.11r** is *Fast BSS Transition*, and it is the only one of the three that
+makes a transition fast. 802.11k is Radio Resource Measurement (neighbour reports, which
+help a client *choose* a target) and 802.11v is Wireless Network Management (BSS
+Transition Management, which lets infrastructure *steer*). They are commonly deployed
+together for roaming optimisation, so "the 802.11r/k/v family" is fair shorthand for the
+deployment pattern and wrong as a description of what provides fast transition.
 
 **Status: built.** Shipped as the `link-usability` dimension — see
 [INTEGRATION_CATALOG](INTEGRATION_CATALOG.md). Scoped deliberately to start *after*

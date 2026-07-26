@@ -170,8 +170,13 @@ function categoryForKind(kind: string): IncidentCategory {
     case "data_protection":
       return "security_compliance";
     case "network":
-    // Link usability is the network plane's "admitted but not usable" reading; it
-    // routes to the same owner as `network`, because the fix is a WLAN change.
+    // Link usability is the network plane's "admitted but not usable" reading, and it
+    // routes exactly as `network` already does. Note the destination: this category
+    // resolves to the "Identity & Access" assignment group, not to a network team. That
+    // is a pre-existing property of how `network` is routed rather than a choice made
+    // here, and it is called out because an earlier draft of this comment justified the
+    // routing by "the fix is a WLAN change" — which is true of the remedy and not of the
+    // owner this actually reaches.
     case "link_usability":
       return "security_compliance";
     case "vulnerability":

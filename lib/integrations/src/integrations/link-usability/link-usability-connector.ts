@@ -92,6 +92,8 @@ function ownValue(report: object, key: string): unknown {
 function isPlainReport(report: unknown): report is object {
   return (
     typeof report === "object" &&
+    // Redundant: `hasOwnProperty.call(null, …)` throws, which the wrapped read below
+    // catches into `readFailed`, which forces malformed anyway. Kept for legibility.
     report !== null &&
     !Array.isArray(report) &&
     report !== Object.prototype
@@ -161,6 +163,8 @@ export function normalizeReport(
   const plain = isPlainReport(report);
   let readFailed = false;
   const read = (key: string): unknown => {
+    // Redundant: `!plain` already forces `malformed` below, so short-circuiting here
+    // changes no verdict. Kept so a non-object never reaches `hasOwnProperty`.
     if (!plain) return undefined;
     try {
       return ownValue(report, key);

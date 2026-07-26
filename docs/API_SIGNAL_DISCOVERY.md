@@ -176,6 +176,32 @@ modelled, with check-in staleness split across **both** delivery channels
 `policyDrift`, `complianceCoverage` and `enrollmentState`; recovery-key escrow / LAPS
 rotation state is **not** yet modelled and remains open.
 
+## Wireless link quality → `link-usability`
+
+Sources: the Meraki Dashboard API v1 (`getNetworkWirelessClientConnectionStats`, which
+returns **separate** counts for failed association, failed authentication, failed DHCP
+and failed DNS; `getNetworkWirelessClientLatencyStats`, which bands latency by traffic
+class), Zebra's Wi-Fi Manager CSP (a documented RSSI roam threshold, default −65 dBm, and
+an 802.11r Fast Transition roam algorithm), and the sticky-client behaviour documented
+independently by Juniper Mist and Ruckus.
+
+The decisive primitive is the **separation of the connection ladder into rungs**. One
+boolean "connected" cannot express a client that clears association and then fails at
+DHCP or DNS — which is precisely the failure operators describe as "coverage is fine but
+it keeps dropping". A dashboard that counts the rungs separately can.
+
+**Status: built.** Shipped as the `link-usability` dimension — see
+[INTEGRATION_CATALOG](INTEGRATION_CATALOG.md). Scoped deliberately to start *after*
+admission, so it does not re-model the 802.1X authentication and segmentation that
+`network-nac` already owns.
+
+Signals named by these sources and **not** modelled, with the reason: scan-engine decode
+failure rates, battery runtime and hot-swap design, and ergonomics/IP/drop ratings are
+DEX and procurement concerns, and
+[OPERATIONAL_HEALTH_DEX_LAYER_STRATEGY](OPERATIONAL_HEALTH_DEX_LAYER_STRATEGY.md) already
+scopes them as *not* trust dimensions. Building them would widen SignalGrid into a
+device-monitoring product it has chosen not to be.
+
 ## Cross-checks against vendor reference material
 
 Reference diagrams are useful mainly as a *check*: they either confirm a dimension is

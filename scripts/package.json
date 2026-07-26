@@ -74,6 +74,7 @@
     "proof:pacs-access": "tsx ./src/pacs-access-proof.ts",
     "proof:agent-identity": "tsx ./src/agent-identity-proof.ts",
     "proof:device-management-health": "tsx ./src/device-management-health-proof.ts",
+    "proof:link-usability": "tsx ./src/link-usability-proof.ts",
     "proof:grant-safety": "tsx ./src/grant-safety-proof.ts",
     "proof:fabric-evals": "tsx ./src/fabric-evals-proof.ts",
     "proof:fabric-scenario": "tsx ./src/fabric-scenario-proof.ts",

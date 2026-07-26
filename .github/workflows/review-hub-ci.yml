@@ -130,6 +130,9 @@ jobs:
       - name: Device-management-health / config-drift proof
         run: pnpm run proof:device-management-health
 
+      - name: Proof — link usability (associated vs usable)
+        run: pnpm run proof:link-usability
+
       - name: PIM activation decision proof
         run: pnpm run proof:pim-activation
 

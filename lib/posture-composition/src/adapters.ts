@@ -18,6 +18,7 @@ import type { TokenBindingVerdict } from "@workspace/integrations/token-binding"
 import type { PacsAccessVerdict } from "@workspace/integrations/pacs-access";
 import type { AgentIdentityVerdict } from "@workspace/integrations/agent-identity";
 import type { DeviceManagementHealthVerdict } from "@workspace/integrations/device-management-health";
+import type { LinkUsabilityVerdict } from "@workspace/integrations/link-usability";
 import type { GraphPostureSignal } from "@workspace/integrations/graph";
 import type { Detection } from "@workspace/event-contract";
 import { ACTION_RANK } from "./compose";
@@ -186,6 +187,22 @@ export function fromDeviceManagementHealth(v: DeviceManagementHealthVerdict): Co
   // covered + enrolled + reachable contributes 'none' — a management plane we could not
   // reach never grants.
   return { kind: "device_management_health", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromLinkUsability(v: LinkUsabilityVerdict): ComposableSignal {
+  // Link usability — is the network link this device is sitting on actually carrying
+  // traffic. `network-nac` answers "was it admitted"; this answers whether that
+  // admission is still worth anything, which is what gives every OTHER dimension's
+  // freshness claim its expiry: a bridge that answers over an associated-but-unusable
+  // link returns a stale read wearing a fresh timestamp. Its actions are already on the
+  // unified ladder. Fail-safe, with the severity inversion the dimension exists for: an
+  // ASSOCIATED link the bridge affirmatively reports is carrying nothing alerts, above a
+  // device that is plainly not associated, because the honest failure is the safer one.
+  // Sticky or flapping roaming, degraded latency, an unreachable controller, a
+  // self-contradictory report, and anything unreadable step up. Only a link confirmed
+  // associated + carrying traffic + stable (or roam-less) + latency-nominal +
+  // capability-reported + controller-reachable contributes 'none'.
+  return { kind: "link_usability", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromMacosPosture(v: MacosPostureVerdict): ComposableSignal {

@@ -25,7 +25,8 @@
     "./token-binding": "./src/integrations/token-binding/index.ts",
     "./pacs-access": "./src/integrations/pacs-access/index.ts",
     "./agent-identity": "./src/integrations/agent-identity/index.ts",
-    "./device-management-health": "./src/integrations/device-management-health/index.ts"
+    "./device-management-health": "./src/integrations/device-management-health/index.ts",
+    "./link-usability": "./src/integrations/link-usability/index.ts"
   },
   "dependencies": {
     "ioredis": "^5.4.1",

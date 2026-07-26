@@ -54,6 +54,7 @@ export type SignalKind =
   | "pacs_access"
   | "agent_identity"
   | "device_management_health"
+  | "link_usability"
   | "detection";
 
 /** One dimension's contribution, already mapped onto the unified action ladder. */

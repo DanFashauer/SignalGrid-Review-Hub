@@ -170,6 +170,9 @@ function categoryForKind(kind: string): IncidentCategory {
     case "data_protection":
       return "security_compliance";
     case "network":
+    // Link usability is the network plane's "admitted but not usable" reading; it
+    // routes to the same owner as `network`, because the fix is a WLAN change.
+    case "link_usability":
       return "security_compliance";
     case "vulnerability":
       return "security_vulnerability";

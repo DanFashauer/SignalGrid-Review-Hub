@@ -183,6 +183,85 @@ File: `artifacts/api-server/src/middlewares/errors.ts`, `CoreError`.
 | Determinism | Two fresh cores produce identical decision and snapshot ids for the same request |
 | Untrusted-input hardening | Every malformed authored rule shape (absent/empty `match`, unknown condition field, out-of-domain value, invalid outcome/severity, over the rule cap, duplicate ids, non-array) is rejected with a validation error; a validated draft still activates and evaluates without throwing; deeply-nested input is rejected by the canonical-JSON depth cap rather than exhausting the stack; the constant-time comparison behaves as an equality; the shipped facade exposes no `unsafeStore()`/caller-tenant probe |
 
+## SignalGrid as the compromised hub
+
+Everything above answers "can one tenant reach another's data inside SignalGrid?" —
+tenant scoping, fail-closed cross-tenant reads, per-tenant audit chains. That is the
+right question and the proof constrains it. It is not the question the current
+healthcare threat landscape is actually asking.
+
+Comparitech's H1 2026 data, reported by Dark Reading on 10 July 2026, found attacks on
+healthcare **providers** rising moderately while attacks on healthcare **businesses** —
+the vendors and service providers behind them — rose 35% against H2 2025 and 110% against
+H1 2025. The stated reason is not subtle. In Comparitech's Rebecca Moody's words,
+"through one central hub, you're targeting multiple healthcare organizations." The
+worked examples in the same reporting are a medical-billing provider serving 95% of one
+country's university hospitals, and a claims processor whose breach exposed 3.4 million
+patients held at its *customers'* facilities.
+
+A runtime decision fabric reading security signals across many hospitals is that
+archetype. Not a market this product sells into — a **description of what this product
+becomes at scale**. The threat model has to say so, and has to be honest about which
+parts of the answer are already structural and which are still owed.
+
+### What already limits the blast radius, and why it is architecture rather than policy
+
+- **Every connector is read-only, enforced in code.** Each one carries a `guardReadOnly`
+  that throws on any non-GET, and each proof asserts it. A compromised SignalGrid cannot
+  push a profile, wipe a device, revoke a certificate, or open a door, because no such
+  code path exists to abuse. This is the single largest reduction in what a stolen
+  position is worth, and it was a design choice made long before this data.
+- **The product decides; it does not enforce.** Remediation is approval-gated and
+  simulated. `pim-activation`, the one inbound control point, defaults every unknown to
+  `Approved` — meaning *a human is asked* — and reserves `AutoApproved` for the case where
+  all seven inputs are positively confirmed.
+- **Live vendor calls are gated three ways** — tier must be beta/prod, `SIGNALGRID_LIVE_INTEGRATIONS`
+  must be `"true"`, and the connector's token must be set — so a deployment that has not
+  deliberately opted in makes no outbound vendor call at all.
+- **The audit ledger is a hash chain**, each record's `prevHash` bound to its predecessor,
+  so silent retroactive edits to a decision history do not survive verification.
+
+### What does not limit it, stated plainly
+
+- **A corrupted verdict is the real prize, and nothing in this repo currently detects
+  one.** An attacker who cannot write to a hospital's MDM but *can* flip SignalGrid's
+  verdicts to `allow` has turned the product into a machine for manufacturing false
+  confirmations at fleet scale. That is the exact inverse of the discipline every
+  connector is built on — a grant requires positive confirmation of every input — applied
+  one level up, at the fabric rather than the field. The verdict leaving SignalGrid is
+  not signed, and a consumer has no way to distinguish a genuine `allow` from an injected
+  one.
+- **Connector credentials are process-global, not per-tenant.** Every resolver reads a
+  single `<NAME>_ACCESS_TOKEN` from the environment. In a single-tenant deployment that
+  is correct and simple. In a hub serving many hospitals it means one stolen process
+  environment yields every tenant's bridge at once — precisely the concentration the
+  attack data describes.
+- **`AutoApproved` is the one outbound grant of privilege.** Its inputs are enumerated
+  and its allow-path is brute-forced, but the enumeration proves the *logic* is tight; it
+  does not prove the *inputs* were not fabricated by whoever owns the process.
+
+### What is therefore owed before a multi-tenant pilot
+
+These are additions to the private production core, listed here so the gap is recorded
+rather than discovered:
+
+1. **Signed verdicts.** A consumer must be able to verify that an `allow` originated from
+   the evaluator and was not injected in transit or at rest. The webhook HMAC covers
+   delivery, not the decision itself.
+2. **Per-tenant connector credentials**, so the blast radius of a stolen credential is one
+   hospital rather than the fleet — replacing the process-global environment token.
+3. **A bounded `AutoApproved` surface** — rate, scope, and time limits on automatic
+   privileged elevation, so a compromised hub cannot mint unbounded activations even with
+   valid-looking inputs.
+4. **An explicit "assume the hub is compromised" review**, run the way the connector
+   allow-paths are: adversarially, with the finding written down whether or not it is
+   comfortable.
+
+Non-claims, stated as plainly as the rest: nothing here asserts that SignalGrid prevents
+a ransomware incident, reduces patient harm, or satisfies any regulatory obligation. The
+figures cited above are third-party research about the sector, reproduced as context for
+a design decision. They are not outcomes this product claims to produce.
+
 ## What the private production core must add
 
 The public core establishes the shapes and fail-closed behaviors; production

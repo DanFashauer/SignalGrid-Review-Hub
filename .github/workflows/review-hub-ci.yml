@@ -154,6 +154,9 @@ jobs:
       - name: Proof — verdict attestation (forged verdicts degrade)
         run: pnpm run proof:verdict-attestation
 
+      - name: Guard-registry drift check
+        run: node scripts/check-guard-registries.mjs
+
       - name: Docs↔proof figure guard
         run: node scripts/check-proof-figures.mjs
 

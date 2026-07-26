@@ -39,11 +39,15 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+/** True only when this file is the entrypoint, so another script can import its
+ *  registry without running the gate. */
+const IS_MAIN = process.argv[1] !== undefined && import.meta.url === new URL(`file://${resolve(process.argv[1])}`).href;
 const docsDir = join(repoRoot, "docs");
 
 /** Proofs that emit a `figures=` line. A proof that does not is simply not checked here —
  *  this guard never invents a figure it was not given. */
-const PROOFS = ["proof:device-management-health", "proof:link-usability", "proof:verdict-attestation"];
+export const PROOFS = ["proof:device-management-health", "proof:link-usability", "proof:verdict-attestation"];
 
 /** Words marking a number as a deliberate reference to a PAST value or a counterfactual.
  *
@@ -104,55 +108,60 @@ function sectionsMentioning(text, needle) {
   return sections.filter((sec) => sec.includes(needle)).map((sec) => ({ p: sec }));
 }
 
-console.log("Docs↔proof FIGURE guard — a number stated as a measurement must still be one\n");
+function main() {
+  console.log("Docs↔proof FIGURE guard — a number stated as a measurement must still be one\n");
 
-let failures = 0;
-let checked = 0;
-const docFiles = readdirSync(docsDir).filter((f) => f.endsWith(".md"));
+  let failures = 0;
+  let checked = 0;
+  const docFiles = readdirSync(docsDir).filter((f) => f.endsWith(".md"));
 
-for (const proof of PROOFS) {
-  const figures = liveFigures(proof);
-  if (figures === null) {
-    console.error(`✗ ${proof} — emitted no \`figures=\` line. Add one, or remove it from PROOFS.`);
-    failures += 1;
-    continue;
-  }
-  const live = [...figures].filter((v) => typeof v === "string").sort();
-  console.log(`  ${proof} — live figures: ${live.join(", ")}`);
+  for (const proof of PROOFS) {
+    const figures = liveFigures(proof);
+    if (figures === null) {
+      console.error(`✗ ${proof} — emitted no \`figures=\` line. Add one, or remove it from PROOFS.`);
+      failures += 1;
+      continue;
+    }
+    const live = [...figures].filter((v) => typeof v === "string").sort();
+    console.log(`  ${proof} — live figures: ${live.join(", ")}`);
 
-  for (const file of docFiles) {
-    const text = readFileSync(join(docsDir, file), "utf8");
-    for (const { p } of sectionsMentioning(text, proof)) {
-      for (const m of p.matchAll(FIGURE_RE)) {
-        checked += 1;
-        if (figures.has(m[0])) continue;
-        // A deliberate comparison to a past value or a counterfactual, in either
-        // direction. Judged by the words around the number rather than by an allowlist of
-        // numbers — an allowlist of numbers would itself go stale, which is the exact
-        // failure being guarded against.
-        const before = p.slice(0, m.index);
-        const after = p.slice(m.index + m[0].length);
-        if (HISTORICAL_BEFORE.test(before) || HISTORICAL_AFTER.test(after)) continue;
-        console.error(`\n✗ docs/${file} — "${m[0]}" is stated in a paragraph about ${proof},`);
-        console.error(`  but that proof's live figures are: ${live.join(", ")}`);
-        const line = p.split("\n").find((l) => l.includes(m[0])) ?? "";
-        console.error(`  ${line.trim().slice(0, 160)}`);
-        failures += 1;
+    for (const file of docFiles) {
+      const text = readFileSync(join(docsDir, file), "utf8");
+      for (const { p } of sectionsMentioning(text, proof)) {
+        for (const m of p.matchAll(FIGURE_RE)) {
+          checked += 1;
+          if (figures.has(m[0])) continue;
+          // A deliberate comparison to a past value or a counterfactual, in either
+          // direction. Judged by the words around the number rather than by an allowlist of
+          // numbers — an allowlist of numbers would itself go stale, which is the exact
+          // failure being guarded against.
+          const before = p.slice(0, m.index);
+          const after = p.slice(m.index + m[0].length);
+          if (HISTORICAL_BEFORE.test(before) || HISTORICAL_AFTER.test(after)) continue;
+          console.error(`\n✗ docs/${file} — "${m[0]}" is stated in a paragraph about ${proof},`);
+          console.error(`  but that proof's live figures are: ${live.join(", ")}`);
+          const line = p.split("\n").find((l) => l.includes(m[0])) ?? "";
+          console.error(`  ${line.trim().slice(0, 160)}`);
+          failures += 1;
+        }
       }
     }
   }
+
+  console.log(`\nfigures checked in docs: ${checked}`);
+
+  if (failures > 0) {
+    console.error(
+      `\nFigure guard FAILED: ${failures} problem${failures === 1 ? "" : "s"}.\n\n` +
+        "A number presented as a measurement has to still be one. Either re-measure and update\n" +
+        "the doc, or — if the number is a deliberate reference to a past value — write it that\n" +
+        'way ("was 1,037,232", "down from 21,168"), which is both clearer and recognised here.\n',
+    );
+    process.exit(1);
+  }
+
+  console.log("Figure guard passed — every measured figure in the docs matches a live proof run.");
+
 }
 
-console.log(`\nfigures checked in docs: ${checked}`);
-
-if (failures > 0) {
-  console.error(
-    `\nFigure guard FAILED: ${failures} problem${failures === 1 ? "" : "s"}.\n\n` +
-      "A number presented as a measurement has to still be one. Either re-measure and update\n" +
-      "the doc, or — if the number is a deliberate reference to a past value — write it that\n" +
-      'way ("was 1,037,232", "down from 21,168"), which is both clearer and recognised here.\n',
-  );
-  process.exit(1);
-}
-
-console.log("Figure guard passed — every measured figure in the docs matches a live proof run.");
+if (IS_MAIN) main();

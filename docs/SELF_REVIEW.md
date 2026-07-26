@@ -151,6 +151,32 @@ just as `unknown_key` instead of `envelope_malformed`, sending an operator hunti
 rotation problem that does not exist. Asserting the reason rather than the refusal made
 them load-bearing.
 
+**`pnpm run guard:registries` — are the guards' own coverage lists honest?**
+
+Both guards above carry a hand-maintained list of what they cover, which is the same shape
+as the defect that produced them: `incident-playbook-proof` restated `SignalKind` by hand
+and drifted five kinds behind. Deriving `SignalKind` from a runtime array fixed that list
+and immediately created two more.
+
+The uncomfortable version: **a guard whose coverage list is stale is worse than no guard**,
+because it reports success over the part it has stopped looking at. `guard:mutations`
+printing "0 survivors" says nothing about a connector nobody added to its targets.
+
+So the expected coverage is derived from the code. Any proof importing
+`enumerateGrantSafety` is enumerating an allow path and must be registered with the
+mutation guard or excluded with a reason; any proof printing a `figures=` line must be
+registered with the figure guard. A registration naming a proof that no longer exists is
+drift in the other direction and also fails. Negative-controlled both ways: dropping a
+connector from the registry fails, and so does adding a brand-new allow-path proof nobody
+registered.
+
+What it reports today is worth stating plainly rather than burying: **12 proofs enumerate
+an allow path, and 3 are under the mutation guard.** Eight are listed as QUEUED — not
+waived — and named individually in the output every time it runs, including
+`agent-identity`, whose allow path was hardened over seven adversarial reviews but predates
+the sweep. Partial coverage announced every run is a very different thing from partial
+coverage that looks complete.
+
 **`pnpm run guard:figures` — is a number stated as a measurement still one?**
 
 `check-proof-counts` already guards the `(N checks)` a doc advertises. The numbers that

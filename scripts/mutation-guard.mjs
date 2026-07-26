@@ -50,6 +50,10 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
+/** True only when this file is the entrypoint, so another script can import its
+ *  registry without running the gate. */
+const IS_MAIN = process.argv[1] !== undefined && import.meta.url === new URL(`file://${resolve(process.argv[1])}`).href;
+
 /** Per-proof wall-clock ceiling. Generous enough for the largest enumeration
  *  (device-management-health runs 1.35M raw reports twice in ~11s) and tight enough that
  *  a hang is detected in seconds rather than at a CI job's timeout. */
@@ -113,7 +117,7 @@ const truncate = (s) => (s.length > 58 ? `${s.slice(0, 55)}...` : s);
 // Scoped on purpose to the files whose correctness is the allow-path: the normalizers
 // and evaluators of the grant-emitting connectors. Widening this is cheap; widening it
 // without meaning to would make the gate slow and its output unreadable.
-const TARGETS = [
+export const TARGETS = [
   {
     proof: "proof:device-management-health",
     files: [
@@ -275,101 +279,106 @@ function isAllowed(mutation) {
   return ALLOWED.find((a) => a.file === mutation.file && mutation.sourceLine.includes(a.line));
 }
 
-const only = process.argv.find((a) => a.startsWith("--proof="))?.split("=")[1];
-const targets = only ? TARGETS.filter((t) => t.proof === only) : TARGETS;
-if (targets.length === 0) {
-  console.error(`No target matches --proof=${only}. Known: ${TARGETS.map((t) => t.proof).join(", ")}`);
-  process.exit(1);
-}
-
-console.log("Mutation guard — every registered guard must be falsifiable by its own proof\n");
-
-// An allowlist entry that no longer matches any line is itself a finding: the code moved
-// and the justification was never revisited. Checked BEFORE any mutation runs, so a stale
-// entry surfaces in seconds rather than after the full sweep.
-let staleAllowlist = 0;
-for (const entry of ALLOWED) {
-  const abs = join(repoRoot, entry.file);
-  let text;
-  try {
-    text = readFileSync(abs, "utf8");
-  } catch {
-    console.error(`✗ allowlist entry references a missing file: ${entry.file}`);
-    staleAllowlist += 1;
-    continue;
+function main() {
+  const only = process.argv.find((a) => a.startsWith("--proof="))?.split("=")[1];
+  const targets = only ? TARGETS.filter((t) => t.proof === only) : TARGETS;
+  if (targets.length === 0) {
+    console.error(`No target matches --proof=${only}. Known: ${TARGETS.map((t) => t.proof).join(", ")}`);
+    process.exit(1);
   }
-  if (!text.includes(entry.line)) {
-    console.error(`✗ STALE allowlist entry — no line matches in ${entry.file}:\n    "${entry.line}"`);
-    console.error("    The code moved. Re-derive whether the justification still holds, then update or remove.");
-    staleAllowlist += 1;
+
+  console.log("Mutation guard — every registered guard must be falsifiable by its own proof\n");
+
+  // An allowlist entry that no longer matches any line is itself a finding: the code moved
+  // and the justification was never revisited. Checked BEFORE any mutation runs, so a stale
+  // entry surfaces in seconds rather than after the full sweep.
+  let staleAllowlist = 0;
+  for (const entry of ALLOWED) {
+    const abs = join(repoRoot, entry.file);
+    let text;
+    try {
+      text = readFileSync(abs, "utf8");
+    } catch {
+      console.error(`✗ allowlist entry references a missing file: ${entry.file}`);
+      staleAllowlist += 1;
+      continue;
+    }
+    if (!text.includes(entry.line)) {
+      console.error(`✗ STALE allowlist entry — no line matches in ${entry.file}:\n    "${entry.line}"`);
+      console.error("    The code moved. Re-derive whether the justification still holds, then update or remove.");
+      staleAllowlist += 1;
+    }
   }
-}
-if (staleAllowlist > 0) {
-  console.error(`\nMutation guard FAILED: ${staleAllowlist} stale allowlist entr${staleAllowlist === 1 ? "y" : "ies"}.`);
-  process.exit(1);
-}
+  if (staleAllowlist > 0) {
+    console.error(`\nMutation guard FAILED: ${staleAllowlist} stale allowlist entr${staleAllowlist === 1 ? "y" : "ies"}.`);
+    process.exit(1);
+  }
 
-let total = 0;
-let killed = 0;
-let hung = 0;
-let allowed = 0;
-const survivors = [];
+  let total = 0;
+  let killed = 0;
+  let hung = 0;
+  let allowed = 0;
+  const survivors = [];
 
-for (const target of targets) {
-  console.log(`── ${target.proof}`);
-  for (const file of target.files) {
-    const mutations = mutationsFor(file);
-    console.log(`   ${file} — ${mutations.length} mutations`);
-    for (const mutation of mutations) {
-      total += 1;
-      writeFileSync(mutation.abs, mutation.content);
-      let verdict;
-      try {
-        verdict = runProof(target.proof);
-      } finally {
-        // ALWAYS restore, including on an unexpected throw. A mutation left on disk would
-        // be catastrophic — it is a deliberately broken security guard.
-        writeFileSync(mutation.abs, mutation.original);
-      }
-      if (verdict === "killed") {
-        killed += 1;
-      } else if (verdict === "hung") {
-        hung += 1;
-        console.log(`   ⚠ HANG  ${file}:${mutation.lineNo}  ${mutation.describe}`);
-        console.log("           (detected, but its CI failure mode is a job timeout rather than a red assertion)");
-      } else {
-        const entry = isAllowed(mutation);
-        if (entry) {
-          allowed += 1;
+  for (const target of targets) {
+    console.log(`── ${target.proof}`);
+    for (const file of target.files) {
+      const mutations = mutationsFor(file);
+      console.log(`   ${file} — ${mutations.length} mutations`);
+      for (const mutation of mutations) {
+        total += 1;
+        writeFileSync(mutation.abs, mutation.content);
+        let verdict;
+        try {
+          verdict = runProof(target.proof);
+        } finally {
+          // ALWAYS restore, including on an unexpected throw. A mutation left on disk would
+          // be catastrophic — it is a deliberately broken security guard.
+          writeFileSync(mutation.abs, mutation.original);
+        }
+        if (verdict === "killed") {
+          killed += 1;
+        } else if (verdict === "hung") {
+          hung += 1;
+          console.log(`   ⚠ HANG  ${file}:${mutation.lineNo}  ${mutation.describe}`);
+          console.log("           (detected, but its CI failure mode is a job timeout rather than a red assertion)");
         } else {
-          survivors.push(mutation);
-          console.log(`   ✗ SURVIVED  ${file}:${mutation.lineNo}  ${mutation.describe}`);
+          const entry = isAllowed(mutation);
+          if (entry) {
+            allowed += 1;
+          } else {
+            survivors.push(mutation);
+            console.log(`   ✗ SURVIVED  ${file}:${mutation.lineNo}  ${mutation.describe}`);
+          }
         }
       }
     }
   }
-}
 
-console.log(
-  `\nmutations=${total} killed=${killed} hung=${hung} known-inert=${allowed} survivors=${survivors.length}`,
-);
-
-if (survivors.length > 0) {
-  console.error("\nMutation guard FAILED — these guards are unfalsifiable by their own proof:\n");
-  for (const s of survivors) {
-    console.error(`  ${s.file}:${s.lineNo}`);
-    console.error(`    ${s.sourceLine}`);
-    console.error(`    ${s.describe}`);
-  }
-  console.error(
-    "\nEach is one of three things, and they need different fixes:\n" +
-      "  1. DEAD CODE — the branch cannot win. Delete it, or fix the ordering that makes it lose.\n" +
-      "  2. REAL BEHAVIOUR WITH NO TEST — add a fixture that pins it. This is the common case,\n" +
-      "     and the one the grant-safety enumeration structurally cannot catch.\n" +
-      "  3. GENUINELY INERT at current severities — keep it, label it inert in the source, and\n" +
-      "     add an ALLOWED entry here with a reason a reader can check.\n",
+  console.log(
+    `\nmutations=${total} killed=${killed} hung=${hung} known-inert=${allowed} survivors=${survivors.length}`,
   );
-  process.exit(1);
+
+  if (survivors.length > 0) {
+    console.error("\nMutation guard FAILED — these guards are unfalsifiable by their own proof:\n");
+    for (const s of survivors) {
+      console.error(`  ${s.file}:${s.lineNo}`);
+      console.error(`    ${s.sourceLine}`);
+      console.error(`    ${s.describe}`);
+    }
+    console.error(
+      "\nEach is one of three things, and they need different fixes:\n" +
+        "  1. DEAD CODE — the branch cannot win. Delete it, or fix the ordering that makes it lose.\n" +
+        "  2. REAL BEHAVIOUR WITH NO TEST — add a fixture that pins it. This is the common case,\n" +
+        "     and the one the grant-safety enumeration structurally cannot catch.\n" +
+        "  3. GENUINELY INERT at current severities — keep it, label it inert in the source, and\n" +
+        "     add an ALLOWED entry here with a reason a reader can check.\n",
+    );
+    process.exit(1);
+  }
+
+  console.log("\nMutation guard passed — every registered guard is falsifiable, or documented as inert.");
+
 }
 
-console.log("\nMutation guard passed — every registered guard is falsifiable, or documented as inert.");
+if (IS_MAIN) main();

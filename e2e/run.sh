@@ -13,12 +13,25 @@ cd "$(dirname "$0")/.."          # repo root
 ROOT="$PWD"
 API=5174; ADMIN=5173; USER=5180; PWA=5181; DESK=5182; WEB=5183
 PIDS=()
+# `lsof -ti tcp:PORT` silently misses IPv6 `*:PORT` listeners, which let stale
+# servers survive cleanup and shadow the next run against the wrong CORS config.
+# -nP -iTCP:PORT -sTCP:LISTEN matches both families.
+free_ports() {
+  for port in "$@"; do
+    lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null | xargs kill -9 2>/dev/null || true
+  done
+}
 cleanup() {
   for p in "${PIDS[@]:-}"; do kill "$p" 2>/dev/null || true; done
-  lsof -ti tcp:$API tcp:$ADMIN tcp:$USER tcp:$PWA tcp:$DESK tcp:$WEB 2>/dev/null | xargs kill -9 2>/dev/null || true
+  free_ports $API $ADMIN $USER $PWA $DESK $WEB
   git checkout package.json pnpm-lock.yaml 2>/dev/null || true
 }
 trap cleanup EXIT
+
+# Clear anything already holding our ports BEFORE starting, so a leftover server
+# can't serve the tests instead of the one this run configures.
+free_ports $API $ADMIN $USER $PWA $DESK $WEB
+sleep 1
 
 command -v pnpm >/dev/null 2>&1 && PNPM=pnpm || PNPM="corepack pnpm@10.28.1"
 

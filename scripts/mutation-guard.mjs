@@ -133,6 +133,13 @@ export const TARGETS = [
     ],
   },
   {
+    proof: "proof:task-exception",
+    files: [
+      "lib/integrations/src/integrations/task-exception/evaluate.ts",
+      "lib/integrations/src/integrations/task-exception/task-exception-connector.ts",
+    ],
+  },
+  {
     proof: "proof:verdict-attestation",
     files: ["lib/verdict-attestation/src/attest.ts", "lib/verdict-attestation/src/canonical.ts"],
   },
@@ -211,6 +218,23 @@ const ALLOWED = [
     file: "lib/integrations/src/integrations/link-usability/link-usability-connector.ts",
     line: 'typeof report === "object" &&',
     reason: "Documented redundant in the source, same reasoning as its device-management-health twin.",
+  },
+  {
+    file: "lib/integrations/src/integrations/task-exception/task-exception-connector.ts",
+    line: 'typeof report === "object" &&',
+    reason:
+      "Documented redundant in the source, same reasoning as its device-management-health twin: a primitive or function reaching the key scan makes Reflect.ownKeys throw or return unrecognized keys, ending at malformed either way.",
+  },
+  {
+    file: "lib/integrations/src/integrations/task-exception/task-exception-connector.ts",
+    line: "report !== null &&",
+    reason:
+      "Documented redundant in the source: hasOwnProperty.call(null, …) throws into the wrapped read, which sets readFailed, which forces malformed.",
+  },
+  {
+    file: "lib/integrations/src/integrations/task-exception/task-exception-connector.ts",
+    line: "!Array.isArray(report) &&",
+    reason: "Documented redundant in the source: an array fails the key scan on its own `length`.",
   },
   {
     file: "lib/verdict-attestation/src/attest.ts",

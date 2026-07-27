@@ -78,6 +78,27 @@ It is fail-safe by construction, mirroring the MCP server's own discipline:
 
 Proven fully offline by `pnpm run proof:macos-posture` (deterministic, no device access, no network). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid changes no macOS setting — every signal is read-only, and this is not a vendor partnership or certification claim.
 
+**The task plane joins the grid.** The task-exception dimension normalizes
+frontline task-system exceptions — short pick / empty or wrong-location bin /
+inventory discrepancy, failed or bypassed scan verification, an executing worker
+or device that differs from the assigned one, RF transaction errors, stalled
+flow — into one vendor-neutral posture. The WMS/task system stays the system of
+record; SignalGrid consumes, decides, and routes. Vocabulary is grounded in
+primary-source-verified surfaces (Oracle WMS Cloud task lifecycle and cycle-count
+triggers; SAP EWM exception codes, queryable via its warehouse-task OData
+service) with vendor codes carried verbatim in a passthrough audit field, never
+in the enum. Integrity-class exceptions (assignment mismatch, bypassed
+procedure) restrict and route to security operations; inventory-class alert and
+route to operations — the worker is never punished for the warehouse's inventory
+problem. Proven offline by `pnpm run proof:task-exception` (195 checks): 1,728
+normalized states + 127,400 raw wire reports enumerated, exactly 5 granting
+shapes, each individually asserted coherent; four self-contradiction relations
+(including the `not_applicable` mirror caught in a sibling dimension's review,
+designed in from birth here) each backed by a fixture that fails if the relation
+is deleted; registered with the mutation guard from its first commit. Read-only,
+fixture-backed, gated like every connector; no partnership or certification is
+claimed.
+
 **Aligned to Apple's canonical schema.** Each normalized posture field carries its provenance in [`apple/device-management`](https://github.com/apple/device-management) (Apple's MIT-licensed, machine-readable MDM + Declarative Device Management schema, pinned at version 26.4): `sip` → `SystemIntegrityProtectionEnabled`, `fileVault` → `FDE_Enabled` (+ DDM `diskmanagement.filevault.enabled`), `firewall` → `FirewallSettings.FirewallEnabled`, and so on — plus the Managed Device Attestation leaf-cert OIDs (e.g. the attested SIP status `1.2.840.113635.100.8.13.1`) reserved for a future hardware-rooted attestation tier. On-device-only signals with no MDM/DDM key (Gatekeeper, XProtect, system extensions) are declared as such rather than given a fabricated key. `pnpm run proof:macos-apple-schema` (52 checks, offline) asserts every posture field is mapped and every referenced key is in the pinned Apple catalog, so a schema change on a new OS release surfaces as a failing check instead of silent drift. Aligning to these names is adoption of a public standard, not a code dependency or vendor partnership.
 
 ## OT / IIoT edge-device posture — the factory floor (built, fixture-backed)

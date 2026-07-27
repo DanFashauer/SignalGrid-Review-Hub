@@ -98,7 +98,7 @@ export function mapPostureToIncident(posture: UnifiedPosture, opts: MapOptions):
   }
   const impact = opts.impact ?? "medium";
   const topDriver = posture.drivers[0];
-  const category = topDriver ? categoryForKind(topDriver.kind) : "general";
+  const category = topDriver ? categoryForKind(topDriver.kind, topDriver.reason) : "general";
   const drivers = posture.drivers.map((d) => `${d.kind}:${d.reason}`);
   const subject = opts.subjectLabel ?? "device";
   const shortDescription = `${category.replace(/_/g, " ")} — ${posture.strongestAction} on ${subject} (${posture.riskTier})`;
@@ -148,7 +148,7 @@ function buildIncident(input: {
   };
 }
 
-function categoryForKind(kind: string): IncidentCategory {
+function categoryForKind(kind: string, reason?: string): IncidentCategory {
   switch (kind) {
     // Device / endpoint integrity & posture — self-reported or hardware-proven.
     // `attestation` mirrors its self-reported twin `device_posture`: a hardware-
@@ -181,6 +181,12 @@ function categoryForKind(kind: string): IncidentCategory {
       return "security_compliance";
     case "vulnerability":
       return "security_vulnerability";
+    // Task-exception is the one kind whose classes have DIFFERENT owners, so it is the
+    // one kind routed by the driver's reason code rather than by the kind alone —
+    // which is why `categoryForKind` gained its optional `reason` parameter. A single
+    // category here would send a short pick to the same queue as a spoofed executor.
+    case "task_exception":
+      return taskExceptionCategory(reason);
     // Physical custody & endpoint peripheral handling.
     case "reachability":
     case "location":
@@ -194,6 +200,50 @@ function categoryForKind(kind: string): IncidentCategory {
       return "security_incident";
     default:
       return "general";
+  }
+}
+
+/** Route a task-exception driver by its CLASS, read off the reason code.
+ *
+ *  INTEGRITY-class exceptions — a spoofed/mismatched executor, a bypassed required
+ *  verification, a verification that caught the wrong object — are live security
+ *  events about how work was executed, and they route to the security/operations
+ *  owner: `security_incident` → "Security Operations (SecOps)".
+ *
+ *  INVENTORY-class (short pick, wrong/empty location, damaged, discrepancy) and
+ *  FLOW-class (failed RF transaction, bridge-derived stall) exceptions are operations
+ *  problems: nobody's identity is in question, something physical or transactional is.
+ *  They route to `asset_device`. Note the destination: that category resolves to the
+ *  "Endpoint / Mobility" assignment group — the closed ITSM table's operations-facing
+ *  owner — not to a warehouse-operations or inventory-control team, which this table
+ *  does not have. Both classes therefore land on the SAME group today; the classes are
+ *  still routed separately here because the distinction is the point of the model, and
+ *  collapsing them in this switch would silently survive the day the table gains a
+ *  real inventory owner. TASK_FLOW_STALLED is additionally UNREACHABLE through
+ *  `mapPostureToIncident` today — it is `monitor`, monitor opens no incident, and a
+ *  monitor driver can never be the top driver of an incident-opening posture — and is
+ *  kept, labelled, as the flow-class routing statement.
+ *
+ *  Everything else on this dimension (contradictory reports, malformed envelopes, an
+ *  unreachable execution system, unknowns) is a trust-fabric integrity question and
+ *  routes exactly as its siblings (`device_management_health`, `link_usability`) do:
+ *  `security_compliance`, never the generic Service Desk. */
+function taskExceptionCategory(reason?: string): IncidentCategory {
+  switch (reason) {
+    // Integrity-class → security/operations owner.
+    case "TASK_ASSIGNMENT_MISMATCH":
+    case "PROCEDURE_BYPASSED":
+    case "VERIFICATION_FAILED":
+      return "security_incident";
+    // Inventory-class → the operations/inventory owner (see the note above).
+    case "INVENTORY_EXCEPTION_ACTIVE":
+      return "asset_device";
+    // Flow-class → operations (see the note above).
+    case "TASK_TRANSACTION_ERROR":
+    case "TASK_FLOW_STALLED":
+      return "asset_device";
+    default:
+      return "security_compliance";
   }
 }
 

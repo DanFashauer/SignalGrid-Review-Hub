@@ -19,6 +19,9 @@ import type { PacsAccessVerdict } from "@workspace/integrations/pacs-access";
 import type { AgentIdentityVerdict } from "@workspace/integrations/agent-identity";
 import type { DeviceManagementHealthVerdict } from "@workspace/integrations/device-management-health";
 import type { LinkUsabilityVerdict } from "@workspace/integrations/link-usability";
+// Type-only, via the "./task-exception" subpath export (wired in the same change
+// that adds this adapter). Erased at compile time.
+import type * as taskException from "@workspace/integrations/task-exception";
 import type { GraphPostureSignal } from "@workspace/integrations/graph";
 import type { Detection } from "@workspace/event-contract";
 import { ACTION_RANK } from "./compose";
@@ -203,6 +206,24 @@ export function fromLinkUsability(v: LinkUsabilityVerdict): ComposableSignal {
   // associated + carrying traffic + stable (or roam-less) + latency-nominal +
   // capability-reported + controller-reachable contributes 'none'.
   return { kind: "link_usability", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromTaskException(v: taskException.TaskExceptionVerdict): ComposableSignal {
+  // Task-exception state from the execution system behind a shared frontline device —
+  // did the system raise an exception about the WORK, and is anyone on it. This is the
+  // one witness that watches every confirm, so it is where the fabric learns that the
+  // person-to-device binding certified by badge/session/custody did not hold where the
+  // work actually happened. Its actions are already on the unified ladder. Fail-safe:
+  // an assignment mismatch (the executing worker/device differs from the assigned one)
+  // or a bypassed required verification restricts; a failed verification or an open
+  // inventory exception alerts — and acknowledged/resolution-task-created do NOT
+  // soften either, because a ticket is not a fix; a failed RF transaction, a
+  // self-contradictory report, an unreachable execution system, and anything
+  // unreadable step up; a bridge-derived stall or a RESOLVED exception contributes
+  // 'monitor' — watched, never granted. Only a stream confirmed exception-free +
+  // lifecycle-free + on an affirmative task state + system-reachable + fully parsed
+  // contributes 'none'. An unread task stream is never fused as clean work.
+  return { kind: "task_exception", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromMacosPosture(v: MacosPostureVerdict): ComposableSignal {

@@ -1,0 +1,702 @@
+{
+  "accessToken": "sg-task-exception-fixture-token",
+  "devices": {
+    "task-stream-healthy": {
+      "deviceId": "rf-aisle-01",
+      "report": {
+        "exceptionKind": "none",
+        "exceptionState": "not_applicable",
+        "taskState": "in_process",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "task_stream_healthy",
+        "reasonCode": "TASK_STREAM_HEALTHY",
+        "recommendedAction": "none",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 0,
+        "taskStreamHealthy": true
+      }
+    },
+    "task-stream-healthy-held": {
+      "deviceId": "rf-aisle-02",
+      "report": {
+        "exceptionKind": "none",
+        "exceptionState": "not_applicable",
+        "taskState": "held",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "task_stream_healthy",
+        "reasonCode": "TASK_STREAM_HEALTHY",
+        "recommendedAction": "none",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 0,
+        "taskStreamHealthy": true
+      }
+    },
+    "task-stream-healthy-completed": {
+      "deviceId": "rf-aisle-03",
+      "report": {
+        "exceptionKind": "none",
+        "exceptionState": "not_applicable",
+        "taskState": "completed",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "task_stream_healthy",
+        "reasonCode": "TASK_STREAM_HEALTHY",
+        "recommendedAction": "none",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 0,
+        "taskStreamHealthy": true
+      }
+    },
+    "assignment-mismatch": {
+      "deviceId": "rf-aisle-04",
+      "report": {
+        "exceptionKind": "assignment_mismatch",
+        "exceptionState": "active",
+        "taskState": "in_process",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "task_integrity_violation",
+        "reasonCode": "TASK_ASSIGNMENT_MISMATCH",
+        "recommendedAction": "restrict",
+        "criticalFindingsCount": 1,
+        "unknownSignalsCount": 0,
+        "taskStreamHealthy": false
+      }
+    },
+    "assignment-mismatch-on-held-task": {
+      "deviceId": "rf-aisle-05",
+      "report": {
+        "exceptionKind": "assignment_mismatch",
+        "exceptionState": "active",
+        "taskState": "held",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "task_integrity_violation",
+        "reasonCode": "TASK_ASSIGNMENT_MISMATCH",
+        "recommendedAction": "restrict",
+        "criticalFindingsCount": 1,
+        "unknownSignalsCount": 0,
+        "taskStreamHealthy": false
+      }
+    },
+    "procedure-bypassed": {
+      "deviceId": "rf-aisle-06",
+      "report": {
+        "exceptionKind": "procedure_bypassed",
+        "exceptionState": "active",
+        "taskState": "in_process",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "task_integrity_violation",
+        "reasonCode": "PROCEDURE_BYPASSED",
+        "recommendedAction": "restrict",
+        "criticalFindingsCount": 1,
+        "unknownSignalsCount": 0,
+        "taskStreamHealthy": false
+      }
+    },
+    "verification-failed": {
+      "deviceId": "rf-aisle-07",
+      "report": {
+        "exceptionKind": "verification_failed",
+        "exceptionState": "active",
+        "taskState": "in_process",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "task_integrity_violation",
+        "reasonCode": "VERIFICATION_FAILED",
+        "recommendedAction": "alert",
+        "criticalFindingsCount": 1,
+        "unknownSignalsCount": 0,
+        "taskStreamHealthy": false
+      }
+    },
+    "inventory-exception-short-pick": {
+      "deviceId": "rf-aisle-08",
+      "report": {
+        "exceptionKind": "inventory_exception",
+        "exceptionState": "active",
+        "taskState": "in_process",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": "DIFF"
+      },
+      "expected": {
+        "posture": "inventory_exception",
+        "reasonCode": "INVENTORY_EXCEPTION_ACTIVE",
+        "recommendedAction": "alert",
+        "criticalFindingsCount": 1,
+        "unknownSignalsCount": 0,
+        "taskStreamHealthy": false
+      }
+    },
+    "inventory-exception-before-execution": {
+      "deviceId": "rf-aisle-09",
+      "report": {
+        "exceptionKind": "inventory_exception",
+        "exceptionState": "active",
+        "taskState": "ready",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": "CHBD"
+      },
+      "expected": {
+        "posture": "inventory_exception",
+        "reasonCode": "INVENTORY_EXCEPTION_ACTIVE",
+        "recommendedAction": "alert",
+        "criticalFindingsCount": 1,
+        "unknownSignalsCount": 0,
+        "taskStreamHealthy": false
+      }
+    },
+    "resolution-task-created-is-not-a-fix": {
+      "deviceId": "rf-aisle-10",
+      "report": {
+        "exceptionKind": "inventory_exception",
+        "exceptionState": "resolution_task_created",
+        "taskState": "completed",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": "DIFF"
+      },
+      "expected": {
+        "posture": "inventory_exception",
+        "reasonCode": "INVENTORY_EXCEPTION_ACTIVE",
+        "recommendedAction": "alert",
+        "criticalFindingsCount": 1,
+        "unknownSignalsCount": 0,
+        "taskStreamHealthy": false
+      }
+    },
+    "acknowledged-is-not-a-fix": {
+      "deviceId": "rf-aisle-11",
+      "report": {
+        "exceptionKind": "verification_failed",
+        "exceptionState": "acknowledged",
+        "taskState": "in_process",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "task_integrity_violation",
+        "reasonCode": "VERIFICATION_FAILED",
+        "recommendedAction": "alert",
+        "criticalFindingsCount": 1,
+        "unknownSignalsCount": 0,
+        "taskStreamHealthy": false
+      }
+    },
+    "exception-resolved": {
+      "deviceId": "rf-aisle-12",
+      "report": {
+        "exceptionKind": "inventory_exception",
+        "exceptionState": "resolved",
+        "taskState": "completed",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": "DIFF"
+      },
+      "expected": {
+        "posture": "exception_resolved",
+        "reasonCode": "TASK_EXCEPTION_RESOLVED",
+        "recommendedAction": "monitor",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 0,
+        "taskStreamHealthy": false
+      }
+    },
+    "mismatch-resolved-still-watched": {
+      "deviceId": "rf-aisle-13",
+      "report": {
+        "exceptionKind": "assignment_mismatch",
+        "exceptionState": "resolved",
+        "taskState": "completed",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "exception_resolved",
+        "reasonCode": "TASK_EXCEPTION_RESOLVED",
+        "recommendedAction": "monitor",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 0,
+        "taskStreamHealthy": false
+      }
+    },
+    "stall-resolved": {
+      "deviceId": "rf-aisle-14",
+      "report": {
+        "exceptionKind": "task_flow_stalled",
+        "exceptionState": "resolved",
+        "taskState": "completed",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "exception_resolved",
+        "reasonCode": "TASK_EXCEPTION_RESOLVED",
+        "recommendedAction": "monitor",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 0,
+        "taskStreamHealthy": false
+      }
+    },
+    "transaction-error": {
+      "deviceId": "rf-aisle-15",
+      "report": {
+        "exceptionKind": "transaction_error",
+        "exceptionState": "active",
+        "taskState": "in_process",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "task_flow_degraded",
+        "reasonCode": "TASK_TRANSACTION_ERROR",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 0,
+        "taskStreamHealthy": false
+      }
+    },
+    "task-flow-stalled": {
+      "deviceId": "rf-aisle-16",
+      "report": {
+        "exceptionKind": "task_flow_stalled",
+        "exceptionState": "active",
+        "taskState": "in_process",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "task_flow_degraded",
+        "reasonCode": "TASK_FLOW_STALLED",
+        "recommendedAction": "monitor",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 0,
+        "taskStreamHealthy": false
+      }
+    },
+    "inconsistent-lifecycle-for-no-exception": {
+      "deviceId": "rf-aisle-17",
+      "report": {
+        "exceptionKind": "none",
+        "exceptionState": "active",
+        "taskState": "in_process",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "TASK_REPORT_INCONSISTENT",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "taskStreamHealthy": false
+      }
+    },
+    "inconsistent-resolved-for-no-exception": {
+      "deviceId": "rf-aisle-18",
+      "report": {
+        "exceptionKind": "none",
+        "exceptionState": "resolved",
+        "taskState": "completed",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "TASK_REPORT_INCONSISTENT",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "taskStreamHealthy": false
+      }
+    },
+    "inconsistent-not-applicable-yet-mismatch": {
+      "deviceId": "rf-aisle-19",
+      "report": {
+        "exceptionKind": "assignment_mismatch",
+        "exceptionState": "not_applicable",
+        "taskState": "in_process",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "TASK_REPORT_INCONSISTENT",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "taskStreamHealthy": false
+      }
+    },
+    "inconsistent-not-applicable-yet-short-pick": {
+      "deviceId": "rf-aisle-20",
+      "report": {
+        "exceptionKind": "inventory_exception",
+        "exceptionState": "not_applicable",
+        "taskState": "in_process",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": "DIFF"
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "TASK_REPORT_INCONSISTENT",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "taskStreamHealthy": false
+      }
+    },
+    "inconsistent-verify-failed-before-execution": {
+      "deviceId": "rf-aisle-21",
+      "report": {
+        "exceptionKind": "verification_failed",
+        "exceptionState": "active",
+        "taskState": "ready",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "TASK_REPORT_INCONSISTENT",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "taskStreamHealthy": false
+      }
+    },
+    "inconsistent-bypass-on-held-task": {
+      "deviceId": "rf-aisle-22",
+      "report": {
+        "exceptionKind": "procedure_bypassed",
+        "exceptionState": "active",
+        "taskState": "held",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "TASK_REPORT_INCONSISTENT",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "taskStreamHealthy": false
+      }
+    },
+    "inconsistent-transaction-error-before-execution": {
+      "deviceId": "rf-aisle-23",
+      "report": {
+        "exceptionKind": "transaction_error",
+        "exceptionState": "active",
+        "taskState": "ready",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "TASK_REPORT_INCONSISTENT",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "taskStreamHealthy": false
+      }
+    },
+    "inconsistent-finished-yet-stalled": {
+      "deviceId": "rf-aisle-24",
+      "report": {
+        "exceptionKind": "task_flow_stalled",
+        "exceptionState": "active",
+        "taskState": "completed",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "TASK_REPORT_INCONSISTENT",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "taskStreamHealthy": false
+      }
+    },
+    "inconsistent-cancelled-yet-stalled": {
+      "deviceId": "rf-aisle-25",
+      "report": {
+        "exceptionKind": "task_flow_stalled",
+        "exceptionState": "acknowledged",
+        "taskState": "cancelled",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "TASK_REPORT_INCONSISTENT",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "taskStreamHealthy": false
+      }
+    },
+    "task-system-unreachable": {
+      "deviceId": "rf-aisle-26",
+      "report": {
+        "exceptionKind": "none",
+        "exceptionState": "not_applicable",
+        "taskState": "in_process",
+        "taskSystemReachable": false,
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "TASK_SYSTEM_UNREACHABLE",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 0,
+        "taskStreamHealthy": false
+      }
+    },
+    "task-system-unreported": {
+      "deviceId": "rf-aisle-27",
+      "report": {
+        "exceptionKind": "none",
+        "exceptionState": "not_applicable",
+        "taskState": "in_process",
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "TASK_SYSTEM_UNREACHABLE",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "taskStreamHealthy": false
+      }
+    },
+    "unreachable-outranks-an-unknown-field": {
+      "deviceId": "rf-aisle-28",
+      "report": {
+        "exceptionKind": "none",
+        "exceptionState": "not_applicable",
+        "taskSystemReachable": false,
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "TASK_SYSTEM_UNREACHABLE",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "taskStreamHealthy": false
+      }
+    },
+    "kind-unreported": {
+      "deviceId": "rf-aisle-29",
+      "report": {
+        "exceptionState": "not_applicable",
+        "taskState": "in_process",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "TASK_STATE_UNKNOWN",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "taskStreamHealthy": false
+      }
+    },
+    "state-unreported": {
+      "deviceId": "rf-aisle-30",
+      "report": {
+        "exceptionKind": "none",
+        "taskState": "in_process",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "TASK_STATE_UNKNOWN",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "taskStreamHealthy": false
+      }
+    },
+    "task-state-unreported": {
+      "deviceId": "rf-aisle-31",
+      "report": {
+        "exceptionKind": "none",
+        "exceptionState": "not_applicable",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "TASK_STATE_UNKNOWN",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "taskStreamHealthy": false
+      }
+    },
+    "mismatch-with-state-unreported": {
+      "deviceId": "rf-aisle-32",
+      "report": {
+        "exceptionKind": "assignment_mismatch",
+        "taskState": "in_process",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "task_integrity_violation",
+        "reasonCode": "TASK_ASSIGNMENT_MISMATCH",
+        "recommendedAction": "restrict",
+        "criticalFindingsCount": 1,
+        "unknownSignalsCount": 1,
+        "taskStreamHealthy": false
+      }
+    },
+    "report-malformed-enum": {
+      "deviceId": "rf-aisle-33",
+      "report": {
+        "exceptionKind": "SHORT_PICK",
+        "exceptionState": "not_applicable",
+        "taskState": "in_process",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "REPORT_MALFORMED",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 2,
+        "taskStreamHealthy": false
+      }
+    },
+    "report-malformed-boolean": {
+      "deviceId": "rf-aisle-34",
+      "report": {
+        "exceptionKind": "none",
+        "exceptionState": "not_applicable",
+        "taskState": "in_process",
+        "taskSystemReachable": "true",
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "REPORT_MALFORMED",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 2,
+        "taskStreamHealthy": false
+      }
+    },
+    "report-malformed-code": {
+      "deviceId": "rf-aisle-35",
+      "report": {
+        "exceptionKind": "none",
+        "exceptionState": "not_applicable",
+        "taskState": "in_process",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": 27
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "REPORT_MALFORMED",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "taskStreamHealthy": false
+      }
+    },
+    "report-aliased-keys": {
+      "deviceId": "rf-aisle-36",
+      "report": {
+        "exceptionKind": "none",
+        "exceptionState": "not_applicable",
+        "taskState": "in_process",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": null,
+        "exception_kind": "assignment_mismatch"
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "REPORT_MALFORMED",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "taskStreamHealthy": false
+      }
+    },
+    "vendor-code-carried-for-audit": {
+      "deviceId": "rf-aisle-37",
+      "report": {
+        "exceptionKind": "inventory_exception",
+        "exceptionState": "active",
+        "taskState": "in_process",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": "BIDF"
+      },
+      "expected": {
+        "posture": "inventory_exception",
+        "reasonCode": "INVENTORY_EXCEPTION_ACTIVE",
+        "recommendedAction": "alert",
+        "criticalFindingsCount": 1,
+        "unknownSignalsCount": 0,
+        "taskStreamHealthy": false
+      }
+    },
+    "worst-of-several": {
+      "deviceId": "rf-aisle-38",
+      "report": {
+        "exceptionKind": "assignment_mismatch",
+        "exceptionState": "acknowledged",
+        "taskState": "in_process",
+        "taskSystemReachable": false,
+        "sourceExceptionCode": "BIDP"
+      },
+      "expected": {
+        "posture": "task_integrity_violation",
+        "reasonCode": "TASK_ASSIGNMENT_MISMATCH",
+        "recommendedAction": "restrict",
+        "criticalFindingsCount": 1,
+        "unknownSignalsCount": 0,
+        "taskStreamHealthy": false
+      }
+    },
+    "inconsistent-finished-stall-ticketed": {
+      "deviceId": "rf-aisle-24-ticketed",
+      "report": {
+        "exceptionKind": "task_flow_stalled",
+        "exceptionState": "resolution_task_created",
+        "taskState": "completed",
+        "taskSystemReachable": true,
+        "sourceExceptionCode": null
+      },
+      "expected": {
+        "posture": "unverified",
+        "reasonCode": "TASK_REPORT_INCONSISTENT",
+        "recommendedAction": "step_up",
+        "criticalFindingsCount": 0,
+        "unknownSignalsCount": 1,
+        "taskStreamHealthy": false
+      }
+    }
+  }
+}

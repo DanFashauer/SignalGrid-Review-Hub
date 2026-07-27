@@ -42,6 +42,11 @@ const SCENARIOS: ScenarioSpec[] = [
   { label: "Critical workflow · untrusted device", identityRef: "tech.unmanaged", deviceRef: "ipad-byod-01", workflowKey: "med-admin" },
   { label: "Overdue device return (DockBridge)", identityRef: "nurse.overdue", deviceRef: "ipad-loan-01", workflowKey: "clinical-session" },
   { label: "Device flagged for tamper (DockBridge)", identityRef: "nurse.tamper", deviceRef: "ipad-loan-02", workflowKey: "clinical-session" },
+  // Fully charged AND restricted — the pair that only makes sense once battery
+  // HEALTH is its own evidence row. Added because the E2E suite proved the row
+  // rendered nowhere: the core carried BATTERY_FAILING, the console had the row,
+  // and no scenario ever produced a batteryHealth value to show in it.
+  { label: "Failing battery (SmartDock)", identityRef: "nurse.failbatt", deviceRef: "ipad-loan-04", workflowKey: "clinical-session" },
   { label: "Critically low battery (DockBridge)", identityRef: "nurse.lowbatt", deviceRef: "ipad-loan-03", workflowKey: "clinical-session" },
   { label: "Security-baseline drift (CIS)", identityRef: "nurse.baseline_drift", deviceRef: "ipad-ward-06", workflowKey: "clinical-session" },
   { label: "Badge pulled from reader case", identityRef: "nurse.badge_removed", deviceRef: "ipad-badge-01", workflowKey: "clinical-session" },

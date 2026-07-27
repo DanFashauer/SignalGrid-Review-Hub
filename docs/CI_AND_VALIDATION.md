@@ -51,6 +51,26 @@ After the workflow is available on GitHub, branch protection should eventually r
 
 This keeps Review Hub independent from `/DEV` and makes the public validation surface self-protecting.
 
+## The two verification layers added with the zero-cost test wave
+
+- **Real-cryptography proof.** `pnpm run proof:live-idp` (31 checks) boots a
+  certified OIDC provider in-process, mints genuine RS256 and DPoP-bound tokens
+  over real HTTP, and drives every accept/reject decision through the production
+  verifier in `lib/enterprise-auth` — tampered signatures, wrong issuer/audience,
+  real 1-second expiry, HS256 algorithm-confusion forged from the provider's own
+  public-key bytes, and `cnf.jkt` validated against the RFC 7638 thumbprint of
+  the held key before the token-binding dimension is allowed to call the result
+  sender-constrained. The fixture proof shows the logic is right; this shows it
+  is right against bytes SignalGrid did not fabricate. Fully local, no tenant,
+  no cost.
+- **Browser-level E2E.** `pnpm run test:e2e` (15 tests, ~75 content-bearing
+  assertions) runs Playwright against the BUILT review console, website, and
+  admin console (the admin console proxied to a live locally-booted api-server).
+  It asserts what a human actually sees — decision evidence rows, reason codes,
+  the corrected battery copy — and its maiden run caught a real gap no other
+  gate could: a decision-evidence row the core carried and no console scenario
+  ever rendered.
+
 ## Unsafe-claim scan scope
 
 The CI denylist is intentionally narrow and direct. It checks for production-ready, replacement, partnership, MFi certification, autonomous-remediation, and specific replacement phrases such as `replaces Jamf`, `replaces Intune`, `replaces Apple Configurator`, and `replaces GroundControl`, while allowing explicit disclaimers, guardrail wording, and validation-command lines that document the scanner itself.

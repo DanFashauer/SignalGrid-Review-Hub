@@ -151,6 +151,12 @@ jobs:
       - name: Proof — link usability (associated vs usable)
         run: pnpm run proof:link-usability
 
+      # The task plane joins the grid: WMS/task-system exceptions (short pick,
+      # wrong-aisle bin, assignment mismatch) as decision signals. The WMS stays
+      # system of record; SignalGrid consumes, decides, and routes.
+      - name: Proof — task exception (task-plane exceptions as grid signals)
+        run: pnpm run proof:task-exception
+
       - name: Proof — verdict attestation (forged verdicts degrade)
         run: pnpm run proof:verdict-attestation
 
@@ -197,6 +203,21 @@ jobs:
 
       - name: Enterprise auth (OIDC/JWT) proof
         run: pnpm run proof:enterprise-auth
+
+      # Real cryptographic material, zero cost: a certified OIDC provider booted
+      # in-process mints genuine RS256/DPoP tokens over real HTTP, and every
+      # accept/reject decision runs through the production verifier. The fixture
+      # proof above shows the logic is right; this shows it is right against
+      # bytes SignalGrid did not fabricate.
+      - name: Live IdP proof (real OIDC provider, real DPoP, in-process)
+        run: pnpm run proof:live-idp
+
+      # The first browser-level gate: what a human actually sees. The suite's
+      # maiden run caught a real gap (a decision-evidence row the core carried
+      # and no console scenario ever rendered), so this layer has already paid
+      # for itself once.
+      - name: Browser E2E (review console, website, admin console)
+        run: pnpm run test:e2e
 
       - name: WebAuthn signature-verification proof
         run: pnpm run proof:webauthn-verify

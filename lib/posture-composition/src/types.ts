@@ -69,6 +69,7 @@ export const SIGNAL_KINDS = [
   "agent_identity",
   "device_management_health",
   "link_usability",
+  "task_exception",
   "detection",
 ] as const;
 

@@ -70,6 +70,28 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             test
 
+  signalgrid-mobile:
+    name: SignalGridMobile (Operator + Wardlink)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      # scripts/verify.sh is the same gate used locally: SignalGridMobileCore
+      # unit tests, a parse check over both app targets, then an xcodebuild of
+      # the SignalGridOperator and WardlinkDemo schemes.
+      - name: Verify SignalGridMobile
+        working-directory: native/ios/SignalGridMobile
+        run: ./scripts/verify.sh
+
   lint-and-security:
     name: Lint & Security
     runs-on: macos-latest

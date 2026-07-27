@@ -1,0 +1,117 @@
+{
+  "manifestVersion": 1,
+  "fingerprint": "389ba5e3300ba79dc9ea4a4a2b9b71bd30983adbeb518ccf72f550161dea3811",
+  "body": {
+    "schema": "signalgrid-live-sync-manifest/v1",
+    "contract": {
+      "path": "lib/integrations/src/integrations/macos-posture/contract/posture-report.contract.json",
+      "sha256": "ba32d196e154173d21f246b19364fd4b8f6a1d0f7d79db8082f195ac011d9e81"
+    },
+    "signalKinds": [
+      "device_posture",
+      "reachability",
+      "location",
+      "vulnerability",
+      "network",
+      "threat",
+      "identity",
+      "custody",
+      "peripheral",
+      "data_protection",
+      "credential_exposure",
+      "ot_posture",
+      "access_governance",
+      "attestation",
+      "sso_session",
+      "oauth_consent",
+      "token_binding",
+      "pacs_access",
+      "agent_identity",
+      "device_management_health",
+      "link_usability",
+      "task_exception",
+      "detection"
+    ],
+    "signalCategories": [
+      "identity_state",
+      "device_compliance",
+      "device_management",
+      "device_encryption",
+      "os_support",
+      "posture_freshness",
+      "custody_state",
+      "charge_state",
+      "battery_health",
+      "tamper_state",
+      "dock_state",
+      "security_baseline",
+      "badge_binding"
+    ],
+    "taskExceptionReasonCodes": [
+      "TASK_STREAM_HEALTHY",
+      "TASK_ASSIGNMENT_MISMATCH",
+      "PROCEDURE_BYPASSED",
+      "VERIFICATION_FAILED",
+      "INVENTORY_EXCEPTION_ACTIVE",
+      "TASK_TRANSACTION_ERROR",
+      "TASK_FLOW_STALLED",
+      "TASK_EXCEPTION_RESOLVED",
+      "TASK_REPORT_INCONSISTENT",
+      "TASK_STATE_UNKNOWN",
+      "TASK_SYSTEM_UNREACHABLE",
+      "REPORT_MALFORMED",
+      "NOT_COVERED"
+    ],
+    "workContextTrustCeilings": [
+      "none",
+      "step_up",
+      "restrict"
+    ],
+    "handoffSimRefusalCodes": [
+      "task_not_held",
+      "exception_does_not_hold_task",
+      "verification_evidence_reused",
+      "exception_unresolved",
+      "verification_missing",
+      "verification_not_independent",
+      "device_not_trusted_for_release",
+      "step_before_assemble"
+    ],
+    "proofCounts": {
+      "access-governance": 57,
+      "agent-identity": 143,
+      "credential-exposure": 28,
+      "device-attestation": 60,
+      "device-management-health": 162,
+      "factory-flows": 16,
+      "handoff-sim": 55,
+      "link-usability": 154,
+      "live-idp": 31,
+      "macos-apple-schema": 52,
+      "oauth-consent": 63,
+      "ot-posture": 37,
+      "pacs-access": 68,
+      "pim-activation": 43,
+      "provisioning-teardown": 25,
+      "sso-session": 78,
+      "task-exception": 195,
+      "token-binding": 52,
+      "verdict-attestation": 76,
+      "work-context": 50
+    },
+    "mcpTools": [
+      "list_room_scenarios",
+      "evaluate_room_entry",
+      "signal_catalog",
+      "scan_signals",
+      "evaluate_decision"
+    ],
+    "consumers": {
+      "macMcpLane": "scripts/verify-all.mjs (SIGNALGRID_MCP_PATH=... --require-mcp --emit-evidence)",
+      "ios": "native/ios/EnterpriseShell"
+    }
+  },
+  "generatedFrom": {
+    "commit": "072fc419e5c75e095e95f62f9788c5802aa18474"
+  }
+}

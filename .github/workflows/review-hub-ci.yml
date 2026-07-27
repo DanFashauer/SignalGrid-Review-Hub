@@ -157,6 +157,12 @@ jobs:
       - name: Proof — task exception (task-plane exceptions as grid signals)
         run: pnpm run proof:task-exception
 
+      # Issue #136's portable work context: the context carries the WORK (tasks,
+      # exceptions, restrictions travel with the person); trust is re-earned per
+      # device. Three monotone invariants proven over the full matrix.
+      - name: Proof — work context (portable, descriptive, never permissive)
+        run: pnpm run proof:work-context
+
       - name: Proof — verdict attestation (forged verdicts degrade)
         run: pnpm run proof:verdict-attestation
 

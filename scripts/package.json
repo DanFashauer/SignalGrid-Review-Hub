@@ -82,7 +82,8 @@
     "proof:pim-activation": "tsx ./src/pim-activation-proof.ts",
     "proof:live-idp": "tsx ./src/live-idp-proof.ts",
     "test:e2e": "playwright test --config playwright.config.ts --tsconfig ../tsconfig.base.json",
-    "proof:task-exception": "tsx ./src/task-exception-proof.ts"
+    "proof:task-exception": "tsx ./src/task-exception-proof.ts",
+    "proof:work-context": "tsx ./src/work-context-proof.ts"
   },
   "dependencies": {
     "@workspace/app-workflows": "workspace:*",
@@ -106,7 +107,8 @@
     "@workspace/signalgrid-simulator": "workspace:*",
     "@workspace/verdict-attestation": "workspace:*",
     "@workspace/webauthn": "workspace:*",
-    "pg": "^8.13.1"
+    "pg": "^8.13.1",
+    "@workspace/work-context": "workspace:*"
   },
   "devDependencies": {
     "@playwright/test": "1.62.0",

@@ -103,7 +103,8 @@
     "proof:pim-activation": "pnpm --filter @workspace/scripts run proof:pim-activation",
     "proof:live-idp": "pnpm --filter @workspace/scripts run proof:live-idp",
     "test:e2e": "pnpm --filter @workspace/scripts run test:e2e",
-    "proof:task-exception": "pnpm --filter @workspace/scripts run proof:task-exception"
+    "proof:task-exception": "pnpm --filter @workspace/scripts run proof:task-exception",
+    "proof:work-context": "pnpm --filter @workspace/scripts run proof:work-context"
   },
   "private": true,
   "devDependencies": {

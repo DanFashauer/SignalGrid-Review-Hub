@@ -47,7 +47,7 @@ const docsDir = join(repoRoot, "docs");
 
 /** Proofs that emit a `figures=` line. A proof that does not is simply not checked here —
  *  this guard never invents a figure it was not given. */
-export const PROOFS = ["proof:device-management-health", "proof:link-usability", "proof:task-exception", "proof:verdict-attestation"];
+export const PROOFS = ["proof:device-management-health", "proof:link-usability", "proof:task-exception", "proof:verdict-attestation", "proof:work-context"];
 
 /** Words marking a number as a deliberate reference to a PAST value or a counterfactual.
  *

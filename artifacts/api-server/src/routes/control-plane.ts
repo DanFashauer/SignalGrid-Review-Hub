@@ -11,6 +11,14 @@ import {
 import { recommend, DEMO_USAGE } from "@workspace/recommendations";
 import { discover, planOnboarding, discoverySummary, DEMO_SOURCES, DEMO_OBSERVED } from "@workspace/signal-discovery";
 import { normalizeDdmReports, ddmSummary, DEMO_DDM_REPORTS, DDM_OBSERVED_AT } from "@workspace/ddm-connector";
+import {
+  DEFAULT_CHECKLIST,
+  deriveChecklist,
+  runAudit,
+  proposeHeals,
+  summarizePlain,
+  type ProbeResult,
+} from "@workspace/self-audit";
 
 /**
  * `/cp/v1/*` — the SaaS **control-plane** surface (management, not decisions).
@@ -166,6 +174,37 @@ router.get("/cp/v1/ddm", (_req, res) => {
     observedAt: DDM_OBSERVED_AT,
     summary: ddmSummary(signals, DEMO_DDM_REPORTS),
     signals,
+  });
+});
+
+// ── Self-audit: the system's own health, in plain language ──────────────────────
+// The administrative "just works" surface. Runs the fabric's self-audit over the
+// default checklist and returns BOTH the raw report and a plain-language summary an
+// owner reads without any product knowledge. Public-safe and deterministic: this is a
+// FIXTURE health snapshot — every probe reports healthy because no live gate runs in
+// this demo server, and the note says so. In a real deployment a probe runner feeds
+// live gate/proof outcomes; the plain-language shape is identical either way.
+const SELF_AUDIT_INVENTORY = {
+  // The demo inventory is exactly what the default checklist covers, so the healthy
+  // demo shows no coverage gaps. A real manifest would surface any uncovered
+  // dimension as an attention item — that is the point of the coverage check.
+  dimensions: [...new Set(DEFAULT_CHECKLIST.flatMap((i) => i.covers))],
+};
+// Fixture probe results: every checklist probe reports healthy. Deterministic.
+const SELF_AUDIT_DEMO_PROBES: Record<string, ProbeResult> = Object.fromEntries(
+  DEFAULT_CHECKLIST.map((i) => [i.probeKey, { status: "healthy" as const, detail: "fixture: verified in CI" }]),
+);
+
+router.get("/cp/v1/self-audit", (_req, res) => {
+  const checklist = deriveChecklist([...DEFAULT_CHECKLIST], SELF_AUDIT_INVENTORY);
+  const report = runAudit(checklist, SELF_AUDIT_DEMO_PROBES);
+  const heals = proposeHeals(report);
+  const plain = summarizePlain(report, heals);
+  res.json({
+    note: "Fixture self-audit snapshot — deterministic, no live gate runs in this demo. 'plain' is the administrator view; 'report' is the machine detail. A heal is only ever proposed, never applied, without a human approval.",
+    plain,
+    report,
+    proposedHeals: heals,
   });
 });
 

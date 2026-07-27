@@ -152,6 +152,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location.startsWith("/system-health")}>
+                  <Link href="/system-health">
+                    <Activity className="w-4 h-4 mr-2" />
+                    <span>System health</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarContent>
           <SidebarFooter className="p-4 border-t border-border">

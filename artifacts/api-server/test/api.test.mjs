@@ -466,6 +466,17 @@ async function run() {
   const deadEnf = (ddm.json?.signals ?? []).find((s) => s.enforcementCurrency === "dead");
   check("ddm: a device with dead update enforcement raises step-up (not trusted as patched)", deadEnf && deadEnf.assurance === "raise_step_up");
 
+  // ── self-audit: the plain-language administrative health surface ─────────
+  const selfAudit = await req("GET", "/cp/v1/self-audit");
+  check("self-audit responds 200 with plain + report + proposedHeals",
+    selfAudit.status === 200 && !!selfAudit.json?.plain && !!selfAudit.json?.report && Array.isArray(selfAudit.json?.proposedHeals));
+  check("self-audit fixture snapshot reads as the all-clear 'just works' state",
+    selfAudit.json?.plain?.allClear === true && selfAudit.json?.plain?.headline === "Everything is working." && selfAudit.json?.plain?.attentionCount === 0);
+  check("self-audit healthy fixture proposes no heals (nothing to fix)",
+    selfAudit.json?.proposedHeals?.length === 0);
+  check("self-audit plain lines never leak an internal status enum word",
+    !/\b(healthy|drifted|broken|unknown)\b/.test((selfAudit.json?.plain?.lines ?? []).map((l) => `${l.state} ${l.sentence}`).join(" ")));
+
   // ── build-the-grid control-plane surface (decision-fabric layer, live) ───
   const coverage = await req("GET", "/cp/v1/grid/coverage");
   check("grid coverage responds 200", coverage.status === 200);

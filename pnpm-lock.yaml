@@ -171,6 +171,9 @@ importers:
       '@workspace/room-sim':
         specifier: workspace:*
         version: link:../../lib/room-sim
+      '@workspace/self-audit':
+        specifier: workspace:*
+        version: link:../../lib/self-audit
       '@workspace/signal-discovery':
         specifier: workspace:*
         version: link:../../lib/signal-discovery

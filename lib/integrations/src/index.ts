@@ -19,4 +19,9 @@ export * as telemetry from "./integrations/telemetry/fleetdm";
 export * as telemetryTypes from "./integrations/telemetry/types";
 export * as webhooks from "./integrations/webhooks/dispatch";
 export * as graph from "./integrations/graph";
+// Namespaced (not a bare `export *`) like every other entry here, so its
+// `normalizeReport`/`guardReadOnly` cannot collide with a sibling connector's. The
+// package.json subpath export for "./task-exception" is orchestrator-wired alongside
+// the proof gates; until it lands, this namespace is the dimension's import path.
+export * as taskException from "./integrations/task-exception";
 export * as deviceRegistry from "./deviceRegistry";

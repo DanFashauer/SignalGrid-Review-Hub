@@ -22,7 +22,11 @@ export class FleetDMAdapter {
     return this.config?.enabled ?? false;
   }
 
-  private getHeaders(): HeadersInit {
+  // `Record<string, string>` rather than the DOM-lib `HeadersInit` alias: this is one
+  // of HeadersInit's member shapes (so every fetch call site is unchanged), and it
+  // keeps this module — and therefore the package root — typecheckable from programs
+  // compiled against the node lib alone, which do not declare `HeadersInit`.
+  private getHeaders(): Record<string, string> {
     if (!this.config?.apiToken) {
       throw new Error('FleetDM API token not configured');
     }

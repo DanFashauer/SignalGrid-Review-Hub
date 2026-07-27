@@ -109,6 +109,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Post-merge connector smoke evidence automation](POST_MERGE_CONNECTOR_SMOKE_EVIDENCE.md): explains the automatic Connector Emulator Smoke run and evidence manifest after merges to `SignalGrid_Alpha`.
 - [Validation commands](VALIDATION_COMMANDS.md): lists the standard install, typecheck, build, proof, unsafe-claim scan, and diff hygiene commands.
 - [CI and validation](CI_AND_VALIDATION.md): explains Review Hub CI, required local checks, docs sanity checks, and future branch-protection expectations.
+- [Live-sync loop](LIVE_SYNC_LOOP.md): keeps the owner's Mac MCP lane and the iOS EnterpriseShell building against current repo contracts — a deterministic sync manifest (`scripts/generate-sync-manifest.mjs`), a drift gate (`scripts/check-live-sync.mjs`, hard on manifest drift, report-only on real-hardware evidence staleness), and the owner's one-command evidence run (`verify:all --require-mcp --emit-evidence`).
 - [Review checklist](REVIEW_CHECKLIST.md): questions for reviewers, design partners, and advisors.
 
 

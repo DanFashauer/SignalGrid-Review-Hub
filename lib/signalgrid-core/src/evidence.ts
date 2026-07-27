@@ -2,6 +2,7 @@ import { canonicalJson, deterministicId, digest } from "./util";
 import type {
   BadgeBindingState,
   BaselineState,
+  BatteryHealthState,
   ChargeState,
   ComplianceState,
   CustodyState,
@@ -59,6 +60,7 @@ export function buildEvidence(
     workflowRiskTier: workflow.riskTier,
     custodyState: readCustody(latestByCategory),
     dockChargeState: readCharge(latestByCategory),
+    batteryHealth: readBatteryHealth(latestByCategory),
     tamperState: readTamper(latestByCategory),
     dockState: readDock(latestByCategory),
     baselineCompliance: readBaseline(latestByCategory),
@@ -195,6 +197,7 @@ const CUSTODY_STATES = [
 const CHARGE_STATES = ["charging", "charged", "low", "critical", "not_present"] as const;
 const TAMPER_STATES = ["none", "suspected", "confirmed", "sensor_unavailable"] as const;
 const DOCK_STATES = ["occupied", "empty", "reserved", "faulted", "offline"] as const;
+const BATTERY_HEALTH_STATES = ["healthy", "degraded", "failing"] as const;
 const BASELINE_STATES = ["aligned", "partial", "drifted", "not_assessed"] as const;
 const BADGE_STATES = ["present", "removed", "forced", "absent"] as const;
 
@@ -212,6 +215,10 @@ function readBadge(latestByCategory: LatestByCategory): BadgeBindingState {
 
 function readCharge(latestByCategory: LatestByCategory): ChargeState {
   return readEnum(latestByCategory, "charge_state", CHARGE_STATES) ?? "unknown";
+}
+
+function readBatteryHealth(latestByCategory: LatestByCategory): BatteryHealthState {
+  return readEnum(latestByCategory, "battery_health", BATTERY_HEALTH_STATES) ?? "unknown";
 }
 
 function readTamper(latestByCategory: LatestByCategory): TamperState {

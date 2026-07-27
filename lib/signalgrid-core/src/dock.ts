@@ -4,6 +4,7 @@ import type { Clock } from "./util";
 import {
   CoreError,
   type BadgeBindingState,
+  type BatteryHealthState,
   type ChargeState,
   type Connector,
   type ConnectorSyncRun,
@@ -32,6 +33,13 @@ export interface DockCustodyRecord {
   dockId: string;
   bayId: string;
   chargeState: ChargeState;
+  /**
+   * Battery HEALTH, optional: absent means the dock reported no health read,
+   * which normalizes to "unknown". Deliberately separate from `chargeState` —
+   * a dock that can only measure fill level has nothing to say here, and must
+   * not have "healthy" inferred on its behalf.
+   */
+  batteryHealth?: BatteryHealthState;
   dockState: DockState;
   custodyState: CustodyState;
   tamperState: TamperState;
@@ -84,6 +92,12 @@ export function runDockSync(
       { category: "tamper_state", value: record.tamperState },
       { category: "dock_state", value: record.dockState },
     ];
+    // Only docks that actually measure battery health report it. Absent stays
+    // absent: no signal is emitted, so evidence reads "unknown" rather than a
+    // fabricated "healthy".
+    if (record.batteryHealth !== undefined) {
+      pairs.push({ category: "battery_health", value: record.batteryHealth });
+    }
     // The reader case reports a badge-binding read when present.
     if (record.badgeBinding !== undefined) {
       pairs.push({ category: "badge_binding", value: record.badgeBinding });

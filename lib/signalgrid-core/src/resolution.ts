@@ -152,6 +152,29 @@ const DESCRIPTORS: Record<string, ResolutionDescriptor> = {
     transform: { dockChargeState: "charged" },
     hardwareOriented: true,
   },
+  BATTERY_FAILING: {
+    // `manual_only` with a null transform, and the pairing is the point.
+    //
+    // Every other battery/charge path has a transform because charging clears it.
+    // This one has none: no automated or worker-performed step changes a failing
+    // battery, so there is nothing honest to project. `simulateResolution` skips
+    // null transforms, so the simulation will correctly show this NOT resolving.
+    //
+    // It must also be `manual_only` rather than `requires_approval`, because
+    // `autoResolvable` is computed as "no manual step present" — a
+    // `requires_approval` step with no transform would report the plan as
+    // auto-resolvable while the simulation showed it resolving nothing. That
+    // contradiction is the same self-contradictory-verdict shape this repo has
+    // been closing elsewhere, so the invariant is asserted in the proof:
+    // transform === null if and only if manual_only.
+    baseClass: "manual_only",
+    workerAction:
+      "This device's battery can no longer hold a shift — charging will not fix it. Use a different device and hand this one in.",
+    operatorAction:
+      "Pull the device for battery replacement; it will keep failing on charge. Do not clear this by re-docking.",
+    transform: null,
+    hardwareOriented: false,
+  },
   TAMPER_SUSPECTED: {
     baseClass: "requires_approval",
     workerAction: "This device is flagged for a physical check — an operator will inspect it before it can be used.",
@@ -217,13 +240,58 @@ const DESCRIPTORS: Record<string, ResolutionDescriptor> = {
   },
 };
 
+/**
+ * The MINIMUM a gate needs to assert the transform/class invariant, and nothing
+ * more.
+ *
+ * An earlier version of this exported the descriptor objects themselves behind
+ * `ReadonlyArray<readonly [string, Readonly<ResolutionDescriptor>]>` and claimed
+ * in a comment that "the table stays private". That was false, and an
+ * adversarial review demonstrated it with no type casts at all: `Readonly<T>` is
+ * shallow and erased at runtime, so `entries[i][1].transform.dockChargeState =
+ * "low"` typechecks and mutates the live table. Flipping `BATTERY_FAILING` that
+ * way produced a plan reporting `autoResolvable: true` while its own simulation
+ * resolved nothing — the exact contradiction the invariant exists to prevent,
+ * reachable from any consumer, and AFTER the gate had already run.
+ *
+ * So this projects to primitives. There is no object here to reach through: a
+ * caller can copy these booleans, and copying them changes nothing.
+ */
+export interface ResolutionDescriptorShape {
+  reasonCode: string;
+  baseClass: ResolutionClass;
+  hasTransform: boolean;
+}
+
+export const RESOLUTION_DESCRIPTOR_SHAPES: readonly ResolutionDescriptorShape[] =
+  Object.freeze(
+    Object.entries(DESCRIPTORS).map(([reasonCode, d]) =>
+      Object.freeze({
+        reasonCode,
+        baseClass: d.baseClass,
+        hasTransform: d.transform !== null,
+      }),
+    ),
+  );
+
 export function buildResolutionPlan(
   decision: Decision,
   config: ResolutionConfig,
 ): ResolutionPlan {
   const steps: ResolutionStep[] = [];
   let order = 1;
+  // A failing battery SUPERSEDES a low one. Both reason codes fire on a device
+  // that is both flat and worn out, and the outcome is already correct
+  // (restrict, escalation) — but the worker-facing text was not: it still read
+  // "swap to a charged device, or dock this one before starting", which is
+  // precisely the charge-and-retry loop `BATTERY_FAILING` exists to end. The
+  // verdict was honest and the guidance contradicted it. Dropping the charge
+  // step is safe in one direction only: it removes advice, never a block.
+  const batteryFailing = decision.reasonCodes.includes("BATTERY_FAILING");
   for (const code of decision.reasonCodes) {
+    if (batteryFailing && code === "BATTERY_CRITICAL") {
+      continue;
+    }
     const descriptor = DESCRIPTORS[code];
     if (!descriptor) {
       continue;
@@ -272,7 +340,15 @@ export function simulateResolution(
 ): ResolutionSimulation {
   const applied: string[] = [];
   let projected: DecisionEvidence = { ...evidence };
+  // Same suppression as `buildResolutionPlan`, and it must be the same or the
+  // two disagree: the plan would omit the charge step while the simulation still
+  // projected a charge fix, so `appliedReasonCodes` would list a step no worker
+  // was ever given.
+  const batteryFailing = decision.reasonCodes.includes("BATTERY_FAILING");
   for (const code of decision.reasonCodes) {
+    if (batteryFailing && code === "BATTERY_CRITICAL") {
+      continue;
+    }
     const descriptor = DESCRIPTORS[code];
     if (!descriptor || descriptor.baseClass === "manual_only" || !descriptor.transform) {
       continue;

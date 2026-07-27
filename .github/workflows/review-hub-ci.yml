@@ -11,6 +11,20 @@ on:
       - SignalGrid_Alpha
   workflow_dispatch:
 
+# Supersede an in-flight run when a newer commit lands on the same ref, and say so.
+#
+# Without this, pushing three commits in half an hour left earlier runs to be abandoned
+# and reported as `failure` with no logs (404, because they never uploaded). That is
+# genuinely hard to tell apart from a real regression, and it cost a careful diagnosis:
+# the only thing that distinguished them was noticing the superset commit had passed the
+# same job. `cancel-in-progress` makes the outcome `cancelled` — an unambiguous status —
+# and stops paying for runs whose result nobody will read.
+#
+# Scoped per workflow AND per ref, so concurrent PRs never cancel each other.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -18,6 +32,10 @@ jobs:
   validation:
     name: Typecheck, build, and proof scaffold
     runs-on: ubuntu-latest
+    # Bounded so a regression that makes a proof HANG (an unbounded prototype walk
+    # against a Proxy returning a fresh prototype each call) fails red instead of
+    # silently consuming the default job timeout.
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -130,6 +148,44 @@ jobs:
       - name: Device-management-health / config-drift proof
         run: pnpm run proof:device-management-health
 
+      - name: Proof — link usability (associated vs usable)
+        run: pnpm run proof:link-usability
+
+      # The task plane joins the grid: WMS/task-system exceptions (short pick,
+      # wrong-aisle bin, assignment mismatch) as decision signals. The WMS stays
+      # system of record; SignalGrid consumes, decides, and routes.
+      - name: Proof — task exception (task-plane exceptions as grid signals)
+        run: pnpm run proof:task-exception
+
+      # Issue #136's portable work context: the context carries the WORK (tasks,
+      # exceptions, restrictions travel with the person); trust is re-earned per
+      # device. Three monotone invariants proven over the full matrix.
+      - name: Proof — work context (portable, descriptive, never permissive)
+        run: pnpm run proof:work-context
+
+      # Issue #136's handoff criterion + the warehouse release loop: exception →
+      # hold → the worker keeps working → fix posted → fix INDEPENDENTLY verified
+      # → released on a trusted device. A resolution posting is not verification.
+      - name: Proof — handoff simulation (exception-release loop)
+        run: pnpm run proof:handoff-sim
+
+      - name: Proof — verdict attestation (forged verdicts degrade)
+        run: pnpm run proof:verdict-attestation
+
+      - name: Guard-registry drift check
+        run: node scripts/check-guard-registries.mjs
+
+      # The Mac MCP lane and iOS shell build against this repo's contracts from
+      # OUTSIDE CI's reach. This gate hard-fails when contracts change without
+      # republishing the machine-readable sync manifest, and soft-reports when
+      # committed real-hardware evidence has gone stale — only the owner's
+      # hardware can refresh that, so staleness never blocks a commit.
+      - name: Live-sync manifest drift (Mac MCP + iOS instructions current)
+        run: node scripts/check-live-sync.mjs
+
+      - name: Docs↔proof figure guard
+        run: node scripts/check-proof-figures.mjs
+
       - name: PIM activation decision proof
         run: pnpm run proof:pim-activation
 
@@ -167,6 +223,28 @@ jobs:
 
       - name: Enterprise auth (OIDC/JWT) proof
         run: pnpm run proof:enterprise-auth
+
+      # Real cryptographic material, zero cost: a certified OIDC provider booted
+      # in-process mints genuine RS256/DPoP tokens over real HTTP, and every
+      # accept/reject decision runs through the production verifier. The fixture
+      # proof above shows the logic is right; this shows it is right against
+      # bytes SignalGrid did not fabricate.
+      - name: Live IdP proof (real OIDC provider, real DPoP, in-process)
+        run: pnpm run proof:live-idp
+
+      # The first browser-level gate: what a human actually sees. The suite's
+      # maiden run caught a real gap (a decision-evidence row the core carried
+      # and no console scenario ever rendered), so this layer has already paid
+      # for itself once.
+      # The GitHub runner ships no Playwright browser — the preinstalled Chromium
+      # this suite uses locally is a property of the dev sandbox, not of CI. The
+      # maiden CI run proved it: all 15 tests failed browser LAUNCH in <11ms
+      # while the same suite passed 15/15 locally. Install before running.
+      - name: Install Playwright Chromium for the E2E suite
+        run: pnpm --filter @workspace/scripts exec playwright install --with-deps chromium
+
+      - name: Browser E2E (review console, website, admin console)
+        run: pnpm run test:e2e
 
       - name: WebAuthn signature-verification proof
         run: pnpm run proof:webauthn-verify

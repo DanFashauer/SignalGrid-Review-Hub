@@ -59,3 +59,7 @@ Thumbs.db
 
 # generated Level 10 audit scorecards
 /artifacts/level-10/
+
+# Playwright E2E run artifacts (scripts/playwright.config.ts)
+/scripts/test-results/
+/scripts/playwright-report/

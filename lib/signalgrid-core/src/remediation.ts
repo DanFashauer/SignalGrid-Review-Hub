@@ -139,6 +139,14 @@ function mapReasonsToRemediation(
       case "TAMPER_SUSPECTED":
       case "TAMPER_SENSOR_UNAVAILABLE":
       case "BATTERY_CRITICAL":
+      // A FAILING battery routes here too, but note what it is NOT: it is not a
+      // `notify_security` event (nothing hostile happened) and it must not be
+      // silent. Before this case existed, `BATTERY_FAILING` fell through to
+      // `default: break` — so the one custody outcome that takes a device out of
+      // service produced no action record for the hardware owner, while the
+      // LESSER `BATTERY_CRITICAL` step-up produced one. A restrict that asks
+      // nobody to do anything is a device that quietly stays broken.
+      case "BATTERY_FAILING":
       case "DOCK_FAULTED":
       case "DOCK_OFFLINE":
       case "BADGE_REMOVED":

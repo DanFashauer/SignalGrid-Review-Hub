@@ -1,0 +1,15 @@
+{
+  "name": "@workspace/work-context",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@workspace/posture-composition": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:"
+  }
+}

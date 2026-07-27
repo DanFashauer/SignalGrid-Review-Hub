@@ -38,12 +38,13 @@ into device signals and marked with freshness:
 | --------------- | ------ |
 | `custody_state` | `checked_in`, `checked_out`, `overdue`, `exception`, `maintenance`, `unknown` |
 | `charge_state` | `charging`, `charged`, `low`, `critical`, `not_present`, `unknown` |
+| `battery_health` | `healthy`, `degraded`, `failing`, `unknown` — capacity, NOT fill level. Emitted only by docks that actually measure it; absent stays `unknown` rather than being inferred `healthy`. |
 | `tamper_state` | `none`, `suspected`, `confirmed`, `sensor_unavailable`, `unknown` |
 | `dock_state` | `occupied`, `empty`, `reserved`, `faulted`, `offline`, `unknown` |
 | `badge_binding` | `present`, `removed`, `forced`, `absent`, `unknown` — the reader case's person→device binding |
 
 These become part of the decision evidence (`custodyState`, `dockChargeState`,
-`tamperState`, `dockState`, `badgeBinding`). Absence of a dock signal is
+`batteryHealth`, `tamperState`, `dockState`, `badgeBinding`). Absence of a dock signal is
 `unknown` and never fabricates a healthy state; it simply adds no custody-based
 conclusion.
 
@@ -60,6 +61,7 @@ the active v1 and the stricter v2 draft):
 | Overdue return | `custodyState = overdue` | `restrict` | `CUSTODY_OVERDUE` |
 | Custody exception | `custodyState = exception` | `restrict` | `CUSTODY_EXCEPTION` |
 | Critical battery | `chargeState = critical` | `step_up` | `BATTERY_CRITICAL` |
+| Failing battery | `batteryHealth = failing` | `restrict` | `BATTERY_FAILING` |
 | Faulted dock | `dockState = faulted` | `restrict` | `DOCK_FAULTED` |
 | Offline dock | `dockState = offline` | `step_up` | `DOCK_OFFLINE` |
 

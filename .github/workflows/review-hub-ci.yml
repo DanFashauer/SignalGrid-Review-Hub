@@ -233,6 +233,47 @@ jobs:
       - name: Decision-latency pilot gate
         run: pnpm run bench:decision-latency
 
+  web-e2e:
+    name: Full-stack web E2E (Playwright, all consoles)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.28.1
+          run_install: false
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Boots the api-server + all five consoles and drives a real headless
+      # Chromium through them: the live-data consoles must reach the api-server
+      # and render its responses, and every seeded decision scenario must render
+      # the outcome + reason code the decision core actually returns.
+      # runs-on is linux-x64, so no native-binary swap is needed (run.sh only
+      # swaps on other hosts).
+      - name: Web E2E
+        run: ./e2e/run.sh
+
+      - name: E2E artifacts (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-e2e-results
+          path: |
+            e2e/test-results
+            e2e/screens
+          retention-days: 7
+
   docs-sanity:
     name: Required docs and unsafe-claim sanity
     runs-on: ubuntu-latest

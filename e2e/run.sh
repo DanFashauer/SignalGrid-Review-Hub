@@ -59,6 +59,11 @@ done
 # -- run Playwright ---------------------------------------------------------------
 cd "$ROOT/e2e"
 [ -d node_modules/@playwright ] || npm install >/dev/null 2>&1
-npx playwright install chromium >/dev/null 2>&1
+# On Linux (CI) also pull the browser's system libraries; on macOS they're built in.
+if [ "$OS" = "linux" ]; then
+  npx playwright install --with-deps chromium >/dev/null 2>&1 || npx playwright install chromium >/dev/null 2>&1
+else
+  npx playwright install chromium >/dev/null 2>&1
+fi
 echo "== run e2e =="
 npx playwright test

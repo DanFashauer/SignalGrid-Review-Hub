@@ -80,7 +80,7 @@ representative four-layer checklist, and prints its live figures so a stale quot
 catchable:
 
 ```
-figures=layers=4,declaredItems=4,coverageGaps=1,healStatuses=4,pairsToApplied=4,legalRoutesToApplied=1,defaultItems=6
+figures=layers=4,declaredItems=4,coverageGaps=1,healStatuses=4,pairsToApplied=4,legalRoutesToApplied=1,defaultItems=7
 ```
 
 The load-bearing assertions:
@@ -105,6 +105,29 @@ Run it directly:
 ```bash
 cd scripts && npx tsx ./src/self-audit-proof.ts    # proof:self-audit (56 checks)
 ```
+
+## Running it for real
+
+The engine is pure and the demo route serves a fixture, but the audit runs against
+REAL gate results too:
+
+```bash
+pnpm run self-audit:run           # runs the mapped proofs, prints plain-language health
+pnpm run self-audit:run --full    # also runs the heavy browser-screen check
+pnpm run self-audit:run --json    # machine output (plain + report + proposed heals)
+```
+
+`scripts/src/self-audit-run.ts` maps each checklist item's probe key to the actual
+gate/proof command that answers it (`proof:api-contract`, `proof:posture-composition`,
+`proof:grant-safety` for connector fail-closedness, `proof:task-exception`,
+`proof:handoff-sim`, `proof:work-context`, and the browser E2E under `--full`), runs
+them, and feeds the outcomes into the SAME engine and plain-language layer the admin
+screen uses. So the words an owner reads are backed by proofs that actually ran. It is
+fail-closed to the letter: a heavy check skipped without `--full`, or a probe with no
+command mapping, resolves to *Not checked* (never *Working*), and coverage is measured
+against the committed live-sync manifest so a contract dimension no item covers surfaces
+as its own attention line. The command exits non-zero unless everything is clear, so it
+can gate a pipeline.
 
 ## Public-safety boundaries
 

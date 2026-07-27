@@ -76,4 +76,14 @@ export const DEFAULT_CHECKLIST: readonly DeclaredItem[] = Object.freeze([
       "Re-run the handoff-release proof; restore the release law so a held task cannot be released on a single unverified signal.",
     covers: ["handoffSimRefusalCodes"],
   },
+  {
+    id: "api-work-context-continuity",
+    layer: "api_integration",
+    description: "A person's work follows them across devices, but trust is re-earned on each device — never carried as a grant.",
+    probeKey: "proof:work-context",
+    healable: true,
+    remediationHint:
+      "Re-run the portable work-context proof; restore the monotone invariants so a carried context can never widen access on a worse device.",
+    covers: ["workContextTrustCeilings"],
+  },
 ]);

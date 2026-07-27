@@ -87,7 +87,8 @@
     "proof:handoff-sim": "tsx ./src/handoff-sim-proof.ts",
     "sync:manifest": "node ../scripts/generate-sync-manifest.mjs",
     "proof:adaptive-proposals": "tsx ./src/adaptive-proposals-proof.ts",
-    "proof:self-audit": "tsx ./src/self-audit-proof.ts"
+    "proof:self-audit": "tsx ./src/self-audit-proof.ts",
+    "self-audit:run": "tsx ./src/self-audit-run.ts"
   },
   "dependencies": {
     "@workspace/app-workflows": "workspace:*",

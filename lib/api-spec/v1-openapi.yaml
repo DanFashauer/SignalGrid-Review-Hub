@@ -315,6 +315,101 @@ paths:
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  # ── Step-up completion (real, hardware-backed WebAuthn) ────────────────────
+  # The ONLY path that releases a held step_up action: enroll a credential,
+  # obtain a single-use challenge, sign it with a native user-verified gesture,
+  # and present the assertion for cryptographic verification. Nothing in any
+  # request body can set the released state; a failed/replayed assertion is a
+  # 403 with no plan. Credentials are tenant-scoped.
+  /v1/step-up/enroll/options:
+    post:
+      operationId: stepUpEnrollOptions
+      tags: [decisions]
+      summary: Mint a WebAuthn registration challenge for this identity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identityRef]
+              properties:
+                identityRef: { type: string }
+      responses:
+        "200": { description: challengeId + WebAuthn PublicKeyCredentialCreationOptions }
+        "400": { $ref: "#/components/responses/ValidationError" }
+
+  /v1/step-up/enroll/verify:
+    post:
+      operationId: stepUpEnrollVerify
+      tags: [decisions]
+      summary: Verify the registration attestation and store the credential
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identityRef, challengeId, response]
+              properties:
+                identityRef: { type: string }
+                challengeId: { type: string }
+                response: { type: object, description: WebAuthn registration response (clientDataJSON + attestationObject) }
+      responses:
+        "200": { description: Credential enrolled }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "403": { description: Attestation failed verification — fail closed, nothing stored }
+
+  /v1/step-up/challenge:
+    post:
+      operationId: stepUpChallenge
+      tags: [decisions]
+      summary: Mint a single-use authentication challenge for a pending step-up
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identityRef]
+              properties:
+                identityRef: { type: string }
+      responses:
+        "200": { description: challengeId + WebAuthn PublicKeyCredentialRequestOptions (userVerification required) }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { description: No enrolled credential for this identity in this tenant — enroll first (fail closed) }
+
+  /v1/app-workflows/complete-step-up:
+    post:
+      operationId: completeAppStepUp
+      tags: [decisions]
+      summary: Release a held step_up plan — requires a verified WebAuthn assertion
+      description: >-
+        Verifies the signed assertion (single-use challenge, tenant+identity-bound
+        credential, user-verification flag required), then re-evaluates the decision
+        fresh and re-cuts the plan with the step-up satisfied. A valid assertion can
+        never upgrade a restrict or deny — release applies only when the CURRENT
+        outcome is step_up.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [integrationId, identityRef, deviceRef, challengeId, assertion]
+              properties:
+                integrationId: { type: string }
+                identityRef: { type: string }
+                deviceRef: { type: string }
+                challengeId: { type: string }
+                assertion: { type: object, description: WebAuthn authentication response (clientDataJSON + authenticatorData + signature) }
+                requestContext: { type: object, additionalProperties: { type: string } }
+      responses:
+        "200": { description: Decision + re-cut plan + stepUp verification record (released only if the current outcome was step_up) }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "403": { description: Assertion failed verification (bad signature, replayed/expired challenge, missing user-verification) — no plan returned }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   # ── Control plane (public management surface; see docs/DEPLOYMENT_MODELS.md) ──
   # The cloud half of the hybrid architecture: manages tenants/sites/fleet,
   # distributes policy bundles DOWN, ingests telemetry UP. Deterministic

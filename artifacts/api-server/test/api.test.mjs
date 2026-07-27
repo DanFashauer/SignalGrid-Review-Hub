@@ -73,6 +73,79 @@ async function waitForReady(timeoutMs = 15000) {
   return false;
 }
 
+// ── WebAuthn fixture crypto (mirrors scripts/src/webauthn-verify-proof.ts) ──
+// A GENUINE ES256 ceremony: real P-256 keypair, real DER signature over
+// authenticatorData ‖ SHA-256(clientDataJSON), UV flag set. Software-keyed, but
+// the server code path exercised is the true hardware path — no stand-ins.
+import { createHash, createSign, generateKeyPairSync, randomBytes } from "node:crypto";
+
+function cborUint(n) {
+  if (n < 24) return Buffer.from([n]);
+  if (n < 256) return Buffer.from([0x18, n]);
+  if (n < 65536) { const b = Buffer.alloc(3); b[0] = 0x19; b.writeUInt16BE(n, 1); return b; }
+  const b = Buffer.alloc(5); b[0] = 0x1a; b.writeUInt32BE(n, 1); return b;
+}
+function cborInt(v) { if (v >= 0) return cborUint(v); const u = cborUint(-1 - v); u[0] = (u[0] & 0x1f) | 0x20; return u; }
+function cborBytes(buf) { const h = cborUint(buf.length); h[0] = (h[0] & 0x1f) | 0x40; return Buffer.concat([h, buf]); }
+function cborText(s) { const b = Buffer.from(s, "utf8"); const h = cborUint(b.length); h[0] = (h[0] & 0x1f) | 0x60; return Buffer.concat([h, b]); }
+function cborMap(pairs) {
+  const h = cborUint(pairs.length); h[0] = (h[0] & 0x1f) | 0xa0;
+  return Buffer.concat([h, ...pairs.map(([k, v]) => Buffer.concat([typeof k === "number" ? cborInt(k) : cborText(k), v]))]);
+}
+const sha256 = (b) => createHash("sha256").update(b).digest();
+
+function makeStepUpAuthenticator(rpId, origin) {
+  const { publicKey, privateKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
+  const jwk = publicKey.export({ format: "jwk" });
+  const cose = cborMap([
+    [1, cborInt(2)], [3, cborInt(-7)], [-1, cborInt(1)],
+    [-2, cborBytes(Buffer.from(jwk.x, "base64url"))],
+    [-3, cborBytes(Buffer.from(jwk.y, "base64url"))],
+  ]);
+  const credId = randomBytes(16);
+  const credIdStr = credId.toString("base64url");
+  const authData = (flags, signCount, attested) => {
+    const head = Buffer.alloc(37);
+    sha256(Buffer.from(rpId, "utf8")).copy(head, 0);
+    head.writeUInt8(flags, 32);
+    head.writeUInt32BE(signCount, 33);
+    return attested ? Buffer.concat([head, attested]) : head;
+  };
+  const clientData = (type, challenge) => Buffer.from(JSON.stringify({ type, challenge, origin }), "utf8");
+  return {
+    credIdStr,
+    registration(challenge) {
+      const credIdLen = Buffer.alloc(2); credIdLen.writeUInt16BE(credId.length, 0);
+      const attested = Buffer.concat([Buffer.alloc(16), credIdLen, credId, cose]);
+      const attObj = cborMap([
+        ["fmt", cborText("none")], ["attStmt", cborMap([])],
+        ["authData", cborBytes(authData(0x45, 0, attested))], // UP+UV+AT
+      ]);
+      return {
+        id: credIdStr, rawId: credIdStr, type: "public-key",
+        response: {
+          clientDataJSON: clientData("webauthn.create", challenge).toString("base64url"),
+          attestationObject: attObj.toString("base64url"),
+        },
+      };
+    },
+    assertion(challenge, { signCount = 1, tamper = false } = {}) {
+      const cd = clientData("webauthn.get", challenge);
+      const ad = authData(0x05, signCount); // UP+UV
+      let sig = createSign("SHA256").update(Buffer.concat([ad, sha256(cd)])).sign(privateKey);
+      if (tamper) sig = Buffer.concat([sig.subarray(0, sig.length - 1), Buffer.from([sig[sig.length - 1] ^ 0xff])]);
+      return {
+        id: credIdStr, rawId: credIdStr, type: "public-key",
+        response: {
+          clientDataJSON: cd.toString("base64url"),
+          authenticatorData: ad.toString("base64url"),
+          signature: sig.toString("base64url"),
+        },
+      };
+    },
+  };
+}
+
 async function run() {
   // ── health + discovery ──────────────────────────────────────────────────
   const health = await req("GET", "/healthz");
@@ -510,6 +583,91 @@ async function run() {
   // blocked case rather than a shape-fragile all-fallbacks predicate.)
   check("app resilience blocks a PHI app in outage with no safety nets (fail-safe)", phiBlocked?.mode === "blocked_no_fallback" && phiBlocked?.canProceed === false && phiBlocked?.requiredSafetyNets?.length === 0);
   check("app resilience surfaces a per-app reason", resApps.length > 0 && resApps.every((a) => typeof a.reason === "string" && a.reason.length > 0));
+
+  // ── step-up completion: real WebAuthn ceremony, fail-closed everywhere ────
+  // The one path that may release a held step_up action: enroll → challenge →
+  // genuinely-signed ES256 assertion (UV set) → verify → re-plan. Everything
+  // else — no enrollment, tampered signature, replayed challenge, request-body
+  // flags, cross-tenant credentials — must hold or 403, never release.
+  const authenticator = makeStepUpAuthenticator("localhost", "http://localhost:3000");
+  const suIdentity = "nurse.baseline_drift";
+  const suDevice = "ipad-ward-06";
+
+  // Fail-closed before enrollment: no credential ⇒ no challenge.
+  const noCred = await req("POST", "/v1/step-up/challenge", {
+    token: KEYS.operator, body: { identityRef: suIdentity },
+  });
+  check("step-up challenge without enrollment → 409 (fail closed)", noCred.status === 409);
+
+  // Enroll.
+  const enrollOpts = await req("POST", "/v1/step-up/enroll/options", {
+    token: KEYS.operator, body: { identityRef: suIdentity },
+  });
+  check("step-up enroll options → 200 with challenge", enrollOpts.status === 200 && typeof enrollOpts.json?.challengeId === "string" && typeof enrollOpts.json?.publicKey?.challenge === "string");
+  const enrollVerify = await req("POST", "/v1/step-up/enroll/verify", {
+    token: KEYS.operator,
+    body: {
+      identityRef: suIdentity,
+      challengeId: enrollOpts.json.challengeId,
+      response: authenticator.registration(enrollOpts.json.publicKey.challenge),
+    },
+  });
+  check("step-up enrollment verifies a genuine attestation", enrollVerify.status === 200 && enrollVerify.json?.enrolled === true);
+
+  // The evaluate route must NEVER release from a request flag, even enrolled.
+  const flagSmuggled = await req("POST", "/v1/app-workflows/evaluate", {
+    token: KEYS.operator,
+    body: { integrationId: "bcma", identityRef: suIdentity, deviceRef: suDevice, stepUpSatisfied: true },
+  });
+  check("evaluate ignores request-body stepUpSatisfied (still held)",
+    flagSmuggled.json?.decision?.outcome === "step_up" &&
+    flagSmuggled.json?.plan?.actions?.find((a) => a.key === "controlled.administer")?.disposition === "step_up");
+
+  // Tampered signature → 403, and no plan escapes with the error.
+  const chalBad = await req("POST", "/v1/step-up/challenge", { token: KEYS.operator, body: { identityRef: suIdentity } });
+  const tampered = await req("POST", "/v1/app-workflows/complete-step-up", {
+    token: KEYS.operator,
+    body: {
+      integrationId: "bcma", identityRef: suIdentity, deviceRef: suDevice,
+      challengeId: chalBad.json.challengeId,
+      assertion: authenticator.assertion(chalBad.json.publicKey.challenge, { tamper: true }),
+    },
+  });
+  check("tampered assertion → 403 with no plan", tampered.status === 403 && tampered.json?.plan === undefined);
+
+  // The genuine ceremony releases the held action.
+  const chalGood = await req("POST", "/v1/step-up/challenge", { token: KEYS.operator, body: { identityRef: suIdentity } });
+  check("step-up auth challenge → 200 (enrolled)", chalGood.status === 200 && typeof chalGood.json?.challengeId === "string");
+  const goodAssertion = authenticator.assertion(chalGood.json.publicKey.challenge, { signCount: 2 });
+  const completed = await req("POST", "/v1/app-workflows/complete-step-up", {
+    token: KEYS.operator,
+    body: {
+      integrationId: "bcma", identityRef: suIdentity, deviceRef: suDevice,
+      challengeId: chalGood.json.challengeId, assertion: goodAssertion,
+    },
+  });
+  check("verified assertion releases the held step_up plan",
+    completed.status === 200 && completed.json?.stepUp?.released === true &&
+    completed.json?.plan?.mode !== "step_up" &&
+    completed.json?.plan?.actions?.find((a) => a.key === "controlled.administer")?.disposition !== "step_up");
+  check("completion reports the webauthn method + credential", completed.json?.stepUp?.method === "webauthn" && typeof completed.json?.stepUp?.credentialId === "string");
+
+  // Replay: the same challenge is single-use.
+  const replay = await req("POST", "/v1/app-workflows/complete-step-up", {
+    token: KEYS.operator,
+    body: {
+      integrationId: "bcma", identityRef: suIdentity, deviceRef: suDevice,
+      challengeId: chalGood.json.challengeId, assertion: goodAssertion,
+    },
+  });
+  check("replayed challenge → 403 (single-use)", replay.status === 403);
+
+  // Cross-tenant isolation: the credential lives under northwind's tenant key;
+  // another tenant's token sees no enrollment at all.
+  const stepUpCrossTenant = await req("POST", "/v1/step-up/challenge", {
+    token: KEYS.atlas, body: { identityRef: suIdentity },
+  });
+  check("step-up credentials are tenant-scoped (other tenant → 409)", stepUpCrossTenant.status === 409);
 
   // ── transport hygiene ───────────────────────────────────────────────────
   check("rate-limit headers present", allow.headers.get("ratelimit-limit") !== null);

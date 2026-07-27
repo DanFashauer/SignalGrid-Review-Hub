@@ -186,6 +186,9 @@ importers:
       '@workspace/signalgrid-simulator':
         specifier: workspace:*
         version: link:../../lib/signalgrid-simulator
+      '@workspace/webauthn':
+        specifier: workspace:*
+        version: link:../../lib/webauthn
       cors:
         specifier: ^2.8.6
         version: 2.8.6

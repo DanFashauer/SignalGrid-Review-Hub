@@ -1,8 +1,9 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { CoreError, verifySnapshot, type EvaluateRequest } from "@workspace/signalgrid-core";
 import { getDecisionStore, getSessionStore, type Session } from "@workspace/persistence";
 import { listAppIntegrations, findAppIntegration, planAppSession } from "@workspace/app-workflows";
+import { webauthn, webauthnStore } from "@workspace/webauthn";
 import { core, DEMO_KEYS } from "../lib/core";
 import { decisionsTotal } from "../lib/metrics";
 import { requireTenantContext } from "../middlewares/context";
@@ -313,13 +314,12 @@ router.post("/v1/app-workflows/evaluate", (req: Request, res: Response) => {
     throw new CoreError("not_found", `Unknown app integration '${integrationId}'.`, 404);
   }
   // The app's session maps to the integration's decision-core workflow. Return
-  // the plan AS DECIDED — a `step_up` keeps its high-assurance actions held. We
-  // deliberately do NOT release held actions from this product API on a request-
-  // supplied signal: releasing a step-up requires a real hardware-backed WebAuthn
-  // assertion (the `@workspace/webauthn` path), which a public-safe fixture can't
-  // genuinely provide, so we don't ship a stand-in that would be a bypassable
-  // gate. Step-up COMPLETION is a clearly-labeled client-side SIMULATION in the
-  // demo UI (the pure `completeAppStepUp` helper), never a server security control.
+  // the plan AS DECIDED — a `step_up` keeps its high-assurance actions held. This
+  // route NEVER releases held actions on a request-supplied signal (a
+  // `stepUpSatisfied` in the body is not read). The one release path is
+  // POST /v1/app-workflows/complete-step-up below: a real WebAuthn assertion,
+  // cryptographically verified against a credential enrolled for this tenant +
+  // identity, with user-verification required.
   const evalReq = parseEvaluate({ ...body, workflowKey: integration.workflowKey });
   const decision = core.evaluate(token(req), evalReq);
   const plan = planAppSession({
@@ -328,6 +328,161 @@ router.post("/v1/app-workflows/evaluate", (req: Request, res: Response) => {
     reasonCodes: decision.reasonCodes,
   });
   res.json(envelope(req, { decision, plan }));
+});
+
+// ── Step-up completion (real, hardware-backed) ─────────────────────────────────
+//
+// Releasing a held `step_up` action is a WebAuthn ceremony, never a request flag:
+// enroll (registration) → challenge → native gesture signs it → cryptographic
+// verify (`@workspace/webauthn`, user-verification REQUIRED) → only then is the
+// plan re-cut with `stepUpSatisfied: true`. The flag is derived server-side from
+// the verified assertion; nothing in the request body can set it. A failed or
+// replayed assertion is a 403 with NO plan — fail closed.
+//
+// Credentials are stored under `<tenantId>:<identityRef>`, so a credential
+// enrolled in one tenant can never satisfy a step-up in another.
+
+const STEP_UP_CHALLENGE_TTL_MS = 60_000;
+
+function webauthnUserId(req: Request, identityRef: string): string {
+  // Tenant from the authenticated token, never from the body — same invariant as
+  // every other /v1 route.
+  return `${core.context(token(req)).tenant.id}:${identityRef}`;
+}
+
+function requireString(body: Record<string, unknown>, key: string): string {
+  const v = body[key];
+  if (typeof v !== "string" || v.length === 0) {
+    throw new CoreError("validation", `${key} is required.`, 400);
+  }
+  return v;
+}
+
+// 1) Enrollment options — mint a registration challenge for this identity.
+router.post("/v1/step-up/enroll/options", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const identityRef = requireString(body, "identityRef");
+    const userId = webauthnUserId(req, identityRef);
+    const options = await webauthn.generateRegistrationOptions(userId, identityRef, identityRef);
+    // The lib persists the challenge under an id the caller must present at
+    // verify time; mint and bind our own so the round-trip is explicit.
+    const challengeId = randomBytes(16).toString("base64url");
+    await webauthnStore.saveChallenge(challengeId, {
+      challenge: options.challenge,
+      expiresAt: new Date(Date.now() + STEP_UP_CHALLENGE_TTL_MS).toISOString(),
+      purpose: "registration",
+      userId,
+    });
+    res.json(envelope(req, { challengeId, publicKey: options }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 2) Enrollment verify — store the credential iff the attestation verifies.
+router.post("/v1/step-up/enroll/verify", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const identityRef = requireString(body, "identityRef");
+    const challengeId = requireString(body, "challengeId");
+    const response = body["response"];
+    if (!response || typeof response !== "object") {
+      throw new CoreError("validation", "response (WebAuthn registration) is required.", 400);
+    }
+    const userId = webauthnUserId(req, identityRef);
+    const result = await webauthn.verifyRegistration(userId, challengeId, response as never);
+    if (!result.success) {
+      throw new CoreError("forbidden", `Enrollment rejected: ${result.error ?? "verification failed"}.`, 403);
+    }
+    res.json(envelope(req, { enrolled: true, credentialId: result.credentialId }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 3) Authentication challenge for a pending step-up.
+router.post("/v1/step-up/challenge", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const identityRef = requireString(body, "identityRef");
+    const userId = webauthnUserId(req, identityRef);
+    // Fail closed: no enrolled credential ⇒ no challenge ⇒ nothing to sign. The
+    // caller must enroll first; we never fall back to a weaker completion path.
+    const enrolled = await webauthnStore.hasWebAuthnCredentials(userId);
+    if (!enrolled) {
+      throw new CoreError("forbidden", "No enrolled step-up credential for this identity. Enroll first.", 409);
+    }
+    const options = await webauthn.generateAuthenticationOptions(userId);
+    const challengeId = randomBytes(16).toString("base64url");
+    await webauthnStore.saveChallenge(challengeId, {
+      challenge: options.challenge,
+      expiresAt: new Date(Date.now() + STEP_UP_CHALLENGE_TTL_MS).toISOString(),
+      purpose: "authentication",
+      userId,
+    });
+    res.json(envelope(req, { challengeId, publicKey: options }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 4) Complete: verify the signed assertion, then — and only then — re-cut the
+//    plan with the step-up satisfied.
+router.post("/v1/app-workflows/complete-step-up", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const integrationId = requireString(body, "integrationId");
+    const identityRef = requireString(body, "identityRef");
+    const challengeId = requireString(body, "challengeId");
+    const assertion = body["assertion"];
+    if (!assertion || typeof assertion !== "object") {
+      throw new CoreError("validation", "assertion (WebAuthn authentication) is required.", 400);
+    }
+    const integration = findAppIntegration(integrationId);
+    if (!integration) {
+      throw new CoreError("not_found", `Unknown app integration '${integrationId}'.`, 404);
+    }
+
+    // The cryptographic gate. Single-use challenge (fetched-and-deleted by the
+    // lib), purpose- and user-bound, signature verified against the enrolled
+    // public key, user-verification flag REQUIRED. Any failure is a 403 with no
+    // plan attached.
+    const userId = webauthnUserId(req, identityRef);
+    const verification = await webauthn.verifyAuthentication(userId, challengeId, assertion as never);
+    if (!verification.success) {
+      throw new CoreError("forbidden", `Step-up assertion rejected: ${verification.error ?? "verification failed"}.`, 403);
+    }
+
+    // Re-evaluate the decision fresh — the release applies to the CURRENT
+    // posture, not the one from when the step-up was requested. If posture has
+    // degraded past step_up (restrict/deny), the verified gesture releases
+    // nothing: planAppSession only honors stepUpSatisfied when the outcome is
+    // step_up, so a valid assertion can never upgrade a restrict or deny.
+    const evalReq = parseEvaluate({ ...body, workflowKey: integration.workflowKey });
+    const decision = core.evaluate(token(req), evalReq);
+    const released = decision.outcome === "step_up";
+    const plan = planAppSession({
+      integration,
+      outcome: decision.outcome,
+      reasonCodes: decision.reasonCodes,
+      stepUpSatisfied: released,
+    });
+    res.json(
+      envelope(req, {
+        decision,
+        plan,
+        stepUp: {
+          released,
+          method: "webauthn",
+          credentialId: verification.credentialId,
+          verifiedAt: verification.timestamp,
+        },
+      }),
+    );
+  } catch (err) {
+    next(err);
+  }
 });
 
 export default router;

@@ -131,10 +131,6 @@ overrides:
 importers:
 
   .:
-    dependencies:
-      '@esbuild/darwin-arm64':
-        specifier: 0.27.3
-        version: 0.27.3
     devDependencies:
       prettier:
         specifier: ^3.8.3
@@ -1785,12 +1781,6 @@ packages:
 
   '@date-fns/tz@1.4.1':
     resolution: {integrity: sha512-P5LUNhtbj6YfI3iJjw5EL9eUAG6OitD0W3fWQcpQjDRc/QIsL0tRNuO1PcDvPccWL1fSTXXdE1ds+l95DV/OFA==}
-
-  '@esbuild/darwin-arm64@0.27.3':
-    resolution: {integrity: sha512-Re491k7ByTVRy0t3EKWajdLIr0gz2kKKfzafkth4Q8A5n1xTHrkqZgLLjFEHVD+AXdUGgQMq+Godfq45mGpCKg==}
-    engines: {node: '>=18'}
-    cpu: [arm64]
-    os: [darwin]
 
   '@esbuild/linux-x64@0.27.3':
     resolution: {integrity: sha512-Czi8yzXUWIQYAtL/2y6vogER8pvcsOsk5cpwL4Gk5nJqH5UZiVByIY8Eorm5R13gq+DQKYg0+JyQoytLQas4dA==}
@@ -4370,8 +4360,6 @@ snapshots:
       commander: 14.0.3
 
   '@date-fns/tz@1.4.1': {}
-
-  '@esbuild/darwin-arm64@0.27.3': {}
 
   '@esbuild/linux-x64@0.27.3':
     optional: true

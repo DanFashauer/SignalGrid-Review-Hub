@@ -63,3 +63,6 @@ Thumbs.db
 # Playwright E2E run artifacts (scripts/playwright.config.ts)
 /scripts/test-results/
 /scripts/playwright-report/
+
+# Self-audit real-run status (one machine's run; never the canonical repo state)
+artifacts/self-audit/

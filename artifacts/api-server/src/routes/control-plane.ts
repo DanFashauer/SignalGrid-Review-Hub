@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { Router, type IRouter } from "express";
 import { ControlPlane, type TelemetryBatch } from "@workspace/control-plane";
 import {
@@ -196,12 +198,31 @@ const SELF_AUDIT_DEMO_PROBES: Record<string, ProbeResult> = Object.fromEntries(
 );
 
 router.get("/cp/v1/self-audit", (_req, res) => {
+  // Prefer a REAL run if an operator has emitted one (`pnpm run self-audit:run
+  // --emit` writes artifacts/self-audit/status.json). It is honestly labeled
+  // source:"real-run" with the commit it ran at. Absent that, serve the
+  // deterministic fixture snapshot, labeled source:"fixture" — never a real
+  // claim the demo cannot back.
+  const statusPath = resolve(process.cwd(), "artifacts/self-audit/status.json");
+  if (existsSync(statusPath)) {
+    try {
+      const real = JSON.parse(readFileSync(statusPath, "utf8"));
+      res.json({
+        note: "Last real self-audit run (an operator ran the gates). 'plain' is the administrator view; a heal is only ever proposed, never applied, without a human approval.",
+        ...real,
+      });
+      return;
+    } catch {
+      // Fall through to the fixture rather than serving a malformed real file.
+    }
+  }
   const checklist = deriveChecklist([...DEFAULT_CHECKLIST], SELF_AUDIT_INVENTORY);
   const report = runAudit(checklist, SELF_AUDIT_DEMO_PROBES);
   const heals = proposeHeals(report);
   const plain = summarizePlain(report, heals);
   res.json({
-    note: "Fixture self-audit snapshot — deterministic, no live gate runs in this demo. 'plain' is the administrator view; 'report' is the machine detail. A heal is only ever proposed, never applied, without a human approval.",
+    source: "fixture",
+    note: "Fixture self-audit snapshot — deterministic, no live gate runs in this demo. Run `pnpm run self-audit:run --emit` to serve a real run instead. A heal is only ever proposed, never applied, without a human approval.",
     plain,
     report,
     proposedHeals: heals,

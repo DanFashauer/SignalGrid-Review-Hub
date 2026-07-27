@@ -30,6 +30,13 @@ export function SystemHealth() {
         <p className="mt-1 text-sm text-slate-400">
           A plain-language read on whether the whole system is working — and anything that needs you.
         </p>
+        {audit.data && (
+          <p className="mt-2 text-xs text-slate-500">
+            {audit.data.source === "real-run"
+              ? `Last real check${audit.data.generatedAtRef ? ` at ${audit.data.generatedAtRef}` : ""}${audit.data.heavyChecksRan === false ? " (screens not re-checked)" : ""}.`
+              : "Demo snapshot — run the health check to see live results."}
+          </p>
+        )}
       </div>
 
       {audit.isLoading && <p className="text-slate-400">Checking…</p>}

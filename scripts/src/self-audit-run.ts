@@ -17,7 +17,7 @@
 // Run:  cd scripts && npx tsx ./src/self-audit-run.ts [--full] [--json]
 
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -32,6 +32,7 @@ import {
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const full = process.argv.includes("--full");
 const asJson = process.argv.includes("--json");
+const emit = process.argv.includes("--emit");
 
 /** How each checklist probe key is answered by a real command. A probe marked
  *  `heavy` is skipped unless --full (and reported `unknown`, fail-closed). A probe
@@ -120,6 +121,31 @@ if (asJson) {
   if (!full) {
     console.log(`\n(Heavy checks skipped. Re-run with --full to verify the browser screens too.)`);
   }
+}
+
+// --emit writes a public-safe status file the admin route can serve as the LAST
+// REAL run (instead of the demo fixture). Deliberately public-safe: plain-language
+// summary + the machine report + the short commit it was generated at + whether the
+// heavy check ran — no secrets, no hostnames, no timestamps (git dates the file).
+// The file is gitignored: it reflects one machine's run, so it is never committed as
+// if it were the repo's canonical state.
+if (emit) {
+  const headRef = (() => {
+    const r = spawnSync("git", ["rev-parse", "--short", "HEAD"], { cwd: repoRoot, encoding: "utf8" });
+    return r.status === 0 ? r.stdout.trim() : "unknown";
+  })();
+  const outDir = resolve(repoRoot, "artifacts/self-audit");
+  mkdirSync(outDir, { recursive: true });
+  const body = {
+    source: "real-run" as const,
+    generatedAtRef: headRef,
+    heavyChecksRan: full,
+    plain,
+    report,
+    proposedHeals: heals,
+  };
+  writeFileSync(resolve(outDir, "status.json"), `${JSON.stringify(body, null, 2)}\n`);
+  if (!asJson) console.log(`\nWrote artifacts/self-audit/status.json (real run at ${headRef}).`);
 }
 
 // Exit non-zero if anything needs attention, so this can gate a pipeline.

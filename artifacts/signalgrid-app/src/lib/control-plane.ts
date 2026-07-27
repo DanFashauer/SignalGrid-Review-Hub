@@ -84,6 +84,12 @@ export interface SelfAuditPlain {
 }
 export interface SelfAuditResp {
   note: string;
+  /** "real-run" when an operator emitted a real gate run; "fixture" for the demo snapshot. */
+  source?: "real-run" | "fixture";
+  /** The short commit a real run was generated at (present only for real runs). */
+  generatedAtRef?: string;
+  /** Whether the heavy browser check ran in that real run. */
+  heavyChecksRan?: boolean;
   plain: SelfAuditPlain;
   report: unknown;
   proposedHeals: unknown[];

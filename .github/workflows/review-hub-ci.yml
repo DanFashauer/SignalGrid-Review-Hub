@@ -181,6 +181,13 @@ jobs:
       - name: Proof — self-audit (fail-closed checklist, governed self-healing)
         run: pnpm run proof:self-audit
 
+      # SLO / error-budget reliability for the decision plane. Latency and
+      # availability carry error budgets; fail-closed integrity is zero-tolerance —
+      # one fail-open exhausts it, so reliability can never be bought at the cost of
+      # the fabric's core promise.
+      - name: Proof — reliability (SLO/error-budget, fail-closed has no budget)
+        run: pnpm run proof:reliability
+
       - name: Proof — verdict attestation (forged verdicts degrade)
         run: pnpm run proof:verdict-attestation
 

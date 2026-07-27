@@ -477,6 +477,15 @@ async function run() {
   check("self-audit plain lines never leak an internal status enum word",
     !/\b(healthy|drifted|broken|unknown)\b/.test((selfAudit.json?.plain?.lines ?? []).map((l) => `${l.state} ${l.sentence}`).join(" ")));
 
+  // ── reliability: SLO / error-budget for the decision plane ───────────────
+  const reliability = await req("GET", "/cp/v1/reliability");
+  check("reliability responds 200 with plain + report", reliability.status === 200 && !!reliability.json?.plain && !!reliability.json?.report);
+  check("reliability healthy fixture is on track", reliability.json?.plain?.allOnTrack === true && reliability.json?.plain?.headline === "Reliability is on track.");
+  check("reliability includes the zero-tolerance fail-closed-integrity SLO with no budget",
+    (reliability.json?.report?.budgets ?? []).some((b) => b.slo?.id === "fail-closed-integrity" && b.slo?.zeroTolerance === true && b.budgetEvents === 0));
+  check("reliability plain lines never leak the raw status enum",
+    !/\b(healthy|at_risk|exhausted)\b/.test((reliability.json?.plain?.lines ?? []).map((l) => l.state).join(" ")));
+
   // ── build-the-grid control-plane surface (decision-fabric layer, live) ───
   const coverage = await req("GET", "/cp/v1/grid/coverage");
   check("grid coverage responds 200", coverage.status === 200);

@@ -21,6 +21,11 @@ import {
   summarizePlain,
   type ProbeResult,
 } from "@workspace/self-audit";
+import {
+  computeReliability,
+  summarizeReliability,
+  type DecisionRecord,
+} from "@workspace/reliability";
 
 /**
  * `/cp/v1/*` — the SaaS **control-plane** surface (management, not decisions).
@@ -226,6 +231,26 @@ router.get("/cp/v1/self-audit", (_req, res) => {
     plain,
     report,
     proposedHeals: heals,
+  });
+});
+
+// ── Reliability: SLOs and error budgets for the decision plane ──────────────────
+// A deterministic fixture window of decision outcomes: a healthy demo — fast,
+// available, and (of course) zero fail-open breaches. Public-safe counts only.
+const RELIABILITY_DEMO_WINDOW: DecisionRecord[] = Array.from({ length: 2000 }, (_, i) => ({
+  produced: true,
+  // A realistic spread well under the 50 ms target; a couple near the edge.
+  latencyMs: 8 + (i % 20),
+  failedOpen: false,
+}));
+
+router.get("/cp/v1/reliability", (_req, res) => {
+  const report = computeReliability(RELIABILITY_DEMO_WINDOW);
+  const plain = summarizeReliability(report);
+  res.json({
+    note: "Fixture SLO / error-budget snapshot over a deterministic window of decision outcomes. Latency and availability carry error budgets; fail-closed integrity is zero-tolerance — one fail-open exhausts it and can never be bought back.",
+    plain,
+    report,
   });
 });
 

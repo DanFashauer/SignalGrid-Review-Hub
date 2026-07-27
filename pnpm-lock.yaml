@@ -168,6 +168,9 @@ importers:
       '@workspace/recommendations':
         specifier: workspace:*
         version: link:../../lib/recommendations
+      '@workspace/reliability':
+        specifier: workspace:*
+        version: link:../../lib/reliability
       '@workspace/room-sim':
         specifier: workspace:*
         version: link:../../lib/room-sim
@@ -1585,6 +1588,12 @@ importers:
         specifier: 'catalog:'
         version: 25.6.2
 
+  lib/reliability:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.6.2
+
   lib/room-sim:
     dependencies:
       '@workspace/orchestration':
@@ -1707,6 +1716,9 @@ importers:
       '@workspace/recommendations':
         specifier: workspace:*
         version: link:../lib/recommendations
+      '@workspace/reliability':
+        specifier: workspace:*
+        version: link:../lib/reliability
       '@workspace/room-sim':
         specifier: workspace:*
         version: link:../lib/room-sim

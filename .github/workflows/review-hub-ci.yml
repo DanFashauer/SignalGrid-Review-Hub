@@ -175,6 +175,12 @@ jobs:
       - name: Proof — adaptive proposals (governed lifecycle, no self-activation)
         run: pnpm run proof:adaptive-proposals
 
+      # The self-aware, self-healing checklist over backend/frontend/API contracts:
+      # fail-closed status, coverage-gap self-reporting, and a heal that cannot
+      # apply itself — the same human-gate invariant as adaptive-proposals.
+      - name: Proof — self-audit (fail-closed checklist, governed self-healing)
+        run: pnpm run proof:self-audit
+
       - name: Proof — verdict attestation (forged verdicts degrade)
         run: pnpm run proof:verdict-attestation
 

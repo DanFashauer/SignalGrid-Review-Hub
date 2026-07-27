@@ -108,7 +108,8 @@
     "proof:handoff-sim": "pnpm --filter @workspace/scripts run proof:handoff-sim",
     "sync:manifest": "node scripts/generate-sync-manifest.mjs",
     "check:live-sync": "node scripts/check-live-sync.mjs",
-    "proof:adaptive-proposals": "pnpm --filter @workspace/scripts run proof:adaptive-proposals"
+    "proof:adaptive-proposals": "pnpm --filter @workspace/scripts run proof:adaptive-proposals",
+    "proof:self-audit": "pnpm --filter @workspace/scripts run proof:self-audit"
   },
   "private": true,
   "devDependencies": {

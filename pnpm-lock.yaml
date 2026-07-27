@@ -1595,6 +1595,12 @@ importers:
         specifier: 'catalog:'
         version: 25.6.2
 
+  lib/self-audit:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.6.2
+
   lib/signal-discovery:
     dependencies:
       '@workspace/signal-radar':
@@ -1701,6 +1707,9 @@ importers:
       '@workspace/room-sim':
         specifier: workspace:*
         version: link:../lib/room-sim
+      '@workspace/self-audit':
+        specifier: workspace:*
+        version: link:../lib/self-audit
       '@workspace/signal-discovery':
         specifier: workspace:*
         version: link:../lib/signal-discovery

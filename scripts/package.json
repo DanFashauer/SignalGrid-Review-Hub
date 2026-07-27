@@ -86,7 +86,8 @@
     "proof:work-context": "tsx ./src/work-context-proof.ts",
     "proof:handoff-sim": "tsx ./src/handoff-sim-proof.ts",
     "sync:manifest": "node ../scripts/generate-sync-manifest.mjs",
-    "proof:adaptive-proposals": "tsx ./src/adaptive-proposals-proof.ts"
+    "proof:adaptive-proposals": "tsx ./src/adaptive-proposals-proof.ts",
+    "proof:self-audit": "tsx ./src/self-audit-proof.ts"
   },
   "dependencies": {
     "@workspace/app-workflows": "workspace:*",
@@ -113,7 +114,8 @@
     "pg": "^8.13.1",
     "@workspace/work-context": "workspace:*",
     "@workspace/handoff-sim": "workspace:*",
-    "@workspace/adaptive-proposals": "workspace:*"
+    "@workspace/adaptive-proposals": "workspace:*",
+    "@workspace/self-audit": "workspace:*"
   },
   "devDependencies": {
     "@playwright/test": "1.62.0",

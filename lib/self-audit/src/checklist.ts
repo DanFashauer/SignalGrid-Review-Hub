@@ -29,11 +29,38 @@ export interface DeclaredItem extends ChecklistItem {
   covers: readonly string[];
 }
 
-function assertUniqueIds(items: readonly DeclaredItem[]): void {
+/** The reserved id prefix for synthesized coverage-gap items. A declared item may
+ *  not claim an id in this namespace: it would collide with the gap item for the
+ *  same dimension and — in any consumer that keys items by id with first-wins
+ *  lookup — MASK the gap the collision was supposed to surface. The namespace is
+ *  the engine's; declared items stay out of it. */
+const GAP_ID_PREFIX = "coverage-gap-";
+
+function assertDeclaredIdsValid(items: readonly DeclaredItem[]): void {
+  const seen = new Set<string>();
+  for (const it of items) {
+    if (it.id.startsWith(GAP_ID_PREFIX)) {
+      throw new Error(
+        `self-audit: declared item id '${it.id}' uses the reserved '${GAP_ID_PREFIX}' prefix, ` +
+          `which belongs to synthesized coverage-gap findings.`,
+      );
+    }
+    if (seen.has(it.id)) {
+      throw new Error(`self-audit: duplicate checklist item id '${it.id}'`);
+    }
+    seen.add(it.id);
+  }
+}
+
+/** Defense in depth: the merged (declared + synthesized) set must have unique ids
+ *  too. The reserved-prefix rule already prevents the only way a collision could
+ *  arise, but a self-audit whose OWN output carried a duplicate id would be the
+ *  exact blind spot this package exists to prevent, so we assert it directly. */
+function assertMergedUnique(items: readonly { id: string }[]): void {
   const seen = new Set<string>();
   for (const it of items) {
     if (seen.has(it.id)) {
-      throw new Error(`self-audit: duplicate checklist item id '${it.id}'`);
+      throw new Error(`self-audit: derived checklist has a duplicate id '${it.id}'`);
     }
     seen.add(it.id);
   }
@@ -54,7 +81,7 @@ export function deriveChecklist(
   declared: readonly DeclaredItem[],
   inventory: ContractInventory,
 ): ChecklistItem[] {
-  assertUniqueIds(declared);
+  assertDeclaredIdsValid(declared);
 
   // What the declared items collectively claim to cover.
   const covered = new Set<string>();
@@ -95,5 +122,6 @@ export function deriveChecklist(
   }));
 
   const all = [...declaredItems, ...gapItems].sort((a, b) => a.id.localeCompare(b.id));
+  assertMergedUnique(all);
   return all.map((it) => deepFreeze(it));
 }

@@ -75,12 +75,12 @@ names, under the same governance.
 
 ## The proof
 
-`pnpm run proof:self-audit` (42 checks) proves every invariant above over a
+`pnpm run proof:self-audit` (56 checks) proves every invariant above over a
 representative four-layer checklist, and prints its live figures so a stale quote is
 catchable:
 
 ```
-figures=layers=4,declaredItems=4,coverageGaps=1,healStatuses=4,pairsToApplied=4,legalRoutesToApplied=1
+figures=layers=4,declaredItems=4,coverageGaps=1,healStatuses=4,pairsToApplied=4,legalRoutesToApplied=1,defaultItems=6
 ```
 
 The load-bearing assertions:
@@ -103,7 +103,7 @@ The load-bearing assertions:
 Run it directly:
 
 ```bash
-cd scripts && npx tsx ./src/self-audit-proof.ts    # proof:self-audit (42 checks)
+cd scripts && npx tsx ./src/self-audit-proof.ts    # proof:self-audit (56 checks)
 ```
 
 ## Public-safety boundaries

@@ -21,6 +21,8 @@ import {
   approveHeal,
   applyHeal,
   rejectHeal,
+  summarizePlain,
+  DEFAULT_CHECKLIST,
   HEAL_NA,
   type DeclaredItem,
   type ContractInventory,
@@ -104,6 +106,19 @@ check("checklist is sorted by id", checklist.map((i) => i.id).join("|") ===
   [...checklist].map((i) => i.id).sort((a, b) => a.localeCompare(b)).join("|"));
 check("duplicate declared ids are refused", (() => {
   try { deriveChecklist([DECLARED[0], DECLARED[0]], INVENTORY); return false; } catch { return true; }
+})());
+// NEGATIVE CONTROL (adversarial-review finding): a declared item may NOT claim an id
+// in the synthesized coverage-gap namespace — that collision would let a careless id
+// MASK the very gap it should surface in an id-keyed consumer. The reserved prefix is
+// rejected, so the derived checklist can never carry a duplicate id.
+check("a declared id in the reserved 'coverage-gap-' namespace is refused", (() => {
+  const evil: DeclaredItem = { ...DECLARED[0], id: "coverage-gap-handoffSimRefusalCodes", covers: [] };
+  try { deriveChecklist([evil], INVENTORY); return false; }
+  catch (e) { return e instanceof Error && /reserved/.test(e.message); }
+})());
+check("the derived checklist never contains a duplicate id", (() => {
+  const ids = checklist.map((i) => i.id);
+  return new Set(ids).size === ids.length;
 })());
 
 // ── (1) FAIL-CLOSED awareness ──────────────────────────────────────────────────
@@ -232,20 +247,28 @@ check("applied carries the approver ref that authorized it",
 check("version advances on every transition (proposed 1 → approved 2 → applied 3)",
   proposed.version === 1 && approved.version === 2 && applied.version === 3);
 
-// Exhaustive: across all 16 (from,to) status pairs, count legal routes to 'applied'.
+// Exhaustive: across all 16 (from,to) status pairs, count legal routes to 'applied'
+// AND assert every OTHER source refuses — the earlier form only counted the approved
+// case and swallowed the rest, so a regression opening a second route would not have
+// been caught (adversarial-review finding). Now the else branch positively asserts a
+// refusal, so `legalRoutesToApplied === 1` genuinely means "one route, all others shut".
 let pairsToApplied = 0;
 let legalRoutesToApplied = 0;
+let illegalRoutesRefused = 0;
 for (const from of HEAL_STATUSES) {
   for (const to of HEAL_STATUSES) {
     if (to !== "applied") continue;
     pairsToApplied += 1;
-    // legal iff from==='approved' AND the source proposal carries a ref
-    if (from === "approved") { try { applyHeal(byStatus[from]); legalRoutesToApplied += 1; } catch { /* refused */ } }
-    else { try { applyHeal(byStatus[from]); } catch { /* expected refusal */ } }
+    if (from === "approved") {
+      try { applyHeal(byStatus[from]); legalRoutesToApplied += 1; } catch { /* should not happen */ }
+    } else {
+      // Every non-approved source MUST refuse to reach applied.
+      try { applyHeal(byStatus[from]); } catch (e) { if (e instanceof SelfAuditError) illegalRoutesRefused += 1; }
+    }
   }
 }
-check("exactly ONE legal route to applied across all status pairs (approved→applied)",
-  legalRoutesToApplied === 1 && pairsToApplied === 4);
+check("exactly ONE legal route to applied, and every other source positively refuses",
+  legalRoutesToApplied === 1 && illegalRoutesRefused === 3 && pairsToApplied === 4);
 
 // ── (5) DETERMINISM + IMMUTABILITY ─────────────────────────────────────────────
 check("deriveChecklist is deterministic",
@@ -263,11 +286,56 @@ check("the input proposal is never mutated across a transition",
   proposed.status === "proposed" && proposed.version === 1 && proposed.approvedByRef === null);
 check("HEAL_NA sentinel is the empty remediation for non-healable items", HEAL_NA === "");
 
+// ── (6) THE DEFAULT CHECKLIST + PLAIN-LANGUAGE SUMMARY (the admin surface) ──────
+// The real system checklist must cover all three functional layers and derive
+// cleanly (no reserved-id collisions, no duplicate ids).
+const defaultLayers = new Set(DEFAULT_CHECKLIST.map((i) => i.layer));
+check("the default checklist covers backend, frontend, and api_integration",
+  defaultLayers.has("backend") && defaultLayers.has("frontend") && defaultLayers.has("api_integration"));
+const defaultDerived = deriveChecklist([...DEFAULT_CHECKLIST], INVENTORY);
+check("the default checklist derives without a reserved-id or duplicate-id error",
+  new Set(defaultDerived.map((i) => i.id)).size === defaultDerived.length);
+
+// summarizePlain: an all-healthy report reads as the calm "just works" state.
+const plainAllClear = summarizePlain(allHealthy, []);
+check("an all-healthy audit summarizes as 'Everything is working.'",
+  plainAllClear.headline === "Everything is working." && plainAllClear.allClear && plainAllClear.attentionCount === 0);
+check("an all-clear summary contains NO attention lines",
+  plainAllClear.lines.every((l) => !l.needsAttention));
+
+// A report with problems reads as a plain, counted call to attention with human words.
+const plainBroken = summarizePlain(brokenReport, heals);
+check("a report with problems summarizes with a non-zero attention count",
+  !plainBroken.allClear && plainBroken.attentionCount === brokenReport.counts.broken + brokenReport.counts.drifted + brokenReport.counts.unknown);
+check("the headline counts things needing attention in plain words",
+  /needs? your attention\.$/.test(plainBroken.headline));
+check("attention lines are ordered worst-first (a 'Needs attention' line precedes any 'Working' line)", (() => {
+  const firstWorking = plainBroken.lines.findIndex((l) => l.state === "Working");
+  const lastAttention = plainBroken.lines.map((l) => l.needsAttention).lastIndexOf(true);
+  return firstWorking === -1 || lastAttention < firstWorking;
+})());
+check("no line or headline leaks an internal status enum word",
+  !/\b(healthy|drifted|broken|unknown)\b/.test(
+    plainBroken.headline + plainBroken.lines.map((l) => l.state + l.sentence).join(" ")));
+check("every suggested fix says it needs human approval (never auto-done)",
+  plainBroken.suggestedFixes.length > 0 && plainBroken.suggestedFixes.every((f) => f.needsYourApproval === true));
+check("each suggested fix maps to a proposed heal proposal",
+  plainBroken.suggestedFixes.every((f) => heals.some((h) => h.proposalId === f.proposalId && h.status === "proposed")));
+check("summarizePlain is deterministic",
+  JSON.stringify(summarizePlain(brokenReport, heals)) === JSON.stringify(summarizePlain(brokenReport, heals)));
+// An APPROVED heal is no longer an open "suggested fix" — the plain view only offers
+// fixes still awaiting a decision, so an administrator never re-approves a done one.
+const approvedHeal = approveHeal(heals[0], "user:owner-001");
+const plainAfterApprove = summarizePlain(brokenReport, [approvedHeal, ...heals.slice(1)]);
+check("an approved heal drops out of the open 'suggested fixes' list",
+  !plainAfterApprove.suggestedFixes.some((f) => f.proposalId === approvedHeal.proposalId));
+
 // ── figures (guarded against the docs) ─────────────────────────────────────────
 const declaredCount = DECLARED.length;
 const gapCount = gapItems.length;
 const layers = new Set(checklist.map((i) => i.layer)).size;
-console.log(`figures=layers=${layers},declaredItems=${declaredCount},coverageGaps=${gapCount},healStatuses=${HEAL_STATUSES.length},pairsToApplied=${pairsToApplied},legalRoutesToApplied=${legalRoutesToApplied}`);
+const defaultItems = DEFAULT_CHECKLIST.length;
+console.log(`figures=layers=${layers},declaredItems=${declaredCount},coverageGaps=${gapCount},healStatuses=${HEAL_STATUSES.length},pairsToApplied=${pairsToApplied},legalRoutesToApplied=${legalRoutesToApplied},defaultItems=${defaultItems}`);
 
 // ── summary ─────────────────────────────────────────────────────────────────────
 const total = passed + failures.length;

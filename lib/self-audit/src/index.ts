@@ -13,3 +13,10 @@ export * from "./types";
 export { deriveChecklist, type ContractInventory, type DeclaredItem } from "./checklist";
 export { runAudit, type ProbeResult } from "./audit";
 export { proposeHeals, approveHeal, applyHeal, rejectHeal, LEGAL_TRANSITIONS } from "./heal";
+export { DEFAULT_CHECKLIST } from "./defaults";
+export {
+  summarizePlain,
+  type PlainSummary,
+  type PlainLine,
+  type PlainFix,
+} from "./summarize";

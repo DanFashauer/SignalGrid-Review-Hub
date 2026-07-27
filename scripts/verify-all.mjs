@@ -26,8 +26,10 @@
 //     reviewHubPass / mcpPass / mcpCheckoutFound — the gate outcomes (all true by
 //                            construction: emission is refused otherwise);
 //     mcpCommit / mcpDirty — WHICH signalgrid-mcp code produced the passing run,
-//                            and whether its tracked files were modified. Without
-//                            these, a mint from an unmerged branch or a stale
+//                            and whether the tree diverged from that commit —
+//                            tracked modifications OR untracked SOURCE (known
+//                            scratch excluded), each also counted on its own.
+//                            Without these, a mint from an unmerged branch or a stale
 //                            checkout is indistinguishable from one against
 //                            published main. Recorded, not enforced — minting from
 //                            a branch is legitimate as long as the evidence says so;
@@ -223,7 +225,19 @@ if (emitEvidence) {
         return r.status === 0 ? r.stdout.trim() : null;
       };
       const mcpCommit = mcpGit(["rev-parse", "HEAD"]);
-      const mcpDirty = mcpGit(["status", "--porcelain"]);
+      const mcpStatus = mcpGit(["status", "--porcelain"]);
+      // Split the checkout's dirtiness HONESTLY. The earlier form dropped every
+      // untracked (`??`) entry, so an untracked test or module — which pytest can
+      // still collect and run — left mcpDirty:false, attributing the pass to a
+      // commit that cannot reproduce it (adversarial-review finding). Only KNOWN
+      // generated/scratch paths are ignored; any other untracked path is source
+      // that could change the outcome, so it counts toward dirtiness and is also
+      // surfaced on its own so a reader can see exactly what was present.
+      const IGNORED_UNTRACKED = /(^|\/)(\.venv|venv|node_modules|__pycache__|\.pytest_cache|\.mypy_cache|\.ruff_cache|dist|build|\.DS_Store)(\/|$)|\.lock$|\.egg-info(\/|$)/;
+      const statusLines = mcpStatus === null ? null : mcpStatus.split("\n").filter(Boolean);
+      const trackedModified = statusLines === null ? null : statusLines.filter((l) => !l.startsWith("??")).length;
+      const untrackedSource = statusLines === null ? null
+        : statusLines.filter((l) => l.startsWith("??") && !IGNORED_UNTRACKED.test(l.slice(3))).length;
       // Public-safe by construction: fingerprints, booleans, and counts only.
       const evidence = {
         schema: "signalgrid-live-evidence/v1",
@@ -234,9 +248,14 @@ if (emitEvidence) {
         mcpPass: true,
         mcpCheckoutFound: true,
         mcpCommit,
-        // Tracked-file modifications only; untracked scratch (venvs, lockfiles)
-        // does not make a run untrustworthy.
-        mcpDirty: mcpDirty === null ? null : mcpDirty.split("\n").filter((l) => l && !l.startsWith("??")).length > 0,
+        // Dirty if the tree has tracked modifications OR untracked SOURCE that the
+        // recorded commit cannot reproduce. Known scratch (venvs, caches, build
+        // dirs, lockfiles) is excluded — see IGNORED_UNTRACKED — and the untracked
+        // source count is reported separately so the claim is auditable, not
+        // asserted.
+        mcpDirty: statusLines === null ? null : (trackedModified > 0 || untrackedSource > 0),
+        mcpTrackedModified: trackedModified,
+        mcpUntrackedSource: untrackedSource,
         contractSha,
         summary: {
           signalKinds: manifest.body.signalKinds?.length ?? 0,

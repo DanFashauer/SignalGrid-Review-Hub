@@ -36,7 +36,7 @@ export default function IntegrationsSection() {
           <div className="max-w-2xl">
             <h2 className="text-3xl font-bold tracking-tight mb-4">16 Candidate Source Categories Across Your Stack.</h2>
             <p className="text-muted-foreground text-lg">
-              SignalGrid is designed to consume signals from across your security stack — identity, endpoint, physical access &amp; custody, SIEM, SOAR, DR, and GRC — and route every alert to the team that owns that signal source. These are the candidate source-category taxonomy (the core normalizes 12 signal categories today; see <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/blob/main/docs/WHAT_SIGNALGRID_DOES_TODAY.md" className="text-primary underline">what's evaluated today</a>). The vendors below are candidate categories, not live integrations; systems of record remain external.
+              SignalGrid is designed to consume signals from across your security stack — identity, endpoint, physical access &amp; custody, SIEM, SOAR, DR, and GRC — and route every alert to the team that owns that signal source. These are the candidate source-category taxonomy (the core normalizes 13 signal categories today; see <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/blob/main/docs/WHAT_SIGNALGRID_DOES_TODAY.md" className="text-primary underline">what's evaluated today</a>). The vendors below are candidate categories, not live integrations; systems of record remain external.
             </p>
           </div>
           <div className="font-mono text-sm px-4 py-2 rounded border border-border bg-card inline-flex self-start md:self-end gap-2">

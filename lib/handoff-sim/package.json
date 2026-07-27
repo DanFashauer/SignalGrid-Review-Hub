@@ -1,0 +1,17 @@
+{
+  "name": "@workspace/handoff-sim",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@workspace/work-context": "workspace:*",
+    "@workspace/posture-composition": "workspace:*",
+    "@workspace/integrations": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:"
+  }
+}

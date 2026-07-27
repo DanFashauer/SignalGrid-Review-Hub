@@ -16,7 +16,7 @@ const SMARTDOCK = [
   },
   {
     title: "Smart charging as a decision signal",
-    body: "Charge state, battery health, and charge faults are first-class signals. A device that could die mid-workflow is stepped up before it is handed out — the dock keeps it topped up in its bay.",
+    body: "Charge state and battery health are separate signals, because charging fixes one and not the other. A critically low battery steps up and clears once the device charges. A failing battery restricts — and deliberately cannot be cleared by re-docking, because the device needs a battery, not a bay.",
     icon: Battery,
     color: "text-orange-400",
   },

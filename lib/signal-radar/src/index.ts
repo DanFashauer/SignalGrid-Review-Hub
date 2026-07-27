@@ -30,6 +30,7 @@ export const EVALUATED_CATEGORIES = [
   "posture_freshness",
   "custody_state",
   "charge_state",
+  "battery_health",
   "tamper_state",
   "dock_state",
   "security_baseline",

@@ -199,7 +199,7 @@ const activationFor = (tier: string) => ev({ ...CONFIRMED, deviceRiskTier: tier 
 
 // A retired enrollment restricts → blocked tier → elevation refused, from real verdicts.
 const retiredDevice = dmh.evaluateDeviceManagementHealth(
-  dmh.normalizeReport("d", { checkInFreshness: "fresh", policyDrift: "on_baseline", complianceCoverage: "covered", enrollmentState: "retired", managementReachable: true }),
+  dmh.normalizeReport("d", { mdmCheckInFreshness: "fresh", agentCheckInFreshness: "not_applicable", remediationHealth: "not_applicable", policyDrift: "on_baseline", complianceCoverage: "covered", enrollmentState: "retired", managementReachable: true }),
 );
 const retiredTier = deviceRiskTierFromPosture(composeDeviceRisk([fromDeviceManagementHealth(retiredDevice)]));
 check("a RETIRED enrollment fuses to the 'blocked' tier", retiredTier === "blocked");
@@ -218,7 +218,7 @@ const governedAgent = ai.evaluateAgentIdentity(
   ai.normalizeReport("a", { actorType: "agent", agentRegistered: true, tokenLifetime: "short_lived", scopeState: "least_privilege", approvalState: "approved", recordingState: "recorded", bridgeReachable: true }),
 );
 const healthyDevice = dmh.evaluateDeviceManagementHealth(
-  dmh.normalizeReport("d", { checkInFreshness: "fresh", policyDrift: "on_baseline", complianceCoverage: "covered", enrollmentState: "enrolled", managementReachable: true }),
+  dmh.normalizeReport("d", { mdmCheckInFreshness: "fresh", agentCheckInFreshness: "not_applicable", remediationHealth: "not_applicable", policyDrift: "on_baseline", complianceCoverage: "covered", enrollmentState: "enrolled", managementReachable: true }),
 );
 const healthyTier = deviceRiskTierFromPosture(composeDeviceRisk([fromAgentIdentity(governedAgent), fromDeviceManagementHealth(healthyDevice)]));
 check("a governed agent on a healthy device fuses to 'ok'", healthyTier === "ok");

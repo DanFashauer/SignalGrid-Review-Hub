@@ -95,6 +95,7 @@ const IN_FIELDS: Record<string, ReadonlySet<string>> = {
     "not_present",
     "unknown",
   ]),
+  batteryHealth: new Set(["healthy", "degraded", "failing", "unknown"]),
   tamperState: new Set([
     "none",
     "suspected",
@@ -343,6 +344,8 @@ function matches(condition: RuleCondition, evidence: DecisionEvidence): boolean 
       return condition.in.includes(evidence.custodyState);
     case "chargeState":
       return condition.in.includes(evidence.dockChargeState);
+    case "batteryHealth":
+      return condition.in.includes(evidence.batteryHealth);
     case "tamperState":
       return condition.in.includes(evidence.tamperState);
     case "dockState":
@@ -537,6 +540,28 @@ export const SHARED_DEVICE_RULES_V1: PolicyRuleSpec[] = [
     outcome: "step_up",
     reasonCode: "BATTERY_CRITICAL",
     severity: "medium",
+  },
+  {
+    id: "battery-failing",
+    // Deliberately RESTRICT where `battery-critical` steps up, and deliberately
+    // matched on health rather than charge. A critically low battery is fixed by
+    // charging, so a step-up plus "go dock it" is a real path back to allow. A
+    // FAILING battery is not fixed by charging, so the same treatment would route
+    // a worker to a bay, return them `low` again, and loop — the device needs a
+    // battery, not a bay. Restrict is the honest outcome for a device that should
+    // not be handed out for a shift, and it matches `custody-maintenance`: a
+    // device awaiting service is out of general rotation until it is serviced.
+    //
+    // `degraded` is deliberately NOT matched here. It is reduced capacity that is
+    // still serviceable, and is carried as evidence only — the same treatment
+    // `chargeState: "low"` gets. A rule on `degraded` would restrict a large part
+    // of any real fleet for a condition nobody would pull a device for.
+    description:
+      "A failing battery cannot hold a shift and charging will not fix it — restrict the shared-device session until the battery is replaced.",
+    match: [{ field: "batteryHealth", in: ["failing"] }],
+    outcome: "restrict",
+    reasonCode: "BATTERY_FAILING",
+    severity: "high",
   },
   {
     id: "dock-faulted",

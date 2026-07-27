@@ -171,8 +171,52 @@ and recovery-key escrow / LAPS rotation state.
 
 **Status: built.** Shipped as the `device-management-health` dimension — see
 [INTEGRATION_CATALOG](INTEGRATION_CATALOG.md). Four of the five signals above are
-modelled (`checkInFreshness`, `policyDrift`, `complianceCoverage`, `enrollmentState`);
-recovery-key escrow / LAPS rotation state is **not** yet modelled and remains open.
+modelled, with check-in staleness split across **both** delivery channels
+(`mdmCheckInFreshness`, `agentCheckInFreshness`) alongside `remediationHealth`,
+`policyDrift`, `complianceCoverage` and `enrollmentState`; recovery-key escrow / LAPS
+rotation state is **not** yet modelled and remains open.
+
+## Wireless link quality → `link-usability`
+
+Sources: the Meraki Dashboard API v1, Zebra's Wi-Fi Manager CSP (a documented RSSI roam
+threshold, default −65 dBm, and an 802.11r Fast BSS Transition roam algorithm), and the
+sticky-client behaviour documented independently by Juniper Mist and Ruckus.
+
+**Correction, and worth recording because of how it was found.** An earlier version of
+this entry credited the rung-by-rung failure counts to
+`getNetworkWirelessClientConnectionStats` — the **singular**, per-client endpoint. Meraki's
+own published OpenAPI spec shows that call returning `{ assoc, auth, dhcp, success }`:
+four fields, **no `dns`**, and counts of attempts rather than of failures. The five-field
+failure schema does exist, but on the **plural / device / network** siblings —
+`getNetworkWirelessClientsConnectionStats`, `getDeviceWirelessConnectionStats`,
+`getNetworkWirelessConnectionStats`, `getNetworkWirelessDevicesConnectionStats`. The
+primitive this dimension needs is real; the endpoint originally cited for it was not the
+one that carries it. A plain web search returns the hallucinated `dns` field for the
+singular endpoint — the vendor's own spec is what catches it, which is the whole argument
+for reading primary sources rather than summaries of them.
+
+The decisive primitive is the **separation of the connection ladder into rungs**. One
+boolean "connected" cannot express a client that clears association and then fails at
+DHCP or DNS. A dashboard that counts the rungs separately can.
+
+On naming: **802.11r** is *Fast BSS Transition*, and it is the only one of the three that
+makes a transition fast. 802.11k is Radio Resource Measurement (neighbour reports, which
+help a client *choose* a target) and 802.11v is Wireless Network Management (BSS
+Transition Management, which lets infrastructure *steer*). They are commonly deployed
+together for roaming optimisation, so "the 802.11r/k/v family" is fair shorthand for the
+deployment pattern and wrong as a description of what provides fast transition.
+
+**Status: built.** Shipped as the `link-usability` dimension — see
+[INTEGRATION_CATALOG](INTEGRATION_CATALOG.md). Scoped deliberately to start *after*
+admission, so it does not re-model the 802.1X authentication and segmentation that
+`network-nac` already owns.
+
+Signals named by these sources and **not** modelled, with the reason: scan-engine decode
+failure rates, battery runtime and hot-swap design, and ergonomics/IP/drop ratings are
+DEX and procurement concerns, and
+[OPERATIONAL_HEALTH_DEX_LAYER_STRATEGY](OPERATIONAL_HEALTH_DEX_LAYER_STRATEGY.md) already
+scopes them as *not* trust dimensions. Building them would widen SignalGrid into a
+device-monitoring product it has chosen not to be.
 
 ## Cross-checks against vendor reference material
 
@@ -214,13 +258,33 @@ implies is already handled honestly in
 names (firewall state, BitLocker/encryption, antivirus health, OS patch level) is
 already carried by `macos-posture` and `intune-entra-posture`.
 
-**Gap: Proactive Remediation health.** Intune's detection-and-remediation script
-framework runs on a recurring schedule to find and fix configuration drift. It appears
-in two independent Intune sources (as workload ID 9 in the on-demand sync path, and as a
-headline capability here) and has **zero** mentions anywhere in this repo. It matters
-because `device-management-health` already reports `policyDrift: drifted` — and a
+**Proactive Remediation health — closed.** Intune's detection-and-remediation script
+framework runs on a recurring schedule to find and fix configuration drift. It appeared
+in two places in this sweep and had **zero** mentions anywhere in this repo. One of the
+two needs a correction that the original note did not make: the "workload ID 9" mapping
+comes from a **reverse-engineered enum** inside the Intune Management Extension's
+`SidecarNotification` assembly, published on a third-party blog and gated behind a
+feature flight. It is corroborating detail, not a Microsoft-published API, and calling it
+an independent *source* overstated it. The same correction applies to "DirectSync",
+which appears in **zero** Microsoft documentation and in any case tags a push-delivered
+sync notification rather than naming a transport — it has been removed from
+INTEGRATION_CATALOG. In a sweep whose entire argument is "read the primary source",
+quoting an internal enum string as vendor nomenclature is the failure mode to avoid. It mattered
+because `device-management-health` already reported `policyDrift: drifted` — and a
 drifted device whose remediation scripts are *also* failing is materially worse than one
-where self-healing is still running. Queued alongside the MDM/IME check-in split.
+where self-healing is still running.
+
+Now modelled as `remediationHealth`, shipped together with the MDM/agent check-in split
+it was queued alongside. Scope, verified against Microsoft Learn rather than assumed:
+Remediations are **Windows-only** — the prerequisites require Windows Enterprise/Pro/
+Education with Windows E3/E5, and the Intune Management Extension is what runs them. The
+macOS Intune agent carries shell scripts, custom attributes and DMG/PKG installs, and
+does *not* carry Remediations; an earlier draft of the catalog claimed macOS parity here
+and was wrong. A detection that **found something and was never fixed** is
+graded `alert` — a confirmed fact about the device, so it outranks every unknown-driven
+`step_up`, but not a `restrict`, because a Remediations pair is arbitrary customer script
+and the severity of what it found is not knowable from here. A script that **could not
+run** is graded `step_up`: that is a broken delivery channel, not a known defect.
 
 ---
 

@@ -14,6 +14,7 @@ This document defines a vendor-neutral, public-safe schema for future Physical C
 | `deviceId` | string | Sanitized managed-device identifier correlated to MDM/UEM posture fixtures. |
 | `batteryId` | string | Sanitized battery or power-module identifier when available. |
 | `chargeState` | enum | Candidate values: `unknown`, `charging`, `charged`, `low`, `critical`, `not_present`. |
+| `batteryHealth` | enum | Candidate values: `unknown`, `healthy`, `degraded`, `failing`. Battery CAPACITY, not fill level — the state charging does not change. |
 | `dockState` | enum | Candidate values: `unknown`, `occupied`, `empty`, `reserved`, `faulted`, `offline`. |
 | `custodyState` | enum | Candidate values: `unknown`, `checked_in`, `checked_out`, `overdue`, `exception`, `maintenance`. |
 | `tamperState` | enum | Candidate values: `unknown`, `none`, `suspected`, `confirmed`, `sensor_unavailable`. |
@@ -35,6 +36,7 @@ This document defines a vendor-neutral, public-safe schema for future Physical C
   "deviceId": "device-fixture-ipad-0001",
   "batteryId": "battery-fixture-0001",
   "chargeState": "charged",
+  "batteryHealth": "healthy",
   "dockState": "occupied",
   "custodyState": "checked_in",
   "tamperState": "none",
@@ -55,6 +57,7 @@ This document defines a vendor-neutral, public-safe schema for future Physical C
 | Device removed without valid session | Dock state changes to `empty` without a matching checkout session. | Custody exception; route to approved owner or local operations review. |
 | Wrong bay return | Device returns to an unexpected bay or dock. | Audit exception; request inventory validation or supervisor review. |
 | Low battery + critical workflow | `chargeState` is `low` or `critical` for a high-risk workflow. | Operational risk; route swap-battery or alternate-device action for approval-aware handling. |
+| Failing battery | `batteryHealth` is `failing`, at any charge level. | Distinct from low charge: charging cannot clear it, so the device is routed for battery replacement rather than back to a bay. |
 | Unknown dock state + high-risk workflow | `dockState` is `unknown`, `faulted`, or `offline` during a sensitive workflow. | Degraded confidence; require step-up, alternate evidence, or owner review. |
 
 ## Public-safety boundaries

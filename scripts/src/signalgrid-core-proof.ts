@@ -24,6 +24,7 @@ import {
   evaluatePolicy,
   fixedClock,
   MemoryStore,
+  RESOLUTION_DESCRIPTOR_SHAPES,
   seedDemoStore,
   SignalGridCore,
   SHARED_DEVICE_RULES_V2,
@@ -96,6 +97,8 @@ const scenarios: Scenario[] = [
   { label: "custody-overdue-restrict", identityRef: "nurse.overdue", deviceRef: "ipad-loan-01", workflowKey: "clinical-session", expectedOutcome: "restrict", expectedReason: "CUSTODY_OVERDUE" },
   { label: "tamper-suspected-restrict", identityRef: "nurse.tamper", deviceRef: "ipad-loan-02", workflowKey: "clinical-session", expectedOutcome: "restrict", expectedReason: "TAMPER_SUSPECTED" },
   { label: "battery-critical-stepup", identityRef: "nurse.lowbatt", deviceRef: "ipad-loan-03", workflowKey: "clinical-session", expectedOutcome: "step_up", expectedReason: "BATTERY_CRITICAL" },
+  { label: "battery-failing-restrict", identityRef: "nurse.failbatt", deviceRef: "ipad-loan-04", workflowKey: "clinical-session", expectedOutcome: "restrict", expectedReason: "BATTERY_FAILING" },
+  { label: "battery-flat-and-worn-restrict", identityRef: "nurse.flatandworn", deviceRef: "ipad-loan-05", workflowKey: "clinical-session", expectedOutcome: "restrict", expectedReason: "BATTERY_FAILING" },
   { label: "baseline-drift-stepup", identityRef: "nurse.baseline_drift", deviceRef: "ipad-ward-06", workflowKey: "clinical-session", expectedOutcome: "step_up", expectedReason: "BASELINE_DRIFTED" },
   { label: "badge-removed-restrict", identityRef: "nurse.badge_removed", deviceRef: "ipad-badge-01", workflowKey: "clinical-session", expectedOutcome: "restrict", expectedReason: "BADGE_REMOVED" },
   { label: "badge-forced-deny", identityRef: "nurse.badge_forced", deviceRef: "ipad-badge-02", workflowKey: "clinical-session", expectedOutcome: "deny", expectedReason: "BADGE_FORCED_REMOVAL" },
@@ -691,6 +694,136 @@ if (pending) {
       sim.resolved === true,
     );
   }
+
+  // ── Battery HEALTH is not battery CHARGE ───────────────────────────────────
+  //
+  // The whole reason `batteryHealth` exists is that charging clears a low
+  // battery and does NOT clear a failing one. If these two ever collapsed into
+  // the same treatment, a worker would be routed to a charging bay forever for
+  // a device that needs a new battery. Four checks, each of which fails if the
+  // distinction is lost in a different way.
+  // The ANTI-FABRICATION property, asserted rather than merely commented.
+  //
+  // `dock.ts` only emits `battery_health` when the record carries one, so a dock
+  // that cannot measure health leaves evidence at "unknown". An adversarial
+  // review proved this was unfalsifiable: replacing that conditional with an
+  // unconditional `record.batteryHealth ?? "healthy"` flipped every dock-synced
+  // device to a fabricated "healthy" and the proof stayed green. A signal source
+  // inventing a healthy reading on behalf of hardware that never reported one is
+  // the whole failure mode this repo exists to prevent, so it is now checked on
+  // both sides: no signal emitted, AND evidence left unknown.
+  const benign = decisions.find(
+    (d) => d.outcome === "allow" && d.reasonCodes.includes("TRUST_ESTABLISHED"),
+  );
+  check("battery-health: an allow decision exists to check for fabrication", Boolean(benign));
+  if (benign) {
+    const snap = core.getSnapshot(T.operator, benign.evidenceSnapshotId);
+    check(
+      "battery-health: a dock that reports no health read leaves evidence unknown, not healthy",
+      snap.evidence.batteryHealth === "unknown",
+    );
+  }
+  // Across EVERY decision in the tenant, exactly one device may carry a non-unknown
+  // battery health — the single fixture whose dock actually reports it. If the
+  // connector ever fabricates a default, this count jumps to the whole fleet.
+  const healthValues = decisions.map(
+    (d) => core.getSnapshot(T.operator, d.evidenceSnapshotId).evidence.batteryHealth,
+  );
+  const reported = healthValues.filter((v) => v !== "unknown");
+  // Two fixtures supply a health read, and both supply "failing". Every other
+  // device must stay "unknown". Fabricating a default would show up here twice
+  // over: the count would jump to the fleet, and "healthy" would appear as a
+  // value no fixture ever provided.
+  check(
+    "battery-health: only the two devices whose dock reports health have one, and it is theirs",
+    reported.length === 2 && reported.every((v) => v === "failing"),
+    `found ${reported.length} reported of ${healthValues.length} decisions: ${reported.join(", ")}`,
+  );
+
+  const failing = decisions.find((d) => d.reasonCodes.includes("BATTERY_FAILING"));
+  check("battery-health: a failing-battery decision exists", Boolean(failing));
+  if (failing) {
+    const snapshot = core.getSnapshot(T.operator, failing.evidenceSnapshotId);
+    // NEGATIVE CONTROL. The fixture is fully CHARGED. If `batteryHealth` were a
+    // proxy for charge, this decision could not exist at all.
+    check(
+      "battery-health: the failing device reads fully charged, so charge did not cause this",
+      snapshot.evidence.dockChargeState === "charged",
+    );
+    check(
+      "battery-health: the failing state is captured in the evidence snapshot",
+      snapshot.evidence.batteryHealth === "failing",
+    );
+    const sim = core.simulateResolution(T.operator, failing.id);
+    // The contrast with BATTERY_CRITICAL directly above: that one resolves,
+    // this one must not, because no step in the plan can change the battery.
+    check(
+      "battery-health: a failing battery does NOT simulate away (charging cannot fix it)",
+      sim.resolved === false && !sim.appliedReasonCodes.includes("BATTERY_FAILING"),
+    );
+    const plan = core.getResolution(T.operator, failing.id);
+    check(
+      "battery-health: the plan escalates rather than claiming self-service",
+      plan.path === "escalation" && plan.autoResolvable === false,
+    );
+    // A restrict that asks nobody to do anything leaves the device broken.
+    const rem = core
+      .listRemediations(T.operator)
+      .filter((r) => r.reasonCode === "BATTERY_FAILING");
+    check(
+      "battery-health: a failing battery routes an approval-gated custody check",
+      rem.length > 0 && rem.every((r) => r.kind === "request_custody_check"),
+      `got ${rem.length}: ${rem.map((r) => r.kind).join(", ")}`,
+    );
+  }
+
+  // ── Flat AND worn: the verdict and the guidance must not disagree ───────────
+  //
+  // Both battery reason codes fire. The outcome was already right, but the
+  // worker-facing step still said "swap to a charged device, or dock this one",
+  // which is the charge-and-retry loop BATTERY_FAILING exists to end — honest
+  // verdict, contradicting advice. `BATTERY_CRITICAL` is now suppressed when
+  // `BATTERY_FAILING` is present, in the plan AND in the simulation.
+  const flatAndWorn = decisions.find(
+    (d) =>
+      d.reasonCodes.includes("BATTERY_FAILING") && d.reasonCodes.includes("BATTERY_CRITICAL"),
+  );
+  check("battery-health: a flat-and-worn device exists (both codes fire)", Boolean(flatAndWorn));
+  if (flatAndWorn) {
+    const plan = core.getResolution(T.operator, flatAndWorn.id);
+    check(
+      "battery-health: flat-and-worn drops the charge-and-retry step entirely",
+      !plan.steps.some((st) => st.reasonCode === "BATTERY_CRITICAL"),
+      `steps: ${plan.steps.map((st) => st.reasonCode).join(", ")}`,
+    );
+    check(
+      "battery-health: flat-and-worn still escalates and still cannot self-resolve",
+      plan.path === "escalation" && plan.autoResolvable === false,
+    );
+    const sim = core.simulateResolution(T.operator, flatAndWorn.id);
+    check(
+      "battery-health: the simulation applies no step the plan did not propose",
+      !sim.appliedReasonCodes.includes("BATTERY_CRITICAL") && sim.resolved === false,
+      `applied: ${sim.appliedReasonCodes.join(", ")}`,
+    );
+  }
+
+  // ── The transform/class invariant, asserted rather than assumed ────────────
+  //
+  // `simulateResolution` skips any descriptor with a null transform, while
+  // `autoResolvable` is computed as "no manual_only step present". So a
+  // descriptor that is `requires_approval` or `auto_proposed` AND has no
+  // transform would report a plan as auto-resolvable while resolving nothing —
+  // a plan that contradicts its own simulation. Every descriptor today honours
+  // `transform === null` iff `manual_only`; nothing enforced it until now.
+  const violations = RESOLUTION_DESCRIPTOR_SHAPES.filter(
+    (d) => d.hasTransform === (d.baseClass === "manual_only"),
+  ).map((d) => d.reasonCode);
+  check(
+    `resolution: transform===null iff manual_only holds for all ${RESOLUTION_DESCRIPTOR_SHAPES.length} descriptors`,
+    violations.length === 0,
+    violations.join(", "),
+  );
 
   // A confirmed-tamper device is a hard deny that cannot self-resolve.
   const confirmedEvidence = buildEvidence(

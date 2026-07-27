@@ -387,6 +387,7 @@ function seedPolicyTests(
     workflowRiskTier: "elevated",
     custodyState: "checked_out",
     dockChargeState: "charged",
+    batteryHealth: "healthy",
     tamperState: "none",
     dockState: "occupied",
     baselineCompliance: "aligned",
@@ -480,6 +481,16 @@ function seedNorthwindSubjects(store: MemoryStore): FixturePostureRecord[] {
       device: { externalRef: "ipad-loan-03", name: "Loaner iPad 03", osPlatform: "iPadOS", osVersion: "18.5", ownerType: "shared", managementAgent: "intune" },
       posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, sourceReference: "fixture:intune:managedDevices#ipad-loan-03" },
     },
+    {
+      identity: { externalRef: "nurse.failbatt", displayName: "Nurse (failing battery)", state: "enabled", assignedRole: "nurse" },
+      device: { externalRef: "ipad-loan-04", name: "Loaner iPad 04", osPlatform: "iPadOS", osVersion: "18.5", ownerType: "shared", managementAgent: "intune" },
+      posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, sourceReference: "fixture:intune:managedDevices#ipad-loan-04" },
+    },
+    {
+      identity: { externalRef: "nurse.flatandworn", displayName: "Nurse (flat and worn battery)", state: "enabled", assignedRole: "nurse" },
+      device: { externalRef: "ipad-loan-05", name: "Loaner iPad 05", osPlatform: "iPadOS", osVersion: "18.5", ownerType: "shared", managementAgent: "intune" },
+      posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, sourceReference: "fixture:intune:managedDevices#ipad-loan-05" },
+    },
     // Security-baseline scenario: posture is otherwise healthy, so the device's
     // drift from its assigned CIS/hardening baseline is the decisive signal.
     {
@@ -565,6 +576,23 @@ function northwindDockCustody(): DockCustodyRecord[] {
     ...benignDock("ipad-loan-03", 13),
     chargeState: "critical",
     dockState: "empty",
+  });
+  // Deliberately FULLY CHARGED with a failing battery. If `batteryHealth` were
+  // merely a proxy for `chargeState`, this record would produce no finding at
+  // all — `chargeState: "charged"` is the healthiest value there is. It is the
+  // negative control for the whole field: the device reads perfect on every
+  // charge signal and still must not go out for a shift.
+  records.push({
+    ...benignDock("ipad-loan-04", 19),
+    chargeState: "charged",
+    batteryHealth: "failing",
+  });
+  // Flat AND worn out — the realistic case, and the one where the two battery
+  // signals could contradict each other in the guidance the worker is given.
+  records.push({
+    ...benignDock("ipad-loan-05", 20),
+    chargeState: "critical",
+    batteryHealth: "failing",
   });
   return records;
 }

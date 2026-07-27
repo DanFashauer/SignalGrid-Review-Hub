@@ -183,6 +183,226 @@ File: `artifacts/api-server/src/middlewares/errors.ts`, `CoreError`.
 | Determinism | Two fresh cores produce identical decision and snapshot ids for the same request |
 | Untrusted-input hardening | Every malformed authored rule shape (absent/empty `match`, unknown condition field, out-of-domain value, invalid outcome/severity, over the rule cap, duplicate ids, non-array) is rejected with a validation error; a validated draft still activates and evaluates without throwing; deeply-nested input is rejected by the canonical-JSON depth cap rather than exhausting the stack; the constant-time comparison behaves as an equality; the shipped facade exposes no `unsafeStore()`/caller-tenant probe |
 
+## SignalGrid as the compromised hub
+
+Everything above answers "can one tenant reach another's data inside SignalGrid?" —
+tenant scoping, fail-closed cross-tenant reads, per-tenant audit chains. That is the
+right question and the proof constrains it. It is not the question the current
+healthcare threat landscape is actually asking.
+
+Comparitech's H1 2026 data, reported by Dark Reading on 10 July 2026, found attacks on
+healthcare **providers** rising moderately while attacks on healthcare **businesses** —
+the vendors and service providers behind them — rose 35% against H2 2025 and 110% against
+H1 2025. The stated reason is not subtle. In Comparitech's Rebecca Moody's words,
+"through one central hub, you're targeting multiple healthcare organizations." The
+worked examples in the same reporting are a medical-billing provider serving 95% of one
+country's university hospitals, and a claims processor whose breach exposed 3.4 million
+patients held at its *customers'* facilities.
+
+A runtime decision fabric reading security signals across many hospitals is that
+archetype. Not a market this product sells into — a **description of what this product
+becomes at scale**. The threat model has to say so, and has to be honest about which
+parts of the answer are already structural and which are still owed.
+
+### What already limits the blast radius, and why it is architecture rather than policy
+
+- **Every connector is read-only, enforced in code.** Each one carries a `guardReadOnly`
+  that throws on any non-GET, and each proof asserts it. A compromised SignalGrid cannot
+  push a profile, wipe a device, revoke a certificate, or open a door, because no such
+  code path exists to abuse. This is the single largest reduction in what a stolen
+  position is worth, and it was a design choice made long before this data.
+- **The product decides; it does not enforce.** Remediation is approval-gated and
+  simulated. `pim-activation`, the one inbound control point, defaults every unknown to
+  `Approved` — meaning *a human is asked* — and reserves `AutoApproved` for the case where
+  all seven inputs are positively confirmed.
+- **Live vendor calls are gated three ways** — tier must be beta/prod, `SIGNALGRID_LIVE_INTEGRATIONS`
+  must be `"true"`, and the connector's token must be set — so a deployment that has not
+  deliberately opted in makes no outbound vendor call at all.
+- **The audit ledger is a hash chain**, each record's `prevHash` bound to its predecessor,
+  so silent retroactive edits to a decision history do not survive verification.
+
+### What does not limit it, stated plainly
+
+- **A corrupted verdict is the real prize, and nothing in this repo currently detects
+  one.** An attacker who cannot write to a hospital's MDM but *can* flip SignalGrid's
+  verdicts to `allow` has turned the product into a machine for manufacturing false
+  confirmations at fleet scale. That is the exact inverse of the discipline every
+  connector is built on — a grant requires positive confirmation of every input — applied
+  one level up, at the fabric rather than the field. The verdict leaving SignalGrid is
+  not signed, and a consumer has no way to distinguish a genuine `allow` from an injected
+  one.
+- **Connector credentials are process-global, not per-tenant.** Every resolver reads a
+  single `<NAME>_ACCESS_TOKEN` from the environment. In a single-tenant deployment that
+  is correct and simple. In a hub serving many hospitals it means one stolen process
+  environment yields every tenant's bridge at once — precisely the concentration the
+  attack data describes.
+- **`AutoApproved` is the one outbound grant of privilege.** Its inputs are enumerated
+  and its allow-path is brute-forced, but the enumeration proves the *logic* is tight; it
+  does not prove the *inputs* were not fabricated by whoever owns the process.
+
+### What is therefore owed before a multi-tenant pilot
+
+These are additions to the private production core, listed here so the gap is recorded
+rather than discovered:
+
+1. ~~**Signed verdicts.**~~ **Shape built** — see below. A consumer must be able to verify
+   that an `allow` originated from the evaluator and was not injected in transit or at
+   rest; the webhook HMAC covers delivery, not the decision itself. What remains for the
+   private core is key custody and asymmetric signing, not the contract.
+2. **Per-tenant connector credentials**, so the blast radius of a stolen credential is one
+   hospital rather than the fleet — replacing the process-global environment token.
+3. **A bounded `AutoApproved` surface** — rate, scope, and time limits on automatic
+   privileged elevation, so a compromised hub cannot mint unbounded activations even with
+   valid-looking inputs.
+4. **An explicit "assume the hub is compromised" review**, run the way the connector
+   allow-paths are: adversarially, with the finding written down whether or not it is
+   comfortable.
+
+Non-claims, stated as plainly as the rest: nothing here asserts that SignalGrid prevents
+a ransomware incident, reduces patient harm, or satisfies any regulatory obligation. The
+figures cited above are third-party research about the sector, reproduced as context for
+a design decision. They are not outcomes this product claims to produce.
+
+### Verdict attestation, as built
+
+`lib/verdict-attestation` is the public-core half of item 1: the envelope, the
+verification contract, and the fail-closed behaviour. The production core swaps the
+sealing primitive for asymmetric signing with real key custody; the contract does not
+change, and the contract is what carries the safety.
+
+The design decision worth arguing about is what happens when verification FAILS. The
+obvious answer — return an error and let the caller decide — is how this class of control
+stops working in practice: a status field a caller may ignore is a status field some
+caller eventually ignores, and the first such caller silently re-opens the hole. So
+`openVerdict` never hands back a usable grant it could not verify. An unverifiable verdict
+comes back with its action raised to `step_up` and its reason replaced with
+`VERDICT_UNVERIFIED`, which means **a caller that never inspects the status still cannot
+act on a forged `allow`**. The proof asserts exactly that across the whole enumerated
+space, not just the happy path.
+
+Three details are load-bearing and easy to get wrong in the other direction:
+
+- **The degrade is one-directional.** A verdict that already says `restrict` is not
+  lowered to `step_up` by a verification failure. Failing to confirm a verdict is never a
+  reason to trust a device *more* than the unverified claim about it did.
+- **`step_up`, not `escalate`.** A failed verification means we do not know the truth; it
+  does not mean the device is compromised. Escalating every unverifiable read would make a
+  key-rotation mistake indistinguishable from an attack, and the first noisy week would
+  end with the control switched off.
+- **The verdict object is copied, never mutated.** The caller is often holding the
+  original for an audit record, and rewriting it underneath them would corrupt exactly the
+  evidence this is meant to protect.
+
+`tenantId` is bound *inside* the sealed payload rather than sitting alongside it, so a
+genuine, correctly-sealed `allow` for one hospital does not transfer to another — the hub
+threat above, closed at the cryptographic layer rather than by policy. `alg` is checked
+for membership in an allowlist and never used to *select* a verifier, which is the
+algorithm-confusion mistake that has broken signed-token schemes repeatedly; the verifier
+comes from the keyring entry. An unknown `keyId` is a refusal rather than a fallback to
+trying every key, because a verifier that roams its ring is an oracle for which keys
+exist.
+
+Canonicalization is its own small module for a reason: a seal is only as good as the bytes
+it covers, and `JSON.stringify` guarantees neither that two different verdicts serialize
+differently (it maps `NaN` and `Infinity` alike to `null`) nor that one verdict serializes
+the same way twice (key order follows insertion order). The canonical form is key-sorted
+and own-property-only, so a polluted prototype cannot change what a signature covers, and
+it returns an `UNCANONICAL` sentinel rather than throwing — a hostile value fails closed
+inside a verification path instead of exploding out of it.
+
+Proven offline by `pnpm run proof:verdict-attestation` (76 checks): 288 envelope states
+enumerated across tamper site, key, algorithm, clock and replay, with **exactly one**
+verifying, and — separately asserted through `openVerdict` — **exactly one** yielding a
+usable `none`.
+
+The count moved from 64 to 76 within an hour of being written, and by a route worth
+recording. The new mutation guard was pointed at this package and reported **13 of 19
+mutations surviving** — thirteen conditions here could be deleted with the proof still
+green. Most were type checks whose deletion changed the failure *reason* without changing
+the refusal: a numeric `keyId` still fails, but as `unknown_key` rather than
+`envelope_malformed`, which sends an operator hunting a key-rotation problem that does not
+exist. Asserting the reason instead of merely the refusal made them load-bearing. The two
+that remain are genuinely unreachable, labelled as such in the source, and allowlisted with
+reasons. Code written an hour ago is not a reason to trust it more than anything else.
+
+## The custody device as an update channel
+
+This section exists because the threat model did not cover it, and the gap was
+found by writing a partner-matrix entry rather than by any gate here. That is
+worth stating plainly: nothing in this document's STRIDE pass would have caught
+it, because the pass is scoped to the software core and a charging dock is not
+software this repo runs.
+
+**The problem.** SignalGrid treats custody hardware — docks, cradles, lockers,
+dispensing kiosks — as a **read-only signal source**. Vendors in this category
+routinely also advertise **over-the-air software updates to the devices they
+hold**. Both statements can be true of the same box, and if they are, the
+"read-only signal source" framing is wrong in a way that matters:
+
+- A device that can **push software** to a shared clinical iPad or a warehouse
+  handheld is a **management-plane component**, with the same reach as an MDM,
+  and a compromise of it is a fleet-wide code-execution event rather than a
+  reporting-integrity event.
+- It is also a **custody signal source SignalGrid trusts**. So a compromised
+  dock could change the device AND report the custody, charge, tamper, and
+  battery state that SignalGrid uses to decide whether that device is trustworthy
+  — corrupting the evidence and the subject together. Every other signal source
+  in this fabric can lie about a device; this one can lie about a device it just
+  modified.
+- The blast radius is concentrated by design. Custody hardware is deployed
+  exactly where shared devices congregate, so one dock is a bottleneck for every
+  device that passes through it, across shifts.
+
+**What SignalGrid does about it today: nothing preventive.** There is no firmware
+attestation for custody hardware, no signature requirement on dock-delivered
+updates, no separation between the reporting channel and the update channel, and
+no signal that would distinguish a dock that updates devices from one that does
+not. `dockState: faulted` and `offline` cover a dock that has *stopped working*;
+nothing covers a dock that is *working for someone else*.
+
+Three things that do exist should be named, because "nothing at all" would be
+the wrong kind of modesty — they are **detective and structural, not
+preventive**, and none of them stops a compromised dock:
+
+- Every custody signal carries `connectorId` and `sourceReference` into the
+  hash-chained audit ledger, so a compromised dock's reports are **attributable
+  and tamper-evident after the fact**.
+- `Connector.ingestionMode` already distinguishes app-in-dock / vendor API /
+  edge gateway / embedded SmartDock, so it is the natural place for the
+  write-path capability declaration below to live — the field exists, the
+  capability question is simply not asked yet.
+- `runDockSync` refuses any non-fixture connector, so **no real custody hardware
+  is trusted anywhere in this repository**. The exposure described here is a
+  property of the product this core is shaped like, not of the core itself.
+
+**What is owed before this is claimed as covered.** These are requirements, not
+implementations, and they belong with the other production-core items below:
+
+- A **capability declaration** per custody connector — does this hardware have a
+  write path to the device? — so an update-capable dock is at least *visible* as
+  a management-plane component rather than silently classed as a sensor.
+- **Attestation of the dock's own firmware** before its custody reports are
+  treated as evidence, which is the same argument `verdict-attestation` makes
+  about a verdict: an unverifiable claim should not be usable.
+- **Separation of duties between the reporting and update channels**, so the
+  component that vouches for a device's integrity is not the component that most
+  recently changed it.
+- **Supply-chain review of the hardware vendor**, which this document does not
+  cover for any vendor today.
+
+**A related weakness, pre-existing and general.** An unrecognized enum value on
+ANY signal degrades silently to `unknown`, and `unknown` is permissive for every
+custody dimension. So a later-timestamped junk value can erase a real adverse
+read and restore `allow` — a compromised or merely buggy source can *unsay* a
+finding by following it with nonsense. This is not specific to custody hardware
+and was not introduced by the battery-health work; it is recorded here because
+the update-channel analysis is what made its reachability concrete.
+
+Until those exist, the accurate public statement is that SignalGrid consumes
+custody signals from hardware whose own integrity it does not verify, and the
+[Hardware Partner Matrix](HARDWARE_PARTNER_MATRIX.md) asks every candidate
+vendor whether their device is also an update channel.
+
 ## What the private production core must add
 
 The public core establishes the shapes and fail-closed behaviors; production

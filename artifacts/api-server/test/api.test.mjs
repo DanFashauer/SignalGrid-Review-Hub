@@ -145,7 +145,11 @@ async function run() {
 
   // ── Signal Radar: new-signal detection ───────────────────────────────────
   const catalog = await req("GET", "/signals/catalog");
-  check("signal catalog → 200 with 12 evaluated categories", catalog.status === 200 && catalog.json?.evaluated?.length === 12);
+  check("signal catalog → 200 with 13 evaluated categories", catalog.status === 200 && catalog.json?.evaluated?.length === 13);
+  check(
+    "signal catalog → battery_health is evaluated, not novel",
+    (catalog.json?.evaluated ?? []).includes("battery_health"),
+  );
   const radar = await req("POST", "/signals/radar", { body: { signals: [
     { category: "identity_state" },
     { category: "rtls_location" },

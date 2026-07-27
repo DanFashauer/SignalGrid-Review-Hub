@@ -63,10 +63,39 @@ Connectors whose full allow-path is currently constrained this way (mismatches=0
 over the full product): **oauth-consent** (6,480), **sso-session** (768),
 **access-governance** (4,500), **ot-posture** (324), **token-binding** (1,296),
 **pacs-access** (8,100), **agent-identity** (17,280 normalized + 870,912 raw + a parse-fidelity pass over the raw space),
-**device-management-health** (864 normalized + 21,168 raw + a parse-fidelity pass). These are the enum-field
+**device-management-health** (21,600 normalized + 1,354,752 raw + a parse-fidelity pass),
+**link-usability** (6,480 normalized + 217,728 raw + a parse-fidelity pass). These are the enum-field
 "trust grant" dimensions where
 the unknown-reaches-grant class is most acute; new connectors adopt the harness
 from the start.
+
+Two of them also pin the NUMBER of granting shapes, not just the absence of
+mismatches: `device-management-health` and `link-usability` at exactly three each,
+**over their enumerated wire spaces**. A mismatch count of zero proves the grant
+path admits nothing unconfirmed; it does not prove the path stayed as narrow as it
+was designed to be, because widening the clean predicate and widening the
+implementation together stays at zero. Pinning the count makes an extra route into
+the grant a test failure rather than a silent widening. The scope qualifier is not
+decoration: `link-usability`'s own proof asserts a route *outside* its enumeration,
+where a Proxy that lies in `ownKeys` while still answering
+`getOwnPropertyDescriptor` keeps its values readable and grants.
+
+`link-usability` reached three the hard way, and the episode is the argument for
+pinning the count at all. It shipped granting **six** shapes; adversarial review
+confirmed the count was correct and then asked what the six *were*, and found three
+of them self-contradictory — a report asserting no roaming domain exists while also
+reporting observed roaming behaviour. Counting the grants is necessary and not
+sufficient; someone still has to read them.
+
+Both connectors carry a mutation-test record. On `device-management-health`, 11
+deliberate weakenings were applied and reverted, every one caught — two of them had
+previously left the proof green. On `link-usability`, review ran 65; 62 were killed,
+and the three survivors were the real findings, now fixed. A follow-up pass of seven
+targeted mutations killed four and left three that are **inert at current
+severities** — a contradiction candidate already outranks what they guard — and
+those three are labelled as such in the source rather than left looking
+load-bearing.
+
 The remaining grant-emitting connectors are a tracked follow-up: the
 list-aggregation dimensions (`credential-exposure`, `data-protection`,
 `edr-threat`, `vuln-scan`, `peripheral-control`, `identity-risk`) grant only on an
@@ -76,6 +105,104 @@ proof; and `macos-posture`, `network-nac`, `rtls-custody`, and `location-service
 are queued for the same treatment (network-nac's unknown-freshness grant is
 flagged there as a candidate to tighten). Scoping is explicit here so coverage is
 never mistaken for complete.
+
+#### Two guards built from failures this repo actually had
+
+Both of these exist because something went wrong here, not because they seemed like good
+practice. Each is stated with the failure it was built against, so a future reader can
+judge whether it is still earning its place.
+
+**`pnpm run guard:mutations` — is each guard falsifiable by its own proof?**
+
+The grant-safety enumeration reports 0 mismatches for every connector, and that proves a
+real thing: no unknown, missing or malformed input reaches a grant. It does not prove that
+each individual condition is doing work, and the two are easy to confuse. The reason is
+structural — grant-safety observes only grant-ness, and every malformed value already
+normalizes to a denying sentinel, so deleting an integrity condition changes
+`reportIntegrity` and changes no action. The enumeration stays green while the condition
+is load-bearing and unproven.
+
+Two adversarial reviews each found exactly that. In `device-management-health`, two of
+three terms in the channel-consistency guard could be deleted with the proof green. In
+`link-usability`, three conditions survived and the branch they guarded turned out to be
+**dead** — its candidate won zero times out of 360 opportunities, so an asserted "this
+device is not on the network" was being reported as a generic unknown. Both were caught
+because a reviewer thought to try mutation testing. That is not a control; it is luck with
+good habits.
+
+The guard mutates each condition in a registered file, runs that proof under a timeout,
+and fails on any survivor. Current sweep: **105 mutations, 95 killed, 7 documented-inert,
+0 survivors.** The timeout is not incidental — deleting `MAX_PROTOTYPE_DEPTH` makes the
+proof *hang* rather than fail, because the walk meets a Proxy returning a fresh prototype
+from every `getPrototypeOf`; in CI that failure mode burns a job's whole budget instead of
+going red, so hangs are detected and reported separately.
+
+The gate is "no NEW survivors", not "zero survivors". Some conditions are genuinely inert
+at current severities — a contradiction candidate already outranks what they guard — and
+are kept because they encode the rule and become load-bearing the moment a severity moves.
+Those carry an allowlist entry with a checkable reason, and are labelled inert in the
+source. **An allowlist entry that stops matching fails the gate**: the code moved and
+nobody re-derived whether the justification still holds.
+
+It found real gaps immediately, including in code written an hour earlier: 13 of 19
+mutations survived in `verdict-attestation` on first run. Most were type checks whose
+deletion changed the failure *reason* but not the refusal — a numeric `keyId` still fails,
+just as `unknown_key` instead of `envelope_malformed`, sending an operator hunting a key
+rotation problem that does not exist. Asserting the reason rather than the refusal made
+them load-bearing.
+
+**`pnpm run guard:registries` — are the guards' own coverage lists honest?**
+
+Both guards above carry a hand-maintained list of what they cover, which is the same shape
+as the defect that produced them: `incident-playbook-proof` restated `SignalKind` by hand
+and drifted five kinds behind. Deriving `SignalKind` from a runtime array fixed that list
+and immediately created two more.
+
+The uncomfortable version: **a guard whose coverage list is stale is worse than no guard**,
+because it reports success over the part it has stopped looking at. `guard:mutations`
+printing "0 survivors" says nothing about a connector nobody added to its targets.
+
+So the expected coverage is derived from the code. Any proof importing
+`enumerateGrantSafety` is enumerating an allow path and must be registered with the
+mutation guard or excluded with a reason; any proof printing a `figures=` line must be
+registered with the figure guard. A registration naming a proof that no longer exists is
+drift in the other direction and also fails. Negative-controlled both ways: dropping a
+connector from the registry fails, and so does adding a brand-new allow-path proof nobody
+registered.
+
+What it reports today is worth stating plainly rather than burying: **12 proofs enumerate
+an allow path, and 3 are under the mutation guard.** Eight are listed as QUEUED — not
+waived — and named individually in the output every time it runs, including
+`agent-identity`, whose allow path was hardened over seven adversarial reviews but predates
+the sweep. Partial coverage announced every run is a very different thing from partial
+coverage that looks complete.
+
+**`pnpm run guard:figures` — is a number stated as a measurement still one?**
+
+`check-proof-counts` already guards the `(N checks)` a doc advertises. The numbers that
+actually carry the argument are the others — how large a space was enumerated, how many
+states grant — and those went stale three times in one working session: pre-split figures
+quoted against a space 64× larger; a PR body advertising counts that had moved; and
+`SELF_REVIEW` saying `link-usability` pins "exactly six" granting shapes, which went stale
+*inside the pull request that made it false*. A reader cannot tell a live figure from a
+fossil, and the fossil is more persuasive than it deserves to be because it looks precise.
+
+Each participating proof now emits a machine-readable `figures=` line derived from the
+same variables its checks asserted on, and the disclosure figures the docs quote are
+computed during the existing enumeration rather than by a throwaway script. The guard runs
+the proof and requires every comma-formatted number in a doc *section* naming that proof to
+be a live figure. Section scope, not paragraph: the drift that actually happened sat
+several paragraphs from the one naming the proof.
+
+Historical numbers are legitimate and this repo uses them deliberately. They are
+recognised by the words around them — in **both** directions, since "read eight and 1,788
+*until* a review re-derived them" puts the marker after what it qualifies — rather than by
+an allowlist of numbers, because an allowlist of numbers would itself go stale, which is
+the failure being guarded against.
+
+Both guards were negative-controlled before being trusted, on the principle that a gate
+which has never failed is indistinguishable from one that cannot: reverting a figure to
+its pre-split value, and perturbing a space size by one, each fail the guard.
 
 #### One command across both repos — `pnpm run verify:all`
 

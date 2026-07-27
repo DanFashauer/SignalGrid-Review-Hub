@@ -25,6 +25,12 @@
 //                            evidence FRESH or STALE as the repo's contracts move on;
 //     reviewHubPass / mcpPass / mcpCheckoutFound — the gate outcomes (all true by
 //                            construction: emission is refused otherwise);
+//     mcpCommit / mcpDirty — WHICH signalgrid-mcp code produced the passing run,
+//                            and whether its tracked files were modified. Without
+//                            these, a mint from an unmerged branch or a stale
+//                            checkout is indistinguishable from one against
+//                            published main. Recorded, not enforced — minting from
+//                            a branch is legitimate as long as the evidence says so;
 //     contractSha          — sha256 of the shared posture-report contract file,
 //                            cross-checked against the manifest before emitting;
 //     summary              — public-safe counts only (signal kinds, categories, MCP
@@ -207,6 +213,17 @@ if (emitEvidence) {
       );
       process.exitCode = 1;
     } else {
+      // Which signalgrid-mcp code actually produced the passing run. Without this
+      // the evidence says only "mcpPass: true", so a mint from an unmerged branch,
+      // an old checkout, or a dirty tree is indistinguishable from one against
+      // published main — and unverifiable evidence is not evidence. Recorded, not
+      // enforced: a legitimate mint from a branch is fine as long as it SAYS so.
+      const mcpGit = (args) => {
+        const r = spawnSync("git", args, { cwd: mcpPath, encoding: "utf8" });
+        return r.status === 0 ? r.stdout.trim() : null;
+      };
+      const mcpCommit = mcpGit(["rev-parse", "HEAD"]);
+      const mcpDirty = mcpGit(["status", "--porcelain"]);
       // Public-safe by construction: fingerprints, booleans, and counts only.
       const evidence = {
         schema: "signalgrid-live-evidence/v1",
@@ -216,6 +233,10 @@ if (emitEvidence) {
         reviewHubPass: true,
         mcpPass: true,
         mcpCheckoutFound: true,
+        mcpCommit,
+        // Tracked-file modifications only; untracked scratch (venvs, lockfiles)
+        // does not make a run untrustworthy.
+        mcpDirty: mcpDirty === null ? null : mcpDirty.split("\n").filter((l) => l && !l.startsWith("??")).length > 0,
         contractSha,
         summary: {
           signalKinds: manifest.body.signalKinds?.length ?? 0,

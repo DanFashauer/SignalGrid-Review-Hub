@@ -45,12 +45,23 @@ echo "-- install deps"
 run install --frozen-lockfile >/tmp/sgval_install.log 2>&1 || { echo "install failed"; tail /tmp/sgval_install.log; exit 1; }
 
 # tsx needs esbuild's platform binary; the workspace overrides strip it. Add the
-# matching version back locally (idempotent; does not touch committed files after).
+# matching version back for THIS RUN only.
+#
+# `pnpm add -w` rewrites package.json AND pnpm-lock.yaml, so we snapshot both and
+# restore them afterwards — the installed binary stays in node_modules (all we
+# need) while the committed manifests are left byte-identical. Without this the
+# stray root dependency gets committed and every CI job's first step
+# (`pnpm install --frozen-lockfile`) fails on a lockfile/manifest mismatch.
 ESV=$(ls node_modules/.pnpm 2>/dev/null | grep -oE '^esbuild@[0-9.]+' | head -1 | cut -d@ -f2)
 ARCHPKG="@esbuild/$(uname -s | tr 'A-Z' 'a-z')-$(uname -m | sed 's/x86_64/x64/')"
 if [ -n "$ESV" ] && ! ls -d node_modules/.pnpm/${ARCHPKG#@esbuild/}* >/dev/null 2>&1; then
   echo "-- add $ARCHPKG@$ESV (tsx runtime binary for this platform)"
+  cp package.json /tmp/sgval_pkg.bak 2>/dev/null
+  cp pnpm-lock.yaml /tmp/sgval_lock.bak 2>/dev/null
   run add -w "$ARCHPKG@$ESV" >/tmp/sgval_esbuild.log 2>&1 || echo "   (add reported an issue; continuing)"
+  cp /tmp/sgval_pkg.bak package.json 2>/dev/null
+  cp /tmp/sgval_lock.bak pnpm-lock.yaml 2>/dev/null
+  echo "   (manifests restored; binary kept in node_modules)"
 fi
 
 echo "-- build api-server (esbuild; needed for observability + api integration test)"

@@ -96,7 +96,15 @@ export default defineConfig({
       command:
         "pnpm --filter @workspace/api-server run build && pnpm --filter @workspace/api-server run start",
       cwd: repoRoot,
-      env: { PORT: String(PORTS.api) },
+      // WebAuthn RP id / origin so the step-up ceremony verifies: the browser
+      // page runs at the admin console's origin (PORTS.admin) and its /api/* is
+      // proxied here, so clientDataJSON.origin is the console origin. rpId
+      // "localhost" is a valid registrable suffix of localhost:<port>.
+      env: {
+        PORT: String(PORTS.api),
+        WEBAUTHN_RP_ID: "localhost",
+        WEBAUTHN_ORIGIN: `http://localhost:${PORTS.admin}`,
+      },
       url: `http://localhost:${PORTS.api}/api/healthz`,
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,

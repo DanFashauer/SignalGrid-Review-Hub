@@ -84,6 +84,16 @@ const fs = normalizeFleetReport(future, FLEET_OBSERVED_AT);
 check("future-dated check-in → freshness unknown (not fresh)", fs.postureFreshness === "unknown");
 check("future-dated check-in → raise step-up (fail closed)", fs.assurance === "raise_step_up");
 
+// ── NEGATIVE CONTROL: absence is not a pass ───────────────────────────────────
+// A transport that cannot see screen lock (Fleet's host list, for one) leaves the
+// field absent. Before the fix, such a host — encrypted, supervised, fresh —
+// graded `compliant` on a check nobody made. A grant requires positive
+// confirmation of EVERY input: absent screen lock ⇒ unknown + raise step-up.
+const noLock: FleetHostReport = { hostRef: "ipad-nolock", mdmEnrolled: true, supervised: true, diskEncryption: "on", osMajor: 26, osFloor: 26, lastSeenAt: "2026-07-16T13:30:00.000Z" };
+const nls = normalizeFleetReport(noLock, FLEET_OBSERVED_AT);
+check("absent screen lock → compliance unknown (never compliant)", nls.deviceCompliance === "unknown");
+check("absent screen lock → raise step-up", nls.assurance === "raise_step_up");
+
 // ── determinism ───────────────────────────────────────────────────────────────
 check("normalization is deterministic", JSON.stringify(normalizeFleetReports(DEMO_FLEET_REPORTS, FLEET_OBSERVED_AT)) === JSON.stringify(signals));
 
@@ -108,10 +118,12 @@ const stub = async (req: FleetRequest): Promise<FleetResponse> => {
   }
   return { status: 200, json: {} };
 };
-const client = new FleetClient({ baseUrl: "https://fleet.example", token: "t", transport: stub, normalTeamId: 1, restrictedTeamId: 9 });
+const client = new FleetClient({ baseUrl: "https://fleet.example", token: "t", transport: stub, normalTeamId: 1, restrictedTeamId: 9, osFloor: 26 });
 
 const hosts = await client.listHostPosture();
 check("client maps Fleet hosts → reports", hosts.length === 2 && hosts[0].hostRef === "UUID-42");
+check("config osFloor is stamped onto every fetched report", hosts.every((h) => h.osFloor === 26));
+check("fetched host leaves screenLock ABSENT (not an asserted pass)", hosts[0].screenLock === undefined);
 check("On (automatic) → managed + supervised", hosts[0].mdmEnrolled === true && hosts[0].supervised === true);
 check("disk_encryption_enabled true → diskEncryption on", hosts[0].diskEncryption === "on");
 check("os_version 'iOS 26.1' → osMajor 26", hosts[0].osMajor === 26);
@@ -121,7 +133,14 @@ const r1 = await client.applyDecision(42, "restrict");
 check("restrict → restricted team (tightened)", r1.teamId === 9 && r1.tightened === true);
 check("deny → restricted team (tightened)", (await client.applyDecision(42, "deny")).tightened === true);
 check("allow → normal team (relaxed)", (await client.applyDecision(42, "allow")).teamId === 1);
-check("step_up → normal team (not tightened)", (await client.applyDecision(42, "step_up")).tightened === false);
+// NEGATIVE CONTROL (adversarial-review finding): step_up demands MORE proof; if it
+// moved a host to the normal team, a restrict→step_up sequence would silently
+// un-restrict the device. Only an explicit allow may relax enforcement.
+const su = await client.applyDecision(42, "step_up");
+check("step_up → restricted team (tightened, never a relaxation)", su.teamId === 9 && su.tightened === true);
+check("only allow relaxes: every non-allow outcome is tightened",
+  (await Promise.all((["step_up", "restrict", "deny"] as const).map((o) => client.applyDecision(42, o))))
+    .every((a) => a.tightened && a.teamId === 9));
 check("transfer request carries host + team", requests.some((r) => r.path === "/api/v1/fleet/hosts/transfer" && (r.body as any).hosts[0] === 42));
 
 const failClient = new FleetClient({ baseUrl: "x", token: "t", transport: async () => ({ status: 500, json: {} }), normalTeamId: 1, restrictedTeamId: 9 });

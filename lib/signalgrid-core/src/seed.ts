@@ -42,6 +42,7 @@ export interface SeededDemo {
     vero: string;
     forge: string;
     orion: string;
+    civic: string;
   };
   tokens: {
     northwindOwner: string;
@@ -52,6 +53,7 @@ export interface SeededDemo {
     veroOwner: string;
     forgeOwner: string;
     orionOwner: string;
+    civicOwner: string;
   };
   /** Per-connector fixture posture records, so a sync can be replayed. */
   fixtureRecords: Record<string, FixturePostureRecord[]>;
@@ -65,6 +67,7 @@ const MERIDIAN = "tenant_meridian";
 const VERO = "tenant_vero";
 const FORGE = "tenant_forge";
 const ORION = "tenant_orion";
+const CIVIC = "tenant_civic";
 
 export function seedDemoStore(clock: Clock): SeededDemo {
   const store = new MemoryStore();
@@ -104,6 +107,12 @@ export function seedDemoStore(clock: Clock): SeededDemo {
     tenantId: ORION,
     slug: "orion-datacenters",
     name: "Orion Data Centers (demo)",
+    createdAt,
+  });
+  seedTenant(store, {
+    tenantId: CIVIC,
+    slug: "civic-services",
+    name: "Civic Services Agency (demo)",
     createdAt,
   });
 
@@ -155,12 +164,24 @@ export function seedDemoStore(clock: Clock): SeededDemo {
     { key: "compute-ops", name: "Compute / orchestration", riskTier: "critical" },
   ]);
 
+  // Civic: government / public-sector workflows. Keys match the app-workflows
+  // catalog (gov-case-session / gov-facility-access) so the benefits/case and
+  // secure-facility catalogs gate against a LIVE decision. Minimal seed —
+  // workflows + policy only; no fixture subjects yet, so an evaluation for an
+  // unknown subject grades fail-closed rather than allow.
+  seedWorkflows(store, CIVIC, [
+    { key: "general-lookup", name: "Agency directory lookup", riskTier: "standard" },
+    { key: "gov-case-session", name: "Benefits / case-management session", riskTier: "elevated" },
+    { key: "gov-facility-access", name: "Secure facility access", riskTier: "critical" },
+  ]);
+
   seedPolicy(store, NORTHWIND, createdAt);
   seedPolicy(store, ATLAS, createdAt);
   seedPolicy(store, MERIDIAN, createdAt);
   seedPolicy(store, VERO, createdAt);
   seedPolicy(store, FORGE, createdAt);
   seedPolicy(store, ORION, createdAt);
+  seedPolicy(store, CIVIC, createdAt);
 
   // Northwind subjects: a deliberate spread of posture outcomes.
   const northwindRecords = seedNorthwindSubjects(store);
@@ -255,7 +276,7 @@ export function seedDemoStore(clock: Clock): SeededDemo {
   return {
     store,
     clock,
-    tenants: { northwind: NORTHWIND, atlas: ATLAS, meridian: MERIDIAN, vero: VERO, forge: FORGE, orion: ORION },
+    tenants: { northwind: NORTHWIND, atlas: ATLAS, meridian: MERIDIAN, vero: VERO, forge: FORGE, orion: ORION, civic: CIVIC },
     tokens: {
       northwindOwner: "sgk_demo_northwind_owner",
       northwindOperator: "sgk_demo_northwind_operator",
@@ -265,6 +286,7 @@ export function seedDemoStore(clock: Clock): SeededDemo {
       veroOwner: "sgk_demo_vero_owner",
       forgeOwner: "sgk_demo_forge_owner",
       orionOwner: "sgk_demo_orion_owner",
+      civicOwner: "sgk_demo_civic_owner",
     },
     fixtureRecords: {
       [northwindConnectorId]: northwindRecords,
@@ -956,6 +978,7 @@ function seedApiKeys(store: MemoryStore): void {
     { tenantId: VERO, role: "owner", token: "sgk_demo_vero_owner", subjectId: "user_vero_owner" },
     { tenantId: FORGE, role: "owner", token: "sgk_demo_forge_owner", subjectId: "user_forge_owner" },
     { tenantId: ORION, role: "owner", token: "sgk_demo_orion_owner", subjectId: "user_orion_owner" },
+    { tenantId: CIVIC, role: "owner", token: "sgk_demo_civic_owner", subjectId: "user_civic_owner" },
   ];
   for (const key of keys) {
     store.putUser({

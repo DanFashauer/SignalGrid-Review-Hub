@@ -13,7 +13,7 @@
 
 import type { AppAction, AppIntegration, AppRiskTier, AppVertical } from "./index";
 
-/** The six supported verticals, as a runtime list (mirrors the AppVertical union). */
+/** The supported verticals, as a runtime list (mirrors the AppVertical union). */
 export const APP_VERTICALS: readonly AppVertical[] = [
   "healthcare",
   "warehouse",

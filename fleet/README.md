@@ -1,6 +1,7 @@
-# SignalGrid × Fleet — deployable artifacts
+# SignalGrid × Fleet — example config fixtures
 
-Ready-to-apply Fleet config for the SignalGrid shared-device model. See
+Example Fleet config for the SignalGrid shared-device model — NOT deploy-ready;
+validate in a private test environment before any real use. See
 `../native/ios/FLEET_MDM.md` for the full blueprint (the posture→signal /
 decision→Fleet-API loop, partnership rationale).
 
@@ -29,5 +30,5 @@ fleetctl apply -f teams/signalgrid-shared-devices.yml
 
 So: everything up to the connector is automatable here; the on-device enforcement
 is a one-time hardware step (one supervised device) that no Mac/Simulator tooling
-can stand in for. Edit `allowlistedAppBundleIDs` to your real host-app bundle IDs
-before deploying.
+can stand in for. Edit `allowListedAppBundleIDs` to your real host-app bundle IDs
+before using in a private test environment.

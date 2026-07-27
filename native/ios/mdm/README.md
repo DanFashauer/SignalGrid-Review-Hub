@@ -12,7 +12,7 @@ that is why the shell looks windowed/removable there.
 | Payload | Effect |
 | --- | --- |
 | `com.apple.app_lock` (Single App Mode) | Locks the device to `com.enterprise.shell`. The Home screen is **never reachable**, so the app **can't be closed or removed**, and iOS **auto-relaunches** it if it ever exits. `DisableAutoLock` keeps the screen on. |
-| `com.apple.applicationaccess` | `allowAppRemoval = false` (belt-and-suspenders: app is non-deletable) and `AutonomousSingleAppModePermittedAppIDs` (lets `KioskController` self-enter ASAM between users). |
+| `com.apple.applicationaccess` | `allowAppRemoval = false` (belt-and-suspenders: app is non-deletable) and `autonomousSingleAppModePermittedAppIDs` (lets `KioskController` self-enter ASAM between users). |
 | `PayloadRemovalDisallowed = true` | The profile itself can't be removed on-device. |
 
 This is what makes "the worker shouldn't be allowed to remove the app, and the

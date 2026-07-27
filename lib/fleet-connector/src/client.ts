@@ -31,6 +31,10 @@ export interface FleetClientConfig {
   normalTeamId: number;
   /** Team provisioned with the LOCKED-DOWN restrictions (kiosk/allowlist/non-removable). */
   restrictedTeamId: number;
+  /** Org-required minimum OS major, stamped onto every fetched report so the
+   *  normalizer can grade the floor. Absent → floor not enforced (and the
+   *  normalizer says so via `unknown` rather than passing the host). */
+  osFloor?: number;
 }
 
 export interface FleetActuation {
@@ -48,8 +52,11 @@ function parseOsMajor(osVersion: unknown): number | undefined {
   return m ? Number(m[1]) : undefined;
 }
 
-/** Map a Fleet host JSON object into a normalized FleetHostReport (fail-safe). */
-export function toHostReport(raw: any): FleetHostReport {
+/** Map a Fleet host JSON object into a normalized FleetHostReport (fail-safe).
+ *  Fleet's host list does not carry screen-lock state, so `screenLock` is left
+ *  absent — the normalizer grades that `unknown`, never `compliant`. `osFloor`
+ *  comes from the caller's config, not from Fleet. */
+export function toHostReport(raw: any, osFloor?: number): FleetHostReport {
   const mdm = raw?.mdm ?? {};
   const enrollment = typeof mdm.enrollment_status === "string" ? mdm.enrollment_status : "";
   const mdmEnrolled = /^on/i.test(enrollment);
@@ -63,6 +70,7 @@ export function toHostReport(raw: any): FleetHostReport {
     supervised,
     diskEncryption,
     osMajor: parseOsMajor(raw?.os_version),
+    osFloor,
     lastSeenAt: typeof raw?.seen_time === "string" ? raw.seen_time : null,
     sourceReference: `fleet:host#${raw?.id ?? "?"}`,
   };
@@ -80,16 +88,19 @@ export class FleetClient {
     const res = await this.cfg.transport({ method: "GET", path: "/api/v1/fleet/hosts" }, this.auth());
     if (!okStatus(res.status)) throw new Error(`Fleet list hosts failed: ${res.status}`);
     const hosts = (res.json as any)?.hosts;
-    return Array.isArray(hosts) ? hosts.map(toHostReport) : [];
+    return Array.isArray(hosts) ? hosts.map((h: any) => toHostReport(h, this.cfg.osFloor)) : [];
   }
 
   /**
-   * Actuate a decision on a host. `restrict`/`deny` move it to the restricted team
-   * (kiosk/allowlist/non-removable engage); `allow`/`step_up` move it to the normal
-   * team. Uses Fleet's host-transfer endpoint. Throws (fail-closed) on any error.
+   * Actuate a decision on a host. Only an explicit `allow` returns a host to the
+   * normal team; `step_up`, `restrict`, and `deny` all place it on the restricted
+   * team (kiosk/allowlist/non-removable engage). step_up is a demand for MORE
+   * proof — actuating it by relaxing device enforcement would turn the fabric's
+   * middle rung into an un-restrict side channel. Uses Fleet's host-transfer
+   * endpoint. Throws (fail-closed) on any error.
    */
   async applyDecision(hostId: number, outcome: AccessOutcome): Promise<FleetActuation> {
-    const tightened = outcome === "restrict" || outcome === "deny";
+    const tightened = outcome !== "allow";
     const teamId = tightened ? this.cfg.restrictedTeamId : this.cfg.normalTeamId;
     const res = await this.cfg.transport(
       { method: "POST", path: "/api/v1/fleet/hosts/transfer", body: { team_id: teamId, hosts: [hostId] } },

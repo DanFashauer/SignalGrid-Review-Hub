@@ -37,14 +37,14 @@
       <string>SignalGrid Restrictions</string>
 
       <!-- Kiosk-until-auth: authorize the shell for Autonomous Single App Mode. -->
-      <key>AutonomousSingleAppModePermittedAppIDs</key>
+      <key>autonomousSingleAppModePermittedAppIDs</key>
       <array>
         <string>com.enterprise.shell</string>
       </array>
 
       <!-- Released device is restricted to the admin-configured apps only.
            Mirror the persona appLaunchConfig; edit per deployment. -->
-      <key>allowlistedAppBundleIDs</key>
+      <key>allowListedAppBundleIDs</key>
       <array>
         <string>com.enterprise.shell</string>
         <string>com.acme.emr</string>

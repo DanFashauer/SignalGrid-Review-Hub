@@ -2,9 +2,10 @@
 //
 // These are generic app CATEGORIES (never a real vendor/product name) with the
 // kinds of actions people perform in them. `workflowKey` is the decision-core
-// workflow the app's session maps to; all six verticals now have a seeded demo
+// workflow the app's session maps to; all seven verticals now have a seeded demo
 // tenant (healthcare / warehouse / global-fleet / retail / industrial /
-// data-center-NOC), so every catalog here evaluates against a live decision.
+// data-center-NOC / government), so every catalog here evaluates against a live
+// decision.
 //
 // Risk tiers: standard (low-risk read/ack) · elevated (writes / sensitive reads)
 // · critical (irreversible / high-consequence — always sensitive). `sensitive`

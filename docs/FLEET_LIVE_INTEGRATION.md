@@ -56,8 +56,9 @@ is the control-plane prerequisite; a supervised device is the on-device prerequi
 The read path can be validated against any reachable Fleet with a token:
 
 ```bash
+# Trust the local Fleet's CA explicitly — never disable TLS verification.
 FLEET_BASE=https://<fleet>:1337 FLEET_TOKEN=<api-token> \
-NODE_TLS_REJECT_UNAUTHORIZED=0 \
+NODE_EXTRA_CA_CERTS=/path/to/fleet-ca.pem \
   tsx path/to/driver.mts   # listHostPosture → normalize → summary → applyDecision
 ```
 

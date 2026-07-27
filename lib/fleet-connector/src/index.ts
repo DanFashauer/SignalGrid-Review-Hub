@@ -99,8 +99,12 @@ export function normalizeFleetReport(report: FleetHostReport, nowIso: string): F
 
   const hasKnownViolation =
     report.diskEncryption === "off" || belowFloor || report.screenLock === "off";
+  // "Fully clean" demands a POSITIVE assertion for every check it covers: screen
+  // lock must be observed "on", not merely "not observed off". An absent field is
+  // how a transport that cannot see screen lock (Fleet's host list, for one)
+  // reports it — that host is `unknown`, never `compliant`.
   const fullyClean =
-    report.diskEncryption === "on" && !belowFloor && report.screenLock !== "off";
+    report.diskEncryption === "on" && !belowFloor && report.screenLock === "on";
 
   const deviceCompliance: ComplianceState =
     hasKnownViolation ? "non_compliant" : fullyClean ? "compliant" : "unknown";

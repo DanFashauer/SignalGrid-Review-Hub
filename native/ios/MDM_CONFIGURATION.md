@@ -41,7 +41,7 @@ Example (MDM app-config payload for `com.enterprise.shell`):
 <dict>
   <key>SingleAppModeEnabled</key><true/>
   <key>AllowManualOverride</key><true/>
-  <key>RecoveryCode</key><string>473921</string>
+  <key>RecoveryCode</key><string>REPLACE-WITH-ADMIN-ISSUED-CODE</string>
 </dict>
 ```
 
@@ -52,7 +52,7 @@ Single App Mode**, via the `com.apple.applicationaccess` payload:
 
 ```xml
 <dict>
-  <key>AutonomousSingleAppModePermittedAppIDs</key>
+  <key>autonomousSingleAppModePermittedAppIDs</key>
   <array>
     <string>com.enterprise.shell</string>
   </array>
@@ -70,7 +70,7 @@ management profile applies an **allowed-apps restriction** (supervised-only):
 
 ```xml
 <dict>
-  <key>allowlistedAppBundleIDs</key>
+  <key>allowListedAppBundleIDs</key>
   <array>
     <string>com.enterprise.shell</string>
     <string>com.apple.Preferences</string>   <!-- if allowed -->

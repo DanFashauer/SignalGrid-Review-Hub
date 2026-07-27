@@ -16,7 +16,7 @@
 // It deliberately does NOT re-implement any check. It shells out to the same gates
 // CI and preflight use, so this can never drift from them.
 
-import { execSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,34 +24,37 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const full = process.argv.includes("--full");
 
-const sh = (cmd) => {
-  try {
-    return execSync(cmd, { cwd: repoRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
-  } catch {
-    return "";
-  }
-};
-
 /** Run a gate. Returns {status, detail} — never throws, never guesses. */
 function gate(name, cmd, args, { skip = false, reason = "" } = {}) {
   if (skip) return { name, status: "not run", detail: reason };
   const r = spawnSync(cmd, args, { cwd: repoRoot, encoding: "utf8", timeout: 30 * 60_000 });
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
-  if (r.error) return { name, status: "not run", detail: r.error.message };
+  // A gate that was ASKED to run but couldn't spawn is a failure, not "not run" —
+  // "not run" is reserved for gates deliberately skipped WITH a reason. Reporting
+  // a spawn error as "not run" would let a broken gate read as merely deferred.
+  if (r.error) return { name, status: "FAIL", detail: `could not run: ${r.error.message}` };
   return { name, status: r.status === 0 ? "pass" : "FAIL", detail: out.trim().split("\n").filter(Boolean).slice(-1)[0] ?? "" };
 }
 
+/** Run git with an argument VECTOR — never interpolate values into a shell string.
+ *  Branch names are attacker-influencable text; execSync(`git ls-remote origin ${branch}`)
+ *  is a command injection the moment a branch is named `x; rm -rf .`. */
+function gitOut(args) {
+  const r = spawnSync("git", args, { cwd: repoRoot, encoding: "utf8" });
+  return r.status === 0 ? (r.stdout ?? "").trim() : "";
+}
+
 // ── repo state ────────────────────────────────────────────────────────────────
-const branch = sh("git rev-parse --abbrev-ref HEAD");
-const head = sh("git rev-parse --short HEAD");
-const baseRef = sh("git symbolic-ref --quiet refs/remotes/origin/HEAD").replace("refs/remotes/", "") || "origin/SignalGrid_Alpha";
-sh(`git fetch origin --quiet`);
-const counts = sh(`git rev-list --left-right --count ${baseRef}...HEAD`).split(/\s+/);
+const branch = gitOut(["rev-parse", "--abbrev-ref", "HEAD"]);
+const head = gitOut(["rev-parse", "--short", "HEAD"]);
+const baseRef = gitOut(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"]).replace("refs/remotes/", "") || "origin/SignalGrid_Alpha";
+gitOut(["fetch", "origin", "--quiet"]);
+const counts = gitOut(["rev-list", "--left-right", "--count", `${baseRef}...HEAD`]).split(/\s+/);
 const behind = counts[0] ?? "?";
 const ahead = counts[1] ?? "?";
-const dirty = sh("git status --porcelain").split("\n").filter(Boolean).length;
-const localHead = sh("git rev-parse HEAD");
-const remoteHead = sh(`git ls-remote origin ${branch}`).split(/\s+/)[0] ?? "";
+const dirty = gitOut(["status", "--porcelain"]).split("\n").filter(Boolean).length;
+const localHead = gitOut(["rev-parse", "HEAD"]);
+const remoteHead = gitOut(["ls-remote", "origin", branch]).split(/\s+/)[0] ?? "";
 const pushed = localHead && localHead === remoteHead;
 
 // ── inventory (facts, not claims) ─────────────────────────────────────────────

@@ -153,7 +153,8 @@ async function run() {
 
   const keys = await req("GET", "/v1/keys");
   check("keys discovery is public (200)", keys.status === 200);
-  check("keys lists the eight demo keys", Array.isArray(keys.json?.keys) && keys.json.keys.length === 8);
+  check("keys lists the nine demo keys (incl. the government/civic tenant)", Array.isArray(keys.json?.keys) && keys.json.keys.length === 9);
+  check("civic (government) owner key is discoverable", keys.json.keys.some((k) => k.token === "sgk_demo_civic_owner"));
 
   // ── public catalog + simulator routes ────────────────────────────────────
   const integrations = await req("GET", "/integrations");

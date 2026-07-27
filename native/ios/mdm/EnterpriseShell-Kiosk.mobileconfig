@@ -74,7 +74,7 @@
                  allowed to enter Autonomous Single App Mode itself (KioskController). -->
             <key>allowAppRemoval</key>
             <false/>
-            <key>AutonomousSingleAppModePermittedAppIDs</key>
+            <key>autonomousSingleAppModePermittedAppIDs</key>
             <array>
                 <string>com.enterprise.shell</string>
             </array>

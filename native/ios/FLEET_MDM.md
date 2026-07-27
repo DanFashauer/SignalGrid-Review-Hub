@@ -42,7 +42,7 @@ configuration profiles** (Fleet supports arbitrary signed/unsigned profiles).
 <dict>
   <key>SingleAppModeEnabled</key><true/>
   <key>AllowManualOverride</key><true/>
-  <key>RecoveryCode</key><string>473921</string>
+  <key>RecoveryCode</key><string>REPLACE-WITH-ADMIN-ISSUED-CODE</string>
 </dict>
 ```
 
@@ -50,7 +50,7 @@ configuration profiles** (Fleet supports arbitrary signed/unsigned profiles).
 supervised) — lets the shell self-lock the idle device:
 ```xml
 <dict>
-  <key>AutonomousSingleAppModePermittedAppIDs</key>
+  <key>autonomousSingleAppModePermittedAppIDs</key>
   <array><string>com.enterprise.shell</string></array>
 </dict>
 ```
@@ -59,7 +59,7 @@ supervised) — lets the shell self-lock the idle device:
 "restricted to admin-configured apps" set, mirrors the persona's `appLaunchConfig`:
 ```xml
 <dict>
-  <key>allowlistedAppBundleIDs</key>
+  <key>allowListedAppBundleIDs</key>
   <array>
     <string>com.enterprise.shell</string>
     <string>com.acme.emr</string>
@@ -107,7 +107,7 @@ A new connector alongside the existing Graph/DDM connectors:
 | Fleet / osquery | SignalGrid signal |
 | --- | --- |
 | `disk_encryption` = off | `device.non_compliant` (compliance=non_compliant) |
-| `os_version` below floor | `device.stale_checkin` / freshness=stale |
+| `os_version` below floor | `device.non_compliant` (compliance=non_compliant) |
 | MDM enrollment absent / unsupervised | managementState=unmanaged |
 | `mdm.enrollment_status`, last seen age | posture freshness |
 | screen-lock / firewall off | posture attributes |
@@ -126,7 +126,12 @@ team. Fleet endpoints: team assignment + `POST` MDM commands / profile apply.
 2. Enroll THIS Mac as a macOS host → confirm live osquery posture flowing.
 3. Push a custom profile via `fleetctl apply` → confirm it applies.
 4. Build the connector: read posture from Fleet → SignalGrid signals; push a
-   profile change on a decision. Proves the whole loop without a phone.
+   profile change on a decision.
+
+What PROVES the loop is the committed, fixture-backed proof —
+`pnpm run proof:fleet-connector` (deterministic, runs in CI). The Docker/live
+steps above are an optional private validation exercise on top of that proof,
+not a substitute for it.
 
 **Needs real hardware + Apple Business Manager:**
 5. Enroll a real iPhone/iPad in Fleet (APNs cert required).

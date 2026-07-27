@@ -16,6 +16,7 @@ const VERTICAL_LABEL: Record<AppVertical, string> = {
   global_fleet: "Global fleet",
   retail: "Retail",
   data_center: "Data center / NOC",
+  government: "Government / public sector",
 };
 
 // A compliant demo actor + token per live-evaluable vertical (public-safe fixtures).
@@ -156,7 +157,7 @@ export function AppWorkflows() {
 }
 
 function groupByVertical(list: V1AppIntegration[]): Record<AppVertical, V1AppIntegration[]> {
-  const order: AppVertical[] = ["healthcare", "warehouse", "industrial", "global_fleet", "retail", "data_center"];
+  const order: AppVertical[] = ["healthcare", "warehouse", "industrial", "global_fleet", "retail", "data_center", "government"];
   const out = {} as Record<AppVertical, V1AppIntegration[]>;
   for (const v of order) {
     const items = list.filter((i) => i.vertical === v);

@@ -5,13 +5,17 @@
 
 set -e
 
+# Run from the script's own directory (native/ios) so paths resolve no matter
+# where it is invoked from.
+cd "$(dirname "$0")"
+
 echo "========================================"
 echo "EnterpriseShell Code Analysis"
 echo "========================================"
 
 # Check if we're in the right directory
-if [ ! -d "ios/EnterpriseShell" ]; then
-    echo "Error: Run this script from the project root"
+if [ ! -d "EnterpriseShell" ]; then
+    echo "Error: EnterpriseShell/ not found next to this script"
     exit 1
 fi
 
@@ -28,36 +32,34 @@ WARNINGS=0
 # Helper function
 check_pass() {
     echo -e "${GREEN}✅ PASS${NC}: $1"
-    ((PASSED++))
+    PASSED=$((PASSED+1))
 }
 
 check_fail() {
     echo -e "${RED}❌ FAIL${NC}: $1"
-    ((FAILED++))
+    FAILED=$((FAILED+1))
 }
 
 check_warn() {
     echo -e "${YELLOW}⚠️  WARN${NC}: $1"
-    ((WARNINGS++))
+    WARNINGS=$((WARNINGS+1))
 }
 
 echo ""
 echo "1. Checking for SwiftLint..."
 if command -v swiftlint &> /dev/null; then
-    cd ios
-    if swiftlint --config ../.swiftlint.yml 2>&1; then
+    if swiftlint --config .swiftlint.yml 2>&1; then
         check_pass "SwiftLint passed"
     else
         check_fail "SwiftLint found issues"
     fi
-    cd ..
 else
     check_warn "SwiftLint not installed (brew install swiftlint)"
 fi
 
 echo ""
 echo "2. Checking for hardcoded credentials..."
-HARDCODED=$(grep -rn "password\s*=\s*[\"']" ios/EnterpriseShell --include="*.swift" | grep -v "TODO\|FIXME\|// " || true)
+HARDCODED=$(grep -rn "password\s*=\s*[\"']" EnterpriseShell --include="*.swift" | grep -v "TODO\|FIXME\|// " || true)
 if [ -z "$HARDCODED" ]; then
     check_pass "No hardcoded passwords"
 else
@@ -67,7 +69,7 @@ fi
 
 echo ""
 echo "3. Checking for insecure URLs..."
-HTTP_URLS=$(grep -rn "http://" ios/EnterpriseShell --include="*.swift" | grep -v "localhost\|TODO\|FIXME" || true)
+HTTP_URLS=$(grep -rn "http://" EnterpriseShell --include="*.swift" | grep -v "localhost\|TODO\|FIXME" || true)
 if [ -z "$HTTP_URLS" ]; then
     check_pass "All URLs use HTTPS"
 else
@@ -77,7 +79,7 @@ fi
 
 echo ""
 echo "4. Checking for print statements..."
-PRINT_STMTS=$(grep -rn "print(" ios/EnterpriseShell --include="*.swift" | grep -v "AuditLogger\|// " || true)
+PRINT_STMTS=$(grep -rn "print(" EnterpriseShell --include="*.swift" | grep -v "AuditLogger\|// " || true)
 if [ -z "$PRINT_STMTS" ]; then
     check_pass "No print statements (using AuditLogger)"
 else
@@ -87,7 +89,7 @@ fi
 
 echo ""
 echo "5. Checking for TODO/FIXME without severity..."
-BAD_TODOS=$(grep -rn "TODO:\|FIXME:" ios/EnterpriseShell --include="*.swift" | grep -v "HIGH\|MEDIUM\|LOW" || true)
+BAD_TODOS=$(grep -rn "TODO:\|FIXME:" EnterpriseShell --include="*.swift" | grep -v "HIGH\|MEDIUM\|LOW" || true)
 if [ -z "$BAD_TODOS" ]; then
     check_pass "TODOs have severity levels"
 else
@@ -97,7 +99,7 @@ fi
 
 echo ""
 echo "6. Checking delegate memory safety..."
-STRONG_DELEGATES=$(grep -rn "var.*Delegate\s*:\s*\w\+[^?]" ios/EnterpriseShell/Services --include="*.swift" | grep -v "weak\|?" || true)
+STRONG_DELEGATES=$(grep -rn "var.*Delegate\s*:\s*\w\+[^?]" EnterpriseShell/Services --include="*.swift" | grep -v "weak\|?" || true)
 if [ -z "$STRONG_DELEGATES" ]; then
     check_pass "Delegates are weak or optional"
 else
@@ -107,7 +109,7 @@ fi
 
 echo ""
 echo "7. Checking for force unwraps..."
-FORCE_UNWRAPS=$(grep -rn "!\s*as\|!\s*is" ios/EnterpriseShell/Services --include="*.swift" | grep -v "// " || true)
+FORCE_UNWRAPS=$(grep -rn "!\s*as\|!\s*is" EnterpriseShell/Services --include="*.swift" | grep -v "// " || true)
 if [ -z "$FORCE_UNWRAPS" ]; then
     check_pass "No force unwraps"
 else
@@ -117,7 +119,7 @@ fi
 
 echo ""
 echo "8. Checking Keychain usage..."
-KEYCHAIN_ITEMS=$(grep -rn "kSecAttrAccessibleWhenUnlockedThisDeviceOnly" ios/EnterpriseShell --include="*.swift" | wc -l)
+KEYCHAIN_ITEMS=$(grep -rn "kSecAttrAccessibleWhenUnlockedThisDeviceOnly" EnterpriseShell --include="*.swift" | wc -l)
 if [ "$KEYCHAIN_ITEMS" -gt 0 ]; then
     check_pass "Keychain secure access used ($KEYCHAIN_ITEMS items)"
 else
@@ -126,14 +128,14 @@ fi
 
 echo ""
 echo "9. Counting lines of code..."
-TOTAL_LOC=$(find ios/EnterpriseShell -name "*.swift" -exec cat {} \; 2>/dev/null | wc -l)
+TOTAL_LOC=$(find EnterpriseShell -name "*.swift" -exec cat {} \; 2>/dev/null | wc -l)
 echo "Total Swift LOC: $TOTAL_LOC"
 
 echo ""
 echo "10. File structure..."
-SERVICE_COUNT=$(find ios/EnterpriseShell/Services -name "*.swift" 2>/dev/null | wc -l)
-VIEW_COUNT=$(find ios/EnterpriseShell/Views -name "*.swift" 2>/dev/null | wc -l)
-MODEL_COUNT=$(find ios/EnterpriseShell/Models -name "*.swift" 2>/dev/null | wc -l)
+SERVICE_COUNT=$(find EnterpriseShell/Services -name "*.swift" 2>/dev/null | wc -l)
+VIEW_COUNT=$(find EnterpriseShell/Views -name "*.swift" 2>/dev/null | wc -l)
+MODEL_COUNT=$(find EnterpriseShell/Models -name "*.swift" 2>/dev/null | wc -l)
 echo "Services: $SERVICE_COUNT | Views: $VIEW_COUNT | Models: $MODEL_COUNT"
 
 echo ""

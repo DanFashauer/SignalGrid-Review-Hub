@@ -185,9 +185,21 @@ public actor MockSignalGridAPI: SignalGridAPI {
             observedAt: "2026-07-16T14:00:00.000Z",
             summary: FleetPostureSummary(hosts: 3, managed: 3, enforceable: 2, diskEncrypted: 2, nonCompliant: 1, raiseStepUp: 2),
             signals: [
-                FleetPostureHost(hostRef: "ipad-ward-01", deviceManaged: true, deviceCompliance: "compliant", baselineCompliance: "aligned", postureFreshness: "fresh", enforceable: true, assurance: "standard", rationale: "Fleet posture healthy — enrolled, supervised, encrypted, fresh"),
-                FleetPostureHost(hostRef: "ipad-ward-02", deviceManaged: true, deviceCompliance: "non_compliant", baselineCompliance: "drifted", postureFreshness: "fresh", enforceable: true, assurance: "raise_step_up", rationale: "disk encryption off"),
-                FleetPostureHost(hostRef: "ipad-byod-01", deviceManaged: true, deviceCompliance: "compliant", baselineCompliance: "aligned", postureFreshness: "fresh", enforceable: false, assurance: "raise_step_up", rationale: "unsupervised (kiosk/allowlist/non-removable cannot engage)"),
+                FleetPostureHost(
+                    hostRef: "ipad-ward-01", deviceManaged: true, deviceCompliance: "compliant",
+                    baselineCompliance: "aligned", postureFreshness: "fresh", enforceable: true,
+                    assurance: "standard",
+                    rationale: "Fleet posture healthy — enrolled, supervised, encrypted, fresh"),
+                FleetPostureHost(
+                    hostRef: "ipad-ward-02", deviceManaged: true, deviceCompliance: "non_compliant",
+                    baselineCompliance: "drifted", postureFreshness: "fresh", enforceable: true,
+                    assurance: "raise_step_up",
+                    rationale: "disk encryption off"),
+                FleetPostureHost(
+                    hostRef: "ipad-byod-01", deviceManaged: true, deviceCompliance: "compliant",
+                    baselineCompliance: "aligned", postureFreshness: "fresh", enforceable: false,
+                    assurance: "raise_step_up",
+                    rationale: "unsupervised (kiosk/allowlist/non-removable cannot engage)"),
             ])
     }
 
@@ -478,39 +490,82 @@ public actor MockSignalGridAPI: SignalGridAPI {
     }
 
     private static func seedDecisions() -> [Decision] {
-        let seed: [(String, String, String, DecisionOutcome, String, Severity, String)] = [
-            ("nurse.compliant", "ipad-ward-01", "clinical-session", .allow, "TRUST_ESTABLISHED", .low, "Identity, device, and workflow trust requirements are satisfied."),
-            ("nurse.stale", "ipad-ward-03", "clinical-session", .stepUp, "POSTURE_STALE", .medium, "Stale posture requires native step-up for high-assurance actions."),
-            ("nurse.noncompliant", "ipad-ward-02", "clinical-session", .restrict, "DEVICE_NONCOMPLIANT", .high, "Non-compliant device is limited to low-risk actions."),
-            ("nurse.disabled", "ipad-ward-04", "clinical-session", .deny, "IDENTITY_DISABLED", .critical, "Disabled identity is denied."),
-            ("nurse.badge_removed", "ipad-badge-01", "clinical-session", .restrict, "BADGE_REMOVED", .high, "Badge binding was removed from the shared device."),
-            ("nurse.baseline_drift", "ipad-ward-06", "clinical-session", .stepUp, "BASELINE_DRIFTED", .medium, "Baseline drift requires additional verification.")
+        let seed: [DecisionSeed] = [
+            DecisionSeed(
+                "nurse.compliant", "ipad-ward-01", "clinical-session", .allow, "TRUST_ESTABLISHED", .low,
+                "Identity, device, and workflow trust requirements are satisfied."),
+            DecisionSeed(
+                "nurse.stale", "ipad-ward-03", "clinical-session", .stepUp, "POSTURE_STALE", .medium,
+                "Stale posture requires native step-up for high-assurance actions."),
+            DecisionSeed(
+                "nurse.noncompliant", "ipad-ward-02", "clinical-session", .restrict, "DEVICE_NONCOMPLIANT", .high,
+                "Non-compliant device is limited to low-risk actions."),
+            DecisionSeed(
+                "nurse.disabled", "ipad-ward-04", "clinical-session", .deny, "IDENTITY_DISABLED", .critical,
+                "Disabled identity is denied."),
+            DecisionSeed(
+                "nurse.badge_removed", "ipad-badge-01", "clinical-session", .restrict, "BADGE_REMOVED", .high,
+                "Badge binding was removed from the shared device."),
+            DecisionSeed(
+                "nurse.baseline_drift", "ipad-ward-06", "clinical-session", .stepUp, "BASELINE_DRIFTED", .medium,
+                "Baseline drift requires additional verification.")
         ]
 
         return seed.enumerated().map { index, item in
-            let (identity, device, workflow, outcome, reason, severity, explanation) = item
-            return Decision(
+            Decision(
                 id: "dec_seed_\(index + 1)",
                 tenantId: DemoFixtures.tenant.id,
-                identityId: "id_\(identity.replacingOccurrences(of: ".", with: "_"))",
-                deviceId: "dev_\(device.replacingOccurrences(of: "-", with: "_"))",
-                workflowId: "wf_\(workflow)",
-                outcome: outcome,
+                identityId: "id_\(item.identity.replacingOccurrences(of: ".", with: "_"))",
+                deviceId: "dev_\(item.device.replacingOccurrences(of: "-", with: "_"))",
+                workflowId: "wf_\(item.workflow)",
+                outcome: item.outcome,
                 policyId: DemoFixtures.policies[0].id,
                 policyVersionId: DemoFixtures.policyVersions[0].id,
                 policyVersion: 1,
-                matchedRules: [MatchedRule(ruleId: reason.lowercased(), reasonCode: reason, outcome: outcome, severity: severity)],
-                reasonCodes: [reason],
+                matchedRules: [
+                    MatchedRule(
+                        ruleId: item.reason.lowercased(), reasonCode: item.reason,
+                        outcome: item.outcome, severity: item.severity)
+                ],
+                reasonCodes: [item.reason],
                 signalIds: ["sig_1", "sig_2", "sig_3"],
                 evidenceSnapshotId: "ev_seed_\(index + 1)",
                 requestContext: ["surface": "ios-operator-demo"],
                 latencyMs: 8 + index * 3,
                 createdAt: String(format: "2026-07-13T14:%02d:00.000Z", 58 - index * 4),
-                reviewStatus: outcome == .allow ? .notRequired : .pendingReview,
-                reviewable: outcome != .allow,
-                explanation: explanation
+                reviewStatus: item.outcome == .allow ? .notRequired : .pendingReview,
+                reviewable: item.outcome != .allow,
+                explanation: item.explanation
             )
         }
+    }
+}
+
+private struct DecisionSeed: Sendable {
+    let identity: String
+    let device: String
+    let workflow: String
+    let outcome: DecisionOutcome
+    let reason: String
+    let severity: Severity
+    let explanation: String
+
+    init(
+        _ identity: String,
+        _ device: String,
+        _ workflow: String,
+        _ outcome: DecisionOutcome,
+        _ reason: String,
+        _ severity: Severity,
+        _ explanation: String
+    ) {
+        self.identity = identity
+        self.device = device
+        self.workflow = workflow
+        self.outcome = outcome
+        self.reason = reason
+        self.severity = severity
+        self.explanation = explanation
     }
 }
 

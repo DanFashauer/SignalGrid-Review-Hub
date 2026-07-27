@@ -40,6 +40,10 @@ final class AppModel {
     init() {
         self.api = MockSignalGridAPI()
         self.baseURLText = UserDefaults.standard.string(forKey: "signalgrid.baseURL")
+            // Loopback default for the local dev/demo control plane only — the same
+            // exemption the insecure_url rule already grants the "localhost" spelling.
+            // Any non-loopback base URL must be HTTPS; the rule still enforces that.
+            // swiftlint:disable:next insecure_url
             ?? "http://127.0.0.1:5174/api"
         self.tokenPresent = KeychainStore().load() != nil
     }

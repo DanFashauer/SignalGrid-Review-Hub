@@ -105,6 +105,13 @@ const v1Requests = [
   item("Approve a remediation", "POST", "/v1/remediation/{{remediationId}}/approve", { body: {} }),
   item("List app-workflow integrations", "GET", "/v1/app-workflows/integrations"),
   item("Gate an app workflow (EMR)", "POST", "/v1/app-workflows/evaluate", { body: { integrationId: "emr-chart", identityRef: "nurse.compliant", deviceRef: "ipad-ward-01" } }),
+  // Step-up completion is a real WebAuthn ceremony; the assertion fields below are
+  // placeholders a browser's navigator.credentials fills in — Postman can exercise
+  // the fail-closed paths (403/409), not mint a genuine release.
+  item("Step-up: enrollment options", "POST", "/v1/step-up/enroll/options", { body: { identityRef: "nurse.baseline_drift" } }),
+  item("Step-up: verify enrollment", "POST", "/v1/step-up/enroll/verify", { body: { identityRef: "nurse.baseline_drift", challengeId: "{{stepUpChallengeId}}", response: { id: "{{credentialId}}", rawId: "{{credentialId}}", type: "public-key", response: { clientDataJSON: "…", attestationObject: "…" } } } }),
+  item("Step-up: auth challenge", "POST", "/v1/step-up/challenge", { body: { identityRef: "nurse.baseline_drift" } }),
+  item("Complete step-up (release held plan)", "POST", "/v1/app-workflows/complete-step-up", { body: { integrationId: "bcma", identityRef: "nurse.baseline_drift", deviceRef: "ipad-ward-06", challengeId: "{{stepUpChallengeId}}", assertion: { id: "{{credentialId}}", rawId: "{{credentialId}}", type: "public-key", response: { clientDataJSON: "…", authenticatorData: "…", signature: "…" } } } }),
   item("Start a device session", "POST", "/v1/sessions/start", { body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session", ttlSeconds: 900 } }),
   item("Get a session", "GET", "/v1/sessions/{{sessionId}}"),
   item("Refresh a session", "POST", "/v1/sessions/{{sessionId}}/refresh", { body: {} }),

@@ -85,7 +85,8 @@
     "proof:task-exception": "tsx ./src/task-exception-proof.ts",
     "proof:work-context": "tsx ./src/work-context-proof.ts",
     "proof:handoff-sim": "tsx ./src/handoff-sim-proof.ts",
-    "sync:manifest": "node ../scripts/generate-sync-manifest.mjs"
+    "sync:manifest": "node ../scripts/generate-sync-manifest.mjs",
+    "proof:adaptive-proposals": "tsx ./src/adaptive-proposals-proof.ts"
   },
   "dependencies": {
     "@workspace/app-workflows": "workspace:*",
@@ -111,7 +112,8 @@
     "@workspace/webauthn": "workspace:*",
     "pg": "^8.13.1",
     "@workspace/work-context": "workspace:*",
-    "@workspace/handoff-sim": "workspace:*"
+    "@workspace/handoff-sim": "workspace:*",
+    "@workspace/adaptive-proposals": "workspace:*"
   },
   "devDependencies": {
     "@playwright/test": "1.62.0",

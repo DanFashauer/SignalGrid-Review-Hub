@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 1,
-  "fingerprint": "389ba5e3300ba79dc9ea4a4a2b9b71bd30983adbeb518ccf72f550161dea3811",
+  "manifestVersion": 2,
+  "fingerprint": "2be7687bfdd2afed9c5c377c69d8f5d8d8890c7b44eccce843f2620511d1b212",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -79,6 +79,7 @@
     ],
     "proofCounts": {
       "access-governance": 57,
+      "adaptive-proposals": 37,
       "agent-identity": 143,
       "credential-exposure": 28,
       "device-attestation": 60,
@@ -111,7 +112,5 @@
       "ios": "native/ios/EnterpriseShell"
     }
   },
-  "generatedFrom": {
-    "commit": "072fc419e5c75e095e95f62f9788c5802aa18474"
-  }
+  "generatedFrom": null
 }

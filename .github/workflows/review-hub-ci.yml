@@ -169,6 +169,12 @@ jobs:
       - name: Proof — handoff simulation (exception-release loop)
         run: pnpm run proof:handoff-sim
 
+      # Issue #136 step 6: the grid proposes better flows from observed history,
+      # but a proposal can never activate itself — approval is a required human
+      # gate, proven exhaustively over the transition table.
+      - name: Proof — adaptive proposals (governed lifecycle, no self-activation)
+        run: pnpm run proof:adaptive-proposals
+
       - name: Proof — verdict attestation (forged verdicts degrade)
         run: pnpm run proof:verdict-attestation
 

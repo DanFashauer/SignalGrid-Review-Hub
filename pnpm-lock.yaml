@@ -1533,6 +1533,16 @@ importers:
         specifier: ^8.11.10
         version: 8.20.0
 
+  lib/pim-activation:
+    dependencies:
+      '@workspace/posture-composition':
+        specifier: workspace:*
+        version: link:../posture-composition
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.6.2
+
   lib/posture-composition:
     dependencies:
       '@workspace/event-contract':
@@ -1644,6 +1654,9 @@ importers:
       '@workspace/persistence':
         specifier: workspace:*
         version: link:../lib/persistence
+      '@workspace/pim-activation':
+        specifier: workspace:*
+        version: link:../lib/pim-activation
       '@workspace/posture-composition':
         specifier: workspace:*
         version: link:../lib/posture-composition

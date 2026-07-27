@@ -216,6 +216,13 @@ jobs:
       # maiden run caught a real gap (a decision-evidence row the core carried
       # and no console scenario ever rendered), so this layer has already paid
       # for itself once.
+      # The GitHub runner ships no Playwright browser — the preinstalled Chromium
+      # this suite uses locally is a property of the dev sandbox, not of CI. The
+      # maiden CI run proved it: all 15 tests failed browser LAUNCH in <11ms
+      # while the same suite passed 15/15 locally. Install before running.
+      - name: Install Playwright Chromium for the E2E suite
+        run: pnpm --filter @workspace/scripts exec playwright install --with-deps chromium
+
       - name: Browser E2E (review console, website, admin console)
         run: pnpm run test:e2e
 

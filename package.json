@@ -108,7 +108,8 @@
     "proof:work-context": "pnpm --filter @workspace/scripts run proof:work-context",
     "proof:handoff-sim": "pnpm --filter @workspace/scripts run proof:handoff-sim",
     "sync:manifest": "node scripts/generate-sync-manifest.mjs",
-    "check:live-sync": "node scripts/check-live-sync.mjs"
+    "check:live-sync": "node scripts/check-live-sync.mjs",
+    "status": "node scripts/status-summary.mjs"
   },
   "private": true,
   "devDependencies": {

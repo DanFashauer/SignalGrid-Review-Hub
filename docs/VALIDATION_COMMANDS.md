@@ -2,6 +2,24 @@
 
 Run these commands from the repository root before opening or updating a standard Review Hub pull request.
 
+## Solution status summary
+
+```bash
+node scripts/status-summary.mjs            # fast gates (seconds)
+node scripts/status-summary.mjs --full     # + preflight (typecheck, build, all proofs, browser E2E)
+node scripts/status-summary.mjs --md > STATUS.md
+```
+
+Emits one paste-ready report of whether the whole system is consistent and current:
+repo state versus the base branch, every fast gate, the live-sync manifest and
+real-hardware evidence status, and an inventory of proof gates, E2E specs, and CI
+workflows. Useful for handing a status update to a reviewer or another agent.
+
+It reports only what it actually ran: every gate is executed live, and anything
+skipped is printed as `not run` with its reason rather than omitted or assumed
+green. It re-implements no check — it shells out to the same gates CI and
+`preflight` use, so it cannot drift from them. A non-zero exit means a gate failed.
+
 ## Install dependencies
 
 ```bash

@@ -1436,6 +1436,22 @@ importers:
         specifier: 'catalog:'
         version: 25.6.2
 
+  lib/handoff-sim:
+    dependencies:
+      '@workspace/integrations':
+        specifier: workspace:*
+        version: link:../integrations
+      '@workspace/posture-composition':
+        specifier: workspace:*
+        version: link:../posture-composition
+      '@workspace/work-context':
+        specifier: workspace:*
+        version: link:../work-context
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.6.2
+
   lib/incident-playbook:
     dependencies:
       '@workspace/event-contract':
@@ -1642,6 +1658,9 @@ importers:
       '@workspace/flows':
         specifier: workspace:*
         version: link:../lib/flows
+      '@workspace/handoff-sim':
+        specifier: workspace:*
+        version: link:../lib/handoff-sim
       '@workspace/incident-playbook':
         specifier: workspace:*
         version: link:../lib/incident-playbook

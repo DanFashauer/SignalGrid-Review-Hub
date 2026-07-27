@@ -104,7 +104,8 @@
     "proof:live-idp": "pnpm --filter @workspace/scripts run proof:live-idp",
     "test:e2e": "pnpm --filter @workspace/scripts run test:e2e",
     "proof:task-exception": "pnpm --filter @workspace/scripts run proof:task-exception",
-    "proof:work-context": "pnpm --filter @workspace/scripts run proof:work-context"
+    "proof:work-context": "pnpm --filter @workspace/scripts run proof:work-context",
+    "proof:handoff-sim": "pnpm --filter @workspace/scripts run proof:handoff-sim"
   },
   "private": true,
   "devDependencies": {

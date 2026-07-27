@@ -163,6 +163,12 @@ jobs:
       - name: Proof — work context (portable, descriptive, never permissive)
         run: pnpm run proof:work-context
 
+      # Issue #136's handoff criterion + the warehouse release loop: exception →
+      # hold → the worker keeps working → fix posted → fix INDEPENDENTLY verified
+      # → released on a trusted device. A resolution posting is not verification.
+      - name: Proof — handoff simulation (exception-release loop)
+        run: pnpm run proof:handoff-sim
+
       - name: Proof — verdict attestation (forged verdicts degrade)
         run: pnpm run proof:verdict-attestation
 

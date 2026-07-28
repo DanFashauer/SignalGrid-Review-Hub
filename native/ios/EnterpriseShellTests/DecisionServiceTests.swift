@@ -82,7 +82,10 @@ final class DecisionServiceTests: XCTestCase {
 
         let req = try XCTUnwrap(StubURLProtocol.lastRequest)
         XCTAssertEqual(req.httpMethod, "POST")
-        XCTAssertEqual(req.url?.path, "/v1/app-workflows/evaluate")
+        // The Express api-server mounts /v1 under /api, so the encoded path must
+        // carry the /api prefix (4b576a5 decision-path correction) — the bare
+        // /v1/... path would 404 against the real server.
+        XCTAssertEqual(req.url?.path, "/api/v1/app-workflows/evaluate")
         XCTAssertEqual(req.value(forHTTPHeaderField: "Authorization"), "Bearer tok-123")
         XCTAssertEqual(req.value(forHTTPHeaderField: "Content-Type"), "application/json")
         let body = try XCTUnwrap(StubURLProtocol.lastBody)

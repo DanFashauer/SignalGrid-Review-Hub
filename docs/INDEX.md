@@ -49,6 +49,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Deployment models](DEPLOYMENT_MODELS.md): the hybrid split — the cloud control plane manages, the edge/on-prem decision core decides.
 - [Admin flows](ADMIN_FLOWS.md) and [app-workflow templates](APP_WORKFLOW_TEMPLATES.md): what admins configure, and the lint that validates it.
 - [API access and connectors](API_ACCESS_AND_CONNECTORS.md): which vendor APIs each dimension would read from, and the read-only boundary.
+- [Fleet connector — private-validation design notes](FLEET_LIVE_INTEGRATION.md): design findings from an out-of-tree validation the owner ran privately. The committed, CI-gated evidence remains the fixture proof (`proof:fleet-connector`); this public tree records no live vendor integration.
 - [Run on a Mac, iPhone, or iPad](RUN_ON_MAC.md): the owner's one-command path to seeing it run.
 - [Inspiration & positioning references](inspiration/INSPIRATION.md): the IAM-landscape framing (Domains → Capabilities → Outcomes) mapped to SignalGrid, plus verdict-first XDR fusion and the NIST SP 800-207 policy-engine model.
 - [Operator console — Build the grid surfaces](OPERATOR_GRID_CONSOLE.md): the mobile PWA's capstone Grid overview plus five read-only detail views (grid intelligence, device recorder, app resilience, signal sourcing, grid config), each mapped to its `/cp/v1` read and `@workspace/flows` model — the "see the grid in action" entry point.

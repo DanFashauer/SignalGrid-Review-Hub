@@ -230,7 +230,11 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
         }
 
         if let rejection = badgeRejection(badgeId) {
-            transition(to: .lockedIdle, error: rejection)
+            // Surface the ACTUAL rejection (review finding): this path only runs
+            // while lockedIdle, and lockedIdle → lockedIdle is not a legal
+            // transition — so transition(to:error:) surfaced a generic
+            // invalidStateTransition instead of the format/lockout error.
+            handleError(rejection)
             return
         }
 
@@ -914,11 +918,24 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
         // keyboard-wedge / webhook / legacy-accessory readers reach authentication
         // with malformed values and unlimited repeated scans.
         if let rejection = badgeRejection(badgeId) {
-            // A rejected scan never advances to authentication. An active session
-            // is left intact — a bad scan must not tear down a valid session;
-            // when idle we surface the error like the validated path does.
-            if currentState != .activeSession {
-                transition(to: .lockedIdle, error: rejection)
+            // A rejected scan never advances to authentication — and never disturbs
+            // work in flight. An active session stays intact, and an in-progress
+            // authentication/provisioning is NOT torn down (review finding: queueing
+            // .lockedIdle here raced the in-flight task, which could still assign
+            // currentSession or persist the session to Keychain and then fail its
+            // own transition — leaving credential-bearing session data behind the
+            // idle UI). Only when the device is already idle is the rejection
+            // surfaced to the holder — directly via handleError, because
+            // lockedIdle → lockedIdle is not a legal transition and the old
+            // transition(to:error:) call surfaced invalidStateTransition instead
+            // of the actual rejection.
+            if currentState == .lockedIdle {
+                handleError(rejection)
+            } else {
+                AuditLogger.shared.log(event: .securitySuspiciousBadge, metadata: [
+                    "badgeId": maskBadgeId(badgeId),
+                    "stage": "rejected_scan_ignored_during_\(currentState.rawValue)"
+                ])
             }
             return
         }

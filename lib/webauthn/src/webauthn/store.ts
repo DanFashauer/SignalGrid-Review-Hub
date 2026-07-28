@@ -230,6 +230,14 @@ export async function advanceCredentialCounter(
       // re-introduce a 24h expiry on the credential record it just updated.
       const execRes = await redis!.multi().set(key, JSON.stringify(user)).exec();
       if (execRes === null) return false; // WATCHed key changed mid-transaction → lost the race
+      // A non-null EXEC can still carry a PER-COMMAND failure (review finding):
+      // ioredis resolves exec() with [error, result] pairs rather than rejecting,
+      // so a SET refused by a read-only replica, an ACL, or OOM would otherwise
+      // read as a successful advance — the step-up releases while Redis retains
+      // the OLD counter, weakening every subsequent clone/replay check. Only a
+      // clean "OK" on the SET is an advance; anything else fails closed.
+      const [setErr, setRes] = execRes[0] ?? [new Error("empty EXEC result"), null];
+      if (setErr || setRes !== "OK") return false;
       inMemoryUsers.set(userId, user); // keep the in-memory mirror consistent (as saveUser does)
       return true;
     } finally {

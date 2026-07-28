@@ -137,6 +137,20 @@ check("disk_encryption_enabled true → diskEncryption on", hosts[0].diskEncrypt
 check("os_version 'iOS 26.1' → osMajor 26", hosts[0].osMajor === 26);
 check("'Off' enrollment → not managed, not supervised", hosts[1].mdmEnrolled === false && hosts[1].supervised === false);
 
+// A 2xx with a malformed/version-skewed envelope must FAIL, not read as an empty
+// fleet (review finding): `[]` is reserved for an explicit `hosts: []`; a missing
+// or non-array `hosts` throws so a broken connector can never impersonate a
+// genuine zero-host tenant and silently produce no posture signals.
+const malformedClient = new FleetClient({ baseUrl: "https://fleet.example", token: "t", transport: async () => ({ status: 200, json: { message: "ok" } }), normalTeamId: 1, restrictedTeamId: 9 });
+check("SAFETY: 2xx with `hosts` absent throws (never a silent empty fleet)",
+  await malformedClient.listHostPosture().then(() => false, () => true));
+const skewedClient = new FleetClient({ baseUrl: "https://fleet.example", token: "t", transport: async () => ({ status: 200, json: { hosts: "unexpected" } }), normalTeamId: 1, restrictedTeamId: 9 });
+check("SAFETY: 2xx with non-array `hosts` throws (version skew fails loudly)",
+  await skewedClient.listHostPosture().then(() => false, () => true));
+const emptyClient = new FleetClient({ baseUrl: "https://fleet.example", token: "t", transport: async () => ({ status: 200, json: { hosts: [] } }), normalTeamId: 1, restrictedTeamId: 9 });
+check("an EXPLICIT `hosts: []` still returns an empty list (genuine zero-host tenant)",
+  (await emptyClient.listHostPosture()).length === 0);
+
 // Actuation is deliberately ABSENT from this public package (review finding): an
 // exported write path — even exercised only with stubs here — hands any injected
 // fetch transport everything needed for a production host transfer. What the public

@@ -83,7 +83,16 @@ export class FleetClient {
     const res = await this.cfg.transport({ method: "GET", path: "/api/v1/fleet/hosts" }, this.auth());
     if (!okStatus(res.status)) throw new Error(`Fleet list hosts failed: ${res.status}`);
     const hosts = (res.json as any)?.hosts;
-    return Array.isArray(hosts) ? hosts.map((h: any) => toHostReport(h, this.cfg.osFloor)) : [];
+    // A 2xx whose envelope is malformed / version-skewed (`hosts` absent or not an
+    // array) must NOT read as a successful empty fleet (review finding): the caller
+    // could not distinguish a genuine zero-host tenant from a broken connector, and
+    // devices that are actually unmanaged or non-compliant would simply produce no
+    // posture signals. `[]` is reserved for an explicit `hosts: []`; anything else
+    // throws so the read fails loudly.
+    if (!Array.isArray(hosts)) {
+      throw new Error("Fleet list hosts returned a malformed envelope: `hosts` is missing or not an array");
+    }
+    return hosts.map((h: any) => toHostReport(h, this.cfg.osFloor));
   }
 
 }

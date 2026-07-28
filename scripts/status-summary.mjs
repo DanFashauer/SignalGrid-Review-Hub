@@ -111,7 +111,15 @@ const manifest = fs.existsSync(manifestPath) ? JSON.parse(fs.readFileSync(manife
 // ── report ────────────────────────────────────────────────────────────────────
 const failed = results.filter((r) => r.status === "FAIL");
 const notRun = results.filter((r) => r.status === "not run");
-const verdict = failed.length ? "RED" : notRun.length ? "GREEN (partial — see not-run)" : "GREEN";
+// The headline never claims more than the run verified (review finding): a failed
+// origin fetch means repo currency — a property this report explicitly states —
+// was NOT verified, so an unqualified GREEN would overstate exactly what this
+// script exists not to overstate. Origin-unverified qualifies the verdict the
+// same way a skipped gate does.
+const qualifiers = [];
+if (notRun.length) qualifiers.push("see not-run");
+if (!originFresh) qualifiers.push("origin unreachable — repo currency unverified");
+const verdict = failed.length ? "RED" : qualifiers.length ? `GREEN (partial — ${qualifiers.join("; ")})` : "GREEN";
 
 const L = [];
 L.push(`# SignalGrid — solution status`);

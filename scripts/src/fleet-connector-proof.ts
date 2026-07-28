@@ -182,6 +182,18 @@ check("exactly ONE host in the fleet derives allow (matches the assurance-standa
 // silently un-restrict a device the posture condemned.
 check("SAFETY: no non-compliant host ever derives allow",
   signals.filter((s) => s.deviceCompliance === "non_compliant").every((s) => fleetOutcome(s) !== "allow"));
+// NEGATIVE CONTROL (adversarial-review finding): fleetOutcome must require POSITIVE
+// health on every field, never trust the derived `assurance` hint alone. An
+// independently-constructed / deserialized signal can carry `assurance: "standard"`
+// while another field is ambiguous — that must NOT reach allow.
+const inconsistentUnknownCompliance = { hostRef: "x", deviceManaged: true, deviceCompliance: "unknown" as const, baselineCompliance: "aligned" as const, postureFreshness: "fresh" as const, enforceable: true, assurance: "standard" as const, rationale: "", sourceReference: "" };
+check("SAFETY: standard-assurance hint with UNKNOWN compliance does NOT derive allow", fleetOutcome(inconsistentUnknownCompliance) !== "allow");
+const inconsistentStale = { ...inconsistentUnknownCompliance, deviceCompliance: "compliant" as const, postureFreshness: "stale" as const };
+check("SAFETY: standard-assurance hint with a STALE check-in does NOT derive allow", fleetOutcome(inconsistentStale) !== "allow");
+const inconsistentUnenforceable = { ...inconsistentUnknownCompliance, deviceCompliance: "compliant" as const, enforceable: false };
+check("SAFETY: standard-assurance hint on an UNENFORCEABLE host does NOT derive allow", fleetOutcome(inconsistentUnenforceable) !== "allow");
+const fullyHealthy = { ...inconsistentUnknownCompliance, deviceCompliance: "compliant" as const };
+check("a positively-confirmed-healthy signal still derives allow (allow path stays reachable)", fleetOutcome(fullyHealthy) === "allow");
 
 const failClient = new FleetClient({ baseUrl: "x", token: "t", transport: async () => ({ status: 500, json: {} }), normalTeamId: 1, restrictedTeamId: 9 });
 let threw = false;

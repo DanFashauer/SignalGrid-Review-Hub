@@ -203,20 +203,31 @@ export {
  * out). Without this, a caller could actuate a hand-picked outcome that the posture never
  * justified, and an unmanaged or non-compliant host would have no effect on enforcement.
  *
- * Fail closed, and never relaxes on an absence: only a positively-confirmed-healthy,
- * governable host reaches `allow`.
+ * Fail closed, and never relaxes on an absence: `allow` requires POSITIVE CONFIRMATION
+ * OF EVERY decision field, not merely the absence of the `raise_step_up` hint.
  *   • an unmanaged/unenrolled host, or one AFFIRMATIVELY non-compliant (encryption off,
  *     screen lock off, OS below floor) → `restrict`;
- *   • any weak-posture assurance raise — an UNKNOWN required check, a stale/missing
- *     check-in, an unsupervised (non-enforceable) host — → `step_up`;
- *   • only a managed, compliant, standard-assurance host → `allow`.
+ *   • every other combination — an UNKNOWN required check, a non-fresh check-in, an
+ *     unenforceable (unsupervised) host, or any raised assurance — → `step_up`;
+ *   • ONLY a host that is positively managed, compliant, baseline-aligned, fresh,
+ *     enforceable, and standard-assurance → `allow`.
  *
- * This is an advisory single-dimension mapping. The fabric's final verdict still fuses
- * every dimension via posture-composition (worst-concern-wins); this never lowers that.
+ * The derived `assurance` hint is NEVER trusted on its own: a persisted, deserialized,
+ * or independently-constructed `FleetSignal` could carry `standard` while another field
+ * is ambiguous (e.g. `deviceCompliance: "unknown"`), and a grant must rest on positive
+ * evidence, not on a hint that happened not to be raised. This is an advisory
+ * single-dimension mapping — the fabric's final verdict still fuses every dimension via
+ * posture-composition (worst-concern-wins); this never lowers that.
  */
 export function fleetOutcome(signal: FleetSignal): AccessOutcome {
   if (!signal.deviceManaged) return "restrict";
   if (signal.deviceCompliance === "non_compliant") return "restrict";
-  if (signal.assurance === "raise_step_up") return "step_up";
-  return "allow";
+  const positivelyHealthy =
+    signal.deviceManaged === true &&
+    signal.deviceCompliance === "compliant" &&
+    signal.baselineCompliance === "aligned" &&
+    signal.postureFreshness === "fresh" &&
+    signal.enforceable === true &&
+    signal.assurance === "standard";
+  return positivelyHealthy ? "allow" : "step_up";
 }

@@ -97,14 +97,22 @@ export function normalizeFleetReport(report: FleetHostReport, nowIso: string): F
     typeof report.osFloor === "number" &&
     report.osMajor < report.osFloor;
 
+  // A configured OS floor with NO observed OS version is an UNKNOWN high-risk input,
+  // not a pass. `belowFloor` is false here only because we cannot SEE the version —
+  // which must never read as compliant. When a floor is enforced the observed OS must
+  // be positively confirmed, exactly as screen lock must be observed "on" below.
+  const osUnknownUnderFloor =
+    typeof report.osFloor === "number" && typeof report.osMajor !== "number";
+
   const hasKnownViolation =
     report.diskEncryption === "off" || belowFloor || report.screenLock === "off";
   // "Fully clean" demands a POSITIVE assertion for every check it covers: screen
-  // lock must be observed "on", not merely "not observed off". An absent field is
-  // how a transport that cannot see screen lock (Fleet's host list, for one)
-  // reports it — that host is `unknown`, never `compliant`.
+  // lock must be observed "on", not merely "not observed off"; the OS must be observed
+  // at-or-above the floor, not merely "not observed below". An absent field is how a
+  // transport that cannot see it (Fleet's host list, for one) reports it — that host is
+  // `unknown`, never `compliant`.
   const fullyClean =
-    report.diskEncryption === "on" && !belowFloor && report.screenLock === "on";
+    report.diskEncryption === "on" && !belowFloor && !osUnknownUnderFloor && report.screenLock === "on";
 
   const deviceCompliance: ComplianceState =
     hasKnownViolation ? "non_compliant" : fullyClean ? "compliant" : "unknown";
@@ -126,6 +134,7 @@ export function normalizeFleetReport(report: FleetHostReport, nowIso: string): F
     deviceCompliance !== "compliant" ||
     postureFreshness !== "fresh" ||
     belowFloor ||
+    osUnknownUnderFloor ||
     report.screenLock === "off";
   const assurance: AssuranceHint = weak ? "raise_step_up" : "standard";
 
@@ -134,6 +143,7 @@ export function normalizeFleetReport(report: FleetHostReport, nowIso: string): F
   if (!enforceable) reasons.push("unsupervised (kiosk/allowlist/non-removable cannot engage)");
   if (report.diskEncryption !== "on") reasons.push(`disk encryption ${report.diskEncryption}`);
   if (belowFloor) reasons.push(`OS ${report.osMajor} below floor ${report.osFloor}`);
+  if (osUnknownUnderFloor) reasons.push(`OS version unknown while floor ${report.osFloor} is enforced`);
   if (report.screenLock === "off") reasons.push("screen lock off");
   if (postureFreshness !== "fresh") reasons.push(`check-in ${postureFreshness}`);
   const rationale = reasons.length

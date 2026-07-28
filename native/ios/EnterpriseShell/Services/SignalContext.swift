@@ -36,6 +36,11 @@ enum SignalContext {
         /// Demo-injected raw conditions for things iOS can't sense
         /// (`stale`, `non_compliant`, `security_risk`, `remediated`).
         var injected: Set<String>
+        /// Whether device posture was POSITIVELY sourced (a real compliance/management
+        /// observation, or the demo's injected posture). When false, the engine must
+        /// NOT be told `device.posture_observed` — otherwise unknown posture becomes the
+        /// base allow path. Fail-closed default.
+        var postureObserved: Bool
 
         init(authenticated: Bool,
              expectedZone: String,
@@ -43,10 +48,12 @@ enum SignalContext {
              screenCaptured: Bool = false,
              sessionStale: Bool = false,
              lockedOut: Bool = false,
-             injected: Set<String> = []) {
+             injected: Set<String> = [],
+             postureObserved: Bool = false) {
             self.authenticated = authenticated
             self.expectedZone = expectedZone
             self.detectedZone = detectedZone
+            self.postureObserved = postureObserved
             self.screenCaptured = screenCaptured
             self.sessionStale = sessionStale
             self.lockedOut = lockedOut
@@ -58,7 +65,12 @@ enum SignalContext {
     static func signals(_ ctx: EnvironmentContext) -> [DecisionEngine.Signal] {
         var out: [DecisionEngine.Signal] = []
         if ctx.authenticated { out.append(.authenticated) }
-        out.append(.postureObserved)
+        // Only tell the engine posture was observed when it POSITIVELY was. Emitting
+        // this unconditionally made unknown posture (an authenticated session with no
+        // real compliance/management observation) the engine's base allow path — a
+        // fail-open. Absent a positive observation, the signal is withheld and the
+        // engine has no posture evidence to allow on.
+        if ctx.postureObserved { out.append(.postureObserved) }
 
         // Active screen recording during a session → exfiltration risk (restrict).
         if ctx.screenCaptured {

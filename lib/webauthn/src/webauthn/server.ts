@@ -111,7 +111,12 @@ export async function generateRegistrationOptions(
     timeout: 60000,
     excludeCredentials: [], // Could check existing credentials here
     authenticatorSelection: {
-      authenticatorAttachment: 'cross-platform',
+      // No `authenticatorAttachment` restriction: SignalGrid's step-up IS the device
+      // owner's own authenticator (Face ID / Touch ID — a PLATFORM authenticator, via
+      // LAContext.deviceOwnerAuthentication on the shared device), so restricting to
+      // 'cross-platform' would exclude the exact mechanism the product uses AND advertise
+      // a flow a faithful client cannot complete. Both platform and cross-platform
+      // (security-key) authenticators are permitted; UV below is what carries the security.
       requireResidentKey: false,
       // Create UV-capable credentials so the step-up path can require UV.
       userVerification: 'required',
@@ -421,6 +426,19 @@ export async function verifyAuthentication(
   // Signature-counter clone detection: a non-zero counter must strictly
   // increase. (Authenticators that always report 0 are exempt, per spec.)
   const newCounter = readSignCount(authenticatorData);
+  // A credential that has ALREADY advanced (stored counter > 0) reporting 0 now is a
+  // cloned authenticator whose counter reset — and the general regression check below
+  // MISSES it, because it only fires when BOTH counters are non-zero. A once-advanced
+  // credential can never legitimately return to a zero counter, so reject it before the
+  // spec exemption for always-zero authenticators can launder the clone through.
+  if (credential.counter > 0 && newCounter === 0) {
+    await appendAuditRecord(
+      'security.webauthn.step_up.failure',
+      { type: 'user', id: userId },
+      { meta: { credentialId: credential.id, reason: 'counter_reset_to_zero' } }
+    );
+    return { success: false, error: 'Authenticator counter reset to zero (possible clone)', timestamp };
+  }
   if (newCounter !== 0 && credential.counter !== 0 && newCounter <= credential.counter) {
     await appendAuditRecord(
       'security.webauthn.step_up.failure',

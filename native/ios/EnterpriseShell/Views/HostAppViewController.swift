@@ -272,12 +272,18 @@ final class HostAppViewController: UIViewController {
         var expectedZone = "default"
         var detectedZone: String? = nil
         var injected: Set<String> = []
+        // Fail-closed on posture too: with no real device-compliance/management source
+        // wired on a physical device, posture is NOT positively observed, so the engine
+        // must not be told `device.posture_observed` (which is its base allow evidence).
+        var postureObserved = false
         #if targetEnvironment(simulator)
-        // Simulator-only: DemoMode injects the zones iOS cannot sense, so the demo
-        // can exercise match / mismatch / unknown deterministically.
+        // Simulator-only: DemoMode injects the zones AND the compliance/management
+        // posture iOS cannot sense, so the demo can exercise match / mismatch / unknown
+        // deterministically — and posture IS positively sourced (from the demo).
         expectedZone = DemoMode.location
         detectedZone = DemoMode.zone ?? DemoMode.location
         injected = DemoMode.injectedSignals
+        postureObserved = true
         #endif
 
         return SignalContext.EnvironmentContext(
@@ -287,7 +293,8 @@ final class HostAppViewController: UIViewController {
             screenCaptured: posture.screenCaptured,
             sessionStale: posture.stale,
             lockedOut: posture.lockedOut,
-            injected: injected)
+            injected: injected,
+            postureObserved: postureObserved)
     }
 
     private var configuredBackendURL: URL? {

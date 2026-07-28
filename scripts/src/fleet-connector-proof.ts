@@ -94,6 +94,15 @@ const nls = normalizeFleetReport(noLock, FLEET_OBSERVED_AT);
 check("absent screen lock → compliance unknown (never compliant)", nls.deviceCompliance === "unknown");
 check("absent screen lock → raise step-up", nls.assurance === "raise_step_up");
 
+// A configured OS floor with NO observed OS version is the same fail-open shape as the
+// absent screen lock: `belowFloor` is false only because the version is unseen, which
+// must never read as compliant. Positive confirmation of the OS is required whenever a
+// floor is enforced.
+const noOs: FleetHostReport = { hostRef: "ipad-noos", mdmEnrolled: true, supervised: true, diskEncryption: "on", screenLock: "on", osFloor: 26, lastSeenAt: "2026-07-16T13:30:00.000Z" };
+const nos = normalizeFleetReport(noOs, FLEET_OBSERVED_AT);
+check("floor enforced but OS version unknown → compliance unknown (never compliant)", nos.deviceCompliance === "unknown");
+check("floor enforced but OS version unknown → raise step-up", nos.assurance === "raise_step_up");
+
 // ── determinism ───────────────────────────────────────────────────────────────
 check("normalization is deterministic", JSON.stringify(normalizeFleetReports(DEMO_FLEET_REPORTS, FLEET_OBSERVED_AT)) === JSON.stringify(signals));
 

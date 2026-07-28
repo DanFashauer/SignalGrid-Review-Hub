@@ -339,6 +339,30 @@ async function main() {
     check("expired challenge rejected", res.success === false);
   }
 
+  // 9b. Signature-counter clone reset: once a credential has ADVANCED (counter > 0), an
+  //     assertion reporting counter 0 is a cloned authenticator whose counter reset. The
+  //     spec exemption for always-zero authenticators must not launder this through — the
+  //     general regression check only fires when BOTH counters are non-zero, so zero is
+  //     the gap this covers.
+  {
+    // Advance the stored counter well past any earlier test's value.
+    const chIdA = randomBytes(16).toString("base64url");
+    const chA = randomBytes(32).toString("base64url");
+    await webauthnStore.saveChallenge(chIdA, {
+      challenge: chA, expiresAt: new Date(Date.now() + 60_000).toISOString(), purpose: "authentication", userId,
+    });
+    const advanced = await webauthn.verifyAuthentication(userId, chIdA, signedAssertion(chA, 1000));
+    check("a valid high-counter assertion advances the stored counter (setup)", advanced.success === true);
+
+    const chIdB = randomBytes(16).toString("base64url");
+    const chB = randomBytes(32).toString("base64url");
+    await webauthnStore.saveChallenge(chIdB, {
+      challenge: chB, expiresAt: new Date(Date.now() + 60_000).toISOString(), purpose: "authentication", userId,
+    });
+    const cloneZero = await webauthn.verifyAuthentication(userId, chIdB, signedAssertion(chB, 0));
+    check("a zero counter AFTER the credential advanced is rejected as a clone reset", cloneZero.success === false);
+  }
+
   // 10. A registration-purpose challenge cannot complete authentication.
   {
     const chId = randomBytes(16).toString("base64url");

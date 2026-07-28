@@ -84,7 +84,11 @@ test("a real browser WebAuthn ceremony releases a held step_up", async ({ page }
           user: { id: b64urlToBuf(ro.user.id), name: ro.user.name, displayName: ro.user.displayName },
           pubKeyCredParams: ro.pubKeyCredParams,
           timeout: ro.timeout,
-          authenticatorSelection: { userVerification: "required" },
+          // Forward the server's ACTUAL authenticatorSelection (no binary fields to
+          // convert) rather than substituting our own — otherwise the test could pass
+          // while a faithful client that honors the returned options (e.g. an
+          // attachment restriction) cannot complete this advertised flow.
+          authenticatorSelection: ro.authenticatorSelection ?? { userVerification: "required" },
           attestation: "none",
         },
       })) as PublicKeyCredential;

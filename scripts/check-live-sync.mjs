@@ -70,7 +70,22 @@ try {
   evidenceFiles = [];
 }
 
+// Evidence is classified by KIND, and only HARDWARE evidence answers
+// `liveEvidence=` (review finding on this file's own new sibling lane): this
+// directory used to be globbed indiscriminately, so ANY committed *.json with a
+// current fingerprint flipped the status to `fresh`. The Docker lane
+// (scripts/docker-verify.mjs) emits `kind: "docker-run"`, which proves the
+// DEPLOYED SERVER TOPOLOGY against a real database — it says nothing whatsoever
+// about a supervised iOS device or a real Mac. Letting it answer this line would
+// have made the repo claim hardware validation it does not have, which is the
+// exact "green-ness is not hardware" failure docs/LIVE_SYNC_LOOP.md forbids.
+// Legacy files without a `kind` are treated as hardware (mac-run.json predates
+// the field), so this cannot silently downgrade existing evidence.
+const HARDWARE_KINDS = new Set(["mac-run", undefined, null, ""]);
+
 let anyStale = false;
+let hardwareCount = 0;
+const otherLanes = [];
 for (const f of evidenceFiles) {
   let ev = null;
   try {
@@ -80,13 +95,23 @@ for (const f of evidenceFiles) {
   }
   const fp = ev?.manifestFingerprint;
   const fresh = typeof fp === "string" && fp === currentFingerprint;
-  if (!fresh) anyStale = true;
   const detail = typeof fp === "string" ? `evidence fingerprint ${fp.slice(0, 16)}…` : "no manifestFingerprint field";
   const summary = ev?.summary ? ` ${JSON.stringify(ev.summary)}` : "";
-  console.log(`  ${fresh ? "FRESH" : "STALE"}  artifacts/live-evidence/${f} (${detail})${summary}`);
+  const isHardware = HARDWARE_KINDS.has(ev?.kind);
+  if (isHardware) {
+    hardwareCount += 1;
+    if (!fresh) anyStale = true;
+  } else {
+    otherLanes.push(`${ev.kind}:${fresh ? "fresh" : "stale"}`);
+  }
+  const lane = isHardware ? "hardware" : `${ev?.kind} lane — NOT hardware evidence`;
+  console.log(`  ${fresh ? "FRESH" : "STALE"}  artifacts/live-evidence/${f} [${lane}] (${detail})${summary}`);
 }
 
-const status = evidenceFiles.length === 0 ? "none" : anyStale ? "stale" : "fresh";
+const status = hardwareCount === 0 ? "none" : anyStale ? "stale" : "fresh";
+if (otherLanes.length > 0) {
+  console.log(`  (other verification lanes present: ${otherLanes.join(", ")} — reported separately, they never answer liveEvidence)`);
+}
 if (status === "stale") {
   console.log(
     "  note: stale evidence is REPORTED, never enforced — only the owner's Mac can refresh it:\n" +

@@ -145,6 +145,36 @@ jobs:
       - name: Agentic / non-human-identity (NHI) proof
         run: pnpm run proof:agent-identity
 
+      # Agent BEHAVIOR — the action-judgment layer. Access brokers (Okta AI Agent
+      # Gateway, Entra Agent ID) answer WHO the agent is; this asks whether the ACTION
+      # is in-pattern: a prompt that became 40k updates, a never-opened target, no
+      # provenance, a broad blast radius, a superhuman cadence. Fail-closed; one combo
+      # of 1,944 grants.
+      - name: Proof — agent-behavior (action-judgment, one grant of 1,944)
+        run: pnpm run proof:agent-behavior
+
+      # Custody BEACON — the offline asset-recovery channel: an independent
+      # case-embedded beacon fused with reachability tells "powered off in its bay"
+      # (monitor) apart from "removed and dark" (escalate).
+      - name: Proof — custody-beacon (asset recovery, offline channel)
+        run: pnpm run proof:custody-beacon
+
+      # App-update currency — min_version floors, force_update, install-channel
+      # provenance as posture (an iOS app cannot install itself; distribution stays
+      # with itms-services / MDM InstallApplication / ABM).
+      - name: Proof — app-update (host-app version currency)
+        run: pnpm run proof:app-update
+
+      # Platform SSO — the METHOD decides the credential's worth; a login policy
+      # claimed on a method that cannot enforce it is config drift.
+      - name: Proof — platform-sso (macOS platform credential)
+        run: pnpm run proof:platform-sso
+
+      # Policy binding — membership IS the policy: unbound, too-wide (fail-open),
+      # too-narrow, or mixed-membership group assignment.
+      - name: Proof — policy-binding (group-assignment correctness)
+        run: pnpm run proof:policy-binding
+
       - name: Device-management-health / config-drift proof
         run: pnpm run proof:device-management-health
 
@@ -168,6 +198,32 @@ jobs:
       # → released on a trusted device. A resolution posting is not verification.
       - name: Proof — handoff simulation (exception-release loop)
         run: pnpm run proof:handoff-sim
+
+      # Issue #136 step 6: the grid proposes better flows from observed history,
+      # but a proposal can never activate itself — approval is a required human
+      # gate, proven exhaustively over the transition table.
+      - name: Proof — adaptive proposals (governed lifecycle, no self-activation)
+        run: pnpm run proof:adaptive-proposals
+
+      # The self-aware, self-healing checklist over backend/frontend/API contracts:
+      # fail-closed status, coverage-gap self-reporting, and a heal that cannot
+      # apply itself — the same human-gate invariant as adaptive-proposals.
+      - name: Proof — self-audit (fail-closed checklist, governed self-healing)
+        run: pnpm run proof:self-audit
+
+      # SLO / error-budget reliability for the decision plane. Latency and
+      # availability carry error budgets; fail-closed integrity is zero-tolerance —
+      # one fail-open exhausts it, so reliability can never be bought at the cost of
+      # the fabric's core promise.
+      - name: Proof — reliability (SLO/error-budget, fail-closed has no budget)
+        run: pnpm run proof:reliability
+
+      # Trust-gated GitOps: a declared desired-state is diffed (plan), rolled out
+      # only through a governed lifecycle whose apply needs BOTH a recorded human
+      # approval and an `allow` trust decision, and drift between declared and
+      # observed becomes a self-audit signal. A rollout cannot apply itself.
+      - name: Proof — iac (trust-gated GitOps, a rollout cannot apply itself)
+        run: pnpm run proof:iac
 
       - name: Proof — verdict attestation (forged verdicts degrade)
         run: pnpm run proof:verdict-attestation

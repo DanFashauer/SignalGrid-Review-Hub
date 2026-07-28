@@ -17,6 +17,11 @@ import type { OAuthConsentVerdict } from "@workspace/integrations/oauth-consent"
 import type { TokenBindingVerdict } from "@workspace/integrations/token-binding";
 import type { PacsAccessVerdict } from "@workspace/integrations/pacs-access";
 import type { AgentIdentityVerdict } from "@workspace/integrations/agent-identity";
+import type { AgentBehaviorVerdict } from "@workspace/integrations/agent-behavior";
+import type { CustodyBeaconVerdict } from "@workspace/integrations/custody-beacon";
+import type { AppUpdateVerdict } from "@workspace/integrations/app-update";
+import type { PlatformSsoVerdict } from "@workspace/integrations/platform-sso";
+import type { PolicyBindingVerdict } from "@workspace/integrations/policy-binding";
 import type { DeviceManagementHealthVerdict } from "@workspace/integrations/device-management-health";
 import type { LinkUsabilityVerdict } from "@workspace/integrations/link-usability";
 // Type-only, via the "./task-exception" subpath export (wired in the same change
@@ -175,6 +180,68 @@ export function fromAgentIdentity(v: AgentIdentityVerdict): ComposableSignal {
   // cannot verify. Unknown is never fused as governed; an actor we cannot identify never
   // grants.
   return { kind: "agent_identity", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromAgentBehavior(v: AgentBehaviorVerdict): ComposableSignal {
+  // Agent BEHAVIOR — is this ACTION sane and authorized, or anomalous. The sibling
+  // `agent_identity` asks WHO is acting and whether that identity is governed; this asks
+  // whether what they are DOING is in-pattern — the judgment layer a credentialed agent
+  // can still violate. Its actions are already on the unified ladder. Fail-safe: a burst
+  // volume (a one-line prompt that became tens of thousands of updates) escalates; an
+  // action with no authorizing provenance, or one whose blast radius fans out across many
+  // resources, restricts; an elevated volume, a first-seen target, a superhuman cadence,
+  // or anything unreadable steps up. Only an action positively confirmed in-pattern on
+  // every signal — within-baseline volume, familiar target, authorized provenance, scoped
+  // blast radius, human-plausible cadence, bridge reachable — contributes 'none'. Judgment
+  // we could not verify never grants.
+  return { kind: "agent_behavior", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromCustodyBeacon(v: CustodyBeaconVerdict): ComposableSignal {
+  // Custody BEACON — asset recovery. The independent, out-of-band channel that still
+  // reports when every ONLINE custody signal (rtls, location, reachability, dock-state)
+  // has gone dark with the device. Its whole value is the fusion it already performed:
+  // in-zone + unreachable is benign (powered off in its bay) → monitor, no alarm;
+  // off-premises + dark is high-confidence removal → escalate. Its actions are already on
+  // the unified ladder. Fail-safe: only a device positively confirmed in the custody zone,
+  // reachable, on a FRESH reading, contributes 'none'; a stale reading, an unknown zone,
+  // or anything unreadable raises. It never lowers what the online custody dimensions say.
+  return { kind: "custody_beacon", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromAppUpdate(v: AppUpdateVerdict): ComposableSignal {
+  // App-update currency — the host app's version graded against the tenant's release
+  // manifest (the per-app sibling of the fleet OS floor). Below the enforced floor or
+  // a forced update pending contributes `restrict`; behind-but-permitted is a
+  // `monitor` nudge; an unmanaged install is untrusted provenance even when current;
+  // anything unknowable raises to `step_up`. Its actions are already on the unified
+  // ladder, and it never lowers what any other dimension says — SignalGrid gates on
+  // currency; distributing the update stays with MDM (docs/APP_UPDATE_CURRENCY.md).
+  return { kind: "app_update", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromPlatformSso(v: PlatformSsoVerdict): ComposableSignal {
+  // Platform SSO — what the Mac's platform credential is actually worth, vendor
+  // "passwordless" labels notwithstanding. Only a user-registered Secure Enclave
+  // key / smart card on a clean report contributes `none`; the Password method is a
+  // `monitor` note (password-grade), a pre-release web method raises, and a login
+  // policy claimed on a method it cannot work with is config drift (`alert` — the
+  // tenant believes a control is enforced that the OS is not enforcing). Its
+  // actions are already on the unified ladder; it never lowers what the identity
+  // dimensions say.
+  return { kind: "platform_sso", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromPolicyBinding(v: PolicyBindingVerdict): ComposableSignal {
+  // Policy binding — is this device in the RIGHT group/team for what it is?
+  // Membership IS the policy binding (Intune dynamic groups, Fleet teams, PACS
+  // access levels — docs/POLICY_BINDING.md maps them), so a wrong binding applies
+  // the wrong policies silently: unbound is ungoverned (restrict), a too-wide
+  // binding is fail-open (restrict), too-narrow is a fail-closed nuisance
+  // (monitor), mixed membership breaks targeting at group scale (alert). Its
+  // actions are already on the unified ladder; it never lowers what any other
+  // dimension says.
+  return { kind: "policy_binding", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromDeviceManagementHealth(v: DeviceManagementHealthVerdict): ComposableSignal {

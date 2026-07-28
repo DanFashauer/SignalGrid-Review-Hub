@@ -65,47 +65,53 @@ const PROOF_TIMEOUT_MS = 90_000;
 // mutation that fails to parse makes the proof crash, which reads as "killed" and would
 // quietly inflate the kill rate — so the patterns below only produce syntactically valid
 // TypeScript. Each is a shape this codebase actually uses for a guard.
+// Every pattern tolerates a trailing `// comment` (review finding): the patterns
+// were end-of-line anchored, so a guard line carrying an inline comment matched NO
+// mutator and was SILENTLY excluded from the sweep — a worse state than an
+// allowlisted survivor, because nothing ever re-validated the exemption. The
+// comment, when present, is preserved in the mutated line so allowlist matching
+// against the source line keeps working.
 const MUTATORS = [
   {
     id: "cond-false",
     // `if (<anything>) {` → `if (false) {`  — delete the branch.
-    match: /^(\s*)if \((.+)\) \{$/,
-    apply: (m) => `${m[1]}if (false) {`,
+    match: /^(\s*)if \((.+)\) \{( \/\/.*)?$/,
+    apply: (m) => `${m[1]}if (false) {${m[3] ?? ""}`,
     describe: (m) => `if (${truncate(m[2])}) → if (false)`,
   },
   {
     id: "else-if-false",
-    match: /^(\s*)\} else if \((.+)\) \{$/,
-    apply: (m) => `${m[1]}} else if (false) {`,
+    match: /^(\s*)\} else if \((.+)\) \{( \/\/.*)?$/,
+    apply: (m) => `${m[1]}} else if (false) {${m[3] ?? ""}`,
     describe: (m) => `else if (${truncate(m[2])}) → else if (false)`,
   },
   {
     id: "else-if-true",
     // Removes a guard on an else-branch without deleting the branch itself — this is
     // what catches a suppression guard like `} else if (!contradictory) {`.
-    match: /^(\s*)\} else if \((!.+)\) \{$/,
-    apply: (m) => `${m[1]}} else if (true) {`,
+    match: /^(\s*)\} else if \((!.+)\) \{( \/\/.*)?$/,
+    apply: (m) => `${m[1]}} else if (true) {${m[3] ?? ""}`,
     describe: (m) => `else if (${truncate(m[2])}) → else if (true)`,
   },
   {
     id: "disjunct-false",
     // A trailing `||` operand on its own line — how the multi-term guards are written.
-    match: /^(\s*)(.+) \|\|$/,
-    apply: (m) => `${m[1]}false ||`,
+    match: /^(\s*)(.+) \|\|( \/\/.*)?$/,
+    apply: (m) => `${m[1]}false ||${m[3] ?? ""}`,
     describe: (m) => `${truncate(m[2])} || → false ||`,
   },
   {
     id: "conjunct-true",
     // A trailing `&&` operand on its own line.
-    match: /^(\s*)(.+) &&$/,
-    apply: (m) => `${m[1]}true &&`,
+    match: /^(\s*)(.+) &&( \/\/.*)?$/,
+    apply: (m) => `${m[1]}true &&${m[3] ?? ""}`,
     describe: (m) => `${truncate(m[2])} && → true &&`,
   },
   {
     id: "return-flip",
     // `return true;` / `return false;` inside a predicate — flips a fail-closed default.
-    match: /^(\s*)return (true|false);$/,
-    apply: (m) => `${m[1]}return ${m[2] === "true" ? "false" : "true"};`,
+    match: /^(\s*)return (true|false);( \/\/.*)?$/,
+    apply: (m) => `${m[1]}return ${m[2] === "true" ? "false" : "true"};${m[3] ?? ""}`,
     describe: (m) => `return ${m[2]} → return ${m[2] === "true" ? "false" : "true"}`,
   },
 ];
@@ -142,6 +148,98 @@ export const TARGETS = [
   {
     proof: "proof:verdict-attestation",
     files: ["lib/verdict-attestation/src/attest.ts", "lib/verdict-attestation/src/canonical.ts"],
+  },
+  {
+    proof: "proof:custody-beacon",
+    files: [
+      "lib/integrations/src/integrations/custody-beacon/evaluate.ts",
+      "lib/integrations/src/integrations/custody-beacon/custody-beacon-connector.ts",
+    ],
+  },
+  {
+    proof: "proof:app-update",
+    files: [
+      "lib/integrations/src/integrations/app-update/evaluate.ts",
+      "lib/integrations/src/integrations/app-update/app-update-connector.ts",
+    ],
+  },
+  {
+    proof: "proof:platform-sso",
+    files: [
+      "lib/integrations/src/integrations/platform-sso/evaluate.ts",
+      "lib/integrations/src/integrations/platform-sso/platform-sso-connector.ts",
+    ],
+  },
+  {
+    proof: "proof:policy-binding",
+    files: [
+      "lib/integrations/src/integrations/policy-binding/evaluate.ts",
+      "lib/integrations/src/integrations/policy-binding/policy-binding-connector.ts",
+    ],
+  },
+
+  {
+    proof: "proof:agent-behavior",
+    files: [
+      "lib/integrations/src/integrations/agent-behavior/evaluate.ts",
+      "lib/integrations/src/integrations/agent-behavior/agent-behavior-connector.ts",
+    ],
+  },
+  {
+    proof: "proof:agent-identity",
+    files: [
+      "lib/integrations/src/integrations/agent-identity/evaluate.ts",
+      "lib/integrations/src/integrations/agent-identity/agent-identity-connector.ts",
+    ],
+  },
+  {
+    proof: "proof:oauth-consent",
+    files: [
+      "lib/integrations/src/integrations/oauth-consent/evaluate.ts",
+      "lib/integrations/src/integrations/oauth-consent/oauth-consent-connector.ts",
+    ],
+  },
+  {
+    proof: "proof:sso-session",
+    files: [
+      "lib/integrations/src/integrations/sso-session/evaluate.ts",
+      "lib/integrations/src/integrations/sso-session/sso-session-connector.ts",
+    ],
+  },
+  {
+    proof: "proof:access-governance",
+    files: [
+      "lib/integrations/src/integrations/access-governance/evaluate.ts",
+      "lib/integrations/src/integrations/access-governance/access-governance-connector.ts",
+    ],
+  },
+  {
+    proof: "proof:ot-posture",
+    files: [
+      "lib/integrations/src/integrations/ot-posture/evaluate.ts",
+      "lib/integrations/src/integrations/ot-posture/ot-connector.ts",
+    ],
+  },
+  {
+    proof: "proof:token-binding",
+    files: [
+      "lib/integrations/src/integrations/token-binding/evaluate.ts",
+      "lib/integrations/src/integrations/token-binding/token-binding-connector.ts",
+    ],
+  },
+  {
+    proof: "proof:pacs-access",
+    files: [
+      "lib/integrations/src/integrations/pacs-access/evaluate.ts",
+      "lib/integrations/src/integrations/pacs-access/pacs-access-connector.ts",
+    ],
+  },
+  {
+    proof: "proof:dual-control",
+    files: [
+      "lib/dual-control/src/evaluate.ts",
+      "lib/dual-control/src/normalize.ts",
+    ],
   },
 ];
 
@@ -247,6 +345,95 @@ const ALLOWED = [
     line: 'typeof own("issuedAt") !== "number" ||',
     reason:
       "Redundant with the `!Number.isFinite` term on the next line — any non-number fails that too. Kept because the pair reads as one contract. Labelled redundant in the source.",
+  },
+  {
+    file: "lib/integrations/src/integrations/custody-beacon/evaluate.ts",
+    line: 'if (beacon.freshness !== "fresh") {',
+    reason:
+      "Verified shadow, not an exemption-by-accident: the complete grant backstop below computes positivelyInCustody (which requires freshness === 'fresh'), so deleting this branch leaves the candidate list empty for in-zone + reachable + stale/expired and the backstop pushes the byte-identical in_zone_stale/step_up/IN_ZONE_STALE candidate — confirmed by running the evaluator with the branch removed. Kept as the primary, readable statement of the freshness rule; deleting BOTH is not a single mutation. (The line is mutated for real now — the mutators tolerate trailing comments, so this entry actually fires.)",
+  },
+  {
+    file: "lib/integrations/src/integrations/custody-beacon/evaluate.ts",
+    line: 'beacon.reportIntegrity === "clean" &&',
+    reason:
+      "A conjunct of the grant backstop's predicate, and the backstop never fires today — every non-confirmed state already pushes a raising candidate, as its own comment states. Weakening the predicate is unobservable while that holds, and the backstop exists precisely for the day it stops holding.",
+  },
+  {
+    file: "lib/integrations/src/integrations/custody-beacon/evaluate.ts",
+    line: 'beacon.zone === "in_custody_zone" &&',
+    reason: "Backstop-predicate conjunct — same reasoning as the reportIntegrity conjunct above.",
+  },
+  {
+    file: "lib/integrations/src/integrations/custody-beacon/evaluate.ts",
+    line: 'beacon.reachability === "reachable" &&',
+    reason: "Backstop-predicate conjunct — same reasoning as the reportIntegrity conjunct above.",
+  },
+  {
+    file: "lib/integrations/src/integrations/custody-beacon/evaluate.ts",
+    line: "if (!positivelyInCustody && candidates.length === 0) {",
+    reason:
+      "The grant backstop itself — deliberately redundant defence-in-depth whose own comment states 'today this never fires'. It exists to catch a FUTURE weakening of a branch, so no single present-day mutation can make it observable. Documented in the source.",
+  },
+  {
+    file: "lib/integrations/src/integrations/app-update/evaluate.ts",
+    line: 'report.reportIntegrity === "clean" &&',
+    reason:
+      "A conjunct of the grant backstop's predicate, and the backstop never fires today — every non-confirmed state already pushes a raising candidate, as its own comment states. Weakening the predicate is unobservable while that holds; the backstop exists for the day it stops holding.",
+  },
+  {
+    file: "lib/integrations/src/integrations/app-update/evaluate.ts",
+    line: 'report.currency === "current" &&',
+    reason: "Backstop-predicate conjunct — same reasoning as the reportIntegrity conjunct above.",
+  },
+  {
+    file: "lib/integrations/src/integrations/app-update/evaluate.ts",
+    line: "if (!positivelyCurrent && candidates.length === 0) {",
+    reason:
+      "The grant backstop itself — deliberately redundant defence-in-depth, documented in the source as never firing today; exists to catch a FUTURE weakening.",
+  },
+  {
+    file: "lib/integrations/src/integrations/platform-sso/evaluate.ts",
+    line: 'report.reportIntegrity === "clean" &&',
+    reason:
+      "A conjunct of the grant backstop's predicate — the backstop never fires today, as its own comment states; the predicate is unobservable until a branch weakens.",
+  },
+  {
+    file: "lib/integrations/src/integrations/platform-sso/evaluate.ts",
+    line: 'report.registration === "user" &&',
+    reason: "Backstop-predicate conjunct — same reasoning as the reportIntegrity conjunct above.",
+  },
+  {
+    file: "lib/integrations/src/integrations/platform-sso/evaluate.ts",
+    line: "hardwareBacked &&",
+    reason: "Backstop-predicate conjunct — same reasoning as the reportIntegrity conjunct above.",
+  },
+  {
+    file: "lib/integrations/src/integrations/platform-sso/evaluate.ts",
+    line: "if (!positivelyConfirmed && candidates.length === 0) {",
+    reason:
+      "The grant backstop itself — deliberately redundant defence-in-depth, documented in the source as never firing today; exists to catch a FUTURE weakening.",
+  },
+  {
+    file: "lib/integrations/src/integrations/policy-binding/evaluate.ts",
+    line: 'report.reportIntegrity === "clean" &&',
+    reason:
+      "A conjunct of the grant backstop's predicate — the backstop never fires today, as its own comment states; the predicate is unobservable until a branch weakens.",
+  },
+  {
+    file: "lib/integrations/src/integrations/policy-binding/evaluate.ts",
+    line: 'report.binding === "bound" &&',
+    reason: "Backstop-predicate conjunct — same reasoning as the reportIntegrity conjunct above.",
+  },
+  {
+    file: "lib/integrations/src/integrations/policy-binding/evaluate.ts",
+    line: 'report.profileMatch === "matched" &&',
+    reason: "Backstop-predicate conjunct — same reasoning as the reportIntegrity conjunct above.",
+  },
+  {
+    file: "lib/integrations/src/integrations/policy-binding/evaluate.ts",
+    line: "if (!positivelyBound && candidates.length === 0) {",
+    reason:
+      "The grant backstop itself — deliberately redundant defence-in-depth, documented in the source as never firing today; exists to catch a FUTURE weakening.",
   },
 ];
 

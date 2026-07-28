@@ -2,6 +2,34 @@
 
 SignalGrid is a runtime decision layer and Operational Trust Orchestration platform for shared, mobile, and frontline environments. At the moment a workflow fires it fuses the evidence the deterministic core evaluates today — identity state, device posture, physical custody (DockBridge), security-baseline (CIS) alignment, device owner type, and workflow risk — into a single allow / step-up / restrict / deny decision. Broader signal-source categories (network/cellular, session/shift, and operational SIEM/ITSM signals) are candidate/roadmap, not decision inputs today. See [What SignalGrid Does Today](docs/WHAT_SIGNALGRID_DOES_TODAY.md) for the exact implemented-vs-candidate boundary.
 
+## The operating model: managed as code (GitOps)
+
+SignalGrid is driven the way modern platform teams run everything else —
+**declaratively, in version control, through pull requests**, not by clicking
+through an MDM console. Device configurations, compliance policies, software
+packages, and the decision rules that gate them live as version-controlled files;
+changes roll out through review and approval; and the system continuously checks
+that the fleet still matches what Git declares (drift detection). This is
+Infrastructure-as-Code / GitOps for endpoints, and it is the primary way
+SignalGrid is meant to be operated.
+
+What makes it SignalGrid's IaC rather than a generic Terraform/Ansible pipeline
+is two things only a trust fabric adds:
+
+1. **The apply is trust-gated.** A declared change rolls out *through the decision
+   fabric* — an apply is refused unless a live decision returns `allow` (a
+   `restrict` / `deny` / fail-closed `unknown` blocks it), on top of a recorded
+   human approval. A rollout can never apply itself.
+2. **Drift is a signal.** The gap between declared and observed fleet state feeds
+   the self-audit checklist and the posture engine, so configuration drift
+   degrades trust the same way a missing security signal does.
+
+Fleet, Microsoft Intune, and Jamf are the declarative **backends** SignalGrid
+plans, gates, and drift-checks — it complements a Fleet GitOps repo or a
+Terraform+Intune module, and never competes with one. Engine:
+[`lib/iac`](lib/iac) · proof: `pnpm run proof:iac` (67 checks) · fixture status:
+`GET /api/cp/v1/iac` · full write-up: [`docs/IAC_GITOPS.md`](docs/IAC_GITOPS.md).
+
 ## Live demo — build the grid
 
 An interactive, public-safe console with one idea: **you add signals and workflows; the grid does the rest — automatically.** Every signal lets the grid *see* more; every workflow lets it *do* more. Toggle signals and workflows on and watch coverage of real situations (lost tablet, compromised sign-in, PHI exfiltration, unmanaged access, config drift, tailgating) climb toward 100% — each caught only when its workflow is active and the signals it needs are wired, then handled by the grid with **no human in the loop**. You never touch the actions; they run inside the workflows you built. The more you add, the more of the organization's infrastructure the grid controls on its own. It mirrors the **real fusion + orchestration logic** ([`lib/posture-composition`](lib/posture-composition)) on illustrative data — no live tenant, no action taken — the same logic proven end-to-end by `pnpm run proof:fabric-scenario`.

@@ -21,7 +21,10 @@
 //     It must be registered with the figure guard, or those figures are unguarded.
 //
 // It runs in milliseconds and reads no proof output, so it belongs in preflight even
-// though the full mutation sweep — 105 proof runs — deliberately does not.
+// though the full mutation sweep — one proof run per mutation, per registered file —
+// deliberately does not. (That count is deliberately NOT written here: a hard-coded
+// sweep size is exactly the fossil figure this file exists to prevent, and it went
+// stale the moment the queued connectors were registered.)
 
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -41,20 +44,6 @@ const MUTATION_EXCLUDED = [
     reason:
       "It IS the harness, not a connector — it has no normalizer or evaluator to mutate, and it already ships its own negative controls (deliberately too-strict and too-loose predicates, each asserted to be caught).",
   },
-  {
-    proof: "proof:agent-identity",
-    reason:
-      "QUEUED, not waived. Its allow path was hardened over seven adversarial reviews and is enumerated at 17,280 normalized + 870,912 raw, but it predates the mutation guard and has not been swept. This entry exists so that gap is visible rather than implied by absence.",
-  },
-  {
-    proof: "proof:oauth-consent",
-    reason: "QUEUED. Enumerated at 6,480; not yet swept.",
-  },
-  { proof: "proof:sso-session", reason: "QUEUED. Enumerated at 768; not yet swept." },
-  { proof: "proof:access-governance", reason: "QUEUED. Enumerated at 4,500; not yet swept." },
-  { proof: "proof:ot-posture", reason: "QUEUED. Enumerated at 324; not yet swept." },
-  { proof: "proof:token-binding", reason: "QUEUED. Enumerated at 1,296; not yet swept." },
-  { proof: "proof:pacs-access", reason: "QUEUED. Enumerated at 8,100; not yet swept." },
   {
     proof: "proof:pim-activation",
     reason:

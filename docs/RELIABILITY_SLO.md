@@ -1,0 +1,78 @@
+# Reliability — SLOs and error budgets for the decision plane
+
+> **Origin:** the SRE discipline (*"the goal is not zero failures; the goal is fast
+> recovery and continuous improvement"*), applied to SignalGrid itself. This is the
+> operational-reliability companion to [`docs/SELF_AUDIT.md`](./SELF_AUDIT.md): the
+> self-audit answers *is the system working right now*, and this answers *is it
+> meeting its reliability objectives over time, and how much budget is left*.
+
+`@workspace/reliability` (`lib/reliability/src/`) turns a window of decision outcomes
+into service-level indicators (SLIs), compares them to objectives (SLOs), and reports
+the remaining **error budget** in plain language. It is pure, deterministic, and
+fixture-backed — SLIs are computed from supplied records, never a clock.
+
+## Measure what matters — three SLOs
+
+| SLO | What it measures | Objective | Budget? |
+| --- | --- | --- | --- |
+| **Decision availability** | Fraction of evaluations that return a valid verdict (not an error/timeout) | 99.9% | yes |
+| **Decision latency** | Fraction of decisions that return under the latency target (50 ms) | 99% | yes |
+| **Fail-closed integrity** | Fraction of decisions that did **not** grant on an unknown/unreachable signal | 100% | **no — zero-tolerance** |
+
+## The SignalGrid twist: a fail-closed violation has no budget
+
+Error budgets exist so reliability and velocity can be balanced — some slow decisions,
+some transient errors, are acceptable, and the budget says how many before you should
+stop shipping risk. That logic applies to **latency** and **availability**.
+
+It does **not** apply to fail-closed integrity. A decision that *granted access on a
+signal it could not verify* is the one thing the fabric exists to prevent, so it is
+modeled as a **zero-tolerance** SLO with a zero error budget: a single occurrence
+exhausts it, at any window size — a million clean decisions do not buy back one
+fail-open. Reliability you could purchase at the cost of the core promise would be no
+reliability at all. The proof sweeps window sizes from 1 to 100,000 and confirms a
+fail-open breach is **never** reported as healthy or at-risk.
+
+## Fail-safe on no data
+
+An empty (or too-small) window for a measurable SLO is **`unknown`**, never `healthy`
+— not knowing your reliability is not "fine", the same instinct the fabric uses
+everywhere. `unknown` outranks `at_risk` in worst-status-wins. (A zero-tolerance SLO
+with no data is `healthy`: the absence of a breach is a true statement, unlike the
+absence of latency data.)
+
+## Plain language for the owner
+
+`summarizeReliability` turns the report into sentences: a headline
+(*"Reliability is on track."* / *"N reliability objectives need attention."*), each
+objective worded in ordinary terms — *"On track"*, *"Getting close"*, *"Not
+measured"*, *"Over budget"* — worst-first, and a fail-open breach worded as **critical**.
+This is the same plain-language contract the System Health admin screen uses, so
+reliability slots into the "just works" surface without new vocabulary.
+
+## The proof
+
+`pnpm run proof:reliability` (28 checks) proves the budget math, the zero-tolerance
+invariant (including the window-size sweep), the fail-safe-on-no-data behavior, the
+plain-language wording, and determinism/immutability. It prints its live figures:
+
+```
+figures=slos=3,zeroToleranceSlos=1,statuses=4
+```
+
+Run it directly:
+
+```bash
+cd scripts && npx tsx ./src/reliability-proof.ts    # proof:reliability (28 checks)
+```
+
+## Public-safety boundaries
+
+- Deterministic and fixture-backed: no `Date.now`/`Math.random`, no network, no
+  secrets, no live tenant identifiers. SLIs come from a supplied window of records.
+- Descriptive, never permissive: this measures and reports reliability; it enacts
+  nothing. Using the error budget to *gate* a change (freeze risky changes when the
+  budget is spent) is a governed decision for the proposal lifecycle, not an action
+  this module takes.
+- The error budget can be spent on latency and availability; it can **never** be
+  spent on fail-closed integrity.

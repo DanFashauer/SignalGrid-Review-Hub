@@ -159,7 +159,25 @@ function categoryForKind(kind: string, reason?: string): IncidentCategory {
     case "ot_posture":
     case "device_management_health":
       return "security_compliance";
-    // Identity, authorization & data-governance signals.
+    // `policy_binding` is group-assignment drift — a device in the wrong Intune
+    // group / Fleet team / access level holds the wrong policies silently. A
+    // management-plane configuration state owned by the compliance queue, the
+    // direct sibling of `device_management_health`.
+    case "policy_binding":
+      return "security_compliance";
+    // `app_update` is the per-app sibling of `device_management_health`: a host app
+    // below its version floor, lagging a forced update, or installed outside the
+    // managed channel is a software-compliance state on the device, owned by the same
+    // compliance queue — not a live incident and not the generic Service Desk.
+    case "app_update":
+      return "security_compliance";
+    // Identity, authorization & data-governance signals. `platform_sso` belongs
+    // here rather than with the device kinds: its findings — a policy claimed on a
+    // method that cannot enforce it, a password-grade method where phishing
+    // resistance was assumed, lockout exposure before enforcement — are identity-
+    // credential configuration questions, owned by the same Identity & Access queue
+    // as `sso_session` and `identity`.
+    case "platform_sso":
     case "identity":
     case "access_governance":
     case "sso_session":
@@ -191,12 +209,22 @@ function categoryForKind(kind: string, reason?: string): IncidentCategory {
     case "reachability":
     case "location":
     case "custody":
+    // `custody_beacon` is the offline asset-recovery sibling of `custody`/`location`:
+    // an independent recovery beacon placing a device off-premises or dark is a physical
+    // device-custody event, and routes to the same Endpoint / Mobility owner that handles
+    // device loss/recovery, not the generic Service Desk.
+    case "custody_beacon":
     case "peripheral":
       return "asset_device";
     // Active security incidents — live threats, exposed credentials, detections.
+    // `agent_behavior` joins them: an anomalous agent ACTION (a burst volume, no
+    // provenance, a superhuman cadence) is a live incident to investigate, distinct
+    // from its sibling `agent_identity` (agent GOVERNANCE → Identity & Access above).
+    // Who the agent is is a compliance question; a runaway action is an incident one.
     case "threat":
     case "credential_exposure":
     case "detection":
+    case "agent_behavior":
       return "security_incident";
     default:
       return "general";

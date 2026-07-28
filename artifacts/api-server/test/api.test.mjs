@@ -549,6 +549,25 @@ async function run() {
   check("fleet-mdm: only the fully-healthy+supervised host is 'standard' — every weak/unsupervised host raises assurance", (fleetMdm.json?.summary?.raiseStepUp ?? 0) >= 1 && (fleetMdm.json?.signals ?? []).filter((s) => s.assurance === "standard").length === (fleetMdm.json.summary.hosts - fleetMdm.json.summary.raiseStepUp));
   const unsupervisedHost = (fleetMdm.json?.signals ?? []).find((s) => s.enforceable === false);
   check("fleet-mdm: an unenforceable (unsupervised) host raises step-up, never trusted as standard", unsupervisedHost && unsupervisedHost.assurance === "raise_step_up");
+  // ── self-audit: the plain-language administrative health surface ─────────
+  const selfAudit = await req("GET", "/cp/v1/self-audit");
+  check("self-audit responds 200 with plain + report + proposedHeals",
+    selfAudit.status === 200 && !!selfAudit.json?.plain && !!selfAudit.json?.report && Array.isArray(selfAudit.json?.proposedHeals));
+  check("self-audit fixture snapshot reads as the all-clear 'just works' state",
+    selfAudit.json?.plain?.allClear === true && selfAudit.json?.plain?.headline === "Everything is working." && selfAudit.json?.plain?.attentionCount === 0);
+  check("self-audit healthy fixture proposes no heals (nothing to fix)",
+    selfAudit.json?.proposedHeals?.length === 0);
+  check("self-audit plain lines never leak an internal status enum word",
+    !/\b(healthy|drifted|broken|unknown)\b/.test((selfAudit.json?.plain?.lines ?? []).map((l) => `${l.state} ${l.sentence}`).join(" ")));
+
+  // ── reliability: SLO / error-budget for the decision plane ───────────────
+  const reliability = await req("GET", "/cp/v1/reliability");
+  check("reliability responds 200 with plain + report", reliability.status === 200 && !!reliability.json?.plain && !!reliability.json?.report);
+  check("reliability healthy fixture is on track", reliability.json?.plain?.allOnTrack === true && reliability.json?.plain?.headline === "Reliability is on track.");
+  check("reliability includes the zero-tolerance fail-closed-integrity SLO with no budget",
+    (reliability.json?.report?.budgets ?? []).some((b) => b.slo?.id === "fail-closed-integrity" && b.slo?.zeroTolerance === true && b.budgetEvents === 0));
+  check("reliability plain lines never leak the raw status enum",
+    !/\b(healthy|at_risk|exhausted)\b/.test((reliability.json?.plain?.lines ?? []).map((l) => l.state).join(" ")));
 
   // ── build-the-grid control-plane surface (decision-fabric layer, live) ───
   const coverage = await req("GET", "/cp/v1/grid/coverage");

@@ -135,8 +135,8 @@ not a substitute for it.
 
 **Needs real hardware + Apple Business Manager:**
 5. Enroll a real iPhone/iPad in Fleet (APNs cert required).
-6. Supervise via ADE/ABM → the ASAM allowlist + Single App Mode actually engage
-   (the kiosk-until-auth lock, verified on-device).
+6. Supervise via ADE/ABM → the ASAM authorization + app allowlist actually engage
+   (the app-controlled kiosk-until-auth lock, verified on-device).
 
 ## Partnership note
 Fleet manages + observes the device (open source, osquery, GitOps); SignalGrid

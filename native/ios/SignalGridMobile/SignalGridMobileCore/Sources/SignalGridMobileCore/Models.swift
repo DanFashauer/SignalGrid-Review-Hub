@@ -552,6 +552,7 @@ public enum AppVertical: String, Codable, CaseIterable, Hashable, Sendable {
     case globalFleet = "global_fleet"
     case retail
     case dataCenter = "data_center"
+    case government
 
     public var title: String {
         switch self {
@@ -561,6 +562,7 @@ public enum AppVertical: String, Codable, CaseIterable, Hashable, Sendable {
         case .globalFleet: return "Global fleet"
         case .retail: return "Retail"
         case .dataCenter: return "Data center"
+        case .government: return "Government"
         }
     }
 }

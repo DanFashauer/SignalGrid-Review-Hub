@@ -12,7 +12,14 @@ final class ActiveSessionViewController: UIViewController {
     
     private var displayTimer: Timer?
     private var sessionTimer: Timer?
-    
+
+    // Simulator demo auto-open latches: viewDidAppear fires on every reappearance
+    // (e.g. after dismissing the managed browser), so without a once-per-session
+    // guard each return would schedule another present and the demo would reopen
+    // indefinitely, never returning to the session home.
+    private var didAutoOpenApp = false
+    private var didAutoOpenAssist = false
+
     // MARK: - UI Components
     
     private lazy var scrollView: UIScrollView = {
@@ -230,17 +237,29 @@ final class ActiveSessionViewController: UIViewController {
         #if targetEnvironment(simulator)
         // Demo: auto-open the first workspace app in the in-app managed browser to show
         // app access staying native/contained inside the kiosk (not external Safari).
-        if DemoMode.openApp,
+        // Latched to fire ONCE per session; a pending present is dropped if the view
+        // is already showing something else.
+        if DemoMode.openApp, !didAutoOpenApp,
            let app = SessionStateManager.shared.currentSession?.persona.appLaunchConfig.requiredApps.first,
            let urlString = app.launchUrl, let url = URL(string: urlString) {
+            didAutoOpenApp = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-                self?.present(ManagedAppViewController(app: app, url: url), animated: true)
+                guard let self, self.presentedViewController == nil else { return }
+                self.present(
+                    ManagedAppViewController(
+                        app: app,
+                        url: url,
+                        allowedDomains: SessionStateManager.shared.currentSession?.persona.restrictions.allowedDomains
+                    ),
+                    animated: true
+                )
             }
         }
-        // Demo: auto-open the embedded Assist host-app demo (invisible gate flow).
-        if DemoMode.assist {
+        // Demo: auto-open the embedded Assist host-app demo (invisible gate flow). Once per session.
+        if DemoMode.assist, !didAutoOpenAssist {
+            didAutoOpenAssist = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-                guard let self else { return }
+                guard let self, self.presentedViewController == nil else { return }
                 self.present(HostAppViewController(config: HostAppViewController.forLocation(DemoMode.location)), animated: true)
             }
         }
@@ -828,7 +847,14 @@ extension ActiveSessionViewController: UICollectionViewDelegate {
             AuditLogger.shared.log(event: .appLaunched, metadata: [
                 "appId": selectedApp.appId, "mode": "managed_webview"
             ])
-            present(ManagedAppViewController(app: selectedApp, url: url), animated: true)
+            present(
+                ManagedAppViewController(
+                    app: selectedApp,
+                    url: url,
+                    allowedDomains: session?.persona.restrictions.allowedDomains
+                ),
+                animated: true
+            )
             return
         }
 

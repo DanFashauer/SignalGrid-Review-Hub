@@ -84,10 +84,14 @@ final class AppModel {
         await bootstrap()
     }
 
-    /// Startup entry point. On the simulator, Settings can't be typed into via
-    /// simctl, so `-LiveBaseURL <url> -LiveToken <token>` auto-connects to the live
-    /// API for demos/testing; otherwise it does the normal offline-demo bootstrap.
+    /// Startup entry point. The `-LiveBaseURL <url> -LiveToken <token>` launch-arg
+    /// live connect is a SIMULATOR-ONLY convenience (Settings can't be typed into
+    /// via simctl) and is compiled out of device builds entirely: this public
+    /// Review-Hub app must never be launch-arg-pointed at a live endpoint on a real
+    /// device. The Settings-driven `connectLive()` path (Keychain-backed, signed
+    /// builds) remains the only live route off-simulator.
     func startup() async {
+        #if targetEnvironment(simulator)
         let d = UserDefaults.standard
         if let base = d.string(forKey: "LiveBaseURL"), !base.isEmpty,
            let token = d.string(forKey: "LiveToken"), !token.isEmpty,
@@ -102,9 +106,10 @@ final class AppModel {
             mode = .live
             api = LiveSignalGridAPI(configuration: APIConfiguration(baseURL: url, bearerToken: token))
             await bootstrap()
-        } else {
-            await bootstrap()
+            return
         }
+        #endif
+        await bootstrap()
     }
 
     func useDemoMode() async {

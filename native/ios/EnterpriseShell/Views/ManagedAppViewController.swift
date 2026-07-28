@@ -11,12 +11,25 @@ import WebKit
 final class ManagedAppViewController: UIViewController {
     private let app: EnterpriseApp
     private let url: URL
-    private let webView = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
+    /// Persona-scoped host allowlist for this contained browser. `nil`/empty means
+    /// the persona set no web restriction (navigation is unrestricted, as before).
+    private let allowedDomains: [String]?
+    private let webView: WKWebView = {
+        let cfg = WKWebViewConfiguration()
+        // Per-session isolation on a SHARED device: an ephemeral (non-persistent)
+        // website data store keeps cookies, localStorage, IndexedDB and cache in
+        // memory only, so nothing a web app writes survives to the next badge
+        // holder. Tearing down this VC drops the store entirely — the previous
+        // holder's authenticated web session cannot be reopened.
+        cfg.websiteDataStore = .nonPersistent()
+        return WKWebView(frame: .zero, configuration: cfg)
+    }()
     private let progress = UIActivityIndicatorView(style: .medium)
 
-    init(app: EnterpriseApp, url: URL) {
+    init(app: EnterpriseApp, url: URL, allowedDomains: [String]? = nil) {
         self.app = app
         self.url = url
+        self.allowedDomains = allowedDomains
         super.init(nibName: nil, bundle: nil)
         modalPresentationStyle = .fullScreen
     }
@@ -87,6 +100,31 @@ final class ManagedAppViewController: UIViewController {
 }
 
 extension ManagedAppViewController: WKNavigationDelegate {
+    /// Contain navigation to approved origins. Without this, a link, redirect, or
+    /// script-driven navigation could carry the user OUT of the intended enterprise
+    /// origin while still inside the kiosk browser — the same escape Safari/other
+    /// apps are MDM-blocked to prevent. The app's own launch origin is always
+    /// permitted; a persona allowlist adds further hosts. No allowlist configured
+    /// ⇒ unrestricted (unchanged behavior).
+    func webView(
+        _ webView: WKWebView,
+        decidePolicyFor navigationAction: WKNavigationAction,
+        decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+    ) {
+        guard let allow = allowedDomains, !allow.isEmpty else {
+            decisionHandler(.allow)
+            return
+        }
+        guard let host = navigationAction.request.url?.host?.lowercased() else {
+            // Hostless (about:blank, data:) — not an origin escape; allow.
+            decisionHandler(.allow)
+            return
+        }
+        let permitted = ([url.host?.lowercased()].compactMap { $0 }) + allow.map { $0.lowercased() }
+        let ok = permitted.contains { host == $0 || host.hasSuffix("." + $0) }
+        decisionHandler(ok ? .allow : .cancel)
+    }
+
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         progress.stopAnimating()
     }

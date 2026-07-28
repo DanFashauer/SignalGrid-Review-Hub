@@ -1,5 +1,10 @@
 // WebAuthn Store
-// Credential storage for WebAuthn/FIDO2 (Redis with in-memory fallback)
+// Credential storage for WebAuthn/FIDO2 (Redis with in-memory fallback).
+//
+// Redis backend requirement: challenge consumption uses GETDEL, so a configured
+// REDIS_URL must point at Redis >= 6.2. On an older server the step-up completion
+// throws (fails closed) rather than degrading to a racy GET+DEL. Managed Redis
+// (AWS/GCP/Azure/Upstash) is 6.2+/7.x, so this holds by default.
 
 import type { WebAuthnUser, WebAuthnCredential, WebAuthnChallenge, StepUpSession } from './types';
 
@@ -9,6 +14,15 @@ const STEPUP_PREFIX = 'webauthn:stepup:';
 
 function getRedisUrl(): string | undefined {
   return process.env.REDIS_URL;
+}
+
+/** Whether Redis is CONFIGURED (not merely reachable). The authoritative store
+ *  for single-use challenges is chosen by configuration, never by runtime
+ *  reachability — a transient connect failure must not silently flip a challenge
+ *  into a second (in-memory) store, which is exactly the divergence that lets a
+ *  single-use challenge be replayed. */
+function redisConfigured(): boolean {
+  return !!getRedisUrl();
 }
 
 async function getRedisClient() {
@@ -148,20 +162,28 @@ export async function saveChallenge(
   challenge: WebAuthnChallenge,
   userId?: string
 ): Promise<void> {
-  const redis = await getRedisClient();
   const key = `${CHALLENGE_PREFIX}${challengeId}`;
 
-  if (redis) {
+  // A single-use challenge must live in exactly ONE store. When Redis is
+  // configured it is the SOLE authoritative store shared across every API
+  // instance; we do NOT also mirror into per-process memory. A mirrored copy on
+  // the minting instance would survive a completion consumed on another instance
+  // (which clears only Redis + its own memory) and let the challenge be replayed
+  // — fatal for authenticators whose signature counter stays 0. A Redis failure
+  // here is deliberately NOT swallowed: the challenge simply is not saved, so the
+  // later completion fails closed (403) rather than degrading to a second store.
+  if (redisConfigured()) {
+    const redis = await getRedisClient();
     try {
-      await redis.connect();
-      await redis.set(key, JSON.stringify({ challenge, userId }), 'EX', 60); // 60s
-    } catch {
-      // Fall through to in-memory
+      await redis!.connect();
+      await redis!.set(key, JSON.stringify({ challenge, userId }), 'EX', 60); // 60s
     } finally {
-      await redis.quit();
+      await redis!.quit();
     }
+    return;
   }
 
+  // No Redis configured: single-process in-memory mode is the only store.
   purgeExpiredInMemoryChallenges();
   inMemoryChallenges.set(key, { challenge, userId });
 }
@@ -173,21 +195,22 @@ export async function saveChallenge(
 export async function getChallengeContext(
   challengeId: string
 ): Promise<{ context: Record<string, string> | undefined; userId?: string } | null> {
-  const redis = await getRedisClient();
   const key = `${CHALLENGE_PREFIX}${challengeId}`;
 
-  if (redis) {
+  // Read from the SAME single authoritative store saveChallenge wrote to. When
+  // Redis is configured, a miss means the challenge is gone (expired or already
+  // consumed) — fail closed on null rather than falling back to a stale
+  // in-memory copy that Redis-mode never populates.
+  if (redisConfigured()) {
+    const redis = await getRedisClient();
     try {
-      await redis.connect();
-      const data = await redis.get(key);
-      if (data) {
-        const parsed = JSON.parse(data) as { challenge: WebAuthnChallenge; userId?: string };
-        return { context: parsed.challenge.context, userId: parsed.userId };
-      }
-    } catch {
-      // Fall through to in-memory
+      await redis!.connect();
+      const data = await redis!.get(key);
+      if (!data) return null;
+      const parsed = JSON.parse(data) as { challenge: WebAuthnChallenge; userId?: string };
+      return { context: parsed.challenge.context, userId: parsed.userId };
     } finally {
-      await redis.quit();
+      await redis!.quit();
     }
   }
 
@@ -201,37 +224,29 @@ export async function getChallengeContext(
 export async function getAndDeleteChallenge(
   challengeId: string
 ): Promise<{ challenge: WebAuthnChallenge; userId?: string } | null> {
-  const redis = await getRedisClient();
   const key = `${CHALLENGE_PREFIX}${challengeId}`;
 
-  let result: { challenge: WebAuthnChallenge; userId?: string } | null = null;
-
-  if (redis) {
+  // Atomic read-and-delete. When Redis is authoritative, GETDEL guarantees that
+  // exactly one caller ever receives the challenge: a non-atomic GET-then-DEL
+  // lets two concurrent completions both read it before either delete lands, and
+  // for a 0-counter authenticator neither would be caught downstream. In-memory
+  // is never populated in Redis mode, so there is no second copy to consume.
+  if (redisConfigured()) {
+    const redis = await getRedisClient();
     try {
-      await redis.connect();
-      const data = await redis.get(key);
-      if (data) {
-        result = JSON.parse(data);
-        await redis.del(key);
-      }
-    } catch {
-      // Fall through to in-memory
+      await redis!.connect();
+      const data = await redis!.getdel(key);
+      return data ? (JSON.parse(data) as { challenge: WebAuthnChallenge; userId?: string }) : null;
     } finally {
-      await redis.quit();
+      await redis!.quit();
     }
   }
 
-  // Always consume the in-memory copy, even when Redis served the read. The
-  // challenge is written to BOTH stores, so if only Redis is cleared the
-  // in-memory copy survives and a single-use challenge could be replayed. Delete
-  // it unconditionally; use it as the fallback value only when Redis had nothing.
-  const memResult = inMemoryChallenges.get(key) ?? null;
+  // No Redis configured: single-process in-memory mode. get-then-delete is
+  // atomic here because Node runs this to completion without interleaving.
+  const entry = inMemoryChallenges.get(key) ?? null;
   inMemoryChallenges.delete(key);
-  if (!result) {
-    result = memResult;
-  }
-
-  return result;
+  return entry;
 }
 
 // ============================================================================

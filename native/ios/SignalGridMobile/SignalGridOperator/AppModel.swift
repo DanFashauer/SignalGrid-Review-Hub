@@ -93,9 +93,18 @@ final class AppModel {
     func startup() async {
         #if targetEnvironment(simulator)
         let d = UserDefaults.standard
+        // LOOPBACK-ONLY (review finding): a simulator can reach live/production APIs,
+        // so compiling this path out of device builds is not enough to keep the public
+        // Review Hub fixture-backed. The launch-arg convenience exists to point demos
+        // at a LOCALLY running api-server; that is loopback, and that is all this
+        // accepts — any other host is ignored and the app stays on fixtures.
+        func isLoopback(_ u: URL) -> Bool {
+            let host = (u.host ?? "").lowercased()
+            return host == "localhost" || host == "127.0.0.1" || host == "::1"
+        }
         if let base = d.string(forKey: "LiveBaseURL"), !base.isEmpty,
            let token = d.string(forKey: "LiveToken"), !token.isEmpty,
-           let url = URL(string: base) {
+           let url = URL(string: base), isLoopback(url) {
             // Launch-arg live connect for demos. Use the token IN-MEMORY only — an
             // unsigned simulator build has no Keychain entitlement (errSecMissingEntitlement
             // -34018), so connectLive()'s keychain.save() would fail. The Settings-driven

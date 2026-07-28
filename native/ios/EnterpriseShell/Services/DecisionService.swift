@@ -108,15 +108,27 @@ enum DecisionServiceProvider {
         return LocalDecisionService()
     }
 
-    /// Evaluate with automatic fallback to on-device on any remote error.
+    /// Evaluate with fallback to on-device on any remote error — CLAMPED (review
+    /// finding). When a configured decision service is unreachable, rejects the token,
+    /// or returns garbage, the authoritative tenant policy supplied NO approval; local
+    /// signals may inform the fallback but must never be MORE permissive than the
+    /// authority that didn't answer. A local `allow` is therefore held as `step_up`;
+    /// a local restrict/deny (more restrictive) stands as-is.
     static func evaluateWithFallback(_ service: DecisionService,
                                      _ request: AppDecisionRequest) async -> DecisionResult {
         do {
             return try await service.evaluate(request)
         } catch {
-            return (try? await LocalDecisionService().evaluate(request))
+            let local = (try? await LocalDecisionService().evaluate(request))
                 ?? DecisionResult(outcome: .step_up, reasonCodes: ["FALLBACK_FAIL_CLOSED"],
                                   explanation: "Fell back to a fail-closed default.", source: .onDevice)
+            if local.outcome == .allow {
+                return DecisionResult(outcome: .step_up,
+                                      reasonCodes: local.reasonCodes + ["REMOTE_UNAVAILABLE_STEP_UP"],
+                                      explanation: "The configured decision service did not answer; local signals are healthy, but an allow requires the tenant authority — held for step-up.",
+                                      source: .onDevice)
+            }
+            return local
         }
     }
 }

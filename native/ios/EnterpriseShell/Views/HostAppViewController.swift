@@ -576,6 +576,12 @@ final class HostAppViewController: UIViewController {
                 }
             }
         } else {
+            // Device-owner authentication is UNAVAILABLE (no passcode/biometrics
+            // configured, or LA refused). What happens next differs by build:
+            #if targetEnvironment(simulator)
+            // Simulator demo: the simulator has no real authenticator, so a clearly
+            // labeled simulated one keeps the demo walkable. Simulator-only by
+            // compilation — this alert can never appear on hardware.
             let sheet = UIAlertController(
                 title: "Confirm it's you",
                 message: "Demo · simulated authenticator\n\n\(config.appName) needs to verify this action on a shared device. No real biometric is used.",
@@ -583,6 +589,20 @@ final class HostAppViewController: UIViewController {
             sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in self?.stepUpDeclined(step) })
             sheet.addAction(UIAlertAction(title: "Simulate Face ID", style: .default) { [weak self] _ in self?.stepUpSatisfied(step) })
             present(sheet, animated: true)
+            #else
+            // Physical device (review finding): a freely tappable simulated gesture
+            // here would release gated actions with NO identity check the moment a
+            // device lacks a passcode. Fail closed: the step-up is treated as failed,
+            // the action stays held, and the holder is told why.
+            AuditLogger.shared.log(event: .assistStepUpFailed,
+                                   metadata: ["action": step.key, "reason": "device_owner_authentication_unavailable"])
+            let sheet = UIAlertController(
+                title: "Authentication unavailable",
+                message: "This device has no passcode or biometric configured, so identity cannot be verified. The action stays held — set a device passcode and try again.",
+                preferredStyle: .alert)
+            sheet.addAction(UIAlertAction(title: "OK", style: .default) { [weak self] _ in self?.stepUpDeclined(step) })
+            present(sheet, animated: true)
+            #endif
         }
     }
 

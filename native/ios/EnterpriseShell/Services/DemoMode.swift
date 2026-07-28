@@ -10,11 +10,19 @@ import Foundation
 ///
 /// This is compiled out of device builds entirely.
 enum DemoMode {
-    static var isEnabled: Bool {
-        let on = UserDefaults.standard.bool(forKey: "DemoMode")
-            || ProcessInfo.processInfo.arguments.contains("-DemoMode")
-        return on
+    /// Read a launch flag honoring an EXPLICIT boolean value (review finding): the
+    /// conventional pair `-DemoMode NO` registers `false` in UserDefaults, but a bare
+    /// `arguments.contains("-DemoMode")` check still read it as enabled — invalidating
+    /// simulator runs that deliberately exercise the non-demo path. When the key has a
+    /// registered value, that value wins; a bare `-Key` (no value) remains an opt-in.
+    private static func flag(_ key: String) -> Bool {
+        if UserDefaults.standard.object(forKey: key) != nil {
+            return UserDefaults.standard.bool(forKey: key)
+        }
+        return ProcessInfo.processInfo.arguments.contains("-\(key)")
     }
+
+    static var isEnabled: Bool { flag("DemoMode") }
 
     /// A canned successful session-start response with a complete demo persona.
     static func startSessionResponse(badgeId: String) -> StartSessionResponse {
@@ -42,8 +50,7 @@ enum DemoMode {
     /// When enabled (`-DemoUnenrolled`), the scanned badge is treated as not
     /// enrolled so the enrollment flow can be demonstrated.
     static var unenrolled: Bool {
-        UserDefaults.standard.bool(forKey: "DemoUnenrolled")
-            || ProcessInfo.processInfo.arguments.contains("-DemoUnenrolled")
+        flag("DemoUnenrolled")
     }
 
     /// Session-start response indicating the badge is not enrolled.
@@ -66,51 +73,52 @@ enum DemoMode {
     /// When enabled (`-DemoAutoEnd`), ActiveSession auto-ends after a short delay
     /// so the terminate -> teardown -> lockedIdle flow can be demonstrated.
     static var autoEnd: Bool {
-        UserDefaults.standard.bool(forKey: "DemoAutoEnd")
-            || ProcessInfo.processInfo.arguments.contains("-DemoAutoEnd")
+        flag("DemoAutoEnd")
     }
 
     /// When enabled (`-DemoIdleLock`), the persona uses a short idle timeout so the
     /// inactivity auto-lock can be demonstrated in seconds instead of minutes.
     static var idleLock: Bool {
-        UserDefaults.standard.bool(forKey: "DemoIdleLock")
-            || ProcessInfo.processInfo.arguments.contains("-DemoIdleLock")
+        flag("DemoIdleLock")
     }
 
     /// When enabled (`-DemoOpenApp`), the first workspace app auto-opens in the in-app
     /// managed browser to demonstrate that app access stays native/contained.
     static var openApp: Bool {
-        UserDefaults.standard.bool(forKey: "DemoOpenApp")
-            || ProcessInfo.processInfo.arguments.contains("-DemoOpenApp")
+        flag("DemoOpenApp")
     }
 
     /// When enabled (`-DemoAssist`), the embedded Assist host-app demo auto-opens so
     /// the invisible-gate flow (allow → step-up → confirm → applied) can be shown.
     static var assist: Bool {
-        UserDefaults.standard.bool(forKey: "DemoAssist")
-            || ProcessInfo.processInfo.arguments.contains("-DemoAssist")
+        flag("DemoAssist")
     }
 
     /// When enabled (`-DemoAssistAuto`), the embedded host-app demo self-walks the
     /// full gate flow (auto reads → held step-up → confirm → applied) so each state
     /// can be captured without manual taps.
     static var assistAuto: Bool {
-        UserDefaults.standard.bool(forKey: "DemoAssistAuto")
-            || ProcessInfo.processInfo.arguments.contains("-DemoAssistAuto")
+        flag("DemoAssistAuto")
     }
 
     /// When enabled (`-DemoAssistDecline`), the auto-walk declines the confirmation
     /// so the fail-closed "nothing fires" state can be captured.
     static var assistDecline: Bool {
-        UserDefaults.standard.bool(forKey: "DemoAssistDecline")
-            || ProcessInfo.processInfo.arguments.contains("-DemoAssistDecline")
+        flag("DemoAssistDecline")
     }
 
-    /// Optional control-plane base URL (`-DemoBackendURL https://host`). When set with
-    /// a token, the app resolves a RemoteDecisionService; otherwise it stays on-device.
+    /// Optional control-plane base URL (`-DemoBackendURL http://localhost:8080`). When
+    /// set with a token, the app resolves a RemoteDecisionService; otherwise it stays
+    /// on-device. LOOPBACK-ONLY (review finding): a simulator can reach live or
+    /// production hosts, so an arbitrary URL here would turn the public demo into an
+    /// authenticated live client — which the Review Hub must never be. The documented
+    /// use (a locally running api-server) is loopback, and that is all this accepts;
+    /// any other host resolves nil and the app stays on-device (fail closed).
     static var backendURL: URL? {
         guard let s = UserDefaults.standard.string(forKey: "DemoBackendURL"), let u = URL(string: s) else { return nil }
-        return u
+        let host = (u.host ?? "").lowercased()
+        let loopback = host == "localhost" || host == "127.0.0.1" || host == "::1"
+        return loopback ? u : nil
     }
 
     /// Bearer token for the control plane (`-DemoBackendToken <tok>`).

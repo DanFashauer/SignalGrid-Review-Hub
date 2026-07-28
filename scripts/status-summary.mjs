@@ -59,8 +59,21 @@ const behind = originFresh ? (counts[0] ?? "?") : "unverified";
 const ahead = originFresh ? (counts[1] ?? "?") : "unverified";
 const dirty = gitOut(["status", "--porcelain"]).split("\n").filter(Boolean).length;
 const localHead = gitOut(["rev-parse", "HEAD"]);
-const remoteHead = gitOut(["ls-remote", "origin", branch]).split(/\s+/)[0] ?? "";
-const pushed = localHead && localHead === remoteHead;
+// Push status is TRI-STATE. A failed or empty `ls-remote` — offline, no remote
+// credentials, a detached HEAD, or simply no matching remote ref — does NOT mean "local
+// is ahead"; it means the relationship is UNKNOWN. Only a SUCCESSFUL lookup that returns
+// a ref hash lets us assert pushed/not-pushed, and even then a mismatch means "differs"
+// (ahead, behind, OR diverged), never specifically "ahead". (Adversarial-review finding:
+// an empty ls-remote was collapsed to false and reported as "local is ahead of the
+// remote", misreporting a branch that may be behind, pushed under another ref, or simply
+// unverifiable.)
+const lsRemote = spawnSync("git", ["ls-remote", "origin", branch], { cwd: repoRoot, encoding: "utf8" });
+const remoteHead = lsRemote.status === 0 ? ((lsRemote.stdout ?? "").trim().split(/\s+/)[0] ?? "") : "";
+const pushState = lsRemote.status !== 0 || remoteHead === ""
+  ? "unknown"
+  : localHead && localHead === remoteHead
+    ? "yes"
+    : "no";
 
 // ── inventory (facts, not claims) ─────────────────────────────────────────────
 const pkg = JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"));
@@ -105,7 +118,13 @@ L.push("");
 L.push(`## Repo state`);
 L.push(`- vs \`${baseRef}\`: **${behind} behind / ${ahead} ahead**${originFresh ? "" : " — **origin could not be reached; repo-state is from a stale cache and is NOT verified current**"}`);
 L.push(`- working tree: ${dirty === 0 ? "clean" : `**${dirty} uncommitted change(s)**`}`);
-L.push(`- pushed: ${pushed ? "yes — remote matches local" : "**no — local is ahead of the remote branch**"}`);
+L.push(`- pushed: ${
+  pushState === "yes"
+    ? "yes — remote matches local"
+    : pushState === "no"
+      ? "**no — local differs from the remote branch (ahead, behind, or diverged)**"
+      : "**unknown — could not read the remote ref (offline, no remote credentials, detached HEAD, or no matching remote branch)**"
+}`);
 L.push("");
 L.push(`## Gates`);
 L.push("");

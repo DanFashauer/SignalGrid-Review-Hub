@@ -75,6 +75,11 @@ const MUTATION_EXCLUDED = [
     reason:
       "QUEUED, not waived. Its grant (custody confirmed) is enumerated over the full normalized space (96 states, exactly one grants) and a hostile raw-wire space (192 readings, exactly one grants) inside its own proof, but the connector has not yet been added to the mutation guard's source-mutation sweep. This entry keeps that gap visible.",
   },
+  {
+    proof: "proof:app-update",
+    reason:
+      "QUEUED, not waived. Its grant (currency confirmed) is enumerated over the full normalized space (72 states, exactly the three current+managed+clean states grant) and a hostile raw-wire space (864 reports, exactly six grant) inside its own proof, but the connector has not yet been added to the mutation guard's source-mutation sweep. This entry keeps that gap visible.",
+  },
 ];
 
 /** `<name>-proof.ts` → `proof:<name>`, the script name the guards register. */

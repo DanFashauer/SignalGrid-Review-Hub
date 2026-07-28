@@ -75,6 +75,7 @@
     "proof:agent-identity": "tsx ./src/agent-identity-proof.ts",
     "proof:agent-behavior": "tsx ./src/agent-behavior-proof.ts",
     "proof:custody-beacon": "tsx ./src/custody-beacon-proof.ts",
+    "proof:app-update": "tsx ./src/app-update-proof.ts",
     "proof:device-management-health": "tsx ./src/device-management-health-proof.ts",
     "proof:link-usability": "tsx ./src/link-usability-proof.ts",
     "proof:verdict-attestation": "tsx ./src/verdict-attestation-proof.ts",

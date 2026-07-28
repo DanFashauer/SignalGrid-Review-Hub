@@ -124,7 +124,9 @@
     "proof:reliability": "pnpm --filter @workspace/scripts run proof:reliability",
     "proof:iac": "pnpm --filter @workspace/scripts run proof:iac",
     "loop": "node scripts/build-loop.mjs",
-    "loop:fix": "node scripts/build-loop.mjs --fix"
+    "loop:fix": "node scripts/build-loop.mjs --fix",
+    "branches:stale": "bash scripts/cleanup-merged-branches.sh",
+    "branches:clean": "bash scripts/cleanup-merged-branches.sh --apply"
   },
   "private": true,
   "devDependencies": {

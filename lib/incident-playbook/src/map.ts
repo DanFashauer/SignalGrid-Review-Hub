@@ -194,9 +194,14 @@ function categoryForKind(kind: string, reason?: string): IncidentCategory {
     case "peripheral":
       return "asset_device";
     // Active security incidents — live threats, exposed credentials, detections.
+    // `agent_behavior` joins them: an anomalous agent ACTION (a burst volume, no
+    // provenance, a superhuman cadence) is a live incident to investigate, distinct
+    // from its sibling `agent_identity` (agent GOVERNANCE → Identity & Access above).
+    // Who the agent is is a compliance question; a runaway action is an incident one.
     case "threat":
     case "credential_exposure":
     case "detection":
+    case "agent_behavior":
       return "security_incident";
     default:
       return "general";

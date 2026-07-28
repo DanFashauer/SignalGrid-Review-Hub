@@ -40,6 +40,16 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Dual control](DUAL_CONTROL.md): two-person integrity for the small set of highest-blast-radius elevated actions (break-glass on a specialty account, bulk export, a privileged fabric change) — a grant requires two distinct, distinctly-credentialed, co-present, user-verified, action-bound authorizers, the software analogue of the two-key narcotics cabinet. Right-fit by design: invoked only where the blast radius earns it. `@workspace/dual-control`; proven by `proof:dual-control`. Its hardware companion concept (a modular case bay + dedicated FIDO2 token) is bounded honestly in [Elevated-access hardware token](HARDWARE_ELEVATED_ACCESS_TOKEN.md).
 - [Grid governance](GRID_GOVERNANCE.md): ownership + accountability as a first-class, lintable axis — who owns the decision, who accepts the risk — because *technology grants access; governance decides who should have it*. A governance scorecard + lint flag an unowned workflow or an automated action with nobody accountable. `@workspace/flows` grid-config `governanceScorecard`; `proof:grid-config`.
 - [Zero-touch provisioning](ZERO_TOUCH_PROVISIONING.md): a device setup recorded once (Designer / Device Action Recorder) as versionable config, CI-validated, and replayed by the Grid on serial/network join — simulated by default, real enforcement only when an owner enables it. `@workspace/flows` provisioning; `proof:provisioning`.
+- [Agent judgment](AGENT_JUDGMENT.md): the layer that questions the action — an agent may be perfectly authenticated and still be about to do something it should not. `@workspace/integrations/agent-behavior`; proven by `proof:agent-behavior`.
+- [Adaptive proposals](ADAPTIVE_PROPOSALS.md): the governed lifecycle around a recommendation — proposals are reviewable suggestions, never self-applied changes. Proven by `proof:adaptive-proposals`.
+- [Self-audit](SELF_AUDIT.md): the fabric's own health as a plain-language checklist an owner reads without product knowledge, with proposed heals that stay proposals. `@workspace/self-audit`; proven by `proof:self-audit`.
+- [Reliability — SLOs and error budgets](RELIABILITY_SLO.md): the decision plane's own service objectives, including the zero-tolerance fail-closed-integrity SLO that carries no error budget at all. Proven by `proof:reliability`.
+- [Portable work context](PORTABLE_WORK_CONTEXT.md) and [cross-device handoff](HANDOFF_SIMULATION.md): the schema that lets work follow a person across shared devices, and the simulation that proves the exception-release loop.
+- [Canonical event contract](EVENT_CONTRACT.md): the shape every signal and decision serializes to.
+- [Deployment models](DEPLOYMENT_MODELS.md): the hybrid split — the cloud control plane manages, the edge/on-prem decision core decides.
+- [Admin flows](ADMIN_FLOWS.md) and [app-workflow templates](APP_WORKFLOW_TEMPLATES.md): what admins configure, and the lint that validates it.
+- [API access and connectors](API_ACCESS_AND_CONNECTORS.md): which vendor APIs each dimension would read from, and the read-only boundary.
+- [Run on a Mac, iPhone, or iPad](RUN_ON_MAC.md): the owner's one-command path to seeing it run.
 - [Inspiration & positioning references](inspiration/INSPIRATION.md): the IAM-landscape framing (Domains → Capabilities → Outcomes) mapped to SignalGrid, plus verdict-first XDR fusion and the NIST SP 800-207 policy-engine model.
 - [Operator console — Build the grid surfaces](OPERATOR_GRID_CONSOLE.md): the mobile PWA's capstone Grid overview plus five read-only detail views (grid intelligence, device recorder, app resilience, signal sourcing, grid config), each mapped to its `/cp/v1` read and `@workspace/flows` model — the "see the grid in action" entry point.
 - [Architecture — signals in, decisions out](architecture.html): a one-page, self-contained diagram of the whole fabric — every vendor system / database / cloud-SaaS as a read-only signal, fused into one verdict (allow/step-up/restrict/deny), orchestrated out (verdict · incident · action · webhook · audit), with the honest sourcing boundary and built-vs-roadmap marked.
@@ -115,6 +125,12 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Validation commands](VALIDATION_COMMANDS.md): lists the standard install, typecheck, build, proof, unsafe-claim scan, and diff hygiene commands.
 - [CI and validation](CI_AND_VALIDATION.md): explains Review Hub CI, required local checks, docs sanity checks, and future branch-protection expectations.
 - [Live-sync loop](LIVE_SYNC_LOOP.md): keeps the owner's Mac MCP lane and the iOS EnterpriseShell building against current repo contracts — a deterministic sync manifest (`scripts/generate-sync-manifest.mjs`), a drift gate (`scripts/check-live-sync.mjs`, hard on manifest drift, report-only on real-hardware evidence staleness), and the owner's one-command evidence run (`verify:all --require-mcp --emit-evidence`).
+- [Branch policy](BRANCHES.md): which branches are load-bearing, which were dead experiments, and the derived cleanup script (`pnpm run branches:stale` / `branches:clean`) that keeps the list honest without a hand-maintained list of names.
+- [Branching and environments](BRANCHING_AND_ENVIRONMENTS.md): how `dev` / `alpha` / `beta` / `prod` relate to the base branch.
+- [Self-review](SELF_REVIEW.md): the second-reviewer pass required before every push.
+- [Build feedback loop](BUILD_LOOP.md): how the product gets built — the runnable harness (`pnpm run loop`) that closes find → fix → verify.
+- [Proof coverage audit](PROOF_COVERAGE_AUDIT.md): which claims are proven, by which proof, and where the gaps are.
+- [Owner-only actions](OWNER_ACTIONS.md): the steps no automated session can perform — branch protection, alert dismissal, Pages, secrets.
 - [Review checklist](REVIEW_CHECKLIST.md): questions for reviewers, design partners, and advisors.
 
 

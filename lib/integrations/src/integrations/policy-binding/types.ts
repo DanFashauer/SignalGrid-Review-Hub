@@ -10,8 +10,9 @@
 // under a different name (see docs/POLICY_BINDING.md for the full mapping):
 //
 //   Intune / Entra   → dynamic device groups + enrollment-profile groups
-//   Fleet            → teams (this repo's fleet-connector carries normalTeamId /
-//                      restrictedTeamId — the same normal-vs-locked-down split)
+//   Fleet            → teams (the normal-vs-locked-down split; the enforcement
+//                      client that carried normalTeamId/restrictedTeamId moved to
+//                      the private core and is not in this public tree)
 //   Apple ABM / DDM  → ADE enrollment profile + declaration assignment
 //   Jamf (candidate) → smart groups
 //   PACS             → access levels / clearance groups

@@ -43,6 +43,11 @@ check("short versions pad with zeros (2.4 == 2.4.0)",
   compareVersions(parseVersion("2.4")!, parseVersion("2.4.0")!) === 0);
 check("a leading v is tolerated (v2.4.0)", parseVersion("v2.4.0") !== null);
 check("a non-numeric segment does not parse (2.4.0-beta → null)", parseVersion("2.4.0-beta") === null);
+check("a segment beyond Number.MAX_SAFE_INTEGER does not parse (precision loss must not derive 'current')",
+  parseVersion("2.9007199254740993") === null);
+const hugeSegment = ev({ installed_version: "2.9007199254740992", latest_version: "2.9007199254740993", channel: "managed" });
+check("unsafely-huge version segments → malformed, never a grant from a comparison that lost information",
+  hugeSegment.recommendedAction !== "none" && normalizeReport("h", "a", { installed_version: "2.9007199254740992", latest_version: "2.9007199254740993", channel: "managed" }).reportIntegrity === "malformed");
 check("a non-string does not parse", parseVersion(7) === null && parseVersion(null) === null);
 
 // ── the grant, and its one reasoned exception ───────────────────────────────────
@@ -60,20 +65,31 @@ check("ahead of latest counts as current (never punished for being newer)", ahea
 const belowFloor = ev({ installed_version: "1.9.0", latest_version: "2.4.0", min_version: "2.0.0", force_update: false, channel: "managed" });
 check("below the enforced floor → restrict (the affirmative bad fact)",
   belowFloor.recommendedAction === "restrict" && belowFloor.reasonCode === "BELOW_MIN_VERSION" && belowFloor.criticalFindings.includes("below_min_version"));
+// A missing latest must not MASK a floor violation (review finding): the known-bad
+// fact needs only installed+min; an unrelated unknown never downgrades it.
+const floorNoLatest = ev({ installed_version: "1.0.0", min_version: "2.0.0", channel: "managed" });
+check("below the floor with latest_version MISSING → still restrict (a known-bad fact is never masked by an unrelated unknown)",
+  floorNoLatest.recommendedAction === "restrict" && floorNoLatest.reasonCode === "BELOW_MIN_VERSION");
 const forcedPending = ev({ installed_version: "2.1.0", latest_version: "2.4.0", min_version: "2.0.0", force_update: true, channel: "managed" });
 check("behind latest with force_update → restrict (the flag's one meaning is 'older versions must not be used')",
-  forcedPending.recommendedAction === "restrict" && forcedPending.reasonCode === "FORCED_UPDATE_PENDING");
+  forcedPending.recommendedAction === "restrict" && forcedPending.reasonCode === "FORCED_UPDATE_PENDING" && forcedPending.criticalFindings.includes("forced_update_pending"));
 const advisory = ev({ installed_version: "2.1.0", latest_version: "2.4.0", min_version: "2.0.0", force_update: false, channel: "managed" });
 check("behind latest, floor satisfied, NOT forced → monitor (a nudge, not fatigue)",
   advisory.recommendedAction === "monitor" && advisory.reasonCode === "UPDATE_AVAILABLE");
 const forceUnknown = ev({ installed_version: "2.1.0", latest_version: "2.4.0", min_version: "2.0.0", channel: "managed" });
 check("behind latest with the force flag UNREADABLE → step_up (cannot confirm the lag is permitted)",
-  forceUnknown.recommendedAction === "step_up" && forceUnknown.reasonCode === "FORCE_POLICY_UNKNOWN");
+  forceUnknown.recommendedAction === "step_up" && forceUnknown.reasonCode === "FORCE_POLICY_UNKNOWN" && forceUnknown.unknownSignals.includes("force_policy"));
 
 // ── unknowns raise, never grant ─────────────────────────────────────────────────
 const noInstalled = ev({ latest_version: "2.4.0", channel: "managed" });
 check("no installed version reported → step_up (VERSION_UNKNOWN), never current",
-  noInstalled.recommendedAction === "step_up" && noInstalled.reasonCode === "VERSION_UNKNOWN");
+  noInstalled.recommendedAction === "step_up" && noInstalled.reasonCode === "VERSION_UNKNOWN" && noInstalled.unknownSignals.includes("currency"));
+// With currency AND channel both unknown, the currency reason still leads (pins
+// the currency branch as load-bearing — the backstop alone would surface the
+// channel's reason instead).
+const bothUnknown = ev({ latest_version: "2.4.0" });
+check("currency unknown + channel unknown → the VERSION_UNKNOWN reason leads",
+  bothUnknown.recommendedAction === "step_up" && bothUnknown.reasonCode === "VERSION_UNKNOWN");
 const noLatest = ev({ installed_version: "2.4.0", channel: "managed" });
 check("no manifest latest → step_up ('current' is only meaningful against a release)",
   noLatest.recommendedAction === "step_up" && noLatest.currencyConfirmed === false);
@@ -86,10 +102,10 @@ check("no inventory row returned (covered=false) → step_up, never a confirmati
 // ── provenance ──────────────────────────────────────────────────────────────────
 const sideload = ev({ installed_version: "2.4.0", latest_version: "2.4.0", channel: "unmanaged" });
 check("an UNMANAGED install → restrict even when fully current (untrusted provenance)",
-  sideload.recommendedAction === "restrict" && sideload.reasonCode === "UNMANAGED_INSTALL");
+  sideload.recommendedAction === "restrict" && sideload.reasonCode === "UNMANAGED_INSTALL" && sideload.criticalFindings.includes("unmanaged_install"));
 const noChannel = ev({ installed_version: "2.4.0", latest_version: "2.4.0" });
-check("channel unknown → step_up (provenance must be positively managed)",
-  noChannel.recommendedAction === "step_up" && noChannel.reasonCode === "CHANNEL_UNKNOWN");
+check("channel unknown → step_up with posture UNVERIFIED, never the affirmative-sounding 'unmanaged_install'",
+  noChannel.recommendedAction === "step_up" && noChannel.reasonCode === "CHANNEL_UNKNOWN" && noChannel.posture === "unverified" && noChannel.unknownSignals.includes("channel"));
 
 // ── malformed / hostile report shapes ───────────────────────────────────────────
 const contradictory = normalizeReport("c", "a", { installed_version: "2.4.0", latest_version: "2.0.0", min_version: "2.2.0", channel: "managed" });
@@ -135,6 +151,8 @@ check("a non-object report body is malformed, not a thrown TypeError",
   normalizeReport("s", "a", "boom" as unknown as AppUpdateReportRaw).reportIntegrity === "malformed");
 check("a null report body is malformed, not a thrown TypeError",
   normalizeReport("n", "a", null as unknown as AppUpdateReportRaw).reportIntegrity === "malformed");
+check("Object.prototype itself as the report is malformed (polluted-prototype fields must never read as own assertions)",
+  normalizeReport("op", "a", Object.prototype as AppUpdateReportRaw).reportIntegrity === "malformed");
 check("channel case and whitespace are canonicalized, not rejected",
   normalizeReport("cw", "a", { channel: " MANAGED " } as AppUpdateReportRaw).channel === "managed");
 

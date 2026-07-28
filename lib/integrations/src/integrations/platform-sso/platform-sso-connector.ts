@@ -57,7 +57,10 @@ function ownValue(report: object, key: string): unknown {
 /** Is this a plain JSON-shaped object at all? An injected transport returning a string
  *  must fail closed, not throw an untyped TypeError out of the normalizer. */
 function isPlainReport(report: unknown): report is object {
-  return typeof report === "object" && report !== null && !Array.isArray(report);
+  // The Object.prototype exclusion is load-bearing (review finding): passing
+  // Object.prototype itself as the report would let POLLUTED prototype fields
+  // read as own assertions on a "plain" object.
+  return typeof report === "object" && report !== null && !Array.isArray(report) && report !== Object.prototype;
 }
 
 /** Depth bound for the prototype scan — a Proxy may return a fresh object from

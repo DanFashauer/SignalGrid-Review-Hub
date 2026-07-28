@@ -153,6 +153,28 @@ jobs:
       - name: Proof — agent-behavior (action-judgment, one grant of 1,944)
         run: pnpm run proof:agent-behavior
 
+      # Custody BEACON — the offline asset-recovery channel: an independent
+      # case-embedded beacon fused with reachability tells "powered off in its bay"
+      # (monitor) apart from "removed and dark" (escalate).
+      - name: Proof — custody-beacon (asset recovery, offline channel)
+        run: pnpm run proof:custody-beacon
+
+      # App-update currency — min_version floors, force_update, install-channel
+      # provenance as posture (an iOS app cannot install itself; distribution stays
+      # with itms-services / MDM InstallApplication / ABM).
+      - name: Proof — app-update (host-app version currency)
+        run: pnpm run proof:app-update
+
+      # Platform SSO — the METHOD decides the credential's worth; a login policy
+      # claimed on a method that cannot enforce it is config drift.
+      - name: Proof — platform-sso (macOS platform credential)
+        run: pnpm run proof:platform-sso
+
+      # Policy binding — membership IS the policy: unbound, too-wide (fail-open),
+      # too-narrow, or mixed-membership group assignment.
+      - name: Proof — policy-binding (group-assignment correctness)
+        run: pnpm run proof:policy-binding
+
       - name: Device-management-health / config-drift proof
         run: pnpm run proof:device-management-health
 

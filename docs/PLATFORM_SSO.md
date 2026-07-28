@@ -56,6 +56,6 @@ password-grade by construction.
   macOS report — never from a vendor label or the user's own claim. An unrecognized
   wire key (a vendor `passwordless: true` flag, say) marks the report malformed.
 
-Proven by `proof:platform-sso` (targeted checks, hostile report shapes, both
+Proven by `proof:platform-sso` (52 checks; targeted checks, hostile report shapes, both
 grant-safety enumerations, fusion into posture-composition and incident routing;
 deterministic, offline).

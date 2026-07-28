@@ -62,6 +62,12 @@ const drift = ev({ registration: "user", method: "secure_enclave_key", login_pol
 check("Require Authentication claimed on the Secure Enclave method → alert (the policy CANNOT be in force — config drift)",
   drift.recommendedAction === "alert" && drift.reasonCode === "POLICY_INCOMPATIBLE_WITH_METHOD" && drift.criticalFindings.includes("policy_incompatible_with_method"));
 check("...and it is NOT a lockout risk — an unenforceable policy cannot strand anyone", drift.lockoutRisk === false);
+// The incompatibility is asserted only for a KNOWN non-Password method (review
+// finding): with the method unreadable, claiming "the policy contradicts the
+// method" fabricates a finding the report never made.
+const driftUnknownMethod = ev({ registration: "user", login_policy: "required" });
+check("Require Authentication with the method UNREADABLE → step_up METHOD_UNKNOWN, never the affirmative incompatibility alert",
+  driftUnknownMethod.recommendedAction === "step_up" && driftUnknownMethod.reasonCode === "METHOD_UNKNOWN" && driftUnknownMethod.criticalFindings.length === 0);
 
 // ── a policy genuinely in force carries lockout exposure ────────────────────────
 const graceOk = ev({ registration: "user", method: "password_sync", login_policy: "required", offline_grace: "valid", break_glass: "exempt_configured" });
@@ -69,7 +75,7 @@ check("policy in force + valid grace + break-glass exempted → monitor only (th
   graceOk.recommendedAction === "monitor" && graceOk.lockoutRisk === false);
 const graceExpired = ev({ registration: "user", method: "password_sync", login_policy: "required", offline_grace: "expired", break_glass: "exempt_configured" });
 check("policy in force + EXPIRED offline grace → alert + lockoutRisk (an offline Mac cannot use the local password)",
-  graceExpired.recommendedAction === "alert" && graceExpired.reasonCode === "OFFLINE_GRACE_EXPIRED" && graceExpired.lockoutRisk === true);
+  graceExpired.recommendedAction === "alert" && graceExpired.reasonCode === "OFFLINE_GRACE_EXPIRED" && graceExpired.lockoutRisk === true && graceExpired.criticalFindings.includes("offline_grace_expired"));
 const graceMissing = ev({ registration: "user", method: "password_sync", login_policy: "required", offline_grace: "not_configured", break_glass: "exempt_configured" });
 check("policy in force + grace NEVER configured → alert + lockoutRisk", graceMissing.recommendedAction === "alert" && graceMissing.reasonCode === "OFFLINE_GRACE_NOT_CONFIGURED" && graceMissing.lockoutRisk === true);
 const noBreakGlass = ev({ registration: "user", method: "password_sync", login_policy: "required", offline_grace: "valid", break_glass: "none" });
@@ -120,6 +126,13 @@ const extraKey = normalizeReport("x", { registration: "user", method: "secure_en
 // is exactly the state only the integrity branch can name.
 check("an unrecognized key (a vendor 'passwordless' flag we would never trust) refuses AS malformed (not via the backstop)",
   extraKey.reportIntegrity === "malformed" && evaluatePlatformSso(extraKey).reasonCode === "REPORT_MALFORMED" && evaluatePlatformSso(extraKey).recommendedAction !== "none");
+check("...and a MALFORMED report asserting user+SEK never reads assurance phishing_resistant",
+  evaluatePlatformSso(extraKey).assurance === "unknown");
+// With method AND policy both unknown, the method reason still leads (pins the
+// method branch as load-bearing — the backstop alone would surface POLICY_UNKNOWN).
+const psBothUnknown = ev({ registration: "user" });
+check("method unknown + policy unknown → the METHOD_UNKNOWN reason leads",
+  psBothUnknown.recommendedAction === "step_up" && psBothUnknown.reasonCode === "METHOD_UNKNOWN");
 const inherited = evaluatePlatformSso(normalizeReport("i", Object.create({ registration: "user", method: "secure_enclave_key", login_policy: "not_required" }) as PlatformSsoReportRaw));
 check("a report with ZERO own keys asserts nothing and cannot grant", inherited.recommendedAction !== "none");
 const hidden = new Proxy({ registration: "user", method: "secure_enclave_key", login_policy: "not_required" }, { ownKeys: () => [], getOwnPropertyDescriptor: () => undefined }) as PlatformSsoReportRaw;
@@ -139,6 +152,8 @@ check("a non-object report body is malformed, not a thrown TypeError",
   normalizeReport("s", "boom" as unknown as PlatformSsoReportRaw).reportIntegrity === "malformed");
 check("a null report body is malformed, not a thrown TypeError",
   normalizeReport("n", null as unknown as PlatformSsoReportRaw).reportIntegrity === "malformed");
+check("Object.prototype itself as the report is malformed (polluted-prototype fields must never read as own assertions)",
+  normalizeReport("op", Object.prototype as PlatformSsoReportRaw).reportIntegrity === "malformed");
 check("case and whitespace are canonicalized, not rejected",
   normalizeReport("cw", { method: " SECURE_ENCLAVE_KEY " } as PlatformSsoReportRaw).method === "secure_enclave_key");
 

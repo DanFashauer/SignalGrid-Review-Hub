@@ -46,6 +46,7 @@ check("...and removal is NOT suspected (this is the fatigue the fabric must not 
 const theft = ev({ zone: "off_premises", reachability: "unreachable" });
 check("off premises + UNREACHABLE → escalate (highest-confidence removal)", theft.recommendedAction === "escalate" && theft.reasonCode === "OFF_PREMISES_DARK");
 check("...and removal IS suspected (drives lost-mode/wipe + incident)", theft.removalSuspected === true);
+check("...with the affirmative finding on the evidence trail", theft.criticalFindings.includes("off_premises_dark"));
 
 const offReachable = ev({ zone: "off_premises", reachability: "reachable" });
 check("off premises but REACHABLE → restrict (out and controllable — contain it)", offReachable.recommendedAction === "restrict" && offReachable.reasonCode === "OFF_PREMISES" && offReachable.removalSuspected === true);
@@ -68,6 +69,20 @@ const expired = ev({ zone: "in_custody_zone", reachability: "reachable", freshne
 check("in zone + reachable but EXPIRED reading → step_up (stale claim never grants)", expired.recommendedAction === "step_up");
 const noFreshness = ev({ zone: "in_custody_zone", reachability: "reachable" });
 check("in zone + reachable but UNKNOWN freshness → step_up (freshness must be positively fresh)", noFreshness.recommendedAction === "step_up" && noFreshness.custodyConfirmed === false);
+
+// The in-zone claim is only as good as its freshness ON EVERY ARM (review
+// finding): the benign reading was trusted regardless of age, so an EXPIRED
+// sighting on a DARK device — the exact shape of a theft that began after the
+// beacon's last report — graded as the benign case.
+const expiredDark = ev({ zone: "in_custody_zone", reachability: "unreachable", freshness: "expired" });
+check("EXPIRED in-zone sighting + DARK device → restrict (epistemically location-unknown-dark, never 'benign')",
+  expiredDark.recommendedAction === "restrict" && expiredDark.reasonCode === "LOCATION_UNKNOWN_DARK" && expiredDark.criticalFindings.includes("location_unknown_dark"));
+const staleDark = ev({ zone: "in_custody_zone", reachability: "unreachable", freshness: "stale" });
+check("STALE in-zone sighting + dark device → step_up (cannot confirm still in place)",
+  staleDark.recommendedAction === "step_up" && staleDark.reasonCode === "IN_ZONE_STALE");
+const freshUnknownReach = ev({ zone: "in_custody_zone", reachability: "unknown", freshness: "fresh" });
+check("FRESH in-zone sighting + reachability unknown → monitor (the benign case requires the fresh sighting)",
+  freshUnknownReach.recommendedAction === "monitor" && freshUnknownReach.reasonCode === "IN_ZONE_OFFLINE_BENIGN");
 
 const uncovered = evaluateCustodyBeacon(normalizeReport("d", { zone: "in_custody_zone", reachability: "reachable", freshness: "fresh" }), { covered: false });
 check("no beacon reading returned for the device (covered=false) → step_up, never a confirmation", uncovered.recommendedAction === "step_up" && uncovered.reasonCode === "NOT_COVERED");
@@ -105,6 +120,8 @@ try { check("a throwing ACCESSOR fails closed to malformed without an exception"
 catch { accessorThrew = true; }
 check("...and no exception escaped the normalizer", accessorThrew === false);
 check("a non-object report body is malformed, not a thrown TypeError", normalizeReport("s", "boom" as unknown as CustodyBeaconReportRaw).reportIntegrity === "malformed");
+check("Object.prototype itself as the report is malformed (polluted-prototype fields must never read as own assertions)",
+  normalizeReport("op", Object.prototype as CustodyBeaconReportRaw).reportIntegrity === "malformed");
 check("a null report body is malformed, not a thrown TypeError", normalizeReport("n", null as unknown as CustodyBeaconReportRaw).reportIntegrity === "malformed");
 check("case and whitespace are canonicalized, not rejected", normalizeReport("cw", { zone: " IN_CUSTODY_ZONE " } as CustodyBeaconReportRaw).zone === "in_custody_zone");
 

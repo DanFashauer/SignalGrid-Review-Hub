@@ -103,9 +103,7 @@ export function evaluateAppUpdate(
       // Behind, and whether that lag is even permitted could not be read.
       candidates.push({ posture: "update_available", action: "step_up", reason: "FORCE_POLICY_UNKNOWN" });
     }
-  } else if (report.currency === "unknown") { // inert: backstop is identical
-    // Inert under mutation (allowlisted): the grant backstop below pushes the
-    // IDENTICAL candidate; this stays as the primary, readable statement.
+  } else if (report.currency === "unknown") {
     candidates.push({ posture: "version_unknown", action: "step_up", reason: "VERSION_UNKNOWN" });
   }
   // currency === "current": no candidate — the seed grant may survive.
@@ -115,7 +113,10 @@ export function evaluateAppUpdate(
     criticalFindings.push("unmanaged_install");
     candidates.push({ posture: "unmanaged_install", action: "restrict", reason: "UNMANAGED_INSTALL" });
   } else if (report.channel === "unknown") {
-    candidates.push({ posture: "unmanaged_install", action: "step_up", reason: "CHANNEL_UNKNOWN" });
+    // An UNKNOWN channel is unverified provenance, not an affirmative
+    // "unmanaged install" (review finding): the posture must not sound like an
+    // affirmative finding the report never made.
+    candidates.push({ posture: "unverified", action: "step_up", reason: "CHANNEL_UNKNOWN" });
   }
 
   // Defence in depth: the grant is affirmative on currency, channel, and parse. The

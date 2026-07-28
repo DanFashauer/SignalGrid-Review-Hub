@@ -96,9 +96,7 @@ export function evaluatePolicyBinding(
   if (report.binding === "unbound") {
     criticalFindings.push("unbound_ungoverned");
     candidates.push({ posture: "unbound", action: "restrict", reason: "UNBOUND_UNGOVERNED" });
-  } else if (report.binding === "unknown") { // inert: backstop is identical
-    // Inert under mutation (allowlisted): the grant backstop below pushes the
-    // IDENTICAL candidate; this stays as the primary, readable statement.
+  } else if (report.binding === "unknown") {
     candidates.push({ posture: "binding_unverified", action: "step_up", reason: "BINDING_UNKNOWN" });
   }
 

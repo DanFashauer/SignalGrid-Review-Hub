@@ -65,47 +65,53 @@ const PROOF_TIMEOUT_MS = 90_000;
 // mutation that fails to parse makes the proof crash, which reads as "killed" and would
 // quietly inflate the kill rate — so the patterns below only produce syntactically valid
 // TypeScript. Each is a shape this codebase actually uses for a guard.
+// Every pattern tolerates a trailing `// comment` (review finding): the patterns
+// were end-of-line anchored, so a guard line carrying an inline comment matched NO
+// mutator and was SILENTLY excluded from the sweep — a worse state than an
+// allowlisted survivor, because nothing ever re-validated the exemption. The
+// comment, when present, is preserved in the mutated line so allowlist matching
+// against the source line keeps working.
 const MUTATORS = [
   {
     id: "cond-false",
     // `if (<anything>) {` → `if (false) {`  — delete the branch.
-    match: /^(\s*)if \((.+)\) \{$/,
-    apply: (m) => `${m[1]}if (false) {`,
+    match: /^(\s*)if \((.+)\) \{( \/\/.*)?$/,
+    apply: (m) => `${m[1]}if (false) {${m[3] ?? ""}`,
     describe: (m) => `if (${truncate(m[2])}) → if (false)`,
   },
   {
     id: "else-if-false",
-    match: /^(\s*)\} else if \((.+)\) \{$/,
-    apply: (m) => `${m[1]}} else if (false) {`,
+    match: /^(\s*)\} else if \((.+)\) \{( \/\/.*)?$/,
+    apply: (m) => `${m[1]}} else if (false) {${m[3] ?? ""}`,
     describe: (m) => `else if (${truncate(m[2])}) → else if (false)`,
   },
   {
     id: "else-if-true",
     // Removes a guard on an else-branch without deleting the branch itself — this is
     // what catches a suppression guard like `} else if (!contradictory) {`.
-    match: /^(\s*)\} else if \((!.+)\) \{$/,
-    apply: (m) => `${m[1]}} else if (true) {`,
+    match: /^(\s*)\} else if \((!.+)\) \{( \/\/.*)?$/,
+    apply: (m) => `${m[1]}} else if (true) {${m[3] ?? ""}`,
     describe: (m) => `else if (${truncate(m[2])}) → else if (true)`,
   },
   {
     id: "disjunct-false",
     // A trailing `||` operand on its own line — how the multi-term guards are written.
-    match: /^(\s*)(.+) \|\|$/,
-    apply: (m) => `${m[1]}false ||`,
+    match: /^(\s*)(.+) \|\|( \/\/.*)?$/,
+    apply: (m) => `${m[1]}false ||${m[3] ?? ""}`,
     describe: (m) => `${truncate(m[2])} || → false ||`,
   },
   {
     id: "conjunct-true",
     // A trailing `&&` operand on its own line.
-    match: /^(\s*)(.+) &&$/,
-    apply: (m) => `${m[1]}true &&`,
+    match: /^(\s*)(.+) &&( \/\/.*)?$/,
+    apply: (m) => `${m[1]}true &&${m[3] ?? ""}`,
     describe: (m) => `${truncate(m[2])} && → true &&`,
   },
   {
     id: "return-flip",
     // `return true;` / `return false;` inside a predicate — flips a fail-closed default.
-    match: /^(\s*)return (true|false);$/,
-    apply: (m) => `${m[1]}return ${m[2] === "true" ? "false" : "true"};`,
+    match: /^(\s*)return (true|false);( \/\/.*)?$/,
+    apply: (m) => `${m[1]}return ${m[2] === "true" ? "false" : "true"};${m[3] ?? ""}`,
     describe: (m) => `return ${m[2]} → return ${m[2] === "true" ? "false" : "true"}`,
   },
 ];
@@ -278,15 +284,9 @@ const ALLOWED = [
   },
   {
     file: "lib/integrations/src/integrations/custody-beacon/evaluate.ts",
-    line: 'unreachable") { // inert: else-arm is identical',
+    line: 'if (beacon.freshness !== "fresh") {',
     reason:
-      "Inert by construction: unreachable and unknown reachability map to the SAME in-zone-offline monitor candidate, and the final else produces it for both. The branch is kept as the explicit statement of THE key benign case. Labelled inert in the source.",
-  },
-  {
-    file: "lib/integrations/src/integrations/custody-beacon/evaluate.ts",
-    line: '{ // inert: backstop is identical',
-    reason:
-      "Inert by construction: the complete grant backstop below pushes the IDENTICAL in_zone_stale/step_up/IN_ZONE_STALE candidate when this branch is deleted. Kept as the primary, readable statement of the rule; deleting BOTH is not a single mutation. Labelled inert in the source.",
+      "Verified shadow, not an exemption-by-accident: the complete grant backstop below computes positivelyInCustody (which requires freshness === 'fresh'), so deleting this branch leaves the candidate list empty for in-zone + reachable + stale/expired and the backstop pushes the byte-identical in_zone_stale/step_up/IN_ZONE_STALE candidate — confirmed by running the evaluator with the branch removed. Kept as the primary, readable statement of the freshness rule; deleting BOTH is not a single mutation. (The line is mutated for real now — the mutators tolerate trailing comments, so this entry actually fires.)",
   },
   {
     file: "lib/integrations/src/integrations/custody-beacon/evaluate.ts",
@@ -312,12 +312,6 @@ const ALLOWED = [
   },
   {
     file: "lib/integrations/src/integrations/app-update/evaluate.ts",
-    line: 'unknown") { // inert: backstop is identical',
-    reason:
-      "Inert by construction: the grant backstop pushes the IDENTICAL version_unknown/step_up/VERSION_UNKNOWN candidate when this branch is deleted. Kept as the primary, readable statement; deleting both is not a single mutation. Labelled inert in the source.",
-  },
-  {
-    file: "lib/integrations/src/integrations/app-update/evaluate.ts",
     line: 'report.reportIntegrity === "clean" &&',
     reason:
       "A conjunct of the grant backstop's predicate, and the backstop never fires today — every non-confirmed state already pushes a raising candidate, as its own comment states. Weakening the predicate is unobservable while that holds; the backstop exists for the day it stops holding.",
@@ -332,12 +326,6 @@ const ALLOWED = [
     line: "if (!positivelyCurrent && candidates.length === 0) {",
     reason:
       "The grant backstop itself — deliberately redundant defence-in-depth, documented in the source as never firing today; exists to catch a FUTURE weakening.",
-  },
-  {
-    file: "lib/integrations/src/integrations/platform-sso/evaluate.ts",
-    line: '{ // inert: backstop is identical',
-    reason:
-      "Inert by construction: the grant backstop pushes the IDENTICAL unverified/step_up/METHOD_UNKNOWN candidate when this method branch is deleted. Kept as the primary, readable statement. Labelled inert in the source.",
   },
   {
     file: "lib/integrations/src/integrations/platform-sso/evaluate.ts",

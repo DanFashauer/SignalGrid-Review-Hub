@@ -129,9 +129,7 @@ export function evaluatePlatformSso(
   } else if (report.method === "web_based") {
     // macOS 27 pre-release material. A preview is a preview.
     candidates.push({ posture: "preview_method", action: "step_up", reason: "PREVIEW_METHOD_NEVER_GRANTS" });
-  } else if (report.method === "none" || report.method === "unknown") { // inert: backstop is identical
-    // Inert under mutation (allowlisted): the grant backstop below pushes the
-    // IDENTICAL candidate; this stays as the primary, readable statement.
+  } else if (report.method === "none" || report.method === "unknown") {
     candidates.push({ posture: "unverified", action: "step_up", reason: "METHOD_UNKNOWN" });
   }
 
@@ -139,7 +137,11 @@ export function evaluatePlatformSso(
   if (report.loginPolicy === "unknown") {
     candidates.push({ posture: "unverified", action: "step_up", reason: "POLICY_UNKNOWN" });
   } else if (report.loginPolicy === "required") {
-    if (report.method !== "password_sync") {
+    if (report.method === "secure_enclave_key" || report.method === "smart_card" || report.method === "web_based") {
+      // The incompatibility is asserted only for a KNOWN non-Password method
+      // (review finding): with the method UNREADABLE we cannot affirmatively
+      // claim the policy contradicts it — the method-unknown step_up above
+      // already covers that state without fabricating a finding.
       // Require Authentication is ONLY compatible with the Password method. The
       // tenant believes a control is enforced that the OS is not enforcing —
       // config drift, and the claimed protection is absent. NOT a lockout risk:

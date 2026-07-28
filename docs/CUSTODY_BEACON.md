@@ -83,7 +83,7 @@ device.
 
 ## Proof
 
-`pnpm run proof:custody-beacon` (38 checks) is fully offline and deterministic.
+`pnpm run proof:custody-beacon` (43 checks) is fully offline and deterministic.
 It pins every zone×reachability fusion (the benign in-zone-offline case and the
 off-premises-dark escalation especially), the fail-closed unknown/stale paths,
 `covered=false`, and hostile report shapes (prototype-inherited/aliased keys,

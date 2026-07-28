@@ -20,7 +20,7 @@ failure modes.
 | System (as documented here) | The binding | Fail-open drift looks like |
 | --- | --- | --- |
 | **Intune / Entra** (`graph`, `device-management-health`) | dynamic device groups + enrollment-profile groups | corporate supervised device sitting in the BYOD group |
-| **Fleet** (`fleet-connector` — its config literally carries `normalTeamId` / `restrictedTeamId`) | teams | a device that should be on the RESTRICTED team running the normal team's profiles |
+| **Fleet** (teams; the enforcement client's config carried `normalTeamId` / `restrictedTeamId` before actuation moved to the private core — the package is not in this public tree) | teams | a device that should be on the RESTRICTED team running the normal team's profiles |
 | **Apple ABM / DDM** (`ddm-connector`, `macos-posture`) | ADE enrollment profile + declaration assignment | a shared kiosk iPad enrolled through the 1:1 profile, missing the shared-device declarations |
 | **Jamf** (documented candidate path) | smart groups | a clinical iPad falling out of its smart group when an inventory attribute goes stale |
 | **PACS** (`pacs-access`) | access levels / clearance groups | a decommissioned badge still in the pharmacy access level |
@@ -47,9 +47,25 @@ it grades the reported outcome:
 | **mixed membership** (users inside a device group — the flow's own "device groups contain devices only" rule) | `alert` | policy targeting is broken at group scale, not for one device |
 | any axis unknown | `step_up` | unknown raises, never grants |
 
-The mismatch *direction* is deliberately moot when the binding is matched — it
-exists in service of a mismatch — and the enumeration pins exactly that (162
-normalized states, exactly 3 grant; 288 hostile raw reports, exactly 3).
+The mismatch *direction* is deliberately moot when the binding is matched at the
+NORMALIZED layer — it exists in service of a mismatch — and the enumeration pins
+exactly that (162 normalized states, exactly 3 grant). At the WIRE layer a report
+that asserts a concrete direction alongside `matched` contradicts itself and is
+malformed, so exactly 1 of 288 hostile raw reports grants.
+
+## What produces `profile_match` — the honest boundary
+
+No vendor API returns "matched / mismatched / wider / narrower" directly. Intune's
+dynamic-group engine CONVERGES membership toward its rules rather than reporting a
+disagreement; Fleet reports the team a host is on, not the team it should be on. So
+the match verdict is an **already-resolved input** that requires an independent
+referee — the tenant's expected-state rules (this repo's own IaC/GitOps desired
+state is exactly such a referee), a reconciliation job comparing observed device
+properties against the group's rule, or an operator's declaration. This dimension
+grades that referee's output; it neither computes membership nor re-implements a
+vendor's grouping engine, and a plane that only ever reports "matched" about itself
+teaches this dimension nothing. Wiring it to a self-reporting feed and expecting
+drift detection would be exactly the fail-open the dimension exists to catch.
 
 ## Boundaries
 
@@ -64,6 +80,6 @@ normalized states, exactly 3 grant; 288 hostile raw reports, exactly 3).
 - Registered with the mutation guard from day one (TARGETS, zero survivors), not
   queued.
 
-Proven by `proof:policy-binding` (targeted ladder checks, per-field integrity,
+Proven by `proof:policy-binding` (41 checks; targeted ladder checks, per-field integrity,
 hostile shapes, both grant-safety enumerations, connector surface, fusion;
 deterministic, offline).

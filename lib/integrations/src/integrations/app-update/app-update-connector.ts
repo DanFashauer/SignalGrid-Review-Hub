@@ -55,7 +55,10 @@ function ownValue(report: object, key: string): unknown {
 /** Is this a plain JSON-shaped object at all? An injected transport returning a string
  *  must fail closed, not throw an untyped TypeError out of the normalizer. */
 function isPlainReport(report: unknown): report is object {
-  return typeof report === "object" && report !== null && !Array.isArray(report);
+  // The Object.prototype exclusion is load-bearing (review finding): passing
+  // Object.prototype itself as the report would let POLLUTED prototype fields
+  // read as own assertions on a "plain" object.
+  return typeof report === "object" && report !== null && !Array.isArray(report) && report !== Object.prototype;
 }
 
 /** Depth bound for the prototype scan — a Proxy may return a fresh object from
@@ -97,7 +100,14 @@ export function parseVersion(v: unknown): number[] | null {
   const nums: number[] = [];
   for (const p of parts) {
     if (!/^\d+$/.test(p)) return null;
-    nums.push(Number(p));
+    const n = Number(p);
+    // A segment beyond Number.MAX_SAFE_INTEGER collapses distinct versions onto
+    // the same float (review finding): "2.9007199254740992" and "...93" compared
+    // equal, positively deriving "current" from a comparison that lost
+    // information. A version we cannot compare EXACTLY is a version we cannot
+    // read — reject it (asserted-but-unparseable ⇒ malformed).
+    if (!Number.isSafeInteger(n)) return null;
+    nums.push(n);
   }
   return nums;
 }
@@ -163,11 +173,18 @@ export function normalizeReport(
   // Currency is a POSITIVE derivation: it needs a parsed installed version and a
   // parsed latest (the manifest's release is the only thing "current" can mean).
   // A floor violation is checked first — it is the affirmative bad fact.
+  // A floor violation needs only installed+min to be positively established
+  // (review finding): requiring latest first let a MISSING latest_version mask an
+  // affirmatively-below-floor device down from restrict to step_up. The known-bad
+  // fact wins over the unrelated unknown; a contradictory manifest still voids
+  // the derivation entirely.
   let currency: UpdateCurrency;
-  if (installed === null || latest === null || contradictoryManifest) {
+  if (contradictoryManifest) {
     currency = "unknown";
-  } else if (min !== null && compareVersions(installed, min) < 0) {
+  } else if (installed !== null && min !== null && compareVersions(installed, min) < 0) {
     currency = "below_floor";
+  } else if (installed === null || latest === null) {
+    currency = "unknown";
   } else if (compareVersions(installed, latest) < 0) {
     currency = "behind";
   } else {

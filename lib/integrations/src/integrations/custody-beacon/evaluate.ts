@@ -105,24 +105,30 @@ export function evaluateCustodyBeacon(
       candidates.push({ posture: "departing", action: "alert", reason: "DEPARTING" });
     }
   } else if (beacon.zone === "in_custody_zone") {
-    // Inert under mutation (allowlisted): the final else produces the IDENTICAL
-    // candidate for the unreachable case; this branch is kept as the explicit
-    // statement of THE key benign case.
-    if (beacon.reachability === "unreachable") { // inert: else-arm is identical
-      // THE key benign case: in its bay, powered off. Note it, do not alarm.
-      candidates.push({ posture: "in_zone_offline", action: "monitor", reason: "IN_ZONE_OFFLINE_BENIGN" });
+    // The in-zone claim is only as good as its freshness (review finding): the
+    // benign "powered off in its bay" reading was trusted regardless of age, so
+    // an EXPIRED sighting on a DARK device — the exact shape of a theft that
+    // began after the beacon's last report — graded as the benign case.
+    if (beacon.freshness === "expired" && beacon.reachability === "unreachable") {
+      // An expired in-zone claim confirms nothing current, and the device is
+      // dark: epistemically the location-unknown-dark state.
+      criticalFindings.push("location_unknown_dark");
+      candidates.push({ posture: "location_unknown", action: "restrict", reason: "LOCATION_UNKNOWN_DARK" });
     } else if (beacon.reachability === "reachable") {
       // In zone AND reachable. The grant requires a FRESH reading — a stale/expired
-      // in-zone claim cannot confirm current location. Inert under mutation
-      // (allowlisted): the grant backstop below pushes the identical candidate;
-      // this stays as the primary, readable statement of the rule.
-      if (beacon.freshness !== "fresh") { // inert: backstop is identical
+      // in-zone claim cannot confirm current location.
+      if (beacon.freshness !== "fresh") {
         candidates.push({ posture: "in_zone_stale", action: "step_up", reason: "IN_ZONE_STALE" });
       }
       // else: no candidate — the seed grant survives.
-    } else {
-      // In zone but reachability unknown — cannot confirm the device is live in place.
+    } else if (beacon.freshness === "fresh") {
+      // THE key benign case: a FRESH sighting in its bay while the device is
+      // dark (or its reachability unknown). Note it, do not alarm.
       candidates.push({ posture: "in_zone_offline", action: "monitor", reason: "IN_ZONE_OFFLINE_BENIGN" });
+    } else {
+      // In zone but the sighting is not fresh and the device is not confirmably
+      // live — cannot confirm the device is still in place.
+      candidates.push({ posture: "in_zone_stale", action: "step_up", reason: "IN_ZONE_STALE" });
     }
   } else {
     // zone unknown — cannot confirm custody. Fail closed by reachability.

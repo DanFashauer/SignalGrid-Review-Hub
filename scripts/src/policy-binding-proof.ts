@@ -38,9 +38,15 @@ const correct = ev({ binding: "bound", profile_match: "matched", membership_hygi
 check("bound + matched + clean hygiene → the grant (binding confirmed)",
   correct.recommendedAction === "none" && correct.reasonCode === "BOUND_CORRECTLY" && correct.bindingConfirmed === true);
 check("...with no critical findings and no unknowns", correct.criticalFindings.length === 0 && correct.unknownSignals.length === 0);
-const correctWithDirection = ev({ binding: "bound", profile_match: "matched", mismatch_direction: "wider", membership_hygiene: "clean" });
-check("a direction value alongside 'matched' is moot — the grant survives (direction exists in service of a mismatch)",
-  correctWithDirection.recommendedAction === "none");
+// A report asserting a concrete direction ALONGSIDE "matched" contradicts itself
+// (review finding — the same self-contradiction rule as a manifest whose floor
+// exceeds its own latest): the wire-level assertion is malformed. At the
+// NORMALIZED layer the direction stays moot-when-matched (the enumeration below
+// pins that), but no self-contradictory wire report ever grants.
+const contradictoryDirection = ev({ binding: "bound", profile_match: "matched", mismatch_direction: "wider", membership_hygiene: "clean" });
+check("'matched' + an asserted concrete direction is a self-contradicting report → malformed, never a grant",
+  contradictoryDirection.recommendedAction !== "none" &&
+  normalizeReport("cd", { binding: "bound", profile_match: "matched", mismatch_direction: "wider", membership_hygiene: "clean" }).reportIntegrity === "malformed");
 
 // ── the failure modes, each with its own reason ─────────────────────────────────
 const unbound = ev({ binding: "unbound", profile_match: "matched", membership_hygiene: "clean" });
@@ -67,8 +73,13 @@ const hygieneUnknown = ev({ binding: "bound", profile_match: "matched" });
 check("hygiene state unreadable → step_up (HYGIENE_UNKNOWN)",
   hygieneUnknown.recommendedAction === "step_up" && hygieneUnknown.reasonCode === "HYGIENE_UNKNOWN");
 const bindingUnknown = ev({ profile_match: "matched", membership_hygiene: "clean" });
-check("binding state unreadable → step_up, never a confirmation",
-  bindingUnknown.recommendedAction === "step_up" && bindingUnknown.unknownSignals.includes("binding"));
+check("binding state unreadable → step_up AS binding-unknown, never a confirmation",
+  bindingUnknown.recommendedAction === "step_up" && bindingUnknown.reasonCode === "BINDING_UNKNOWN" && bindingUnknown.unknownSignals.includes("binding"));
+// With binding AND hygiene both unknown, the binding reason still leads (pins the
+// binding branch as load-bearing — the backstop alone would surface HYGIENE_UNKNOWN).
+const pbBothUnknown = ev({ profile_match: "matched" });
+check("binding unknown + hygiene unknown → the BINDING_UNKNOWN reason leads",
+  pbBothUnknown.recommendedAction === "step_up" && pbBothUnknown.reasonCode === "BINDING_UNKNOWN");
 const uncovered = evaluatePolicyBinding(
   normalizeReport("d", { binding: "bound", profile_match: "matched", membership_hygiene: "clean" }),
   { covered: false });
@@ -112,6 +123,8 @@ check("a non-object report body is malformed, not a thrown TypeError",
   normalizeReport("s", "boom" as unknown as PolicyBindingReportRaw).reportIntegrity === "malformed");
 check("a null report body is malformed, not a thrown TypeError",
   normalizeReport("n", null as unknown as PolicyBindingReportRaw).reportIntegrity === "malformed");
+check("Object.prototype itself as the report is malformed (polluted-prototype fields must never read as own assertions)",
+  normalizeReport("op", Object.prototype as PolicyBindingReportRaw).reportIntegrity === "malformed");
 check("case and whitespace are canonicalized, not rejected",
   normalizeReport("cw", { binding: " BOUND " } as PolicyBindingReportRaw).binding === "bound");
 
@@ -196,14 +209,15 @@ const rawRes = enumerateGrantSafety({
     c.__alias !== "present" &&
     c.binding === "bound" &&
     c.profile_match === "matched" &&
+    c.mismatch_direction === undefined && // asserted direction + matched = self-contradiction
     c.membership_hygiene === "clean",
 });
 check(
   `exhaustive (raw wire): over all ${rawRes.combos} raw reports — junk enums, a number, an aliased group_name key — the binding is confirmed only on fully-clean bound+matched+clean reports (mismatches=${rawRes.mismatches}${rawRes.firstMismatch ? ", first=" + rawRes.firstMismatch : ""})`,
   rawRes.mismatches === 0 && rawRes.combos === productOf(rawDomains) && rawRes.combos === 288,
 );
-check("exhaustive (raw wire): exactly 3 raw reports grant (one per direction value, all bound+matched+clean)",
-  rawRes.noneCount === 3);
+check("exhaustive (raw wire): exactly ONE raw report grants (bound+matched+clean with NO direction asserted — a direction alongside 'matched' self-contradicts)",
+  rawRes.noneCount === 1);
 
 // ── fusion into the fabric (posture-composition + incident routing) ─────────────
 check("policy_binding is a member of the runtime SIGNAL_KINDS array — the union is derived, so the playbook proof covers it automatically",

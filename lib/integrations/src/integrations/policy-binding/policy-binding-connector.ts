@@ -57,7 +57,10 @@ function ownValue(report: object, key: string): unknown {
 /** Is this a plain JSON-shaped object at all? An injected transport returning a string
  *  must fail closed, not throw an untyped TypeError out of the normalizer. */
 function isPlainReport(report: unknown): report is object {
-  return typeof report === "object" && report !== null && !Array.isArray(report);
+  // The Object.prototype exclusion is load-bearing (review finding): passing
+  // Object.prototype itself as the report would let POLLUTED prototype fields
+  // read as own assertions on a "plain" object.
+  return typeof report === "object" && report !== null && !Array.isArray(report) && report !== Object.prototype;
 }
 
 /** Depth bound for the prototype scan — a Proxy may return a fresh object from
@@ -119,9 +122,17 @@ export function normalizeReport(
   const mismatchDirection = oneOf<MismatchDirection>(rawDirection, DIRECTIONS, "unknown");
   const membershipHygiene = oneOf<MembershipHygiene>(rawHygiene, HYGIENES, "unknown");
 
+  // A report asserting a concrete mismatch DIRECTION alongside "matched"
+  // contradicts itself — the direction exists only in service of a mismatch
+  // (review finding; the same self-contradiction rule as app-update's
+  // min_version > latest_version manifest).
+  const contradictoryDirection =
+    profileMatch === "matched" && (mismatchDirection === "wider" || mismatchDirection === "narrower");
+
   const malformed =
     readThrew ||
     !plain ||
+    contradictoryDirection ||
     hasUnrecognizedKey(report, POLICY_BINDING_REPORT_KEYS) ||
     enumMalformed(rawBinding, BINDINGS) ||
     enumMalformed(rawMatch, MATCHES) ||

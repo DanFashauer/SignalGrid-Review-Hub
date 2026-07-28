@@ -1,0 +1,9 @@
+{
+  "kind": "docker-run",
+  "manifestFingerprint": "c4d1ba6002a0a472585ffa13df5ce69c94f2e77e5819ec82402b210626b402ec",
+  "dockerServerVersion": "29.6.2",
+  "durablePersistencePass": true,
+  "pgProofsRun": 3,
+  "pgAssertionsPassed": 22,
+  "note": "A real Docker daemon ran postgres:16 and the three durable-persistence proofs passed against it. Emission is refused unless every step is green."
+}

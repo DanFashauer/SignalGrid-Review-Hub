@@ -44,11 +44,6 @@ const MUTATION_EXCLUDED = [
     reason:
       "It IS the harness, not a connector — it has no normalizer or evaluator to mutate, and it already ships its own negative controls (deliberately too-strict and too-loose predicates, each asserted to be caught).",
   },
-  {
-    proof: "proof:pim-activation",
-    reason:
-      "QUEUED. It consumes other dimensions' verdicts rather than normalizing a bridge report, so its allow path is the composition rather than a parse layer.",
-  },
 ];
 
 /** `<name>-proof.ts` → `proof:<name>`, the script name the guards register. */

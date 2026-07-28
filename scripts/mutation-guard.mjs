@@ -171,6 +171,14 @@ export const TARGETS = [
     ],
   },
   {
+    // The last QUEUED allow-path proof. Registered on the argument that composition
+    // is exactly where a grant leaks — consuming other dimensions' verdicts rather
+    // than parsing a bridge report changes WHAT is mutated, not whether it needs to
+    // be falsifiable.
+    proof: "proof:pim-activation",
+    files: ["lib/pim-activation/src/evaluate.ts", "lib/pim-activation/src/normalize.ts"],
+  },
+  {
     proof: "proof:passkey-assurance",
     files: [
       "lib/integrations/src/integrations/passkey-assurance/evaluate.ts",
@@ -256,6 +264,30 @@ export const TARGETS = [
 // fine" is not one. An entry whose `line` no longer matches fails the gate: the code
 // moved and nobody re-derived whether the justification still holds.
 const ALLOWED = [
+  // The four entries below were classified by BEHAVIOURAL DIFF, not by reading. For each,
+  // the mutation was applied and the full output — not just grant-ness — was compared
+  // across the connector's whole input space. That is what separates "genuinely inert"
+  // from "real behaviour with no test", and the guard itself cannot tell them apart: a
+  // surviving mutation looks identical either way. Any future reader can re-run the same
+  // check rather than take the reason on trust.
+  {
+    file: "lib/integrations/src/integrations/oauth-consent/evaluate.ts",
+    line: 'consent.grants === "none" &&',
+    reason:
+      'Genuinely inert, verified by diffing all 6,480 enumerated states with the term mutated to `true`: ZERO verdicts changed. The guard as a whole is live (it fails a "none" report that carries positive risky detail), but this TERM cannot matter, because the risky-field checks above already push a candidate for broad/full_access scope, an unverified publisher, or an unmanaged workload secret whenever grants === "present" — so the disjunct it scopes can only be true when grants is already "none", and an "unknown" grants value has returned before reaching here. Kept because it states the scope exactly and becomes load-bearing the moment the risky-field block\'s own scoping changes.',
+  },
+  {
+    file: "lib/dual-control/src/normalize.ts",
+    line: "!plain ||",
+    reason:
+      "Covers BOTH occurrences (the authorizer normalizer and the top-level request normalizer) — same term, same justification. Genuinely inert, verified by diffing 239 hostile shapes (non-objects, null, arrays, Object.prototype, a getPrototypeOf Proxy, throwing accessors, and every field-corruption crossed pair) with the term mutated to `false`: ZERO outputs changed. When the input is not a plain object every field read yields undefined, and the per-field refMalformed/enumMalformed checks below already mark the report malformed on that alone. Kept as defence in depth: it encodes the rule directly instead of relying on a downstream check to imply it, and becomes load-bearing the moment any field check is narrowed to tolerate undefined.",
+  },
+  {
+    file: "lib/dual-control/src/normalize.ts",
+    line: "readThrew ||",
+    reason:
+      "Genuinely inert, verified by the same 239-shape diff with the term mutated to `false`: ZERO outputs changed. A throwing accessor forces every field to undefined in the catch block, and the per-field checks below already mark the report malformed on that alone. Kept for the same reason as the !plain term beside it — a read that THREW is a distinct fact from a read that returned nothing, and stating it here keeps the integrity flag honest if the field checks ever stop covering undefined.",
+  },
   {
     file: 'lib/integrations/src/integrations/passkey-assurance/evaluate.ts',
     line: 'report.credentialRef.length > 0 &&',

@@ -121,6 +121,14 @@ function normalizeAuthorizer(raw: unknown): { value: NormalizedAuthorizer; malfo
     userVerified = boundToAction = roleAuthorized = undefined;
   }
 
+  // The first two terms are INERT at today's field checks and are kept deliberately:
+  // when the input is not a plain object every read yields undefined, and a throwing
+  // accessor forces the same, so the per-field checks below already mark the report
+  // malformed on that alone. Verified by behavioural diff, not by reading — mutating
+  // either to `false` changes ZERO outputs across 239 hostile shapes. They stay because
+  // they state the rule directly rather than relying on a downstream check to imply it,
+  // and become load-bearing the moment a field check tolerates undefined. Registered in
+  // the mutation guard's allowlist with the same reasoning.
   const malformed =
     readThrew ||
     !plain ||
@@ -183,6 +191,8 @@ export function normalizeDualControlRequest(
   const initiator = normalizeAuthorizer(initiatorRaw);
   const approver = normalizeAuthorizer(approverRaw);
 
+  // Same two inert-but-kept terms as the authorizer normalizer above, same verification
+  // and same justification.
   const topMalformed =
     readThrew ||
     !plain ||

@@ -131,7 +131,7 @@ because a reviewer thought to try mutation testing. That is not a control; it is
 good habits.
 
 The guard mutates each condition in a registered file, runs that proof under a timeout,
-and fails on any survivor. Current sweep: **105 mutations, 95 killed, 7 documented-inert,
+and fails on any survivor. Current sweep: **500 mutations, 460 killed, 40 documented-inert,
 0 survivors.** The timeout is not incidental — deleting `MAX_PROTOTYPE_DEPTH` makes the
 proof *hang* rather than fail, because the walk meets a Proxy returning a fresh prototype
 from every `getPrototypeOf`; in CI that failure mode burns a job's whole budget instead of
@@ -143,6 +143,21 @@ are kept because they encode the rule and become load-bearing the moment a sever
 Those carry an allowlist entry with a checkable reason, and are labelled inert in the
 source. **An allowlist entry that stops matching fails the gate**: the code moved and
 nobody re-derived whether the justification still holds.
+
+That leaves one judgement the guard cannot make for you. A survivor is *either* inert
+*or* real-behaviour-with-no-test, and it looks identical either way — the proof passed, and
+that is all the guard observes. Deciding by reading the code is exactly the reasoning that
+put the untested condition there in the first place, so the four survivors in the most
+recent sweep were each classified by **behavioural diff** instead: apply the mutation, dump
+the FULL output over the connector's whole input space, and compare. `oauth-consent`'s
+`grants === "none"` term changed zero of 6,480 enumerated verdicts; the two `!plain` terms
+and the `readThrew` term in `dual-control`'s normalizers changed zero of 239 hostile shapes
+(non-objects, `Object.prototype`, a `getPrototypeOf` Proxy, throwing accessors, and every
+field-corruption crossed pair). All four are genuinely inert — each is caught downstream by
+a per-field check before the term can matter — and all four are kept as defence in depth,
+because they state the rule directly rather than relying on a downstream check to imply it.
+The allowlist entries record the diff, so the next reader can re-run the reason rather than
+take it on trust.
 
 It found real gaps immediately, including in code written an hour earlier: 13 of 19
 mutations survived in `verdict-attestation` on first run. Most were type checks whose
@@ -200,12 +215,14 @@ drift in the other direction and also fails. Negative-controlled both ways: drop
 connector from the registry fails, and so does adding a brand-new allow-path proof nobody
 registered.
 
-What it reports today is worth stating plainly rather than burying: **12 proofs enumerate
-an allow path, and 3 are under the mutation guard.** Eight are listed as QUEUED — not
-waived — and named individually in the output every time it runs, including
-`agent-identity`, whose allow path was hardened over seven adversarial reviews but predates
-the sweep. Partial coverage announced every run is a very different thing from partial
-coverage that looks complete.
+What it reports today is worth stating plainly rather than burying: **20 proofs enumerate
+an allow path, 19 are under the mutation guard, and none are QUEUED.** The one that is not
+a target is `proof:grant-safety` itself — it IS the harness, with no normalizer or
+evaluator to mutate, and it already ships its own negative controls. The QUEUED list is
+empty for the first time; while it was not, those proofs were named individually in the
+output every time the check ran, because partial coverage announced every run is a very
+different thing from partial coverage that looks complete. The list is worth keeping in
+the output for the next gap rather than deleting now that it happens to be empty.
 
 **`pnpm run guard:figures` — is a number stated as a measurement still one?**
 

@@ -97,14 +97,32 @@ const CO_PRESENCE = ["confirmed", "expired", "unknown"] as const;
 function normalizeAuthorizer(raw: unknown): { value: NormalizedAuthorizer; malformed: boolean } {
   const plain = isPlainObject(raw);
   const get = (k: string): unknown => (plain ? ownValue(raw, k) : undefined);
-  const identityRef = get("identityRef");
-  const credentialRef = get("credentialRef");
-  const authenticatorClass = get("authenticatorClass");
-  const userVerified = get("userVerified");
-  const boundToAction = get("boundToAction");
-  const roleAuthorized = get("roleAuthorized");
+  // The reads themselves can throw: an own property may be an ACCESSOR whose getter
+  // throws. A field we cannot READ is exactly a field we cannot confirm, so a throw
+  // forces every value to the fail-safe and marks the authorizer malformed — the same
+  // fail-closed reading `hasUnrecognizedKey` already applies to a throwing `ownKeys`.
+  let identityRef: unknown;
+  let credentialRef: unknown;
+  let authenticatorClass: unknown;
+  let userVerified: unknown;
+  let boundToAction: unknown;
+  let roleAuthorized: unknown;
+  let readThrew = false;
+  try {
+    identityRef = get("identityRef");
+    credentialRef = get("credentialRef");
+    authenticatorClass = get("authenticatorClass");
+    userVerified = get("userVerified");
+    boundToAction = get("boundToAction");
+    roleAuthorized = get("roleAuthorized");
+  } catch {
+    readThrew = true;
+    identityRef = credentialRef = authenticatorClass = undefined;
+    userVerified = boundToAction = roleAuthorized = undefined;
+  }
 
   const malformed =
+    readThrew ||
     !plain ||
     hasUnrecognizedKey(raw, AUTHORIZER_ATTESTATION_KEYS) ||
     refMalformed(identityRef) ||
@@ -143,16 +161,30 @@ export function normalizeDualControlRequest(
   source = "host-dual-control-gate",
 ): NormalizedDualControl {
   const plain = isPlainObject(request);
-  const actionIdRaw = plain ? ownValue(request, "actionId") : undefined;
-  const actionClassRaw = plain ? ownValue(request, "actionClass") : undefined;
-  const coPresenceRaw = plain ? ownValue(request, "coPresence") : undefined;
-  const initiatorRaw = plain ? ownValue(request, "initiator") : undefined;
-  const approverRaw = plain ? ownValue(request, "approver") : undefined;
+  // Guard the reads: a throwing accessor on any top-level field must fail closed to a
+  // malformed verdict, not escape as an uncaught exception (see normalizeAuthorizer).
+  let actionIdRaw: unknown;
+  let actionClassRaw: unknown;
+  let coPresenceRaw: unknown;
+  let initiatorRaw: unknown;
+  let approverRaw: unknown;
+  let readThrew = false;
+  try {
+    actionIdRaw = plain ? ownValue(request, "actionId") : undefined;
+    actionClassRaw = plain ? ownValue(request, "actionClass") : undefined;
+    coPresenceRaw = plain ? ownValue(request, "coPresence") : undefined;
+    initiatorRaw = plain ? ownValue(request, "initiator") : undefined;
+    approverRaw = plain ? ownValue(request, "approver") : undefined;
+  } catch {
+    readThrew = true;
+    actionIdRaw = actionClassRaw = coPresenceRaw = initiatorRaw = approverRaw = undefined;
+  }
 
   const initiator = normalizeAuthorizer(initiatorRaw);
   const approver = normalizeAuthorizer(approverRaw);
 
   const topMalformed =
+    readThrew ||
     !plain ||
     hasUnrecognizedKey(request, DUAL_CONTROL_REQUEST_KEYS) ||
     refMalformed(actionIdRaw) ||

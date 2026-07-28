@@ -114,11 +114,13 @@ and it is where the irreversible actions live.
 
 ## Proof
 
-`pnpm run proof:dual-control` (43 checks) is fully offline and deterministic. It
+`pnpm run proof:dual-control` (47 checks) is fully offline and deterministic. It
 asserts the three outcomes, every affirmative-bad deny, and every unknown routing
 to `SecondAuthorizerRequired`; it feeds hostile request shapes (prototype-inherited
 keys, aliased keys inside an authorizer, descriptor-hiding and throwing proxies,
-non-object bodies, string-quoted booleans) and confirms none can reach a grant;
+throwing accessor getters on both a top-level field and an authorizer field,
+non-object bodies, string-quoted booleans) and confirms none can reach a grant or
+escape as an exception;
 and it brute-forces the grant path twice — over the **full normalized decision
 space** and over a **hostile raw-wire space** through the real normalizer —
 asserting `Granted` is emitted for **exactly** the one fully-confirmed state and

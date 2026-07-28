@@ -124,6 +124,25 @@ check("a Proxy that THROWS from ownKeys fails closed", evaluateDualControl(norma
 const hostileAuthorizer = new Proxy(A(), { ownKeys: () => { throw new Error("hostile"); } }) as AuthorizerAttestationRaw;
 check("a Proxy authorizer that THROWS from ownKeys fails closed", evaluateDualControl(normalizeDualControlRequest("ta", { ...CONFIRMED, initiator: hostileAuthorizer })).outcome !== "Granted");
 
+// A THROWING ACCESSOR — an own property whose getter throws — is inside the same threat
+// model as the proxies above: a field we cannot READ is a field we cannot confirm. It
+// must fail closed to a malformed verdict, never escape as an uncaught exception.
+const throwingReqField = { actionClass: "break_glass", coPresence: "confirmed", initiator: A(), approver: B() } as DualControlRequestRaw;
+Object.defineProperty(throwingReqField, "actionId", { enumerable: true, get() { throw new Error("boom"); } });
+let reqAccessorThrew = false;
+let reqAccessorVerdict: ReturnType<typeof evaluateDualControl> | null = null;
+try { reqAccessorVerdict = evaluateDualControl(normalizeDualControlRequest("tg", throwingReqField)); } catch { reqAccessorThrew = true; }
+check("a throwing ACCESSOR on a top-level field fails closed to malformed, without an exception", reqAccessorThrew === false && reqAccessorVerdict !== null && reqAccessorVerdict.outcome !== "Granted");
+check("...and the request is marked malformed", normalizeDualControlRequest("tg2", throwingReqField).requestIntegrity === "malformed");
+
+const throwingAuthorizerField = { credentialRef: "cx", authenticatorClass: "security_key", userVerified: true, boundToAction: true, roleAuthorized: true } as AuthorizerAttestationRaw;
+Object.defineProperty(throwingAuthorizerField, "identityRef", { enumerable: true, get() { throw new Error("boom"); } });
+let authAccessorThrew = false;
+let authAccessorVerdict: ReturnType<typeof evaluateDualControl> | null = null;
+try { authAccessorVerdict = evaluateDualControl(normalizeDualControlRequest("tag", { ...CONFIRMED, approver: throwingAuthorizerField })); } catch { authAccessorThrew = true; }
+check("a throwing ACCESSOR inside an authorizer fails closed to malformed, without an exception", authAccessorThrew === false && authAccessorVerdict !== null && authAccessorVerdict.outcome !== "Granted");
+check("...and the request is marked malformed", normalizeDualControlRequest("tag2", { ...CONFIRMED, approver: throwingAuthorizerField }).requestIntegrity === "malformed");
+
 check("a non-object request body is malformed, not a thrown TypeError", normalizeDualControlRequest("s", "boom" as unknown as DualControlRequestRaw).requestIntegrity === "malformed");
 check("a null request body is malformed, not a thrown TypeError", normalizeDualControlRequest("n", null as unknown as DualControlRequestRaw).requestIntegrity === "malformed");
 check("a non-object authorizer is malformed, not a thrown TypeError", normalizeDualControlRequest("na", { ...CONFIRMED, approver: "boom" } as DualControlRequestRaw).requestIntegrity === "malformed");

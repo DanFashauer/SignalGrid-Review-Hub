@@ -30,6 +30,9 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
     }
     
     private var stateTransitionQueue = DispatchQueue(label: "com.enterprise.shell.stateQueue")
+    /// A badge tapped DURING an active session, held until the full teardown reaches
+    /// .lockedIdle and then replayed as a fresh authentication (see handleBadgeTap).
+    private var pendingReplayBadgeId: String?
     private var activityTimer: Timer?
     private var timeoutTimer: Timer?
     private let timeoutGracePeriod: TimeInterval = 5.0
@@ -127,6 +130,18 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
             capturedBadgeId = nil
             // Kiosk-lock the idle shared device until someone authenticates.
             KioskController.shared.enforceLock()
+            // Replay a badge that arrived during the previous session, AFTER the full
+            // teardown completed and the cleanup above ran — so the new authentication
+            // starts from a clean state and its badge id is not erased by this entry.
+            if let replay = pendingReplayBadgeId {
+                pendingReplayBadgeId = nil
+                AuditLogger.shared.log(event: .badgeTapDuringActiveSession, metadata: [
+                    "newBadgeId": maskBadgeId(replay),
+                    "stage": "replayed_after_teardown"
+                ])
+                capturedBadgeId = replay
+                transition(to: .authenticating)
+            }
 
         case .badgeCaptured:
             // Badge ID is already set before transition
@@ -512,9 +527,18 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
             transition(to: .lockedIdle)
             return
         }
-        
+
+        // Wipe local secrets BEFORE the first await (review finding): `session` is a
+        // value copy carrying everything the remote teardown needs, so nothing
+        // requires the live tokens to stay resident. Previously the terminating
+        // shared-device session kept its access/refresh tokens in memory and
+        // Keychain until every network call finished — indefinitely if one stalled —
+        // and killing the process mid-wait bypassed both cleanup paths. Clearing
+        // first bounds the exposure to nothing; the requests below run from copies.
+        clearLocalSessionData()
+
         do {
-            // Step 1: Revoke identity provider tokens
+            // Step 1: Revoke identity provider tokens (from the captured copy)
             if let accessToken = session.accessToken {
                 if let provider = identityProvider {
                     try await provider.revokeAuthentication(token: accessToken)
@@ -523,20 +547,17 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
                     try await OIDCAuthService.shared.revokeToken(accessToken)
                 }
             }
-            
+
             // Step 2: Send audit logs to backend
             try await sendSessionAudit(session: session, reason: reason)
-            
+
             // Step 3: Notify backend of session end
             try await BackendService.shared.endSession(
                 sessionId: session.sessionId,
                 reason: reason
             )
-            
-            // Step 4: Clear all local data
-            clearLocalSessionData()
-            
-            // Transition to locked idle
+
+            // Transition to locked idle (local data already cleared above)
             transition(to: .lockedIdle)
             
             AuditLogger.shared.log(event: .sessionEnded, metadata: [
@@ -549,8 +570,8 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
             AuditLogger.shared.log(event: .sessionTerminationError, metadata: [
                 "error": error.localizedDescription
             ])
-            // Still clear local data and return to locked state
-            clearLocalSessionData()
+            // Local data was already wiped before the first await; just return to
+            // the locked state (the wipe is idempotent, remote failure changes nothing).
             transition(to: .lockedIdle)
         }
     }
@@ -864,6 +885,12 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
         // Check for any persisted session state on launch
         // For security, we start in lockedIdle state
         currentState = .lockedIdle
+        // Cold-start hygiene (review finding): if the app was killed or crashed
+        // mid-session, the prior holder's tokens are still in the Keychain and
+        // UserDefaults — starting lockedIdle in MEMORY alone leaves them to survive
+        // into the next holder's process. Synchronously run the same local wipe
+        // normal termination performs so nothing outlives the process that earned it.
+        clearLocalSessionData()
     }
     
     // MARK: - Helpers
@@ -884,27 +911,22 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
             return
         }
 
-        // If there's an active session, clear it first
+        // If there's an active session, finish it PROPERLY first (review finding):
+        // the old shortcut cleared local data and queued .lockedIdle directly, which
+        // skipped token revocation, the session audit upload, and
+        // BackendService.endSession — and its capturedBadgeId assignment was erased
+        // by the queued lockedIdle entry before the queued authentication ran,
+        // failing the replacement auth with missingBadgeId. Defer the badge, run the
+        // normal end-of-session teardown, and replay the badge when the machine
+        // actually reaches .lockedIdle (see enterState).
         if currentState == .activeSession {
             AuditLogger.shared.log(event: .badgeTapDuringActiveSession, metadata: [
                 "previousSessionId": currentSessionId ?? "none",
-                "newBadgeId": maskBadgeId(badgeId)
+                "newBadgeId": maskBadgeId(badgeId),
+                "stage": "deferred_until_teardown"
             ])
-            
-            // Immediately clear all session data and transition to locked idle
-            // This ensures clean state for new badge authentication
-            clearLocalSessionData()
-            
-            // Stop any running timers
-            stopActivityTimer()
-            stopTimeoutTimer()
-            
-            // Transition to locked idle state (ready for new badge authentication)
-            transition(to: .lockedIdle)
-            
-            // Start authentication process with new badge
-            capturedBadgeId = badgeId
-            transition(to: .authenticating)
+            pendingReplayBadgeId = badgeId
+            endSession(userInitiated: true)
         } else {
             // No active session - start new authentication
             capturedBadgeId = badgeId

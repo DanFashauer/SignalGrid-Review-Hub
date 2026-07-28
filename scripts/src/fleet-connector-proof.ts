@@ -18,6 +18,7 @@ import {
   DEMO_FLEET_REPORTS,
   FLEET_OBSERVED_AT,
   FleetClient,
+  fleetOutcome,
   toHostReport,
   type FleetHostReport,
   type FleetRequest,
@@ -151,6 +152,36 @@ check("only allow relaxes: every non-allow outcome is tightened",
   (await Promise.all((["step_up", "restrict", "deny"] as const).map((o) => client.applyDecision(42, o))))
     .every((a) => a.tightened && a.teamId === 9));
 check("transfer request carries host + team", requests.some((r) => r.path === "/api/v1/fleet/hosts/transfer" && (r.body as any).hosts[0] === 42));
+
+// ── THE LOOP: normalized posture DRIVES the decision that is actuated ──────────
+// Adversarial-review finding (Codex): earlier this proof normalized posture, then
+// actuated HAND-PICKED outcomes — so it would stay green even if the posture had no
+// effect on enforcement. `fleetOutcome` closes that gap: the outcome fed to
+// applyDecision is DERIVED from the normalized signal, and the actuation is asserted
+// against the posture rather than a literal. Now an unmanaged/non-compliant host that
+// stopped affecting the decision would fail here.
+const outcomeByRef = (ref: string) => fleetOutcome(byRef(ref));
+check("healthy+supervised posture derives allow", outcomeByRef("ipad-ward-01") === "allow");
+check("...and actuating THAT derived outcome relaxes the host to the normal team",
+  (await client.applyDecision(42, outcomeByRef("ipad-ward-01"))).teamId === 1);
+// Affirmatively non-compliant / unmanaged posture must derive restrict and tighten.
+for (const [ref, why] of [["ipad-ward-02", "disk off"], ["ipad-ward-03", "lock off"], ["ipad-ward-04", "OS below floor"], ["iphone-personal-01", "unenrolled"]] as const) {
+  check(`${why} posture derives restrict`, outcomeByRef(ref) === "restrict");
+  check(`...and actuating THAT tightens the host`, (await client.applyDecision(42, outcomeByRef(ref))).tightened === true);
+}
+// Weak-but-managed posture (unsupervised, stale, never-seen/unknown) derives step_up.
+for (const [ref, why] of [["ipad-byod-01", "unsupervised"], ["ipad-ward-05", "stale"], ["ipad-ward-06", "never-seen/unknown"]] as const) {
+  check(`${why} posture derives step_up`, outcomeByRef(ref) === "step_up");
+  check(`...and actuating THAT tightens (never relaxes)`, (await client.applyDecision(42, outcomeByRef(ref))).tightened === true);
+}
+// The derived decision tracks posture 1:1: exactly the one healthy+supervised host
+// relaxes, matching the assurance-standard count — a broken normalizer can no longer pass.
+check("exactly ONE host in the fleet derives allow (matches the assurance-standard count)",
+  signals.filter((s) => fleetOutcome(s) === "allow").length === 1);
+// NEGATIVE CONTROL: a non-compliant host must NEVER derive allow, or the loop would
+// silently un-restrict a device the posture condemned.
+check("SAFETY: no non-compliant host ever derives allow",
+  signals.filter((s) => s.deviceCompliance === "non_compliant").every((s) => fleetOutcome(s) !== "allow"));
 
 const failClient = new FleetClient({ baseUrl: "x", token: "t", transport: async () => ({ status: 500, json: {} }), normalTeamId: 1, restrictedTeamId: 9 });
 let threw = false;

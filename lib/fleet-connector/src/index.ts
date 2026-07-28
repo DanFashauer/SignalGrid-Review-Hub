@@ -18,6 +18,7 @@
 //     restricted / made non-removable, so that is surfaced as `enforceable`.
 
 import type { BaselineState, ComplianceState, Freshness } from "@workspace/signalgrid-core";
+import type { AccessOutcome } from "./client";
 
 export type DiskEncryption = "on" | "off" | "unknown";
 export type ScreenLock = "on" | "off" | "unknown";
@@ -195,3 +196,27 @@ export {
   type AccessOutcome, type FleetRequest, type FleetResponse,
   type FleetTransport, type FleetClientConfig, type FleetActuation,
 } from "./client";
+
+/**
+ * Derive the access decision a normalized Fleet posture warrants — the missing link
+ * between `normalizeFleetReport` (posture in) and `FleetClient.applyDecision` (enforcement
+ * out). Without this, a caller could actuate a hand-picked outcome that the posture never
+ * justified, and an unmanaged or non-compliant host would have no effect on enforcement.
+ *
+ * Fail closed, and never relaxes on an absence: only a positively-confirmed-healthy,
+ * governable host reaches `allow`.
+ *   • an unmanaged/unenrolled host, or one AFFIRMATIVELY non-compliant (encryption off,
+ *     screen lock off, OS below floor) → `restrict`;
+ *   • any weak-posture assurance raise — an UNKNOWN required check, a stale/missing
+ *     check-in, an unsupervised (non-enforceable) host — → `step_up`;
+ *   • only a managed, compliant, standard-assurance host → `allow`.
+ *
+ * This is an advisory single-dimension mapping. The fabric's final verdict still fuses
+ * every dimension via posture-composition (worst-concern-wins); this never lowers that.
+ */
+export function fleetOutcome(signal: FleetSignal): AccessOutcome {
+  if (!signal.deviceManaged) return "restrict";
+  if (signal.deviceCompliance === "non_compliant") return "restrict";
+  if (signal.assurance === "raise_step_up") return "step_up";
+  return "allow";
+}

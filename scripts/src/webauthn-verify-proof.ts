@@ -455,6 +455,68 @@ async function main() {
     check("clone-detect: signCount < N (regression) rejected as clone", cloneLower.success === false);
   }
 
+  // ── 12b. Registration counter is SEEDED, not discarded ───────────────────
+  // An authenticator that ships a NON-ZERO signature counter at registration must be
+  // stored with THAT counter, not 0. Otherwise the FIRST assertion — which the release
+  // path trusts — would accept any positive counter, including one a clone presents at
+  // or below the registration value. Register at counter 15 and prove the first
+  // assertion at signCount <= 15 is rejected as a clone, while a strictly-greater one
+  // is accepted. Without the seeding (stored 0), the <=15 assertions would SUCCEED,
+  // so these checks fail if the fix regresses. (Adversarial-review finding.)
+  {
+    const seedUser = "user-reg-counter-seed";
+    const { publicKey: seedPub, privateKey: seedPriv } = generateKeyPairSync("ec", { namedCurve: "P-256" });
+    const seedJwk = seedPub.export({ format: "jwk" }) as { x: string; y: string };
+    const seedCose = coseFromJwk(seedJwk);
+    const seedCredId = randomBytes(16);
+    const seedCredIdStr = seedCredId.toString("base64url");
+
+    const seedRegChId = randomBytes(16).toString("base64url");
+    const seedRegCh = randomBytes(32).toString("base64url");
+    await webauthnStore.saveChallenge(seedRegChId, {
+      challenge: seedRegCh, expiresAt: new Date(Date.now() + 60_000).toISOString(), purpose: "registration", userId: seedUser,
+    });
+    const REG_COUNTER = 15;
+    const seedRegAuth = buildAuthData(rpId, 0x45, REG_COUNTER, attestedCredentialData(seedCredId, seedCose)); // UP+UV+AT
+    const seedRegCd = clientData("webauthn.create", seedRegCh, origin);
+    const seedAttObj = cborMap([
+      ["fmt", cborText("none")],
+      ["attStmt", cborMap([])],
+      ["authData", cborBytes(seedRegAuth)],
+    ]).toString("base64url");
+    const seedReg = await webauthn.verifyRegistration(seedUser, seedRegChId, {
+      id: seedCredIdStr, rawId: seedCredIdStr, type: "public-key",
+      response: { clientDataJSON: seedRegCd.toString("base64url"), attestationObject: seedAttObj },
+    });
+    check("reg-counter-seed: registration at a non-zero counter succeeds", seedReg.success === true);
+
+    async function seedAssert(signCount: number) {
+      const chId = randomBytes(16).toString("base64url");
+      const ch = randomBytes(32).toString("base64url");
+      await webauthnStore.saveChallenge(chId, {
+        challenge: ch, expiresAt: new Date(Date.now() + 60_000).toISOString(), purpose: "authentication", userId: seedUser,
+      });
+      const cd = clientData("webauthn.get", ch, origin);
+      const authData = buildAuthData(rpId, 0x05, signCount); // UP+UV
+      const signature = createSign("SHA256").update(Buffer.concat([authData, sha256(cd)])).sign(seedPriv);
+      return webauthn.verifyAuthentication(seedUser, chId, {
+        id: seedCredIdStr, rawId: seedCredIdStr, type: "public-key",
+        response: {
+          clientDataJSON: cd.toString("base64url"),
+          authenticatorData: authData.toString("base64url"),
+          signature: signature.toString("base64url"),
+        },
+      });
+    }
+
+    const seedEqual = await seedAssert(REG_COUNTER);
+    check("reg-counter-seed: first assertion at signCount == registration counter rejected as clone", seedEqual.success === false);
+    const seedBelow = await seedAssert(REG_COUNTER - 5);
+    check("reg-counter-seed: first assertion at signCount < registration counter rejected as clone", seedBelow.success === false);
+    const seedGreater = await seedAssert(REG_COUNTER + 1);
+    check("reg-counter-seed: first assertion at signCount > registration counter accepted (genuine first use)", seedGreater.success === true);
+  }
+
   // ── 6. Legacy stub credential fails closed ────────────────────────────────
   const legacyUser = "user-legacy";
   await webauthnStore.addCredential(legacyUser, {

@@ -235,12 +235,23 @@ export async function verifyRegistration(
 
   const credentialId = response.id || response.rawId;
 
+  // Seed the stored counter from the REGISTRATION authenticator data, not 0. An
+  // authenticator that ships a non-zero signature counter at registration would
+  // otherwise be recorded as counter:0, so the FIRST assertion — which the release
+  // path now trusts — would accept ANY positive counter, including one equal to or
+  // below the registration value presented by a clone. Recording the registration
+  // counter means the regression check (newCounter must strictly exceed the stored
+  // counter, both non-zero) catches a clone on its very first use. Always-zero
+  // authenticators register 0 and stay exempt, exactly as the spec allows.
+  // (Adversarial-review finding, complements the non-zero-to-zero reset check.)
+  const registrationCounter = readSignCount(regAuthData);
+
   // Store the verifiable key (JWK + alg) so future assertions can be checked
   // cryptographically against it.
   const credential: WebAuthnCredential = {
     id: credentialId,
     publicKey: JSON.stringify(verifiable),
-    counter: 0,
+    counter: registrationCounter,
     createdAt: timestamp,
   };
 

@@ -70,7 +70,10 @@ export interface RegistrationOptions {
     type: 'public-key';
   }[];
   authenticatorSelection: {
-    authenticatorAttachment: 'platform' | 'cross-platform';
+    // Optional, as in the WebAuthn spec: omitting it permits BOTH platform (the
+    // device's own Face ID / Touch ID — what SignalGrid step-up uses) and
+    // cross-platform (security-key) authenticators.
+    authenticatorAttachment?: 'platform' | 'cross-platform';
     requireResidentKey: boolean;
     userVerification: 'required' | 'preferred' | 'discouraged';
   };

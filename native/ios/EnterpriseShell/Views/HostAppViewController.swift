@@ -579,7 +579,7 @@ final class HostAppViewController: UIViewController {
             AuditLogger.shared.log(event: .assistActionAwaitingConfirmation, metadata: ["action": step.key])
             flow = .awaitingConfirm
             presentConfirm(step)
-        } else {
+        } else if action?.disposition == .applied || action?.disposition == .auto {
             // Gated-but-not-sensitive → released after the step-up.
             input.stepUpSatisfied = true
             setGlass(step.key, "applied", "RELEASED_AFTER_STEP_UP",
@@ -588,6 +588,17 @@ final class HostAppViewController: UIViewController {
             showBanner(step.hostDone, kind: .ok)
             AuditLogger.shared.log(event: .assistActionApplied, metadata: ["action": step.key])
             advance()
+        } else {
+            // Posture tightened to restrict/deny while the identity prompt was open,
+            // so the freshly re-evaluated disposition is `blocked` (or still
+            // `step_up`). Fail-closed: a satisfied step-up can NEVER release a
+            // now-blocked action — it is not applied.
+            setGlass(step.key, action?.disposition.rawValue ?? "blocked", "BLOCKED_AFTER_REEVALUATION",
+                     "Access changed while verifying identity — posture degraded past step-up, so the action is blocked. Fail-closed: the gesture releases nothing.")
+            AuditLogger.shared.log(event: .assistActionBlocked, metadata: ["action": step.key, "reason": "posture_tightened_after_step_up"])
+            showBanner("Blocked — access changed. The action does not fire.", kind: .hold)
+            flow = .idle
+            primaryButton.isEnabled = true
         }
     }
 
@@ -618,6 +629,19 @@ final class HostAppViewController: UIViewController {
         let plan = AppWorkflows.confirmAppActions(input, [step.key])
         let action = plan.actions.first { $0.key == step.key }
         AuditLogger.shared.log(event: .assistActionConfirmed, metadata: ["action": step.key])
+        // Fail-closed on a late posture change: if access tightened to restrict/deny
+        // between opening this confirmation and confirming, the re-evaluated
+        // disposition is `blocked` — an explicit confirmation does NOT release a
+        // now-blocked action.
+        guard action?.disposition == .applied || action?.disposition == .auto else {
+            setGlass(step.key, action?.disposition.rawValue ?? "blocked", "BLOCKED_AFTER_REEVALUATION",
+                     "Access changed before confirmation — posture degraded, so the action is blocked. Fail-closed: the confirmation releases nothing.")
+            AuditLogger.shared.log(event: .assistActionBlocked, metadata: ["action": step.key, "reason": "posture_tightened_after_confirm"])
+            showBanner("Blocked — access changed. The action does not fire.", kind: .hold)
+            flow = .idle
+            primaryButton.isEnabled = true
+            return
+        }
         AuditLogger.shared.log(event: .assistActionApplied, metadata: ["action": step.key])
         let gatesCleared = d.outcome == .step_up
             ? "Two gates cleared: a native step-up AND an explicit confirmation."

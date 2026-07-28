@@ -169,6 +169,33 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
     // MARK: - Badge Handling
     
     /// Called when a badge is scanned (from BadgeReaderProviderDelegate)
+    /// Format + rate-limit/lockout gates shared by EVERY badge entry point (the
+    /// validated scan path AND the hardware-reader callbacks). Logs the reason and
+    /// returns the SessionError to fail with, or nil if the badge passes. Keeping
+    /// this in one place is the point: a reader callback must not be able to reach
+    /// authentication without the same checks the simulator path enforces.
+    private func badgeRejection(_ badgeId: String) -> SessionError? {
+        // SECURITY: Validate badge ID format before processing
+        let validationResult = SecurityManager.shared.validateBadgeId(badgeId)
+        if !validationResult.valid {
+            AuditLogger.shared.log(event: .securitySuspiciousBadge, metadata: [
+                "badgeId": maskBadgeId(badgeId),
+                "reason": validationResult.error ?? "invalid_format"
+            ])
+            return SessionError.invalidBadgeFormat
+        }
+        // SECURITY: Check rate limiting / lockout before processing
+        let rateLimitResult = SecurityManager.shared.isBadgeScanAllowed(badgeId: badgeId)
+        if !rateLimitResult.allowed {
+            AuditLogger.shared.log(event: .securityRateLimitExceeded, metadata: [
+                "badgeId": maskBadgeId(badgeId),
+                "reason": rateLimitResult.reason ?? "rate_limit_exceeded"
+            ])
+            return SessionError.rateLimited
+        }
+        return nil
+    }
+
     func onBadgeScanned(_ badgeId: String) {
         guard currentState == .lockedIdle else {
             AuditLogger.shared.log(event: .badgeScannedUnexpectedState, metadata: [
@@ -177,29 +204,12 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
             ])
             return
         }
-        
-        // SECURITY: Validate badge ID format before processing
-        let validationResult = SecurityManager.shared.validateBadgeId(badgeId)
-        if !validationResult.valid {
-            AuditLogger.shared.log(event: .securitySuspiciousBadge, metadata: [
-                "badgeId": maskBadgeId(badgeId),
-                "reason": validationResult.error ?? "invalid_format"
-            ])
-            transition(to: .lockedIdle, error: SessionError.invalidBadgeFormat)
+
+        if let rejection = badgeRejection(badgeId) {
+            transition(to: .lockedIdle, error: rejection)
             return
         }
-        
-        // SECURITY: Check rate limiting before processing
-        let rateLimitResult = SecurityManager.shared.isBadgeScanAllowed(badgeId: badgeId)
-        if !rateLimitResult.allowed {
-            AuditLogger.shared.log(event: .securityRateLimitExceeded, metadata: [
-                "badgeId": maskBadgeId(badgeId),
-                "reason": rateLimitResult.reason ?? "rate_limit_exceeded"
-            ])
-            transition(to: .lockedIdle, error: SessionError.rateLimited)
-            return
-        }
-        
+
         capturedBadgeId = badgeId
         
         AuditLogger.shared.log(event: .badgeScanned, metadata: [
@@ -835,6 +845,20 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
     
     /// Handle badge tap from hardware reader - clears session if active and starts new auth
     func handleBadgeTap(_ badgeId: String) {
+        // SECURITY: gate every hardware-reader callback with the SAME format +
+        // lockout checks as the validated scan path. Without this, the default
+        // keyboard-wedge / webhook / legacy-accessory readers reach authentication
+        // with malformed values and unlimited repeated scans.
+        if let rejection = badgeRejection(badgeId) {
+            // A rejected scan never advances to authentication. An active session
+            // is left intact — a bad scan must not tear down a valid session;
+            // when idle we surface the error like the validated path does.
+            if currentState != .activeSession {
+                transition(to: .lockedIdle, error: rejection)
+            }
+            return
+        }
+
         // If there's an active session, clear it first
         if currentState == .activeSession {
             AuditLogger.shared.log(event: .badgeTapDuringActiveSession, metadata: [

@@ -45,7 +45,13 @@ final class KioskController {
 
     private func guidedAccessChanged() {
         let on = UIAccessibility.isGuidedAccessEnabled
-        if on { isLocked = true }   // reflect a manual Guided Access lock as active
+        // Track the ACTUAL Guided Access / ASAM status in BOTH directions. If the
+        // session ends outside releaseLock (a manual triple-click off, or a
+        // system-driven change), leaving isLocked=true would make isKioskActive
+        // report a captive device and enforceLock() exit at its already-locked
+        // guard — so the pre-auth kiosk would never re-engage on the next scene
+        // activation. Assigning `on` keeps the flag honest.
+        isLocked = on
         AuditLogger.shared.log(
             event: on ? .kioskLockEngaged : .kioskUnlocked,
             metadata: ["mode": "guided_access_manual"])

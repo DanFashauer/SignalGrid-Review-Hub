@@ -76,6 +76,13 @@ final class HostAppViewController: UIViewController {
     private enum FlowState { case idle, awaitingStepUp, awaitingConfirm, finished }
     private var flow: FlowState = .idle
     private var stepIndex = 0
+    /// Whether a REAL native device-owner authentication completed for the action
+    /// currently being confirmed. This is the only proof of step-up; the confirm
+    /// path must never infer step-up from the re-evaluated outcome, or a posture
+    /// escalation that happens while the confirm dialog is open would release the
+    /// action with no authentication at all. Reset per action in `primaryTapped`,
+    /// set true only in `stepUpSatisfied`.
+    private var nativeStepUpCompleted = false
     private var currentStep: ScriptedStep? { stepIndex < config.steps.count ? config.steps[stepIndex] : nil }
 
     // MARK: - UI
@@ -255,10 +262,19 @@ final class HostAppViewController: UIViewController {
         let authenticated = SessionStateManager.shared.currentSession != nil
         let posture = livePosture()
 
+        // Fail-closed on location: with NO trusted location source wired on a real
+        // device, the detected zone is UNKNOWN (nil), so LocationGate denies rather
+        // than granting on a fabricated match. Hard-coding detected == expected here
+        // would erase the zone restriction for every physical deployment (an
+        // unknown/mismatched-zone deny that never fires). Production must derive the
+        // detected zone from a trusted source (geofence / MDM-provisioned deployment
+        // metadata); until then, unknown → deny is the honest posture.
         var expectedZone = "default"
-        var detectedZone: String? = "default"   // match by default → no zone deny
+        var detectedZone: String? = nil
         var injected: Set<String> = []
         #if targetEnvironment(simulator)
+        // Simulator-only: DemoMode injects the zones iOS cannot sense, so the demo
+        // can exercise match / mismatch / unknown deterministically.
         expectedZone = DemoMode.location
         detectedZone = DemoMode.zone ?? DemoMode.location
         injected = DemoMode.injectedSignals
@@ -479,6 +495,7 @@ final class HostAppViewController: UIViewController {
     @objc private func primaryTapped() {
         SessionStateManager.shared.userDidInteract()
         guard let step = currentStep else { return }
+        nativeStepUpCompleted = false                     // fresh action attempt — no step-up yet
         let d = currentDecision()                         // session verdict (signals + location)
         let why = d.reasonCodes.joined(separator: " · ")
         let input = AppWorkflows.AppPlanInput(
@@ -570,6 +587,10 @@ final class HostAppViewController: UIViewController {
             integration: config.integration, outcome: d.outcome, reasonCodes: d.reasonCodes)
         let plan = AppWorkflows.completeAppStepUp(input)
         let action = plan.actions.first { $0.key == step.key }
+        // A REAL device-owner authentication completed (LAContext, or the labeled
+        // simulated authenticator in the demo). This is the only place the flag is
+        // set true, so a later confirmation can trust it as genuine step-up proof.
+        nativeStepUpCompleted = true
         AuditLogger.shared.log(event: .assistStepUpSatisfied, metadata: ["action": step.key])
 
         if action?.disposition == .assist {
@@ -625,14 +646,31 @@ final class HostAppViewController: UIViewController {
         let d = currentDecision()
         var input = AppWorkflows.AppPlanInput(
             integration: config.integration, outcome: d.outcome, reasonCodes: d.reasonCodes)
-        input.stepUpSatisfied = (d.outcome == .step_up)
+        // Step-up is satisfied ONLY if a real native authentication actually ran —
+        // never inferred from the current outcome. Otherwise a posture escalation
+        // (allow → step_up) that lands while this confirm dialog is open would be
+        // mistaken for a successful step-up and release the action with no
+        // authentication at all.
+        input.stepUpSatisfied = nativeStepUpCompleted
         let plan = AppWorkflows.confirmAppActions(input, [step.key])
         let action = plan.actions.first { $0.key == step.key }
         AuditLogger.shared.log(event: .assistActionConfirmed, metadata: ["action": step.key])
-        // Fail-closed on a late posture change: if access tightened to restrict/deny
-        // between opening this confirmation and confirming, the re-evaluated
-        // disposition is `blocked` — an explicit confirmation does NOT release a
-        // now-blocked action.
+
+        // Escalation at confirm time: the action now REQUIRES a step-up that hasn't
+        // happened. Launch the real native step-up rather than applying or dead-ending
+        // — the confirmation resumes via stepUpSatisfied → presentConfirm once a
+        // genuine gesture completes.
+        if action?.disposition == .step_up && !nativeStepUpCompleted {
+            setGlass(step.key, "step_up", "STEP_UP_REQUIRED_AT_CONFIRM",
+                     "Access tightened to require identity verification before this action. Launching a native step-up; nothing fires until it completes.")
+            AuditLogger.shared.log(event: .assistStepUpRequested, metadata: ["action": step.key, "reason": "escalated_at_confirm"])
+            flow = .awaitingStepUp
+            requestNativeStepUp(step)
+            return
+        }
+
+        // Fail-closed on a hard tighten (restrict/deny → blocked): a confirmation does
+        // NOT release a now-blocked action.
         guard action?.disposition == .applied || action?.disposition == .auto else {
             setGlass(step.key, action?.disposition.rawValue ?? "blocked", "BLOCKED_AFTER_REEVALUATION",
                      "Access changed before confirmation — posture degraded, so the action is blocked. Fail-closed: the confirmation releases nothing.")
@@ -643,7 +681,7 @@ final class HostAppViewController: UIViewController {
             return
         }
         AuditLogger.shared.log(event: .assistActionApplied, metadata: ["action": step.key])
-        let gatesCleared = d.outcome == .step_up
+        let gatesCleared = nativeStepUpCompleted
             ? "Two gates cleared: a native step-up AND an explicit confirmation."
             : "One gate cleared: an explicit confirmation."
         setGlass(step.key, action?.disposition.rawValue ?? "applied",

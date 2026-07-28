@@ -19,6 +19,7 @@ import type { PacsAccessVerdict } from "@workspace/integrations/pacs-access";
 import type { AgentIdentityVerdict } from "@workspace/integrations/agent-identity";
 import type { AgentBehaviorVerdict } from "@workspace/integrations/agent-behavior";
 import type { CustodyBeaconVerdict } from "@workspace/integrations/custody-beacon";
+import type { AppUpdateVerdict } from "@workspace/integrations/app-update";
 import type { DeviceManagementHealthVerdict } from "@workspace/integrations/device-management-health";
 import type { LinkUsabilityVerdict } from "@workspace/integrations/link-usability";
 // Type-only, via the "./task-exception" subpath export (wired in the same change
@@ -204,6 +205,17 @@ export function fromCustodyBeacon(v: CustodyBeaconVerdict): ComposableSignal {
   // reachable, on a FRESH reading, contributes 'none'; a stale reading, an unknown zone,
   // or anything unreadable raises. It never lowers what the online custody dimensions say.
   return { kind: "custody_beacon", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromAppUpdate(v: AppUpdateVerdict): ComposableSignal {
+  // App-update currency — the host app's version graded against the tenant's release
+  // manifest (the per-app sibling of the fleet OS floor). Below the enforced floor or
+  // a forced update pending contributes `restrict`; behind-but-permitted is a
+  // `monitor` nudge; an unmanaged install is untrusted provenance even when current;
+  // anything unknowable raises to `step_up`. Its actions are already on the unified
+  // ladder, and it never lowers what any other dimension says — SignalGrid gates on
+  // currency; distributing the update stays with MDM (docs/APP_UPDATE_CURRENCY.md).
+  return { kind: "app_update", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromDeviceManagementHealth(v: DeviceManagementHealthVerdict): ComposableSignal {

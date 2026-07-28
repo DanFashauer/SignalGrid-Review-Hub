@@ -159,6 +159,12 @@ function categoryForKind(kind: string, reason?: string): IncidentCategory {
     case "ot_posture":
     case "device_management_health":
       return "security_compliance";
+    // `app_update` is the per-app sibling of `device_management_health`: a host app
+    // below its version floor, lagging a forced update, or installed outside the
+    // managed channel is a software-compliance state on the device, owned by the same
+    // compliance queue — not a live incident and not the generic Service Desk.
+    case "app_update":
+      return "security_compliance";
     // Identity, authorization & data-governance signals.
     case "identity":
     case "access_governance":

@@ -18,6 +18,7 @@ import {
   type AppUpdateReportRaw,
   type NormalizedAppUpdate,
 } from "@workspace/integrations/app-update";
+import { SIGNAL_KINDS, composeDeviceRisk, fromAppUpdate } from "@workspace/posture-composition";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 
 let passed = 0;
@@ -186,6 +187,25 @@ check(
 );
 check("exhaustive (raw wire): exactly SIX raw reports grant (2 floor states × 3 force-flag values, all current+managed)",
   rawRes.noneCount === 6);
+
+// ── fusion into the fabric (posture-composition + incident routing) ─────────────
+check("app_update is a member of the runtime SIGNAL_KINDS array — the union is derived, so the playbook proof covers it automatically",
+  (SIGNAL_KINDS as readonly string[]).includes("app_update"));
+const fusedBelowFloor = fromAppUpdate(ev({ installed_version: "1.9.0", latest_version: "2.4.0", min_version: "2.0.0", force_update: false, channel: "managed" }));
+check("fromAppUpdate maps a below-floor verdict onto the unified ladder as restrict",
+  fusedBelowFloor.kind === "app_update" && fusedBelowFloor.action === "restrict" && fusedBelowFloor.reason === "BELOW_MIN_VERSION");
+const fused = composeDeviceRisk([
+  { kind: "device_posture", posture: "healthy", action: "none", reason: "OK" },
+  fusedBelowFloor,
+]);
+check("composition is worst-concern-wins: one below-floor app drags an otherwise-healthy device to restrict, with app_update as the top driver",
+  fused.strongestAction === "restrict" && fused.drivers[0]?.kind === "app_update");
+const fusedCurrent = composeDeviceRisk([
+  { kind: "device_posture", posture: "healthy", action: "none", reason: "OK" },
+  fromAppUpdate(ev({ installed_version: "2.4.0", latest_version: "2.4.0", force_update: false, channel: "managed" })),
+]);
+check("...and a confirmed-current app contributes none — the dimension never lowers, only raises",
+  fusedCurrent.strongestAction === "none");
 
 // Determinism.
 const d1 = normalizeReport("det", "a", { installed_version: "2.1.0", latest_version: "2.4.0", force_update: true, channel: "managed" });

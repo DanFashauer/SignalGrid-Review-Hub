@@ -69,6 +69,7 @@ export const SIGNAL_KINDS = [
   "agent_identity",
   "agent_behavior",
   "custody_beacon",
+  "app_update",
   "device_management_health",
   "link_usability",
   "task_exception",

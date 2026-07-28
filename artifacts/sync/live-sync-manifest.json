@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 11,
-  "fingerprint": "20bc38dae554ee69bba586b3c0b99ab42f4492dde05c9c5aac8710d0ea435c2f",
+  "manifestVersion": 12,
+  "fingerprint": "ffc76f3b364140b751fd0d544bda48dadef9eec3f153e36cfe242638c439e40f",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -29,6 +29,7 @@
       "agent_identity",
       "agent_behavior",
       "custody_beacon",
+      "app_update",
       "device_management_health",
       "link_usability",
       "task_exception",

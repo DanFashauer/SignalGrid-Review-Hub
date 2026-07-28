@@ -177,6 +177,70 @@ export const TARGETS = [
       "lib/integrations/src/integrations/policy-binding/policy-binding-connector.ts",
     ],
   },
+
+  {
+    proof: "proof:agent-behavior",
+    files: [
+      "lib/integrations/src/integrations/agent-behavior/evaluate.ts",
+      "lib/integrations/src/integrations/agent-behavior/agent-behavior-connector.ts",
+    ],
+  },
+  {
+    proof: "proof:agent-identity",
+    files: [
+      "lib/integrations/src/integrations/agent-identity/evaluate.ts",
+      "lib/integrations/src/integrations/agent-identity/agent-identity-connector.ts",
+    ],
+  },
+  {
+    proof: "proof:oauth-consent",
+    files: [
+      "lib/integrations/src/integrations/oauth-consent/evaluate.ts",
+      "lib/integrations/src/integrations/oauth-consent/oauth-consent-connector.ts",
+    ],
+  },
+  {
+    proof: "proof:sso-session",
+    files: [
+      "lib/integrations/src/integrations/sso-session/evaluate.ts",
+      "lib/integrations/src/integrations/sso-session/sso-session-connector.ts",
+    ],
+  },
+  {
+    proof: "proof:access-governance",
+    files: [
+      "lib/integrations/src/integrations/access-governance/evaluate.ts",
+      "lib/integrations/src/integrations/access-governance/access-governance-connector.ts",
+    ],
+  },
+  {
+    proof: "proof:ot-posture",
+    files: [
+      "lib/integrations/src/integrations/ot-posture/evaluate.ts",
+      "lib/integrations/src/integrations/ot-posture/ot-connector.ts",
+    ],
+  },
+  {
+    proof: "proof:token-binding",
+    files: [
+      "lib/integrations/src/integrations/token-binding/evaluate.ts",
+      "lib/integrations/src/integrations/token-binding/token-binding-connector.ts",
+    ],
+  },
+  {
+    proof: "proof:pacs-access",
+    files: [
+      "lib/integrations/src/integrations/pacs-access/evaluate.ts",
+      "lib/integrations/src/integrations/pacs-access/pacs-access-connector.ts",
+    ],
+  },
+  {
+    proof: "proof:dual-control",
+    files: [
+      "lib/dual-control/src/evaluate.ts",
+      "lib/dual-control/src/normalize.ts",
+    ],
+  },
 ];
 
 // ── known-inert survivors ─────────────────────────────────────────────────────

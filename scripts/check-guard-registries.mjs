@@ -42,33 +42,9 @@ const MUTATION_EXCLUDED = [
       "It IS the harness, not a connector — it has no normalizer or evaluator to mutate, and it already ships its own negative controls (deliberately too-strict and too-loose predicates, each asserted to be caught).",
   },
   {
-    proof: "proof:agent-identity",
-    reason:
-      "QUEUED, not waived. Its allow path was hardened over seven adversarial reviews and is enumerated at 17,280 normalized + 870,912 raw, but it predates the mutation guard and has not been swept. This entry exists so that gap is visible rather than implied by absence.",
-  },
-  {
-    proof: "proof:agent-behavior",
-    reason:
-      "QUEUED, not waived. Its allow path is enumerated over the full normalized input space (1,944 combinations, exactly one grants) inside its own proof, but the connector has not yet been added to the mutation guard's source-mutation sweep. This entry keeps that gap visible.",
-  },
-  {
-    proof: "proof:oauth-consent",
-    reason: "QUEUED. Enumerated at 6,480; not yet swept.",
-  },
-  { proof: "proof:sso-session", reason: "QUEUED. Enumerated at 768; not yet swept." },
-  { proof: "proof:access-governance", reason: "QUEUED. Enumerated at 4,500; not yet swept." },
-  { proof: "proof:ot-posture", reason: "QUEUED. Enumerated at 324; not yet swept." },
-  { proof: "proof:token-binding", reason: "QUEUED. Enumerated at 1,296; not yet swept." },
-  { proof: "proof:pacs-access", reason: "QUEUED. Enumerated at 8,100; not yet swept." },
-  {
     proof: "proof:pim-activation",
     reason:
       "QUEUED. It consumes other dimensions' verdicts rather than normalizing a bridge report, so its allow path is the composition rather than a parse layer.",
-  },
-  {
-    proof: "proof:dual-control",
-    reason:
-      "QUEUED, not waived. Its grant (Granted) is enumerated over both the full normalized space (78,732 states, exactly one grants) and a hostile raw-wire space (45,000 requests, exactly one grants) inside its own proof, but the normalizer/evaluator have not yet been added to the mutation guard's source-mutation sweep. This entry keeps that gap visible.",
   },
 ];
 

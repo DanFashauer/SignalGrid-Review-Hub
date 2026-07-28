@@ -14,6 +14,7 @@
 
 import {
   evaluateAgentBehavior,
+  guardReadOnly,
   normalizeReport,
   createMockAgentBehaviorTransport,
   AgentBehaviorConnector,
@@ -181,6 +182,17 @@ check("dev tier resolves to fixture mode", resolveAgentBehaviorConnector({ SIGNA
 check("prod WITHOUT live flag stays fixture", resolveAgentBehaviorConnector({ SIGNALGRID_TIER: "prod" }).mode === "fixture");
 check("prod + live but NO token stays fixture", resolveAgentBehaviorConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" }).mode === "fixture");
 check("prod + live + token resolves live", resolveAgentBehaviorConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", AGENT_BEHAVIOR_ACCESS_TOKEN: "t" }).mode === "live");
+
+// ── connector surface (mutation-guard coverage: every guard falsifiable) ────────
+let abReadOnly = false;
+try { guardReadOnly("POST"); } catch (err) { abReadOnly = err instanceof AgentBehaviorConnectorError && err.code === "read_only_violation"; }
+check("a non-GET request is refused by the read-only guard", abReadOnly);
+check("Object.prototype itself as the report is malformed (polluted-prototype fields must never read as own assertions)",
+  normalizeReport("op", Object.prototype as never).reportIntegrity === "malformed");
+let abDeepProto: object = {};
+for (let i = 0; i < 100; i += 1) abDeepProto = Object.create(abDeepProto);
+check("a report behind a 100-deep prototype chain is malformed (bounded walk)",
+  normalizeReport("deep", Object.create(abDeepProto) as never).reportIntegrity === "malformed");
 
 // ── report ─────────────────────────────────────────────────────────────────────
 console.log(`figures=combos=${combosExpected},grantingCombos=${enumResult.noneCount},signals=5,ladderRungs=5`);

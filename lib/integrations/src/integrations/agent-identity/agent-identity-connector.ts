@@ -94,7 +94,11 @@ function ownValue(report: object, key: string): unknown {
  *  throws on a primitive — so an injected adapter returning a string must fail closed,
  *  not throw an untyped TypeError out of the normalizer. */
 function isPlainReport(report: unknown): report is object {
-  return typeof report === "object" && report !== null && !Array.isArray(report);
+  // The Object.prototype exclusion is load-bearing (review finding, extended to
+  // this connector by the same audit): passing Object.prototype itself as the
+  // report would let POLLUTED prototype fields read as own assertions on a
+  // "plain" object — empirically a clean parse, and a grant.
+  return typeof report === "object" && report !== null && !Array.isArray(report) && report !== Object.prototype;
 }
 
 /** Depth bound for the prototype scan below. A Proxy may return a fresh object from

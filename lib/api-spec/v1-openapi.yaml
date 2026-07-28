@@ -315,7 +315,12 @@ paths:
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  # ── Step-up completion (real, hardware-backed WebAuthn) ────────────────────
+  # ── Step-up completion (real, user-verified WebAuthn) ──────────────────────
+  # "User-verified", not "hardware-backed": registration requests attestation
+  # "none", so the server receives no authenticator provenance and a software
+  # authenticator is accepted. The guarantee is a cryptographically verified,
+  # user-verified (UV) assertion over a single-use, action-bound challenge —
+  # nothing more is claimed.
   # The ONLY path that releases a held step_up action: enroll a credential,
   # obtain a single-use challenge, sign it with a native user-verified gesture,
   # and present the assertion for cryptographic verification. Nothing in any

@@ -330,7 +330,11 @@ router.post("/v1/app-workflows/evaluate", (req: Request, res: Response) => {
   res.json(envelope(req, { decision, plan }));
 });
 
-// ── Step-up completion (real, hardware-backed) ─────────────────────────────────
+// ── Step-up completion (real, user-verified WebAuthn) ──────────────────────────
+// ("User-verified", not "hardware-backed": registration requests attestation "none",
+// so no authenticator provenance reaches the server and a software authenticator is
+// accepted. The claim is a verified UV assertion over a single-use, action-bound
+// challenge — nothing more.)
 //
 // Releasing a held `step_up` action is a WebAuthn ceremony, never a request flag:
 // enroll (registration) → challenge → native gesture signs it → cryptographic

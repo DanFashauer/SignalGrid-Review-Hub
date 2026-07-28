@@ -724,7 +724,7 @@ async function run() {
     const BASE2 = `http://localhost:${PORT2}/api`;
     const SECRET = "test-out-of-band-enrollment-secret";
     const server2 = spawn("node", [serverEntry], {
-      env: { ...process.env, PORT: String(PORT2), NODE_ENV: "production", LOG_LEVEL: "silent", SIGNALGRID_ENROLLMENT_SECRET: SECRET },
+      env: { ...process.env, PORT: String(PORT2), NODE_ENV: "production", LOG_LEVEL: "silent", SIGNALGRID_ENROLLMENT_SECRET: SECRET, CORS_ALLOWED_ORIGINS: "http://console.example" },
       stdio: ["ignore", "ignore", "inherit"],
     });
     try {
@@ -755,6 +755,21 @@ async function run() {
       check("secret mode: the self-service demo note is ABSENT (no longer self-service)", rightHeader.json?.demoNote === undefined);
       const auditorWithSecret = await enroll2({ authorization: `Bearer ${KEYS.auditor}`, "x-enrollment-authorization": SECRET });
       check("secret mode: the secret does not override the role gate (auditor still 403)", auditorWithSecret.status === 403);
+      // Cross-origin flow (review finding): a browser console on an allowed origin
+      // sends a CORS preflight naming x-enrollment-authorization. If the CORS
+      // allowedHeaders list omits it, the browser blocks every correctly-authorized
+      // enrollment BEFORE the server-side check can run. server2 was spawned with an
+      // allowed origin, so the preflight must echo the header back.
+      const preflight = await fetch(`${BASE2}/v1/step-up/enroll/options`, {
+        method: "OPTIONS",
+        headers: {
+          origin: "http://console.example",
+          "access-control-request-method": "POST",
+          "access-control-request-headers": "authorization,content-type,x-enrollment-authorization",
+        },
+      });
+      const allowedHdrs = (preflight.headers.get("access-control-allow-headers") ?? "").toLowerCase();
+      check("secret mode: CORS preflight permits x-enrollment-authorization for an allowed origin", preflight.headers.get("access-control-allow-origin") === "http://console.example" && allowedHdrs.includes("x-enrollment-authorization"));
     } finally {
       server2.kill("SIGTERM");
     }

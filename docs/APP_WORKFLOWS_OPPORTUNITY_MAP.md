@@ -90,7 +90,7 @@ concentration the same way.
 2. **App-integration API** (`/v1/app-workflows`) — the endpoint an app calls:
    "given this actor + device + context, what can this app do right now?" plus a
    single-action gate. Bearer-authed, runs the real decision core. *(P1 build.)*
-3. **In-app step-up (real, hardware-backed)** — when a decision is `step_up`, the
+3. **In-app step-up (real, user-verified)** — when a decision is `step_up`, the
    **host app** drives the platform's *native* authenticator (Face ID / Touch ID /
    Windows Hello / badge tap); the assertion is verified cryptographically by the
    hardened `@workspace/webauthn` path, and only then does the held action

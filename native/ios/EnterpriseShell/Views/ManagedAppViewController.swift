@@ -14,6 +14,11 @@ final class ManagedAppViewController: UIViewController {
     /// Persona-scoped host allowlist for this contained browser. `nil`/empty means
     /// the persona set no web restriction (navigation is unrestricted, as before).
     private let allowedDomains: [String]?
+    /// Persona copy/paste policy. When false, selection + copy are disabled inside
+    /// the managed page (review finding): wiping the pasteboard at teardown does not
+    /// enforce the advertised IN-SESSION restriction — a holder could copy web-app
+    /// content and paste it into another permitted app before logout.
+    private let allowCopyPaste: Bool
     private let webView: WKWebView = {
         let cfg = WKWebViewConfiguration()
         // Per-session isolation on a SHARED device: an ephemeral (non-persistent)
@@ -26,10 +31,11 @@ final class ManagedAppViewController: UIViewController {
     }()
     private let progress = UIActivityIndicatorView(style: .medium)
 
-    init(app: EnterpriseApp, url: URL, allowedDomains: [String]? = nil) {
+    init(app: EnterpriseApp, url: URL, allowedDomains: [String]? = nil, allowCopyPaste: Bool = true) {
         self.app = app
         self.url = url
         self.allowedDomains = allowedDomains
+        self.allowCopyPaste = allowCopyPaste
         super.init(nibName: nil, bundle: nil)
         modalPresentationStyle = .fullScreen
     }
@@ -88,8 +94,78 @@ final class ManagedAppViewController: UIViewController {
             progress.centerYAnchor.constraint(equalTo: webView.centerYAnchor)
         ])
 
+        if !allowCopyPaste {
+            // Document-start script in all frames: disable selection and swallow
+            // copy/cut events so the standard Copy menu has nothing to act on.
+            let js = """
+            (function () {
+              var s = document.createElement('style');
+              s.textContent = '* { -webkit-user-select: none !important; user-select: none !important; }';
+              (document.head || document.documentElement).appendChild(s);
+              ['copy', 'cut'].forEach(function (t) {
+                document.addEventListener(t, function (e) { e.preventDefault(); }, true);
+              });
+            })();
+            """
+            webView.configuration.userContentController.addUserScript(
+                WKUserScript(source: js, injectionTime: .atDocumentStart, forMainFrameOnly: false))
+        }
+
         progress.startAnimating()
-        webView.load(URLRequest(url: url))
+        loadWithDomainContainment()
+    }
+
+    /// Enforce the persona's `allowedDomains` on ALL web traffic, not just top-level
+    /// navigation (review finding): `decidePolicyFor` governs navigations only, so a
+    /// script on an allowed page could still fetch/XHR/beacon session data to any
+    /// origin. A WKContentRuleList blocks every request whose domain is not on the
+    /// allowlist at the resource layer. FAIL CLOSED: with an allowlist configured,
+    /// nothing loads until the rules are compiled and attached; if compilation fails,
+    /// the page is not loaded at all rather than loaded unrestricted.
+    private func loadWithDomainContainment() {
+        guard let allow = allowedDomains, !allow.isEmpty else {
+            webView.load(URLRequest(url: url))
+            return
+        }
+        let permitted = (([url.host?.lowercased()].compactMap { $0 }) + allow.map { $0.lowercased() })
+            .map { "*\($0)" }
+        let rules = """
+        [
+          {"trigger": {"url-filter": ".*"}, "action": {"type": "block"}},
+          {"trigger": {"url-filter": ".*", "if-domain": \(jsonStringArray(permitted))}, "action": {"type": "ignore-previous-rules"}}
+        ]
+        """
+        WKContentRuleListStore.default().compileContentRuleList(
+            forIdentifier: "managed-app-domain-allowlist-\(app.appId)",
+            encodedContentRuleList: rules
+        ) { [weak self] list, error in
+            guard let self = self else { return }
+            DispatchQueue.main.async {
+                guard let list = list, error == nil else {
+                    self.progress.stopAnimating()
+                    AuditLogger.shared.log(event: .error, metadata: [
+                        "error": "managed_app_content_rules_failed",
+                        "app": self.app.appId
+                    ])
+                    let alert = UIAlertController(
+                        title: "App unavailable",
+                        message: "The web containment policy for this app could not be applied, so the app was not opened (fail closed).",
+                        preferredStyle: .alert)
+                    alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in self.dismiss(animated: true) })
+                    self.present(alert, animated: true)
+                    return
+                }
+                self.webView.configuration.userContentController.add(list)
+                self.webView.load(URLRequest(url: self.url))
+            }
+        }
+    }
+
+    /// Minimal JSON encoding for the rule list's domain array (hosts are validated
+    /// config values, but encode defensively anyway).
+    private func jsonStringArray(_ values: [String]) -> String {
+        let data = (try? JSONSerialization.data(withJSONObject: values)) ?? Data("[]".utf8)
+        return String(data: data, encoding: .utf8) ?? "[]"
     }
 
     @objc private func close() {

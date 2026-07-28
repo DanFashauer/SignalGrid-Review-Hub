@@ -851,7 +851,11 @@ extension ActiveSessionViewController: UICollectionViewDelegate {
                 ManagedAppViewController(
                     app: selectedApp,
                     url: url,
-                    allowedDomains: session?.persona.restrictions.allowedDomains
+                    allowedDomains: session?.persona.restrictions.allowedDomains,
+                    // Enforce the persona's copy policy INSIDE the managed page too
+                    // (review finding): teardown pasteboard wipes are not an
+                    // in-session restriction.
+                    allowCopyPaste: session?.persona.restrictions.allowCopyPaste ?? true
                 ),
                 animated: true
             )

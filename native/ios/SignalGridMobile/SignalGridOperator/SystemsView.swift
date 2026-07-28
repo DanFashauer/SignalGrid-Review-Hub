@@ -47,6 +47,11 @@ struct SystemsView: View {
     private var fleet: some View {
         SectionHeading(title: "Fleet (open-source MDM) posture", subtitle: "osquery host posture → decision signals")
         if let fp = model.fleetPosture {
+            // Provenance FIRST (review finding): these are fixture hosts even when the
+            // app is connected in Live API mode — say so before listing them.
+            Text(fp.note ?? "Fixture Fleet host posture — not the connected tenant's device estate.")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.orange)
             Text("\(fp.summary.hosts) hosts · \(fp.summary.enforceable) supervised · \(fp.summary.nonCompliant) non-compliant · \(fp.summary.raiseStepUp) raise step-up")
                 .font(.caption)
                 .foregroundStyle(.secondary)

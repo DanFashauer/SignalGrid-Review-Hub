@@ -735,10 +735,15 @@ public struct FleetPostureSummary: Codable, Hashable, Sendable {
 }
 
 public struct FleetPosture: Codable, Hashable, Sendable {
+    /// The route's provenance statement (review finding): /cp/v1/fleet-mdm serves
+    /// FIXTURE host posture, and in Live API mode an operator must not mistake the
+    /// canned demo hosts for the connected tenant's device estate. Kept and shown,
+    /// never discarded.
+    public let note: String?
     public let observedAt: String
     public let summary: FleetPostureSummary
     public let signals: [FleetPostureHost]
-    public init(observedAt: String, summary: FleetPostureSummary, signals: [FleetPostureHost]) {
-        self.observedAt = observedAt; self.summary = summary; self.signals = signals
+    public init(note: String? = nil, observedAt: String, summary: FleetPostureSummary, signals: [FleetPostureHost]) {
+        self.note = note; self.observedAt = observedAt; self.summary = summary; self.signals = signals
     }
 }

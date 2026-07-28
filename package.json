@@ -97,6 +97,7 @@
     "proof:custody-beacon": "pnpm --filter @workspace/scripts run proof:custody-beacon",
     "proof:app-update": "pnpm --filter @workspace/scripts run proof:app-update",
     "proof:platform-sso": "pnpm --filter @workspace/scripts run proof:platform-sso",
+    "proof:passkey-assurance": "pnpm --filter @workspace/scripts run proof:passkey-assurance",
     "proof:policy-binding": "pnpm --filter @workspace/scripts run proof:policy-binding",
     "verify:docker": "node scripts/docker-verify.mjs",
     "proof:device-management-health": "pnpm --filter @workspace/scripts run proof:device-management-health",

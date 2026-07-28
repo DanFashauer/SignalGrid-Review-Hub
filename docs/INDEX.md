@@ -57,6 +57,12 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 
 ## Strategy and roadmap
 
+- [Why SignalGrid](WHY_SIGNALGRID_VERTICALS.md): the layer that simplifies the complexity, and why the same fabric serves very different frontlines.
+- [Vision — the person-first grid](VISION_PERSON_FIRST_GRID.md) and [the trust fabric for the smart hospital](SMART_HOSPITAL_TRUST_FABRIC.md): the long-range framing.
+- [Market landscape & positioning](MARKET_LANDSCAPE.md), with the category comparisons: [Entra](COMPETITIVE_ENTRA.md), [Imprivata](COMPETITIVE_IMPRIVATA.md), [Oloid](COMPETITIVE_OLOID.md), [SGNL](COMPETITIVE_SGNL.md), [Teleport](COMPETITIVE_TELEPORT.md), and the [battlecard](COMPETITIVE_BATTLECARD.md).
+- [SignalGrid and IGA — adjacent, not overlapping](IGA_ADJACENCY.md): why runtime decisioning is not identity governance.
+- [macOS 27 / DDM signal opportunity](MACOS_27_DDM_SIGNAL_OPPORTUNITY.md): new OS signal sources, and why they are tailwind.
+- [What needs Dan](WHAT_NEEDS_DAN.md): the decisions and actions that cannot be delegated.
 - [SignalGrid real-life simulator](SIGNALGRID_REAL_LIFE_SIMULATOR.md): explains the public-safe deterministic simulator foundation and its runtime trust layers.
 - [Operational Trust Orchestration](OPERATIONAL_TRUST_ORCHESTRATION.md): defines the refined category positioning, source-system boundaries, market signal mapping, proof foundation, and public-safe roadmap.
 - [SignalGrid app suite plan](SIGNALGRID_APP_SUITE_PLAN.md): defines Operator, Admin, DockBridge, Shared Device Assistant, and Remediation Assistant simulator shells.
@@ -131,6 +137,11 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Build feedback loop](BUILD_LOOP.md): how the product gets built — the runnable harness (`pnpm run loop`) that closes find → fix → verify.
 - [Proof coverage audit](PROOF_COVERAGE_AUDIT.md): which claims are proven, by which proof, and where the gaps are.
 - [Owner-only actions](OWNER_ACTIONS.md): the steps no automated session can perform — branch protection, alert dismissal, Pages, secrets.
+- [Deployment — durable stack](DEPLOYMENT.md): the environment variables a real deployment must set, including `SIGNALGRID_ENROLLMENT_SECRET` (required for any non-demo deployment, because the demo core publishes operator/owner tokens via `/v1/keys`).
+- [Domain setup](DOMAIN_SETUP.md): signalgrid.app on GitHub Pages.
+- [Phase 6 cutover runbook](PHASE6_CUTOVER_RUNBOOK.md) and [PIM activation live runbook](PIM_ACTIVATION_LIVE_RUNBOOK.md): the staged operational procedures.
+- [Zero-cost live-test matrix](ZERO_COST_LIVE_TEST_MATRIX.md): what can be validated against real systems without spend.
+- [Simulation validation evidence](VALIDATION_EVIDENCE.md): what the simulations have actually demonstrated.
 - [Review checklist](REVIEW_CHECKLIST.md): questions for reviewers, design partners, and advisors.
 
 

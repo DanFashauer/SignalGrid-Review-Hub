@@ -151,6 +151,36 @@ just as `unknown_key` instead of `envelope_malformed`, sending an operator hunti
 rotation problem that does not exist. Asserting the reason rather than the refusal made
 them load-bearing.
 
+**The blind spot neither guard covers: is this the right input space?**
+
+Both guards above aim at the same target from different sides. Grant-safety asks whether
+the mapping from input to verdict is correct; the mutation guard asks whether each
+condition in that mapping is load-bearing. Neither asks whether the *space being
+enumerated* is the space that decides the question — and that gap stays invisible
+precisely because the enumeration is green.
+
+`passkey-assurance` is the clean example, because the failure and the proof of its absence
+sat side by side. Its enumeration sweeps a large normalized state space and a larger
+hostile-wire one with zero mismatches, and every state in both is a *single credential*.
+The question the dimension actually answers is about an identity, and an identity's answer
+needs one thing the enumeration has no axis for: whether the credential set it was handed
+is the whole set. A caller could confirm an identity by supplying two flawless credentials
+and saying nothing about the other three. Nothing in the sweep could notice, because "is
+this every credential?" is not a value any credential carries.
+
+The shape generalizes. An enumeration is only ever as wide as the axes someone thought to
+put in it, so it is strong at *"is the ladder right"* and structurally blind to *"is this
+the right ladder"*. Adding states does not help; adding an axis does — and knowing which
+axis is missing is exactly the thing the harness cannot tell you. Three findings that
+produced this dimension's current shape were of that kind (a missing identity reference, a
+substituted credential, an unproven-complete set), and all three came from a reviewer
+reading the contract rather than from the sweep.
+
+So the honest statement of what a green enumeration buys: **no unknown, missing or
+malformed value reaches a grant, over the axes enumerated.** The trailing clause is not
+hedging. It is the whole of what review still has to do, and it does not shrink as the
+state count grows.
+
 **`pnpm run guard:registries` — are the guards' own coverage lists honest?**
 
 Both guards above carry a hand-maintained list of what they cover, which is the same shape

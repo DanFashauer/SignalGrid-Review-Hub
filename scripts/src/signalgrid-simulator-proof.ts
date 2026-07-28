@@ -57,6 +57,28 @@ assertions.push(assertion("integration outage does not crash", byId["api-integra
 assertions.push(assertion("remediation verified records audit", hasOutcome(byId["remediation-verified"], "verify_remediation") && (byId["remediation-verified"]?.auditEvidence.length ?? 0) > 0));
 assertions.push(assertion("all scenarios produce audit evidence", results.every((result) => result.auditEvidence.length > 0)));
 
+// NEGATIVE CONTROL (review finding): remediation evidence WITHOUT base trust must
+// never allow. The shipping remediation scenario now carries an authenticated
+// identity, so on its own it can no longer catch the unconditional-allow regression
+// this pins — derive the unsafe input from it by stripping the identity signal and
+// prove the engine refuses. If the engine's old `outcomes.add("allow")` returns,
+// THIS assertion goes red even while every scenario expectation stays green.
+const remScenario = listSimulatorScenarios().find((s) => s.id === "remediation-verified");
+const remWithoutBaseTrust = remScenario
+  ? runScenario({
+      ...remScenario,
+      id: "remediation-without-base-trust",
+      expectedOutcomes: ["verify_remediation", "record_audit"] as DecisionOutcome[],
+      startingSignals: remScenario.startingSignals.filter((s) => s.type !== "identity.authenticated"),
+    })
+  : undefined;
+assertions.push(assertion(
+  "remediation WITHOUT base trust never allows (fail-closed)",
+  remWithoutBaseTrust !== undefined &&
+    !remWithoutBaseTrust.decision.outcomes.includes("allow") &&
+    remWithoutBaseTrust.decision.outcomes.includes("verify_remediation"),
+));
+
 const failed = assertions.filter((item) => !item.passed);
 
 console.log(`SignalGrid simulator proof: ${assertions.length - failed.length}/${assertions.length} assertions passed`);

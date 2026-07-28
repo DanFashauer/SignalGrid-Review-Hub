@@ -626,6 +626,15 @@ paths:
       responses:
         "200": { description: Normalized DDM signals + assurance hints }
 
+  /cp/v1/fleet-mdm:
+    get:
+      operationId: cpFleetMdm
+      tags: [control-plane]
+      security: []
+      summary: Fleet (open-source, osquery MDM) host posture normalized to decision dimensions (fixtures; distinct from /cp/v1/fleet inventory)
+      responses:
+        "200": { description: Normalized Fleet host signals + assurance hints (weak/unsupervised posture only raises assurance) }
+
   /cp/v1/grid/coverage:
     get:
       operationId: cpGridCoverage

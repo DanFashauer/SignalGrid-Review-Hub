@@ -811,6 +811,42 @@ async function run() {
     }
   }
 
+  // ── store unavailability is an error, never an empty credential set ──────
+  // (Review finding.) With Redis CONFIGURED but unreachable, getUser used to
+  // swallow the failure into the same `null` that means "this user has no
+  // credentials" — so /v1/step-up/challenge answered a definitive 409 "no
+  // enrolled credential" from a FAILED read, and an enrollment racing a Redis
+  // blip could rebuild the user with only the new credential, silently wiping
+  // every previously enrolled one once Redis recovered. The read failure must
+  // propagate: a 5xx, and specifically NEVER the 409 that asserts an empty
+  // credential set it could not actually observe. Third short-lived server so
+  // the main (no-Redis) coverage above is untouched.
+  {
+    const PORT3 = 5312;
+    const BASE3 = `http://localhost:${PORT3}/api`;
+    const server3 = spawn("node", [serverEntry], {
+      env: { ...process.env, PORT: String(PORT3), NODE_ENV: "production", LOG_LEVEL: "silent", REDIS_URL: "redis://127.0.0.1:1" },
+      stdio: ["ignore", "ignore", "inherit"],
+    });
+    try {
+      let ready3 = false;
+      const start3 = Date.now();
+      while (Date.now() - start3 < 15000) {
+        try { if ((await fetch(`${BASE3}/healthz`)).ok) { ready3 = true; break; } } catch { /* not up yet */ }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      check("redis-down server becomes ready", ready3 === true);
+      const res3 = await fetch(`${BASE3}/v1/step-up/challenge`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${KEYS.owner}` },
+        body: JSON.stringify({ identityRef: suIdentity, integrationId: "bcma", deviceRef: suDevice, actionKey: "controlled.administer" }),
+      });
+      check("unreachable credential store → 5xx, never 409's definitive 'no enrolled credential'", res3.status >= 500);
+    } finally {
+      server3.kill("SIGTERM");
+    }
+  }
+
   // ── transport hygiene ───────────────────────────────────────────────────
   check("rate-limit headers present", allow.headers.get("ratelimit-limit") !== null);
   check("security header x-content-type-options set", allow.headers.get("x-content-type-options") === "nosniff");

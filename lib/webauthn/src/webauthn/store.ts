@@ -29,10 +29,17 @@ async function getRedisClient() {
   const { Redis } = await import('ioredis');
   const url = getRedisUrl();
   if (!url) return null;
-  return new Redis(url, {
+  const client = new Redis(url, {
     maxRetriesPerRequest: 1,
     lazyConnect: true,
   });
+  // Every use of this client awaits connect()/commands, so failures surface as
+  // promise rejections the callers handle (and now propagate — see getUser).
+  // Without a listener ioredis ALSO emits an unhandled 'error' event for the
+  // same failure, spamming "[ioredis] Unhandled error event" into logs for a
+  // condition that is already being handled deliberately.
+  client.on("error", () => undefined);
+  return client;
 }
 
 // In-memory fallback
@@ -54,10 +61,15 @@ export async function getUser(userId: string): Promise<WebAuthnUser | null> {
     // still lingered in this process's inMemoryUsers mirror, and the old
     // miss-falls-through-to-memory read let a sticky challenge/completion pair
     // verify the REVOKED authenticator and release the held action. A Redis miss
-    // is therefore a miss (drop the stale mirror entry too), and a Redis FAILURE
-    // is a fail-closed null — never a silent downgrade to per-process state.
-    // The in-memory map remains the store only when no Redis is configured,
-    // matching saveUser's durability contract.
+    // is therefore a miss (drop the stale mirror entry too) — never a silent
+    // downgrade to per-process state. A Redis FAILURE, however, must PROPAGATE,
+    // not read as null (review finding): `null` means "this user has no
+    // credentials", and addCredential answers that by constructing a REPLACEMENT
+    // user containing only the new credential — so a transient read failure
+    // during enrollment, followed by Redis recovering before saveUser, silently
+    // overwrote every previously enrolled credential. An unavailable store is an
+    // error, not an empty credential set. The in-memory map remains the store
+    // only when no Redis is configured, matching saveUser's durability contract.
     try {
       await redis.connect();
       const data = await redis.get(key);
@@ -66,10 +78,12 @@ export async function getUser(userId: string): Promise<WebAuthnUser | null> {
       }
       inMemoryUsers.delete(userId);
       return null;
-    } catch {
-      return null;
+    } catch (err) {
+      throw err instanceof Error ? err : new Error("WebAuthn credential read failed");
     } finally {
-      await redis.quit();
+      // quit() on a broken connection can itself reject — never let that mask
+      // the real result/error of the read.
+      await redis.quit().catch(() => undefined);
     }
   }
 

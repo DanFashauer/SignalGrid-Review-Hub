@@ -1438,6 +1438,27 @@
           }
         },
         {
+          "name": "Fleet MDM host posture (osquery, fixtures)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cp/v1/fleet-mdm",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cp",
+                "v1",
+                "fleet-mdm"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
           "name": "Grid coverage (situations handled)",
           "request": {
             "method": "GET",

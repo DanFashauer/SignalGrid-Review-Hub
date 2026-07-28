@@ -135,6 +135,7 @@ const cpRequests = [
   item("Learned recommendations", "GET", "/cp/v1/recommendations", { auth: NOAUTH }),
   item("Signal discovery + auto-onboard", "GET", "/cp/v1/signal-discovery", { auth: NOAUTH }),
   item("DDM / device-health signals (macOS 27)", "GET", "/cp/v1/ddm", { auth: NOAUTH }),
+  item("Fleet MDM host posture (osquery, fixtures)", "GET", "/cp/v1/fleet-mdm", { auth: NOAUTH }),
   item("Grid coverage (situations handled)", "GET", "/cp/v1/grid/coverage", { auth: NOAUTH }),
   item("Signal sourcing (api / native / grid-collected / gap)", "GET", "/cp/v1/grid/sourcing", { auth: NOAUTH }),
   item("Grid config (workflows as code — validation)", "GET", "/cp/v1/grid/config", { auth: NOAUTH }),

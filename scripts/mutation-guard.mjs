@@ -164,6 +164,13 @@ export const TARGETS = [
       "lib/integrations/src/integrations/platform-sso/platform-sso-connector.ts",
     ],
   },
+  {
+    proof: "proof:policy-binding",
+    files: [
+      "lib/integrations/src/integrations/policy-binding/evaluate.ts",
+      "lib/integrations/src/integrations/policy-binding/policy-binding-connector.ts",
+    ],
+  },
 ];
 
 // ── known-inert survivors ─────────────────────────────────────────────────────
@@ -351,6 +358,28 @@ const ALLOWED = [
   {
     file: "lib/integrations/src/integrations/platform-sso/evaluate.ts",
     line: "if (!positivelyConfirmed && candidates.length === 0) {",
+    reason:
+      "The grant backstop itself — deliberately redundant defence-in-depth, documented in the source as never firing today; exists to catch a FUTURE weakening.",
+  },
+  {
+    file: "lib/integrations/src/integrations/policy-binding/evaluate.ts",
+    line: 'report.reportIntegrity === "clean" &&',
+    reason:
+      "A conjunct of the grant backstop's predicate — the backstop never fires today, as its own comment states; the predicate is unobservable until a branch weakens.",
+  },
+  {
+    file: "lib/integrations/src/integrations/policy-binding/evaluate.ts",
+    line: 'report.binding === "bound" &&',
+    reason: "Backstop-predicate conjunct — same reasoning as the reportIntegrity conjunct above.",
+  },
+  {
+    file: "lib/integrations/src/integrations/policy-binding/evaluate.ts",
+    line: 'report.profileMatch === "matched" &&',
+    reason: "Backstop-predicate conjunct — same reasoning as the reportIntegrity conjunct above.",
+  },
+  {
+    file: "lib/integrations/src/integrations/policy-binding/evaluate.ts",
+    line: "if (!positivelyBound && candidates.length === 0) {",
     reason:
       "The grant backstop itself — deliberately redundant defence-in-depth, documented in the source as never firing today; exists to catch a FUTURE weakening.",
   },

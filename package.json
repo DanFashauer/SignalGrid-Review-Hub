@@ -95,6 +95,7 @@
     "proof:custody-beacon": "pnpm --filter @workspace/scripts run proof:custody-beacon",
     "proof:app-update": "pnpm --filter @workspace/scripts run proof:app-update",
     "proof:platform-sso": "pnpm --filter @workspace/scripts run proof:platform-sso",
+    "proof:policy-binding": "pnpm --filter @workspace/scripts run proof:policy-binding",
     "proof:device-management-health": "pnpm --filter @workspace/scripts run proof:device-management-health",
     "proof:link-usability": "pnpm --filter @workspace/scripts run proof:link-usability",
     "proof:verdict-attestation": "pnpm --filter @workspace/scripts run proof:verdict-attestation",

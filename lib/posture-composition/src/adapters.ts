@@ -21,6 +21,7 @@ import type { AgentBehaviorVerdict } from "@workspace/integrations/agent-behavio
 import type { CustodyBeaconVerdict } from "@workspace/integrations/custody-beacon";
 import type { AppUpdateVerdict } from "@workspace/integrations/app-update";
 import type { PlatformSsoVerdict } from "@workspace/integrations/platform-sso";
+import type { PolicyBindingVerdict } from "@workspace/integrations/policy-binding";
 import type { DeviceManagementHealthVerdict } from "@workspace/integrations/device-management-health";
 import type { LinkUsabilityVerdict } from "@workspace/integrations/link-usability";
 // Type-only, via the "./task-exception" subpath export (wired in the same change
@@ -229,6 +230,18 @@ export function fromPlatformSso(v: PlatformSsoVerdict): ComposableSignal {
   // actions are already on the unified ladder; it never lowers what the identity
   // dimensions say.
   return { kind: "platform_sso", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromPolicyBinding(v: PolicyBindingVerdict): ComposableSignal {
+  // Policy binding — is this device in the RIGHT group/team for what it is?
+  // Membership IS the policy binding (Intune dynamic groups, Fleet teams, PACS
+  // access levels — docs/POLICY_BINDING.md maps them), so a wrong binding applies
+  // the wrong policies silently: unbound is ungoverned (restrict), a too-wide
+  // binding is fail-open (restrict), too-narrow is a fail-closed nuisance
+  // (monitor), mixed membership breaks targeting at group scale (alert). Its
+  // actions are already on the unified ladder; it never lowers what any other
+  // dimension says.
+  return { kind: "policy_binding", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromDeviceManagementHealth(v: DeviceManagementHealthVerdict): ComposableSignal {

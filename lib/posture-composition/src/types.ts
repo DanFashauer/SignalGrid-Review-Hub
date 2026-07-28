@@ -71,6 +71,7 @@ export const SIGNAL_KINDS = [
   "custody_beacon",
   "app_update",
   "platform_sso",
+  "policy_binding",
   "device_management_health",
   "link_usability",
   "task_exception",

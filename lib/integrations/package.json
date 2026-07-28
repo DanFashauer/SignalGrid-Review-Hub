@@ -29,6 +29,7 @@
     "./custody-beacon": "./src/integrations/custody-beacon/index.ts",
     "./app-update": "./src/integrations/app-update/index.ts",
     "./platform-sso": "./src/integrations/platform-sso/index.ts",
+    "./policy-binding": "./src/integrations/policy-binding/index.ts",
     "./device-management-health": "./src/integrations/device-management-health/index.ts",
     "./link-usability": "./src/integrations/link-usability/index.ts",
     "./task-exception": "./src/integrations/task-exception/index.ts"

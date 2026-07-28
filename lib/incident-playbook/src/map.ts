@@ -165,7 +165,13 @@ function categoryForKind(kind: string, reason?: string): IncidentCategory {
     // compliance queue — not a live incident and not the generic Service Desk.
     case "app_update":
       return "security_compliance";
-    // Identity, authorization & data-governance signals.
+    // Identity, authorization & data-governance signals. `platform_sso` belongs
+    // here rather than with the device kinds: its findings — a policy claimed on a
+    // method that cannot enforce it, a password-grade method where phishing
+    // resistance was assumed, lockout exposure before enforcement — are identity-
+    // credential configuration questions, owned by the same Identity & Access queue
+    // as `sso_session` and `identity`.
+    case "platform_sso":
     case "identity":
     case "access_governance":
     case "sso_session":

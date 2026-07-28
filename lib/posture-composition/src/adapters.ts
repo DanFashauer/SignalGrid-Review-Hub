@@ -20,6 +20,7 @@ import type { AgentIdentityVerdict } from "@workspace/integrations/agent-identit
 import type { AgentBehaviorVerdict } from "@workspace/integrations/agent-behavior";
 import type { CustodyBeaconVerdict } from "@workspace/integrations/custody-beacon";
 import type { AppUpdateVerdict } from "@workspace/integrations/app-update";
+import type { PlatformSsoVerdict } from "@workspace/integrations/platform-sso";
 import type { DeviceManagementHealthVerdict } from "@workspace/integrations/device-management-health";
 import type { LinkUsabilityVerdict } from "@workspace/integrations/link-usability";
 // Type-only, via the "./task-exception" subpath export (wired in the same change
@@ -216,6 +217,18 @@ export function fromAppUpdate(v: AppUpdateVerdict): ComposableSignal {
   // ladder, and it never lowers what any other dimension says — SignalGrid gates on
   // currency; distributing the update stays with MDM (docs/APP_UPDATE_CURRENCY.md).
   return { kind: "app_update", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromPlatformSso(v: PlatformSsoVerdict): ComposableSignal {
+  // Platform SSO — what the Mac's platform credential is actually worth, vendor
+  // "passwordless" labels notwithstanding. Only a user-registered Secure Enclave
+  // key / smart card on a clean report contributes `none`; the Password method is a
+  // `monitor` note (password-grade), a pre-release web method raises, and a login
+  // policy claimed on a method it cannot work with is config drift (`alert` — the
+  // tenant believes a control is enforced that the OS is not enforcing). Its
+  // actions are already on the unified ladder; it never lowers what the identity
+  // dimensions say.
+  return { kind: "platform_sso", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromDeviceManagementHealth(v: DeviceManagementHealthVerdict): ComposableSignal {

@@ -191,6 +191,11 @@ function categoryForKind(kind: string, reason?: string): IncidentCategory {
     case "reachability":
     case "location":
     case "custody":
+    // `custody_beacon` is the offline asset-recovery sibling of `custody`/`location`:
+    // an independent recovery beacon placing a device off-premises or dark is a physical
+    // device-custody event, and routes to the same Endpoint / Mobility owner that handles
+    // device loss/recovery, not the generic Service Desk.
+    case "custody_beacon":
     case "peripheral":
       return "asset_device";
     // Active security incidents — live threats, exposed credentials, detections.

@@ -18,6 +18,7 @@ import type { TokenBindingVerdict } from "@workspace/integrations/token-binding"
 import type { PacsAccessVerdict } from "@workspace/integrations/pacs-access";
 import type { AgentIdentityVerdict } from "@workspace/integrations/agent-identity";
 import type { AgentBehaviorVerdict } from "@workspace/integrations/agent-behavior";
+import type { CustodyBeaconVerdict } from "@workspace/integrations/custody-beacon";
 import type { DeviceManagementHealthVerdict } from "@workspace/integrations/device-management-health";
 import type { LinkUsabilityVerdict } from "@workspace/integrations/link-usability";
 // Type-only, via the "./task-exception" subpath export (wired in the same change
@@ -191,6 +192,18 @@ export function fromAgentBehavior(v: AgentBehaviorVerdict): ComposableSignal {
   // blast radius, human-plausible cadence, bridge reachable — contributes 'none'. Judgment
   // we could not verify never grants.
   return { kind: "agent_behavior", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromCustodyBeacon(v: CustodyBeaconVerdict): ComposableSignal {
+  // Custody BEACON — asset recovery. The independent, out-of-band channel that still
+  // reports when every ONLINE custody signal (rtls, location, reachability, dock-state)
+  // has gone dark with the device. Its whole value is the fusion it already performed:
+  // in-zone + unreachable is benign (powered off in its bay) → monitor, no alarm;
+  // off-premises + dark is high-confidence removal → escalate. Its actions are already on
+  // the unified ladder. Fail-safe: only a device positively confirmed in the custody zone,
+  // reachable, on a FRESH reading, contributes 'none'; a stale reading, an unknown zone,
+  // or anything unreadable raises. It never lowers what the online custody dimensions say.
+  return { kind: "custody_beacon", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromDeviceManagementHealth(v: DeviceManagementHealthVerdict): ComposableSignal {

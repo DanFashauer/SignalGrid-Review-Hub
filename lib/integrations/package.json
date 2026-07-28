@@ -26,6 +26,7 @@
     "./pacs-access": "./src/integrations/pacs-access/index.ts",
     "./agent-identity": "./src/integrations/agent-identity/index.ts",
     "./agent-behavior": "./src/integrations/agent-behavior/index.ts",
+    "./custody-beacon": "./src/integrations/custody-beacon/index.ts",
     "./device-management-health": "./src/integrations/device-management-health/index.ts",
     "./link-usability": "./src/integrations/link-usability/index.ts",
     "./task-exception": "./src/integrations/task-exception/index.ts"

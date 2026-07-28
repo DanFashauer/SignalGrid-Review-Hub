@@ -68,6 +68,7 @@ export const SIGNAL_KINDS = [
   "pacs_access",
   "agent_identity",
   "agent_behavior",
+  "custody_beacon",
   "device_management_health",
   "link_usability",
   "task_exception",

@@ -108,7 +108,7 @@ from a simulator.
 
 ## Proofs and surfaces
 
-- `pnpm run proof:iac` (65 checks) — plan/diff correctness and determinism,
+- `pnpm run proof:iac` (67 checks) — plan/diff correctness and determinism,
   validation fail-closed (unknown kind / duplicate / empty id / malformed spec
   refused), the governed lifecycle, the trust gate (every non-`allow` outcome
   blocks), drift classification and worst-status-wins, and the self-audit

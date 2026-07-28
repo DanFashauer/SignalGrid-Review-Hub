@@ -189,6 +189,15 @@ const missingOnly = detectDrift(
 );
 check("drift: a declared-but-absent resource → overall missing", missingOnly.overall === "missing");
 
+// Drift validates OBSERVED input as strictly as plan validates desired input:
+// an unknown kind or malformed spec is refused, never silently classed unmanaged.
+throwsCode("drift: unknown observed kind is refused (not classed unmanaged)", "unknown_kind", () =>
+  detectDrift({ resources: [] }, { resources: [{ kind: "config profile" as never, id: "x", spec: {} }] }),
+);
+throwsCode("drift: malformed observed spec is refused", "malformed_input", () =>
+  detectDrift({ resources: [] }, { resources: [{ kind: "config_profile", id: "x", spec: "nope" as never }] }),
+);
+
 // Projection into self-audit vocabulary.
 const probes = toProbeResults(drift);
 check("drift→probe: missing maps to broken", Object.values(probes).some((p) => p.status === "broken"));

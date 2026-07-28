@@ -27,7 +27,7 @@ is two things only a trust fabric adds:
 Fleet, Microsoft Intune, and Jamf are the declarative **backends** SignalGrid
 plans, gates, and drift-checks — it complements a Fleet GitOps repo or a
 Terraform+Intune module, and never competes with one. Engine:
-[`lib/iac`](lib/iac) · proof: `pnpm run proof:iac` (65 checks) · fixture status:
+[`lib/iac`](lib/iac) · proof: `pnpm run proof:iac` (67 checks) · fixture status:
 `GET /api/cp/v1/iac` · full write-up: [`docs/IAC_GITOPS.md`](docs/IAC_GITOPS.md).
 
 ## Live demo — build the grid

@@ -19,8 +19,9 @@ import {
   type FieldChange,
   type ObservedState,
   type ProbeResultLike,
+  type ResourceKind,
 } from "./types";
-import { parseDesiredState } from "./plan";
+import { assertSpec, isKind, parseDesiredState } from "./plan";
 
 function worst(a: DriftStatus, b: DriftStatus): DriftStatus {
   return DRIFT_RANK[a] >= DRIFT_RANK[b] ? a : b;
@@ -53,12 +54,27 @@ export function detectDrift(desired: DesiredState, observed: ObservedState): Dri
     throw new IacError("malformed_input", "Observed state must have a resources array.");
   }
 
-  const observedByKey = new Map<string, Readonly<Record<string, string>>>();
+  // Keep the kind/id intact alongside the spec so the unmanaged branch never has
+  // to reconstruct them by string-splitting the composite key.
+  const observedByKey = new Map<
+    string,
+    { kind: ResourceKind; id: string; spec: Readonly<Record<string, string>> }
+  >();
   for (const o of observed.resources) {
-    if (typeof o.id !== "string" || typeof o.kind !== "string") {
-      throw new IacError("malformed_input", "An observed resource is malformed.");
+    // Validate observed input exactly as strictly as the desired side: an
+    // unknown kind or malformed spec is REFUSED, not silently classified as
+    // `unmanaged`.
+    if (!isKind(o.kind)) {
+      throw new IacError("unknown_kind", `Unknown observed resource kind: ${String(o.kind)}.`);
     }
-    observedByKey.set(`${o.kind} ${o.id}`, o.spec ?? {});
+    if (typeof o.id !== "string" || o.id.trim().length === 0) {
+      throw new IacError("malformed_input", `Observed resource of kind ${o.kind} has an empty id.`);
+    }
+    observedByKey.set(`${o.kind} ${o.id}`, {
+      kind: o.kind,
+      id: o.id,
+      spec: assertSpec(o.kind, o.id, o.spec),
+    });
   }
 
   const findings: DriftFinding[] = [];
@@ -67,8 +83,8 @@ export function detectDrift(desired: DesiredState, observed: ObservedState): Dri
   for (const r of validated.resources) {
     const key = `${r.kind} ${r.id}`;
     declaredKeys.add(key);
-    const obsSpec = observedByKey.get(key);
-    if (obsSpec === undefined) {
+    const obs = observedByKey.get(key);
+    if (obs === undefined) {
       findings.push({
         kind: r.kind,
         id: r.id,
@@ -78,7 +94,7 @@ export function detectDrift(desired: DesiredState, observed: ObservedState): Dri
       });
       continue;
     }
-    const changes = diffSpec(obsSpec, r.spec);
+    const changes = diffSpec(obs.spec, r.spec);
     if (changes.length === 0) {
       findings.push({ kind: r.kind, id: r.id, status: "in_sync", detail: "Matches the declared configuration.", changes: [] });
     } else {
@@ -92,15 +108,14 @@ export function detectDrift(desired: DesiredState, observed: ObservedState): Dri
     }
   }
 
-  for (const [key, spec] of observedByKey) {
+  for (const [key, obs] of observedByKey) {
     if (declaredKeys.has(key)) continue;
-    const [kind, ...idParts] = key.split(" ");
     findings.push({
-      kind: kind as DriftFinding["kind"],
-      id: idParts.join(" "),
+      kind: obs.kind,
+      id: obs.id,
       status: "unmanaged",
       detail: "Present on the fleet but not declared in Git.",
-      changes: diffSpec(spec, {}),
+      changes: diffSpec(obs.spec, {}),
     });
   }
 

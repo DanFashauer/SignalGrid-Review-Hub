@@ -126,7 +126,10 @@ export interface NormalizedPasskey {
   identityRef: string;
   /** WHICH credential this report describes. An identity may hold several, and a
    *  verdict that cannot name its subject invites being read as an identity-wide
-   *  answer when it is not. Empty when the source did not say. */
+   *  answer when it is not. Empty when the source did not say — and an empty ref
+   *  FORECLOSES the grant (review finding): a verdict that cannot name its subject
+   *  cannot support the aggregator's claim that every usable credential was
+   *  covered, which is the whole reason the field exists. */
   credentialRef: string;
   registration: PasskeyRegistration;
   credentialType: PasskeyCredentialType;
@@ -165,6 +168,8 @@ export type PasskeyReasonCode =
   | "REGISTRATION_UNKNOWN"
   | "CREDENTIAL_TYPE_UNKNOWN"
   | "REPORT_MALFORMED"
+  | "CREDENTIAL_REF_MISSING"
+  | "IDENTITY_SET_INCONSISTENT"
   | "GRANT_BACKSTOP"
   | "NOT_COVERED";
 

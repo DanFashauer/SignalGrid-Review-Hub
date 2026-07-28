@@ -127,6 +127,13 @@ export function evaluatePasskey(
       : "unknown";
 
   // Track unknown axes for evidence (they also foreclose the grant below).
+  // A verdict that cannot name its subject cannot be bound to the credential it
+  // graded, so the aggregator's "every usable credential was covered" claim would
+  // rest on nothing (review finding). An unnamed credential therefore raises.
+  if (report.credentialRef.length === 0) {
+    unknownSignals.push("credential_ref");
+    candidates.push({ posture: "unverified", action: "step_up", reason: "CREDENTIAL_REF_MISSING" });
+  }
   if (report.reportIntegrity !== "clean") unknownSignals.push("report_integrity");
   if (report.registration === "unknown") unknownSignals.push("registration");
   if (report.credentialType === "none" || report.credentialType === "unknown") {
@@ -214,6 +221,7 @@ export function evaluatePasskey(
   // empty candidate list, this backstop forces a step_up rather than letting the
   // seed grant survive.
   const positivelyConfirmed =
+    report.credentialRef.length > 0 &&
     report.reportIntegrity === "clean" &&
     report.registration === "registered" &&
     deviceHeld &&
@@ -275,6 +283,23 @@ export function evaluateIdentityPasskeys(
 ): PasskeyIdentityVerdict {
   const credentials = reports.map((r) => evaluatePasskey(r, opts));
   const identityRef = reports[0]?.identityRef ?? "";
+
+  // An upstream batching or grouping error must not become an unsafe allow (review
+  // finding). Taking the first identityRef and grading the rest would let a set that
+  // mixes identities — or one whose identity is unnamed — report identityConfirmed
+  // for whichever identity happened to sort first, over someone else's credentials.
+  const identityConsistent =
+    reports.length > 0 && identityRef.length > 0 && reports.every((r) => r.identityRef === identityRef);
+  if (reports.length > 0 && !identityConsistent) {
+    return {
+      identityRef,
+      recommendedAction: "step_up",
+      weakestCredentialRef: "",
+      reasonCode: "IDENTITY_SET_INCONSISTENT",
+      credentials,
+      identityConfirmed: false,
+    };
+  }
 
   if (credentials.length === 0) {
     return {

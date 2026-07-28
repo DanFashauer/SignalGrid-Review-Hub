@@ -64,7 +64,8 @@ load-bearing, not tidiness).
 | credential is **synced** | `step_up` | custody unknowable by construction — forecloses the grant |
 | attestation policy claims **enforced** while the credential is synced | `alert` | the platform is not applying the claimed control — config drift |
 | **no backup** credential registered | `monitor` | one lost device from a lockout; flagged, not distrusted |
-| not registered, or any axis unknown | `step_up` | unknown raises, never grants |
+| not registered, or any TRUST axis unknown (type, attestation, policy, UV, parse, credential ref) | `step_up` | unknown raises, never grants |
+| **backup unknown** | `monitor` | the recovery axis only — an unreadable backup is a recovery gap, not a trust one |
 
 Wire-level integrity: a report asserting `synced` **and** `attestation: verified`
 describes something that cannot exist, so the normalizer marks it malformed rather
@@ -145,7 +146,7 @@ recovery plan. This dimension takes no position on which tier a given population
 should hold; it grades what a credential actually is, and `recoveryRisk` makes the
 tradeoff visible instead of implicit.
 
-Proven by `proof:passkey-assurance` (59 checks; the three headline claims pinned
+Proven by `proof:passkey-assurance` (63 checks; the three headline claims pinned
 individually, per-field integrity, hostile shapes, both grant-safety enumerations
 including a non-vacuity guard, the identity-level worst-wins aggregation, and the
 connector surface; deterministic, offline).

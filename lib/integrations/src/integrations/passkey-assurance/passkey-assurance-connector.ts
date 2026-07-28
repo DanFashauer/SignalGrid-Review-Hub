@@ -175,6 +175,10 @@ export function normalizeReport(
 
 export interface PasskeyRequest {
   identityRef: string;
+  /** WHICH credential to read. Absent = "this identity's primary/only credential",
+   *  which is all a single-credential source can answer. A real IdP adapter uses
+   *  this to fetch a specific registered credential. */
+  credentialRef?: string;
   token: string;
 }
 
@@ -186,16 +190,34 @@ export interface PasskeyConnectorConfig {
   source?: string;
 }
 
-/** Read-only connector: fetches one identity's passkey posture and normalizes it. */
+/** Read-only connector: fetches ONE CREDENTIAL's posture and normalizes it.
+ *
+ *  Scope, stated because it is easy to over-read: a single call cannot establish the
+ *  COMPLETE credential set for an identity, so its result must never be handed to
+ *  `evaluateIdentityPasskeys` as if it were the whole set. `fetchNormalizedSet`
+ *  below takes the credential refs explicitly, which makes the completeness
+ *  requirement the caller's visible responsibility rather than a silent assumption —
+ *  and the aggregator independently fails closed when the set contradicts itself. */
 export class PasskeyAssuranceConnector {
   constructor(
     private readonly config: PasskeyConnectorConfig,
     private readonly transport: PasskeyTransport,
   ) {}
 
-  async fetchNormalized(identityRef: string): Promise<NormalizedPasskey> {
+  async fetchNormalized(identityRef: string, credentialRef?: string): Promise<NormalizedPasskey> {
     guardReadOnly("GET");
-    const raw = await this.transport({ identityRef, token: this.config.accessToken });
+    const raw = await this.transport({ identityRef, credentialRef, token: this.config.accessToken });
     return normalizeReport(identityRef, raw, this.config.source ?? "passkey-idp-export");
+  }
+
+  /** Fetch a NAMED SET of credentials for one identity. The caller supplies the refs
+   *  because only the IdP's own enumeration knows them — inventing them here would
+   *  manufacture exactly the completeness this dimension refuses to assume. */
+  async fetchNormalizedSet(
+    identityRef: string,
+    credentialRefs: readonly string[],
+  ): Promise<NormalizedPasskey[]> {
+    guardReadOnly("GET");
+    return Promise.all(credentialRefs.map((ref) => this.fetchNormalized(identityRef, ref)));
   }
 }

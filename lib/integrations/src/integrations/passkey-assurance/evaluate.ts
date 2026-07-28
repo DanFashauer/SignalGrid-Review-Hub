@@ -63,6 +63,13 @@ export interface EvaluatePasskeyOptions {
   covered?: boolean;
 }
 
+export interface EvaluateIdentityPasskeysOptions extends EvaluatePasskeyOptions {
+  /** How many credentials the IdP says this identity holds, when it can say.
+   *  Supplying it turns completeness from an inference into a check: a set that
+   *  does not match the authoritative count fails closed. */
+  expectedCredentialCount?: number;
+}
+
 interface Candidate {
   posture: PasskeyPosture;
   action: PasskeyAction;
@@ -275,11 +282,13 @@ export function evaluatePasskey(
  * granted outright.
  *
  * An empty credential set is NOT a grant. No credentials is an absence of evidence,
- * and this fabric does not read absence as confirmation.
+ * and this fabric does not read absence as confirmation. Neither is an INCOMPLETE
+ * set: worst-wins is only sound over every usable credential, so the set must be
+ * evidently whole before it can confirm — see the completeness checks below.
  */
 export function evaluateIdentityPasskeys(
   reports: readonly NormalizedPasskey[],
-  opts: EvaluatePasskeyOptions = {},
+  opts: EvaluateIdentityPasskeysOptions = {},
 ): PasskeyIdentityVerdict {
   const credentials = reports.map((r) => evaluatePasskey(r, opts));
   const identityRef = reports[0]?.identityRef ?? "";
@@ -307,6 +316,37 @@ export function evaluateIdentityPasskeys(
       recommendedAction: "step_up",
       weakestCredentialRef: "",
       reasonCode: "NOT_COVERED",
+      credentials,
+      identityConfirmed: false,
+    };
+  }
+
+  // ── COMPLETENESS: the set must be evidently whole before it can confirm ───────
+  // Worst-wins is only sound over EVERY usable credential. Nothing so far
+  // established that the caller supplied them all, and the connector fetches one
+  // credential per call, so it structurally cannot (review finding). Three ways the
+  // set can be shown incomplete — each fails closed rather than confirming over a
+  // set that was never whole:
+  //
+  //   1. Duplicate credential refs: the same credential counted twice looks like
+  //      breadth while covering less than it appears to.
+  //   2. A report asserts `backup: "registered"` — i.e. a SECOND authentication path
+  //      exists — while the set holds fewer than two distinct credentials. The set
+  //      contradicts its own contents.
+  //   3. An authoritative expected count was supplied and does not match.
+  const distinctRefs = new Set(reports.map((r) => r.credentialRef));
+  const hasDuplicateRefs = distinctRefs.size !== reports.length;
+  const claimsBackup = reports.some((r) => r.backup === "registered");
+  const backupUnaccounted = claimsBackup && distinctRefs.size < 2;
+  const countMismatch =
+    typeof opts.expectedCredentialCount === "number" && distinctRefs.size !== opts.expectedCredentialCount;
+
+  if (hasDuplicateRefs || backupUnaccounted || countMismatch) {
+    return {
+      identityRef,
+      recommendedAction: "step_up",
+      weakestCredentialRef: "",
+      reasonCode: "CREDENTIAL_SET_INCOMPLETE",
       credentials,
       identityConfirmed: false,
     };

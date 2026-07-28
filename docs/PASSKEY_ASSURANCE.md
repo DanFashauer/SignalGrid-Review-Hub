@@ -95,8 +95,19 @@ credential, grades each, and returns worst-wins plus `weakestCredentialRef` so
 there is something concrete to go fix. An empty credential set is **not** a grant:
 absence of evidence is not confirmation.
 
-Every verdict now carries `credentialRef`, so a per-credential answer cannot be
-mistaken for an identity-wide one by a reader who only sees the payload.
+Every verdict carries `credentialRef`, so a per-credential answer cannot be mistaken
+for an identity-wide one by a reader who only sees the payload.
+
+**And the set must be evidently WHOLE before it can confirm.** Worst-wins is only
+sound over every usable credential, and supplying a set does not establish that it
+is complete — the connector reads one credential per call, so it structurally
+cannot. `evaluateIdentityPasskeys` therefore fails closed on three signals of
+incompleteness: duplicate credential refs (one credential counted twice is not two
+credentials); a report asserting `backup: "registered"` while the set holds fewer
+than two distinct credentials (the set contradicts its own contents); and a
+mismatch against `expectedCredentialCount` when the IdP can supply an authoritative
+one. `fetchNormalizedSet` takes the refs explicitly, so completeness is the
+caller's visible responsibility rather than a silent assumption.
 
 ## Why `restrict` for missing user verification
 
@@ -146,7 +157,7 @@ recovery plan. This dimension takes no position on which tier a given population
 should hold; it grades what a credential actually is, and `recoveryRisk` makes the
 tradeoff visible instead of implicit.
 
-Proven by `proof:passkey-assurance` (63 checks; the three headline claims pinned
+Proven by `proof:passkey-assurance` (69 checks; the three headline claims pinned
 individually, per-field integrity, hostile shapes, both grant-safety enumerations
 including a non-vacuity guard, the identity-level worst-wins aggregation, and the
 connector surface; deterministic, offline).

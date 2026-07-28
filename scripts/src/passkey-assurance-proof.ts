@@ -394,6 +394,54 @@ const unnamedIdentity = evaluateIdentityPasskeys([normalizeReport("", { ...GRANT
 check("IDENTITY — an unnamed identity cannot be confirmed either",
   unnamedIdentity.recommendedAction === "step_up" && unnamedIdentity.identityConfirmed === false);
 
+// ── COMPLETENESS: the set must be evidently whole before it confirms ──────────
+// Worst-wins is only sound over EVERY usable credential, and nothing previously
+// established that the caller supplied them all (review finding).
+const loneClaimingBackup = evaluateIdentityPasskeys([primary]);
+check("IDENTITY — one report that itself claims a backup exists does NOT confirm (the set contradicts its own contents)",
+  loneClaimingBackup.recommendedAction === "step_up" && loneClaimingBackup.identityConfirmed === false &&
+  loneClaimingBackup.reasonCode === "CREDENTIAL_SET_INCOMPLETE");
+const duplicated = evaluateIdentityPasskeys([primary, primary]);
+check("IDENTITY — duplicate credential refs do NOT confirm; one credential twice is not two credentials",
+  duplicated.recommendedAction === "step_up" && duplicated.reasonCode === "CREDENTIAL_SET_INCOMPLETE");
+const countMismatch = evaluateIdentityPasskeys(
+  [primary, normalizeReport("alice", { ...GRANT, credential_ref: "key-2" })],
+  { expectedCredentialCount: 3 },
+);
+check("IDENTITY — an authoritative count that the set does not match fails closed",
+  countMismatch.recommendedAction === "step_up" && countMismatch.reasonCode === "CREDENTIAL_SET_INCOMPLETE");
+const countMatches = evaluateIdentityPasskeys(
+  [primary, normalizeReport("alice", { ...GRANT, credential_ref: "key-2" })],
+  { expectedCredentialCount: 2 },
+);
+check("IDENTITY — a set matching the authoritative count still confirms (completeness is a check, not a veto)",
+  countMatches.recommendedAction === "none" && countMatches.identityConfirmed === true);
+
+// End-to-end through the connector: an identity holding TWO credentials of
+// different worth, fetched per-credential, aggregated. This is the shape the
+// dimension exists for, and it exercises the transport's credentialRef path rather
+// than only the pure evaluator.
+const multiConnector = new PasskeyAssuranceConnector(
+  { accessToken: "t", baseUrl: "https://idp.local", source: "enum" },
+  createMockPasskeyTransport({
+    credentialReports: {
+      "carol/key-1": { ...GRANT, credential_ref: "key-1" },
+      "carol/synced-2": {
+        credential_ref: "synced-2", registration: "registered", credential_type: "synced",
+        attestation: "not_provided", attestation_policy: "not_enforced",
+        user_verification_policy: "required", backup: "registered",
+      },
+    },
+  }),
+);
+const fetchedSet = await multiConnector.fetchNormalizedSet("carol", ["key-1", "synced-2"]);
+check("connector fetches a NAMED SET, one report per credential, each keeping its own ref",
+  fetchedSet.length === 2 && fetchedSet[0].credentialRef === "key-1" && fetchedSet[1].credentialRef === "synced-2");
+const fetchedVerdict = evaluateIdentityPasskeys(fetchedSet, { expectedCredentialCount: 2 });
+check("end-to-end — the fetched set does NOT confirm, because one credential is synced",
+  fetchedVerdict.recommendedAction === "step_up" && fetchedVerdict.identityConfirmed === false &&
+  fetchedVerdict.weakestCredentialRef === "synced-2");
+
 // Determinism.
 const d1 = normalizeReport("det", { ...GRANT, credential_type: "synced", attestation: "not_provided" });
 check("evaluator is deterministic", JSON.stringify(evaluatePasskey(d1)) === JSON.stringify(evaluatePasskey(d1)));

@@ -326,6 +326,18 @@ paths:
       operationId: stepUpEnrollOptions
       tags: [decisions]
       summary: Mint a WebAuthn registration challenge for this identity
+      parameters:
+        - in: header
+          name: x-enrollment-authorization
+          required: false
+          schema: { type: string }
+          description: >-
+            Out-of-band enrollment authorization. Required whenever the server is
+            configured with SIGNALGRID_ENROLLMENT_SECRET (any real deployment) —
+            the role gate alone is not sufficient there, because a demo core
+            publishes operator/owner tokens via /v1/keys. Absent on the fixture
+            demo, whose responses carry a demoNote saying enrollment is
+            self-service and releases only simulated plans.
       requestBody:
         required: true
         content:
@@ -336,14 +348,21 @@ paths:
               properties:
                 identityRef: { type: string }
       responses:
-        "200": { description: challengeId + WebAuthn PublicKeyCredentialCreationOptions }
+        "200": { description: challengeId + WebAuthn PublicKeyCredentialCreationOptions (+ demoNote on a demo core with no out-of-band secret configured) }
         "400": { $ref: "#/components/responses/ValidationError" }
+        "403": { description: Role not operator/owner, or the configured out-of-band authorization header is absent/wrong — fail closed }
 
   /v1/step-up/enroll/verify:
     post:
       operationId: stepUpEnrollVerify
       tags: [decisions]
       summary: Verify the registration attestation and store the credential
+      parameters:
+        - in: header
+          name: x-enrollment-authorization
+          required: false
+          schema: { type: string }
+          description: Out-of-band enrollment authorization (see stepUpEnrollOptions).
       requestBody:
         required: true
         content:
@@ -356,9 +375,9 @@ paths:
                 challengeId: { type: string }
                 response: { type: object, description: WebAuthn registration response (clientDataJSON + attestationObject) }
       responses:
-        "200": { description: Credential enrolled }
+        "200": { description: Credential enrolled (+ demoNote on a demo core with no out-of-band secret configured) }
         "400": { $ref: "#/components/responses/ValidationError" }
-        "403": { description: Attestation failed verification — fail closed, nothing stored }
+        "403": { description: Attestation failed verification, role not operator/owner, or out-of-band authorization absent/wrong — fail closed, nothing stored }
 
   /v1/step-up/challenge:
     post:

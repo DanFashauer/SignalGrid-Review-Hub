@@ -622,6 +622,10 @@ async function run() {
     token: KEYS.operator, body: { identityRef: suIdentity },
   });
   check("step-up enroll options → 200 with challenge", enrollOpts.status === 200 && typeof enrollOpts.json?.challengeId === "string" && typeof enrollOpts.json?.publicKey?.challenge === "string");
+  // Truthful framing (review finding): with no out-of-band secret configured, the
+  // ceremony IS self-service (the role gate is satisfiable with the published demo
+  // keys), and the response must say so rather than presenting a real privileged gate.
+  check("enroll options carries the self-service demo note (secret unset)", typeof enrollOpts.json?.demoNote === "string" && enrollOpts.json.demoNote.includes("simulated") && enrollOpts.json.demoNote.includes("SIGNALGRID_ENROLLMENT_SECRET"));
   const enrollVerify = await req("POST", "/v1/step-up/enroll/verify", {
     token: KEYS.operator,
     body: {
@@ -707,6 +711,54 @@ async function run() {
     token: KEYS.atlas, body: { identityRef: suIdentity, integrationId: "bcma", deviceRef: suDevice },
   });
   check("step-up credentials are tenant-scoped (other tenant → 409)", stepUpCrossTenant.status === 409);
+
+  // ── out-of-band enrollment authorization (secret-configured mode) ────────
+  // The block above proved the DEMO mode honest. This proves the REAL mode closed:
+  // with SIGNALGRID_ENROLLMENT_SECRET configured, a published demo owner token alone
+  // must no longer authorize enrollment — the x-enrollment-authorization header must
+  // carry the secret (which /v1/keys does not publish), and the role gate still holds
+  // independently. Runs against a second, short-lived server so the main server's
+  // self-service coverage above is untouched.
+  {
+    const PORT2 = 5311;
+    const BASE2 = `http://localhost:${PORT2}/api`;
+    const SECRET = "test-out-of-band-enrollment-secret";
+    const server2 = spawn("node", [serverEntry], {
+      env: { ...process.env, PORT: String(PORT2), NODE_ENV: "production", LOG_LEVEL: "silent", SIGNALGRID_ENROLLMENT_SECRET: SECRET },
+      stdio: ["ignore", "ignore", "inherit"],
+    });
+    try {
+      let ready2 = false;
+      const start2 = Date.now();
+      while (Date.now() - start2 < 15000) {
+        try { if ((await fetch(`${BASE2}/healthz`)).ok) { ready2 = true; break; } } catch { /* not up yet */ }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      check("secret-mode server becomes ready", ready2 === true);
+      const enroll2 = async (headers) => {
+        const res = await fetch(`${BASE2}/v1/step-up/enroll/options`, {
+          method: "POST",
+          headers: { "content-type": "application/json", ...headers },
+          body: JSON.stringify({ identityRef: suIdentity }),
+        });
+        let json = null;
+        try { json = await res.json(); } catch { json = null; }
+        return { status: res.status, json };
+      };
+      const ownerAuth = { authorization: `Bearer ${KEYS.owner}` };
+      const noHeader = await enroll2(ownerAuth);
+      check("secret mode: published owner token WITHOUT the out-of-band header → 403 (self-service closed)", noHeader.status === 403);
+      const wrongHeader = await enroll2({ ...ownerAuth, "x-enrollment-authorization": "guess" });
+      check("secret mode: wrong out-of-band value → 403 (fail closed)", wrongHeader.status === 403);
+      const rightHeader = await enroll2({ ...ownerAuth, "x-enrollment-authorization": SECRET });
+      check("secret mode: owner token + correct out-of-band header → 200", rightHeader.status === 200 && typeof rightHeader.json?.challengeId === "string");
+      check("secret mode: the self-service demo note is ABSENT (no longer self-service)", rightHeader.json?.demoNote === undefined);
+      const auditorWithSecret = await enroll2({ authorization: `Bearer ${KEYS.auditor}`, "x-enrollment-authorization": SECRET });
+      check("secret mode: the secret does not override the role gate (auditor still 403)", auditorWithSecret.status === 403);
+    } finally {
+      server2.kill("SIGTERM");
+    }
+  }
 
   // ── transport hygiene ───────────────────────────────────────────────────
   check("rate-limit headers present", allow.headers.get("ratelimit-limit") !== null);

@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { CoreError, verifySnapshot, type EvaluateRequest } from "@workspace/signalgrid-core";
 import { getDecisionStore, getSessionStore, type Session } from "@workspace/persistence";
 import { listAppIntegrations, findAppIntegration, planAppSession } from "@workspace/app-workflows";
@@ -372,7 +372,49 @@ function requireEnrollmentPrincipal(req: Request): { subjectId: string } {
       403,
     );
   }
+  requireOutOfBandEnrollmentAuthorization(req);
   return { subjectId: principal.subjectId };
+}
+
+/** Out-of-band enrollment authorization (review finding). The role gate above is not
+ *  sufficient by itself on a demo core: the unauthenticated `/v1/keys` route PUBLISHES
+ *  operator/owner demo tokens, so any visitor can satisfy the role check and the
+ *  "privileged" ceremony is self-service. That is acceptable for the fixture demo — a
+ *  completed step-up releases only simulated fixture plans, and the responses say so
+ *  (see `demoEnrollmentNote`) — but it must not be inherited by a real deployment.
+ *
+ *  When `SIGNALGRID_ENROLLMENT_SECRET` is configured, enrollment additionally requires
+ *  the `x-enrollment-authorization` header to carry that secret — an authorization this
+ *  server does NOT publish. Read at request time (not module load) so both modes are
+ *  testable; compared as SHA-256 digests so `timingSafeEqual` gets equal-length inputs
+ *  and the comparison never throws or leaks length. Fail closed on absent or wrong. */
+function requireOutOfBandEnrollmentAuthorization(req: Request): void {
+  const secret = process.env.SIGNALGRID_ENROLLMENT_SECRET;
+  if (!secret) return; // fixture demo: self-service by design, labeled honestly
+  const presented = req.get("x-enrollment-authorization") ?? "";
+  const a = createHash("sha256").update(presented, "utf8").digest();
+  const b = createHash("sha256").update(secret, "utf8").digest();
+  if (!timingSafeEqual(a, b)) {
+    throw new CoreError(
+      "forbidden",
+      "Enrollment requires out-of-band authorization (x-enrollment-authorization header).",
+      403,
+    );
+  }
+}
+
+/** Honest framing for the self-service demo ceremony: present exactly when the
+ *  out-of-band secret is NOT configured, so a reader of the response knows the role
+ *  gate is satisfiable with the published demo keys and that completion releases only
+ *  simulated fixture plans. Absent (undefined) once a real deployment sets the secret. */
+function demoEnrollmentNote(): string | undefined {
+  if (process.env.SIGNALGRID_ENROLLMENT_SECRET) return undefined;
+  return (
+    "Self-service demo ceremony: the operator/owner role gate is satisfiable with the " +
+    "demo keys published by the unauthenticated /v1/keys route, and a completed step-up " +
+    "releases only simulated fixture plans. Real deployments set " +
+    "SIGNALGRID_ENROLLMENT_SECRET to require out-of-band enrollment authorization."
+  );
 }
 
 // 1) Enrollment options — mint a registration challenge for this identity.
@@ -388,7 +430,7 @@ router.post("/v1/step-up/enroll/options", async (req: Request, res: Response, ne
       enrolledByRef: enrolledBy.subjectId,
     });
     const { challengeId, ...publicKey } = options;
-    res.json(envelope(req, { challengeId, publicKey }));
+    res.json(envelope(req, { challengeId, publicKey, demoNote: demoEnrollmentNote() }));
   } catch (err) {
     next(err);
   }
@@ -411,7 +453,7 @@ router.post("/v1/step-up/enroll/verify", async (req: Request, res: Response, nex
     if (!result.success) {
       throw new CoreError("forbidden", `Enrollment rejected: ${result.error ?? "verification failed"}.`, 403);
     }
-    res.json(envelope(req, { enrolled: true, credentialId: result.credentialId, enrolledByRef: enrolledBy.subjectId }));
+    res.json(envelope(req, { enrolled: true, credentialId: result.credentialId, enrolledByRef: enrolledBy.subjectId, demoNote: demoEnrollmentNote() }));
   } catch (err) {
     next(err);
   }

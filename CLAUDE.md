@@ -48,8 +48,11 @@ proofs miss:
   `pnpm install --lockfile-only` — and commit `pnpm-lock.yaml`. CI runs
   `pnpm install --frozen-lockfile` (Node 22) and fails hard on drift.
 - **Touched the api-server?** `pnpm --filter @workspace/api-server run test:api`
-  must pass **137/137**. Adding a route near others: verify you didn't drop the
-  neighbors (a real regression this file exists to prevent).
+  must pass **with every assertion green** (the suite prints `N/N`; 163/163 at the
+  time of writing — the printed total grows as coverage does, so compare passed
+  against total, not against a number quoted here). Adding a route near others:
+  verify you didn't drop the neighbors (a real regression this file exists to
+  prevent).
 - Core gates individually: `pnpm run typecheck`, `pnpm run review:invariants`,
   `pnpm run proof:signalgrid-simulator`.
 

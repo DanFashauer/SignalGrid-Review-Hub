@@ -33,6 +33,7 @@ in-memory (the fixture-safe default used by the public build and CI).
 | `PORT` | API listen port. | `8080` |
 | `LOG_LEVEL` | pino log level. | `info` |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated browser origins allowed to call `/v1`. | none (deny all cross-origin) |
+| `SIGNALGRID_ENROLLMENT_SECRET` | Set ⇒ `/v1/step-up/enroll/*` additionally requires the `x-enrollment-authorization` header to carry this value (out-of-band enrollment authorization — required for any real deployment, since a demo core publishes operator/owner tokens via `/v1/keys`). | unset (self-service demo, labeled via `demoNote`) |
 | `OIDC_ISSUER` | Enterprise IdP issuer. Set ⇒ OIDC/JWT bearer auth on for `/v1`. | unset (demo keys) |
 | `OIDC_AUDIENCE` | Expected token audience (the API's app/client id). | unset |
 | `OIDC_JWKS_URI` | IdP JWKS endpoint (discovery `jwks_uri`). | unset |

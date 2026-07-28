@@ -91,6 +91,7 @@
     "proof:token-binding": "pnpm --filter @workspace/scripts run proof:token-binding",
     "proof:pacs-access": "pnpm --filter @workspace/scripts run proof:pacs-access",
     "proof:agent-identity": "pnpm --filter @workspace/scripts run proof:agent-identity",
+    "proof:agent-behavior": "pnpm --filter @workspace/scripts run proof:agent-behavior",
     "proof:device-management-health": "pnpm --filter @workspace/scripts run proof:device-management-health",
     "proof:link-usability": "pnpm --filter @workspace/scripts run proof:link-usability",
     "proof:verdict-attestation": "pnpm --filter @workspace/scripts run proof:verdict-attestation",

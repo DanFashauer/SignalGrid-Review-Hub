@@ -73,6 +73,7 @@
     "proof:token-binding": "tsx ./src/token-binding-proof.ts",
     "proof:pacs-access": "tsx ./src/pacs-access-proof.ts",
     "proof:agent-identity": "tsx ./src/agent-identity-proof.ts",
+    "proof:agent-behavior": "tsx ./src/agent-behavior-proof.ts",
     "proof:device-management-health": "tsx ./src/device-management-health-proof.ts",
     "proof:link-usability": "tsx ./src/link-usability-proof.ts",
     "proof:verdict-attestation": "tsx ./src/verdict-attestation-proof.ts",

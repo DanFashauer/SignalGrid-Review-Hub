@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 7,
-  "fingerprint": "483479fb62a965258308b1a0caca28c8f345ef584dbb9efb821fcc9affa29d02",
+  "manifestVersion": 8,
+  "fingerprint": "1285133db5c6ee89b1271b9e9724771d35bacee0f1fc51237762c2b722e25f81",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -27,6 +27,7 @@
       "token_binding",
       "pacs_access",
       "agent_identity",
+      "agent_behavior",
       "device_management_health",
       "link_usability",
       "task_exception",
@@ -80,6 +81,7 @@
     "proofCounts": {
       "access-governance": 57,
       "adaptive-proposals": 37,
+      "agent-behavior": 36,
       "agent-identity": 143,
       "credential-exposure": 28,
       "device-attestation": 60,

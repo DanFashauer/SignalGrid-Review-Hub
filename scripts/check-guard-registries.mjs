@@ -47,6 +47,11 @@ const MUTATION_EXCLUDED = [
       "QUEUED, not waived. Its allow path was hardened over seven adversarial reviews and is enumerated at 17,280 normalized + 870,912 raw, but it predates the mutation guard and has not been swept. This entry exists so that gap is visible rather than implied by absence.",
   },
   {
+    proof: "proof:agent-behavior",
+    reason:
+      "QUEUED, not waived. Its allow path is enumerated over the full normalized input space (1,944 combinations, exactly one grants) inside its own proof, but the connector has not yet been added to the mutation guard's source-mutation sweep. This entry keeps that gap visible.",
+  },
+  {
     proof: "proof:oauth-consent",
     reason: "QUEUED. Enumerated at 6,480; not yet swept.",
   },

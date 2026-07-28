@@ -67,6 +67,7 @@ export const SIGNAL_KINDS = [
   "token_binding",
   "pacs_access",
   "agent_identity",
+  "agent_behavior",
   "device_management_health",
   "link_usability",
   "task_exception",

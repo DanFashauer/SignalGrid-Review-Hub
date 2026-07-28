@@ -145,6 +145,14 @@ jobs:
       - name: Agentic / non-human-identity (NHI) proof
         run: pnpm run proof:agent-identity
 
+      # Agent BEHAVIOR — the action-judgment layer. Access brokers (Okta AI Agent
+      # Gateway, Entra Agent ID) answer WHO the agent is; this asks whether the ACTION
+      # is in-pattern: a prompt that became 40k updates, a never-opened target, no
+      # provenance, a broad blast radius, a superhuman cadence. Fail-closed; one combo
+      # of 1,944 grants.
+      - name: Proof — agent-behavior (action-judgment, one grant of 1,944)
+        run: pnpm run proof:agent-behavior
+
       - name: Device-management-health / config-drift proof
         run: pnpm run proof:device-management-health
 

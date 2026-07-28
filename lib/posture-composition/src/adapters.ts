@@ -17,6 +17,7 @@ import type { OAuthConsentVerdict } from "@workspace/integrations/oauth-consent"
 import type { TokenBindingVerdict } from "@workspace/integrations/token-binding";
 import type { PacsAccessVerdict } from "@workspace/integrations/pacs-access";
 import type { AgentIdentityVerdict } from "@workspace/integrations/agent-identity";
+import type { AgentBehaviorVerdict } from "@workspace/integrations/agent-behavior";
 import type { DeviceManagementHealthVerdict } from "@workspace/integrations/device-management-health";
 import type { LinkUsabilityVerdict } from "@workspace/integrations/link-usability";
 // Type-only, via the "./task-exception" subpath export (wired in the same change
@@ -175,6 +176,21 @@ export function fromAgentIdentity(v: AgentIdentityVerdict): ComposableSignal {
   // cannot verify. Unknown is never fused as governed; an actor we cannot identify never
   // grants.
   return { kind: "agent_identity", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromAgentBehavior(v: AgentBehaviorVerdict): ComposableSignal {
+  // Agent BEHAVIOR — is this ACTION sane and authorized, or anomalous. The sibling
+  // `agent_identity` asks WHO is acting and whether that identity is governed; this asks
+  // whether what they are DOING is in-pattern — the judgment layer a credentialed agent
+  // can still violate. Its actions are already on the unified ladder. Fail-safe: a burst
+  // volume (a one-line prompt that became tens of thousands of updates) escalates; an
+  // action with no authorizing provenance, or one whose blast radius fans out across many
+  // resources, restricts; an elevated volume, a first-seen target, a superhuman cadence,
+  // or anything unreadable steps up. Only an action positively confirmed in-pattern on
+  // every signal — within-baseline volume, familiar target, authorized provenance, scoped
+  // blast radius, human-plausible cadence, bridge reachable — contributes 'none'. Judgment
+  // we could not verify never grants.
+  return { kind: "agent_behavior", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromDeviceManagementHealth(v: DeviceManagementHealthVerdict): ComposableSignal {

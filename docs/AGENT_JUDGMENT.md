@@ -70,7 +70,7 @@ posture + action:
 
 ## Proof
 
-`pnpm run proof:agent-behavior` (39 checks) brute-forces the evaluator's entire
+`pnpm run proof:agent-behavior` (45 checks) brute-forces the evaluator's entire
 normalized input space — **1,944 combinations** — and asserts **exactly one** grants
 (the fully-in-pattern, reachable, clean combination), every grant is `actionJudgedSafe`,
 and every anomaly / unknown / malformed report does not. The named ladder checks

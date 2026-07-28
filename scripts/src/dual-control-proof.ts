@@ -114,6 +114,29 @@ check("an unrecognized key INSIDE an authorizer marks the request malformed", al
 
 const protoAliasAuthorizer = normalizeDualControlRequest("pa", { ...CONFIRMED, approver: Object.assign(Object.create({ identity_ref: "op-bob" }), B()) as AuthorizerAttestationRaw } as DualControlRequestRaw);
 check("an unrecognized key INHERITED by an authorizer is caught too", protoAliasAuthorizer.requestIntegrity === "malformed");
+// PER-FIELD integrity (mutation-guard finding): one junk field per request, every
+// other field valid. Several junk fields at once let one integrity term hide
+// behind another — deleting a term stayed green because the request was refused
+// anyway, with nothing asserting it was marked MALFORMED.
+for (const [field, junk] of [
+  ["identityRef", 7], ["credentialRef", 7], ["authenticatorClass", "magic"],
+  ["userVerified", "yes"], ["boundToAction", "yes"], ["roleAuthorized", "yes"],
+] as const) {
+  const req = { ...CONFIRMED, approver: B({ [field]: junk } as never) };
+  check(`junk authorizer ${field} alone marks the request malformed`,
+    normalizeDualControlRequest("pf", req).requestIntegrity === "malformed");
+}
+for (const [field, junk] of [["actionId", 7], ["actionClass", "whatever"], ["coPresence", "maybe"]] as const) {
+  const req = { ...CONFIRMED, [field]: junk } as DualControlRequestRaw;
+  check(`junk request ${field} alone marks the request malformed`,
+    normalizeDualControlRequest("pfr", req).requestIntegrity === "malformed");
+}
+// A non-plain authorizer / request body must itself be malformed, not merely
+// refused downstream (the `!plain` terms the sweep found unfalsifiable).
+check("a non-object authorizer body is malformed",
+  normalizeDualControlRequest("np", { ...CONFIRMED, approver: "nope" as never }).requestIntegrity === "malformed");
+check("a non-object request body is malformed",
+  normalizeDualControlRequest("npr", "nope" as never).requestIntegrity === "malformed");
 
 const hidden = new Proxy({ ...CONFIRMED }, { ownKeys: () => [], getOwnPropertyDescriptor: () => undefined }) as DualControlRequestRaw;
 check("a Proxy hiding its own descriptors reads as ABSENT and cannot Grant", evaluateDualControl(normalizeDualControlRequest("px", hidden)).outcome !== "Granted");

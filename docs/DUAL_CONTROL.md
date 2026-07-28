@@ -114,7 +114,7 @@ and it is where the irreversible actions live.
 
 ## Proof
 
-`pnpm run proof:dual-control` (47 checks) is fully offline and deterministic. It
+`pnpm run proof:dual-control` (58 checks) is fully offline and deterministic. It
 asserts the three outcomes, every affirmative-bad deny, and every unknown routing
 to `SecondAuthorizerRequired`; it feeds hostile request shapes (prototype-inherited
 keys, aliased keys inside an authorizer, descriptor-hiding and throwing proxies,

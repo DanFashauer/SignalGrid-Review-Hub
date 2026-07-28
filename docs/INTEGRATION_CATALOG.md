@@ -187,7 +187,7 @@ Fail-safe by construction, matched to a shared frontline session's stakes:
 - the **only** paths that contribute a grant are a positively-confirmed clean state — a **known** consent type (admin- or user-consented) + verified publisher + least scope + managed/no workload, **or** no grants at all — **and only with the IdP confirmed reachable** (`idpReachable === true`); an **unknown** consent type (like any other unknown field) never grants, and the IdP unreachable or **unreported**, or an unknown grant state, all step up;
 - an unrecognized value normalizes to the safe `unknown`, never a fabricated `present`/`verified`/`admin`.
 
-Proven fully offline by `pnpm run proof:oauth-consent` (63 checks, no network, no keys). Live calls are gated exactly like every other connector. SignalGrid reads and decides on the evaluated grant state — it revokes no grant and changes no consent; every signal is read-only, and this is not a Microsoft / Okta / Google partnership or certification claim.
+Proven fully offline by `pnpm run proof:oauth-consent` (65 checks, no network, no keys). Live calls are gated exactly like every other connector. SignalGrid reads and decides on the evaluated grant state — it revokes no grant and changes no consent; every signal is read-only, and this is not a Microsoft / Okta / Google partnership or certification claim.
 
 ## Token binding / proof-of-possession — the replayable-token dimension (built, fixture-backed)
 

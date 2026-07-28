@@ -157,6 +157,17 @@ check(
 check("exhaustive: some clean states DO grant (the enumeration is not vacuous)", enumRes.noneCount > 0);
 
 // Unknown ≠ governed: an unrecognized enum value normalizes to the safe unknown.
+// The no-grants self-contradiction guard is SCOPED to grants === "none"
+// (mutation-guard finding): without that term every risky-but-legitimate PRESENT
+// consent would also be flagged as contradictory, so the scoping must be pinned
+// from both sides.
+const contradictoryNone = evaluateOAuthConsent(normalizeReport("cn", { grants: "none", scope: "broad", consentType: "admin", publisher: "verified", workloadCredential: "managed_identity" } as OAuthConsentReportRaw));
+check("grants 'none' carrying a risky scope is self-contradictory → no_grants_conflict",
+  contradictoryNone.unknownSignals.includes("no_grants_conflict"));
+const legitimateBroad = evaluateOAuthConsent(normalizeReport("lb", { grants: "present", scope: "broad", consentType: "admin", publisher: "verified", workloadCredential: "managed_identity" } as OAuthConsentReportRaw));
+check("a PRESENT consent with a broad scope is graded on its merits, never flagged as a no-grants contradiction",
+  legitimateBroad.unknownSignals.includes("no_grants_conflict") === false);
+
 const norm = normalizeReport("n", { grants: "totally", consentType: "sorta", publisher: "vibes", scope: "wide", workloadCredential: "maybe" } as OAuthConsentReportRaw);
 check("unrecognized enums normalize to 'unknown' (never a fabricated present/verified/admin)", norm.grants === "unknown" && norm.consentType === "unknown" && norm.publisher === "unknown" && norm.scope === "unknown" && norm.workloadCredential === "unknown");
 const boolNorm = normalizeReport("b", { idpReachable: "yes", riskyGrantCount: "lots" } as unknown as OAuthConsentReportRaw);

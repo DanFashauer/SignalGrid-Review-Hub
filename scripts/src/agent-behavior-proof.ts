@@ -109,6 +109,22 @@ check("a garbage enum value is unknown AND marks the report malformed", (() => {
   return n.volumeState === "unknown" && n.reportIntegrity === "malformed";
 })());
 check("an unrecognized key marks the report malformed (assertion in a spelling we ignore)", normalizeReport("dev-x", { somethingElse: "burst" } as never).reportIntegrity === "malformed");
+// PER-FIELD integrity (mutation-guard finding): one junk field per report, every
+// other field valid. A report with several junk fields lets one integrity term
+// hide behind another, so deleting a term stayed green — the evaluator refused
+// anyway via the unknown path and nothing asserted the report was MALFORMED.
+for (const [field, junk] of [
+  ["volumeState", "loads"], ["targetFamiliarity", "sorta"], ["provenance", "vibes"],
+  ["blastRadius", "hugeish"], ["cadence", "brisk"],
+] as const) {
+  const one = normalizeReport("dev-pf", { volumeState: "within_expected", targetFamiliarity: "familiar", provenance: "authorized", blastRadius: "scoped", cadence: "human_plausible", bridgeReachable: true, [field]: junk } as never);
+  check(`junk ${field} alone marks the report malformed`, one.reportIntegrity === "malformed");
+}
+// The prototype scan's fail-closed default: a Proxy that THROWS from ownKeys must
+// read as malformed (the catch returns true), not as a clean report.
+const abThrowingKeys = new Proxy({ volumeState: "within_expected" }, { ownKeys: () => { throw new Error("hostile"); } });
+check("a Proxy that THROWS from ownKeys is malformed (the scan's fail-closed default)",
+  normalizeReport("dev-tk", abThrowingKeys as never).reportIntegrity === "malformed");
 check("a non-boolean bridgeReachable is null AND malformed", (() => {
   const n = normalizeReport("dev-x", { bridgeReachable: "true" });
   return n.bridgeReachable === null && n.reportIntegrity === "malformed";

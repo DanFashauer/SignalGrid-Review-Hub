@@ -142,7 +142,18 @@ check("'Off' enrollment → not managed, not supervised", hosts[1].mdmEnrolled =
 const r1 = await client.applyDecision(42, "restrict");
 check("restrict → restricted team (tightened)", r1.teamId === 9 && r1.tightened === true);
 check("deny → restricted team (tightened)", (await client.applyDecision(42, "deny")).tightened === true);
-check("allow → normal team (relaxed)", (await client.applyDecision(42, "allow")).teamId === 1);
+check("allow + healthy posture evidence → normal team (relaxed)", (await client.applyDecision(42, "allow", byRef("ipad-ward-01"))).teamId === 1);
+// NEGATIVE CONTROLS (review finding): relaxation is POSTURE-BOUND, not assertable.
+// A hand-picked "allow" with no evidence, or with evidence that does not derive to
+// allow, must throw fail-closed with no transfer attempted.
+{
+  let bareAllowThrew = false;
+  try { await client.applyDecision(42, "allow"); } catch { bareAllowThrew = true; }
+  check("a bare 'allow' with NO posture evidence throws (relaxation not assertable)", bareAllowThrew === true);
+  let unhealthyThrew = false;
+  try { await client.applyDecision(42, "allow", byRef("ipad-ward-02")); } catch { unhealthyThrew = true; }
+  check("an 'allow' whose evidence does not derive to allow (non-compliant host) throws", unhealthyThrew === true);
+}
 // NEGATIVE CONTROL (adversarial-review finding): step_up demands MORE proof; if it
 // moved a host to the normal team, a restrict→step_up sequence would silently
 // un-restrict the device. Only an explicit allow may relax enforcement.
@@ -163,7 +174,7 @@ check("transfer request carries host + team", requests.some((r) => r.path === "/
 const outcomeByRef = (ref: string) => fleetOutcome(byRef(ref));
 check("healthy+supervised posture derives allow", outcomeByRef("ipad-ward-01") === "allow");
 check("...and actuating THAT derived outcome relaxes the host to the normal team",
-  (await client.applyDecision(42, outcomeByRef("ipad-ward-01"))).teamId === 1);
+  (await client.applyDecision(42, outcomeByRef("ipad-ward-01"), byRef("ipad-ward-01"))).teamId === 1);
 // Affirmatively non-compliant / unmanaged posture must derive restrict and tighten.
 for (const [ref, why] of [["ipad-ward-02", "disk off"], ["ipad-ward-03", "lock off"], ["ipad-ward-04", "OS below floor"], ["iphone-personal-01", "unenrolled"]] as const) {
   check(`${why} posture derives restrict`, outcomeByRef(ref) === "restrict");
@@ -197,7 +208,7 @@ check("a positively-confirmed-healthy signal still derives allow (allow path sta
 
 const failClient = new FleetClient({ baseUrl: "x", token: "t", transport: async () => ({ status: 500, json: {} }), normalTeamId: 1, restrictedTeamId: 9 });
 let threw = false;
-try { await failClient.applyDecision(1, "allow"); } catch { threw = true; }
+try { await failClient.applyDecision(1, "allow", byRef("ipad-ward-01")); } catch { threw = true; }
 check("fail-closed: non-2xx transfer throws", threw === true);
 
 const total = passed + failures.length;

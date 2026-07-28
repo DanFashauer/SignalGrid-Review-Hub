@@ -12,7 +12,7 @@
 // supplying it. (Adversarial-review finding: an exported live transport made the public
 // connector a write-capable Fleet actuator.)
 
-import type { DiskEncryption, FleetHostReport } from "./index";
+import { fleetOutcome, type DiskEncryption, type FleetHostReport, type FleetSignal } from "./index";
 
 /** Mirrors the core's gate outcome (allow / step_up / restrict / deny). */
 export type AccessOutcome = "allow" | "step_up" | "restrict" | "deny";
@@ -105,8 +105,27 @@ export class FleetClient {
    * middle rung into an un-restrict side channel. Uses Fleet's host-transfer
    * endpoint. Throws (fail-closed) on any error.
    */
-  async applyDecision(hostId: number, outcome: AccessOutcome): Promise<FleetActuation> {
+  async applyDecision(hostId: number, outcome: AccessOutcome, evidence?: FleetSignal): Promise<FleetActuation> {
     const tightened = outcome !== "allow";
+    // RELAXATION IS POSTURE-BOUND (review finding): tightening (step_up/restrict/
+    // deny) is always safe to actuate, but returning a host to the normal team on a
+    // hand-picked "allow" would let any caller un-restrict an unmanaged, non-
+    // compliant, or stale host — making fleetOutcome advisory rather than enforced.
+    // An "allow" therefore REQUIRES the host's normalized Fleet signal as evidence,
+    // and that evidence must itself derive to "allow" (positive health on every
+    // axis); anything less throws fail-closed and no transfer is attempted.
+    if (!tightened) {
+      if (!evidence) {
+        throw new Error(
+          "Fleet relaxation requires the host's normalized posture signal as evidence — an 'allow' cannot be actuated on assertion alone.",
+        );
+      }
+      if (fleetOutcome(evidence) !== "allow") {
+        throw new Error(
+          "Fleet relaxation refused: the supplied posture evidence does not derive to 'allow' (fail closed).",
+        );
+      }
+    }
     const teamId = tightened ? this.cfg.restrictedTeamId : this.cfg.normalTeamId;
     const res = await this.cfg.transport(
       { method: "POST", path: "/api/v1/fleet/hosts/transfer", body: { team_id: teamId, hosts: [hostId] } },

@@ -236,7 +236,9 @@ final class ActiveSessionViewController: UIViewController {
         ) { [weak self] _ in
             let alert = UIAlertController(
                 title: "Device still locked",
-                message: "The kiosk could not be released, so this device remains in Single App Mode. Try again from Settings, or contact an administrator — MDM supervision may need to re-apply the release.",
+                message: "The kiosk could not be released, so this device remains in Single App Mode. "
+                    + "Try again from Settings, or contact an administrator — "
+                    + "MDM supervision may need to re-apply the release.",
                 preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: "OK", style: .default))
             self?.present(alert, animated: true)

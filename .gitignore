@@ -66,3 +66,4 @@ Thumbs.db
 
 # Self-audit real-run status (one machine's run; never the canonical repo state)
 artifacts/self-audit/
+artifacts/build-loop/

@@ -112,7 +112,9 @@
     "proof:self-audit": "pnpm --filter @workspace/scripts run proof:self-audit",
     "self-audit:run": "pnpm --filter @workspace/scripts run self-audit:run",
     "proof:reliability": "pnpm --filter @workspace/scripts run proof:reliability",
-    "proof:iac": "pnpm --filter @workspace/scripts run proof:iac"
+    "proof:iac": "pnpm --filter @workspace/scripts run proof:iac",
+    "loop": "node scripts/build-loop.mjs",
+    "loop:fix": "node scripts/build-loop.mjs --fix"
   },
   "private": true,
   "devDependencies": {

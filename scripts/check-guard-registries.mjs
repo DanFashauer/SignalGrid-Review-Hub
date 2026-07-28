@@ -21,7 +21,10 @@
 //     It must be registered with the figure guard, or those figures are unguarded.
 //
 // It runs in milliseconds and reads no proof output, so it belongs in preflight even
-// though the full mutation sweep — 105 proof runs — deliberately does not.
+// though the full mutation sweep — one proof run per mutation, per registered file —
+// deliberately does not. (That count is deliberately NOT written here: a hard-coded
+// sweep size is exactly the fossil figure this file exists to prevent, and it went
+// stale the moment the queued connectors were registered.)
 
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";

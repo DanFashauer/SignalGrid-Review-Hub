@@ -38,26 +38,46 @@ targets:
         LD_RUNPATH_SEARCH_PATHS:
           - $(inherited)
           - "@executable_path/Frameworks"
-    entitlements:
-      path: EnterpriseShell/EnterpriseShell.entitlements
-    info:
-      path: EnterpriseShell/Info.plist
-      properties:
-        UISupportedInterfaceOrientations~ipad:
-          - UIInterfaceOrientationPortrait
-          - UIInterfaceOrientationPortraitUpsideDown
-          - UIInterfaceOrientationLandscapeLeft
-          - UIInterfaceOrientationLandscapeRight
+    # NOTE: intentionally no `info:` or `entitlements:` block here. Those make
+    # XcodeGen GENERATE (and thus overwrite) the hand-maintained Info.plist and
+    # entitlements, which strips the scene manifest, launch screen, background
+    # modes, external-accessory config, and permission strings — causing a black
+    # screen and broken capabilities. The committed files are used as-is via the
+    # INFOPLIST_FILE and CODE_SIGN_ENTITLEMENTS build settings above.
+
+  # Hermetic logic tests for the decision engine + Assist planner ports. These
+  # compile the pure-Foundation port sources directly (no host app, no UIKit), so
+  # they run fast and reliably in CI without launching the simulator app.
+  EnterpriseShellTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: EnterpriseShellTests
+      - path: EnterpriseShell/Services/DecisionEngine.swift
+      - path: EnterpriseShell/Services/AppWorkflows.swift
+      - path: EnterpriseShell/Services/DecisionService.swift
+      - path: EnterpriseShell/Services/SignalContext.swift
+      - path: EnterpriseShell/Services/ScreenCapturePolicy.swift
+      - path: EnterpriseShell/Models/SessionState.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.enterprise.shell.tests
+        GENERATE_INFOPLIST_FILE: "YES"
+        SWIFT_VERSION: "5.9"
+        TARGETED_DEVICE_FAMILY: "1,2"
 
 schemes:
   EnterpriseShell:
     build:
       targets:
         EnterpriseShell: all
+        EnterpriseShellTests: [test]
     run:
       config: Debug
     test:
       config: Debug
+      targets:
+        - EnterpriseShellTests
     profile:
       config: Release
     analyze:

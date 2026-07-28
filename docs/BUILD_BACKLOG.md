@@ -16,14 +16,26 @@ picking these up:
 
 ## Next
 
-- [ ] **In-app step-up completion (real, hardware-backed)** — releasing a held
-      `step_up` action requires a REAL WebAuthn assertion verified by the hardened
-      `@workspace/webauthn` path (challenge → native gesture → cryptographic
-      verify → release), plus device enrollment. A public-safe fixture cannot
-      genuinely provide hardware evidence, so the product API must NOT ship a
-      release stand-in (an earlier HMAC-proof attempt was removed for exactly this
-      reason). Until then, step-up completion is a clearly-labeled client-side
-      SIMULATION in the demo UI (`completeAppStepUp`), never a server control.
+- [x] **In-app step-up completion (real WebAuthn, possession + user-verification)** — the SERVER control
+      is real: `/v1/step-up/enroll/{options,verify}` + `/v1/step-up/challenge` +
+      `/v1/app-workflows/complete-step-up` wire the hardened `@workspace/webauthn`
+      path (single-use tenant+identity-bound challenge → assertion → cryptographic
+      verify with user-verification REQUIRED → plan re-cut with `stepUpSatisfied`).
+      Attestation is `none`, so the server proves credential POSSESSION and an
+      authenticator-asserted user-verification event — it does NOT prove the key
+      is hardware-backed; requiring/validating attestation is a future policy
+      choice, not a current claim.
+      The released state is derived only from the verified assertion — nothing in
+      any request body can set it; a failed/replayed assertion is a 403 with no
+      plan, and a valid assertion never upgrades a restrict/deny (release applies
+      only when the CURRENT outcome is step_up). Credentials are tenant-scoped.
+      Proven in `test:api` with a GENUINE ES256 ceremony (real P-256 keypair, real
+      DER signature, UV flag): enroll → release, plus fail-closed negatives
+      (pre-enrollment 409, smuggled `stepUpSatisfied` ignored, tampered signature,
+      challenge replay, cross-tenant 409). Spec'd in `lib/api-spec/v1-openapi.yaml`.
+      Remaining (follow-up): point the demo UIs' clearly-labeled client-side
+      simulation (`completeAppStepUp`) at the real endpoint via
+      `navigator.credentials` on a platform authenticator.
 - [x] **Reposition `signalgrid-mobile-pwa` as operator/support (not a worker
       destination)** — done. The branded first-person "My Access" worker screen is
       now the `AccessSupport` tab ("Access support · Worker session triage · relay

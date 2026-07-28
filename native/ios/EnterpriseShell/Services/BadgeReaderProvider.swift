@@ -1,6 +1,13 @@
 import Foundation
 import UIKit
 
+/// Stub: the HTTP-webhook badge reader is not yet implemented. This placeholder
+/// lets the passive HTTP webhook provider compile; setup()/stop() are no-ops
+/// until a real embedded HTTP listener is added.
+private final class HTTPServer {
+    func stop() {}
+}
+
 /// Protocol defining the interface for badge reader providers
 /// Allows integration with any badge reader system (USB, Bluetooth, NFC, serial, etc.)
 protocol BadgeReaderProvider: AnyObject {
@@ -324,21 +331,19 @@ final class HTTPWebhookBadgeReaderProvider: BadgeReaderProvider {
     weak var delegate: BadgeReaderProviderDelegate?
     
     private var config: BadgeReaderConfig?
-    // NOTE: a concrete HTTP listener is not bundled in this build. Badge events are
-    // delivered via `processIncomingBadge(badgeId:metadata:)` (e.g. from an app
-    // extension or a push), so this provider holds no server instance to tear down.
-
+    private var httpServer: HTTPServer?
+    
     func setup() {
-        // Passive listener — nothing to start here. Configuration would come from
-        // BadgeReaderConfig once a concrete HTTP listener is wired in.
+        // Start HTTP server to listen for badge events
+        // Configuration would come from BadgeReaderConfig
         AuditLogger.shared.log(event: .badgeReaderProviderInitialized, metadata: [
             "provider": displayName,
             "type": BadgeReaderType.httpWebhook.rawValue
         ])
     }
-
+    
     func teardown() {
-        // No server instance held; nothing to stop.
+        httpServer?.stop()
     }
     
     func resetReaderState() {

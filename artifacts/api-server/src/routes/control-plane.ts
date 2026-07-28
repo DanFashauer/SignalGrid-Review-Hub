@@ -13,6 +13,7 @@ import {
 import { recommend, DEMO_USAGE } from "@workspace/recommendations";
 import { discover, planOnboarding, discoverySummary, DEMO_SOURCES, DEMO_OBSERVED } from "@workspace/signal-discovery";
 import { normalizeDdmReports, ddmSummary, DEMO_DDM_REPORTS, DDM_OBSERVED_AT } from "@workspace/ddm-connector";
+import { normalizeFleetReports, fleetSummary, DEMO_FLEET_REPORTS, FLEET_OBSERVED_AT } from "@workspace/fleet-connector";
 import {
   DEFAULT_CHECKLIST,
   deriveChecklist,
@@ -188,6 +189,20 @@ router.get("/cp/v1/ddm", (_req, res) => {
     note: "Fixture DDM reports normalized to decision dimensions; no live MDM is called. A weak posture only raises assurance (auto → step-up), never lowers it.",
     observedAt: DDM_OBSERVED_AT,
     summary: ddmSummary(signals, DEMO_DDM_REPORTS),
+    signals,
+  });
+});
+
+// GET /cp/v1/fleet-mdm — Fleet (open-source, osquery MDM) host posture normalized
+// to the same decision signals as /cp/v1/ddm; no live Fleet is called (fixtures).
+// (Distinct from /cp/v1/fleet, which is the device-fleet inventory.)
+// Unmanaged/unsupervised/weak posture only raises assurance (auto → step-up).
+router.get("/cp/v1/fleet-mdm", (_req, res) => {
+  const signals = normalizeFleetReports(DEMO_FLEET_REPORTS, FLEET_OBSERVED_AT);
+  res.json({
+    note: "Fixture Fleet host posture normalized to decision dimensions; no live Fleet is called. Unsupervised hosts cannot be locked down (enforceable=false) and any weak posture raises assurance.",
+    observedAt: FLEET_OBSERVED_AT,
+    summary: fleetSummary(signals, DEMO_FLEET_REPORTS),
     signals,
   });
 });

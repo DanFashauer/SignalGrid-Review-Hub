@@ -105,6 +105,13 @@ const v1Requests = [
   item("Approve a remediation", "POST", "/v1/remediation/{{remediationId}}/approve", { body: {} }),
   item("List app-workflow integrations", "GET", "/v1/app-workflows/integrations"),
   item("Gate an app workflow (EMR)", "POST", "/v1/app-workflows/evaluate", { body: { integrationId: "emr-chart", identityRef: "nurse.compliant", deviceRef: "ipad-ward-01" } }),
+  // Step-up completion is a real WebAuthn ceremony; the assertion fields below are
+  // placeholders a browser's navigator.credentials fills in — Postman can exercise
+  // the fail-closed paths (403/409), not mint a genuine release.
+  item("Step-up: enrollment options", "POST", "/v1/step-up/enroll/options", { body: { identityRef: "nurse.baseline_drift" } }),
+  item("Step-up: verify enrollment", "POST", "/v1/step-up/enroll/verify", { body: { identityRef: "nurse.baseline_drift", challengeId: "{{stepUpChallengeId}}", response: { id: "{{credentialId}}", rawId: "{{credentialId}}", type: "public-key", response: { clientDataJSON: "…", attestationObject: "…" } } } }),
+  item("Step-up: auth challenge (action-bound)", "POST", "/v1/step-up/challenge", { body: { identityRef: "nurse.baseline_drift", integrationId: "bcma", deviceRef: "ipad-ward-06", actionKey: "controlled.administer" } }),
+  item("Complete step-up (release held plan)", "POST", "/v1/app-workflows/complete-step-up", { body: { integrationId: "bcma", identityRef: "nurse.baseline_drift", deviceRef: "ipad-ward-06", actionKey: "controlled.administer", challengeId: "{{stepUpChallengeId}}", assertion: { id: "{{credentialId}}", rawId: "{{credentialId}}", type: "public-key", response: { clientDataJSON: "…", authenticatorData: "…", signature: "…" } } } }),
   item("Start a device session", "POST", "/v1/sessions/start", { body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session", ttlSeconds: 900 } }),
   item("Get a session", "GET", "/v1/sessions/{{sessionId}}"),
   item("Refresh a session", "POST", "/v1/sessions/{{sessionId}}/refresh", { body: {} }),
@@ -128,6 +135,7 @@ const cpRequests = [
   item("Learned recommendations", "GET", "/cp/v1/recommendations", { auth: NOAUTH }),
   item("Signal discovery + auto-onboard", "GET", "/cp/v1/signal-discovery", { auth: NOAUTH }),
   item("DDM / device-health signals (macOS 27)", "GET", "/cp/v1/ddm", { auth: NOAUTH }),
+  item("Fleet MDM host posture (osquery, fixtures)", "GET", "/cp/v1/fleet-mdm", { auth: NOAUTH }),
   item("Grid coverage (situations handled)", "GET", "/cp/v1/grid/coverage", { auth: NOAUTH }),
   item("Signal sourcing (api / native / grid-collected / gap)", "GET", "/cp/v1/grid/sourcing", { auth: NOAUTH }),
   item("Grid config (workflows as code — validation)", "GET", "/cp/v1/grid/config", { auth: NOAUTH }),

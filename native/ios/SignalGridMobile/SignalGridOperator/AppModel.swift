@@ -19,6 +19,7 @@ final class AppModel {
     var decisions: [Decision] = []
     var connectors: [Connector] = []
     var policies: [Policy] = []
+    var fleetPosture: FleetPosture?
     var audit: AuditResponse?
     var appIntegrations: [AppIntegration] = []
     var activeSession: Session?
@@ -39,6 +40,10 @@ final class AppModel {
     init() {
         self.api = MockSignalGridAPI()
         self.baseURLText = UserDefaults.standard.string(forKey: "signalgrid.baseURL")
+            // Loopback default for the local dev/demo control plane only — the same
+            // exemption the insecure_url rule already grants the "localhost" spelling.
+            // Any non-loopback base URL must be HTTPS; the rule still enforces that.
+            // swiftlint:disable:next insecure_url
             ?? "http://127.0.0.1:5174/api"
         self.tokenPresent = KeychainStore().load() != nil
     }
@@ -67,6 +72,8 @@ final class AppModel {
             policies = try await policiesValue
             audit = try await auditValue
             appIntegrations = try await integrationsValue
+            // Fleet (open-source MDM) posture via the control plane — non-fatal.
+            fleetPosture = try? await api.fetchFleetPosture()
             lastRefresh = Date()
         } catch {
             errorMessage = error.localizedDescription
@@ -74,6 +81,43 @@ final class AppModel {
     }
 
     func refresh() async {
+        await bootstrap()
+    }
+
+    /// Startup entry point. The `-LiveBaseURL <url> -LiveToken <token>` launch-arg
+    /// live connect is a SIMULATOR-ONLY convenience (Settings can't be typed into
+    /// via simctl) and is compiled out of device builds entirely: this public
+    /// Review-Hub app must never be launch-arg-pointed at a live endpoint on a real
+    /// device. The Settings-driven `connectLive()` path (Keychain-backed, signed
+    /// builds) remains the only live route off-simulator.
+    func startup() async {
+        #if targetEnvironment(simulator)
+        let d = UserDefaults.standard
+        // LOOPBACK-ONLY (review finding): a simulator can reach live/production APIs,
+        // so compiling this path out of device builds is not enough to keep the public
+        // Review Hub fixture-backed. The launch-arg convenience exists to point demos
+        // at a LOCALLY running api-server; that is loopback, and that is all this
+        // accepts — any other host is ignored and the app stays on fixtures.
+        func isLoopback(_ u: URL) -> Bool {
+            let host = (u.host ?? "").lowercased()
+            return host == "localhost" || host == "127.0.0.1" || host == "::1"
+        }
+        if let base = d.string(forKey: "LiveBaseURL"), !base.isEmpty,
+           let token = d.string(forKey: "LiveToken"), !token.isEmpty,
+           let url = URL(string: base), isLoopback(url) {
+            // Launch-arg live connect for demos. Use the token IN-MEMORY only — an
+            // unsigned simulator build has no Keychain entitlement (errSecMissingEntitlement
+            // -34018), so connectLive()'s keychain.save() would fail. The Settings-driven
+            // path still persists to Keychain on a signed build.
+            defaults.set(base, forKey: "signalgrid.baseURL")
+            baseURLText = base
+            tokenPresent = true
+            mode = .live
+            api = LiveSignalGridAPI(configuration: APIConfiguration(baseURL: url, bearerToken: token))
+            await bootstrap()
+            return
+        }
+        #endif
         await bootstrap()
     }
 

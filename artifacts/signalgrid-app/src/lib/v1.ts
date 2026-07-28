@@ -72,7 +72,7 @@ export async function evaluateV1(req: V1EvaluateRequest): Promise<V1Decision> {
 
 // ── app-workflows: gate the software people use, not just the doors ───────────
 
-export type AppVertical = "healthcare" | "warehouse" | "industrial" | "global_fleet" | "retail" | "data_center";
+export type AppVertical = "healthcare" | "warehouse" | "industrial" | "global_fleet" | "retail" | "data_center" | "government";
 
 export interface V1AppAction {
   key: string;

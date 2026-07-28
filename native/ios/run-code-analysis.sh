@@ -5,18 +5,17 @@
 
 set -e
 
-# Always run from this script's own directory (native/ios), so the analysis works
-# no matter where it is invoked from. The app moved from repo-root `ios/` to
-# `native/ios/`; the app sources live in `./EnterpriseShell` relative to here.
+# Run from the script's own directory (native/ios) so paths resolve no matter
+# where it is invoked from.
 cd "$(dirname "$0")"
 
 echo "========================================"
 echo "EnterpriseShell Code Analysis"
 echo "========================================"
 
-# Sanity: the app sources must be next to this script.
+# Check if we're in the right directory
 if [ ! -d "EnterpriseShell" ]; then
-    echo "Error: EnterpriseShell/ not found next to this script ($(pwd))"
+    echo "Error: EnterpriseShell/ not found next to this script"
     exit 1
 fi
 
@@ -110,10 +109,7 @@ fi
 
 echo ""
 echo "7. Checking for force unwraps..."
-# A force-unwrap-then-cast is `something! as X` / `something! is X` — the `!` must be
-# preceded by an identifier/closer. Requiring that avoids matching boolean negations
-# like `!isTerminating` (a `!` with nothing before it), which are not force-unwraps.
-FORCE_UNWRAPS=$(grep -rnE "[[:alnum:]_)\]]!\s+(as|is)\b" EnterpriseShell/Services --include="*.swift" | grep -v "// " || true)
+FORCE_UNWRAPS=$(grep -rn "!\s*as\|!\s*is" EnterpriseShell/Services --include="*.swift" | grep -v "// " || true)
 if [ -z "$FORCE_UNWRAPS" ]; then
     check_pass "No force unwraps"
 else

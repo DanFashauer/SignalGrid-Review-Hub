@@ -78,17 +78,44 @@ final class AuditLogger {
         case providerConfigurationUpdated
         case badgeReceived
         case badgeReaderProviderInitialized
-        case badgeReaderProviderStateChange
-        case badgeReaderProviderError
         case badgeReaderDidConnect
         case badgeReaderDidDisconnect
-
-        // Session state (observed by SceneDelegate)
+        case badgeReaderProviderError
+        case badgeReaderProviderStateChange
         case sessionStateChanged
+
+        // Embedded Assist gate (app-workflows Assist model)
+        case assistActionEvaluated
+        case assistActionAuto
+        case assistStepUpRequested
+        case assistStepUpSatisfied
+        case assistStepUpFailed
+        case assistActionAwaitingConfirmation
+        case assistActionConfirmed
+        case assistActionApplied
+        case assistActionBlocked
+
+        // Data-protection / anti-tamper
+        case screenshotDetected
+        case screenRecordingStarted
+        case screenRecordingStopped
+        case pasteboardCleared
+
+        // Kiosk lock (Autonomous Single App Mode)
+        case kioskLockEngaged
+        case kioskLockFailed
+        case kioskUnlocked
+        case kioskRecoveryOverride
+        case kioskRecoveryDenied
     }
 
     // MARK: - Properties
-    
+
+    /// Current session id, PUSHED here by SessionStateManager on session start/end.
+    /// The logger must not PULL from SessionStateManager.shared — doing so during
+    /// singleton init re-enters that still-initializing singleton and deadlocks.
+    var currentSessionId: String?
+
     private var eventQueue: [AuditLogEntry] = []
     private let queue = DispatchQueue(label: "com.enterprise.shell.audit")
     private var batchTimer: Timer?
@@ -121,7 +148,7 @@ final class AuditLogger {
             eventType: event.rawValue,
             deviceId: DeviceInfo.identifier,
             deviceSerial: DeviceInfo.serialNumber ?? "unknown",
-            sessionId: SessionStateManager.shared.currentSessionId,
+            sessionId: currentSessionId,
             metadata: metadata ?? [:]
         )
         

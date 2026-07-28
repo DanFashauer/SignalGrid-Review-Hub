@@ -514,12 +514,28 @@ public struct AuditEvent: Codable, Hashable, Identifiable, Sendable {
     public let recordedAt: String
     public let previousDigest: String
     public let digest: String
+
+    // The /v1/audit API sends `seq` and `prevDigest`; map them to the model names.
+    enum CodingKeys: String, CodingKey {
+        case id, tenantId
+        case sequence = "seq"
+        case type, actor, subject, summary, references, recordedAt
+        case previousDigest = "prevDigest"
+        case digest
+    }
 }
 
 public struct AuditChain: Codable, Hashable, Sendable {
     public let valid: Bool
     public let eventCount: Int
     public let firstInvalidSequence: Int?
+
+    // The /v1/audit API sends `length` and `brokenAtSeq`; map to the model names.
+    enum CodingKeys: String, CodingKey {
+        case valid
+        case eventCount = "length"
+        case firstInvalidSequence = "brokenAtSeq"
+    }
 }
 
 public struct AuditResponse: Codable, Hashable, Sendable {
@@ -536,6 +552,7 @@ public enum AppVertical: String, Codable, CaseIterable, Hashable, Sendable {
     case globalFleet = "global_fleet"
     case retail
     case dataCenter = "data_center"
+    case government
 
     public var title: String {
         switch self {
@@ -545,6 +562,7 @@ public enum AppVertical: String, Codable, CaseIterable, Hashable, Sendable {
         case .globalFleet: return "Global fleet"
         case .retail: return "Retail"
         case .dataCenter: return "Data center"
+        case .government: return "Government"
         }
     }
 }
@@ -590,6 +608,27 @@ public struct AppActionPlan: Codable, Hashable, Identifiable, Sendable {
     public let disposition: AppActionDisposition
     public let requiresConfirmation: Bool
     public let reason: String
+
+    // A public memberwise init is required so host-app consumers (e.g. WardlinkDemo)
+    // can construct/override a plan across the module boundary; the default
+    // memberwise init of a public struct is only `internal`.
+    public init(
+        key: String,
+        label: String,
+        riskTier: AppRiskTier,
+        sensitive: Bool,
+        disposition: AppActionDisposition,
+        requiresConfirmation: Bool,
+        reason: String
+    ) {
+        self.key = key
+        self.label = label
+        self.riskTier = riskTier
+        self.sensitive = sensitive
+        self.disposition = disposition
+        self.requiresConfirmation = requiresConfirmation
+        self.reason = reason
+    }
 }
 
 public enum AppSessionMode: String, Codable, Hashable, Sendable {
@@ -660,5 +699,51 @@ public struct TrustScenario: Identifiable, Hashable, Sendable {
         self.deviceRef = deviceRef
         self.workflowKey = workflowKey
         self.expectedOutcome = expectedOutcome
+    }
+}
+
+// MARK: - Fleet (open-source MDM) posture — GET /cp/v1/fleet-mdm
+
+public struct FleetPostureHost: Codable, Hashable, Identifiable, Sendable {
+    public var id: String { hostRef }
+    public let hostRef: String
+    public let deviceManaged: Bool
+    public let deviceCompliance: String
+    public let baselineCompliance: String
+    public let postureFreshness: String
+    public let enforceable: Bool
+    public let assurance: String
+    public let rationale: String
+    public init(hostRef: String, deviceManaged: Bool, deviceCompliance: String, baselineCompliance: String, postureFreshness: String, enforceable: Bool, assurance: String, rationale: String) {
+        self.hostRef = hostRef; self.deviceManaged = deviceManaged; self.deviceCompliance = deviceCompliance
+        self.baselineCompliance = baselineCompliance; self.postureFreshness = postureFreshness
+        self.enforceable = enforceable; self.assurance = assurance; self.rationale = rationale
+    }
+}
+
+public struct FleetPostureSummary: Codable, Hashable, Sendable {
+    public let hosts: Int
+    public let managed: Int
+    public let enforceable: Int
+    public let diskEncrypted: Int
+    public let nonCompliant: Int
+    public let raiseStepUp: Int
+    public init(hosts: Int, managed: Int, enforceable: Int, diskEncrypted: Int, nonCompliant: Int, raiseStepUp: Int) {
+        self.hosts = hosts; self.managed = managed; self.enforceable = enforceable
+        self.diskEncrypted = diskEncrypted; self.nonCompliant = nonCompliant; self.raiseStepUp = raiseStepUp
+    }
+}
+
+public struct FleetPosture: Codable, Hashable, Sendable {
+    /// The route's provenance statement (review finding): /cp/v1/fleet-mdm serves
+    /// FIXTURE host posture, and in Live API mode an operator must not mistake the
+    /// canned demo hosts for the connected tenant's device estate. Kept and shown,
+    /// never discarded.
+    public let note: String?
+    public let observedAt: String
+    public let summary: FleetPostureSummary
+    public let signals: [FleetPostureHost]
+    public init(note: String? = nil, observedAt: String, summary: FleetPostureSummary, signals: [FleetPostureHost]) {
+        self.note = note; self.observedAt = observedAt; self.summary = summary; self.signals = signals
     }
 }

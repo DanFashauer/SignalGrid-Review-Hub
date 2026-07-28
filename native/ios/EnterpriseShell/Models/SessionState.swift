@@ -74,6 +74,10 @@ enum SessionState: String, CaseIterable {
 /// Notification posted when session state changes
 extension Notification.Name {
     static let sessionStateDidChange = Notification.Name("sessionStateDidChange")
+    /// Posted when a kiosk (ASAM) release was REFUSED and the device is still captive,
+    /// so the session UI can surface recovery guidance instead of claiming the device
+    /// opened (see KioskController.releaseLock).
+    static let kioskReleaseFailed = Notification.Name("kioskReleaseFailed")
     static let deviceReadyForNewSession = Notification.Name("deviceReadyForNewSession")
 }
 

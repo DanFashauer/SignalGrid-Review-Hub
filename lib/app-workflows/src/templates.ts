@@ -13,7 +13,7 @@
 
 import type { AppAction, AppIntegration, AppRiskTier, AppVertical } from "./index";
 
-/** The six supported verticals, as a runtime list (mirrors the AppVertical union). */
+/** The supported verticals, as a runtime list (mirrors the AppVertical union). */
 export const APP_VERTICALS: readonly AppVertical[] = [
   "healthcare",
   "warehouse",
@@ -21,6 +21,7 @@ export const APP_VERTICALS: readonly AppVertical[] = [
   "global_fleet",
   "retail",
   "data_center",
+  "government",
 ] as const;
 
 /** The supported risk tiers, as a runtime list (mirrors the AppRiskTier union). */
@@ -188,6 +189,7 @@ const CONFIRMED_WORKFLOW: Record<AppVertical, string> = {
   global_fleet: "field-session",
   retail: "pos-session",
   data_center: "noc-session",
+  government: "gov-case-session",
 };
 
 function templateFor(vertical: AppVertical): AppIntegration {
@@ -217,6 +219,7 @@ export const STARTER_TEMPLATES: Record<AppVertical, AppIntegration> = {
   global_fleet: templateFor("global_fleet"),
   retail: templateFor("retail"),
   data_center: templateFor("data_center"),
+  government: templateFor("government"),
 };
 
 /** Return a fresh starter template for a vertical (a deep copy, safe to mutate). */

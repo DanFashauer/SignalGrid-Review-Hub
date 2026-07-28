@@ -38,6 +38,12 @@ const PG_PORT = 5433;
 const PG_URL = `postgres://sg:sg@localhost:${PG_PORT}/signalgrid`;
 const PG_CONTAINER = "signalgrid-verify-pg";
 
+/** Redis on 6380 for the same reason. It backs the credential store, whose
+ *  concurrency claim is only testable against a real shared store. */
+const REDIS_PORT = 6380;
+const REDIS_URL = `redis://127.0.0.1:${REDIS_PORT}`;
+const REDIS_CONTAINER = "signalgrid-verify-redis";
+
 const run = (cmd, args, opts = {}) =>
   spawnSync(cmd, args, { cwd: repoRoot, encoding: "utf8", timeout: 15 * 60_000, ...opts });
 
@@ -83,12 +89,28 @@ for (let i = 0; i < 60 && !ready; i += 1) {
 }
 record("postgres accepting connections", ready);
 
+// ── 2b. Redis, for the credential store's concurrency claim ───────────────────
+run("docker", ["rm", "-f", REDIS_CONTAINER]);
+const redisUp = run("docker", [
+  "run", "-d", "--name", REDIS_CONTAINER, "-p", `${REDIS_PORT}:6379`, "redis:7",
+]);
+record("redis:7 container started", redisUp.status === 0, (redisUp.stderr ?? "").trim().split("\n")[0]);
+
+let redisReady = false;
+for (let i = 0; i < 60 && !redisReady; i += 1) {
+  const probe = run("docker", ["exec", REDIS_CONTAINER, "redis-cli", "ping"]);
+  redisReady = probe.status === 0 && (probe.stdout ?? "").includes("PONG");
+  if (!redisReady) run("sleep", ["1"]);
+}
+record("redis accepting connections", redisReady);
+
 const teardown = () => {
   if (keepUp) {
-    console.log(`\n(--keep) leaving ${PG_CONTAINER} running on port ${PG_PORT}.`);
+    console.log(`\n(--keep) leaving ${PG_CONTAINER} on ${PG_PORT} and ${REDIS_CONTAINER} on ${REDIS_PORT}.`);
     return;
   }
   run("docker", ["rm", "-f", PG_CONTAINER]);
+  run("docker", ["rm", "-f", REDIS_CONTAINER]);
 };
 
 if (!ready) {
@@ -116,9 +138,26 @@ for (const [script, what] of PG_PROOFS) {
   record(`${script} — ${what}`, ok, out.trim().split("\n").slice(-1)[0]);
 }
 
+// ── 3b. The credential store's concurrency claim, against a real Redis ────────
+// addCredential must not lose an enrollment when ceremonies overlap. That claim is
+// only testable against a real shared store — in-memory single-process mode cannot
+// exhibit the race at all, so a green unit suite says nothing about it.
+let raceAssertions = 0;
+if (redisReady) {
+  const r = run("pnpm", ["run", "proof:enrollment-race"], {
+    env: { ...process.env, REDIS_URL },
+  });
+  const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
+  const m = out.match(/(\d+)\/(\d+) assertions passed/);
+  const ok = r.status === 0 && !!m && m[1] === m[2];
+  if (ok) raceAssertions = Number(m[1]);
+  record("proof:enrollment-race — concurrent enrollment loses no credential", ok, out.trim().split("\n").slice(-1)[0]);
+}
+
 const allGreen = results.every((r) => r.ok);
 console.log(
   `\ndocker=${serverVersion} pgProofs=${PG_PROOFS.length} pgAssertions=${pgAssertions} ` +
+    `raceAssertions=${raceAssertions} ` +
     `result=${allGreen ? "pass" : "fail"}`,
 );
 
@@ -148,9 +187,11 @@ if (emitEvidence) {
         durablePersistencePass: true,
         pgProofsRun: PG_PROOFS.length,
         pgAssertionsPassed: pgAssertions,
+        enrollmentRaceAssertionsPassed: raceAssertions,
         note:
-          "A real Docker daemon ran postgres:16 and the three durable-persistence proofs " +
-          "passed against it. Emission is refused unless every step is green.",
+          "A real Docker daemon ran postgres:16 and redis:7; the three durable-persistence " +
+          "proofs and the concurrent-enrollment race proof passed against them. Emission is " +
+          "refused unless every step is green.",
       };
       const path = resolve(evidenceDir, "docker-run.json");
       writeFileSync(path, `${JSON.stringify(evidence, null, 2)}\n`);

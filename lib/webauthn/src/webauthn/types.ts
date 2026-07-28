@@ -39,6 +39,11 @@ export interface WebAuthnChallenge {
   expiresAt: string;
   purpose: 'registration' | 'authentication';
   userId?: string;
+  /** Server-persisted binding of this challenge to the EXACT action it was minted
+   *  for (tenant, identity, integration, device). Verified at completion time so a
+   *  gesture signed for one pending action can never release a different one — the
+   *  guarded values come from this stored record, never from the caller's body. */
+  context?: Record<string, string>;
 }
 
 /**
@@ -65,7 +70,10 @@ export interface RegistrationOptions {
     type: 'public-key';
   }[];
   authenticatorSelection: {
-    authenticatorAttachment: 'platform' | 'cross-platform';
+    // Optional, as in the WebAuthn spec: omitting it permits BOTH platform (the
+    // device's own Face ID / Touch ID — what SignalGrid step-up uses) and
+    // cross-platform (security-key) authenticators.
+    authenticatorAttachment?: 'platform' | 'cross-platform';
     requireResidentKey: boolean;
     userVerification: 'required' | 'preferred' | 'discouraged';
   };

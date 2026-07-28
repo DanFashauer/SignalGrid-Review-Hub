@@ -39,12 +39,12 @@ final class KeychainService {
             kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         ]
-
+        
         // Add access group if configured
         if let group = accessGroup {
             query[kSecAttrAccessGroup as String] = group
         }
-
+        
         let status = SecItemAdd(query as CFDictionary, nil)
         
         guard status == errSecSuccess else {
@@ -54,7 +54,7 @@ final class KeychainService {
     
     /// Retrieve data from Keychain
     func retrieve(forKey key: String) throws -> Data? {
-        let query: [String: Any] = [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: serviceName,
             kSecAttrAccount as String: key,
@@ -83,7 +83,7 @@ final class KeychainService {
     
     /// Delete item from Keychain
     func delete(forKey key: String) {
-        let query: [String: Any] = [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: serviceName,
             kSecAttrAccount as String: key
@@ -100,7 +100,7 @@ final class KeychainService {
     
     /// Check if item exists in Keychain
     func exists(forKey key: String) -> Bool {
-        let query: [String: Any] = [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: serviceName,
             kSecAttrAccount as String: key,

@@ -315,6 +315,138 @@ paths:
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  # ── Step-up completion (real, user-verified WebAuthn) ──────────────────────
+  # "User-verified", not "hardware-backed": registration requests attestation
+  # "none", so the server receives no authenticator provenance and a software
+  # authenticator is accepted. The guarantee is a cryptographically verified,
+  # user-verified (UV) assertion over a single-use, action-bound challenge —
+  # nothing more is claimed.
+  # The ONLY path that releases a held step_up action: enroll a credential,
+  # obtain a single-use challenge, sign it with a native user-verified gesture,
+  # and present the assertion for cryptographic verification. Nothing in any
+  # request body can set the released state; a failed/replayed assertion is a
+  # 403 with no plan. Credentials are tenant-scoped.
+  /v1/step-up/enroll/options:
+    post:
+      operationId: stepUpEnrollOptions
+      tags: [decisions]
+      summary: Mint a WebAuthn registration challenge for this identity
+      parameters:
+        - in: header
+          name: x-enrollment-authorization
+          required: false
+          schema: { type: string }
+          description: >-
+            Out-of-band enrollment authorization. Required whenever the server is
+            configured with SIGNALGRID_ENROLLMENT_SECRET (any real deployment) —
+            the role gate alone is not sufficient there, because a demo core
+            publishes operator/owner tokens via /v1/keys. Absent on the fixture
+            demo, whose responses carry a demoNote saying enrollment is
+            self-service and releases only simulated plans.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identityRef]
+              properties:
+                identityRef: { type: string }
+      responses:
+        "200": { description: challengeId + WebAuthn PublicKeyCredentialCreationOptions (+ demoNote on a demo core with no out-of-band secret configured) }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "403": { description: Role not operator/owner, or the configured out-of-band authorization header is absent/wrong — fail closed }
+
+  /v1/step-up/enroll/verify:
+    post:
+      operationId: stepUpEnrollVerify
+      tags: [decisions]
+      summary: Verify the registration attestation and store the credential
+      parameters:
+        - in: header
+          name: x-enrollment-authorization
+          required: false
+          schema: { type: string }
+          description: Out-of-band enrollment authorization (see stepUpEnrollOptions).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identityRef, challengeId, response]
+              properties:
+                identityRef: { type: string }
+                challengeId: { type: string }
+                response: { type: object, description: WebAuthn registration response (clientDataJSON + attestationObject) }
+      responses:
+        "200": { description: Credential enrolled (+ demoNote on a demo core with no out-of-band secret configured) }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "403": { description: Attestation failed verification, role not operator/owner, or out-of-band authorization absent/wrong — fail closed, nothing stored }
+
+  /v1/step-up/challenge:
+    post:
+      operationId: stepUpChallenge
+      tags: [decisions]
+      summary: Mint a single-use authentication challenge BOUND to a pending step-up action
+      description: >-
+        The challenge is bound at mint time to the exact pending action (tenant,
+        identity, integration, device, and the SELECTED action key); completion
+        verifies that server-persisted binding, so a gesture signed for one pending
+        action can never release a different one — and the eventual release is
+        scoped to that single action, never the integration's other gated actions.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identityRef, integrationId, deviceRef, actionKey]
+              properties:
+                identityRef: { type: string }
+                integrationId: { type: string }
+                deviceRef: { type: string }
+                actionKey: { type: string, description: The one action of this integration the gesture will release }
+      responses:
+        "200": { description: challengeId + WebAuthn PublicKeyCredentialRequestOptions (userVerification required) }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { description: Unknown app integration, or unknown action key for it }
+        "409": { description: No enrolled credential for this identity in this tenant — enroll first (fail closed) }
+
+  /v1/app-workflows/complete-step-up:
+    post:
+      operationId: completeAppStepUp
+      tags: [decisions]
+      summary: Release a held step_up plan — requires a verified WebAuthn assertion
+      description: >-
+        Verifies the signed assertion (single-use challenge, tenant+identity-bound
+        credential, user-verification flag required), then re-evaluates the decision
+        fresh and re-cuts the plan with the step-up satisfied FOR THE ONE ACTION the
+        challenge was bound to — the integration's other gated actions stay held, so
+        the plan honestly remains in step_up mode while they do. A valid assertion can
+        never upgrade a restrict or deny — release applies only when the CURRENT
+        outcome is step_up.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [integrationId, identityRef, deviceRef, actionKey, challengeId, assertion]
+              properties:
+                integrationId: { type: string }
+                identityRef: { type: string }
+                deviceRef: { type: string }
+                actionKey: { type: string, description: Must equal the action the challenge was minted for (the release is scoped to it) }
+                challengeId: { type: string }
+                assertion: { type: object, description: WebAuthn authentication response (clientDataJSON + authenticatorData + signature) }
+                requestContext: { type: object, additionalProperties: { type: string } }
+      responses:
+        "200": { description: Decision + re-cut plan + stepUp verification record (released only if the current outcome was step_up) }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "403": { description: Assertion failed verification (bad signature, replayed/expired challenge, missing user-verification) — no plan returned }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   # ── Control plane (public management surface; see docs/DEPLOYMENT_MODELS.md) ──
   # The cloud half of the hybrid architecture: manages tenants/sites/fleet,
   # distributes policy bundles DOWN, ingests telemetry UP. Deterministic
@@ -493,6 +625,15 @@ paths:
       summary: DDM / device-health signals normalized to decision dimensions (macOS 27)
       responses:
         "200": { description: Normalized DDM signals + assurance hints }
+
+  /cp/v1/fleet-mdm:
+    get:
+      operationId: cpFleetMdm
+      tags: [control-plane]
+      security: []
+      summary: Fleet (open-source, osquery MDM) host posture normalized to decision dimensions (fixtures; distinct from /cp/v1/fleet inventory)
+      responses:
+        "200": { description: Normalized Fleet host signals + assurance hints (weak/unsupervised posture only raises assurance) }
 
   /cp/v1/grid/coverage:
     get:

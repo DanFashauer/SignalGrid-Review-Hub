@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>PayloadType</key>
+    <string>Configuration</string>
+    <key>PayloadVersion</key>
+    <integer>1</integer>
+    <key>PayloadIdentifier</key>
+    <string>com.enterprise.shell.kiosk</string>
+    <key>PayloadUUID</key>
+    <string>A53CEB90-D532-4AF1-9046-71EB40980F02</string>
+    <key>PayloadDisplayName</key>
+    <string>SignalGrid Enterprise Shell — Kiosk Lockdown</string>
+    <key>PayloadDescription</key>
+    <string>On a SUPERVISED, MDM-enrolled device this profile PERMITS Enterprise Shell to enter Autonomous Single App Mode (ASAM) so the shell can self-lock the device between users, and marks the app non-removable. The shell enters ASAM itself when idle and RELEASES it on authentication (KioskController / SessionStateManager), so an authenticated worker reaches their admin-allowlisted apps — the device is never permanently captive and stays remotely recoverable via MDM. This profile deliberately does NOT install hard MDM Single App Mode (com.apple.app_lock): the app cannot exit that on its own, so it would trap the device on the shell and defeat the release-on-auth model. Requires supervision — does nothing on an unsupervised device or the simulator.</string>
+    <key>PayloadOrganization</key>
+    <string>SignalGrid</string>
+    <key>PayloadScope</key>
+    <string>System</string>
+    <key>PayloadRemovalDisallowed</key>
+    <true/>
+    <key>PayloadContent</key>
+    <array>
+        <dict>
+            <key>PayloadType</key>
+            <string>com.apple.applicationaccess</string>
+            <key>PayloadIdentifier</key>
+            <string>com.enterprise.shell.kiosk.restrictions</string>
+            <key>PayloadUUID</key>
+            <string>2D010AC6-9424-47D8-A996-604D13A44116</string>
+            <key>PayloadVersion</key>
+            <integer>1</integer>
+            <key>PayloadDisplayName</key>
+            <string>Restrictions — non-removable app + ASAM permitted</string>
+            <!-- The app cannot be deleted, and the shell is ALLOWED to enter
+                 Autonomous Single App Mode itself (KioskController). ASAM is
+                 app-controlled: the shell self-locks between users and releases on
+                 authentication, so the device is usable after sign-in and never
+                 permanently captive. Hard Single App Mode (com.apple.app_lock) is
+                 intentionally omitted — see PayloadDescription. -->
+            <key>allowAppRemoval</key>
+            <false/>
+            <key>autonomousSingleAppModePermittedAppIDs</key>
+            <array>
+                <string>com.enterprise.shell</string>
+            </array>
+        </dict>
+    </array>
+</dict>
+</plist>

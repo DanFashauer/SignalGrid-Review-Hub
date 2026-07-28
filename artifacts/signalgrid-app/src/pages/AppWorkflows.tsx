@@ -16,6 +16,7 @@ const VERTICAL_LABEL: Record<AppVertical, string> = {
   global_fleet: "Global fleet",
   retail: "Retail",
   data_center: "Data center / NOC",
+  government: "Government / public sector",
 };
 
 // A compliant demo actor + token per live-evaluable vertical (public-safe fixtures).
@@ -103,7 +104,7 @@ export function AppWorkflows() {
               {selected && !actor && (
                 <div>
                   <div className="text-xs font-mono text-muted-foreground mb-3">
-                    Catalog only for this vertical (no seeded demo tenant). Actions + risk tiers shown; wire a tenant to gate live.
+                    Catalog view for this vertical — no public demo actor is seeded, so live evaluation stays off here (fail-closed by design). Actions + risk tiers shown; the government tenant gates live via its own workflows once an actor fixture is added.
                   </div>
                   {selected.actions.map((a) => (
                     <div key={a.key} className="flex items-center justify-between text-xs font-mono py-1.5 border-b border-border/30 last:border-0">
@@ -156,7 +157,7 @@ export function AppWorkflows() {
 }
 
 function groupByVertical(list: V1AppIntegration[]): Record<AppVertical, V1AppIntegration[]> {
-  const order: AppVertical[] = ["healthcare", "warehouse", "industrial", "global_fleet", "retail", "data_center"];
+  const order: AppVertical[] = ["healthcare", "warehouse", "industrial", "global_fleet", "retail", "data_center", "government"];
   const out = {} as Record<AppVertical, V1AppIntegration[]>;
   for (const v of order) {
     const items = list.filter((i) => i.vertical === v);

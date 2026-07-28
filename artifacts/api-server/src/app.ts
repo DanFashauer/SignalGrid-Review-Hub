@@ -39,7 +39,11 @@ const corsOptions: CorsOptions = {
     callback(null, false);
   },
   methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["authorization", "content-type", "x-request-id"],
+  // x-enrollment-authorization: the out-of-band enrollment secret header. Without it
+  // here, a browser console on an allowed cross-origin deployment with
+  // SIGNALGRID_ENROLLMENT_SECRET set would have every correctly-authorized enrollment
+  // request blocked at CORS preflight, before the server-side check could even run.
+  allowedHeaders: ["authorization", "content-type", "x-request-id", "x-enrollment-authorization"],
   maxAge: 600,
 };
 

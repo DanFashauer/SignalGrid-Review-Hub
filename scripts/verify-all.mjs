@@ -25,6 +25,14 @@
 //                            evidence FRESH or STALE as the repo's contracts move on;
 //     reviewHubPass / mcpPass / mcpCheckoutFound — the gate outcomes (all true by
 //                            construction: emission is refused otherwise);
+//     mcpCommit / mcpDirty — WHICH signalgrid-mcp code produced the passing run,
+//                            and whether the tree diverged from that commit —
+//                            tracked modifications OR untracked SOURCE (known
+//                            scratch excluded), each also counted on its own.
+//                            Without these, a mint from an unmerged branch or a stale
+//                            checkout is indistinguishable from one against
+//                            published main. Recorded, not enforced — minting from
+//                            a branch is legitimate as long as the evidence says so;
 //     contractSha          — sha256 of the shared posture-report contract file,
 //                            cross-checked against the manifest before emitting;
 //     summary              — public-safe counts only (signal kinds, categories, MCP
@@ -207,6 +215,29 @@ if (emitEvidence) {
       );
       process.exitCode = 1;
     } else {
+      // Which signalgrid-mcp code actually produced the passing run. Without this
+      // the evidence says only "mcpPass: true", so a mint from an unmerged branch,
+      // an old checkout, or a dirty tree is indistinguishable from one against
+      // published main — and unverifiable evidence is not evidence. Recorded, not
+      // enforced: a legitimate mint from a branch is fine as long as it SAYS so.
+      const mcpGit = (args) => {
+        const r = spawnSync("git", args, { cwd: mcpPath, encoding: "utf8" });
+        return r.status === 0 ? r.stdout.trim() : null;
+      };
+      const mcpCommit = mcpGit(["rev-parse", "HEAD"]);
+      const mcpStatus = mcpGit(["status", "--porcelain"]);
+      // Split the checkout's dirtiness HONESTLY. The earlier form dropped every
+      // untracked (`??`) entry, so an untracked test or module — which pytest can
+      // still collect and run — left mcpDirty:false, attributing the pass to a
+      // commit that cannot reproduce it (adversarial-review finding). Only KNOWN
+      // generated/scratch paths are ignored; any other untracked path is source
+      // that could change the outcome, so it counts toward dirtiness and is also
+      // surfaced on its own so a reader can see exactly what was present.
+      const IGNORED_UNTRACKED = /(^|\/)(\.venv|venv|node_modules|__pycache__|\.pytest_cache|\.mypy_cache|\.ruff_cache|dist|build|\.DS_Store)(\/|$)|\.lock$|\.egg-info(\/|$)/;
+      const statusLines = mcpStatus === null ? null : mcpStatus.split("\n").filter(Boolean);
+      const trackedModified = statusLines === null ? null : statusLines.filter((l) => !l.startsWith("??")).length;
+      const untrackedSource = statusLines === null ? null
+        : statusLines.filter((l) => l.startsWith("??") && !IGNORED_UNTRACKED.test(l.slice(3))).length;
       // Public-safe by construction: fingerprints, booleans, and counts only.
       const evidence = {
         schema: "signalgrid-live-evidence/v1",
@@ -216,6 +247,15 @@ if (emitEvidence) {
         reviewHubPass: true,
         mcpPass: true,
         mcpCheckoutFound: true,
+        mcpCommit,
+        // Dirty if the tree has tracked modifications OR untracked SOURCE that the
+        // recorded commit cannot reproduce. Known scratch (venvs, caches, build
+        // dirs, lockfiles) is excluded — see IGNORED_UNTRACKED — and the untracked
+        // source count is reported separately so the claim is auditable, not
+        // asserted.
+        mcpDirty: statusLines === null ? null : (trackedModified > 0 || untrackedSource > 0),
+        mcpTrackedModified: trackedModified,
+        mcpUntrackedSource: untrackedSource,
         contractSha,
         summary: {
           signalKinds: manifest.body.signalKinds?.length ?? 0,
@@ -226,12 +266,29 @@ if (emitEvidence) {
           proofsDocumented: Object.keys(manifest.body.proofCounts ?? {}).length,
         },
       };
-      const evidenceDir = resolve(repoRoot, "artifacts/live-evidence");
-      mkdirSync(evidenceDir, { recursive: true });
-      const evidencePath = resolve(evidenceDir, "mac-run.json");
-      writeFileSync(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
-      console.log(`\n--emit-evidence: wrote ${evidencePath} (manifestFingerprint=${manifest.fingerprint.slice(0, 12)}…).`);
-      console.log("  Commit artifacts/live-evidence/ to publish the run as repo evidence.");
+      // Refuse to emit evidence the reader cannot verify. If EITHER git query failed —
+      // e.g. SIGNALGRID_MCP_PATH points at a source export (pyproject.toml but no .git),
+      // which pytest can still pass — then mcpCommit is null and the evidence cannot
+      // identify OR reproduce the MCP code that passed, defeating the attribution the
+      // rest of this block exists to provide. "Recorded, not enforced" covers a branch
+      // mint (commit known, tree dirty); it does NOT cover a checkout with no commit at
+      // all. Fail closed rather than publish unverifiable evidence. (Review finding.)
+      if (mcpCommit === null || mcpStatus === null) {
+        console.error(
+          `\n--emit-evidence: the signalgrid-mcp checkout at ${mcpPath} is not a git repository ` +
+            `(git rev-parse/status failed), so the evidence cannot identify or reproduce the MCP ` +
+            `code that passed. Refusing to emit unverifiable evidence — point SIGNALGRID_MCP_PATH ` +
+            `at a real git checkout.`,
+        );
+        process.exitCode = 1;
+      } else {
+        const evidenceDir = resolve(repoRoot, "artifacts/live-evidence");
+        mkdirSync(evidenceDir, { recursive: true });
+        const evidencePath = resolve(evidenceDir, "mac-run.json");
+        writeFileSync(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
+        console.log(`\n--emit-evidence: wrote ${evidencePath} (manifestFingerprint=${manifest.fingerprint.slice(0, 12)}…).`);
+        console.log("  Commit artifacts/live-evidence/ to publish the run as repo evidence.");
+      }
     }
   }
 }

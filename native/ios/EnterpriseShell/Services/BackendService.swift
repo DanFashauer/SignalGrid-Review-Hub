@@ -67,6 +67,9 @@ final class BackendService {
         deviceId: String,
         deviceSerial: String
     ) async throws -> StartSessionResponse {
+        #if targetEnvironment(simulator)
+        if DemoMode.isEnabled { return DemoMode.unenrolled ? DemoMode.unenrolledStartResponse() : DemoMode.startSessionResponse(badgeId: badgeId) }
+        #endif
         let url = URL(string: "\(Self.baseUrl)/api/sessions/start")!
         
         var request = URLRequest(url: url)
@@ -103,6 +106,9 @@ final class BackendService {
     
     /// End an active session
     func endSession(sessionId: String, reason: SessionEndReason) async throws -> EndSessionResponse {
+        #if targetEnvironment(simulator)
+        if DemoMode.isEnabled { return DemoMode.endSessionResponse() }
+        #endif
         let url = URL(string: "\(Self.baseUrl)/api/sessions/\(sessionId)/end")!
         
         var request = URLRequest(url: url)
@@ -142,6 +148,9 @@ final class BackendService {
     
     /// Send audit data for a session
     func sendAuditData(sessionId: String, auditData: AuditData) async throws {
+        #if targetEnvironment(simulator)
+        if DemoMode.isEnabled { return }
+        #endif
         let url = URL(string: "\(Self.baseUrl)/api/sessions/\(sessionId)/audit")!
         
         var request = URLRequest(url: url)
@@ -196,6 +205,9 @@ final class BackendService {
         deviceId: String,
         deviceSerial: String
     ) async throws -> BadgeEnrollmentResponse {
+        #if targetEnvironment(simulator)
+        if DemoMode.isEnabled { return DemoMode.enrollmentCheckResponse() }
+        #endif
         let url = URL(string: "\(Self.baseUrl)/api/badges/check-enrollment")!
         
         var request = URLRequest(url: url)

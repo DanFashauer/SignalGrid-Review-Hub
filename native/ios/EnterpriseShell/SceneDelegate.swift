@@ -11,9 +11,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         options connectionOptions: UIScene.ConnectionOptions
     ) {
         guard let windowScene = (scene as? UIWindowScene) else { return }
-        
-        window = UIWindow(windowScene: windowScene)
-        
+
+        window = SessionWindow(windowScene: windowScene)
+
         // Set up the root view controller based on session state
         let rootViewController = SessionStateManager.shared.currentViewController()
         window?.rootViewController = rootViewController
@@ -21,7 +21,16 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         
         // Observe session state changes
         observeSessionStateChanges()
-        
+
+        // Kiosk-lock the device while idle / pre-auth so it can't be tampered with
+        // before a badge or login (no-op until MDM-supervised). Released on auth.
+        if SessionStateManager.shared.currentState == .lockedIdle {
+            KioskController.shared.enforceLock()
+        }
+
+        // Attach the screen-capture guard (redacts on recording, audits screenshots).
+        ScreenCaptureGuard.shared.attach(to: window)
+
         // Log scene connection
         AuditLogger.shared.log(event: .sceneConnected, metadata: [
             "sessionId": SessionStateManager.shared.currentSessionId ?? "none"
@@ -33,6 +42,11 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
     
     func sceneDidBecomeActive(_ scene: UIScene) {
+        // Re-assert the kiosk lock on activation ONLY while idle / pre-auth. During an
+        // authenticated session the device stays unlocked for normal use.
+        if SessionStateManager.shared.currentState == .lockedIdle {
+            KioskController.shared.enforceLock()
+        }
         // Validate session when becoming active
         Task {
             await SessionStateManager.shared.validateActiveSession()

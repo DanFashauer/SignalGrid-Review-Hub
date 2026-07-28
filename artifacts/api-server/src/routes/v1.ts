@@ -1,8 +1,9 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { CoreError, verifySnapshot, type EvaluateRequest } from "@workspace/signalgrid-core";
 import { getDecisionStore, getSessionStore, type Session } from "@workspace/persistence";
 import { listAppIntegrations, findAppIntegration, planAppSession } from "@workspace/app-workflows";
+import { webauthn, webauthnStore } from "@workspace/webauthn";
 import { core, DEMO_KEYS } from "../lib/core";
 import { decisionsTotal } from "../lib/metrics";
 import { requireTenantContext } from "../middlewares/context";
@@ -313,13 +314,12 @@ router.post("/v1/app-workflows/evaluate", (req: Request, res: Response) => {
     throw new CoreError("not_found", `Unknown app integration '${integrationId}'.`, 404);
   }
   // The app's session maps to the integration's decision-core workflow. Return
-  // the plan AS DECIDED — a `step_up` keeps its high-assurance actions held. We
-  // deliberately do NOT release held actions from this product API on a request-
-  // supplied signal: releasing a step-up requires a real hardware-backed WebAuthn
-  // assertion (the `@workspace/webauthn` path), which a public-safe fixture can't
-  // genuinely provide, so we don't ship a stand-in that would be a bypassable
-  // gate. Step-up COMPLETION is a clearly-labeled client-side SIMULATION in the
-  // demo UI (the pure `completeAppStepUp` helper), never a server security control.
+  // the plan AS DECIDED — a `step_up` keeps its high-assurance actions held. This
+  // route NEVER releases held actions on a request-supplied signal (a
+  // `stepUpSatisfied` in the body is not read). The one release path is
+  // POST /v1/app-workflows/complete-step-up below: a real WebAuthn assertion,
+  // cryptographically verified against a credential enrolled for this tenant +
+  // identity, with user-verification required.
   const evalReq = parseEvaluate({ ...body, workflowKey: integration.workflowKey });
   const decision = core.evaluate(token(req), evalReq);
   const plan = planAppSession({
@@ -328,6 +328,308 @@ router.post("/v1/app-workflows/evaluate", (req: Request, res: Response) => {
     reasonCodes: decision.reasonCodes,
   });
   res.json(envelope(req, { decision, plan }));
+});
+
+// ── Step-up completion (real, user-verified WebAuthn) ──────────────────────────
+// ("User-verified", not "hardware-backed": registration requests attestation "none",
+// so no authenticator provenance reaches the server and a software authenticator is
+// accepted. The claim is a verified UV assertion over a single-use, action-bound
+// challenge — nothing more.)
+//
+// Releasing a held `step_up` action is a WebAuthn ceremony, never a request flag:
+// enroll (registration) → challenge → native gesture signs it → cryptographic
+// verify (`@workspace/webauthn`, user-verification REQUIRED) → only then is the
+// plan re-cut with `stepUpSatisfied: true`. The flag is derived server-side from
+// the verified assertion; nothing in the request body can set it. A failed or
+// replayed assertion is a 403 with NO plan — fail closed.
+//
+// Credentials are stored under `<tenantId>:<identityRef>`, so a credential
+// enrolled in one tenant can never satisfy a step-up in another.
+
+function webauthnUserId(req: Request, identityRef: string): string {
+  // Tenant from the authenticated token, never from the body — same invariant as
+  // every other /v1 route.
+  return `${core.context(token(req)).tenant.id}:${identityRef}`;
+}
+
+function requireString(body: Record<string, unknown>, key: string): string {
+  const v = body[key];
+  if (typeof v !== "string" || v.length === 0) {
+    throw new CoreError("validation", `${key} is required.`, 400);
+  }
+  return v;
+}
+
+/** Enrollment AUTHORIZATION (adversarial-review + CodeQL finding): `identityRef`
+ *  necessarily comes from the request in the shared-device model — tokens belong to
+ *  consoles/operators, not to each frontline worker — so enrolling a credential FOR
+ *  an identity is a privileged, attributable ceremony, not something any bearer may
+ *  do. Only an `owner` or `operator` principal may enroll, and the enrolling
+ *  principal is recorded in the response for attribution. An `auditor` (or any
+ *  other role) is refused BEFORE any WebAuthn work happens. */
+function requireEnrollmentPrincipal(req: Request): { subjectId: string } {
+  const { principal } = core.context(token(req));
+  if (principal.role !== "owner" && principal.role !== "operator") {
+    throw new CoreError(
+      "forbidden",
+      "Enrolling a step-up credential is an operator/owner ceremony; this key's role cannot enroll identities.",
+      403,
+    );
+  }
+  requireOutOfBandEnrollmentAuthorization(req);
+  return { subjectId: principal.subjectId };
+}
+
+/** Out-of-band enrollment authorization (review finding). The role gate above is not
+ *  sufficient by itself on a demo core: the unauthenticated `/v1/keys` route PUBLISHES
+ *  operator/owner demo tokens, so any visitor can satisfy the role check and the
+ *  "privileged" ceremony is self-service. That is acceptable for the fixture demo — a
+ *  completed step-up releases only simulated fixture plans, and the responses say so
+ *  (see `demoEnrollmentNote`) — but it must not be inherited by a real deployment.
+ *
+ *  When `SIGNALGRID_ENROLLMENT_SECRET` is configured, enrollment additionally requires
+ *  the `x-enrollment-authorization` header to carry that secret — an authorization this
+ *  server does NOT publish. Read at request time (not module load) so both modes are
+ *  testable; compared as SHA-256 digests so `timingSafeEqual` gets equal-length inputs
+ *  and the comparison never throws or leaks length. Fail closed on absent or wrong. */
+function requireOutOfBandEnrollmentAuthorization(req: Request): void {
+  const secret = process.env.SIGNALGRID_ENROLLMENT_SECRET;
+  if (!secret) return; // fixture demo: self-service by design, labeled honestly
+  const presented = req.get("x-enrollment-authorization") ?? "";
+  const a = createHash("sha256").update(presented, "utf8").digest();
+  const b = createHash("sha256").update(secret, "utf8").digest();
+  if (!timingSafeEqual(a, b)) {
+    throw new CoreError(
+      "forbidden",
+      "Enrollment requires out-of-band authorization (x-enrollment-authorization header).",
+      403,
+    );
+  }
+}
+
+/** Honest framing for the self-service demo ceremony: present exactly when the
+ *  out-of-band secret is NOT configured, so a reader of the response knows the role
+ *  gate is satisfiable with the published demo keys and that completion releases only
+ *  simulated fixture plans. Absent (undefined) once a real deployment sets the secret. */
+function demoEnrollmentNote(): string | undefined {
+  if (process.env.SIGNALGRID_ENROLLMENT_SECRET) return undefined;
+  return (
+    "Self-service demo ceremony: the operator/owner role gate is satisfiable with the " +
+    "demo keys published by the unauthenticated /v1/keys route, and a completed step-up " +
+    "releases only simulated fixture plans. Real deployments set " +
+    "SIGNALGRID_ENROLLMENT_SECRET to require out-of-band enrollment authorization."
+  );
+}
+
+// 1) Enrollment options — mint a registration challenge for this identity.
+//    Role-gated (see requireEnrollmentPrincipal). ONE challenge record: the lib
+//    mints, persists, and returns the id — no second copy is saved here.
+router.post("/v1/step-up/enroll/options", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const enrolledBy = requireEnrollmentPrincipal(req);
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const identityRef = requireString(body, "identityRef");
+    const userId = webauthnUserId(req, identityRef);
+    const options = await webauthn.generateRegistrationOptions(userId, identityRef, identityRef, {
+      enrolledByRef: enrolledBy.subjectId,
+    });
+    const { challengeId, ...publicKey } = options;
+    res.json(envelope(req, { challengeId, publicKey, demoNote: demoEnrollmentNote() }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 2) Enrollment verify — store the credential iff the attestation verifies.
+//    Role-gated; the enrolling principal is attributed in the response.
+router.post("/v1/step-up/enroll/verify", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const enrolledBy = requireEnrollmentPrincipal(req);
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const identityRef = requireString(body, "identityRef");
+    const challengeId = requireString(body, "challengeId");
+    const response = body["response"];
+    if (!response || typeof response !== "object") {
+      throw new CoreError("validation", "response (WebAuthn registration) is required.", 400);
+    }
+    // Bind verification to the principal who MINTED the ceremony (review finding):
+    // the registration challenge context records enrolledByRef at options time, and
+    // the verifier must be the same principal. Without this, a second operator could
+    // submit the first operator's challengeId + attestation and the enrollment would
+    // be attributed to the wrong principal — a false audit trail on a privileged
+    // ceremony. Checked against the STORED context before any WebAuthn work; the
+    // challenge is left unconsumed on mismatch.
+    const storedReg = await webauthnStore.getChallengeContext(challengeId);
+    if (!storedReg || !storedReg.context) {
+      throw new CoreError("forbidden", "Unknown or expired enrollment challenge.", 403);
+    }
+    if (storedReg.context.enrolledByRef !== enrolledBy.subjectId) {
+      throw new CoreError(
+        "forbidden",
+        "This enrollment ceremony was started by a different principal; the same operator/owner must complete it.",
+        403,
+      );
+    }
+    const userId = webauthnUserId(req, identityRef);
+    const result = await webauthn.verifyRegistration(userId, challengeId, response as never);
+    if (!result.success) {
+      throw new CoreError("forbidden", `Enrollment rejected: ${result.error ?? "verification failed"}.`, 403);
+    }
+    res.json(envelope(req, { enrolled: true, credentialId: result.credentialId, enrolledByRef: storedReg.context.enrolledByRef, demoNote: demoEnrollmentNote() }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 3) Authentication challenge for a pending step-up. The challenge is BOUND to the
+//    exact pending action at mint time (tenant + identity + integration + device +
+//    the SELECTED ACTION KEY), and the completion route verifies that binding — so a
+//    gesture signed for one pending action can never release a different one, and can
+//    never release the integration's OTHER gated actions either (adversarial-review +
+//    CodeQL + Codex findings). ONE challenge record: minted, persisted, id-returned.
+router.post("/v1/step-up/challenge", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const identityRef = requireString(body, "identityRef");
+    const integrationId = requireString(body, "integrationId");
+    const deviceRef = requireString(body, "deviceRef");
+    const actionKey = requireString(body, "actionKey");
+    const integration = findAppIntegration(integrationId);
+    if (!integration) {
+      throw new CoreError("not_found", `Unknown app integration '${integrationId}'.`, 404);
+    }
+    // The challenge names ONE concrete action of this integration. An unknown key has
+    // nothing to bind to, so nothing is minted (fail closed).
+    const action = integration.actions.find((a) => a.key === actionKey);
+    if (!action) {
+      throw new CoreError("not_found", `Unknown action '${actionKey}' for integration '${integrationId}'.`, 404);
+    }
+    // ...and it must be an action the planner can actually HOLD. planAppSession holds
+    // only `gatedByStepUp || sensitive` actions; anything else stays `auto` even under a
+    // step_up decision. Minting a challenge for such an action produced a verification
+    // record asserting `released: true` for something that was never withheld — a step-up
+    // ceremony that proves nothing, recorded as though it authorized access (review
+    // finding). The record is the audit artifact, so a false release claim is the defect
+    // even though no extra access is granted. Fail closed rather than mint a no-op.
+    if (!action.gatedByStepUp && !action.sensitive) {
+      throw new CoreError(
+        "validation",
+        `Action '${actionKey}' is not held pending step-up, so a step-up challenge for it would release nothing. Request the action directly.`,
+        400,
+      );
+    }
+    const userId = webauthnUserId(req, identityRef);
+    // Fail closed: no enrolled credential ⇒ no challenge ⇒ nothing to sign. The
+    // caller must enroll first; we never fall back to a weaker completion path.
+    const enrolled = await webauthnStore.hasWebAuthnCredentials(userId);
+    if (!enrolled) {
+      throw new CoreError("forbidden", "No enrolled step-up credential for this identity. Enroll first.", 409);
+    }
+    const options = await webauthn.generateAuthenticationOptions(userId, {
+      tenantId: core.context(token(req)).tenant.id,
+      identityRef,
+      integrationId,
+      deviceRef,
+      actionKey,
+    });
+    const { challengeId, ...publicKey } = options;
+    res.json(envelope(req, { challengeId, publicKey }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 4) Complete: verify the signed assertion, then — and only then — re-cut the
+//    plan with the step-up satisfied.
+router.post("/v1/app-workflows/complete-step-up", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const integrationId = requireString(body, "integrationId");
+    const identityRef = requireString(body, "identityRef");
+    const challengeId = requireString(body, "challengeId");
+    const assertion = body["assertion"];
+    if (!assertion || typeof assertion !== "object") {
+      throw new CoreError("validation", "assertion (WebAuthn authentication) is required.", 400);
+    }
+    const integration = findAppIntegration(integrationId);
+    if (!integration) {
+      throw new CoreError("not_found", `Unknown app integration '${integrationId}'.`, 404);
+    }
+
+    // THE BINDING GATE, checked BEFORE any cryptography: the challenge carries the
+    // server-persisted context it was minted for, and this request must match it
+    // exactly. The guarded values (tenant, identity, integration, device) come from
+    // the STORED record — the caller's body is only compared against it, never
+    // trusted. A gesture signed for one pending action can therefore never release
+    // a different identity's, integration's, or device's action. Mismatch is a 403
+    // with the challenge left unconsumed and the verify path never reached.
+    const stored = await webauthnStore.getChallengeContext(challengeId);
+    if (!stored || !stored.context) {
+      throw new CoreError("forbidden", "Unknown or expired step-up challenge.", 403);
+    }
+    const ctx = stored.context;
+    const tenantId = core.context(token(req)).tenant.id;
+    const deviceRef = requireString(body, "deviceRef");
+    const actionKey = requireString(body, "actionKey");
+    if (
+      ctx.tenantId !== tenantId ||
+      ctx.identityRef !== identityRef ||
+      ctx.integrationId !== integrationId ||
+      ctx.deviceRef !== deviceRef ||
+      ctx.actionKey !== actionKey
+    ) {
+      throw new CoreError(
+        "forbidden",
+        "This step-up challenge was minted for a different action; request a new challenge for this one.",
+        403,
+      );
+    }
+
+    // The cryptographic gate. Single-use challenge (fetched-and-deleted by the
+    // lib), purpose- and user-bound, signature verified against the enrolled
+    // public key, user-verification flag REQUIRED. Any failure is a 403 with no
+    // plan attached. The userId is derived from the STORED binding, so the
+    // verification target is the identity the challenge was minted for.
+    const userId = webauthnUserId(req, ctx.identityRef);
+    const verification = await webauthn.verifyAuthentication(userId, challengeId, assertion as never);
+    if (!verification.success) {
+      throw new CoreError("forbidden", `Step-up assertion rejected: ${verification.error ?? "verification failed"}.`, 403);
+    }
+
+    // Re-evaluate the decision fresh — the release applies to the CURRENT
+    // posture, not the one from when the step-up was requested. If posture has
+    // degraded past step_up (restrict/deny), the verified gesture releases
+    // nothing: planAppSession only honors stepUpSatisfied when the outcome is
+    // step_up, so a valid assertion can never upgrade a restrict or deny.
+    const evalReq = parseEvaluate({ ...body, workflowKey: integration.workflowKey });
+    const decision = core.evaluate(token(req), evalReq);
+    const released = decision.outcome === "step_up";
+    // SCOPED release (review finding): the gesture releases ONLY the action the
+    // challenge was minted for — taken from the STORED binding, never the caller's
+    // body — so one verified gesture cannot release the integration's other gated
+    // actions. The plan honestly stays in step_up mode when other actions remain held.
+    const plan = planAppSession({
+      integration,
+      outcome: decision.outcome,
+      reasonCodes: decision.reasonCodes,
+      stepUpSatisfiedActionKeys: released ? [ctx.actionKey] : [],
+    });
+    res.json(
+      envelope(req, {
+        decision,
+        plan,
+        stepUp: {
+          released,
+          actionKey: ctx.actionKey,
+          method: "webauthn",
+          credentialId: verification.credentialId,
+          verifiedAt: verification.timestamp,
+        },
+      }),
+    );
+  } catch (err) {
+    next(err);
+  }
 });
 
 export default router;

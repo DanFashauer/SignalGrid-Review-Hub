@@ -22,6 +22,12 @@
     <string>1</string>
     <key>LSRequiresIPhoneOS</key>
     <true/>
+    <!-- Kiosk: force full screen. Without this, iPadOS lets Split View / Slide Over /
+         Stage Manager put the shell in a resizable floating window — which both looks
+         broken and lets a user shove the "kiosk" aside. A kiosk must always own the
+         whole screen and never be windowed or multitasked. -->
+    <key>UIRequiresFullScreen</key>
+    <true/>
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>
@@ -44,6 +50,10 @@
         <key>UIColorName</key>
         <string>LaunchBackground</string>
     </dict>
+    <key>UIRequiredDeviceCapabilities</key>
+    <array>
+        <string>armv7</string>
+    </array>
     <key>UISupportedInterfaceOrientations~ipad</key>
     <array>
         <string>UIInterfaceOrientationPortrait</string>
@@ -60,6 +70,18 @@
     </array>
     <key>NSExternalAccessoryManualSelect</key>
     <true/>
+    <key>NSFaceIDUsageDescription</key>
+    <string>Verify it's you before performing a sensitive action on this shared device.</string>
+    <!-- App Transport Security: ATS stays fully enforced for internet endpoints — a
+         production SignalGrid control plane MUST be HTTPS. NSAllowsLocalNetworking
+         permits cleartext ONLY to local/dev hosts (localhost, *.local, link-local),
+         so the embedded gate's dev/demo control plane (-DemoBackendURL http://…)
+         resolves on a real device without weakening security for real traffic. -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+    </dict>
     <!-- Required so EASession(accessory:forProtocol:) can open USB-C/Lightning badge
          readers; without it EASession init returns nil and readers never connect. -->
     <key>UISupportedExternalAccessoryProtocols</key>

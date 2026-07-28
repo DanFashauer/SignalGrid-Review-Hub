@@ -339,6 +339,30 @@ async function main() {
     check("expired challenge rejected", res.success === false);
   }
 
+  // 9b. Signature-counter clone reset: once a credential has ADVANCED (counter > 0), an
+  //     assertion reporting counter 0 is a cloned authenticator whose counter reset. The
+  //     spec exemption for always-zero authenticators must not launder this through — the
+  //     general regression check only fires when BOTH counters are non-zero, so zero is
+  //     the gap this covers.
+  {
+    // Advance the stored counter well past any earlier test's value.
+    const chIdA = randomBytes(16).toString("base64url");
+    const chA = randomBytes(32).toString("base64url");
+    await webauthnStore.saveChallenge(chIdA, {
+      challenge: chA, expiresAt: new Date(Date.now() + 60_000).toISOString(), purpose: "authentication", userId,
+    });
+    const advanced = await webauthn.verifyAuthentication(userId, chIdA, signedAssertion(chA, 1000));
+    check("a valid high-counter assertion advances the stored counter (setup)", advanced.success === true);
+
+    const chIdB = randomBytes(16).toString("base64url");
+    const chB = randomBytes(32).toString("base64url");
+    await webauthnStore.saveChallenge(chIdB, {
+      challenge: chB, expiresAt: new Date(Date.now() + 60_000).toISOString(), purpose: "authentication", userId,
+    });
+    const cloneZero = await webauthn.verifyAuthentication(userId, chIdB, signedAssertion(chB, 0));
+    check("a zero counter AFTER the credential advanced is rejected as a clone reset", cloneZero.success === false);
+  }
+
   // 10. A registration-purpose challenge cannot complete authentication.
   {
     const chId = randomBytes(16).toString("base64url");
@@ -431,6 +455,68 @@ async function main() {
     check("clone-detect: signCount < N (regression) rejected as clone", cloneLower.success === false);
   }
 
+  // ── 12b. Registration counter is SEEDED, not discarded ───────────────────
+  // An authenticator that ships a NON-ZERO signature counter at registration must be
+  // stored with THAT counter, not 0. Otherwise the FIRST assertion — which the release
+  // path trusts — would accept any positive counter, including one a clone presents at
+  // or below the registration value. Register at counter 15 and prove the first
+  // assertion at signCount <= 15 is rejected as a clone, while a strictly-greater one
+  // is accepted. Without the seeding (stored 0), the <=15 assertions would SUCCEED,
+  // so these checks fail if the fix regresses. (Adversarial-review finding.)
+  {
+    const seedUser = "user-reg-counter-seed";
+    const { publicKey: seedPub, privateKey: seedPriv } = generateKeyPairSync("ec", { namedCurve: "P-256" });
+    const seedJwk = seedPub.export({ format: "jwk" }) as { x: string; y: string };
+    const seedCose = coseFromJwk(seedJwk);
+    const seedCredId = randomBytes(16);
+    const seedCredIdStr = seedCredId.toString("base64url");
+
+    const seedRegChId = randomBytes(16).toString("base64url");
+    const seedRegCh = randomBytes(32).toString("base64url");
+    await webauthnStore.saveChallenge(seedRegChId, {
+      challenge: seedRegCh, expiresAt: new Date(Date.now() + 60_000).toISOString(), purpose: "registration", userId: seedUser,
+    });
+    const REG_COUNTER = 15;
+    const seedRegAuth = buildAuthData(rpId, 0x45, REG_COUNTER, attestedCredentialData(seedCredId, seedCose)); // UP+UV+AT
+    const seedRegCd = clientData("webauthn.create", seedRegCh, origin);
+    const seedAttObj = cborMap([
+      ["fmt", cborText("none")],
+      ["attStmt", cborMap([])],
+      ["authData", cborBytes(seedRegAuth)],
+    ]).toString("base64url");
+    const seedReg = await webauthn.verifyRegistration(seedUser, seedRegChId, {
+      id: seedCredIdStr, rawId: seedCredIdStr, type: "public-key",
+      response: { clientDataJSON: seedRegCd.toString("base64url"), attestationObject: seedAttObj },
+    });
+    check("reg-counter-seed: registration at a non-zero counter succeeds", seedReg.success === true);
+
+    async function seedAssert(signCount: number) {
+      const chId = randomBytes(16).toString("base64url");
+      const ch = randomBytes(32).toString("base64url");
+      await webauthnStore.saveChallenge(chId, {
+        challenge: ch, expiresAt: new Date(Date.now() + 60_000).toISOString(), purpose: "authentication", userId: seedUser,
+      });
+      const cd = clientData("webauthn.get", ch, origin);
+      const authData = buildAuthData(rpId, 0x05, signCount); // UP+UV
+      const signature = createSign("SHA256").update(Buffer.concat([authData, sha256(cd)])).sign(seedPriv);
+      return webauthn.verifyAuthentication(seedUser, chId, {
+        id: seedCredIdStr, rawId: seedCredIdStr, type: "public-key",
+        response: {
+          clientDataJSON: cd.toString("base64url"),
+          authenticatorData: authData.toString("base64url"),
+          signature: signature.toString("base64url"),
+        },
+      });
+    }
+
+    const seedEqual = await seedAssert(REG_COUNTER);
+    check("reg-counter-seed: first assertion at signCount == registration counter rejected as clone", seedEqual.success === false);
+    const seedBelow = await seedAssert(REG_COUNTER - 5);
+    check("reg-counter-seed: first assertion at signCount < registration counter rejected as clone", seedBelow.success === false);
+    const seedGreater = await seedAssert(REG_COUNTER + 1);
+    check("reg-counter-seed: first assertion at signCount > registration counter accepted (genuine first use)", seedGreater.success === true);
+  }
+
   // ── 6. Legacy stub credential fails closed ────────────────────────────────
   const legacyUser = "user-legacy";
   await webauthnStore.addCredential(legacyUser, {
@@ -460,6 +546,34 @@ async function main() {
     },
   });
   check("legacy stub credential fails closed", legacy.success === false);
+
+  // ── 13. Atomic counter compare-and-advance (concurrent-completion race) ────
+  // The counter persist is a compare-and-advance, not a read-modify-write: two valid
+  // challenges for the same credential must not both advance from the SAME stored value
+  // and then write out of order so the lower overwrites the higher (after which a clone
+  // could re-present the already-used higher count). advanceCredentialCounter enforces
+  // that exactly one advance from a given expected value wins; the other fails closed.
+  const casUser = "user-cas";
+  const casCred = "cas-cred";
+  await webauthnStore.addCredential(casUser, {
+    id: casCred, publicKey: JSON.stringify({ jwk: {}, alg: -7 }), counter: 5,
+    createdAt: new Date().toISOString(),
+  });
+  // First racer reads stored=5 and advances to 10 — wins.
+  const casWin = await webauthnStore.advanceCredentialCounter(casUser, casCred, 5, 10, new Date().toISOString());
+  check("cas: an advance from the correct expected counter succeeds", casWin === true);
+  check("cas: the stored counter is now the higher value", (await webauthnStore.getCredentialsForUser(casUser))[0].counter === 10);
+  // Second racer also read stored=5 (stale) and tries to advance to 8 — must fail closed,
+  // and must NOT lower the stored counter from 10 back to 8.
+  const casLose = await webauthnStore.advanceCredentialCounter(casUser, casCred, 5, 8, new Date().toISOString());
+  check("cas: a second advance from a STALE expected counter fails closed", casLose === false);
+  check("cas: the losing racer did NOT overwrite the higher stored counter", (await webauthnStore.getCredentialsForUser(casUser))[0].counter === 10);
+  // A non-increase is never a legitimate advance, even from the correct expected value.
+  check("cas: a non-increasing advance (equal) is refused", (await webauthnStore.advanceCredentialCounter(casUser, casCred, 10, 10, new Date().toISOString())) === false);
+  check("cas: a regressing advance is refused", (await webauthnStore.advanceCredentialCounter(casUser, casCred, 10, 9, new Date().toISOString())) === false);
+  // An unknown credential/user fails closed rather than throwing.
+  check("cas: an unknown credential fails closed", (await webauthnStore.advanceCredentialCounter(casUser, "no-such-cred", 10, 11, new Date().toISOString())) === false);
+  check("cas: a legitimate later advance from the NEW expected value succeeds", (await webauthnStore.advanceCredentialCounter(casUser, casCred, 10, 11, new Date().toISOString())) === true);
 
   const total = passed + failures.length;
   console.log(`WebAuthn verification proof: ${passed}/${total} assertions passed`);

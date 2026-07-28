@@ -7,6 +7,7 @@ struct SystemsView: View {
 
     enum Segment: String, CaseIterable, Identifiable {
         case connectors = "Connectors"
+        case fleet = "Fleet MDM"
         case policies = "Policies"
         case audit = "Audit"
         var id: String { rawValue }
@@ -27,6 +28,7 @@ struct SystemsView: View {
                     LazyVStack(alignment: .leading, spacing: 14) {
                         switch segment {
                         case .connectors: connectors
+                        case .fleet: fleet
                         case .policies: policies
                         case .audit: audit
                         }
@@ -38,6 +40,42 @@ struct SystemsView: View {
             }
             .navigationTitle("Systems")
             .signalGridSurface()
+        }
+    }
+
+    @ViewBuilder
+    private var fleet: some View {
+        SectionHeading(title: "Fleet (open-source MDM) posture", subtitle: "osquery host posture → decision signals")
+        if let fp = model.fleetPosture {
+            // Provenance FIRST (review finding): these are fixture hosts even when the
+            // app is connected in Live API mode — say so before listing them.
+            Text(fp.note ?? "Fixture Fleet host posture — not the connected tenant's device estate.")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.orange)
+            Text("\(fp.summary.hosts) hosts · \(fp.summary.enforceable) supervised · \(fp.summary.nonCompliant) non-compliant · \(fp.summary.raiseStepUp) raise step-up")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            ForEach(fp.signals) { h in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(h.hostRef).font(.subheadline.weight(.semibold))
+                        Spacer()
+                        Text(h.assurance == "standard" ? "STANDARD" : "STEP-UP")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(h.assurance == "standard" ? Color.sgAllow : Color.orange)
+                    }
+                    Text("\(h.deviceCompliance) · \(h.enforceable ? "enforceable" : "not enforceable")")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Text(h.rationale).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(Color(.secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+        } else {
+            Text("No Fleet posture loaded (control plane unreachable or offline demo).")
+                .font(.caption).foregroundStyle(.secondary)
         }
     }
 

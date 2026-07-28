@@ -12,7 +12,14 @@ final class ActiveSessionViewController: UIViewController {
     
     private var displayTimer: Timer?
     private var sessionTimer: Timer?
-    
+
+    // Simulator demo auto-open latches: viewDidAppear fires on every reappearance
+    // (e.g. after dismissing the managed browser), so without a once-per-session
+    // guard each return would schedule another present and the demo would reopen
+    // indefinitely, never returning to the session home.
+    private var didAutoOpenApp = false
+    private var didAutoOpenAssist = false
+
     // MARK: - UI Components
     
     private lazy var scrollView: UIScrollView = {
@@ -33,7 +40,7 @@ final class ActiveSessionViewController: UIViewController {
     
     private lazy var profileHeaderView: UIView = {
         let view = UIView()
-        view.backgroundColor = .systemBlue
+        view.backgroundColor = SG.primary
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
     }()
@@ -85,7 +92,7 @@ final class ActiveSessionViewController: UIViewController {
     
     private lazy var sessionStatusBar: UIView = {
         let view = UIView()
-        view.backgroundColor = .secondarySystemBackground
+        view.backgroundColor = SG.card
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
     }()
@@ -93,7 +100,7 @@ final class ActiveSessionViewController: UIViewController {
     private lazy var sessionIcon: UIImageView = {
         let imageView = UIImageView()
         imageView.image = UIImage(systemName: "clock.fill")
-        imageView.tintColor = .systemGreen
+        imageView.tintColor = SG.accent
         imageView.contentMode = .scaleAspectFit
         imageView.translatesAutoresizingMaskIntoConstraints = false
         return imageView
@@ -102,7 +109,7 @@ final class ActiveSessionViewController: UIViewController {
     private lazy var sessionStatusLabel: UILabel = {
         let label = UILabel()
         label.font = UIFont.systemFont(ofSize: 14, weight: .medium)
-        label.textColor = .label
+        label.textColor = SG.foreground
         label.text = "Session Active"
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
@@ -111,7 +118,7 @@ final class ActiveSessionViewController: UIViewController {
     private lazy var sessionTimerLabel: UILabel = {
         let label = UILabel()
         label.font = UIFont.monospacedDigitSystemFont(ofSize: 14, weight: .semibold)
-        label.textColor = .systemGreen
+        label.textColor = SG.accent
         label.textAlignment = .right
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
@@ -122,7 +129,7 @@ final class ActiveSessionViewController: UIViewController {
         button.setTitle("End Session", for: .normal)
         button.setTitleColor(.white, for: .normal)
         button.titleLabel?.font = UIFont.systemFont(ofSize: 14, weight: .semibold)
-        button.backgroundColor = .systemRed
+        button.backgroundColor = SG.deny
         button.layer.cornerRadius = 8
         button.addTarget(self, action: #selector(endSessionTapped), for: .touchUpInside)
         button.translatesAutoresizingMaskIntoConstraints = false
@@ -133,8 +140,8 @@ final class ActiveSessionViewController: UIViewController {
     
     private lazy var requiredAppsHeader: UILabel = {
         let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 18, weight: .bold)
-        label.textColor = .label
+        label.font = SG.sans(18, .bold)
+        label.textColor = SG.foreground
         label.text = "Required Apps"
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
@@ -156,8 +163,8 @@ final class ActiveSessionViewController: UIViewController {
     
     private lazy var optionalAppsHeader: UILabel = {
         let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 18, weight: .bold)
-        label.textColor = .label
+        label.font = SG.sans(18, .bold)
+        label.textColor = SG.foreground
         label.text = "Available Apps"
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
@@ -181,8 +188,8 @@ final class ActiveSessionViewController: UIViewController {
     
     private lazy var quickActionsHeader: UILabel = {
         let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 18, weight: .bold)
-        label.textColor = .label
+        label.font = SG.sans(18, .bold)
+        label.textColor = SG.foreground
         label.text = "Quick Actions"
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
@@ -201,8 +208,8 @@ final class ActiveSessionViewController: UIViewController {
     
     private lazy var restrictionsHeader: UILabel = {
         let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 18, weight: .bold)
-        label.textColor = .label
+        label.font = SG.sans(18, .bold)
+        label.textColor = SG.foreground
         label.text = "Session Restrictions"
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
@@ -220,9 +227,67 @@ final class ActiveSessionViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        // A refused kiosk (ASAM) release leaves the holder trapped in the shell while
+        // the session is already active (review finding): observe the failure signal
+        // KioskController posts and surface recovery guidance instead of rendering
+        // the normal workspace as if the device had opened.
+        NotificationCenter.default.addObserver(
+            forName: .kioskReleaseFailed, object: nil, queue: .main
+        ) { [weak self] _ in
+            let alert = UIAlertController(
+                title: "Device still locked",
+                message: "The kiosk could not be released, so this device remains in Single App Mode. "
+                    + "Try again from Settings, or contact an administrator — "
+                    + "MDM supervision may need to re-apply the release.",
+                preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            self?.present(alert, animated: true)
+        }
         setupUI()
         configureWithSession()
         startTimers()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        #if targetEnvironment(simulator)
+        // Demo: auto-open the first workspace app in the in-app managed browser to show
+        // app access staying native/contained inside the kiosk (not external Safari).
+        // Latched to fire ONCE per session; a pending present is dropped if the view
+        // is already showing something else.
+        if DemoMode.openApp, !didAutoOpenApp,
+           let app = SessionStateManager.shared.currentSession?.persona.appLaunchConfig.requiredApps.first,
+           let urlString = app.launchUrl, let url = URL(string: urlString) {
+            didAutoOpenApp = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+                guard let self, self.presentedViewController == nil else { return }
+                self.present(
+                    ManagedAppViewController(
+                        app: app,
+                        url: url,
+                        allowedDomains: SessionStateManager.shared.currentSession?.persona.restrictions.allowedDomains
+                    ),
+                    animated: true
+                )
+            }
+        }
+        // Demo: auto-open the embedded Assist host-app demo (invisible gate flow). Once per session.
+        if DemoMode.assist, !didAutoOpenAssist {
+            didAutoOpenAssist = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                guard let self, self.presentedViewController == nil else { return }
+                self.present(HostAppViewController(config: HostAppViewController.forLocation(DemoMode.location)), animated: true)
+            }
+        }
+        // Demo: auto-end the session after a beat so the terminate -> teardown ->
+        // lockedIdle flow can be exercised without tapping "End Session".
+        if DemoMode.autoEnd {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+                guard SessionStateManager.shared.currentState == .activeSession else { return }
+                SessionStateManager.shared.endSession(userInitiated: true)
+            }
+        }
+        #endif
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -238,7 +303,7 @@ final class ActiveSessionViewController: UIViewController {
     // MARK: - Setup
     
     private func setupUI() {
-        view.backgroundColor = .systemGroupedBackground
+        view.backgroundColor = SG.background
         
         // Add scroll view
         view.addSubview(scrollView)
@@ -400,7 +465,7 @@ final class ActiveSessionViewController: UIViewController {
         let lockButton = createQuickActionButton(
             icon: "lock.fill",
             title: "Lock",
-            color: .systemOrange
+            color: SG.accent
         )
         lockButton.addTarget(self, action: #selector(lockDeviceTapped), for: .touchUpInside)
         
@@ -408,21 +473,49 @@ final class ActiveSessionViewController: UIViewController {
         let refreshButton = createQuickActionButton(
             icon: "arrow.clockwise",
             title: "Refresh",
-            color: .systemBlue
+            color: SG.accent
         )
         refreshButton.addTarget(self, action: #selector(refreshSessionTapped), for: .touchUpInside)
         
+        // Host app (embedded Assist flow) — the invisible-gate reference.
+        let hostAppButton = createQuickActionButton(
+            icon: "cross.case.fill",
+            title: "Host App",
+            color: SG.accent
+        )
+        hostAppButton.addTarget(self, action: #selector(hostAppTapped), for: .touchUpInside)
+
         // Help action
         let helpButton = createQuickActionButton(
             icon: "questionmark.circle.fill",
             title: "Help",
-            color: .systemPurple
+            color: SG.accent
         )
         helpButton.addTarget(self, action: #selector(helpTapped), for: .touchUpInside)
-        
+
         quickActionsStack.addArrangedSubview(lockButton)
+        quickActionsStack.addArrangedSubview(hostAppButton)
         quickActionsStack.addArrangedSubview(refreshButton)
         quickActionsStack.addArrangedSubview(helpButton)
+    }
+
+    /// Open the embedded Assist host-app demo — a generic, un-branded host app with
+    /// the invisible SignalGrid gate underneath (allow → auto, sensitive → native
+    /// step-up + host confirm, per EMBEDDED_UX_PRINCIPLE.md). Presented contained
+    /// inside the kiosk, like ManagedAppViewController.
+    @objc private func hostAppTapped() {
+        SessionStateManager.shared.userDidInteract()
+        present(HostAppViewController(config: hostAppConfig()), animated: true)
+    }
+
+    /// The host app matching the deployment location (clinic → clinical chart,
+    /// warehouse → warehouse handheld). Same invisible gate, different app.
+    private func hostAppConfig() -> HostAppViewController.HostAppConfig {
+        #if targetEnvironment(simulator)
+        return HostAppViewController.forLocation(DemoMode.location)
+        #else
+        return HostAppViewController.clinical()
+        #endif
     }
     
     private func createQuickActionButton(icon: String, title: String, color: UIColor) -> UIButton {
@@ -473,7 +566,7 @@ final class ActiveSessionViewController: UIViewController {
         
         // Update header color based on theme if available
         if let primaryColor = session.persona.workspaceConfig.theme.primaryColor as String? {
-            profileHeaderView.backgroundColor = UIColor(hex: primaryColor) ?? .systemBlue
+            profileHeaderView.backgroundColor = UIColor(hex: primaryColor) ?? SG.primary
         }
         
         // Configure restrictions
@@ -507,25 +600,25 @@ final class ActiveSessionViewController: UIViewController {
     
     private func addRestrictionItem(icon: String, title: String, value: String) {
         let container = UIView()
-        container.backgroundColor = .secondarySystemGroupedBackground
+        container.backgroundColor = SG.card
         container.layer.cornerRadius = 8
         container.translatesAutoresizingMaskIntoConstraints = false
         
         let iconView = UIImageView(image: UIImage(systemName: icon))
-        iconView.tintColor = .systemBlue
+        iconView.tintColor = SG.accent
         iconView.contentMode = .scaleAspectFit
         iconView.translatesAutoresizingMaskIntoConstraints = false
         
         let titleLabel = UILabel()
         titleLabel.text = title
         titleLabel.font = UIFont.systemFont(ofSize: 14, weight: .medium)
-        titleLabel.textColor = .label
+        titleLabel.textColor = SG.foreground
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         
         let valueLabel = UILabel()
         valueLabel.text = value
         valueLabel.font = UIFont.systemFont(ofSize: 14, weight: .regular)
-        valueLabel.textColor = .secondaryLabel
+        valueLabel.textColor = SG.mutedFg
         valueLabel.textAlignment = .right
         valueLabel.translatesAutoresizingMaskIntoConstraints = false
         
@@ -592,15 +685,15 @@ final class ActiveSessionViewController: UIViewController {
             
             // Change color based on remaining time
             if remaining < 60 {
-                sessionTimerLabel.textColor = .systemRed
+                sessionTimerLabel.textColor = SG.deny
             } else if remaining < 300 {
-                sessionTimerLabel.textColor = .systemOrange
+                sessionTimerLabel.textColor = SG.review
             } else {
-                sessionTimerLabel.textColor = .systemGreen
+                sessionTimerLabel.textColor = SG.accent
             }
         } else {
             sessionTimerLabel.text = "Expired"
-            sessionTimerLabel.textColor = .systemRed
+            sessionTimerLabel.textColor = SG.deny
         }
     }
     
@@ -669,7 +762,7 @@ final class ActiveSessionViewController: UIViewController {
         let toast = UILabel()
         toast.text = message
         toast.textColor = .white
-        toast.backgroundColor = .systemGreen
+        toast.backgroundColor = SG.allow
         toast.textAlignment = .center
         toast.font = UIFont.systemFont(ofSize: 14, weight: .medium)
         toast.layer.cornerRadius = 8
@@ -758,7 +851,33 @@ extension ActiveSessionViewController: UICollectionViewDelegate {
         }
         
         guard let selectedApp = app else { return }
-        
+
+        // Kiosk containment: a web app opens in an in-app managed browser so the device
+        // stays NATIVE and contained inside EnterpriseShell — it must not hand off to the
+        // external Safari app, which would let a user leave the locked kiosk. Only true
+        // native/deep-link apps launch through the OS via AppLauncher.
+        if !selectedApp.isDeepLink,
+           let urlString = selectedApp.launchUrl,
+           let url = URL(string: urlString),
+           ["http", "https"].contains((url.scheme ?? "").lowercased()) {
+            AuditLogger.shared.log(event: .appLaunched, metadata: [
+                "appId": selectedApp.appId, "mode": "managed_webview"
+            ])
+            present(
+                ManagedAppViewController(
+                    app: selectedApp,
+                    url: url,
+                    allowedDomains: session?.persona.restrictions.allowedDomains,
+                    // Enforce the persona's copy policy INSIDE the managed page too
+                    // (review finding): teardown pasteboard wipes are not an
+                    // in-session restriction.
+                    allowCopyPaste: session?.persona.restrictions.allowCopyPaste ?? true
+                ),
+                animated: true
+            )
+            return
+        }
+
         Task {
             do {
                 try await AppLauncher.shared.launchEnterpriseApp(selectedApp)
@@ -792,7 +911,7 @@ extension ActiveSessionViewController: UICollectionViewDelegateFlowLayout {
 final class HomeScreenAppCell: UICollectionViewCell {
     private lazy var iconContainerView: UIView = {
         let view = UIView()
-        view.backgroundColor = .systemBlue.withAlphaComponent(0.1)
+        view.backgroundColor = SG.primary.withAlphaComponent(0.18)
         view.layer.cornerRadius = 20
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
@@ -801,14 +920,15 @@ final class HomeScreenAppCell: UICollectionViewCell {
     private lazy var iconImageView: UIImageView = {
         let imageView = UIImageView()
         imageView.contentMode = .scaleAspectFit
-        imageView.tintColor = .systemBlue
+        imageView.tintColor = SG.accent
         imageView.translatesAutoresizingMaskIntoConstraints = false
         return imageView
     }()
     
     private lazy var titleLabel: UILabel = {
         let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 12, weight: .medium)
+        label.font = SG.sans(12, .medium)
+        label.textColor = SG.foreground
         label.textAlignment = .center
         label.numberOfLines = 2
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -817,7 +937,7 @@ final class HomeScreenAppCell: UICollectionViewCell {
     
     private lazy var statusIndicator: UIView = {
         let view = UIView()
-        view.backgroundColor = .systemGreen
+        view.backgroundColor = SG.allow
         view.layer.cornerRadius = 4
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
@@ -867,9 +987,9 @@ final class HomeScreenAppCell: UICollectionViewCell {
         
         // Check if app has a deep link
         if app.isDeepLink {
-            statusIndicator.backgroundColor = .systemBlue
+            statusIndicator.backgroundColor = SG.accent
         } else {
-            statusIndicator.backgroundColor = .systemGreen
+            statusIndicator.backgroundColor = SG.allow
         }
     }
 }

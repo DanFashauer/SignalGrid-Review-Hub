@@ -20,8 +20,7 @@ import {
   getCredentialsForUser,
   createStepUpSession,
   getStepUpSession,
-  getUser,
-  saveUser,
+  advanceCredentialCounter,
 } from './store';
 import {
   extractCredentialPublicKey,
@@ -74,21 +73,26 @@ function base64urlToBuffer(base64url: string): ArrayBuffer {
 export async function generateRegistrationOptions(
   userId: string,
   userName: string,
-  displayName: string
-): Promise<RegistrationOptions> {
+  displayName: string,
+  context?: Record<string, string>
+): Promise<RegistrationOptions & { challengeId: string }> {
   const config = getWebAuthnConfig();
   const challenge = generateChallenge();
   const challengeId = generateCredentialId();
 
-  // Save challenge
+  // ONE challenge record, saved here and returned by id — the caller must not mint
+  // and save a second copy (the earlier double-save left the internal record
+  // unreachable and grew the store; adversarial-review finding).
   await saveChallenge(challengeId, {
     challenge,
     expiresAt: new Date(Date.now() + 60 * 1000).toISOString(), // 60s
     purpose: 'registration',
     userId,
+    context,
   });
 
   return {
+    challengeId,
     challenge,
     rp: {
       id: config.rpId,
@@ -106,7 +110,12 @@ export async function generateRegistrationOptions(
     timeout: 60000,
     excludeCredentials: [], // Could check existing credentials here
     authenticatorSelection: {
-      authenticatorAttachment: 'cross-platform',
+      // No `authenticatorAttachment` restriction: SignalGrid's step-up IS the device
+      // owner's own authenticator (Face ID / Touch ID — a PLATFORM authenticator, via
+      // LAContext.deviceOwnerAuthentication on the shared device), so restricting to
+      // 'cross-platform' would exclude the exact mechanism the product uses AND advertise
+      // a flow a faithful client cannot complete. Both platform and cross-platform
+      // (security-key) authenticators are permitted; UV below is what carries the security.
       requireResidentKey: false,
       // Create UV-capable credentials so the step-up path can require UV.
       userVerification: 'required',
@@ -226,12 +235,23 @@ export async function verifyRegistration(
 
   const credentialId = response.id || response.rawId;
 
+  // Seed the stored counter from the REGISTRATION authenticator data, not 0. An
+  // authenticator that ships a non-zero signature counter at registration would
+  // otherwise be recorded as counter:0, so the FIRST assertion — which the release
+  // path now trusts — would accept ANY positive counter, including one equal to or
+  // below the registration value presented by a clone. Recording the registration
+  // counter means the regression check (newCounter must strictly exceed the stored
+  // counter, both non-zero) catches a clone on its very first use. Always-zero
+  // authenticators register 0 and stay exempt, exactly as the spec allows.
+  // (Adversarial-review finding, complements the non-zero-to-zero reset check.)
+  const registrationCounter = readSignCount(regAuthData);
+
   // Store the verifiable key (JWK + alg) so future assertions can be checked
   // cryptographically against it.
   const credential: WebAuthnCredential = {
     id: credentialId,
     publicKey: JSON.stringify(verifiable),
-    counter: 0,
+    counter: registrationCounter,
     createdAt: timestamp,
   };
 
@@ -257,8 +277,9 @@ export async function verifyRegistration(
  * Generate authentication options for a user
  */
 export async function generateAuthenticationOptions(
-  userId: string
-): Promise<AuthenticationOptions> {
+  userId: string,
+  context?: Record<string, string>
+): Promise<AuthenticationOptions & { challengeId: string }> {
   const config = getWebAuthnConfig();
   const challenge = generateChallenge();
   const challengeId = generateCredentialId();
@@ -266,15 +287,18 @@ export async function generateAuthenticationOptions(
   // Get user's credentials
   const credentials = await getCredentialsForUser(userId);
 
-  // Save challenge
+  // ONE challenge record (see generateRegistrationOptions). `context` binds this
+  // challenge to the exact pending action; the completion route verifies it.
   await saveChallenge(challengeId, {
     challenge,
     expiresAt: new Date(Date.now() + 60 * 1000).toISOString(),
     purpose: 'authentication',
     userId,
+    context,
   });
 
   return {
+    challengeId,
     challenge,
     timeout: 60000,
     rpId: config.rpId,
@@ -412,6 +436,19 @@ export async function verifyAuthentication(
   // Signature-counter clone detection: a non-zero counter must strictly
   // increase. (Authenticators that always report 0 are exempt, per spec.)
   const newCounter = readSignCount(authenticatorData);
+  // A credential that has ALREADY advanced (stored counter > 0) reporting 0 now is a
+  // cloned authenticator whose counter reset — and the general regression check below
+  // MISSES it, because it only fires when BOTH counters are non-zero. A once-advanced
+  // credential can never legitimately return to a zero counter, so reject it before the
+  // spec exemption for always-zero authenticators can launder the clone through.
+  if (credential.counter > 0 && newCounter === 0) {
+    await appendAuditRecord(
+      'security.webauthn.step_up.failure',
+      { type: 'user', id: userId },
+      { meta: { credentialId: credential.id, reason: 'counter_reset_to_zero' } }
+    );
+    return { success: false, error: 'Authenticator counter reset to zero (possible clone)', timestamp };
+  }
   if (newCounter !== 0 && credential.counter !== 0 && newCounter <= credential.counter) {
     await appendAuditRecord(
       'security.webauthn.step_up.failure',
@@ -421,16 +458,33 @@ export async function verifyAuthentication(
     return { success: false, error: 'Authenticator counter did not increase (possible clone)', timestamp };
   }
 
-  // Persist the advanced counter + last-used time.
+  // Persist the advanced counter ATOMICALLY. Compare-and-advance against the exact
+  // counter we ran the clone-regression check against (`credential.counter`): if a
+  // concurrent completion already advanced the stored counter, the CAS fails and we fail
+  // closed. A naive getUser→mutate→saveUser here let two valid challenges for the same
+  // credential both pass the regression check against the same stored counter and then
+  // write out of order, so the LOWER counter could overwrite the higher — after which a
+  // clone can re-present the already-used higher count and pass. The CAS makes exactly
+  // one writer win.
   if (newCounter > credential.counter) {
-    const user = await getUser(userId);
-    if (user) {
-      const stored = user.credentials.find(c => c.id === credential.id);
-      if (stored) {
-        stored.counter = newCounter;
-        stored.lastUsedAt = timestamp;
-        await saveUser(user);
-      }
+    const advanced = await advanceCredentialCounter(
+      userId,
+      credential.id,
+      credential.counter,
+      newCounter,
+      timestamp,
+    );
+    if (!advanced) {
+      await appendAuditRecord(
+        'security.webauthn.step_up.failure',
+        { type: 'user', id: userId },
+        { meta: { credentialId: credential.id, reason: 'counter_advance_conflict' } }
+      );
+      return {
+        success: false,
+        error: 'Concurrent counter advance detected (possible clone/replay)',
+        timestamp,
+      };
     }
   }
 

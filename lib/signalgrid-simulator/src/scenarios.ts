@@ -152,6 +152,10 @@ export const simulatorScenarios: SimulatorScenario[] = [
     expectedOwnerTeam: "Endpoint and mobility operations",
     safeDemoNote: "Verification evidence is fixture-based and does not close a real ticket.",
     startingSignals: [
+      // Base trust is present alongside the remediation evidence — the engine only
+      // restores `allow` when identity + posture are affirmatively established, so
+      // this scenario carries both (a lone remediation ticket releases nothing).
+      signal("identity.authenticated", "identity", "Entra fixture", "user:rn-207", "info", "Remediation assistant authenticated with MFA", { risk: "low" }),
       signal("remediation.verified", "workflow", "Remediation fixture", "ticket:sim-010", "info", "Prior posture issue was remediated", { verified: true }),
       signal("device.posture_observed", "device", "Intune fixture", "device:ios-shared-022", "info", "Posture refreshed and compliant", { compliance: "compliant", freshness: "fresh" }),
       signal("ticket.updated", "workflow", "Ticket fixture", "ticket:sim-010", "info", "Ticket updated with verification evidence", { state: "verified" }),

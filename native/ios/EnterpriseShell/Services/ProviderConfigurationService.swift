@@ -14,8 +14,8 @@ final class ProviderConfigurationService {
     struct AppConfiguration: Codable {
         var badgeReader: BadgeReaderConfig
         var identityProvider: IdentityProviderConfig
-        var security: SecurityConfig
-        var backend: BackendConfig
+        let security: SecurityConfig
+        let backend: BackendConfig
         
         /// Default configuration - can be overridden
         static let `default` = AppConfiguration(
@@ -194,6 +194,9 @@ final class ProviderConfigurationService {
     
     /// Get the configured identity provider
     func getIdentityProvider() -> IdentityProvider? {
+        #if targetEnvironment(simulator)
+        if DemoMode.isEnabled { return DemoIdentityProvider() }
+        #endif
         return identityProvider
     }
     
@@ -296,7 +299,7 @@ extension ProviderConfigurationService {
             baudRate: nil,
             mdmProvider: MDMProviderConfig(
                 providerType: .microsoftIntune,
-                enrollmentEndpoint: nil,
+                enrollmentEndpoint: "",
                 apiKey: nil,
                 certificatePath: nil,
                 additionalConfig: nil
@@ -323,7 +326,7 @@ extension ProviderConfigurationService {
             samlLogoutUrl: nil,
             certificate: nil,
             mdmProvider: nil,
-            enrollmentEndpoint: nil,
+            enrollmentEndpoint: "",
             mfaProvider: nil,
             mfaApiKey: nil,
             mfaHost: nil,
@@ -350,7 +353,7 @@ extension ProviderConfigurationService {
             samlLogoutUrl: nil,
             certificate: nil,
             mdmProvider: nil,
-            enrollmentEndpoint: nil,
+            enrollmentEndpoint: "",
             mfaProvider: .duo,
             mfaApiKey: nil,
             mfaHost: nil,
@@ -377,7 +380,7 @@ extension ProviderConfigurationService {
             samlLogoutUrl: nil,
             certificate: nil,
             mdmProvider: nil,
-            enrollmentEndpoint: nil,
+            enrollmentEndpoint: "",
             mfaProvider: .duo,
             mfaApiKey: nil,
             mfaHost: nil,

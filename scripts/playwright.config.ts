@@ -34,6 +34,8 @@ const PORTS = {
   web: Number(process.env.E2E_WEB_PORT ?? 4612),
   api: Number(process.env.E2E_API_PORT ?? 4613),
   admin: Number(process.env.E2E_ADMIN_PORT ?? 4614),
+  desktop: Number(process.env.E2E_DESKTOP_PORT ?? 4615),
+  pwa: Number(process.env.E2E_PWA_PORT ?? 4616),
 };
 
 // Browser resolution, in order: explicit override → the runner's preinstalled
@@ -94,7 +96,15 @@ export default defineConfig({
       command:
         "pnpm --filter @workspace/api-server run build && pnpm --filter @workspace/api-server run start",
       cwd: repoRoot,
-      env: { PORT: String(PORTS.api) },
+      // WebAuthn RP id / origin so the step-up ceremony verifies: the browser
+      // page runs at the admin console's origin (PORTS.admin) and its /api/* is
+      // proxied here, so clientDataJSON.origin is the console origin. rpId
+      // "localhost" is a valid registrable suffix of localhost:<port>.
+      env: {
+        PORT: String(PORTS.api),
+        WEBAUTHN_RP_ID: "localhost",
+        WEBAUTHN_ORIGIN: `http://localhost:${PORTS.admin}`,
+      },
       url: `http://localhost:${PORTS.api}/api/healthz`,
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,
@@ -113,6 +123,39 @@ export default defineConfig({
         API_PROXY_TARGET: `http://localhost:${PORTS.api}`,
       },
       url: `http://localhost:${PORTS.admin}/`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 180_000,
+      stdout: "ignore",
+      stderr: "pipe",
+    },
+    {
+      // Desktop client, wired to the same live api-server through the preview
+      // proxy. Same generated api-client as the admin console, different shell —
+      // so a client-wiring regression shows up here even if the admin app is fine.
+      command:
+        "pnpm --filter @workspace/signalgrid-desktop run build && pnpm --filter @workspace/signalgrid-desktop run serve",
+      cwd: repoRoot,
+      env: {
+        PORT: String(PORTS.desktop),
+        API_PROXY_TARGET: `http://localhost:${PORTS.api}`,
+      },
+      url: `http://localhost:${PORTS.desktop}/`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 180_000,
+      stdout: "ignore",
+      stderr: "pipe",
+    },
+    {
+      // Mobile PWA — the field surface. Tab-driven (no URL routes), lazy-loaded
+      // views, so its data path is genuinely distinct from the other two.
+      command:
+        "pnpm --filter @workspace/signalgrid-mobile-pwa run build && pnpm --filter @workspace/signalgrid-mobile-pwa run serve",
+      cwd: repoRoot,
+      env: {
+        PORT: String(PORTS.pwa),
+        API_PROXY_TARGET: `http://localhost:${PORTS.api}`,
+      },
+      url: `http://localhost:${PORTS.pwa}/`,
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,
       stdout: "ignore",

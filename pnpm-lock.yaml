@@ -156,6 +156,9 @@ importers:
       '@workspace/enterprise-auth':
         specifier: workspace:*
         version: link:../../lib/enterprise-auth
+      '@workspace/fleet-connector':
+        specifier: workspace:*
+        version: link:../../lib/fleet-connector
       '@workspace/flows':
         specifier: workspace:*
         version: link:../../lib/flows
@@ -192,6 +195,9 @@ importers:
       '@workspace/signalgrid-simulator':
         specifier: workspace:*
         version: link:../../lib/signalgrid-simulator
+      '@workspace/webauthn':
+        specifier: workspace:*
+        version: link:../../lib/webauthn
       cors:
         specifier: ^2.8.6
         version: 2.8.6
@@ -1458,6 +1464,16 @@ importers:
         specifier: 'catalog:'
         version: 25.6.2
 
+  lib/fleet-connector:
+    dependencies:
+      '@workspace/signalgrid-core':
+        specifier: workspace:*
+        version: link:../signalgrid-core
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.6.2
+
   lib/flows:
     devDependencies:
       '@types/node':
@@ -1707,6 +1723,9 @@ importers:
       '@workspace/event-contract':
         specifier: workspace:*
         version: link:../lib/event-contract
+      '@workspace/fleet-connector':
+        specifier: workspace:*
+        version: link:../lib/fleet-connector
       '@workspace/flows':
         specifier: workspace:*
         version: link:../lib/flows

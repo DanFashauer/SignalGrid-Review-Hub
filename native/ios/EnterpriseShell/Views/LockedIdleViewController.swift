@@ -7,7 +7,7 @@ final class LockedIdleViewController: UIViewController {
     
     private lazy var backgroundView: UIView = {
         let view = UIView()
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = SG.background
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
     }()
@@ -15,8 +15,8 @@ final class LockedIdleViewController: UIViewController {
     private lazy var logoImageView: UIImageView = {
         let imageView = UIImageView()
         imageView.contentMode = .scaleAspectFit
-        imageView.image = UIImage(systemName: "building.2")
-        imageView.tintColor = .systemBlue
+        imageView.image = UIImage(systemName: "square.grid.3x3.fill")
+        imageView.tintColor = SG.primary
         imageView.translatesAutoresizingMaskIntoConstraints = false
         return imageView
     }()
@@ -24,9 +24,9 @@ final class LockedIdleViewController: UIViewController {
     private lazy var titleLabel: UILabel = {
         let label = UILabel()
         label.text = "Enterprise Device"
-        label.font = UIFont.systemFont(ofSize: 28, weight: .bold)
+        label.font = SG.sans(28, .bold)
         label.textAlignment = .center
-        label.textColor = .label
+        label.textColor = SG.foreground
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
     }()
@@ -34,9 +34,9 @@ final class LockedIdleViewController: UIViewController {
     private lazy var instructionLabel: UILabel = {
         let label = UILabel()
         label.text = "Tap your badge to begin session"
-        label.font = UIFont.systemFont(ofSize: 18, weight: .medium)
+        label.font = SG.sans(18, .medium)
         label.textAlignment = .center
-        label.textColor = .secondaryLabel
+        label.textColor = SG.mutedFg
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
     }()
@@ -45,22 +45,23 @@ final class LockedIdleViewController: UIViewController {
         let imageView = UIImageView()
         imageView.contentMode = .scaleAspectFit
         imageView.image = UIImage(systemName: "creditcard.fill")
-        imageView.tintColor = .systemGray3
+        imageView.tintColor = SG.accent
         imageView.translatesAutoresizingMaskIntoConstraints = false
         return imageView
     }()
     
     private lazy var statusLabel: UILabel = {
         let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 14, weight: .regular)
+        label.font = SG.sans(14, .regular)
         label.textAlignment = .center
-        label.textColor = .tertiaryLabel
+        label.textColor = SG.mutedFg
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
     }()
     
     private lazy var activityIndicator: UIActivityIndicatorView = {
         let indicator = UIActivityIndicatorView(style: .medium)
+        indicator.color = SG.mutedFg
         indicator.hidesWhenStopped = true
         indicator.translatesAutoresizingMaskIntoConstraints = false
         return indicator
@@ -68,18 +69,36 @@ final class LockedIdleViewController: UIViewController {
     
     private lazy var errorLabel: UILabel = {
         let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 14, weight: .medium)
+        label.font = SG.sans(14, .medium)
         label.textAlignment = .center
-        label.textColor = .systemRed
+        label.textColor = SG.deny
         label.numberOfLines = 0
         label.translatesAutoresizingMaskIntoConstraints = false
         label.isHidden = true
         return label
     }()
     
+    /// Disaster-recovery override — a discreet affordance shown ONLY when a company
+    /// has opted in (`KioskConfig.allowManualOverride`). Off by default.
+    private lazy var recoveryButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.setTitle("Manual login", for: .normal)
+        button.setTitleColor(SG.mutedFg.withAlphaComponent(0.6), for: .normal)
+        button.titleLabel?.font = SG.sans(12, .regular)
+        button.addTarget(self, action: #selector(recoveryTapped), for: .touchUpInside)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.isHidden = true
+        return button
+    }()
+
     private var badgeReaderObserver: NSObjectProtocol?
     private var stateChangeObserver: NSObjectProtocol?
-    
+
+    #if targetEnvironment(simulator)
+    /// Ensures `-SimulateBadge` injects only once (see viewDidAppear).
+    private static var didInjectSimulatedBadge = false
+    #endif
+
     // MARK: - Lifecycle
     
     override func viewDidLoad() {
@@ -103,6 +122,27 @@ final class LockedIdleViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         updateReaderStatus()
+        #if targetEnvironment(simulator)
+        // The simulator has no badge-reader hardware. If launched with
+        // `-SimulateBadge <id>`, inject that badge ONCE so the session flow can be
+        // exercised without a physical reader. (The launch arg lives in the argument
+        // domain and can't be cleared via removeObject, so guard with a static flag
+        // to avoid re-injecting every time we return to LockedIdle.)
+        if !Self.didInjectSimulatedBadge {
+            if let badge = UserDefaults.standard.string(forKey: "SimulateBadge"), !badge.isEmpty {
+                Self.didInjectSimulatedBadge = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    SessionStateManager.shared.onBadgeScanned(badge)
+                }
+            } else if UserDefaults.standard.bool(forKey: "SimulateManualLogin"), KioskConfig.allowManualOverride {
+                // Demo the manual-override login path (no code entry): -SimulateManualLogin YES
+                Self.didInjectSimulatedBadge = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    SessionStateManager.shared.beginManualOverrideLogin()
+                }
+            }
+        }
+        #endif
     }
     
     deinit {
@@ -125,8 +165,12 @@ final class LockedIdleViewController: UIViewController {
         view.addSubview(activityIndicator)
         view.addSubview(statusLabel)
         view.addSubview(errorLabel)
-        
+        view.addSubview(recoveryButton)
+        recoveryButton.isHidden = !KioskConfig.allowManualOverride
+
         NSLayoutConstraint.activate([
+            recoveryButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            recoveryButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
             // Background
             backgroundView.topAnchor.constraint(equalTo: view.topAnchor),
             backgroundView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -224,18 +268,61 @@ final class LockedIdleViewController: UIViewController {
     
     private func updateReaderStatus() {
         if BadgeReaderManager.shared.isConnected {
-            statusLabel.text = "Badge reader connected - Ready to scan"
-            statusLabel.textColor = .systemGreen
+            statusLabel.text = "Badge reader connected — Ready to scan"
+            statusLabel.textColor = SG.accent
             activityIndicator.stopAnimating()
         } else {
             statusLabel.text = "No badge reader detected"
-            statusLabel.textColor = .systemOrange
+            statusLabel.textColor = SG.mutedFg
             activityIndicator.startAnimating()
         }
     }
     
     @objc private func accessoryDisconnected() {
         updateReaderStatus()
+    }
+
+    /// Disaster-recovery override: prompt for the admin recovery code and, if valid,
+    /// release the kiosk lock so the device can be serviced without a badge. Only
+    /// reachable when a company has opted in (KioskConfig.allowManualOverride).
+    @objc private func recoveryTapped() {
+        let alert = UIAlertController(
+            title: "Manual login",
+            message: "Sign in without a badge using the admin-issued login code. This is logged.",
+            preferredStyle: .alert)
+        alert.addTextField { field in
+            field.isSecureTextEntry = true
+            field.keyboardType = .numberPad
+            field.placeholder = "Login code"
+        }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Log in", style: .default) { [weak self] _ in
+            // Bounded + audited (review finding): every guess consumes the device-wide
+            // auth-attempt budget BEFORE the validator runs, and every rejection is
+            // recorded. Without this, anyone at the idle shared device could make
+            // unlimited local guesses at a short numeric code until the badge-free
+            // login gate opened. Exceeding the budget locks the affordance out
+            // (SecurityManager audits the rate-limit denial) until the window passes.
+            guard SecurityManager.shared.isAuthAttemptAllowed() else {
+                self?.showRecoveryResult("Too many attempts. Manual login is locked — try again later.", ok: false)
+                return
+            }
+            let code = alert.textFields?.first?.text ?? ""
+            if KioskConfig.validateRecoveryCode(code) {
+                self?.showRecoveryResult("Manual login accepted.", ok: true)
+                SessionStateManager.shared.beginManualOverrideLogin()
+            } else {
+                SecurityManager.shared.recordFailedAttempt(type: .authentication)
+                self?.showRecoveryResult("Login code rejected.", ok: false)
+            }
+        })
+        present(alert, animated: true)
+    }
+
+    private func showRecoveryResult(_ message: String, ok: Bool) {
+        errorLabel.text = message
+        errorLabel.textColor = ok ? SG.accent : SG.deny
+        errorLabel.isHidden = false
     }
     
     private func animateBadgeIcon() {

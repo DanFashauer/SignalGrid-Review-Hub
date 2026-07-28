@@ -73,6 +73,79 @@ async function waitForReady(timeoutMs = 15000) {
   return false;
 }
 
+// ── WebAuthn fixture crypto (mirrors scripts/src/webauthn-verify-proof.ts) ──
+// A GENUINE ES256 ceremony: real P-256 keypair, real DER signature over
+// authenticatorData ‖ SHA-256(clientDataJSON), UV flag set. Software-keyed, but
+// the server code path exercised is the true hardware path — no stand-ins.
+import { createHash, createSign, generateKeyPairSync, randomBytes } from "node:crypto";
+
+function cborUint(n) {
+  if (n < 24) return Buffer.from([n]);
+  if (n < 256) return Buffer.from([0x18, n]);
+  if (n < 65536) { const b = Buffer.alloc(3); b[0] = 0x19; b.writeUInt16BE(n, 1); return b; }
+  const b = Buffer.alloc(5); b[0] = 0x1a; b.writeUInt32BE(n, 1); return b;
+}
+function cborInt(v) { if (v >= 0) return cborUint(v); const u = cborUint(-1 - v); u[0] = (u[0] & 0x1f) | 0x20; return u; }
+function cborBytes(buf) { const h = cborUint(buf.length); h[0] = (h[0] & 0x1f) | 0x40; return Buffer.concat([h, buf]); }
+function cborText(s) { const b = Buffer.from(s, "utf8"); const h = cborUint(b.length); h[0] = (h[0] & 0x1f) | 0x60; return Buffer.concat([h, b]); }
+function cborMap(pairs) {
+  const h = cborUint(pairs.length); h[0] = (h[0] & 0x1f) | 0xa0;
+  return Buffer.concat([h, ...pairs.map(([k, v]) => Buffer.concat([typeof k === "number" ? cborInt(k) : cborText(k), v]))]);
+}
+const sha256 = (b) => createHash("sha256").update(b).digest();
+
+function makeStepUpAuthenticator(rpId, origin) {
+  const { publicKey, privateKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
+  const jwk = publicKey.export({ format: "jwk" });
+  const cose = cborMap([
+    [1, cborInt(2)], [3, cborInt(-7)], [-1, cborInt(1)],
+    [-2, cborBytes(Buffer.from(jwk.x, "base64url"))],
+    [-3, cborBytes(Buffer.from(jwk.y, "base64url"))],
+  ]);
+  const credId = randomBytes(16);
+  const credIdStr = credId.toString("base64url");
+  const authData = (flags, signCount, attested) => {
+    const head = Buffer.alloc(37);
+    sha256(Buffer.from(rpId, "utf8")).copy(head, 0);
+    head.writeUInt8(flags, 32);
+    head.writeUInt32BE(signCount, 33);
+    return attested ? Buffer.concat([head, attested]) : head;
+  };
+  const clientData = (type, challenge) => Buffer.from(JSON.stringify({ type, challenge, origin }), "utf8");
+  return {
+    credIdStr,
+    registration(challenge) {
+      const credIdLen = Buffer.alloc(2); credIdLen.writeUInt16BE(credId.length, 0);
+      const attested = Buffer.concat([Buffer.alloc(16), credIdLen, credId, cose]);
+      const attObj = cborMap([
+        ["fmt", cborText("none")], ["attStmt", cborMap([])],
+        ["authData", cborBytes(authData(0x45, 0, attested))], // UP+UV+AT
+      ]);
+      return {
+        id: credIdStr, rawId: credIdStr, type: "public-key",
+        response: {
+          clientDataJSON: clientData("webauthn.create", challenge).toString("base64url"),
+          attestationObject: attObj.toString("base64url"),
+        },
+      };
+    },
+    assertion(challenge, { signCount = 1, tamper = false } = {}) {
+      const cd = clientData("webauthn.get", challenge);
+      const ad = authData(0x05, signCount); // UP+UV
+      let sig = createSign("SHA256").update(Buffer.concat([ad, sha256(cd)])).sign(privateKey);
+      if (tamper) sig = Buffer.concat([sig.subarray(0, sig.length - 1), Buffer.from([sig[sig.length - 1] ^ 0xff])]);
+      return {
+        id: credIdStr, rawId: credIdStr, type: "public-key",
+        response: {
+          clientDataJSON: cd.toString("base64url"),
+          authenticatorData: ad.toString("base64url"),
+          signature: sig.toString("base64url"),
+        },
+      };
+    },
+  };
+}
+
 async function run() {
   // ── health + discovery ──────────────────────────────────────────────────
   const health = await req("GET", "/healthz");
@@ -80,7 +153,8 @@ async function run() {
 
   const keys = await req("GET", "/v1/keys");
   check("keys discovery is public (200)", keys.status === 200);
-  check("keys lists the eight demo keys", Array.isArray(keys.json?.keys) && keys.json.keys.length === 8);
+  check("keys lists the nine demo keys (incl. the government/civic tenant)", Array.isArray(keys.json?.keys) && keys.json.keys.length === 9);
+  check("civic (government) owner key is discoverable", keys.json.keys.some((k) => k.token === "sgk_demo_civic_owner"));
 
   // ── public catalog + simulator routes ────────────────────────────────────
   const integrations = await req("GET", "/integrations");
@@ -466,6 +540,15 @@ async function run() {
   const deadEnf = (ddm.json?.signals ?? []).find((s) => s.enforcementCurrency === "dead");
   check("ddm: a device with dead update enforcement raises step-up (not trusted as patched)", deadEnf && deadEnf.assurance === "raise_step_up");
 
+  // ── Fleet MDM (osquery) — fixture host posture, fail-closed assurance ──────
+  // Contract coverage for GET /cp/v1/fleet-mdm: without this the route could change its
+  // serialized shape or disappear while every deterministic gate stayed green, and the
+  // native client silently degrades a failure to an empty Fleet view (review finding).
+  const fleetMdm = await req("GET", "/cp/v1/fleet-mdm");
+  check("fleet-mdm returns normalized host posture: summary.hosts + a signals row per host", fleetMdm.status === 200 && typeof fleetMdm.json?.summary?.hosts === "number" && Array.isArray(fleetMdm.json?.signals) && fleetMdm.json.signals.length === fleetMdm.json.summary.hosts);
+  check("fleet-mdm: only the fully-healthy+supervised host is 'standard' — every weak/unsupervised host raises assurance", (fleetMdm.json?.summary?.raiseStepUp ?? 0) >= 1 && (fleetMdm.json?.signals ?? []).filter((s) => s.assurance === "standard").length === (fleetMdm.json.summary.hosts - fleetMdm.json.summary.raiseStepUp));
+  const unsupervisedHost = (fleetMdm.json?.signals ?? []).find((s) => s.enforceable === false);
+  check("fleet-mdm: an unenforceable (unsupervised) host raises step-up, never trusted as standard", unsupervisedHost && unsupervisedHost.assurance === "raise_step_up");
   // ── self-audit: the plain-language administrative health surface ─────────
   const selfAudit = await req("GET", "/cp/v1/self-audit");
   check("self-audit responds 200 with plain + report + proposedHeals",
@@ -530,6 +613,276 @@ async function run() {
   // blocked case rather than a shape-fragile all-fallbacks predicate.)
   check("app resilience blocks a PHI app in outage with no safety nets (fail-safe)", phiBlocked?.mode === "blocked_no_fallback" && phiBlocked?.canProceed === false && phiBlocked?.requiredSafetyNets?.length === 0);
   check("app resilience surfaces a per-app reason", resApps.length > 0 && resApps.every((a) => typeof a.reason === "string" && a.reason.length > 0));
+
+  // ── step-up completion: real WebAuthn ceremony, fail-closed everywhere ────
+  // The one path that may release a held step_up action: enroll → challenge →
+  // genuinely-signed ES256 assertion (UV set) → verify → re-plan. Everything
+  // else — no enrollment, tampered signature, replayed challenge, request-body
+  // flags, cross-tenant credentials — must hold or 403, never release.
+  const authenticator = makeStepUpAuthenticator("localhost", "http://localhost:3000");
+  const suIdentity = "nurse.baseline_drift";
+  const suDevice = "ipad-ward-06";
+
+  // Fail-closed before enrollment: no credential ⇒ no challenge.
+  const noCred = await req("POST", "/v1/step-up/challenge", {
+    token: KEYS.operator, body: { identityRef: suIdentity, integrationId: "bcma", deviceRef: suDevice, actionKey: "controlled.administer" },
+  });
+  check("step-up challenge without enrollment → 409 (fail closed)", noCred.status === 409);
+
+  // NEGATIVE CONTROL (enrollment RBAC): enrolling a credential FOR an identity is an
+  // operator/owner ceremony — an auditor key must be refused before any WebAuthn work.
+  const auditorEnroll = await req("POST", "/v1/step-up/enroll/options", {
+    token: KEYS.auditor, body: { identityRef: suIdentity },
+  });
+  check("auditor key cannot enroll a step-up credential (403)", auditorEnroll.status === 403);
+
+  // Enroll.
+  const enrollOpts = await req("POST", "/v1/step-up/enroll/options", {
+    token: KEYS.operator, body: { identityRef: suIdentity },
+  });
+  check("step-up enroll options → 200 with challenge", enrollOpts.status === 200 && typeof enrollOpts.json?.challengeId === "string" && typeof enrollOpts.json?.publicKey?.challenge === "string");
+  // Truthful framing (review finding): with no out-of-band secret configured, the
+  // ceremony IS self-service (the role gate is satisfiable with the published demo
+  // keys), and the response must say so rather than presenting a real privileged gate.
+  check("enroll options carries the self-service demo note (secret unset)", typeof enrollOpts.json?.demoNote === "string" && enrollOpts.json.demoNote.includes("simulated") && enrollOpts.json.demoNote.includes("SIGNALGRID_ENROLLMENT_SECRET"));
+  // Principal binding (review finding): the ceremony was minted by the OPERATOR key;
+  // a different authorized principal (owner) presenting the same challengeId must be
+  // refused BEFORE any WebAuthn work — and the challenge must remain unconsumed, so
+  // the legitimate verify below still succeeds.
+  const crossPrincipalVerify = await req("POST", "/v1/step-up/enroll/verify", {
+    token: KEYS.owner,
+    body: {
+      identityRef: suIdentity,
+      challengeId: enrollOpts.json.challengeId,
+      response: authenticator.registration(enrollOpts.json.publicKey.challenge),
+    },
+  });
+  check("a different principal cannot complete another's enrollment ceremony (403)", crossPrincipalVerify.status === 403);
+
+  const enrollVerify = await req("POST", "/v1/step-up/enroll/verify", {
+    token: KEYS.operator,
+    body: {
+      identityRef: suIdentity,
+      challengeId: enrollOpts.json.challengeId,
+      response: authenticator.registration(enrollOpts.json.publicKey.challenge),
+    },
+  });
+  check("step-up enrollment verifies a genuine attestation", enrollVerify.status === 200 && enrollVerify.json?.enrolled === true);
+  check("enrollment is attributed to the minting principal", enrollVerify.json?.enrolledByRef === "user_northwind_operator");
+
+  // The evaluate route must NEVER release from a request flag, even enrolled.
+  const flagSmuggled = await req("POST", "/v1/app-workflows/evaluate", {
+    token: KEYS.operator,
+    body: { integrationId: "bcma", identityRef: suIdentity, deviceRef: suDevice, stepUpSatisfied: true },
+  });
+  check("evaluate ignores request-body stepUpSatisfied (still held)",
+    flagSmuggled.json?.decision?.outcome === "step_up" &&
+    flagSmuggled.json?.plan?.actions?.find((a) => a.key === "controlled.administer")?.disposition === "step_up");
+
+  // Tampered signature → 403, and no plan escapes with the error.
+  const chalBad = await req("POST", "/v1/step-up/challenge", { token: KEYS.operator, body: { identityRef: suIdentity, integrationId: "bcma", deviceRef: suDevice, actionKey: "controlled.administer" } });
+  const tampered = await req("POST", "/v1/app-workflows/complete-step-up", {
+    token: KEYS.operator,
+    body: {
+      integrationId: "bcma", identityRef: suIdentity, deviceRef: suDevice, actionKey: "controlled.administer",
+      challengeId: chalBad.json.challengeId,
+      assertion: authenticator.assertion(chalBad.json.publicKey.challenge, { tamper: true }),
+    },
+  });
+  check("tampered assertion → 403 with no plan", tampered.status === 403 && tampered.json?.plan === undefined);
+
+  // The genuine ceremony releases the held action.
+  const chalGood = await req("POST", "/v1/step-up/challenge", { token: KEYS.operator, body: { identityRef: suIdentity, integrationId: "bcma", deviceRef: suDevice, actionKey: "controlled.administer" } });
+  check("step-up auth challenge → 200 (enrolled)", chalGood.status === 200 && typeof chalGood.json?.challengeId === "string");
+  const goodAssertion = authenticator.assertion(chalGood.json.publicKey.challenge, { signCount: 2 });
+
+  // NEGATIVE CONTROLS (challenge→action binding): the challenge above was minted for
+  // (nurse.baseline_drift, bcma, ipad-ward-06). A signed gesture must release ONLY
+  // that action — a different integration, identity, or device is refused BEFORE the
+  // cryptographic verify, leaving the challenge unconsumed.
+  const wrongIntegration = await req("POST", "/v1/app-workflows/complete-step-up", {
+    token: KEYS.operator,
+    body: { integrationId: "emr-chart", identityRef: suIdentity, deviceRef: suDevice, actionKey: "controlled.administer", challengeId: chalGood.json.challengeId, assertion: goodAssertion },
+  });
+  check("challenge minted for bcma cannot release emr-chart (403)", wrongIntegration.status === 403 && wrongIntegration.json?.plan === undefined);
+  const wrongIdentity = await req("POST", "/v1/app-workflows/complete-step-up", {
+    token: KEYS.operator,
+    body: { integrationId: "bcma", identityRef: "nurse.compliant", deviceRef: suDevice, actionKey: "controlled.administer", challengeId: chalGood.json.challengeId, assertion: goodAssertion },
+  });
+  check("challenge minted for one identity cannot release another's action (403)", wrongIdentity.status === 403);
+  const wrongDevice = await req("POST", "/v1/app-workflows/complete-step-up", {
+    token: KEYS.operator,
+    body: { integrationId: "bcma", identityRef: suIdentity, deviceRef: "ipad-ward-01", actionKey: "controlled.administer", challengeId: chalGood.json.challengeId, assertion: goodAssertion },
+  });
+  check("challenge minted for one device cannot release another's action (403)", wrongDevice.status === 403);
+
+  // SCOPED release (Codex finding): the challenge above was minted for
+  // controlled.administer. A completion claiming a DIFFERENT action of the SAME
+  // integration is refused before the cryptographic verify.
+  const wrongAction = await req("POST", "/v1/app-workflows/complete-step-up", {
+    token: KEYS.operator,
+    body: { integrationId: "bcma", identityRef: suIdentity, deviceRef: suDevice, actionKey: "dose.override", challengeId: chalGood.json.challengeId, assertion: goodAssertion },
+  });
+  check("challenge minted for one action cannot release a different action of the same integration (403)", wrongAction.status === 403 && wrongAction.json?.plan === undefined);
+  // An unknown action key has nothing to bind to — no challenge is minted.
+  const unknownAction = await req("POST", "/v1/step-up/challenge", {
+    token: KEYS.operator, body: { identityRef: suIdentity, integrationId: "bcma", deviceRef: suDevice, actionKey: "no.such.action" },
+  });
+  check("challenge for an unknown action key → 404 (nothing to bind to)", unknownAction.status === 404);
+  // A KNOWN action that the planner never holds is refused too (review finding). Only
+  // `gatedByStepUp || sensitive` actions are held; `note.document` is standard-tier, so
+  // it stays `auto` even under a step_up decision. Minting a challenge for it produced a
+  // record asserting `released: true` over something that was never withheld — a
+  // ceremony proving nothing, written into the audit trail as though it authorized
+  // access. Rejecting at mint time is what keeps the record truthful.
+  const notHeld = await req("POST", "/v1/step-up/challenge", {
+    token: KEYS.operator, body: { identityRef: suIdentity, integrationId: "emr-chart", deviceRef: suDevice, actionKey: "note.document" },
+  });
+  check("challenge for a known but never-held action → 400 (it would release nothing)",
+    notHeld.status === 400 && notHeld.json?.challengeId === undefined);
+  // Control: the same integration's genuinely gated action still mints, so the guard
+  // above rejects for being un-held rather than by rejecting emr-chart wholesale.
+  const heldSameIntegration = await req("POST", "/v1/step-up/challenge", {
+    token: KEYS.operator, body: { identityRef: suIdentity, integrationId: "emr-chart", deviceRef: suDevice, actionKey: "order.place" },
+  });
+  check("control: a held action of the SAME integration still mints a challenge",
+    heldSameIntegration.status === 200 && typeof heldSameIntegration.json?.challengeId === "string");
+
+  const completed = await req("POST", "/v1/app-workflows/complete-step-up", {
+    token: KEYS.operator,
+    body: {
+      integrationId: "bcma", identityRef: suIdentity, deviceRef: suDevice, actionKey: "controlled.administer",
+      challengeId: chalGood.json.challengeId, assertion: goodAssertion,
+    },
+  });
+  check("verified assertion releases the BOUND action (no longer held)",
+    completed.status === 200 && completed.json?.stepUp?.released === true &&
+    completed.json?.stepUp?.actionKey === "controlled.administer" &&
+    completed.json?.plan?.actions?.find((a) => a.key === "controlled.administer")?.disposition !== "step_up");
+  // THE scoped-release invariant: the gesture was bound to controlled.administer, so
+  // every OTHER gated action of the integration stays held and the plan honestly
+  // remains in step_up mode. Before the fix, one gesture released them all.
+  check("...and the integration's OTHER gated actions stay held (scoped, not integration-wide)",
+    completed.json?.plan?.actions?.find((a) => a.key === "dose.override")?.disposition === "step_up" &&
+    completed.json?.plan?.actions?.find((a) => a.key === "witness.cosign")?.disposition === "step_up" &&
+    completed.json?.plan?.mode === "step_up");
+  check("completion reports the webauthn method + credential", completed.json?.stepUp?.method === "webauthn" && typeof completed.json?.stepUp?.credentialId === "string");
+
+  // Replay: the same challenge is single-use.
+  const replay = await req("POST", "/v1/app-workflows/complete-step-up", {
+    token: KEYS.operator,
+    body: {
+      integrationId: "bcma", identityRef: suIdentity, deviceRef: suDevice, actionKey: "controlled.administer",
+      challengeId: chalGood.json.challengeId, assertion: goodAssertion,
+    },
+  });
+  check("replayed challenge → 403 (single-use)", replay.status === 403);
+
+  // Cross-tenant isolation: the credential lives under northwind's tenant key;
+  // another tenant's token sees no enrollment at all.
+  const stepUpCrossTenant = await req("POST", "/v1/step-up/challenge", {
+    token: KEYS.atlas, body: { identityRef: suIdentity, integrationId: "bcma", deviceRef: suDevice, actionKey: "controlled.administer" },
+  });
+  check("step-up credentials are tenant-scoped (other tenant → 409)", stepUpCrossTenant.status === 409);
+
+  // ── out-of-band enrollment authorization (secret-configured mode) ────────
+  // The block above proved the DEMO mode honest. This proves the REAL mode closed:
+  // with SIGNALGRID_ENROLLMENT_SECRET configured, a published demo owner token alone
+  // must no longer authorize enrollment — the x-enrollment-authorization header must
+  // carry the secret (which /v1/keys does not publish), and the role gate still holds
+  // independently. Runs against a second, short-lived server so the main server's
+  // self-service coverage above is untouched.
+  {
+    const PORT2 = 5311;
+    const BASE2 = `http://localhost:${PORT2}/api`;
+    const SECRET = "test-out-of-band-enrollment-secret";
+    const server2 = spawn("node", [serverEntry], {
+      env: { ...process.env, PORT: String(PORT2), NODE_ENV: "production", LOG_LEVEL: "silent", SIGNALGRID_ENROLLMENT_SECRET: SECRET, CORS_ALLOWED_ORIGINS: "http://console.example" },
+      stdio: ["ignore", "ignore", "inherit"],
+    });
+    try {
+      let ready2 = false;
+      const start2 = Date.now();
+      while (Date.now() - start2 < 15000) {
+        try { if ((await fetch(`${BASE2}/healthz`)).ok) { ready2 = true; break; } } catch { /* not up yet */ }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      check("secret-mode server becomes ready", ready2 === true);
+      const enroll2 = async (headers) => {
+        const res = await fetch(`${BASE2}/v1/step-up/enroll/options`, {
+          method: "POST",
+          headers: { "content-type": "application/json", ...headers },
+          body: JSON.stringify({ identityRef: suIdentity }),
+        });
+        let json = null;
+        try { json = await res.json(); } catch { json = null; }
+        return { status: res.status, json };
+      };
+      const ownerAuth = { authorization: `Bearer ${KEYS.owner}` };
+      const noHeader = await enroll2(ownerAuth);
+      check("secret mode: published owner token WITHOUT the out-of-band header → 403 (self-service closed)", noHeader.status === 403);
+      const wrongHeader = await enroll2({ ...ownerAuth, "x-enrollment-authorization": "guess" });
+      check("secret mode: wrong out-of-band value → 403 (fail closed)", wrongHeader.status === 403);
+      const rightHeader = await enroll2({ ...ownerAuth, "x-enrollment-authorization": SECRET });
+      check("secret mode: owner token + correct out-of-band header → 200", rightHeader.status === 200 && typeof rightHeader.json?.challengeId === "string");
+      check("secret mode: the self-service demo note is ABSENT (no longer self-service)", rightHeader.json?.demoNote === undefined);
+      const auditorWithSecret = await enroll2({ authorization: `Bearer ${KEYS.auditor}`, "x-enrollment-authorization": SECRET });
+      check("secret mode: the secret does not override the role gate (auditor still 403)", auditorWithSecret.status === 403);
+      // Cross-origin flow (review finding): a browser console on an allowed origin
+      // sends a CORS preflight naming x-enrollment-authorization. If the CORS
+      // allowedHeaders list omits it, the browser blocks every correctly-authorized
+      // enrollment BEFORE the server-side check can run. server2 was spawned with an
+      // allowed origin, so the preflight must echo the header back.
+      const preflight = await fetch(`${BASE2}/v1/step-up/enroll/options`, {
+        method: "OPTIONS",
+        headers: {
+          origin: "http://console.example",
+          "access-control-request-method": "POST",
+          "access-control-request-headers": "authorization,content-type,x-enrollment-authorization",
+        },
+      });
+      const allowedHdrs = (preflight.headers.get("access-control-allow-headers") ?? "").toLowerCase();
+      check("secret mode: CORS preflight permits x-enrollment-authorization for an allowed origin", preflight.headers.get("access-control-allow-origin") === "http://console.example" && allowedHdrs.includes("x-enrollment-authorization"));
+    } finally {
+      server2.kill("SIGTERM");
+    }
+  }
+
+  // ── store unavailability is an error, never an empty credential set ──────
+  // (Review finding.) With Redis CONFIGURED but unreachable, getUser used to
+  // swallow the failure into the same `null` that means "this user has no
+  // credentials" — so /v1/step-up/challenge answered a definitive 409 "no
+  // enrolled credential" from a FAILED read, and an enrollment racing a Redis
+  // blip could rebuild the user with only the new credential, silently wiping
+  // every previously enrolled one once Redis recovered. The read failure must
+  // propagate: a 5xx, and specifically NEVER the 409 that asserts an empty
+  // credential set it could not actually observe. Third short-lived server so
+  // the main (no-Redis) coverage above is untouched.
+  {
+    const PORT3 = 5312;
+    const BASE3 = `http://localhost:${PORT3}/api`;
+    const server3 = spawn("node", [serverEntry], {
+      env: { ...process.env, PORT: String(PORT3), NODE_ENV: "production", LOG_LEVEL: "silent", REDIS_URL: "redis://127.0.0.1:1" },
+      stdio: ["ignore", "ignore", "inherit"],
+    });
+    try {
+      let ready3 = false;
+      const start3 = Date.now();
+      while (Date.now() - start3 < 15000) {
+        try { if ((await fetch(`${BASE3}/healthz`)).ok) { ready3 = true; break; } } catch { /* not up yet */ }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      check("redis-down server becomes ready", ready3 === true);
+      const res3 = await fetch(`${BASE3}/v1/step-up/challenge`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${KEYS.owner}` },
+        body: JSON.stringify({ identityRef: suIdentity, integrationId: "bcma", deviceRef: suDevice, actionKey: "controlled.administer" }),
+      });
+      check("unreachable credential store → 5xx, never 409's definitive 'no enrolled credential'", res3.status >= 500);
+    } finally {
+      server3.kill("SIGTERM");
+    }
+  }
 
   // ── transport hygiene ───────────────────────────────────────────────────
   check("rate-limit headers present", allow.headers.get("ratelimit-limit") !== null);

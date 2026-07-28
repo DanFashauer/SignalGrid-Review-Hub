@@ -114,10 +114,36 @@ enum DecisionServiceProvider {
     /// signals may inform the fallback but must never be MORE permissive than the
     /// authority that didn't answer. A local `allow` is therefore held as `step_up`;
     /// a local restrict/deny (more restrictive) stands as-is.
+    /// Severity rank on the gate ladder, for the local-risk clamp below.
+    private static func rank(_ o: AppWorkflows.DecisionOutcome) -> Int {
+        switch o {
+        case .allow: return 0
+        case .step_up: return 1
+        case .restrict: return 2
+        case .deny: return 3
+        }
+    }
+
     static func evaluateWithFallback(_ service: DecisionService,
                                      _ request: AppDecisionRequest) async -> DecisionResult {
         do {
-            return try await service.evaluate(request)
+            let remote = try await service.evaluate(request)
+            // Clamp with the LOCAL risk verdict (review finding): the control-plane
+            // request does not carry request.localSignals, so newly detected screen
+            // capture, session staleness, or lockout would be invisible to a healthy
+            // seeded remote actor and its `allow` would keep elevated actions
+            // automatic. The remote answer may TIGHTEN the local one but never relax
+            // it: the effective outcome is the worse of the two.
+            guard remote.source == .controlPlane,
+                  let local = try? await LocalDecisionService().evaluate(request),
+                  rank(local.outcome) > rank(remote.outcome) else {
+                return remote
+            }
+            return DecisionResult(
+                outcome: local.outcome,
+                reasonCodes: remote.reasonCodes + local.reasonCodes + ["LOCAL_RISK_CLAMP"],
+                explanation: "The control plane answered \(remote.outcome), but on-device signals require \(local.outcome) — the stricter verdict applies.",
+                source: .controlPlane)
         } catch {
             let local = (try? await LocalDecisionService().evaluate(request))
                 ?? DecisionResult(outcome: .step_up, reasonCodes: ["FALLBACK_FAIL_CLOSED"],

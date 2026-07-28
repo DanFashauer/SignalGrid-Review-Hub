@@ -49,14 +49,25 @@ export async function getUser(userId: string): Promise<WebAuthnUser | null> {
   const key = `${USER_PREFIX}${userId}`;
 
   if (redis) {
+    // Redis configured ⇒ Redis is AUTHORITATIVE for credential reads (review
+    // finding): a credential removed via removeCredential on another instance
+    // still lingered in this process's inMemoryUsers mirror, and the old
+    // miss-falls-through-to-memory read let a sticky challenge/completion pair
+    // verify the REVOKED authenticator and release the held action. A Redis miss
+    // is therefore a miss (drop the stale mirror entry too), and a Redis FAILURE
+    // is a fail-closed null — never a silent downgrade to per-process state.
+    // The in-memory map remains the store only when no Redis is configured,
+    // matching saveUser's durability contract.
     try {
       await redis.connect();
       const data = await redis.get(key);
       if (data) {
         return JSON.parse(data);
       }
+      inMemoryUsers.delete(userId);
+      return null;
     } catch {
-      // Fall through to in-memory
+      return null;
     } finally {
       await redis.quit();
     }

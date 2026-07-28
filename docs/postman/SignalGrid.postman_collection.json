@@ -978,7 +978,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"identityRef\": \"nurse.baseline_drift\",\n  \"integrationId\": \"bcma\",\n  \"deviceRef\": \"ipad-ward-06\"\n}"
+              "raw": "{\n  \"identityRef\": \"nurse.baseline_drift\",\n  \"integrationId\": \"bcma\",\n  \"deviceRef\": \"ipad-ward-06\",\n  \"actionKey\": \"controlled.administer\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/v1/step-up/challenge",
@@ -1005,7 +1005,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"integrationId\": \"bcma\",\n  \"identityRef\": \"nurse.baseline_drift\",\n  \"deviceRef\": \"ipad-ward-06\",\n  \"challengeId\": \"{{stepUpChallengeId}}\",\n  \"assertion\": {\n    \"id\": \"{{credentialId}}\",\n    \"rawId\": \"{{credentialId}}\",\n    \"type\": \"public-key\",\n    \"response\": {\n      \"clientDataJSON\": \"…\",\n      \"authenticatorData\": \"…\",\n      \"signature\": \"…\"\n    }\n  }\n}"
+              "raw": "{\n  \"integrationId\": \"bcma\",\n  \"identityRef\": \"nurse.baseline_drift\",\n  \"deviceRef\": \"ipad-ward-06\",\n  \"actionKey\": \"controlled.administer\",\n  \"challengeId\": \"{{stepUpChallengeId}}\",\n  \"assertion\": {\n    \"id\": \"{{credentialId}}\",\n    \"rawId\": \"{{credentialId}}\",\n    \"type\": \"public-key\",\n    \"response\": {\n      \"clientDataJSON\": \"…\",\n      \"authenticatorData\": \"…\",\n      \"signature\": \"…\"\n    }\n  }\n}"
             },
             "url": {
               "raw": "{{base_url}}/v1/app-workflows/complete-step-up",

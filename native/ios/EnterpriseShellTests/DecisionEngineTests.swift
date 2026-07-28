@@ -63,16 +63,35 @@ final class DecisionEngineTests: XCTestCase {
         XCTAssertTrue(r.reasonCodes.contains("LOCATION_EXCEPTION"))
     }
 
-    // Verified remediation makes the device an allow candidate.
+    // Verified remediation restores an allow candidate — WITH base trust present.
     func testRemediationVerifiedAllows() {
-        let r = DecisionEngine.evaluate([Signal("remediation.verified")])
+        let r = DecisionEngine.evaluate([
+            Signal("remediation.verified"),
+            Signal("identity.authenticated"),
+            Signal("device.posture_observed"),
+        ])
         XCTAssertEqual(r.outcome, .allow)
         XCTAssertTrue(r.reasonCodes.contains("REMEDIATION_VERIFIED"))
     }
 
+    // Negative control (review finding): remediation evidence ALONE — no authenticated
+    // identity, no observed posture — must not release anything. The evidence is
+    // verified and audited, but the gate holds for a step-up, never allow.
+    func testRemediationAloneDoesNotAllow() {
+        let r = DecisionEngine.evaluate([Signal("remediation.verified")])
+        XCTAssertFalse(r.allOutcomes.contains("allow"))
+        XCTAssertTrue(r.allOutcomes.contains("verify_remediation"))
+        XCTAssertEqual(r.outcome, .step_up)
+    }
+
     // An allow candidate is removed when a higher-risk outcome is also present.
     func testAllowRemovedDueToHigherRisk() {
-        let r = DecisionEngine.evaluate([Signal("remediation.verified"), .staleCheckin])
+        let r = DecisionEngine.evaluate([
+            Signal("remediation.verified"),
+            Signal("identity.authenticated"),
+            Signal("device.posture_observed"),
+            .staleCheckin,
+        ])
         XCTAssertFalse(r.allOutcomes.contains("allow"))
         XCTAssertTrue(r.reasonCodes.contains("ALLOW_REMOVED_DUE_TO_HIGHER_RISK"))
         XCTAssertEqual(r.outcome, .step_up)

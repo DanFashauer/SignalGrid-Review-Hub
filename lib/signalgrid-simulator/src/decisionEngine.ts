@@ -209,8 +209,21 @@ function evaluateScenario(
 
   if (hasType("remediation.verified")) {
     outcomes.add("verify_remediation");
-    outcomes.add("allow");
     reasonCodes.push("REMEDIATION_VERIFIED");
+    // Remediation evidence RESTORES an allow candidate — it never substitutes for
+    // base trust. Without affirmative identity + posture evidence this branch used
+    // to insert `allow` directly, bypassing the base-trust gate below, so a lone
+    // remediation ticket released elevated non-sensitive actions with nobody
+    // authenticated (review finding). The same affirmative conditions as the
+    // base-trust allow are required here; anything less verifies the evidence and
+    // records audit, but releases nothing.
+    if (
+      hasType("identity.authenticated") &&
+      (hasType("device.posture_observed") || hasType("apple.ddm_declared_state")) &&
+      !hasType("device.non_compliant")
+    ) {
+      outcomes.add("allow");
+    }
   }
 
   if (

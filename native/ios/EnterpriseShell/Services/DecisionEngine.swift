@@ -122,7 +122,16 @@ enum DecisionEngine {
             outcomes.formUnion(["alert_operator", "route_to_owner"]); reasonCodes.append("INTEGRATION_ROUTE_DEGRADED")
         }
         if hasType("remediation.verified") {
-            outcomes.formUnion(["verify_remediation", "allow"]); reasonCodes.append("REMEDIATION_VERIFIED")
+            outcomes.formUnion(["verify_remediation"]); reasonCodes.append("REMEDIATION_VERIFIED")
+            // Mirrors the TS simulator (decisionEngine.ts): remediation evidence RESTORES
+            // an allow candidate — it never substitutes for base trust. Without affirmative
+            // identity + posture evidence, a lone remediation ticket verifies the evidence
+            // and records audit but releases nothing (review finding; parity-ported).
+            if hasType("identity.authenticated") &&
+                (hasType("device.posture_observed") || hasType("apple.ddm_declared_state")) &&
+                !hasType("device.non_compliant") {
+                outcomes.insert("allow")
+            }
         }
 
         if outcomes.isEmpty && hasType("identity.authenticated") &&

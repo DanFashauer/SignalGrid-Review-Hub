@@ -85,8 +85,22 @@ final class KioskController {
     func releaseLock(reason: String) {
         DispatchQueue.main.async { [weak self] in
             UIAccessibility.requestGuidedAccessSession(enabled: false) { success in
-                if success { self?.isLocked = false }
-                AuditLogger.shared.log(event: .kioskUnlocked, metadata: ["reason": reason])
+                // Audit what actually HAPPENED (review finding): on a supervised device
+                // that refuses/fails the ASAM release, `isLocked` correctly stays true
+                // but the old path still recorded `kioskUnlocked` — an audit trail
+                // claiming the kiosk was released while the holder stayed trapped in
+                // the shell. Log the failure as a failure, and surface it so the UI
+                // can show recovery guidance instead of pretending the device opened.
+                if success {
+                    self?.isLocked = false
+                    AuditLogger.shared.log(event: .kioskUnlocked, metadata: ["reason": reason])
+                } else {
+                    AuditLogger.shared.log(
+                        event: .kioskLockFailed,
+                        metadata: ["reason": reason, "stage": "release_refused_still_locked"])
+                    NotificationCenter.default.post(name: .kioskReleaseFailed, object: nil,
+                                                    userInfo: ["reason": reason])
+                }
             }
         }
     }

@@ -97,10 +97,14 @@ final class DecisionEngineTests: XCTestCase {
         XCTAssertEqual(r.outcome, .step_up)
     }
 
-    // An allow candidate is removed on an active custody-integrity failure.
+    // An allow candidate is removed on an active custody-integrity failure. Base
+    // trust (identity + posture) is supplied so the remediation branch actually
+    // inserts the allow candidate this test removes — remediation alone no longer
+    // creates one (see testRemediationAloneDoesNotAllow).
     func testAllowRemovedDueToCustodyFailure() {
         let r = DecisionEngine.evaluate([
             Signal("remediation.verified"),
+            Signal("identity.authenticated"),
             Signal("device.posture_observed", attributes: ["zone": "wrong"]),
         ])
         XCTAssertFalse(r.allOutcomes.contains("allow"))

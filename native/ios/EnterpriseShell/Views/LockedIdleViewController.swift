@@ -297,11 +297,22 @@ final class LockedIdleViewController: UIViewController {
         }
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(UIAlertAction(title: "Log in", style: .default) { [weak self] _ in
+            // Bounded + audited (review finding): every guess consumes the device-wide
+            // auth-attempt budget BEFORE the validator runs, and every rejection is
+            // recorded. Without this, anyone at the idle shared device could make
+            // unlimited local guesses at a short numeric code until the badge-free
+            // login gate opened. Exceeding the budget locks the affordance out
+            // (SecurityManager audits the rate-limit denial) until the window passes.
+            guard SecurityManager.shared.isAuthAttemptAllowed() else {
+                self?.showRecoveryResult("Too many attempts. Manual login is locked — try again later.", ok: false)
+                return
+            }
             let code = alert.textFields?.first?.text ?? ""
             if KioskConfig.validateRecoveryCode(code) {
                 self?.showRecoveryResult("Manual login accepted.", ok: true)
                 SessionStateManager.shared.beginManualOverrideLogin()
             } else {
+                SecurityManager.shared.recordFailedAttempt(type: .authentication)
                 self?.showRecoveryResult("Login code rejected.", ok: false)
             }
         })

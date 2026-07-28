@@ -121,7 +121,8 @@ final class DecisionServiceTests: XCTestCase {
         }
     }
 
-    // An unrecognized outcome fails closed (thrown), never silently allows.
+    // An unrecognized outcome fails closed (thrown), never silently allows. The
+    // error carries BOTH raw fields (decision/plan) since both must parse.
     func testRemoteUnknownOutcomeThrows() async {
         StubURLProtocol.responder = { _ in
             (200, #"{"decision":{"outcome":"banana","reasonCodes":[]},"plan":{"outcome":"banana"}}"#.data(using: .utf8)!)
@@ -132,7 +133,23 @@ final class DecisionServiceTests: XCTestCase {
             _ = try await svc.evaluate(request())
             XCTFail("expected an error")
         } catch {
-            XCTAssertEqual(error as? DecisionServiceError, .unknownOutcome("banana"))
+            XCTAssertEqual(error as? DecisionServiceError, .unknownOutcome("banana/banana"))
+        }
+    }
+
+    // A malformed decision outcome alongside a parseable plan "allow" must
+    // invalidate the whole envelope — never fall through to the permissive field.
+    func testRemotePartiallyUnknownOutcomeThrows() async {
+        StubURLProtocol.responder = { _ in
+            (200, #"{"decision":{"outcome":"banana","reasonCodes":[]},"plan":{"outcome":"allow"}}"#.data(using: .utf8)!)
+        }
+        let svc = RemoteDecisionService(baseURL: URL(string: "https://cp.example")!,
+                                        bearerToken: "t", session: stubbedSession())
+        do {
+            _ = try await svc.evaluate(request())
+            XCTFail("expected an error")
+        } catch {
+            XCTAssertEqual(error as? DecisionServiceError, .unknownOutcome("banana/allow"))
         }
     }
 

@@ -38,7 +38,21 @@ BOT_PREFIX='^dependabot/'
 
 git fetch --prune "$REMOTE" >/dev/null 2>&1
 
-mapfile -t MERGED < <(
+# `mapfile` is a bash 4+ builtin and macOS still ships bash 3.2, where it does not
+# exist: the script errored at this line, produced an EMPTY candidate set, and
+# still exited 0 — a clean-sweep report over a scan that never ran, which is the
+# exact failure this script's own design notes warn about. read_lines is the
+# 3.2-compatible equivalent used throughout.
+read_lines() { # read_lines VAR_NAME < input
+  local __var="$1" __line
+  eval "$__var=()"
+  while IFS= read -r __line; do
+    [[ -z "$__line" ]] && continue
+    eval "$__var+=(\"\$__line\")"
+  done
+}
+
+read_lines MERGED < <(
   git branch -r --merged "$REMOTE/$BASE" \
     | sed "s|^ *$REMOTE/||" \
     | grep -v '^HEAD' \
@@ -52,10 +66,10 @@ SQUASHED=()
 if command -v gh >/dev/null 2>&1; then
   # Never delete a branch that still has an OPEN pull request, even if its commits
   # are all in the base — deleting the head branch closes the PR.
-  mapfile -t OPEN_HEADS < <(gh pr list --state open --json headRefName -q '.[].headRefName' 2>/dev/null || true)
+  read_lines OPEN_HEADS < <(gh pr list --state open --json headRefName -q '.[].headRefName' 2>/dev/null || true)
   # Signal (2): branches whose PR GitHub reports as merged. Squash merges land here
   # and nowhere else.
-  mapfile -t SQUASHED < <(
+  read_lines SQUASHED < <(
     gh pr list --state merged --limit 200 --json headRefName,headRepositoryOwner \
       -q '.[] | select(.headRepositoryOwner.login != null) | .headRefName' 2>/dev/null || true
   )
@@ -65,7 +79,10 @@ else
   echo "      Install gh for a complete cleanup." >&2
 fi
 
-CANDIDATES=("${MERGED[@]}")
+# Guarded expansion: under `set -u`, bash 3.2 treats an EMPTY array's "${a[@]}" as
+# unbound and aborts (bash 4+ expands it to nothing). Same ${var+...} form already
+# used below — applied here so a repo with no contained branches still runs.
+CANDIDATES=(${MERGED+"${MERGED[@]}"})
 for b in ${SQUASHED+"${SQUASHED[@]}"}; do
   [[ -z "$b" ]] && continue
   # Only branches that still exist on the remote, and never a protected one.
@@ -73,7 +90,7 @@ for b in ${SQUASHED+"${SQUASHED[@]}"}; do
   [[ "$b" =~ $PROTECTED || "$b" =~ $BOT_PREFIX ]] && continue
   CANDIDATES+=("$b")
 done
-mapfile -t CANDIDATES < <(printf '%s\n' ${CANDIDATES+"${CANDIDATES[@]}"} | sort -u)
+read_lines CANDIDATES < <(printf '%s\n' ${CANDIDATES+"${CANDIDATES[@]}"} | sort -u)
 
 TO_DELETE=()
 for b in ${CANDIDATES+"${CANDIDATES[@]}"}; do
@@ -84,13 +101,13 @@ for b in ${CANDIDATES+"${CANDIDATES[@]}"}; do
   (( skip )) || TO_DELETE+=("$b")
 done
 
-if (( ${#TO_DELETE[@]} == 0 )); then
+if (( ${#TO_DELETE[@]:-0} == 0 )); then
   echo "Nothing to clean up: no fully-merged, unprotected branches remain."
   exit 0
 fi
 
 echo "Safe to delete (${#TO_DELETE[@]}) — all commits already in $BASE, or the PR is merged:"
-printf '  %s\n' "${TO_DELETE[@]}"
+printf '  %s\n' ${TO_DELETE+"${TO_DELETE[@]}"}
 
 # Report what is being LEFT BEHIND and why. A cleanup that silently skips
 # branches reads as "everything is tidy" when it is not.
@@ -110,6 +127,6 @@ if (( ! APPLY )); then
 fi
 
 echo
-for b in "${TO_DELETE[@]}"; do
+for b in ${TO_DELETE+"${TO_DELETE[@]}"}; do
   git push "$REMOTE" --delete "$b" && echo "deleted $b"
 done

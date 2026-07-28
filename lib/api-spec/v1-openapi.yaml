@@ -364,19 +364,27 @@ paths:
     post:
       operationId: stepUpChallenge
       tags: [decisions]
-      summary: Mint a single-use authentication challenge for a pending step-up
+      summary: Mint a single-use authentication challenge BOUND to a pending step-up action
+      description: >-
+        The challenge is bound at mint time to the exact pending action (tenant,
+        identity, integration, device); completion verifies that server-persisted
+        binding, so a gesture signed for one pending action can never release a
+        different one.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [identityRef]
+              required: [identityRef, integrationId, deviceRef]
               properties:
                 identityRef: { type: string }
+                integrationId: { type: string }
+                deviceRef: { type: string }
       responses:
         "200": { description: challengeId + WebAuthn PublicKeyCredentialRequestOptions (userVerification required) }
         "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { description: Unknown app integration }
         "409": { description: No enrolled credential for this identity in this tenant — enroll first (fail closed) }
 
   /v1/app-workflows/complete-step-up:

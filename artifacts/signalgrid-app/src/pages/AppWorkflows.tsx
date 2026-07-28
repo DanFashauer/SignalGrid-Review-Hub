@@ -104,7 +104,7 @@ export function AppWorkflows() {
               {selected && !actor && (
                 <div>
                   <div className="text-xs font-mono text-muted-foreground mb-3">
-                    Catalog only for this vertical (no seeded demo tenant). Actions + risk tiers shown; wire a tenant to gate live.
+                    Catalog view for this vertical — no public demo actor is seeded, so live evaluation stays off here (fail-closed by design). Actions + risk tiers shown; the government tenant gates live via its own workflows once an actor fixture is added.
                   </div>
                   {selected.actions.map((a) => (
                     <div key={a.key} className="flex items-center justify-between text-xs font-mono py-1.5 border-b border-border/30 last:border-0">

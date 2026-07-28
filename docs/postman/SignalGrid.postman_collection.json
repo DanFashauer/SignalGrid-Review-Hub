@@ -967,7 +967,7 @@
           }
         },
         {
-          "name": "Step-up: auth challenge",
+          "name": "Step-up: auth challenge (action-bound)",
           "request": {
             "method": "POST",
             "header": [
@@ -978,7 +978,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"identityRef\": \"nurse.baseline_drift\"\n}"
+              "raw": "{\n  \"identityRef\": \"nurse.baseline_drift\",\n  \"integrationId\": \"bcma\",\n  \"deviceRef\": \"ipad-ward-06\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/v1/step-up/challenge",

@@ -596,9 +596,16 @@ async function run() {
 
   // Fail-closed before enrollment: no credential ⇒ no challenge.
   const noCred = await req("POST", "/v1/step-up/challenge", {
-    token: KEYS.operator, body: { identityRef: suIdentity },
+    token: KEYS.operator, body: { identityRef: suIdentity, integrationId: "bcma", deviceRef: suDevice },
   });
   check("step-up challenge without enrollment → 409 (fail closed)", noCred.status === 409);
+
+  // NEGATIVE CONTROL (enrollment RBAC): enrolling a credential FOR an identity is an
+  // operator/owner ceremony — an auditor key must be refused before any WebAuthn work.
+  const auditorEnroll = await req("POST", "/v1/step-up/enroll/options", {
+    token: KEYS.auditor, body: { identityRef: suIdentity },
+  });
+  check("auditor key cannot enroll a step-up credential (403)", auditorEnroll.status === 403);
 
   // Enroll.
   const enrollOpts = await req("POST", "/v1/step-up/enroll/options", {
@@ -625,7 +632,7 @@ async function run() {
     flagSmuggled.json?.plan?.actions?.find((a) => a.key === "controlled.administer")?.disposition === "step_up");
 
   // Tampered signature → 403, and no plan escapes with the error.
-  const chalBad = await req("POST", "/v1/step-up/challenge", { token: KEYS.operator, body: { identityRef: suIdentity } });
+  const chalBad = await req("POST", "/v1/step-up/challenge", { token: KEYS.operator, body: { identityRef: suIdentity, integrationId: "bcma", deviceRef: suDevice } });
   const tampered = await req("POST", "/v1/app-workflows/complete-step-up", {
     token: KEYS.operator,
     body: {
@@ -637,9 +644,30 @@ async function run() {
   check("tampered assertion → 403 with no plan", tampered.status === 403 && tampered.json?.plan === undefined);
 
   // The genuine ceremony releases the held action.
-  const chalGood = await req("POST", "/v1/step-up/challenge", { token: KEYS.operator, body: { identityRef: suIdentity } });
+  const chalGood = await req("POST", "/v1/step-up/challenge", { token: KEYS.operator, body: { identityRef: suIdentity, integrationId: "bcma", deviceRef: suDevice } });
   check("step-up auth challenge → 200 (enrolled)", chalGood.status === 200 && typeof chalGood.json?.challengeId === "string");
   const goodAssertion = authenticator.assertion(chalGood.json.publicKey.challenge, { signCount: 2 });
+
+  // NEGATIVE CONTROLS (challenge→action binding): the challenge above was minted for
+  // (nurse.baseline_drift, bcma, ipad-ward-06). A signed gesture must release ONLY
+  // that action — a different integration, identity, or device is refused BEFORE the
+  // cryptographic verify, leaving the challenge unconsumed.
+  const wrongIntegration = await req("POST", "/v1/app-workflows/complete-step-up", {
+    token: KEYS.operator,
+    body: { integrationId: "emr-chart", identityRef: suIdentity, deviceRef: suDevice, challengeId: chalGood.json.challengeId, assertion: goodAssertion },
+  });
+  check("challenge minted for bcma cannot release emr-chart (403)", wrongIntegration.status === 403 && wrongIntegration.json?.plan === undefined);
+  const wrongIdentity = await req("POST", "/v1/app-workflows/complete-step-up", {
+    token: KEYS.operator,
+    body: { integrationId: "bcma", identityRef: "nurse.compliant", deviceRef: suDevice, challengeId: chalGood.json.challengeId, assertion: goodAssertion },
+  });
+  check("challenge minted for one identity cannot release another's action (403)", wrongIdentity.status === 403);
+  const wrongDevice = await req("POST", "/v1/app-workflows/complete-step-up", {
+    token: KEYS.operator,
+    body: { integrationId: "bcma", identityRef: suIdentity, deviceRef: "ipad-ward-01", challengeId: chalGood.json.challengeId, assertion: goodAssertion },
+  });
+  check("challenge minted for one device cannot release another's action (403)", wrongDevice.status === 403);
+
   const completed = await req("POST", "/v1/app-workflows/complete-step-up", {
     token: KEYS.operator,
     body: {
@@ -666,7 +694,7 @@ async function run() {
   // Cross-tenant isolation: the credential lives under northwind's tenant key;
   // another tenant's token sees no enrollment at all.
   const stepUpCrossTenant = await req("POST", "/v1/step-up/challenge", {
-    token: KEYS.atlas, body: { identityRef: suIdentity },
+    token: KEYS.atlas, body: { identityRef: suIdentity, integrationId: "bcma", deviceRef: suDevice },
   });
   check("step-up credentials are tenant-scoped (other tenant → 409)", stepUpCrossTenant.status === 409);
 

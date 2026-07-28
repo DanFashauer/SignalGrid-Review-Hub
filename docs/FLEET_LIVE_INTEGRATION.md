@@ -1,11 +1,14 @@
-# Fleet connector — live integration (validated against a real Fleet)
+# Fleet connector — private-validation design notes
 
-`@workspace/fleet-connector` is exercised in CI against fixtures
-(`proof:fleet-connector`, 45 assertions). This note records an **end-to-end run
-against a genuinely live open-source Fleet server** — real server, real enrolled
-osquery host, real REST responses — and the free-vs-Premium boundary it surfaced.
+`@workspace/fleet-connector`'s **committed, CI-gated evidence is the fixture
+proof** (`proof:fleet-connector`) — this public repo stays fixture-backed and
+records no live vendor integration. This note captures DESIGN FINDINGS from a
+one-off validation exercise the owner performed **privately, out-of-tree** (an
+open-source Fleet server stood up locally for the exercise); nothing here is, or
+substitutes for, the repo's evidence, and no live system, credential, or
+reproduction artifact is part of this repository.
 
-## What ran
+## What the private exercise covered
 
 - **Fleet v4.89.2**, open-source (MIT), built from source for **arm64**
   (`go build ./cmd/fleet`; the frontend `make generate` is not required — the REST
@@ -32,7 +35,8 @@ osquery host, real REST responses — and the free-vs-Premium boundary it surfac
 
 An unmanaged/unsupervised host **raises** assurance to step-up and reports
 `enforceable:false` — the fail-safe direction (a weak posture never lowers
-assurance). This matches the fixture behavior, now confirmed on live data.
+assurance). The private exercise observed the same behavior the committed
+fixture proof pins — the fixture proof remains the evidence of record.
 
 ## Boundary found: enforcement (team transfer) is Fleet Premium
 
@@ -51,9 +55,11 @@ Enforcement on a real device still additionally requires a **supervised** iPhone
 (Apple Business Manager + APNs) — see `native/ios/FLEET_MDM.md`. Fleet Premium (teams)
 is the control-plane prerequisite; a supervised device is the on-device prerequisite.
 
-## Reproduce
+## Validating privately (optional, out-of-tree)
 
-The read path can be validated against any reachable Fleet with a token:
+If you want to repeat the exercise in a PRIVATE test environment of your own,
+the read path can be pointed at any reachable Fleet with a token you provision
+there — this is private-lab guidance, not a repo artifact:
 
 ```bash
 # Trust the local Fleet's CA explicitly — never disable TLS verification.

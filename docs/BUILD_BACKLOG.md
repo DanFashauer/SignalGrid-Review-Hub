@@ -16,11 +16,15 @@ picking these up:
 
 ## Next
 
-- [x] **In-app step-up completion (real, hardware-backed)** — the SERVER control
+- [x] **In-app step-up completion (real WebAuthn, possession + user-verification)** — the SERVER control
       is real: `/v1/step-up/enroll/{options,verify}` + `/v1/step-up/challenge` +
       `/v1/app-workflows/complete-step-up` wire the hardened `@workspace/webauthn`
       path (single-use tenant+identity-bound challenge → assertion → cryptographic
       verify with user-verification REQUIRED → plan re-cut with `stepUpSatisfied`).
+      Attestation is `none`, so the server proves credential POSSESSION and an
+      authenticator-asserted user-verification event — it does NOT prove the key
+      is hardware-backed; requiring/validating attestation is a future policy
+      choice, not a current claim.
       The released state is derived only from the verified assertion — nothing in
       any request body can set it; a failed/replayed assertion is a 403 with no
       plan, and a valid assertion never upgrades a restrict/deny (release applies

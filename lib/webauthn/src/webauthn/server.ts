@@ -74,21 +74,26 @@ function base64urlToBuffer(base64url: string): ArrayBuffer {
 export async function generateRegistrationOptions(
   userId: string,
   userName: string,
-  displayName: string
-): Promise<RegistrationOptions> {
+  displayName: string,
+  context?: Record<string, string>
+): Promise<RegistrationOptions & { challengeId: string }> {
   const config = getWebAuthnConfig();
   const challenge = generateChallenge();
   const challengeId = generateCredentialId();
 
-  // Save challenge
+  // ONE challenge record, saved here and returned by id — the caller must not mint
+  // and save a second copy (the earlier double-save left the internal record
+  // unreachable and grew the store; adversarial-review finding).
   await saveChallenge(challengeId, {
     challenge,
     expiresAt: new Date(Date.now() + 60 * 1000).toISOString(), // 60s
     purpose: 'registration',
     userId,
+    context,
   });
 
   return {
+    challengeId,
     challenge,
     rp: {
       id: config.rpId,
@@ -257,8 +262,9 @@ export async function verifyRegistration(
  * Generate authentication options for a user
  */
 export async function generateAuthenticationOptions(
-  userId: string
-): Promise<AuthenticationOptions> {
+  userId: string,
+  context?: Record<string, string>
+): Promise<AuthenticationOptions & { challengeId: string }> {
   const config = getWebAuthnConfig();
   const challenge = generateChallenge();
   const challengeId = generateCredentialId();
@@ -266,15 +272,18 @@ export async function generateAuthenticationOptions(
   // Get user's credentials
   const credentials = await getCredentialsForUser(userId);
 
-  // Save challenge
+  // ONE challenge record (see generateRegistrationOptions). `context` binds this
+  // challenge to the exact pending action; the completion route verifies it.
   await saveChallenge(challengeId, {
     challenge,
     expiresAt: new Date(Date.now() + 60 * 1000).toISOString(),
     purpose: 'authentication',
     userId,
+    context,
   });
 
   return {
+    challengeId,
     challenge,
     timeout: 60000,
     rpId: config.rpId,

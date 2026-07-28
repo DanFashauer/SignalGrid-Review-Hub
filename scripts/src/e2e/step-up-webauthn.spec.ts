@@ -109,7 +109,9 @@ test("a real browser WebAuthn ceremony releases a held step_up", async ({ page }
       if (enrollVerify.status !== 200) return { stage: "enroll-verify", ...enrollVerify };
 
       // 2) Challenge + real navigator.credentials.get.
-      const chal = await post("/v1/step-up/challenge", { identityRef: identity }, token);
+      // The challenge is bound to the exact pending action at mint time; completion
+      // verifies the binding, so the same integration/device must be named here.
+      const chal = await post("/v1/step-up/challenge", { identityRef: identity, integrationId: integration, deviceRef: device }, token);
       if (chal.status !== 200) return { stage: "challenge", ...chal };
       const ao = chal.json.publicKey;
       const assertion = (await navigator.credentials.get({

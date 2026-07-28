@@ -131,6 +131,18 @@ export async function getCredentialsForUser(userId: string): Promise<WebAuthnCre
 // Challenges
 // ============================================================================
 
+/** Purge expired entries from the in-memory challenge map. Redis entries expire via
+ *  EX; without this sweep the in-memory fallback grew one entry per request forever
+ *  (adversarial-review finding). Called on every save, so the map is self-cleaning
+ *  and bounded by the 60s TTL regardless of backend. */
+function purgeExpiredInMemoryChallenges(): void {
+  const now = Date.now();
+  for (const [key, entry] of inMemoryChallenges) {
+    const exp = Date.parse(entry.challenge.expiresAt);
+    if (!Number.isNaN(exp) && exp <= now) inMemoryChallenges.delete(key);
+  }
+}
+
 export async function saveChallenge(
   challengeId: string,
   challenge: WebAuthnChallenge,
@@ -150,7 +162,40 @@ export async function saveChallenge(
     }
   }
 
+  purgeExpiredInMemoryChallenges();
   inMemoryChallenges.set(key, { challenge, userId });
+}
+
+/** Non-consuming read of a stored challenge's action context. Used by the completion
+ *  route to verify the request matches the action the challenge was MINTED for,
+ *  BEFORE the (single-use, consuming) cryptographic verification runs. Returns null
+ *  for an unknown or expired challenge — the caller fails closed on null. */
+export async function getChallengeContext(
+  challengeId: string
+): Promise<{ context: Record<string, string> | undefined; userId?: string } | null> {
+  const redis = await getRedisClient();
+  const key = `${CHALLENGE_PREFIX}${challengeId}`;
+
+  if (redis) {
+    try {
+      await redis.connect();
+      const data = await redis.get(key);
+      if (data) {
+        const parsed = JSON.parse(data) as { challenge: WebAuthnChallenge; userId?: string };
+        return { context: parsed.challenge.context, userId: parsed.userId };
+      }
+    } catch {
+      // Fall through to in-memory
+    } finally {
+      await redis.quit();
+    }
+  }
+
+  const entry = inMemoryChallenges.get(key);
+  if (!entry) return null;
+  const exp = Date.parse(entry.challenge.expiresAt);
+  if (!Number.isNaN(exp) && exp <= Date.now()) return null;
+  return { context: entry.challenge.context, userId: entry.userId };
 }
 
 export async function getAndDeleteChallenge(

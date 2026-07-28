@@ -65,9 +65,9 @@ proofs miss:
 
 ## iOS specifics
 
-- **Buildable checkout is THIS repo** (`~/SignalGrid-Review-Hub`, branch
-  `fix/ios-enterpriseshell-build-and-run`). A separate `~/Downloads` copy's iOS
-  tree never compiled — don't hand-fix it.
+- **Build from the repo root of the currently checked-out revision** — all iOS
+  paths below are repo-relative (`native/ios/...`). Do not hand-fix any stray
+  copy of the iOS tree outside this repository; only this tree is maintained.
 - Two apps: **EnterpriseShell** (the kiosk-until-auth shell + Assist gate) and
   **SignalGridMobile** (Operator + Wardlink demo/console).
 - Build & run:

@@ -69,7 +69,31 @@ export const controlPlane = {
   gridConfig: () => get<GridConfigResp>(`/api/cp/v1/grid/config`),
   provisioning: (serial?: string) => get<ProvisioningResp>(`/api/cp/v1/grid/provisioning${serial ? `?serial=${encodeURIComponent(serial)}` : ""}`),
   appResilience: () => get<AppResilienceResp>(`/api/cp/v1/apps/resilience`),
+  selfAudit: () => get<SelfAuditResp>(`/api/cp/v1/self-audit`),
 };
+
+// ── Self-audit: the plain-language administrative health surface ─────────────────
+export interface SelfAuditPlainLine { area: string; state: string; needsAttention: boolean; sentence: string }
+export interface SelfAuditPlainFix { proposalId: string; area: string; whatWeWouldDo: string; needsYourApproval: true }
+export interface SelfAuditPlain {
+  headline: string;
+  allClear: boolean;
+  attentionCount: number;
+  lines: SelfAuditPlainLine[];
+  suggestedFixes: SelfAuditPlainFix[];
+}
+export interface SelfAuditResp {
+  note: string;
+  /** "real-run" when an operator emitted a real gate run; "fixture" for the demo snapshot. */
+  source?: "real-run" | "fixture";
+  /** The short commit a real run was generated at (present only for real runs). */
+  generatedAtRef?: string;
+  /** Whether the heavy browser check ran in that real run. */
+  heavyChecksRan?: boolean;
+  plain: SelfAuditPlain;
+  report: unknown;
+  proposedHeals: unknown[];
+}
 
 // ── Build-the-grid surface (decision-fabric layer) ──────────────────────────────
 export interface SourcingSummary { total: number; api: number; native: number; gridCollected: number; unavailable: number; wireable: number; vendorIntegrated: number }

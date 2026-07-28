@@ -28,6 +28,9 @@
     "pino-http": "^10.5.0",
     "@workspace/room-sim": "workspace:*",
     "@workspace/signal-radar": "workspace:*",
+    "@workspace/self-audit": "workspace:*",
+    "@workspace/reliability": "workspace:*",
+    "@workspace/iac": "workspace:*",
     "@workspace/control-plane": "workspace:*",
     "@workspace/ddm-connector": "workspace:*",
     "@workspace/signal-discovery": "workspace:*"

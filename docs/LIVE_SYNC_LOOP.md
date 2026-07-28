@@ -87,6 +87,32 @@ evidence that real hardware validated the current contracts. Emission is refused
 when any half is not green or when the MCP side merely skipped, so a sandbox
 without the checkout can never fabricate a "real Mac run".
 
+### (iii-b) The Docker lane — one command, on any machine with Docker
+
+```
+pnpm run verify:docker            # bring the stack up, verify, tear down
+pnpm run verify:docker -- --emit-evidence   # ...and write committable evidence
+```
+
+`scripts/docker-verify.mjs` starts `postgres:16` (published on **5433**, so a
+local 5432 is never disturbed), waits for real readiness rather than sleeping a
+guessed interval, and runs the three durable-persistence proofs against it:
+the audit ledger (durability, tamper-evidence, redaction, concurrency), the
+decision + evidence store (tenant isolation, tamper-evident snapshots), and the
+session lifecycle. Those are the claims that are only meaningful over a real
+socket — every other gate in this repo runs the core in memory.
+
+It inherits this loop's central discipline: **evidence is never fabricated.**
+A missing daemon is a refusal, not a skip; a red or partial run emits nothing.
+On a fully green run with `--emit-evidence` it writes
+`artifacts/live-evidence/docker-run.json` carrying the committed manifest's
+fingerprint, the Docker server version, and assertion counts — fingerprints,
+booleans and counts only, no hostnames, paths or timestamps. Committing
+`artifacts/live-evidence/` is the record that a real stack ran.
+
+This lane does **not** replace the Mac/Xcode evidence in (iii): Docker proves the
+deployed server topology, not a supervised iOS device. They close different gaps.
+
 ### (iv) iOS: EnterpriseShell pins to the manifest version
 
 The app lives at `native/ios/EnterpriseShell`. The instruction (documented here,

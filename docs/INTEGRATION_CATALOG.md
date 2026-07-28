@@ -187,7 +187,7 @@ Fail-safe by construction, matched to a shared frontline session's stakes:
 - the **only** paths that contribute a grant are a positively-confirmed clean state — a **known** consent type (admin- or user-consented) + verified publisher + least scope + managed/no workload, **or** no grants at all — **and only with the IdP confirmed reachable** (`idpReachable === true`); an **unknown** consent type (like any other unknown field) never grants, and the IdP unreachable or **unreported**, or an unknown grant state, all step up;
 - an unrecognized value normalizes to the safe `unknown`, never a fabricated `present`/`verified`/`admin`.
 
-Proven fully offline by `pnpm run proof:oauth-consent` (63 checks, no network, no keys). Live calls are gated exactly like every other connector. SignalGrid reads and decides on the evaluated grant state — it revokes no grant and changes no consent; every signal is read-only, and this is not a Microsoft / Okta / Google partnership or certification claim.
+Proven fully offline by `pnpm run proof:oauth-consent` (65 checks, no network, no keys). Live calls are gated exactly like every other connector. SignalGrid reads and decides on the evaluated grant state — it revokes no grant and changes no consent; every signal is read-only, and this is not a Microsoft / Okta / Google partnership or certification claim.
 
 ## Token binding / proof-of-possession — the replayable-token dimension (built, fixture-backed)
 
@@ -381,6 +381,43 @@ A future connector model may include read-only signal connectors, signed action 
 ## Imprivata candidate path
 
 Imprivata is documented as a future candidate healthcare access-management integration and partner path only. Review Hub does not claim a current Imprivata partnership, certification, alliance, or validated integration. Before any public claim changes, SignalGrid would need an approved product one-pager, working demo, validated integration proof, concise customer benefit statement, and careful review for production/compliance overclaims.
+
+## The 2026 dimensions — recovery, currency, credential worth, binding, two-person integrity (built, fixture-backed)
+
+Five dimensions added after the sections above, each read-only, fixture-gated, fused into
+posture-composition, registered with the mutation guard, and proven offline. Full write-ups
+live in their own docs; this catalog entry exists so the list of built dimensions is complete
+in one place.
+
+- **Custody beacon** ([CUSTODY_BEACON.md](CUSTODY_BEACON.md)) — asset recovery for the moment
+  every *online* custody signal goes dark **with** the device. An independent case-embedded
+  beacon fused with reachability separates "powered off in its bay" (`monitor`) from
+  "removed and dark" (`escalate`) — a call native Lost Mode cannot make on a shared fleet,
+  since it needs the device powered and online. A stale sighting confirms nothing: an
+  expired in-zone reading on a dark device is graded as location-unknown, not as benign.
+  `proof:custody-beacon` (43 checks).
+
+- **App-update currency** ([APP_UPDATE_CURRENCY.md](APP_UPDATE_CURRENCY.md)) — the honest
+  half of "custom OTA updates". An iOS app cannot install or replace itself; distribution
+  stays with itms-services / MDM InstallApplication / ABM. What *is* posture: `min_version`
+  floors, `force_update`, and install-channel provenance. `proof:app-update` (52 checks).
+
+- **Platform SSO** ([PLATFORM_SSO.md](PLATFORM_SSO.md)) — "passwordless" and "satisfies MFA"
+  are not automatic; the **method** decides the credential's worth. Only a user-registered
+  Secure Enclave key or smart card is phishing-resistant. A login policy claimed on a method
+  that cannot enforce it is config drift, and a policy genuinely in force is graded for
+  lockout exposure. `proof:platform-sso` (52 checks).
+
+- **Policy binding** ([POLICY_BINDING.md](POLICY_BINDING.md)) — membership **is** the policy.
+  Intune dynamic groups, Fleet teams, ABM/DDM profiles, Jamf smart groups, PACS access
+  levels, Entra CA groups, WMS queues, EDR policy groups and SignalGrid's own per-vertical
+  bundles are one mechanism under many names, and a wrong binding applies the wrong policies
+  silently. `proof:policy-binding` (41 checks).
+
+- **Dual control** ([DUAL_CONTROL.md](DUAL_CONTROL.md)) — two-person integrity for the
+  highest-blast-radius actions: two distinct identities, distinct credential instances, user
+  verification, action binding, role, co-presence, clean parse. `proof:dual-control`
+  (58 checks).
 
 ## DockBridge candidate integration
 

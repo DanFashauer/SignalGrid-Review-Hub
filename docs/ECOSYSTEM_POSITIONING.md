@@ -17,6 +17,56 @@ SignalGrid consumes signals from those systems, evaluates runtime context, deter
 
 SignalGrid fits in the decision gap between systems that authenticate users, manage devices, measure endpoint/user experience, monitor APIs and services, record operations, investigate security events, and observe shared-device movement. It evaluates identity, device posture, session context, physical/device context, workflow context, and operational signals before the workflow breaks.
 
+## Operated as code: the GitOps control plane
+
+SignalGrid's operating model is Infrastructure-as-Code / GitOps (see
+[`IAC_GITOPS.md`](IAC_GITOPS.md)). Endpoint configuration, compliance policy,
+software packages, and the decision rules that gate them are declared in
+version-controlled files and rolled out through review and approval, not clicked
+into a console. This does not make SignalGrid an MDM. **Fleet, Microsoft Intune,
+and Jamf remain the declarative backends** that actuate a profile on a device;
+SignalGrid holds the desired state, plans the diff, gates the rollout on a live
+`allow` decision plus a recorded human approval (a rollout can never apply
+itself), and drift-checks the result — feeding any divergence back as a trust
+signal. It complements a Fleet GitOps repo or a Terraform+Intune module; it is
+not a competing MDM or IaC tool, and does not replace one.
+
+## Architectural analogy: the trust control plane
+
+Enterprise networking learned this pattern long ago. A hub-and-spoke topology (AWS
+Transit Gateway, Azure Virtual WAN, Google Cloud Network Connectivity Center)
+centralizes routing, inspection, and shared services in a dedicated hub so the
+spokes stay simple and isolated; the hard-won lesson is that *a hub without
+centralized inspection is just an expensive peering mesh*, and that the hub is not
+a network component so much as an **enterprise control plane** worth treating as a
+product.
+
+SignalGrid is the same pattern applied to a different plane. It does not route
+packets and it never touches a route table — the network hub remains the system of
+record for connectivity. SignalGrid is the **centralized inspection point for
+runtime trust**: instead of every workload deciding on its own whether a person,
+device, and moment are trustworthy, that decision is centralized, evaluated against
+fused signals, and routed to whoever resolves it. The spokes — the host apps a
+worker actually uses — stay simple and focused on the work.
+
+The lessons transfer almost verbatim:
+
+- *Routing is a security policy; route-table changes deserve IAM-grade governance.*
+  In SignalGrid, a policy or a self-healing fix is a governed, human-approved change
+  — a proposal can never activate itself (`docs/ADAPTIVE_PROPOSALS.md`,
+  `docs/SELF_AUDIT.md`).
+- *Spoke-to-spoke should be the exception, not the default.* Trust is
+  re-established per device from that device's own signals; a carried work context
+  is descriptive, never a grant that flows sideways (`docs/PORTABLE_WORK_CONTEXT.md`).
+- *Shared services belong in the platform, not duplicated per workload.* Domain
+  safety stays in the host apps; the decision, the audit trail, and the signal
+  fusion live once, in the fabric.
+
+The point of both hubs is the same: not better plumbing, but a platform that is
+easier to secure, operate, and scale — with less downtime — and every workload
+connected to it benefits. SignalGrid is complementary to the network hub, not a
+competitor to it: the two inspect different planes and neither replaces the other.
+
 ## Ecosystem positioning matrix
 
 | Category                          | Examples                                                                                                                                                                                                                                                                | What the category owns                                                                                                                                     | What SignalGrid consumes                                                                                                                                                                                                                                                           | What SignalGrid emits                                                                                                                                                                                                                     | Replacement boundary                                                                                                                                                                                    |

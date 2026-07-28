@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { Router, type IRouter } from "express";
 import { ControlPlane, type TelemetryBatch } from "@workspace/control-plane";
 import {
@@ -11,6 +13,27 @@ import {
 import { recommend, DEMO_USAGE } from "@workspace/recommendations";
 import { discover, planOnboarding, discoverySummary, DEMO_SOURCES, DEMO_OBSERVED } from "@workspace/signal-discovery";
 import { normalizeDdmReports, ddmSummary, DEMO_DDM_REPORTS, DDM_OBSERVED_AT } from "@workspace/ddm-connector";
+import {
+  DEFAULT_CHECKLIST,
+  deriveChecklist,
+  runAudit,
+  proposeHeals,
+  summarizePlain,
+  type ProbeResult,
+} from "@workspace/self-audit";
+import {
+  computeReliability,
+  summarizeReliability,
+  type DecisionRecord,
+} from "@workspace/reliability";
+import {
+  planChanges,
+  detectDrift,
+  summarizePlan,
+  summarizeDrift,
+  DEMO_DESIRED_STATE,
+  DEMO_OBSERVED_STATE,
+} from "@workspace/iac";
 
 /**
  * `/cp/v1/*` — the SaaS **control-plane** surface (management, not decisions).
@@ -166,6 +189,92 @@ router.get("/cp/v1/ddm", (_req, res) => {
     observedAt: DDM_OBSERVED_AT,
     summary: ddmSummary(signals, DEMO_DDM_REPORTS),
     signals,
+  });
+});
+
+// ── Self-audit: the system's own health, in plain language ──────────────────────
+// The administrative "just works" surface. Runs the fabric's self-audit over the
+// default checklist and returns BOTH the raw report and a plain-language summary an
+// owner reads without any product knowledge. Public-safe and deterministic: this is a
+// FIXTURE health snapshot — every probe reports healthy because no live gate runs in
+// this demo server, and the note says so. In a real deployment a probe runner feeds
+// live gate/proof outcomes; the plain-language shape is identical either way.
+const SELF_AUDIT_INVENTORY = {
+  // The demo inventory is exactly what the default checklist covers, so the healthy
+  // demo shows no coverage gaps. A real manifest would surface any uncovered
+  // dimension as an attention item — that is the point of the coverage check.
+  dimensions: [...new Set(DEFAULT_CHECKLIST.flatMap((i) => i.covers))],
+};
+// Fixture probe results: every checklist probe reports healthy. Deterministic.
+const SELF_AUDIT_DEMO_PROBES: Record<string, ProbeResult> = Object.fromEntries(
+  DEFAULT_CHECKLIST.map((i) => [i.probeKey, { status: "healthy" as const, detail: "fixture: verified in CI" }]),
+);
+
+router.get("/cp/v1/self-audit", (_req, res) => {
+  // Prefer a REAL run if an operator has emitted one (`pnpm run self-audit:run
+  // --emit` writes artifacts/self-audit/status.json). It is honestly labeled
+  // source:"real-run" with the commit it ran at. Absent that, serve the
+  // deterministic fixture snapshot, labeled source:"fixture" — never a real
+  // claim the demo cannot back.
+  const statusPath = resolve(process.cwd(), "artifacts/self-audit/status.json");
+  if (existsSync(statusPath)) {
+    try {
+      const real = JSON.parse(readFileSync(statusPath, "utf8"));
+      res.json({
+        note: "Last real self-audit run (an operator ran the gates). 'plain' is the administrator view; a heal is only ever proposed, never applied, without a human approval.",
+        ...real,
+      });
+      return;
+    } catch {
+      // Fall through to the fixture rather than serving a malformed real file.
+    }
+  }
+  const checklist = deriveChecklist([...DEFAULT_CHECKLIST], SELF_AUDIT_INVENTORY);
+  const report = runAudit(checklist, SELF_AUDIT_DEMO_PROBES);
+  const heals = proposeHeals(report);
+  const plain = summarizePlain(report, heals);
+  res.json({
+    source: "fixture",
+    note: "Fixture self-audit snapshot — deterministic, no live gate runs in this demo. Run `pnpm run self-audit:run --emit` to serve a real run instead. A heal is only ever proposed, never applied, without a human approval.",
+    plain,
+    report,
+    proposedHeals: heals,
+  });
+});
+
+// ── Reliability: SLOs and error budgets for the decision plane ──────────────────
+// A deterministic fixture window of decision outcomes: a healthy demo — fast,
+// available, and (of course) zero fail-open breaches. Public-safe counts only.
+const RELIABILITY_DEMO_WINDOW: DecisionRecord[] = Array.from({ length: 2000 }, (_, i) => ({
+  produced: true,
+  // A realistic spread well under the 50 ms target; a couple near the edge.
+  latencyMs: 8 + (i % 20),
+  failedOpen: false,
+}));
+
+router.get("/cp/v1/reliability", (_req, res) => {
+  const report = computeReliability(RELIABILITY_DEMO_WINDOW);
+  const plain = summarizeReliability(report);
+  res.json({
+    note: "Fixture SLO / error-budget snapshot over a deterministic window of decision outcomes. Latency and availability carry error budgets; fail-closed integrity is zero-tolerance — one fail-open exhausts it and can never be bought back.",
+    plain,
+    report,
+  });
+});
+
+// ── IaC / GitOps: declared desired-state vs observed fleet ──────────────────────
+// The trust-gated GitOps control plane. Deterministic public-safe fixtures: a
+// declared desired-state diffed against an observed fleet-state. The plan and the
+// drift are read-only here — a real apply actuates through the MDM backend's own
+// API on a supervised device and is gated on a live `allow` decision plus a
+// recorded human approval (a rollout can never apply itself). See docs/IAC_GITOPS.md.
+router.get("/cp/v1/iac", (_req, res) => {
+  const plan = planChanges(DEMO_DESIRED_STATE, DEMO_OBSERVED_STATE);
+  const drift = detectDrift(DEMO_DESIRED_STATE, DEMO_OBSERVED_STATE);
+  res.json({
+    note: "Fixture GitOps snapshot: desired state (Git) diffed against observed fleet state. A rollout applies only through a governed lifecycle — a recorded human approval AND an `allow` trust decision — and is simulated here; real actuation is via the MDM backend (Fleet/Intune/Jamf). Drift feeds self-audit and posture.",
+    plan: { summary: summarizePlan(plan), ...plan },
+    drift: { summary: summarizeDrift(drift), ...drift },
   });
 });
 

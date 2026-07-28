@@ -1,0 +1,16 @@
+{
+  "name": "@workspace/adaptive-proposals",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@workspace/signalgrid-core": "workspace:*",
+    "@workspace/recommendations": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:"
+  }
+}

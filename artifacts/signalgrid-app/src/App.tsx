@@ -28,6 +28,7 @@ const AppResilience = named(() => import("@/pages/AppResilience"), "AppResilienc
 const SignalSourcing = named(() => import("@/pages/SignalSourcing"), "SignalSourcing");
 const GridConfig = named(() => import("@/pages/GridConfig"), "GridConfig");
 const GridOverview = named(() => import("@/pages/GridOverview"), "GridOverview");
+const SystemHealth = named(() => import("@/pages/SystemHealth"), "SystemHealth");
 
 const queryClient = new QueryClient();
 
@@ -53,6 +54,7 @@ function Router() {
           <Route path="/signal-sourcing" component={SignalSourcing} />
           <Route path="/grid-config" component={GridConfig} />
           <Route path="/grid" component={GridOverview} />
+          <Route path="/system-health" component={SystemHealth} />
           <Route component={NotFound} />
         </Switch>
       </Suspense>

@@ -192,7 +192,9 @@ export function fleetSummary(signals: FleetSignal[], reports: FleetHostReport[])
 
 export { DEMO_FLEET_REPORTS, FLEET_OBSERVED_AT } from "./fixture";
 export {
-  FleetClient, toHostReport, fetchTransport,
+  // NB: the live `fetchTransport` is deliberately NOT re-exported — the public package is
+  // stub/fixture-only, and the real Fleet transport lives out of tree (see client.ts).
+  FleetClient, toHostReport,
   type AccessOutcome, type FleetRequest, type FleetResponse,
   type FleetTransport, type FleetClientConfig, type FleetActuation,
 } from "./client";

@@ -2,9 +2,15 @@
 // from Fleet's REST API, and ACTUATE a SignalGrid decision on a host by moving it
 // between Fleet teams (which carry the restriction profiles in `fleet/`).
 //
-// Transport is injected (a fetch-like function), so this is unit-testable with a
-// stub and has no hard dependency on a live Fleet — the real transport wraps
-// `fetch`, the test transport returns canned responses.
+// PUBLIC-REPO BOUNDARY: this is a public, review-safe package, and it must not carry
+// a LIVE, write-capable Fleet actuator. Transport is injected (a fetch-like function),
+// so the public build is exercised ONLY with a stub that returns canned responses —
+// the class and its actuation logic are proven fixture-backed, never against a real
+// Fleet tenant. The real `fetch`-wrapping transport lives OUT OF TREE in the private
+// core, which is where a live host-transfer POST belongs; it is deliberately NOT
+// exported here, so no caller can turn this review package into a live actuator by
+// supplying it. (Adversarial-review finding: an exported live transport made the public
+// connector a write-capable Fleet actuator.)
 
 import type { DiskEncryption, FleetHostReport } from "./index";
 
@@ -111,17 +117,9 @@ export class FleetClient {
   }
 }
 
-/** Real transport: wraps `fetch` (Node 18+/browser). */
-export const fetchTransport: FleetTransport = async (req, auth) => {
-  const res = await fetch(`${auth.baseUrl}${req.path}`, {
-    method: req.method,
-    headers: {
-      "Authorization": `Bearer ${auth.token}`,
-      "Content-Type": "application/json",
-    },
-    body: req.body === undefined ? undefined : JSON.stringify(req.body),
-  });
-  let json: unknown = null;
-  try { json = await res.json(); } catch { /* empty body is fine */ }
-  return { status: res.status, json };
-};
+// NOTE: the live `fetch`-wrapping transport is intentionally NOT defined or exported in
+// this public package — see the boundary note at the top. A live Fleet transport (and
+// the authenticated host-transfer POST it enables) lives out of tree in the private
+// core. In this repo, `FleetClient` is only ever constructed with a caller-supplied stub
+// (see `fleet-connector-proof.ts`), so the actuation logic is proven without any path to
+// a real tenant.

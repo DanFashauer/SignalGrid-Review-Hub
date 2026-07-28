@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 8,
-  "fingerprint": "1285133db5c6ee89b1271b9e9724771d35bacee0f1fc51237762c2b722e25f81",
+  "manifestVersion": 9,
+  "fingerprint": "57e8bed38484d2cc118bcf77c5e0b9b47f82a698fa5c87a14d7d2a00095307b8",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -86,6 +86,7 @@
       "credential-exposure": 28,
       "device-attestation": 60,
       "device-management-health": 162,
+      "dual-control": 43,
       "factory-flows": 16,
       "handoff-sim": 55,
       "iac": 67,

@@ -102,6 +102,7 @@
     "proof:fabric-evals": "pnpm --filter @workspace/scripts run proof:fabric-evals",
     "proof:fabric-scenario": "pnpm --filter @workspace/scripts run proof:fabric-scenario",
     "proof:pim-activation": "pnpm --filter @workspace/scripts run proof:pim-activation",
+    "proof:dual-control": "pnpm --filter @workspace/scripts run proof:dual-control",
     "proof:live-idp": "pnpm --filter @workspace/scripts run proof:live-idp",
     "test:e2e": "pnpm --filter @workspace/scripts run test:e2e",
     "proof:task-exception": "pnpm --filter @workspace/scripts run proof:task-exception",

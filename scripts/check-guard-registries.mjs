@@ -65,6 +65,11 @@ const MUTATION_EXCLUDED = [
     reason:
       "QUEUED. It consumes other dimensions' verdicts rather than normalizing a bridge report, so its allow path is the composition rather than a parse layer.",
   },
+  {
+    proof: "proof:dual-control",
+    reason:
+      "QUEUED, not waived. Its grant (Granted) is enumerated over both the full normalized space (78,732 states, exactly one grants) and a hostile raw-wire space (45,000 requests, exactly one grants) inside its own proof, but the normalizer/evaluator have not yet been added to the mutation guard's source-mutation sweep. This entry keeps that gap visible.",
+  },
 ];
 
 /** `<name>-proof.ts` → `proof:<name>`, the script name the guards register. */

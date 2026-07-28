@@ -1436,6 +1436,12 @@ importers:
         specifier: 'catalog:'
         version: 25.6.2
 
+  lib/dual-control:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.6.2
+
   lib/enterprise-auth:
     dependencies:
       '@workspace/signalgrid-core':
@@ -1692,6 +1698,9 @@ importers:
       '@workspace/ddm-connector':
         specifier: workspace:*
         version: link:../lib/ddm-connector
+      '@workspace/dual-control':
+        specifier: workspace:*
+        version: link:../lib/dual-control
       '@workspace/enterprise-auth':
         specifier: workspace:*
         version: link:../lib/enterprise-auth

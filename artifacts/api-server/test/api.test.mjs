@@ -540,6 +540,16 @@ async function run() {
   const deadEnf = (ddm.json?.signals ?? []).find((s) => s.enforcementCurrency === "dead");
   check("ddm: a device with dead update enforcement raises step-up (not trusted as patched)", deadEnf && deadEnf.assurance === "raise_step_up");
 
+  // ── Fleet MDM (osquery) — fixture host posture, fail-closed assurance ──────
+  // Contract coverage for GET /cp/v1/fleet-mdm: without this the route could change its
+  // serialized shape or disappear while every deterministic gate stayed green, and the
+  // native client silently degrades a failure to an empty Fleet view (review finding).
+  const fleetMdm = await req("GET", "/cp/v1/fleet-mdm");
+  check("fleet-mdm returns normalized host posture: summary.hosts + a signals row per host", fleetMdm.status === 200 && typeof fleetMdm.json?.summary?.hosts === "number" && Array.isArray(fleetMdm.json?.signals) && fleetMdm.json.signals.length === fleetMdm.json.summary.hosts);
+  check("fleet-mdm: only the fully-healthy+supervised host is 'standard' — every weak/unsupervised host raises assurance", (fleetMdm.json?.summary?.raiseStepUp ?? 0) >= 1 && (fleetMdm.json?.signals ?? []).filter((s) => s.assurance === "standard").length === (fleetMdm.json.summary.hosts - fleetMdm.json.summary.raiseStepUp));
+  const unsupervisedHost = (fleetMdm.json?.signals ?? []).find((s) => s.enforceable === false);
+  check("fleet-mdm: an unenforceable (unsupervised) host raises step-up, never trusted as standard", unsupervisedHost && unsupervisedHost.assurance === "raise_step_up");
+
   // ── build-the-grid control-plane surface (decision-fabric layer, live) ───
   const coverage = await req("GET", "/cp/v1/grid/coverage");
   check("grid coverage responds 200", coverage.status === 200);

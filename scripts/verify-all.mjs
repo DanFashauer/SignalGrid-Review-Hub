@@ -266,12 +266,29 @@ if (emitEvidence) {
           proofsDocumented: Object.keys(manifest.body.proofCounts ?? {}).length,
         },
       };
-      const evidenceDir = resolve(repoRoot, "artifacts/live-evidence");
-      mkdirSync(evidenceDir, { recursive: true });
-      const evidencePath = resolve(evidenceDir, "mac-run.json");
-      writeFileSync(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
-      console.log(`\n--emit-evidence: wrote ${evidencePath} (manifestFingerprint=${manifest.fingerprint.slice(0, 12)}…).`);
-      console.log("  Commit artifacts/live-evidence/ to publish the run as repo evidence.");
+      // Refuse to emit evidence the reader cannot verify. If EITHER git query failed —
+      // e.g. SIGNALGRID_MCP_PATH points at a source export (pyproject.toml but no .git),
+      // which pytest can still pass — then mcpCommit is null and the evidence cannot
+      // identify OR reproduce the MCP code that passed, defeating the attribution the
+      // rest of this block exists to provide. "Recorded, not enforced" covers a branch
+      // mint (commit known, tree dirty); it does NOT cover a checkout with no commit at
+      // all. Fail closed rather than publish unverifiable evidence. (Review finding.)
+      if (mcpCommit === null || mcpStatus === null) {
+        console.error(
+          `\n--emit-evidence: the signalgrid-mcp checkout at ${mcpPath} is not a git repository ` +
+            `(git rev-parse/status failed), so the evidence cannot identify or reproduce the MCP ` +
+            `code that passed. Refusing to emit unverifiable evidence — point SIGNALGRID_MCP_PATH ` +
+            `at a real git checkout.`,
+        );
+        process.exitCode = 1;
+      } else {
+        const evidenceDir = resolve(repoRoot, "artifacts/live-evidence");
+        mkdirSync(evidenceDir, { recursive: true });
+        const evidencePath = resolve(evidenceDir, "mac-run.json");
+        writeFileSync(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
+        console.log(`\n--emit-evidence: wrote ${evidencePath} (manifestFingerprint=${manifest.fingerprint.slice(0, 12)}…).`);
+        console.log("  Commit artifacts/live-evidence/ to publish the run as repo evidence.");
+      }
     }
   }
 }

@@ -112,8 +112,10 @@ A new connector alongside the existing Graph/DDM connectors:
 | `mdm.enrollment_status`, last seen age | posture freshness |
 | screen-lock / firewall off | posture attributes |
 
-`GET /api/v1/hosts/{id}` and osquery live/scheduled queries → normalized into the
-signal context the `DecisionEngine` already evaluates.
+`GET /api/v1/fleet/hosts/{id}` and osquery live/scheduled queries → normalized into
+the signal context the `DecisionEngine` already evaluates. (The Fleet REST path keeps
+the `/fleet` segment — the same base the connector reads from, `/api/v1/fleet/hosts` —
+so this documented validation path is executable and does not 404.)
 
 **Decision out** (SignalGrid → Fleet REST): on `restrict`/`deny`, move the host to
 a locked team / apply the tighter allowlist profile; on `allow`, apply the normal

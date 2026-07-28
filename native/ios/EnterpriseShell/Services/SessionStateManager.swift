@@ -29,7 +29,6 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
         currentState == .activeSession && currentSession?.isActive == true
     }
     
-    private var stateTransitionQueue = DispatchQueue(label: "com.enterprise.shell.stateQueue")
     /// A badge tapped DURING an active session, held until the full teardown reaches
     /// .lockedIdle and then replayed as a fresh authentication (see handleBadgeTap).
     private var pendingReplayBadgeId: String?
@@ -67,9 +66,19 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
     
     // MARK: - State Transitions
     
-    /// Transition to a new state with validation
+    /// Transition to a new state with validation.
+    ///
+    /// MAIN-CONFINED (review finding): every reader of this state machine —
+    /// session UI, badge callbacks, timers, `isSessionActive` — runs on the main
+    /// thread, while transitions used to mutate the same @Published properties and
+    /// run entry/cleanup actions on a private GCD queue with no synchronization. A
+    /// badge or timeout arriving mid-transition could observe stale state,
+    /// overwrite the badge being authenticated, or validate against a state that
+    /// had already changed. Serializing transitions on the MAIN queue puts writers
+    /// on the same serial executor as every reader: ordering is preserved (async
+    /// enqueue, exactly as before), and cross-thread interleaving is gone.
     func transition(to newState: SessionState, error: Error? = nil) {
-        stateTransitionQueue.async { [weak self] in
+        DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             
             // Validate transition
@@ -749,11 +758,12 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
     private func startActivityTimer() {
         stopActivityTimer()
 
-        // Schedule on the MAIN run loop (review finding): `enterState` runs on the
-        // private stateTransitionQueue, and Timer.scheduledTimer attaches to the
-        // CURRENT thread's run loop — a GCD worker thread whose run loop never runs,
-        // so the timer would never fire and the shared-device session would never
-        // idle out. Main-queue scheduling guarantees a running run loop.
+        // Schedule on the MAIN run loop (review finding): Timer.scheduledTimer
+        // attaches to the CURRENT thread's run loop, and callers may arrive from a
+        // background context — a run-loop-less thread would mean the timer never
+        // fires and the shared-device session never idles out. Main-queue
+        // scheduling guarantees a running run loop (transitions are themselves
+        // main-confined now, so this also keeps timer state with the machine).
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             self.activityTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in

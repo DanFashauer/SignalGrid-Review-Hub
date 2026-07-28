@@ -11,7 +11,22 @@ import "./index.css";
 // - Hosted static build against a remote api-server: set VITE_API_BASE_URL to
 //   that origin at build time. The api-server must allow this app's origin via
 //   CORS_ALLOWED_ORIGINS.
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+// PUBLIC-BUILD BOUNDARY (review finding): an arbitrary VITE_API_BASE_URL would
+// turn this public Review-Hub bundle into an unrestricted live API client. The
+// base URL is therefore constrained to LOOPBACK — the documented local api-server
+// demo — and anything else is ignored (the bundle stays same-origin/fixture).
+const rawBase = import.meta.env.VITE_API_BASE_URL?.trim();
+const apiBaseUrl = (() => {
+  if (!rawBase) return undefined;
+  try {
+    const host = new URL(rawBase).hostname.toLowerCase();
+    return host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]"
+      ? rawBase
+      : undefined;
+  } catch {
+    return undefined;
+  }
+})();
 if (apiBaseUrl) {
   setBaseUrl(apiBaseUrl);
 }

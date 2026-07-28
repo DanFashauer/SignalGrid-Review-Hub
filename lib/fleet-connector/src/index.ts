@@ -196,7 +196,7 @@ export {
   // stub/fixture-only, and the real Fleet transport lives out of tree (see client.ts).
   FleetClient, toHostReport,
   type AccessOutcome, type FleetRequest, type FleetResponse,
-  type FleetTransport, type FleetClientConfig, type FleetActuation,
+  type FleetTransport, type FleetClientConfig,
 } from "./client";
 
 /**

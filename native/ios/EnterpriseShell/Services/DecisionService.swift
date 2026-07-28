@@ -72,7 +72,10 @@ struct RemoteDecisionService: DecisionService {
     }
 
     func evaluate(_ request: AppDecisionRequest) async throws -> DecisionResult {
-        var req = URLRequest(url: baseURL.appendingPathComponent("v1/app-workflows/evaluate"))
+        // The Express app mounts /v1 under /api (review finding): without the prefix
+        // the documented loopback demo got 404 on every call and silently fell back
+        // to the local engine, never exercising the tenant-seeded control plane.
+        var req = URLRequest(url: baseURL.appendingPathComponent("api/v1/app-workflows/evaluate"))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("Bearer \(bearerToken)", forHTTPHeaderField: "Authorization")
@@ -87,10 +90,19 @@ struct RemoteDecisionService: DecisionService {
         guard (200..<300).contains(http.statusCode) else { throw DecisionServiceError.http(http.statusCode) }
 
         let env = try JSONDecoder().decode(Envelope.self, from: data)
-        // The plan's outcome is the gate outcome AS DECIDED by the core.
-        guard let outcome = AppWorkflows.DecisionOutcome(rawValue: env.plan.outcome)
-            ?? AppWorkflows.DecisionOutcome(rawValue: env.decision.outcome) else {
-            throw DecisionServiceError.unknownOutcome(env.plan.outcome)
+        // A response carrying VALID BUT CONFLICTING outcomes (decision says restrict,
+        // plan says allow) must never resolve to the permissive one (review finding).
+        // Parse both; if both parse and disagree, the MORE RESTRICTIVE applies. If
+        // neither parses, the envelope is unusable — throw (fail closed).
+        let planOutcome = AppWorkflows.DecisionOutcome(rawValue: env.plan.outcome)
+        let decisionOutcome = AppWorkflows.DecisionOutcome(rawValue: env.decision.outcome)
+        let severity: [AppWorkflows.DecisionOutcome: Int] = [.allow: 0, .step_up: 1, .restrict: 2, .deny: 3]
+        let outcome: AppWorkflows.DecisionOutcome
+        switch (planOutcome, decisionOutcome) {
+        case let (p?, d?): outcome = (severity[p] ?? 3) >= (severity[d] ?? 3) ? p : d
+        case let (p?, nil): outcome = p
+        case let (nil, d?): outcome = d
+        case (nil, nil): throw DecisionServiceError.unknownOutcome(env.plan.outcome)
         }
         return DecisionResult(outcome: outcome, reasonCodes: env.decision.reasonCodes,
                               explanation: env.decision.explanation ?? "", source: .controlPlane)

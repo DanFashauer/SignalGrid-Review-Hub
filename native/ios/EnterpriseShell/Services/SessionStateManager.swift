@@ -266,9 +266,11 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
             return
         }
         
-        // Notify UI to show authenticating state
-        transition(to: .authenticating)
-        
+        // No self-transition here (review finding): every normal path reaches this
+        // method FROM enterState(.authenticating), so requesting .authenticating
+        // again violated the state table and polluted lastError with a spurious
+        // invalidStateTransition on every successful badge login. The UI already
+        // observed the state change that got us here; start the backend work.
         do {
             // Step 1: Validate badge with backend and get session token
             let startSessionResponse = try await BackendService.shared.startSession(

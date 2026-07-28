@@ -1,18 +1,14 @@
-// The ENFORCEMENT-OUT half of the SignalGrid <-> Fleet loop: read host posture
-// from Fleet's REST API, and ACTUATE a SignalGrid decision on a host by moving it
-// between Fleet teams (which carry the restriction profiles in `fleet/`).
-//
-// PUBLIC-REPO BOUNDARY: this is a public, review-safe package, and it must not carry
-// a LIVE, write-capable Fleet actuator. Transport is injected (a fetch-like function),
-// so the public build is exercised ONLY with a stub that returns canned responses —
-// the class and its actuation logic are proven fixture-backed, never against a real
-// Fleet tenant. The real `fetch`-wrapping transport lives OUT OF TREE in the private
-// core, which is where a live host-transfer POST belongs; it is deliberately NOT
-// exported here, so no caller can turn this review package into a live actuator by
-// supplying it. (Adversarial-review finding: an exported live transport made the public
-// connector a write-capable Fleet actuator.)
+// The READ half of the SignalGrid <-> Fleet loop: read host posture from Fleet's
+// REST API, normalized for the decision core. READ-ONLY BY CONSTRUCTION (review
+// finding): an exported actuation method — even stub-transported — hands an
+// injected fetch transport everything needed to execute a production host
+// transfer, so the public package exposes NO write path at all. Actuation
+// (moving a host between Fleet teams) lives in the private core; the DERIVATION
+// (posture → outcome via `fleetOutcome`) stays here and is proven.
+// The injected transport (a fetch-like function) exists so the READ is testable
+// with a stub; the live `fetch`-wrapping transport also lives out of tree.
 
-import { fleetOutcome, type DiskEncryption, type FleetHostReport, type FleetSignal } from "./index";
+import type { DiskEncryption, FleetHostReport } from "./index";
 
 /** Mirrors the core's gate outcome (allow / step_up / restrict / deny). */
 export type AccessOutcome = "allow" | "step_up" | "restrict" | "deny";
@@ -41,13 +37,6 @@ export interface FleetClientConfig {
    *  normalizer can grade the floor. Absent → floor not enforced (and the
    *  normalizer says so via `unknown` rather than passing the host). */
   osFloor?: number;
-}
-
-export interface FleetActuation {
-  hostId: number;
-  teamId: number;
-  tightened: boolean;
-  outcome: AccessOutcome;
 }
 
 const okStatus = (s: number) => s >= 200 && s < 300;
@@ -97,48 +86,4 @@ export class FleetClient {
     return Array.isArray(hosts) ? hosts.map((h: any) => toHostReport(h, this.cfg.osFloor)) : [];
   }
 
-  /**
-   * Actuate a decision on a host. Only an explicit `allow` returns a host to the
-   * normal team; `step_up`, `restrict`, and `deny` all place it on the restricted
-   * team (kiosk/allowlist/non-removable engage). step_up is a demand for MORE
-   * proof — actuating it by relaxing device enforcement would turn the fabric's
-   * middle rung into an un-restrict side channel. Uses Fleet's host-transfer
-   * endpoint. Throws (fail-closed) on any error.
-   */
-  async applyDecision(hostId: number, outcome: AccessOutcome, evidence?: FleetSignal): Promise<FleetActuation> {
-    const tightened = outcome !== "allow";
-    // RELAXATION IS POSTURE-BOUND (review finding): tightening (step_up/restrict/
-    // deny) is always safe to actuate, but returning a host to the normal team on a
-    // hand-picked "allow" would let any caller un-restrict an unmanaged, non-
-    // compliant, or stale host — making fleetOutcome advisory rather than enforced.
-    // An "allow" therefore REQUIRES the host's normalized Fleet signal as evidence,
-    // and that evidence must itself derive to "allow" (positive health on every
-    // axis); anything less throws fail-closed and no transfer is attempted.
-    if (!tightened) {
-      if (!evidence) {
-        throw new Error(
-          "Fleet relaxation requires the host's normalized posture signal as evidence — an 'allow' cannot be actuated on assertion alone.",
-        );
-      }
-      if (fleetOutcome(evidence) !== "allow") {
-        throw new Error(
-          "Fleet relaxation refused: the supplied posture evidence does not derive to 'allow' (fail closed).",
-        );
-      }
-    }
-    const teamId = tightened ? this.cfg.restrictedTeamId : this.cfg.normalTeamId;
-    const res = await this.cfg.transport(
-      { method: "POST", path: "/api/v1/fleet/hosts/transfer", body: { team_id: teamId, hosts: [hostId] } },
-      this.auth(),
-    );
-    if (!okStatus(res.status)) throw new Error(`Fleet host transfer failed: ${res.status}`);
-    return { hostId, teamId, tightened, outcome };
-  }
 }
-
-// NOTE: the live `fetch`-wrapping transport is intentionally NOT defined or exported in
-// this public package — see the boundary note at the top. A live Fleet transport (and
-// the authenticated host-transfer POST it enables) lives out of tree in the private
-// core. In this repo, `FleetClient` is only ever constructed with a caller-supplied stub
-// (see `fleet-connector-proof.ts`), so the actuation logic is proven without any path to
-// a real tenant.

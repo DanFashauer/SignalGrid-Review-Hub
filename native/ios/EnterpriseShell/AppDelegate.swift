@@ -12,10 +12,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         _ = KeychainService.shared
         _ = AuditLogger.shared
         
-        // Configure badge reader
-        BadgeReaderManager.shared.setup()
-        BadgeReaderManager.shared.delegate = SessionStateManager.shared
-        
+        // NO parallel badge reader here (review finding): SessionStateManager's init
+        // already resolved and set up the ONE configured provider via
+        // ProviderConfigurationService. Unconditionally starting the legacy
+        // ExternalAccessory manager as well made any matching USB accessory an
+        // additional, UNCONFIGURED badge source — and when the configured provider
+        // was itself the ExternalAccessory wrapper, this delegate assignment
+        // overwrote the wrapper's bridge. ProviderConfigurationService owns the
+        // single active reader.
+
         // Log app launch
         AuditLogger.shared.log(event: .appLaunched, metadata: [
             "deviceId": DeviceInfo.identifier,

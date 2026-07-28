@@ -23,6 +23,8 @@ const CONSOLE = `http://localhost:${Number(process.env.E2E_ADMIN_PORT ?? 4614)}`
 const IDENTITY = "nurse.baseline_drift";
 const DEVICE = "ipad-ward-06";
 const INTEGRATION = "bcma";
+// The ONE action this ceremony's challenge is bound to; the release is scoped to it.
+const ACTION_KEY = "controlled.administer";
 
 test("a real browser WebAuthn ceremony releases a held step_up", async ({ page }) => {
   // A user-verified platform authenticator: UV on (our endpoints require it),
@@ -46,7 +48,7 @@ test("a real browser WebAuthn ceremony releases a held step_up", async ({ page }
   // The whole ceremony runs IN THE PAGE so navigator.credentials is the real
   // browser API and the request origin is the page origin.
   const result = await page.evaluate(
-    async ({ identity, device, integration }) => {
+    async ({ identity, device, integration, actionKey }) => {
       const b64urlToBuf = (s: string) => {
         const pad = "=".repeat((4 - (s.length % 4)) % 4);
         const bin = atob((s + pad).replace(/-/g, "+").replace(/_/g, "/"));
@@ -115,7 +117,7 @@ test("a real browser WebAuthn ceremony releases a held step_up", async ({ page }
       // 2) Challenge + real navigator.credentials.get.
       // The challenge is bound to the exact pending action at mint time; completion
       // verifies the binding, so the same integration/device must be named here.
-      const chal = await post("/v1/step-up/challenge", { identityRef: identity, integrationId: integration, deviceRef: device }, token);
+      const chal = await post("/v1/step-up/challenge", { identityRef: identity, integrationId: integration, deviceRef: device, actionKey }, token);
       if (chal.status !== 200) return { stage: "challenge", ...chal };
       const ao = chal.json.publicKey;
       const assertion = (await navigator.credentials.get({
@@ -139,6 +141,7 @@ test("a real browser WebAuthn ceremony releases a held step_up", async ({ page }
           integrationId: integration,
           identityRef: identity,
           deviceRef: device,
+          actionKey,
           challengeId: chal.json.challengeId,
           assertion: {
             id: assertion.id,
@@ -155,7 +158,7 @@ test("a real browser WebAuthn ceremony releases a held step_up", async ({ page }
       );
       return { stage: "complete", ...done };
     },
-    { identity: IDENTITY, device: DEVICE, integration: INTEGRATION },
+    { identity: IDENTITY, device: DEVICE, integration: INTEGRATION, actionKey: ACTION_KEY },
   );
 
   // The real browser assertion was accepted and the held plan released.
@@ -164,7 +167,11 @@ test("a real browser WebAuthn ceremony releases a held step_up", async ({ page }
   const payload = result.json;
   expect(payload.stepUp?.released, "held step_up released by a real browser assertion").toBe(true);
   expect(payload.stepUp?.method).toBe("webauthn");
-  expect(payload.plan?.mode).not.toBe("step_up");
-  const held = payload.plan?.actions?.find((a: { key: string }) => a.key === "controlled.administer");
-  expect(held?.disposition, "the held controlled action is no longer step_up").not.toBe("step_up");
+  expect(payload.stepUp?.actionKey).toBe(ACTION_KEY);
+  const held = payload.plan?.actions?.find((a: { key: string }) => a.key === ACTION_KEY);
+  expect(held?.disposition, "the BOUND controlled action is no longer step_up").not.toBe("step_up");
+  // Scoped release: the gesture was bound to ONE action, so the integration's other
+  // gated actions stay held and the plan honestly remains in step_up mode.
+  const other = payload.plan?.actions?.find((a: { key: string }) => a.key === "dose.override");
+  expect(other?.disposition, "an unbound gated action stays held (scoped release)").toBe("step_up");
 });

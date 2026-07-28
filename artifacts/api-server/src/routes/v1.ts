@@ -464,18 +464,26 @@ router.post("/v1/step-up/enroll/verify", async (req: Request, res: Response, nex
 });
 
 // 3) Authentication challenge for a pending step-up. The challenge is BOUND to the
-//    exact pending action at mint time (tenant + identity + integration + device),
-//    and the completion route verifies that binding — so a gesture signed for one
-//    pending action can never release a different one (adversarial-review + CodeQL
-//    finding). ONE challenge record: minted, persisted, and id-returned by the lib.
+//    exact pending action at mint time (tenant + identity + integration + device +
+//    the SELECTED ACTION KEY), and the completion route verifies that binding — so a
+//    gesture signed for one pending action can never release a different one, and can
+//    never release the integration's OTHER gated actions either (adversarial-review +
+//    CodeQL + Codex findings). ONE challenge record: minted, persisted, id-returned.
 router.post("/v1/step-up/challenge", async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = (req.body ?? {}) as Record<string, unknown>;
     const identityRef = requireString(body, "identityRef");
     const integrationId = requireString(body, "integrationId");
     const deviceRef = requireString(body, "deviceRef");
-    if (!findAppIntegration(integrationId)) {
+    const actionKey = requireString(body, "actionKey");
+    const integration = findAppIntegration(integrationId);
+    if (!integration) {
       throw new CoreError("not_found", `Unknown app integration '${integrationId}'.`, 404);
+    }
+    // The challenge names ONE concrete action of this integration. An unknown key has
+    // nothing to bind to, so nothing is minted (fail closed).
+    if (!integration.actions.some((a) => a.key === actionKey)) {
+      throw new CoreError("not_found", `Unknown action '${actionKey}' for integration '${integrationId}'.`, 404);
     }
     const userId = webauthnUserId(req, identityRef);
     // Fail closed: no enrolled credential ⇒ no challenge ⇒ nothing to sign. The
@@ -489,6 +497,7 @@ router.post("/v1/step-up/challenge", async (req: Request, res: Response, next: N
       identityRef,
       integrationId,
       deviceRef,
+      actionKey,
     });
     const { challengeId, ...publicKey } = options;
     res.json(envelope(req, { challengeId, publicKey }));
@@ -528,11 +537,13 @@ router.post("/v1/app-workflows/complete-step-up", async (req: Request, res: Resp
     const ctx = stored.context;
     const tenantId = core.context(token(req)).tenant.id;
     const deviceRef = requireString(body, "deviceRef");
+    const actionKey = requireString(body, "actionKey");
     if (
       ctx.tenantId !== tenantId ||
       ctx.identityRef !== identityRef ||
       ctx.integrationId !== integrationId ||
-      ctx.deviceRef !== deviceRef
+      ctx.deviceRef !== deviceRef ||
+      ctx.actionKey !== actionKey
     ) {
       throw new CoreError(
         "forbidden",
@@ -560,11 +571,15 @@ router.post("/v1/app-workflows/complete-step-up", async (req: Request, res: Resp
     const evalReq = parseEvaluate({ ...body, workflowKey: integration.workflowKey });
     const decision = core.evaluate(token(req), evalReq);
     const released = decision.outcome === "step_up";
+    // SCOPED release (review finding): the gesture releases ONLY the action the
+    // challenge was minted for — taken from the STORED binding, never the caller's
+    // body — so one verified gesture cannot release the integration's other gated
+    // actions. The plan honestly stays in step_up mode when other actions remain held.
     const plan = planAppSession({
       integration,
       outcome: decision.outcome,
       reasonCodes: decision.reasonCodes,
-      stepUpSatisfied: released,
+      stepUpSatisfiedActionKeys: released ? [ctx.actionKey] : [],
     });
     res.json(
       envelope(req, {
@@ -572,6 +587,7 @@ router.post("/v1/app-workflows/complete-step-up", async (req: Request, res: Resp
         plan,
         stepUp: {
           released,
+          actionKey: ctx.actionKey,
           method: "webauthn",
           credentialId: verification.credentialId,
           verifiedAt: verification.timestamp,

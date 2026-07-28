@@ -391,24 +391,26 @@ paths:
       summary: Mint a single-use authentication challenge BOUND to a pending step-up action
       description: >-
         The challenge is bound at mint time to the exact pending action (tenant,
-        identity, integration, device); completion verifies that server-persisted
-        binding, so a gesture signed for one pending action can never release a
-        different one.
+        identity, integration, device, and the SELECTED action key); completion
+        verifies that server-persisted binding, so a gesture signed for one pending
+        action can never release a different one — and the eventual release is
+        scoped to that single action, never the integration's other gated actions.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [identityRef, integrationId, deviceRef]
+              required: [identityRef, integrationId, deviceRef, actionKey]
               properties:
                 identityRef: { type: string }
                 integrationId: { type: string }
                 deviceRef: { type: string }
+                actionKey: { type: string, description: The one action of this integration the gesture will release }
       responses:
         "200": { description: challengeId + WebAuthn PublicKeyCredentialRequestOptions (userVerification required) }
         "400": { $ref: "#/components/responses/ValidationError" }
-        "404": { description: Unknown app integration }
+        "404": { description: Unknown app integration, or unknown action key for it }
         "409": { description: No enrolled credential for this identity in this tenant — enroll first (fail closed) }
 
   /v1/app-workflows/complete-step-up:
@@ -419,7 +421,9 @@ paths:
       description: >-
         Verifies the signed assertion (single-use challenge, tenant+identity-bound
         credential, user-verification flag required), then re-evaluates the decision
-        fresh and re-cuts the plan with the step-up satisfied. A valid assertion can
+        fresh and re-cuts the plan with the step-up satisfied FOR THE ONE ACTION the
+        challenge was bound to — the integration's other gated actions stay held, so
+        the plan honestly remains in step_up mode while they do. A valid assertion can
         never upgrade a restrict or deny — release applies only when the CURRENT
         outcome is step_up.
       requestBody:
@@ -428,11 +432,12 @@ paths:
           application/json:
             schema:
               type: object
-              required: [integrationId, identityRef, deviceRef, challengeId, assertion]
+              required: [integrationId, identityRef, deviceRef, actionKey, challengeId, assertion]
               properties:
                 integrationId: { type: string }
                 identityRef: { type: string }
                 deviceRef: { type: string }
+                actionKey: { type: string, description: Must equal the action the challenge was minted for (the release is scoped to it) }
                 challengeId: { type: string }
                 assertion: { type: object, description: WebAuthn authentication response (clientDataJSON + authenticatorData + signature) }
                 requestContext: { type: object, additionalProperties: { type: string } }

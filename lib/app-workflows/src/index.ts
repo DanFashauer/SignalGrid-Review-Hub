@@ -78,8 +78,16 @@ export interface AppPlanInput {
   reasonCodes: string[];
   /** Keys of `assist` actions a human has confirmed this turn. */
   confirmedActionKeys?: string[];
-  /** True once the holder has satisfied a step-up (badge tap / biometric). */
+  /** True once the holder has satisfied a step-up (badge tap / biometric).
+   *  FULL release: every held action is released. Kept for the simulated/demo
+   *  planners; the /v1 WebAuthn completion path uses the scoped form below. */
   stepUpSatisfied?: boolean;
+  /** SCOPED release (review finding): keys of the specific actions a verified
+   *  step-up gesture was bound to. Only these actions are released — every other
+   *  gated/sensitive action stays held, so a gesture obtained for one pending
+   *  action can never release the rest of the integration. If the listed keys
+   *  cover EVERY held action, the plan is equivalent to a full release. */
+  stepUpSatisfiedActionKeys?: string[];
   /** Who confirms a sensitive action, phrased for the vertical. Defaults per vertical. */
   confirmer?: string;
 }
@@ -107,7 +115,16 @@ export function planAppSession(input: AppPlanInput): AppSessionPlan {
   const confirmed = new Set(input.confirmedActionKeys ?? []);
   const confirmer = input.confirmer ?? DEFAULT_CONFIRMER[integration.vertical];
 
-  const stepUpDone = outcome === "step_up" && input.stepUpSatisfied === true;
+  // A release may be FULL (stepUpSatisfied — the simulated/demo path) or SCOPED to the
+  // action keys a verified gesture was actually bound to. A scoped release that happens
+  // to cover every held action is equivalent to a full one (so a single-gated-action
+  // integration still leaves step_up mode); otherwise the plan honestly STAYS in
+  // step_up mode with only the bound action released — a gesture for one action must
+  // never release the rest of the integration (review finding).
+  const releasedKeys = new Set(input.stepUpSatisfiedActionKeys ?? []);
+  const heldKeys = integration.actions.filter((a) => a.gatedByStepUp || a.sensitive).map((a) => a.key);
+  const allHeldReleased = releasedKeys.size > 0 && heldKeys.every((k) => releasedKeys.has(k));
+  const stepUpDone = outcome === "step_up" && (input.stepUpSatisfied === true || allHeldReleased);
   const effective: DecisionOutcome = stepUpDone ? "allow" : outcome;
 
   const actions: AppActionPlan[] = integration.actions.map((a) => {
@@ -115,7 +132,12 @@ export function planAppSession(input: AppPlanInput): AppSessionPlan {
     let reason: string;
     let requiresConfirmation = false;
 
-    switch (effective) {
+    // This action's effective outcome: released individually iff the step-up gesture
+    // was bound to it (or the release was full).
+    const actionReleased = stepUpDone || (outcome === "step_up" && releasedKeys.has(a.key));
+    const eff: DecisionOutcome = actionReleased ? "allow" : effective;
+
+    switch (eff) {
       case "deny":
         disposition = "blocked";
         reason = `Denied — ${firstReason(reasonCodes, "trust conditions not met")}`;
@@ -156,7 +178,7 @@ export function planAppSession(input: AppPlanInput): AppSessionPlan {
           }
         } else {
           disposition = "auto";
-          reason = stepUpDone ? "Released after step-up" : "Trusted — performed automatically";
+          reason = actionReleased ? "Released after step-up" : "Trusted — performed automatically";
         }
         break;
       default:

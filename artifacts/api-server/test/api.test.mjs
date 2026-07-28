@@ -606,7 +606,7 @@ async function run() {
 
   // Fail-closed before enrollment: no credential ⇒ no challenge.
   const noCred = await req("POST", "/v1/step-up/challenge", {
-    token: KEYS.operator, body: { identityRef: suIdentity, integrationId: "bcma", deviceRef: suDevice },
+    token: KEYS.operator, body: { identityRef: suIdentity, integrationId: "bcma", deviceRef: suDevice, actionKey: "controlled.administer" },
   });
   check("step-up challenge without enrollment → 409 (fail closed)", noCred.status === 409);
 
@@ -646,11 +646,11 @@ async function run() {
     flagSmuggled.json?.plan?.actions?.find((a) => a.key === "controlled.administer")?.disposition === "step_up");
 
   // Tampered signature → 403, and no plan escapes with the error.
-  const chalBad = await req("POST", "/v1/step-up/challenge", { token: KEYS.operator, body: { identityRef: suIdentity, integrationId: "bcma", deviceRef: suDevice } });
+  const chalBad = await req("POST", "/v1/step-up/challenge", { token: KEYS.operator, body: { identityRef: suIdentity, integrationId: "bcma", deviceRef: suDevice, actionKey: "controlled.administer" } });
   const tampered = await req("POST", "/v1/app-workflows/complete-step-up", {
     token: KEYS.operator,
     body: {
-      integrationId: "bcma", identityRef: suIdentity, deviceRef: suDevice,
+      integrationId: "bcma", identityRef: suIdentity, deviceRef: suDevice, actionKey: "controlled.administer",
       challengeId: chalBad.json.challengeId,
       assertion: authenticator.assertion(chalBad.json.publicKey.challenge, { tamper: true }),
     },
@@ -658,7 +658,7 @@ async function run() {
   check("tampered assertion → 403 with no plan", tampered.status === 403 && tampered.json?.plan === undefined);
 
   // The genuine ceremony releases the held action.
-  const chalGood = await req("POST", "/v1/step-up/challenge", { token: KEYS.operator, body: { identityRef: suIdentity, integrationId: "bcma", deviceRef: suDevice } });
+  const chalGood = await req("POST", "/v1/step-up/challenge", { token: KEYS.operator, body: { identityRef: suIdentity, integrationId: "bcma", deviceRef: suDevice, actionKey: "controlled.administer" } });
   check("step-up auth challenge → 200 (enrolled)", chalGood.status === 200 && typeof chalGood.json?.challengeId === "string");
   const goodAssertion = authenticator.assertion(chalGood.json.publicKey.challenge, { signCount: 2 });
 
@@ -668,38 +668,59 @@ async function run() {
   // cryptographic verify, leaving the challenge unconsumed.
   const wrongIntegration = await req("POST", "/v1/app-workflows/complete-step-up", {
     token: KEYS.operator,
-    body: { integrationId: "emr-chart", identityRef: suIdentity, deviceRef: suDevice, challengeId: chalGood.json.challengeId, assertion: goodAssertion },
+    body: { integrationId: "emr-chart", identityRef: suIdentity, deviceRef: suDevice, actionKey: "controlled.administer", challengeId: chalGood.json.challengeId, assertion: goodAssertion },
   });
   check("challenge minted for bcma cannot release emr-chart (403)", wrongIntegration.status === 403 && wrongIntegration.json?.plan === undefined);
   const wrongIdentity = await req("POST", "/v1/app-workflows/complete-step-up", {
     token: KEYS.operator,
-    body: { integrationId: "bcma", identityRef: "nurse.compliant", deviceRef: suDevice, challengeId: chalGood.json.challengeId, assertion: goodAssertion },
+    body: { integrationId: "bcma", identityRef: "nurse.compliant", deviceRef: suDevice, actionKey: "controlled.administer", challengeId: chalGood.json.challengeId, assertion: goodAssertion },
   });
   check("challenge minted for one identity cannot release another's action (403)", wrongIdentity.status === 403);
   const wrongDevice = await req("POST", "/v1/app-workflows/complete-step-up", {
     token: KEYS.operator,
-    body: { integrationId: "bcma", identityRef: suIdentity, deviceRef: "ipad-ward-01", challengeId: chalGood.json.challengeId, assertion: goodAssertion },
+    body: { integrationId: "bcma", identityRef: suIdentity, deviceRef: "ipad-ward-01", actionKey: "controlled.administer", challengeId: chalGood.json.challengeId, assertion: goodAssertion },
   });
   check("challenge minted for one device cannot release another's action (403)", wrongDevice.status === 403);
+
+  // SCOPED release (Codex finding): the challenge above was minted for
+  // controlled.administer. A completion claiming a DIFFERENT action of the SAME
+  // integration is refused before the cryptographic verify.
+  const wrongAction = await req("POST", "/v1/app-workflows/complete-step-up", {
+    token: KEYS.operator,
+    body: { integrationId: "bcma", identityRef: suIdentity, deviceRef: suDevice, actionKey: "dose.override", challengeId: chalGood.json.challengeId, assertion: goodAssertion },
+  });
+  check("challenge minted for one action cannot release a different action of the same integration (403)", wrongAction.status === 403 && wrongAction.json?.plan === undefined);
+  // An unknown action key has nothing to bind to — no challenge is minted.
+  const unknownAction = await req("POST", "/v1/step-up/challenge", {
+    token: KEYS.operator, body: { identityRef: suIdentity, integrationId: "bcma", deviceRef: suDevice, actionKey: "no.such.action" },
+  });
+  check("challenge for an unknown action key → 404 (nothing to bind to)", unknownAction.status === 404);
 
   const completed = await req("POST", "/v1/app-workflows/complete-step-up", {
     token: KEYS.operator,
     body: {
-      integrationId: "bcma", identityRef: suIdentity, deviceRef: suDevice,
+      integrationId: "bcma", identityRef: suIdentity, deviceRef: suDevice, actionKey: "controlled.administer",
       challengeId: chalGood.json.challengeId, assertion: goodAssertion,
     },
   });
-  check("verified assertion releases the held step_up plan",
+  check("verified assertion releases the BOUND action (no longer held)",
     completed.status === 200 && completed.json?.stepUp?.released === true &&
-    completed.json?.plan?.mode !== "step_up" &&
+    completed.json?.stepUp?.actionKey === "controlled.administer" &&
     completed.json?.plan?.actions?.find((a) => a.key === "controlled.administer")?.disposition !== "step_up");
+  // THE scoped-release invariant: the gesture was bound to controlled.administer, so
+  // every OTHER gated action of the integration stays held and the plan honestly
+  // remains in step_up mode. Before the fix, one gesture released them all.
+  check("...and the integration's OTHER gated actions stay held (scoped, not integration-wide)",
+    completed.json?.plan?.actions?.find((a) => a.key === "dose.override")?.disposition === "step_up" &&
+    completed.json?.plan?.actions?.find((a) => a.key === "witness.cosign")?.disposition === "step_up" &&
+    completed.json?.plan?.mode === "step_up");
   check("completion reports the webauthn method + credential", completed.json?.stepUp?.method === "webauthn" && typeof completed.json?.stepUp?.credentialId === "string");
 
   // Replay: the same challenge is single-use.
   const replay = await req("POST", "/v1/app-workflows/complete-step-up", {
     token: KEYS.operator,
     body: {
-      integrationId: "bcma", identityRef: suIdentity, deviceRef: suDevice,
+      integrationId: "bcma", identityRef: suIdentity, deviceRef: suDevice, actionKey: "controlled.administer",
       challengeId: chalGood.json.challengeId, assertion: goodAssertion,
     },
   });
@@ -708,7 +729,7 @@ async function run() {
   // Cross-tenant isolation: the credential lives under northwind's tenant key;
   // another tenant's token sees no enrollment at all.
   const stepUpCrossTenant = await req("POST", "/v1/step-up/challenge", {
-    token: KEYS.atlas, body: { identityRef: suIdentity, integrationId: "bcma", deviceRef: suDevice },
+    token: KEYS.atlas, body: { identityRef: suIdentity, integrationId: "bcma", deviceRef: suDevice, actionKey: "controlled.administer" },
   });
   check("step-up credentials are tenant-scoped (other tenant → 409)", stepUpCrossTenant.status === 409);
 

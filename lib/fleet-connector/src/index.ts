@@ -146,6 +146,11 @@ export function normalizeFleetReport(report: FleetHostReport, nowIso: string): F
   if (belowFloor) reasons.push(`OS ${report.osMajor} below floor ${report.osFloor}`);
   if (osUnknownUnderFloor) reasons.push(`OS version unknown while floor ${report.osFloor} is enforced`);
   if (report.screenLock === "off") reasons.push("screen lock off");
+  // Unobserved required checks are step-up REASONS, not silence (review finding):
+  // an absent screen lock made compliance `unknown` and raised assurance, but the
+  // rationale still read "healthy" — contradicting the step-up in the operator UI.
+  if (report.screenLock !== "on" && report.screenLock !== "off") reasons.push("screen lock unobserved");
+  else if (deviceCompliance === "unknown" && !reasons.length) reasons.push("compliance unverified");
   if (postureFreshness !== "fresh") reasons.push(`check-in ${postureFreshness}`);
   const rationale = reasons.length
     ? reasons.join(", ")

@@ -13,10 +13,16 @@ if (Number.isNaN(port) || port <= 0) {
 const basePath = process.env.BASE_PATH ?? "/";
 
 // Where the app's `/api/*` calls are proxied in local dev + `vite preview`.
-// Defaults to the api-server's default port; override with API_PROXY_TARGET.
-// (For a hosted static build pointing at a remote api-server, set
-// VITE_API_BASE_URL at build time instead — see src/main.tsx.)
-const apiProxyTarget = process.env.API_PROXY_TARGET ?? "http://localhost:8080";
+// LOOPBACK-ONLY (review finding): an arbitrary API_PROXY_TARGET would forward all
+// generated /api/* traffic to a live service, preserving an unrestricted live-API
+// path in the public Review Hub even with the browser-side base-URL check. The
+// proxy exists for the LOCAL api-server; any non-loopback target is refused.
+const rawProxyTarget = process.env.API_PROXY_TARGET ?? "http://localhost:8080";
+const proxyHost = (() => { try { return new URL(rawProxyTarget).hostname.toLowerCase(); } catch { return ""; } })();
+if (!["localhost", "127.0.0.1", "::1", "[::1]"].includes(proxyHost)) {
+  throw new Error(`API_PROXY_TARGET must be loopback (got "${rawProxyTarget}") — the public Review Hub proxies only a locally running api-server.`);
+}
+const apiProxyTarget = rawProxyTarget;
 const apiProxy = {
   "/api": { target: apiProxyTarget, changeOrigin: true },
 };

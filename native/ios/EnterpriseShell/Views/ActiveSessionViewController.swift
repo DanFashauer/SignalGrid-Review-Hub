@@ -227,6 +227,20 @@ final class ActiveSessionViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        // A refused kiosk (ASAM) release leaves the holder trapped in the shell while
+        // the session is already active (review finding): observe the failure signal
+        // KioskController posts and surface recovery guidance instead of rendering
+        // the normal workspace as if the device had opened.
+        NotificationCenter.default.addObserver(
+            forName: .kioskReleaseFailed, object: nil, queue: .main
+        ) { [weak self] _ in
+            let alert = UIAlertController(
+                title: "Device still locked",
+                message: "The kiosk could not be released, so this device remains in Single App Mode. Try again from Settings, or contact an administrator — MDM supervision may need to re-apply the release.",
+                preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            self?.present(alert, animated: true)
+        }
         setupUI()
         configureWithSession()
         startTimers()

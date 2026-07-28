@@ -97,13 +97,13 @@ struct RemoteDecisionService: DecisionService {
         let planOutcome = AppWorkflows.DecisionOutcome(rawValue: env.plan.outcome)
         let decisionOutcome = AppWorkflows.DecisionOutcome(rawValue: env.decision.outcome)
         let severity: [AppWorkflows.DecisionOutcome: Int] = [.allow: 0, .step_up: 1, .restrict: 2, .deny: 3]
-        let outcome: AppWorkflows.DecisionOutcome
-        switch (planOutcome, decisionOutcome) {
-        case let (p?, d?): outcome = (severity[p] ?? 3) >= (severity[d] ?? 3) ? p : d
-        case let (p?, nil): outcome = p
-        case let (nil, d?): outcome = d
-        case (nil, nil): throw DecisionServiceError.unknownOutcome(env.plan.outcome)
+        // BOTH fields must parse (review finding): a malformed or version-skewed
+        // decision outcome alongside plan "allow" must invalidate the envelope, not
+        // fall through to the derived plan.
+        guard let p = planOutcome, let d = decisionOutcome else {
+            throw DecisionServiceError.unknownOutcome("\(env.decision.outcome)/\(env.plan.outcome)")
         }
+        let outcome: AppWorkflows.DecisionOutcome = (severity[p] ?? 3) >= (severity[d] ?? 3) ? p : d
         return DecisionResult(outcome: outcome, reasonCodes: env.decision.reasonCodes,
                               explanation: env.decision.explanation ?? "", source: .controlPlane)
     }

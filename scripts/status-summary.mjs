@@ -69,7 +69,10 @@ const localHead = gitOut(["rev-parse", "HEAD"]);
 // unverifiable.)
 const lsRemote = spawnSync("git", ["ls-remote", "origin", branch], { cwd: repoRoot, encoding: "utf8" });
 const remoteHead = lsRemote.status === 0 ? ((lsRemote.stdout ?? "").trim().split(/\s+/)[0] ?? "") : "";
-const pushState = lsRemote.status !== 0 || remoteHead === ""
+// A detached checkout reports branch "HEAD", and `git ls-remote origin HEAD`
+// then resolves the remote DEFAULT branch — a successful lookup of the wrong ref
+// (review finding). Detached ⇒ the relationship is unknown, full stop.
+const pushState = branch === "HEAD" || lsRemote.status !== 0 || remoteHead === ""
   ? "unknown"
   : localHead && localHead === remoteHead
     ? "yes"

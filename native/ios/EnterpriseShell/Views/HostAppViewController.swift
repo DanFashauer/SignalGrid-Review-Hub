@@ -34,6 +34,8 @@ final class HostAppViewController: UIViewController {
     /// The per-action difference (auto vs assist vs blocked) comes from the action's
     /// risk tier via `AppWorkflows`, not from per-step signals.
     private var cachedDecision: DecisionResult?
+    /// Monotonic evaluation generation — only the latest may publish its verdict.
+    private var evalGeneration = 0
     private func currentDecision() -> DecisionResult {
         cachedDecision ?? DecisionResult(
             outcome: .step_up, reasonCodes: ["DECISION_PENDING"],
@@ -140,6 +142,13 @@ final class HostAppViewController: UIViewController {
         let ctx = buildEnvironmentContext()
         let service = DecisionServiceProvider.resolve(
             backendURL: configuredBackendURL, bearerToken: configuredBackendToken)
+        // Version each evaluation (review finding): overlapping remote evaluations
+        // each capture a different ctx, and whichever finished LAST used to win —
+        // so an older healthy result could overwrite a newer restrictive one and
+        // re-open auto actions against the current risk signal. Only the latest
+        // generation may publish; superseded results are discarded (audited).
+        evalGeneration += 1
+        let gen = evalGeneration
         Task { @MainActor in
             let previous = self.cachedDecision?.outcome
             let result = await AccessDecision.evaluate(
@@ -147,6 +156,13 @@ final class HostAppViewController: UIViewController {
                 identityRef: backendIdentityRef,
                 deviceRef: backendDeviceRef,
                 via: service)
+            guard gen == self.evalGeneration else {
+                AuditLogger.shared.log(event: .assistActionEvaluated, metadata: [
+                    "scope": "session", "trigger": reason,
+                    "outcome": result.outcome.rawValue,
+                    "superseded": "true"])
+                return
+            }
             self.cachedDecision = result
             AuditLogger.shared.log(event: .assistActionEvaluated, metadata: [
                 "scope": "session", "trigger": reason,

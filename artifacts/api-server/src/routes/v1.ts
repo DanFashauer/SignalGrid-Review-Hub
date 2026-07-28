@@ -500,8 +500,23 @@ router.post("/v1/step-up/challenge", async (req: Request, res: Response, next: N
     }
     // The challenge names ONE concrete action of this integration. An unknown key has
     // nothing to bind to, so nothing is minted (fail closed).
-    if (!integration.actions.some((a) => a.key === actionKey)) {
+    const action = integration.actions.find((a) => a.key === actionKey);
+    if (!action) {
       throw new CoreError("not_found", `Unknown action '${actionKey}' for integration '${integrationId}'.`, 404);
+    }
+    // ...and it must be an action the planner can actually HOLD. planAppSession holds
+    // only `gatedByStepUp || sensitive` actions; anything else stays `auto` even under a
+    // step_up decision. Minting a challenge for such an action produced a verification
+    // record asserting `released: true` for something that was never withheld — a step-up
+    // ceremony that proves nothing, recorded as though it authorized access (review
+    // finding). The record is the audit artifact, so a false release claim is the defect
+    // even though no extra access is granted. Fail closed rather than mint a no-op.
+    if (!action.gatedByStepUp && !action.sensitive) {
+      throw new CoreError(
+        "validation",
+        `Action '${actionKey}' is not held pending step-up, so a step-up challenge for it would release nothing. Request the action directly.`,
+        400,
+      );
     }
     const userId = webauthnUserId(req, identityRef);
     // Fail closed: no enrolled credential ⇒ no challenge ⇒ nothing to sign. The

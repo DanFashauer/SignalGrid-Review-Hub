@@ -124,19 +124,113 @@ export async function saveUser(user: WebAuthnUser): Promise<void> {
   inMemoryUsers.set(user.userId, user);
 }
 
+/**
+ * Append a credential to a user's enrollment record ATOMICALLY.
+ *
+ * The naive getUser→push→saveUser sequence loses enrollments (review finding).
+ * Two enrollment ceremonies for the same identity — easy to hit across Redis-backed
+ * API instances, or from one operator enrolling a replacement authenticator while
+ * another finishes the first — each read the same record, each append their own
+ * credential, and each write the whole thing back. The later SET erases the earlier
+ * credential. Both requests still answer `enrolled: true`, so the loser walks away
+ * believing they hold a working step-up authenticator that the store no longer knows
+ * about; they discover otherwise at the moment they are asked to step up.
+ *
+ * WHY A LOCK AND NOT THE WATCH/MULTI USED BY advanceCredentialCounter. Optimistic
+ * locking is right for the counter, where losing the race MUST fail closed — the loser
+ * has nothing valid left to do. Here both appends are legitimate and commutative, so a
+ * loser has to retry, and retrying is where WATCH breaks down: under concurrent writers
+ * on one key the aborts cascade and some writers exhaust their attempts having done
+ * nothing wrong. `proof:enrollment-race` measured exactly that against a real Redis —
+ * a WATCH/MULTI version with 5 attempts persisted 7 of 12 concurrent enrollments and
+ * threw for the rest. Raising the retry count would move the failure, not remove it:
+ * optimistic locking under contention is livelock-prone by construction. A mutual
+ * exclusion lock serialises the appends instead, so every writer commits exactly once.
+ *
+ * The lock is correct rather than merely present: acquisition is `SET NX PX` (atomic,
+ * self-expiring so a crashed holder cannot wedge enrollment forever), and release is a
+ * compare-and-delete against a per-caller token so a slow holder whose lock already
+ * expired cannot delete the NEXT holder's lock. Failing to acquire throws — reporting a
+ * successful enrollment over a credential that was not persisted is the one outcome
+ * this function must never produce.
+ */
+const LOCK_TTL_MS = 5_000;
+const LOCK_ATTEMPTS = 100;
+const LOCK_RETRY_MS = 25;
+
+/** Release only OUR lock: a plain DEL would free a lock another caller now holds. */
+const RELEASE_LOCK_LUA =
+  "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
+
 export async function addCredential(userId: string, credential: WebAuthnCredential): Promise<void> {
-  const user = await getUser(userId);
-  
-  if (user) {
-    user.credentials.push(credential);
-    await saveUser(user);
-  } else {
-    await saveUser({
-      userId,
-      credentials: [credential],
-      createdAt: new Date().toISOString(),
-    });
+  const key = `${USER_PREFIX}${userId}`;
+
+  if (redisConfigured()) {
+    const redis = await getRedisClient();
+    const lockKey = `${key}:lock`;
+    const lockToken = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    let held = false;
+    try {
+      await redis!.connect();
+
+      for (let attempt = 0; attempt < LOCK_ATTEMPTS && !held; attempt += 1) {
+        const acquired = await redis!.set(lockKey, lockToken, "PX", LOCK_TTL_MS, "NX");
+        if (acquired === "OK") {
+          held = true;
+          break;
+        }
+        // Jitter so contending writers do not retry in lockstep.
+        await new Promise((r) => setTimeout(r, LOCK_RETRY_MS + Math.floor(Math.random() * LOCK_RETRY_MS)));
+      }
+      if (!held) {
+        throw new Error(
+          "WebAuthn credential enrollment could not acquire the per-user lock; not reporting an enrollment that was not persisted",
+        );
+      }
+
+      // ── critical section ────────────────────────────────────────────────────
+      const data = await redis!.get(key);
+      const user: WebAuthnUser = data
+        ? (JSON.parse(data) as WebAuthnUser)
+        : { userId, credentials: [], createdAt: new Date().toISOString() };
+      // Re-entrant safety: a retried request or a duplicate delivery must not append
+      // the same credential twice.
+      if (!user.credentials.some((c) => c.id === credential.id)) {
+        user.credentials.push(credential);
+        // Durable, no TTL — matching saveUser. A credential is an enrollment record,
+        // not a session.
+        const setRes = await redis!.set(key, JSON.stringify(user));
+        if (setRes !== "OK") {
+          throw new Error("WebAuthn credential persistence failed");
+        }
+      }
+      inMemoryUsers.set(userId, user); // keep the mirror consistent, as saveUser does
+    } finally {
+      if (held) {
+        await redis!.eval(RELEASE_LOCK_LUA, 1, lockKey, lockToken).catch(() => undefined);
+      }
+      await redis!.quit().catch(() => undefined);
+    }
+    return;
   }
+
+  // No Redis configured: single-process in-memory mode. Read-check-write with NO await
+  // between the read and the mutation, so it cannot interleave — the same guarantee
+  // advanceCredentialCounter and getAndDeleteChallenge rely on in this mode. (The old
+  // code awaited getUser() here, which opened exactly the interleave it needed to avoid.)
+  const existing = inMemoryUsers.get(userId);
+  if (existing) {
+    if (!existing.credentials.some((c) => c.id === credential.id)) {
+      existing.credentials.push(credential);
+    }
+    inMemoryUsers.set(userId, existing);
+    return;
+  }
+  inMemoryUsers.set(userId, {
+    userId,
+    credentials: [credential],
+    createdAt: new Date().toISOString(),
+  });
 }
 
 export async function removeCredential(userId: string, credentialId: string): Promise<boolean> {

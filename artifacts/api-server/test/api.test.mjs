@@ -729,6 +729,24 @@ async function run() {
     token: KEYS.operator, body: { identityRef: suIdentity, integrationId: "bcma", deviceRef: suDevice, actionKey: "no.such.action" },
   });
   check("challenge for an unknown action key → 404 (nothing to bind to)", unknownAction.status === 404);
+  // A KNOWN action that the planner never holds is refused too (review finding). Only
+  // `gatedByStepUp || sensitive` actions are held; `note.document` is standard-tier, so
+  // it stays `auto` even under a step_up decision. Minting a challenge for it produced a
+  // record asserting `released: true` over something that was never withheld — a
+  // ceremony proving nothing, written into the audit trail as though it authorized
+  // access. Rejecting at mint time is what keeps the record truthful.
+  const notHeld = await req("POST", "/v1/step-up/challenge", {
+    token: KEYS.operator, body: { identityRef: suIdentity, integrationId: "emr-chart", deviceRef: suDevice, actionKey: "note.document" },
+  });
+  check("challenge for a known but never-held action → 400 (it would release nothing)",
+    notHeld.status === 400 && notHeld.json?.challengeId === undefined);
+  // Control: the same integration's genuinely gated action still mints, so the guard
+  // above rejects for being un-held rather than by rejecting emr-chart wholesale.
+  const heldSameIntegration = await req("POST", "/v1/step-up/challenge", {
+    token: KEYS.operator, body: { identityRef: suIdentity, integrationId: "emr-chart", deviceRef: suDevice, actionKey: "order.place" },
+  });
+  check("control: a held action of the SAME integration still mints a challenge",
+    heldSameIntegration.status === 200 && typeof heldSameIntegration.json?.challengeId === "string");
 
   const completed = await req("POST", "/v1/app-workflows/complete-step-up", {
     token: KEYS.operator,

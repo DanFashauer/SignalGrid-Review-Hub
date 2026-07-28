@@ -15,6 +15,7 @@
     "proof:signalgrid-core": "pnpm --filter @workspace/scripts run proof:signalgrid-core",
     "proof:api-contract": "pnpm --filter @workspace/scripts run proof:api-contract",
     "proof:webauthn-verify": "pnpm --filter @workspace/scripts run proof:webauthn-verify",
+    "proof:enrollment-race": "pnpm --filter @workspace/scripts run proof:enrollment-race",
     "proof:audit-ledger": "pnpm --filter @workspace/scripts run proof:audit-ledger",
     "proof:audit-ledger-pg": "pnpm --filter @workspace/scripts run proof:audit-ledger-pg",
     "test:api": "pnpm --filter @workspace/api-server run test:api",

@@ -40,6 +40,7 @@
     "proof:signalgrid-simulator": "tsx ./src/signalgrid-simulator-proof.ts",
     "proof:telemetry-up": "tsx ./src/telemetry-up-proof.ts",
     "proof:webauthn-verify": "tsx ./src/webauthn-verify-proof.ts",
+    "proof:enrollment-race": "tsx ./src/webauthn-enrollment-race-proof.ts",
     "proof:audit-ledger": "tsx ./src/audit-ledger-proof.ts",
     "proof:audit-ledger-pg": "tsx ./src/audit-ledger-pg-proof.ts",
     "sbom": "tsx ./src/generate-sbom.ts",

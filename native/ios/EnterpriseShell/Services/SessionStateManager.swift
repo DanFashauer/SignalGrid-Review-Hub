@@ -727,36 +727,61 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
     
     private func startActivityTimer() {
         stopActivityTimer()
-        
-        activityTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
-            self?.updateActivity()
+
+        // Schedule on the MAIN run loop (review finding): `enterState` runs on the
+        // private stateTransitionQueue, and Timer.scheduledTimer attaches to the
+        // CURRENT thread's run loop — a GCD worker thread whose run loop never runs,
+        // so the timer would never fire and the shared-device session would never
+        // idle out. Main-queue scheduling guarantees a running run loop.
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.activityTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
+                self?.heartbeatTick()
+            }
         }
     }
     
     private func stopActivityTimer() {
-        activityTimer?.invalidate()
-        activityTimer = nil
+        // Timers are scheduled on the main run loop; invalidate there too (a Timer
+        // must be invalidated from the thread it was scheduled on).
+        DispatchQueue.main.async { [weak self] in
+            self?.activityTimer?.invalidate()
+            self?.activityTimer = nil
+        }
     }
     
-    private func updateActivity() {
-        currentSession?.updateActivity()
-        // Reset the timeout timer when user is active
-        startTimeoutTimer()
+    /// The 60-second heartbeat. Housekeeping ONLY (review finding): it must never
+    /// touch the activity record or reset the idle timeout — the previous version
+    /// called updateActivity() + startTimeoutTimer() on every tick, so the idle
+    /// timeout was pushed back every 60s forever and an abandoned shared device
+    /// never locked. Real user interaction resets the timeout via userDidInteract()
+    /// (wired to actual touches in SessionWindow); the heartbeat only checks the
+    /// server-side expiry.
+    private func heartbeatTick() {
+        Task { await self.checkSessionTimeout() }
     }
-    
+
     private func startTimeoutTimer() {
-        stopTimeoutTimer()
-        
         let timeout = UserDefaults.standard.object(forKey: "idle_timeout") as? TimeInterval ?? 300.0
-        
-        timeoutTimer = Timer.scheduledTimer(withTimeInterval: timeout, repeats: false) { [weak self] _ in
-            self?.handleSessionTimeout()
+
+        // Main run loop, same reasoning as startActivityTimer: this is reached from
+        // the private state queue AND from userDidInteract (any thread); a timer
+        // scheduled on a run-loop-less GCD worker never fires, which here means the
+        // idle timeout silently never expires (review finding).
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.timeoutTimer?.invalidate()
+            self.timeoutTimer = Timer.scheduledTimer(withTimeInterval: timeout, repeats: false) { [weak self] _ in
+                self?.handleSessionTimeout()
+            }
         }
     }
     
     private func stopTimeoutTimer() {
-        timeoutTimer?.invalidate()
-        timeoutTimer = nil
+        DispatchQueue.main.async { [weak self] in
+            self?.timeoutTimer?.invalidate()
+            self?.timeoutTimer = nil
+        }
     }
     
     private func handleSessionTimeout() {

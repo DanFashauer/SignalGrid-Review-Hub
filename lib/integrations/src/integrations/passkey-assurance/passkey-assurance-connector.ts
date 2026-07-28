@@ -105,6 +105,7 @@ export function normalizeReport(
   source = "passkey-idp-export",
 ): NormalizedPasskey {
   const plain = isPlainReport(report);
+  let rawCredentialRef: unknown;
   let rawRegistration: unknown;
   let rawType: unknown;
   let rawAttestation: unknown;
@@ -113,17 +114,21 @@ export function normalizeReport(
   let rawBackup: unknown;
   let readThrew = false;
   try {
+    rawCredentialRef = plain ? ownValue(report, "credential_ref") : undefined;
     rawRegistration = plain ? ownValue(report, "registration") : undefined;
     rawType = plain ? ownValue(report, "credential_type") : undefined;
     rawAttestation = plain ? ownValue(report, "attestation") : undefined;
     rawPolicy = plain ? ownValue(report, "attestation_policy") : undefined;
-    rawUv = plain ? ownValue(report, "user_verification") : undefined;
+    rawUv = plain ? ownValue(report, "user_verification_policy") : undefined;
     rawBackup = plain ? ownValue(report, "backup") : undefined;
   } catch {
     readThrew = true;
-    rawRegistration = rawType = rawAttestation = rawPolicy = rawUv = rawBackup = undefined;
+    rawCredentialRef = rawRegistration = rawType = rawAttestation = rawPolicy = rawUv = rawBackup = undefined;
   }
 
+  // Free-form, so it is not allowlisted — but it must be a STRING to be usable as
+  // an identifier. Anything else is dropped to "" rather than coerced.
+  const credentialRef = typeof rawCredentialRef === "string" ? rawCredentialRef.trim() : "";
   const registration = oneOf<PasskeyRegistration>(rawRegistration, REGISTRATIONS, "unknown");
   const credentialType = oneOf<PasskeyCredentialType>(rawType, CREDENTIAL_TYPES, "unknown");
   const attestation = oneOf<PasskeyAttestation>(rawAttestation, ATTESTATIONS, "unknown");
@@ -149,12 +154,14 @@ export function normalizeReport(
     enumMalformed(rawAttestation, ATTESTATIONS) ||
     enumMalformed(rawPolicy, ATTESTATION_POLICIES) ||
     enumMalformed(rawUv, USER_VERIFICATIONS) ||
+    (rawCredentialRef !== undefined && rawCredentialRef !== null && typeof rawCredentialRef !== "string") ||
     enumMalformed(rawBackup, BACKUPS);
   const reportIntegrity: ReportIntegrity = malformed ? "malformed" : "clean";
 
   return {
     sourceSystem: "passkey-assurance",
     identityRef,
+    credentialRef,
     registration,
     credentialType,
     attestation,

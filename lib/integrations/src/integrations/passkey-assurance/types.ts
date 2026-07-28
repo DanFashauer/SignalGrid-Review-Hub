@@ -53,12 +53,32 @@ export type PasskeyAttestation = "verified" | "not_provided" | "unknown";
  *  observation — grading claim-vs-reality is the point. */
 export type PasskeyAttestationPolicy = "enforced" | "not_enforced" | "unknown";
 
-/** WebAuthn user-verification posture at registration. `discouraged` means the
- *  credential can be exercised on possession alone. */
+/** Is user verification ENFORCED AT AUTHENTICATION for this credential?
+ *
+ *  Deliberately NOT the registration-time preference (review finding). WebAuthn's
+ *  registration `userVerification` is a preference, and the authentication ceremony
+ *  independently decides whether to require UV and whether to reject an assertion
+ *  without the UV flag — this repo's own relying party requires it at authentication
+ *  (lib/webauthn/src/webauthn/server.ts). A credential registered with UV
+ *  "discouraged" that is nonetheless always authenticated with UV required is NOT
+ *  possession-only, so grading the registration preference would restrict a
+ *  perfectly sound credential.
+ *
+ *  An integrator must therefore populate this from the ENFORCED authentication
+ *  policy (or from assertion evidence), not from the registration options. If only
+ *  the registration preference is available, report `unknown` — which raises to
+ *  step_up rather than asserting a fact that was not established. */
 export type PasskeyUserVerification = "required" | "discouraged" | "unknown";
 
 /** Is a second credential registered against this identity? The recovery half of
- *  the guidance ("everyone should have a backup and a recovery plan"). */
+ *  the guidance ("everyone should have a backup and a recovery plan").
+ *
+ *  This is a RECOVERY signal and nothing more. It deliberately says NOTHING about
+ *  the backup's own worth, and must never be read as one: an identity holding an
+ *  attested security key plus a synced backup has a synced authentication path, and
+ *  an attacker uses the weakest path on offer. Grading that requires the backup's
+ *  own report — see `evaluateIdentityPasskeys`, which is the only function that may
+ *  answer for an IDENTITY. `evaluatePasskey` answers for ONE credential. */
 export type PasskeyBackup = "registered" | "none" | "unknown";
 
 /** Is a credential registered for this identity at all? */
@@ -81,27 +101,33 @@ export type ReportIntegrity = "clean" | "malformed";
 /** Raw wire report (loosely typed — an IdP export is EXTERNAL and may emit anything
  *  in any slot; the normalizer makes values safe). */
 export interface PasskeyReportRaw {
+  credential_ref?: unknown; // opaque id of the credential this report describes
   registration?: unknown; // registered | none | unknown
   credential_type?: unknown; // security_key | device_bound_authenticator | synced | none | unknown
   attestation?: unknown; // verified | not_provided | unknown
   attestation_policy?: unknown; // enforced | not_enforced | unknown
-  user_verification?: unknown; // required | discouraged | unknown
+  user_verification_policy?: unknown; // required | discouraged | unknown (ENFORCED at auth)
   backup?: unknown; // registered | none | unknown
   [k: string]: unknown;
 }
 
 export const PASSKEY_REPORT_KEYS = [
+  "credential_ref",
   "registration",
   "credential_type",
   "attestation",
   "attestation_policy",
-  "user_verification",
+  "user_verification_policy",
   "backup",
 ] as const;
 
 export interface NormalizedPasskey {
   sourceSystem: "passkey-assurance";
   identityRef: string;
+  /** WHICH credential this report describes. An identity may hold several, and a
+   *  verdict that cannot name its subject invites being read as an identity-wide
+   *  answer when it is not. Empty when the source did not say. */
+  credentialRef: string;
   registration: PasskeyRegistration;
   credentialType: PasskeyCredentialType;
   attestation: PasskeyAttestation;
@@ -144,6 +170,10 @@ export type PasskeyReasonCode =
 
 export interface PasskeyVerdict {
   identityRef: string;
+  /** The credential this verdict is about. A PER-CREDENTIAL verdict: `none` here
+   *  means THIS credential is sound, NOT that the identity is. Use
+   *  `evaluateIdentityPasskeys` for the identity-level question. */
+  credentialRef: string;
   posture: PasskeyPosture;
   reasonCode: PasskeyReasonCode;
   recommendedAction: PasskeyAction;
@@ -174,4 +204,20 @@ export class PasskeyConnectorError extends Error {
     super(message);
     this.name = "PasskeyConnectorError";
   }
+}
+
+/** The identity-level answer. An identity is only as strong as its WEAKEST usable
+ *  authentication path, so this is worst-wins across every registered credential. */
+export interface PasskeyIdentityVerdict {
+  identityRef: string;
+  /** Worst action across all credentials. `none` only when EVERY credential grants. */
+  recommendedAction: PasskeyAction;
+  /** The credential that produced the worst verdict — what to go fix. */
+  weakestCredentialRef: string;
+  reasonCode: PasskeyReasonCode;
+  /** Per-credential verdicts, in the order supplied. */
+  credentials: PasskeyVerdict[];
+  /** True ONLY when at least one credential was supplied and every one of them
+   *  grants. An empty set is NOT a grant — it is an absence of evidence. */
+  identityConfirmed: boolean;
 }

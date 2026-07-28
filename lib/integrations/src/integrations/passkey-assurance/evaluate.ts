@@ -1,5 +1,6 @@
 import {
   type NormalizedPasskey,
+  type PasskeyIdentityVerdict,
   type PasskeyAction,
   type PasskeyAssuranceGrade,
   type PasskeyCustody,
@@ -73,7 +74,7 @@ export function evaluatePasskey(
   opts: EvaluatePasskeyOptions = {},
 ): PasskeyVerdict {
   const covered = opts.covered ?? true;
-  const base = { identityRef: report.identityRef };
+  const base = { identityRef: report.identityRef, credentialRef: report.credentialRef };
   const criticalFindings: string[] = [];
   const unknownSignals: string[] = [];
 
@@ -250,5 +251,54 @@ export function evaluatePasskey(
     criticalFindings,
     unknownSignals,
     passkeyConfirmed: winner.action === "none",
+  };
+}
+
+/**
+ * The IDENTITY-level verdict — worst-wins across every registered credential.
+ *
+ * `evaluatePasskey` answers for ONE credential, and that is the honest scope of a
+ * single report. But an identity is only as strong as its weakest usable
+ * authentication path: an attacker presented with an attested security key and a
+ * synced backup uses the synced one. A per-credential `none` read as an identity
+ * answer is therefore a fail-open, and it was one (review finding) — the previous
+ * shape recorded only THAT a backup existed, discarding its type, attestation and
+ * user-verification posture, so an attested primary alongside a synced backup
+ * granted outright.
+ *
+ * An empty credential set is NOT a grant. No credentials is an absence of evidence,
+ * and this fabric does not read absence as confirmation.
+ */
+export function evaluateIdentityPasskeys(
+  reports: readonly NormalizedPasskey[],
+  opts: EvaluatePasskeyOptions = {},
+): PasskeyIdentityVerdict {
+  const credentials = reports.map((r) => evaluatePasskey(r, opts));
+  const identityRef = reports[0]?.identityRef ?? "";
+
+  if (credentials.length === 0) {
+    return {
+      identityRef,
+      recommendedAction: "step_up",
+      weakestCredentialRef: "",
+      reasonCode: "NOT_COVERED",
+      credentials,
+      identityConfirmed: false,
+    };
+  }
+
+  const weakest = credentials.reduce((worst, c) =>
+    ACTION_SEVERITY[c.recommendedAction] > ACTION_SEVERITY[worst.recommendedAction] ? c : worst,
+  );
+
+  return {
+    identityRef,
+    recommendedAction: weakest.recommendedAction,
+    weakestCredentialRef: weakest.credentialRef,
+    reasonCode: weakest.reasonCode,
+    credentials,
+    // Every credential must grant. `weakest` already encodes that, but stating it
+    // as an explicit universal keeps the intent legible if the reducer changes.
+    identityConfirmed: credentials.every((c) => c.recommendedAction === "none"),
   };
 }

@@ -51,7 +51,10 @@ holding it, that is the decision.
 ## The dimension
 
 `passkey-assurance` (`@workspace/integrations/passkey-assurance`) grades one
-registered credential from the IdP's own authentication-methods export:
+registered credential from the IdP's own authentication-methods export.
+`evaluatePasskey` answers for ONE credential; `evaluateIdentityPasskeys` answers
+for an identity, worst-wins across all of them (see below — that distinction is
+load-bearing, not tidiness).
 
 | Observation | Verdict | Why |
 | --- | --- | --- |
@@ -67,6 +70,32 @@ Wire-level integrity: a report asserting `synced` **and** `attestation: verified
 describes something that cannot exist, so the normalizer marks it malformed rather
 than merely surprising. Without that rule a hostile or buggy export could claim
 both and collect the attestation half of the grant.
+
+## Two scoping rules that are easy to get wrong
+
+**User verification is graded at AUTHENTICATION, not registration.** WebAuthn's
+registration-time `userVerification` is a *preference*; the authentication ceremony
+independently decides whether to require UV and whether to reject an assertion
+without the UV flag — this repo's own relying party requires it at authentication
+(`lib/webauthn/src/webauthn/server.ts`). A credential registered "discouraged" but
+always authenticated with UV required is **not** possession-only, so grading the
+registration preference would restrict a perfectly sound credential. The wire field
+is therefore `user_verification_policy`, and an integrator with only the
+registration preference available must report `unknown` (which raises to `step_up`)
+rather than asserting a fact that was never established.
+
+**An identity is only as strong as its weakest credential.** The `backup` field
+says *that* a second credential exists and deliberately nothing about its worth. An
+identity holding an attested security key **and** a synced backup has a synced
+authentication path, and an attacker uses the weakest path on offer. Reading a
+per-credential `none` as an identity-level answer is a fail-open — and it was one
+until a review caught it. `evaluateIdentityPasskeys` takes every registered
+credential, grades each, and returns worst-wins plus `weakestCredentialRef` so
+there is something concrete to go fix. An empty credential set is **not** a grant:
+absence of evidence is not confirmation.
+
+Every verdict now carries `credentialRef`, so a per-credential answer cannot be
+mistaken for an identity-wide one by a reader who only sees the payload.
 
 ## Why `restrict` for missing user verification
 
@@ -116,6 +145,7 @@ recovery plan. This dimension takes no position on which tier a given population
 should hold; it grades what a credential actually is, and `recoveryRisk` makes the
 tradeoff visible instead of implicit.
 
-Proven by `proof:passkey-assurance` (51 checks; the three headline claims pinned
+Proven by `proof:passkey-assurance` (59 checks; the three headline claims pinned
 individually, per-field integrity, hostile shapes, both grant-safety enumerations
-including a non-vacuity guard, connector surface; deterministic, offline).
+including a non-vacuity guard, the identity-level worst-wins aggregation, and the
+connector surface; deterministic, offline).

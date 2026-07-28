@@ -17,6 +17,7 @@
 
 import {
   evaluatePasskey,
+  evaluateIdentityPasskeys,
   normalizeReport,
   guardReadOnly,
   PasskeyAssuranceConnector,
@@ -44,7 +45,7 @@ const GRANT: PasskeyReportRaw = {
   credential_type: "device_bound_authenticator",
   attestation: "verified",
   attestation_policy: "enforced",
-  user_verification: "required",
+  user_verification_policy: "required",
   backup: "registered",
 };
 
@@ -73,7 +74,7 @@ check("...and a synced credential lands on the SAME rung — the two are equival
 // ── CLAIM 2: synced custody is unknowable → it forecloses ──────────────────────
 const syncedOtherwisePerfect = ev({
   registration: "registered", credential_type: "synced", attestation: "not_provided",
-  attestation_policy: "not_enforced", user_verification: "required", backup: "registered",
+  attestation_policy: "not_enforced", user_verification_policy: "required", backup: "registered",
 });
 check("CLAIM 2 — a synced credential healthy on every OTHER axis still cannot grant",
   syncedOtherwisePerfect.recommendedAction !== "none");
@@ -82,13 +83,13 @@ check("...because custody is unknowable by construction, tracked as an unknown s
   syncedOtherwisePerfect.unknownSignals.includes("device_custody"));
 
 // ── CLAIM 3: user verification decides whether it is MFA at all ────────────────
-const noUv = ev({ ...GRANT, user_verification: "discouraged" });
+const noUv = ev({ ...GRANT, user_verification_policy: "discouraged" });
 check("CLAIM 3 — user verification discouraged → RESTRICT (possession only; not MFA)",
   noUv.recommendedAction === "restrict" && noUv.reasonCode === "USER_VERIFICATION_DISCOURAGED");
 check("...it is an AFFIRMATIVE bad fact (a critical finding), not an unknown",
   noUv.criticalFindings.includes("user_verification_discouraged") &&
   !noUv.unknownSignals.includes("user_verification") && noUv.assurance === "possession_only");
-const uvUnknown = ev({ ...GRANT, user_verification: "unknown" });
+const uvUnknown = ev({ ...GRANT, user_verification_policy: "unknown" });
 check("...whereas UNREADABLE user verification only raises to step_up — unknown ≠ known-bad",
   uvUnknown.recommendedAction === "step_up" && uvUnknown.criticalFindings.length === 0);
 
@@ -108,7 +109,7 @@ const typeUnknown = ev({ ...GRANT, credential_type: undefined, attestation: "not
 check("branch — credential type unknown names itself and is tracked as an unknown signal",
   typeUnknown.unknownSignals.includes("credential_type") &&
   (typeUnknown.reasonCode === "CREDENTIAL_TYPE_UNKNOWN" || typeUnknown.reasonCode === "ATTESTATION_NOT_PROVIDED"));
-const typeUnknownAlone = ev({ registration: "registered", attestation: "verified", attestation_policy: "not_enforced", user_verification: "required", backup: "registered" });
+const typeUnknownAlone = ev({ registration: "registered", attestation: "verified", attestation_policy: "not_enforced", user_verification_policy: "required", backup: "registered" });
 check("branch — with ONLY the credential type unreadable, that is the reason returned",
   typeUnknownAlone.reasonCode === "CREDENTIAL_TYPE_UNKNOWN" && typeUnknownAlone.recommendedAction === "step_up");
 const attUnknown = ev({ ...GRANT, attestation: undefined });
@@ -131,7 +132,7 @@ check("branch — a report malformed ONLY by an extra key still fails closed, na
 // ── claim vs reality: an attestation policy that cannot be in force ────────────
 const claimUnenforceable = ev({
   registration: "registered", credential_type: "synced", attestation: "not_provided",
-  attestation_policy: "enforced", user_verification: "required", backup: "registered",
+  attestation_policy: "enforced", user_verification_policy: "required", backup: "registered",
 });
 check("attestation claimed ENFORCED while the credential is synced → alert (the claim is not being applied)",
   claimUnenforceable.recommendedAction === "alert" && claimUnenforceable.reasonCode === "ATTESTATION_CLAIM_UNENFORCEABLE" &&
@@ -170,7 +171,7 @@ check("case and whitespace are canonicalized, not rejected",
 // unparseable and everything else is valid. Asserting only "some bad report is
 // malformed" would let any one of these terms be deleted unnoticed, because a
 // different term would still catch the fixture.
-for (const field of ["registration", "credential_type", "attestation", "attestation_policy", "user_verification", "backup"] as const) {
+for (const field of ["registration", "credential_type", "attestation", "attestation_policy", "user_verification_policy", "backup"] as const) {
   const oneBad = normalizeReport("mf", { ...GRANT, [field]: "not-a-valid-value" } as PasskeyReportRaw);
   check(`per-field integrity — an unparseable "${field}" alone makes the report malformed`,
     oneBad.reportIntegrity === "malformed");
@@ -216,7 +217,7 @@ const normDomains = {
   reportIntegrity: ["clean", "malformed"],
 };
 const buildNorm = (c: Record<string, unknown>): NormalizedPasskey => ({
-  sourceSystem: "passkey-assurance", identityRef: "enum", source: "enum",
+  sourceSystem: "passkey-assurance", identityRef: "enum", credentialRef: "enum-cred", source: "enum",
   registration: c.registration as NormalizedPasskey["registration"],
   credentialType: c.credentialType as NormalizedPasskey["credentialType"],
   attestation: c.attestation as NormalizedPasskey["attestation"],
@@ -274,7 +275,7 @@ const rawDomains = {
   credential_type: ["security_key", "device_bound_authenticator", "synced", undefined, 7],
   attestation: ["verified", "not_provided", undefined],
   attestation_policy: ["enforced", "not_enforced", undefined],
-  user_verification: ["required", "discouraged", undefined],
+  user_verification_policy: ["required", "discouraged", undefined],
   backup: ["registered", "none", undefined],
   __alias: ["absent", "present"],
 };
@@ -304,7 +305,7 @@ const rawRes = enumerateGrantSafety({
     (c.credential_type === "security_key" || c.credential_type === "device_bound_authenticator") &&
     c.attestation === "verified" &&
     (c.attestation_policy === "enforced" || c.attestation_policy === "not_enforced") &&
-    c.user_verification === "required" &&
+    c.user_verification_policy === "required" &&
     c.backup === "registered",
 });
 check(
@@ -335,6 +336,38 @@ const res = resolvePasskeyConnector({ SIGNALGRID_TIER: "dev" } as NodeJS.Process
 check("dev tier never resolves a live connector", res.mode === "fixture");
 const resProd = resolvePasskeyConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" } as NodeJS.ProcessEnv);
 check("prod without a token stays fixture-mode", resProd.mode === "fixture");
+
+// ── IDENTITY level: worst-wins across every registered credential ─────────────
+// The fail-open this closes (review finding): the per-credential verdict records
+// only THAT a backup exists, not what it is. An attested security key alongside a
+// synced backup granted outright, even though the synced credential is a usable
+// authentication path and an attacker uses the weakest one on offer.
+const primary = normalizeReport("alice", { credential_ref: "key-1", ...GRANT });
+const syncedBackup = normalizeReport("alice", {
+  credential_ref: "synced-1", registration: "registered", credential_type: "synced",
+  attestation: "not_provided", attestation_policy: "not_enforced",
+  user_verification_policy: "required", backup: "registered",
+});
+check("per-credential: the attested primary alone still grants (its own scope is honest)",
+  evaluatePasskey(primary).recommendedAction === "none");
+const identity = evaluateIdentityPasskeys([primary, syncedBackup]);
+check("IDENTITY — an attested primary plus a SYNCED backup does NOT grant (worst-wins)",
+  identity.recommendedAction === "step_up" && identity.identityConfirmed === false);
+check("...and it names the weakest credential, so there is something to go fix",
+  identity.weakestCredentialRef === "synced-1" && identity.reasonCode === "SYNCED_CUSTODY_UNKNOWABLE");
+check("...while still reporting every credential's own verdict",
+  identity.credentials.length === 2 && identity.credentials[0].credentialRef === "key-1");
+const allGood = evaluateIdentityPasskeys([primary, normalizeReport("alice", { credential_ref: "key-2", ...GRANT })]);
+check("IDENTITY — two sound credentials DO grant (the aggregate is not vacuously strict)",
+  allGood.recommendedAction === "none" && allGood.identityConfirmed === true);
+const noCreds = evaluateIdentityPasskeys([]);
+check("IDENTITY — an empty credential set is NOT a grant; absence of evidence is not confirmation",
+  noCreds.recommendedAction === "step_up" && noCreds.identityConfirmed === false && noCreds.reasonCode === "NOT_COVERED");
+// credentialRef plumbing
+check("a report naming its credential carries that ref onto the verdict",
+  evaluatePasskey(primary).credentialRef === "key-1");
+check("a non-string credential_ref is malformed, never coerced into an identifier",
+  normalizeReport("x", { ...GRANT, credential_ref: 7 } as unknown as PasskeyReportRaw).reportIntegrity === "malformed");
 
 // Determinism.
 const d1 = normalizeReport("det", { ...GRANT, credential_type: "synced", attestation: "not_provided" });

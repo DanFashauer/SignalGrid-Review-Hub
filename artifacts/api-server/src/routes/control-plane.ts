@@ -26,6 +26,14 @@ import {
   summarizeReliability,
   type DecisionRecord,
 } from "@workspace/reliability";
+import {
+  planChanges,
+  detectDrift,
+  summarizePlan,
+  summarizeDrift,
+  DEMO_DESIRED_STATE,
+  DEMO_OBSERVED_STATE,
+} from "@workspace/iac";
 
 /**
  * `/cp/v1/*` — the SaaS **control-plane** surface (management, not decisions).
@@ -251,6 +259,22 @@ router.get("/cp/v1/reliability", (_req, res) => {
     note: "Fixture SLO / error-budget snapshot over a deterministic window of decision outcomes. Latency and availability carry error budgets; fail-closed integrity is zero-tolerance — one fail-open exhausts it and can never be bought back.",
     plain,
     report,
+  });
+});
+
+// ── IaC / GitOps: declared desired-state vs observed fleet ──────────────────────
+// The trust-gated GitOps control plane. Deterministic public-safe fixtures: a
+// declared desired-state diffed against an observed fleet-state. The plan and the
+// drift are read-only here — a real apply actuates through the MDM backend's own
+// API on a supervised device and is gated on a live `allow` decision plus a
+// recorded human approval (a rollout can never apply itself). See docs/IAC_GITOPS.md.
+router.get("/cp/v1/iac", (_req, res) => {
+  const plan = planChanges(DEMO_DESIRED_STATE, DEMO_OBSERVED_STATE);
+  const drift = detectDrift(DEMO_DESIRED_STATE, DEMO_OBSERVED_STATE);
+  res.json({
+    note: "Fixture GitOps snapshot: desired state (Git) diffed against observed fleet state. A rollout applies only through a governed lifecycle — a recorded human approval AND an `allow` trust decision — and is simulated here; real actuation is via the MDM backend (Fleet/Intune/Jamf). Drift feeds self-audit and posture.",
+    plan: { summary: summarizePlan(plan), ...plan },
+    drift: { summary: summarizeDrift(drift), ...drift },
   });
 });
 

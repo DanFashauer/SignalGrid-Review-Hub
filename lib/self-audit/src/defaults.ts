@@ -86,4 +86,14 @@ export const DEFAULT_CHECKLIST: readonly DeclaredItem[] = Object.freeze([
       "Re-run the portable work-context proof; restore the monotone invariants so a carried context can never widen access on a worse device.",
     covers: ["workContextTrustCeilings"],
   },
+  {
+    id: "api-iac-drift-governed",
+    layer: "api_integration",
+    description: "The fleet matches the configuration declared in Git, and a rollout applies only through a human-approved, trust-gated lifecycle — never itself.",
+    probeKey: "proof:iac",
+    healable: true,
+    remediationHint:
+      "Re-run the IaC proof; open a governed rollout to reconcile the drift — it applies only with a recorded approval and an `allow` decision, so a drift is never silently auto-applied.",
+    covers: ["iacResources"],
+  },
 ]);

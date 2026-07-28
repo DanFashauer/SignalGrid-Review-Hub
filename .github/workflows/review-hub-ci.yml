@@ -188,6 +188,13 @@ jobs:
       - name: Proof — reliability (SLO/error-budget, fail-closed has no budget)
         run: pnpm run proof:reliability
 
+      # Trust-gated GitOps: a declared desired-state is diffed (plan), rolled out
+      # only through a governed lifecycle whose apply needs BOTH a recorded human
+      # approval and an `allow` trust decision, and drift between declared and
+      # observed becomes a self-audit signal. A rollout cannot apply itself.
+      - name: Proof — iac (trust-gated GitOps, a rollout cannot apply itself)
+        run: pnpm run proof:iac
+
       - name: Proof — verdict attestation (forged verdicts degrade)
         run: pnpm run proof:verdict-attestation
 

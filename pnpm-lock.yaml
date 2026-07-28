@@ -159,6 +159,9 @@ importers:
       '@workspace/flows':
         specifier: workspace:*
         version: link:../../lib/flows
+      '@workspace/iac':
+        specifier: workspace:*
+        version: link:../../lib/iac
       '@workspace/orchestration':
         specifier: workspace:*
         version: link:../../lib/orchestration
@@ -1471,6 +1474,12 @@ importers:
         specifier: 'catalog:'
         version: 25.6.2
 
+  lib/iac:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.6.2
+
   lib/incident-playbook:
     dependencies:
       '@workspace/event-contract':
@@ -1695,6 +1704,9 @@ importers:
       '@workspace/handoff-sim':
         specifier: workspace:*
         version: link:../lib/handoff-sim
+      '@workspace/iac':
+        specifier: workspace:*
+        version: link:../lib/iac
       '@workspace/incident-playbook':
         specifier: workspace:*
         version: link:../lib/incident-playbook

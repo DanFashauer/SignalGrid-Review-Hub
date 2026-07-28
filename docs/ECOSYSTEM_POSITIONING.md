@@ -17,6 +17,20 @@ SignalGrid consumes signals from those systems, evaluates runtime context, deter
 
 SignalGrid fits in the decision gap between systems that authenticate users, manage devices, measure endpoint/user experience, monitor APIs and services, record operations, investigate security events, and observe shared-device movement. It evaluates identity, device posture, session context, physical/device context, workflow context, and operational signals before the workflow breaks.
 
+## Operated as code: the GitOps control plane
+
+SignalGrid's operating model is Infrastructure-as-Code / GitOps (see
+[`IAC_GITOPS.md`](IAC_GITOPS.md)). Endpoint configuration, compliance policy,
+software packages, and the decision rules that gate them are declared in
+version-controlled files and rolled out through review and approval, not clicked
+into a console. This does not make SignalGrid an MDM. **Fleet, Microsoft Intune,
+and Jamf remain the declarative backends** that actuate a profile on a device;
+SignalGrid holds the desired state, plans the diff, gates the rollout on a live
+`allow` decision plus a recorded human approval (a rollout can never apply
+itself), and drift-checks the result — feeding any divergence back as a trust
+signal. It complements a Fleet GitOps repo or a Terraform+Intune module; it is
+not a competing MDM or IaC tool, and does not replace one.
+
 ## Architectural analogy: the trust control plane
 
 Enterprise networking learned this pattern long ago. A hub-and-spoke topology (AWS

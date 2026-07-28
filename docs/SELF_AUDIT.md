@@ -80,7 +80,7 @@ representative four-layer checklist, and prints its live figures so a stale quot
 catchable:
 
 ```
-figures=layers=4,declaredItems=4,coverageGaps=1,healStatuses=4,pairsToApplied=4,legalRoutesToApplied=1,defaultItems=7
+figures=layers=4,declaredItems=4,coverageGaps=1,healStatuses=4,pairsToApplied=4,legalRoutesToApplied=1,defaultItems=8
 ```
 
 The load-bearing assertions:

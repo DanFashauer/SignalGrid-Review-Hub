@@ -111,7 +111,8 @@
     "proof:adaptive-proposals": "pnpm --filter @workspace/scripts run proof:adaptive-proposals",
     "proof:self-audit": "pnpm --filter @workspace/scripts run proof:self-audit",
     "self-audit:run": "pnpm --filter @workspace/scripts run self-audit:run",
-    "proof:reliability": "pnpm --filter @workspace/scripts run proof:reliability"
+    "proof:reliability": "pnpm --filter @workspace/scripts run proof:reliability",
+    "proof:iac": "pnpm --filter @workspace/scripts run proof:iac"
   },
   "private": true,
   "devDependencies": {

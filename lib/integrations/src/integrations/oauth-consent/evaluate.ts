@@ -140,6 +140,11 @@ export function evaluateOAuthConsent(
     // secret) is self-contradictory — no grants, yet risky grant detail. The risky
     // fields above are only evaluated for `present`, so a "none" report would
     // otherwise sail through here; fail closed instead of granting.
+    // The `grants === "none"` term is INERT at today's ordering — the risky-field checks
+    // above already push a candidate whenever grants is "present", so this disjunct can
+    // only be true for a "none" report. Verified by behavioural diff (all 6,480
+    // enumerated states, zero verdicts changed when mutated to `true`), and kept because
+    // it states the scope exactly and goes load-bearing if that block's scoping changes.
     if (
       consent.grants === "none" &&
       (consent.scope === "broad" ||

@@ -141,6 +141,71 @@ export async function getCredentialsForUser(userId: string): Promise<WebAuthnCre
   return user?.credentials ?? [];
 }
 
+/**
+ * Atomically advance a credential's signature counter — but ONLY if it still holds the
+ * value the caller verified against (`expectedCounter`) and the new value is strictly
+ * greater. Returns true if the advance was applied; false if the stored counter no
+ * longer matches (a concurrent completion already advanced it), the new value is not an
+ * increase, or the row is gone.
+ *
+ * The caller MUST fail closed on false: the counter it ran the clone-regression check
+ * against is stale, so it can no longer prove this assertion is not a replay of an
+ * already-used count. This closes the read-modify-write race the naive
+ * getUser→mutate→saveUser sequence left open — two valid challenges for the same
+ * credential both passing the regression check against the same stored counter, then
+ * their separate writes landing out of order so the LOWER counter overwrites the higher
+ * (after which a clone can re-present the already-used higher count and pass). A
+ * compare-and-advance makes exactly one writer win and forces the other to fail closed.
+ * Same discipline, and same Redis-version requirement, as getAndDeleteChallenge's GETDEL.
+ */
+export async function advanceCredentialCounter(
+  userId: string,
+  credentialId: string,
+  expectedCounter: number,
+  newCounter: number,
+  usedAtIso: string,
+): Promise<boolean> {
+  // Never a no-op or a regression: only a strict increase is a legitimate advance.
+  if (!(newCounter > expectedCounter)) return false;
+
+  const key = `${USER_PREFIX}${userId}`;
+
+  if (redisConfigured()) {
+    const redis = await getRedisClient();
+    try {
+      await redis!.connect();
+      // Optimistic lock: WATCH the row, verify the counter is still what we checked the
+      // regression against, then commit inside a MULTI. If another completion advanced
+      // the row after our WATCH, EXEC returns null and we fail closed.
+      await redis!.watch(key);
+      const data = await redis!.get(key);
+      if (!data) { await redis!.unwatch(); return false; }
+      const user = JSON.parse(data) as WebAuthnUser;
+      const cred = user.credentials.find((c) => c.id === credentialId);
+      if (!cred || cred.counter !== expectedCounter) { await redis!.unwatch(); return false; }
+      cred.counter = newCounter;
+      cred.lastUsedAt = usedAtIso;
+      const execRes = await redis!.multi().set(key, JSON.stringify(user), 'EX', 86400).exec();
+      if (execRes === null) return false; // WATCHed key changed mid-transaction → lost the race
+      inMemoryUsers.set(userId, user); // keep the in-memory mirror consistent (as saveUser does)
+      return true;
+    } finally {
+      await redis!.quit();
+    }
+  }
+
+  // No Redis configured: single-process in-memory mode. The read-check-write below runs
+  // to completion with NO await between the check and the mutation, so it cannot
+  // interleave — the same guarantee getAndDeleteChallenge relies on in this mode.
+  const user = inMemoryUsers.get(userId);
+  if (!user) return false;
+  const cred = user.credentials.find((c) => c.id === credentialId);
+  if (!cred || cred.counter !== expectedCounter) return false;
+  cred.counter = newCounter;
+  cred.lastUsedAt = usedAtIso;
+  return true;
+}
+
 // ============================================================================
 // Challenges
 // ============================================================================

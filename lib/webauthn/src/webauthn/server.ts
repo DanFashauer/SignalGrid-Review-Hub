@@ -20,8 +20,7 @@ import {
   getCredentialsForUser,
   createStepUpSession,
   getStepUpSession,
-  getUser,
-  saveUser,
+  advanceCredentialCounter,
 } from './store';
 import {
   extractCredentialPublicKey,
@@ -448,16 +447,33 @@ export async function verifyAuthentication(
     return { success: false, error: 'Authenticator counter did not increase (possible clone)', timestamp };
   }
 
-  // Persist the advanced counter + last-used time.
+  // Persist the advanced counter ATOMICALLY. Compare-and-advance against the exact
+  // counter we ran the clone-regression check against (`credential.counter`): if a
+  // concurrent completion already advanced the stored counter, the CAS fails and we fail
+  // closed. A naive getUser→mutate→saveUser here let two valid challenges for the same
+  // credential both pass the regression check against the same stored counter and then
+  // write out of order, so the LOWER counter could overwrite the higher — after which a
+  // clone can re-present the already-used higher count and pass. The CAS makes exactly
+  // one writer win.
   if (newCounter > credential.counter) {
-    const user = await getUser(userId);
-    if (user) {
-      const stored = user.credentials.find(c => c.id === credential.id);
-      if (stored) {
-        stored.counter = newCounter;
-        stored.lastUsedAt = timestamp;
-        await saveUser(user);
-      }
+    const advanced = await advanceCredentialCounter(
+      userId,
+      credential.id,
+      credential.counter,
+      newCounter,
+      timestamp,
+    );
+    if (!advanced) {
+      await appendAuditRecord(
+        'security.webauthn.step_up.failure',
+        { type: 'user', id: userId },
+        { meta: { credentialId: credential.id, reason: 'counter_advance_conflict' } }
+      );
+      return {
+        success: false,
+        error: 'Concurrent counter advance detected (possible clone/replay)',
+        timestamp,
+      };
     }
   }
 

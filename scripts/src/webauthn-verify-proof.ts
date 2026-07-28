@@ -485,6 +485,34 @@ async function main() {
   });
   check("legacy stub credential fails closed", legacy.success === false);
 
+  // ── 13. Atomic counter compare-and-advance (concurrent-completion race) ────
+  // The counter persist is a compare-and-advance, not a read-modify-write: two valid
+  // challenges for the same credential must not both advance from the SAME stored value
+  // and then write out of order so the lower overwrites the higher (after which a clone
+  // could re-present the already-used higher count). advanceCredentialCounter enforces
+  // that exactly one advance from a given expected value wins; the other fails closed.
+  const casUser = "user-cas";
+  const casCred = "cas-cred";
+  await webauthnStore.addCredential(casUser, {
+    id: casCred, publicKey: JSON.stringify({ jwk: {}, alg: -7 }), counter: 5,
+    createdAt: new Date().toISOString(),
+  });
+  // First racer reads stored=5 and advances to 10 — wins.
+  const casWin = await webauthnStore.advanceCredentialCounter(casUser, casCred, 5, 10, new Date().toISOString());
+  check("cas: an advance from the correct expected counter succeeds", casWin === true);
+  check("cas: the stored counter is now the higher value", (await webauthnStore.getCredentialsForUser(casUser))[0].counter === 10);
+  // Second racer also read stored=5 (stale) and tries to advance to 8 — must fail closed,
+  // and must NOT lower the stored counter from 10 back to 8.
+  const casLose = await webauthnStore.advanceCredentialCounter(casUser, casCred, 5, 8, new Date().toISOString());
+  check("cas: a second advance from a STALE expected counter fails closed", casLose === false);
+  check("cas: the losing racer did NOT overwrite the higher stored counter", (await webauthnStore.getCredentialsForUser(casUser))[0].counter === 10);
+  // A non-increase is never a legitimate advance, even from the correct expected value.
+  check("cas: a non-increasing advance (equal) is refused", (await webauthnStore.advanceCredentialCounter(casUser, casCred, 10, 10, new Date().toISOString())) === false);
+  check("cas: a regressing advance is refused", (await webauthnStore.advanceCredentialCounter(casUser, casCred, 10, 9, new Date().toISOString())) === false);
+  // An unknown credential/user fails closed rather than throwing.
+  check("cas: an unknown credential fails closed", (await webauthnStore.advanceCredentialCounter(casUser, "no-such-cred", 10, 11, new Date().toISOString())) === false);
+  check("cas: a legitimate later advance from the NEW expected value succeeds", (await webauthnStore.advanceCredentialCounter(casUser, casCred, 10, 11, new Date().toISOString())) === true);
+
   const total = passed + failures.length;
   console.log(`WebAuthn verification proof: ${passed}/${total} assertions passed`);
   if (failures.length) {

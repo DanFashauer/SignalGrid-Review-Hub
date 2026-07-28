@@ -452,12 +452,30 @@ router.post("/v1/step-up/enroll/verify", async (req: Request, res: Response, nex
     if (!response || typeof response !== "object") {
       throw new CoreError("validation", "response (WebAuthn registration) is required.", 400);
     }
+    // Bind verification to the principal who MINTED the ceremony (review finding):
+    // the registration challenge context records enrolledByRef at options time, and
+    // the verifier must be the same principal. Without this, a second operator could
+    // submit the first operator's challengeId + attestation and the enrollment would
+    // be attributed to the wrong principal — a false audit trail on a privileged
+    // ceremony. Checked against the STORED context before any WebAuthn work; the
+    // challenge is left unconsumed on mismatch.
+    const storedReg = await webauthnStore.getChallengeContext(challengeId);
+    if (!storedReg || !storedReg.context) {
+      throw new CoreError("forbidden", "Unknown or expired enrollment challenge.", 403);
+    }
+    if (storedReg.context.enrolledByRef !== enrolledBy.subjectId) {
+      throw new CoreError(
+        "forbidden",
+        "This enrollment ceremony was started by a different principal; the same operator/owner must complete it.",
+        403,
+      );
+    }
     const userId = webauthnUserId(req, identityRef);
     const result = await webauthn.verifyRegistration(userId, challengeId, response as never);
     if (!result.success) {
       throw new CoreError("forbidden", `Enrollment rejected: ${result.error ?? "verification failed"}.`, 403);
     }
-    res.json(envelope(req, { enrolled: true, credentialId: result.credentialId, enrolledByRef: enrolledBy.subjectId, demoNote: demoEnrollmentNote() }));
+    res.json(envelope(req, { enrolled: true, credentialId: result.credentialId, enrolledByRef: storedReg.context.enrolledByRef, demoNote: demoEnrollmentNote() }));
   } catch (err) {
     next(err);
   }

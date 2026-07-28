@@ -81,11 +81,19 @@ export async function saveUser(user: WebAuthnUser): Promise<void> {
       // review finding.) Ephemeral records — challenges (60s) and step-up sessions —
       // keep their TTLs below; only the credential store is durable.
       await redis.set(key, JSON.stringify(user));
-    } catch {
-      // Fall through to in-memory
-    } finally {
-      await redis.quit();
+    } catch (err) {
+      // When Redis IS configured it is the authoritative shared store (review
+      // finding): swallowing a write failure here stored the credential only in
+      // this process's memory while the enrollment endpoint answered
+      // `enrolled: true` — and the single-use registration challenge was already
+      // consumed, so another instance (or this one after a restart) rejected the
+      // next challenge with no way to retry the ceremony. Propagate the failure so
+      // enrollment fails loudly instead of acknowledging a non-durable write. The
+      // in-memory fallback remains the store ONLY when no Redis is configured.
+      await redis.quit().catch(() => undefined);
+      throw err instanceof Error ? err : new Error("WebAuthn credential persistence failed");
     }
+    await redis.quit();
   }
 
   inMemoryUsers.set(user.userId, user);

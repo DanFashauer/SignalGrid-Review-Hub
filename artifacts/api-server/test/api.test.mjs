@@ -626,6 +626,20 @@ async function run() {
   // ceremony IS self-service (the role gate is satisfiable with the published demo
   // keys), and the response must say so rather than presenting a real privileged gate.
   check("enroll options carries the self-service demo note (secret unset)", typeof enrollOpts.json?.demoNote === "string" && enrollOpts.json.demoNote.includes("simulated") && enrollOpts.json.demoNote.includes("SIGNALGRID_ENROLLMENT_SECRET"));
+  // Principal binding (review finding): the ceremony was minted by the OPERATOR key;
+  // a different authorized principal (owner) presenting the same challengeId must be
+  // refused BEFORE any WebAuthn work — and the challenge must remain unconsumed, so
+  // the legitimate verify below still succeeds.
+  const crossPrincipalVerify = await req("POST", "/v1/step-up/enroll/verify", {
+    token: KEYS.owner,
+    body: {
+      identityRef: suIdentity,
+      challengeId: enrollOpts.json.challengeId,
+      response: authenticator.registration(enrollOpts.json.publicKey.challenge),
+    },
+  });
+  check("a different principal cannot complete another's enrollment ceremony (403)", crossPrincipalVerify.status === 403);
+
   const enrollVerify = await req("POST", "/v1/step-up/enroll/verify", {
     token: KEYS.operator,
     body: {
@@ -635,6 +649,7 @@ async function run() {
     },
   });
   check("step-up enrollment verifies a genuine attestation", enrollVerify.status === 200 && enrollVerify.json?.enrolled === true);
+  check("enrollment is attributed to the minting principal", enrollVerify.json?.enrolledByRef === "user_northwind_operator");
 
   // The evaluate route must NEVER release from a request flag, even enrolled.
   const flagSmuggled = await req("POST", "/v1/app-workflows/evaluate", {

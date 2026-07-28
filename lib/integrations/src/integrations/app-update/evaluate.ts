@@ -103,7 +103,9 @@ export function evaluateAppUpdate(
       // Behind, and whether that lag is even permitted could not be read.
       candidates.push({ posture: "update_available", action: "step_up", reason: "FORCE_POLICY_UNKNOWN" });
     }
-  } else if (report.currency === "unknown") {
+  } else if (report.currency === "unknown") { // inert: backstop is identical
+    // Inert under mutation (allowlisted): the grant backstop below pushes the
+    // IDENTICAL candidate; this stays as the primary, readable statement.
     candidates.push({ posture: "version_unknown", action: "step_up", reason: "VERSION_UNKNOWN" });
   }
   // currency === "current": no candidate — the seed grant may survive.

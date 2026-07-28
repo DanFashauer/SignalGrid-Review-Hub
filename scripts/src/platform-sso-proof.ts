@@ -11,7 +11,11 @@
 // control is enforced that the OS is not enforcing. A policy genuinely in force
 // carries lockout exposure (expired/unconfigured grace, missing break-glass).
 import {
+  PlatformSsoConnector,
+  PlatformSsoConnectorError,
+  createMockPlatformSsoTransport,
   evaluatePlatformSso,
+  guardReadOnly,
   normalizeReport,
   type PlatformSsoReportRaw,
   type NormalizedPlatformSso,
@@ -81,6 +85,12 @@ check("policy state unreadable → step_up (POLICY_UNKNOWN) even on a hardware-b
   noPolicy.recommendedAction === "step_up" && noPolicy.reasonCode === "POLICY_UNKNOWN");
 const noMethod = ev({ registration: "user", login_policy: "not_required" });
 check("method unreadable → step_up, assurance unknown", noMethod.recommendedAction === "step_up" && noMethod.assurance === "unknown");
+const regUnknown = ev({ method: "secure_enclave_key", login_policy: "not_required" });
+check("registration state unreadable → step_up AS registration-unknown (its own reason, not the backstop's)",
+  regUnknown.recommendedAction === "step_up" && regUnknown.reasonCode === "REGISTRATION_UNKNOWN" && regUnknown.unknownSignals.includes("registration"));
+const bgUnknown = ev({ registration: "user", method: "password_sync", login_policy: "required", offline_grace: "valid" });
+check("policy in force + break-glass state unreadable → step_up (cannot verify the recovery posture), never just the password-grade monitor",
+  bgUnknown.recommendedAction === "step_up" && bgUnknown.reasonCode === "BREAK_GLASS_UNKNOWN" && bgUnknown.unknownSignals.includes("break_glass"));
 const uncovered = evaluatePlatformSso(
   normalizeReport("m", { registration: "user", method: "secure_enclave_key", login_policy: "not_required" }),
   { covered: false });
@@ -88,12 +98,28 @@ check("no Platform SSO report returned (covered=false) → step_up, never a conf
   uncovered.recommendedAction === "step_up" && uncovered.reasonCode === "NOT_COVERED");
 
 // ── malformed / hostile report shapes ───────────────────────────────────────────
+// Per-field integrity: each asserted-but-unparseable field must mark the report
+// MALFORMED on its own (one junk field per report, everything else valid — a report
+// with several junk fields would let one integrity term hide behind another, which
+// is exactly the unfalsifiability the mutation guard exists to catch).
 const junkEnum = ev({ registration: "user", method: "totally-passwordless", login_policy: "not_required" });
-check("an unrecognized method value is an assertion we could not read → malformed, cannot grant",
+check("junk method alone → malformed, cannot grant, never phishing-resistant",
+  normalizeReport("j1", { registration: "user", method: "totally-passwordless", login_policy: "not_required" }).reportIntegrity === "malformed" &&
   junkEnum.recommendedAction !== "none" && junkEnum.assurance !== "phishing_resistant");
+check("junk registration alone → malformed",
+  normalizeReport("j2", { registration: "sorta", method: "secure_enclave_key", login_policy: "not_required" }).reportIntegrity === "malformed");
+check("junk login_policy alone → malformed",
+  normalizeReport("j3", { registration: "user", method: "secure_enclave_key", login_policy: "maybe" }).reportIntegrity === "malformed");
+check("junk offline_grace alone → malformed",
+  normalizeReport("j4", { registration: "user", method: "password_sync", login_policy: "required", offline_grace: "soon", break_glass: "exempt_configured" }).reportIntegrity === "malformed");
+check("junk break_glass alone → malformed",
+  normalizeReport("j5", { registration: "user", method: "password_sync", login_policy: "required", offline_grace: "valid", break_glass: "who" }).reportIntegrity === "malformed");
 const extraKey = normalizeReport("x", { registration: "user", method: "secure_enclave_key", login_policy: "not_required", passwordless: true } as PlatformSsoReportRaw);
-check("an unrecognized key (e.g. a vendor 'passwordless' flag we would never trust) marks the report malformed",
-  extraKey.reportIntegrity === "malformed" && evaluatePlatformSso(extraKey).recommendedAction !== "none");
+// The refusal must come from the INTEGRITY branch itself (REPORT_MALFORMED), not
+// merely from the grant backstop — a malformed report whose fields all parse valid
+// is exactly the state only the integrity branch can name.
+check("an unrecognized key (a vendor 'passwordless' flag we would never trust) refuses AS malformed (not via the backstop)",
+  extraKey.reportIntegrity === "malformed" && evaluatePlatformSso(extraKey).reasonCode === "REPORT_MALFORMED" && evaluatePlatformSso(extraKey).recommendedAction !== "none");
 const inherited = evaluatePlatformSso(normalizeReport("i", Object.create({ registration: "user", method: "secure_enclave_key", login_policy: "not_required" }) as PlatformSsoReportRaw));
 check("a report with ZERO own keys asserts nothing and cannot grant", inherited.recommendedAction !== "none");
 const hidden = new Proxy({ registration: "user", method: "secure_enclave_key", login_policy: "not_required" }, { ownKeys: () => [], getOwnPropertyDescriptor: () => undefined }) as PlatformSsoReportRaw;
@@ -187,6 +213,32 @@ check(
 );
 check("exhaustive (raw wire): exactly 9 raw reports grant (3 grace × 3 break-glass states, all moot without a policy)",
   rawRes.noneCount === 9);
+
+// ── connector surface (mutation-guard coverage: every guard falsifiable) ────────
+let psReadOnly = false;
+try { guardReadOnly("POST"); } catch (err) { psReadOnly = err instanceof PlatformSsoConnectorError && err.code === "read_only_violation"; }
+check("a non-GET request is refused by the read-only guard", psReadOnly);
+const psConn = new PlatformSsoConnector(
+  { accessToken: "t", baseUrl: "https://inventory.example" },
+  createMockPlatformSsoTransport({ reports: { "mac-9": { registration: "user", method: "secure_enclave_key", login_policy: "not_required" } } }),
+);
+check("the connector round-trip normalizes a clean report end to end (grantable)",
+  evaluatePlatformSso(await psConn.fetchNormalized("mac-9")).recommendedAction === "none");
+check("an unknown device yields an all-unknown report that cannot grant",
+  evaluatePlatformSso(await psConn.fetchNormalized("mac-unknown")).recommendedAction !== "none");
+// The prototype walk must be BOUNDED, not trusted: >64 empty prototypes under an
+// otherwise-clean report must read malformed — without the bound the walk ends
+// quietly at Object.prototype and the report reads clean.
+let psDeepProto: object = {};
+for (let i = 0; i < 100; i += 1) psDeepProto = Object.create(psDeepProto);
+const psDeepReport = Object.assign(Object.create(psDeepProto), { registration: "user", method: "secure_enclave_key", login_policy: "not_required" });
+check("a report behind a 100-deep prototype chain is malformed (bounded walk)",
+  normalizeReport("deep", psDeepReport as PlatformSsoReportRaw).reportIntegrity === "malformed");
+// An inherited key with a RECOGNIZED name is still an assertion this report did not
+// make itself — the prototype-chain scan, not the own-value read, is what notices it.
+const psProtoAlias = Object.assign(Object.create({ method: "password_sync" }), { registration: "user", method: "secure_enclave_key", login_policy: "not_required" });
+check("a recognized key inherited from the prototype marks the report malformed",
+  normalizeReport("pa", psProtoAlias as PlatformSsoReportRaw).reportIntegrity === "malformed");
 
 // ── fusion into the fabric (posture-composition + incident routing) ─────────────
 check("platform_sso is a member of the runtime SIGNAL_KINDS array — the union is derived, so the playbook proof covers it automatically",

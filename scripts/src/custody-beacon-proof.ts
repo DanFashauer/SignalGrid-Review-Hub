@@ -8,7 +8,11 @@
 // dark is high-confidence removal. The grant (`none`) requires POSITIVE CONFIRMATION on
 // every axis — in zone, reachable, fresh reading, clean parse.
 import {
+  CustodyBeaconConnector,
+  CustodyBeaconConnectorError,
+  createMockCustodyBeaconTransport,
   evaluateCustodyBeacon,
+  guardReadOnly,
   normalizeReport,
   type CustodyBeaconReportRaw,
   type NormalizedCustodyBeacon,
@@ -71,9 +75,21 @@ check("no beacon reading returned for the device (covered=false) → step_up, ne
 // ── malformed / hostile report shapes ───────────────────────────────────────────
 
 const malformedEnum = normalizeReport("m", { zone: "in_custody_zone", reachability: "reachable", freshness: "fresh", extra: 1 } as CustodyBeaconReportRaw);
-check("an unrecognized key marks the report malformed and cannot grant", malformedEnum.reportIntegrity === "malformed" && evaluateCustodyBeacon(malformedEnum).recommendedAction !== "none");
+// The refusal must come from the INTEGRITY branch itself (REPORT_MALFORMED), not
+// merely from the grant backstop happening to catch it — a malformed report whose
+// fields all parse valid is exactly the state only the integrity branch can name.
+check("an unrecognized key marks the report malformed and refuses AS malformed (not via the backstop)",
+  malformedEnum.reportIntegrity === "malformed" && evaluateCustodyBeacon(malformedEnum).reasonCode === "REPORT_MALFORMED" && evaluateCustodyBeacon(malformedEnum).recommendedAction !== "none");
+// Per-field integrity: each asserted-but-unparseable field must mark the report
+// MALFORMED on its own (one junk field per report — several at once would let one
+// integrity term hide behind another, the unfalsifiability this guard exists to catch).
 const junkEnum = ev({ zone: "somewhere", reachability: "reachable", freshness: "fresh" });
-check("an unparseable zone value → unknown zone, malformed, cannot grant", junkEnum.recommendedAction !== "none");
+check("junk zone alone → malformed, cannot grant",
+  normalizeReport("jz", { zone: "somewhere", reachability: "reachable", freshness: "fresh" }).reportIntegrity === "malformed" && junkEnum.recommendedAction !== "none");
+check("junk freshness alone → malformed",
+  normalizeReport("jf", { zone: "in_custody_zone", reachability: "reachable", freshness: "soon" }).reportIntegrity === "malformed");
+check("junk reachability alone → malformed",
+  normalizeReport("jr", { zone: "in_custody_zone", reachability: "maybe", freshness: "fresh" }).reportIntegrity === "malformed");
 const inherited = evaluateCustodyBeacon(normalizeReport("i", Object.create({ zone: "in_custody_zone" }) as CustodyBeaconReportRaw));
 check("a report with ZERO own keys asserts nothing and cannot grant", inherited.recommendedAction !== "none");
 const protoAlias = normalizeReport("pa", Object.assign(Object.create({ zone: "in_custody_zone" }), { zone: "in_custody_zone", reachability: "reachable", freshness: "fresh" }) as CustodyBeaconReportRaw);
@@ -148,6 +164,27 @@ check(
   rawRes.mismatches === 0 && rawRes.combos === productOf(rawDomains) && rawRes.combos === 192,
 );
 check("exhaustive (raw wire): exactly ONE raw reading grants", rawRes.noneCount === 1);
+
+// ── connector surface (mutation-guard coverage: every guard falsifiable) ────────
+let cbReadOnly = false;
+try { guardReadOnly("POST"); } catch (err) { cbReadOnly = err instanceof CustodyBeaconConnectorError && err.code === "read_only_violation"; }
+check("a non-GET request is refused by the read-only guard", cbReadOnly);
+const cbConn = new CustodyBeaconConnector(
+  { accessToken: "t", baseUrl: "https://beacon.example" },
+  createMockCustodyBeaconTransport({ readings: { "dev-9": { zone: "in_custody_zone", reachability: "reachable", freshness: "fresh" } } }),
+);
+check("the connector round-trip normalizes a clean reading end to end (grantable)",
+  evaluateCustodyBeacon(await cbConn.fetchNormalized("dev-9")).recommendedAction === "none");
+check("an unknown device yields an all-unknown reading that cannot grant",
+  evaluateCustodyBeacon(await cbConn.fetchNormalized("dev-unknown")).recommendedAction !== "none");
+// The prototype walk must be BOUNDED, not trusted: a chain of >64 empty prototypes
+// under an otherwise-clean report must read as malformed — without the depth bound
+// the walk would end quietly at Object.prototype and the report would read clean.
+let cbDeepProto: object = {};
+for (let i = 0; i < 100; i += 1) cbDeepProto = Object.create(cbDeepProto);
+const cbDeepReport = Object.assign(Object.create(cbDeepProto), { zone: "in_custody_zone", reachability: "reachable", freshness: "fresh" });
+check("a report behind a 100-deep prototype chain is malformed (bounded walk)",
+  normalizeReport("deep", cbDeepReport as CustodyBeaconReportRaw).reportIntegrity === "malformed");
 
 // Determinism.
 const d1 = normalizeReport("det", { zone: "off_premises", reachability: "unreachable" });

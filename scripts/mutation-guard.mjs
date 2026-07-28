@@ -143,6 +143,27 @@ export const TARGETS = [
     proof: "proof:verdict-attestation",
     files: ["lib/verdict-attestation/src/attest.ts", "lib/verdict-attestation/src/canonical.ts"],
   },
+  {
+    proof: "proof:custody-beacon",
+    files: [
+      "lib/integrations/src/integrations/custody-beacon/evaluate.ts",
+      "lib/integrations/src/integrations/custody-beacon/custody-beacon-connector.ts",
+    ],
+  },
+  {
+    proof: "proof:app-update",
+    files: [
+      "lib/integrations/src/integrations/app-update/evaluate.ts",
+      "lib/integrations/src/integrations/app-update/app-update-connector.ts",
+    ],
+  },
+  {
+    proof: "proof:platform-sso",
+    files: [
+      "lib/integrations/src/integrations/platform-sso/evaluate.ts",
+      "lib/integrations/src/integrations/platform-sso/platform-sso-connector.ts",
+    ],
+  },
 ];
 
 // ── known-inert survivors ─────────────────────────────────────────────────────
@@ -247,6 +268,91 @@ const ALLOWED = [
     line: 'typeof own("issuedAt") !== "number" ||',
     reason:
       "Redundant with the `!Number.isFinite` term on the next line — any non-number fails that too. Kept because the pair reads as one contract. Labelled redundant in the source.",
+  },
+  {
+    file: "lib/integrations/src/integrations/custody-beacon/evaluate.ts",
+    line: 'unreachable") { // inert: else-arm is identical',
+    reason:
+      "Inert by construction: unreachable and unknown reachability map to the SAME in-zone-offline monitor candidate, and the final else produces it for both. The branch is kept as the explicit statement of THE key benign case. Labelled inert in the source.",
+  },
+  {
+    file: "lib/integrations/src/integrations/custody-beacon/evaluate.ts",
+    line: '{ // inert: backstop is identical',
+    reason:
+      "Inert by construction: the complete grant backstop below pushes the IDENTICAL in_zone_stale/step_up/IN_ZONE_STALE candidate when this branch is deleted. Kept as the primary, readable statement of the rule; deleting BOTH is not a single mutation. Labelled inert in the source.",
+  },
+  {
+    file: "lib/integrations/src/integrations/custody-beacon/evaluate.ts",
+    line: 'beacon.reportIntegrity === "clean" &&',
+    reason:
+      "A conjunct of the grant backstop's predicate, and the backstop never fires today — every non-confirmed state already pushes a raising candidate, as its own comment states. Weakening the predicate is unobservable while that holds, and the backstop exists precisely for the day it stops holding.",
+  },
+  {
+    file: "lib/integrations/src/integrations/custody-beacon/evaluate.ts",
+    line: 'beacon.zone === "in_custody_zone" &&',
+    reason: "Backstop-predicate conjunct — same reasoning as the reportIntegrity conjunct above.",
+  },
+  {
+    file: "lib/integrations/src/integrations/custody-beacon/evaluate.ts",
+    line: 'beacon.reachability === "reachable" &&',
+    reason: "Backstop-predicate conjunct — same reasoning as the reportIntegrity conjunct above.",
+  },
+  {
+    file: "lib/integrations/src/integrations/custody-beacon/evaluate.ts",
+    line: "if (!positivelyInCustody && candidates.length === 0) {",
+    reason:
+      "The grant backstop itself — deliberately redundant defence-in-depth whose own comment states 'today this never fires'. It exists to catch a FUTURE weakening of a branch, so no single present-day mutation can make it observable. Documented in the source.",
+  },
+  {
+    file: "lib/integrations/src/integrations/app-update/evaluate.ts",
+    line: 'unknown") { // inert: backstop is identical',
+    reason:
+      "Inert by construction: the grant backstop pushes the IDENTICAL version_unknown/step_up/VERSION_UNKNOWN candidate when this branch is deleted. Kept as the primary, readable statement; deleting both is not a single mutation. Labelled inert in the source.",
+  },
+  {
+    file: "lib/integrations/src/integrations/app-update/evaluate.ts",
+    line: 'report.reportIntegrity === "clean" &&',
+    reason:
+      "A conjunct of the grant backstop's predicate, and the backstop never fires today — every non-confirmed state already pushes a raising candidate, as its own comment states. Weakening the predicate is unobservable while that holds; the backstop exists for the day it stops holding.",
+  },
+  {
+    file: "lib/integrations/src/integrations/app-update/evaluate.ts",
+    line: 'report.currency === "current" &&',
+    reason: "Backstop-predicate conjunct — same reasoning as the reportIntegrity conjunct above.",
+  },
+  {
+    file: "lib/integrations/src/integrations/app-update/evaluate.ts",
+    line: "if (!positivelyCurrent && candidates.length === 0) {",
+    reason:
+      "The grant backstop itself — deliberately redundant defence-in-depth, documented in the source as never firing today; exists to catch a FUTURE weakening.",
+  },
+  {
+    file: "lib/integrations/src/integrations/platform-sso/evaluate.ts",
+    line: '{ // inert: backstop is identical',
+    reason:
+      "Inert by construction: the grant backstop pushes the IDENTICAL unverified/step_up/METHOD_UNKNOWN candidate when this method branch is deleted. Kept as the primary, readable statement. Labelled inert in the source.",
+  },
+  {
+    file: "lib/integrations/src/integrations/platform-sso/evaluate.ts",
+    line: 'report.reportIntegrity === "clean" &&',
+    reason:
+      "A conjunct of the grant backstop's predicate — the backstop never fires today, as its own comment states; the predicate is unobservable until a branch weakens.",
+  },
+  {
+    file: "lib/integrations/src/integrations/platform-sso/evaluate.ts",
+    line: 'report.registration === "user" &&',
+    reason: "Backstop-predicate conjunct — same reasoning as the reportIntegrity conjunct above.",
+  },
+  {
+    file: "lib/integrations/src/integrations/platform-sso/evaluate.ts",
+    line: "hardwareBacked &&",
+    reason: "Backstop-predicate conjunct — same reasoning as the reportIntegrity conjunct above.",
+  },
+  {
+    file: "lib/integrations/src/integrations/platform-sso/evaluate.ts",
+    line: "if (!positivelyConfirmed && candidates.length === 0) {",
+    reason:
+      "The grant backstop itself — deliberately redundant defence-in-depth, documented in the source as never firing today; exists to catch a FUTURE weakening.",
   },
 ];
 

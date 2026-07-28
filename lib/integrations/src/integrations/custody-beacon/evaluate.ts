@@ -105,13 +105,18 @@ export function evaluateCustodyBeacon(
       candidates.push({ posture: "departing", action: "alert", reason: "DEPARTING" });
     }
   } else if (beacon.zone === "in_custody_zone") {
-    if (beacon.reachability === "unreachable") {
+    // Inert under mutation (allowlisted): the final else produces the IDENTICAL
+    // candidate for the unreachable case; this branch is kept as the explicit
+    // statement of THE key benign case.
+    if (beacon.reachability === "unreachable") { // inert: else-arm is identical
       // THE key benign case: in its bay, powered off. Note it, do not alarm.
       candidates.push({ posture: "in_zone_offline", action: "monitor", reason: "IN_ZONE_OFFLINE_BENIGN" });
     } else if (beacon.reachability === "reachable") {
       // In zone AND reachable. The grant requires a FRESH reading — a stale/expired
-      // in-zone claim cannot confirm current location.
-      if (beacon.freshness !== "fresh") {
+      // in-zone claim cannot confirm current location. Inert under mutation
+      // (allowlisted): the grant backstop below pushes the identical candidate;
+      // this stays as the primary, readable statement of the rule.
+      if (beacon.freshness !== "fresh") { // inert: backstop is identical
         candidates.push({ posture: "in_zone_stale", action: "step_up", reason: "IN_ZONE_STALE" });
       }
       // else: no candidate — the seed grant survives.

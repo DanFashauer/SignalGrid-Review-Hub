@@ -11,7 +11,11 @@
 // current — a forced update to a version already running is satisfied by
 // construction; the enumeration pins exactly that set of granting states).
 import {
+  AppUpdateConnector,
+  AppUpdateConnectorError,
+  createMockAppUpdateTransport,
   evaluateAppUpdate,
+  guardReadOnly,
   normalizeReport,
   parseVersion,
   compareVersions,
@@ -91,14 +95,27 @@ check("channel unknown → step_up (provenance must be positively managed)",
 const contradictory = normalizeReport("c", "a", { installed_version: "2.4.0", latest_version: "2.0.0", min_version: "2.2.0", channel: "managed" });
 check("a manifest whose floor exceeds its own latest is MALFORMED (self-contradiction), currency unknown",
   contradictory.reportIntegrity === "malformed" && contradictory.currency === "unknown" && evaluateAppUpdate(contradictory).recommendedAction !== "none");
-const junkVersion = ev({ installed_version: "latest!", latest_version: "2.4.0", channel: "managed" });
-check("an asserted-but-unparseable version marks the report malformed and cannot grant",
-  junkVersion.recommendedAction !== "none");
+// Per-field integrity: each asserted-but-unparseable field must mark the report
+// MALFORMED on its own (one junk field per report, everything else valid — a report
+// with several junk fields would let one integrity term hide behind another, which
+// is exactly the unfalsifiability the mutation guard exists to catch).
+check("junk installed_version alone → malformed, cannot grant",
+  normalizeReport("j1", "a", { installed_version: "latest!", latest_version: "2.4.0", channel: "managed" }).reportIntegrity === "malformed" &&
+  ev({ installed_version: "latest!", latest_version: "2.4.0", channel: "managed" }).recommendedAction !== "none");
+check("junk latest_version alone → malformed",
+  normalizeReport("j2", "a", { installed_version: "2.4.0", latest_version: "soon™", channel: "managed" }).reportIntegrity === "malformed");
+check("junk min_version alone → malformed",
+  normalizeReport("j3", "a", { installed_version: "2.4.0", latest_version: "2.4.0", min_version: "junk", channel: "managed" }).reportIntegrity === "malformed");
+check("junk channel alone → malformed",
+  normalizeReport("j4", "a", { installed_version: "2.4.0", latest_version: "2.4.0", channel: "sideload?" }).reportIntegrity === "malformed");
 const junkForce = normalizeReport("f", "a", { installed_version: "2.4.0", latest_version: "2.4.0", force_update: "yes", channel: "managed" });
 check("a non-boolean force_update is an assertion we could not read → malformed", junkForce.reportIntegrity === "malformed");
 const extraKey = normalizeReport("x", "a", { installed_version: "2.4.0", latest_version: "2.4.0", channel: "managed", update_url: "https://x" } as AppUpdateReportRaw);
-check("an unrecognized key (e.g. an update_url we would never fetch) marks the report malformed",
-  extraKey.reportIntegrity === "malformed" && evaluateAppUpdate(extraKey).recommendedAction !== "none");
+// The refusal must come from the INTEGRITY branch itself (REPORT_MALFORMED), not
+// merely from the grant backstop — a malformed report whose fields all parse valid
+// is exactly the state only the integrity branch can name.
+check("an unrecognized key (e.g. an update_url we would never fetch) refuses AS malformed (not via the backstop)",
+  extraKey.reportIntegrity === "malformed" && evaluateAppUpdate(extraKey).reasonCode === "REPORT_MALFORMED" && evaluateAppUpdate(extraKey).recommendedAction !== "none");
 const inherited = evaluateAppUpdate(normalizeReport("i", "a", Object.create({ installed_version: "2.4.0", latest_version: "2.4.0", channel: "managed" }) as AppUpdateReportRaw));
 check("a report with ZERO own keys asserts nothing and cannot grant", inherited.recommendedAction !== "none");
 const hidden = new Proxy({ installed_version: "2.4.0", latest_version: "2.4.0", channel: "managed" }, { ownKeys: () => [], getOwnPropertyDescriptor: () => undefined }) as AppUpdateReportRaw;
@@ -187,6 +204,32 @@ check(
 );
 check("exhaustive (raw wire): exactly SIX raw reports grant (2 floor states × 3 force-flag values, all current+managed)",
   rawRes.noneCount === 6);
+
+// ── connector surface (mutation-guard coverage: every guard falsifiable) ────────
+let auReadOnly = false;
+try { guardReadOnly("POST"); } catch (err) { auReadOnly = err instanceof AppUpdateConnectorError && err.code === "read_only_violation"; }
+check("a non-GET request is refused by the read-only guard", auReadOnly);
+const auConn = new AppUpdateConnector(
+  { accessToken: "t", baseUrl: "https://manifest.example" },
+  createMockAppUpdateTransport({ reports: { "dev-9/host-app": { installed_version: "2.4.0", latest_version: "2.4.0", channel: "managed" } } }),
+);
+check("the connector round-trip normalizes a clean report end to end (grantable)",
+  evaluateAppUpdate(await auConn.fetchNormalized("dev-9", "host-app")).recommendedAction === "none");
+check("an unknown device/app pair yields an all-unknown report that cannot grant",
+  evaluateAppUpdate(await auConn.fetchNormalized("dev-9", "other-app")).recommendedAction !== "none");
+// The prototype walk must be BOUNDED, not trusted: >64 empty prototypes under an
+// otherwise-clean report must read malformed — without the bound the walk ends
+// quietly at Object.prototype and the report reads clean.
+let auDeepProto: object = {};
+for (let i = 0; i < 100; i += 1) auDeepProto = Object.create(auDeepProto);
+const auDeepReport = Object.assign(Object.create(auDeepProto), { installed_version: "2.4.0", latest_version: "2.4.0", channel: "managed" });
+check("a report behind a 100-deep prototype chain is malformed (bounded walk)",
+  normalizeReport("deep", "a", auDeepReport as AppUpdateReportRaw).reportIntegrity === "malformed");
+// An inherited key with a RECOGNIZED name is still an assertion this report did not
+// make itself — the prototype-chain scan, not the own-value read, is what notices it.
+const auProtoAlias = Object.assign(Object.create({ installed_version: "9.9.9" }), { installed_version: "2.4.0", latest_version: "2.4.0", channel: "managed" });
+check("a recognized key inherited from the prototype marks the report malformed",
+  normalizeReport("pa", "a", auProtoAlias as AppUpdateReportRaw).reportIntegrity === "malformed");
 
 // ── fusion into the fabric (posture-composition + incident routing) ─────────────
 check("app_update is a member of the runtime SIGNAL_KINDS array — the union is derived, so the playbook proof covers it automatically",

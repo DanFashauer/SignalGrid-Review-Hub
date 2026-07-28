@@ -129,7 +129,9 @@ export function evaluatePlatformSso(
   } else if (report.method === "web_based") {
     // macOS 27 pre-release material. A preview is a preview.
     candidates.push({ posture: "preview_method", action: "step_up", reason: "PREVIEW_METHOD_NEVER_GRANTS" });
-  } else if (report.method === "none" || report.method === "unknown") {
+  } else if (report.method === "none" || report.method === "unknown") { // inert: backstop is identical
+    // Inert under mutation (allowlisted): the grant backstop below pushes the
+    // IDENTICAL candidate; this stays as the primary, readable statement.
     candidates.push({ posture: "unverified", action: "step_up", reason: "METHOD_UNKNOWN" });
   }
 

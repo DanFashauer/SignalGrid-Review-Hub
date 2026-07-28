@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 13,
-  "fingerprint": "474ab647763cf98a2f77b41ae2eaf9756fc94bdc9b29e0febbc1a75ebc5eca4c",
+  "manifestVersion": 14,
+  "fingerprint": "b434368c1eb58f71794972b6f1da73b08ea2e1989d7fd2386e3ef742275dcdf6",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -87,7 +87,7 @@
       "agent-behavior": 36,
       "agent-identity": 143,
       "credential-exposure": 28,
-      "custody-beacon": 32,
+      "custody-beacon": 38,
       "device-attestation": 60,
       "device-management-health": 162,
       "dual-control": 47,

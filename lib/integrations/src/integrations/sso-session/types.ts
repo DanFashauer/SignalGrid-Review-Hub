@@ -31,7 +31,21 @@ export type SessionBinding = "bound" | "mismatched" | "unbound" | "unknown";
 
 /** Authenticator assurance backing the session. `phishing_resistant` (e.g.
  *  passkey / FIDO2 / platform), `mfa` (any second factor), `single_factor`
- *  (password only), `unknown`. */
+ *  (password only), `unknown`.
+ *
+ *  DELIBERATELY COARSE, and the coarseness is the point of a sibling dimension.
+ *  `phishing_resistant` collapses every credential that resists phishing into one
+ *  bucket — which is the "a passkey is a passkey" misconception encoded as a type.
+ *  It cannot tell a synced passkey on a personal phone (whose copies no
+ *  administrator can enumerate) from a FIDO2 key in a badge holder. That resolution
+ *  lives in `@workspace/integrations/passkey-assurance` (docs/PASSKEY_ASSURANCE.md),
+ *  which grades attestation, custody, and user verification separately.
+ *
+ *  This type is NOT widened to match. The question it answers — "was this session
+ *  backed by something phishing-resistant?" — is a real and separate one, and a
+ *  session record is often all the IdP exposes at session-evaluation time. Widening
+ *  it would force every caller to supply credential detail that may not exist at
+ *  that moment. Compose the two dimensions instead of conflating them. */
 export type SessionAssurance = "phishing_resistant" | "mfa" | "single_factor" | "unknown";
 
 /** Session freshness against its own lifetime. `near_expiry` = within the renewal

@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 17,
-  "fingerprint": "c4d1ba6002a0a472585ffa13df5ce69c94f2e77e5819ec82402b210626b402ec",
+  "manifestVersion": 18,
+  "fingerprint": "2de1a9bbd60fce767baf881ed5f6cea585b2d8fdbc94ed6f7b965f3eb9774078",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -102,6 +102,7 @@
       "oauth-consent": 65,
       "ot-posture": 37,
       "pacs-access": 68,
+      "passkey-assurance": 51,
       "pim-activation": 43,
       "platform-sso": 52,
       "policy-binding": 41,

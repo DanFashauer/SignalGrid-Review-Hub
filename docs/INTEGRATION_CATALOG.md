@@ -408,6 +408,14 @@ in one place.
   that cannot enforce it is config drift, and a policy genuinely in force is graded for
   lockout exposure. `proof:platform-sso` (52 checks).
 
+- **Passkey assurance** ([PASSKEY_ASSURANCE.md](PASSKEY_ASSURANCE.md)) — "a passkey is a
+  passkey" is the misconception, and the line falls at **attestation**, not at
+  synced-vs-device-bound: an unattested device-bound passkey carries no more device
+  provenance than a synced one. A synced credential's custody is unknowable by
+  construction — no administrator can query where it synced — so it forecloses the grant
+  rather than lowering it. User verification discouraged is possession-only, a known-false
+  reliance that restricts. `proof:passkey-assurance` (51 checks).
+
 - **Policy binding** ([POLICY_BINDING.md](POLICY_BINDING.md)) — membership **is** the policy.
   Intune dynamic groups, Fleet teams, ABM/DDM profiles, Jamf smart groups, PACS access
   levels, Entra CA groups, WMS queues, EDR policy groups and SignalGrid's own per-vertical

@@ -171,6 +171,13 @@ export const TARGETS = [
     ],
   },
   {
+    proof: "proof:passkey-assurance",
+    files: [
+      "lib/integrations/src/integrations/passkey-assurance/evaluate.ts",
+      "lib/integrations/src/integrations/passkey-assurance/passkey-assurance-connector.ts",
+    ],
+  },
+  {
     proof: "proof:policy-binding",
     files: [
       "lib/integrations/src/integrations/policy-binding/evaluate.ts",
@@ -249,6 +256,36 @@ export const TARGETS = [
 // fine" is not one. An entry whose `line` no longer matches fails the gate: the code
 // moved and nobody re-derived whether the justification still holds.
 const ALLOWED = [
+  {
+    file: 'lib/integrations/src/integrations/passkey-assurance/evaluate.ts',
+    line: 'report.reportIntegrity === "clean" &&',
+    reason:
+      'Defence-in-depth backstop that CANNOT fire today: every non-confirmed state already pushes a raising candidate above it, so the candidate list is never empty when positivelyConfirmed is false. Kept because it is the last thing standing between a weakened branch and a surviving seed grant, and it now pushes its OWN reason code (GRANT_BACKSTOP) so a firing would be visible in the record rather than disguised as a normal branch. Same shape and same justification as the platform-sso and policy-binding backstops.',
+  },
+  {
+    file: 'lib/integrations/src/integrations/passkey-assurance/evaluate.ts',
+    line: 'report.registration === "registered" &&',
+    reason:
+      'Defence-in-depth backstop that CANNOT fire today: every non-confirmed state already pushes a raising candidate above it, so the candidate list is never empty when positivelyConfirmed is false. Kept because it is the last thing standing between a weakened branch and a surviving seed grant, and it now pushes its OWN reason code (GRANT_BACKSTOP) so a firing would be visible in the record rather than disguised as a normal branch. Same shape and same justification as the platform-sso and policy-binding backstops.',
+  },
+  {
+    file: 'lib/integrations/src/integrations/passkey-assurance/evaluate.ts',
+    line: 'deviceHeld &&',
+    reason:
+      'Defence-in-depth backstop that CANNOT fire today: every non-confirmed state already pushes a raising candidate above it, so the candidate list is never empty when positivelyConfirmed is false. Kept because it is the last thing standing between a weakened branch and a surviving seed grant, and it now pushes its OWN reason code (GRANT_BACKSTOP) so a firing would be visible in the record rather than disguised as a normal branch. Same shape and same justification as the platform-sso and policy-binding backstops.',
+  },
+  {
+    file: 'lib/integrations/src/integrations/passkey-assurance/evaluate.ts',
+    line: 'report.attestation === "verified" &&',
+    reason:
+      'Defence-in-depth backstop that CANNOT fire today: every non-confirmed state already pushes a raising candidate above it, so the candidate list is never empty when positivelyConfirmed is false. Kept because it is the last thing standing between a weakened branch and a surviving seed grant, and it now pushes its OWN reason code (GRANT_BACKSTOP) so a firing would be visible in the record rather than disguised as a normal branch. Same shape and same justification as the platform-sso and policy-binding backstops.',
+  },
+  {
+    file: 'lib/integrations/src/integrations/passkey-assurance/evaluate.ts',
+    line: 'if (!positivelyConfirmed && candidates.length === 0) {',
+    reason:
+      'Defence-in-depth backstop that CANNOT fire today: every non-confirmed state already pushes a raising candidate above it, so the candidate list is never empty when positivelyConfirmed is false. Kept because it is the last thing standing between a weakened branch and a surviving seed grant, and it now pushes its OWN reason code (GRANT_BACKSTOP) so a firing would be visible in the record rather than disguised as a normal branch. Same shape and same justification as the platform-sso and policy-binding backstops.',
+  },
   {
     file: "lib/integrations/src/integrations/link-usability/evaluate.ts",
     line: 'link.linkProgress !== "not_associated"',

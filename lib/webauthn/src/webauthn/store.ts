@@ -72,7 +72,15 @@ export async function saveUser(user: WebAuthnUser): Promise<void> {
   if (redis) {
     try {
       await redis.connect();
-      await redis.set(key, JSON.stringify(user), 'EX', 86400); // 24h
+      // Credentials are DURABLE enrollment records, not sessions — persist them with NO
+      // TTL. A 24h expiry meant an enrolled credential vanished from Redis after a day,
+      // so a challenge request on another instance (or any instance after a restart)
+      // found no credential and returned 409 despite enrollment having succeeded; the
+      // per-process in-memory mirror only masked that on the one surviving instance.
+      // Removal is explicit, via removeCredential (which DELs the key). (Adversarial
+      // review finding.) Ephemeral records — challenges (60s) and step-up sessions —
+      // keep their TTLs below; only the credential store is durable.
+      await redis.set(key, JSON.stringify(user));
     } catch {
       // Fall through to in-memory
     } finally {
@@ -185,7 +193,9 @@ export async function advanceCredentialCounter(
       if (!cred || cred.counter !== expectedCounter) { await redis!.unwatch(); return false; }
       cred.counter = newCounter;
       cred.lastUsedAt = usedAtIso;
-      const execRes = await redis!.multi().set(key, JSON.stringify(user), 'EX', 86400).exec();
+      // Persist durably (no TTL), matching saveUser — a counter advance must not
+      // re-introduce a 24h expiry on the credential record it just updated.
+      const execRes = await redis!.multi().set(key, JSON.stringify(user)).exec();
       if (execRes === null) return false; // WATCHed key changed mid-transaction → lost the race
       inMemoryUsers.set(userId, user); // keep the in-memory mirror consistent (as saveUser does)
       return true;

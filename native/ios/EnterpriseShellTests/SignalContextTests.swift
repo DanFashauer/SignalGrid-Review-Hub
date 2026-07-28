@@ -11,17 +11,26 @@ final class SignalContextTests: XCTestCase {
                      screenCaptured: Bool = false,
                      sessionStale: Bool = false,
                      lockedOut: Bool = false,
-                     injected: Set<String> = []) -> Env {
+                     injected: Set<String> = [],
+                     postureObserved: Bool = true) -> Env {
         Env(authenticated: true, expectedZone: expected, detectedZone: detected,
             screenCaptured: screenCaptured, sessionStale: sessionStale,
-            lockedOut: lockedOut, injected: injected)
+            lockedOut: lockedOut, injected: injected, postureObserved: postureObserved)
     }
 
-    // A trusted, in-zone session with fresh posture → allow.
+    // A trusted, in-zone session with fresh, OBSERVED posture → allow.
     func testTrustedContextAllows() {
         let r = DecisionEngine.evaluate(SignalContext.signals(env()))
         XCTAssertEqual(r.outcome, .allow)
         XCTAssertTrue(r.reasonCodes.contains("IDENTITY_AND_POSTURE_TRUSTED"))
+    }
+
+    // Negative control for the fail-closed posture gate: an authenticated,
+    // in-zone session whose posture was NEVER positively sourced must NOT get
+    // the base allow evidence — absence of observation is not observed-good.
+    func testUnobservedPostureFailsClosed() {
+        let r = DecisionEngine.evaluate(SignalContext.signals(env(postureObserved: false)))
+        XCTAssertNotEqual(r.outcome, .allow)
     }
 
     // Stale posture (real freshness OR injected) → step_up.

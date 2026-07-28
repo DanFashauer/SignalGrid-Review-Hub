@@ -225,13 +225,11 @@ final class BLEBadgeReaderProvider: NSObject, BadgeReaderProvider {
             return
         }
         
-        // SECURITY: Rate limit check
-        let rateLimit = SecurityManager.shared.isBadgeScanAllowed(badgeId: badgeId)
-        if !rateLimit.allowed {
-            delegate?.badgeReader(self, didFailWithError: BadgeReaderProviderError.notSupported)
-            return
-        }
-        
+        // SECURITY: rate-limit/lockout is enforced once, centrally, at the session
+        // chokepoint (SessionStateManager.badgeRejection). It must NOT be called
+        // here too: isBadgeScanAllowed is stateful (it records an attempt), so a
+        // second call per scan would double-count and lock the reader out at half
+        // the configured threshold. Format is still validated above.
         lastScanAt = Date()
         
         AuditLogger.shared.log(event: .badgeReceived, metadata: [

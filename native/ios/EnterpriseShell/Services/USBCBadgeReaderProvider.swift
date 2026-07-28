@@ -220,13 +220,10 @@ final class USBCBadgeReaderProvider: NSObject, BadgeReaderProvider {
             return
         }
         
-        // SECURITY: Rate limit check (same as BLE)
-        let rateLimit = SecurityManager.shared.isBadgeScanAllowed(badgeId: badgeId)
-        if !rateLimit.allowed {
-            delegate?.badgeReader(self, didFailWithError: BadgeReaderProviderError.notSupported)
-            return
-        }
-        
+        // SECURITY: rate-limit/lockout is enforced once, centrally, at the session
+        // chokepoint (SessionStateManager.badgeRejection). Not called here (same as
+        // BLE): isBadgeScanAllowed is stateful, so a second call per scan would
+        // double-count and lock the reader out at half the configured threshold.
         AuditLogger.shared.log(event: .badgeReceived, metadata: [
             "provider": providerId,
             "badgeId": SecurityManager.shared.maskBadgeId(badgeId),

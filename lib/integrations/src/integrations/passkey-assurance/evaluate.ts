@@ -64,9 +64,14 @@ export interface EvaluatePasskeyOptions {
 }
 
 export interface EvaluateIdentityPasskeysOptions extends EvaluatePasskeyOptions {
-  /** How many credentials the IdP says this identity holds, when it can say.
-   *  Supplying it turns completeness from an inference into a check: a set that
-   *  does not match the authoritative count fails closed. */
+  /** How many credentials the IdP says this identity holds. REQUIRED for a grant.
+   *
+   *  Completeness is an INPUT, and this fabric's rule is that a grant requires
+   *  positive confirmation of every input (review finding). Inferring wholeness from
+   *  a backup boolean and two distinct refs proves nothing about a third credential,
+   *  so without an authoritative total the aggregate can report worst-wins over what
+   *  it was given but must never claim the identity is confirmed. Omit it and the
+   *  verdict raises with COMPLETENESS_UNPROVEN. */
   expectedCredentialCount?: number;
 }
 
@@ -140,6 +145,14 @@ export function evaluatePasskey(
   if (report.credentialRef.length === 0) {
     unknownSignals.push("credential_ref");
     candidates.push({ posture: "unverified", action: "step_up", reason: "CREDENTIAL_REF_MISSING" });
+  }
+  // Same reasoning one level up (review finding): a verdict that cannot name the
+  // IDENTITY whose authentication path it grades cannot be bound to anyone. The
+  // aggregate already refused an unnamed identity; this public per-credential path
+  // must refuse it too, or the weaker entry point silently undoes the stronger one.
+  if (report.identityRef.trim().length === 0) {
+    unknownSignals.push("identity_ref");
+    candidates.push({ posture: "unverified", action: "step_up", reason: "IDENTITY_REF_MISSING" });
   }
   if (report.reportIntegrity !== "clean") unknownSignals.push("report_integrity");
   if (report.registration === "unknown") unknownSignals.push("registration");
@@ -229,6 +242,7 @@ export function evaluatePasskey(
   // seed grant survive.
   const positivelyConfirmed =
     report.credentialRef.length > 0 &&
+    report.identityRef.trim().length > 0 &&
     report.reportIntegrity === "clean" &&
     report.registration === "registered" &&
     deviceHeld &&
@@ -338,8 +352,8 @@ export function evaluateIdentityPasskeys(
   const hasDuplicateRefs = distinctRefs.size !== reports.length;
   const claimsBackup = reports.some((r) => r.backup === "registered");
   const backupUnaccounted = claimsBackup && distinctRefs.size < 2;
-  const countMismatch =
-    typeof opts.expectedCredentialCount === "number" && distinctRefs.size !== opts.expectedCredentialCount;
+  const haveAuthoritativeCount = typeof opts.expectedCredentialCount === "number";
+  const countMismatch = haveAuthoritativeCount && distinctRefs.size !== opts.expectedCredentialCount;
 
   if (hasDuplicateRefs || backupUnaccounted || countMismatch) {
     return {
@@ -355,6 +369,20 @@ export function evaluateIdentityPasskeys(
   const weakest = credentials.reduce((worst, c) =>
     ACTION_SEVERITY[c.recommendedAction] > ACTION_SEVERITY[worst.recommendedAction] ? c : worst,
   );
+
+  // Without an authoritative total, nothing establishes that the supplied set is the
+  // WHOLE set. Report the worst of what we were given — that is real information —
+  // but never confirm. A caller with no count still learns "at least this bad".
+  if (!haveAuthoritativeCount) {
+    return {
+      identityRef,
+      recommendedAction: weakest.recommendedAction === "none" ? "step_up" : weakest.recommendedAction,
+      weakestCredentialRef: weakest.recommendedAction === "none" ? "" : weakest.credentialRef,
+      reasonCode: weakest.recommendedAction === "none" ? "COMPLETENESS_UNPROVEN" : weakest.reasonCode,
+      credentials,
+      identityConfirmed: false,
+    };
+  }
 
   return {
     identityRef,

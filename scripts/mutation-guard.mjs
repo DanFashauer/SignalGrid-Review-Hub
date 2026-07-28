@@ -264,6 +264,12 @@ const ALLOWED = [
   },
   {
     file: 'lib/integrations/src/integrations/passkey-assurance/evaluate.ts',
+    line: 'report.identityRef.trim().length > 0 &&',
+    reason:
+      'Defence-in-depth backstop that CANNOT fire today: an empty or whitespace-only identityRef already raises IDENTITY_REF_MISSING on its own branch above, so the candidate list is never empty when positivelyConfirmed is false. Kept as the last thing standing between a weakened branch and a surviving seed grant; it pushes its own GRANT_BACKSTOP reason so a firing is visible in the record. Same shape as the credentialRef term directly above it.',
+  },
+  {
+    file: 'lib/integrations/src/integrations/passkey-assurance/evaluate.ts',
     line: 'report.reportIntegrity === "clean" &&',
     reason:
       'Defence-in-depth backstop that CANNOT fire today: every non-confirmed state already pushes a raising candidate above it, so the candidate list is never empty when positivelyConfirmed is false. Kept because it is the last thing standing between a weakened branch and a surviving seed grant, and it now pushes its OWN reason code (GRANT_BACKSTOP) so a firing would be visible in the record rather than disguised as a normal branch. Same shape and same justification as the platform-sso and policy-binding backstops.',

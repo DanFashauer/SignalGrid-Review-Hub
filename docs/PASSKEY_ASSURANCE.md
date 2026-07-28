@@ -64,7 +64,7 @@ load-bearing, not tidiness).
 | credential is **synced** | `step_up` | custody unknowable by construction — forecloses the grant |
 | attestation policy claims **enforced** while the credential is synced | `alert` | the platform is not applying the claimed control — config drift |
 | **no backup** credential registered | `monitor` | one lost device from a lockout; flagged, not distrusted |
-| not registered, or any TRUST axis unknown (type, attestation, policy, UV, parse, credential ref) | `step_up` | unknown raises, never grants |
+| not registered, or any TRUST axis unknown (type, attestation, policy, UV, parse, credential ref, identity ref) | `step_up` | unknown raises, never grants |
 | **backup unknown** | `monitor` | the recovery axis only — an unreadable backup is a recovery gap, not a trust one |
 
 Wire-level integrity: a report asserting `synced` **and** `attestation: verified`
@@ -101,13 +101,23 @@ for an identity-wide one by a reader who only sees the payload.
 **And the set must be evidently WHOLE before it can confirm.** Worst-wins is only
 sound over every usable credential, and supplying a set does not establish that it
 is complete — the connector reads one credential per call, so it structurally
-cannot. `evaluateIdentityPasskeys` therefore fails closed on three signals of
-incompleteness: duplicate credential refs (one credential counted twice is not two
-credentials); a report asserting `backup: "registered"` while the set holds fewer
-than two distinct credentials (the set contradicts its own contents); and a
-mismatch against `expectedCredentialCount` when the IdP can supply an authoritative
-one. `fetchNormalizedSet` takes the refs explicitly, so completeness is the
-caller's visible responsibility rather than a silent assumption.
+cannot. So completeness is not a check the set can pass by default: an
+**authoritative `expectedCredentialCount` is required for `identityConfirmed`**.
+Without one, `evaluateIdentityPasskeys` still reports worst-wins over what it was
+given, but returns `COMPLETENESS_UNPROVEN` and refuses to confirm — an unread axis
+raises, and "is this every credential?" is an axis like any other. This was opt-in
+until a review pointed out that an opt-in completeness check establishes nothing.
+
+With a count in hand it fails closed on three signals of incompleteness: duplicate
+credential refs (one credential counted twice is not two credentials); a report
+asserting `backup: "registered"` while the set holds fewer than two distinct
+credentials (the set contradicts its own contents); and a mismatch against the
+count itself. `fetchNormalizedSet` takes the refs explicitly, so completeness is
+the caller's visible responsibility rather than a silent assumption — and it marks
+**substituted** reports malformed, because a source that answers a request for the
+weak credential with a healthy *different* one would otherwise be graded as if the
+requested credential had been read, and two such substitutions would satisfy the
+count while the real credentials were never seen.
 
 ## Why `restrict` for missing user verification
 
@@ -157,7 +167,7 @@ recovery plan. This dimension takes no position on which tier a given population
 should hold; it grades what a credential actually is, and `recoveryRisk` makes the
 tradeoff visible instead of implicit.
 
-Proven by `proof:passkey-assurance` (69 checks; the three headline claims pinned
+Proven by `proof:passkey-assurance` (74 checks; the three headline claims pinned
 individually, per-field integrity, hostile shapes, both grant-safety enumerations
 including a non-vacuity guard, the identity-level worst-wins aggregation, and the
 connector surface; deterministic, offline).

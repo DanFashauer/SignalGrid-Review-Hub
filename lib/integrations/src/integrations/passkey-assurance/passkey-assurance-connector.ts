@@ -218,6 +218,19 @@ export class PasskeyAssuranceConnector {
     credentialRefs: readonly string[],
   ): Promise<NormalizedPasskey[]> {
     guardReadOnly("GET");
-    return Promise.all(credentialRefs.map((ref) => this.fetchNormalized(identityRef, ref)));
+    return Promise.all(
+      credentialRefs.map(async (ref) => {
+        const report = await this.fetchNormalized(identityRef, ref);
+        // SUBSTITUTION GUARD (review finding): a source that answers a request for a
+        // weak credential with a healthy DIFFERENT credential would otherwise be
+        // accepted, and two such substitutions could even satisfy an authoritative
+        // count while the requested credentials were never graded. A returned ref
+        // that does not match the requested one is a substitution, not an answer.
+        if (report.credentialRef.length > 0 && report.credentialRef !== ref) {
+          return { ...report, reportIntegrity: "malformed" as const };
+        }
+        return report;
+      }),
+    );
   }
 }

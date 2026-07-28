@@ -358,9 +358,16 @@ check("...and it names the weakest credential, so there is something to go fix",
   identity.weakestCredentialRef === "synced-1" && identity.reasonCode === "SYNCED_CUSTODY_UNKNOWABLE");
 check("...while still reporting every credential's own verdict",
   identity.credentials.length === 2 && identity.credentials[0].credentialRef === "key-1");
-const allGood = evaluateIdentityPasskeys([primary, normalizeReport("alice", { ...GRANT, credential_ref: "key-2" })]);
-check("IDENTITY — two sound credentials DO grant (the aggregate is not vacuously strict)",
-  allGood.recommendedAction === "none" && allGood.identityConfirmed === true);
+// Two flawless credentials, but NO authoritative count: supplying a set does not
+// establish it is the whole set, so the aggregate raises rather than confirms
+// (review finding). `countMatches` below is the same pair WITH a count, and does
+// grant — so this is a completeness rule, not a blanket refusal.
+const allGoodNoCount = evaluateIdentityPasskeys([primary, normalizeReport("alice", { ...GRANT, credential_ref: "key-2" })]);
+check("IDENTITY — two sound credentials without an authoritative count do NOT confirm",
+  allGoodNoCount.recommendedAction === "step_up" && allGoodNoCount.identityConfirmed === false &&
+  allGoodNoCount.reasonCode === "COMPLETENESS_UNPROVEN");
+check("...and it names no weakest credential, because no credential is the problem",
+  allGoodNoCount.weakestCredentialRef === "" && allGoodNoCount.credentials.length === 2);
 const noCreds = evaluateIdentityPasskeys([]);
 check("IDENTITY — an empty credential set is NOT a grant; absence of evidence is not confirmation",
   noCreds.recommendedAction === "step_up" && noCreds.identityConfirmed === false && noCreds.reasonCode === "NOT_COVERED");
@@ -381,6 +388,15 @@ check("a credential with NO reference does not grant, however healthy it otherwi
 const blankRef = ev({ ...GRANT, credential_ref: "   " });
 check("...and a whitespace-only reference is treated the same, not trimmed into validity",
   blankRef.recommendedAction === "step_up" && blankRef.reasonCode === "CREDENTIAL_REF_MISSING");
+// The SAME argument one level up: a verdict that cannot name WHOSE credential this
+// is cannot support a grant either — the whole question on a shared device is which
+// human is holding it (review finding).
+const unnamedSubject = ev({ ...GRANT, credential_ref: "key-1" }, "");
+check("a credential with no IDENTITY reference does not grant either",
+  unnamedSubject.recommendedAction === "step_up" && unnamedSubject.reasonCode === "IDENTITY_REF_MISSING" &&
+  unnamedSubject.unknownSignals.includes("identity_ref"));
+check("...and a whitespace-only identity reference is treated the same",
+  ev({ ...GRANT, credential_ref: "key-1" }, "  ").reasonCode === "IDENTITY_REF_MISSING");
 // An upstream grouping error must fail closed rather than confirm one identity over
 // another identity's credentials.
 const mixed = evaluateIdentityPasskeys([
@@ -437,6 +453,25 @@ const multiConnector = new PasskeyAssuranceConnector(
 const fetchedSet = await multiConnector.fetchNormalizedSet("carol", ["key-1", "synced-2"]);
 check("connector fetches a NAMED SET, one report per credential, each keeping its own ref",
   fetchedSet.length === 2 && fetchedSet[0].credentialRef === "key-1" && fetchedSet[1].credentialRef === "synced-2");
+// SUBSTITUTION (review finding): a source that answers a request for the weak
+// credential with a healthy DIFFERENT one would otherwise be graded as if the
+// requested credential had been read — and two substitutions could even satisfy an
+// authoritative count while the real credentials were never seen.
+const swapConnector = new PasskeyAssuranceConnector(
+  { accessToken: "t", baseUrl: "https://idp.local", source: "enum" },
+  createMockPasskeyTransport({
+    credentialReports: {
+      "dave/key-1": { ...GRANT, credential_ref: "key-1" },
+      "dave/synced-2": { ...GRANT, credential_ref: "key-1" },
+    },
+  }),
+);
+const swapped = await swapConnector.fetchNormalizedSet("dave", ["key-1", "synced-2"]);
+check("connector marks a SUBSTITUTED report malformed — a different credential is not an answer",
+  swapped[0].reportIntegrity === "clean" && swapped[1].reportIntegrity === "malformed");
+check("...so the substitution cannot buy a confirmation off an authoritative count",
+  evaluateIdentityPasskeys(swapped, { expectedCredentialCount: 2 }).identityConfirmed === false);
+
 const fetchedVerdict = evaluateIdentityPasskeys(fetchedSet, { expectedCredentialCount: 2 });
 check("end-to-end — the fetched set does NOT confirm, because one credential is synced",
   fetchedVerdict.recommendedAction === "step_up" && fetchedVerdict.identityConfirmed === false &&

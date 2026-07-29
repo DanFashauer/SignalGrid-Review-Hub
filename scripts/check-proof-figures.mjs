@@ -54,11 +54,31 @@ export const PROOFS = ["proof:device-management-health", "proof:link-usability",
  *  Checked on BOTH sides. The first version looked only behind the number, and missed
  *  "…read eight and 1,788 UNTIL a review re-derived them" — where the marker follows what
  *  it qualifies, which is ordinary English. A one-directional check would have forced that
- *  sentence to be rewritten to suit the tool rather than the reader. */
+ *  sentence to be rewritten to suit the tool rather than the reader.
+ *
+ *  TWO EXEMPTION HOLES, both found by a negative control that did NOT fire, both fixed
+ *  here, and each verified in BOTH directions against a figure first proven to be checked:
+ *
+ *  1. THE WINDOW CROSSED NEWLINES. `[^.]{0,60}` stops at a period but not at a line break,
+ *     so a marker on the PREVIOUS line silently exempted a number on this one. Breaking a
+ *     real checked figure PASSED with an innocent "before" at the end of the line above,
+ *     and FAILED once the window was bounded. Now `[^.\n]{0,60}`.
+ *
+ *  2. THREE MARKERS WERE ORDINARY PROSE. `from`, `rather than` and `would` appear
+ *     constantly in normal sentences and carry no past-tense intent — "stated plainly
+ *     RATHER THAN buried" exempted the figure that followed it. Removed, and controlled the
+ *     same way: the break is caught without them and passes with them restored.
+ *
+ *  `before` was tested for removal and KEPT. INTEGRATION_CATALOG's "measured it, **before
+ *  this fix**, at 21,168 reports" is exactly the deliberate historical usage this list
+ *  exists to honour; dropping it would turn a correct sentence into a failure, which is how
+ *  a gate earns a reputation for crying wolf and gets switched off.
+ *
+ *  Neither narrowing breaks a single currently-passing figure — measured, not assumed. */
 const MARKER =
-  "was|were|from|previously|originally|earlier|before|until|had|used to|rather than|instead of|down to|up to|would|counterfactual|no longer|→|->";
-const HISTORICAL_BEFORE = new RegExp(`\\b(?:${MARKER})\\b[^.]{0,60}$`, "i");
-const HISTORICAL_AFTER = new RegExp(`^[^.]{0,60}\\b(?:${MARKER})\\b`, "i");
+  "was|were|previously|originally|earlier|before|until|had|used to|instead of|down to|up to|counterfactual|no longer|→|->";
+const HISTORICAL_BEFORE = new RegExp(`\\b(?:${MARKER})\\b[^.\\n]{0,60}$`, "i");
+const HISTORICAL_AFTER = new RegExp(`^[^.\\n]{0,60}\\b(?:${MARKER})\\b`, "i");
 
 /** Comma-formatted integers of four digits or more — the shape a measured figure takes in
  *  this repo's prose. Plain four-digit numbers without separators are skipped: they are

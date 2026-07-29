@@ -30,6 +30,27 @@ It also asserts the harness restored `package.json` and `pnpm-lock.yaml` after i
 `--frozen-lockfile` starts failing on unrelated PRs — a confusing symptom a long way
 from its cause. Better to fail at the source.
 
+**What the first run actually taught us**, since a workflow nobody has run is a claim
+rather than a lane:
+
+- The lockfile-restore assertion **passed** — "package.json and pnpm-lock.yaml are
+  unchanged". It was written blind and it works.
+- The suite reported **86 passed, 1 failed** — 87 gates, which independently confirms
+  the count corrected in `CLAUDE.md`. The pinned "66/66" that count replaced would have
+  read as a pass while 21 gates went unaccounted for.
+- The one failure was `proof:enrollment-race`, which races 12 concurrent WebAuthn
+  enrollments against a **real Redis** and REFUSES to run without `REDIS_URL` rather
+  than skipping quietly. That refusal is correct — for a race proof a silent skip is
+  indistinguishable from a pass — and the missing piece was this workflow, which never
+  provided Redis. Now installed via Homebrew (macOS runners cannot use `services:`,
+  which is Linux-container only) and health-checked before the suite starts, so a Redis
+  that fails to come up is attributable rather than showing up as a mysterious proof
+  failure.
+
+Installing the dependency rather than dropping the gate is deliberate: a lane that
+quietly omits a gate while calling itself "the full suite" is exactly the failure the
+rest of this repo's guards exist to prevent.
+
 Dispatch it from **Actions → Mac lane (full suite) → Run workflow**. `--sim-only` is
 exposed as an input for a fast scenario-only pass.
 
@@ -65,9 +86,13 @@ history already dates it.
 
 ## Two honest limits
 
-**A green Mac rehearsal is not a green CI.** `preflight` and this suite both mirror
-the service-free gates. `durable-persistence` (Postgres), `deploy-stack` (Docker
-compose) and `secret-scan` (gitleaks) run only in Linux CI.
+**A green Mac rehearsal is not a green CI.** `preflight` mirrors the service-free
+gates only. This suite is no longer quite service-free — it now provisions Redis for
+`proof:enrollment-race` — but it still does not run `durable-persistence` (Postgres),
+`deploy-stack` (Docker compose) or `secret-scan` (gitleaks), which remain Linux-CI
+only. Nor does it run `phase-pr-evidence`, a job neither this lane nor `preflight`
+covers; the full CI job set is larger than the six previously enumerated, and deriving
+that list mechanically instead of maintaining it by hand is tracked work.
 
 **Neither tier proves on-device enforcement.** An app cannot grant device access,
 restrict other apps, make itself non-removable, or self-kiosk. Those are MDM/OS

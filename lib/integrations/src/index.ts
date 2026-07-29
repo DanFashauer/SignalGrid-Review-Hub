@@ -12,7 +12,7 @@ export * as dispatcher from "./integrations/dispatcher";
 export * as deviceResolver from "./integrations/deviceResolver";
 export * as sign from "./integrations/sign";
 export * as itsm from "./integrations/itsm/adapter";
-export * as uem from "./integrations/uem/store";
+export * as uem from "./integrations/uem/index";
 export * as nac from "./integrations/nac/store";
 export * as siem from "./integrations/siem/webhook";
 export * as telemetry from "./integrations/telemetry/fleetdm";

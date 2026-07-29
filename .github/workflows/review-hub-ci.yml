@@ -117,6 +117,8 @@ jobs:
 
       - name: macOS endpoint-posture (grid-collected) proof
         run: pnpm run proof:macos-posture
+      - name: "Proof: uem (read-only MDM/UEM, gated, no actuators)"
+        run: pnpm run proof:uem
 
       - name: macOS posture ↔ apple/device-management schema alignment proof
         run: pnpm run proof:macos-apple-schema

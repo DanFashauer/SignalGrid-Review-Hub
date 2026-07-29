@@ -17,6 +17,7 @@
     "./data-protection": "./src/integrations/data-protection/index.ts",
     "./credential-exposure": "./src/integrations/credential-exposure/index.ts",
     "./macos-posture": "./src/integrations/macos-posture/index.ts",
+    "./uem": "./src/integrations/uem/index.ts",
     "./ot-posture": "./src/integrations/ot-posture/index.ts",
     "./access-governance": "./src/integrations/access-governance/index.ts",
     "./device-attestation": "./src/integrations/device-attestation/index.ts",

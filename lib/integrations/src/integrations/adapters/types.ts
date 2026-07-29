@@ -104,59 +104,51 @@ export interface SIEMAdapter {
 // UEM Types - Universal Surface for MDM/UEM
 // ============================================================================
 
+/**
+ * Device state as reported by a UEM. READ-ONLY.
+ *
+ * `enrolled` and `compliant` were `boolean` here. A boolean cannot express "the
+ * UEM did not tell us", so an unreadable device silently became `false` — and the
+ * Jamf adapter, which had no compliance check at all, filled the gap with a
+ * hardcoded `true`. A field that cannot express ignorance gets filled with a guess,
+ * and the guess is then read as fact. Both are now tri-state.
+ *
+ * The richer vendor-neutral shape lives in `../uem/types` (`NormalizedUemDeviceState`);
+ * this interface is the narrow one the device resolver consumes.
+ */
 export interface UEMDeviceState {
   deviceId: string;
-  enrolled: boolean;
-  compliant: boolean;
+  enrolled: 'enrolled' | 'not_enrolled' | 'unknown';
+  compliant: 'compliant' | 'non_compliant' | 'not_evaluated' | 'unknown';
   osVersion?: string;
   platform?: string;
+  /** Vendor-reported check-in timestamp, verbatim. Deliberately NOT converted to an
+   *  age here — that needs a clock, and a clock read in a decision path is forbidden
+   *  by golden rule 2. The caller that owns the clock derives freshness. */
   lastSync?: string;
   tags?: string[];
-  quarantineStatus?: 'none' | 'quarantined' | 'clearing';
 }
 
-export interface UEMTagRequest {
-  deviceId: string;
-  tag: string;
-  reason?: string;
-  correlationId?: string;
-}
-
-export interface UEMQuarantineRequest {
-  deviceId: string;
-  action: 'quarantine' | 'unquarantine';
-  reason?: string;
-  correlationId?: string;
-}
-
-export interface UEMCommandRequest {
-  deviceId: string;
-  command: string;
-  payload?: Record<string, unknown>;
-  reason?: string;
-  correlationId?: string;
-}
-
-export interface UEMCommandResponse {
-  commandId: string;
-  status: 'queued' | 'sent' | 'delivered' | 'failed';
-  message?: string;
-}
-
+/**
+ * The UEM read surface.
+ *
+ * WRITE METHODS REMOVED: `setTag`, `removeTag`, `quarantine`, `clearQuarantine`,
+ * `syncDevice`, `pushCommand`. Their implementations fired real device-lock,
+ * passcode-bypass and inventory commands at real vendor APIs with no tier gate, no
+ * `SIGNALGRID_LIVE_INTEGRATIONS` gate and no approval step — against AGENTS.md
+ * ("Keep high-risk actions simulated and approval-required").
+ *
+ * They are deleted rather than gated because connector discipline in this repo is a
+ * READ-ONLY discipline: every disciplined connector reads and returns a verdict,
+ * none of them act. Remediation is already modelled correctly elsewhere as an
+ * approval-gated request a human executes in the system of record.
+ *
+ * Nothing consumed them: the only caller, `deviceResolver`, uses `getDeviceState`.
+ */
 export interface UEMAdapter {
   readonly name: string;
   readonly vendor: string;
-  
-  // Universal UEM Surface
   getDeviceState(deviceId: string): Promise<UEMDeviceState | null>;
-  setTag(request: UEMTagRequest): Promise<{ success: boolean }>;
-  removeTag(request: UEMTagRequest): Promise<{ success: boolean }>;
-  quarantine(request: UEMQuarantineRequest): Promise<UEMCommandResponse>;
-  clearQuarantine(deviceId: string, reason?: string): Promise<UEMCommandResponse>;
-  syncDevice?(deviceId: string): Promise<UEMCommandResponse>;
-  
-  // Legacy support
-  pushCommand?(request: UEMCommandRequest): Promise<UEMCommandResponse>;
   healthCheck?(): Promise<boolean>;
 }
 

@@ -884,6 +884,77 @@ async function run() {
     }
   }
 
+  // ── PRODUCT PROFILE: the gateway must refuse what the demo publishes ─────
+  //
+  // Everything above runs in the DEFAULT (review-demo) profile, and asserts the demo
+  // surfaces work — including that /v1/keys is public. That is correct for a public
+  // review deployment and it is the half a production switch could silently break, so
+  // it stays exactly as it was.
+  //
+  // What was missing is the other half. An audit found /v1/keys registered ABOVE the
+  // auth guard, publishing the RAW owner bearer for all seven seeded tenants to
+  // anonymous callers — and THIS SUITE asserted that as correct while spawning the
+  // server with NODE_ENV=production. The suite did not miss the leak; it certified it.
+  // NODE_ENV was never the signal: it says how Node should behave, not whether a
+  // customer is on the other end.
+  //
+  // Fourth short-lived server, in the gateway profile, so the demo coverage above is
+  // untouched and both halves are proven in one run.
+  {
+    const PORT4 = 5313;
+    const BASE4 = `http://localhost:${PORT4}/api`;
+    const server4 = spawn("node", [serverEntry], {
+      env: {
+        ...process.env,
+        PORT: String(PORT4),
+        NODE_ENV: "production",
+        LOG_LEVEL: "silent",
+        SIGNALGRID_PRODUCT_PROFILE: "shared-device-gateway",
+      },
+      stdio: ["ignore", "ignore", "inherit"],
+    });
+    try {
+      let ready4 = false;
+      const start4 = Date.now();
+      while (Date.now() - start4 < 15000) {
+        try { if ((await fetch(`${BASE4}/healthz`)).ok) { ready4 = true; break; } } catch { /* not up yet */ }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      check("gateway-profile server becomes ready (the profile does not break boot)", ready4 === true);
+
+      // 401, not 404, and the difference is worth stating: with the route unregistered
+      // the path falls under the `/v1` auth guard like every other /v1 path, so it now
+      // DEMANDS a credential instead of handing one out. Combined with the demo-bearer
+      // refusal below, there is no token that satisfies it.
+      const gwKeys = await fetch(`${BASE4}/v1/keys`);
+      check("gateway: /v1/keys no longer publishes bearers — it demands one (401)", gwKeys.status === 401);
+
+      const gwSim = await fetch(`${BASE4}/sim/room-entry`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ scenarioId: "compliant-bedside" }),
+      });
+      check("gateway: the unauthenticated simulator is NOT mounted (no anonymous write path)", gwSim.status === 404);
+
+      const gwCp = await fetch(`${BASE4}/cp/v1/tenants`);
+      check("gateway: the unauthenticated control plane is NOT mounted (no tenant roster)", gwCp.status === 404);
+
+      const gwDemoToken = await fetch(`${BASE4}/v1/context`, {
+        headers: { authorization: `Bearer ${KEYS.owner}` },
+      });
+      check("gateway: a demo bearer is refused — no fallback to fixture credentials", gwDemoToken.status === 401);
+
+      // NON-VACUITY. Every check above asserts an ABSENCE, and a server that failed to
+      // boot, or a wrong base URL, would satisfy all of them. Something must still be
+      // served, or these prove nothing.
+      const gwHealth = await fetch(`${BASE4}/healthz`);
+      check("gateway: the server is genuinely up — the 404s above are refusals, not a dead port",
+        gwHealth.status === 200);
+    } finally {
+      server4.kill("SIGTERM");
+    }
+  }
+
   // ── transport hygiene ───────────────────────────────────────────────────
   check("rate-limit headers present", allow.headers.get("ratelimit-limit") !== null);
   check("security header x-content-type-options set", allow.headers.get("x-content-type-options") === "nosniff");

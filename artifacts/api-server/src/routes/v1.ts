@@ -8,6 +8,7 @@ import { core, DEMO_KEYS } from "../lib/core";
 import { decisionsTotal } from "../lib/metrics";
 import { requireTenantContext } from "../middlewares/context";
 import { v1RateLimiter } from "../middlewares/rateLimit";
+import { demoSurfacesEnabled } from "../lib/profile";
 
 /**
  * /v1 — the product-shaped SignalGrid surface.
@@ -19,6 +20,13 @@ import { v1RateLimiter } from "../middlewares/rateLimit";
 const router: IRouter = Router();
 
 // Public discovery route (no auth) so reviewers can find the demo keys.
+//
+// It sits ABOVE the auth guard on line 32 — Express matches in registration order, so
+// `requireTenantContext` never runs for it — and `DEMO_KEYS` carries the RAW bearer.
+// Under the review-demo profile that is the point: a reviewer needs a way in. Under
+// any other profile it publishes an owner token for every seeded tenant to anonymous
+// callers, so the route is not registered at all.
+if (demoSurfacesEnabled()) {
 router.get("/v1/keys", (req: Request, res: Response) => {
   res.json(
     envelope(req, {
@@ -27,6 +35,7 @@ router.get("/v1/keys", (req: Request, res: Response) => {
     }),
   );
 });
+}
 
 // Everything below requires a tenant context and is rate-limited.
 router.use("/v1", v1RateLimiter, requireTenantContext);

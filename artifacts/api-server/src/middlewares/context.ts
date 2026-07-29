@@ -8,6 +8,7 @@ import {
   type JwksFetch,
 } from "@workspace/enterprise-auth";
 import { core } from "../lib/core";
+import { demoSurfacesEnabled } from "../lib/profile";
 import { logger } from "../lib/logger";
 
 declare global {
@@ -128,7 +129,21 @@ export const requireTenantContext: RequestHandler = async (
       return;
     }
 
-    // OIDC not configured (fixture/CI default): resolve the public-safe demo key.
+    // OIDC not configured. Under the review-demo profile that is the fixture/CI
+    // default and the public-safe demo keys are the credential. Under any other
+    // profile it means a deployment that intends to serve real callers has no identity
+    // provider configured — so there is no credential it can legitimately accept, and
+    // falling back to a demo key would accept exactly the tokens `/v1/keys` publishes.
+    // Refuse rather than degrade. (Mirrors the OIDC branch above, which is already
+    // linear and fail-closed with no fallback to a weaker path.)
+    if (!demoSurfacesEnabled()) {
+      throw new CoreError(
+        "unauthorized",
+        "This deployment accepts only verified enterprise credentials; no identity provider is configured.",
+        401,
+      );
+    }
+
     // Fail-closed — an unknown token is a 401, never a default tenant.
     const { principal } = core.context(token);
     req.bearerToken = token;

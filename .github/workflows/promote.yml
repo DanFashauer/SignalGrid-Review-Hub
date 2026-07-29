@@ -72,16 +72,32 @@ jobs:
               }
             };
 
-            // How far behind the branch that work actually lands on? `behind_by` on a
-            // `default...tier` comparison is the number of commits the tier is missing.
-            const behindDefault = async (branch) => {
+            // How many commits is this tier MISSING relative to the branch work lands on?
+            //
+            // `basehead` is `base...head`, so `${branch}...${def}` puts the tier as base and the
+            // default as head — and `ahead_by` is then the count of commits the DEFAULT has that
+            // the tier lacks. That is the "how far behind" number, confirmed against a live run
+            // (108) matching `git rev-list --count <tier>..<default>`.
+            //
+            // The catch discriminates rather than swallowing. A bare `catch { return null }` here
+            // rendered EVERY fault — a 502, a socket timeout, a rate limit — as the definite
+            // ancestry claim "unrelated history", and then dropped the row from the staleness
+            // filter, so the explanatory banner vanished at exactly the moment its data was least
+            // trustworthy, with the job still green. A false statement and a fault reading as
+            // success, in one line. `shaOf` above already had this right, and the create step
+            // below states the same rule for itself.
+            const missingFrom = async (branch) => {
               try {
                 const { data } = await github.rest.repos.compareCommitsWithBasehead({
                   owner, repo, basehead: `${branch}...${def}`,
                 });
                 return data.ahead_by;
-              } catch {
-                return null;
+              } catch (err) {
+                // The branch is known to exist (shaOf resolved it), so a 404 here means the two
+                // histories share no common ancestor — a real answer, not a fault.
+                if (err.status === 404) return null;
+                core.error(`compare ${branch}...${def} failed with ${err.status}: ${err.message}`);
+                throw err;
               }
             };
 
@@ -91,17 +107,62 @@ jobs:
               rows.push({
                 tier,
                 sha: sha ? sha.slice(0, 7) : "—",
-                missing: sha ? await behindDefault(tier) : null,
+                missing: sha ? await missingFrom(tier) : null,
               });
             }
 
             const fmt = (r) => {
               if (r.sha === "—") return "branch does not exist";
-              if (r.missing === null) return "unrelated history";
+              if (r.missing === null) return "no common ancestor";
               return r.missing === 0 ? "up to date" : `${r.missing} commit(s) behind \`${def}\``;
             };
 
-            const stale = rows.filter((r) => typeof r.missing === "number" && r.missing > 0);
+            // MEASURE THE PROMOTION, don't infer it.
+            //
+            // The table above says how far each tier is BEHIND the default. It says nothing about
+            // what a promotion would carry, because those are different comparisons: a tier can be
+            // behind the default and simultaneously ahead of the tier above it. The first version
+            // of this step inferred "every promotion is a no-op" from "every tier is behind", which
+            // is invalid — land one commit on `dev` per the documented flow and the merge base does
+            // not move, so every tier still reads 108 behind while `dev → alpha` now carries real
+            // work. The summary would have called that a no-op while the step below offered a live
+            // link to open it.
+            //
+            // So compare the pair actually dispatched. `${to}...${from}` makes the target the base
+            // and the source the head, and `ahead_by` is exactly the number of commits this
+            // promotion would move.
+            const from = context.payload.inputs.from;
+            const to = context.payload.inputs.to;
+            let carries = null;
+            try {
+              const { data } = await github.rest.repos.compareCommitsWithBasehead({
+                owner, repo, basehead: `${to}...${from}`,
+              });
+              carries = data.ahead_by;
+            } catch (err) {
+              if (err.status !== 404) {
+                core.error(`compare ${to}...${from} failed with ${err.status}: ${err.message}`);
+                throw err;
+              }
+            }
+
+            const allBehind = rows.filter((r) => typeof r.missing === "number" && r.missing > 0).length === TIERS.length;
+
+            const verdict =
+              carries === 0
+                ? `\n**This promotion carries nothing.** \`${to}\` already contains every commit in ` +
+                  `\`${from}\`, so \`${from}\` → \`${to}\` is a no-op.\n`
+                : carries === null
+                  ? `\n**\`${from}\` and \`${to}\` share no common ancestor**, so no promotion between ` +
+                    `them is possible.\n`
+                  : `\n**This promotion carries ${carries} commit(s)** from \`${from}\` into \`${to}\`.\n`;
+
+            const entryPoint = allBehind
+              ? `\nSeparately: **every tier is behind \`${def}\`**, the branch work actually lands on. ` +
+                `That does not by itself make a promotion empty — the two are different comparisons — ` +
+                `but it does mean the pipeline's entry tier is not being fed. Reconnecting it is an ` +
+                `owner decision; see \`docs/BRANCHING_AND_ENVIRONMENTS.md\`.\n`
+              : "";
 
             await core.summary
               .addHeading("Tier state", 3)
@@ -110,18 +171,12 @@ jobs:
                 [{ data: "Tier", header: true }, { data: "Commit", header: true }, { data: "Relative to default", header: true }],
                 ...rows.map((r) => [r.tier, r.sha, fmt(r)]),
               ])
-              .addRaw(
-                stale.length === TIERS.length
-                  ? `\n**Every tier is behind \`${def}\`.** Promotion only ever moves commits ` +
-                    `between tiers, so while the entry tier (\`dev\`) is itself behind the branch ` +
-                    `work lands on, there is nothing for any promotion to carry and each one is a ` +
-                    `no-op. Feeding \`dev\` from \`${def}\` is an owner decision — see ` +
-                    `\`docs/BRANCHING_AND_ENVIRONMENTS.md\`.\n`
-                  : "\n",
-              )
+              .addRaw(verdict)
+              .addRaw(entryPoint)
               .write();
 
             for (const r of rows) core.info(`${r.tier.padEnd(6)} ${r.sha}  ${fmt(r)}`);
+            core.info(`${from} -> ${to} carries: ${carries === null ? "no common ancestor" : carries}`);
 
       - name: Open promotion PR
         uses: actions/github-script@v9

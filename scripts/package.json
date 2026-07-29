@@ -66,6 +66,7 @@
     "proof:data-protection": "tsx ./src/data-protection-proof.ts",
     "proof:credential-exposure": "tsx ./src/credential-exposure-proof.ts",
     "proof:macos-posture": "tsx ./src/macos-posture-proof.ts",
+    "proof:uem": "tsx ./src/uem-proof.ts",
     "proof:macos-apple-schema": "tsx ./src/macos-apple-schema-proof.ts",
     "proof:ot-posture": "tsx ./src/ot-posture-proof.ts",
     "proof:access-governance": "tsx ./src/access-governance-proof.ts",

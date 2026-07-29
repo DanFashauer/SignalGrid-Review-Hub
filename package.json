@@ -84,6 +84,7 @@
     "proof:data-protection": "pnpm --filter @workspace/scripts run proof:data-protection",
     "proof:credential-exposure": "pnpm --filter @workspace/scripts run proof:credential-exposure",
     "proof:macos-posture": "pnpm --filter @workspace/scripts run proof:macos-posture",
+    "proof:uem": "pnpm --filter @workspace/scripts run proof:uem",
     "proof:macos-apple-schema": "pnpm --filter @workspace/scripts run proof:macos-apple-schema",
     "proof:ot-posture": "pnpm --filter @workspace/scripts run proof:ot-posture",
     "proof:access-governance": "pnpm --filter @workspace/scripts run proof:access-governance",

@@ -7,7 +7,7 @@ first change. These rules override default behavior.
 
 A pnpm/TypeScript monorepo for **SignalGrid** — a signal- and location-driven
 **Assist gate** for frontline devices. The decision core is deterministic and
-fixture-backed; a "real-life simulator" subsystem plus ~55 `proof:*` gates prove
+fixture-backed; a "real-life simulator" subsystem plus 82 `proof:*` gates prove
 behavior without a database. Native iOS lives under `native/ios/`.
 
 Layout: `lib/*` (decision core, connectors, flows), `artifacts/api-server`
@@ -41,7 +41,12 @@ Run the full local harness; it mirrors CI and catches breakage the individual
 proofs miss:
 
 ```bash
-./validate-sim-macos.sh          # full suite → must be 66/66 (--sim-only for just the scenarios)
+./validate-sim-macos.sh          # full suite → the harness prints
+                                 # "== SUMMARY: N passed, M failed =="; compare M
+                                 # against 0. Do NOT compare N against a total quoted
+                                 # here — the suite grows, and a pinned total silently
+                                 # turns a regression into a pass.
+                                 # (--sim-only for just the scenarios)
 ```
 
 - **Added or changed a package's deps?** Regenerate the lockfile —

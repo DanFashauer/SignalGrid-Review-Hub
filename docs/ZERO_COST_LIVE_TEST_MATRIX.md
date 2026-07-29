@@ -13,7 +13,7 @@ Conventions used throughout, non-negotiable:
 
 | Layer | Mechanism | What it verifies | Cost |
 | --- | --- | --- | --- |
-| Every decision dimension | 39 deterministic proof scripts (`pnpm run proof:*`), grant-safety enumeration (millions of raw states), mutation guard (105 mutations, 0 survivors), figure/registry/count drift guards | The decision logic itself, adversarially | $0, every commit |
+| Every decision dimension | 82 deterministic proof scripts (`pnpm run proof:*`), grant-safety enumeration (millions of raw states), mutation guard (500 mutations, 460 killed, 40 documented-inert, 0 survivors), figure/registry/count drift guards | The decision logic itself, adversarially | $0, every commit |
 | Cloud connectors | Connector-emulator harness (`proof:connector-emulator`, scenario packs) | Connector normalize/evaluate against emulated vendor responses incl. malformed/hostile | $0 |
 | REAL hardware posture | The signalgrid-mcp Mac lane: `verify:all` on the owner's Mac collects genuine macOS posture (encryption, screen lock, system extensions, USB inventory) and runs it through the real fabric verdict ([RUN_ON_MAC.md](RUN_ON_MAC.md)) | Live end-to-end on real hardware the owner already owns | $0 |
 | API surface | API integration test (boots the real server, 138 assertions), OpenAPI contract check, Postman collection kept in sync | The wire contract | $0 |

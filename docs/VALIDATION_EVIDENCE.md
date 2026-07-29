@@ -6,12 +6,24 @@ outside CI, to complement `SIMULATOR_VALIDATION_RUNBOOK.md`. Reproduce with
 
 ## 1. Native run (macOS, Apple Silicon / arm64)
 
-Harness: `validate-sim-macos.sh`. Result: **33 / 33 gates green.**
+Harness: `validate-sim-macos.sh`. Result **as recorded at the time of this run:
+33 / 33 gates green** — the whole suite as it then stood.
+
+> **This section is a dated record, not a current measurement.** The suite has
+> since grown to **87 gates** (4 named simulator gates + 78 looped `proof:*`
+> gates + 5 non-proof gates; derive it with the command below). Re-run the
+> harness to refresh it — and note the harness prints
+> `== SUMMARY: N passed, M failed ==`, so read `M` against 0 rather than pinning
+> a total here again, which is how these numbers went stale in the first place.
+>
+> ```
+> node -e "const s=require('./package.json').scripts;const sim=['proof:signalgrid-simulator','proof:room-sim','proof:signalgrid-core','proof:signalgrid-grid'];const all=Object.keys(s).filter(k=>k.startsWith('proof:'));console.log('total gates', 4+all.filter(k=>!sim.includes(k)).length+5)"
+> ```
 
 | Group | Gates | Result |
 |---|---|---|
 | Real-life simulator | `proof:signalgrid-simulator` (11 scenarios / 39 assertions), `proof:room-sim`, `proof:signalgrid-core`, `proof:signalgrid-grid` | PASS |
-| CI-mirror proof suite | remaining 24 `proof:*` gates (incl. `-pg` gates via in-memory fallback) | PASS |
+| CI-mirror proof suite | the remaining `proof:*` gates at that time — 24 then, 78 now (incl. `-pg` gates via in-memory fallback) | PASS |
 | Non-proof gates | `typecheck`, `test:api`, `safety:check`, `docs:sanity`, `review:invariants` | PASS |
 | Hygiene | `git diff --check` | clean |
 
@@ -56,8 +68,9 @@ real linux-x64 CI run.
 
 ## 4. Proof coverage audit (feedback loop)
 
-Each of the 28 proof gates was independently audited for *real coverage vs.
-rubber-stamp*. Full report: [`PROOF_COVERAGE_AUDIT.md`](./PROOF_COVERAGE_AUDIT.md).
+Each of the 28 proof gates **that existed when the audit ran** was
+independently audited for *real coverage vs. rubber-stamp* (the suite has since
+grown to 82 `proof:*` scripts, so this audit covers a subset). Full report: [`PROOF_COVERAGE_AUDIT.md`](./PROOF_COVERAGE_AUDIT.md).
 
 Headline: **12 strong, 16 moderate, 0 weak; 0 formal rubber-stamps** — but the
 moderate gates repeatedly assert outputs are *present/well-typed* rather than
@@ -76,7 +89,8 @@ branches**. Top gaps to close (see report for the concrete test in each case):
 ### Remediation (all 8 gaps closed in this branch)
 
 All eight highest-value gaps were implemented as real assertions against shipped
-code and verified by re-running each proof; the full suite stays **33/33 green**.
+code and verified by re-running each proof; the full suite was **33/33 green**
+at that point.
 None revealed a product bug — the fail-closed branches were correct, just untested.
 
 The additions are mutation-verified, not rubber-stamps. Example: forcing

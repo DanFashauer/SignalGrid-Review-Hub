@@ -51,6 +51,26 @@ Installing the dependency rather than dropping the gate is deliberate: a lane th
 quietly omits a gate while calling itself "the full suite" is exactly the failure the
 rest of this repo's guards exist to prevent.
 
+**What the second and third runs taught us**, because the Redis fix shipped
+*unverified* — a macOS runner cannot be driven from the cloud lane, and the whole
+lesson of the first run was that an unrun workflow is a claim:
+
+- The second dispatch was **cancelled before it ran a single gate**, and the run that
+  survived was testing the older, broken commit. `concurrency.group` was keyed on
+  `github.ref`, so a re-run of the earlier failing attempt shared a group with a fresh
+  dispatch of the fix and killed it. Keyed on `github.sha` now — two dispatches of the
+  same commit still dedupe, which is the real waste, while a run of one commit can no
+  longer cancel a run of another. A cancelled run is not a failed run, and it is easy
+  to skim past; this one silently inverted which code was under test.
+- The third dispatch ran clean: **`== SUMMARY: 88 passed, 0 failed ==`**. Redis came
+  up via Homebrew, `proof:enrollment-race` ran and passed, and the lockfile-restore
+  assertion held again.
+
+Note the count moved — the first run saw 87 gates, this one 88. That is the suite
+growing, and it is exactly why neither this file nor `CLAUDE.md` pins a total: compare
+the failure count against zero, never the pass count against a number written down
+here.
+
 Dispatch it from **Actions → Mac lane (full suite) → Run workflow**. `--sim-only` is
 exposed as an input for a fast scenario-only pass.
 

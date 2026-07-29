@@ -18,6 +18,9 @@ import {
   MACOS_POSTURE_APPLE_ALIASES,
   NORMALIZED_MACOS_POSTURE_FIELDS,
 } from "@workspace/integrations/macos-posture";
+// The OTHER alignment pinned to the same upstream. Imported solely so the two
+// pins can be compared — see the equality check below.
+import { DDM_APPLE_SCHEMA_VERSION } from "@workspace/ddm-connector";
 
 let passed = 0;
 const failures: string[] = [];
@@ -31,6 +34,22 @@ console.log(`pinned schema version=${APPLE_DEVICE_MANAGEMENT_SCHEMA_VERSION}`);
 
 // The pinned schema version must be present and shaped like an Apple OS schema tag.
 check("a schema version is pinned (e.g. 26.4), never HEAD", /^\d+\.\d+$/.test(APPLE_DEVICE_MANAGEMENT_SCHEMA_VERSION));
+
+// TWO ALIGNMENTS, ONE UPSTREAM — and the invariant was stated but unenforced.
+//
+// `lib/ddm-connector/src/apple-schema.ts` says of its own pin: "Must match the
+// macos-posture alignment's pinned version." Nothing checked it. Each proof only
+// regex-tested its OWN constant for shape, and no proof imported both, so the two
+// could drift to different Apple releases with every gate green — the repo asserting
+// one canonical vocabulary while grading against two.
+//
+// Cheap to state, cheap to check, and it belongs here rather than in either
+// connector because it is a claim ABOUT the pair.
+check(
+  `both Apple alignments pin the SAME upstream release ` +
+    `(macos-posture=${APPLE_DEVICE_MANAGEMENT_SCHEMA_VERSION}, ddm-connector=${DDM_APPLE_SCHEMA_VERSION})`,
+  APPLE_DEVICE_MANAGEMENT_SCHEMA_VERSION === DDM_APPLE_SCHEMA_VERSION,
+);
 
 // Every substantive posture field is mapped — no field goes un-aliased.
 const aliasKeys = Object.keys(MACOS_POSTURE_APPLE_ALIASES).sort();

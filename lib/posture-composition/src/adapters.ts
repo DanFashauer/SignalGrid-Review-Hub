@@ -312,18 +312,54 @@ export function fromDetection(d: Detection): ComposableSignal {
  * Device posture (Graph/MDM) → unified action. Fail-safe and ORDER-PROOF: every
  * matching condition contributes a candidate action, and the STRONGEST (highest
  * rank on the unified ladder) wins — so a severe concern is never diluted by a
- * calmer one that happens to be checked later. A compliant managed device with no
- * risk factors contributes nothing (`none`). Ranks: escalate > restrict > alert >
+ * calmer one that happens to be checked later. Ranks: escalate > restrict > alert >
  * step_up, so e.g. a high-risk user (alert) on an unmanaged device (step_up)
  * composes to `alert`, and any non-compliant/disabled state outranks both.
+ *
+ * A GRANT REQUIRES POSITIVE CONFIRMATION OF EVERY INPUT. This function previously
+ * tested only five specific bad values and let everything else fall through to
+ * `{ action: "none", reason: "COMPLIANT_MANAGED" }`. Every Graph field carries an
+ * `"unknown"` member, `deviceComplianceState` also carries `"in_grace_period"`,
+ * `deviceManagementState` also carries `"retire_pending"` — and
+ * `deviceRegistrationState` was never read at all. All of them contributed nothing
+ * and composed to an affirmative claim that the device was compliant and managed.
+ *
+ * Measured over the full 900-state input space before the fix: 216 states composed
+ * to `none`, of which 213 were NOT positively confirmed on every input — a grant
+ * path 72x wider than the three genuinely-clean states. That inverts golden rule 2
+ * (an unknown or unreachable signal must raise assurance, never lower it) and the
+ * reason code made it worse: `COMPLIANT_MANAGED` asserted managed-and-compliant for
+ * a device whose management state was unreadable.
+ *
+ * Unknowns FORECLOSE a grant but never deny — `step_up` throughout, never
+ * `restrict`. An unreadable signal is not evidence of wrongdoing, and denying on one
+ * would strand a clinician mid-shift over an API timeout. The sibling
+ * `fromMacosPosture` already drew this line ("an unreadable Mac is never fused as
+ * compliant"), and `macos-posture/types.ts` states it in the type itself: "null =
+ * enrollment state could not be determined (unknown, not 'unmanaged')". This adapter
+ * now matches. After the fix only the three fully-confirmed states grant.
  */
 export function fromDevicePosture(s: GraphPostureSignal): ComposableSignal {
   const candidates: Array<{ action: UnifiedAction; reason: string }> = [];
+
+  // AFFIRMATIVE CONCERNS — a known-bad fact was reported.
   if (s.identityStatus === "disabled") candidates.push({ action: "escalate", reason: "IDENTITY_DISABLED" });
   if (s.deviceComplianceState === "non_compliant") candidates.push({ action: "restrict", reason: "DEVICE_NON_COMPLIANT" });
   if (s.userRisk === "high") candidates.push({ action: "alert", reason: "USER_RISK_HIGH" });
   if (s.deviceManagementState === "unmanaged") candidates.push({ action: "step_up", reason: "DEVICE_UNMANAGED" });
+  if (s.deviceManagementState === "retire_pending") candidates.push({ action: "step_up", reason: "DEVICE_RETIRE_PENDING" });
+  if (s.deviceRegistrationState === "not_registered") candidates.push({ action: "step_up", reason: "DEVICE_NOT_REGISTERED" });
   if (s.deviceComplianceState === "missing") candidates.push({ action: "step_up", reason: "COMPLIANCE_MISSING" });
+  if (s.deviceComplianceState === "in_grace_period") candidates.push({ action: "step_up", reason: "COMPLIANCE_IN_GRACE_PERIOD" });
+
+  // UNCONFIRMED INPUTS — not bad news, but not good news either, and a grant needs
+  // good news on every input. Each is enumerated separately rather than collapsed
+  // into one catch-all so the evidence names WHICH signal could not be confirmed.
+  if (s.identityStatus === "unknown") candidates.push({ action: "step_up", reason: "IDENTITY_STATE_UNKNOWN" });
+  if (s.userRisk === "unknown") candidates.push({ action: "step_up", reason: "USER_RISK_UNKNOWN" });
+  if (s.deviceComplianceState === "unknown") candidates.push({ action: "step_up", reason: "COMPLIANCE_STATE_UNKNOWN" });
+  if (s.deviceManagementState === "unknown") candidates.push({ action: "step_up", reason: "MANAGEMENT_STATE_UNKNOWN" });
+  if (s.deviceRegistrationState === "unknown") candidates.push({ action: "step_up", reason: "REGISTRATION_STATE_UNKNOWN" });
 
   const winner = candidates.reduce<{ action: UnifiedAction; reason: string }>(
     (max, c) => (ACTION_RANK[c.action] > ACTION_RANK[max.action] ? c : max),

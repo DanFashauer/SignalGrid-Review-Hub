@@ -1,0 +1,98 @@
+# Mac lane — run the FULL gate suite on macOS.
+#
+# WHY THIS EXISTS. `validate-sim-macos.sh` is the repo's full suite (4 simulator
+# gates + every looped `proof:*` gate + 5 non-proof gates) and until now it ran
+# ONLY on the owner's laptop. That made the largest gate set in the repo the one
+# least often run, and made "the suite is green" a claim resting on whoever last
+# remembered to run it by hand. This runs it on every dispatch and weekly.
+#
+# WHAT THIS IS NOT. A hosted macOS runner is a throwaway VM: not MDM-enrolled, not
+# a managed device, and not the machine whose posture `macos-posture` reads. It is
+# a REHEARSAL — it proves the gates pass on macOS, which is real and worth knowing,
+# and it proves nothing about real hardware.
+#
+# So this job deliberately does NOT pass `--emit-evidence`. `scripts/verify-all.mjs`
+# independently refuses to mint evidence under CI, so the boundary holds even if
+# someone adds the flag here later; this comment explains the intent, that check
+# enforces it. Live evidence is minted only by the owner running the command on a
+# real Mac — see docs/MAC_LANE.md.
+
+name: Mac lane (full suite)
+
+on:
+  workflow_dispatch:
+    inputs:
+      sim_only:
+        description: "Run only the simulator scenarios (--sim-only) instead of the full suite"
+        type: boolean
+        default: false
+  schedule:
+    # Weekly, Mondays 06:00 UTC. Frequent enough to catch macOS-specific drift
+    # while it is still attributable to a small range of commits; infrequent
+    # enough not to burn the runner allowance on a suite that mostly repeats
+    # what the linux lane already proved.
+    - cron: "0 6 * * 1"
+
+# A second run of a long suite on the same ref teaches nothing and competes for
+# runners; let the newer one win.
+concurrency:
+  group: mac-lane-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  full-suite:
+    name: validate-sim-macos.sh
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable corepack (the harness falls back to it when pnpm is absent)
+        run: corepack enable
+
+      - name: Run the full suite
+        run: |
+          if [ "${{ inputs.sim_only }}" = "true" ]; then
+            ./validate-sim-macos.sh --sim-only
+          else
+            ./validate-sim-macos.sh
+          fi
+
+      # The harness snapshots and restores package.json + pnpm-lock.yaml around its
+      # `pnpm add -w` of the darwin esbuild binary. If a future change breaks that
+      # restore, the lockfile drifts and CI's `--frozen-lockfile` starts failing on
+      # unrelated PRs — a confusing, far-away symptom. Catch it here, at the source.
+      - name: Manifest and lockfile must be unchanged by the harness
+        if: always()
+        run: |
+          if ! git diff --quiet -- package.json pnpm-lock.yaml; then
+            echo "::error::validate-sim-macos.sh left package.json or pnpm-lock.yaml modified."
+            echo "Its snapshot/restore around 'pnpm add -w' did not restore cleanly:"
+            git diff --stat -- package.json pnpm-lock.yaml
+            exit 1
+          fi
+          echo "package.json and pnpm-lock.yaml are unchanged."
+
+      - name: State plainly what this run did and did not prove
+        if: always()
+        run: |
+          {
+            echo "### Mac lane — rehearsal, not evidence"
+            echo
+            echo "The full gate suite ran on \`macos-latest\`. That proves the gates pass on macOS."
+            echo
+            echo "It does **not** prove anything about real hardware. A hosted runner is a"
+            echo "throwaway VM — not MDM-enrolled, not a managed device, not the machine whose"
+            echo "posture \`macos-posture\` reads. No live evidence was minted, and"
+            echo "\`scripts/verify-all.mjs\` refuses to mint any under CI."
+            echo
+            echo "Real-hardware evidence comes only from \`pnpm run verify:all --emit-evidence\`"
+            echo "on the owner's Mac. See \`docs/MAC_LANE.md\`."
+          } >> "$GITHUB_STEP_SUMMARY"

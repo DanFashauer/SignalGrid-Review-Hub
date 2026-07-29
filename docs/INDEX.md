@@ -132,6 +132,10 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Post-merge connector smoke evidence automation](POST_MERGE_CONNECTOR_SMOKE_EVIDENCE.md): explains the automatic Connector Emulator Smoke run and evidence manifest after merges to `SignalGrid_Alpha`.
 - [Validation commands](VALIDATION_COMMANDS.md): lists the standard install, typecheck, build, proof, unsafe-claim scan, and diff hygiene commands.
 - [CI and validation](CI_AND_VALIDATION.md): explains Review Hub CI, required local checks, docs sanity checks, and future branch-protection expectations.
+- [The Mac lane](MAC_LANE.md): what a cloud macOS runner can prove and what only the
+  owner's real Mac can — the full 87-gate suite now runs on `macos-latest` (dispatch +
+  weekly) as a REHEARSAL, while live evidence stays mintable only off CI. Closes a hole
+  where a hosted macOS runner satisfied the "real machine" check by construction.
 - [Live-sync loop](LIVE_SYNC_LOOP.md): keeps the owner's Mac MCP lane and the iOS EnterpriseShell building against current repo contracts — a deterministic sync manifest (`scripts/generate-sync-manifest.mjs`), a drift gate (`scripts/check-live-sync.mjs`, hard on manifest drift, report-only on real-hardware evidence staleness), and the owner's one-command evidence run (`verify:all --require-mcp --emit-evidence`).
 - [Branch policy](BRANCHES.md): which branches are load-bearing, which were dead experiments, and the derived cleanup script (`pnpm run branches:stale` / `branches:clean`) that keeps the list honest without a hand-maintained list of names.
 - [Branching and environments](BRANCHING_AND_ENVIRONMENTS.md): how `dev` / `alpha` / `beta` / `prod` relate to the base branch.

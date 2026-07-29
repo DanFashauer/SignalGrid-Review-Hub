@@ -29,6 +29,7 @@ import type {
   NormalizedUemDeviceState,
   UemCompliance,
   UemEnrollment,
+  UemOwnership,
   UemSupervision,
 } from "./types";
 
@@ -41,6 +42,9 @@ export interface WorkspaceOneDevicePayload {
   readonly IsSupervised?: unknown;
   readonly OperatingSystem?: unknown;
   readonly LocationGroupName?: unknown;
+  /** `Ownership`: "C" corporate-dedicated | "S" corporate-shared | "E"
+   *  employee-owned | "U" undefined. */
+  readonly Ownership?: unknown;
 }
 
 const asString = (v: unknown): string | null =>
@@ -92,6 +96,36 @@ function complianceFrom(raw: unknown): UemCompliance {
   }
 }
 
+/**
+ * Workspace ONE `Ownership`, a single-letter enum.
+ *
+ *   C — Corporate-Dedicated   (org-owned, assigned to one person)
+ *   S — Corporate-Shared      (org-owned, checked out and handed on)
+ *   E — Employee-Owned        (BYOD)
+ *   U — Undefined
+ *
+ * BOTH corporate forms map to `corporate`, and the distinction between them is
+ * deliberately dropped rather than modelled. It is real, and it is not this
+ * dimension's question: `S` is SignalGrid's central case — the shared frontline
+ * device — but who currently HOLDS a shared device is the custody question that
+ * `rtls-custody` and the badge-binding dimension already own. Two sources of truth
+ * for one question is the mistake, so this one answers only "may this device be
+ * expected to be supervised", for which C and S are the same answer.
+ *
+ * `U` and anything unrecognised fall to `unknown`, never to `personal`.
+ */
+function ownershipFrom(raw: unknown): UemOwnership {
+  switch (asString(raw)?.toUpperCase()) {
+    case "C":
+    case "S":
+      return "corporate";
+    case "E":
+      return "personal";
+    default:
+      return "unknown";
+  }
+}
+
 export function normalizeWorkspaceOneDevice(
   raw: WorkspaceOneDevicePayload,
 ): NormalizedUemDeviceState {
@@ -105,6 +139,7 @@ export function normalizeWorkspaceOneDevice(
       enrollment: "unknown",
       compliance: "unknown",
       supervision: "unknown",
+      ownership: "unknown",
       osVersion: null,
       lastCheckInAgeSeconds: null,
       reportIntegrity: "malformed",
@@ -121,6 +156,7 @@ export function normalizeWorkspaceOneDevice(
     enrollment: enrollmentFrom(raw.EnrollmentStatus),
     compliance: complianceFrom(raw.ComplianceStatus),
     supervision,
+    ownership: ownershipFrom(raw.Ownership),
     osVersion: asString(raw.OperatingSystem),
     lastCheckInAgeSeconds: null,
     reportIntegrity: "intact",

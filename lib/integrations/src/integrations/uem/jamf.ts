@@ -74,6 +74,7 @@ export function normalizeJamfDevice(raw: JamfComputerPayload): NormalizedUemDevi
       enrollment: "unknown",
       compliance: "unknown",
       supervision: "unknown",
+      ownership: "unknown",
       osVersion: null,
       lastCheckInAgeSeconds: null,
       reportIntegrity: "malformed",
@@ -94,12 +95,26 @@ export function normalizeJamfDevice(raw: JamfComputerPayload): NormalizedUemDevi
   const supervision: UemSupervision =
     supervisedRaw === true ? "supervised" : supervisedRaw === false ? "unsupervised" : "unknown";
 
+  // Jamf Pro's computer record carries no ownership field — there is no
+  // `managedDeviceOwnerType` equivalent in `/JSSResource/computers`, and ownership in
+  // Jamf is expressed (when at all) through site or department assignment, which this
+  // read does not fetch and which sites are not obliged to use for that purpose.
+  //
+  // So this is `unknown`, and it is deliberate. The consequence is visible and
+  // correct: an unsupervised Jamf device grades UNSUPERVISED_OWNERSHIP_UNKNOWN rather
+  // than being either excused as BYOD or accused of being an unsupervised corporate
+  // device. Same discipline as `compliance` above — do NOT "improve" this by
+  // defaulting to `corporate` on the grounds that Jamf is usually corporate. Usually
+  // is not a reading.
+  const ownership = "unknown" as const;
+
   return {
     deviceId,
     vendor: "jamf",
     enrollment,
     compliance,
     supervision,
+    ownership,
     osVersion: asString(raw.computer?.hardware?.os_version),
     // Jamf reports a timestamp; converting it to an age needs a clock, and a clock
     // read here would make this dimension non-replayable. The caller that owns the

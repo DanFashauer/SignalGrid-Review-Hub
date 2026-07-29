@@ -56,6 +56,28 @@ export type UemCompliance =
  *  one — see the platform-honesty rule in CLAUDE.md. */
 export type UemSupervision = "supervised" | "unsupervised" | "unknown";
 
+/** Who owns the device.
+ *
+ *  WHY THIS EXISTS, and it is a defect report on the first version of this file.
+ *  The evaluator graded `supervision === "unsupervised"` as `step_up`
+ *  unconditionally. On a corporate device that is a real finding. On a
+ *  personally-owned BYOD device it is the EXPECTED and PERMANENT state — Apple
+ *  supervision requires the organisation to own the device (Apple Business Manager
+ *  / Configurator), so an employee-owned iPhone can never be supervised.
+ *
+ *  A gate that fires on every single decision forever carries no information. Worse,
+ *  it is the shape that trains an operator to ignore the signal, so the one time it
+ *  means something they have already learned to scroll past it. Interpreting
+ *  supervision without knowing ownership is reading half a sentence.
+ *
+ *  - `corporate` — organisation-owned (including corporate-SHARED, which is this
+ *                  product's central case: a checked-out frontline device)
+ *  - `personal`  — employee-owned / BYOD
+ *  - `unknown`   — could not be determined. NOT the same as `personal`; assuming
+ *                  BYOD would silently excuse an unsupervised corporate device,
+ *                  which is the finding this dimension most needs to keep. */
+export type UemOwnership = "corporate" | "personal" | "unknown";
+
 /** Whether the normalized report itself parsed cleanly. Tracked SEPARATELY from
  *  the states above, because a malformed report can normalize every field to a
  *  denying sentinel and thereby *look* like a decisive answer. Integrity says
@@ -71,6 +93,8 @@ export interface NormalizedUemDeviceState {
   readonly enrollment: UemEnrollment;
   readonly compliance: UemCompliance;
   readonly supervision: UemSupervision;
+  /** Ownership, which is what makes `supervision` interpretable. See UemOwnership. */
+  readonly ownership: UemOwnership;
   /** Vendor-reported OS version, or null when absent/unparseable. Informational —
    *  currency is graded by the `app-update` dimension, not here. */
   readonly osVersion: string | null;
@@ -122,11 +146,16 @@ export type UemReasonCode =
   | "DEVICE_NON_COMPLIANT"
   | "COMPLIANCE_IN_GRACE_PERIOD"
   | "COMPLIANCE_NOT_EVALUATED"
+  /** A CORPORATE device that is not supervised. Scoped to corporate deliberately:
+   *  see UemOwnership for why the unscoped version of this code was a defect. */
   | "DEVICE_UNSUPERVISED"
   // Unconfirmed inputs — foreclose the grant, never deny.
   | "ENROLLMENT_STATE_UNKNOWN"
   | "COMPLIANCE_STATE_UNKNOWN"
   | "SUPERVISION_STATE_UNKNOWN"
+  /** Unsupervised, and ownership could not be established — so it is impossible to
+   *  say whether that is an expected BYOD state or an unsupervised corporate device. */
+  | "UNSUPERVISED_OWNERSHIP_UNKNOWN"
   | "VENDOR_UNKNOWN"
   // The report itself could not be trusted.
   | "REPORT_MALFORMED";

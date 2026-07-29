@@ -11,6 +11,7 @@ import type {
   NormalizedUemDeviceState,
   UemCompliance,
   UemEnrollment,
+  UemOwnership,
   UemSupervision,
 } from "./types";
 
@@ -21,6 +22,8 @@ export interface IntuneManagedDevicePayload {
   readonly managementState?: unknown;
   readonly isSupervised?: unknown;
   readonly osVersion?: unknown;
+  /** Graph `managedDeviceOwnerType`: `unknown` | `company` | `personal`. */
+  readonly managedDeviceOwnerType?: unknown;
 }
 
 const asString = (v: unknown): string | null =>
@@ -71,6 +74,26 @@ function enrollmentFrom(raw: unknown): UemEnrollment {
   return "unknown";
 }
 
+/**
+ * Graph's `managedDeviceOwnerType` enum — `unknown` | `company` | `personal`.
+ *
+ * Graph spells the corporate case "company"; the fabric calls it `corporate`, so the
+ * rename happens here rather than leaking a vendor word into the decision core. The
+ * enum's own `unknown` member and any unrecognised value both fall to `unknown` —
+ * deliberately NOT to `personal`, which would silently excuse an unsupervised
+ * corporate device (see UemOwnership).
+ */
+function ownershipFrom(raw: unknown): UemOwnership {
+  switch (asString(raw)?.toLowerCase()) {
+    case "company":
+      return "corporate";
+    case "personal":
+      return "personal";
+    default:
+      return "unknown";
+  }
+}
+
 export function normalizeIntuneDevice(raw: IntuneManagedDevicePayload): NormalizedUemDeviceState {
   const deviceId = asString(raw?.id);
   if (deviceId === null) {
@@ -80,6 +103,7 @@ export function normalizeIntuneDevice(raw: IntuneManagedDevicePayload): Normaliz
       enrollment: "unknown",
       compliance: "unknown",
       supervision: "unknown",
+      ownership: "unknown",
       osVersion: null,
       lastCheckInAgeSeconds: null,
       reportIntegrity: "malformed",
@@ -96,6 +120,7 @@ export function normalizeIntuneDevice(raw: IntuneManagedDevicePayload): Normaliz
     enrollment: enrollmentFrom(raw.managementState),
     compliance: complianceFrom(raw.complianceState),
     supervision,
+    ownership: ownershipFrom(raw.managedDeviceOwnerType),
     osVersion: asString(raw.osVersion),
     lastCheckInAgeSeconds: null,
     reportIntegrity: "intact",

@@ -156,6 +156,20 @@ export interface UEMAdapter {
 // NAC Types - Network Access Control
 // ============================================================================
 
+/**
+ * An endpoint record from a NAC, used for DEVICE IDENTITY RESOLUTION — mapping a
+ * MAC / serial / certificate subject to the device the fabric is deciding about.
+ *
+ * Note what this is NOT: it is not the network-posture decision input. That is
+ * `../network-nac`, which owns a richer, already-proven model
+ * (`NetworkAuthState` including `quarantined`, `NetworkVerdict`, reason codes).
+ * Two sources of truth for one question would be a regression, so this shape stays
+ * deliberately narrow and serves `deviceResolver` only.
+ *
+ * `lastSeen` is the vendor timestamp verbatim. Deliberately not converted to an age
+ * here — that needs a clock, and a clock read in a decision path is forbidden by
+ * golden rule 2.
+ */
 export interface NACEndpointInfo {
   endpointId: string;
   macAddress?: string;
@@ -167,35 +181,30 @@ export interface NACEndpointInfo {
   lastSeen?: string;
 }
 
-export interface NACQuarantineRequest {
-  deviceId: string;
-  action: 'quarantine' | 'unquarantine' | 'reauthenticate' | 'notify';
-  reason?: string;
-  duration?: number;
-  vlan?: string;
-  networkProfile?: string;
-  correlationId?: string;
-  caseId?: string;
-}
-
-export interface NACQuarantineResponse {
-  requestId: string;
-  status: 'pending' | 'applied' | 'failed' | 'revoked';
-  appliedAt?: string;
-  message?: string;
-}
-
+/**
+ * The NAC read surface.
+ *
+ * WRITE METHODS REMOVED: `quarantineEndpoint`, `clearQuarantine`, `quarantineDevice`,
+ * and the `NACQuarantineRequest` / `NACQuarantineResponse` types that served them.
+ * Their implementations called the Cisco ISE ANC and Aruba ClearPass APIs to
+ * quarantine an endpoint — a device action over the network, ungated and unproven,
+ * against AGENTS.md:19 ("Keep high-risk actions simulated and approval-required").
+ *
+ * Cutting a device off the network is, if anything, a more severe action than
+ * locking one: on a shared clinical cart mid-shift it removes the worker's ability
+ * to reach the systems the patient in front of them depends on. Exactly the class of
+ * action that must route through an approval-gated request rather than fire from a
+ * decision path.
+ *
+ * Deleted rather than gated, for the same reason as the `uem/` actuators in #150:
+ * connector discipline here is a READ-ONLY discipline, so there is no disciplined
+ * form of a quarantine actuator to convert these into. Nothing outside `nac/` called
+ * them — `deviceResolver`, the only consumer, uses `lookupEndpoint`.
+ */
 export interface NACAdapter {
   readonly name: string;
   readonly vendor: string;
-  
-  // Universal NAC Surface
   lookupEndpoint(identifier: string, type: 'mac' | 'serial' | 'cert'): Promise<NACEndpointInfo | null>;
-  quarantineEndpoint(request: NACQuarantineRequest): Promise<NACQuarantineResponse>;
-  clearQuarantine(endpointId: string, reason?: string): Promise<NACQuarantineResponse>;
-  
-  // Legacy support
-  quarantineDevice?(request: NACQuarantineRequest): Promise<NACQuarantineResponse>;
   healthCheck?(): Promise<boolean>;
 }
 

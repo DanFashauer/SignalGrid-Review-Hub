@@ -119,6 +119,8 @@ jobs:
         run: pnpm run proof:macos-posture
       - name: "Proof: uem (read-only MDM/UEM, gated, no actuators)"
         run: pnpm run proof:uem
+      - name: "Proof: nac (read-only endpoint identity, gated, no actuators)"
+        run: pnpm run proof:nac
 
       - name: macOS posture ↔ apple/device-management schema alignment proof
         run: pnpm run proof:macos-apple-schema

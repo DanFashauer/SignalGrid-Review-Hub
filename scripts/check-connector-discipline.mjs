@@ -61,14 +61,15 @@ const NOT_A_FAMILY = new Set(["adapters"]);
  *                     platform-honesty one. Still needs a gate.
  *   unproven        — gated, but no proof asserts the gate actually holds.
  */
+// `nac` was here, as the one entry with severity "violation": cisco-ise.ts and
+// aruba-clearpass.ts called the ISE ANC / ClearPass APIs to quarantine an endpoint.
+// Fixed — actuators removed, gated, proven — and the entry deleted, because rule 5
+// made leaving it impossible. Staging the fix flipped the gate to FAILED with
+// "KNOWN_GAPS lists nac as a gap, but it is now gated, proven and action-free",
+// which is the registry refusing to describe the repo inaccurately in either
+// direction. That is the whole point of the self-invalidation and it is worth
+// recording that it worked on a real fix rather than only on a rehearsal.
 const KNOWN_GAPS = {
-  nac: {
-    severity: "violation",
-    reason:
-      "cisco-ise.ts and aruba-clearpass.ts call the ISE ANC / ClearPass APIs to " +
-      "quarantine and un-quarantine an endpoint — a DEVICE ACTION over the network, " +
-      "the same class removed from uem/ in #150 — with no tier gate and no proof.",
-  },
   itsm: { severity: "ungated-emitter", reason: "servicenow/bmc-helix/ivanti create real tickets with no tier gate." },
   siem: { severity: "ungated-emitter", reason: "sentinel forwards real events with no tier gate." },
   syslog: { severity: "ungated-emitter", reason: "forwards real log lines with no tier gate." },

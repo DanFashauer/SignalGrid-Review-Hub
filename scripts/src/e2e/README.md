@@ -35,7 +35,7 @@ Everything is localhost and every fixture is the deterministic demo seed, so
 `retries: 0` — a red run is a regression, not a coin-flip. Each spec also
 blocks all non-localhost requests (the consoles' `index.html` references
 Google Fonts), keeping runs hermetic and offline-capable. Full run:
-~40 seconds including all four builds.
+~40 seconds including all six builds.
 
 ## Servers (booted by `webServer` in `playwright.config.ts`)
 
@@ -45,9 +45,12 @@ Google Fonts), keeping runs hermetic and offline-capable. Full run:
 | 4612 | signalgrid-web (public website) | `vite build` + `vite preview` |
 | 4613 | api-server | `node dist/index.mjs` (the real built server; in-memory demo core, no DATABASE_URL) |
 | 4614 | signalgrid-app (admin console) | `vite build` + `vite preview`, `/api/*` proxied to the live api-server via `API_PROXY_TARGET` |
+| 4615 | signalgrid-desktop (desktop client) | `vite build` + `vite preview`, `/api/*` proxied to the live api-server via `API_PROXY_TARGET` |
+| 4616 | signalgrid-mobile-pwa (mobile PWA) | `vite build` + `vite preview`, `/api/*` proxied to the live api-server via `API_PROXY_TARGET` |
 
 Ports are overridable via `E2E_REVIEW_PORT` / `E2E_WEB_PORT` / `E2E_API_PORT`
-/ `E2E_ADMIN_PORT` (the specs read the same variables). Apps are served from
+/ `E2E_ADMIN_PORT` / `E2E_DESKTOP_PORT` / `E2E_PWA_PORT` (the specs read the
+same variables). Apps are served from
 their **built** bundles — a green run pins the artifact, not the dev server.
 
 ## What is covered
@@ -92,7 +95,7 @@ the operator-facing half of the feature never rendered.
 The one-line `SCENARIOS` entry ("Failing battery (SmartDock)",
 `nurse.failbatt`/`ipad-loan-04`) landed in
 `artifacts/signalgrid-review/src/components/sections/OperatorConsoleSection.tsx`
-**in the same change that adds this suite**, and the test is green — 15/15.
+**in the same change that adds this suite**, and the test was green — 15/15 **at that point** (the suite has since grown to 35).
 An adversarial review then caught an earlier draft of THIS section still
 describing the test as red after the fix had landed, which is its own lesson:
 a README describing a test's live state is a hand-maintained claim, and the
@@ -114,8 +117,7 @@ with the next evidence field.
   runs the public-safe in-memory tier only; the pg proofs own the rest.
   There is no OpenAPI-serving endpoint on the api-server to test (the spec
   lives in `lib/api-spec` and is contract-checked by `proof:api-contract`).
-- **signalgrid-desktop / signalgrid-mobile-pwa / mockup-sandbox**: not part
-  of the launch review surface.
+- **mockup-sandbox**: not part of the launch review surface.
 - **Cross-browser, mobile viewports, visual regression, a11y audits**:
   Chromium-only by design — the preinstalled browser is the only one allowed
   here, and these tests pin *content and wiring*, not pixels.

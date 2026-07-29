@@ -63,9 +63,10 @@ This keeps Review Hub independent from `/DEV` and makes the public validation su
   sender-constrained. The fixture proof shows the logic is right; this shows it
   is right against bytes SignalGrid did not fabricate. Fully local, no tenant,
   no cost.
-- **Browser-level E2E.** `pnpm run test:e2e` (15 tests, ~75 content-bearing
-  assertions) runs Playwright against the BUILT review console, website, and
-  admin console (the admin console proxied to a live locally-booted api-server).
+- **Browser-level E2E.** `pnpm run test:e2e` (35 tests, ~126 content-bearing
+  assertions) runs Playwright against the BUILT review console, website,
+  admin console, desktop client, and mobile PWA (the admin console, desktop
+  client, and mobile PWA proxied to a live locally-booted api-server).
   It asserts what a human actually sees — decision evidence rows, reason codes,
   the corrected battery copy — and its maiden run caught a real gap no other
   gate could: a decision-evidence row the core carried and no console scenario

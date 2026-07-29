@@ -57,6 +57,13 @@ const contractPath = resolve(
 const requireMcp = process.argv.includes("--require-mcp");
 const emitEvidence = process.argv.includes("--emit-evidence");
 
+/** Are we on a hosted CI runner? Checked because the darwin test alone does NOT
+ *  exclude a cloud sandbox — a GitHub macOS runner passes it. `CI` is set by every
+ *  major provider; `GITHUB_ACTIONS` is belt-and-braces for this repo's own workflows.
+ *  Deliberately NOT overridable: an override would be the lie with extra steps, which
+ *  is the same reason the platform check has no override either. */
+const IN_CI = process.env.CI === "true" || process.env.CI === "1" || !!process.env.GITHUB_ACTIONS;
+
 function run(label, cmd, args, opts = {}) {
   console.log(`\n=== ${label} ===\n$ ${cmd} ${args.join(" ")}`);
   const r = spawnSync(cmd, args, { stdio: "inherit", ...opts });
@@ -173,7 +180,35 @@ if (emitEvidence) {
   // sandbox cannot satisfy by accident: the process must actually be running on
   // macOS. There is no override flag on purpose — an override would be the lie
   // with extra steps.
-  if (process.platform !== "darwin") {
+  if (IN_CI) {
+    // THE HOLE IN THE CHECK ABOVE. Its stated intent is "a condition a cloud sandbox
+    // cannot satisfy by accident" — but a GitHub Actions macOS runner IS a cloud
+    // sandbox running macOS, and this repo already uses one (.github/workflows/
+    // ios-ci.yml, runs-on: macos-latest). A hosted runner would therefore have
+    // satisfied the darwin check and minted a file asserting the owner's real machine
+    // ran it. Nothing about that evidence would have been true, and nothing would have
+    // said so.
+    //
+    // A hosted runner is a throwaway VM: not MDM-enrolled, not the managed device
+    // whose posture the macos-posture connector exists to read. Under this repo's
+    // platform-honesty rule it cannot stand in for real hardware any more than a
+    // simulator can. So CI runs the suite — which is genuinely useful, and proves the
+    // gates pass on macOS — and does NOT mint live evidence. Refusal, not a label:
+    // an `environment: "ci"` field would sit in a file whose name and purpose still
+    // say "the owner's Mac", and a skimming reader would take the filename over the
+    // field.
+    console.error(
+      [
+        "\n--emit-evidence: REFUSED — running on a CI runner (macOS or not).",
+        "  A hosted macOS runner satisfies the platform check above while being exactly the",
+        "  cloud sandbox that check was written to exclude: a throwaway VM, not MDM-enrolled,",
+        "  not the managed Mac whose posture this evidence claims to describe.",
+        "  CI running the suite is a rehearsal and reports as one. Evidence is minted only by",
+        "  a real machine: run `pnpm run verify:all --emit-evidence` locally.",
+      ].join("\n"),
+    );
+    process.exitCode = 1;
+  } else if (process.platform !== "darwin") {
     console.error(
       [
         "\n--emit-evidence: REFUSED — this process is not running on macOS (platform=" + process.platform + ").",

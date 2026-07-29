@@ -41,6 +41,88 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # Report where every tier actually points, BEFORE attempting the promotion and
+      # regardless of how the promotion turns out.
+      #
+      # This exists because the first real dispatch of this workflow failed with an
+      # opaque red X, and the log said nothing an operator could act on. The cause was
+      # not in the promotion at all: the four tier branches are pinned to an old commit
+      # and no longer follow the branch where work lands, so EVERY promotion this
+      # workflow can offer has an empty diff. That is a fact about the repository, not
+      # about the run — and a workflow that can only fail should say why on its own,
+      # rather than requiring someone to go read four branch refs by hand.
+      - name: Report tier state
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const TIERS = ["dev", "alpha", "beta", "prod"];
+
+            const { data: repoInfo } = await github.rest.repos.get({ owner, repo });
+            const def = repoInfo.default_branch;
+
+            const shaOf = async (branch) => {
+              try {
+                const { data } = await github.rest.repos.getBranch({ owner, repo, branch });
+                return data.commit.sha;
+              } catch (err) {
+                if (err.status === 404) return null;
+                throw err;
+              }
+            };
+
+            // How far behind the branch that work actually lands on? `behind_by` on a
+            // `default...tier` comparison is the number of commits the tier is missing.
+            const behindDefault = async (branch) => {
+              try {
+                const { data } = await github.rest.repos.compareCommitsWithBasehead({
+                  owner, repo, basehead: `${branch}...${def}`,
+                });
+                return data.ahead_by;
+              } catch {
+                return null;
+              }
+            };
+
+            const rows = [];
+            for (const tier of TIERS) {
+              const sha = await shaOf(tier);
+              rows.push({
+                tier,
+                sha: sha ? sha.slice(0, 7) : "—",
+                missing: sha ? await behindDefault(tier) : null,
+              });
+            }
+
+            const fmt = (r) => {
+              if (r.sha === "—") return "branch does not exist";
+              if (r.missing === null) return "unrelated history";
+              return r.missing === 0 ? "up to date" : `${r.missing} commit(s) behind \`${def}\``;
+            };
+
+            const stale = rows.filter((r) => typeof r.missing === "number" && r.missing > 0);
+
+            await core.summary
+              .addHeading("Tier state", 3)
+              .addRaw(`Default branch: \`${def}\`\n\n`)
+              .addTable([
+                [{ data: "Tier", header: true }, { data: "Commit", header: true }, { data: "Relative to default", header: true }],
+                ...rows.map((r) => [r.tier, r.sha, fmt(r)]),
+              ])
+              .addRaw(
+                stale.length === TIERS.length
+                  ? `\n**Every tier is behind \`${def}\`.** Promotion only ever moves commits ` +
+                    `between tiers, so while the entry tier (\`dev\`) is itself behind the branch ` +
+                    `work lands on, there is nothing for any promotion to carry and each one is a ` +
+                    `no-op. Feeding \`dev\` from \`${def}\` is an owner decision — see ` +
+                    `\`docs/BRANCHING_AND_ENVIRONMENTS.md\`.\n`
+                  : "\n",
+              )
+              .write();
+
+            for (const r of rows) core.info(`${r.tier.padEnd(6)} ${r.sha}  ${fmt(r)}`);
+
       - name: Open promotion PR
         uses: actions/github-script@v9
         with:
@@ -62,8 +144,33 @@ jobs:
               core.notice(`A promotion PR ${from} → ${to} is already open: #${existing[0].number}`);
               return;
             }
-            const { data: pr } = await github.rest.pulls.create({
-              owner: context.repo.owner, repo: context.repo.repo,
-              title, body, head: from, base: to,
-            });
-            core.notice(`Opened promotion PR #${pr.number}: ${from} → ${to}`);
+            // "Nothing to promote" is a NORMAL outcome and must read like one. All four
+            // tier branches currently point at the same commit, so every promotion this
+            // workflow can offer has an empty diff — and GitHub answers that with a 422
+            // the script did not catch, surfacing as an opaque red X with no explanation
+            // in the log. An operator cannot tell that from a broken workflow.
+            //
+            // Matched on BOTH the structured `errors[]` and the error message: Octokit
+            // folds a validation body into `err.message`, and which of the two carries the
+            // text has changed across versions. Anything else is rethrown — an
+            // unrecognised 422 is a real failure and must stay red — but the body is
+            // logged first so the next one is diagnosable from the run alone.
+            try {
+              const { data: pr } = await github.rest.pulls.create({
+                owner: context.repo.owner, repo: context.repo.repo,
+                title, body, head: from, base: to,
+              });
+              core.notice(`Opened promotion PR #${pr.number}: ${from} → ${to}`);
+            } catch (err) {
+              const haystack = `${err.message ?? ""} ${JSON.stringify(err.response?.data ?? {})}`;
+              if (err.status === 422 && haystack.includes("No commits between")) {
+                core.notice(
+                  `Nothing to promote: \`${to}\` already contains everything in \`${from}\` ` +
+                  `(no commits between them). This is a no-op, not a failure — see the ` +
+                  `"Tier state" table in the run summary for where each tier points.`,
+                );
+                return;
+              }
+              core.error(`pulls.create failed with ${err.status}: ${haystack}`);
+              throw err;
+            }

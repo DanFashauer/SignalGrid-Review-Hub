@@ -6,12 +6,29 @@ pull request, after CI is green.
 
 ```
 dev  ──PR──▶  alpha  ──PR──▶  beta  ──PR──▶  prod
-(default)                              (protected, stable)
+                                       (protected, stable)
 ```
+
+> **This is the designed model, and the repository does not currently run it.**
+> `SignalGrid_Alpha` is the default branch and the branch every merged PR lands
+> on; the four tier branches are all pinned to the `Merge PR #65` commit and have
+> not moved since. So `dev` is not fed, and because promotion only ever moves
+> commits *between tiers*, every promotion the **Promote Tier** workflow can offer
+> has an empty diff. That workflow now reports each tier's actual position in its
+> run summary rather than failing opaquely — dispatch it to see the current gap,
+> which it measures live rather than quoting a number that would go stale here.
+>
+> Reconnecting the pipeline is an owner decision with three defensible answers,
+> and it is deliberately not made in code: **feed `dev`** from `SignalGrid_Alpha`
+> (keeps the model, needs the tier branches fast-forwarded); **re-point the
+> default** to `dev` so work lands at the pipeline's entry point (see
+> `docs/OWNER_ACTIONS.md` §3); or **retire the tier branches** and treat
+> `SignalGrid_Alpha` plus per-environment config as the whole deployment story.
+> Until one is chosen, read the table below as intent, not as current state.
 
 | Tier | Branch | Purpose | Live integrations |
 | ---- | ------ | ------- | ----------------- |
-| **dev** | `dev` (default) | Active development; every feature branch targets `dev`. | **Never** — always fixture-safe |
+| **dev** | `dev` | Active development; every feature branch targets `dev`. | **Never** — always fixture-safe |
 | **alpha** | `alpha` | Internal validation of a `dev` snapshot. | **Never** — always fixture-safe |
 | **beta** | `beta` | Pre-production / design-partner validation. | Gated: only with `SIGNALGRID_LIVE_INTEGRATIONS=true` + real creds |
 | **prod** | `prod` | Stable production. Protected; requires review + green CI to merge. | Gated: only with `SIGNALGRID_LIVE_INTEGRATIONS=true` + real creds |

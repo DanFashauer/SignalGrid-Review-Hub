@@ -41,14 +41,26 @@ them for the live codebase, without deleting any history.
 **Why you:** the default branch is the public face of the repo; which tier is
 "default" is a product decision, not something to guess.
 
-The promotion branches exist and track the current build: `dev` → `alpha` →
-`beta` → `prod`, alongside the working base `SignalGrid_Alpha`. Pick one as the
-repo default under **Settings → General → Default branch**:
+The promotion branches `dev` → `alpha` → `beta` → `prod` exist alongside the
+working base `SignalGrid_Alpha`. They **no longer track the current build** — all
+four are pinned to the `Merge PR #65` commit, while every PR since has merged into
+`SignalGrid_Alpha`. This section previously claimed otherwise; it was true when
+written and quietly stopped being true. Dispatch **Actions → Promote Tier** to see
+the live gap: its "Tier state" summary measures each branch's position rather than
+restating a number that would go stale the same way.
 
-- Keep **`SignalGrid_Alpha`** if you want the current integration branch to stay
-  the default (no change needed), or
-- Switch to **`prod`** (or `beta`) if you'd rather the default reflect the
-  promotion model — see `docs/REPO_LAYOUT.md` for the tier map.
+That makes this a decision about the *pipeline*, not just a label. Pick under
+**Settings → General → Default branch**:
+
+- Keep **`SignalGrid_Alpha`** as default and treat the tier branches as dormant —
+  honest, and worth then deleting them so they stop implying a live pipeline; or
+- Switch the default to **`dev`** and fast-forward the tier branches, which
+  reconnects the promotion model end to end (work lands at the entry point, and
+  `Promote Tier` starts having something to carry); or
+- Switch to **`prod`**/`beta` so the default reflects the promotion model's stable
+  end — see `docs/REPO_LAYOUT.md` for the tier map. Note this only helps once the
+  tiers are actually fed; on today's refs it would make a stale commit the repo's
+  public face.
 
 After a change, update branch-protection to match (below).
 

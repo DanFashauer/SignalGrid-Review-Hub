@@ -33,10 +33,19 @@ on:
     # what the linux lane already proved.
     - cron: "0 6 * * 1"
 
-# A second run of a long suite on the same ref teaches nothing and competes for
-# runners; let the newer one win.
+# Keyed on the COMMIT, not the ref — and that distinction cost a run.
+#
+# It was `mac-lane-${{ github.ref }}` with cancel-in-progress, reasoning that a second
+# run of a long suite on the same ref teaches nothing. But every dispatch and every
+# re-run of an OLD attempt lands on the same ref, so they all shared one group: a fresh
+# dispatch of fixed code started at 13:06, a re-run of the older failing attempt started
+# at 13:08, and the re-run cancelled the fix. The survivor was the run testing STALE
+# code — the exact inversion of what the rule was for.
+#
+# On the SHA, two dispatches of the same commit still dedupe (the real waste), while a
+# run of a different commit can never be killed by one of another.
 concurrency:
-  group: mac-lane-${{ github.ref }}
+  group: mac-lane-${{ github.sha }}
   cancel-in-progress: true
 
 permissions:

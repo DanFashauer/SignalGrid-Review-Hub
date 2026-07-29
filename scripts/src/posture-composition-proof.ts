@@ -106,6 +106,91 @@ check("device posture high user-risk → alert",
 check("device posture compliant+managed → none",
   fromDevicePosture(posture({})).action === "none");
 
+// ── grant discipline: a grant needs POSITIVE CONFIRMATION OF EVERY INPUT ──────
+//
+// The adapter tested five specific bad values and let everything else fall through
+// to `none` / `COMPLIANT_MANAGED`. Every Graph field has an `"unknown"` member, two
+// have extra non-clean members, and `deviceRegistrationState` was never read at all
+// — so an unreadable signal was reported as an affirmatively compliant, managed
+// device. Golden rule 2 inverted.
+//
+// The exhaustive sweep below is the real gate; these named cases exist so a failure
+// says WHICH state regressed instead of only that the count moved.
+check("management state UNKNOWN must not grant → step_up",
+  fromDevicePosture(posture({ deviceManagementState: "unknown" })).action === "step_up");
+check("management state retire_pending must not grant → step_up",
+  fromDevicePosture(posture({ deviceManagementState: "retire_pending" })).action === "step_up");
+check("compliance state UNKNOWN must not grant → step_up",
+  fromDevicePosture(posture({ deviceComplianceState: "unknown" })).action === "step_up");
+check("compliance in_grace_period must not grant → step_up",
+  fromDevicePosture(posture({ deviceComplianceState: "in_grace_period" })).action === "step_up");
+check("identity state UNKNOWN must not grant → step_up",
+  fromDevicePosture(posture({ identityStatus: "unknown" })).action === "step_up");
+check("user risk UNKNOWN must not grant → step_up",
+  fromDevicePosture(posture({ userRisk: "unknown" })).action === "step_up");
+check("registration not_registered must not grant → step_up",
+  fromDevicePosture(posture({ deviceRegistrationState: "not_registered" })).action === "step_up");
+check("registration state UNKNOWN must not grant → step_up",
+  fromDevicePosture(posture({ deviceRegistrationState: "unknown" })).action === "step_up");
+check("an unknown input never DENIES — it forecloses the grant, it does not restrict",
+  (["unknown"] as const).every((u) =>
+    [
+      fromDevicePosture(posture({ identityStatus: u })),
+      fromDevicePosture(posture({ userRisk: u })),
+      fromDevicePosture(posture({ deviceComplianceState: u })),
+      fromDevicePosture(posture({ deviceManagementState: u })),
+      fromDevicePosture(posture({ deviceRegistrationState: u })),
+    ].every((r) => r.action === "step_up")));
+
+// EXHAUSTIVE: enumerate the whole input space and assert that the ONLY states
+// contributing nothing are the ones positively confirmed clean on every field.
+// A spot-check cannot see a field nobody thought to test — which is exactly how
+// `deviceRegistrationState` went unread. This can.
+{
+  const IDENTITY = ["enabled", "disabled", "unknown"] as const;
+  const RISK = ["none", "low", "medium", "high", "unknown"] as const;
+  const COMPLIANCE = ["compliant", "non_compliant", "in_grace_period", "missing", "unknown"] as const;
+  const MANAGEMENT = ["managed", "unmanaged", "retire_pending", "unknown"] as const;
+  const REGISTRATION = ["registered", "not_registered", "unknown"] as const;
+
+  let total = 0;
+  const unjustifiedGrants: string[] = [];
+  for (const identityStatus of IDENTITY)
+    for (const userRisk of RISK)
+      for (const deviceComplianceState of COMPLIANCE)
+        for (const deviceManagementState of MANAGEMENT)
+          for (const deviceRegistrationState of REGISTRATION) {
+            total += 1;
+            const r = fromDevicePosture(
+              posture({ identityStatus, userRisk, deviceComplianceState, deviceManagementState, deviceRegistrationState }),
+            );
+            if (r.action !== "none") continue;
+            const confirmedClean =
+              identityStatus === "enabled" &&
+              userRisk !== "unknown" &&
+              deviceComplianceState === "compliant" &&
+              deviceManagementState === "managed" &&
+              deviceRegistrationState === "registered";
+            if (!confirmedClean) {
+              unjustifiedGrants.push(
+                `${identityStatus}/${userRisk}/${deviceComplianceState}/${deviceManagementState}/${deviceRegistrationState}`,
+              );
+            }
+          }
+  check(`device-posture space enumerated (${total} states)`, total === 900);
+  check(
+    `ZERO unjustified grants across all ${total} states (was 213)` +
+      (unjustifiedGrants.length ? ` — leaked: ${unjustifiedGrants.slice(0, 5).join(", ")}` : ""),
+    unjustifiedGrants.length === 0,
+  );
+  // Non-vacuity: the assertion above passes trivially if nothing ever grants.
+  // Exactly three states are fully confirmed (userRisk none/low/medium), so the
+  // grant path must be reachable and must be exactly that wide.
+  const grants = [...RISK].filter((userRisk) =>
+    fromDevicePosture(posture({ userRisk })).action === "none").length;
+  check("...and the grant path is still REACHABLE — exactly 3 confirmed-clean states", grants === 3);
+}
+
 // ── order-proof: the STRONGEST device-posture concern wins (a severe signal is
 // never diluted by a calmer one checked later — regression for the adapter bug) ──
 check("high user-risk (alert) is NOT diluted by unmanaged (step_up) → alert",

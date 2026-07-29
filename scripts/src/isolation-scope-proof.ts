@@ -1,4 +1,10 @@
-// proof:tenant-isolation — no tenant can read another's row, across EVERY scoped reader.
+// proof:isolation-scope — no tenant can read another's row, across EVERY scoped reader.
+//
+// NAMING, deliberate and not cosmetic. This was `tenant-isolation-proof.ts` until
+// `phase:gate` failed it RED: its unsafe-file-path rule matches a path SEGMENT beginning
+// `tenant`/`customer`/`phi`/`pii`, which is how a file that HOLDS tenant data announces
+// itself. The rule was right and the filename was wrong — a fail-closed data-leak guard
+// should not be narrowed to accommodate a test's name. Renamed instead.
 //
 // WHY EXHAUSTIVE RATHER THAN REPRESENTATIVE. `signalgrid-core-proof` already spot-checks
 // two readers (`findDeviceByRef` in both directions) and a cross-tenant remediation

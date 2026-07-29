@@ -98,7 +98,7 @@
     "proof:app-update": "pnpm --filter @workspace/scripts run proof:app-update",
     "proof:platform-sso": "pnpm --filter @workspace/scripts run proof:platform-sso",
     "proof:passkey-assurance": "pnpm --filter @workspace/scripts run proof:passkey-assurance",
-    "proof:tenant-isolation": "pnpm --filter @workspace/scripts run proof:tenant-isolation",
+    "proof:isolation-scope": "pnpm --filter @workspace/scripts run proof:isolation-scope",
     "proof:policy-binding": "pnpm --filter @workspace/scripts run proof:policy-binding",
     "verify:docker": "node scripts/docker-verify.mjs",
     "proof:device-management-health": "pnpm --filter @workspace/scripts run proof:device-management-health",

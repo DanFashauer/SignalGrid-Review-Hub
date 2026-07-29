@@ -234,6 +234,8 @@ jobs:
 
       - name: Guard-registry drift check
         run: node scripts/check-guard-registries.mjs
+      - name: "Connector discipline (gated + proven, no device actuators)"
+        run: node scripts/check-connector-discipline.mjs
 
       # The Mac MCP lane and iOS shell build against this repo's contracts from
       # OUTSIDE CI's reach. This gate hard-fails when contracts change without

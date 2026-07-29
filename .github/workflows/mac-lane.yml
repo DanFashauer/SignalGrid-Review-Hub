@@ -57,7 +57,33 @@ jobs:
       - name: Enable corepack (the harness falls back to it when pnpm is absent)
         run: corepack enable
 
+      # The suite includes proof:enrollment-race, which races 12 concurrent WebAuthn
+      # enrollments against a REAL Redis to prove the SET NX PX lock holds. It REFUSES
+      # to run without REDIS_URL rather than skipping quietly — correct for a race proof,
+      # since a silent skip is indistinguishable from a pass — so the first run of this
+      # workflow failed on it for want of a dependency the job never provided.
+      #
+      # Installed here rather than dropped from the suite: this lane exists to run the
+      # FULL gate set on macOS, and a lane that quietly omits a gate is the thing the
+      # rest of this repo's guards are built against. macOS runners cannot use `services:`
+      # (Linux containers only), so Homebrew it is.
+      - name: Start Redis (required by proof:enrollment-race)
+        run: |
+          brew install redis
+          redis-server --daemonize yes --port 6379
+          for i in $(seq 1 30); do
+            if redis-cli -p 6379 ping 2>/dev/null | grep -q PONG; then
+              echo "Redis is up."; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::Redis did not become reachable on 127.0.0.1:6379 within 30s."
+          exit 1
+
       - name: Run the full suite
+        env:
+          # proof:enrollment-race reads this and refuses without it.
+          REDIS_URL: redis://127.0.0.1:6379
         run: |
           if [ "${{ inputs.sim_only }}" = "true" ]; then
             ./validate-sim-macos.sh --sim-only

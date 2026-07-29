@@ -15,11 +15,22 @@ import { fileURLToPath } from "node:url";
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const quick = process.argv.includes("--quick");
 
-// Ordered gates — a COMPLETE mirror of the CI validation + docs-sanity jobs, so
-// a green preflight genuinely means CI will be green. Keep this list in lockstep
-// with `.github/workflows/review-hub-ci.yml`; a proof that runs in CI but not
-// here would let a red build pass preflight. `heavy` steps (full monorepo build)
-// are skipped only under --quick.
+// Ordered gates — a complete mirror of the CI jobs that need NOTHING BUT NODE:
+// `validation` and `docs-sanity` from `.github/workflows/review-hub-ci.yml`, plus
+// the SBOM-drift gate from `supply-chain.yml`'s `sbom` job. Keep this list in
+// lockstep with those; a proof that runs in CI but not here would let a red build
+// pass preflight.
+//
+// WHAT IT DOES NOT COVER, stated because the previous wording here claimed a
+// green preflight "genuinely means CI will be green" and that was false. Six CI
+// jobs run on pull_request; this mirrors three. The other three need external
+// services and cannot run in this harness:
+//   durable-persistence  (Postgres audit ledger)
+//   deploy-stack         (Docker compose smoke)
+//   secret-scan          (gitleaks)
+// So a green preflight means EVERYTHING REPRODUCIBLE LOCALLY is green. Those
+// three are still proven only in CI, and a push can go red on them after a clean
+// preflight. `heavy` steps (full monorepo build) are skipped only under --quick.
 const STEPS = [
   { name: "Invariant review (fail-closed / determinism / Assist / truth)", cmd: ["node", "scripts/review-invariants.mjs"] },
   { name: "Docs sanity (required docs + unsafe-claim scan)", cmd: ["node", "scripts/docs-sanity.mjs"] },

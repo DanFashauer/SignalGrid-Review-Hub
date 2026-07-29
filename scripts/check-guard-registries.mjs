@@ -55,7 +55,16 @@ const emitsFigures = [];
 for (const f of files) {
   const text = readFileSync(join(proofDir, f), "utf8");
   if (text.includes("enumerateGrantSafety")) usesGrantSafety.push(proofNameOf(f));
-  if (/console\.log\(`figures=/.test(text)) emitsFigures.push(proofNameOf(f));
+  // `\s*` and the /s flag are load-bearing: this was anchored to `console.log(` on
+  // ONE line, so a proof that wraps its call —
+  //     console.log(
+  //       `figures=...`,
+  //     );
+  // — read as "publishes no figures". `proof:iac` does exactly that, so it sat in
+  // the figure guard's PROOFS registry while this scanner reported it absent. The
+  // two printed totals disagreed (16 vs 17) and the check still exited 0, because
+  // nothing compared them. Found by audit, not by the guard.
+  if (/console\.log\(\s*`figures=/s.test(text)) emitsFigures.push(proofNameOf(f));
 }
 
 const mutationCovered = new Set(TARGETS.map((t) => t.proof));
@@ -84,6 +93,27 @@ for (const proof of emitsFigures) {
   console.error(`\n✗ ${proof} publishes a \`figures=\` line but is NOT registered with the figure guard.`);
   console.error("  Add it to PROOFS in scripts/check-proof-figures.mjs, or those figures can be");
   console.error("  quoted in docs and go stale unnoticed.");
+  failures += 1;
+}
+
+// THE REVERSE DIRECTION, and the reason the printed numbers could disagree in
+// silence. Every check above is "detected ⊆ registered": a proof that emits
+// figures must be registered. Nothing asserted "registered ⊆ detected", so a
+// registration whose proof this scanner does not SEE emitting was invisible —
+// which is precisely how the multi-line `figures=` blind spot above survived.
+//
+// This is the assertion the printed totals imply and never made. It is not
+// circular: the left side is a scan of the source tree, the right side is a
+// hand-maintained registry in a DIFFERENT file, and neither is derived from the
+// other. (Asserting `figureCovered.size === 17` against a literal WOULD be
+// circular — that is the fossil class this file exists to prevent.)
+for (const proof of figureCovered) {
+  if (emitsFigures.includes(proof)) continue;
+  console.error(`\n✗ ${proof} is registered with the figure guard, but no \`figures=\` emission was detected in its source.`);
+  console.error("  Either the registration is stale (the proof stopped publishing figures and the");
+  console.error("  figure guard is now checking nothing for it), or THIS scanner's detector missed");
+  console.error("  the emission — check for a wrapped `console.log(\\n  `figures=…`)` before");
+  console.error("  assuming the registry is at fault.");
   failures += 1;
 }
 

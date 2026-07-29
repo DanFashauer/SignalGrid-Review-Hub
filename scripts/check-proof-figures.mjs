@@ -148,7 +148,44 @@ function main() {
     }
   }
 
+  // ANNOUNCE WHAT THIS GUARD CANNOT SEE, every run. `checked` on its own reads as
+  // coverage, and it is not: two independent filters keep most doc figures out of
+  // reach, and an audit found 11 stale claims living in the gap — including a copy
+  // of a fossil that had just been corrected 40 lines away in another file.
+  //
+  //   SCOPE filter  — only `docs/*.md`, and only inside a `##`/`###` section whose
+  //                   text contains a registered `proof:<name>`. A section naming a
+  //                   GUARD, a script, a suite, or the `proof:*` glob matches nothing,
+  //                   and `####` does not open a section.
+  //   SHAPE filter  — FIGURE_RE sees only comma-formatted numbers >= 1,000. Every
+  //                   bare number is invisible even inside a perfectly scoped section.
+  //
+  // Both are stated as live measurements rather than prose so they cannot quietly rot
+  // the way the numbers they describe did.
+  const allCommaFigures = docFiles.reduce(
+    (n, f) => n + [...readFileSync(join(docsDir, f), "utf8").matchAll(FIGURE_RE)].length,
+    0,
+  );
+  const bareMeasurementRe =
+    /\b\d{2,3}\b(?=[^.\n]{0,24}\b(?:checks?|assertions?|gates?|mutations?|proofs?|scripts?|states?|combos?|categories|tests?|survivors?|killed|scenarios?|dimensions?|connectors?|targets?)\b)/gi;
+  const bareMeasurements = docFiles.reduce(
+    (n, f) => n + [...readFileSync(join(docsDir, f), "utf8").matchAll(bareMeasurementRe)].length,
+    0,
+  );
+
   console.log(`\nfigures checked in docs: ${checked}`);
+  console.log(
+    `NOT checked — out of SCOPE: ${allCommaFigures - checked} of ${allCommaFigures} comma-formatted figures ` +
+      `sit outside any proof-named section`,
+  );
+  console.log(
+    `NOT checked — out of SHAPE: ~${bareMeasurements} bare measurement-adjacent numbers ` +
+      `(FIGURE_RE only matches comma-formatted values >= 1,000)`,
+  );
+  console.log(
+    "  Partial coverage announced every run is a very different thing from partial\n" +
+      "  coverage that looks complete. Widening either filter is tracked work, not a waiver.",
+  );
 
   if (failures > 0) {
     console.error(

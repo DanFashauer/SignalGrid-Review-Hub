@@ -8,11 +8,21 @@ version and Codex has less to find.
 ## The two layers
 
 ### 1. Mechanical — `pnpm run preflight`
-Runs the **entire CI gate suite locally** in one command — a complete mirror of
-all three CI jobs (validation, docs-sanity, supply-chain): the invariant
-reviewer, docs sanity (required docs + unsafe-claim scan), typecheck, build,
-every proof, the API integration test, the safety gate, Postman/spec sync, and
-the CycloneDX SBOM sync. A green preflight means CI will be green.
+Runs the **service-free CI gate suite locally** in one command — a complete
+mirror of the two CI jobs that need nothing but Node (`validation` and
+`docs-sanity` in `review-hub-ci.yml`) plus the SBOM-drift gate from
+`supply-chain.yml`'s `sbom` job: the invariant reviewer, docs sanity (required
+docs + unsafe-claim scan), typecheck, build, every proof, the API integration
+test, the safety gate, Postman/spec sync, and the CycloneDX SBOM sync.
+
+It does **not** run the three CI jobs that need external services —
+`durable-persistence` (Postgres), `deploy-stack` (Docker compose smoke) and
+`secret-scan` (gitleaks). So a green preflight means everything reproducible
+locally is green; those three are proven only in CI, and a push can still go red
+on them. This paragraph previously said "a complete mirror of all three CI jobs
+… a green preflight means CI will be green", which was false in both halves:
+there are six jobs, and preflight mirrors three. It survived because no guard
+reads prose claims — see the coverage limits below.
 
 ```
 pnpm run preflight          # full suite — what CI runs
@@ -250,6 +260,37 @@ the failure being guarded against.
 Both guards were negative-controlled before being trusted, on the principle that a gate
 which has never failed is indistinguishable from one that cannot: reverting a figure to
 its pre-split value, and perturbing a space size by one, each fail the guard.
+
+**What this guard does NOT see, and how we found out.** An audit swept every
+measurement-shaped claim in the docs and found **11 stale ones**, including a copy of a
+fossil that had been corrected 40 lines away in a different file *in the pull request
+that corrected it*. Two independent filters explain all of them, and the second is the
+one that matters:
+
+- **Scope.** Only `docs/*.md`, and only inside a `##`/`###` section whose text contains a
+  registered `proof:<name>`. A section naming a **guard**, a script, a suite, or the
+  `proof:*` glob matches nothing — and `####` does not open a section, so a
+  `#### … proof:grant-safety` heading is absorbed into its parent. `CLAUDE.md` and
+  `README.md` are never read at all, which is how `CLAUDE.md`'s mandatory pre-push gate
+  came to pin a total of "66/66" against a suite of 87.
+- **Shape.** `FIGURE_RE` matches only comma-formatted values ≥ 1,000. **Every bare number
+  is invisible even inside a perfectly scoped section** — 105, 82, 66, 33, 166, 13. Fixing
+  the scope filter alone would have caught almost none of the 11.
+
+So the guard now prints both gaps as live measurements on every run — how many
+comma-figures sit outside any proof-named section, and roughly how many bare
+measurement-adjacent numbers exist at all — for the same reason the QUEUED list stayed in
+the registry check's output: partial coverage announced every run is a very different
+thing from partial coverage that looks complete. Widening either filter is tracked work,
+not a waiver. The shape filter in particular cannot simply be relaxed to "any number" —
+that sweeps in versions, dates and illustrative examples — so it needs a design pass
+rather than a one-line change.
+
+The honest summary of the whole apparatus: **these guards catch drift in the numbers they
+can see, and prose claims are not among them.** The most consequential thing the audit
+found was not a number at all — `preflight` described itself as "a COMPLETE mirror … a
+green preflight genuinely means CI will be green" while mirroring three of six CI jobs.
+No guard reads a sentence.
 
 #### One command across both repos — `pnpm run verify:all`
 

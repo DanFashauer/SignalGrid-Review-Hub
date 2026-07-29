@@ -92,7 +92,7 @@ decision inputs in the core today, and any surface that shows them must say so:
 - **RTLS / precise indoor location** — candidate.
 - The **broader integration catalog** (~149 candidate sources across ~16
   categories in the catalog taxonomy) — these are *candidate signal-source
-  categories*, distinct from the 12 categories the core normalizes today, and
+  categories*, distinct from the 13 categories the core normalizes today, and
   none is a live integration.
 - **Native app shells** (React Native / Expo, Tauri / Electron) — the current
   cross-platform delivery is responsive web + PWA; native is a documented next
@@ -106,7 +106,7 @@ The repo intentionally has two surfaces that must not be conflated:
 
 1. **Product-core lineage** — `@workspace/signalgrid-core` and the Review Hub's
    Operator Console / Worker Self-Service run the real, deterministic decision
-   loop with the 12 categories and 4 outcomes above. This is the truth.
+   loop with the 13 categories and 4 outcomes above. This is the truth.
 2. **Catalog / app-shell lineage** — the `/api/integrations` catalog (~149
    candidate sources, ~16 taxonomy categories) and the platform app shells
    (`signalgrid-app`, `-desktop`, `-mobile-pwa`) illustrate the broader vision
@@ -114,13 +114,13 @@ The repo intentionally has two surfaces that must not be conflated:
    what the core evaluates.
 
 When a surface shows "16 categories" or "~149 sources," it means the candidate
-catalog taxonomy — not the 12 categories the core evaluates. When it shows the
+catalog taxonomy — not the 13 categories the core evaluates. When it shows the
 signal dimensions a decision actually uses, it means the five evaluated-today
 dimensions above.
 
 ## How to verify
 
-- `pnpm run proof:signalgrid-core` — 166 assertions over the real core: outcomes,
+- `pnpm run proof:signalgrid-core` — 188 assertions over the real core: outcomes,
   fail-closed, tenant isolation, RBAC, tamper-evidence, determinism, the
   security-baseline dimension, the badge-binding (reader case) dimension, the
   dock/SmartDock hardware-state dimension, and untrusted-input hardening.

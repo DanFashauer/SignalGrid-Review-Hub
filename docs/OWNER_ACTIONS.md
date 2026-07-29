@@ -49,6 +49,12 @@ written and quietly stopped being true. Dispatch **Actions → Promote Tier** to
 the live gap: its "Tier state" summary measures each branch's position rather than
 restating a number that would go stale the same way.
 
+> Separately, and **not** something you need to fix: this repository does not let
+> GitHub Actions open pull requests (*Settings → Actions → General → Workflow
+> permissions*), which is GitHub's default and the safer posture. Promote Tier now
+> hands back a one-click compare link instead of failing. Turning that setting on
+> would let it open the PR for you and buys nothing else.
+
 That makes this a decision about the *pipeline*, not just a label. Pick under
 **Settings → General → Default branch**:
 

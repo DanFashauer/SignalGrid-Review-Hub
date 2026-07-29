@@ -144,17 +144,21 @@ jobs:
               core.notice(`A promotion PR ${from} → ${to} is already open: #${existing[0].number}`);
               return;
             }
-            // "Nothing to promote" is a NORMAL outcome and must read like one. All four
-            // tier branches currently point at the same commit, so every promotion this
-            // workflow can offer has an empty diff — and GitHub answers that with a 422
-            // the script did not catch, surfacing as an opaque red X with no explanation
-            // in the log. An operator cannot tell that from a broken workflow.
+            // TWO OUTCOMES THAT ARE NOT FAILURES. Both were previously uncaught, and both
+            // surfaced as an opaque red X that an operator could not tell from a broken
+            // workflow. Each is now reported as what it is, and the job stays green.
             //
-            // Matched on BOTH the structured `errors[]` and the error message: Octokit
-            // folds a validation body into `err.message`, and which of the two carries the
-            // text has changed across versions. Anything else is rethrown — an
-            // unrecognised 422 is a real failure and must stay red — but the body is
-            // logged first so the next one is diagnosable from the run alone.
+            // Anything else is rethrown — an unrecognised error is a real failure and must
+            // stay red — but the status and body are logged on one readable line first, so
+            // the next unknown case is diagnosable from the run alone instead of from a
+            // hundred lines of Octokit object dump.
+            //
+            // Matched on BOTH the structured body and the message: Octokit folds a response
+            // body into `err.message`, and which of the two carries the text has moved
+            // across versions.
+            const compare =
+              `https://github.com/${context.repo.owner}/${context.repo.repo}` +
+              `/compare/${to}...${from}?expand=1`;
             try {
               const { data: pr } = await github.rest.pulls.create({
                 owner: context.repo.owner, repo: context.repo.repo,
@@ -163,6 +167,10 @@ jobs:
               core.notice(`Opened promotion PR #${pr.number}: ${from} → ${to}`);
             } catch (err) {
               const haystack = `${err.message ?? ""} ${JSON.stringify(err.response?.data ?? {})}`;
+
+              // (1) Nothing to promote. The target already contains everything in the
+              // source, so there is no pull request to open. Normal, and common here while
+              // the tiers sit at the same commit.
               if (err.status === 422 && haystack.includes("No commits between")) {
                 core.notice(
                   `Nothing to promote: \`${to}\` already contains everything in \`${from}\` ` +
@@ -171,6 +179,41 @@ jobs:
                 );
                 return;
               }
+
+              // (2) The repository does not let Actions open pull requests.
+              //
+              // This is REPOSITORY POLICY, not a bug, and it is GitHub's default. The
+              // job-level `pull-requests: write` permission below is necessary but NOT
+              // sufficient — the "Allow GitHub Actions to create and approve pull requests"
+              // setting overrides it, and while it is off this call can never succeed.
+              //
+              // Failing red for a permanent, deliberate policy just teaches people to
+              // ignore red. So the workflow does the rest of its job instead: it hands over
+              // the exact compare link that opens the same PR in one click. That path needs
+              // no elevated permission and no stored credential, which is a better default
+              // than asking an owner to switch off a security setting for a convenience
+              // workflow. Turning the setting on is optional, and stated as optional.
+              if (err.status === 403 && haystack.includes("not permitted to create or approve pull requests")) {
+                core.notice(
+                  `Could not open the PR automatically: this repository does not allow ` +
+                  `GitHub Actions to create pull requests. Open it in one click instead: ${compare}`,
+                );
+                await core.summary
+                  .addHeading("Promotion PR not opened automatically", 3)
+                  .addRaw(
+                    `This repository has **Settings → Actions → General → Workflow permissions ` +
+                    `→ "Allow GitHub Actions to create and approve pull requests"** turned off, ` +
+                    `which is GitHub's default. The job-level \`pull-requests: write\` grant ` +
+                    `cannot override it.\n\n` +
+                    `Nothing is broken, and nothing needs changing unless you want to. ` +
+                    `**[Open the \`${from}\` → \`${to}\` pull request](${compare})** — same PR, one click.\n\n` +
+                    `Enabling that setting would let this workflow open it for you; leaving it off ` +
+                    `keeps Actions unable to author pull requests, which is the safer posture.\n`,
+                  )
+                  .write();
+                return;
+              }
+
               core.error(`pulls.create failed with ${err.status}: ${haystack}`);
               throw err;
             }

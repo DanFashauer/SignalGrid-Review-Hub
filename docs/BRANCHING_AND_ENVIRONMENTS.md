@@ -10,19 +10,29 @@ dev  ──PR──▶  alpha  ──PR──▶  beta  ──PR──▶  prod
 ```
 
 > **This is the designed model, and the repository does not currently run it.**
-> `SignalGrid_Alpha` is the default branch and the branch every merged PR lands
-> on; the four tier branches are all pinned to the `Merge PR #65` commit and have
-> not moved since. So `dev` is not fed, and because promotion only ever moves
-> commits *between tiers*, every promotion the **Promote Tier** workflow can offer
-> has an empty diff. That workflow now reports each tier's actual position in its
-> run summary rather than failing opaquely — dispatch it to see the current gap,
-> which it measures live rather than quoting a number that would go stale here.
+> Two independent things stand between the diagram and reality, and it is worth
+> keeping them apart because only one of them is a problem.
 >
-> Reconnecting the pipeline is an owner decision with three defensible answers,
-> and it is deliberately not made in code: **feed `dev`** from `SignalGrid_Alpha`
-> (keeps the model, needs the tier branches fast-forwarded); **re-point the
-> default** to `dev` so work lands at the pipeline's entry point (see
-> `docs/OWNER_ACTIONS.md` §3); or **retire the tier branches** and treat
+> **1. The tiers are not fed.** `SignalGrid_Alpha` is the default branch and the
+> branch every merged PR lands on; the four tier branches are all pinned to the
+> `Merge PR #65` commit and have not moved since. Promotion only ever moves commits
+> *between tiers*, so while `dev` itself is behind, every promotion has an empty
+> diff and nothing to carry. **Promote Tier** now reports each tier's actual
+> position in its run summary — dispatch it to see the current gap, which it
+> measures live rather than quoting a number that would go stale here.
+>
+> **2. Actions cannot open pull requests, and that is fine.** The repository has
+> *Settings → Actions → General → "Allow GitHub Actions to create and approve pull
+> requests"* off, which is GitHub's default and the safer posture. The workflow's
+> own `pull-requests: write` grant cannot override it. Rather than fail, the
+> workflow now hands back the compare link that opens the same PR in one click.
+> Enabling the setting is optional and buys only convenience.
+>
+> Reconnecting the pipeline — item 1 — is an owner decision with three defensible
+> answers, and it is deliberately not made in code: **feed `dev`** from
+> `SignalGrid_Alpha` (keeps the model, needs the tier branches fast-forwarded);
+> **re-point the default** to `dev` so work lands at the pipeline's entry point
+> (see `docs/OWNER_ACTIONS.md` §3); or **retire the tier branches** and treat
 > `SignalGrid_Alpha` plus per-environment config as the whole deployment story.
 > Until one is chosen, read the table below as intent, not as current state.
 

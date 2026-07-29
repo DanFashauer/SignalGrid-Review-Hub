@@ -132,6 +132,10 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Post-merge connector smoke evidence automation](POST_MERGE_CONNECTOR_SMOKE_EVIDENCE.md): explains the automatic Connector Emulator Smoke run and evidence manifest after merges to `SignalGrid_Alpha`.
 - [Validation commands](VALIDATION_COMMANDS.md): lists the standard install, typecheck, build, proof, unsafe-claim scan, and diff hygiene commands.
 - [CI and validation](CI_AND_VALIDATION.md): explains Review Hub CI, required local checks, docs sanity checks, and future branch-protection expectations.
+- [Product profile](PRODUCT_PROFILE.md): what a customer deployment refuses that the
+  public review deployment serves — three unauthenticated surfaces (published owner
+  bearers, an anonymous simulator that writes, an unauthenticated control plane), gated
+  behind SIGNALGRID_PRODUCT_PROFILE=shared-device-gateway. Additive: unset changes nothing.
 - [The Mac lane](MAC_LANE.md): what a cloud macOS runner can prove and what only the
   owner's real Mac can — the full 87-gate suite now runs on `macos-latest` (dispatch +
   weekly) as a REHEARSAL, while live evidence stays mintable only off CI. Closes a hole

@@ -1,335 +1,142 @@
-import type { 
-  UEMAdapter, 
-  UEMDeviceState, 
-  UEMTagRequest, 
-  UEMQuarantineRequest, 
-  UEMCommandResponse 
-} from '../adapters/types';
-import { fetchWithTimeout, TIMEOUT_PRESETS } from '../../utils/fetchWithTimeout';
+// Omnissa Workspace ONE UEM → normalized UEM device state. READ-ONLY and PURE.
+//
+// WHAT WAS REMOVED. Tag writes, quarantine/unquarantine and a generic command
+// sender, all ungated. Same reasoning as jamf.ts and intune.ts.
+//
+// WIRE FORMAT, corrected against the published Workspace ONE UEM 2604 API
+// specification. The previous implementation had eight defects that would each have
+// produced a 404 or a silently wrong field. They are recorded here because the
+// fixes are invisible otherwise, and because the ORDER mattered: they were left in
+// place until this connector had a gate and a proof, since correcting them first
+// would have converted "visibly wrong" into "plausibly wrong but still untested".
+//
+//   1. base path was `/api/v1/mdm` — the spec's `basePath` is `/api/mdm`
+//   2. `searchBy` query parameter — the spec spells it lowercase `searchby`
+//   3. `data.Devices[0]` off `GET /devices` — that endpoint returns a SINGLE
+//      `Device` object; the `{ Devices: [...] }` wrapper belongs to `/devices/search`
+//   4. `DeviceUUID` does not exist — the canonical fields are `Uuid` and `Udid`
+//   5. `OSVersion` does not exist — it is `OperatingSystem`
+//   6. `DeviceGroups` does not exist — the organisation group is `LocationGroupName`
+//   7. tenant header was `aw-tenant-identifier` — the spec's header is `aw-tenant-code`
+//   8. the commands endpoint takes `command` as a required QUERY parameter, not a
+//      `{commandType}` body — moot here, since the command path is deleted entirely
+//
+// These are release-independent: the specification is byte-identical across all six
+// published releases, so nothing here is pinned to 2604 and there is no version to
+// go stale.
+
+import type {
+  NormalizedUemDeviceState,
+  UemCompliance,
+  UemEnrollment,
+  UemSupervision,
+} from "./types";
+
+/** Canonical Workspace ONE `Device` fields this reads. All optional by design. */
+export interface WorkspaceOneDevicePayload {
+  readonly Uuid?: unknown;
+  readonly Udid?: unknown;
+  readonly EnrollmentStatus?: unknown;
+  readonly ComplianceStatus?: unknown;
+  readonly IsSupervised?: unknown;
+  readonly OperatingSystem?: unknown;
+  readonly LocationGroupName?: unknown;
+}
+
+const asString = (v: unknown): string | null =>
+  typeof v === "string" && v.trim() !== "" ? v.trim() : null;
 
 /**
- * Omnissa Workspace ONE UEM (formerly VMware Workspace ONE UEM) Adapter Configuration
- * 
- * Uses the Workspace ONE UEM REST API
+ * Workspace ONE `EnrollmentStatus`.
+ *
+ * The wipe/unenrol-pending states are teardown, so they map to `retired` for the
+ * same reason Intune's do: management is ending and the posture it reports is about
+ * to stop being maintained. `Discovered` and `Registered` are seen-but-not-managed.
+ * Anything unrecognised is `unknown`, never a pass.
  */
-export interface WorkspaceONEConfig {
-  /** Workspace ONE UEM API base URL */
-  baseUrl: string;
-  /** API Client ID */
-  clientId: string;
-  /** API Client Secret */
-  clientSecret: string;
-  /** Tenant ID (API Key) */
-  tenantId: string;
-  /** Group ID (organization group) */
-  groupId?: string;
-  /** Timeout for requests in ms */
-  timeout?: number;
+function enrollmentFrom(raw: unknown): UemEnrollment {
+  switch (asString(raw)?.toLowerCase()) {
+    case "enrolled":
+      return "enrolled";
+    case "unenrolled":
+    case "discovered":
+    case "registered":
+      return "not_enrolled";
+    case "enterprisewipepending":
+    case "devicewipepending":
+    case "unenrollmentpending":
+      return "retired";
+    default:
+      return "unknown";
+  }
 }
 
 /**
- * Workspace ONE UEM Adapter
- * 
- * Manages devices via Workspace ONE UEM REST API
+ * Workspace ONE `ComplianceStatus`.
+ *
+ * `NotAvailable` means no compliance policy result exists for the device — an
+ * absence of evidence, mapped to `not_evaluated` rather than to a pass. This is the
+ * same distinction the Jamf normalizer now makes explicit.
  */
-export class WorkspaceONEAdapter implements UEMAdapter {
-  readonly name = 'workspace_one';
-  readonly vendor = 'Omnissa';
-  readonly config: Required<WorkspaceONEConfig>;
-
-  private accessToken: string | null = null;
-  private tokenExpiry: number = 0;
-
-  constructor(config: WorkspaceONEConfig) {
-    this.config = {
-      baseUrl: config.baseUrl.replace(/\/$/, ''),
-      clientId: config.clientId,
-      clientSecret: config.clientSecret,
-      tenantId: config.tenantId,
-      groupId: config.groupId || '',
-      timeout: config.timeout || 30000,
-    };
-  }
-
-  /**
-   * Get device state from Workspace ONE
-   */
-  async getDeviceState(deviceId: string): Promise<UEMDeviceState | null> {
-    await this.ensureAuthenticated();
-
-    // Search by device UUID or serial number
-    const url = `${this.config.baseUrl}/api/v1/mdm/devices?searchBy=${deviceId}&id=${deviceId}`;
-
-    const response = await fetchWithTimeout(url, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${this.config.tenantId}:${this.accessToken}`,
-        'Accept': 'application/json',
-        'aw-tenant-identifier': this.config.tenantId,
-      },
-      timeoutMs: TIMEOUT_PRESETS.normal,
-    });
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        return null;
-      }
-      const error = await response.text();
-      throw new Error(`Workspace ONE API error: ${response.status} - ${error}`);
-    }
-
-    const data = await response.json() as {
-      Devices?: Array<{
-        DeviceUUID: string;
-        SerialNumber: string;
-        DeviceName: string;
-        Platform: string;
-        OSVersion: string;
-        LastSeen: string;
-        EnrollmentStatus: string;
-        ComplianceStatus: string;
-        DeviceGroups?: Array<{ Name: string }>;
-      }>;
-    };
-
-    if (!data.Devices || data.Devices.length === 0) {
-      return null;
-    }
-
-    const device = data.Devices[0];
-
-    return {
-      deviceId: device.DeviceUUID,
-      enrolled: device.EnrollmentStatus === 'Enrolled',
-      compliant: device.ComplianceStatus === 'Compliant',
-      osVersion: device.OSVersion,
-      platform: device.Platform,
-      lastSync: device.LastSeen,
-      tags: device.DeviceGroups?.map(g => g.Name) || [],
-      quarantineStatus: 'none',
-    };
-  }
-
-  /**
-   * Set a tag on a device (via smart group or custom attribute)
-   */
-  async setTag(request: UEMTagRequest): Promise<{ success: boolean }> {
-    await this.ensureAuthenticated();
-
-    // Use custom attribute to set tag
-    const url = `${this.config.baseUrl}/api/v1/mdm/devices/${request.deviceId}/customattribute`;
-
-    const attribute = {
-      name: 'EnterpriseShellTag',
-      value: request.tag,
-    };
-
-    const response = await fetchWithTimeout(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.config.tenantId}:${this.accessToken}`,
-        'Content-Type': 'application/json',
-        'aw-tenant-identifier': this.config.tenantId,
-      },
-      body: JSON.stringify(attribute),
-      timeoutMs: TIMEOUT_PRESETS.normal,
-    });
-
-    return { success: response.ok };
-  }
-
-  /**
-   * Remove a tag from a device
-   */
-  async removeTag(request: UEMTagRequest): Promise<{ success: boolean }> {
-    await this.ensureAuthenticated();
-
-    // Delete custom attribute
-    const url = `${this.config.baseUrl}/api/v1/mdm/devices/${request.deviceId}/customattribute/EnterpriseShellTag`;
-
-    const response = await fetchWithTimeout(url, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${this.config.tenantId}:${this.accessToken}`,
-        'aw-tenant-identifier': this.config.tenantId,
-      },
-      timeoutMs: TIMEOUT_PRESETS.normal,
-    });
-
-    return { success: response.ok || response.status === 404 };
-  }
-
-  /**
-   * Quarantine a device
-   */
-  async quarantine(request: UEMQuarantineRequest): Promise<UEMCommandResponse> {
-    await this.ensureAuthenticated();
-
-    // Use device commands API to quarantine
-    const url = `${this.config.baseUrl}/api/v1/mdm/devices/${request.deviceId}/commands`;
-
-    const command = {
-      commandType: 'DEVICE_LOCK',
-      commandId: 'quarantine',
-    };
-
-    const response = await fetchWithTimeout(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.config.tenantId}:${this.accessToken}`,
-        'Content-Type': 'application/json',
-        'aw-tenant-identifier': this.config.tenantId,
-      },
-      body: JSON.stringify(command),
-      timeoutMs: TIMEOUT_PRESETS.normal,
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Workspace ONE quarantine error: ${response.status} - ${error}`);
-    }
-
-    return {
-      commandId: `quarantine-${request.deviceId}-${Date.now()}`,
-      status: 'sent',
-      message: 'Device lock command sent',
-    };
-  }
-
-  /**
-   * Clear quarantine (unlock device)
-   */
-  async clearQuarantine(deviceId: string, reason?: string): Promise<UEMCommandResponse> {
-    await this.ensureAuthenticated();
-
-    // Send unlock command
-    const url = `${this.config.baseUrl}/api/v1/mdm/devices/${deviceId}/commands`;
-
-    const command = {
-      commandType: 'UNLOCK',
-      commandId: 'unquarantine',
-    };
-
-    const response = await fetchWithTimeout(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.config.tenantId}:${this.accessToken}`,
-        'Content-Type': 'application/json',
-        'aw-tenant-identifier': this.config.tenantId,
-      },
-      body: JSON.stringify(command),
-      timeoutMs: TIMEOUT_PRESETS.normal,
-    });
-
-    if (!response.ok) {
-      return {
-        commandId: `unquarantine-${deviceId}-${Date.now()}`,
-        status: 'failed',
-        message: 'Failed to send unlock command',
-      };
-    }
-
-    return {
-      commandId: `unquarantine-${deviceId}-${Date.now()}`,
-      status: 'sent',
-      message: 'Unlock command sent',
-    };
-  }
-
-  /**
-   * Sync device (trigger check-in)
-   */
-  async syncDevice(deviceId: string): Promise<UEMCommandResponse> {
-    await this.ensureAuthenticated();
-
-    // Send ping command to trigger check-in
-    const url = `${this.config.baseUrl}/api/v1/mdm/devices/${deviceId}/commands`;
-
-    const command = {
-      commandType: 'PING',
-      commandId: 'sync',
-    };
-
-    const response = await fetchWithTimeout(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.config.tenantId}:${this.accessToken}`,
-        'Content-Type': 'application/json',
-        'aw-tenant-identifier': this.config.tenantId,
-      },
-      body: JSON.stringify(command),
-      timeoutMs: TIMEOUT_PRESETS.normal,
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Workspace ONE sync error: ${response.status} - ${error}`);
-    }
-
-    return {
-      commandId: `sync-${deviceId}-${Date.now()}`,
-      status: 'sent',
-      message: 'Ping command sent to device',
-    };
-  }
-
-  /**
-   * Health check - verify Workspace ONE connectivity
-   */
-  async healthCheck(): Promise<boolean> {
-    try {
-      await this.ensureAuthenticated();
-      
-      const url = `${this.config.baseUrl}/api/v1/mdm/devices?page=1&pageSize=1`;
-      const response = await fetchWithTimeout(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${this.config.tenantId}:${this.accessToken}`,
-          'aw-tenant-identifier': this.config.tenantId,
-        },
-        timeoutMs: TIMEOUT_PRESETS.short,
-      });
-      
-      return response.ok;
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * Ensure we have a valid access token
-   */
-  private async ensureAuthenticated(): Promise<void> {
-    if (this.accessToken && Date.now() < this.tokenExpiry) {
-      return;
-    }
-
-    const tokenUrl = `${this.config.baseUrl}/api/v1/oauth/token`;
-
-    const params = new URLSearchParams({
-      grant_type: 'client_credentials',
-      client_id: this.config.clientId,
-      client_secret: this.config.clientSecret,
-    });
-
-    const response = await fetchWithTimeout(tokenUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'aw-tenant-identifier': this.config.tenantId,
-      },
-      body: params.toString(),
-      timeoutMs: TIMEOUT_PRESETS.normal,
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Workspace ONE OAuth error: ${response.status} - ${error}`);
-    }
-
-    const data = await response.json() as { access_token: string; expires_in: number };
-    
-    this.accessToken = data.access_token;
-    this.tokenExpiry = Date.now() + (data.expires_in * 1000) - 60000;
+function complianceFrom(raw: unknown): UemCompliance {
+  switch (asString(raw)?.toLowerCase()) {
+    case "compliant":
+      return "compliant";
+    case "noncompliant":
+    case "non-compliant":
+      return "non_compliant";
+    case "notavailable":
+      return "not_evaluated";
+    default:
+      return "unknown";
   }
 }
+
+export function normalizeWorkspaceOneDevice(
+  raw: WorkspaceOneDevicePayload,
+): NormalizedUemDeviceState {
+  // `Uuid` preferred, `Udid` as the documented fallback — both are canonical, and
+  // the field the old code read (`DeviceUUID`) is neither.
+  const deviceId = asString(raw?.Uuid) ?? asString(raw?.Udid);
+  if (deviceId === null) {
+    return {
+      deviceId: "",
+      vendor: "workspace-one",
+      enrollment: "unknown",
+      compliance: "unknown",
+      supervision: "unknown",
+      osVersion: null,
+      lastCheckInAgeSeconds: null,
+      reportIntegrity: "malformed",
+    };
+  }
+
+  const supervised = typeof raw.IsSupervised === "boolean" ? raw.IsSupervised : null;
+  const supervision: UemSupervision =
+    supervised === true ? "supervised" : supervised === false ? "unsupervised" : "unknown";
+
+  return {
+    deviceId,
+    vendor: "workspace-one",
+    enrollment: enrollmentFrom(raw.EnrollmentStatus),
+    compliance: complianceFrom(raw.ComplianceStatus),
+    supervision,
+    osVersion: asString(raw.OperatingSystem),
+    lastCheckInAgeSeconds: null,
+    reportIntegrity: "intact",
+  };
+}
+
+/** Canonical request shape for a read, exported so the gate and any future live
+ *  transport share ONE definition of the corrected wire format rather than each
+ *  re-deriving it. No function here performs a request. */
+export const WORKSPACE_ONE_READ_CONTRACT = {
+  basePath: "/api/mdm",
+  deviceByIdPath: "/devices",
+  deviceSearchPath: "/devices/search",
+  /** lowercase, per the specification */
+  searchByParam: "searchby",
+  tenantHeader: "aw-tenant-code",
+  /** `/devices` returns a single Device; only `/devices/search` wraps in `Devices`. */
+  searchResponseArrayKey: "Devices",
+} as const;

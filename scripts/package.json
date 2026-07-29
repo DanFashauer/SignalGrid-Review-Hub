@@ -80,6 +80,7 @@
     "proof:app-update": "tsx ./src/app-update-proof.ts",
     "proof:platform-sso": "tsx ./src/platform-sso-proof.ts",
     "proof:passkey-assurance": "tsx ./src/passkey-assurance-proof.ts",
+    "proof:isolation-scope": "tsx ./src/isolation-scope-proof.ts",
     "proof:policy-binding": "tsx ./src/policy-binding-proof.ts",
     "proof:device-management-health": "tsx ./src/device-management-health-proof.ts",
     "proof:link-usability": "tsx ./src/link-usability-proof.ts",

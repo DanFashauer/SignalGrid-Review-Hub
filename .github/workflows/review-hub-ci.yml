@@ -123,6 +123,8 @@ jobs:
         run: pnpm run proof:entitlement-binding
       - name: "Proof: response-accountability (watermelon detection)"
         run: pnpm run proof:response-accountability
+      - name: "Proof: device-resolver (read-only injection boundary)"
+        run: pnpm run proof:device-resolver
       - name: "Proof: provisioning-order (zero-touch step order)"
         run: pnpm run proof:provisioning-order
       - name: "Proof: nac (read-only endpoint identity, gated, no actuators)"

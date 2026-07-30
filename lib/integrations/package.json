@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./adapters/types": "./src/integrations/adapters/types.ts",
     "./graph": "./src/integrations/graph/index.ts",
     "./carrier": "./src/integrations/carrier/index.ts",
     "./location-services": "./src/integrations/location-services/index.ts",

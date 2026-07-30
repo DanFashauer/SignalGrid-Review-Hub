@@ -453,6 +453,17 @@ proof reports — the numbers below are therefore evidence, not claims.
 - **`proof:entitlement-binding` (57 checks)** — whether a grant is *reviewable*, not
   merely correct. Includes a **1,200-state sweep** with the clean path pinned to
   *exactly 18*, plus coherence checks that reject a report contradicting itself.
+- **`proof:device-resolver` (14 checks)** — the injection boundary. `deviceResolver`
+  typed its NAC adapter map as `any`, so the read-only `NACAdapter` interface was not
+  enforced at the one call site that consumes it. TypeScript alone cannot close this:
+  structural typing means an object carrying `lookupEndpoint` **and**
+  `quarantineEndpoint` satisfies the interface, and excess-property checking never
+  applies to a value arriving through a variable. So an adapter exposing any
+  device-action method is now REFUSED at runtime, at injection, through both the
+  constructor and `addNACAdapter` — a check only one of two entry points performs is a
+  check with a door beside it. Source faults are reported rather than swallowed: a
+  bare `catch { return null }` made an unreachable UEM indistinguishable from "no such
+  device".
 - **`proof:network-nac` (37 checks)** — 802.1X / NAC access posture, read-only. The
   device's network SEGMENT is now evaluated against an operator-supplied policy rather
   than merely carried: an unexpected VLAN steps up, a segment the operator marked

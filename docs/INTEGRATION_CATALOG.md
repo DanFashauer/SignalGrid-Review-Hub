@@ -446,10 +446,16 @@ proof reports — the numbers below are therefore evidence, not claims.
   and a source scan asserting no vendor-API call. `personal` ownership on an
   unsupervised device grades `monitor`, not a grant: vendors report personal ownership
   as a residual bucket rather than a positive confirmation.
-- **`proof:nac` (27 checks)** — Cisco ISE and Aruba ClearPass endpoint identity,
+- **`proof:nac` (32 checks)** — Cisco ISE and Aruba ClearPass endpoint identity,
   read-only. Hostile-identifier cases are asserted against the **filter builder**, not
   merely the validator, and fixture lookups are scoped to the identifier kind so a
-  certificate query cannot be answered by a MAC match.
+  certificate query cannot be answered by a MAC match. The normalizers now take **no
+  identifier at all**: `normalizeIseEndpoint` once received the caller's query and wrote
+  it into the returned record's identity fields — reporting "ISE says this endpoint's
+  MAC is X" when ISE had said no such thing. That was fixed by review and then covered
+  by *nothing*: reverting the fix left this proof passing at the identical count. The
+  dead parameters are removed so the echo is unrepresentable rather than merely absent,
+  and the reads-from-the-response property is now asserted for both vendors.
 - **`proof:entitlement-binding` (57 checks)** — whether a grant is *reviewable*, not
   merely correct. Includes a **1,200-state sweep** with the clean path pinned to
   *exactly 18*, plus coherence checks that reject a report contradicting itself.

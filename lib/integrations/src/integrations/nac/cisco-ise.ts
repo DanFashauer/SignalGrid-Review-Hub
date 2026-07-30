@@ -63,8 +63,6 @@ export function iseFilterFor(identifier: unknown, type: NacIdentifierType): stri
  */
 export function normalizeIseEndpoint(
   raw: IseEndpointSearchPayload,
-  identifier: unknown,
-  type: NacIdentifierType,
 ): NACEndpointInfo | null {
   const first = raw?.SearchResult?.resources?.[0];
   const endpointId = asString(first?.id);
@@ -92,6 +90,14 @@ export function normalizeIseEndpoint(
   // ISE's endpoint search returns `mac` on the resource, so that one is READ. It
   // reports neither a device serial nor a certificate subject, so those are simply
   // ABSENT — an omitted field is honest, an echoed one is not.
+  //
+  // THE QUERY PARAMETERS ARE GONE FROM THE SIGNATURE, not merely unused. Removing the
+  // fabrication left `identifier` and `type` sitting in the parameter list, ignored by
+  // the body and dutifully passed by every caller — the exact ingredients of the defect,
+  // kept within reach. With `noUnusedParameters` off, nothing flagged them. A function
+  // that cannot see the caller's query cannot echo it back, so the defect is now
+  // unrepresentable rather than merely absent. Same reasoning as the missing cycle
+  // detector in `provisioning-order`: prefer a shape that cannot express the bug.
   return {
     endpointId,
     macAddress: asString(first.mac),

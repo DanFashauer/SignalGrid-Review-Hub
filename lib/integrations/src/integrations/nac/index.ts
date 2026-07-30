@@ -86,15 +86,18 @@ export function nacFilterFor(
   return vendor === "ise" ? iseFilterFor(identifier, type) : clearPassFilterFor(identifier, type);
 }
 
-/** Normalize a raw vendor endpoint payload. Vendor is supplied, never sniffed. */
-export function normalizeNacEndpoint(
-  vendor: NacVendor,
-  raw: unknown,
-  identifier: unknown,
-  type: NacIdentifierType,
-): NACEndpointInfo | null {
+/**
+ * Normalize a raw vendor endpoint payload. Vendor is supplied, never sniffed.
+ *
+ * TAKES NO IDENTIFIER. It used to accept the caller's `identifier` and `type` and hand
+ * them to the ISE normalizer, which wrote them into the returned record's identity
+ * fields — echoing the question back as the vendor's answer. ClearPass never used them
+ * and ISE no longer does, so the parameters are removed rather than left dead: a
+ * normalizer that cannot see the query cannot fabricate from it.
+ */
+export function normalizeNacEndpoint(vendor: NacVendor, raw: unknown): NACEndpointInfo | null {
   return vendor === "ise"
-    ? normalizeIseEndpoint((raw ?? {}) as Parameters<typeof normalizeIseEndpoint>[0], identifier, type)
+    ? normalizeIseEndpoint((raw ?? {}) as Parameters<typeof normalizeIseEndpoint>[0])
     : normalizeClearPassEndpoint((raw ?? {}) as Parameters<typeof normalizeClearPassEndpoint>[0]);
 }
 

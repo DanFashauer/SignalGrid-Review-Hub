@@ -105,9 +105,42 @@ check("serial and cert kinds validate independently",
 
 // ── 3. No unearned status ────────────────────────────────────────────────────
 check("ISE endpoint search does NOT claim an auth state it cannot read",
-  normalizeIseEndpoint({ SearchResult: { resources: [{ id: "1", name: "n" }] } }, "aa:bb:cc:dd:ee:01", "mac")?.status === "unknown");
+  normalizeIseEndpoint({ SearchResult: { resources: [{ id: "1", name: "n" }] } })?.status === "unknown");
 check("an empty ISE result is null (no such endpoint), not a fabricated record",
-  normalizeIseEndpoint({ SearchResult: { resources: [] } }, "aa:bb:cc:dd:ee:01", "mac") === null);
+  normalizeIseEndpoint({ SearchResult: { resources: [] } }) === null);
+
+// ── IDENTITY COMES FROM THE RESPONSE ─────────────────────────────────────────
+//
+// THESE ASSERTIONS DID NOT EXIST until an audit went looking for them. The fabrication
+// defect in `normalizeIseEndpoint` — writing the CALLER'S query into the record's
+// identity fields, so it reported "ISE says this endpoint's MAC is X" when ISE had said
+// no such thing — was found by review, fixed, and then covered by nothing. Reverting
+// the fix would have left `proof:nac` passing at exactly the same count. A fix whose
+// proof cannot tell whether it is present is a green gate over an unchecked claim,
+// which is the failure mode this whole PR is about.
+//
+// The parameters are now gone from the signature, so the echo is unrepresentable rather
+// than merely untested. What remains testable — and is tested here — is that the fields
+// are genuinely READ from the payload, which is the non-vacuity half: a normalizer that
+// returned `undefined` for every identity field would also never fabricate, and would
+// also be useless.
+check("ISE reads macAddress FROM THE RESPONSE, not from the caller's query",
+  normalizeIseEndpoint({ SearchResult: { resources: [{ id: "1", mac: "de:ad:be:ef:00:01" }] } })?.macAddress
+    === "de:ad:be:ef:00:01");
+check("...and when ISE reports no mac, the field is ABSENT rather than back-filled",
+  normalizeIseEndpoint({ SearchResult: { resources: [{ id: "1", name: "n" }] } })?.macAddress === undefined);
+check("...and ISE never invents a serial or a cert subject — it reports neither",
+  (() => {
+    const r = normalizeIseEndpoint({ SearchResult: { resources: [{ id: "1", mac: "de:ad:be:ef:00:01" }] } });
+    return r?.serialNumber === undefined && r?.certSubject === undefined;
+  })());
+check("ClearPass reads macAddress and serialNumber FROM THE RESPONSE too",
+  (() => {
+    const r = normalizeClearPassEndpoint({
+      _embedded: { items: [{ id: 9, mac_address: "de:ad:be:ef:00:02", device_id: "SN-9", status: "Known" }] },
+    });
+    return r?.macAddress === "de:ad:be:ef:00:02" && r?.serialNumber === "SN-9";
+  })());
 check("ClearPass status mapping is preserved for known values",
   clearPassStatus("Authenticated") === "authenticated" && clearPassStatus("Disconnected") === "disconnected" && clearPassStatus("Known") === "registered");
 check("an unrecognised ClearPass status falls to unknown, never something more confident",
@@ -117,8 +150,13 @@ check("a ClearPass payload with no items is null",
 check("a numeric ClearPass id normalizes to a string id",
   normalizeClearPassEndpoint({ _embedded: { items: [{ id: 77, status: "Known" }] } })?.endpointId === "77");
 check("normalization is deterministic",
-  JSON.stringify(normalizeNacEndpoint("clearpass", { _embedded: { items: [{ id: 1, status: "Known" }] } }, "aa:bb:cc:dd:ee:01", "mac")) ===
-  JSON.stringify(normalizeNacEndpoint("clearpass", { _embedded: { items: [{ id: 1, status: "Known" }] } }, "aa:bb:cc:dd:ee:01", "mac")));
+  JSON.stringify(normalizeNacEndpoint("clearpass", { _embedded: { items: [{ id: 1, status: "Known" }] } })) ===
+  JSON.stringify(normalizeNacEndpoint("clearpass", { _embedded: { items: [{ id: 1, status: "Known" }] } })));
+// The dispatcher's arity is itself the guarantee: with no identifier parameter there is
+// no query for a normalizer to echo. Asserted so that re-adding one is a failing change
+// rather than a silent widening of the surface.
+check("normalizeNacEndpoint takes NO identifier — the echo is unrepresentable, not merely unused",
+  normalizeNacEndpoint.length === 2 && normalizeIseEndpoint.length === 1);
 check("no fixture carries a wall-clock timestamp",
   Object.values(NAC_FIXTURES).every((f) => f.lastSeen === undefined));
 

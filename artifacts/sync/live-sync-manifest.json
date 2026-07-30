@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 29,
-  "fingerprint": "983258bf838e15833fef2d1bdfb25d250733e020a4ef6bf64428069e88fd7785",
+  "manifestVersion": 30,
+  "fingerprint": "84b963de034e8523fa7e4747fb42fc4943f82357658b2ed60416d809453ef653",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -102,7 +102,7 @@
       "link-usability": 154,
       "live-idp": 31,
       "macos-apple-schema": 53,
-      "nac": 27,
+      "nac": 32,
       "network-nac": 37,
       "oauth-consent": 65,
       "ot-posture": 37,

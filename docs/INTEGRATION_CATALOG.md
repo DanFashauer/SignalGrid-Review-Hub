@@ -432,3 +432,32 @@ in one place.
 SignalGrid DockBridge is a future dock/edge integration strategy for shared-device physical events. The first proof should be software-only: a simulated `POST /api/dock/events` contract and demo flow that turns dock state into SignalGrid runtime decisions and audit records (the implemented path is now `POST /api/v1/connectors/{id}/sync`). Real dock hardware, MFi work, or vendor-specific adapters should come later only if the simulated workflow validates customer value.
 
 DockBridge should reduce workstation-centered orchestration where possible, but it should not be claimed as a replacement for Apple Configurator, MDM/UEM, Imprivata GroundControl, or platform-managed device operations.
+
+## Endpoint-management, NAC, entitlement and provisioning proofs
+
+These four proofs cover the families brought under connector discipline most
+recently. Their documented counts are enforced by `pnpm run check:proof-counts`,
+which runs each proof and fails the build when a number here disagrees with what the
+proof reports — the numbers below are therefore evidence, not claims.
+
+- **`proof:uem` (50 checks)** — the read-only MDM/UEM dimension across Intune, Jamf
+  and Workspace ONE. Includes a **1,440-state exhaustive sweep** whose grant path is
+  pinned to *exactly 9* fully-confirmed states, four isolated live-call-gate refusals,
+  and a source scan asserting no vendor-API call. `personal` ownership on an
+  unsupervised device grades `monitor`, not a grant: vendors report personal ownership
+  as a residual bucket rather than a positive confirmation.
+- **`proof:nac` (27 checks)** — Cisco ISE and Aruba ClearPass endpoint identity,
+  read-only. Hostile-identifier cases are asserted against the **filter builder**, not
+  merely the validator, and fixture lookups are scoped to the identifier kind so a
+  certificate query cannot be answered by a MAC match.
+- **`proof:entitlement-binding` (57 checks)** — whether a grant is *reviewable*, not
+  merely correct. Includes a **1,200-state sweep** with the clean path pinned to
+  *exactly 18*, plus coherence checks that reject a report contradicting itself.
+- **`proof:provisioning-order` (34 checks)** — zero-touch step ordering, with four
+  vendor reference pipelines (Windows Autopilot + Intune, Apple ABM/ADE, Android
+  Zero-Touch, Jamf PreStage) expressed in one neutral model and asserted to validate.
+
+SignalGrid performs none of this itself: it reads evaluated state and decides. Zero-touch
+provisioning requires the vendor's own enrollment program on organisation-registered
+hardware, and no application can grant itself that. These are read-only, fixture-backed
+dimensions — not live integrations, and not a compliance or certification claim.

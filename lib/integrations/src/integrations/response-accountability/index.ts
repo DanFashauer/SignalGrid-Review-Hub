@@ -13,7 +13,7 @@ import { evaluateResponse } from "./evaluate";
 import type { NormalizedResponseRecord, ResponseVerdict } from "./types";
 
 export * from "./types";
-export { evaluateResponse, deriveAcknowledgement } from "./evaluate";
+export { evaluateResponse, deriveAcknowledgement, deriveResolutionTimeliness } from "./evaluate";
 
 /** A read transport for a response system (ITSM, on-call, incident tracker).
  *  Deliberately NOT implemented in this repository. */
@@ -104,6 +104,8 @@ export const RESPONSE_FIXTURES: Readonly<Record<string, NormalizedResponseRecord
     underlyingConcernStillPresent: false,
     acknowledgedAfterSeconds: 120,
     acknowledgementTargetSeconds: 300,
+    elapsedSinceRaisedSeconds: 3600,
+    resolutionTargetSeconds: 14400,
     reportIntegrity: "intact",
   },
   /** THE WATERMELON. Every process metric green — owned, acknowledged in two minutes
@@ -118,6 +120,8 @@ export const RESPONSE_FIXTURES: Readonly<Record<string, NormalizedResponseRecord
     underlyingConcernStillPresent: true,
     acknowledgedAfterSeconds: 120,
     acknowledgementTargetSeconds: 300,
+    elapsedSinceRaisedSeconds: 3600,
+    resolutionTargetSeconds: 14400,
     reportIntegrity: "intact",
   },
   /** Closed as resolved, nobody re-checked. How a watermelon survives unseen. */
@@ -130,6 +134,8 @@ export const RESPONSE_FIXTURES: Readonly<Record<string, NormalizedResponseRecord
     underlyingConcernStillPresent: null,
     acknowledgedAfterSeconds: 60,
     acknowledgementTargetSeconds: 300,
+    elapsedSinceRaisedSeconds: 3600,
+    resolutionTargetSeconds: 14400,
     reportIntegrity: "intact",
   },
   /** Raised, and nobody owns it. */
@@ -142,6 +148,8 @@ export const RESPONSE_FIXTURES: Readonly<Record<string, NormalizedResponseRecord
     underlyingConcernStillPresent: true,
     acknowledgedAfterSeconds: null,
     acknowledgementTargetSeconds: 300,
+    elapsedSinceRaisedSeconds: 86400,
+    resolutionTargetSeconds: 14400,
     reportIntegrity: "intact",
   },
   /** Picked up, but outside the window. A slow team, not an absent one. */
@@ -154,6 +162,8 @@ export const RESPONSE_FIXTURES: Readonly<Record<string, NormalizedResponseRecord
     underlyingConcernStillPresent: true,
     acknowledgedAfterSeconds: 1800,
     acknowledgementTargetSeconds: 300,
+    elapsedSinceRaisedSeconds: 3600,
+    resolutionTargetSeconds: 14400,
     reportIntegrity: "intact",
   },
   /** Open, owned, inside the process. Not a finding. */
@@ -166,6 +176,40 @@ export const RESPONSE_FIXTURES: Readonly<Record<string, NormalizedResponseRecord
     underlyingConcernStillPresent: true,
     acknowledgedAfterSeconds: 30,
     acknowledgementTargetSeconds: 300,
+    elapsedSinceRaisedSeconds: 3600,
+    resolutionTargetSeconds: 14400,
+    reportIntegrity: "intact",
+  },
+  /** Closed, honestly, and past the operator's committed resolution target. The ITSM
+   *  "SLA achievement" / "time to restore" miss: a SLOW fix, not a false one — which is
+   *  why it sits at `monitor` and nowhere near the watermelon's `alert`. */
+  "resolution-target-missed": {
+    concernRef: "concern-7",
+    owningTeam: "endpoint-team",
+    owner: "assigned",
+    acknowledgement: "acknowledged_within_target",
+    resolution: "resolved",
+    underlyingConcernStillPresent: false,
+    acknowledgedAfterSeconds: 120,
+    acknowledgementTargetSeconds: 300,
+    elapsedSinceRaisedSeconds: 172800,
+    resolutionTargetSeconds: 14400,
+    reportIntegrity: "intact",
+  },
+  /** Still open, well past the same target: the concern is aging in a queue. Identical
+   *  fields to the record above bar the resolution claim — which is the whole argument
+   *  for one elapsed field rather than two. */
+  "backlog-aged": {
+    concernRef: "concern-8",
+    owningTeam: "service-desk",
+    owner: "assigned",
+    acknowledgement: "acknowledged_within_target",
+    resolution: "open",
+    underlyingConcernStillPresent: true,
+    acknowledgedAfterSeconds: 120,
+    acknowledgementTargetSeconds: 300,
+    elapsedSinceRaisedSeconds: 172800,
+    resolutionTargetSeconds: 14400,
     reportIntegrity: "intact",
   },
   unreadable: {
@@ -177,6 +221,8 @@ export const RESPONSE_FIXTURES: Readonly<Record<string, NormalizedResponseRecord
     underlyingConcernStillPresent: null,
     acknowledgedAfterSeconds: null,
     acknowledgementTargetSeconds: null,
+    elapsedSinceRaisedSeconds: null,
+    resolutionTargetSeconds: null,
     reportIntegrity: "malformed",
   },
 });

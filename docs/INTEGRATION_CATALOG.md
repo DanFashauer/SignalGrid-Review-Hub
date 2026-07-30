@@ -494,7 +494,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   `AUTHENTICATED_SEGMENT_UNVERIFIED` rather than claiming a trusted segment it never
   checked. Matching is trimmed and case-insensitive, because the same VLAN arrives
   spelled differently from NAC, RADIUS and switch inventories.
-- **`proof:response-accountability` (56 checks)** — the ITSM "watermelon": green
+- **`proof:response-accountability` (69 checks)** — the ITSM "watermelon": green
   outside, red inside. A concern reported RESOLVED while the underlying state still
   shows it present is the finding, and it is asserted to outrank every green process
   metric on the same record — because a watermelon is green on every other axis by
@@ -540,6 +540,29 @@ proof reports — the numbers below are therefore evidence, not claims.
   *timely*, and that word must not land on a record nobody measured. Sweep 576 → **720**
   states (a fifth acknowledgement value); watermelons 24 → **30**, the detector's reach
   growing with the space rather than shrinking; clean still **5**.
+
+  **Resolution timing — the only three ITSM KPIs this dimension can carry honestly.**
+  From a 19-KPI service-management set, 11 were already covered elsewhere in the repo and
+  5 are out of scope (rates, means and trends over a ticket corpus the fabric does not
+  hold, which would need a wall clock a decision path must not read). The residual three
+  — SLA achievement, mean time to restore, and backlog aging — collapse to **one**
+  caller-supplied `elapsedSinceRaisedSeconds` graded against one caller-supplied
+  `resolutionTargetSeconds`. One field, two readings, chosen by `resolution`: closed, it
+  is time-to-close; open, it is the concern's current age. They are the same clock read
+  at different moments, so two fields would invite a record that disagrees with itself.
+  A breach reports `RESOLUTION_TARGET_MISSED` when closed and `BACKLOG_AGED_BEYOND_LIMIT`
+  when open — same number, different remedy, never collapsed — both at `monitor`, because
+  **a slow fix is not a false one** and `alert` stays reserved for someone claiming a
+  problem went away that did not. `ResponseTimeliness` keeps three absences apart
+  (`ungraded` = no policy, `unmeasured` = no clock, `unknown` = a broken value, which is
+  reported rather than skipped since an unreadable clock is not a met target). Unlike the
+  acknowledgement axis, `ungraded` raises nothing — the clean verdict claims the
+  *acknowledgement* window and says nothing about resolution speed, so nothing is
+  overstated, and reporting it would put every record without a resolution SLA into
+  permanent `monitor`. Sweep 720 → **3,600** states (720 × 5 timing states); clean 5 →
+  **15** (5 × the 3 timing states that raise nothing); watermelons 30 → **150** (30 × 5,
+  timing free) — pinning that a watermelon which *also* blew its SLA is still reported as
+  the watermelon rather than downgraded to a missed target.
 - **`proof:provisioning-order` (34 checks)** — zero-touch step ordering, with four
   vendor reference pipelines (Windows Autopilot + Intune, Apple ABM/ADE, Android
   Zero-Touch, Jamf PreStage) expressed in one neutral model and asserted to validate.

@@ -14,6 +14,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   deriveAcknowledgement,
+  deriveResolutionTimeliness,
   evaluateResponse,
   evaluateResponseFixture,
   resolveResponseConnector,
@@ -40,7 +41,8 @@ const healthy: NormalizedResponseRecord = {
   concernRef: "c", owningTeam: "endpoint-team", owner: "assigned",
   acknowledgement: "acknowledged_within_target", resolution: "resolved",
   underlyingConcernStillPresent: false,
-  acknowledgedAfterSeconds: 60, acknowledgementTargetSeconds: 300, reportIntegrity: "intact",
+  acknowledgedAfterSeconds: 60, acknowledgementTargetSeconds: 300,
+  elapsedSinceRaisedSeconds: 3600, resolutionTargetSeconds: 14400, reportIntegrity: "intact",
 };
 
 // ── 1. THE WATERMELON ────────────────────────────────────────────────────────
@@ -150,6 +152,70 @@ const healthy: NormalizedResponseRecord = {
     evaluateResponse(healthy).notifyTeam === "endpoint-team" && evaluateResponse(healthy).concernRef === "c");
 }
 
+// ── 2b. RESOLUTION TIMING — SLA achievement, time-to-restore, backlog aging ──
+//
+// One elapsed field, one caller-supplied target, read differently depending on whether
+// the work is finished. These are the only three measures from the ITSM KPI set this
+// dimension can carry honestly; the rest are rates and means over a corpus of tickets
+// the fabric does not hold, and computing those would need a clock it must not read.
+{
+  const late = { elapsedSinceRaisedSeconds: 172800, resolutionTargetSeconds: 14400 };
+
+  check("CLOSED past the committed target is a missed resolution target — monitor, not alert",
+    (() => {
+      const v = evaluateResponse({ ...healthy, ...late });
+      return v.recommendedAction === "monitor" && v.reasonCode === "RESOLUTION_TARGET_MISSED";
+    })());
+  check("...and a SLOW fix is never graded as a FALSE one — the watermelon's alert is not reused",
+    evaluateResponse({ ...healthy, ...late }).recommendedAction !== "alert");
+  check("OPEN past the same target is backlog aging — the same number, a different remedy",
+    (() => {
+      const v = evaluateResponse({ ...healthy, ...late, resolution: "open", underlyingConcernStillPresent: true });
+      return v.recommendedAction === "monitor" && v.reasonCode === "BACKLOG_AGED_BEYOND_LIMIT";
+    })());
+  check("closed_unresolved past the target is ALSO a missed target — the commitment was to resolve, not to claim",
+    evaluateResponse({ ...healthy, ...late, resolution: "closed_unresolved" }).reasonCode === "RESOLUTION_TARGET_MISSED");
+
+  // NON-VACUITY: inside the target must stay clean, or the axis is "always complain".
+  check("inside the committed target stays clean — the axis is not always-complain",
+    evaluateResponse({ ...healthy, elapsedSinceRaisedSeconds: 3600, resolutionTargetSeconds: 14400 })
+      .reasonCode === "RESPONSE_VERIFIED_RESOLVED");
+  check("the boundary is INCLUSIVE, matching the acknowledgement comparison",
+    deriveResolutionTimeliness(300, 300) === "within_target" &&
+    deriveResolutionTimeliness(301, 300) === "breached");
+
+  // THE THREE ABSENCES, KEPT APART. Same principle that separates acknowledged_ungraded
+  // from unknown: a missing policy, a missing measurement and a broken number are
+  // different facts, and collapsing them lets the worst wear the face of the mildest.
+  check("NO TARGET is ungraded — and, unlike the acknowledgement axis, raises nothing",
+    deriveResolutionTimeliness(172800, null) === "ungraded" &&
+    evaluateResponse({ ...healthy, elapsedSinceRaisedSeconds: 172800, resolutionTargetSeconds: null })
+      .reasonCode === "RESPONSE_VERIFIED_RESOLVED");
+  check("NO ELAPSED is unmeasured — the clock is missing, not the policy",
+    deriveResolutionTimeliness(null, 14400) === "unmeasured");
+  check("...and unmeasured is NOT ungraded — the two absences stay distinct",
+    deriveResolutionTimeliness(null, 14400) !== deriveResolutionTimeliness(3600, null));
+  check("a NEGATIVE or FRACTIONAL duration is unknown, never a met target",
+    deriveResolutionTimeliness(-1, 14400) === "unknown" &&
+    deriveResolutionTimeliness(1.5, 14400) === "unknown" &&
+    deriveResolutionTimeliness(3600, -1) === "unknown");
+  check("...and an unreadable clock is REPORTED rather than skipped — it is not a pass",
+    evaluateResponse({ ...healthy, elapsedSinceRaisedSeconds: -1, resolutionTargetSeconds: 14400 })
+      .reasonCode === "RESOLUTION_TIMING_UNREADABLE");
+
+  // A record can be late AND lying. The watermelon must still win, because it is the
+  // finding that says someone asserted something false.
+  check("a watermelon that ALSO blew its SLA is still reported as the watermelon",
+    evaluateResponse({ ...healthy, ...late, underlyingConcernStillPresent: true })
+      .reasonCode === "WATERMELON_CLOSED_BUT_UNRESOLVED");
+
+  // The two new fixtures exist so the axis is demonstrated on the shipped corpus, not
+  // only on records this proof invented for itself.
+  check("the shipped fixtures demonstrate both new findings",
+    evaluateResponseFixture("resolution-target-missed")?.reasonCode === "RESOLUTION_TARGET_MISSED" &&
+    evaluateResponseFixture("backlog-aged")?.reasonCode === "BACKLOG_AGED_BEYOND_LIMIT");
+}
+
 // ── 3. THE CEILING — never restrict, never escalate ──────────────────────────
 {
   const OWNERS: ResponseOwnerState[] = ["assigned", "unassigned", "unknown"];
@@ -159,6 +225,16 @@ const healthy: NormalizedResponseRecord = {
   const PRESENT: (boolean | null)[] = [true, false, null];
   const TEAMS: (string | null)[] = ["endpoint-team", null];
   const INTEGRITIES = ["intact", "malformed"] as const;
+  // The resolution-timing axis, expressed as the (elapsed, target) PAIRS that reach
+  // each of the five ResponseTimeliness states — swept as INPUTS rather than as the
+  // derived state, so the derivation is under test rather than assumed.
+  const TIMINGS: Array<readonly [number | null, number | null, string]> = [
+    [3600, 14400, "within_target"],
+    [172800, 14400, "breached"],
+    [3600, null, "ungraded"],
+    [null, 14400, "unmeasured"],
+    [-1, 14400, "unknown"],
+  ];
 
   let total = 0, clean = 0, overCeiling = 0, watermelons = 0;
   const unjustified: string[] = [];
@@ -167,11 +243,13 @@ const healthy: NormalizedResponseRecord = {
       for (const resolution of RESOLUTIONS)
         for (const underlyingConcernStillPresent of PRESENT)
           for (const owningTeam of TEAMS)
-            for (const reportIntegrity of INTEGRITIES) {
+            for (const reportIntegrity of INTEGRITIES)
+              for (const [elapsedSinceRaisedSeconds, resolutionTargetSeconds, timing] of TIMINGS) {
               total += 1;
               const r = evaluateResponse({
                 ...healthy, owner, acknowledgement, resolution,
                 underlyingConcernStillPresent, owningTeam, reportIntegrity,
+                elapsedSinceRaisedSeconds, resolutionTargetSeconds,
               });
               const a = r.recommendedAction as string;
               if (a === "restrict" || a === "escalate") overCeiling += 1;
@@ -200,16 +278,21 @@ const healthy: NormalizedResponseRecord = {
               const justified =
                 reportIntegrity === "intact" && owner === "assigned" && owningTeam !== null &&
                 acknowledgement === "acknowledged_within_target" &&
-                (underlyingConcernStillPresent === false || resolution === "open");
+                (underlyingConcernStillPresent === false || resolution === "open") &&
+                // ...and the resolution clock must not be BREACHED or UNREADABLE. A
+                // record past its committed target, or carrying a duration nobody can
+                // read, has not "positively worked" however green the rest of it looks.
+                (timing === "within_target" || timing === "ungraded" || timing === "unmeasured");
               if (!justified) {
                 unjustified.push(`${owner}/${acknowledgement}/${resolution}/${underlyingConcernStillPresent}/${owningTeam}/${reportIntegrity}`);
               }
             }
 
-  // 720, WAS 576: `acknowledged_ungraded` widened ACKS from 4 to 5 (5/4 x 576 = 720).
-  // The state space grew because the CONTRACT grew — a new epistemic state exists that
-  // did not before, and the sweep must see it or the widening is untested.
-  check(`state space enumerated (${total} states)`, total === 720);
+  // 3,600 = 720 x 5. The resolution-timing axis contributes its five states, and the
+  // 720 was itself 576 widened by `acknowledged_ungraded`. Both growths are the CONTRACT
+  // growing: a new epistemic state exists that did not before, and a sweep that did not
+  // see it would leave the widening untested.
+  check(`state space enumerated (${total} states)`, total === 3600);
   check("NEVER restricts or escalates — a badly-closed ticket must not interrupt a worker's shift",
     overCeiling === 0);
   check(`ZERO unjustified clean verdicts` +
@@ -238,7 +321,10 @@ const healthy: NormalizedResponseRecord = {
   //                         CLOSED_CONCERN_NOT_RESOLVED at monitor.              = 1
   //   open                → in_progress, present genuinely is free               = 3
   //                                                                        total = 5
-  check(`...and the clean path is REACHABLE — exactly 5 states (got ${clean})`, clean === 5);
+  // CLEAN = 15 = 5 x 3. The five above, crossed with the three timing states that push
+  // no candidate — within_target, ungraded, unmeasured. `breached` and `unknown` each
+  // add a monitor, so neither can appear in a clean verdict.
+  check(`...and the clean path is REACHABLE — exactly 15 states (got ${clean})`, clean === 15);
   // WATERMELON = 30, WAS 24. resolution=resolved AND present=true AND integrity=intact,
   // with owner (3) × ack (5) × owningTeam (2) all free — because a false closure
   // outranks every other finding on the record, which is exactly the behaviour worth
@@ -247,7 +333,11 @@ const healthy: NormalizedResponseRecord = {
   // (3 × 2), i.e. the detector's REACH GREW with the state space rather than shrinking
   // — which is the direction that matters. A count that fell here would mean the new
   // state had started shadowing the finding.
-  check(`...and the WATERMELON path is reachable — exactly 30 states (got ${watermelons})`, watermelons === 30);
+  // 150 = 30 x 5: timing is FREE, because `alert` outranks every monitor the timing
+  // axis can raise. That is the property worth pinning — a watermelon on a record that
+  // also blew its resolution SLA must still be reported as the watermelon, not
+  // downgraded to a missed target.
+  check(`...and the WATERMELON path is reachable — exactly 150 states (got ${watermelons})`, watermelons === 150);
 }
 
 // ── 4. Timeliness, from caller-supplied durations only ───────────────────────

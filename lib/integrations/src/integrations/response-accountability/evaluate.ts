@@ -15,6 +15,7 @@ import type {
   ResponseAction,
   ResponsePosture,
   ResponseReasonCode,
+  ResponseTimeliness,
   ResponseVerdict,
 } from "./types";
 
@@ -91,6 +92,43 @@ export function evaluateResponse(record: NormalizedResponseRecord): ResponseVerd
     // ratio a reader can see rather than in anyone's inbox.
     candidates.push({ action: "monitor", reason: "ACKNOWLEDGEMENT_TARGET_UNSTATED" });
   }
+
+  // ── Resolution timing ───────────────────────────────────────────────────────
+  //
+  // The ITSM measures this dimension can honestly carry: "SLA achievement" and "time to
+  // restore" when the record is closed, "backlog aging" when it is open. Same elapsed
+  // field, same caller-supplied target, read at different moments in the record's life.
+  //
+  // NO RATE, NO MEAN, NO WINDOW. Those are aggregate statistics over a corpus of
+  // tickets this fabric does not hold, and computing them would need a clock it must
+  // not read. This grades ONE record against ONE commitment the operator made.
+  const timeliness = deriveResolutionTimeliness(
+    record.elapsedSinceRaisedSeconds,
+    record.resolutionTargetSeconds,
+  );
+  if (timeliness === "breached") {
+    // Which finding it is depends on whether the work is finished. Closed-and-late is a
+    // slow team; open-and-late is a queue nobody is draining. Same number, different
+    // remedy, so they are never collapsed into one code.
+    candidates.push(
+      record.resolution === "open"
+        ? { action: "monitor", reason: "BACKLOG_AGED_BEYOND_LIMIT" }
+        : { action: "monitor", reason: "RESOLUTION_TARGET_MISSED" },
+    );
+  }
+  if (timeliness === "unknown") {
+    // An unreadable clock is not a met target. Same lesson as the negative
+    // acknowledgement duration: a broken value must never grade cleaner than an honest
+    // one that happens to be bad.
+    candidates.push({ action: "monitor", reason: "RESOLUTION_TIMING_UNREADABLE" });
+  }
+  // `ungraded` and `unmeasured` push NOTHING, and that asymmetry with
+  // ACKNOWLEDGEMENT_TARGET_UNSTATED above is deliberate rather than an oversight. The
+  // clean verdict makes an explicit claim about the ACKNOWLEDGEMENT window and none at
+  // all about resolution speed, so an ungraded resolution leaves no claim overstated.
+  // Reporting it anyway would put every record without a resolution SLA into `monitor`
+  // forever — the "a control that fires constantly is a control nobody reads" failure
+  // this repository has already had to fix once, in the BYOD-unsupervised axis.
 
   // ── Unconfirmed inputs ──────────────────────────────────────────────────────
   if (record.owner === "unknown") {
@@ -177,11 +215,20 @@ function postureFor(reason: ResponseReasonCode): ResponsePosture {
     case "OWNER_UNROUTED":
     case "RESPONSE_UNACKNOWLEDGED":
     case "ACKNOWLEDGED_LATE":
+    // Late, or aging in a queue: the process did not keep its own commitment. Same
+    // family as a missed acknowledgement window — the work may still be perfectly
+    // correct, and nobody has claimed otherwise; it simply took longer than promised.
+    case "RESOLUTION_TARGET_MISSED":
+    case "BACKLOG_AGED_BEYOND_LIMIT":
       return "unowned";
     // The response happened; what could not be established is whether it was timely,
     // because the policy that would decide it was never supplied. That is an epistemic
     // gap, not a process failure — `unowned` would libel a team that answered promptly.
     case "ACKNOWLEDGEMENT_TARGET_UNSTATED":
+    // An unreadable duration: the timing could not be established either way. Not a
+    // process failure — we do not know that anyone was late, only that we cannot say
+    // they were not.
+    case "RESOLUTION_TIMING_UNREADABLE":
       return "indeterminate";
     // Driven by something we could not read. Deliberately not one of the affirmative
     // postures: we do not know the response failed, only that we cannot establish it
@@ -227,4 +274,34 @@ export function deriveAcknowledgement(
   if (targetSeconds === null) return "acknowledged_ungraded";
   if (!Number.isInteger(targetSeconds) || targetSeconds < 0) return "unknown";
   return acknowledgedAfterSeconds <= targetSeconds ? "acknowledged_within_target" : "acknowledged_late";
+}
+
+/**
+ * Grade elapsed-since-raised against the operator's committed resolution target.
+ *
+ * Serves three ITSM measures with one comparison — SLA achievement and time-to-restore
+ * when the record is closed, backlog aging when it is open — because they are the same
+ * clock read at different moments. Which finding a breach produces is the evaluator's
+ * business; this function only says whether the commitment was kept.
+ *
+ * SAME DISCIPLINE AS `deriveAcknowledgement`, INCLUDING THE BUG IT HAD. A missing
+ * target returns `ungraded`, never a value that reads as a pass — that defect
+ * (`acknowledged_within_target` for a target that did not exist) was fixed here one
+ * commit ago, and the whole reason this axis waited for that fix was to avoid inheriting
+ * it. A missing measurement is `unmeasured`, distinct again: the clock is absent, not
+ * the policy.
+ *
+ * The boundary is INCLUSIVE — elapsed exactly equal to the target is kept, not missed.
+ * Matching the acknowledgement comparison, because two timing axes on one record that
+ * disagreed about `<=` versus `<` would be a coin-flip nobody could predict.
+ */
+export function deriveResolutionTimeliness(
+  elapsedSinceRaisedSeconds: number | null,
+  resolutionTargetSeconds: number | null,
+): ResponseTimeliness {
+  if (elapsedSinceRaisedSeconds === null) return "unmeasured";
+  if (!Number.isInteger(elapsedSinceRaisedSeconds) || elapsedSinceRaisedSeconds < 0) return "unknown";
+  if (resolutionTargetSeconds === null) return "ungraded";
+  if (!Number.isInteger(resolutionTargetSeconds) || resolutionTargetSeconds < 0) return "unknown";
+  return elapsedSinceRaisedSeconds <= resolutionTargetSeconds ? "within_target" : "breached";
 }

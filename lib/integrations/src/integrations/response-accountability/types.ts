@@ -123,8 +123,44 @@ export interface NormalizedResponseRecord {
    *  applied to every tenant and every severity alike. `null` = no target expressed,
    *  in which case timeliness is not graded rather than graded against a guess. */
   readonly acknowledgementTargetSeconds: number | null;
+  /**
+   * Elapsed time since the concern was RAISED, in whole seconds, or null when not
+   * reported. Caller-supplied, like every other duration here.
+   *
+   * ONE FIELD, TWO READINGS, decided by `resolution` — and that is the point rather
+   * than an economy. Closed, it is time-to-close: the ITSM "SLA achievement" and
+   * "mean time to restore" measures. Open, it is the concern's current age: the
+   * "backlog aging" measure. Those are the same clock read at different moments, so
+   * modelling them as two fields would invite a record that disagrees with itself.
+   */
+  readonly elapsedSinceRaisedSeconds: number | null;
+  /** The operator's committed target for reaching a resolution, in whole seconds.
+   *  CALLER-SUPPLIED POLICY, for exactly the reason the acknowledgement target is:
+   *  a built-in would be a number nobody chose. `null` = no commitment expressed, and
+   *  the elapsed time is then reported unGRADED rather than graded against a guess. */
+  readonly resolutionTargetSeconds: number | null;
   readonly reportIntegrity: ResponseReportIntegrity;
 }
+
+/**
+ * How an elapsed duration compares to the target it was committed against.
+ *
+ * FIVE STATES, NOT THREE, and the three absences are kept apart on the same principle
+ * that separates `acknowledged_ungraded` from `unknown`: a missing policy, a missing
+ * measurement and a broken number are different facts about the world, and collapsing
+ * them lets the worst of them wear the face of the mildest.
+ */
+export type ResponseTimeliness =
+  /** Measured, graded, and inside the commitment. */
+  | "within_target"
+  /** Measured, graded, and past it. */
+  | "breached"
+  /** Measured, but the operator committed to no target — nothing to grade against. */
+  | "ungraded"
+  /** No elapsed time reported. The clock is missing, not the policy. */
+  | "unmeasured"
+  /** A duration or target that is negative, fractional, or otherwise unreadable. */
+  | "unknown";
 
 export type ResponsePosture =
   /** Owned, acknowledged in time, and the concern is confirmed gone. */
@@ -153,7 +189,17 @@ export type ResponsePosture =
 export type ResponseAction = "none" | "monitor" | "step_up" | "alert";
 
 export type ResponseReasonCode =
-  /** Owned, timely, and verified gone. */
+  /**
+   * Owned, ACKNOWLEDGED within the operator's target, and the concern positively
+   * confirmed gone.
+   *
+   * "Timely" here means the ACKNOWLEDGEMENT window specifically, and the wording is
+   * narrowed deliberately now that a second timing axis exists: a record may reach this
+   * verdict with its resolution time unGRADED, because the operator committed to no
+   * resolution target. That is honest — the verdict claims what was checked, no more.
+   * The looser earlier wording would have quietly extended the claim to cover a duration
+   * nobody measured, which is the mistake this whole file has been correcting.
+   */
   | "RESPONSE_VERIFIED_RESOLVED"
   // ── The watermelon and its neighbours ──
   /** Reported resolved; the underlying concern is STILL PRESENT. */
@@ -182,6 +228,16 @@ export type ResponseReasonCode =
   /** Picked up, and the operator supplied no window to judge it against. A policy gap,
    *  not a response failure — but it forecloses the clean verdict's claim of timeliness. */
   | "ACKNOWLEDGEMENT_TARGET_UNSTATED"
+  // ── Resolution timing (ITSM "SLA achievement", "time to restore", "backlog aging") ──
+  /** CLOSED past the operator's committed resolution target. A slow fix, not a false
+   *  one — so `monitor`, and emphatically not the watermelon's `alert`. */
+  | "RESOLUTION_TARGET_MISSED"
+  /** STILL OPEN past the operator's committed target: the concern is aging in a queue.
+   *  The same field and the same target as above, read while the work is unfinished. */
+  | "BACKLOG_AGED_BEYOND_LIMIT"
+  /** A duration or target that could not be read — negative, fractional, junk. Reported
+   *  rather than silently skipped, because an unreadable clock is not a met target. */
+  | "RESOLUTION_TIMING_UNREADABLE"
   /** Open and inside the process. Reported, not faulted. */
   | "RESPONSE_IN_PROGRESS"
   // ── Unconfirmed inputs ──

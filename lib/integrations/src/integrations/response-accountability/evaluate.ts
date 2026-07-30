@@ -80,6 +80,17 @@ export function evaluateResponse(record: NormalizedResponseRecord): ResponseVerd
     // an absent one, and grading them the same would hide which you have.
     candidates.push({ action: "monitor", reason: "ACKNOWLEDGED_LATE" });
   }
+  if (record.acknowledgement === "acknowledged_ungraded") {
+    // Acknowledged, no target supplied. Reported rather than waved through BECAUSE THE
+    // CLEAN VERDICT CLAIMS TIMELINESS — RESPONSE_VERIFIED_RESOLVED is documented as
+    // "Owned, TIMELY, and verified gone". Letting an ungraded acknowledgement reach it
+    // would put that word on a record whose timeliness nobody measured.
+    //
+    // `monitor`, matching ACKNOWLEDGED_LATE and RESOLUTION_UNVERIFIED: the remedy is a
+    // policy the operator has not written, not a response failure, so it belongs in the
+    // ratio a reader can see rather than in anyone's inbox.
+    candidates.push({ action: "monitor", reason: "ACKNOWLEDGEMENT_TARGET_UNSTATED" });
+  }
 
   // ── Unconfirmed inputs ──────────────────────────────────────────────────────
   if (record.owner === "unknown") {
@@ -167,6 +178,11 @@ function postureFor(reason: ResponseReasonCode): ResponsePosture {
     case "RESPONSE_UNACKNOWLEDGED":
     case "ACKNOWLEDGED_LATE":
       return "unowned";
+    // The response happened; what could not be established is whether it was timely,
+    // because the policy that would decide it was never supplied. That is an epistemic
+    // gap, not a process failure — `unowned` would libel a team that answered promptly.
+    case "ACKNOWLEDGEMENT_TARGET_UNSTATED":
+      return "indeterminate";
     // Driven by something we could not read. Deliberately not one of the affirmative
     // postures: we do not know the response failed, only that we cannot establish it
     // succeeded. There is no `default` here on purpose — adding a reason code without
@@ -197,8 +213,18 @@ export function deriveAcknowledgement(
   if (acknowledgedAfterSeconds === null) return "unacknowledged";
   if (!Number.isInteger(acknowledgedAfterSeconds) || acknowledgedAfterSeconds < 0) return "unknown";
   // No target expressed: it was acknowledged, and there is no window to judge it
-  // against. Inventing one would apply a number nobody chose to every severity.
-  if (targetSeconds === null) return "acknowledged_within_target";
+  // against. Inventing one would apply a number nobody chose to every severity — that
+  // part was right and is unchanged.
+  //
+  // WHAT WAS WRONG was the ANSWER, not the refusal. This returned
+  // `acknowledged_within_target` — a claim of COMPLIANCE WITH A TARGET THAT DOES NOT
+  // EXIST. An acknowledgement 27 hours late graded identically to one inside a
+  // five-minute window, because the absence of a policy was reported as a pass.
+  //
+  // Same unearned affirmative as the verdict seed in this file, found in the same
+  // review: declining to invent a threshold is correct, but the state you fall back to
+  // must not assert the thing you declined to measure.
+  if (targetSeconds === null) return "acknowledged_ungraded";
   if (!Number.isInteger(targetSeconds) || targetSeconds < 0) return "unknown";
   return acknowledgedAfterSeconds <= targetSeconds ? "acknowledged_within_target" : "acknowledged_late";
 }

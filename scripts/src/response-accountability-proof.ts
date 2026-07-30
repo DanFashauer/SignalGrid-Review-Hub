@@ -154,7 +154,7 @@ const healthy: NormalizedResponseRecord = {
 {
   const OWNERS: ResponseOwnerState[] = ["assigned", "unassigned", "unknown"];
   const ACKS: ResponseAcknowledgement[] =
-    ["acknowledged_within_target", "acknowledged_late", "unacknowledged", "unknown"];
+    ["acknowledged_within_target", "acknowledged_late", "acknowledged_ungraded", "unacknowledged", "unknown"];
   const RESOLUTIONS: ResponseResolutionClaim[] = ["resolved", "closed_unresolved", "open", "unknown"];
   const PRESENT: (boolean | null)[] = [true, false, null];
   const TEAMS: (string | null)[] = ["endpoint-team", null];
@@ -206,7 +206,10 @@ const healthy: NormalizedResponseRecord = {
               }
             }
 
-  check(`state space enumerated (${total} states)`, total === 576);
+  // 720, WAS 576: `acknowledged_ungraded` widened ACKS from 4 to 5 (5/4 x 576 = 720).
+  // The state space grew because the CONTRACT grew — a new epistemic state exists that
+  // did not before, and the sweep must see it or the widening is untested.
+  check(`state space enumerated (${total} states)`, total === 720);
   check("NEVER restricts or escalates — a badly-closed ticket must not interrupt a worker's shift",
     overCeiling === 0);
   check(`ZERO unjustified clean verdicts` +
@@ -236,11 +239,15 @@ const healthy: NormalizedResponseRecord = {
   //   open                → in_progress, present genuinely is free               = 3
   //                                                                        total = 5
   check(`...and the clean path is REACHABLE — exactly 5 states (got ${clean})`, clean === 5);
-  // WATERMELON = 24. resolution=resolved AND present=true AND integrity=intact, with
-  // owner (3) × ack (4) × owningTeam (2) all free — because a false closure outranks
-  // every other finding on the record, which is exactly the behaviour worth pinning:
-  // a watermelon is green on every other axis by construction, and must still win.
-  check(`...and the WATERMELON path is reachable — exactly 24 states (got ${watermelons})`, watermelons === 24);
+  // WATERMELON = 30, WAS 24. resolution=resolved AND present=true AND integrity=intact,
+  // with owner (3) × ack (5) × owningTeam (2) all free — because a false closure
+  // outranks every other finding on the record, which is exactly the behaviour worth
+  // pinning: a watermelon is green on every other axis by construction, and must still
+  // win. The +6 is the new `acknowledged_ungraded` crossed with owner × owningTeam
+  // (3 × 2), i.e. the detector's REACH GREW with the state space rather than shrinking
+  // — which is the direction that matters. A count that fell here would mean the new
+  // state had started shadowing the finding.
+  check(`...and the WATERMELON path is reachable — exactly 30 states (got ${watermelons})`, watermelons === 30);
 }
 
 // ── 4. Timeliness, from caller-supplied durations only ───────────────────────
@@ -251,8 +258,22 @@ const healthy: NormalizedResponseRecord = {
     deriveAcknowledgement(300, 300) === "acknowledged_within_target");
   check("no acknowledgement at all is unacknowledged, not 'fast'",
     deriveAcknowledgement(null, 300) === "unacknowledged");
-  check("NO TARGET means timeliness is not graded — no threshold is invented here",
-    deriveAcknowledgement(99999, null) === "acknowledged_within_target");
+  // THE NAME OF THIS CHECK WAS ALWAYS RIGHT; ITS ASSERTION WAS NOT.
+  //
+  // It read `=== "acknowledged_within_target"` — the value meaning "graded, and it
+  // passed" — under a name promising the opposite. So an acknowledgement 27 hours late
+  // with no target graded identically to one answered inside a five-minute window, and
+  // the check that should have caught it was the thing pinning it in place.
+  //
+  // A test name is documentation; the assertion is the contract. When they disagree,
+  // the assertion wins silently — which is how a proof ends up defending a defect.
+  check("NO TARGET means timeliness is not graded — and the STATE says so, rather than claiming a pass",
+    deriveAcknowledgement(99999, null) === "acknowledged_ungraded");
+  check("...and a fast acknowledgement with no target is graded the SAME — the absence of policy is the finding, not the speed",
+    deriveAcknowledgement(1, null) === "acknowledged_ungraded");
+  check("...while a target that IS supplied still grades normally — the rule is not 'never grade'",
+    deriveAcknowledgement(1, 300) === "acknowledged_within_target" &&
+    deriveAcknowledgement(9999, 300) === "acknowledged_late");
   // A broken duration must not compare as prompt.
   check("a negative or fractional duration is unknown, NOT a fast acknowledgement",
     deriveAcknowledgement(-1, 300) === "unknown" && deriveAcknowledgement(1.5, 300) === "unknown");

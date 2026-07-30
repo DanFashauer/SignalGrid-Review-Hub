@@ -51,6 +51,21 @@ export type ResponseOwnerState = "assigned" | "unassigned" | "unknown";
 export type ResponseAcknowledgement =
   | "acknowledged_within_target"
   | "acknowledged_late"
+  /**
+   * Acknowledged, and the operator supplied NO target to judge it against.
+   *
+   * Distinct from `acknowledged_within_target`, which is a CLAIM OF COMPLIANCE. Saying
+   * "within target" when no target exists asserts something nobody established — the
+   * same unearned affirmative as the verdict seed that reported `resolved_verified` for
+   * a record nobody had checked. The honest answer is that the response happened and
+   * its timeliness was not graded.
+   *
+   * Distinct from `unknown` too: we know exactly when it was acknowledged. What is
+   * missing is the policy, not the fact. Collapsing the two would repeat the
+   * malformed-vs-absent mistake this file's own `deriveAcknowledgement` comment warns
+   * about.
+   */
+  | "acknowledged_ungraded"
   | "unacknowledged"
   | "unknown";
 
@@ -164,6 +179,9 @@ export type ResponseReasonCode =
   | "RESPONSE_UNACKNOWLEDGED"
   /** Picked up, but outside the operator's target window. */
   | "ACKNOWLEDGED_LATE"
+  /** Picked up, and the operator supplied no window to judge it against. A policy gap,
+   *  not a response failure — but it forecloses the clean verdict's claim of timeliness. */
+  | "ACKNOWLEDGEMENT_TARGET_UNSTATED"
   /** Open and inside the process. Reported, not faulted. */
   | "RESPONSE_IN_PROGRESS"
   // ── Unconfirmed inputs ──

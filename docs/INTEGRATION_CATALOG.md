@@ -494,7 +494,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   `AUTHENTICATED_SEGMENT_UNVERIFIED` rather than claiming a trusted segment it never
   checked. Matching is trimmed and case-insensitive, because the same VLAN arrives
   spelled differently from NAC, RADIUS and switch inventories.
-- **`proof:response-accountability` (54 checks)** — the ITSM "watermelon": green
+- **`proof:response-accountability` (56 checks)** — the ITSM "watermelon": green
   outside, red inside. A concern reported RESOLVED while the underlying state still
   shows it present is the finding, and it is asserted to outrank every green process
   metric on the same record — because a watermelon is green on every other axis by
@@ -525,6 +525,21 @@ proof reports — the numbers below are therefore evidence, not claims.
   "ZERO unjustified clean verdicts" agreed with the bug. An assertion is only as good as
   the belief behind it. Clean states 7 → **5** (the two that left were the defect);
   watermelon states unchanged at 24.
+
+  **The same defect had a twin in the timeliness helper.** `deriveAcknowledgement`
+  returned `acknowledged_within_target` when the caller supplied **no target** — a claim
+  of compliance with a target that does not exist, so an acknowledgement 27 hours late
+  graded identically to one answered inside a five-minute window. Declining to invent a
+  threshold was right; the state it fell back to was not. And the check guarding it read
+  `check("NO TARGET means timeliness is not graded", … === "acknowledged_within_target")`
+  — a **name that described the correct behaviour above an assertion pinning the wrong
+  one**. When a test's name and its assertion disagree, the assertion wins silently.
+  There is now a distinct `acknowledged_ungraded` state (kept apart from `unknown`,
+  because the fact is known and only the policy is missing) reported at `monitor` via
+  `ACKNOWLEDGEMENT_TARGET_UNSTATED` — since the clean verdict claims the response was
+  *timely*, and that word must not land on a record nobody measured. Sweep 576 → **720**
+  states (a fifth acknowledgement value); watermelons 24 → **30**, the detector's reach
+  growing with the space rather than shrinking; clean still **5**.
 - **`proof:provisioning-order` (34 checks)** — zero-touch step ordering, with four
   vendor reference pipelines (Windows Autopilot + Intune, Apple ABM/ADE, Android
   Zero-Touch, Jamf PreStage) expressed in one neutral model and asserted to validate.

@@ -112,13 +112,30 @@ export function evaluateUem(state: NormalizedUemDeviceState): UemVerdict {
       // device. Defaulting to `personal` here would silently excuse the corporate
       // case, which is the fail-open direction, so this forecloses instead.
       candidates.push({ action: "step_up", reason: "UNSUPERVISED_OWNERSHIP_UNKNOWN" });
+    } else {
+      // `personal` — MONITOR, not silence, and the difference was found by
+      // adversarial review.
+      //
+      // The first version of this fix contributed NOTHING here, so a personally-owned
+      // unsupervised device produced a verdict BYTE-IDENTICAL to a supervised
+      // company-owned one. That over-corrected. Intune's `managedDeviceOwnerType`
+      // reports `personal` as its residual bucket — a device that was not matched to
+      // a corporate identifier, ADE, or a device-enrollment manager lands there by
+      // DEFAULT. So `personal` frequently means "no corporate marker was seen", not
+      // "employee ownership was confirmed", and this file's own header forbids
+      // exactly that inference: "a grant requires POSITIVE CONFIRMATION OF EVERY
+      // INPUT. Not 'no bad value was seen'."
+      //
+      // `monitor` is the honest rung. It does not fire a step-up at a worker who has
+      // no way to remediate — which was the original defect — and it does not claim a
+      // confirmation the vendor field cannot carry. The state stays visible in the
+      // verdict instead of vanishing.
+      candidates.push({ action: "monitor", reason: "BYOD_UNSUPERVISED_EXPECTED" });
     }
-    // `personal` contributes NOTHING: unsupervised is the correct, expected and
-    // permanent state for an employee-owned device. Note what this does NOT say —
-    // it does not say a BYOD device is as trustworthy as a corporate one. It says
-    // supervision is the wrong instrument for that question. Whether BYOD may reach
-    // a given resource is a POLICY decision for the host app and the policy layer,
-    // not something this dimension should smuggle in via a supervision concern.
+    // What this still does NOT say: that a BYOD device is as trustworthy as a
+    // corporate one. It says supervision is the wrong instrument for that question.
+    // Whether BYOD may reach a given resource is a POLICY decision for the host app
+    // and the policy layer, not something smuggled in via a supervision concern.
   }
 
   // ── Unconfirmed inputs ──────────────────────────────────────────────────────
@@ -181,6 +198,10 @@ function postureFor(winner: Candidate): UemPosture {
   // Anything driven by an unconfirmed input is INDETERMINATE, not degraded: we do
   // not know that the device is in a worse state, only that we cannot say it is in
   // a good one. Reporting "degraded" there would assert a fact not in evidence.
+  // BYOD-unsupervised is not degraded and not indeterminate — the management story
+  // is exactly what it should be for the ownership. It is reported as compliant with
+  // a monitor-level note attached, so an operator sees it without being alarmed.
+  if (winner.reason === "BYOD_UNSUPERVISED_EXPECTED") return "managed_compliant";
   if (
     winner.reason === "ENROLLMENT_STATE_UNKNOWN" ||
     winner.reason === "COMPLIANCE_STATE_UNKNOWN" ||

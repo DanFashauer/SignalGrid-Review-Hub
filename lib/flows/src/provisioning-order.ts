@@ -60,6 +60,24 @@ export const MANAGEMENT_DEPENDENT_KINDS: readonly SetupStepKind[] = [
   "restriction",
 ];
 
+/**
+ * Does this step establish management?
+ *
+ * PRECISE WHEN THE AUTHOR IS PRECISE, heuristic otherwise. If any step in the
+ * recording carries `establishesManagement`, only those count — the author has told
+ * us exactly which step enrolls the device and the kind heuristic is switched off.
+ *
+ * THE HEURISTIC IS KNOWN-COARSE and adversarial review is why this note exists.
+ * `kind: "profile"` covers an MDM enrollment profile and a VPN profile alike, so a
+ * recording whose first profile is a VPN payload will satisfy the rule without
+ * having enrolled anything — a FALSE NEGATIVE. It is kept as the default because
+ * every existing recording relies on it and because rejecting them all would be a
+ * worse failure than the one it misses, but a recording that cares should set the
+ * flag. `lintSetupOrder` emits a warning naming this limit when it has to guess.
+ */
+const establishesManagement = (s: SetupStep, explicitMode: boolean): boolean =>
+  explicitMode ? s.establishesManagement === true : MANAGEMENT_ESTABLISHING_KINDS.includes(s.kind);
+
 const isManagementEstablishing = (k: SetupStepKind): boolean =>
   MANAGEMENT_ESTABLISHING_KINDS.includes(k);
 const isManagementDependent = (k: SetupStepKind): boolean =>
@@ -154,7 +172,18 @@ export function lintSetupOrder(rec: DeviceSetupRecording): SetupRecordingIssue[]
   // believe a guarantee is checked twice when it is checked once.
 
   // ── The intrinsic rule: management before anything that needs management ────
-  const firstManagementAt = steps.findIndex((s) => isManagementEstablishing(s.kind));
+  const explicitMode = steps.some((s) => s.establishesManagement === true);
+  const firstManagementAt = steps.findIndex((s) => establishesManagement(s, explicitMode));
+  if (!explicitMode && firstManagementAt !== -1 && steps[firstManagementAt]!.kind === "profile") {
+    // Say out loud that this was a guess. A rule that silently guesses is how a
+    // false negative reads as a clean bill of health.
+    warnings.push({
+      severity: "warning",
+      code: "management_step_inferred",
+      subject: rec.id,
+      message: `Recording "${rec.id}" infers that "${steps[firstManagementAt]!.key}" establishes management because its kind is "profile". A VPN or configuration profile has the same kind and would satisfy the ordering rule without enrolling anything. Set establishesManagement: true on the real enrollment step to make this exact.`,
+    });
+  }
   const dependents = steps
     .map((s, i) => ({ s, i }))
     .filter(({ s }) => isManagementDependent(s.kind));

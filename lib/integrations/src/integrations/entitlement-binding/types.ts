@@ -94,12 +94,20 @@ export interface NormalizedEntitlementBinding {
   readonly carrier: CarrierType;
   readonly carrierOwner: CarrierOwnerState;
   /** Hops from the principal to the group holding the permission. 0 = the principal
-   *  is a direct member of the group that carries it. `null` = not reported.
+   *  is a direct member of the group that carries it.
+   *
+   *  `null`      = not reported at all (the directory said nothing).
+   *  `"malformed"` = reported, but unreadable (negative, fractional, a string).
+   *
+   *  THOSE TWO ARE DIFFERENT and collapsing them was a defect found by adversarial
+   *  review. Both used to become `null`, and `null` skips the budget comparison — so
+   *  a report claiming `nestingDepth: -1` graded CLEANER than an honest report of a
+   *  genuinely over-budget depth. A broken input must never outrank a truthful one.
    *
    *  A COUNT SUPPLIED BY THE CALLER, never traversed here — walking a directory
    *  would put I/O in a decision path, and the graph/uem connectors own that read.
    *  Same discipline as `lastCheckInAgeSeconds` in the uem dimension. */
-  readonly nestingDepth: number | null;
+  readonly nestingDepth: number | null | "malformed";
   /** The deepest nesting the operator considers reviewable. Caller-supplied POLICY,
    *  not a constant in this file.
    *
@@ -138,6 +146,8 @@ export type EntitlementBindingReasonCode =
   | "CARRIER_NOT_A_SECURITY_GROUP"
   | "CARRIER_HAS_NO_OWNER"
   | "NESTING_DEPTH_OVER_BUDGET"
+  /** A depth was asserted but could not be read. Distinct from "not reported". */
+  | "NESTING_DEPTH_MALFORMED"
   // Unconfirmed inputs — foreclose the grant, never deny.
   | "BINDING_MECHANISM_UNKNOWN"
   | "CARRIER_TYPE_UNKNOWN"

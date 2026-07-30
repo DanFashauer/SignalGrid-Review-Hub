@@ -55,6 +55,23 @@ export interface SetupStep {
    * app which talks through it, for instance.
    */
   requires?: string[];
+  /**
+   * This step is what puts the device under management (MDM enrollment, directory
+   * join, EMM provisioning).
+   *
+   * WHY THIS EXISTS. The ordering rule infers management from `kind` — `profile` or
+   * `account`. Adversarial review showed that inference is too coarse: `profile`
+   * covers an MDM enrollment profile AND a VPN, PPPC or OneDrive-KFM profile, so a
+   * recording that put a VPN profile before an app_install silenced the ordering
+   * error entirely, and the error message then named a config profile as
+   * "management".
+   *
+   * When ANY step in a recording sets this flag, ONLY flagged steps establish
+   * management and the kind heuristic is switched off. When no step sets it, the
+   * heuristic still applies — so existing recordings keep working — but it is
+   * exactly as coarse as it was, and `provisioning-order.ts` says so.
+   */
+  establishesManagement?: boolean;
 }
 
 /** Which devices a recording applies to. At least one selector must be present. */

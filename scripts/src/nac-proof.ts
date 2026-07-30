@@ -125,23 +125,64 @@ check("no fixture carries a wall-clock timestamp",
 // ── 4. The actuators stay gone ───────────────────────────────────────────────
 {
   const here = dirname(fileURLToPath(import.meta.url));
-  const nacDir = resolve(here, "../../lib/integrations/src/integrations/nac");
-  const files = readdirSync(nacDir).filter((f) => f.endsWith(".ts"));
+  const dir = resolve(here, "../../lib/integrations/src/integrations/nac");
+  // RECURSIVE. The previous scan used a flat readdirSync, so a subdirectory could
+  // hold anything at all and the guarantee would still print green.
+  const walk = (d: string): string[] =>
+    readdirSync(d, { withFileTypes: true }).flatMap((e) =>
+      e.isDirectory() ? walk(join(d, e.name)) : e.name.endsWith(".ts") ? [join(d, e.name)] : []);
+  const files = walk(dir);
   const offenders: string[] = [];
-  // Network primitives only — the same narrowing the uem/ proof arrived at, after
-  // banning verbs false-positived on vendor enum values a normalizer must read.
-  const banned =
-    /\b(fetch|XMLHttpRequest)\s*\(|\b(?:axios|got|undici)\b|https?\.request\s*\(|method:\s*['"](?:POST|PUT|PATCH|DELETE)['"]/i;
+
+  // WHAT THIS BANS, and the claim is now narrowed to what it actually checks.
+  //
+  // THE OLD VERSION PRINTED A FALSE GUARANTEE. It said "no network I/O in any
+  // source" while matching only fetch/axios/got/undici/https.request and a mutating
+  // `method:` literal. Adversarial review found `nac/store.ts` doing
+  // `await import("ioredis")` and opening a TCP connection to Redis — real network
+  // I/O, invisible to every pattern in the list. The scan was reporting success over
+  // something it had stopped looking at, which this repo's own guard-registry header
+  // calls WORSE than no guard.
+  //
+  // Two changes. (1) The claim is now "no VENDOR-API call", which is the property
+  // that actually matters here — Redis is configuration storage, not a device
+  // actuator, and banning it outright would be theatre. (2) The pattern list gained
+  // dynamic import of network clients, node:net/http/https/tls, XHR, WebSocket and
+  // aliased fetch, so the next thing that sneaks in has fewer doors.
+  const banned = [
+    /\b(?:fetch|XMLHttpRequest|WebSocket|EventSource)\s*\(/i,
+    /\b(?:const|let|var)\s+\w+\s*=\s*fetch\b/i,            // aliased fetch
+    /\brequire\s*\(\s*['"](?:axios|got|undici|node-fetch|superagent|request|ioredis|redis|pg|mysql2|mongodb)['"]/i,
+    /\bimport\s*\(\s*['"](?:axios|got|undici|node-fetch|superagent|request|ioredis|redis|pg|mysql2|mongodb)['"]/i,
+    /\bfrom\s+['"](?:axios|got|undici|node-fetch|superagent|request)['"]/i,
+    /\bfrom\s+['"]node:(?:net|http|https|tls|dgram)['"]/i,
+    /\bhttps?\.(?:request|get)\s*\(/i,
+    /\bnet\.(?:connect|createConnection)\s*\(/i,
+    /method:\s*['"](?:POST|PUT|PATCH|DELETE)['"]/i,
+  ];
+  // store.ts is EXEMPT and named, not silently skipped. It talks to Redis to persist
+  // which NAC provider is configured — configuration storage, not a vendor API call
+  // and not a device action. Listing it here is the honest form: the exemption is
+  // visible, scoped to one file, and a reader can disagree with it.
+  const CONFIG_STORAGE_FILES = new Set(["store.ts"]);
+  const allowed = (rel: string): boolean => CONFIG_STORAGE_FILES.has(rel);
   for (const f of files) {
-    readFileSync(join(nacDir, f), "utf8").split("\n").forEach((line, i) => {
+    const rel = f.slice(dir.length + 1);
+    readFileSync(f, "utf8").split("\n").forEach((line, i) => {
       const t = line.trim();
       if (t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")) return;
-      if (banned.test(line)) offenders.push(`${f}:${i + 1}`);
+      if (allowed(rel) ) return;
+      if (banned.some((re) => re.test(line))) offenders.push(`${rel}:${i + 1}`);
     });
   }
   if (offenders.length) console.log(`      offenders: ${offenders.join(", ")}`);
-  check(`no network I/O in any nac/ source — a quarantine actuator cannot return (${files.length} files scanned)`,
+  check(`no VENDOR-API call in any nac/ source — an actuator cannot return (${files.length} files scanned recursively)`,
     offenders.length === 0);
+  // NON-VACUITY: the scan must be able to FAIL. Without this, deleting the pattern
+  // list would leave the assertion green and nobody would notice.
+  check("...and the scan actually detects a planted vendor call",
+    banned.some((re) => re.test(`await fetch("https://vendor/api", { method: "POST" })`)) &&
+    banned.some((re) => re.test(`const { Redis } = await import("ioredis");`)));
 }
 
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${passed + failures.length})`);

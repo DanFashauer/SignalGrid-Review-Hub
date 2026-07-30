@@ -87,6 +87,8 @@ export interface GraphBindingPayload {
     /** Count of owners. A COUNT, supplied by the caller — this normalizer does not
      *  expand a navigation property, because that would be a second network read. */
     readonly ownerCount?: unknown;
+    /** Graph's own discriminator. Contains "Unified" for a Microsoft 365 group. */
+    readonly groupTypes?: unknown;
   };
   /** Hops from principal to the group carrying the permission, counted by the caller. */
   readonly nestingDepth?: unknown;
@@ -100,10 +102,19 @@ const asString = (v: unknown): string | null =>
  *  confident answer. Same discipline as `asBool` in jamf.ts. */
 const asBool = (v: unknown): boolean | null => (typeof v === "boolean" ? v : null);
 
-/** Non-negative integer, or null. A negative or fractional hop count is not a
- *  smaller number — it is a broken report, and it must not compare as shallow. */
+/** Owner counts: non-negative integer, or null when absent/unreadable. Ownership is
+ *  already tri-state via `carrierOwner`, so an unreadable count lands on `unknown`
+ *  there and needs no separate sentinel. */
 const asCount = (v: unknown): number | null =>
   typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null;
+
+/** Hop depth: absent stays `null`, but a value that was ASSERTED and cannot be read
+ *  becomes `"malformed"` rather than collapsing into "not reported". See the note on
+ *  `nestingDepth` in types.ts for why the distinction is load-bearing. */
+const asDepth = (v: unknown): number | null | "malformed" => {
+  if (v === undefined || v === null) return null;
+  return typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : "malformed";
+};
 
 /**
  * Normalize a Graph-shaped binding report. Pure — no clock, no I/O, no throwing.
@@ -157,15 +168,35 @@ export function normalizeGraphBinding(
 
   const securityEnabled = asBool(raw.group?.securityEnabled);
   const mailEnabled = asBool(raw.group?.mailEnabled);
+  // A Microsoft 365 (Unified) group and a distribution list SHARE the
+  // `securityEnabled:false, mailEnabled:true` shape. Found by adversarial review:
+  // the previous version graded that pair as `distribution_group` outright and
+  // carried a comment claiming the M365 shape was "both false" — which is simply
+  // wrong. Every M365 group was therefore reported `unreviewable` on a
+  // discriminator that cannot tell the two apart.
+  //
+  // `groupTypes` containing "Unified" is Graph's own discriminator, so it is read
+  // when present. When it is ABSENT the pair is genuinely ambiguous, and the honest
+  // answer is `unknown` — not the more confident `distribution_group`. Asserting the
+  // wrong carrier is worse than admitting we cannot tell: an operator sent to remove
+  // a distribution-list grant that is actually an M365 group wastes the trip and
+  // learns to distrust the finding.
+  const groupTypes = Array.isArray(raw.group?.groupTypes) ? raw.group.groupTypes : null;
+  const isUnified =
+    groupTypes === null ? null : groupTypes.some((t) => typeof t === "string" && t.toLowerCase() === "unified");
   const carrier: CarrierType =
     securityEnabled === true && mailEnabled === true
       ? "mail_enabled_security_group"
       : securityEnabled === true && mailEnabled === false
         ? "security_group"
         : securityEnabled === false && mailEnabled === true
-          ? "distribution_group"
-          : // Either flag unread, or both false (a Microsoft 365 group shape this
-            // normalizer does not claim to grade). Unknown, never a pass.
+          ? // Only callable a distribution group once Graph has positively told us it
+            // is NOT Unified. `isUnified === null` means the field was not supplied.
+            isUnified === false
+            ? "distribution_group"
+            : "unknown"
+          : // Either flag unread, or both false — a shape this normalizer does not
+            // claim to grade. Unknown, never a pass.
             "unknown";
 
   const ownerCount = asCount(raw.group?.ownerCount);
@@ -177,7 +208,7 @@ export function normalizeGraphBinding(
     mechanism,
     carrier,
     carrierOwner,
-    nestingDepth: asCount(raw.nestingDepth),
+    nestingDepth: asDepth(raw.nestingDepth),
     nestingDepthBudget,
     reportIntegrity: "intact",
   };
@@ -297,6 +328,18 @@ export const ENTITLEMENT_BINDING_FIXTURES: Readonly<
 export function evaluateEntitlementBindingFixture(
   name: string,
 ): EntitlementBindingVerdict | null {
+  // OWN-PROPERTY LOOKUP ONLY. Found by adversarial review: the previous body did
+  // `const fixture = FIXTURES[name]; return fixture ? evaluate(fixture) : null;`,
+  // which resolves inherited `Object.prototype` keys. So
+  // `evaluateEntitlementBindingFixture("constructor")` returned the `Object`
+  // function — truthy — and handed it to the evaluator, where every field read as
+  // `undefined`, no concern matched, and the seed verdict fell straight through to
+  // `{ recommendedAction: "none", reasonCode: "GRANT_GOVERNABLE" }`.
+  //
+  // A lookup for a fixture that does not exist GRANTED. The proof missed it because
+  // it only tested `"no-such-fixture"`, which is not a prototype key — a reminder
+  // that "unknown input returns null" needs the HOSTILE unknown, not a friendly one.
+  if (!Object.hasOwn(ENTITLEMENT_BINDING_FIXTURES, name)) return null;
   const fixture = ENTITLEMENT_BINDING_FIXTURES[name];
   return fixture ? evaluateEntitlementBinding(fixture) : null;
 }

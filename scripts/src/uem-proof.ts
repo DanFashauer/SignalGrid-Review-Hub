@@ -127,14 +127,13 @@ for (const vendor of VENDORS)
             const v = evaluateUem(state);
             if (v.recommendedAction !== "none") continue;
             granting += 1;
-            // The management story must be positively confirmed. Supervision clears
-            // EITHER by being present, OR by being absent on a device that is
-            // affirmatively employee-owned — where absence is the correct state and
-            // no supervised alternative exists. `ownership: "unknown"` does NOT
-            // clear it: that is the case we cannot read, so it cannot be a grant.
-            const supervisionConfirmed =
-              supervision === "supervised" ||
-              (supervision === "unsupervised" && ownership === "personal");
+            // Supervision must be POSITIVELY PRESENT for a grant. It is no longer
+            // cleared by "unsupervised + personal": adversarial review pointed out
+            // that Intune reports `personal` as its residual bucket, so that
+            // combination is an absence of a corporate marker rather than a
+            // confirmation of employee ownership. It now grades `monitor`, which is
+            // why it is absent from this predicate — see BYOD_UNSUPERVISED_EXPECTED.
+            const supervisionConfirmed = supervision === "supervised";
             const confirmedClean =
               vendor !== "unknown" && enrollment === "enrolled" && compliance === "compliant" &&
               supervisionConfirmed && reportIntegrity === "intact";
@@ -149,16 +148,16 @@ check(
 );
 // Non-vacuity: "no unjustified grants" passes trivially if nothing grants, so the
 // grant path is pinned EXACTLY — not merely "> 0", which would let the set silently
-// widen. Three vendors x four confirmed-clean shapes: supervised under each of the
-// three ownership values (ownership is irrelevant once supervision is confirmed),
-// plus unsupervised-and-personal, the BYOD case this change added. 3 x 4 = 12.
+// widen. Three vendors x supervised under each of the three ownership values
+// (ownership is irrelevant once supervision is confirmed) = 9.
 //
-// This number is the tripwire. It was 3 before the ownership axis; if a later edit
-// makes ownership foreclose the grant on its own it drops to 9, and if one makes
-// `unknown` ownership behave like `personal` it rises to 15. Either way the figure
-// moves and this assertion fails, which is the point of pinning it rather than
-// asserting a floor.
-check(`...and the grant path is REACHABLE — exactly 12 confirmed-clean states (got ${granting})`, granting === 12);
+// THE FIGURE HAS MOVED TWICE AND BOTH MOVES ARE THE POINT. It was 3 before the
+// ownership axis; it went to 12 when unsupervised-and-personal was made a grant; it
+// is back to 9 now that adversarial review showed `personal` is a vendor DEFAULT
+// rather than a confirmation, so BYOD grades `monitor` instead of granting. Pinning
+// the exact count is what forced each of those changes to be noticed and argued for
+// rather than absorbed silently.
+check(`...and the grant path is REACHABLE — exactly 9 confirmed-clean states (got ${granting})`, granting === 9);
 
 // The ceiling is real: this dimension never escalates.
 {
@@ -223,9 +222,18 @@ check(`...and the grant path is REACHABLE — exactly 12 confirmed-clean states 
     corporate.recommendedAction === "step_up" && corporate.reasonCode === "DEVICE_UNSUPERVISED");
 
   // THE FIX. This is the assertion that would have failed before the ownership axis.
+  // MONITOR, not a grant and not a step_up. The first version of this fix granted,
+  // making a BYOD verdict byte-identical to a supervised corporate one; adversarial
+  // review showed that over-corrected, because Intune's `personal` is the residual
+  // bucket for "no corporate marker seen". Monitor keeps the state visible without
+  // firing an unremediable step_up at the worker.
   const personal = evaluateUem({ ...base, ownership: "personal" });
-  check("PERSONAL + unsupervised → GRANTS — the expected, permanent, unremediable BYOD state",
-    personal.recommendedAction === "none" && personal.reasonCode === "UEM_MANAGED_COMPLIANT");
+  check("PERSONAL + unsupervised → MONITOR — visible, but no unremediable step_up",
+    personal.recommendedAction === "monitor" && personal.reasonCode === "BYOD_UNSUPERVISED_EXPECTED");
+  check("...and it is NOT byte-identical to a supervised corporate device",
+    JSON.stringify(personal) !== JSON.stringify(evaluateUem({ ...base, supervision: "supervised", ownership: "corporate" })));
+  check("...and its posture is still managed_compliant — expected-absent is not degraded",
+    personal.posture === "managed_compliant");
 
   const unknownOwner = evaluateUem({ ...base, ownership: "unknown" });
   check("UNKNOWN ownership + unsupervised → step_up, naming ownership as the unread input",
@@ -273,8 +281,8 @@ check("Jamf reports NO ownership field, so it is unknown — not guessed as corp
   normalizeJamfDevice({ computer: { general: { id: 1, remote_management: { managed: true }, supervised: false } } }).ownership === "unknown");
 
 // The fixture pair that demonstrates the fix end-to-end.
-check("fixture 'intune-byod-personal' GRANTS — the BYOD case that used to step up forever",
-  evaluateUem(UEM_FIXTURES["intune-byod-personal"]!).recommendedAction === "none");
+check("fixture 'intune-byod-personal' MONITORS — visible, not a step_up, not a silent grant",
+  evaluateUem(UEM_FIXTURES["intune-byod-personal"]!).recommendedAction === "monitor");
 check("fixture 'intune-unsupervised-owner-unknown' steps up — identical but for the unread owner",
   evaluateUem(UEM_FIXTURES["intune-unsupervised-owner-unknown"]!).reasonCode === "UNSUPERVISED_OWNERSHIP_UNKNOWN");
 
@@ -307,36 +315,68 @@ check("no fixture carries a wall-clock timestamp — ages are durations supplied
 // pasting a fetch() back in. This asserts it at the source level instead.
 {
   const here = dirname(fileURLToPath(import.meta.url));
-  const uemDir = resolve(here, "../../lib/integrations/src/integrations/uem");
-  const files = readdirSync(uemDir).filter((f) => f.endsWith(".ts"));
+  const dir = resolve(here, "../../lib/integrations/src/integrations/uem");
+  // RECURSIVE. The previous scan used a flat readdirSync, so a subdirectory could
+  // hold anything at all and the guarantee would still print green.
+  const walk = (d: string): string[] =>
+    readdirSync(d, { withFileTypes: true }).flatMap((e) =>
+      e.isDirectory() ? walk(join(d, e.name)) : e.name.endsWith(".ts") ? [join(d, e.name)] : []);
+  const files = walk(dir);
   const offenders: string[] = [];
 
-  // BAN NETWORK I/O, NOT VOCABULARY.
+  // WHAT THIS BANS, and the claim is now narrowed to what it actually checks.
   //
-  // The first version of this scan also banned the verbs themselves — LockDevice,
-  // remoteLock, wipe, EraseDevice — and immediately flagged three false positives:
-  // `startsWith("wipe")` in the Intune enrollment mapping, and the
-  // `enterprisewipepending` / `devicewipepending` cases in Workspace ONE. Those are
-  // vendor enum values this connector must READ in order to grade a device as
-  // retiring. Banning the words would have forced the normalizers to obfuscate the
-  // very states they exist to recognise.
+  // THE OLD VERSION PRINTED A FALSE GUARANTEE. It said "no network I/O in any
+  // source" while matching only fetch/axios/got/undici/https.request and a mutating
+  // `method:` literal. Adversarial review found `nac/store.ts` doing
+  // `await import("ioredis")` and opening a TCP connection to Redis — real network
+  // I/O, invisible to every pattern in the list. The scan was reporting success over
+  // something it had stopped looking at, which this repo's own guard-registry header
+  // calls WORSE than no guard.
   //
-  // Narrowing to network primitives is a tightening, not a weakening: a write
-  // actuator needs I/O to act. A verb with no request attached is an inert string,
-  // and a request is exactly what this catches.
-  const banned =
-    /\b(fetch|XMLHttpRequest)\s*\(|\b(?:axios|got|undici)\b|https?\.request\s*\(|method:\s*['"](?:POST|PUT|PATCH|DELETE)['"]/i;
-
+  // Two changes. (1) The claim is now "no VENDOR-API call", which is the property
+  // that actually matters here — Redis is configuration storage, not a device
+  // actuator, and banning it outright would be theatre. (2) The pattern list gained
+  // dynamic import of network clients, node:net/http/https/tls, XHR, WebSocket and
+  // aliased fetch, so the next thing that sneaks in has fewer doors.
+  const banned = [
+    /\b(?:fetch|XMLHttpRequest|WebSocket|EventSource)\s*\(/i,
+    /\b(?:const|let|var)\s+\w+\s*=\s*fetch\b/i,            // aliased fetch
+    /\brequire\s*\(\s*['"](?:axios|got|undici|node-fetch|superagent|request|ioredis|redis|pg|mysql2|mongodb)['"]/i,
+    /\bimport\s*\(\s*['"](?:axios|got|undici|node-fetch|superagent|request|ioredis|redis|pg|mysql2|mongodb)['"]/i,
+    /\bfrom\s+['"](?:axios|got|undici|node-fetch|superagent|request)['"]/i,
+    /\bfrom\s+['"]node:(?:net|http|https|tls|dgram)['"]/i,
+    /\bhttps?\.(?:request|get)\s*\(/i,
+    /\bnet\.(?:connect|createConnection)\s*\(/i,
+    /method:\s*['"](?:POST|PUT|PATCH|DELETE)['"]/i,
+  ];
+  // store.ts is EXEMPT and NAMED, not silently skipped. It talks to Redis to persist
+  // connector configuration — configuration storage, not a vendor API call and not a
+  // device action. Listing it here is the honest form: the exemption is visible,
+  // scoped to one file, and a reader can disagree with it.
+  //
+  // Both this family and nac/ were found doing `await import("ioredis")` while their
+  // proofs printed "no network I/O". The broadened scan caught uem/ on its first run
+  // after the rewrite, which is the check earning its keep immediately.
+  const CONFIG_STORAGE_FILES = new Set(["store.ts"]);
+  const allowed = (rel: string): boolean => CONFIG_STORAGE_FILES.has(rel);
   for (const f of files) {
-    readFileSync(join(uemDir, f), "utf8").split("\n").forEach((line, i) => {
+    const rel = f.slice(dir.length + 1);
+    readFileSync(f, "utf8").split("\n").forEach((line, i) => {
       const t = line.trim();
       if (t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")) return;
-      if (banned.test(line)) offenders.push(`${f}:${i + 1}`);
+      if (allowed(rel) ) return;
+      if (banned.some((re) => re.test(line))) offenders.push(`${rel}:${i + 1}`);
     });
   }
   if (offenders.length) console.log(`      offenders: ${offenders.join(", ")}`);
-  check(`no network I/O in any uem/ source — a write actuator cannot return (${files.length} files scanned)`,
+  check(`no VENDOR-API call in any uem/ source — an actuator cannot return (${files.length} files scanned recursively)`,
     offenders.length === 0);
+  // NON-VACUITY: the scan must be able to FAIL. Without this, deleting the pattern
+  // list would leave the assertion green and nobody would notice.
+  check("...and the scan actually detects a planted vendor call",
+    banned.some((re) => re.test(`await fetch("https://vendor/api", { method: "POST" })`)) &&
+    banned.some((re) => re.test(`const { Redis } = await import("ioredis");`)));
 }
 
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${passed + failures.length})`);

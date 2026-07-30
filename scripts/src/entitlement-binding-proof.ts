@@ -288,8 +288,17 @@ const carrierOf = (securityEnabled: unknown, mailEnabled: unknown) =>
 check("securityEnabled+!mailEnabled → security_group", carrierOf(true, false) === "security_group");
 check("securityEnabled+mailEnabled → mail_enabled_security_group",
   carrierOf(true, true) === "mail_enabled_security_group");
-check("!securityEnabled+mailEnabled → distribution_group",
-  carrierOf(false, true) === "distribution_group");
+// A distribution group is only callable as such once Graph has positively said the
+// group is NOT Unified — the securityEnabled/mailEnabled pair alone cannot tell a DL
+// from a Microsoft 365 group, and the previous version asserted it could.
+check("!securityEnabled+mailEnabled + groupTypes WITHOUT Unified → distribution_group",
+  normalizeGraphBinding({ principalId: "p", principalType: "Group",
+    group: { securityEnabled: false, mailEnabled: true, ownerCount: 1, groupTypes: [] } }).carrier === "distribution_group");
+check("...but the SAME flags with groupTypes ['Unified'] are an M365 group, NOT a DL",
+  normalizeGraphBinding({ principalId: "p", principalType: "Group",
+    group: { securityEnabled: false, mailEnabled: true, ownerCount: 1, groupTypes: ["Unified"] } }).carrier !== "distribution_group");
+check("...and with groupTypes ABSENT the pair is ambiguous, so unknown — never the confident wrong answer",
+  carrierOf(false, true) === "unknown");
 check("both false (an M365 group shape) → unknown, not silently graded",
   carrierOf(false, false) === "unknown");
 check("a NON-BOOLEAN flag is unknown, not coerced — 'false' the string is not false",
@@ -299,9 +308,18 @@ check("ownerCount 0 → ownerless, >0 → owner_assigned, absent → unknown",
   normalizeGraphBinding({ principalId: "p", principalType: "Group", group: { securityEnabled: true, mailEnabled: false, ownerCount: 2 } }).carrierOwner === "owner_assigned" &&
   normalizeGraphBinding({ principalId: "p", principalType: "Group", group: { securityEnabled: true, mailEnabled: false } }).carrierOwner === "unknown");
 // A broken count must not compare as shallow.
-check("a negative or fractional depth is null, NOT a small number that clears a budget",
-  normalizeGraphBinding({ principalId: "p", principalType: "Group", nestingDepth: -1 }).nestingDepth === null &&
-  normalizeGraphBinding({ principalId: "p", principalType: "Group", nestingDepth: 1.5 }).nestingDepth === null);
+// ASSERTED-BUT-UNREADABLE is distinct from NOT-REPORTED, and conflating them let a
+// broken report grade cleaner than an honest over-budget one.
+check("a negative or fractional depth is 'malformed', NOT null and NOT a small number",
+  normalizeGraphBinding({ principalId: "p", principalType: "Group", nestingDepth: -1 }).nestingDepth === "malformed" &&
+  normalizeGraphBinding({ principalId: "p", principalType: "Group", nestingDepth: 1.5 }).nestingDepth === "malformed" &&
+  normalizeGraphBinding({ principalId: "p", principalType: "Group", nestingDepth: "9" }).nestingDepth === "malformed");
+check("...an ABSENT depth is still null (silence is not a broken assertion)",
+  normalizeGraphBinding({ principalId: "p", principalType: "Group" }).nestingDepth === null);
+check("...and a malformed depth is GRADED even with no budget, unlike an absent one",
+  evaluateEntitlementBinding({ principalId: "p", mechanism: "group", carrier: "security_group",
+    carrierOwner: "owner_assigned", nestingDepth: "malformed", nestingDepthBudget: null,
+    reportIntegrity: "intact" }).reasonCode === "NESTING_DEPTH_MALFORMED");
 check("a payload with no identifiable principal is malformed, not a verdict about nobody",
   normalizeGraphBinding({ principalType: "Group" }).reportIntegrity === "malformed");
 check("the budget is a PARAMETER, never read from the directory payload",
@@ -337,22 +355,58 @@ check("no fixture carries a wall-clock timestamp — depths are counts, not time
 {
   const here = dirname(fileURLToPath(import.meta.url));
   const dir = resolve(here, "../../lib/integrations/src/integrations/entitlement-binding");
-  const files = readdirSync(dir).filter((f) => f.endsWith(".ts"));
+  // RECURSIVE. The previous scan used a flat readdirSync, so a subdirectory could
+  // hold anything at all and the guarantee would still print green.
+  const walk = (d: string): string[] =>
+    readdirSync(d, { withFileTypes: true }).flatMap((e) =>
+      e.isDirectory() ? walk(join(d, e.name)) : e.name.endsWith(".ts") ? [join(d, e.name)] : []);
+  const files = walk(dir);
   const offenders: string[] = [];
-  // Network primitives only — the narrowing the uem/ and nac/ proofs arrived at,
-  // after banning verbs false-positived on vendor enum values a normalizer must read.
-  const banned =
-    /\b(fetch|XMLHttpRequest)\s*\(|\b(?:axios|got|undici)\b|https?\.request\s*\(|method:\s*['"](?:POST|PUT|PATCH|DELETE)['"]/i;
+
+  // WHAT THIS BANS, and the claim is now narrowed to what it actually checks.
+  //
+  // THE OLD VERSION PRINTED A FALSE GUARANTEE. It said "no network I/O in any
+  // source" while matching only fetch/axios/got/undici/https.request and a mutating
+  // `method:` literal. Adversarial review found `nac/store.ts` doing
+  // `await import("ioredis")` and opening a TCP connection to Redis — real network
+  // I/O, invisible to every pattern in the list. The scan was reporting success over
+  // something it had stopped looking at, which this repo's own guard-registry header
+  // calls WORSE than no guard.
+  //
+  // Two changes. (1) The claim is now "no VENDOR-API call", which is the property
+  // that actually matters here — Redis is configuration storage, not a device
+  // actuator, and banning it outright would be theatre. (2) The pattern list gained
+  // dynamic import of network clients, node:net/http/https/tls, XHR, WebSocket and
+  // aliased fetch, so the next thing that sneaks in has fewer doors.
+  const banned = [
+    /\b(?:fetch|XMLHttpRequest|WebSocket|EventSource)\s*\(/i,
+    /\b(?:const|let|var)\s+\w+\s*=\s*fetch\b/i,            // aliased fetch
+    /\brequire\s*\(\s*['"](?:axios|got|undici|node-fetch|superagent|request|ioredis|redis|pg|mysql2|mongodb)['"]/i,
+    /\bimport\s*\(\s*['"](?:axios|got|undici|node-fetch|superagent|request|ioredis|redis|pg|mysql2|mongodb)['"]/i,
+    /\bfrom\s+['"](?:axios|got|undici|node-fetch|superagent|request)['"]/i,
+    /\bfrom\s+['"]node:(?:net|http|https|tls|dgram)['"]/i,
+    /\bhttps?\.(?:request|get)\s*\(/i,
+    /\bnet\.(?:connect|createConnection)\s*\(/i,
+    /method:\s*['"](?:POST|PUT|PATCH|DELETE)['"]/i,
+  ];
+    const allowed = (_rel: string): boolean => false;
   for (const f of files) {
-    readFileSync(join(dir, f), "utf8").split("\n").forEach((line, i) => {
+    const rel = f.slice(dir.length + 1);
+    readFileSync(f, "utf8").split("\n").forEach((line, i) => {
       const t = line.trim();
       if (t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")) return;
-      if (banned.test(line)) offenders.push(`${f}:${i + 1}`);
+      if (allowed(rel) ) return;
+      if (banned.some((re) => re.test(line))) offenders.push(`${rel}:${i + 1}`);
     });
   }
   if (offenders.length) console.log(`      offenders: ${offenders.join(", ")}`);
-  check(`no network I/O in any entitlement-binding source (${files.length} files scanned)`,
+  check(`no VENDOR-API call in any entitlement-binding/ source — an actuator cannot return (${files.length} files scanned recursively)`,
     offenders.length === 0);
+  // NON-VACUITY: the scan must be able to FAIL. Without this, deleting the pattern
+  // list would leave the assertion green and nobody would notice.
+  check("...and the scan actually detects a planted vendor call",
+    banned.some((re) => re.test(`await fetch("https://vendor/api", { method: "POST" })`)) &&
+    banned.some((re) => re.test(`const { Redis } = await import("ioredis");`)));
 }
 
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${passed + failures.length})`);

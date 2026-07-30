@@ -127,7 +127,13 @@ export function evaluateEntitlementBinding(
   // unmeasured depth is not silently treated as shallow either, since a `group`
   // binding whose depth is unreported still has a confirmed mechanism, carrier and
   // owner, and those are what reviewability turns on.
-  if (
+  if (binding.nestingDepth === "malformed") {
+    // A depth was ASSERTED and could not be read. Graded even with no budget set,
+    // because the defect is the unreadable assertion itself, not the comparison —
+    // and it must never be quieter than an honest over-budget report, which is what
+    // collapsing it into `null` achieved.
+    candidates.push({ action: "monitor", reason: "NESTING_DEPTH_MALFORMED" });
+  } else if (
     binding.nestingDepthBudget !== null &&
     binding.nestingDepth !== null &&
     binding.nestingDepth > binding.nestingDepthBudget
@@ -201,6 +207,7 @@ function postureFor(winner: Candidate): EntitlementBindingPosture {
       return "unattestable";
     // Findable and owned, but further from the principal than the operator can trace.
     case "NESTING_DEPTH_OVER_BUDGET":
+    case "NESTING_DEPTH_MALFORMED":
       return "obscured";
     // Driven by an input we could not read. Deliberately NOT one of the affirmative
     // postures above: we do not know the grant is unreviewable, only that we cannot

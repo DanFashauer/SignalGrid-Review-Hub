@@ -208,13 +208,39 @@ const base = {
       ] };
       return lintSetupRecording(acctOnly).length === 0;
     })());
-  check("...and a `profile` step alone does too, symmetrically",
+  // A `profile` step also establishes management — but it now WARNS that the answer
+  // was inferred from the kind, because `profile` covers an MDM enrollment profile
+  // and a VPN profile alike. Adversarial review showed the heuristic can be silenced
+  // by an unrelated config profile, so the guess is stated instead of hidden.
+  check("...and a `profile` step alone does too, but says the answer was INFERRED",
     (() => {
       const profOnly: DeviceSetupRecording = { ...base, triggers: ["first_boot"], steps: [
         { key: "mdm", label: "MDM", kind: "profile" },
         { key: "app", label: "App", kind: "app_install" },
       ] };
-      return lintSetupRecording(profOnly).length === 0;
+      const issues = lintSetupRecording(profOnly);
+      return issues.every((i) => i.severity !== "error") &&
+        issues.some((i) => i.code === "management_step_inferred");
+    })());
+  // THE FALSE NEGATIVE, named and pinned: a VPN profile satisfies the heuristic.
+  check("a VPN profile before an app SILENCES the ordering rule — the heuristic's known limit",
+    (() => {
+      const vpnFirst: DeviceSetupRecording = { ...base, triggers: ["first_boot"], steps: [
+        { key: "vpn", label: "Corporate VPN payload", kind: "profile" },
+        { key: "app", label: "App", kind: "app_install" },
+      ] };
+      return codes(vpnFirst, "error").length === 0 &&
+        codes(vpnFirst, "warning").includes("management_step_inferred");
+    })());
+  // ...and marking the real enrollment step makes it EXACT again.
+  check("declaring establishesManagement makes the rule exact — the VPN no longer counts",
+    (() => {
+      const explicit: DeviceSetupRecording = { ...base, triggers: ["first_boot"], steps: [
+        { key: "vpn", label: "Corporate VPN payload", kind: "profile" },
+        { key: "app", label: "App", kind: "app_install" },
+        { key: "mdm", label: "MDM enrollment", kind: "profile", establishesManagement: true },
+      ] };
+      return codes(explicit, "error").includes("step_before_management");
     })());
   check("the two kind lists are disjoint — no kind both needs and provides management",
     MANAGEMENT_DEPENDENT_KINDS.every((k) => !MANAGEMENT_ESTABLISHING_KINDS.includes(k)));

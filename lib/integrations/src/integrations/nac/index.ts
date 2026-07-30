@@ -118,17 +118,58 @@ export const NAC_FIXTURES: Readonly<Record<string, NACEndpointInfo>> = Object.fr
     name: "handheld-03",
     status: "disconnected",
   },
+  /** Serial-keyed, so the per-kind lookup has a non-vacuous `serial` branch. Without
+   *  this the "cert must not match a MAC" fix could be satisfied by a lookup that
+   *  simply never matches anything. */
+  "ise-by-serial": {
+    endpointId: "fixture-ise-2",
+    serialNumber: "SN-CART-0042",
+    name: "ward-cart-02",
+    status: "unknown",
+  },
 });
 
-/** Look up a fixture endpoint by identifier, applying the SAME validation a live read
- *  would. A refused identifier returns null here too, so fixture mode and live mode
- *  agree about what is a valid request. */
+/**
+ * Look up a fixture endpoint by identifier, applying the SAME validation a live read
+ * would. A refused identifier returns null here too, so fixture mode and live mode
+ * agree about what is a valid request.
+ *
+ * THE LOOKUP IS SCOPED TO THE IDENTIFIER KIND, and it was not. Found by adversarial
+ * review: the previous body validated with `type` and then matched with
+ *
+ *     f.macAddress === v.normalized || f.serialNumber === v.normalized
+ *
+ * — ignoring `type` entirely. The namespaces provably overlap, because
+ * `CERT_SERIAL_RE` accepts colon-separated hex and every MAC address is
+ * colon-separated hex. So `lookupNacFixture("aa:bb:cc:dd:ee:01", "cert")` returned
+ * the MAC-keyed endpoint: a certificate-scoped question answered with a MAC match.
+ *
+ * This feeds `deviceResolver`, so the consequence is binding a decision to the wrong
+ * device — the single worst thing an identity resolver can do. Matching per kind
+ * costs nothing and makes the overlap unreachable.
+ *
+ * A `cert` lookup currently always returns null: no fixture carries a certificate
+ * identity, and inventing one to make the path look populated would be fabricating
+ * a corpus. The proof asserts the null explicitly so the absence is recorded rather
+ * than mistaken for a miss.
+ */
 export function lookupNacFixture(identifier: unknown, type: NacIdentifierType): NACEndpointInfo | null {
   const v = validateNacIdentifier(identifier, type);
   if (!v.ok) return null;
-  return (
-    Object.values(NAC_FIXTURES).find(
-      (f) => f.macAddress === v.normalized || f.serialNumber === v.normalized,
-    ) ?? null
-  );
+  const matches = (f: NACEndpointInfo): boolean => {
+    switch (type) {
+      case "mac":
+        return f.macAddress === v.normalized;
+      case "serial":
+        return f.serialNumber === v.normalized;
+      case "cert":
+        // NACEndpointInfo carries `certSubject` (a subject DN), NOT a certificate
+        // serial. Comparing a serial against a subject would be the same category
+        // error the ISE normalizer was just fixed for, so this matches nothing.
+        return false;
+      default:
+        return false;
+    }
+  };
+  return Object.values(NAC_FIXTURES).find(matches) ?? null;
 }

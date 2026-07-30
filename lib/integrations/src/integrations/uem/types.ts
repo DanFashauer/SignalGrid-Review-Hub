@@ -149,6 +149,10 @@ export type UemReasonCode =
   /** A CORPORATE device that is not supervised. Scoped to corporate deliberately:
    *  see UemOwnership for why the unscoped version of this code was a defect. */
   | "DEVICE_UNSUPERVISED"
+  /** Employee-owned and unsupervised — the expected state, surfaced at `monitor`
+   *  rather than silenced, because most vendors report personal ownership as a
+   *  DEFAULT rather than as a positive confirmation. */
+  | "BYOD_UNSUPERVISED_EXPECTED"
   // Unconfirmed inputs — foreclose the grant, never deny.
   | "ENROLLMENT_STATE_UNKNOWN"
   | "COMPLIANCE_STATE_UNKNOWN"

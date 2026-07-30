@@ -32,6 +32,8 @@ export interface IseEndpointSearchPayload {
     readonly resources?: ReadonlyArray<{
       readonly id?: unknown;
       readonly name?: unknown;
+      /** ISE's own MAC for the endpoint. Read when present; never inferred. */
+      readonly mac?: unknown;
     }>;
   };
 }
@@ -68,14 +70,31 @@ export function normalizeIseEndpoint(
   const endpointId = asString(first?.id);
   if (!first || endpointId === undefined) return null;
 
-  const v = validateNacIdentifier(identifier, type);
-  const normalized = v.ok ? v.normalized : undefined;
-
+  // IDENTITY FIELDS COME FROM THE RESPONSE, NEVER FROM THE REQUEST.
+  //
+  // FOUND BY ADVERSARIAL REVIEW, and it is the same defect this file's header claims
+  // to have fixed for `status` — I fixed the unearned `registered` and then left the
+  // identity fields fabricating. The previous version did:
+  //
+  //     macAddress:   type === "mac"    ? normalized : undefined,
+  //     serialNumber: type === "serial" ? normalized : undefined,
+  //     certSubject:  type === "cert"   ? normalized : undefined,
+  //
+  // where `normalized` is the CALLER'S QUERY. So the returned record asserted "ISE
+  // says this endpoint's MAC is X" when ISE had said no such thing — it was echoing
+  // the question back as an answer. If the search matched a different endpoint than
+  // the caller assumed, the record confidently mislabelled it.
+  //
+  // Worse for `cert`: it wrote a certificate SERIAL into `certSubject`, which is a
+  // subject-DN field. A serial is not a subject; that is a type confusion a consumer
+  // would have no way to detect.
+  //
+  // ISE's endpoint search returns `mac` on the resource, so that one is READ. It
+  // reports neither a device serial nor a certificate subject, so those are simply
+  // ABSENT — an omitted field is honest, an echoed one is not.
   return {
     endpointId,
-    macAddress: type === "mac" ? normalized : undefined,
-    serialNumber: type === "serial" ? normalized : undefined,
-    certSubject: type === "cert" ? normalized : undefined,
+    macAddress: asString(first.mac),
     name: asString(first.name),
     // ISE endpoint search returns identity and description, NOT session
     // authentication state. `registered` would be an unearned claim.

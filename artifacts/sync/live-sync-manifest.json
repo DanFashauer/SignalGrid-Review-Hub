@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 23,
-  "fingerprint": "be6b1d853a2c834026d0af4d6fd7274028a9a9db06a2f78033d61464200ae05c",
+  "manifestVersion": 24,
+  "fingerprint": "b1426cb5b3574659d064e0a09a2480b88ac037d07163c2f300fc11be08ab262d",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -93,12 +93,14 @@
       "device-attestation": 60,
       "device-management-health": 162,
       "dual-control": 58,
+      "entitlement-binding": 57,
       "factory-flows": 16,
       "handoff-sim": 55,
       "iac": 67,
       "link-usability": 154,
       "live-idp": 31,
       "macos-apple-schema": 53,
+      "nac": 27,
       "oauth-consent": 65,
       "ot-posture": 37,
       "pacs-access": 68,
@@ -106,12 +108,14 @@
       "pim-activation": 43,
       "platform-sso": 52,
       "policy-binding": 41,
+      "provisioning-order": 34,
       "provisioning-teardown": 25,
       "reliability": 28,
       "self-audit": 56,
       "sso-session": 78,
       "task-exception": 195,
       "token-binding": 52,
+      "uem": 50,
       "verdict-attestation": 76,
       "work-context": 50
     },

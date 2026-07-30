@@ -71,9 +71,46 @@ const healthy: NormalizedResponseRecord = {
 
   // NOT a watermelon: closed WITHOUT claiming a fix. Nobody asserted the problem went
   // away, so nobody is being caught out.
-  check("closed_unresolved is NOT a watermelon — no false claim was made",
-    evaluateResponse({ ...healthy, resolution: "closed_unresolved", underlyingConcernStillPresent: true })
-      .reasonCode !== "WATERMELON_CLOSED_BUT_UNRESOLVED");
+  //
+  // THIS ASSERTION USED TO SAY ONLY WHAT THE VERDICT IS NOT — `!== "WATERMELON_..."` —
+  // and it passed for two years' worth of the wrong answer. The verdict it was actually
+  // getting was RESPONSE_VERIFIED_RESOLVED / posture `resolved_verified`: "the concern is
+  // confirmed gone", asserted about a record whose own fields said the concern was
+  // CONFIRMED STILL THERE. The next check down, for `open`, was written positively
+  // (`=== "RESPONSE_IN_PROGRESS"`); that inconsistency was the tell. A negative
+  // assertion excludes one wrong answer and licenses every other one.
+  {
+    const closedLive = evaluateResponse({
+      ...healthy, resolution: "closed_unresolved", underlyingConcernStillPresent: true,
+    });
+    check("closed_unresolved with the concern STILL PRESENT is monitor — closed is not resolved",
+      closedLive.recommendedAction === "monitor" &&
+      closedLive.reasonCode === "CLOSED_CONCERN_NOT_RESOLVED" &&
+      closedLive.posture === "resolved_unverified");
+    check("...and it is NOT the watermelon — nobody claimed a fix, so nobody lied",
+      closedLive.reasonCode !== "WATERMELON_CLOSED_BUT_UNRESOLVED" &&
+      closedLive.recommendedAction !== "alert");
+    check("closed_unresolved with nobody re-checking grades the same — absence is not a fix",
+      evaluateResponse({ ...healthy, resolution: "closed_unresolved", underlyingConcernStillPresent: null })
+        .reasonCode === "CLOSED_CONCERN_NOT_RESOLVED");
+    // NON-VACUITY: closed_unresolved must still be able to come out clean, or the fix is
+    // just "always complain about closed_unresolved".
+    check("closed_unresolved with the concern CONFIRMED GONE is clean and says VERIFIED",
+      evaluateResponse({ ...healthy, resolution: "closed_unresolved", underlyingConcernStillPresent: false })
+        .reasonCode === "RESPONSE_VERIFIED_RESOLVED");
+  }
+
+  // THE STRUCTURAL GUARANTEE, asserted directly rather than inferred from the cases
+  // above: the affirmative verdict is the fold's SEED, so it is what the evaluator says
+  // when nothing fires — and "nothing fired" is not evidence a concern was fixed. Every
+  // resolution value, present and future, must fail to earn it without a positive check.
+  for (const resolution of ["resolved", "closed_unresolved", "open", "unknown"] as const) {
+    for (const present of [true, null] as const) {
+      const v = evaluateResponse({ ...healthy, resolution, underlyingConcernStillPresent: present });
+      check(`VERIFIED_RESOLVED is unreachable without a positive check (${resolution}/${present})`,
+        v.reasonCode !== "RESPONSE_VERIFIED_RESOLVED" && v.posture !== "resolved_verified");
+    }
+  }
   // NOT a watermelon: still open. Open work is work.
   check("an OPEN concern with the problem still present is in_progress, not a watermelon",
     evaluateResponse({ ...healthy, resolution: "open", underlyingConcernStillPresent: true })
@@ -144,11 +181,26 @@ const healthy: NormalizedResponseRecord = {
               // A clean verdict requires the response to have positively worked:
               // owned by a named team, acknowledged in time, and either verified gone
               // or legitimately still open.
+              // THIS ORACLE WAS THE BUG. It read:
+              //
+              //   ... || resolution === "open" || resolution === "closed_unresolved");
+              //
+              // — blessing `closed_unresolved` UNCONDITIONALLY, whatever the underlying
+              // state. So a record closed with no fix claim while the concern was
+              // CONFIRMED still present counted as a justified clean verdict, and the
+              // check named "ZERO unjustified clean verdicts" passed on it. The
+              // implementation asserted `resolved_verified` and the oracle agreed,
+              // because the oracle shared the implementation's mistake. An assertion is
+              // only as good as the belief behind it; a 576-state sweep tests breadth,
+              // not whether the thing it is comparing against is right.
+              //
+              // Restated so it turns on the EVIDENCE rather than on the claim's label:
+              // a clean verdict is justified only if the concern was positively checked
+              // and found gone, or the work is legitimately still open.
               const justified =
                 reportIntegrity === "intact" && owner === "assigned" && owningTeam !== null &&
                 acknowledgement === "acknowledged_within_target" &&
-                ((resolution === "resolved" && underlyingConcernStillPresent === false) ||
-                 resolution === "open" || resolution === "closed_unresolved");
+                (underlyingConcernStillPresent === false || resolution === "open");
               if (!justified) {
                 unjustified.push(`${owner}/${acknowledgement}/${resolution}/${underlyingConcernStillPresent}/${owningTeam}/${reportIntegrity}`);
               }
@@ -168,14 +220,22 @@ const healthy: NormalizedResponseRecord = {
   // count rather than a floor: a number you cannot derive is a number you have not
   // checked.
   //
-  // CLEAN = 7. A clean verdict pushes no candidate at all, which forces
-  // owner=assigned (1), owningTeam≠null (1 of 2), ack=within_target (1 of 4) and
-  // integrity=intact (1 of 2). That leaves resolution × present:
+  // CLEAN = 5, WAS 7 — and the two that left were the defect, not a tightening.
+  //
+  // A clean verdict pushes no candidate at all, which forces owner=assigned (1),
+  // owningTeam≠null (1 of 2), ack=within_target (1 of 4) and integrity=intact (1 of 2).
+  // That leaves resolution × present:
   //   resolved            → only present=false clears (true is the watermelon,
-  //                         null is RESOLUTION_UNVERIFIED)            = 1
-  //   closed_unresolved   → no claim was made, so present is free      = 3
-  //   open                → in_progress, present is free               = 3
-  check(`...and the clean path is REACHABLE — exactly 7 states (got ${clean})`, clean === 7);
+  //                         null is RESOLUTION_UNVERIFIED)                      = 1
+  //   closed_unresolved   → only present=false clears. WAS 3, on the reasoning
+  //                         "no claim was made, so present is free" — which was
+  //                         wrong: no claim was made about the FIX, but the verdict
+  //                         still asserted `resolved_verified`, and that IS a claim.
+  //                         present=true and present=null now grade
+  //                         CLOSED_CONCERN_NOT_RESOLVED at monitor.              = 1
+  //   open                → in_progress, present genuinely is free               = 3
+  //                                                                        total = 5
+  check(`...and the clean path is REACHABLE — exactly 5 states (got ${clean})`, clean === 5);
   // WATERMELON = 24. resolution=resolved AND present=true AND integrity=intact, with
   // owner (3) × ack (4) × owningTeam (2) all free — because a false closure outranks
   // every other finding on the record, which is exactly the behaviour worth pinning:

@@ -494,7 +494,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   `AUTHENTICATED_SEGMENT_UNVERIFIED` rather than claiming a trusted segment it never
   checked. Matching is trimmed and case-insensitive, because the same VLAN arrives
   spelled differently from NAC, RADIUS and switch inventories.
-- **`proof:response-accountability` (43 checks)** — the ITSM "watermelon": green
+- **`proof:response-accountability` (54 checks)** — the ITSM "watermelon": green
   outside, red inside. A concern reported RESOLVED while the underlying state still
   shows it present is the finding, and it is asserted to outrank every green process
   metric on the same record — because a watermelon is green on every other axis by
@@ -505,6 +505,26 @@ proof reports — the numbers below are therefore evidence, not claims.
   and never raises the bar on a worker. Routing is a pure longest-match lookup that
   decides WHO to tell; it never delivers — delivery is the outbound-emitter surface,
   which remains an explicit owner decision.
+
+  **A watermelon was found inside the watermelon detector, after it shipped.** The
+  verdict fold was *seeded* with `RESPONSE_VERIFIED_RESOLVED` — documented as "Owned,
+  timely, and verified gone" — so "no candidate fired" silently became "the concern is
+  confirmed gone". `closed_unresolved` had been added to the resolution union with no
+  candidate covering it, so the seed spoke for it: a record closed with **no fix claim at
+  all**, with the concern **confirmed still present**, returned posture
+  `resolved_verified`, action `none`. It is the same unearned-affirmative defect this
+  repository has now found three times — Jamf's hardcoded `compliant: true`, ISE's
+  hardcoded `status: "registered"`, and this one; the first two were fixed here and the
+  third was shipped here. The affirmative verdict is now guarded structurally rather than
+  by adding a case, so it is unreachable without `underlyingConcernStillPresent === false`
+  — for every resolution value present *and future*, since a new union member is exactly
+  how this arrived. Two reasons the 43-check proof and its 576-state sweep missed it, both
+  fixed: the `closed_unresolved` assertion tested only what the verdict *was not*
+  (`!== "WATERMELON_…"`), licensing every other wrong answer; and the sweep's own
+  `justified` oracle blessed `closed_unresolved` **unconditionally**, so the check named
+  "ZERO unjustified clean verdicts" agreed with the bug. An assertion is only as good as
+  the belief behind it. Clean states 7 → **5** (the two that left were the defect);
+  watermelon states unchanged at 24.
 - **`proof:provisioning-order` (34 checks)** — zero-touch step ordering, with four
   vendor reference pipelines (Windows Autopilot + Intune, Apple ABM/ADE, Android
   Zero-Touch, Jamf PreStage) expressed in one neutral model and asserted to validate.

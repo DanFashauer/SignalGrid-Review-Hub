@@ -145,6 +145,16 @@ export type ResponseReasonCode =
   | "WATERMELON_CLOSED_BUT_UNRESOLVED"
   /** Reported resolved; nobody re-checked. Unverified, not disproven. */
   | "RESOLUTION_UNVERIFIED"
+  /**
+   * Closed WITHOUT a fix claim (`closed_unresolved`) while the concern is confirmed
+   * present, or was never re-checked.
+   *
+   * NOT a watermelon, and graded `monitor` rather than `alert` for that reason:
+   * nobody lied. A duplicate, a won't-fix or an expiry over a live concern is a
+   * legitimate accepted-risk decision — it is just not a resolution, and the fabric
+   * must not report it as one.
+   */
+  | "CLOSED_CONCERN_NOT_RESOLVED"
   // ── Process failures ──
   /** No accountable owner. A queue is not an owner. */
   | "RESPONSE_UNOWNED"

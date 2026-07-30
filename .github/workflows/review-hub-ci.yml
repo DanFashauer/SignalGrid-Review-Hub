@@ -129,6 +129,13 @@ jobs:
         run: pnpm run proof:config-scope
       - name: "Proof: unsafe-claim (negation-aware claim scan)"
         run: pnpm run proof:unsafe-claim
+      # Both of these ran in preflight but in NO workflow — proven only on a developer
+      # machine while every status page said "CI runs the full gate suite".
+      # `check-ci-preflight-sync.mjs` now derives this list rather than trusting it.
+      - name: "Proof: dual-control (two-person integrity)"
+        run: pnpm run proof:dual-control
+      - name: "Proof: session-store (in-memory lifecycle)"
+        run: pnpm run proof:session-store
       - name: "Proof: provisioning-order (zero-touch step order)"
         run: pnpm run proof:provisioning-order
       - name: "Proof: nac (read-only endpoint identity, gated, no actuators)"
@@ -409,6 +416,9 @@ jobs:
       # Required docs exist + affirmative-unsafe-claim scan. Shared with
       # `pnpm run preflight` via scripts/docs-sanity.mjs so the check is the same
       # locally and in CI.
+      - name: CI↔preflight drift (every proof runs in both places)
+        run: node scripts/check-ci-preflight-sync.mjs
+
       - name: Docs sanity (required docs + unsafe-claim scan)
         run: node scripts/docs-sanity.mjs
 

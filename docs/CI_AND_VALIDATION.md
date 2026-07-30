@@ -72,6 +72,29 @@ This keeps Review Hub independent from `/DEV` and makes the public validation su
   gate could: a decision-evidence row the core carried and no console scenario
   ever rendered.
 
+## CI ↔ preflight drift (`pnpm run guard:ci-sync`)
+
+`scripts/preflight.mjs` calls itself a mirror of the CI jobs that need nothing but Node,
+and asked a human to *"keep this list in lockstep"*. Two hand-maintained lists that must
+agree is a promise, not a mechanism, and it fails silently in **both** directions: a proof
+in CI but not preflight means a red build passes `Safe to push`; a proof in preflight but
+not CI means it is verified only on a developer's machine while every status surface says
+CI runs the full suite.
+
+**Both had already drifted.** `proof:dual-control` and `proof:session-store` ran in
+preflight and in **no workflow at all**. They are in CI now, and
+`scripts/check-ci-preflight-sync.mjs` derives both lists from source so the next omission
+is caught by a machine rather than by an audit that happened to look.
+
+Three Postgres proofs (`audit-ledger-pg`, `decision-store-pg`, `session-store-pg`) are
+exempt **by name with a reason**, not by a `/-pg$/` pattern that would quietly absorb the
+next unrelated omission — and a stale exemption is itself reported, since silencing a
+check for something now covered is its own drift. The gate also refuses to pass on an
+implausibly small scan: both sides are read with a regex, and if either stops matching the
+sets go empty and every comparison trivially succeeds. A drift checker that reports "no
+drift" because its parser broke is the exact failure this repository keeps finding, so the
+gate that hunts it carries a floor against having it.
+
 ## Unsafe-claim scan scope
 
 The CI denylist is intentionally narrow and direct. It checks for production-ready, replacement, partnership, MFi certification, autonomous-remediation, and specific replacement phrases such as `replaces Jamf`, `replaces Intune`, `replaces Apple Configurator`, and `replaces GroundControl`, while allowing explicit disclaimers, guardrail wording, and validation-command lines that document the scanner itself.

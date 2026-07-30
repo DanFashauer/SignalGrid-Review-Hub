@@ -127,6 +127,8 @@ jobs:
         run: pnpm run proof:device-resolver
       - name: "Proof: config-scope (per-tenant connector config keys)"
         run: pnpm run proof:config-scope
+      - name: "Proof: unsafe-claim (negation-aware claim scan)"
+        run: pnpm run proof:unsafe-claim
       - name: "Proof: provisioning-order (zero-touch step order)"
         run: pnpm run proof:provisioning-order
       - name: "Proof: nac (read-only endpoint identity, gated, no actuators)"

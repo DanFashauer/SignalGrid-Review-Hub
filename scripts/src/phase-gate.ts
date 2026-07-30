@@ -2,8 +2,11 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-const unsafeClaimPattern =
-  /SignalGrid is production-ready|SignalGrid replaces|SignalGrid is an Imprivata partner|SignalGrid is MFi certified|autonomous production remediation|replaces ServiceNow|replaces PagerDuty|replaces CrowdStrike|replaces Defender|replaces ControlUp|Imprivata partner|MFi certified|replaces Jamf|replaces Intune|replaces Apple Configurator|replaces GroundControl/i;
+import { classifyScanOutput, tallyClaims, UNSAFE_CLAIM_SOURCE } from "./unsafe-claim-classifier";
+
+// Kept as a RegExp for the grep call below. The source string now lives in the
+// classifier so the pattern and the negation-awareness that interprets it cannot drift.
+const unsafeClaimPattern = new RegExp(UNSAFE_CLAIM_SOURCE, "i");
 const unsafeClaimScanCommand =
   'git grep -nE "SignalGrid is production-ready|SignalGrid replaces|SignalGrid is an Imprivata partner|SignalGrid is MFi certified|autonomous production remediation|replaces ServiceNow|replaces PagerDuty|replaces CrowdStrike|replaces Defender|replaces ControlUp|Imprivata partner|MFi certified|replaces Jamf|replaces Intune|replaces Apple Configurator|replaces GroundControl" -- README.md docs artifacts/signalgrid-review/src || true';
 const redFilePattern =
@@ -140,9 +143,20 @@ if (changedUnsafe.length > 0 || stagedUnsafe.length > 0) {
   lane = "RED";
   reasons.push(`unsafe file path detected: ${changedUnsafe.join(", ")}`);
 }
-if (unsafeClaims) {
+// CLASSIFY, don't just count. The raw grep cannot distinguish "SignalGrid is an
+// Imprivata partner" from "SignalGrid is NOT an Imprivata partner", so escalating on a
+// raw hit escalated on every honest disclaimer this repository deliberately publishes —
+// and, measured, on nothing else. Only an AFFIRMATIVE hit moves the lane now. The other
+// categories are still counted and printed: a scan that silently dropped them could not
+// tell a clean repo from a broken scanner.
+const claimTally = tallyClaims(classifyScanOutput(unsafeClaims));
+if (claimTally.affirmative.length > 0) {
   if (lane === "GREEN") lane = "YELLOW";
-  reasons.push("unsafe claim scan matched protected wording for manual review");
+  reasons.push(
+    `unsafe claim asserted (not disclaimed): ${claimTally.affirmative
+      .map((c) => `${c.file}:${c.line}`)
+      .join(", ")}`,
+  );
 }
 if (missingValidation.length > 0) {
   // Documented-validation drift must actually move the lane, not just log a
@@ -165,7 +179,15 @@ console.log(`touchesWorkflows=${touchesWorkflow}`);
 console.log(`touchesScripts=${touchesScripts}`);
 console.log(`touchesProofs=${touchesProof}`);
 console.log(`touchesRuntime=${touchesRuntime}`);
-console.log(`unsafeClaims=${unsafeClaims ? "found" : "clean"}`);
+// Both numbers are printed. The old line said "found" on literally every run, so it
+// could not distinguish a repo with an unsafe claim from one without; the affirmative
+// count is the one that can actually change, and the mention breakdown is kept so a
+// sudden collapse in disclaimers is visible too.
+console.log(`unsafeClaims=${claimTally.affirmative.length > 0 ? "ASSERTED" : "clean"}`);
+console.log(
+  `unsafeClaimMentions=total:${claimTally.total} affirmative:${claimTally.affirmative.length} ` +
+    `disclaimed:${claimTally.disclaimed} selfReferential:${claimTally.selfReferential} registry:${claimTally.registry}`,
+);
 console.log(`phaseLane=${lane}`);
 if (reasons.length > 0) console.log(`reasons=${reasons.join(" | ")}`);
 

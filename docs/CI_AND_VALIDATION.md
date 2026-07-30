@@ -75,3 +75,43 @@ This keeps Review Hub independent from `/DEV` and makes the public validation su
 ## Unsafe-claim scan scope
 
 The CI denylist is intentionally narrow and direct. It checks for production-ready, replacement, partnership, MFi certification, autonomous-remediation, and specific replacement phrases such as `replaces Jamf`, `replaces Intune`, `replaces Apple Configurator`, and `replaces GroundControl`, while allowing explicit disclaimers, guardrail wording, and validation-command lines that document the scanner itself.
+
+**`scripts/docs-sanity.mjs` implemented that allowance; `phase-gate.ts` did not.** The two
+scanners share a denylist and disagreed about how to read it. `docs-sanity` is
+negation-aware and has been for some time — its `hasBareClaim` requires a negator to
+appear *before* the phrase, and its comment records why a line-wide search is wrong. The
+phase gate just ran the grep. A substring match cannot distinguish a partnership claim
+from its own denial, and since this project's doctrine is platform honesty, its docs are
+overwhelmingly the denials. Measured at the time of the fix: **64 hits, of which zero were
+affirmative.** `unsafeClaims=found` had therefore printed on every run the gate had ever
+made, and would have printed identically on a repository that *did* carry a real claim. A
+signal that cannot vary carries no information, and the incentive ran backwards — writing
+an honest disclaimer cost you a lane escalation.
+
+`scripts/src/unsafe-claim-classifier.ts` now sorts each hit into `affirmative`,
+`disclaimed`, `self_referential` or `registry`, and **only `affirmative` moves the lane**.
+The two marker families are scoped differently on purpose:
+
+- **Negation is positional** — counted only in the text *before* the match, within the
+  same clause (`.`, `;` and `|` are boundaries, because these docs use markdown tables and
+  a negation in one cell must not reach into the next). Words like "not" and "no" are
+  ordinary prose, so a line-wide search would let a production-readiness assertion launder
+  itself on a trailing "no" elsewhere in the sentence. This matches `docs-sanity`'s
+  `hasBareClaim`, which reached the same conclusion first; the phase gate additionally
+  narrows the window from the whole line to the clause.
+- **Prohibition is lexical** — "avoid", "denylist", "guardrail", "disclaimer" and friends
+  count anywhere in the clause, because they cannot plausibly co-occur with a sincere
+  claim.
+
+Anything not positively identified as disclaimed is affirmative: fail-closed, as
+everywhere else here. The gate prints the full breakdown (`unsafeClaimMentions=total:…
+affirmative:… disclaimed:… selfReferential:… registry:…`) so a collapse in the disclaimer
+count is visible too.
+
+**Known limitation, stated rather than implied by silence:** the registry exemption is
+per-file, so a sincere claim written *inside* `docs/PUBLIC_MESSAGING_GUARDRAILS.md` — the
+document whose purpose is to enumerate forbidden wording — is exempt. The `registry:`
+count moves when that happens, but the lane does not. Closing it would require shape
+heuristics about how that one document may be written, and a guard that fails on
+legitimate edits gets switched off. `pnpm run proof:unsafe-claim` (40 checks) pins all of
+the above, including that limitation and the adversarial trailing-negation case.

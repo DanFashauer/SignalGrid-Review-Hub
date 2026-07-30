@@ -16,6 +16,8 @@
 //
 // Pure and deterministic. No device is contacted here.
 
+import { lintSetupOrder } from "./provisioning-order";
+
 /** When a recording is eligible to fire for a device. */
 export type SetupTrigger = "first_boot" | "network_join" | "serial_match";
 
@@ -41,6 +43,18 @@ export interface SetupStep {
   sensitive?: boolean;
   /** The Grid performs this itself because the target system exposes no way to (grid does the lifting). */
   gridLifted?: boolean;
+  /**
+   * Keys of steps that MUST already have run. The array order is the execution
+   * order, so every key here has to name a step EARLIER in `steps` — see
+   * `provisioning-order.ts`, which rejects a forward reference rather than
+   * quietly reordering.
+   *
+   * Optional: most ordering is carried by the intrinsic rule (management before
+   * anything that needs management). This is for the deployment-specific edges
+   * that rule cannot know — a VPN profile that must precede the line-of-business
+   * app which talks through it, for instance.
+   */
+  requires?: string[];
 }
 
 /** Which devices a recording applies to. At least one selector must be present. */
@@ -79,9 +93,16 @@ const VALID_TRIGGERS: readonly SetupTrigger[] = ["first_boot", "network_join", "
 /**
  * Validate a setup recording. Fail-safe: a recording that couldn't run correctly
  * (no steps, an unknown step kind, no trigger, no device selector, duplicate step
- * keys, a missing id) is an ERROR; a sensitive step is surfaced as a WARNING (it
- * will require approval at apply time, not blocked at authoring). Errors block a
- * merge; warnings inform. Deterministic order (errors first, then warnings).
+ * keys, a missing id, or an IMPOSSIBLE STEP ORDER) is an ERROR; a sensitive step is
+ * surfaced as a WARNING (it will require approval at apply time, not blocked at
+ * authoring). Errors block a merge; warnings inform. Deterministic order (errors
+ * first, then warnings).
+ *
+ * Ordering lives in `provisioning-order.ts` and is folded in here on purpose rather
+ * than offered as a separate opt-in check: `planZeroTouchSetup` refuses an invalid
+ * recording, so routing order errors through validity is what stops a setup that
+ * cannot work from ever reaching a device. A check nobody is obliged to call would
+ * have left the original failure mode intact.
  */
 export function lintSetupRecording(rec: DeviceSetupRecording): SetupRecordingIssue[] {
   const errors: SetupRecordingIssue[] = [];
@@ -131,6 +152,12 @@ export function lintSetupRecording(rec: DeviceSetupRecording): SetupRecordingIss
       warnings.push({ severity: "warning", code: "sensitive_step", subject: rec.id, message: `Recording "${rec.id}" step "${s.key}" is sensitive — it will require approval before any real apply.` });
     }
   }
+  // Ordering, folded in so an impossible sequence makes the recording INVALID.
+  const order = lintSetupOrder(rec);
+  for (const issue of order) {
+    (issue.severity === "error" ? errors : warnings).push(issue);
+  }
+
   return [...errors, ...warnings];
 }
 

@@ -121,6 +121,8 @@ jobs:
         run: pnpm run proof:uem
       - name: "Proof: entitlement-binding (grant reviewability)"
         run: pnpm run proof:entitlement-binding
+      - name: "Proof: provisioning-order (zero-touch step order)"
+        run: pnpm run proof:provisioning-order
       - name: "Proof: nac (read-only endpoint identity, gated, no actuators)"
         run: pnpm run proof:nac
 

@@ -395,6 +395,7 @@ export * from "./app-resilience";
 // validated in CI, and replayed by the Grid on serial/network join. Simulated by
 // default; real enforcement only when an owner turns it on.
 export * from "./provisioning";
+export * from "./provisioning-order";
 export * from "./provisioning-teardown";
 
 export function listFlows(): Flow[] {

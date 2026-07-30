@@ -13,6 +13,10 @@ import { normalizeWorkspaceOneDevice } from "./workspace-one";
 import type { NormalizedUemDeviceState, UemVendor, UemVerdict } from "./types";
 
 export * from "./types";
+// Mirrors `nac/index.ts`, which has always re-exported its store. The asymmetry was
+// not a decision — it just meant the uem config store had no import path at all
+// outside its own directory, which is part of why its unscoped key went unnoticed.
+export * from "./store";
 export { evaluateUem } from "./evaluate";
 export { normalizeIntuneDevice } from "./intune";
 export { normalizeJamfDevice } from "./jamf";

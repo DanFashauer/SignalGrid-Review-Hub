@@ -464,6 +464,21 @@ proof reports — the numbers below are therefore evidence, not claims.
   check with a door beside it. Source faults are reported rather than swallowed: a
   bare `catch { return null }` made an unreachable UEM indistinguishable from "no such
   device".
+- **`proof:config-scope` (48 checks)** — tenant scoping for the connector
+  *configuration* stores. Both `uem/store.ts` and `nac/store.ts` keyed their entry on a
+  flat constant (`"uem:config"`, `"nac:config"`) in a repository where every other
+  persisted reader is keyed on `(id, tenant_id)`. **Severity, stated honestly: nothing
+  called them.** No tenant's connector selection was ever readable by another, because
+  no code path ever read one — this was a latent trap, not a live exposure, and the fix
+  was cheap precisely because there were no callers to migrate, so `tenantId` could be
+  made a *required* leading parameter rather than an optional one nobody passes. Two
+  design points carry the weight. First, the store **refuses rather than normalizes**:
+  trimming and lowercasing an id is a many-to-one map, so `"Acme"` and `"acme"` would
+  land in one bucket — the bug wearing the fix's clothes. Second, the process-local
+  fallback is scoped too; scoping only the Redis key would have fixed nothing for any
+  deployment without `REDIS_URL` set, which is this package's documented default. The
+  id rule is an **allowlist** (`/^[A-Za-z0-9._-]{1,128}$/`), so the characters nobody
+  thought of are refused by default rather than enumerated by someone who tried.
 - **`proof:network-nac` (37 checks)** — 802.1X / NAC access posture, read-only. The
   device's network SEGMENT is now evaluated against an operator-supplied policy rather
   than merely carried: an unexpected VLAN steps up, a segment the operator marked

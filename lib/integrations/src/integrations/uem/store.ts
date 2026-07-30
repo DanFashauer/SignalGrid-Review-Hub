@@ -31,6 +31,8 @@
 
 import { z } from "zod";
 
+import { scopedConfigKey } from "../store-scope";
+
 export const UEMProviderSchema = z.enum(["intune", "jamf", "workspace_one"]);
 export type UEMProvider = z.infer<typeof UEMProviderSchema>;
 
@@ -40,10 +42,14 @@ export const UEMConfigSchema = z.object({
 });
 export type UEMConfig = z.infer<typeof UEMConfigSchema>;
 
-const UEM_KEY = "uem:config";
+/** Key PREFIX, not a key. See `nac/store.ts` — both stores carried the same flat,
+ *  tenant-free key and both are scoped by the same helper. */
+const UEM_KEY_PREFIX = "uem:config";
 
-/** Process-local fallback when no Redis is configured. */
-let inMemoryConfig: UEMConfig | null = null;
+/** Process-local fallback when no Redis is configured — SCOPED BY TENANT. Scoping the
+ *  Redis key alone would have fixed nothing for any deployment without REDIS_URL set,
+ *  which is the default this package documents at the top of `index.ts`. */
+const inMemoryConfig = new Map<string, UEMConfig>();
 
 async function getRedisClient() {
   const url = process.env["REDIS_URL"];
@@ -62,13 +68,16 @@ async function getRedisClient() {
  * configuration, not a decision input — but it is now audible.
  */
 export async function getUEMConfig(
+  tenantId: string,
   onFault: (message: string) => void = (m) => console.warn(`[uem-store] ${m}`),
 ): Promise<UEMConfig | null> {
+  // Validate BEFORE touching Redis — see `nac/store.ts`.
+  const key = scopedConfigKey(UEM_KEY_PREFIX, tenantId);
   const redis = await getRedisClient();
   if (redis) {
     try {
       await redis.connect();
-      const data = await redis.get(UEM_KEY);
+      const data = await redis.get(key);
       if (data) return UEMConfigSchema.parse(JSON.parse(data));
     } catch (err) {
       onFault(`read failed, using in-memory config: ${err instanceof Error ? err.message : String(err)}`);
@@ -76,29 +85,31 @@ export async function getUEMConfig(
       await redis.quit().catch(() => undefined);
     }
   }
-  return inMemoryConfig;
+  return inMemoryConfig.get(key) ?? null;
 }
 
 export async function setUEMConfig(
+  tenantId: string,
   config: UEMConfig,
   onFault: (message: string) => void = (m) => console.warn(`[uem-store] ${m}`),
 ): Promise<void> {
+  const key = scopedConfigKey(UEM_KEY_PREFIX, tenantId);
   const parsed = UEMConfigSchema.parse(config);
   const redis = await getRedisClient();
   if (redis) {
     try {
       await redis.connect();
-      await redis.set(UEM_KEY, JSON.stringify(parsed), "EX", 86400);
+      await redis.set(key, JSON.stringify(parsed), "EX", 86400);
     } catch (err) {
       onFault(`write failed, kept in memory only: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       await redis.quit().catch(() => undefined);
     }
   }
-  inMemoryConfig = { ...parsed };
+  inMemoryConfig.set(key, { ...parsed });
 }
 
-/** Test seam — resets the process-local fallback. */
+/** Test seam — clears the process-local fallback for EVERY tenant. See `nac/store.ts`. */
 export function __resetUemConfigForTests(): void {
-  inMemoryConfig = null;
+  inMemoryConfig.clear();
 }

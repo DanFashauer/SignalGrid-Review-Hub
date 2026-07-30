@@ -29,6 +29,8 @@
 
 import { z } from "zod";
 
+import { scopedConfigKey } from "../store-scope";
+
 export const NACProviderSchema = z.enum(["ise", "clearpass"]);
 export type NACProvider = z.infer<typeof NACProviderSchema>;
 
@@ -38,10 +40,15 @@ export const NACConfigSchema = z.object({
 });
 export type NACConfig = z.infer<typeof NACConfigSchema>;
 
-const NAC_KEY = "nac:config";
+/** Key PREFIX, not a key. The tenant id is appended by `scopedConfigKey`; this was a
+ *  flat `"nac:config"` shared by every tenant until the scoping was added. */
+const NAC_KEY_PREFIX = "nac:config";
 
-/** Process-local fallback when no Redis is configured. */
-let inMemoryConfig: NACConfig | null = null;
+/** Process-local fallback when no Redis is configured — SCOPED BY TENANT, because a
+ *  scoped Redis key with an unscoped process-local singleton behind it leaks in exactly
+ *  the deployments the scoping was added for: the fallback is what runs when REDIS_URL
+ *  is unset, which is every fixture build and every single-node dev run. */
+const inMemoryConfig = new Map<string, NACConfig>();
 
 async function getRedisClient() {
   const url = process.env["REDIS_URL"];
@@ -54,13 +61,17 @@ async function getRedisClient() {
  *  falling back to the process-local value is right for configuration, but it should
  *  be audible. */
 export async function getNACConfig(
+  tenantId: string,
   onFault: (message: string) => void = (m) => console.warn(`[nac-store] ${m}`),
 ): Promise<NACConfig | null> {
+  // Validate BEFORE touching Redis, so a malformed id can never reach a key builder
+  // on some later code path and so the refusal does not depend on network state.
+  const key = scopedConfigKey(NAC_KEY_PREFIX, tenantId);
   const redis = await getRedisClient();
   if (redis) {
     try {
       await redis.connect();
-      const data = await redis.get(NAC_KEY);
+      const data = await redis.get(key);
       if (data) return NACConfigSchema.parse(JSON.parse(data));
     } catch (err) {
       onFault(`read failed, using in-memory config: ${err instanceof Error ? err.message : String(err)}`);
@@ -68,29 +79,33 @@ export async function getNACConfig(
       await redis.quit().catch(() => undefined);
     }
   }
-  return inMemoryConfig;
+  return inMemoryConfig.get(key) ?? null;
 }
 
 export async function setNACConfig(
+  tenantId: string,
   config: NACConfig,
   onFault: (message: string) => void = (m) => console.warn(`[nac-store] ${m}`),
 ): Promise<void> {
+  const key = scopedConfigKey(NAC_KEY_PREFIX, tenantId);
   const parsed = NACConfigSchema.parse(config);
   const redis = await getRedisClient();
   if (redis) {
     try {
       await redis.connect();
-      await redis.set(NAC_KEY, JSON.stringify(parsed), "EX", 86400);
+      await redis.set(key, JSON.stringify(parsed), "EX", 86400);
     } catch (err) {
       onFault(`write failed, kept in memory only: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       await redis.quit().catch(() => undefined);
     }
   }
-  inMemoryConfig = { ...parsed };
+  inMemoryConfig.set(key, { ...parsed });
 }
 
-/** Test seam — resets the process-local fallback. */
+/** Test seam — clears the process-local fallback for EVERY tenant. Deliberately not
+ *  per-tenant: a reset that left other tenants' entries behind would let one proof's
+ *  writes survive into the next and be read as that test's own. */
 export function __resetNacConfigForTests(): void {
-  inMemoryConfig = null;
+  inMemoryConfig.clear();
 }

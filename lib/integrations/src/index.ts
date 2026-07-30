@@ -10,6 +10,9 @@ export * as types from "./integrations/types";
 export * as adapterTypes from "./integrations/adapters/types";
 export * as dispatcher from "./integrations/dispatcher";
 export * as deviceResolver from "./integrations/deviceResolver";
+// Tenant scoping for the connector CONFIGURATION stores. Exported so the scoping rule
+// has one definition and one proof rather than a copy per store.
+export * as storeScope from "./integrations/store-scope";
 export * as sign from "./integrations/sign";
 export * as itsm from "./integrations/itsm/adapter";
 export * as entitlementBinding from "./integrations/entitlement-binding/index";

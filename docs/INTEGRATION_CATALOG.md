@@ -462,6 +462,17 @@ proof reports — the numbers below are therefore evidence, not claims.
   `AUTHENTICATED_SEGMENT_UNVERIFIED` rather than claiming a trusted segment it never
   checked. Matching is trimmed and case-insensitive, because the same VLAN arrives
   spelled differently from NAC, RADIUS and switch inventories.
+- **`proof:response-accountability` (43 checks)** — the ITSM "watermelon": green
+  outside, red inside. A concern reported RESOLVED while the underlying state still
+  shows it present is the finding, and it is asserted to outrank every green process
+  metric on the same record — because a watermelon is green on every other axis by
+  construction. A closure nobody re-checked is its own state (`monitor`), distinct
+  from both a verified fix and a proven-false one, because that is where a watermelon
+  hides. The ceiling is `alert`: every finding here is a PROCESS failure, and the
+  worker on the device did not close the ticket, so this dimension raises its voice
+  and never raises the bar on a worker. Routing is a pure longest-match lookup that
+  decides WHO to tell; it never delivers — delivery is the outbound-emitter surface,
+  which remains an explicit owner decision.
 - **`proof:provisioning-order` (34 checks)** — zero-touch step ordering, with four
   vendor reference pipelines (Windows Autopilot + Intune, Apple ABM/ADE, Android
   Zero-Touch, Jamf PreStage) expressed in one neutral model and asserted to validate.

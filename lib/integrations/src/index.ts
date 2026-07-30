@@ -13,6 +13,7 @@ export * as deviceResolver from "./integrations/deviceResolver";
 export * as sign from "./integrations/sign";
 export * as itsm from "./integrations/itsm/adapter";
 export * as entitlementBinding from "./integrations/entitlement-binding/index";
+export * as responseAccountability from "./integrations/response-accountability/index";
 export * as uem from "./integrations/uem/index";
 export * as nac from "./integrations/nac/index";
 export * as siem from "./integrations/siem/webhook";

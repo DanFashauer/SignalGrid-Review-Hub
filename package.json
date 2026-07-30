@@ -87,6 +87,7 @@
     "proof:uem": "pnpm --filter @workspace/scripts run proof:uem",
     "proof:nac": "pnpm --filter @workspace/scripts run proof:nac",
     "proof:entitlement-binding": "pnpm --filter @workspace/scripts run proof:entitlement-binding",
+    "proof:response-accountability": "pnpm --filter @workspace/scripts run proof:response-accountability",
     "proof:provisioning-order": "pnpm --filter @workspace/scripts run proof:provisioning-order",
     "proof:macos-apple-schema": "pnpm --filter @workspace/scripts run proof:macos-apple-schema",
     "proof:ot-posture": "pnpm --filter @workspace/scripts run proof:ot-posture",

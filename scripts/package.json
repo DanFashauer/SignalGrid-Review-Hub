@@ -67,6 +67,7 @@
     "proof:credential-exposure": "tsx ./src/credential-exposure-proof.ts",
     "proof:macos-posture": "tsx ./src/macos-posture-proof.ts",
     "proof:entitlement-binding": "tsx ./src/entitlement-binding-proof.ts",
+    "proof:response-accountability": "tsx ./src/response-accountability-proof.ts",
     "proof:provisioning-order": "tsx ./src/provisioning-order-proof.ts",
     "proof:uem": "tsx ./src/uem-proof.ts",
     "proof:nac": "tsx ./src/nac-proof.ts",

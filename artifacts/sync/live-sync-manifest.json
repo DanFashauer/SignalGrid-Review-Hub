@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 25,
-  "fingerprint": "c5159c92b7e103d730d540478e4d219cca09e576d50354dc41b265275bc5cac2",
+  "manifestVersion": 26,
+  "fingerprint": "0698bc339c1a1433d0c69b6ebcc7b389fd205968d7de874551c3b3479ef79455",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -112,6 +112,7 @@
       "provisioning-order": 34,
       "provisioning-teardown": 25,
       "reliability": 28,
+      "response-accountability": 43,
       "self-audit": 56,
       "sso-session": 78,
       "task-exception": 195,

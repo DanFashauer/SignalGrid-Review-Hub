@@ -18,6 +18,7 @@
     "./credential-exposure": "./src/integrations/credential-exposure/index.ts",
     "./macos-posture": "./src/integrations/macos-posture/index.ts",
     "./entitlement-binding": "./src/integrations/entitlement-binding/index.ts",
+    "./response-accountability": "./src/integrations/response-accountability/index.ts",
     "./uem": "./src/integrations/uem/index.ts",
     "./nac": "./src/integrations/nac/index.ts",
     "./ot-posture": "./src/integrations/ot-posture/index.ts",

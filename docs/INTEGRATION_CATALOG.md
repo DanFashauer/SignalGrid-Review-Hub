@@ -453,6 +453,15 @@ proof reports — the numbers below are therefore evidence, not claims.
 - **`proof:entitlement-binding` (57 checks)** — whether a grant is *reviewable*, not
   merely correct. Includes a **1,200-state sweep** with the clean path pinned to
   *exactly 18*, plus coherence checks that reject a report contradicting itself.
+- **`proof:network-nac` (37 checks)** — 802.1X / NAC access posture, read-only. The
+  device's network SEGMENT is now evaluated against an operator-supplied policy rather
+  than merely carried: an unexpected VLAN steps up, a segment the operator marked
+  high-consequence (management / security / OT) restricts, and a policy that cannot be
+  applied because the source reported no segment forecloses. Where NO policy is
+  supplied the segment is not graded and the verdict says so — it reports
+  `AUTHENTICATED_SEGMENT_UNVERIFIED` rather than claiming a trusted segment it never
+  checked. Matching is trimmed and case-insensitive, because the same VLAN arrives
+  spelled differently from NAC, RADIUS and switch inventories.
 - **`proof:provisioning-order` (34 checks)** — zero-touch step ordering, with four
   vendor reference pipelines (Windows Autopilot + Intune, Apple ABM/ADE, Android
   Zero-Touch, Jamf PreStage) expressed in one neutral model and asserted to validate.

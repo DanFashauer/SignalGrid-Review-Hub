@@ -7,11 +7,25 @@
 //
 //     "a proof that runs in CI but not here would let a red build pass preflight"
 //
-// The reverse gap is worse, and it is the one that had actually opened. SEVEN
-// preflight gates ran in no workflow at all — including `review-invariants.mjs`,
-// the repo's automated "second reviewer" that encodes the defect classes Codex
-// repeatedly caught (fail-closed control flow, determinism, Assist-safety,
-// truthfulness), and the FIRST entry in preflight.
+// The reverse gap is worse, and it is the one that had actually opened. FIVE
+// preflight gates ran in no workflow at all:
+//
+//   scripts/check-doc-orphans.mjs
+//   scripts/check-pagination-truncation.mjs
+//   proof:absent-collection
+//   scripts/check-decision-port-parity.mjs
+//   proof:dual-control
+//
+// Three of those were added recently and never wired up, which is the honest
+// reason this check exists: guards against silent drift were left where they
+// could not fail a pull request.
+//
+// The first version of this file said SEVEN and named `review-invariants.mjs` as
+// the worst offender. That was WRONG, and the way it was wrong is the point:
+// CI ran it as `pnpm run review:invariants`, an npm-script ALIAS, while the check
+// searched for the script PATH. Colons are not hyphens, so the substring never
+// matched and a gate that had been running all along was reported as running
+// nowhere. Same for `check-proof-counts.mjs`. See `wired()` below.
 //
 // A guard that runs in preflight but not in CI does not fail a pull request. So
 // the drift it exists to catch lands on the branch unchallenged, while the guard
@@ -43,6 +57,27 @@ const LOCAL_ONLY = new Map([
 
 const preflight = readFileSync(join(repo, "scripts/preflight.mjs"), "utf8");
 
+// A workflow may invoke a gate by its PATH (`node scripts/x.mjs`) or through an
+// npm-script ALIAS (`pnpm run review:invariants`). Matching only the path was the
+// first version's bug, and it produced a false positive with real consequences:
+// it reported `review-invariants.mjs` — the repo's automated second reviewer — as
+// running nowhere, when CI had been running it as `pnpm run review:invariants`
+// all along. Colons are not hyphens, and a substring search cannot know that.
+//
+// So resolve package.json's scripts into path -> [alias] and accept either form.
+// The lesson is the one this whole file is about: a checker that cannot see a
+// gate is indistinguishable from a gate that is not there, and it will happily
+// invent work.
+const pkgScripts = JSON.parse(readFileSync(join(repo, "package.json"), "utf8")).scripts ?? {};
+const aliasesFor = new Map();
+for (const [name, cmd] of Object.entries(pkgScripts)) {
+  const m = /scripts\/([a-z0-9-]+\.mjs)/.exec(cmd ?? "");
+  if (!m) continue;
+  const list = aliasesFor.get(m[1]) ?? [];
+  list.push(name);
+  aliasesFor.set(m[1], list);
+}
+
 // Each STEPS entry is `cmd: ["node", "scripts/x.mjs"]` or `["pnpm", "run", "x"]`.
 // Reduce both to the identifying token a workflow would have to mention.
 const gates = [];
@@ -69,8 +104,15 @@ if (gates.length === 0) {
 let problems = 0;
 const localOnlyHit = [];
 
+/** True when a workflow invokes this gate by path OR by any npm-script alias. */
+function wired(gate) {
+  if (blob.includes(gate)) return true;
+  const file = gate.split("/").pop();
+  return (aliasesFor.get(file) ?? []).some((alias) => blob.includes(alias));
+}
+
 for (const gate of gates) {
-  if (blob.includes(gate)) continue;
+  if (wired(gate)) continue;
   if (LOCAL_ONLY.has(gate)) {
     localOnlyHit.push(gate);
     continue;
@@ -85,7 +127,7 @@ for (const gate of gates) {
 // A stale exemption is its own failure: it quietly re-permits the gap it was
 // granted for, and reads as intentional forever after.
 for (const [gate, reason] of LOCAL_ONLY) {
-  if (blob.includes(gate)) {
+  if (wired(gate)) {
     console.error(`  ✗ ${gate}: listed as local-only ("${reason}") but IS now in a workflow — remove the exemption`);
     problems += 1;
   } else if (!gates.includes(gate)) {

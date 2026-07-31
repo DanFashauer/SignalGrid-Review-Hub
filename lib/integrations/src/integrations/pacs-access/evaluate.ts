@@ -1,4 +1,5 @@
 import {
+  type CredentialAssurance,
   type PacsAccessAction,
   type PacsAccessPosture,
   type PacsAccessReasonCode,
@@ -35,9 +36,22 @@ const ACTION_SEVERITY: Record<PacsAccessAction, number> = {
   escalate: 5,
 };
 
+/** The floors a caller may pose. Ranked so a future finer ladder slots in without
+ *  changing the comparison. */
+const TECHNOLOGY_RANK = { static_identifier: 1, cryptographic: 2 } as const;
+export type CredentialTechnologyFloor = keyof typeof TECHNOLOGY_RANK;
+
 export interface EvaluatePacsAccessOptions {
   /** False when no PACS result was returned for this entry. Default true. */
   covered?: boolean;
+  /** The mixed-estate question, POSED BY THE CALLER per workflow/door — never a
+   *  tuned default. `"cryptographic"` = this workflow requires a credential that
+   *  proved itself (PKOC/Aliro/DESFire-class); a static-identifier read then steps
+   *  up — a challenge, never a lockout, because the legacy estate is serviceable
+   *  and modernization is the operator's pace to set. `"static_identifier"` = the
+   *  operator explicitly accepts any known technology (the choice stays theirs).
+   *  Unposed = the axis is not graded and never forecloses. */
+  minimumCredentialTechnology?: CredentialTechnologyFloor;
 }
 
 interface Candidate {
@@ -51,10 +65,25 @@ export function evaluatePacsAccess(
   options: EvaluatePacsAccessOptions = {},
 ): PacsAccessVerdict {
   const covered = options.covered ?? true;
+  const floor = options.minimumCredentialTechnology;
+
+  // The credential-technology grade — derived BEFORE the covered check so an
+  // uncovered entry still answers the posed question honestly ("unknown", not a
+  // quietly-dropped axis). Only a POSED floor is graded: a deployment that has not
+  // asked this dimension to police its estate is `unassessed`, never foreclosed —
+  // readers do not all have to disappear overnight.
+  let credentialAssurance: CredentialAssurance;
+  if (floor === undefined) {
+    credentialAssurance = "unassessed";
+  } else if (!covered || pacs.credentialTechnology === "unknown") {
+    credentialAssurance = "unknown";
+  } else {
+    credentialAssurance = TECHNOLOGY_RANK[pacs.credentialTechnology] >= TECHNOLOGY_RANK[floor] ? "meets_floor" : "below_floor";
+  }
 
   const criticalFindings: string[] = [];
   const unknownSignals: string[] = [];
-  const base = { criticalFindings, unknownSignals, deviceId: pacs.deviceId };
+  const base = { criticalFindings, unknownSignals, credentialAssurance, deviceId: pacs.deviceId };
 
   // No PACS result at all → a gap. Raise the bar (never a confirmed physical entry).
   if (!covered) {
@@ -125,6 +154,20 @@ export function evaluatePacsAccess(
   if (pacs.credentialType === "unknown") {
     unknownSignals.push("credential_type");
     candidates.push({ posture: "unverified", action: "step_up", reason: "PACS_STATE_UNKNOWN" });
+  }
+
+  // The mixed-estate axis, graded ONLY when the caller posed a floor. A read below
+  // the posed technology floor steps up — the remedy is a stronger challenge at the
+  // decision point, deliberately NEVER restrict/deny: the legacy reader estate is
+  // serviceable, and condemning it would turn a grading dimension into the rip-out
+  // this axis exists to make unnecessary. A posed floor the PACS could not answer
+  // ("what did the reader verify?" → unknown) raises the same bar — a silence is
+  // not a cryptographic credential.
+  if (credentialAssurance === "below_floor") {
+    candidates.push({ posture: "credential_below_floor", action: "step_up", reason: "CREDENTIAL_BELOW_FLOOR" });
+  } else if (credentialAssurance === "unknown") {
+    unknownSignals.push("credential_technology");
+    candidates.push({ posture: "unverified", action: "step_up", reason: "CREDENTIAL_TECHNOLOGY_UNKNOWN" });
   }
 
   // Identity match must be POSITIVELY confirmed. `false` escalated above; a null

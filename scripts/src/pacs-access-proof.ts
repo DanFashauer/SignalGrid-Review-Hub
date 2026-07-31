@@ -124,6 +124,39 @@ check("a contradictory false/equal-subjects entry → escalate, NEVER granted", 
 const corroborated = await connector.fetchAccess(fixture.entries["subjects-corroborate-clean"].deviceId);
 check("equal subjects with no explicit flag positively confirm the match (identityMatched=true)", corroborated.identityMatched === true);
 
+// ── the credential-technology (mixed-estate) axis ───────────────────────────────
+// A 125 kHz prox clone and a PKOC/Aliro credential both arrive as one "granted";
+// this axis grades what the reader actually VERIFIED, and only when the CALLER
+// poses a floor — the legacy estate is graded, never condemned.
+
+const cleanRaw = fixture.entries["clean-card-badge-in"].report;
+const staticRead = normalizeReport("est", { ...cleanRaw, credentialTechnology: "static_identifier" } as PacsAccessReportRaw);
+const cryptoRead = normalizeReport("est", { ...cleanRaw, credentialTechnology: "cryptographic" } as PacsAccessReportRaw);
+
+const belowFloor = evaluatePacsAccess(staticRead, { minimumCredentialTechnology: "cryptographic" });
+check("a static-identifier read below a posed cryptographic floor → credential_below_floor/step_up, assurance below_floor", belowFloor.posture === "credential_below_floor" && belowFloor.reasonCode === "CREDENTIAL_BELOW_FLOOR" && belowFloor.recommendedAction === "step_up" && belowFloor.credentialAssurance === "below_floor" && belowFloor.physicalAccessConfirmed === false);
+check("below-floor is a CHALLENGE, never a lockout — exactly step_up, not restrict/deny", belowFloor.recommendedAction === "step_up");
+
+const unposed = evaluatePacsAccess(staticRead);
+check("the SAME static read with NO floor posed still grants — unassessed never forecloses (readers don't all disappear overnight)", unposed.recommendedAction === "none" && unposed.physicalAccessConfirmed === true && unposed.credentialAssurance === "unassessed");
+
+const acceptedLegacy = evaluatePacsAccess(staticRead, { minimumCredentialTechnology: "static_identifier" });
+check("an operator who explicitly poses the static floor keeps the grant — the choice stays theirs, assurance meets_floor", acceptedLegacy.recommendedAction === "none" && acceptedLegacy.credentialAssurance === "meets_floor");
+
+const meets = evaluatePacsAccess(cryptoRead, { minimumCredentialTechnology: "cryptographic" });
+check("a cryptographic read meets the posed cryptographic floor and grants", meets.recommendedAction === "none" && meets.physicalAccessConfirmed === true && meets.credentialAssurance === "meets_floor");
+
+const posedSilent = evaluatePacsAccess(normalizeReport("est", cleanRaw), { minimumCredentialTechnology: "cryptographic" });
+check("a posed floor the PACS did not answer → step_up CREDENTIAL_TECHNOLOGY_UNKNOWN, assurance unknown (silence is not a cryptographic credential)", posedSilent.reasonCode === "CREDENTIAL_TECHNOLOGY_UNKNOWN" && posedSilent.recommendedAction === "step_up" && posedSilent.credentialAssurance === "unknown" && posedSilent.unknownSignals.includes("credential_technology"));
+
+check("a garbled technology value normalizes to unknown, never a fabricated class", normalizeReport("g", { ...cleanRaw, credentialTechnology: "DESFire EV3!!" } as PacsAccessReportRaw).credentialTechnology === "unknown");
+
+const deniedBelow = evaluatePacsAccess(normalizeReport("est", { ...cleanRaw, accessResult: "denied", credentialTechnology: "static_identifier" } as PacsAccessReportRaw), { minimumCredentialTechnology: "cryptographic" });
+check("worst-concern-wins: a denial still escalates past a below-floor read (the axis never dilutes a stronger negative)", deniedBelow.recommendedAction === "escalate" && deniedBelow.reasonCode === "ACCESS_DENIED" && deniedBelow.credentialAssurance === "below_floor");
+
+const uncoveredPosed = evaluatePacsAccess(normalizeReport("ghost", {} as PacsAccessReportRaw), { covered: false, minimumCredentialTechnology: "cryptographic" });
+check("an uncovered entry with a posed floor answers the axis honestly: assurance unknown, still NOT_COVERED", uncoveredPosed.reasonCode === "NOT_COVERED" && uncoveredPosed.credentialAssurance === "unknown");
+
 // Exhaustive: brute-force the ENTIRE normalized input space (not fixture-bound), so
 // the proof genuinely CONSTRAINS the allow path. Action "none" is emitted for EXACTLY
 // a positively-confirmed authorized entry — granted, authorized, anti-passback-ok, a
@@ -132,37 +165,59 @@ check("equal subjects with no explicit flag positively confirm the match (identi
 const domains = {
   accessResult: ["granted", "denied", "unknown"],
   credentialType: ["biometric", "card", "mobile", "pin", "unknown"],
+  credentialTechnology: ["cryptographic", "static_identifier", "unknown"],
   authorization: ["authorized", "out_of_schedule", "out_of_zone", "revoked", "unknown"],
   antipassback: ["ok", "violation", "unknown"],
   doorState: ["secured", "forced", "held_open", "unknown"],
   identityMatched: [true, false, null],
   bridgeReachable: [true, false, null],
 };
+const buildEnum = (c: Record<string, unknown>) =>
+  ({ sourceSystem: "pacs-access", deviceId: "enum", pacsSubject: null, expectedSubject: null, source: "enum", ...c }) as NormalizedPacsAccess;
+const positivelyCleanBase = (c: Record<string, unknown>): boolean => {
+  const { accessResult, credentialType, authorization, antipassback, doorState, identityMatched, bridgeReachable } = c;
+  return (
+    accessResult === "granted" &&
+    authorization === "authorized" &&
+    antipassback === "ok" &&
+    doorState === "secured" &&
+    identityMatched === true &&
+    bridgeReachable === true &&
+    (credentialType === "biometric" || credentialType === "card" || credentialType === "mobile" || credentialType === "pin")
+  );
+};
 const enumRes = enumerateGrantSafety({
   domains,
-  build: (c) =>
-    ({ sourceSystem: "pacs-access", deviceId: "enum", pacsSubject: null, expectedSubject: null, source: "enum", ...c }) as NormalizedPacsAccess,
+  build: buildEnum,
   evaluate: evaluatePacsAccess,
   actionOf: (v) => v.recommendedAction,
   confirmedWhenNone: (v) => v.posture === "physical_access_ok" && v.physicalAccessConfirmed === true,
-  positivelyClean: (c) => {
-    const { accessResult, credentialType, authorization, antipassback, doorState, identityMatched, bridgeReachable } = c;
-    return (
-      accessResult === "granted" &&
-      authorization === "authorized" &&
-      antipassback === "ok" &&
-      doorState === "secured" &&
-      identityMatched === true &&
-      bridgeReachable === true &&
-      (credentialType === "biometric" || credentialType === "card" || credentialType === "mobile" || credentialType === "pin")
-    );
-  },
+  // UNPOSED: the technology axis must be invisible to the grant — any of its three
+  // values grants when the rest of the entry is positively clean.
+  positivelyClean: positivelyCleanBase,
 });
 check(
-  `exhaustive: over all ${enumRes.combos} input combinations, action 'none' is emitted for EXACTLY the positively-confirmed authorized entries (mismatches=${enumRes.mismatches}${enumRes.firstMismatch ? ", first=" + enumRes.firstMismatch : ""})`,
-  enumRes.mismatches === 0 && enumRes.combos === productOf(domains) && enumRes.combos === 8100,
+  `exhaustive (unposed): over all ${enumRes.combos} input combinations, action 'none' is emitted for EXACTLY the positively-confirmed authorized entries — the technology axis forecloses NOTHING unposed (mismatches=${enumRes.mismatches}${enumRes.firstMismatch ? ", first=" + enumRes.firstMismatch : ""})`,
+  enumRes.mismatches === 0 && enumRes.combos === productOf(domains) && enumRes.combos === 24300,
 );
-check("exhaustive: some clean states DO grant (the enumeration is not vacuous)", enumRes.noneCount > 0);
+check("exhaustive (unposed): some clean states DO grant (the enumeration is not vacuous)", enumRes.noneCount > 0);
+
+// POSED cryptographic floor: the SAME space, and now the grant additionally
+// requires the reader to have verified a cryptographic credential — a static or
+// unreported technology falls out of the allow path, and nothing else changes.
+const enumPosed = enumerateGrantSafety({
+  domains,
+  build: buildEnum,
+  evaluate: (n) => evaluatePacsAccess(n, { minimumCredentialTechnology: "cryptographic" }),
+  actionOf: (v) => v.recommendedAction,
+  confirmedWhenNone: (v) => v.posture === "physical_access_ok" && v.physicalAccessConfirmed === true,
+  positivelyClean: (c) => positivelyCleanBase(c) && c["credentialTechnology"] === "cryptographic",
+});
+check(
+  `exhaustive (posed cryptographic floor): over the same ${enumPosed.combos} combinations, the grant additionally demands a cryptographic read — static/unknown fall out, nothing else moves (mismatches=${enumPosed.mismatches}${enumPosed.firstMismatch ? ", first=" + enumPosed.firstMismatch : ""})`,
+  enumPosed.mismatches === 0 && enumPosed.combos === 24300,
+);
+check("exhaustive (posed): the cryptographic allow path is exactly one third of the unposed one (the two static/unknown thirds step up)", enumPosed.noneCount * 3 === enumRes.noneCount);
 
 // Unknown ≠ granted: an unrecognized enum value normalizes to the safe unknown.
 const norm = normalizeReport("n", { accessResult: "maybe", authorization: "sorta", doorState: "ajar" } as PacsAccessReportRaw);

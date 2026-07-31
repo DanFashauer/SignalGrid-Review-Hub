@@ -31,6 +31,9 @@
 import { evaluateVulnPosture } from "@workspace/integrations/vuln-scan";
 import { evaluateThreatPosture, normalizeEndpoint } from "@workspace/integrations/edr-threat";
 import { evaluateIdentityPasskeys } from "@workspace/integrations/passkey-assurance";
+import * as identityRisk from "@workspace/integrations/identity-risk";
+import * as peripheral from "@workspace/integrations/peripheral-control";
+import * as credential from "@workspace/integrations/credential-exposure";
 
 let passed = 0;
 const failures: string[] = [];
@@ -140,6 +143,81 @@ check(
   `${realFinding.posture}/${realFinding.reasonCode}`,
 );
 
+// ── 5. THE SYSTEMIC ONE: `X ?? []` erases "never looked" ────────────────────
+// Five connectors normalize a MISSING collection into an EMPTY one
+// (`(raw.threats ?? []).map(...)` and siblings). After that line, a source that
+// could not report and a source that reported nothing are byte-identical, and
+// every one of these evaluators reads the empty set as good news with action
+// "none":
+//
+//   edr-threat          protected      / NO_THREATS_HEALTHY / none
+//   identity-risk       trusted        / NO_RISK            / none
+//   peripheral-control  no_removable   / NO_REMOVABLE       / none
+//   credential-exposure clean          / NO_FINDINGS        / none
+//   vuln-scan           clean          / NO_FINDINGS        / none
+//
+// This is not hypothetical. proof:live-edr MEASURED that Wazuh's alerts live in a
+// separate indexer, so "reports protection health, cannot report detections" is
+// the real shape of the one live EDR this repo has been pointed at. Wazuh escapes
+// today only because it also cannot report realtimeProtection or signatureAgeHours,
+// which independently force degraded_protection. A vendor that reports protection
+// health but not detections lands on `protected` / action none.
+//
+// It also COMPOUNDS the capped-read defect that check-pagination-truncation.mjs
+// guards: a truncated page returns fewer items, and fewer items read as cleaner.
+// A read that never happened and a read that found nothing must not be the same
+// value — that is the whole law, and here it is violated by a single `?? []`.
+//
+// PINNED, NOT ENDORSED — fixing it needs an "observed" distinction on five
+// normalized types plus new reason codes, so it is an owner decision recorded in
+// docs/BUILD_BACKLOG.md. These assertions exist so the behaviour cannot drift
+// further and so a fix announces itself by failing here.
+const healthyNoThreatFeed = normalizeEndpoint({
+  deviceId: "d1",
+  agentInstalled: true,
+  agentRunning: true,
+  realtimeProtection: true,
+  signatureAgeHours: 1,
+  source: "vendor-without-threat-feed",
+  // threats: NOT SUPPLIED — the vendor has no detection endpoint here
+});
+const noFeedVerdict = evaluateThreatPosture(healthyNoThreatFeed, {});
+const explicitZero = evaluateThreatPosture(
+  normalizeEndpoint({
+    deviceId: "d2",
+    agentInstalled: true,
+    agentRunning: true,
+    realtimeProtection: true,
+    signatureAgeHours: 1,
+    threats: [],
+    source: "vendor-with-threat-feed",
+  }),
+  {},
+);
+check(
+  "edr-threat: an unreported threat feed currently grades protected/none (known, owner-gated)",
+  noFeedVerdict.posture === "protected" && noFeedVerdict.recommendedAction === "none",
+  `${noFeedVerdict.posture}/${noFeedVerdict.recommendedAction}`,
+);
+check(
+  "…and is INDISTINGUISHABLE from a vendor that actually scanned and found nothing",
+  JSON.stringify(noFeedVerdict) === JSON.stringify(explicitZero),
+  "if this now fails, the absent/empty distinction was added — update docs/BUILD_BACKLOG.md",
+);
+
+for (const [label, verdict] of [
+  ["identity-risk", identityRisk.evaluateIdentityRisk(identityRisk.normalizePrincipal({ principalId: "p", source: "s" } as never), {})],
+  ["peripheral-control", peripheral.evaluatePeripheralPosture(peripheral.normalizeDevice({ deviceId: "d", source: "s" } as never), {})],
+  ["credential-exposure", credential.evaluateCredentialExposure(credential.normalizeDevice({ deviceId: "d", source: "s" } as never), {})],
+] as [string, { recommendedAction?: string; action?: string }][]) {
+  const action = verdict.recommendedAction ?? verdict.action;
+  check(
+    `${label}: an unreported collection currently recommends no action (known, owner-gated)`,
+    action === "none",
+    `action=${String(action)} — if this now fails, the distinction was added; update docs/BUILD_BACKLOG.md`,
+  );
+}
+
 const total = passed + failures.length;
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${total})`);
 if (failures.length > 0) {
@@ -148,5 +226,8 @@ if (failures.length > 0) {
   process.exit(1);
 }
 console.log(
-  "Absent-collection law pinned: 3 of 4 grading paths derive caution from the data; vuln-scan's default is recorded.",
+  "Absent-collection law pinned. Derived correctly: passkey-assurance, edr-threat's agent path,\n" +
+    "telemetry/fleetdm. Recorded as owner-gated debt: vuln-scan's `scanned` default, and the\n" +
+    "`X ?? []` normalizers in edr-threat / identity-risk / peripheral-control / credential-exposure\n" +
+    "that grade an unreported collection as good news with action \"none\".",
 );

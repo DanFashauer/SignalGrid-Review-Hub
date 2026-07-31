@@ -157,6 +157,38 @@ only), and the DDM rig is gated on an APNs push certificate.
       After merging: `SIGNALGRID_MCP_PATH=~/signalgrid-mcp node scripts/verify-all.mjs
       --require-mcp --emit-evidence`, then commit `artifacts/live-evidence/`.
 
+- [ ] **`X ?? []` makes an unreported collection indistinguishable from an empty
+      one — in FIVE connectors.** ⚠️ **owner decision — the largest fail-open found
+      so far.** Each normalizer does `(raw.threats ?? []).map(...)` or a sibling.
+      After that single line, "the vendor could not report this" and "the vendor
+      reported nothing" are the same value, and every evaluator downstream reads the
+      empty set as good news **with action `none`**:
+
+      | connector | unreported collection → verdict |
+      | --- | --- |
+      | `edr-threat` | `protected` / `NO_THREATS_HEALTHY` / none |
+      | `identity-risk` | `trusted` / `NO_RISK` / none |
+      | `peripheral-control` | `no_removable` / `NO_REMOVABLE` / none |
+      | `credential-exposure` | `clean` / `NO_FINDINGS` / none |
+      | `vuln-scan` | `clean` / `NO_FINDINGS` / none |
+
+      Not hypothetical: `proof:live-edr` MEASURED that Wazuh's alerts live in a
+      separate indexer, so "reports protection health, cannot report detections" is
+      the real shape of the one live EDR this repo has been pointed at. Wazuh escapes
+      today only because it also cannot report `realtimeProtection` or
+      `signatureAgeHours`, which independently force `degraded_protection`. Any
+      vendor that reports protection health but not detections lands on `protected` /
+      action none. `identity-risk` is the starkest: a principal whose risk detections
+      were never fetched is graded **trusted**.
+      It also COMPOUNDS the capped-read defect below — a truncated page returns fewer
+      items, and fewer items read as cleaner. Same root cause: a read that never
+      happened must not equal a read that found nothing.
+      Fixing it needs an "observed" distinction on five normalized types (nullable
+      collection, or an `xObserved` flag) plus new reason codes, hence owner-gated.
+      Pinned meanwhile by `proof:absent-collection`, which asserts the CURRENT
+      behaviour so it cannot drift and fails — with instructions — the moment the
+      distinction is added.
+
 - [ ] **`vuln-scan` grades an empty finding set as CLEAN by default.** ⚠️ **owner
       decision — API change across callers.** `evaluateVulnPosture([], {})` returns
       `clean` / `NO_FINDINGS` / action `none`. `[]` is genuinely ambiguous — a

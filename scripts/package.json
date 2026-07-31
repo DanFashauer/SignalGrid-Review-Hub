@@ -103,7 +103,8 @@
     "proof:reliability": "tsx ./src/reliability-proof.ts",
     "proof:iac": "tsx ./src/iac-proof.ts",
     "proof:nac": "tsx ./src/nac-proof.ts",
-    "proof:webhooks": "tsx ./src/webhooks-proof.ts"
+    "proof:webhooks": "tsx ./src/webhooks-proof.ts",
+    "proof:mdm-profile": "tsx ./src/mdm-profile-proof.ts"
   },
   "dependencies": {
     "@workspace/app-workflows": "workspace:*",

@@ -416,6 +416,16 @@ in one place.
   rather than lowering it. User verification discouraged is possession-only, a known-false
   reliance that restricts. `proof:passkey-assurance` (74 checks).
 
+- **Benchmark selection** ([BENCHMARK_SELECTION.md](BENCHMARK_SELECTION.md)) — a baseline answer is
+  meaningless without the question that produced it. `BaselineState` records `aligned` and nothing
+  about which benchmark, at what version, from whose content, covering how much. Graded against a
+  committed snapshot of the published CIS catalog: 454 entries, 447 distinct titles, 7 superseded
+  rows. Title is the identity — the catalog files one Windows Server STIG version under a different
+  family from its successor, so a family-keyed index reports the stale row as current. A third-party
+  implementation of CIS-aligned checks is never represented as official CIS content, and a tool that
+  merely labels its checks "CIS" establishes nothing. Titles and versions only — CIS rule content is
+  licensed and is not reproduced. `proof:benchmark-selection` (71 checks).
+
 - **Policy binding** ([POLICY_BINDING.md](POLICY_BINDING.md)) — membership **is** the policy.
   Intune dynamic groups, Fleet teams, ABM/DDM profiles, Jamf smart groups, PACS access
   levels, Entra CA groups, WMS queues, EDR policy groups and SignalGrid's own per-vertical

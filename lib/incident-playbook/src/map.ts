@@ -165,6 +165,12 @@ function categoryForKind(kind: string, reason?: string): IncidentCategory {
     // direct sibling of `device_management_health`.
     case "policy_binding":
       return "security_compliance";
+    // `benchmark_selection` is the hardening plane's equivalent: the device was
+    // graded against the wrong benchmark document, a superseded version, content
+    // that is not CIS's own, or a run that evaluated almost nothing. A measurement
+    // failure about the compliance evidence itself, owned by the same queue.
+    case "benchmark_selection":
+      return "security_compliance";
     // `app_update` is the per-app sibling of `device_management_health`: a host app
     // below its version floor, lagging a forced update, or installed outside the
     // managed channel is a software-compliance state on the device, owned by the same

@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 36,
-  "fingerprint": "4e38ef3543ba82e2a475f578d387991a38756a534e1eec6c22c89bc783a8dd79",
+  "manifestVersion": 38,
+  "fingerprint": "11d7fea49bcb2e6c9027a652140be465726ee236909c3235c4fa7513c409961d",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -32,6 +32,7 @@
       "app_update",
       "platform_sso",
       "policy_binding",
+      "benchmark_selection",
       "device_management_health",
       "link_usability",
       "task_exception",
@@ -88,6 +89,7 @@
       "agent-behavior": 45,
       "agent-identity": 143,
       "app-update": 52,
+      "benchmark-selection": 71,
       "config-scope": 48,
       "credential-exposure": 28,
       "custody-beacon": 43,

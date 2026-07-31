@@ -107,6 +107,7 @@
     "proof:platform-sso": "pnpm --filter @workspace/scripts run proof:platform-sso",
     "proof:passkey-assurance": "pnpm --filter @workspace/scripts run proof:passkey-assurance",
     "proof:isolation-scope": "pnpm --filter @workspace/scripts run proof:isolation-scope",
+    "proof:benchmark-selection": "pnpm --filter @workspace/scripts run proof:benchmark-selection",
     "proof:policy-binding": "pnpm --filter @workspace/scripts run proof:policy-binding",
     "verify:docker": "node scripts/docker-verify.mjs",
     "proof:device-management-health": "pnpm --filter @workspace/scripts run proof:device-management-health",

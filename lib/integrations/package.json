@@ -35,6 +35,7 @@
     "./app-update": "./src/integrations/app-update/index.ts",
     "./platform-sso": "./src/integrations/platform-sso/index.ts",
     "./passkey-assurance": "./src/integrations/passkey-assurance/index.ts",
+    "./benchmark-selection": "./src/integrations/benchmark-selection/index.ts",
     "./policy-binding": "./src/integrations/policy-binding/index.ts",
     "./device-management-health": "./src/integrations/device-management-health/index.ts",
     "./link-usability": "./src/integrations/link-usability/index.ts",

@@ -22,6 +22,7 @@ import type { CustodyBeaconVerdict } from "@workspace/integrations/custody-beaco
 import type { AppUpdateVerdict } from "@workspace/integrations/app-update";
 import type { PlatformSsoVerdict } from "@workspace/integrations/platform-sso";
 import type { PolicyBindingVerdict } from "@workspace/integrations/policy-binding";
+import type { BenchmarkSelectionVerdict } from "@workspace/integrations/benchmark-selection";
 import type { DeviceManagementHealthVerdict } from "@workspace/integrations/device-management-health";
 import type { LinkUsabilityVerdict } from "@workspace/integrations/link-usability";
 // Type-only, via the "./task-exception" subpath export (wired in the same change
@@ -244,6 +245,18 @@ export function fromPolicyBinding(v: PolicyBindingVerdict): ComposableSignal {
   // since it is `unbound` in effect. Its actions are already on the unified ladder;
   // it never lowers what any other dimension says.
   return { kind: "policy_binding", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromBenchmarkSelection(v: BenchmarkSelectionVerdict): ComposableSignal {
+  // Benchmark selection — was this device graded against the RIGHT hardening
+  // benchmark, from CIS's own published content, on the platform the document
+  // targets, covering enough rules to mean anything? The baseline dimension records
+  // the ANSWER (`aligned`/`drifted`); this one records whether the QUESTION was
+  // sound. A device scored against a superseded or wrong-platform document reports
+  // "aligned" and is not hardened — so this dimension raises where the answer alone
+  // would have granted. It never lowers what any other dimension says, and it never
+  // asserts the device passed: that stays with `baselineCompliance`.
+  return { kind: "benchmark_selection", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromDeviceManagementHealth(v: DeviceManagementHealthVerdict): ComposableSignal {

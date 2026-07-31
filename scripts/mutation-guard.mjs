@@ -186,6 +186,15 @@ export const TARGETS = [
     ],
   },
   {
+    proof: "proof:benchmark-selection",
+    files: [
+      "lib/integrations/src/integrations/benchmark-selection/evaluate.ts",
+      "lib/integrations/src/integrations/benchmark-selection/benchmark-selection-connector.ts",
+      "lib/integrations/src/integrations/benchmark-selection/catalog.ts",
+    ],
+  },
+
+  {
     proof: "proof:policy-binding",
     files: [
       "lib/integrations/src/integrations/policy-binding/evaluate.ts",
@@ -493,6 +502,42 @@ const ALLOWED = [
     line: "if (!positivelyConfirmed && candidates.length === 0) {",
     reason:
       "The grant backstop itself — deliberately redundant defence-in-depth, documented in the source as never firing today; exists to catch a FUTURE weakening.",
+  },
+  {
+    file: "lib/integrations/src/integrations/benchmark-selection/evaluate.ts",
+    line: 'report.reportIntegrity === "clean" &&',
+    reason:
+      "A conjunct of the grant backstop's predicate — the backstop never fires today, as its own comment states; the predicate is unobservable until a branch weakens. Same shape as the policy-binding backstop below.",
+  },
+  {
+    file: "lib/integrations/src/integrations/benchmark-selection/evaluate.ts",
+    line: 'report.recognition === "recognized" &&',
+    reason:
+      "Backstop-predicate conjunct — same reasoning as the reportIntegrity conjunct above. The recognition BRANCH itself is not exempt: four negative controls cover it (superseded, unlisted, not-in-catalog, and the pinned BENCHMARK_UNKNOWN reason).",
+  },
+  {
+    file: "lib/integrations/src/integrations/benchmark-selection/evaluate.ts",
+    line: 'report.provenance === "cis_published" &&',
+    reason:
+      "Backstop-predicate conjunct — same reasoning. The provenance branch is covered by three controls (independent implementation, tool-declared, and the absent-key default).",
+  },
+  {
+    file: "lib/integrations/src/integrations/benchmark-selection/evaluate.ts",
+    line: 'report.platformMatch === "matched" &&',
+    reason:
+      "Backstop-predicate conjunct — same reasoning. The platform branch is covered by the mismatch control and the absent-string control.",
+  },
+  {
+    file: "lib/integrations/src/integrations/benchmark-selection/evaluate.ts",
+    line: 'report.coverage === "complete" &&',
+    reason:
+      "Backstop-predicate conjunct — same reasoning. The coverage branch is covered by five controls (unreconciled counts, empty run, partial run, one absent count, and non-integer counts).",
+  },
+  {
+    file: "lib/integrations/src/integrations/benchmark-selection/evaluate.ts",
+    line: 'if (!positivelySelected && candidates.length === 0) {',
+    reason:
+      "The grant backstop itself — deliberately redundant defence-in-depth, documented in the source as never firing today; it exists to catch a FUTURE weakening. Same shape and justification as the policy-binding backstop.",
   },
   {
     file: "lib/integrations/src/integrations/policy-binding/evaluate.ts",

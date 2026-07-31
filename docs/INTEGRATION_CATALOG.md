@@ -423,7 +423,7 @@ in one place.
   emitter records what WOULD have been sent with a literal `delivered: false` on every entry —
   after the syslog family was found returning `status:'sent'` for events it silently dropped,
   the surface is shaped so that claim is unrepresentable. Routing (`response-accountability`)
-  stays a verdict; emission stays an act behind this gate. `proof:emitter-discipline` (42 checks).
+  stays a verdict; emission stays an act behind this gate. `proof:emitter-discipline` (43 checks).
 
 - **Benchmark selection** ([BENCHMARK_SELECTION.md](BENCHMARK_SELECTION.md)) — a baseline answer is
   meaningless without the question that produced it. `BaselineState` records `aligned` and nothing

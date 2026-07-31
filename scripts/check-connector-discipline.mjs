@@ -62,13 +62,6 @@ const NOT_A_FAMILY = new Set(["adapters"]);
  *   unproven        — gated, but no proof asserts the gate actually holds.
  */
 const KNOWN_GAPS = {
-  nac: {
-    severity: "violation",
-    reason:
-      "cisco-ise.ts and aruba-clearpass.ts call the ISE ANC / ClearPass APIs to " +
-      "quarantine and un-quarantine an endpoint — a DEVICE ACTION over the network, " +
-      "the same class removed from uem/ in #150 — with no tier gate and no proof.",
-  },
   itsm: { severity: "ungated-emitter", reason: "servicenow/bmc-helix/ivanti create real tickets with no tier gate." },
   siem: { severity: "ungated-emitter", reason: "sentinel forwards real events with no tier gate." },
   syslog: { severity: "ungated-emitter", reason: "forwards real log lines with no tier gate." },

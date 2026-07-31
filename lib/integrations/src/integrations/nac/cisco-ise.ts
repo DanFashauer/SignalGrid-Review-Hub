@@ -1,8 +1,7 @@
-import type { 
-  NACAdapter, 
-  NACEndpointInfo, 
-  NACQuarantineRequest, 
-  NACQuarantineResponse 
+// Cisco ISE → endpoint lookup. READ-ONLY. See the removal note below.
+import type {
+  NACAdapter,
+  NACEndpointInfo
 } from '../adapters/types';
 
 /**
@@ -115,78 +114,14 @@ export class CiscoISEAdapter implements NACAdapter {
     };
   }
 
-  /**
-   * Quarantine an endpoint
-   */
-  async quarantineEndpoint(request: NACQuarantineRequest): Promise<NACQuarantineResponse> {
-    await this.ensureAuthenticated();
-
-    // Use ISE ANC (Adaptive Network Control) API
-    const url = `${this.config.baseUrl}/api/v1/anc/apply`;
-
-    const payload = {
-      macAddress: request.deviceId,
-      policy: request.networkProfile || this.config.defaultQuarantineProfile,
-    };
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.accessToken}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Cisco ISE quarantine error: ${response.status} - ${error}`);
-    }
-
-    return {
-      requestId: `ise-quarantine-${Date.now()}`,
-      status: 'applied',
-      appliedAt: new Date().toISOString(),
-      message: `Quarantine policy '${request.networkProfile || this.config.defaultQuarantineProfile}' applied`,
-    };
-  }
-
-  /**
-   * Clear quarantine on an endpoint
-   */
-  async clearQuarantine(endpointId: string, reason?: string): Promise<NACQuarantineResponse> {
-    await this.ensureAuthenticated();
-
-    // Use ISE ANC API to clear quarantine
-    const url = `${this.config.baseUrl}/api/v1/anc/clear`;
-
-    const payload = {
-      macAddress: endpointId,
-    };
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.accessToken}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Cisco ISE unquarantine error: ${response.status} - ${error}`);
-    }
-
-    return {
-      requestId: `ise-unquarantine-${Date.now()}`,
-      status: 'revoked',
-      appliedAt: new Date().toISOString(),
-      message: 'Quarantine policy cleared',
-    };
-  }
+  // WHAT WAS REMOVED. `quarantineEndpoint` (POST /api/v1/anc/apply),
+  // `clearQuarantine` (POST /api/v1/anc/clear) and the `quarantineDevice` alias
+  // drove Cisco ISE's Adaptive Network Control to cut a device off the network —
+  // a DEVICE ACTION over the network, the same class deleted from uem/ in #150.
+  // There is no read-only-disciplined form of "quarantine this endpoint", and
+  // AGENTS.md requires high-risk actions to be simulated and approval-required,
+  // so the actuators are gone rather than gated. What remains is read-only:
+  // look an endpoint up, and check connectivity.
 
   /**
    * Health check - verify Cisco ISE connectivity
@@ -247,10 +182,4 @@ export class CiscoISEAdapter implements NACAdapter {
     }
   }
 
-  /**
-   * Legacy support - quarantine device
-   */
-  async quarantineDevice(request: NACQuarantineRequest): Promise<NACQuarantineResponse> {
-    return this.quarantineEndpoint(request);
-  }
 }

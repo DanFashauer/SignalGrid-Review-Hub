@@ -185,17 +185,18 @@ export interface NACQuarantineResponse {
   message?: string;
 }
 
+// WRITE METHODS REMOVED: `quarantineEndpoint`, `clearQuarantine` and the
+// `quarantineDevice` alias. They cut a device off the network through Cisco ISE
+// ANC / ClearPass enforcement — a DEVICE ACTION, the class removed from uem/ in
+// #150. Declaring them here made the actuator a REQUIRED part of the contract,
+// so any new NAC vendor had to implement one; the interface is now read-only and
+// a vendor adapter cannot satisfy it by acting on a device.
 export interface NACAdapter {
   readonly name: string;
   readonly vendor: string;
-  
-  // Universal NAC Surface
+
+  // Universal NAC surface — read-only.
   lookupEndpoint(identifier: string, type: 'mac' | 'serial' | 'cert'): Promise<NACEndpointInfo | null>;
-  quarantineEndpoint(request: NACQuarantineRequest): Promise<NACQuarantineResponse>;
-  clearQuarantine(endpointId: string, reason?: string): Promise<NACQuarantineResponse>;
-  
-  // Legacy support
-  quarantineDevice?(request: NACQuarantineRequest): Promise<NACQuarantineResponse>;
   healthCheck?(): Promise<boolean>;
 }
 

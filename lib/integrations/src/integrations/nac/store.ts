@@ -8,7 +8,7 @@
 import { z } from 'zod';
 import { CiscoISEAdapter, CiscoISEConfig } from './cisco-ise';
 import { ArubaClearPassAdapter, ArubaClearPassConfig } from './aruba-clearpass';
-import type { NACAdapter, NACEndpointInfo, NACQuarantineRequest } from '../adapters/types';
+import type { NACAdapter, NACEndpointInfo } from '../adapters/types';
 import { appendAuditRecord } from '@workspace/audit';
 
 // ============================================================================
@@ -178,99 +178,10 @@ export async function lookupEndpoint(
   }
 }
 
-/**
- * Apply quarantine to an endpoint
- */
-export async function applyQuarantine(
-  deviceId: string,
-  reason?: string,
-  options?: {
-    vlan?: string;
-    networkProfile?: string;
-    correlationId?: string;
-  }
-): Promise<{ success: boolean; requestId?: string; message?: string }> {
-  const adapter = await getNACAdapter();
-  
-  if (!adapter) {
-    const msg = 'NAC not configured';
-    await appendAuditRecord('nac.quarantine.failed', { type: 'system' }, {
-      meta: { deviceId, reason: 'not_configured', message: msg },
-    });
-    return { success: false, message: msg };
-  }
-  
-  try {
-    const request: NACQuarantineRequest = {
-      deviceId,
-      action: 'quarantine',
-      reason,
-      vlan: options?.vlan,
-      networkProfile: options?.networkProfile,
-      correlationId: options?.correlationId,
-    };
-    
-    const result = await adapter.quarantineEndpoint(request);
-    
-    await appendAuditRecord('nac.quarantine.applied', { type: 'system' }, {
-      meta: { requestId: result.requestId, status: result.status, reason, networkProfile: options?.networkProfile },
-    });
-    
-    return {
-      success: true,
-      requestId: result.requestId,
-      message: result.message,
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    
-    await appendAuditRecord('nac.quarantine.failed', { type: 'system' }, {
-      meta: { reason, message },
-    });
-    
-    return { success: false, message };
-  }
-}
-
-/**
- * Clear quarantine on an endpoint
- */
-export async function clearQuarantine(
-  deviceId: string,
-  reason?: string
-): Promise<{ success: boolean; requestId?: string; message?: string }> {
-  const adapter = await getNACAdapter();
-  
-  if (!adapter) {
-    const msg = 'NAC not configured';
-    await appendAuditRecord('nac.quarantine.cleared', { type: 'system' }, {
-      meta: { reason: 'not_configured', message: msg },
-    });
-    return { success: false, message: msg };
-  }
-  
-  try {
-    const result = await adapter.clearQuarantine(deviceId, reason);
-    
-    await appendAuditRecord('nac.quarantine.cleared', { type: 'system' }, {
-      meta: { requestId: result.requestId, status: result.status, reason },
-    });
-    
-    return {
-      success: true,
-      requestId: result.requestId,
-      message: result.message,
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    
-    await appendAuditRecord('nac.quarantine.cleared', { type: 'system' }, {
-      meta: { reason, message },
-    });
-    
-    return { success: false, message };
-  }
-}
+// WHAT WAS REMOVED. `applyQuarantine` and `clearQuarantine` forwarded to the
+// vendor adapters' quarantine actuators — a DEVICE ACTION over the network,
+// the class deleted from uem/ in #150 and now gone from the adapters and the
+// NACAdapter contract too. This store reads NAC state; it does not change it.
 
 /**
  * Health check for NAC

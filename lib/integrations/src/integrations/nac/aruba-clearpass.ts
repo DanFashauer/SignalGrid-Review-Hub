@@ -1,8 +1,16 @@
-import type { 
-  NACAdapter, 
-  NACEndpointInfo, 
-  NACQuarantineRequest, 
-  NACQuarantineResponse 
+// Aruba ClearPass → endpoint lookup. READ-ONLY.
+//
+// WHAT WAS REMOVED. `quarantineEndpoint` (POST /api/endpoint), `clearQuarantine`
+// (PATCH /api/endpoint/{id}) and the `quarantineDevice` alias changed an
+// endpoint's enforcement state to cut it off the network — a DEVICE ACTION over
+// the network, the same class deleted from uem/ in #150. "Quarantine this
+// endpoint" has no read-only-disciplined form, and AGENTS.md requires high-risk
+// actions to be simulated and approval-required, so these are gone rather than
+// gated. What remains reads: look an endpoint up, and check connectivity.
+
+import type {
+  NACAdapter,
+  NACEndpointInfo
 } from '../adapters/types';
 
 /**
@@ -114,116 +122,6 @@ export class ArubaClearPassAdapter implements NACAdapter {
     };
   }
 
-  /**
-   * Quarantine an endpoint
-   */
-  async quarantineEndpoint(request: NACQuarantineRequest): Promise<NACQuarantineResponse> {
-    await this.ensureAuthenticated();
-
-    // Use ClearPass endpoint manager API
-    const url = `${this.config.baseUrl}/api/endpoint`;
-
-    // First, find or create the endpoint
-    const endpointInfo = await this.lookupEndpoint(request.deviceId, 'mac');
-    let endpointId = endpointInfo?.endpointId;
-
-    if (!endpointId) {
-      // Create endpoint
-      const createResponse = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify({
-          mac_address: request.deviceId,
-          status: 'Known',
-        }),
-      });
-
-      if (!createResponse.ok) {
-        const error = await createResponse.text();
-        throw new Error(`ClearPass create endpoint error: ${createResponse.status} - ${error}`);
-      }
-
-      const createData = await createResponse.json() as { id: number };
-      endpointId = String(createData.id);
-    }
-
-    // Apply role via enforcement profile
-    const enforceUrl = `${this.config.baseUrl}/api/enforcement/profile`;
-
-    const enforcementPayload = {
-      name: `Quarantine-${request.deviceId}-${Date.now()}`,
-      description: request.reason || 'Quarantine from Enterprise Shell',
-      type: 'RADIUS Enforcement',
-      profile_template: this.config.defaultQuarantineProfile,
-      action: [
-        {
-          type: 'Attribute',
-          name: 'Aruba-User-Role',
-          value: this.config.defaultQuarantineRole,
-        },
-      ],
-    };
-
-    const enforceResponse = await fetch(enforceUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.accessToken}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify(enforcementPayload),
-    });
-
-    if (!enforceResponse.ok) {
-      const error = await enforceResponse.text();
-      throw new Error(`ClearPass quarantine error: ${enforceResponse.status} - ${error}`);
-    }
-
-    return {
-      requestId: `clearpass-quarantine-${Date.now()}`,
-      status: 'applied',
-      appliedAt: new Date().toISOString(),
-      message: `Role '${this.config.defaultQuarantineRole}' assigned to endpoint`,
-    };
-  }
-
-  /**
-   * Clear quarantine on an endpoint
-   */
-  async clearQuarantine(endpointId: string, reason?: string): Promise<NACQuarantineResponse> {
-    await this.ensureAuthenticated();
-
-    // Clear the enforcement profile by updating endpoint
-    const url = `${this.config.baseUrl}/api/endpoint/${endpointId}`;
-
-    const response = await fetch(url, {
-      method: 'PATCH',
-      headers: {
-        'Authorization': `Bearer ${this.accessToken}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify({
-        status: 'Known',
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`ClearPass unquarantine error: ${response.status} - ${error}`);
-    }
-
-    return {
-      requestId: `clearpass-unquarantine-${Date.now()}`,
-      status: 'revoked',
-      appliedAt: new Date().toISOString(),
-      message: 'Endpoint restored to normal access',
-    };
-  }
 
   /**
    * Health check - verify ClearPass connectivity
@@ -294,12 +192,5 @@ export class ArubaClearPassAdapter implements NACAdapter {
       'Disconnected': 'disconnected',
     };
     return statusMap[status] || 'unknown';
-  }
-
-  /**
-   * Legacy support - quarantine device
-   */
-  async quarantineDevice(request: NACQuarantineRequest): Promise<NACQuarantineResponse> {
-    return this.quarantineEndpoint(request);
   }
 }

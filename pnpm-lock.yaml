@@ -244,6 +244,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(zod@3.25.76)
+      '@workspace/facility-trust-graph':
+        specifier: workspace:*
+        version: link:../../lib/facility-trust-graph
       '@workspace/room-sim':
         specifier: workspace:*
         version: link:../../lib/room-sim

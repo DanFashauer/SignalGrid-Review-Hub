@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 44,
-  "fingerprint": "33bd55ad8dfe2818620fda06e2fcd56d93f7a07c4c67a82461e72e31e5212389",
+  "manifestVersion": 45,
+  "fingerprint": "29d8b0370cd0a6ce8b77846bb06bd004e7232673c172a0fc6f9a05bf003daf2b",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -137,7 +137,9 @@
       "evaluate_room_entry",
       "signal_catalog",
       "scan_signals",
-      "evaluate_decision"
+      "evaluate_decision",
+      "facility_graph",
+      "evaluate_location_certainty"
     ],
     "consumers": {
       "macMcpLane": "scripts/verify-all.mjs (SIGNALGRID_MCP_PATH=... --require-mcp --emit-evidence)",

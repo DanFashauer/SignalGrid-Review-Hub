@@ -17,6 +17,14 @@ import { z } from "zod";
 import { SignalGridCore } from "@workspace/signalgrid-core";
 import { listScenarios, runRoomEntry, tenantForScenario } from "@workspace/room-sim";
 import { scanSignals, signalCatalog } from "@workspace/signal-radar";
+import {
+  ACCURACY_CLASSES,
+  FIXTURE_HOSPITAL_GRAPH,
+  evaluateLocationCertainty,
+  normalizeLocationObservation,
+  type AccuracyClass,
+  type LocationObservationRaw,
+} from "@workspace/facility-trust-graph";
 
 const core = SignalGridCore.demo();
 const demoKeys = core.demoApiKeys();
@@ -124,7 +132,92 @@ server.registerTool(
   },
 );
 
+server.registerTool(
+  "facility_graph",
+  {
+    title: "Facility Trust Graph (fixture hospital)",
+    description:
+      "Inspect the canonical space model: list the fixture hospital's spaces, get one space with its " +
+      "root-first path, or resolve a VENDOR identifier (cisco / physical_access / ehr / rtls) to the " +
+      "space it is attached to. Vendor ids are attachments, never keys — an unmapped id returns null, " +
+      "never a guess. Public-safe fixture; no real facility is described.",
+    inputSchema: {
+      spaceId: z.string().optional().describe("A SignalGrid spaceId to fetch (with its ancestor path)"),
+      vendorNamespace: z.string().optional().describe("Vendor namespace, e.g. cisco, physical_access, ehr, rtls"),
+      vendorKey: z.string().optional().describe("Vendor key, e.g. zone_id, reader_id, bed"),
+      vendorId: z.string().optional().describe("The vendor's identifier value to resolve"),
+    },
+  },
+  async ({ spaceId, vendorNamespace, vendorKey, vendorId }) => {
+    const g = FIXTURE_HOSPITAL_GRAPH;
+    if (vendorNamespace && vendorKey && vendorId) {
+      const hit = g.resolveVendorRef(vendorNamespace, vendorKey, vendorId);
+      return asText({ resolved: hit, note: hit === null ? "unmapped vendor id — null, never a guess" : undefined });
+    }
+    if (spaceId) {
+      const node = g.get(spaceId);
+      return asText(node === null ? { space: null } : { space: node, path: g.path(spaceId).map((n) => `${n.kind}:${n.spaceId}`) });
+    }
+    return asText({ mapVersion: g.mapVersion, derived: g.derived, spaces: g.spaces });
+  },
+);
+
+server.registerTool(
+  "evaluate_location_certainty",
+  {
+    title: "Evaluate location certainty (the multi-bed rule)",
+    description:
+      "Grade ONE location observation against the precision a workflow requires, over the fixture " +
+      "hospital graph. accuracy_class is an ordered ladder (site … room_candidate, room_confirmed, " +
+      "bed_candidate, bed_confirmed) and a candidate class never satisfies a confirmed requirement: a " +
+      "Wi-Fi room fix against a bed_confirmed workflow steps up (scan the wristband) — 'open every " +
+      "patient in the room' is unrepresentable. Wrong map version restricts; unmapped space alerts; " +
+      "stale/degraded/unavailable step up. Try: space_id SG-RM0312, accuracy_class room_candidate, " +
+      "requiredClass bed_confirmed.",
+    inputSchema: {
+      space_id: z.string().describe("The observed space, e.g. SG-RM0312 or SG-RM0312-BED-B"),
+      accuracy_class: z.enum(ACCURACY_CLASSES as unknown as [string, ...string[]]).describe("Achieved precision"),
+      requiredClass: z
+        .enum(ACCURACY_CLASSES.filter((c) => c !== "unknown") as unknown as [string, ...string[]])
+        .describe("The precision floor this workflow requires"),
+      confidence: z.number().min(0).max(1).optional().describe("Source-reported confidence (0..1)"),
+      minConfidence: z.number().min(0).max(1).optional().describe("Caller's minimum acceptable confidence"),
+      observed_at: z.string().optional().describe("ISO-8601 UTC instant the observation was made"),
+      referenceTime: z.string().optional().describe("The caller's 'now' (ISO-8601 UTC) for staleness"),
+      maxObservationAgeSeconds: z.number().optional().describe("Maximum acceptable observation age"),
+      map_version: z.string().optional().describe("The map the source located against (fixture graph is 2026.07.14)"),
+      source_health: z.enum(["healthy", "degraded", "unavailable"]).optional(),
+      observation_source: z.string().optional().describe("e.g. cisco_spaces, rtls, scan"),
+    },
+  },
+  async (input) => {
+    try {
+      const requirement = {
+        requiredClass: input.requiredClass as Exclude<AccuracyClass, "unknown">,
+        maxObservationAgeSeconds: input.maxObservationAgeSeconds,
+        minConfidence: input.minConfidence,
+      };
+      const raw: LocationObservationRaw = {
+        space_id: input.space_id,
+        accuracy_class: input.accuracy_class,
+        confidence: input.confidence,
+        observed_at: input.observed_at,
+        map_version: input.map_version ?? FIXTURE_HOSPITAL_GRAPH.mapVersion,
+        source_health: input.source_health ?? "healthy",
+        observation_source: input.observation_source,
+      };
+      const normalized = normalizeLocationObservation("mcp-subject", FIXTURE_HOSPITAL_GRAPH, raw, {
+        requirement,
+        referenceTime: input.referenceTime,
+      });
+      return asText({ normalized, verdict: evaluateLocationCertainty(normalized, requirement) });
+    } catch (err) {
+      return { isError: true, content: [{ type: "text" as const, text: err instanceof Error ? err.message : "evaluation failed" }] };
+    }
+  },
+);
+
 const transport = new StdioServerTransport();
 await server.connect(transport);
 // stderr is safe for logs; stdout is the MCP transport.
-console.error("SignalGrid MCP server ready (stdio). Tools: list_room_scenarios, evaluate_room_entry, signal_catalog, scan_signals, evaluate_decision.");
+console.error("SignalGrid MCP server ready (stdio). Tools: list_room_scenarios, evaluate_room_entry, signal_catalog, scan_signals, evaluate_decision, facility_graph, evaluate_location_certainty.");

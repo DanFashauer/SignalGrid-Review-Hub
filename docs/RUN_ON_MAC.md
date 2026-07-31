@@ -57,8 +57,10 @@ After phase 4 prints its snippet, add it to
 
 Restart Claude Desktop. Claude now has the fabric's tools —
 `list_room_scenarios`, `evaluate_room_entry`, `signal_catalog`, `scan_signals`,
-`evaluate_decision` — and every call runs your local, fixture-backed decision
-core. No cloud, no vendor, nothing leaves the machine.
+`evaluate_decision`, `facility_graph`, and `evaluate_location_certainty` (ask it:
+*"a Wi-Fi room fix in Room 312 for a med-admin workflow — allow it?"* and watch
+the multi-bed rule step it up) — and every call runs your local, fixture-backed
+decision core. No cloud, no vendor, nothing leaves the machine.
 
 ## Option A — Open it in a browser (zero setup — works on iPhone/iPad)
 

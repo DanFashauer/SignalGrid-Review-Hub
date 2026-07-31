@@ -10,16 +10,19 @@
 // not the compiler — is what makes a value safe. Own-property reads only; malformed
 // reports fail closed.
 //
-// THREE THINGS THIS NORMALIZER DERIVES RATHER THAN TRUSTS:
+// FOUR THINGS THIS NORMALIZER DERIVES RATHER THAN TRUSTS:
 //   • recognition — (title, version) looked up in the committed catalog
 //   • platformMatch — the two substrate strings compared, not a boolean believed
 //   • coverage — computed from integer counts that must reconcile to their own total
+//   • recency — the run's own timestamp aged against the operator's stated bound,
+//     at a reference instant the CALLER supplies (no clock in the decision path)
 
 import { loadBenchmarkCatalog, versionGreater, type BenchmarkCatalog } from "./catalog";
 import {
   BENCHMARK_SELECTION_REPORT_KEYS,
   BenchmarkSelectionConnectorError,
   type AssessmentCoverage,
+  type AssessmentRecency,
   type BenchmarkAlignment,
   type BenchmarkProvenance,
   type BenchmarkRequirement,
@@ -95,6 +98,17 @@ function hasUnrecognizedKey(report: object, known: readonly string[]): boolean {
 function countOf(v: unknown): number | null {
   if (typeof v !== "number" || !Number.isSafeInteger(v) || v < 0) return null;
   return v;
+}
+
+/** A strict ISO-8601 UTC (Zulu) instant → epoch ms, or null. A local-time string,
+ *  a bare date, an epoch number, junk — all null: an instant this fabric compares
+ *  must be unambiguous, and only the Zulu form is. */
+function instantOf(v: unknown): number | null {
+  if (typeof v !== "string") return null;
+  const s = v.trim();
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(s)) return null;
+  const ms = Date.parse(s);
+  return Number.isFinite(ms) ? ms : null;
 }
 
 /** A trimmed non-empty string, or null. Never a fabricated placeholder. */
@@ -181,11 +195,43 @@ export function deriveRequirementFit(requirement: BenchmarkRequirement | undefin
   return titles.some((t) => t.trim() === title) ? "on_requirement" : "off_requirement";
 }
 
+const MS_PER_DAY = 86_400_000;
+
+/**
+ * Derive recency — the TEMPORAL axis. Deterministic on three supplied inputs: the
+ * assessor reports when the run happened, the operator's requirement states how
+ * old is too old, and the caller supplies the reference instant. `Date.now()`
+ * never runs here.
+ *
+ * A FUTURE-dated run (age < 0) is `unknown`, never `current`: a run claiming to
+ * postdate the reference instant has an age this fabric cannot establish, and an
+ * unestablishable age must not read as fresh. No skew allowance exists on
+ * purpose — an allowance is a tuned number, and this fabric does not tune.
+ */
+export function deriveRecency(
+  requirement: BenchmarkRequirement | undefined,
+  assessmentMs: number | null,
+  referenceMs: number | null,
+): AssessmentRecency {
+  if (requirement === undefined) return "unbounded";
+  const bound = requirement.maxAssessmentAgeDays;
+  if (bound === undefined) return "unbounded";
+  if (typeof bound !== "number" || !Number.isFinite(bound) || bound <= 0) return "unknown";
+  if (assessmentMs === null || referenceMs === null) return "unknown";
+  const ageMs = referenceMs - assessmentMs;
+  if (ageMs < 0) return "unknown";
+  return ageMs <= bound * MS_PER_DAY ? "current" : "stale";
+}
+
 export interface NormalizeOptions {
   /** The workflow's requirement. Absent = nobody stated a bar. */
   requirement?: BenchmarkRequirement;
   /** Catalog override, for proofs and negative controls. */
   catalog?: BenchmarkCatalog;
+  /** The caller's "now", as a strict ISO-8601 UTC instant — the reference the
+   *  recency axis ages against. Absent while a bound is stated → recency
+   *  `unknown` (never silently current). */
+  referenceTime?: string;
   source?: string;
 }
 
@@ -229,10 +275,17 @@ export function normalizeReport(
   // app-update's min_version > latest_version manifest.
   const versionShapeBad = citedVersion !== null && !/^\d+\.\d+\.\d+$/.test(citedVersion);
 
+  // An ASSERTED run time we could not read is an assertion, not silence — same
+  // rule as an unlisted provenance spelling.
+  const assessmentTimeRaw = raw["assessment_time"];
+  const assessmentMs = instantOf(assessmentTimeRaw);
+  const timeShapeBad = assessmentTimeRaw !== undefined && assessmentTimeRaw !== null && assessmentMs === null;
+
   const malformed =
     readThrew ||
     !plain ||
     versionShapeBad ||
+    timeShapeBad ||
     hasUnrecognizedKey(report, BENCHMARK_SELECTION_REPORT_KEYS) ||
     enumMalformed(raw["source_provenance"], PROVENANCES) ||
     enumMalformed(raw["alignment"], ALIGNMENTS);
@@ -249,6 +302,7 @@ export function normalizeReport(
     platformMatch: comparePlatforms(benchmarkTargetPlatform, observedPlatform),
     coverage: deriveCoverage(counts),
     requirementFit: deriveRequirementFit(opts.requirement, citedTitle),
+    recency: deriveRecency(opts.requirement, assessmentMs, instantOf(opts.referenceTime)),
     alignment,
     citedTitle,
     citedVersion,
@@ -260,6 +314,8 @@ export function normalizeReport(
     benchmarkTargetPlatform,
     observedPlatform,
     profileOrLevel: textOf(raw["profile_or_level"]),
+    // Carried ONLY when it parsed as an instant — an unreadable claim is null.
+    assessmentTime: assessmentMs !== null ? (assessmentTimeRaw as string).trim() : null,
     controlId: textOf(raw["control_id"]),
     evidenceReference: textOf(raw["evidence_reference"]),
     counts,
@@ -289,9 +345,13 @@ export class BenchmarkSelectionConnector {
     private readonly transport: BenchmarkSelectionTransport,
   ) {}
 
-  async fetchNormalized(deviceRef: string, requirement?: BenchmarkRequirement): Promise<NormalizedBenchmarkSelection> {
+  async fetchNormalized(
+    deviceRef: string,
+    requirement?: BenchmarkRequirement,
+    referenceTime?: string,
+  ): Promise<NormalizedBenchmarkSelection> {
     guardReadOnly("GET");
     const raw = await this.transport({ deviceRef, token: this.config.accessToken });
-    return normalizeReport(deviceRef, raw, { requirement, source: this.config.source ?? "benchmark-selection-assessor" });
+    return normalizeReport(deviceRef, raw, { requirement, referenceTime, source: this.config.source ?? "benchmark-selection-assessor" });
   }
 }

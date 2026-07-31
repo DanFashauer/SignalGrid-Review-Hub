@@ -19,9 +19,9 @@ hardening plane. `benchmark-selection` withdraws it.
 
 ## What it grades
 
-Five independent questions, each answerable from what a real assessor already
-reports. None of them is "did the device pass" — that stays with the baseline
-dimension, deliberately.
+Six independent questions, each answerable from what a real assessor already
+reports plus what the operator's requirement states. None of them is "did the
+device pass" — that stays with the baseline dimension, deliberately.
 
 | Question | Axis | How it is answered |
 | --- | --- | --- |
@@ -30,15 +30,17 @@ dimension, deliberately.
 | Does the document target this device? | `platformMatch` | the platform the **document** declares vs the platform the **tool** read, both reported by the assessor |
 | How much was actually evaluated? | `coverage` | rule counts that must reconcile to their own stated total |
 | Is it the benchmark this work requires? | `requirementFit` | membership in a caller-supplied allowlist for the workflow |
+| Is the answer still current? | `recency` | the run's own `assessment_time` aged against the requirement's `maxAssessmentAgeDays`, at a caller-supplied reference instant |
 
 | Observation | Verdict | Why |
 | --- | --- | --- |
-| recognized + CIS content + matching platform + complete coverage + on requirement | `none` — the grant | the right document, honestly sourced, adequately covered |
+| recognized + CIS content + matching platform + complete coverage + on requirement + within the age bound (or explicitly unbounded) | `none` — the grant | the right document, honestly sourced, adequately covered, still current |
 | the document targets a **different platform** than the tool read | `restrict` | the wrong-bar case, caught affirmatively rather than inferred |
 | the counts reconcile and **zero rules were evaluated** | `restrict` | a perfect score over an empty denominator |
 | a title the published catalog **does not carry** | `alert` | measurement is broken at operator scale, not for one device |
 | a real benchmark that is **not the one this work requires** | `alert` | a citation/targeting failure — it must not block a correctly hardened device mid-shift |
 | a **superseded** version, or one not listed for that title | `step_up` | a real document at a bar the catalog no longer leads with |
+| a run **older than the operator's stated age bound** | `step_up` | an assessment is a statement about the moment it ran — "confirmed" must not mean confirmed forever |
 | the tool only **labels** its checks "CIS" | `step_up` | a label is a name, not a provenance |
 | **no requirement** stated for this workflow | `step_up` | nobody said what the bar is — a hole, not a pass |
 | a **third-party implementation** of CIS-aligned checks | `monitor` | real work, but not CIS's published content, and the verdict says so |
@@ -102,6 +104,40 @@ proof pins exactly that.
 An **empty** requirement list reads as unreadable, never as "anything goes": a
 vacuous policy must not be the cheapest route to a grant.
 
+## Recency — the temporal axis
+
+The sixth question is the unearned affirmative in its temporal form: without
+this axis a "confirmed" selection stayed confirmed **forever**. It is the same
+test a vendor security review applies to a certification on file — *current SOC2,
+age under 12 months* — an answer is only as good as its date.
+
+All three inputs are **supplied, never sampled**. The assessor reports
+`assessment_time` (a strict ISO-8601 UTC instant — the versioned-evidence
+`assessmentTime` field); the operator's requirement states `maxAssessmentAgeDays`;
+the **caller** supplies the reference instant. `Date.now()` never runs in a
+decision path, so the derivation is deterministic and replayable: the same report,
+same requirement, and two different reference instants grade `current` and then
+`stale` — nothing about the device changed, only the date. The proof pins exactly
+that.
+
+The edges are all fail-closed:
+
+- A bound is stated and the run time is **absent or unreadable**, or the caller
+  supplies **no reference instant** → `unknown` → `step_up`. The fabric refuses
+  to sample a clock instead.
+- A **future-dated** run → `unknown`, never `current`: an unestablishable age
+  must not read as fresh. No skew allowance exists on purpose — an allowance is a
+  tuned number, and this dimension has none.
+- A bound that is **zero, negative, or not a number** reads as unreadable →
+  `unknown`, never as "no bound".
+- An **asserted** run time in a shape that cannot be parsed is `malformed` — an
+  assertion, not silence.
+
+A supplied requirement that states **no bound** is `unbounded`: an explicit
+operator choice, carried on the record so it stays visible, and it does not
+foreclose the grant. That is a policy fact the operator authored — different in
+kind from a defaulted affirmative the fabric invented.
+
 ## The catalog snapshot
 
 `lib/integrations/src/integrations/benchmark-selection/cis-catalog.data.ts` — a dated
@@ -156,9 +192,9 @@ Four properties the loader **enforces rather than documents**:
 - **It does not say the device passed.** `alignment` is carried on every normalized
   record and is deliberately **outside** the grant conjunction. `requirement_matched`
   alongside `drifted` is the honest and useful pair, and the proof asserts that state
-  exists and grants. Over the normalized enumeration exactly **5** states grant — one
-  per alignment value — which is the mechanical proof that this dimension never
-  grades whether the device passed.
+  exists and grants. Over the normalized enumeration exactly **10** states grant —
+  one per alignment value, times the two recencies that can grant — which is the
+  mechanical proof that this dimension never grades whether the device passed.
 - **It does not infer a benchmark from a device.** No OS-marketing-name → benchmark
   mapping is attempted; that inference is the invented judgement the dimension
   refuses to make. Applicability comes from two strings the assessor itself reports,
@@ -196,7 +232,7 @@ The dimension also has an arm in the core policy layer, so a policy that grants 
 - The arm **never lowers**: `confirmed` grants nothing a healthy device did not
   already have, and every other rule still fires alongside it.
 
-Proven by `proof:benchmark-selection` (71 checks; targeted ladder checks, per-field
-integrity, hostile wire shapes, catalog-loader refusals, the comparator asserted
-directly, both grant-safety enumerations, connector surface, fusion; deterministic,
-offline).
+Proven by `proof:benchmark-selection` (82 checks; targeted ladder checks including
+the temporal axis, per-field integrity, hostile wire shapes, catalog-loader
+refusals, the comparators asserted directly, both grant-safety enumerations,
+connector surface, fusion; deterministic, offline).

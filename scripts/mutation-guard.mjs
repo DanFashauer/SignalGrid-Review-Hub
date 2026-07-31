@@ -546,6 +546,12 @@ const ALLOWED = [
   },
   {
     file: "lib/integrations/src/integrations/benchmark-selection/evaluate.ts",
+    line: 'report.requirementFit === "on_requirement" &&',
+    reason:
+      "Backstop-predicate conjunct — same reasoning. It was the conjunction's FINAL clause (no trailing &&, so the mutator never touched it) until the recency clause was appended after it; nothing about its inertness changed. The requirement branch is covered by four controls (off-requirement, absent requirement, empty list, and the two-workflows divergence).",
+  },
+  {
+    file: "lib/integrations/src/integrations/benchmark-selection/evaluate.ts",
     line: 'if (!positivelySelected && candidates.length === 0) {',
     reason:
       "The grant backstop itself — deliberately redundant defence-in-depth, documented in the source as never firing today; it exists to catch a FUTURE weakening. Same shape and justification as the policy-binding backstop.",

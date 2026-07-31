@@ -38,12 +38,19 @@ import {
  *  - **coverage partial** → `monitor`. Errors or skipped rules remain.
  *  - **requirement absent** → `step_up`. Nobody stated a bar for this work, so
  *    "the right test" is unestablished. A hole, not a pass.
+ *  - **assessment stale** → `step_up`. The run is older than the operator's stated
+ *    age bound. An assessment is a statement about the moment it ran — the
+ *    temporal unearned affirmative was a "confirmed" that stayed confirmed
+ *    forever, and this rung withdraws it. Same class as version_superseded:
+ *    a real answer at a bar that can no longer be confirmed current.
  *  - **unknown anything** → `step_up`. Unknown raises, never grants.
  *
- * The grant (`none`) requires SEVEN affirmatives: clean parse + covered + a
- * recognized current catalog row + CIS-published content + a matched platform +
- * complete coverage + on requirement. Not one clause has the form `!== bad`, so a
- * value this design has never heard of satisfies none of them.
+ * The grant (`none`) requires EIGHT affirmative clauses: clean parse + covered +
+ * a recognized current catalog row + CIS-published content + a matched platform +
+ * complete coverage + on requirement + a recency that is `current` or explicitly
+ * `unbounded` (the operator's carried choice to state no age bound). Not one
+ * clause has the form `!== bad`, so a value this design has never heard of
+ * satisfies none of them.
  *
  * `alignment` is deliberately ABSENT from the conjunction. This dimension says the
  * test was the right test; it does not say the device passed. `requirement_matched`
@@ -100,6 +107,7 @@ export function evaluateBenchmarkSelection(
   if (report.platformMatch === "unknown") unknownSignals.push("platform_match");
   if (report.coverage === "ungraded") unknownSignals.push("assessment_coverage");
   if (report.requirementFit === "unknown") unknownSignals.push("requirement");
+  if (report.recency === "unknown") unknownSignals.push("assessment_recency");
 
   // Defence in depth: a report we could not fully parse is never a grant.
   if (report.reportIntegrity !== "clean") {
@@ -150,6 +158,14 @@ export function evaluateBenchmarkSelection(
     candidates.push({ posture: "selection_unverified", action: "step_up", reason: "COVERAGE_UNGRADED" });
   }
 
+  // ── is the answer still current? ────────────────────────────────────────────────
+  if (report.recency === "stale") {
+    criticalFindings.push("assessment_stale");
+    candidates.push({ posture: "assessment_stale", action: "step_up", reason: "ASSESSMENT_STALE" });
+  } else if (report.recency === "unknown") {
+    candidates.push({ posture: "selection_unverified", action: "step_up", reason: "ASSESSMENT_RECENCY_UNKNOWN" });
+  }
+
   // ── is it the document this work requires? ──────────────────────────────────────
   if (report.requirementFit === "off_requirement") {
     criticalFindings.push("benchmark_off_requirement");
@@ -160,7 +176,7 @@ export function evaluateBenchmarkSelection(
     candidates.push({ posture: "selection_unverified", action: "step_up", reason: "REQUIREMENT_UNKNOWN" });
   }
 
-  // Defence in depth: the grant is affirmative on all six axes plus the parse. The
+  // Defence in depth: the grant is affirmative on all seven axes plus the parse. The
   // branches above already push a raising candidate for every non-confirmed state,
   // so today this never fires — but if any branch were later weakened so a
   // non-confirmed state produced an empty candidate list, this backstop forces a
@@ -171,7 +187,8 @@ export function evaluateBenchmarkSelection(
     report.provenance === "cis_published" &&
     report.platformMatch === "matched" &&
     report.coverage === "complete" &&
-    report.requirementFit === "on_requirement";
+    report.requirementFit === "on_requirement" &&
+    (report.recency === "current" || report.recency === "unbounded");
   if (!positivelySelected && candidates.length === 0) {
     candidates.push({ posture: "selection_unverified", action: "step_up", reason: "BENCHMARK_UNKNOWN" });
   }

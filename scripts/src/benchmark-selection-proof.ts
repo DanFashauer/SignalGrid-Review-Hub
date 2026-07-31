@@ -6,15 +6,18 @@
 // third-party implementation rather than CIS's own (monitor) or is merely LABELLED
 // "CIS" (step_up); a document that does not target the platform the tool read
 // (restrict); an assessment that evaluated nothing (restrict); a real benchmark that
-// is not the one this work requires (alert); and no stated requirement at all
-// (step_up). The grant needs SEVEN affirmatives, and `alignment` is deliberately not
-// one of them — this dimension says the test was right, never that the device passed.
+// is not the one this work requires (alert); no stated requirement at all (step_up);
+// and a run OLDER than the operator's stated age bound (step_up) — the temporal
+// unearned affirmative, where "confirmed" once meant confirmed forever. The grant
+// needs EIGHT affirmative clauses, and `alignment` is deliberately not one of them —
+// this dimension says the test was right, never that the device passed.
 import {
   BenchmarkSelectionConnector,
   BenchmarkSelectionConnectorError,
   buildBenchmarkCatalog,
   createMockBenchmarkSelectionTransport,
   deriveCoverage,
+  deriveRecency,
   deriveRecognition,
   deriveRequirementFit,
   evaluateBenchmarkSelection,
@@ -187,6 +190,58 @@ check("the Intune-tailored, Cloud-tailored and base macOS 15 benchmarks are thre
   catalog.versionsFor("Apple macOS 15.0 Sequoia Intune").size === 1 &&
   catalog.versionsFor("Apple macOS 15.0 Sequoia Cloud-tailored").size === 1);
 
+// ── recency: the temporal axis ──────────────────────────────────────────────────
+// An assessment is a statement about the moment it ran. Without this axis a
+// "confirmed" selection stayed confirmed FOREVER — the same defect the other axes
+// withdraw, in its temporal form. All three inputs are supplied, never sampled:
+// the assessor reports assessment_time, the operator's requirement states
+// maxAssessmentAgeDays, and the caller supplies the reference instant.
+const AGE_REQ = { requiredTitles: [OK_TITLE], maxAssessmentAgeDays: 365 };
+const REF = "2026-07-31T00:00:00Z";
+const evAt = (r: BenchmarkSelectionReportRaw, requirement = AGE_REQ, referenceTime: string | undefined = REF) =>
+  evaluateBenchmarkSelection(normalizeReport("dev-t", r, { requirement, referenceTime }));
+const recent = evAt(clean({ assessment_time: "2026-07-01T12:00:00Z" }));
+check("a run inside the operator's age bound → still the grant (the recency axis raises, it never blocks a fresh answer)",
+  recent.recommendedAction === "none" && recent.selectionConfirmed === true);
+const stale = evAt(clean({ assessment_time: "2024-01-01T00:00:00Z" }));
+check("a run OLDER than the stated bound → step_up (ASSESSMENT_STALE): the answer was right once, and once is not now",
+  stale.recommendedAction === "step_up" && stale.reasonCode === "ASSESSMENT_STALE" &&
+  stale.criticalFindings.includes("assessment_stale") && stale.selectionConfirmed === false);
+check("THE TEMPORAL POINT: the SAME report under the SAME requirement grades current at one reference instant and stale at a later one — nothing about the device changed, only the date",
+  evAt(clean({ assessment_time: "2026-07-01T12:00:00Z" }), AGE_REQ, "2026-07-31T00:00:00Z").recommendedAction === "none" &&
+  evAt(clean({ assessment_time: "2026-07-01T12:00:00Z" }), AGE_REQ, "2027-08-01T00:00:00Z").reasonCode === "ASSESSMENT_STALE");
+const noTime = evAt(clean());
+check("a bound is stated and the report carries NO run time → step_up (ASSESSMENT_RECENCY_UNKNOWN), never silently current",
+  noTime.recommendedAction === "step_up" && noTime.reasonCode === "ASSESSMENT_RECENCY_UNKNOWN" &&
+  noTime.unknownSignals.includes("assessment_recency"));
+// Built WITHOUT the referenceTime option at all — an explicit `undefined` argument
+// would trigger a helper's default parameter and silently test the wrong thing.
+const noRef = evaluateBenchmarkSelection(
+  normalizeReport("dev-t", clean({ assessment_time: "2026-07-01T12:00:00Z" }), { requirement: AGE_REQ }));
+check("a bound is stated and the CALLER supplies no reference instant → step_up (the fabric refuses to sample a clock instead)",
+  noRef.recommendedAction === "step_up" && noRef.reasonCode === "ASSESSMENT_RECENCY_UNKNOWN");
+const unbounded = normalizeReport("d", clean({ assessment_time: "2020-01-01T00:00:00Z" }), { requirement: REQUIREMENT, referenceTime: REF });
+check("a supplied requirement that states NO age bound → recency 'unbounded', carried and still granting — an explicit operator choice, visible on the record",
+  unbounded.recency === "unbounded" && evaluateBenchmarkSelection(unbounded).recommendedAction === "none");
+const futureDated = evAt(clean({ assessment_time: "2027-01-01T00:00:00Z" }));
+check("a FUTURE-dated run → unknown → step_up: an unestablishable age never reads as fresh",
+  futureDated.recommendedAction === "step_up" && futureDated.reasonCode === "ASSESSMENT_RECENCY_UNKNOWN");
+check("an ASSERTED run time in a shape we cannot read ('yesterday') is malformed — an assertion, not silence",
+  normalizeReport("d", clean({ assessment_time: "yesterday" }), { requirement: AGE_REQ, referenceTime: REF }).reportIntegrity === "malformed" &&
+  normalizeReport("d", clean({ assessment_time: "yesterday" }), { requirement: AGE_REQ, referenceTime: REF }).recency === "unknown");
+check("the boundary is inclusive and exact: a run aged precisely 365 days is current; one millisecond older is stale",
+  evAt(clean({ assessment_time: "2025-07-31T00:00:00.000Z" })).recommendedAction === "none" &&
+  evAt(clean({ assessment_time: "2025-07-30T23:59:59.999Z" })).reasonCode === "ASSESSMENT_STALE");
+check("deriveRecency maps its cases directly: an unreadable bound (zero, negative, NaN) is unknown, NEVER 'no bound' — a vacuous bound is not the cheap route past the axis",
+  deriveRecency({ requiredTitles: [OK_TITLE], maxAssessmentAgeDays: 0 }, 0, 1) === "unknown" &&
+  deriveRecency({ requiredTitles: [OK_TITLE], maxAssessmentAgeDays: -5 }, 0, 1) === "unknown" &&
+  deriveRecency({ requiredTitles: [OK_TITLE], maxAssessmentAgeDays: Number.NaN }, 0, 1) === "unknown" &&
+  deriveRecency({ requiredTitles: [OK_TITLE] }, 0, 1) === "unbounded" &&
+  deriveRecency(undefined, 0, 1) === "unbounded");
+check("the run's own timestamp is carried as versioned evidence (the assessmentTime field), null when unreadable",
+  normalizeReport("d", clean({ assessment_time: "2026-07-01T12:00:00Z" }), { requirement: AGE_REQ, referenceTime: REF }).assessmentTime === "2026-07-01T12:00:00Z" &&
+  normalizeReport("d", clean(), { requirement: AGE_REQ, referenceTime: REF }).assessmentTime === null);
+
 // ── uncovered ───────────────────────────────────────────────────────────────────
 const uncovered = evaluateBenchmarkSelection(normalizeReport("d", clean(), { requirement: REQUIREMENT }), { covered: false });
 check("no assessment record returned (covered=false) → step_up (NOT_COVERED)",
@@ -326,13 +381,14 @@ check("the connector round-trip normalizes a clean report end to end (grantable)
 check("an unknown device yields an all-unknown report that cannot grant",
   evaluateBenchmarkSelection(await conn.fetchNormalized("dev-unknown", REQUIREMENT)).recommendedAction !== "none");
 
-// ── exhaustive (normalized): the grant is the seven-way conjunction ─────────────
+// ── exhaustive (normalized): the grant is the eight-way conjunction ─────────────
 const normDomains = {
   recognition: ["recognized", "version_superseded", "version_unlisted", "not_in_catalog", "unknown"],
   provenance: ["cis_published", "independent_implementation", "tool_declared", "unknown"],
   platformMatch: ["matched", "mismatched", "unknown"],
   coverage: ["complete", "partial", "empty", "ungraded"],
   requirementFit: ["on_requirement", "off_requirement", "unrequired", "unknown"],
+  recency: ["current", "stale", "unbounded", "unknown"],
   alignment: ["aligned", "partially_aligned", "drifted", "not_assessed", "unknown"],
   reportIntegrity: ["clean", "malformed"],
 };
@@ -343,11 +399,12 @@ const buildNorm = (c: Record<string, unknown>): NormalizedBenchmarkSelection => 
   platformMatch: c.platformMatch as NormalizedBenchmarkSelection["platformMatch"],
   coverage: c.coverage as NormalizedBenchmarkSelection["coverage"],
   requirementFit: c.requirementFit as NormalizedBenchmarkSelection["requirementFit"],
+  recency: c.recency as NormalizedBenchmarkSelection["recency"],
   alignment: c.alignment as NormalizedBenchmarkSelection["alignment"],
   reportIntegrity: c.reportIntegrity as NormalizedBenchmarkSelection["reportIntegrity"],
   citedTitle: OK_TITLE, citedVersion: OK_VERSION, catalogFamily: null, catalogSection: null,
   assessmentTool: null, toolVersion: null, benchmarkTargetPlatform: null, observedPlatform: null,
-  profileOrLevel: null, controlId: null, evidenceReference: null,
+  profileOrLevel: null, assessmentTime: null, controlId: null, evidenceReference: null,
   counts: { total: null, passed: null, failed: null, notApplicable: null, error: null, notChecked: null },
 });
 const normRes = enumerateGrantSafety({
@@ -362,14 +419,15 @@ const normRes = enumerateGrantSafety({
     c.provenance === "cis_published" &&
     c.platformMatch === "matched" &&
     c.coverage === "complete" &&
-    c.requirementFit === "on_requirement",
+    c.requirementFit === "on_requirement" &&
+    (c.recency === "current" || c.recency === "unbounded"),
 });
 check(
-  `exhaustive (normalized): over all ${normRes.combos} states, selection is confirmed ONLY on the seven-way conjunction (mismatches=${normRes.mismatches}${normRes.firstMismatch ? ", first=" + normRes.firstMismatch : ""})`,
-  normRes.mismatches === 0 && normRes.combos === productOf(normDomains) && normRes.combos === 9600,
+  `exhaustive (normalized): over all ${normRes.combos} states, selection is confirmed ONLY on the eight-way conjunction (mismatches=${normRes.mismatches}${normRes.firstMismatch ? ", first=" + normRes.firstMismatch : ""})`,
+  normRes.mismatches === 0 && normRes.combos === productOf(normDomains) && normRes.combos === 38400,
 );
-check("exhaustive (normalized): exactly 5 states grant — one per ALIGNMENT value, which is the proof that this dimension never grades whether the device passed",
-  normRes.noneCount === 5);
+check("exhaustive (normalized): exactly 10 states grant — one per ALIGNMENT value times the two recencies that can grant (current, and the operator's explicit unbounded) — the proof that this dimension never grades whether the device passed",
+  normRes.noneCount === 10);
 
 // ── exhaustive (raw wire): normalizer + catalog + requirement on hostile input ──
 const rawDomains = {

@@ -432,8 +432,10 @@ in one place.
   rows. Title is the identity — the catalog files one Windows Server STIG version under a different
   family from its successor, so a family-keyed index reports the stale row as current. A third-party
   implementation of CIS-aligned checks is never represented as official CIS content, and a tool that
-  merely labels its checks "CIS" establishes nothing. Titles and versions only — CIS rule content is
-  licensed and is not reproduced. `proof:benchmark-selection` (71 checks).
+  merely labels its checks "CIS" establishes nothing, and a run older than the operator's stated
+  age bound cannot confirm anything today (all three temporal inputs supplied, never sampled).
+  Titles and versions only — CIS rule content is licensed and is not reproduced.
+  `proof:benchmark-selection` (82 checks).
 
 - **Policy binding** ([POLICY_BINDING.md](POLICY_BINDING.md)) — membership **is** the policy.
   Intune dynamic groups, Fleet teams, ABM/DDM profiles, Jamf smart groups, PACS access

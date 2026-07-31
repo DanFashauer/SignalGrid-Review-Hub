@@ -10,7 +10,7 @@
 // in the fabric could see it.
 //
 // That is this fabric's recurring defect — the UNEARNED AFFIRMATIVE — in the
-// hardening plane. This dimension withdraws it on five independent questions:
+// hardening plane. This dimension withdraws it on six independent questions:
 //
 //   1. IDENTITY + CURRENCY. Is the cited (title, version) an actual row of the
 //      published catalog, and is it the highest version listed for that title?
@@ -27,6 +27,11 @@
 //      iPad in a kiosk workflow, a BYOD phone, a warehouse scanner and an OT
 //      controller do not share a bar, so the operator supplies the allowlist and
 //      the fabric grades membership. The fabric never invents which bar is right.
+//   6. RECENCY. Is the answer still current? An assessment is a statement about
+//      the device at the moment it ran — it does not age into permanence. The
+//      operator's requirement may bound its age; a run older than that bound
+//      cannot confirm anything today. The bound, the run time and the reference
+//      instant are all supplied — no clock ticks inside the decision path.
 //
 // NAMING IS DELIBERATE. Nothing here is called "fit", "compliant", or "conformant".
 // `selectionConfirmed` means "this was the right document, honestly sourced, and
@@ -127,6 +132,32 @@ export type RequirementFit =
   | "unknown"; // a requirement was supplied and could not be read
 
 /**
+ * Is the assessment recent enough to still speak for the device?
+ *
+ * The TEMPORAL form of the unearned affirmative: without this axis a "confirmed"
+ * selection stayed confirmed FOREVER. The same test a vendor security review
+ * applies to a certification on file ("current SOC2, age under 12 months") —
+ * an answer is only as good as its date.
+ *
+ * All three inputs are SUPPLIED, never sampled: the assessor reports
+ * `assessment_time`, the operator's requirement states `maxAssessmentAgeDays`,
+ * and the caller supplies the reference instant. `Date.now()` never runs in a
+ * decision path.
+ *
+ * `unbounded` = no age bound is in force: either the supplied requirement states
+ * none (an explicit operator choice, carried so it stays visible) or no
+ * requirement was supplied at all (already foreclosed as `unrequired` on the
+ * requirement axis). `unknown` = a bound IS stated and the age could not be
+ * established — missing or unreadable run time, unreadable bound, no reference
+ * instant, or a future-dated run — and unknown raises, never grants.
+ */
+export type AssessmentRecency =
+  | "current" // a bound is stated and the assessment is within it
+  | "stale" // a bound is stated and the assessment is older than it
+  | "unbounded" // no age bound is in force — a visible policy fact, not a default
+  | "unknown"; // a bound is stated and the age could not be established
+
+/**
  * The alignment answer itself, in the owner's vocabulary. CARRIED, NEVER GRANTED.
  * Maps onto the core's `BaselineState`: `partially_aligned` ≡ `partial`. The proof
  * pins that mapping so the two vocabularies cannot drift apart silently.
@@ -147,6 +178,7 @@ export interface BenchmarkSelectionReportRaw {
   benchmark_target_platform?: unknown; // the platform the DOCUMENT declares
   observed_platform?: unknown; // the platform the TOOL read off the device
   profile_or_level?: unknown; // evidence: L1 / L2 — carried, never graded (the catalog carries no level)
+  assessment_time?: unknown; // ISO-8601 UTC instant the run happened — the versioned-evidence assessmentTime field
   control_id?: unknown; // evidence
   evidence_reference?: unknown; // evidence: where the full result lives
   alignment?: unknown; // aligned | partially_aligned | drifted | not_assessed | unknown
@@ -168,6 +200,7 @@ export const BENCHMARK_SELECTION_REPORT_KEYS = [
   "benchmark_target_platform",
   "observed_platform",
   "profile_or_level",
+  "assessment_time",
   "control_id",
   "evidence_reference",
   "alignment",
@@ -196,6 +229,11 @@ export interface RuleCounts {
  *  vacuous and reads as unreadable, never as "anything goes". */
 export interface BenchmarkRequirement {
   readonly requiredTitles: readonly string[];
+  /** Maximum acceptable assessment age, in days. Omitted = the operator states no
+   *  age bound (`unbounded`, an explicit and carried choice). A supplied bound
+   *  that is not a positive finite number reads as unreadable → `unknown`, never
+   *  as "no bound" — a vacuous bound must not be the cheap route past the axis. */
+  readonly maxAssessmentAgeDays?: number;
 }
 
 export interface NormalizedBenchmarkSelection {
@@ -206,6 +244,7 @@ export interface NormalizedBenchmarkSelection {
   platformMatch: PlatformMatch;
   coverage: AssessmentCoverage;
   requirementFit: RequirementFit;
+  recency: AssessmentRecency;
   /** Carried, never granted. */
   alignment: BenchmarkAlignment;
   /** The versioned-evidence record. Absent fields are null, never a placeholder. */
@@ -220,6 +259,8 @@ export interface NormalizedBenchmarkSelection {
   benchmarkTargetPlatform: string | null;
   observedPlatform: string | null;
   profileOrLevel: string | null;
+  /** The run's own timestamp, carried verbatim when parseable — null otherwise. */
+  assessmentTime: string | null;
   controlId: string | null;
   evidenceReference: string | null;
   counts: RuleCounts;
@@ -233,6 +274,7 @@ export type BenchmarkSelectionPosture =
   | "coverage_partial" // errors or skipped rules remain
   | "version_superseded" // graded against a lower version than the catalog lists
   | "version_unlisted" // the title is real; this version is not a listed row
+  | "assessment_stale" // the run is older than the operator's stated age bound
   | "requirement_absent" // nobody stated a bar for this work
   | "provenance_unattributed" // the tool labelled its checks "CIS" and named no source
   | "benchmark_unlisted" // an affirmative citation the catalog does not carry
@@ -250,6 +292,8 @@ export type BenchmarkSelectionReasonCode =
   | "PROVENANCE_UNKNOWN"
   | "ASSESSMENT_PARTIAL"
   | "ASSESSMENT_EMPTY"
+  | "ASSESSMENT_STALE"
+  | "ASSESSMENT_RECENCY_UNKNOWN"
   | "COVERAGE_UNGRADED"
   | "BENCHMARK_VERSION_SUPERSEDED"
   | "BENCHMARK_VERSION_NOT_LISTED"

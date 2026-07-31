@@ -73,6 +73,23 @@ already has a fixture proof; these add a real vendor behind it._
       type. Doing this properly means a websocket client plus a result-collection
       policy (timeout, partial results, per-host errors) — and, given the blast
       radius, an explicit approval gate rather than only the tier gate.
+- [x] **Traccar → location-services.** DONE — `proof:live-location` (22 assertions)
+      against a real Traccar 6.14.5, positions ingested over its genuine OsmAnd
+      protocol. This connector has no hardcoded paths, so the lane found something
+      else: Traccar's `geofenceIds: null` is AMBIGUOUS — it means both "outside every
+      geofence" AND "no geofence is linked to this device". Proven live rather than
+      argued: the SAME coordinates return `[1]` while linked and `null` after
+      unlinking, from a device that never moved.
+      The obvious `null → outside` mapping would report a device sitting at HQ centre
+      as off-premises the moment someone unlinks a geofence, and `evaluateLocation`
+      turns that into `OUTSIDE_AUTHORIZED_GEOFENCE`/`locate` — a config change
+      becoming a location signal. The proof asserts that failure explicitly and pins
+      the honest mapping, which needs a second call (`/api/geofences?deviceId=N`).
+      Usually this repo catches absence graded as GOOD; here it would be graded BAD.
+      Same mistake — reporting a measurement never taken.
+      See [TRACCAR_LIVE_INTEGRATION.md](TRACCAR_LIVE_INTEGRATION.md). Does NOT cover
+      rtls-custody: Traccar is outdoor GPS, not indoor RTLS.
+
 - [ ] **Android: AMAPI Colab + Test DPC on an emulator** — managed/kiosk custody
       without hardware. Needs the Android SDK on the machine.
 
@@ -117,6 +134,51 @@ only), and the DDM rig is gated on an APNs push certificate.
       `docs/APP_WORKFLOW_TEMPLATES.md`.
 
 ## Owner-gated (needs a decision before an agent builds it)
+
+- [ ] **Merge `signalgrid-mcp#fix/unblock-live-evidence` → `liveEvidence` goes
+      `none` → `fresh`.** ⚠️ **one merge in the OTHER repo; everything else is done.**
+      This is the repo's longest-standing gap (`STATUS.md`: "real-hardware evidence:
+      none"), and it turned out not to need a supervised device or any purchase.
+      Two things blocked it, both now cleared or diagnosed:
+      1. *Review-Hub half* — `verify-all.mjs` runs the FULL preflight, which includes
+         `pnpm run build`, believed unrunnable on macOS. It runs fine once the four
+         stripped darwin binaries are supplied (commit `d637404`). **Cleared.**
+      2. *signalgrid-mcp half* — its `pyproject.toml` pinned `mcp>=1.9.0` with no
+         upper bound. The MCP Python SDK released **2.0.0**, removing
+         `create_connected_server_and_client_session` from `mcp.shared.memory`, so a
+         fresh checkout fails at pytest COLLECTION: 4 files error, 0 tests run. It
+         reads as a broken repo but is a moved API. Pinning `<2` restores it and
+         `verify.sh` exits 0. **Fix pushed as a branch, NOT merged — owner call.**
+      Verified end-to-end on 2026-07-31: with both in place, both halves pass and
+      `mac-run.json` mints. That evidence was deliberately NOT committed, because it
+      was produced against a local ad-hoc merge — the evidence schema records
+      `mcpCommit`/`mcpDirty`, and publishing a run against an unpushed dirty tree
+      would be exactly the manufactured confidence this repo keeps deleting.
+      After merging: `SIGNALGRID_MCP_PATH=~/signalgrid-mcp node scripts/verify-all.mjs
+      --require-mcp --emit-evidence`, then commit `artifacts/live-evidence/`.
+
+- [ ] **`vuln-scan` grades an empty finding set as CLEAN by default.** ⚠️ **owner
+      decision — API change across callers.** `evaluateVulnPosture([], {})` returns
+      `clean` / `NO_FINDINGS` / action `none`. `[]` is genuinely ambiguous — a
+      scanned device with zero findings really is clean — which is why the `scanned`
+      flag exists; the question is which way the DEFAULT falls.
+      It falls the opposite way from every sibling. Measured across all four places
+      this repo grades a collection: `passkey-assurance` (`[]` → `NOT_COVERED` /
+      `step_up`), `edr-threat` (nothing observed → `AGENT_ABSENT` / `alert`), and
+      `telemetry/fleetdm` (`policies.length > 0 && every(pass)`) all DERIVE their
+      caution from the data. `vuln-scan` alone requires the caller to remember
+      `scanned: false` — and a safety property that depends on being asked for
+      politely is not a safety property. The failure mode is a caller that gets `[]`
+      from a truncated page, an errored request, or a device with no scan record and
+      forwards it: the device is reported clean, action none.
+      LATENT, not live: there are no production callers of these evaluators today —
+      only tests and proofs — which is why this is recorded rather than fixed.
+      Options: make `scanned` required (loudest, breaks every call site), flip the
+      default to `false` (safest, makes existing tests declare their intent), or
+      accept it explicitly with the reasoning written down.
+      Pinned meanwhile by `proof:absent-collection`, which asserts the current
+      behaviour so it cannot drift further and fails — with instructions — the
+      moment the default is changed.
 
 - [ ] **Truncation signal on capped reads** ⚠️ **owner decision — API change across 11
       connectors.** Eleven connectors paginate with their own copy of `getAllPages`,

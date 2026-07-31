@@ -57,8 +57,42 @@ export function evaluateResponse(record: NormalizedResponseRecord): ResponseVerd
   // closure nobody verified is not evidence that anything was fixed. `monitor`: this
   // is the common case in a healthy process and screaming about it would make the
   // dimension noise. It is surfaced so the ratio is visible, not so it interrupts.
-  if (record.resolution === "resolved" && record.underlyingConcernStillPresent === null) {
+  //
+  // EXCLUDES the user-confirmed case, which is described more precisely below. Both sit
+  // at `monitor`, and the fold replaces only on strict `>`, so whichever is pushed first
+  // wins a tie — meaning the generic code would silently mask the specific one. These
+  // are two descriptions of one situation, not two findings, and the informative one
+  // should be the one a reader gets: "a user confirmed it" tells you more than "nobody
+  // looked", and tells you something different about how to fix the process.
+  if (
+    record.resolution === "resolved" &&
+    record.underlyingConcernStillPresent === null &&
+    record.resolutionEvidence !== "user_confirmation"
+  ) {
     candidates.push({ action: "monitor", reason: "RESOLUTION_UNVERIFIED" });
+  }
+
+  // ── Evidence provenance ─────────────────────────────────────────────────────
+  //
+  // COHERENCE FIRST. A record claiming a signal re-check must carry its result, and a
+  // record carrying a result must not claim it came from nowhere. Graded on the
+  // contradiction rather than on whichever half reads better — the same move
+  // `entitlement-binding` needed once its sweep found a report disagreeing with itself.
+  const claimsRecheck = record.resolutionEvidence === "signal_recheck";
+  const hasRecheckResult = record.underlyingConcernStillPresent !== null;
+  if (claimsRecheck !== hasRecheckResult && record.resolution !== "open") {
+    candidates.push({ action: "step_up", reason: "RESOLUTION_EVIDENCE_INCOHERENT" });
+  }
+
+  // Closed on a human's word, with the raising signal never re-read. The USER
+  // CONFIRMATION box on every support flow chart, and the most respectable way a
+  // watermelon survives: the symptom stopped, so the ticket closed, and the cause is
+  // still there to raise the concern again next shift.
+  if (
+    record.resolutionEvidence === "user_confirmation" &&
+    (record.resolution === "resolved" || record.resolution === "closed_unresolved")
+  ) {
+    candidates.push({ action: "monitor", reason: "RESOLVED_ON_USER_CONFIRMATION_ONLY" });
   }
 
   // ── Process failures ────────────────────────────────────────────────────────
@@ -177,6 +211,19 @@ export function evaluateResponse(record: NormalizedResponseRecord): ResponseVerd
   // makes the affirmative claim unrepresentable without positive confirmation: the
   // only way to be reported "verified gone" is for the caller to have looked and found
   // it gone. Absence of a concern is not evidence of a fix.
+  // ONE CONDITION, NOT TWO — and the second one was deleted rather than kept, which is
+  // worth recording because a negative control is what removed it.
+  //
+  // The support-flow audit first added `|| record.resolutionEvidence !== "signal_recheck"`
+  // here, to stop a user's say-so earning "verified gone". A control that dropped that
+  // clause then PASSED the whole proof, meaning the clause enforced nothing: whenever
+  // `underlyingConcernStillPresent === false` and the evidence is not a re-check, the
+  // COHERENCE GATE above has already pushed a step_up, so this branch is unreachable.
+  //
+  // Keeping an unreachable clause would have read as defence in depth and been
+  // decoration — two protections where there is one, which is how a reader comes to
+  // trust a door that is painted on. The coherence gate is the mechanism; it is asserted
+  // directly in the proof, and a control that removes it fails three checks.
   if (winner.reason === "RESPONSE_VERIFIED_RESOLVED" && record.underlyingConcernStillPresent !== false) {
     return v("resolved_unverified", "monitor", "CLOSED_CONCERN_NOT_RESOLVED", notifyTeam, "intact", record.concernRef);
   }
@@ -208,6 +255,8 @@ function postureFor(reason: ResponseReasonCode): ResponsePosture {
     // the two apart: one claimed a fix and nobody looked, the other claimed no fix at all.
     // A separate posture would assert a distinction the consumer cannot act on differently.
     case "CLOSED_CONCERN_NOT_RESOLVED":
+    // Closed on a human's word: the closure is real, the verification is not.
+    case "RESOLVED_ON_USER_CONFIRMATION_ONLY":
       return "resolved_unverified";
     case "RESPONSE_IN_PROGRESS":
       return "in_progress";
@@ -238,6 +287,9 @@ function postureFor(reason: ResponseReasonCode): ResponsePosture {
     case "ACKNOWLEDGEMENT_STATE_UNKNOWN":
     case "RESOLUTION_STATE_UNKNOWN":
     case "RESPONSE_REPORT_MALFORMED":
+    // The record parsed, and then disagreed with itself about how it was evidenced.
+    // Nothing can be established from it, which is what `indeterminate` means.
+    case "RESOLUTION_EVIDENCE_INCOHERENT":
       return "indeterminate";
   }
 }

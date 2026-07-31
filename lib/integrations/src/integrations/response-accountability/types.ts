@@ -83,6 +83,27 @@ export type ResponseResolutionClaim =
   | "open"
   | "unknown";
 
+/**
+ * What kind of evidence stands behind a closure.
+ *
+ * ORDERED BY STRENGTH, and kept apart because collapsing them is the whole failure:
+ * only a fresh read of the raising signal can retire the concern the fabric itself
+ * raised. Everything else is somebody's account of it.
+ */
+export type ResolutionEvidence =
+  /** A fresh read of the same signal that raised the concern, showing its current
+   *  state. The only evidence that can earn RESPONSE_VERIFIED_RESOLVED. */
+  | "signal_recheck"
+  /** A human — usually the reporting user — said it is fixed. Genuine evidence, and
+   *  weaker: it attests the symptom, not the cause. */
+  | "user_confirmation"
+  /** Closed with neither. Common on paths that bypass confirmation entirely, such as
+   *  the external-vendor branch of a typical support flow. */
+  | "none"
+  /** The report did not say. Distinct from `none`: not knowing how a closure was
+   *  evidenced is not the same as knowing it was evidenced by nothing. */
+  | "unknown";
+
 /** Whether the report itself parsed. Tracked separately for the same reason as in the
  *  other dimensions: a malformed record normalizes to a pile of `unknown` and would
  *  otherwise read as a confident set of separate findings. */
@@ -110,6 +131,25 @@ export interface NormalizedResponseRecord {
    * that raised the concern; this dimension performs no I/O and re-reads nothing.
    */
   readonly underlyingConcernStillPresent: boolean | null;
+  /**
+   * WHERE THE LINE ABOVE CAME FROM.
+   *
+   * `underlyingConcernStillPresent` documented itself as "supplied by the caller from a
+   * fresh read of the same signal that raised the concern" — and documented it is all it
+   * was. Nothing stopped a caller writing `false` because the reporting user said it
+   * seemed fine now, and the fabric would then issue RESPONSE_VERIFIED_RESOLVED: its
+   * strongest claim, on its weakest evidence.
+   *
+   * A service desk closing on user confirmation is a normal, reasonable process — it is
+   * the gate on the L1 and L2 paths of every support flow chart ever drawn. It is also
+   * the classic way a watermelon survives: a user confirms the SYMPTOM stopped, while
+   * the cause that raised the concern is still there to raise it again.
+   *
+   * So the provenance is now a field rather than a comment. This dimension still
+   * performs no I/O and re-reads nothing; it only refuses to treat one kind of evidence
+   * as another.
+   */
+  readonly resolutionEvidence: ResolutionEvidence;
   /**
    * How long acknowledgement took, in whole seconds, or null when not reported.
    *
@@ -206,6 +246,22 @@ export type ResponseReasonCode =
   | "WATERMELON_CLOSED_BUT_UNRESOLVED"
   /** Reported resolved; nobody re-checked. Unverified, not disproven. */
   | "RESOLUTION_UNVERIFIED"
+  /**
+   * Closed on a human's confirmation, with no fresh read of the raising signal.
+   *
+   * Graded at `monitor` — the same rung as RESOLUTION_UNVERIFIED, and deliberately no
+   * worse. A user confirming is strictly MORE evidence than nobody looking, and a
+   * service desk that closes on confirmation is running a normal process, not a
+   * negligent one. What it must not do is earn the word "verified": the user attests
+   * the symptom stopped, and the concern was raised by a signal that nobody re-read.
+   */
+  | "RESOLVED_ON_USER_CONFIRMATION_ONLY"
+  /**
+   * The record claims a signal re-check but carries no result from it, or claims no
+   * re-check while reporting one. A report that contradicts itself is graded on the
+   * contradiction rather than on whichever half reads better.
+   */
+  | "RESOLUTION_EVIDENCE_INCOHERENT"
   /**
    * Closed WITHOUT a fix claim (`closed_unresolved`) while the concern is confirmed
    * present, or was never re-checked.

@@ -26,6 +26,7 @@ import type {
   ResponseAcknowledgement,
   ResponseOwnerState,
   ResponseResolutionClaim,
+  ResolutionEvidence,
 } from "@workspace/integrations/response-accountability";
 
 let passed = 0;
@@ -42,7 +43,8 @@ const healthy: NormalizedResponseRecord = {
   acknowledgement: "acknowledged_within_target", resolution: "resolved",
   underlyingConcernStillPresent: false,
   acknowledgedAfterSeconds: 60, acknowledgementTargetSeconds: 300,
-  elapsedSinceRaisedSeconds: 3600, resolutionTargetSeconds: 14400, reportIntegrity: "intact",
+  elapsedSinceRaisedSeconds: 3600, resolutionTargetSeconds: 14400,
+  resolutionEvidence: "signal_recheck", reportIntegrity: "intact",
 };
 
 // ── 1. THE WATERMELON ────────────────────────────────────────────────────────
@@ -93,7 +95,8 @@ const healthy: NormalizedResponseRecord = {
       closedLive.reasonCode !== "WATERMELON_CLOSED_BUT_UNRESOLVED" &&
       closedLive.recommendedAction !== "alert");
     check("closed_unresolved with nobody re-checking grades the same — absence is not a fix",
-      evaluateResponse({ ...healthy, resolution: "closed_unresolved", underlyingConcernStillPresent: null })
+      evaluateResponse({ ...healthy, resolution: "closed_unresolved",
+                         underlyingConcernStillPresent: null, resolutionEvidence: "none" })
         .reasonCode === "CLOSED_CONCERN_NOT_RESOLVED");
     // NON-VACUITY: closed_unresolved must still be able to come out clean, or the fix is
     // just "always complain about closed_unresolved".
@@ -119,12 +122,18 @@ const healthy: NormalizedResponseRecord = {
       .reasonCode === "RESPONSE_IN_PROGRESS");
 
   // Unverified closure: the state a watermelon hides in. Distinct from both.
-  const unverified = evaluateResponse({ ...healthy, underlyingConcernStillPresent: null });
+  // `resolutionEvidence: "none"` because this record means NOBODY LOOKED. Leaving the
+  // base record's "signal_recheck" here would claim a re-check that carried no result —
+  // and the coherence gate now catches exactly that, which is how this line was found.
+  const unverified = evaluateResponse({
+    ...healthy, underlyingConcernStillPresent: null, resolutionEvidence: "none",
+  });
   check("resolved but NEVER RE-CHECKED is its own state — monitor, not clean, not alert",
     unverified.recommendedAction === "monitor" && unverified.reasonCode === "RESOLUTION_UNVERIFIED" &&
     unverified.posture === "resolved_unverified");
   check("...and null is never read as 'the concern is gone'",
-    evaluateResponse({ ...healthy, underlyingConcernStillPresent: null }).recommendedAction !== "none");
+    evaluateResponse({ ...healthy, underlyingConcernStillPresent: null, resolutionEvidence: "none" })
+      .recommendedAction !== "none");
 }
 
 // ── 2. Process failures, each distinct ───────────────────────────────────────
@@ -150,6 +159,82 @@ const healthy: NormalizedResponseRecord = {
     evaluateResponse({ ...healthy, reportIntegrity: "malformed" }).reasonCode === "RESPONSE_REPORT_MALFORMED");
   check("the verdict carries the notify team and the concern ref, so routing needs no second lookup",
     evaluateResponse(healthy).notifyTeam === "endpoint-team" && evaluateResponse(healthy).concernRef === "c");
+}
+
+// ── 2a. EVIDENCE PROVENANCE — the USER CONFIRMATION box ─────────────────────
+//
+// Every IT support flow chart gates ticket closure on USER CONFIRMATION. That is a
+// normal process and this dimension does not call it a failure. What it refuses to do
+// is let a human's account of the symptom earn the word "verified", which is reserved
+// for a fresh read of the signal that raised the concern.
+//
+// The field exists because the contract already SAID this and enforced none of it:
+// `underlyingConcernStillPresent` documented itself as "supplied by the caller from a
+// fresh read of the same signal", and nothing stopped a caller populating it from what
+// the user said. Documented is not enforced.
+{
+  const userSaidSo = {
+    ...healthy, underlyingConcernStillPresent: null, resolutionEvidence: "user_confirmation",
+  } as const;
+
+  check("closed on USER CONFIRMATION alone is monitor, and named as such",
+    (() => {
+      const v = evaluateResponse(userSaidSo);
+      return v.recommendedAction === "monitor" &&
+        v.reasonCode === "RESOLVED_ON_USER_CONFIRMATION_ONLY" &&
+        v.posture === "resolved_unverified";
+    })());
+  check("...and it is NOT graded worse than nobody looking — a user confirming is MORE evidence",
+    evaluateResponse(userSaidSo).recommendedAction ===
+      evaluateResponse({ ...healthy, underlyingConcernStillPresent: null, resolutionEvidence: "none" })
+        .recommendedAction);
+  check("...and it does NOT reach the watermelon's alert — nobody lied, the symptom did stop",
+    evaluateResponse(userSaidSo).recommendedAction !== "alert");
+  // The specific code must not be masked by the generic one. Both sit at `monitor`, and
+  // the fold replaces only on strict `>`, so whichever is pushed first wins a tie.
+  check("the SPECIFIC finding wins over the generic RESOLUTION_UNVERIFIED on the same record",
+    evaluateResponse(userSaidSo).reasonCode !== "RESOLUTION_UNVERIFIED");
+
+  // THE CENTRAL GUARD. A user confirmation paired with "concern gone" must NOT earn the
+  // verified verdict — this is the exact laundering path the field was added to close.
+  check("user confirmation + concern reported GONE still does not earn VERIFIED",
+    evaluateResponse({ ...healthy, resolutionEvidence: "user_confirmation" }).reasonCode
+      !== "RESPONSE_VERIFIED_RESOLVED");
+  // NAMING THE MECHANISM. The checks above pass because the COHERENCE GATE fires, not
+  // because of a clause in the earned-affirmative guard. An earlier draft had such a
+  // clause; a control that deleted it passed the entire proof, proving it unreachable,
+  // and it was removed rather than left as painted-on protection. Asserted explicitly so
+  // the next reader knows which mechanism is load-bearing.
+  check("...and the mechanism is the COHERENCE GATE, named rather than assumed",
+    evaluateResponse({ ...healthy, resolutionEvidence: "user_confirmation" }).reasonCode
+      === "RESOLUTION_EVIDENCE_INCOHERENT");
+  check("...nor does evidence 'none', nor 'unknown', with the same reported result",
+    evaluateResponse({ ...healthy, resolutionEvidence: "none" }).reasonCode !== "RESPONSE_VERIFIED_RESOLVED" &&
+    evaluateResponse({ ...healthy, resolutionEvidence: "unknown" }).reasonCode !== "RESPONSE_VERIFIED_RESOLVED");
+  // NON-VACUITY: a real signal re-check must still earn it, or the guard is
+  // "never verify anything".
+  check("...while a genuine SIGNAL RE-CHECK still earns it — the guard is not never-verify",
+    evaluateResponse({ ...healthy, resolutionEvidence: "signal_recheck" }).reasonCode
+      === "RESPONSE_VERIFIED_RESOLVED");
+
+  // COHERENCE, both directions.
+  check("claiming a re-check while carrying NO result is incoherent, not clean",
+    evaluateResponse({ ...healthy, underlyingConcernStillPresent: null, resolutionEvidence: "signal_recheck" })
+      .reasonCode === "RESOLUTION_EVIDENCE_INCOHERENT");
+  check("...and carrying a result while claiming NO re-check is incoherent too",
+    evaluateResponse({ ...healthy, resolutionEvidence: "none" }).reasonCode
+      === "RESOLUTION_EVIDENCE_INCOHERENT");
+  check("...and an incoherent report is indeterminate — nothing can be established from it",
+    evaluateResponse({ ...healthy, resolutionEvidence: "none" }).posture === "indeterminate");
+  // An OPEN record has not been closed, so closure evidence does not apply and must not
+  // be graded — constraining it would invent a rule about a field with no subject yet.
+  check("an OPEN record is not graded on closure evidence — there is no closure to evidence",
+    evaluateResponse({ ...healthy, resolution: "open", underlyingConcernStillPresent: true,
+                       resolutionEvidence: "signal_recheck" }).reasonCode === "RESPONSE_IN_PROGRESS");
+
+  check("the shipped fixture demonstrates the support-flow case",
+    evaluateResponseFixture("closed-on-user-confirmation")?.reasonCode
+      === "RESOLVED_ON_USER_CONFIRMATION_ONLY");
 }
 
 // ── 2b. RESOLUTION TIMING — SLA achievement, time-to-restore, backlog aging ──
@@ -228,6 +313,10 @@ const healthy: NormalizedResponseRecord = {
   // The resolution-timing axis, expressed as the (elapsed, target) PAIRS that reach
   // each of the five ResponseTimeliness states — swept as INPUTS rather than as the
   // derived state, so the derivation is under test rather than assumed.
+  // Evidence provenance — the axis the support-flow audit added. Swept because the
+  // clean verdict now depends on it, and an axis the sweep cannot see is an axis the
+  // sweep cannot vouch for.
+  const EVIDENCE: ResolutionEvidence[] = ["signal_recheck", "user_confirmation", "none", "unknown"];
   const TIMINGS: Array<readonly [number | null, number | null, string]> = [
     [3600, 14400, "within_target"],
     [172800, 14400, "breached"],
@@ -244,12 +333,13 @@ const healthy: NormalizedResponseRecord = {
         for (const underlyingConcernStillPresent of PRESENT)
           for (const owningTeam of TEAMS)
             for (const reportIntegrity of INTEGRITIES)
-              for (const [elapsedSinceRaisedSeconds, resolutionTargetSeconds, timing] of TIMINGS) {
+              for (const [elapsedSinceRaisedSeconds, resolutionTargetSeconds, timing] of TIMINGS)
+              for (const resolutionEvidence of EVIDENCE) {
               total += 1;
               const r = evaluateResponse({
                 ...healthy, owner, acknowledgement, resolution,
                 underlyingConcernStillPresent, owningTeam, reportIntegrity,
-                elapsedSinceRaisedSeconds, resolutionTargetSeconds,
+                elapsedSinceRaisedSeconds, resolutionTargetSeconds, resolutionEvidence,
               });
               const a = r.recommendedAction as string;
               if (a === "restrict" || a === "escalate") overCeiling += 1;
@@ -279,6 +369,10 @@ const healthy: NormalizedResponseRecord = {
                 reportIntegrity === "intact" && owner === "assigned" && owningTeam !== null &&
                 acknowledgement === "acknowledged_within_target" &&
                 (underlyingConcernStillPresent === false || resolution === "open") &&
+                // ...and the concern must have been looked at by a FRESH SIGNAL READ.
+                // A user's confirmation attests the symptom; only a re-read of the
+                // raising signal retires the concern the fabric itself raised.
+                (resolutionEvidence === "signal_recheck" || resolution === "open") &&
                 // ...and the resolution clock must not be BREACHED or UNREADABLE. A
                 // record past its committed target, or carrying a duration nobody can
                 // read, has not "positively worked" however green the rest of it looks.
@@ -292,7 +386,10 @@ const healthy: NormalizedResponseRecord = {
   // 720 was itself 576 widened by `acknowledged_ungraded`. Both growths are the CONTRACT
   // growing: a new epistemic state exists that did not before, and a sweep that did not
   // see it would leave the widening untested.
-  check(`state space enumerated (${total} states)`, total === 3600);
+  // 14,400 = 3,600 x 4 evidence values. Each axis added this session multiplied it
+  // rather than replacing it, which is the point: a state space that grows with the
+  // contract is a sweep still covering the whole contract.
+  check(`state space enumerated (${total} states)`, total === 14400);
   check("NEVER restricts or escalates — a badly-closed ticket must not interrupt a worker's shift",
     overCeiling === 0);
   check(`ZERO unjustified clean verdicts` +
@@ -324,7 +421,18 @@ const healthy: NormalizedResponseRecord = {
   // CLEAN = 15 = 5 x 3. The five above, crossed with the three timing states that push
   // no candidate — within_target, ungraded, unmeasured. `breached` and `unknown` each
   // add a monitor, so neither can appear in a clean verdict.
-  check(`...and the clean path is REACHABLE — exactly 15 states (got ${clean})`, clean === 15);
+  // CLEAN = 42, and the growth from 15 is NOT 3x more cleanliness — it is mostly
+  // vacuity, which is worth stating rather than banking:
+  //   resolved + present=false        -> evidence must be signal_recheck (coherence)  = 1
+  //   closed_unresolved + false       -> same                                          = 1
+  //   open + present free (3)         -> evidence does not apply to an unclosed record,
+  //                                      so all 4 values pass vacuously      = 3 x 4 = 12
+  //                                                        14 per timing x 3 timings = 42
+  // Twelve of the forty-two are the same three open states counted four times. The axis
+  // is deliberately unconstrained there: `resolutionEvidence` describes what evidenced a
+  // CLOSURE, and an open record has not been closed, so constraining it would invent a
+  // rule about a field that does not apply.
+  check(`...and the clean path is REACHABLE — exactly 42 states (got ${clean})`, clean === 42);
   // WATERMELON = 30, WAS 24. resolution=resolved AND present=true AND integrity=intact,
   // with owner (3) × ack (5) × owningTeam (2) all free — because a false closure
   // outranks every other finding on the record, which is exactly the behaviour worth
@@ -337,7 +445,10 @@ const healthy: NormalizedResponseRecord = {
   // axis can raise. That is the property worth pinning — a watermelon on a record that
   // also blew its resolution SLA must still be reported as the watermelon, not
   // downgraded to a missed target.
-  check(`...and the WATERMELON path is reachable — exactly 150 states (got ${watermelons})`, watermelons === 150);
+  // 600 = 150 x 4: evidence is free, because `alert` outranks every rung the evidence
+  // axis can raise — including the step_up an incoherent record earns. A watermelon on a
+  // record that ALSO contradicts itself about its evidence is still the watermelon.
+  check(`...and the WATERMELON path is reachable — exactly 600 states (got ${watermelons})`, watermelons === 600);
 }
 
 // ── 4. Timeliness, from caller-supplied durations only ───────────────────────

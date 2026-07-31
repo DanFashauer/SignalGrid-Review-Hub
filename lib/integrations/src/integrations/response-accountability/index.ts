@@ -106,6 +106,7 @@ export const RESPONSE_FIXTURES: Readonly<Record<string, NormalizedResponseRecord
     acknowledgementTargetSeconds: 300,
     elapsedSinceRaisedSeconds: 3600,
     resolutionTargetSeconds: 14400,
+    resolutionEvidence: "signal_recheck",
     reportIntegrity: "intact",
   },
   /** THE WATERMELON. Every process metric green — owned, acknowledged in two minutes
@@ -122,6 +123,7 @@ export const RESPONSE_FIXTURES: Readonly<Record<string, NormalizedResponseRecord
     acknowledgementTargetSeconds: 300,
     elapsedSinceRaisedSeconds: 3600,
     resolutionTargetSeconds: 14400,
+    resolutionEvidence: "signal_recheck",
     reportIntegrity: "intact",
   },
   /** Closed as resolved, nobody re-checked. How a watermelon survives unseen. */
@@ -136,6 +138,7 @@ export const RESPONSE_FIXTURES: Readonly<Record<string, NormalizedResponseRecord
     acknowledgementTargetSeconds: 300,
     elapsedSinceRaisedSeconds: 3600,
     resolutionTargetSeconds: 14400,
+    resolutionEvidence: "none",
     reportIntegrity: "intact",
   },
   /** Raised, and nobody owns it. */
@@ -150,6 +153,7 @@ export const RESPONSE_FIXTURES: Readonly<Record<string, NormalizedResponseRecord
     acknowledgementTargetSeconds: 300,
     elapsedSinceRaisedSeconds: 86400,
     resolutionTargetSeconds: 14400,
+    resolutionEvidence: "none",
     reportIntegrity: "intact",
   },
   /** Picked up, but outside the window. A slow team, not an absent one. */
@@ -164,6 +168,7 @@ export const RESPONSE_FIXTURES: Readonly<Record<string, NormalizedResponseRecord
     acknowledgementTargetSeconds: 300,
     elapsedSinceRaisedSeconds: 3600,
     resolutionTargetSeconds: 14400,
+    resolutionEvidence: "none",
     reportIntegrity: "intact",
   },
   /** Open, owned, inside the process. Not a finding. */
@@ -178,6 +183,7 @@ export const RESPONSE_FIXTURES: Readonly<Record<string, NormalizedResponseRecord
     acknowledgementTargetSeconds: 300,
     elapsedSinceRaisedSeconds: 3600,
     resolutionTargetSeconds: 14400,
+    resolutionEvidence: "none",
     reportIntegrity: "intact",
   },
   /** Closed, honestly, and past the operator's committed resolution target. The ITSM
@@ -194,6 +200,7 @@ export const RESPONSE_FIXTURES: Readonly<Record<string, NormalizedResponseRecord
     acknowledgementTargetSeconds: 300,
     elapsedSinceRaisedSeconds: 172800,
     resolutionTargetSeconds: 14400,
+    resolutionEvidence: "signal_recheck",
     reportIntegrity: "intact",
   },
   /** Still open, well past the same target: the concern is aging in a queue. Identical
@@ -210,6 +217,25 @@ export const RESPONSE_FIXTURES: Readonly<Record<string, NormalizedResponseRecord
     acknowledgementTargetSeconds: 300,
     elapsedSinceRaisedSeconds: 172800,
     resolutionTargetSeconds: 14400,
+    resolutionEvidence: "none",
+    reportIntegrity: "intact",
+  },
+  /** THE SUPPORT-FLOW CASE. Closed because the user said it was fixed — the USER
+   *  CONFIRMATION gate on the L1/L2 branches of a standard support matrix — with the
+   *  raising signal never re-read. A normal process, and the most respectable route a
+   *  watermelon takes. */
+  "closed-on-user-confirmation": {
+    concernRef: "concern-9",
+    owningTeam: "service-desk",
+    owner: "assigned",
+    acknowledgement: "acknowledged_within_target",
+    resolution: "resolved",
+    underlyingConcernStillPresent: null,
+    acknowledgedAfterSeconds: 90,
+    acknowledgementTargetSeconds: 300,
+    elapsedSinceRaisedSeconds: 3600,
+    resolutionTargetSeconds: 14400,
+    resolutionEvidence: "user_confirmation",
     reportIntegrity: "intact",
   },
   unreadable: {
@@ -223,6 +249,7 @@ export const RESPONSE_FIXTURES: Readonly<Record<string, NormalizedResponseRecord
     acknowledgementTargetSeconds: null,
     elapsedSinceRaisedSeconds: null,
     resolutionTargetSeconds: null,
+    resolutionEvidence: "unknown",
     reportIntegrity: "malformed",
   },
 });

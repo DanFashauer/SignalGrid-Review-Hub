@@ -494,7 +494,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   `AUTHENTICATED_SEGMENT_UNVERIFIED` rather than claiming a trusted segment it never
   checked. Matching is trimmed and case-insensitive, because the same VLAN arrives
   spelled differently from NAC, RADIUS and switch inventories.
-- **`proof:response-accountability` (69 checks)** — the ITSM "watermelon": green
+- **`proof:response-accountability` (82 checks)** — the ITSM "watermelon": green
   outside, red inside. A concern reported RESOLVED while the underlying state still
   shows it present is the finding, and it is asserted to outrank every green process
   metric on the same record — because a watermelon is green on every other axis by
@@ -563,6 +563,30 @@ proof reports — the numbers below are therefore evidence, not claims.
   **15** (5 × the 3 timing states that raise nothing); watermelons 30 → **150** (30 × 5,
   timing free) — pinning that a watermelon which *also* blew its SLA is still reported as
   the watermelon rather than downgraded to a missed target.
+
+  **Evidence provenance — the USER CONFIRMATION box.** Every IT support flow chart gates
+  ticket closure on a user confirming the fix. `underlyingConcernStillPresent` documented
+  itself as *"supplied by the caller from a fresh read of the same signal that raised the
+  concern"* — and documented was all it was. Nothing stopped a caller populating it from
+  what the user said, so the fabric would issue its strongest verdict on its weakest
+  evidence. `resolutionEvidence` makes the provenance a field: `signal_recheck`,
+  `user_confirmation`, `none`, `unknown`. A closure on a user's word reports
+  `RESOLVED_ON_USER_CONFIRMATION_ONLY` at `monitor` — the same rung as "nobody looked" and
+  deliberately no worse, because a user confirming is strictly more evidence than nobody
+  looking and a desk that closes on confirmation is running a normal process. What it
+  cannot do is earn the word *verified*: the user attests the symptom, and the concern was
+  raised by a signal nobody re-read. A coherence gate rejects records that claim a
+  re-check without a result, or carry a result while claiming none.
+
+  **A negative control deleted part of this fix within minutes of it being written.** The
+  first draft also added an evidence clause to the earned-affirmative guard; a control
+  that removed that clause passed the entire proof, proving it unreachable — the coherence
+  gate always fires first on those states. Keeping it would have read as defence in depth
+  while being decoration, so it was removed and the coherence gate is now asserted by name
+  as the load-bearing mechanism. Sweep 3,600 → **14,400** states; watermelons 150 → **600**
+  (evidence free — `alert` outranks every rung this axis raises); clean 15 → **42**, of
+  which twelve are the same three *open* states counted four times, because closure
+  evidence does not apply to a record that has not been closed.
 - **`proof:provisioning-order` (34 checks)** — zero-touch step ordering, with four
   vendor reference pipelines (Windows Autopilot + Intune, Apple ABM/ADE, Android
   Zero-Touch, Jamf PreStage) expressed in one neutral model and asserted to validate.

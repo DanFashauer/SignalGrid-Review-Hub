@@ -24,7 +24,9 @@ export const FIXTURE_HOSPITAL_GRAPH_DOC: FacilityGraphDoc = {
       vendorRefs: { rtls: { bed_zone_id: "bz-312a" }, ehr: { bed: "0312-A" } } },
     { spaceId: "SG-RM0312-BED-B", kind: "bed", name: "Bed B", parentId: "SG-RM0312",
       vendorRefs: { rtls: { bed_zone_id: "bz-312b" }, ehr: { bed: "0312-B" } } },
+    { spaceId: "SG-F03-CORRIDOR-W", kind: "room", name: "West corridor", parentId: "SG-F03-UNIT-4W" },
     { spaceId: "SG-RM0312-DOOR", kind: "door", name: "Room 312 door", parentId: "SG-RM0312",
+      connects: ["SG-F03-CORRIDOR-W"],
       vendorRefs: { physical_access: { door_id: "door-3120", reader_id: "rdr-3120" } } },
   ],
 };

@@ -1,6 +1,6 @@
 # Facility Trust Graph — spatial trust as a first-class subsystem
 
-*Status: **phase 1 BUILT** (`@workspace/facility-trust-graph`, proven by `proof:facility-trust-graph` — 44 checks; phases 2–4 roadmap). This document records the
+*Status: **phases 1–2 BUILT** (`@workspace/facility-trust-graph`, proven by `proof:facility-trust-graph`; phases 3–4 roadmap). This document records the
 owner's architecture (2026-07-31, intake ledger row 16), what the fabric
 already covers, and the honest built-vs-roadmap boundary. Nothing here claims
 a live vendor integration exists — this repository is fixture-backed.*
@@ -69,10 +69,17 @@ safely.
   (`space_id`, `accuracy_class`, `confidence`, `observed_at`, source health;
   the caller's reference instant for staleness, per the no-clock rule).
   Fixture-backed; low-risk automations first.
-- **Phase 2:** badge/door correlation — reader → door → portal → adjacent
-  spaces mapping in the graph; door crossing + device movement + session
-  fusion (directionality, tailgating assumptions, clock skew as *modeled*
-  uncertainty, not assumptions).
+- **Phase 2 (BUILT):** badge/door correlation. Doors are PORTALS: `connects`
+  declares the space(s) a door opens to (validated — into nowhere, into
+  itself, into another door, or on a non-door all refuse at build), and
+  `doorSides()` derives the full set either direction touches.
+  `correlateCrossing()` grades one crossing against one subsequent
+  observation: **corroborated** (observed in a side or its descendant, inside
+  the caller's window — carried as evidence, deliberately never an accuracy
+  upgrade), **contradicted** (observed where the door does not lead:
+  passback, tailgate, or a cloned badge → alert), **unassessed** (before the
+  crossing or outside the window — no claim posed; clock skew lands here
+  honestly, never as a silent pass), and every unreadable input raises.
 - **Phase 3:** clinical bed context — ADT/FHIR location normalization into
   the graph; bed-level RTLS classes; the wristband-scan step-up path. Patient
   semantics stay in the host app.

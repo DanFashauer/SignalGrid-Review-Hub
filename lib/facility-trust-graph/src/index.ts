@@ -14,4 +14,5 @@
 
 export * from "./graph";
 export * from "./evaluate";
+export * from "./correlate";
 export * from "./fixture";

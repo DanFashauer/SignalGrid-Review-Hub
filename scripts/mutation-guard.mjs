@@ -201,6 +201,7 @@ export const TARGETS = [
     files: [
       "lib/facility-trust-graph/src/evaluate.ts",
       "lib/facility-trust-graph/src/graph.ts",
+      "lib/facility-trust-graph/src/correlate.ts",
     ],
   },
 

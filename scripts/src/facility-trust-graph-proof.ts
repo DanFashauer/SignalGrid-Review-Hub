@@ -10,6 +10,7 @@
 // unrepresentable.
 import {
   ACCURACY_CLASSES,
+  correlateCrossing,
   FacilityGraphError,
   buildFacilityGraph,
   evaluateLocationCertainty,
@@ -52,14 +53,16 @@ const DOC: FacilityGraphDoc = {
       vendorRefs: { rtls: { bed_zone_id: "bz-312a" }, ehr: { bed: "0312-A" } } },
     { spaceId: "SG-RM0312-BED-B", kind: "bed", name: "Bed B", parentId: "SG-RM0312",
       vendorRefs: { rtls: { bed_zone_id: "bz-312b" }, ehr: { bed: "0312-B" } } },
+    { spaceId: "SG-F03-CORRIDOR-W", kind: "room", name: "West corridor", parentId: "SG-F03-UNIT-4W" },
     { spaceId: "SG-RM0312-DOOR", kind: "door", name: "Room 312 door", parentId: "SG-RM0312",
+      connects: ["SG-F03-CORRIDOR-W"],
       vendorRefs: { physical_access: { door_id: "door-3120", reader_id: "rdr-3120" } } },
   ],
 };
 const graph = buildFacilityGraph(DOC);
 
-check("the graph builds, and derived figures are recomputed from the spaces (10 total; 2 beds; 1 door)",
-  graph.derived.total === 10 && graph.derived.byKind.bed === 2 && graph.derived.byKind.door === 1);
+check("the graph builds, and derived figures are recomputed from the spaces (11 total; 2 beds; 1 door)",
+  graph.derived.total === 11 && graph.derived.byKind.bed === 2 && graph.derived.byKind.door === 1);
 check("path() walks root-first: org → campus → building → floor → unit → room → bed",
   graph.path("SG-RM0312-BED-B").map((s) => s.kind).join(",") === "organization,campus,building,floor,unit,room,bed");
 check("containing() finds the nearest ancestor of a kind — the bed's unit is 4 West",
@@ -103,6 +106,41 @@ check("a CYCLE is refused by the bounded walk",
   refuses(swap((s) => (s.spaceId === "SG-HOSP-A" ? { ...s, parentId: "SG-RM0312" } : s))));
 check("an AMBIGUOUS vendor ref (same namespace/key/id on two spaces) is refused — ambiguity does not resolve, it refuses",
   refuses(swap((s) => (s.spaceId === "SG-RM0312-BED-A" ? { ...s, vendorRefs: { rtls: { bed_zone_id: "bz-312b" } } } : s))));
+
+// ── phase 2: portal adjacency + crossing correlation ────────────────────────────
+const DOOR = "SG-RM0312-DOOR";
+const W = { maxCorrelationSeconds: 90 };
+const corr = (obsSpace: string, crossedAt: string, observedAt: string, w = W) =>
+  correlateCrossing(graph, { doorSpaceId: DOOR, crossedAt }, { spaceId: obsSpace, observedAt }, w);
+check("doorSides = parent + connects: the Room 312 door touches the room and the west corridor, in either direction",
+  JSON.stringify([...(graph.doorSides(DOOR) ?? [])].sort()) === JSON.stringify(["SG-F03-CORRIDOR-W", "SG-RM0312"]));
+check("doorSides on a non-door is null, never a guess", graph.doorSides("SG-RM0312") === null);
+check("CORROBORATED: badge crosses the Room 312 door, device observed at Bed B 30s later — the bed DESCENDS from a side, so the crossing and the observation agree",
+  corr("SG-RM0312-BED-B", "2026-07-31T14:00:00Z", "2026-07-31T14:00:30Z").corroboration === "corroborated" &&
+  corr("SG-RM0312-BED-B", "2026-07-31T14:00:00Z", "2026-07-31T14:00:30Z").recommendedAction === "none");
+check("...and corroboration is EVIDENCE, not a grant: the corridor side corroborates too (a door works in both directions)",
+  corr("SG-F03-CORRIDOR-W", "2026-07-31T14:00:00Z", "2026-07-31T14:00:30Z").corroboration === "corroborated");
+check("CONTRADICTED: badge crosses the Room 312 door, device observed in the MEDICATION ZONE 30s later — the door does not lead there: passback, tailgate, or a cloned badge → alert",
+  corr("SG-F03-ZONE-MED", "2026-07-31T14:00:00Z", "2026-07-31T14:00:30Z").corroboration === "contradicted" &&
+  corr("SG-F03-ZONE-MED", "2026-07-31T14:00:00Z", "2026-07-31T14:00:30Z").recommendedAction === "alert");
+check("UNASSESSED outside the window: an observation 5 minutes later does not speak about a 90-second window — no claim posed, nothing granted, nothing raised by this pair",
+  corr("SG-RM0312-BED-B", "2026-07-31T14:00:00Z", "2026-07-31T14:05:01Z").corroboration === "unassessed" &&
+  corr("SG-RM0312-BED-B", "2026-07-31T14:00:00Z", "2026-07-31T14:05:01Z").recommendedAction === "none");
+check("UNASSESSED before the crossing: clock skew lands honestly as not-evidence, never as a silent pass",
+  corr("SG-RM0312-BED-B", "2026-07-31T14:00:00Z", "2026-07-31T13:59:59Z").reasonCode === "OBSERVATION_BEFORE_CROSSING");
+check("the window boundary is inclusive: exactly 90s corroborates; 90.001s is outside",
+  corr("SG-RM0312-BED-B", "2026-07-31T14:00:00Z", "2026-07-31T14:01:30.000Z").corroboration === "corroborated" &&
+  corr("SG-RM0312-BED-B", "2026-07-31T14:00:00Z", "2026-07-31T14:01:30.001Z").corroboration === "unassessed");
+check("unknowns RAISE: a door not in the graph, an unreadable window, and an unreadable instant each step up (never a silent skip)",
+  correlateCrossing(graph, { doorSpaceId: "SG-NOPE", crossedAt: "2026-07-31T14:00:00Z" }, { spaceId: "SG-RM0312", observedAt: "2026-07-31T14:00:30Z" }, W).recommendedAction === "step_up" &&
+  corr("SG-RM0312-BED-B", "2026-07-31T14:00:00Z", "2026-07-31T14:00:30Z", { maxCorrelationSeconds: 0 }).reasonCode === "WINDOW_UNREADABLE" &&
+  corr("SG-RM0312-BED-B", "just now", "2026-07-31T14:00:30Z").reasonCode === "INSTANT_UNREADABLE");
+check("an observed space the graph does not carry → alert (the same measurement-broken class as SPACE_UNMAPPED)",
+  corr("SG-DEMOLISHED", "2026-07-31T14:00:00Z", "2026-07-31T14:00:30Z").reasonCode === "OBSERVED_SPACE_NOT_IN_GRAPH");
+check("adjacency refusals: connects on a non-door, into nowhere, into itself, and into another door are all refused at build",
+  refuses(swap((s) => (s.spaceId === "SG-RM0312" ? { ...s, connects: ["SG-F03-CORRIDOR-W"] } : s))) &&
+  refuses(swap((s) => (s.spaceId === "SG-RM0312-DOOR" ? { ...s, connects: ["SG-NOWHERE"] } : s))) &&
+  refuses(swap((s) => (s.spaceId === "SG-RM0312-DOOR" ? { ...s, connects: ["SG-RM0312-DOOR"] } : s))));
 
 // ── the certainty ladder ────────────────────────────────────────────────────────
 check("the ladder is ordered least→most precise and 'unknown' satisfies NOTHING",

@@ -111,7 +111,9 @@
     "proof:self-audit": "tsx ./src/self-audit-proof.ts",
     "self-audit:run": "tsx ./src/self-audit-run.ts",
     "proof:reliability": "tsx ./src/reliability-proof.ts",
-    "proof:iac": "tsx ./src/iac-proof.ts"
+    "proof:iac": "tsx ./src/iac-proof.ts",
+    "proof:nac": "tsx ./src/nac-proof.ts",
+    "proof:webhooks": "tsx ./src/webhooks-proof.ts"
   },
   "dependencies": {
     "@workspace/app-workflows": "workspace:*",

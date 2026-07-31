@@ -35,6 +35,11 @@ export const DeliveryStatusSchema = z.enum([
   'failed',
   'retrying',
   'dead_letter',
+  // The tier gate withheld the delivery — nothing was sent. Deliberately NOT
+  // folded into 'failed': an operator reading a wall of failures for a tier that
+  // is never supposed to emit would either chase a non-problem or learn to
+  // ignore the failure column.
+  'suppressed',
 ]);
 export type DeliveryStatus = z.infer<typeof DeliveryStatusSchema>;
 

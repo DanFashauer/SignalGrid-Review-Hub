@@ -141,7 +141,9 @@
     "loop:fix": "node scripts/build-loop.mjs --fix",
     "check:doc-orphans": "node scripts/check-doc-orphans.mjs",
     "branches:stale": "bash scripts/cleanup-merged-branches.sh",
-    "branches:clean": "bash scripts/cleanup-merged-branches.sh --apply"
+    "branches:clean": "bash scripts/cleanup-merged-branches.sh --apply",
+    "proof:nac": "pnpm --filter @workspace/scripts run proof:nac",
+    "proof:webhooks": "pnpm --filter @workspace/scripts run proof:webhooks"
   },
   "private": true,
   "devDependencies": {

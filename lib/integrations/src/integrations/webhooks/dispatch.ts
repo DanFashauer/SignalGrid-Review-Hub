@@ -52,6 +52,37 @@ export interface DeliveryResult {
   responseBody?: string;
   error?: string;
   deadLettered?: boolean;
+  /**
+   * The tier gate withheld this delivery — nothing left the process. Distinct
+   * from `success: false`, which means we tried and it did not work. A caller
+   * that cannot tell those apart would report "webhook failed" for a tier that
+   * is never supposed to send.
+   */
+  suppressed?: boolean;
+}
+
+/**
+ * Live-delivery gate. Webhooks POST to a customer-supplied URL, so this family
+ * is an OUTBOUND EMITTER: unlike a device actuator it has a legitimate
+ * read-only-disciplined form (send nothing), so it is gated rather than deleted.
+ *
+ * Same policy as every other live vendor path in this repo: dev/alpha NEVER send;
+ * beta/prod may, and only with SIGNALGRID_LIVE_INTEGRATIONS=true. Env is read at
+ * CALL TIME, not captured at module load like IS_PRODUCTION above — a gate that
+ * cannot be varied per call cannot be proven, which is part of why this family
+ * went unproven for so long.
+ */
+export function resolveWebhookDelivery(
+  env: NodeJS.ProcessEnv = process.env,
+): { mode: 'live' } | { mode: 'suppressed'; reason: string } {
+  const tier = (env.SIGNALGRID_TIER ?? 'dev').toLowerCase();
+  if (tier !== 'beta' && tier !== 'prod') {
+    return { mode: 'suppressed', reason: `tier "${tier}" never delivers live webhooks` };
+  }
+  if (env.SIGNALGRID_LIVE_INTEGRATIONS !== 'true') {
+    return { mode: 'suppressed', reason: "SIGNALGRID_LIVE_INTEGRATIONS is not 'true'" };
+  }
+  return { mode: 'live' };
 }
 
 /**
@@ -113,6 +144,23 @@ async function dispatchToEndpoint(
   payload: WebhookPayload,
   config: DispatcherConfig = DEFAULT_DISPATCHER_CONFIG
 ): Promise<DeliveryResult> {
+  // The tier gate comes FIRST: a suppressed tier must do no outbound work at all,
+  // not merely skip the fetch after resolving secrets and signing a payload.
+  // Recorded, not silent — a withheld delivery that left no trace would be
+  // indistinguishable from one that was never requested.
+  const delivery = resolveWebhookDelivery();
+  if (delivery.mode === 'suppressed') {
+    await recordDelivery(
+      webhook.id,
+      payload.id,
+      'suppressed',
+      undefined,
+      undefined,
+      delivery.reason,
+    );
+    return { success: false, suppressed: true, error: delivery.reason };
+  }
+
   const urlValidation = validateWebhookUrl(webhook.url);
   if (!urlValidation.valid) {
     return {

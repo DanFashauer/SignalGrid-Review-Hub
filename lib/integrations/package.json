@@ -45,7 +45,8 @@
     "./siem": "./src/integrations/siem/index.ts",
     "./syslog": "./src/integrations/syslog/index.ts",
     "./telemetry": "./src/integrations/telemetry/index.ts",
-    "./webhooks": "./src/integrations/webhooks/index.ts"
+    "./webhooks": "./src/integrations/webhooks/index.ts",
+    "./nac": "./src/integrations/nac/index.ts"
   },
   "dependencies": {
     "ioredis": "^5.4.1",

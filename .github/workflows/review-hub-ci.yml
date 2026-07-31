@@ -201,6 +201,8 @@ jobs:
         run: pnpm run proof:emitter-discipline
       - name: Proof — emit-gate (one shared tier gate for every in-adapter emitter route)
         run: pnpm run proof:emit-gate
+      - name: Proof — absent-collection (nothing observed is not nothing wrong)
+        run: pnpm run proof:absent-collection
       - name: Proof — mdm-profile (the shipped profiles say what the product claims)
         run: pnpm run proof:mdm-profile
       - name: Proof — benchmark-selection (which CIS benchmark graded this device, and from what content)

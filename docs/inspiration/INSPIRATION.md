@@ -123,3 +123,12 @@ It also anchors the honest register: continuous *verification*, least privilege,
    and `docs/PUBLIC_MESSAGING_GUARDRAILS.md`: no replacement/partnership/
    certification claims, read-only signals, action plane simulated until an owner
    turns it on.
+
+---
+
+## Filed reference documents
+
+- [Spatial trust & session-control research report](SPATIAL_TRUST_RESEARCH_REPORT.md)
+  — the owner-supplied deep-research report behind intake ledger row 17
+  (external validation of the Facility Trust Graph architecture; source of the
+  zone-presence state machine built in `transition.ts`).

@@ -143,6 +143,62 @@ was added the same hour, the fabricated file deleted, and the platform is now
 recorded inside every evidence body so a reader can check the claim instead of
 trusting it.
 
+## What the contract does NOT check: the VALUE
+
+Measured 2026-07-31 by driving the live `signalgrid-macos` MCP server from this side
+and feeding its real output through the real connector — the first time this lane
+was exercised end-to-end from the Review-Hub.
+
+`posture-report.contract.json`'s `requiredFields` asserts that a field is PRESENT.
+It says nothing about what is in it, and on this Mac several fields are present with
+CLI failure text as their value:
+
+| field | value on a real Mac |
+| --- | --- |
+| `updates.AutomaticCheckEnabled` | `…defaults[94442] The domain/default pair of (…) does not exist` |
+| `updates.LastUpdatesAvailable` | same shape |
+| `xprotect.xprotect_definitions` | same shape |
+| `time_machine.latest_backup` | `Failed to mount backup destination, error: …` |
+
+`defaults read` writes its failure to stdout as an ordinary string, so a missing key
+arrives looking exactly like data. A presence check passes; the field is there.
+
+It was not harmless. `malwareDefs()` graded the XProtect blob as `"present"` — a
+message saying the version key DOES NOT EXIST read as "definitions are present" —
+so `xprotect` never reached `controlsUnknown`. Fixed in `15e9473`: `readableString`
+now rejects `defaults[pid:tid]` banners and "does not exist" text, alongside the
+`%Su` substitution artifacts it already rejected. `autoUpdate()` was never exposed
+because it compares strictly against booleans.
+
+**The producer already knows how to do this correctly**, which is what makes it
+worth writing down rather than just patching. The `sharing` section of the SAME
+report handles an un-runnable probe properly:
+
+```json
+"remote_login_ssh": { "raw": "You need administrator access to run this tool... exiting!",
+                      "enabled": null },
+"_unknown": ["remote_login_ssh"]
+```
+
+Failure text stays in `raw`, the parsed field is `null`, and the key is listed in
+`_unknown`. `updates`, `xprotect` and `time_machine` put the failure text in the
+parsed field itself. Same server, two conventions.
+
+Two consequences, stated rather than assumed:
+
+- **Consumer exposure is closed.** Only `osVersion` and `malwareDefs` pass through
+  `readableString`, and the connector reads just `os`, `security`, `mdm`, `updates`,
+  `xprotect`, `system_extensions` — `time_machine` is not consumed today, so its
+  error blob is latent rather than live.
+- **The root fix belongs in signalgrid-mcp**: emit `null` plus `_unknown`, as
+  `sharing` already does. Until then this side defends itself, which it should do
+  regardless — a consumer that trusts its producer's error text is one bad probe
+  away from a fabricated reading.
+
+A contract that checks presence and not plausibility is worth strengthening on both
+sides; doing so needs the producer test (which reads this same file) to change with
+it, so it is recorded here rather than altered unilaterally.
+
 ## Proof pointer
 
 ```

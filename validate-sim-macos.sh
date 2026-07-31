@@ -68,6 +68,32 @@ echo "-- build api-server (esbuild; needed for observability + api integration t
 run --filter @workspace/api-server run build >/tmp/sgval_apibuild.log 2>&1 \
   && echo "   dist built" || { echo "   api-server build FAILED"; tail /tmp/sgval_apibuild.log; exit 1; }
 
+# -- Redis for the one proof that races a real shared store --------------------
+# proof:enrollment-race REFUSES (exit 1) without REDIS_URL rather than passing
+# vacuously — correct, but this harness enumerates every proof:* script, so it ran
+# a proof it never satisfied and reported "1 failed" on a wholly green tree. A gate
+# that can never reach 0 failures trains its reader to ignore failures, and
+# CLAUDE.md tells that reader to compare M against 0. So: provide the store when
+# Docker can, and when it cannot, SKIP the proof loudly with the reason — never
+# silently, and never counted as passed.
+REDIS_CONTAINER=sgval-redis
+REDIS_PORT=6381   # not 6379/6380: leaves a local Redis and docker-verify's alone
+SKIPPED=0; skipped_gates=""
+skip() { printf "  \033[33mSKIP\033[0m  %s  (%s)\n" "$1" "$2"; SKIPPED=$((SKIPPED+1)); skipped_gates="$skipped_gates $1"; }
+
+if [ -z "${REDIS_URL:-}" ] && docker info >/dev/null 2>&1; then
+  docker rm -f "$REDIS_CONTAINER" >/dev/null 2>&1
+  if docker run -d --name "$REDIS_CONTAINER" -p "$REDIS_PORT:6379" redis:7 >/dev/null 2>&1; then
+    for _ in $(seq 1 20); do
+      docker exec "$REDIS_CONTAINER" redis-cli ping 2>/dev/null | grep -q PONG && break
+      sleep 1
+    done
+    export REDIS_URL="redis://127.0.0.1:$REDIS_PORT"
+    echo "-- started $REDIS_CONTAINER on $REDIS_PORT for proof:enrollment-race"
+    trap 'docker rm -f "$REDIS_CONTAINER" >/dev/null 2>&1' EXIT
+  fi
+fi
+
 echo; echo "== real-life simulator scenarios =="
 gate "proof:signalgrid-simulator (11 scenarios)" $PNPM run proof:signalgrid-simulator
 gate "proof:room-sim"                            $PNPM run proof:room-sim
@@ -77,6 +103,12 @@ gate "proof:signalgrid-grid"                     $PNPM run proof:signalgrid-grid
 if [ "$SIM_ONLY" != "--sim-only" ]; then
   echo; echo "== full CI-mirror proof suite =="
   for p in $(node -e "const s=require('./package.json').scripts;console.log(Object.keys(s).filter(k=>k.startsWith('proof:')&&!['proof:signalgrid-simulator','proof:room-sim','proof:signalgrid-core','proof:signalgrid-grid'].includes(k)).join(' '))"); do
+    # The race proof needs a real shared store. With one, run it like any other
+    # gate; without one, say so — an unrun proof is never a passed proof.
+    if [ "$p" = "proof:enrollment-race" ] && [ -z "${REDIS_URL:-}" ]; then
+      skip "$p" "needs REDIS_URL (no Docker here); run it via pnpm run verify:docker"
+      continue
+    fi
     gate "$p" $PNPM run "$p"
   done
 
@@ -93,6 +125,13 @@ echo "== NOTE: the linux-x64 web build (pnpm run build) is intentionally skipped
 echo "   — its vite/rollup/lightningcss/tailwind darwin binaries are stripped by the"
 echo "     repo's own pnpm-workspace.yaml (CI runs linux-x64). Run it in CI / linux for web."
 echo
-echo "== SUMMARY: $pass passed, $fail failed =="
+echo "== SUMMARY: $pass passed, $fail failed, $SKIPPED skipped =="
 if [ "$fail" -ne 0 ]; then echo "   failed:$failed_gates"; exit 1; fi
+# A skip is not a pass. Green still means "nothing failed", but the skipped gates
+# are named so a reader is never left believing the suite covered them.
+if [ "$SKIPPED" -ne 0 ]; then
+  echo "   skipped (NOT verified by this run):$skipped_gates"
+  echo "✅ Nothing failed — but see the skipped gate(s) above."
+  exit 0
+fi
 echo "✅ Simulation validation GREEN."

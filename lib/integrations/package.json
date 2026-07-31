@@ -12,6 +12,7 @@
     "./vuln-scan": "./src/integrations/vuln-scan/index.ts",
     "./network-nac": "./src/integrations/network-nac/index.ts",
     "./edr-threat": "./src/integrations/edr-threat/index.ts",
+    "./telemetry": "./src/integrations/telemetry/index.ts",
     "./identity-risk": "./src/integrations/identity-risk/index.ts",
     "./rtls-custody": "./src/integrations/rtls-custody/index.ts",
     "./peripheral-control": "./src/integrations/peripheral-control/index.ts",

@@ -20,21 +20,59 @@ What remains is the LIVE-lane column of
 [ZERO_COST_LIVE_TEST_MATRIX.md](ZERO_COST_LIVE_TEST_MATRIX.md) — every dimension
 already has a fixture proof; these add a real vendor behind it._
 
-- [ ] **Wazuh (perpetual free) → edr-threat connector.** Real EDR vocabulary rather
-      than fixture shapes, and the dimension has NO live vendor behind it today.
-      Free forever, self-hosted, no trial clock — the strongest remaining lane.
+- [x] **Wazuh (perpetual free) → edr-threat connector.** DONE — `proof:live-edr`
+      (`f26cb0c`), 16 assertions against a real Wazuh 4.9.0 API. The measured answer
+      is the valuable part: Wazuh supplies **5 of 8** `EndpointThreatRaw` fields and
+      has no concept at all of `realtimeProtection`, `signatureAgeHours` or
+      `threats[]` (it is HIDS/XDR, not signature AV; alerts live in a separate
+      indexer). Those three are left ABSENT rather than mapped to something
+      cheerful, and the proof pins what the connector does with the silence:
+      `realtimeProtection`→`false` (not protected, never assumed on),
+      `signatureAgeHours`→`null` (not `0`, which would read as freshly updated),
+      verdict `degraded_protection`/`PROTECTION_DEGRADED`/`step_up`. Skipped loudly
+      by name, never silently passed, when `WAZUH_URL` is unset.
 - [ ] **Keycloak 26.4 DPoP → token-binding.** LOWER priority than it reads in the
       matrix: `live-idp-proof` already runs a complete real DPoP ceremony (client-held
       EC key, real proof JWT, provider-minted `cnf.jkt` equal to the RFC 7638
       thumbprint, verified through enterprise-auth). Keycloak's value is
       cross-implementation agreement, not first coverage.
-- [ ] **Dev Proxy → graph posture + device-management-health.** Injects Graph-authentic
-      429/`Retry-After`, 5xx and paging at the wire, exercising error-mapping and
-      pagination caps the mocks assert but have never seen over a real socket.
-- [ ] **Fleet Free + osquery → telemetry/fleetdm.ts.** A real Fleet was already built
-      from source and validated against `lib/fleet-connector` (see
-      [FLEET_LIVE_INTEGRATION.md](FLEET_LIVE_INTEGRATION.md)); this extends the same
-      rig to the telemetry adapter, which is a different code path.
+- [x] **Graph posture over a real socket.** DONE — `proof:graph-wire` (`d0958a2`),
+      11 assertions. Achieved with a local `http.Server` rather than Dev Proxy: same
+      end (Graph-authentic 429 / 5xx / 401 / 403 / malformed bodies / paging over a
+      genuine socket, real status codes, real chunked JSON) with no new external
+      dependency, so it runs in CI unattended. Every error path fails closed —
+      429/5xx→`upstream_error`, 401/403→`auth_failed` (distinguished), unparseable
+      JSON and a collection with no `value` array→`bad_response` rather than being
+      read as zero devices.
+      **This is what surfaced the pagination defect below:** the cap holds (it must —
+      it is a loop/DoS guard) but a capped read returns a bare array, so the caller
+      cannot tell it from a complete one. Dev Proxy remains optional upside for
+      Graph-specific throttling *semantics* (e.g. honouring `Retry-After`), which the
+      connector deliberately does not implement today.
+- [x] **Fleet Free + osquery → telemetry/fleetdm.ts.** DONE — `proof:live-fleet`,
+      30 assertions against a real Fleet 4.89.2. This lane paid for the whole matrix:
+      the adapter was documented as running "verbatim, zero shim code", and in fact
+      **every host- and policy-level route in it 404'd**. Wrong global-policies path,
+      a UUID passed to a numeric-id route, a `{host}` envelope cast away as a bare
+      host (so every field was `undefined` while typechecking cleanly), a
+      host-policies endpoint that does not exist, three wrong field names, and a
+      live-query body Fleet rejects 400. All fixed and pinned.
+      The trap worth remembering: `testConnection()` returned "Successfully connected
+      to FleetDM" throughout — a health check that could not detect a completely
+      non-functional integration. The adapter did fail CLOSED (no fabricated
+      compliance), and that property is now asserted rather than assumed.
+      Note the image is amd64-only; Docker Desktop emulates it on Apple Silicon, so
+      the earlier from-source arm64 build is no longer needed.
+
+- [ ] **Fleet live-query results (websocket campaign collector).** `runQuery()` now
+      THROWS `not implemented` and sends nothing. Fixing its request body alone would
+      have armed the most dangerous call in the package — arbitrary osquery SQL to
+      real production hosts — while still returning nothing usable, because a Fleet
+      live query is asynchronous: the POST returns `{campaign}` and rows stream over a
+      websocket, so the old `data.results` was always `undefined` despite its array
+      type. Doing this properly means a websocket client plus a result-collection
+      policy (timeout, partial results, per-host errors) — and, given the blast
+      radius, an explicit approval gate rather than only the tier gate.
 - [ ] **Android: AMAPI Colab + Test DPC on an emulator** — managed/kiosk custody
       without hardware. Needs the Android SDK on the machine.
 
@@ -79,6 +117,21 @@ only), and the DDM rig is gated on an APNs push certificate.
       `docs/APP_WORKFLOW_TEMPLATES.md`.
 
 ## Owner-gated (needs a decision before an agent builds it)
+
+- [ ] **Truncation signal on capped reads** ⚠️ **owner decision — API change across 11
+      connectors.** Eleven connectors paginate with their own copy of `getAllPages`,
+      looping `while (url && pages < this.pageLimit)` and returning a plain array.
+      The cap is correct (a loop/DoS guard against an endless `nextLink`) but the
+      caller learns nothing: a tenant with more pages than the cap yields a SHORT
+      list indistinguishable from a complete one. For a posture fabric that is a
+      fail-open — an absent device reads as "no such device", so a non-compliant
+      host past the cap reads as no problem. Measured over a real socket in
+      `proof:graph-wire`.
+      Fixing it changes the return type of all eleven and every caller, so it is
+      the owner's call: richer return (`{items, truncated}`), a thrown error on
+      cap-hit, or a documented accept-the-risk. `scripts/check-pagination-truncation.mjs`
+      stops a TWELFTH being added silently in the meantime — the eleven are listed
+      there, so the debt is stated rather than implied.
 
 _These need the owner's call — an agent should not act on them unsupervised._
 

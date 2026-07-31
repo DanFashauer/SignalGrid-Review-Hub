@@ -38,7 +38,7 @@ Everything below extends this base outward to external systems.
 | macos-posture connector | signalgrid-mcp Mac lane (running) | 1, 4 |
 | lib/ddm-connector | NanoMDM + KMFDDM rig, after ABM lands | 4 |
 | Android managed/kiosk custody | AMAPI Colab + Test DPC on an emulator | 5 |
-| telemetry/fleetdm.ts | Fleet Free + osquery, zero shim | 6 |
+| telemetry/fleetdm.ts | ~~Fleet Free + osquery, zero shim~~ **DONE** — `proof:live-fleet`; "zero shim" was false | 6 |
 | edr-threat connector | Wazuh (perpetual); CrowdStrike 15-day trial for vendor vocabulary | 6 |
 | siem/splunk.ts, siem/sentinel.ts | Splunk trial → perpetual Free license; Sentinel 31-day trial | 6 |
 | network-nac connector | FreeRADIUS in Docker | 7 |
@@ -137,11 +137,21 @@ Caveats that will burn you:
 
 ## 6. EDR / SIEM / DEX / operational health
 
-**Do this first:** osquery + Fleet (Fleet Free, self-hosted). `lib/integrations/src/integrations/telemetry/fleetdm.ts` is written against Fleet's exact API paths, so it needs zero shim code — Docker up Fleet, enroll the dev laptop, and the repo gets real endpoint telemetry, real policy pass/fail, and a live test of the fail-closed compliance logic, permanently free. Pair with Wazuh for the edr-threat side via a small transport adapter.
+**DONE — and it repaid the effort by proving this entry wrong.** This section used to
+say `telemetry/fleetdm.ts` "is written against Fleet's exact API paths, so it needs
+zero shim code." A real Fleet 4.89.2 says otherwise: **every host- and policy-level
+route in that adapter 404'd**, the host response is an envelope the code cast away,
+and a live query returns a websocket campaign rather than the results array the code
+read. See `proof:live-fleet` (30 assertions) and
+[FLEET_LIVE_INTEGRATION.md](FLEET_LIVE_INTEGRATION.md) for the measured table.
+
+That is the whole argument for this matrix in one lane: the "zero shim" claim was
+sincere, plausible, and false, and only a live server could tell us. Fixtures written
+from the same assumptions as the code agree with the code by construction.
 
 | Option | Exercises | Cost | Effort | Confidence |
 | --- | --- | --- | --- | --- |
-| Fleet Free + osquery (self-hosted) | telemetry/fleetdm.ts verbatim — hosts, policies, live queries, fail-closed logic | free (OSS self-hosted; some vuln/MDM features are paid) | hours | **[verified July 2026](https://fleetdm.com/pricing)** |
+| Fleet Free + osquery (self-hosted) | telemetry/fleetdm.ts — hosts, policies, fail-closed logic. NOT verbatim: four routes were wrong and are now fixed + pinned by `proof:live-fleet` | free (OSS self-hosted; some vuln/MDM features are paid) | hours | **[verified July 2026](https://fleetdm.com/pricing)** |
 | Wazuh (self-hosted OSS SIEM/XDR) | edr-threat connector with real agents/alerts via a ~30-line transport adapter | free (GPL/Apache OSS) | hours | **[verified July 2026](https://wazuh.com/platform/overview/)** |
 | Elastic Security, self-managed Basic | siem/webhook.ts push + edr-threat read via Elastic Defend alerts | free (self-managed Basic only) | hours | **[verified July 2026](https://www.elastic.co/subscriptions)** |
 | Splunk Enterprise trial → perpetual Free license | siem/splunk.ts exactly as written (real HEC) | free trial 60 days, then a perpetual Free license capped at 500MB/day with features disabled | minutes | **[verified July 2026](https://www.splunk.com/en_us/download/splunk-enterprise.html)** |
@@ -248,7 +258,7 @@ Five free lanes, ordered by real-world verification per hour of setup (each is t
 
 1. **Playwright CDP WebAuthn virtual authenticator** over lib/webauthn (minutes): converts the repo's strongest fixture proof into evidence against real browser-generated CTAP2 credentials, including the fido-u2f x5c positive path the fixture file marks out of scope.
 2. **Keycloak in Docker** (minutes): three env vars light up all of lib/enterprise-auth against a live JWKS, and its DPoP support mints the only zero-cost genuinely sender-constrained token for token-binding — extending the live-idp-proof lane to an independent production IdP.
-3. **Fleet + osquery, self-hosted** (hours): fleetdm.ts runs verbatim with zero shim code — real endpoint telemetry, real policy pass/fail, fail-closed logic live, permanently free.
+3. ~~**Fleet + osquery, self-hosted**~~ **DONE** (hours): and the "runs verbatim with zero shim code" claim did not survive contact — every host/policy route 404'd against a real Fleet 4.89.2. Fixed and pinned by `proof:live-fleet`.
 4. **FreeRADIUS + netns/dnsmasq ladder** (hours): real 802.1X outcomes and kernel-real DHCP/DNS failures drive the exact enums network-nac and link-usability gate on — and it can become a CI job, the only vendor-cloud-free option class with that property.
 5. **Seam sandbox + Traccar** (an afternoon): the two thinnest-category connectors (pacs-access, rtls-custody) both get genuine live-transport proof — real cloud auth/pagination/failure modes and real movement/geofence/staleness — for $0.
 

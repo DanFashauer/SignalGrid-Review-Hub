@@ -13,7 +13,11 @@ export interface FleetDMHost {
   cpu_type: string;
   cpu_brand: string;
   hardware_model: string;
-  serial_number: string;
+  // Fleet's field is `hardware_serial`. This was declared as `serial_number`, a
+  // key a real Fleet never sends — so it was typed non-optional while always
+  // being `undefined` at runtime. Measured against Fleet 4.89.2 by
+  // `proof:live-fleet`.
+  hardware_serial: string;
   last_enrolled_at: string;
   seen_time: string;
   distributed_interval: number;
@@ -33,11 +37,18 @@ export interface FleetDMPolicy {
   team_id: number | null;
 }
 
+// A real Fleet reports a policy a host has not yet answered as the EMPTY STRING,
+// not as 'fail' (measured on 4.89.2). That third state is kept rather than folded
+// into either side: 'pass' would grade an unobserved policy as observed-good — the
+// exact fail-open this repo keeps removing — and 'fail' would assert a failure
+// that was never observed. `unknown` is not compliant, but it is also not a claim.
+export type FleetDMPolicyResponse = 'pass' | 'fail' | 'unknown';
+
 export interface FleetDMPolicyResult {
   host_id: number;
   policy_id: number;
   policy_name: string;
-  policy_response: 'pass' | 'fail';
+  policy_response: FleetDMPolicyResponse;
   policy_updated_at: string;
 }
 
@@ -55,7 +66,7 @@ export interface FleetDMPostureSignal {
   policies: {
     id: number;
     name: string;
-    response: 'pass' | 'fail';
+    response: FleetDMPolicyResponse;
     updatedAt: string;
   }[];
   rawSignals?: Record<string, unknown>;

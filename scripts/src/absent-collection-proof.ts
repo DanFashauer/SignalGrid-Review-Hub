@@ -143,18 +143,17 @@ check(
   `${realFinding.posture}/${realFinding.reasonCode}`,
 );
 
-// ── 5. THE SYSTEMIC ONE: `X ?? []` erases "never looked" ────────────────────
-// Five connectors normalize a MISSING collection into an EMPTY one
-// (`(raw.threats ?? []).map(...)` and siblings). After that line, a source that
-// could not report and a source that reported nothing are byte-identical, and
-// every one of these evaluators reads the empty set as good news with action
-// "none":
+// ── 5. THE SYSTEMIC ONE, NOW FIXED: `X ?? []` used to erase "never looked" ───
+// Five connectors normalized a MISSING collection into an EMPTY one
+// (`(raw.threats ?? []).map(...)` and siblings). After that line a source that
+// could not report and a source that reported nothing were byte-identical, and
+// every evaluator read the empty set as good news with action "none":
 //
-//   edr-threat          protected      / NO_THREATS_HEALTHY / none
-//   identity-risk       trusted        / NO_RISK            / none
-//   peripheral-control  no_removable   / NO_REMOVABLE       / none
-//   credential-exposure clean          / NO_FINDINGS        / none
-//   vuln-scan           clean          / NO_FINDINGS        / none
+//   edr-threat          protected      / NO_THREATS_HEALTHY / none   <- was
+//   identity-risk       trusted        / NO_RISK            / none   <- was
+//   peripheral-control  no_removable   / NO_REMOVABLE       / none   <- was
+//   credential-exposure clean          / NO_FINDINGS        / none   <- was
+//   vuln-scan           clean          / NO_FINDINGS        / none   <- STILL (see below)
 //
 // This is not hypothetical. proof:live-edr MEASURED that Wazuh's alerts live in a
 // separate indexer, so "reports protection health, cannot report detections" is
@@ -168,10 +167,17 @@ check(
 // A read that never happened and a read that found nothing must not be the same
 // value — that is the whole law, and here it is violated by a single `?? []`.
 //
-// PINNED, NOT ENDORSED — fixing it needs an "observed" distinction on five
-// normalized types plus new reason codes, so it is an owner decision recorded in
-// docs/BUILD_BACKLOG.md. These assertions exist so the behaviour cannot drift
-// further and so a fix announces itself by failing here.
+// FIXED. Each of those five now carries the distinction: the normalized collection
+// is `null` when the source never reported it and `[]` when it reported none, and
+// each evaluator contributes an "unobserved" candidate that raises `monitor`
+// instead of leaving the `none` default to win. The table above is what these
+// assertions USED to pin; they now pin the opposite, and the two states must stay
+// distinguishable.
+//
+// The mechanism worked exactly as designed on the way through: the moment the fix
+// landed, this proof failed with "the distinction was added — update
+// docs/BUILD_BACKLOG.md". A pinning assertion is not a claim that the behaviour is
+// right; it is a tripwire that makes changing it deliberate.
 const healthyNoThreatFeed = normalizeEndpoint({
   deviceId: "d1",
   agentInstalled: true,
@@ -195,26 +201,55 @@ const explicitZero = evaluateThreatPosture(
   {},
 );
 check(
-  "edr-threat: an unreported threat feed currently grades protected/none (known, owner-gated)",
-  noFeedVerdict.posture === "protected" && noFeedVerdict.recommendedAction === "none",
-  `${noFeedVerdict.posture}/${noFeedVerdict.recommendedAction}`,
+  "edr-threat: an unreported threat feed is NOT graded protected",
+  noFeedVerdict.posture !== "protected" && noFeedVerdict.reasonCode === "THREAT_FEED_UNOBSERVED",
+  `${noFeedVerdict.posture}/${noFeedVerdict.reasonCode}`,
 );
 check(
-  "…and is INDISTINGUISHABLE from a vendor that actually scanned and found nothing",
-  JSON.stringify(noFeedVerdict) === JSON.stringify(explicitZero),
-  "if this now fails, the absent/empty distinction was added — update docs/BUILD_BACKLOG.md",
+  "…and it raises `monitor` — a blind spot to investigate, never action `none`",
+  noFeedVerdict.recommendedAction === "monitor",
+  noFeedVerdict.recommendedAction,
+);
+check(
+  "…and it is DISTINGUISHABLE from a vendor that actually scanned and found nothing",
+  JSON.stringify(noFeedVerdict) !== JSON.stringify(explicitZero),
+);
+check(
+  "…while a vendor that DID scan and found nothing is still graded clean (not a wall)",
+  explicitZero.posture === "protected" && explicitZero.recommendedAction === "none",
+  `${explicitZero.posture}/${explicitZero.recommendedAction}`,
 );
 
-for (const [label, verdict] of [
-  ["identity-risk", identityRisk.evaluateIdentityRisk(identityRisk.normalizePrincipal({ principalId: "p", source: "s" } as never), {})],
-  ["peripheral-control", peripheral.evaluatePeripheralPosture(peripheral.normalizeDevice({ deviceId: "d", source: "s" } as never), {})],
-  ["credential-exposure", credential.evaluateCredentialExposure(credential.normalizeDevice({ deviceId: "d", source: "s" } as never), {})],
-] as [string, { recommendedAction?: string; action?: string }][]) {
-  const action = verdict.recommendedAction ?? verdict.action;
+// The same law at the other four sites. Asserted on the ACTION rather than the
+// posture name, because that is what a caller acts on and it is the part that was
+// wrong: every one of these used to recommend doing nothing about a device nobody
+// had looked at.
+for (const [label, unreported, reportedNone] of [
+  [
+    "identity-risk",
+    identityRisk.evaluateIdentityRisk(identityRisk.normalizePrincipal({ principalId: "p", source: "s" } as never), {}),
+    identityRisk.evaluateIdentityRisk(identityRisk.normalizePrincipal({ principalId: "p", source: "s", detections: [] } as never), {}),
+  ],
+  [
+    "peripheral-control",
+    peripheral.evaluatePeripheralPosture(peripheral.normalizeDevice({ deviceId: "d", source: "s" } as never), {}),
+    peripheral.evaluatePeripheralPosture(peripheral.normalizeDevice({ deviceId: "d", source: "s", peripherals: [] } as never), {}),
+  ],
+  [
+    "credential-exposure",
+    credential.evaluateCredentialExposure(credential.normalizeDevice({ deviceId: "d", source: "s" } as never), {}),
+    credential.evaluateCredentialExposure(credential.normalizeDevice({ deviceId: "d", source: "s", findings: [] } as never), {}),
+  ],
+] as [string, { recommendedAction?: string; reasonCode?: string }, { recommendedAction?: string }][]) {
   check(
-    `${label}: an unreported collection currently recommends no action (known, owner-gated)`,
-    action === "none",
-    `action=${String(action)} — if this now fails, the distinction was added; update docs/BUILD_BACKLOG.md`,
+    `${label}: an unreported collection raises monitor, not "no action"`,
+    unreported.recommendedAction === "monitor",
+    `action=${String(unreported.recommendedAction)} reason=${String(unreported.reasonCode)}`,
+  );
+  check(
+    `${label}: …and an explicitly EMPTY collection is still clean, action none`,
+    reportedNone.recommendedAction === "none",
+    `action=${String(reportedNone.recommendedAction)}`,
   );
 }
 

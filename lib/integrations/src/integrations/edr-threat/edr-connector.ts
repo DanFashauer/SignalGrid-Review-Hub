@@ -122,7 +122,10 @@ export function normalizeEndpoint(endpoint: EndpointThreatRaw): NormalizedEndpoi
     realtimeProtection: endpoint.realtimeProtection === true,
     signatureAgeHours: typeof endpoint.signatureAgeHours === "number" ? endpoint.signatureAgeHours : null,
     lastSeen: endpoint.lastSeen ?? null,
-    threats: (endpoint.threats ?? []).map(normalizeDetection),
+    // `?? []` here was the whole defect: it turned "this vendor has no detection
+    // endpoint" into "this vendor found nothing". Absence is preserved as null and
+    // graded by the evaluator; an explicit [] still means a real, empty result.
+    threats: endpoint.threats == null ? null : endpoint.threats.map(normalizeDetection),
     source: endpoint.source ?? "unknown",
   };
 }

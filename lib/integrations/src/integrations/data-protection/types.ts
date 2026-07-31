@@ -71,7 +71,13 @@ export interface NormalizedDataProtection {
   sourceSystem: "data-protection";
   deviceId: string;
   dlpPolicyEnforced: boolean | null;
-  violations: NormalizedDlpViolation[];
+  /**
+   * `null` when the source did not report a DLP violation feed at all — distinct from `[]`,
+   * which means it reported and found nothing. The same distinction this package
+   * already draws for scalars (`null = not reported`), extended to the collection:
+   * a feed that was never read must not be gradeable as a clean one.
+   */
+  violations: NormalizedDlpViolation[] | null;
   source: string;
 }
 
@@ -85,6 +91,7 @@ export type DlpPosture =
 
 export type DlpReasonCode =
   | "NO_VIOLATIONS"
+  | "DLP_FEED_UNOBSERVED"
   | "NOT_COVERED"
   | "VIOLATIONS_CONTAINED"
   | "POLICY_UNENFORCED"

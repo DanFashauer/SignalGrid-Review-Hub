@@ -119,7 +119,9 @@ export function normalizeDevice(device: PeripheralPostureRaw): NormalizedPeriphe
     sourceSystem: "peripheral-control",
     deviceId: device.deviceId,
     policyEnforced: typeof device.policyEnforced === "boolean" ? device.policyEnforced : null,
-    peripherals: (device.peripherals ?? []).map(normalizePeripheral),
+    // `?? []` here made "the source never reported this" indistinguishable from
+    // "the source reported nothing". Absence is preserved and graded downstream.
+    peripherals: device.peripherals == null ? null : device.peripherals.map(normalizePeripheral),
     source: device.source ?? "unknown",
   };
 }

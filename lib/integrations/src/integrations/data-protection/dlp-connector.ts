@@ -121,7 +121,9 @@ export function normalizeDevice(device: DataProtectionRaw): NormalizedDataProtec
     sourceSystem: "data-protection",
     deviceId: device.deviceId,
     dlpPolicyEnforced: typeof device.dlpPolicyEnforced === "boolean" ? device.dlpPolicyEnforced : null,
-    violations: (device.violations ?? []).map(normalizeViolation),
+    // `?? []` here made "the source never reported this" indistinguishable from
+    // "the source reported nothing". Absence is preserved and graded downstream.
+    violations: device.violations == null ? null : device.violations.map(normalizeViolation),
     source: device.source ?? "unknown",
   };
 }

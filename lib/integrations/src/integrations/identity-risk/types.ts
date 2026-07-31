@@ -81,7 +81,13 @@ export interface NormalizedPrincipalRisk {
   riskState: RiskState;
   /** null when the IdP did not report an MFA outcome for the risky sign-in. */
   mfaSatisfied: boolean | null;
-  detections: NormalizedRiskDetection[];
+  /**
+   * `null` when the source did not report a sign-in risk-detection feed at all — distinct from `[]`,
+   * which means it reported and found nothing. The same distinction this package
+   * already draws for scalars (`null = not reported`), extended to the collection:
+   * a feed that was never read must not be gradeable as a clean one.
+   */
+  detections: NormalizedRiskDetection[] | null;
   lastSignInAt: string | null;
   source: string;
 }
@@ -96,6 +102,7 @@ export type IdentityPosture =
 
 export type IdentityReasonCode =
   | "NO_RISK"
+  | "RISK_FEED_UNOBSERVED"
   | "NOT_COVERED"
   | "RISK_REMEDIATED"
   | "RISK_STATE_AT_RISK"

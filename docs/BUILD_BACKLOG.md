@@ -157,9 +157,39 @@ only), and the DDM rig is gated on an APNs push certificate.
       After merging: `SIGNALGRID_MCP_PATH=~/signalgrid-mcp node scripts/verify-all.mjs
       --require-mcp --emit-evidence`, then commit `artifacts/live-evidence/`.
 
-- [ ] **`X ?? []` makes an unreported collection indistinguishable from an empty
-      one — in FIVE connectors.** ⚠️ **owner decision — the largest fail-open found
-      so far.** Each normalizer does `(raw.threats ?? []).map(...)` or a sibling.
+- [x] **`X ?? []` made an unreported collection indistinguishable from an empty
+      one — in FIVE connectors.** **DONE.** The normalized collection is now `null`
+      when the source never reported it and `[]` when it reported none, and each
+      evaluator contributes an "unobserved" candidate that raises `monitor` instead
+      of letting the `none` default win. New reason codes:
+      `THREAT_FEED_UNOBSERVED`, `RISK_FEED_UNOBSERVED`, `PERIPHERAL_FEED_UNOBSERVED`,
+      `SECRET_SCAN_UNOBSERVED`, `DLP_FEED_UNOBSERVED`.
+
+      | connector | unreported (was → now) | reported-none (unchanged) |
+      | --- | --- | --- |
+      | `edr-threat` | `protected`/none → `monitored`/monitor | `protected`/none |
+      | `identity-risk` | `trusted`/none → `unknown`/monitor | `trusted`/none |
+      | `peripheral-control` | `no_removable`/none → `unknown`/monitor | `no_removable`/none |
+      | `credential-exposure` | `clean`/none → `unknown`/monitor | `clean`/none |
+      | `data-protection` | `protected`/none → `unknown`/monitor | `protected`/none |
+
+      `monitor` on purpose, not something louder: the device may be entirely fine —
+      we simply never read the feed. It is a blind spot to investigate, the same
+      level as the existing `NOT_REPORTING`, and it loses to any genuinely observed
+      problem, so a real active threat still outranks "we could not see". A vendor
+      that DID look and found nothing is still clean with action `none`, which is
+      what keeps this a distinction rather than a wall.
+      Design taken from the repo rather than invented: `null = not reported,
+      distinct from an explicit false` already appears in six normalized types
+      (`rtls-custody.present`, `oauth-consent`/`sso-session` reachability,
+      `agent-identity`, `pacs-access`, `task-exception`). This extends it to
+      collections. Pinned by `proof:absent-collection` (20 assertions); suite
+      96 passed / 0 failed.
+
+      _Historical, kept because the reasoning is the point:_
+
+- [x] **`X ?? []` (original entry — the fail-open as first measured).** Each
+      normalizer did `(raw.threats ?? []).map(...)` or a sibling.
       After that single line, "the vendor could not report this" and "the vendor
       reported nothing" are the same value, and every evaluator downstream reads the
       empty set as good news **with action `none`**:

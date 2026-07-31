@@ -123,7 +123,9 @@ export function normalizePrincipal(principal: PrincipalRiskRaw): NormalizedPrinc
     riskLevel: normalizeRiskLevel(principal.riskLevel),
     riskState: normalizeRiskState(principal.riskState),
     mfaSatisfied: typeof principal.mfaSatisfied === "boolean" ? principal.mfaSatisfied : null,
-    detections: (principal.detections ?? []).map(normalizeDetection),
+    // `?? []` here made "the source never reported this" indistinguishable from
+    // "the source reported nothing". Absence is preserved and graded downstream.
+    detections: principal.detections == null ? null : principal.detections.map(normalizeDetection),
     lastSignInAt: principal.lastSignInAt ?? null,
     source: principal.source ?? "unknown",
   };

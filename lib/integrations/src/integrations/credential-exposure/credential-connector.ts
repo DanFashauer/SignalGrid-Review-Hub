@@ -124,7 +124,9 @@ export function normalizeDevice(device: CredentialExposureRaw): NormalizedCreden
     sourceSystem: "credential-exposure",
     deviceId: device.deviceId,
     scannerEnrolled: typeof device.scannerEnrolled === "boolean" ? device.scannerEnrolled : null,
-    findings: (device.findings ?? []).map(normalizeFinding),
+    // `?? []` here made "the source never reported this" indistinguishable from
+    // "the source reported nothing". Absence is preserved and graded downstream.
+    findings: device.findings == null ? null : device.findings.map(normalizeFinding),
     source: device.source ?? "unknown",
   };
 }

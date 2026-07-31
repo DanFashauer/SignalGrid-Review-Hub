@@ -64,7 +64,11 @@ export function evaluateThreatPosture(
   const reporting = options.reporting ?? true;
   const staleHours = options.staleSignatureHours ?? STALE_SIGNATURE_HOURS_DEFAULT;
 
-  const threats = endpoint.threats;
+  // `null` means the source never reported a detection feed; `[]` means it did and
+  // found nothing. Counting treats both as zero — which is correct arithmetic and
+  // exactly why the distinction has to be carried separately into the verdict.
+  const threatsObserved = endpoint.threats !== null;
+  const threats = endpoint.threats ?? [];
   const threatCount = threats.length;
   const activeThreats = threats.filter((t) => t.active);
   const activeThreatCount = activeThreats.length;
@@ -94,6 +98,15 @@ export function evaluateThreatPosture(
   // Collect every applicable risk factor as a candidate, then let the STRONGEST
   // win — so a severe concern is never diluted by a calmer one (order-proof).
   const candidates: Candidate[] = [];
+  if (!threatsObserved) {
+    // The agent may be perfectly healthy — we simply never saw its detection feed,
+    // so "no threats" is not a reading we are entitled to. Graded `monitor`, the
+    // same level as NOT_REPORTING: a blind spot to investigate, not an alarm. It
+    // beats the `none` default and loses to any genuinely observed problem below,
+    // which is the correct precedence — a real active threat outranks "we could
+    // not see".
+    candidates.push({ posture: "monitored", action: "monitor", reason: "THREAT_FEED_UNOBSERVED" });
+  }
   if (threatCount > 0 && activeThreatCount === 0) {
     // Detections exist but all are neutralized (quarantined/removed/blocked).
     candidates.push({ posture: "monitored", action: "monitor", reason: "THREATS_REMEDIATED" });

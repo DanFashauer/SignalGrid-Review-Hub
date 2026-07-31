@@ -106,7 +106,8 @@
     "proof:webhooks": "tsx ./src/webhooks-proof.ts",
     "proof:mdm-profile": "tsx ./src/mdm-profile-proof.ts",
     "proof:emit-gate": "tsx ./src/emit-gate-proof.ts",
-    "proof:live-edr": "tsx ./src/live-edr-proof.ts"
+    "proof:live-edr": "tsx ./src/live-edr-proof.ts",
+    "proof:graph-wire": "tsx ./src/graph-wire-proof.ts"
   },
   "dependencies": {
     "@workspace/app-workflows": "workspace:*",

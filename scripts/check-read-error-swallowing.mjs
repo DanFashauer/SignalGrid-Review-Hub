@@ -35,8 +35,8 @@ const ROOT = join(repo, "lib/integrations/src/integrations");
 // fix a fail-open, and the right change needs caller analysis this gate cannot do.
 // Stated here so the debt is explicit rather than implied by silence.
 const KNOWN_SWALLOWERS = new Map([
-  ["deviceResolver.ts:resolveFromUEM", "multi-source resolver: null means 'this source did not answer, try the next'"],
-  ["nac/store.ts:lookupEndpoint", "same shape — null already also means 'NAC not configured'"],
+  ["deviceResolver.ts:resolveFromUEM", "multi-source resolver: null means 'this source did not answer, try the next' — and the fault is reported via onFault, not silent"],
+  ["deviceResolver.ts:resolveFromNAC", "same chain, same shape as resolveFromUEM (its catch deliberately mirrors it): onFault reports the fault, null lets resolution fall through to the next source"],
 ]);
 
 const READ_SHAPED = /^(get|list|fetch|lookup|read|resolve|query)/i;

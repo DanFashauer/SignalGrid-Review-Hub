@@ -272,6 +272,31 @@ const fieldsOk = Object.entries(contract.requiredFields).every(([path, leaves]) 
 });
 check("contract: example is self-consistent — carries every requiredFields nested leaf", fieldsOk);
 
+// ── `defaults read` failure text is not a reading ────────────────────────────
+// This exact string was MEASURED on the owner's Mac through the live
+// signalgrid-mcp server — it is what `defaults read` emits for a key that is not
+// set, and the MCP server passes it through as the field's value.
+//
+// It is non-empty and contains no "%", so it survived every earlier sentinel check
+// and `malwareDefs()` graded it "present": a message stating the XProtect version
+// key DOES NOT EXIST was read as "definitions are present", and xprotect never
+// reached controlsUnknown. Absence graded as good news, in the live path, on real
+// hardware.
+const defaultsMissing =
+  "2026-07-31 19:25:53.687 defaults[79610:19689790] \n" +
+  "The domain/default pair of (/Library/Apple/System/Library/CoreServices/XProtect.bundle/Contents/Info, Version) does not exist";
+const missingKey = normalizeReport("m", {
+  os: { product_version: "26.5.2" },
+  xprotect: { xprotect_definitions: defaultsMissing },
+} as MacosPostureReportRaw);
+check("`defaults read` failure text normalizes to unknown, never 'present'", missingKey.malwareDefs === "unknown");
+check("…and it does not over-match: a real OS version alongside it still reads", missingKey.osVersion === "26.5.2");
+// The guard must not become a wall — a genuine definitions string still counts.
+const realDefs = normalizeReport("r", {
+  xprotect: { xprotect_definitions: "2170" },
+} as MacosPostureReportRaw);
+check("a genuine XProtect definitions value is still 'present'", realDefs.malwareDefs === "present");
+
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

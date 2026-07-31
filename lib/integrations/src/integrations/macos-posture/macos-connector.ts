@@ -46,6 +46,24 @@ function readableString(v: unknown): string | null {
   // A `defaults`/`stat` format artifact that was never substituted (e.g. "%Su",
   // "%N") is not a real value — treat it as unknown, never a fabricated reading.
   if (s.includes("%")) return null;
+  // `defaults read` writes its FAILURE to stdout as an ordinary string, so a
+  // missing key arrives here looking exactly like data:
+  //
+  //   "2026-07-31 19:25:53.687 defaults[79610:19689790] \n
+  //    The domain/default pair of (…XProtect.bundle/Contents/Info, Version)
+  //    does not exist"
+  //
+  // MEASURED on the owner's Mac through the live signalgrid-mcp server, not
+  // hypothesised: that blob is non-empty and contains no "%", so it survived every
+  // check above and `malwareDefs()` graded it "present" — i.e. a message stating
+  // the XProtect version key DOES NOT EXIST was read as "definitions are present",
+  // and xprotect never appeared in controlsUnknown. Absence read as good news, in
+  // the live path.
+  //
+  // Both shapes are matched: the timestamped `defaults[pid:tid]` stderr banner, and
+  // the "does not exist" sentence on its own in case the banner is stripped.
+  if (/\bdefaults\[\d+:[0-9a-f]+\]/i.test(s)) return null;
+  if (/\bdoes not exist\b/i.test(s)) return null;
   return s;
 }
 

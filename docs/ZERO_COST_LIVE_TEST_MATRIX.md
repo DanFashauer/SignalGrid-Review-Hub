@@ -48,7 +48,7 @@ Everything below extends this base outward to external systems.
 | rtls-custody connector | Traccar covers location-services only (**DONE**); indoor RTLS still unmet | 8 |
 | DockBridge charge/battery | app_in_dock script on owner's Mac/phone; dock/tamper/badge-binding stay emulator-only | 8, 10 |
 | Five web artifact UIs + api-server | Playwright E2E suite (running) | 1, 9 |
-| native/ios EnterpriseShell | Xcode Simulator + Maestro on the owner's Mac | 9 |
+| native/ios EnterpriseShell | Xcode Simulator + XCTest (**DONE** — 57/57); Maestro still REQUIRED for any visual E2E, see section 9 | 9 |
 
 ## 2. Identity / SSO / FIDO2-WebAuthn
 
@@ -219,7 +219,7 @@ Caveats that will burn you:
 | --- | --- | --- | --- | --- |
 | Playwright E2E suite (landed) | review console, website, admin console, desktop client, mobile PWA + live api-server | free | done | [verified in-repo] |
 | Lighthouse PWA installability audit | signalgrid-mobile-pwa manifest/service-worker gaps | free (OSS) | minutes | **[unverified — confirm before relying]** (OSS status stable but not re-verified) |
-| Xcode Simulator + XCTest for native/ios EnterpriseShell | session state machine, OIDC flow, Keychain, teardown — `project.yml` is already unsigned-simulator-ready | free (no paid Apple account for Simulator) | owner's Mac | **[unverified — confirm before relying]** |
+| Xcode Simulator + XCTest for native/ios EnterpriseShell | session state machine, OIDC flow, Keychain, teardown — `project.yml` is already unsigned-simulator-ready | free (no paid Apple account for Simulator) | owner's Mac | **[VERIFIED 2026-07-31 on this Mac]** — `xcodegen generate` + `xcodebuild` on Xcode 26.6/iPhone 17 sim: **BUILD SUCCEEDED, 57 tests, 0 failures**, including all 10 `SignalContextTests` (allow / step-up on stale / restrict on non-compliant, screen-capture and security-risk / deny on zone mismatch WITHOUT calling the service / deny on unknown zone / unobserved posture fails closed). Needs `brew install xcodegen`. |
 | Maestro CLI (YAML flows) | badge-in → workspace → teardown journeys in Simulator + web mode | free (Apache-2.0 CLI/Studio; Maestro Cloud is paid, ~$250/device/mo, 7-day trial only) | owner's Mac | **[verified July 2026](https://maestro.dev/pricing)** |
 | Appium (OSS) | the only free path to REAL iOS Safari (Simulator) for the PWA; XCUITest driver alternative | free (Apache-2.0) | owner's Mac, hours | **[unverified — confirm before relying]** |
 
@@ -230,6 +230,21 @@ Caveats that will burn you:
 - Playwright's WebKit build is NOT real iOS Safari — no add-to-home-screen, no iOS quirks. Real iOS Safari means Appium driving Simulator Safari, or a real iPhone over LAN.
 - The Simulator cannot exercise the External Accessory badge-reader path, supervised-device/MDM behaviors, or push. Free-Apple-ID installs on a physical iPhone expire every 7 days.
 - Maestro flows assert on visible UI, not internal state — pair with the repo's proof gates for logic coverage.
+- **Maestro is not optional for the visual E2E, and here is why (measured 2026-07-31).** On a
+  Simulator the app is reachable and authenticates, but ASAM (Autonomous Single App Mode)
+  release ALWAYS fails — the Simulator has no MDM client and no supervision — so
+  `ActiveSessionViewController` receives `.kioskReleaseFailed` and raises a modal
+  ("Device still locked … MDM supervision may need to re-apply the release"). That is the
+  correct fail-closed behaviour: the code comments say it surfaces recovery guidance rather
+  than "rendering the normal workspace as if the device had opened", and the alert appearing
+  is itself evidence the refused-release path works. But it lands at launch and blocks the
+  `-DemoAssist` host-app from auto-presenting, and `simctl` cannot tap. So a per-verdict
+  screenshot run needs a tap-capable driver (Maestro/XCUITest) or a genuinely supervised
+  device — it cannot be done with `simctl launch` + `simctl io screenshot` alone.
+  The DECISION logic needs neither: the 10 `SignalContextTests` above already assert every
+  verdict in that matrix, including the zone-mismatch deny.
+  Note when installing: `brew install --cask maestro` is a DIFFERENT product
+  (runmaestro.ai, an AI agent console). The mobile UI framework is mobile-dev-inc's.
 
 ## 10. The owner-only boundary
 

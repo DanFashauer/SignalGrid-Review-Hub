@@ -207,6 +207,8 @@ jobs:
         run: pnpm run proof:benchmark-selection
       - name: Proof — shift-context (right time and site for this worker to be operating)
         run: pnpm run proof:shift-context
+      - name: Proof — bootstrap-credential (a temporary pass reaches enrollment only)
+        run: pnpm run proof:bootstrap-credential
       - name: Proof — webhooks (outbound delivery gated; a withheld delivery says so)
         run: pnpm run proof:webhooks
       - name: Proof — facility-trust-graph (canonical space model + location certainty)

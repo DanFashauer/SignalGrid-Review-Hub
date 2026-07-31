@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 47,
-  "fingerprint": "a0756e4fd79ac41a9f702db3a6a09a34f42258b99166d0bef6144a4f05dfa846",
+  "manifestVersion": 49,
+  "fingerprint": "48c63364476de5c41e978ca02c7f9e67d32555eb94b03aeedd164f0b10e384f8",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -35,6 +35,7 @@
       "benchmark_selection",
       "shift_context",
       "location_certainty",
+      "bootstrap_credential",
       "device_management_health",
       "link_usability",
       "task_exception",
@@ -94,6 +95,7 @@
       "agent-identity": 143,
       "app-update": 52,
       "benchmark-selection": 82,
+      "bootstrap-credential": 35,
       "config-scope": 48,
       "credential-exposure": 28,
       "custody-beacon": 43,

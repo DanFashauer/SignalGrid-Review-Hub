@@ -215,6 +215,13 @@ export const TARGETS = [
       "lib/integrations/src/integrations/shift-context/shift-context-connector.ts",
     ],
   },
+  {
+    proof: "proof:bootstrap-credential",
+    files: [
+      "lib/integrations/src/integrations/bootstrap-credential/evaluate.ts",
+      "lib/integrations/src/integrations/bootstrap-credential/bootstrap-credential-connector.ts",
+    ],
+  },
 
   {
     proof: "proof:benchmark-selection",
@@ -594,6 +601,42 @@ const ALLOWED = [
     line: 'capability.grading === "within_capability" &&',
     reason:
       "Grant-conjunct defence-in-depth, labeled in the source: exceeds_capability is blocked before the grant (pinned by the wifi-lie control) and unstated/unrecognized force the effective class to unknown, which certaintyConfirmed already refuses (pinned by the generic-rtls control). Exists to catch a FUTURE weakening, per the affirmative-on-every-axis doctrine.",
+  },
+  {
+    file: "lib/integrations/src/integrations/bootstrap-credential/evaluate.ts",
+    line: 'report.reportIntegrity === "clean" &&',
+    reason:
+      "Coherent-bootstrap rung conjunct, labeled inert in the source: every failure state of the conjunct already pushed a raising candidate (REPORT_MALFORMED step_up, pinned) that outranks this monitor rung, so weakening it adds only a losing candidate. Same shape for the four siblings below.",
+  },
+  {
+    file: "lib/integrations/src/integrations/bootstrap-credential/evaluate.ts",
+    line: 'workflowFit === "enrollment_recovery" &&',
+    reason:
+      "Coherent-bootstrap rung conjunct — operational pushes a pinned restrict and unposed a pinned step_up, both outranking monitor.",
+  },
+  {
+    file: "lib/integrations/src/integrations/bootstrap-credential/evaluate.ts",
+    line: 'report.lifetime === "within_lifetime" &&',
+    reason:
+      "Coherent-bootstrap rung conjunct — expired restricts, unbounded and unknown step up, all pinned and all outranking monitor.",
+  },
+  {
+    file: "lib/integrations/src/integrations/bootstrap-credential/evaluate.ts",
+    line: 'report.scope === "enrollment_only" &&',
+    reason:
+      "Coherent-bootstrap rung conjunct — broad alerts and unknown steps up, both pinned and outranking monitor.",
+  },
+  {
+    file: "lib/integrations/src/integrations/bootstrap-credential/evaluate.ts",
+    line: 'report.oneTime === "one_time" &&',
+    reason:
+      "Coherent-bootstrap rung conjunct — reusable and unknown both step up, pinned, outranking monitor.",
+  },
+  {
+    file: "lib/integrations/src/integrations/bootstrap-credential/evaluate.ts",
+    line: "if (candidates.length === 0) {",
+    reason:
+      "The bootstrap backstop itself — deliberately redundant defence-in-depth with its OWN reason (BOOTSTRAP_UNGRADED), documented in the source as never firing today; it exists so a FUTURE weakened branch surfaces as ungraded instead of impersonating the branch it replaced.",
   },
   {
     file: "lib/integrations/src/integrations/shift-context/evaluate.ts",

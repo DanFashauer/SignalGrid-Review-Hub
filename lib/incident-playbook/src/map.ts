@@ -202,6 +202,13 @@ function categoryForKind(kind: string, reason?: string): IncidentCategory {
     // measurement state owned by the same queue — not a live threat, and never
     // the generic Service Desk.
     case "location_certainty":
+    // `bootstrap_credential` is the auth plane's provenance reading: a temporary
+    // pass beyond enrollment scope, expired-in-use, minted broad, or issued on
+    // location alone is a credential-lifecycle concern owned by the same
+    // Identity & Access queue as `sso_session` and `pim_activation` — never the
+    // generic Service Desk, and not SecOps: its findings are issuance/policy
+    // states, not live threats.
+    case "bootstrap_credential":
     case "agent_identity":
     case "data_protection":
       return "security_compliance";

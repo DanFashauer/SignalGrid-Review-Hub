@@ -168,9 +168,10 @@ safely.
   discipline as itsm/siem/syslog/telemetry/webhooks — dev/alpha never emit.
   OAuth introspection / short-lived tokens are the consuming side and are
   already modeled by `token-binding` and `sso-session`.
-- **Bootstrap credentials (queued candidate, row 17):** TAP-style temporary
-  access grading — one-time, shortest-practical, enrollment-scope-only,
-  location as corroboration never the sole verification factor.
+- **Bootstrap credentials (BUILT, row 17):** the `bootstrap-credential`
+  connector family — one-time, shortest-practical, enrollment-scope-only,
+  location as corroboration never the sole verification factor, each rule
+  mechanical (see `docs/INTEGRATION_CATALOG.md`).
 - **Naming note:** the physical-access family in this repo is `pacs-access`;
   in healthcare-facing docs the expansion is always "physical access control
   system" — never bare "PACS", which collides with radiology picture archiving.

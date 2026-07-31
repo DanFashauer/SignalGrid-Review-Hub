@@ -75,6 +75,7 @@ export const SIGNAL_KINDS = [
   "benchmark_selection",
   "shift_context",
   "location_certainty",
+  "bootstrap_credential",
   "device_management_health",
   "link_usability",
   "task_exception",

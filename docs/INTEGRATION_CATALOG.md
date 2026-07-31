@@ -448,6 +448,20 @@ in one place.
   Reading a schedule is not managing one: GET-only, no punch writes, nothing payroll-adjacent.
   `proof:shift-context` (50 checks).
 
+- **Bootstrap credential** — the auth plane's provenance reading (intake ledger row 17's queued
+  candidate; Entra Temporary Access Pass and its peers are the reference shape). A temporary
+  bootstrap pass may reach ONLY authenticator enrollment or recovery: a bootstrap session on an
+  operational workflow restricts (a step-up would let the suspect credential answer for itself);
+  expired-but-in-use restricts; a pass minted broad or issued on location evidence ALONE alerts —
+  issuance defects are operator-scale; reusable or unbounded-lifetime passes step up, visibly
+  weaker than the mechanism promises. Lifetime is DERIVED from the reported issued/expires
+  instants at a caller-supplied reference instant — no clock in any decision path — and the
+  workflow class is POSED by the caller: silence never widens enrollment-only. The clean state is
+  a STANDING strong credential and only that; a perfectly-used bootstrap pass still reads
+  monitor, because a temporary credential is an elevated state, not a clean one. Reading a
+  credential record is not managing one: no pass is issued, revoked, or extended.
+  `proof:bootstrap-credential` (35 checks).
+
 - **Policy binding** ([POLICY_BINDING.md](POLICY_BINDING.md)) — membership **is** the policy.
   Intune dynamic groups, Fleet teams, ABM/DDM profiles, Jamf smart groups, PACS access
   levels, Entra CA groups, WMS queues, EDR policy groups and SignalGrid's own per-vertical

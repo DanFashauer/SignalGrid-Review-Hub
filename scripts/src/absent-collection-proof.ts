@@ -38,6 +38,7 @@ import { evaluateIdentityPasskeys } from "@workspace/integrations/passkey-assura
 import * as identityRisk from "@workspace/integrations/identity-risk";
 import * as peripheral from "@workspace/integrations/peripheral-control";
 import * as credential from "@workspace/integrations/credential-exposure";
+import { composeDeviceRisk, fromThreat } from "@workspace/posture-composition";
 
 let passed = 0;
 const failures: string[] = [];
@@ -278,6 +279,41 @@ for (const [label, unreported, reportedNone] of [
     `action=${String(reportedNone.recommendedAction)}`,
   );
 }
+
+// ── 6. Does any of it REACH the fabric? ──────────────────────────────────────
+// Everything above is per-dimension. A verdict that never changes what the fabric
+// composes is a cosmetic fix, so this asserts the whole path end to end:
+// normalize → evaluate → adapter → composeDeviceRisk.
+const unobservedComposed = composeDeviceRisk([fromThreat(noFeedVerdict)]);
+const scannedComposed = composeDeviceRisk([fromThreat(explicitZero)]);
+
+check(
+  "an unobserved feed changes the COMPOSED action, not just the dimension verdict",
+  unobservedComposed.strongestAction === "monitor" && scannedComposed.strongestAction === "none",
+  `${unobservedComposed.strongestAction} vs ${scannedComposed.strongestAction}`,
+);
+check(
+  "…and the fabric can SAY WHY — the driver names the unobserved feed",
+  unobservedComposed.drivers[0]?.reason === "THREAT_FEED_UNOBSERVED",
+  String(unobservedComposed.drivers[0]?.reason),
+);
+
+// RECORDED, NOT ENDORSED — and deliberately not changed here. `TIER_BY_ACTION`
+// maps BOTH `none` and `monitor` to the tier `ok`, so a consumer reading only
+// `riskTier` still cannot tell "verified clean" from "we never looked". The finer
+// distinction is present one level down, in `strongestAction` and `drivers`.
+//
+// Reclassifying `monitor` to `watch` would be the obvious fix and is NOT a local
+// one: it would move EVERY monitor verdict in every dimension — controlled media,
+// remediated threats, NOT_REPORTING — out of `ok`. That is a decision about what
+// the tier vocabulary means, not a defect in this law, so it is pinned and stated
+// rather than quietly altered.
+check(
+  "the coarse riskTier is `ok` for both — the distinction lives in action + drivers (recorded)",
+  unobservedComposed.riskTier === "ok" && scannedComposed.riskTier === "ok",
+  `${unobservedComposed.riskTier}/${scannedComposed.riskTier} — if this changed, TIER_BY_ACTION was ` +
+    "revisited: update this assertion and say so in docs/BUILD_BACKLOG.md",
+);
 
 const total = passed + failures.length;
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${total})`);

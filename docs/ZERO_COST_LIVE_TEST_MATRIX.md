@@ -45,7 +45,7 @@ Everything below extends this base outward to external systems.
 | link-usability connector | netns + dnsmasq ladder; hwsim for 802.11; Meraki sandbox for vendor cloud | 7 |
 | carrier-reachability | transport-half only; real session data needs a SIM | 7, 10 |
 | pacs-access connector | Seam sandbox (simulated Brivo) | 8 |
-| rtls-custody connector | Traccar + owner's phone | 8 |
+| rtls-custody connector | Traccar covers location-services only (**DONE**); indoor RTLS still unmet | 8 |
 | DockBridge charge/battery | app_in_dock script on owner's Mac/phone; dock/tamper/badge-binding stay emulator-only | 8, 10 |
 | Five web artifact UIs + api-server | Playwright E2E suite (running) | 1, 9 |
 | native/ios EnterpriseShell | Xcode Simulator + Maestro on the owner's Mac | 9 |
@@ -198,7 +198,7 @@ Blunt up front: this is the thinnest category for free live testing because the 
 | --- | --- | --- | --- | --- |
 | Seam sandbox (simulated Brivo Access) | pacs-access live-bridge transport: auth, pagination, 401/429/5xx | free tier: up to 3 devices, sandbox workspaces | minutes | **[verified July 2026](https://docs.seam.co/latest/device-and-system-integration-guides/brivo-access/brivo-access-sample-data)** |
 | Brivo official developer sandbox | raw first-party Brivo semantics (25,000 calls/mo, 25/sec) | free if approved — human-reviewed request via email | owner action | **[verified July 2026](https://apidocs.brivo.com/)** |
-| Traccar self-hosted + phone client | rtls-custody fix-age, geofence zones, LEFT_AREA on real movement | free (Apache 2.0) | hours | **[verified July 2026](https://www.traccar.org/)** |
+| Traccar self-hosted + phone client | **DONE for location-services** (`proof:live-location`, 22 assertions — see [TRACCAR_LIVE_INTEGRATION.md](TRACCAR_LIVE_INTEGRATION.md)): real geofence membership, fix-age, precise-coordinate flagging. rtls-custody remains uncovered — Traccar is outdoor GPS, not indoor RTLS | free (Apache 2.0) | hours | **[verified July 2026](https://www.traccar.org/)** |
 | libosdp software CP↔PD loop | badge-read protocol layer (IEC 60839-11-5 OSDP), secure-channel failure, reader-offline | free (OSS) | hours | **[verified July 2026](https://github.com/goToMain/libosdp)** |
 | app_in_dock battery telemetry on the owner's Mac/phone | DockBridge `charge_state`/`battery_health` from real hardware (real BATTERY_CRITICAL that clears on plug-in) | free | hours | [verified in-repo] |
 

@@ -138,7 +138,8 @@
     "status:write": "node scripts/status-summary.mjs --write",
     "proof:live-edr": "pnpm --filter @workspace/scripts run proof:live-edr",
     "proof:graph-wire": "pnpm --filter @workspace/scripts run proof:graph-wire",
-    "proof:live-fleet": "pnpm --filter @workspace/scripts run proof:live-fleet"
+    "proof:live-fleet": "pnpm --filter @workspace/scripts run proof:live-fleet",
+    "proof:live-location": "pnpm --filter @workspace/scripts run proof:live-location"
   },
   "private": true,
   "devDependencies": {

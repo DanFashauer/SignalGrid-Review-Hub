@@ -145,6 +145,12 @@ if [ "$SIM_ONLY" != "--sim-only" ]; then
       skip "$p" "needs a live Fleet (FLEET_URL + FLEET_TOKEN); see docs/FLEET_LIVE_INTEGRATION.md"
       continue
     fi
+    # proof:live-location reads a REAL Traccar and INGESTS positions into it, so it
+    # mutates that server's data — never point it at anything but a disposable one.
+    if [ "$p" = "proof:live-location" ] && [ -z "${TRACCAR_URL:-}" ]; then
+      skip "$p" "needs a live Traccar (TRACCAR_URL/USER/PASS); see docs/TRACCAR_LIVE_INTEGRATION.md"
+      continue
+    fi
     gate "$p" $PNPM run "$p"
   done
 

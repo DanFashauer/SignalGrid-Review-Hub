@@ -73,6 +73,23 @@ already has a fixture proof; these add a real vendor behind it._
       type. Doing this properly means a websocket client plus a result-collection
       policy (timeout, partial results, per-host errors) — and, given the blast
       radius, an explicit approval gate rather than only the tier gate.
+- [x] **Traccar → location-services.** DONE — `proof:live-location` (22 assertions)
+      against a real Traccar 6.14.5, positions ingested over its genuine OsmAnd
+      protocol. This connector has no hardcoded paths, so the lane found something
+      else: Traccar's `geofenceIds: null` is AMBIGUOUS — it means both "outside every
+      geofence" AND "no geofence is linked to this device". Proven live rather than
+      argued: the SAME coordinates return `[1]` while linked and `null` after
+      unlinking, from a device that never moved.
+      The obvious `null → outside` mapping would report a device sitting at HQ centre
+      as off-premises the moment someone unlinks a geofence, and `evaluateLocation`
+      turns that into `OUTSIDE_AUTHORIZED_GEOFENCE`/`locate` — a config change
+      becoming a location signal. The proof asserts that failure explicitly and pins
+      the honest mapping, which needs a second call (`/api/geofences?deviceId=N`).
+      Usually this repo catches absence graded as GOOD; here it would be graded BAD.
+      Same mistake — reporting a measurement never taken.
+      See [TRACCAR_LIVE_INTEGRATION.md](TRACCAR_LIVE_INTEGRATION.md). Does NOT cover
+      rtls-custody: Traccar is outdoor GPS, not indoor RTLS.
+
 - [ ] **Android: AMAPI Colab + Test DPC on an emulator** — managed/kiosk custody
       without hardware. Needs the Android SDK on the machine.
 

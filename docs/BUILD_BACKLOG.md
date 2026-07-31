@@ -118,6 +118,28 @@ only), and the DDM rig is gated on an APNs push certificate.
 
 ## Owner-gated (needs a decision before an agent builds it)
 
+- [ ] **Merge `signalgrid-mcp#fix/unblock-live-evidence` → `liveEvidence` goes
+      `none` → `fresh`.** ⚠️ **one merge in the OTHER repo; everything else is done.**
+      This is the repo's longest-standing gap (`STATUS.md`: "real-hardware evidence:
+      none"), and it turned out not to need a supervised device or any purchase.
+      Two things blocked it, both now cleared or diagnosed:
+      1. *Review-Hub half* — `verify-all.mjs` runs the FULL preflight, which includes
+         `pnpm run build`, believed unrunnable on macOS. It runs fine once the four
+         stripped darwin binaries are supplied (commit `d637404`). **Cleared.**
+      2. *signalgrid-mcp half* — its `pyproject.toml` pinned `mcp>=1.9.0` with no
+         upper bound. The MCP Python SDK released **2.0.0**, removing
+         `create_connected_server_and_client_session` from `mcp.shared.memory`, so a
+         fresh checkout fails at pytest COLLECTION: 4 files error, 0 tests run. It
+         reads as a broken repo but is a moved API. Pinning `<2` restores it and
+         `verify.sh` exits 0. **Fix pushed as a branch, NOT merged — owner call.**
+      Verified end-to-end on 2026-07-31: with both in place, both halves pass and
+      `mac-run.json` mints. That evidence was deliberately NOT committed, because it
+      was produced against a local ad-hoc merge — the evidence schema records
+      `mcpCommit`/`mcpDirty`, and publishing a run against an unpushed dirty tree
+      would be exactly the manufactured confidence this repo keeps deleting.
+      After merging: `SIGNALGRID_MCP_PATH=~/signalgrid-mcp node scripts/verify-all.mjs
+      --require-mcp --emit-evidence`, then commit `artifacts/live-evidence/`.
+
 - [ ] **Truncation signal on capped reads** ⚠️ **owner decision — API change across 11
       connectors.** Eleven connectors paginate with their own copy of `getAllPages`,
       looping `while (url && pages < this.pageLimit)` and returning a plain array.

@@ -1,5 +1,8 @@
 #!/usr/bin/env node
-// Decision-port parity — the Swift port must not drift from the TS engine.
+// Port parity — the two Swift ports must not drift from their TS originals.
+//
+// Covers BOTH ported files: DecisionEngine.swift (which verdict) and
+// AppWorkflows.swift (what the user then meets — auto, assist, step-up, blocked).
 //
 // `native/ios/EnterpriseShell/Services/DecisionEngine.swift` is documented as a
 // BYTE-FAITHFUL port of `lib/signalgrid-simulator/src/decisionEngine.ts`. That
@@ -170,6 +173,78 @@ for (const [c, tsOutcomes] of [...ts.entries()].sort()) {
 
 say(`decision-port parity: ${ts.size} TS rules vs ${swift.size} Swift rules, ${problems} divergence(s)`);
 
+// ── 3. AppWorkflows: the OTHER ported file ───────────────────────────────────
+// DecisionEngine decides; AppWorkflows turns that decision into what the user
+// meets — which action is automatic, which needs a confirmation, which is blocked.
+// It is the second byte-faithful port and carries the identical risk, so guarding
+// only the first would leave half the gate unratcheted.
+//
+// Its rules are not reason-code emissions, so the comparison above does not apply.
+// What it does have is a shared VOCABULARY — the same three enums and the same
+// four operations, declared as a union in TS and an enum in Swift. If TS gains a
+// disposition the port lacks, the device cannot express it; if the port loses an
+// operation, a screen silently stops gating. Both are extractable as text.
+const WF_TS = "lib/app-workflows/src/index.ts";
+const WF_SWIFT = "native/ios/EnterpriseShell/Services/AppWorkflows.swift";
+const wfTsSrc = code(readFileSync(resolve(repo, WF_TS), "utf8"));
+const wfSwiftSrc = code(readFileSync(resolve(repo, WF_SWIFT), "utf8"));
+
+/** `export type X = "a" | "b";` -> Set{a,b} */
+function tsUnion(src, name) {
+  const m = new RegExp(`export type ${name}\\s*=\\s*([^;]+);`).exec(src);
+  if (!m) return null;
+  return new Set([...m[1].matchAll(/"([a-z_]+)"/g)].map((x) => x[1]));
+}
+/** `enum X: String { case a, b }` -> Set{a,b} */
+function swiftEnum(src, name) {
+  const m = new RegExp(`enum ${name}\\s*:\\s*String\\s*\\{([^}]*)\\}`).exec(src);
+  if (!m) return null;
+  const cases = new Set();
+  for (const c of m[1].matchAll(/case\s+([a-zA-Z0-9_,\s]+)/g)) {
+    for (const one of c[1].split(",")) {
+      const t = one.trim();
+      if (t) cases.add(t);
+    }
+  }
+  return cases;
+}
+
+for (const name of ["AppRiskTier", "AppActionDisposition", "AppSessionMode"]) {
+  const a = tsUnion(wfTsSrc, name);
+  const b = swiftEnum(wfSwiftSrc, name);
+  if (!a || !b) {
+    console.error(`  ✗ ${name}: could not be read from ${!a ? WF_TS : WF_SWIFT} — the declaration shape changed, so this guard stopped guarding it`);
+    problems += 1;
+    continue;
+  }
+  const missing = [...a].filter((x) => !b.has(x)).sort();
+  const extra = [...b].filter((x) => !a.has(x)).sort();
+  if (missing.length || extra.length) {
+    console.error(
+      `  ✗ ${name}: vocabulary differs\n` +
+        `      only in TS:    ${missing.join(", ") || "(none)"}\n` +
+        `      only in Swift: ${extra.join(", ") || "(none)"}`,
+    );
+    problems += 1;
+  }
+}
+
+// The operations the port must keep offering. A missing one is a screen that
+// silently stops gating rather than an error anyone would see.
+const wfTsFns = new Set([...wfTsSrc.matchAll(/export function ([a-zA-Z]+)\(/g)].map((m) => m[1]));
+const wfSwiftFns = new Set([...wfSwiftSrc.matchAll(/\n\s*static func ([a-zA-Z]+)\(/g)].map((m) => m[1]));
+for (const fn of ["planAppSession", "gateAppAction", "confirmAppActions", "completeAppStepUp"]) {
+  if (!wfTsFns.has(fn)) {
+    console.error(`  ✗ ${fn}: gone from ${WF_TS} — update this guard's expected list if that was intended`);
+    problems += 1;
+  } else if (!wfSwiftFns.has(fn)) {
+    console.error(`  ✗ ${fn}: present in TS, ABSENT from the Swift port — that gating step does not run on the device`);
+    problems += 1;
+  }
+}
+
+say(`app-workflows parity: 3 enums + 4 operations compared`);
+
 if (problems > 0) {
   console.error(
     `\nDecision-port parity FAILED.\n` +
@@ -179,4 +254,7 @@ if (problems > 0) {
   );
   process.exit(1);
 }
-say("Decision-port parity passed — the Swift port emits the same verdicts, wired the same way.");
+say(
+  "Port parity passed — DecisionEngine emits the same verdicts wired the same way, and\n" +
+    "AppWorkflows offers the same vocabulary and the same gating operations.",
+);

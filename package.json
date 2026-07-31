@@ -134,7 +134,8 @@
     "proof:nac": "pnpm --filter @workspace/scripts run proof:nac",
     "proof:webhooks": "pnpm --filter @workspace/scripts run proof:webhooks",
     "proof:mdm-profile": "pnpm --filter @workspace/scripts run proof:mdm-profile",
-    "proof:emit-gate": "pnpm --filter @workspace/scripts run proof:emit-gate"
+    "proof:emit-gate": "pnpm --filter @workspace/scripts run proof:emit-gate",
+    "status:write": "node scripts/status-summary.mjs --write"
   },
   "private": true,
   "devDependencies": {

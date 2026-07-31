@@ -133,7 +133,8 @@
     "branches:clean": "bash scripts/cleanup-merged-branches.sh --apply",
     "proof:nac": "pnpm --filter @workspace/scripts run proof:nac",
     "proof:webhooks": "pnpm --filter @workspace/scripts run proof:webhooks",
-    "proof:mdm-profile": "pnpm --filter @workspace/scripts run proof:mdm-profile"
+    "proof:mdm-profile": "pnpm --filter @workspace/scripts run proof:mdm-profile",
+    "proof:emit-gate": "pnpm --filter @workspace/scripts run proof:emit-gate"
   },
   "private": true,
   "devDependencies": {

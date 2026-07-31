@@ -36,7 +36,8 @@
     "./link-usability": "./src/integrations/link-usability/index.ts",
     "./task-exception": "./src/integrations/task-exception/index.ts",
     "./nac": "./src/integrations/nac/index.ts",
-    "./webhooks": "./src/integrations/webhooks/dispatch.ts"
+    "./webhooks": "./src/integrations/webhooks/dispatch.ts",
+    "./emit-gate": "./src/integrations/adapters/emit-gate.ts"
   },
   "dependencies": {
     "ioredis": "^5.4.1",

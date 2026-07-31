@@ -6,6 +6,7 @@
  */
 
 import crypto from 'crypto';
+import { resolveEmission, EMIT_SUPPRESSED } from '../adapters/emit-gate';
 import type { SIEMAdapter, SIEMEventRequest, SIEMEventResponse } from '../adapters/types';
 
 export interface WebhookSIEMConfig {
@@ -53,6 +54,16 @@ export class WebhookSIEMAdapter implements SIEMAdapter {
   }
 
   async sendEvent(event: SIEMEventRequest): Promise<SIEMEventResponse> {
+    // Gate first: dev/alpha never emit outbound. See ../adapters/emit-gate.ts.
+    const emission = resolveEmission();
+    if (emission.mode === 'suppressed') {
+      return {
+        eventId: `suppressed-${Date.now()}`,
+        status: EMIT_SUPPRESSED,
+        receivedAt: new Date().toISOString(),
+      };
+    }
+
     const payload = JSON.stringify(event);
     const headers = { ...this.config.headers };
 

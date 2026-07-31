@@ -63,9 +63,6 @@ const NOT_A_FAMILY = new Set(["adapters"]);
  */
 const KNOWN_GAPS = {
   itsm: { severity: "ungated-emitter", reason: "servicenow/bmc-helix/ivanti create real tickets with no tier gate." },
-  siem: { severity: "ungated-emitter", reason: "sentinel forwards real events with no tier gate." },
-  syslog: { severity: "ungated-emitter", reason: "forwards real log lines with no tier gate." },
-  telemetry: { severity: "ungated-emitter", reason: "emits real telemetry with no tier gate." },
   // `carrier` and `graph` were listed here on the assumption they had no proof. The
   // stale-entry check below immediately disproved it: they are covered by
   // carrier-reachability-proof.ts and graph-connector-proof.ts. Entries removed —
@@ -116,7 +113,13 @@ function analyzeFamily(name) {
     const lines = readFileSync(join(dir, f), "utf8").split("\n");
     const code = lines.filter((l) => !isComment(l));
     const body = code.join("\n");
+    // Gated either by naming the env var directly, or by routing through the
+    // SHARED gate in adapters/emit-gate.ts. The shared form is STRONGER, not
+    // weaker: one resolver cannot drift permissive the way four copy-pasted
+    // policies can, and the drifted copy is always the one that ships. A family
+    // must both import it AND call it — an unused import gates nothing.
     if (/SIGNALGRID_LIVE_INTEGRATIONS/.test(body)) gated = true;
+    if (/adapters\/emit-gate/.test(body) && /resolveEmission\s*\(/.test(body)) gated = true;
     if (ACTION_CALL.test(body) && MUTATING_REQUEST.test(body)) {
       performsAction = true;
       code.forEach((l, i) => { if (ACTION_CALL.test(l)) actionSites.push(`${f}:~${i + 1}`); });
@@ -126,9 +129,18 @@ function analyzeFamily(name) {
   // A proof either lives at the conventional path, or the family is covered by a
   // proof that imports it by subpath. Both count — what must not count is "nothing".
   const conventional = existsSync(join(proofDir, `${name}-proof.ts`));
-  const importedByAProof = readdirSync(proofDir)
-    .filter((f) => f.endsWith("-proof.ts"))
-    .some((f) => new RegExp(`@workspace/integrations/${name}\\b`).test(readFileSync(join(proofDir, f), "utf8")));
+  // …or a proof that names the family's source path explicitly. emit-gate-proof
+  // asserts, per family, that each one imports AND calls the shared resolver —
+  // which is coverage of that family, even though it imports the gate rather
+  // than the family's own subpath (several have no index.ts to import).
+  const proofFiles = readdirSync(proofDir).filter((f) => f.endsWith("-proof.ts"));
+  const importedByAProof = proofFiles.some((f) => {
+    const src = readFileSync(join(proofDir, f), "utf8");
+    return (
+      new RegExp(`@workspace/integrations/${name}\\b`).test(src) ||
+      new RegExp(`integrations/${name}/`).test(src)
+    );
+  });
 
   return { name, gated, proven: conventional || importedByAProof, performsAction, actionSites };
 }

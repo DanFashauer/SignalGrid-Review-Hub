@@ -1,4 +1,5 @@
 import type { SIEMAdapter, SIEMEventRequest, SIEMEventResponse } from '../adapters/types';
+import { resolveEmission, EMIT_SUPPRESSED } from '../adapters/emit-gate';
 
 /**
  * Syslog Transport Configuration
@@ -96,15 +97,29 @@ export class SyslogAdapter implements SIEMAdapter {
    * Send a single event to syslog
    */
   async sendEvent(event: SIEMEventRequest): Promise<SIEMEventResponse> {
+    // Gate first: dev/alpha never emit. See ../adapters/emit-gate.ts.
+    const emission = resolveEmission();
+    if (emission.mode === 'suppressed') {
+      return {
+        eventId: `syslog-${event.type}-${Date.now()}`,
+        status: EMIT_SUPPRESSED,
+        receivedAt: new Date().toISOString(),
+      };
+    }
+
+    // Formatting is real and unit-testable; the WIRE is not implemented.
     const message = this.formatEvent(event);
-    const priority = this.buildPriority(event.severity);
-    
-    // In a real implementation, this would send via UDP/TCP/TLS
-    // For now, we return a mock response
-    
+    void message;
+    void this.buildPriority(event.severity);
+
+    // HONESTY FIX. This previously returned status 'sent' having sent nothing —
+    // no UDP, TCP or TLS socket is opened anywhere in this file. A compliance
+    // reader treats a forwarded audit event as delivered, so claiming 'sent'
+    // for a no-op is the most damaging thing this adapter could report. Until a
+    // real transport exists it reports `not_implemented`, which is true.
     return {
       eventId: `syslog-${event.type}-${Date.now()}`,
-      status: 'sent',
+      status: 'not_implemented',
       receivedAt: new Date().toISOString(),
     };
   }

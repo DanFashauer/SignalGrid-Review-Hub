@@ -8,6 +8,7 @@ import {
   FleetDMPolicyResult,
   FleetDMPostureSignal,
 } from './types';
+import { resolveEmission } from '../adapters/emit-gate';
 import { getFleetDMConfig, setPostureForHost } from './store';
 import { fetchWithTimeout, TIMEOUT_PRESETS } from '../../utils/fetchWithTimeout';
 
@@ -19,6 +20,14 @@ export class FleetDMAdapter {
   }
 
   isEnabled(): boolean {
+    // The tier gate is ANDed with the operator's config flag, and it is checked
+    // HERE because every live path in this file guards on isEnabled() — making
+    // this the one chokepoint that cannot be bypassed by adding a new method.
+    //
+    // `config.enabled` is an operator preference, not a safety control: a dev or
+    // alpha process with enabled=true would otherwise reach the live Fleet API,
+    // including runQuery(), which POSTs arbitrary osquery SQL to real hosts.
+    if (resolveEmission().mode === 'suppressed') return false;
     return this.config?.enabled ?? false;
   }
 

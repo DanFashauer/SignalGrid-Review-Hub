@@ -186,6 +186,17 @@ export const TARGETS = [
     ],
   },
   {
+    proof: "proof:emitter-discipline",
+    files: [
+      "lib/integrations/src/integrations/itsm/resolve.ts",
+      "lib/integrations/src/integrations/siem/resolve.ts",
+      "lib/integrations/src/integrations/syslog/resolve.ts",
+      "lib/integrations/src/integrations/telemetry/resolve.ts",
+      "lib/integrations/src/integrations/webhooks/resolve.ts",
+    ],
+  },
+
+  {
     proof: "proof:benchmark-selection",
     files: [
       "lib/integrations/src/integrations/benchmark-selection/evaluate.ts",

@@ -31,7 +31,7 @@ Everything below extends this base outward to external systems.
 | --- | --- | --- |
 | lib/webauthn | Chromium CDP virtual authenticator | 2 |
 | lib/enterprise-auth | live-idp-proof (built); then Keycloak / Okta / Entra tenants | 1, 2 |
-| token-binding connector | Keycloak 26.4 DPoP (only zero-cost sender-constrained token source) | 2 |
+| token-binding connector | live-idp-proof already mints a real DPoP-bound token (built — see row above); Keycloak 26.4 adds a SECOND, independent issuer | 1, 2 |
 | identity-risk connector | Entra P2 trial only — no permanent free path | 2, 10 |
 | graph posture + device-management-health | Dev Proxy wire simulation; then the one Intune trial window | 3 |
 | lib/pim-activation | P2/Governance trial window only | 3, 10 |
@@ -52,7 +52,7 @@ Everything below extends this base outward to external systems.
 
 ## 2. Identity / SSO / FIDO2-WebAuthn
 
-**Do this first:** Playwright + Chromium's CDP WebAuthn virtual authenticator over a thin RP harness on lib/webauthn — it converts the repo's strongest fixture proof (`scripts/src/webauthn-verify-proof.ts`) into evidence against real browser-generated CTAP2 credentials, including the positive fido-u2f x5c attestation path the fixture file documents as out of scope. Then Keycloak in Docker: three env vars (`OIDC_ISSUER`/`OIDC_AUDIENCE`/`OIDC_JWKS_URI`, exactly as `lib/enterprise-auth/src/config.ts` documents) light up the whole pipeline against a live JWKS, and Keycloak 26.4's DPoP support is the only zero-cost way to mint a genuinely sender-constrained token for the token-binding connector.
+**Do this first:** Playwright + Chromium's CDP WebAuthn virtual authenticator over a thin RP harness on lib/webauthn — it converts the repo's strongest fixture proof (`scripts/src/webauthn-verify-proof.ts`) into evidence against real browser-generated CTAP2 credentials, including the positive fido-u2f x5c attestation path the fixture file documents as out of scope. Then Keycloak in Docker: three env vars (`OIDC_ISSUER`/`OIDC_AUDIENCE`/`OIDC_JWKS_URI`, exactly as `lib/enterprise-auth/src/config.ts` documents) light up the whole pipeline against a live JWKS, and Keycloak 26.4's DPoP support is a SECOND zero-cost way to mint a genuinely sender-constrained token for the token-binding connector — `live-idp-proof` (section 1) already does this against an in-process `oidc-provider`, so Keycloak's value here is cross-implementation agreement, not first coverage.
 
 | Option | Exercises | Cost | Effort | Confidence |
 | --- | --- | --- | --- | --- |

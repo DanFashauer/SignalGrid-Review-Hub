@@ -199,6 +199,10 @@ jobs:
       # too-narrow, or mixed-membership group assignment.
       - name: Proof — emitter-discipline (five outbound families gated, fixture never claims delivery)
         run: pnpm run proof:emitter-discipline
+      - name: Proof — emit-gate (one shared tier gate for every in-adapter emitter route)
+        run: pnpm run proof:emit-gate
+      - name: Proof — mdm-profile (the shipped profiles say what the product claims)
+        run: pnpm run proof:mdm-profile
       - name: Proof — benchmark-selection (which CIS benchmark graded this device, and from what content)
         run: pnpm run proof:benchmark-selection
       - name: Proof — shift-context (right time and site for this worker to be operating)

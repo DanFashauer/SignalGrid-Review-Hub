@@ -1,4 +1,5 @@
 import type { SIEMAdapter, SIEMEventRequest, SIEMEventResponse } from '../adapters/types';
+import { resolveEmission, EMIT_SUPPRESSED } from '../adapters/emit-gate';
 
 /**
  * Syslog Transport Configuration
@@ -96,6 +97,20 @@ export class SyslogAdapter implements SIEMAdapter {
    * Send a single event to syslog
    */
   async sendEvent(event: SIEMEventRequest): Promise<SIEMEventResponse> {
+    // GATE FIRST — the shared emit gate (../adapters/emit-gate.ts) the other
+    // emitter families route through. When policy says nothing may be sent
+    // (dev/alpha, or the live flag unset), nothing was promised and nothing is
+    // lost: report the honest `suppressed` status WITH the reason, exactly like
+    // siem/telemetry/itsm do.
+    const emission = resolveEmission();
+    if (emission.mode === 'suppressed') {
+      return {
+        eventId: `syslog-${event.type}-${Date.now()}`,
+        status: EMIT_SUPPRESSED,
+        receivedAt: new Date().toISOString(),
+      };
+    }
+
     // FORMATTING IS REAL AND IS KEPT. `formatEvent` and `buildPriority` implement RFC
     // 5424 / CEF / LEEF correctly and are worth having when a transport is chosen.
     const message = this.formatEvent(event);
@@ -105,7 +120,13 @@ export class SyslogAdapter implements SIEMAdapter {
 
     // THERE IS NO TRANSPORT, AND THIS NO LONGER CLAIMS OTHERWISE.
     //
-    // This returned `{ status: 'sent', receivedAt: <now> }` above a comment reading "In
+    // Past the gate the caller has EXPLICITLY configured live delivery
+    // (beta/prod tier and SIGNALGRID_LIVE_INTEGRATIONS exactly "true") — this
+    // is where a quiet honest status is at its most dangerous, because a
+    // caller that ignores a status string is the normal case and here they are
+    // actively expecting delivery. So the live path REFUSES LOUDLY.
+    //
+    // This returned a `sent` status with a fresh receivedAt above a comment reading "In
     // a real implementation, this would send via UDP/TCP/TLS. For now, we return a mock
     // response." Nothing ever left the process — no socket is opened anywhere in this
     // family — and the caller was told the security event had been SENT and RECEIVED.
@@ -120,14 +141,13 @@ export class SyslogAdapter implements SIEMAdapter {
     //
     // REFUSING RATHER THAN RETURNING AN HONEST-BUT-QUIET STATUS, because a caller that
     // ignores a status string is the normal case, and this must be impossible to miss.
-    // Deliberately NOT deciding the open question — whether this family should be
-    // tier-gated for live delivery or made fixture-backed like the graded connectors.
-    // Both futures require that it stop lying today, and neither is foreclosed by
-    // throwing: a real implementation replaces this body, and a fixture-backed one
-    // refuses exactly like `resolveResponseConnector` already does.
+    // The once-open question — tier-gated vs fixture-backed — is now decided: this
+    // family is tier-gated (the shared gate above, plus `resolveSyslogEmitter`'s
+    // four-clause gate at the family boundary). The gate stands beside this refusal;
+    // it does not soften it. A real implementation replaces this throw, nothing else.
     throw new Error(
       "syslog: no transport is implemented — this adapter formats events but opens no " +
-        "socket. It previously reported status:'sent' for events that were never " +
+        "socket. It previously reported a 'sent' status for events that were never " +
         "transmitted. Wire a UDP/TCP/TLS transport behind a tier gate, or consume the " +
         "formatter directly, but do not treat a returned value here as delivery.",
     );

@@ -14,6 +14,34 @@ picking these up:
 
 ## Now (next up)
 
+_Derived from repo data, not memory: `check-connector-discipline` reports 36/36
+families with KNOWN_GAPS empty, and `check-live-sync` reports `liveEvidence=none`.
+What remains is the LIVE-lane column of
+[ZERO_COST_LIVE_TEST_MATRIX.md](ZERO_COST_LIVE_TEST_MATRIX.md) — every dimension
+already has a fixture proof; these add a real vendor behind it._
+
+- [ ] **Wazuh (perpetual free) → edr-threat connector.** Real EDR vocabulary rather
+      than fixture shapes, and the dimension has NO live vendor behind it today.
+      Free forever, self-hosted, no trial clock — the strongest remaining lane.
+- [ ] **Keycloak 26.4 DPoP → token-binding.** LOWER priority than it reads in the
+      matrix: `live-idp-proof` already runs a complete real DPoP ceremony (client-held
+      EC key, real proof JWT, provider-minted `cnf.jkt` equal to the RFC 7638
+      thumbprint, verified through enterprise-auth). Keycloak's value is
+      cross-implementation agreement, not first coverage.
+- [ ] **Dev Proxy → graph posture + device-management-health.** Injects Graph-authentic
+      429/`Retry-After`, 5xx and paging at the wire, exercising error-mapping and
+      pagination caps the mocks assert but have never seen over a real socket.
+- [ ] **Fleet Free + osquery → telemetry/fleetdm.ts.** A real Fleet was already built
+      from source and validated against `lib/fleet-connector` (see
+      [FLEET_LIVE_INTEGRATION.md](FLEET_LIVE_INTEGRATION.md)); this extends the same
+      rig to the telemetry adapter, which is a different code path.
+- [ ] **Android: AMAPI Colab + Test DPC on an emulator** — managed/kiosk custody
+      without hardware. Needs the Android SDK on the machine.
+
+Not free, stated so the absence is deliberate rather than forgotten: identity-risk
+and pim-activation have NO permanent free path (Entra P2 / Governance trial windows
+only), and the DDM rig is gated on an APNs push certificate.
+
 ## Next
 
 - [x] **In-app step-up completion (real WebAuthn, possession + user-verification)** — the SERVER control

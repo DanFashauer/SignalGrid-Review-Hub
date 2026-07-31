@@ -1,4 +1,5 @@
 import type { SIEMAdapter, SIEMEventRequest, SIEMEventResponse } from '../adapters/types';
+import { resolveEmission, EMIT_SUPPRESSED } from '../adapters/emit-gate';
 
 /**
  * Splunk HEC (HTTP Event Collector) Adapter Configuration
@@ -46,6 +47,16 @@ export class SplunkAdapter implements SIEMAdapter {
    * Send a single event to Splunk
    */
   async sendEvent(event: SIEMEventRequest): Promise<SIEMEventResponse> {
+    // Gate first: dev/alpha never emit outbound. See ../adapters/emit-gate.ts.
+    const emission = resolveEmission();
+    if (emission.mode === 'suppressed') {
+      return {
+        eventId: `suppressed-${Date.now()}`,
+        status: EMIT_SUPPRESSED,
+        receivedAt: new Date().toISOString(),
+      };
+    }
+
     const payload = this.buildEventPayload(event);
     
     const response = await fetch(`${this.config.hecUrl}/services/collector`, {

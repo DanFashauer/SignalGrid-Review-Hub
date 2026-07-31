@@ -1,4 +1,5 @@
 import type { SIEMAdapter, SIEMEventRequest, SIEMEventResponse } from '../adapters/types';
+import { resolveEmission, EMIT_SUPPRESSED } from '../adapters/emit-gate';
 
 /**
  * Microsoft Sentinel (Azure Log Analytics) Adapter Configuration
@@ -53,6 +54,16 @@ export class SentinelAdapter implements SIEMAdapter {
    * Send a single event to Sentinel
    */
   async sendEvent(event: SIEMEventRequest): Promise<SIEMEventResponse> {
+    // Gate first: dev/alpha never emit outbound. See ../adapters/emit-gate.ts.
+    const emission = resolveEmission();
+    if (emission.mode === 'suppressed') {
+      return {
+        eventId: `suppressed-${Date.now()}`,
+        status: EMIT_SUPPRESSED,
+        receivedAt: new Date().toISOString(),
+      };
+    }
+
     const payload = this.buildEventPayload(event);
     
     // For Sentinel, we need to get an access token

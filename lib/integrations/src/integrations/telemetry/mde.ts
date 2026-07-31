@@ -12,6 +12,7 @@
  */
 
 import { MDEDevice, MDEConfig, MDEPostureSignal } from './types';
+import { resolveEmission, EMIT_SUPPRESSED } from '../adapters/emit-gate';
 
 export class MDEAdapter {
   private config: MDEConfig | null = null;

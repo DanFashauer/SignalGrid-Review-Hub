@@ -97,13 +97,30 @@ for (const fam of FAMILIES) {
 // ── family-specific honesty pins ────────────────────────────────────────────────
 // syslog is the family whose lie started this: the raw adapter must still THROW
 // rather than pretend — the gate stands beside that refusal, it does not soften it.
+// The adapter now routes through the shared emit gate first (like siem/telemetry/
+// itsm), so the pin is proven where it matters most: with live delivery FULLY
+// CONFIGURED (beta tier + the flag exactly "true"), the adapter still refuses
+// loudly rather than reporting any status for an event that never left the process.
 const adapter = new SyslogAdapter({ host: "collector.local", protocol: "udp", format: "cef" });
+const probeEvent = { type: "session.probe", severity: "high", timestamp: "2026-07-30T00:00:00.000Z", details: { probe: true } } as never;
+const savedTier = process.env.SIGNALGRID_TIER;
+const savedLive = process.env.SIGNALGRID_LIVE_INTEGRATIONS;
+process.env.SIGNALGRID_TIER = "beta";
+process.env.SIGNALGRID_LIVE_INTEGRATIONS = "true";
 let syslogThrew = false;
 try {
-  await adapter.sendEvent({ type: "session.probe", severity: "high", timestamp: "2026-07-30T00:00:00.000Z", details: { probe: true } } as never);
+  await adapter.sendEvent(probeEvent);
 } catch (err) { syslogThrew = err instanceof Error && err.message.includes("no transport is implemented"); }
-check("syslog: the raw adapter still THROWS rather than reporting 'sent' for an event that never left the process",
+if (savedTier === undefined) delete process.env.SIGNALGRID_TIER; else process.env.SIGNALGRID_TIER = savedTier;
+if (savedLive === undefined) delete process.env.SIGNALGRID_LIVE_INTEGRATIONS; else process.env.SIGNALGRID_LIVE_INTEGRATIONS = savedLive;
+check("syslog: with live delivery fully configured, the raw adapter still THROWS rather than reporting 'sent' for an event that never left the process",
   syslogThrew);
+// And when the gate suppresses (this proof's scrubbed env), the adapter reports
+// the honest shared `suppressed` status — never 'sent', never a throw the caller
+// could mistake for breakage when policy simply forbids emission.
+const suppressed = await adapter.sendEvent(probeEvent);
+check("syslog: under a suppressing env the adapter reports status 'suppressed', never 'sent'",
+  (suppressed as { status?: string }).status === "suppressed");
 
 // Determinism: two identical resolutions produce identical fixture logs.
 const r1 = resolveItsmEmitter({}, undefined);

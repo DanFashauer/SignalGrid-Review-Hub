@@ -3,11 +3,11 @@
 # SignalGrid-Review-Hub — "real-life simulation" validation harness (macOS/arm64)
 #
 # Runs the full deterministic proof/sim suite that CI runs, natively on an Apple
-# Silicon Mac — WITHOUT Docker. The repo's toolchain is pinned to linux-x64 (its
-# pnpm-workspace.yaml strips every non-linux-x64 native binary), so the *web*
-# build can't run here. But the simulator + all proof gates are pure TS logic run
-# via tsx; they run natively once tsx's esbuild binary is present and the
-# (esbuild-based) api-server is built. This harness sets that up and runs it all.
+# Silicon Mac — WITHOUT Docker. The repo's pnpm-workspace.yaml strips every
+# non-linux-x64 native binary, which long read as "the web build cannot run here".
+# It can: nothing about the SOURCES is linux-only, so this harness supplies the
+# four stripped darwin binaries for the run and builds all six web artifacts too.
+# The simulator + proof gates are pure TS via tsx. Everything runs natively.
 #
 #   ./validate-sim-macos.sh            # full suite
 #   ./validate-sim-macos.sh --sim-only # just the real-life simulator scenarios
@@ -52,16 +52,38 @@ run install --frozen-lockfile >/tmp/sgval_install.log 2>&1 || { echo "install fa
 # need) while the committed manifests are left byte-identical. Without this the
 # stray root dependency gets committed and every CI job's first step
 # (`pnpm install --frozen-lockfile`) fails on a lockfile/manifest mismatch.
-ESV=$(ls node_modules/.pnpm 2>/dev/null | grep -oE '^esbuild@[0-9.]+' | head -1 | cut -d@ -f2)
-ARCHPKG="@esbuild/$(uname -s | tr 'A-Z' 'a-z')-$(uname -m | sed 's/x86_64/x64/')"
-if [ -n "$ESV" ] && ! ls -d node_modules/.pnpm/${ARCHPKG#@esbuild/}* >/dev/null 2>&1; then
-  echo "-- add $ARCHPKG@$ESV (tsx runtime binary for this platform)"
+#
+# This covers tsx's esbuild AND the web build's toolchain. The header of this file
+# used to say the web build was unrunnable here; that was wrong in an important
+# way. Nothing about the SOURCES is linux-only — only the four native binaries the
+# workspace strips are. Supply them for the run and all six web artifacts build on
+# darwin/arm64. "The build is linux-x64-only" was a fact about node_modules being
+# read as a fact about the code.
+PLAT="$(uname -s | tr 'A-Z' 'a-z')-$(uname -m | sed 's/x86_64/x64/')"
+pkg_ver() { ls node_modules/.pnpm 2>/dev/null | grep -oE "^$1@[0-9.]+" | head -1 | sed "s/^$1@//"; }
+
+# Added UNCONDITIONALLY rather than probed-then-added. A `.pnpm/<pkg>@<ver>` store
+# directory survives the `install --frozen-lockfile` above while no longer being
+# LINKED into the consumer's node_modules — so "the directory exists" is not the
+# same question as "rollup can require it", and probing for it reported present
+# for binaries the build then could not load. `pnpm add` is idempotent and costs
+# under a second; a wrong answer costs a red gate that looks like a real failure.
+WANT=""
+want() { [ -n "$2" ] && WANT="$WANT $1@$2"; }
+want "@esbuild/$PLAT"           "$(pkg_ver esbuild)"
+want "@rollup/rollup-$PLAT"     "$(pkg_ver rollup)"
+want "lightningcss-$PLAT"       "$(pkg_ver lightningcss)"
+want "@tailwindcss/oxide-$PLAT" "$(pkg_ver '@tailwindcss\+oxide')"
+
+if [ -n "$WANT" ]; then
+  echo "-- add platform binaries for this run:$WANT"
   cp package.json /tmp/sgval_pkg.bak 2>/dev/null
   cp pnpm-lock.yaml /tmp/sgval_lock.bak 2>/dev/null
-  run add -w "$ARCHPKG@$ESV" >/tmp/sgval_esbuild.log 2>&1 || echo "   (add reported an issue; continuing)"
+  # shellcheck disable=SC2086
+  run add -w --save-optional $WANT >/tmp/sgval_esbuild.log 2>&1 || echo "   (add reported an issue; continuing)"
   cp /tmp/sgval_pkg.bak package.json 2>/dev/null
   cp /tmp/sgval_lock.bak pnpm-lock.yaml 2>/dev/null
-  echo "   (manifests restored; binary kept in node_modules)"
+  echo "   (manifests restored; binaries kept in node_modules)"
 fi
 
 echo "-- build api-server (esbuild; needed for observability + api integration test)"
@@ -128,6 +150,7 @@ if [ "$SIM_ONLY" != "--sim-only" ]; then
 
   echo; echo "== non-proof gates =="
   gate "typecheck"            $PNPM run typecheck
+  gate "build (6 web artifacts)" $PNPM run build
   gate "test:api"             $PNPM run test:api
   gate "safety:check"         $PNPM run safety:check
   gate "docs:sanity"          $PNPM run docs:sanity
@@ -135,9 +158,10 @@ if [ "$SIM_ONLY" != "--sim-only" ]; then
 fi
 
 echo
-echo "== NOTE: the linux-x64 web build (pnpm run build) is intentionally skipped =="
-echo "   — its vite/rollup/lightningcss/tailwind darwin binaries are stripped by the"
-echo "     repo's own pnpm-workspace.yaml (CI runs linux-x64). Run it in CI / linux for web."
+echo "== NOTE: the web build now RUNS here (it used to be skipped) =="
+echo "   — the vite/rollup/lightningcss/tailwind darwin binaries this repo strips are"
+echo "     added to node_modules for the run, exactly as tsx's esbuild binary always"
+echo "     was. Nothing about the sources is linux-only; all 6 artifacts build on arm64."
 echo
 echo "== SUMMARY: $pass passed, $fail failed, $SKIPPED skipped =="
 if [ "$fail" -ne 0 ]; then echo "   failed:$failed_gates"; exit 1; fi

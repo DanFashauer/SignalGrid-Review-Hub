@@ -1,6 +1,6 @@
 # Facility Trust Graph — spatial trust as a first-class subsystem
 
-*Status: **phases 1–3 BUILT** (`@workspace/facility-trust-graph`, proven by `proof:facility-trust-graph`; phase 4 roadmap). This document records the
+*Status: **phases 1–4 BUILT** (`@workspace/facility-trust-graph`, proven by `proof:facility-trust-graph`; phase 4 is the gateway's pure decision/data core — transport and deployment remain `control-plane`/`edge-sync`). This document records the
 owner's architecture (2026-07-31, intake ledger row 16), what the fabric
 already covers, and the honest built-vs-roadmap boundary. Nothing here claims
 a live vendor integration exists — this repository is fixture-backed.*
@@ -117,10 +117,33 @@ safely.
   `present | crossing | probably_outside | confirmed_outside | never_present |
   unknown`; disordered, future-dated, or unreadable sequences raise. No clock:
   every instant is supplied, every bound is caller policy.
-- **Phase 4:** Site Context Gateway — the local-only/hybrid deployment mode
-  built on `edge-sync`/`control-plane`: local normalization and sensitive
-  joins, pseudonymized minimum telemetry upstream, immutable local audit,
-  defined restricted mode when sources are unavailable.
+- **Phase 4 (CORE BUILT):** Site Context Gateway — the hybrid-deployment
+  boundary's pure decision/data core, in `gateway.ts`:
+  - **The minimization projector** (`projectUpstreamRecord`): the sensitive
+    join happens locally; the cloud receives ONLY outcome, reason codes, a
+    coarse zone, a pseudonym, device tier, source health, latency, and the
+    audit anchor. The projector REFUSES what it does not recognize rather
+    than stripping it — a silently dropped `patient_id` would teach callers
+    to keep sending one. Spatial content coarsens THROUGH THE GRAPH to a
+    caller-supplied kind ceiling; when the coarse zone cannot be derived the
+    record carries nothing spatial, never the precise id. A cheap tripwire
+    refuses email-shaped pseudonyms (a tripwire, not proof of pseudonymity).
+  - **The restricted-mode grader** (`deriveGatewayMode`): the operator poses
+    which local sources their high-trust workflows require; a required source
+    unavailable, unrecognized, or simply ABSENT from the health report
+    (absence is not health) puts the gateway in a defined `restricted` mode
+    with location-derived privileges WITHDRAWN — a restricted place never
+    silently loosens because location went dark. A gateway that cannot read
+    its own health report is itself restricted. Non-required sources never
+    restrict (the posed set governs).
+  - **The audit anchor**: the local trail is NOT rebuilt here —
+    `@workspace/audit` is already an atomic hash-chained ledger. The upstream
+    record carries the local chain HEAD (`audit_head`), so the control plane
+    can detect local tampering or truncation without ever receiving the
+    sensitive records themselves.
+  - **Honest boundary:** transport, sync cadence, config-down integrity
+    (bundle checksums + signatures), and counts-only aggregation remain
+    `control-plane`/`edge-sync`. Nothing in this package opens a socket.
 
 ## Vendor and standards positioning (no dependency taken)
 

@@ -204,6 +204,7 @@ export const TARGETS = [
       "lib/facility-trust-graph/src/correlate.ts",
       "lib/facility-trust-graph/src/clinical.ts",
       "lib/facility-trust-graph/src/transition.ts",
+      "lib/facility-trust-graph/src/gateway.ts",
     ],
   },
 

@@ -17,4 +17,5 @@ export * from "./evaluate";
 export * from "./correlate";
 export * from "./clinical";
 export * from "./transition";
+export * from "./gateway";
 export * from "./fixture";

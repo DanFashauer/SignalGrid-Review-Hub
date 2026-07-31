@@ -16,9 +16,11 @@ import {
   FacilityGraphError,
   buildFacilityGraph,
   evaluateLocationCertainty,
+  deriveGatewayMode,
   gradeExplicitSelection,
   gradeZonePresence,
   normalizeLocationObservation,
+  projectUpstreamRecord,
   resolveClinicalAssignment,
   satisfies,
   type AccuracyClass,
@@ -519,6 +521,78 @@ check("a nonsense policy (negative dwell, zero staleness bound) is unreadable, n
 check("presenceConfirmed is true for exactly ONE state — present — and the grader is deterministic",
   zp([...settled]).presenceConfirmed === true && zp([...settled]).state === "present" &&
   JSON.stringify(zp([...settled])) === JSON.stringify(zp([...settled])));
+
+// ── phase 4 core: the Site Context Gateway boundary ─────────────────────────────
+// The minimization projector: the cloud receives the minimum, or nothing.
+const upstreamBase = {
+  outcome: "step_up",
+  reason_codes: ["EXPLICIT_SELECTION_REQUIRED", "INSUFFICIENT_PRECISION"],
+  space_id: "SG-RM0312-BED-B",
+  pseudonym: "wf-pseud-91c4",
+  device_tier: "clinical-managed-high",
+  source_health: "healthy",
+  decision_latency_ms: 41,
+  audit_head: "b1946ac92492d234",
+};
+const up = (over: Record<string, unknown> = {}) => projectUpstreamRecord(graph, { ...upstreamBase, ...over }, "unit");
+const projected = up();
+check("PHASE-4 HEADLINE: a bed-level decision projects upstream as its UNIT — and the serialized record contains no trace of the room or bed id",
+  projected.refusal === null && projected.projected?.coarseZoneId === "SG-F03-UNIT-4W" &&
+  !JSON.stringify(projected.projected).includes("RM0312"));
+check("the record carries the audit-chain HEAD as the tamper anchor, plus pseudonym, tier, health, latency and reason codes — and nothing else spatial",
+  projected.projected?.auditHead === "b1946ac92492d234" && projected.projected?.pseudonym === "wf-pseud-91c4" &&
+  projected.projected?.reasonCodes.length === 2 && projected.projected?.coarseZoneKind === "unit");
+check("MINIMIZATION REFUSES, NEVER STRIPS: a patient_id, subject_id, or coordinates field refuses the whole record — silently dropping it would teach callers to keep sending it",
+  up({ patient_id: "P123" }).refusal === "UNRECOGNIZED_FIELD" &&
+  up({ subject_id: "nurse.j" }).refusal === "UNRECOGNIZED_FIELD" &&
+  up({ coordinates: { x: 1, y: 2 } }).refusal === "UNRECOGNIZED_FIELD");
+check("pseudonym is required, and an email-shaped value trips the raw-identifier tripwire",
+  up({ pseudonym: undefined }).refusal === "PSEUDONYM_MISSING" &&
+  up({ pseudonym: "dan@example.com" }).refusal === "PSEUDONYM_SUSPECT");
+check("an unmapped precise space refuses — forwarding it raw would be exactly the leak the projector exists to prevent",
+  up({ space_id: "SG-GHOST-WING" }).refusal === "SPACE_UNMAPPED");
+check("no coarse ancestor at the ceiling → the record carries NOTHING spatial, never the raw id (a floor asked to coarsen to unit)",
+  up({ space_id: "SG-HOSP-A-BLDG1-F03" }).refusal === null &&
+  up({ space_id: "SG-HOSP-A-BLDG1-F03" }).projected?.coarseZoneId === null &&
+  !JSON.stringify(up({ space_id: "SG-HOSP-A-BLDG1-F03" }).projected).includes("SG-HOSP-A-BLDG1-F03"));
+check("no spatial input at all is fine — coarse zone null; outcome and reason codes are validated, an unrecognized outcome or unreadable reason list refuses",
+  up({ space_id: undefined }).refusal === null && up({ space_id: undefined }).projected?.coarseZoneId === null &&
+  up({ outcome: "granted" }).refusal === "OUTCOME_UNRECOGNIZED" &&
+  up({ reason_codes: "STEP_UP" }).refusal === "REASON_CODES_UNREADABLE" &&
+  up({ reason_codes: Array.from({ length: 33 }, () => "R") }).refusal === "REASON_CODES_UNREADABLE");
+check("hostile shapes refuse: a throwing-ownKeys proxy, a non-object input, an unrecognized coarsening ceiling",
+  projectUpstreamRecord(graph, new Proxy({}, { ownKeys: () => { throw new Error("hostile"); } }) as never, "unit").refusal === "UNRECOGNIZED_FIELD" &&
+  projectUpstreamRecord(graph, "record" as never, "unit").refusal === "INPUT_UNREADABLE" &&
+  projectUpstreamRecord(graph, { ...upstreamBase }, "ward" as never).refusal === "CEILING_UNRECOGNIZED");
+check("the projector is deterministic",
+  JSON.stringify(up()) === JSON.stringify(up()));
+
+// The restricted-mode grader: a defined mode, never a silent loosening.
+const POLICY = { requiredSources: ["location", "pacs", "ehr"] };
+const gm = (report: unknown, policy: { requiredSources: string[] } = POLICY) => deriveGatewayMode(report, policy);
+check("all required sources healthy → normal, action none, location-derived privileges retained",
+  gm({ location: "healthy", pacs: "healthy", ehr: "healthy" }).mode === "normal" &&
+  gm({ location: "healthy", pacs: "healthy", ehr: "healthy" }).locationDerivedPrivileges === "retained");
+check("a required source degraded → degraded mode, monitor, privileges retained (the per-observation dimensions grade the specifics)",
+  gm({ location: "degraded", pacs: "healthy", ehr: "healthy" }).mode === "degraded" &&
+  gm({ location: "degraded", pacs: "healthy", ehr: "healthy" }).recommendedAction === "monitor");
+check("THE LAW: a required source UNAVAILABLE → restricted, step_up, location-derived privileges WITHDRAWN — a restricted place never silently loosens because location went dark",
+  gm({ location: "unavailable", pacs: "healthy", ehr: "healthy" }).mode === "restricted" &&
+  gm({ location: "unavailable", pacs: "healthy", ehr: "healthy" }).locationDerivedPrivileges === "withdrawn" &&
+  gm({ location: "unavailable", pacs: "healthy", ehr: "healthy" }).unavailableSources.includes("location"));
+check("ABSENCE IS NOT HEALTH: a required source missing from the report, or reporting an unrecognized value, restricts — named in unknownSources so a dead source and a missing report line are distinguishable",
+  gm({ pacs: "healthy", ehr: "healthy" }).mode === "restricted" &&
+  gm({ pacs: "healthy", ehr: "healthy" }).unknownSources.includes("location") &&
+  gm({ location: "fine", pacs: "healthy", ehr: "healthy" }).unknownSources.includes("location"));
+check("an unreadable report or policy is RESTRICTED — a gateway that cannot read its own health is not entitled to normal mode",
+  gm("all good").reasonCode === "REPORT_UNREADABLE" && gm("all good").mode === "restricted" &&
+  gm({ location: "healthy" }, null as never).reasonCode === "POLICY_UNREADABLE");
+check("the POSED set governs: a non-required source going dark does not restrict, and an operator's explicit empty required set is normal",
+  gm({ location: "healthy", pacs: "healthy", ehr: "healthy", cafeteria_wifi: "unavailable" }).mode === "normal" &&
+  gm({}, { requiredSources: [] }).mode === "normal");
+check("the mode grader is deterministic",
+  JSON.stringify(gm({ location: "degraded", pacs: "healthy", ehr: "healthy" })) ===
+  JSON.stringify(gm({ location: "degraded", pacs: "healthy", ehr: "healthy" })));
 
 // ── fusion into the fabric ──────────────────────────────────────────────────────
 check("location_certainty is a member of the runtime SIGNAL_KINDS array",

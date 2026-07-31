@@ -242,7 +242,19 @@ only), and the DDM rig is gated on an APNs push certificate.
       behaviour so it cannot drift further and fails — with instructions — the
       moment the default is changed.
 
-- [ ] **Truncation signal on capped reads** ⚠️ **owner decision — API change across 11
+- [x] **Truncation signal on capped reads.** **DONE** — all eleven now throw
+      `incomplete_read` when the page cap is hit with a next-page cursor still in
+      hand, rather than returning a partial inventory as a complete one. Chosen over
+      a richer return type because it needs NO signature change: every caller already
+      handles connector errors, so there is no new call site that can forget. The cap
+      itself stays — it is the loop/DoS guard against an endless cursor — and a tenant
+      that FITS reads normally, so it is a refusal, not a wall. The remedy is named in
+      the message: raise `pageLimit`. `KNOWN_SILENT` in the guard is now EMPTY.
+      Design taken from the repo: `policy.ts` and the simulator both answer
+      incompleteness with "trust is incomplete → step up", and passkey/ddm fail closed
+      on partial sets. ORIGINAL ENTRY BELOW.
+
+- [x] **Truncation signal on capped reads** (original entry — API change across 11
       connectors.** Eleven connectors paginate with their own copy of `getAllPages`,
       looping `while (url && pages < this.pageLimit)` and returning a plain array.
       The cap is correct (a loop/DoS guard against an endless `nextLink`) but the

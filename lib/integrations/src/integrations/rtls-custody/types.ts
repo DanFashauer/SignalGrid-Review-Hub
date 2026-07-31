@@ -94,7 +94,7 @@ export interface CustodyVerdict {
   recommendedAction: CustodyAction;
 }
 
-export type RtlsConnectorErrorCode = "auth_failed" | "read_only_violation" | "upstream_error" | "bad_response";
+export type RtlsConnectorErrorCode = "incomplete_read" | "auth_failed" | "read_only_violation" | "upstream_error" | "bad_response";
 
 export class RtlsConnectorError extends Error {
   readonly code: RtlsConnectorErrorCode;

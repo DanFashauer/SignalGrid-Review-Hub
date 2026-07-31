@@ -129,7 +129,7 @@ export interface CredentialExposureVerdict {
   recommendedAction: CredentialRecommendedAction;
 }
 
-export type CredentialConnectorErrorCode = "auth_failed" | "read_only_violation" | "upstream_error" | "bad_response";
+export type CredentialConnectorErrorCode = "incomplete_read" | "auth_failed" | "read_only_violation" | "upstream_error" | "bad_response";
 
 export class CredentialConnectorError extends Error {
   readonly code: CredentialConnectorErrorCode;

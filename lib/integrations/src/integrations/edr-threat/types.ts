@@ -117,7 +117,7 @@ export interface ThreatVerdict {
   recommendedAction: ThreatAction;
 }
 
-export type EdrConnectorErrorCode = "auth_failed" | "read_only_violation" | "upstream_error" | "bad_response";
+export type EdrConnectorErrorCode = "incomplete_read" | "auth_failed" | "read_only_violation" | "upstream_error" | "bad_response";
 
 export class EdrConnectorError extends Error {
   readonly code: EdrConnectorErrorCode;

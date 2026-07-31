@@ -92,6 +92,7 @@ export interface ReachabilityVerdict {
 }
 
 export type CarrierConnectorErrorCode =
+  | "incomplete_read"
   | "auth_failed"
   | "read_only_violation"
   | "upstream_error"

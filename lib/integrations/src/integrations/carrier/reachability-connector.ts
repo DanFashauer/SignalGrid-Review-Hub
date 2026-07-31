@@ -113,6 +113,17 @@ export class CarrierReachabilityConnector {
       url = body.nextPageToken ? `${firstUrl}?pageToken=${encodeURIComponent(body.nextPageToken)}` : undefined;
       pages += 1;
     }
+    // Exiting the cap with a next-page cursor still in hand means the inventory is
+    // INCOMPLETE, and a short list is indistinguishable from a complete one. Refuse
+    // rather than pass a partial inventory off as a whole one; the cap itself stays,
+    // because it is the loop/DoS guard against an endless cursor.
+    if (url) {
+      throw new CarrierConnectorError(
+        "incomplete_read",
+        `Carrier read hit the ${this.pageLimit}-page cap with more pages remaining. ` +
+          "Refusing to return a partial inventory as if it were complete; raise pageLimit to read further.",
+      );
+    }
     return out;
   }
 

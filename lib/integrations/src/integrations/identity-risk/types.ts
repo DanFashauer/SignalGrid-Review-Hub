@@ -129,7 +129,7 @@ export interface IdentityRiskVerdict {
   recommendedAction: IdentityAction;
 }
 
-export type IdentityConnectorErrorCode = "auth_failed" | "read_only_violation" | "upstream_error" | "bad_response";
+export type IdentityConnectorErrorCode = "incomplete_read" | "auth_failed" | "read_only_violation" | "upstream_error" | "bad_response";
 
 export class IdentityRiskConnectorError extends Error {
   readonly code: IdentityConnectorErrorCode;

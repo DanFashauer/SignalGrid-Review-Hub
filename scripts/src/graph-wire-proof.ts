@@ -7,14 +7,15 @@
 // real wire — with a local http.Server instead of a new external dependency, and
 // it can therefore run in CI unattended.
 //
-// The interesting case is not the errors. It is PAGE-CAP TRUNCATION.
-// `getAllPages` follows `@odata.nextLink` while `pages < pageLimit`, then returns
-// what it has. A tenant with more pages than the cap yields a SHORT list that is
-// indistinguishable from a complete one — and for a posture connector, a device
-// missing from the result reads as "no such device", i.e. no problem. This proof
-// pins that the cap holds (it must — it is a loop/DoS guard) and measures exactly
-// what the caller can and cannot tell afterwards, so the limitation is recorded
-// rather than discovered in production.
+// The interesting case is not the errors. It is PAGE-CAP TRUNCATION, and this
+// proof is what found it. `getAllPages` follows `@odata.nextLink` while
+// `pages < pageLimit`; it USED TO return what it had, so a tenant with more pages
+// than the cap yielded a SHORT list indistinguishable from a complete one — and for
+// a posture connector a device missing from the result reads as "no such device",
+// i.e. no problem. That measurement drove the fix across all eleven paginating
+// connectors: a capped read now REFUSES (`incomplete_read`) rather than passing a
+// partial inventory off as a whole one. Both halves are asserted here — the refusal,
+// and that a tenant which FITS still reads normally, so the cap never became a wall.
 //
 // Pure and offline: the server is local and deterministic. No account, no vendor.
 
@@ -41,8 +42,10 @@ type Mode =
   | { kind: "auth"; status: number }
   | { kind: "bad-json" }
   | { kind: "no-value-array" }
-  | { kind: "endless-pages" };
+  | { kind: "endless-pages" }
+  | { kind: "finite-pages" };
 
+const FINITE_PAGES = 3;
 let mode: Mode = { kind: "endless-pages" };
 let requestCount = 0;
 
@@ -65,6 +68,18 @@ function startServer(): Promise<{ server: Server; base: string }> {
           return send(200, "{ this is not json");
         case "no-value-array":
           return send(200, JSON.stringify({ notValue: [] }));
+        case "finite-pages": {
+          // A tenant that FITS: stops handing back nextLink before the cap.
+          const host = (req.headers.host ?? "").toString();
+          const more = requestCount < FINITE_PAGES;
+          return send(
+            200,
+            JSON.stringify({
+              value: [{ id: `fin-${requestCount}`, complianceState: "compliant", managementState: "managed" }],
+              ...(more ? { "@odata.nextLink": `http://${host}/next/${requestCount + 1}` } : {}),
+            }),
+          );
+        }
         case "endless-pages": {
           // Always hands back another nextLink — an unbounded tenant. Each page
           // carries one device so the returned count equals the pages followed.
@@ -108,24 +123,44 @@ async function main(): Promise<void> {
   // ── 1. Page-cap truncation ────────────────────────────────────────────────
   mode = { kind: "endless-pages" };
   requestCount = 0;
-  const devices = await connector.listManagedDevices();
+  let cappedCode = "";
+  let cappedMessage = "";
+  try {
+    await connector.listManagedDevices();
+  } catch (e) {
+    cappedCode = (e as { code?: string }).code ?? "";
+    cappedMessage = e instanceof Error ? e.message : "";
+  }
   check(
-    `the page cap holds against an endless tenant (followed ${devices.length}, cap ${PAGE_LIMIT})`,
-    devices.length === PAGE_LIMIT,
-    `got ${devices.length}`,
-  );
-  check(
-    "the loop/DoS guard stops the connector — it does not follow nextLink forever",
+    "the loop/DoS guard still stops the connector — it does not follow nextLink forever",
     requestCount === PAGE_LIMIT,
     `requests=${requestCount}`,
   );
-  // RECORDED LIMITATION, asserted so it cannot change unnoticed: the result is a
-  // plain array. There is no truncation flag, so a caller CANNOT distinguish a
-  // capped read from a complete one. For posture, an absent device reads as "no
-  // device" — the caller must treat a full-length result as possibly incomplete.
+  // This assertion used to record the OPPOSITE, and that is the history worth
+  // keeping: it pinned "a capped read returns a plain array with no truncation
+  // signal (known limitation)" — a caller could not tell a capped read from a
+  // complete one, and for posture an absent device reads as "no device". This proof
+  // is what surfaced that defect; when the fix landed across all eleven paginating
+  // connectors, this assertion failed and said so.
   check(
-    "a capped read returns a plain array with no truncation signal (known limitation)",
-    Array.isArray(devices) && !("truncated" in (devices as unknown as Record<string, unknown>)),
+    "a capped read now REFUSES rather than returning a partial inventory as a whole one",
+    cappedCode === "incomplete_read",
+    `code=${cappedCode || "(no throw — the silent-truncation fail-open is back)"}`,
+  );
+  check(
+    "…and the refusal names the remedy instead of just failing",
+    /pageLimit/.test(cappedMessage),
+    cappedMessage.slice(0, 80),
+  );
+
+  // The cap must not become a wall: a tenant that FITS still reads normally.
+  mode = { kind: "finite-pages" };
+  requestCount = 0;
+  const finite = await connector.listManagedDevices();
+  check(
+    "a tenant inside the cap still returns its devices, no throw",
+    finite.length === FINITE_PAGES,
+    `got ${finite.length}`,
   );
 
   // ── 2. Throttling is surfaced, not silently swallowed ─────────────────────

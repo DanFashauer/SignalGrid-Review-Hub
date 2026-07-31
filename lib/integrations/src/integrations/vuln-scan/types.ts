@@ -61,7 +61,7 @@ export interface VulnVerdict {
   recommendedAction: VulnAction;
 }
 
-export type VulnConnectorErrorCode = "auth_failed" | "read_only_violation" | "upstream_error" | "bad_response";
+export type VulnConnectorErrorCode = "incomplete_read" | "auth_failed" | "read_only_violation" | "upstream_error" | "bad_response";
 
 export class VulnConnectorError extends Error {
   readonly code: VulnConnectorErrorCode;

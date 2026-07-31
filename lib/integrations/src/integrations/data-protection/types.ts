@@ -111,7 +111,7 @@ export interface DlpVerdict {
   recommendedAction: DlpRecommendedAction;
 }
 
-export type DlpConnectorErrorCode = "auth_failed" | "read_only_violation" | "upstream_error" | "bad_response";
+export type DlpConnectorErrorCode = "incomplete_read" | "auth_failed" | "read_only_violation" | "upstream_error" | "bad_response";
 
 export class DlpConnectorError extends Error {
   readonly code: DlpConnectorErrorCode;

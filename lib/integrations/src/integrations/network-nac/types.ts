@@ -68,7 +68,7 @@ export interface NetworkVerdict {
   accessLocation: string | null;
 }
 
-export type NetworkConnectorErrorCode = "auth_failed" | "read_only_violation" | "upstream_error" | "bad_response";
+export type NetworkConnectorErrorCode = "incomplete_read" | "auth_failed" | "read_only_violation" | "upstream_error" | "bad_response";
 
 export class NetworkConnectorError extends Error {
   readonly code: NetworkConnectorErrorCode;

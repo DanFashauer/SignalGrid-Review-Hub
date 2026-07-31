@@ -106,7 +106,7 @@ export interface PeripheralVerdict {
   recommendedAction: PeripheralAction;
 }
 
-export type PeripheralConnectorErrorCode = "auth_failed" | "read_only_violation" | "upstream_error" | "bad_response";
+export type PeripheralConnectorErrorCode = "incomplete_read" | "auth_failed" | "read_only_violation" | "upstream_error" | "bad_response";
 
 export class PeripheralConnectorError extends Error {
   readonly code: PeripheralConnectorErrorCode;

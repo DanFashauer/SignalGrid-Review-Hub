@@ -102,8 +102,16 @@ export class MDEAdapter {
       const data = await response.json() as { value: MDEDevice[] };
       return data.value;
     } catch (error) {
+      // NOT swallowed. This used to log and `return []`, which turned an auth
+      // failure, a 5xx, or malformed JSON into "this tenant has zero devices" — and
+      // for a posture fabric a device that is not in the result reads as a device
+      // with no problem. The throw above was decorative: it was caught two lines
+      // later by its own handler.
+      //
+      // A read that failed is not a read that found nothing. Callers already handle
+      // rejections from every sibling connector in this package.
       console.error('[MDE] Failed to get devices:', error);
-      return [];
+      throw error;
     }
   }
 
@@ -133,8 +141,11 @@ export class MDEAdapter {
 
       return response.json() as Promise<MDEDevice>;
     } catch (error) {
+      // Rethrown: `null` here is the documented "no such device" answer (the 404
+      // branch above returns it deliberately), so returning it on a FAILED lookup
+      // made "we could not ask" indistinguishable from "it is not there".
       console.error('[MDE] Failed to get device:', error);
-      return null;
+      throw error;
     }
   }
 
@@ -161,8 +172,10 @@ export class MDEAdapter {
 
       return response.json() as Promise<Record<string, unknown>>;
     } catch (error) {
+      // Rethrown, same reason: a failed compliance read must not be reported as an
+      // absent compliance record.
       console.error('[MDE] Failed to get device compliance:', error);
-      return null;
+      throw error;
     }
   }
 

@@ -266,6 +266,8 @@ jobs:
         run: pnpm run proof:absent-collection
       - name: "Port parity (DecisionEngine + AppWorkflows vs their TS originals)"
         run: node scripts/check-decision-port-parity.mjs
+      - name: "Read-error swallowing (a failed lookup must not report nothing-found)"
+        run: node scripts/check-read-error-swallowing.mjs
       # And the ratchet for the ratchets: fails if a future preflight gate is added
       # without being wired into a workflow. It has to run HERE, not only in
       # preflight, or it would be the very thing it exists to prevent.

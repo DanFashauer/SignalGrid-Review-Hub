@@ -134,6 +134,20 @@ function boolMalformed(v: unknown): boolean {
   return v !== undefined && v !== null && typeof v !== "boolean";
 }
 
+/** A non-negative finite number, or null. STRICT: no numeric strings, no
+ *  negatives, no NaN/Infinity — a count the wire could not state as a number
+ *  is an assertion we could not read. */
+function countOf(v: unknown): number | null {
+  if (typeof v !== "number" || !Number.isFinite(v) || v < 0) return null;
+  return v;
+}
+
+/** Was a numeric field asserted but not a usable non-negative number? */
+function countMalformed(v: unknown): boolean {
+  if (v === undefined || v === null) return false;
+  return countOf(v) === null;
+}
+
 /** Normalize one app-update report. Defensive throughout: a missing/errored field
  *  yields the fail-safe unknown, never a fabricated "current" — and the CURRENCY is
  *  COMPUTED here from the raw versions, so the wire can never assert it directly. */
@@ -149,6 +163,8 @@ export function normalizeReport(
   let rawMin: unknown;
   let rawForce: unknown;
   let rawChannel: unknown;
+  let rawCrashes: unknown;
+  let rawWindow: unknown;
   let readThrew = false;
   try {
     rawInstalled = plain ? ownValue(report, "installed_version") : undefined;
@@ -156,9 +172,11 @@ export function normalizeReport(
     rawMin = plain ? ownValue(report, "min_version") : undefined;
     rawForce = plain ? ownValue(report, "force_update") : undefined;
     rawChannel = plain ? ownValue(report, "channel") : undefined;
+    rawCrashes = plain ? ownValue(report, "crash_count") : undefined;
+    rawWindow = plain ? ownValue(report, "stability_window_hours") : undefined;
   } catch {
     readThrew = true;
-    rawInstalled = rawLatest = rawMin = rawForce = rawChannel = undefined;
+    rawInstalled = rawLatest = rawMin = rawForce = rawChannel = rawCrashes = rawWindow = undefined;
   }
 
   const installed = parseVersion(rawInstalled);
@@ -204,7 +222,11 @@ export function normalizeReport(
     versionMalformed(rawMin) ||
     contradictoryManifest ||
     boolMalformed(rawForce) ||
-    enumMalformed(rawChannel, CHANNELS);
+    enumMalformed(rawChannel, CHANNELS) ||
+    countMalformed(rawCrashes) ||
+    countMalformed(rawWindow) ||
+    // A window of zero hours cannot have counted anything — self-contradictory.
+    (countOf(rawWindow) !== null && (countOf(rawWindow) as number) === 0);
   const reportIntegrity: ReportIntegrity = malformed ? "malformed" : "clean";
 
   return {
@@ -214,6 +236,8 @@ export function normalizeReport(
     currency,
     forcePolicy,
     channel,
+    crashCount: countOf(rawCrashes),
+    stabilityWindowHours: countOf(rawWindow) !== null && (countOf(rawWindow) as number) > 0 ? countOf(rawWindow) : null,
     reportIntegrity,
     source,
   };

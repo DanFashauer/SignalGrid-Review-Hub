@@ -400,7 +400,7 @@ in one place.
 - **App-update currency** ([APP_UPDATE_CURRENCY.md](APP_UPDATE_CURRENCY.md)) — the honest
   half of "custom OTA updates". An iOS app cannot install or replace itself; distribution
   stays with itms-services / MDM InstallApplication / ABM. What *is* posture: `min_version`
-  floors, `force_update`, and install-channel provenance. `proof:app-update` (52 checks).
+  floors, `force_update`, and install-channel provenance. `proof:app-update` (57 checks).
 
 - **Platform SSO** ([PLATFORM_SSO.md](PLATFORM_SSO.md)) — "passwordless" and "satisfies MFA"
   are not automatic; the **method** decides the credential's worth. Only a user-registered

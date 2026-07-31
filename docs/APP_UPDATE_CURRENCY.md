@@ -57,8 +57,25 @@ the wire cannot claim "current" directly.
 One reasoned exception to every-axis-positive: the force flag does **not** gate
 the grant. A forced update to a version the device already runs is satisfied by
 construction, so `current` grants under any force-flag state — and the proof
-pins exactly that (of 72 normalized states, exactly the three
-current+managed+clean states grant; of 864 hostile raw reports, exactly six).
+pins exactly that (of 216 normalized states with the stability bound posed,
+exactly the three current+managed+clean+stable states grant; of 864 hostile
+raw reports, exactly six).
+
+## The stability axis (intake ledger row 19)
+
+The same host app has a RUNTIME record on this device, and the analytics plane
+(Omnissa Intelligence, Crashlytics-class SDKs and their peers) already computes
+it. The wire may carry `crash_count` and `stability_window_hours` — the
+source's own figures, validated but never reinterpreted — and the CALLER poses
+the bound (`maxCrashesInWindow`). More crashes than the bound → `step_up`
+(`APP_UNSTABLE`): a crashing host app is operational risk for the workflow
+about to start in it, and the remedy is a challenge and a device swap, never a
+block. An unposed bound is `unassessed` — carried visibly, never a defaulted
+pass and never a foreclosed grant; a POSED bound the figures cannot answer
+(count or window missing — a count without its window is uninterpretable) is
+`unknown` and raises. A garbled count, a garbled window, or a zero-hour window
+is a malformed report. No threshold is tuned here: the source counted, the
+operator bounded, the fabric graded.
 
 ## Boundaries
 
@@ -71,5 +88,5 @@ current+managed+clean states grant; of 864 hostile raw reports, exactly six).
   inventory. An app reporting its own version can support UX ("update
   available" messaging in the host app), but a *grant* never rests on it.
 
-Proven by `proof:app-update` (52 checks; targeted checks, hostile report shapes, and the
+Proven by `proof:app-update` (57 checks; targeted checks, hostile report shapes, and the
 grant-safety enumerations above; deterministic, offline).

@@ -515,6 +515,12 @@ const ALLOWED = [
   },
   {
     file: "lib/integrations/src/integrations/app-update/evaluate.ts",
+    line: 'report.channel === "managed" &&',
+    reason:
+      "Backstop-predicate conjunct — same reasoning. The channel branches are covered by the unmanaged-restrict and channel-unknown controls, which outrank anything the skipped backstop would have added.",
+  },
+  {
+    file: "lib/integrations/src/integrations/app-update/evaluate.ts",
     line: "if (!positivelyCurrent && candidates.length === 0) {",
     reason:
       "The grant backstop itself — deliberately redundant defence-in-depth, documented in the source as never firing today; exists to catch a FUTURE weakening.",

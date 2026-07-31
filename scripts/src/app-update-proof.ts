@@ -156,12 +156,43 @@ check("Object.prototype itself as the report is malformed (polluted-prototype fi
 check("channel case and whitespace are canonicalized, not rejected",
   normalizeReport("cw", "a", { channel: " MANAGED " } as AppUpdateReportRaw).channel === "managed");
 
-// ── exhaustive (normalized): the grant is current + managed + clean ─────────────
+// ── the stability axis (intake ledger row 19) ───────────────────────────────────
+// The analytics plane reports the figures; the caller poses the bound.
+const stable = (over: AppUpdateReportRaw = {}): AppUpdateReportRaw => ({
+  installed_version: "2.4.0", latest_version: "2.4.0", channel: "managed", force_update: false,
+  crash_count: 0, stability_window_hours: 24, ...over,
+});
+const evStab = (r: AppUpdateReportRaw, maxCrashesInWindow?: number) =>
+  evaluateAppUpdate(normalizeReport("d", "a", r), maxCrashesInWindow === undefined ? {} : { maxCrashesInWindow });
+check("STABILITY HEADLINE: more crashes than the caller's bound → step_up APP_UNSTABLE — a crashing host app is operational risk, and the fix is a challenge and a device swap, never a block",
+  evStab(stable({ crash_count: 4 }), 1).recommendedAction === "step_up" &&
+  evStab(stable({ crash_count: 4 }), 1).reasonCode === "APP_UNSTABLE" &&
+  evStab(stable({ crash_count: 4 }), 1).criticalFindings.includes("app_unstable"));
+check("the bound is INCLUSIVE: exactly at the bound is stable, and a stable current managed app still grants",
+  evStab(stable({ crash_count: 1 }), 1).stability === "stable" &&
+  evStab(stable({ crash_count: 1 }), 1).recommendedAction === "none");
+check("UNPOSED is unassessed — carried visibly, never foreclosing the grant even with crashy figures on the wire",
+  evStab(stable({ crash_count: 9 })).stability === "unassessed" &&
+  evStab(stable({ crash_count: 9 })).recommendedAction === "none");
+check("POSED but unanswerable raises: figures absent → STABILITY_UNKNOWN; a nonsense bound (negative) → unknown too",
+  evStab(stable({ crash_count: undefined, stability_window_hours: undefined }), 1).reasonCode === "STABILITY_UNKNOWN" &&
+  evStab(stable(), -1).stability === "unknown");
+check("a count WITHOUT its window is uninterpretable (unknown when posed); a garbled count, a garbled window, and a ZERO-hour window are all malformed",
+  evStab(stable({ stability_window_hours: undefined }), 1).reasonCode === "STABILITY_UNKNOWN" &&
+  normalizeReport("d", "a", stable({ crash_count: "many" })).reportIntegrity === "malformed" &&
+  normalizeReport("d", "a", stable({ stability_window_hours: -2 })).reportIntegrity === "malformed" &&
+  normalizeReport("d", "a", stable({ stability_window_hours: 0 })).reportIntegrity === "malformed");
+
+// ── exhaustive (normalized): the grant is current + managed + clean + stable ────
 const normDomains = {
   currency: ["current", "behind", "below_floor", "unknown"],
   forcePolicy: ["forced", "not_forced", "unknown"],
   channel: ["managed", "unmanaged", "unknown"],
   reportIntegrity: ["clean", "malformed"],
+  figures: ["ok", "crashy", "absent"],
+};
+const FIGURES: Record<string, { c: number | null; w: number | null }> = {
+  ok: { c: 0, w: 24 }, crashy: { c: 5, w: 24 }, absent: { c: null, w: null },
 };
 const buildNorm = (c: Record<string, unknown>): NormalizedAppUpdate => ({
   sourceSystem: "app-update", deviceRef: "enum", appRef: "enum", source: "enum",
@@ -169,21 +200,23 @@ const buildNorm = (c: Record<string, unknown>): NormalizedAppUpdate => ({
   forcePolicy: c.forcePolicy as NormalizedAppUpdate["forcePolicy"],
   channel: c.channel as NormalizedAppUpdate["channel"],
   reportIntegrity: c.reportIntegrity as NormalizedAppUpdate["reportIntegrity"],
+  crashCount: FIGURES[c.figures as string].c,
+  stabilityWindowHours: FIGURES[c.figures as string].w,
 });
 const normRes = enumerateGrantSafety({
   domains: normDomains,
   build: buildNorm,
-  evaluate: evaluateAppUpdate,
+  evaluate: (r) => evaluateAppUpdate(r, { maxCrashesInWindow: 1 }),
   actionOf: (v) => (v.recommendedAction === "none" ? "none" : v.recommendedAction),
   confirmedWhenNone: (v) => v.currencyConfirmed === true && v.criticalFindings.length === 0 && v.unknownSignals.length === 0,
   positivelyClean: (c) =>
-    c.currency === "current" && c.channel === "managed" && c.reportIntegrity === "clean",
+    c.currency === "current" && c.channel === "managed" && c.reportIntegrity === "clean" && c.figures === "ok",
 });
 check(
-  `exhaustive (normalized): over all ${normRes.combos} states, currency is confirmed ONLY when current + managed + clean (mismatches=${normRes.mismatches}${normRes.firstMismatch ? ", first=" + normRes.firstMismatch : ""})`,
-  normRes.mismatches === 0 && normRes.combos === productOf(normDomains) && normRes.combos === 72,
+  `exhaustive (normalized, stability bound POSED): over all ${normRes.combos} states, currency is confirmed ONLY when current + managed + clean + stable (mismatches=${normRes.mismatches}${normRes.firstMismatch ? ", first=" + normRes.firstMismatch : ""})`,
+  normRes.mismatches === 0 && normRes.combos === productOf(normDomains) && normRes.combos === 216,
 );
-check("exhaustive (normalized): exactly the THREE current+managed+clean states grant (one per force-flag value — the pinned doctrine)",
+check("exhaustive (normalized): exactly the THREE current+managed+clean+stable states grant (one per force-flag value — the pinned doctrine); crashy and absent figures never grant under a posed bound",
   normRes.noneCount === 3);
 
 // ── exhaustive (raw wire): the normalizer + evaluator on hostile input ───────────

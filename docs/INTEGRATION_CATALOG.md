@@ -420,7 +420,11 @@ in one place.
   Intune dynamic groups, Fleet teams, ABM/DDM profiles, Jamf smart groups, PACS access
   levels, Entra CA groups, WMS queues, EDR policy groups and SignalGrid's own per-vertical
   bundles are one mechanism under many names, and a wrong binding applies the wrong policies
-  silently. `proof:policy-binding` (41 checks).
+  silently. A second axis grades whether the bound policy ACTS: Conditional Access in
+  report-only, a compliance policy whose only noncompliance action is "notify", and ASR in
+  audit mode all leave a perfectly-bound device ungated, so `bound_correctly` requires
+  `enforcing` and an absent enforcement answer raises rather than granting.
+  `proof:policy-binding` (46 checks).
 
 - **Dual control** ([DUAL_CONTROL.md](DUAL_CONTROL.md)) — two-person integrity for the
   highest-blast-radius actions: two distinct identities, distinct credential instances, user

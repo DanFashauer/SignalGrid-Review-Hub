@@ -512,6 +512,12 @@ const ALLOWED = [
   },
   {
     file: "lib/integrations/src/integrations/policy-binding/evaluate.ts",
+    line: 'report.enforcement === "enforcing" &&',
+    reason:
+      "Backstop-predicate conjunct — same reasoning as the reportIntegrity conjunct above. Deleting it lets a report-only or disabled binding satisfy positivelyBound, but those states already push their own raising candidate, so the backstop still cannot fire. The ENFORCEMENT BRANCH itself is not exempt and is covered by four negative controls (report_only → none, disabled → monitor, absent-key default, and dropping the wire key), each of which fails the proof.",
+  },
+  {
+    file: "lib/integrations/src/integrations/policy-binding/evaluate.ts",
     line: "if (!positivelyBound && candidates.length === 0) {",
     reason:
       "The grant backstop itself — deliberately redundant defence-in-depth, documented in the source as never firing today; exists to catch a FUTURE weakening.",

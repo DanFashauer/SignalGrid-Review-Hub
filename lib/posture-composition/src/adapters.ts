@@ -238,9 +238,11 @@ export function fromPolicyBinding(v: PolicyBindingVerdict): ComposableSignal {
   // access levels — docs/POLICY_BINDING.md maps them), so a wrong binding applies
   // the wrong policies silently: unbound is ungoverned (restrict), a too-wide
   // binding is fail-open (restrict), too-narrow is a fail-closed nuisance
-  // (monitor), mixed membership breaks targeting at group scale (alert). Its
-  // actions are already on the unified ladder; it never lowers what any other
-  // dimension says.
+  // (monitor), mixed membership breaks targeting at group scale (alert). A correct
+  // binding to a policy in REPORT-ONLY mode is `monitor`, not a grant — the device
+  // is governed on paper and gated by nothing — and a disabled policy is `restrict`,
+  // since it is `unbound` in effect. Its actions are already on the unified ladder;
+  // it never lowers what any other dimension says.
   return { kind: "policy_binding", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 

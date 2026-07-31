@@ -39,19 +39,71 @@ it grades the reported outcome:
 
 | Observation | Verdict | Why |
 | --- | --- | --- |
-| bound + matched + clean membership + clean parse | `none` — the grant | positively correct binding |
+| bound + matched + clean membership + **enforcing** + clean parse | `none` — the grant | positively correct binding, behind a policy that acts |
 | **unbound** (enrolled, in no policy group) | `restrict` | the device receives NO policy at all — affirmatively ungoverned |
 | mismatched, binding **wider** than warranted | `restrict` | the fail-open case: more permissive policy than the device's properties justify, silently |
 | mismatched, binding **narrower** | `monitor` | a fail-closed mistake — ops nuisance, not a trust hole |
 | mismatched, direction unreadable | `step_up` | cannot confirm it is not the fail-open case |
 | **mixed membership** (users inside a device group — the flow's own "device groups contain devices only" rule) | `alert` | policy targeting is broken at group scale, not for one device |
+| bound correctly, policy in **report-only** | `monitor` | evaluates and logs; gates nothing. The binding is right and the device is unprotected |
+| bound correctly, policy **disabled** | `restrict` | neither acting nor observing — in effect, no binding at all |
 | any axis unknown | `step_up` | unknown raises, never grants |
 
 The mismatch *direction* is deliberately moot when the binding is matched at the
 NORMALIZED layer — it exists in service of a mismatch — and the enumeration pins
-exactly that (162 normalized states, exactly 3 grant). At the WIRE layer a report
-that asserts a concrete direction alongside `matched` contradicts itself and is
-malformed, so exactly 1 of 288 hostile raw reports grants.
+exactly that (648 normalized states, exactly 3 grant — one per direction value, and
+none at all for the three non-enforcing modes). At the WIRE layer a report that
+asserts a concrete direction alongside `matched` contradicts itself and is
+malformed, so exactly 1 of 1,440 hostile raw reports grants.
+
+## The enforcement axis — a correct binding is not protection
+
+Being in the right group is necessary and not sufficient. Every management plane
+ships a mode where a policy **evaluates without acting**, and recommends it as the
+rollout stage:
+
+| Plane | The non-acting mode |
+| --- | --- |
+| Entra Conditional Access | **report-only** — the policy evaluates on every sign-in, writes to the sign-in log, blocks nothing |
+| Intune compliance policy | actions for noncompliance limited to *notify*, with no mark-noncompliant or CA block configured |
+| Microsoft Defender ASR | **audit mode** |
+| Update rings | a deferral/grace window whose deadline has not arrived, so nothing installs yet |
+
+Staging a policy this way is correct practice — the guidance this dimension came
+from says so in as many words ("test in report-only mode"). The failure is not the
+mode; it is that a dashboard showing the device correctly bound reads as protection
+it does not have. Before this axis, `bound_correctly` was exactly that claim: the
+same unearned affirmative `response-accountability` grades in the ITSM plane, where
+every process metric is green and the concern is still there.
+
+So the axis reports what is TRUE of the device rather than what an operator meant:
+report-only is a `monitor` finding (a fail-open one — it is listed in
+`criticalFindings`), never a grant. `disabled` is `restrict`, because a policy that
+neither acts nor observes leaves the device in the same posture as `unbound` and,
+unlike report-only, is nobody's recommended stage.
+
+An **absent** `enforcement` key normalizes to `unknown` → `step_up`, not to
+`enforcing`. A plane that was never asked the question has not answered it, and
+defaulting the silence to "yes" would reinstate the affirmative the axis exists to
+withdraw. The allowlist also refuses `audit` — the vendor's own word for the same
+thing — rather than guessing at a spelling nobody registered; the raw enumeration
+carries that value specifically to pin the refusal.
+
+## What produces `enforcement` — the honest boundary
+
+Unlike `profile_match`, this one is **directly readable** from the planes rather
+than inferred. Entra exposes a Conditional Access policy's state as a first-class
+enum whose middle value is literally "enabled for reporting but not enforced";
+Intune exposes a compliance policy's scheduled actions, so "notify only, nothing
+blocks" is a fact about the policy object rather than a judgement. That is why this
+axis is a normal read and not an already-resolved referee input.
+
+The part that IS the caller's: a device bound to SEVERAL policies with MIXED modes
+resolves to ONE reported value. The safe fold is the weakest — one report-only
+policy in the set means the device is not fully covered — and the fabric cannot
+enforce that from downstream, so it grades the value the plane reports, the same
+way it grades `profile_match`. A bridge that folds by "any policy enforcing →
+enforcing" would be manufacturing the affirmative this axis exists to withdraw.
 
 ## What produces `profile_match` — the honest boundary
 
@@ -80,6 +132,6 @@ drift detection would be exactly the fail-open the dimension exists to catch.
 - Registered with the mutation guard from day one (TARGETS, zero survivors), not
   queued.
 
-Proven by `proof:policy-binding` (41 checks; targeted ladder checks, per-field integrity,
+Proven by `proof:policy-binding` (46 checks; targeted ladder checks, per-field integrity,
 hostile shapes, both grant-safety enumerations, connector surface, fusion;
 deterministic, offline).

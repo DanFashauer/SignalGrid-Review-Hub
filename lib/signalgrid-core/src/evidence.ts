@@ -3,6 +3,7 @@ import type {
   BadgeBindingState,
   BaselineState,
   BenchmarkSelectionState,
+  ShiftContextState,
   BatteryHealthState,
   ChargeState,
   ComplianceState,
@@ -66,6 +67,7 @@ export function buildEvidence(
     dockState: readDock(latestByCategory),
     baselineCompliance: readBaseline(latestByCategory),
     benchmarkSelection: readBenchmarkSelection(latestByCategory),
+    shiftContext: readShiftContext(latestByCategory),
     badgeBinding: readBadge(latestByCategory),
   };
 
@@ -206,6 +208,10 @@ const BASELINE_STATES = ["aligned", "partial", "drifted", "not_assessed"] as con
 // rule as every other read here, and the value the active v1 rule deliberately
 // does not match.
 const BENCHMARK_SELECTION_STATES = ["confirmed", "misfit"] as const;
+// Same rule for the labor plane: only the two AFFIRMATIVE values are readable;
+// absent or unrecognized falls back to "unverified", which the active v1 rule
+// deliberately does not match.
+const SHIFT_CONTEXT_STATES = ["confirmed", "misfit"] as const;
 const BADGE_STATES = ["present", "removed", "forced", "absent"] as const;
 
 function readCustody(latestByCategory: LatestByCategory): CustodyState {
@@ -218,6 +224,10 @@ function readBaseline(latestByCategory: LatestByCategory): BaselineState {
 
 function readBenchmarkSelection(latestByCategory: LatestByCategory): BenchmarkSelectionState {
   return readEnum(latestByCategory, "benchmark_selection", BENCHMARK_SELECTION_STATES) ?? "unverified";
+}
+
+function readShiftContext(latestByCategory: LatestByCategory): ShiftContextState {
+  return readEnum(latestByCategory, "shift_context", SHIFT_CONTEXT_STATES) ?? "unverified";
 }
 
 function readBadge(latestByCategory: LatestByCategory): BadgeBindingState {

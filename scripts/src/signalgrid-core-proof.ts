@@ -654,6 +654,41 @@ if (pending) {
     evaluatePolicy(v1, { ...misfit, benchmarkSelection: "confirmed" }).outcome === "allow" &&
       evaluatePolicy(v1, { ...misfit, benchmarkSelection: "confirmed", deviceCompliance: "non_compliant" }).outcome === "restrict",
   );
+
+  // The /v1 arm of the shift-context dimension — same three properties, same
+  // buildEvidence-not-literals discipline (the derivation is what the negative
+  // control on the benchmark arm proved literals cannot falsify).
+  const shiftAbsent = buildEvidence(identity, device, workflow, healthy);
+  check(
+    "shift-context: an ABSENT signal derives 'unverified' — silence is not a confirmation of labor context",
+    shiftAbsent.shiftContext === "unverified",
+  );
+  const shiftJunk = buildEvidence(identity, device, workflow, [...healthy, sig("shift_context", "probably-working")]);
+  check(
+    "shift-context: an unrecognized signal value also derives 'unverified', never a guess",
+    shiftJunk.shiftContext === "unverified",
+  );
+  const shiftMisfit = buildEvidence(identity, device, workflow, [...healthy, sig("shift_context", "misfit")]);
+  check("shift-context: a 'misfit' signal is read through", shiftMisfit.shiftContext === "misfit");
+  check(
+    "shift-context: v1 steps up on MISFIT with its own reason code — off the clock, off duty, or the wrong site is not the right decision context",
+    evaluatePolicy(v1, shiftMisfit).outcome === "step_up" &&
+      evaluatePolicy(v1, shiftMisfit).matchedRules.some((r) => r.reasonCode === "SHIFT_CONTEXT_MISFIT"),
+  );
+  check(
+    "shift-context: v1 does NOT step up on the absent default — day one is quiet until a WFM connector emits the signal",
+    evaluatePolicy(v1, shiftAbsent).outcome === "allow",
+  );
+  check(
+    "shift-context: the v2 STRICT draft widens to 'unverified' — the same absent evidence diverges to step_up only for a tenant that opted in",
+    evaluatePolicy(v2, shiftAbsent).outcome === "step_up" &&
+      evaluatePolicy(v2, shiftAbsent).matchedRules.some((r) => r.reasonCode === "SHIFT_CONTEXT_UNESTABLISHED_STRICT"),
+  );
+  check(
+    "shift-context: the arm never lowers — 'confirmed' grants nothing a healthy device lacked, and a non-compliant device restricts alongside it",
+    evaluatePolicy(v1, { ...shiftMisfit, shiftContext: "confirmed" }).outcome === "allow" &&
+      evaluatePolicy(v1, { ...shiftMisfit, shiftContext: "confirmed", deviceCompliance: "non_compliant" }).outcome === "restrict",
+  );
 }
 
 // ── 12. Repeated evaluation does not overwrite (unique ids) ────────────────────

@@ -142,7 +142,8 @@ truth for real evaluations).
 
 - **Try every scenario.** They span the full decision range: a clean allow, a
   bedside session, a controlled med room, a non-compliant device, security-
-  baseline drift, a withdrawn badge (custody lost), a tamper flag, and a disabled
+  baseline drift, a withdrawn badge (custody lost), a tamper flag, an off-the-clock
+  badge-in (the labor plane disagrees with the moment), and a disabled
   account — each producing a real allow / step-up / restrict / deny and a matching
   orchestration plan.
 - **Confirm an assist action.** On an allow, sensitive steps show a **Confirm**

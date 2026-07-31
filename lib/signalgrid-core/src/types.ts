@@ -108,7 +108,7 @@ export interface Workflow {
 
 // ── Connector (fixture-only, read-only) ──────────────────────────────────────
 
-export type ConnectorKind = "microsoft-entra-intune" | "dockbridge-custody";
+export type ConnectorKind = "microsoft-entra-intune" | "dockbridge-custody" | "wfm-shift";
 export type ConnectorMode = "fixture";
 export type ConnectorStatus = "healthy" | "degraded" | "never_synced";
 
@@ -207,6 +207,25 @@ export type BaselineState =
 export type BenchmarkSelectionState = "confirmed" | "misfit" | "unverified";
 
 /**
+ * The labor plane's summary for the worker acting on this device, from the
+ * shift-context dimension (docs/SHIFT_CONTEXT.md): is this the right TIME and
+ * SITE for this worker to be operating? Custody says which badge holds the
+ * device; this says whether the workforce-management plane agrees with the
+ * moment.
+ *  - confirmed:  scheduled now, on the clock, and the site question (if posed)
+ *                answered matched,
+ *  - misfit:     an AFFIRMATIVE labor mismatch — scheduled-but-clocked-out
+ *                (off-the-clock work, or someone else's badge), operating while
+ *                neither scheduled nor punched in, or a shift that places the
+ *                worker at a different site,
+ *  - unverified: not established either way (no signal, axes unknown).
+ *                Fail-safe: never read as confirmed — and, deliberately, never
+ *                matched by the ACTIVE v1 rule either, so a fleet that does not
+ *                yet emit this signal is not stepped up on day one.
+ */
+export type ShiftContextState = "confirmed" | "misfit" | "unverified";
+
+/**
  * Badge-binding state from the RFID/prox/NFC badge-reader case — whether the
  * assigned worker's credential is physically bound to this shared device at the
  * moment a workflow fires. This is the signal that ties a human to a shared
@@ -296,6 +315,7 @@ export type SignalCategory =
   | "dock_state"
   | "security_baseline"
   | "benchmark_selection"
+  | "shift_context"
   | "badge_binding";
 
 export interface NormalizedSignal {
@@ -334,6 +354,7 @@ export type EvidenceField =
   | "dockState"
   | "baselineState"
   | "benchmarkSelectionState"
+  | "shiftContextState"
   | "badgeState";
 
 export type RuleCondition =
@@ -353,6 +374,7 @@ export type RuleCondition =
   | { field: "dockState"; in: DockState[] }
   | { field: "baselineState"; in: BaselineState[] }
   | { field: "benchmarkSelectionState"; in: BenchmarkSelectionState[] }
+  | { field: "shiftContextState"; in: ShiftContextState[] }
   | { field: "badgeState"; in: BadgeBindingState[] };
 
 export interface PolicyRuleSpec {
@@ -421,6 +443,10 @@ export interface DecisionEvidence {
    *  "unverified") — see BenchmarkSelectionState. `aligned` + `misfit` means the
    *  device passed a test that does not apply to it. */
   benchmarkSelection: BenchmarkSelectionState;
+  /** Labor-plane summary from the shift-context dimension (default "unverified") —
+   *  see ShiftContextState. The badge says WHO; this says whether the WFM agrees
+   *  it is the right TIME and SITE for them to be operating. */
+  shiftContext: ShiftContextState;
   /** Badge-binding state from the RFID/prox badge-reader case (default "unknown"). */
   badgeBinding: BadgeBindingState;
   /** True only when every critical input is present and not degraded. */

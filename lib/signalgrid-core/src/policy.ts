@@ -123,6 +123,11 @@ const IN_FIELDS: Record<string, ReadonlySet<string>> = {
     "misfit",
     "unverified",
   ]),
+  shiftContextState: new Set([
+    "confirmed",
+    "misfit",
+    "unverified",
+  ]),
   badgeState: new Set([
     "present",
     "removed",
@@ -359,6 +364,8 @@ function matches(condition: RuleCondition, evidence: DecisionEvidence): boolean 
       return condition.in.includes(evidence.baselineCompliance);
     case "benchmarkSelectionState":
       return condition.in.includes(evidence.benchmarkSelection);
+    case "shiftContextState":
+      return condition.in.includes(evidence.shiftContext);
     case "badgeState":
       return condition.in.includes(evidence.badgeBinding);
     default: {
@@ -629,6 +636,19 @@ export const SHARED_DEVICE_RULES_V1: PolicyRuleSpec[] = [
     reasonCode: "BENCHMARK_SELECTION_MISFIT",
     severity: "medium",
   },
+  // Same day-one-quiet shape for the labor plane: the ACTIVE rule matches only the
+  // affirmative mismatch (scheduled-but-clocked-out, off-duty operation, wrong
+  // site). `unverified` — the default until a WFM connector emits the signal —
+  // stays quiet in v1 and ships as the v2 STRICT arm below.
+  {
+    id: "shift-context-misfit",
+    description:
+      "The labor plane disagrees with this moment — the worker is scheduled but clocked out, operating while off duty, or at a site their shift does not place them — so step up before the action proceeds.",
+    match: [{ field: "shiftContextState", in: ["misfit"] }],
+    outcome: "step_up",
+    reasonCode: "SHIFT_CONTEXT_MISFIT",
+    severity: "medium",
+  },
   {
     id: "healthy-allow",
     description:
@@ -690,6 +710,14 @@ export const SHARED_DEVICE_RULES_V2: PolicyRuleSpec[] = SHARED_DEVICE_RULES_V1.m
         ...rule,
         match: [{ field: "benchmarkSelectionState", in: ["misfit", "unverified"] }],
         reasonCode: "BENCHMARK_SELECTION_UNESTABLISHED_STRICT",
+        severity: "high",
+      };
+    }
+    if (rule.id === "shift-context-misfit") {
+      return {
+        ...rule,
+        match: [{ field: "shiftContextState", in: ["misfit", "unverified"] }],
+        reasonCode: "SHIFT_CONTEXT_UNESTABLISHED_STRICT",
         severity: "high",
       };
     }

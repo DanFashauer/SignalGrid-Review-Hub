@@ -82,6 +82,28 @@ case-folding and whitespace collapse — no geo inference, no site-name aliasing
 Field naming follows the HR Open Standards vocabulary (worker, shift, punch,
 site) so a future canonical-schema mapping is a rename, not a redesign.
 
+## The /v1 arm
+
+The dimension also has an arm in the core policy layer, mirroring
+benchmark-selection's:
+
+- `DecisionEvidence.shiftContext: "confirmed" | "misfit" | "unverified"`, derived
+  from a `shift_context` signal through `buildEvidence`. An absent or
+  unrecognized signal derives **`unverified`, never `confirmed`**.
+- The **active v1 rule** `shift-context-misfit` matches **only** the affirmative
+  mismatch: `misfit` → `step_up` (`SHIFT_CONTEXT_MISFIT`). `unverified` is
+  deliberately excluded — nothing emits the signal until a WFM connector is
+  wired, and a rule matching the default would step up the entire fleet on day
+  one. The core proof pins that the absent default stays `allow` under v1.
+- The **v2 STRICT draft** widens the same rule to `["misfit", "unverified"]`
+  (`SHIFT_CONTEXT_UNESTABLISHED_STRICT`) for tenants that opt in.
+- The arm **never lowers**: `confirmed` grants nothing a healthy device did not
+  already have.
+- The demo carries it end to end: the fixture WFM connector (`wfm-shift`, seed:
+  no punch, schedule, or pay touched) marks one ward iPad's holder scheduled but
+  NOT clocked in, and the `offclock-medroom` room-entry scenario — identity,
+  posture, and custody all green — steps up on `SHIFT_CONTEXT_MISFIT` alone.
+
 Proven by `proof:shift-context` (50 checks; the coherence ladder, both
 derivations asserted directly, the posed/unposed site split, hostile wire
 shapes, the live-call gate clause by clause, both grant-safety enumerations,

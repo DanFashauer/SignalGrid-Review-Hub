@@ -623,7 +623,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   (evidence free — `alert` outranks every rung this axis raises); clean 15 → **42**, of
   which twelve are the same three *open* states counted four times, because closure
   evidence does not apply to a record that has not been closed.
-- **`proof:provisioning-order` (34 checks)** — zero-touch step ordering, with four
+- **`proof:provisioning-order` (42 checks)** — zero-touch step ordering, with four
   vendor reference pipelines (Windows Autopilot + Intune, Apple ABM/ADE, Android
   Zero-Touch, Jamf PreStage) expressed in one neutral model and asserted to validate.
 

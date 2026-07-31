@@ -16,6 +16,7 @@
 //      Jamf PreStage all express and all validate.
 
 import {
+  gradeSetupCompletion,
   lintSetupOrder,
   lintSetupRecording,
   planZeroTouchSetup,
@@ -292,6 +293,48 @@ const base = {
   });
   check("...and moving the dependent steps first breaks EVERY one of them",
     broken.every((p) => codes(p, "error").includes("step_before_management")));
+}
+
+// ── setup completion: was the device released before day-zero finished? ──────
+// (Intake ledger row 18, from the Jamf Setup Manager guide.) The plan says what
+// day zero requires; this grades the RELEASE against it.
+{
+  const rec: DeviceSetupRecording = {
+    ...base,
+    triggers: ["first_boot"],
+    steps: [
+      { key: "mdm", label: "Install MDM profile", kind: "profile", establishesManagement: true },
+      { key: "emr", label: "Deploy EMR app", kind: "app_install" },
+    ],
+  };
+  const enforced = planZeroTouchSetup(rec, { serial: "T-9" }, { mode: "enforced", enforcementEnabled: true });
+  const simulated = planZeroTouchSetup(rec, { serial: "T-9" });
+  const RELEASED = "2026-07-31T15:00:00Z";
+  check("all required steps succeeded before the first user session → released_complete, action none",
+    gradeSetupCompletion(enforced, { mdm: "succeeded", emr: "succeeded" }, RELEASED).completion === "released_complete" &&
+    gradeSetupCompletion(enforced, { mdm: "succeeded", emr: "succeeded" }, RELEASED).recommendedAction === "none");
+  check("THE RACE MADE VISIBLE: a user session while a required step is still pending → released_incomplete, step_up, the step named",
+    gradeSetupCompletion(enforced, { mdm: "succeeded", emr: "pending" }, RELEASED).completion === "released_incomplete" &&
+    gradeSetupCompletion(enforced, { mdm: "succeeded", emr: "pending" }, RELEASED).outstandingSteps.includes("emr"));
+  check("ABSENCE OF A REPORT IS NEVER SUCCESS: a required step with no result entry, or an unrecognized value, is outstanding",
+    gradeSetupCompletion(enforced, { mdm: "succeeded" }, RELEASED).completion === "released_incomplete" &&
+    gradeSetupCompletion(enforced, { mdm: "succeeded", emr: "done" }, RELEASED).outstandingSteps.includes("emr"));
+  check("released with ZERO reports at all → setup_bypassed, ALERT — in use with no evidence guided setup ever ran",
+    gradeSetupCompletion(enforced, {}, RELEASED).completion === "setup_bypassed" &&
+    gradeSetupCompletion(enforced, {}, RELEASED).recommendedAction === "alert");
+  check("no user session yet → in_setup (monitor), even with failures — failing DURING guided setup is the retry loop, not a release",
+    gradeSetupCompletion(enforced, { mdm: "failed" }).completion === "in_setup" &&
+    gradeSetupCompletion(enforced, { mdm: "failed" }).recommendedAction === "monitor");
+  check("a SIMULATED plan required nothing on-device — grading it is unknown (PLAN_NOT_ENFORCED), never a hollow green; an unmatched plan is unknown too",
+    gradeSetupCompletion(simulated, { mdm: "succeeded", emr: "succeeded" }, RELEASED).completion === "unknown" &&
+    gradeSetupCompletion(simulated, {}, RELEASED).reasonCode === "PLAN_NOT_ENFORCED" &&
+    gradeSetupCompletion(planZeroTouchSetup(rec, { serial: "X-1" }, { mode: "enforced", enforcementEnabled: true }), {}, RELEASED).reasonCode === "PLAN_UNMATCHED");
+  check("a garbled session instant is unknown and raises — a release the wire cannot date is not a dated release",
+    gradeSetupCompletion(enforced, { mdm: "succeeded", emr: "succeeded" }, "yesterday-ish").completion === "unknown" &&
+    gradeSetupCompletion(enforced, { mdm: "succeeded", emr: "succeeded" }, "yesterday-ish").recommendedAction === "step_up");
+  check("the completion grader is deterministic",
+    JSON.stringify(gradeSetupCompletion(enforced, { mdm: "succeeded", emr: "pending" }, RELEASED)) ===
+    JSON.stringify(gradeSetupCompletion(enforced, { mdm: "succeeded", emr: "pending" }, RELEASED)));
 }
 
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${passed + failures.length})`);

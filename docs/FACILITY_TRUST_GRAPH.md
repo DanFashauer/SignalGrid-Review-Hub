@@ -1,6 +1,6 @@
 # Facility Trust Graph — spatial trust as a first-class subsystem
 
-*Status: **design accepted, phase 1 in build**. This document records the
+*Status: **phase 1 BUILT** (`@workspace/facility-trust-graph`, proven by `proof:facility-trust-graph` — 44 checks; phases 2–4 roadmap). This document records the
 owner's architecture (2026-07-31, intake ledger row 16), what the fabric
 already covers, and the honest built-vs-roadmap boundary. Nothing here claims
 a live vendor integration exists — this repository is fixture-backed.*
@@ -63,7 +63,7 @@ safely.
 
 ## Build phases (mirroring the owner's implementation order)
 
-- **Phase 1 (in build):** `lib/facility-trust-graph` — the space model with
+- **Phase 1 (BUILT):** `lib/facility-trust-graph` — the space model with
   permanent ids + vendor mappings + map versioning, and a location-certainty
   decision dimension consuming the normalized observation contract
   (`space_id`, `accuracy_class`, `confidence`, `observed_at`, source health;

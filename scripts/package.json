@@ -91,6 +91,7 @@
     "proof:isolation-scope": "tsx ./src/isolation-scope-proof.ts",
     "proof:benchmark-selection": "tsx ./src/benchmark-selection-proof.ts",
     "proof:shift-context": "tsx ./src/shift-context-proof.ts",
+    "proof:facility-trust-graph": "tsx ./src/facility-trust-graph-proof.ts",
     "proof:emitter-discipline": "tsx ./src/emitter-discipline-proof.ts",
     "proof:policy-binding": "tsx ./src/policy-binding-proof.ts",
     "proof:device-management-health": "tsx ./src/device-management-health-proof.ts",
@@ -116,6 +117,7 @@
     "proof:webhooks": "tsx ./src/webhooks-proof.ts"
   },
   "dependencies": {
+    "@workspace/facility-trust-graph": "workspace:*",
     "@workspace/app-workflows": "workspace:*",
     "@workspace/audit": "workspace:*",
     "@workspace/control-plane": "workspace:*",

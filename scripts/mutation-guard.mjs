@@ -197,6 +197,14 @@ export const TARGETS = [
   },
 
   {
+    proof: "proof:facility-trust-graph",
+    files: [
+      "lib/facility-trust-graph/src/evaluate.ts",
+      "lib/facility-trust-graph/src/graph.ts",
+    ],
+  },
+
+  {
     proof: "proof:shift-context",
     files: [
       "lib/integrations/src/integrations/shift-context/evaluate.ts",
@@ -521,6 +529,43 @@ const ALLOWED = [
     line: "if (!positivelyConfirmed && candidates.length === 0) {",
     reason:
       "The grant backstop itself — deliberately redundant defence-in-depth, documented in the source as never firing today; exists to catch a FUTURE weakening.",
+  },
+  {
+    file: "lib/facility-trust-graph/src/evaluate.ts",
+    line: 'obs.reportIntegrity === "clean" &&',
+    reason:
+      "A conjunct of the grant backstop's predicate — the backstop never fires today, as its own comment states; the predicate is unobservable until a branch weakens. Same shape as the shift-context and benchmark-selection backstops below.",
+  },
+  {
+    file: "lib/facility-trust-graph/src/evaluate.ts",
+    line: 'obs.spaceInGraph === "known" &&',
+    reason: "Backstop-predicate conjunct — same reasoning. The space branches are covered by the unmapped, unstated-ordering, and grant controls.",
+  },
+  {
+    file: "lib/facility-trust-graph/src/evaluate.ts",
+    line: '(obs.mapVersionMatch === "matched" || obs.mapVersionMatch === "unassessed") &&',
+    reason: "Backstop-predicate conjunct — same reasoning. The map-version branch is covered by the wrong-map restrict control.",
+  },
+  {
+    file: "lib/facility-trust-graph/src/evaluate.ts",
+    line: 'obs.sourceHealth === "healthy" &&',
+    reason: "Backstop-predicate conjunct — same reasoning. The health branches are covered by the unavailable, degraded, and absent-health-ordering controls.",
+  },
+  {
+    file: "lib/facility-trust-graph/src/evaluate.ts",
+    line: '(obs.recency === "current" || obs.recency === "unbounded") &&',
+    reason: "Backstop-predicate conjunct — same reasoning. The recency branches are covered by the stale, unbounded-grant, and absent-time-ordering controls.",
+  },
+  {
+    file: "lib/facility-trust-graph/src/evaluate.ts",
+    line: '(obs.confidenceFit === "met" || obs.confidenceFit === "unbounded") &&',
+    reason: "Backstop-predicate conjunct — same reasoning. The confidence branches are covered by the unmet and posed-but-unanswerable controls.",
+  },
+  {
+    file: "lib/facility-trust-graph/src/evaluate.ts",
+    line: 'if (!positivelyCertain && candidates.length === 0) {',
+    reason:
+      "The grant backstop itself — deliberately redundant defence-in-depth, documented in the source as never firing today; it exists to catch a FUTURE weakening. Same shape and justification as the sibling backstops.",
   },
   {
     file: "lib/integrations/src/integrations/shift-context/evaluate.ts",

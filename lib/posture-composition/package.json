@@ -5,6 +5,7 @@
   "type": "module",
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
+    "@workspace/facility-trust-graph": "workspace:*",
     "@workspace/integrations": "workspace:*",
     "@workspace/event-contract": "workspace:*"
   },

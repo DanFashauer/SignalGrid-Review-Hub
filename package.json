@@ -109,6 +109,7 @@
     "proof:isolation-scope": "pnpm --filter @workspace/scripts run proof:isolation-scope",
     "proof:benchmark-selection": "pnpm --filter @workspace/scripts run proof:benchmark-selection",
     "proof:shift-context": "pnpm --filter @workspace/scripts run proof:shift-context",
+    "proof:facility-trust-graph": "pnpm --filter @workspace/scripts run proof:facility-trust-graph",
     "proof:emitter-discipline": "pnpm --filter @workspace/scripts run proof:emitter-discipline",
     "proof:policy-binding": "pnpm --filter @workspace/scripts run proof:policy-binding",
     "verify:docker": "node scripts/docker-verify.mjs",

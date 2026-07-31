@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 43,
-  "fingerprint": "452e58e3f9cc218ade81c5dd8fd6010d32545abbea1c910e221aa25452e1ccb7",
+  "manifestVersion": 44,
+  "fingerprint": "33bd55ad8dfe2818620fda06e2fcd56d93f7a07c4c67a82461e72e31e5212389",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -34,6 +34,7 @@
       "policy_binding",
       "benchmark_selection",
       "shift_context",
+      "location_certainty",
       "device_management_health",
       "link_usability",
       "task_exception",

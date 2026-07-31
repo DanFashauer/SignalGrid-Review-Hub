@@ -197,6 +197,11 @@ function categoryForKind(kind: string, reason?: string): IncidentCategory {
     // generic Service Desk. Never SecOps: the dimension deliberately step-ups
     // rather than restricts, and its findings are policy states, not live threats.
     case "shift_context":
+    // `location_certainty` is the spatial sibling: a wrong-map fix, an unmapped
+    // space, or precision below a workflow's floor is a facility-context /
+    // measurement state owned by the same queue — not a live threat, and never
+    // the generic Service Desk.
+    case "location_certainty":
     case "agent_identity":
     case "data_protection":
       return "security_compliance";

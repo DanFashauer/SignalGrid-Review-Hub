@@ -74,6 +74,7 @@ export const SIGNAL_KINDS = [
   "policy_binding",
   "benchmark_selection",
   "shift_context",
+  "location_certainty",
   "device_management_health",
   "link_usability",
   "task_exception",

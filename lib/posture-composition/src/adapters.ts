@@ -24,6 +24,7 @@ import type { PlatformSsoVerdict } from "@workspace/integrations/platform-sso";
 import type { PolicyBindingVerdict } from "@workspace/integrations/policy-binding";
 import type { BenchmarkSelectionVerdict } from "@workspace/integrations/benchmark-selection";
 import type { ShiftContextVerdict } from "@workspace/integrations/shift-context";
+import type { LocationCertaintyVerdict } from "@workspace/facility-trust-graph";
 import type { DeviceManagementHealthVerdict } from "@workspace/integrations/device-management-health";
 import type { LinkUsabilityVerdict } from "@workspace/integrations/link-usability";
 // Type-only, via the "./task-exception" subpath export (wired in the same change
@@ -258,6 +259,16 @@ export function fromBenchmarkSelection(v: BenchmarkSelectionVerdict): Composable
   // would have granted. It never lowers what any other dimension says, and it never
   // asserts the device passed: that stays with `baselineCompliance`.
   return { kind: "benchmark_selection", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromLocationCertainty(v: LocationCertaintyVerdict): ComposableSignal {
+  // Location certainty — is the fix precise, fresh, healthy, on the CURRENT
+  // map, and inside the graph, to the floor the workflow demands? A room-level
+  // candidate against a bed-confirmed requirement steps up (scan the wristband)
+  // rather than automating — the multi-bed rule. Never lowers what any other
+  // dimension says, and never claims WHO or WHAT is at the location — identity,
+  // custody, and the labor plane stay with their own dimensions.
+  return { kind: "location_certainty", posture: v.state, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromShiftContext(v: ShiftContextVerdict): ComposableSignal {

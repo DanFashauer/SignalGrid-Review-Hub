@@ -46,9 +46,8 @@
     "./itsm": "./src/integrations/itsm/index.ts",
     "./siem": "./src/integrations/siem/index.ts",
     "./syslog": "./src/integrations/syslog/index.ts",
-    "./telemetry": "./src/integrations/telemetry/index.ts",
     "./webhooks": "./src/integrations/webhooks/index.ts",
-    "./nac": "./src/integrations/nac/index.ts",
+    "./caep-events": "./src/integrations/caep-events/index.ts",
     "./emit-gate": "./src/integrations/adapters/emit-gate.ts"
   },
   "dependencies": {

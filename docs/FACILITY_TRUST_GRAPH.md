@@ -161,13 +161,14 @@ safely.
   supported.
 - **Healthcare RTLS:** CenTrak, Kontakt.io, Securitas/Sonitor, Zebra UWB —
   the precision layer for multi-bed and sensitive areas, deployed selectively.
-- **Session-signal path (roadmap, row 17):** OpenID CAEP / Shared Signals is
-  the natural OUTBOUND channel for telling cooperating applications that a
-  session's context changed (exit confirmed, posture dropped, presence
-  expired). It is an emitter, so when built it lands behind the same emitter
-  discipline as itsm/siem/syslog/telemetry/webhooks — dev/alpha never emit.
-  OAuth introspection / short-lived tokens are the consuming side and are
-  already modeled by `token-binding` and `sso-session`.
+- **Session-signal path (BUILT, row 17):** the `caep-events` emitter family —
+  the sixth outbound family, behind the same emitter discipline as
+  itsm/siem/syslog/telemetry/webhooks (dev/alpha never emit; no transport and
+  no signing keys ship here). The formatter builds UNSIGNED SET claims sets
+  over the five OpenID CAEP event types with an opaque-pseudonym subject; see
+  `docs/INTEGRATION_CATALOG.md`. OAuth introspection / short-lived tokens are
+  the consuming side and are already modeled by `token-binding` and
+  `sso-session`.
 - **Bootstrap credentials (BUILT, row 17):** the `bootstrap-credential`
   connector family — one-time, shortest-practical, enrollment-scope-only,
   location as corroboration never the sole verification factor, each rule

@@ -145,6 +145,7 @@
     "branches:stale": "bash scripts/cleanup-merged-branches.sh",
     "branches:clean": "bash scripts/cleanup-merged-branches.sh --apply",
     "proof:webhooks": "pnpm --filter @workspace/scripts run proof:webhooks",
+    "proof:caep-events": "pnpm --filter @workspace/scripts run proof:caep-events",
     "proof:mdm-profile": "pnpm --filter @workspace/scripts run proof:mdm-profile",
     "proof:emit-gate": "pnpm --filter @workspace/scripts run proof:emit-gate",
     "status:write": "node scripts/status-summary.mjs --write",

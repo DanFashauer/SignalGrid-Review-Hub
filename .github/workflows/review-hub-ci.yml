@@ -203,6 +203,8 @@ jobs:
         run: pnpm run proof:emit-gate
       - name: Proof — absent-collection (nothing observed is not nothing wrong)
         run: pnpm run proof:absent-collection
+      - name: Proof — caep-events (unsigned session signals, sixth emitter family)
+        run: pnpm run proof:caep-events
       - name: Proof — mdm-profile (the shipped profiles say what the product claims)
         run: pnpm run proof:mdm-profile
       - name: Proof — benchmark-selection (which CIS benchmark graded this device, and from what content)

@@ -23,6 +23,7 @@ import { resolveSiemEmitter } from "@workspace/integrations/siem";
 import { resolveSyslogEmitter, SyslogAdapter } from "@workspace/integrations/syslog";
 import { resolveTelemetryEmitter } from "@workspace/integrations/telemetry";
 import { resolveWebhooksEmitter } from "@workspace/integrations/webhooks";
+import { resolveCaepEmitter } from "@workspace/integrations/caep-events";
 
 let passed = 0;
 const failures: string[] = [];
@@ -50,6 +51,7 @@ const FAMILIES: FamilyUnderTest[] = [
   { name: "syslog", tokenVar: "SYSLOG_EMITTER_TOKEN", resolve: resolveSyslogEmitter },
   { name: "telemetry", tokenVar: "TELEMETRY_EMITTER_TOKEN", resolve: resolveTelemetryEmitter },
   { name: "webhooks", tokenVar: "WEBHOOKS_EMITTER_TOKEN", resolve: resolveWebhooksEmitter },
+  { name: "caep", tokenVar: "CAEP_EMITTER_TOKEN", resolve: resolveCaepEmitter },
 ];
 
 const noopTransport = async (): Promise<void> => {};

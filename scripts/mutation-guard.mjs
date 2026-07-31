@@ -216,6 +216,13 @@ export const TARGETS = [
     ],
   },
   {
+    proof: "proof:caep-events",
+    files: [
+      "lib/integrations/src/integrations/caep-events/format.ts",
+      "lib/integrations/src/integrations/caep-events/resolve.ts",
+    ],
+  },
+  {
     proof: "proof:bootstrap-credential",
     files: [
       "lib/integrations/src/integrations/bootstrap-credential/evaluate.ts",

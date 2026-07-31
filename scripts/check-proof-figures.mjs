@@ -47,7 +47,7 @@ const docsDir = join(repoRoot, "docs");
 
 /** Proofs that emit a `figures=` line. A proof that does not is simply not checked here —
  *  this guard never invents a figure it was not given. */
-export const PROOFS = ["proof:device-management-health", "proof:link-usability", "proof:task-exception", "proof:verdict-attestation", "proof:work-context", "proof:handoff-sim", "proof:adaptive-proposals", "proof:self-audit", "proof:reliability", "proof:iac", "proof:agent-behavior", "proof:dual-control", "proof:custody-beacon", "proof:app-update", "proof:platform-sso", "proof:passkey-assurance", "proof:benchmark-selection", "proof:shift-context", "proof:bootstrap-credential", "proof:facility-trust-graph", "proof:emitter-discipline", "proof:policy-binding", "proof:isolation-scope"];
+export const PROOFS = ["proof:device-management-health", "proof:link-usability", "proof:task-exception", "proof:verdict-attestation", "proof:work-context", "proof:handoff-sim", "proof:adaptive-proposals", "proof:self-audit", "proof:reliability", "proof:iac", "proof:agent-behavior", "proof:dual-control", "proof:custody-beacon", "proof:app-update", "proof:platform-sso", "proof:passkey-assurance", "proof:benchmark-selection", "proof:shift-context", "proof:bootstrap-credential", "proof:caep-events", "proof:facility-trust-graph", "proof:emitter-discipline", "proof:policy-binding", "proof:isolation-scope"];
 
 /** Words marking a number as a deliberate reference to a PAST value or a counterfactual.
  *

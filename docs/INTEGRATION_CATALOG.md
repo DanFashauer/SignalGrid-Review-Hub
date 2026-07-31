@@ -416,14 +416,27 @@ in one place.
   rather than lowering it. User verification discouraged is possession-only, a known-false
   reliance that restricts. `proof:passkey-assurance` (74 checks).
 
-- **Outbound emitters under discipline** — the five delivery families (`itsm`, `siem`, `syslog`,
-  `telemetry`, `webhooks`) each carry the same unanimous live-call gate as every read
-  connector: dev/alpha never emit; beta/prod need `SIGNALGRID_LIVE_INTEGRATIONS=true`, a
+- **Outbound emitters under discipline** — the six delivery families (`itsm`, `siem`, `syslog`,
+  `telemetry`, `webhooks`, `caep-events`) each carry the same unanimous live-call gate as every
+  read connector: dev/alpha never emit; beta/prod need `SIGNALGRID_LIVE_INTEGRATIONS=true`, a
   per-family credential, and an INJECTED transport this repository does not ship. The fixture
   emitter records what WOULD have been sent with a literal `delivered: false` on every entry —
   after the syslog family was found returning `status:'sent'` for events it silently dropped,
   the surface is shaped so that claim is unrepresentable. Routing (`response-accountability`)
-  stays a verdict; emission stays an act behind this gate. `proof:emitter-discipline` (43 checks).
+  stays a verdict; emission stays an act behind this gate. `proof:emitter-discipline` (51 checks).
+
+- **CAEP / Shared Signals session-signal emitter** — the sixth family, and the outbound half of
+  continuous access evaluation (intake ledger row 17, built on the owner's keep-going): telling
+  COOPERATING applications that a session's context changed — presence expired, posture dropped,
+  a credential changed, assurance moved. The formatter builds an **UNSIGNED SET claims set**
+  (RFC 8417 shape, the five OpenID CAEP event types as an allowlist, event URIs never guessed);
+  signing is a JWT operation needing keys this public repository must not hold, so producing a
+  transmissible SET is the injected transport's job in a private deployment — and the proof pins
+  that no string in the output is even JWT-shaped. The subject is an `opaque` PSEUDONYM with the
+  same raw-identifier tripwire as the gateway projector (an email-shaped subject refuses);
+  `iat`/`event_timestamp` come from SUPPLIED instants and `jti` from an upstream decision id —
+  no clock, no randomness. The fabric's reason codes travel as `reason_admin`, so the auditable
+  why crosses with the event. `proof:caep-events` (17 checks).
 
 - **Benchmark selection** ([BENCHMARK_SELECTION.md](BENCHMARK_SELECTION.md)) — a baseline answer is
   meaningless without the question that produced it. `BaselineState` records `aligned` and nothing

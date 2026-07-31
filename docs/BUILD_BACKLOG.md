@@ -20,13 +20,14 @@ What remains is the LIVE-lane column of
 [ZERO_COST_LIVE_TEST_MATRIX.md](ZERO_COST_LIVE_TEST_MATRIX.md) — every dimension
 already has a fixture proof; these add a real vendor behind it._
 
-- [ ] **Keycloak 26.4 DPoP → token-binding connector.** The matrix calls this the
-      only zero-cost source of a genuinely sender-constrained token. `live-idp-proof`
-      already mints a DPoP-bound token from an in-process `oidc-provider` and checks
-      the `cnf.jkt` thumbprint, so this is about a SECOND, independent issuer
-      disagreeing or agreeing — free, Docker, no account.
 - [ ] **Wazuh (perpetual free) → edr-threat connector.** Real EDR vocabulary rather
-      than fixture shapes. Free forever, self-hosted; no trial clock.
+      than fixture shapes, and the dimension has NO live vendor behind it today.
+      Free forever, self-hosted, no trial clock — the strongest remaining lane.
+- [ ] **Keycloak 26.4 DPoP → token-binding.** LOWER priority than it reads in the
+      matrix: `live-idp-proof` already runs a complete real DPoP ceremony (client-held
+      EC key, real proof JWT, provider-minted `cnf.jkt` equal to the RFC 7638
+      thumbprint, verified through enterprise-auth). Keycloak's value is
+      cross-implementation agreement, not first coverage.
 - [ ] **Dev Proxy → graph posture + device-management-health.** Injects Graph-authentic
       429/`Retry-After`, 5xx and paging at the wire, exercising error-mapping and
       pagination caps the mocks assert but have never seen over a real socket.

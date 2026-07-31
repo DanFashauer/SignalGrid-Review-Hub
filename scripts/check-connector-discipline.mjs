@@ -72,7 +72,12 @@ const NOT_A_FAMILY = new Set(["adapters"]);
 const KNOWN_GAPS = {
   itsm: { severity: "ungated-emitter", reason: "servicenow/bmc-helix/ivanti create real tickets with no tier gate." },
   siem: { severity: "ungated-emitter", reason: "sentinel forwards real events with no tier gate." },
-  syslog: { severity: "ungated-emitter", reason: "forwards real log lines with no tier gate." },
+  // CORRECTED AFTER AUDIT. This read "forwards real log lines with no tier gate", which
+  // was false: the family opens no socket at all (no dgram, net, tls or fetch anywhere
+  // in it). It formats RFC 5424 / CEF / LEEF correctly and then dropped every event —
+  // while returning status:'sent'. The lie is fixed; the family still needs the owner's
+  // gated-vs-fixture decision before a transport is added, so it stays listed.
+  syslog: { severity: "ungated-emitter", reason: "formats events but ships NO transport; needs the gated-vs-fixture decision before one is added." },
   telemetry: { severity: "ungated-emitter", reason: "emits real telemetry with no tier gate." },
   webhooks: { severity: "ungated-emitter", reason: "delivers real outbound webhooks with no tier gate." },
   // `carrier` and `graph` were listed here on the assumption they had no proof. The
@@ -139,7 +144,38 @@ function analyzeFamily(name) {
     .filter((f) => f.endsWith("-proof.ts"))
     .some((f) => new RegExp(`@workspace/integrations/${name}\\b`).test(readFileSync(join(proofDir, f), "utf8")));
 
-  return { name, gated, proven: conventional || importedByAProof, performsAction, actionSites };
+  return { name, gated, proven: conventional || importedByAProof, performsAction, actionSites,
+           consumers: consumersOf(name) };
+}
+
+/**
+ * Who imports this family from OUTSIDE its own directory.
+ *
+ * DERIVED, NOT ASSERTED, and it is the single most decision-relevant fact about the
+ * ungated emitters. An audit found all five of them — itsm, siem, syslog, telemetry,
+ * webhooks — with ZERO external consumers: real network code that no code path reaches,
+ * which is a latent trap rather than a live exposure, exactly like the connector config
+ * stores that were tenant-scoped earlier.
+ *
+ * That distinction sets the urgency of the owner's gated-vs-fixture decision, so it must
+ * not be a sentence in a document that silently goes stale. Recomputed every run, and
+ * printed beside each known gap: the day someone wires one up, the number moves and the
+ * decision stops being theoretical. Counting rather than failing, because wiring one up
+ * is a legitimate thing to do once the decision is made — the gate's job here is to make
+ * it impossible to do QUIETLY.
+ */
+function consumersOf(name) {
+  const needle = new RegExp(`from ['"][^'"]*integrations/${name}(?:/|['"])|@workspace/integrations/${name}\\b`);
+  const hits = [];
+  for (const rel of tracked) {
+    if (!rel.endsWith(".ts") && !rel.endsWith(".tsx")) continue;
+    if (rel.startsWith(`lib/integrations/src/integrations/${name}/`)) continue;
+    if (rel.includes("/dist/")) continue;
+    let text;
+    try { text = readFileSync(join(repo, rel), "utf8"); } catch { continue; }
+    if (needle.test(text)) hits.push(rel);
+  }
+  return hits;
 }
 
 console.log("Connector-discipline gate — every family gated and proven, none acting on a device\n");
@@ -202,6 +238,23 @@ if (gaps.length) {
     ].filter(Boolean).join(" + ");
     console.log(`    [${g.severity}] ${g.name} (${missing})`);
     console.log(`        ${g.reason}`);
+    // THE URGENCY LINE, and it is deliberately factual rather than a verdict.
+    //
+    // A hand-rolled grep run during the audit reported "zero external references" for
+    // all five. That was WRONG — its exclusion pattern also excluded the package barrel,
+    // which re-exports four of them. This derived version caught the error on its first
+    // run, which is the argument for deriving rather than asserting, made against the
+    // person writing the guard.
+    //
+    // IMPORTED IS NOT INVOKED. A barrel re-export puts the family on the public surface
+    // of `@workspace/integrations` without any code calling its send/dispatch path. The
+    // importer is NAMED rather than graded so a reader can tell those apart instead of
+    // trusting an adjective chosen here.
+    console.log(
+      g.consumers.length === 0
+        ? `        reach: no file outside its own directory imports it`
+        : `        reach: imported by ${g.consumers.length} file(s) outside the family — ${g.consumers.join(", ")}`,
+    );
   }
   const violations = gaps.filter((g) => g.severity === "violation");
   if (violations.length) {

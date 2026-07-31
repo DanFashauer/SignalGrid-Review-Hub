@@ -10,16 +10,22 @@
 // unrepresentable.
 import {
   ACCURACY_CLASSES,
+  applyCapabilityCeiling,
   correlateCrossing,
+  evaluateBedWorkflow,
   FacilityGraphError,
   buildFacilityGraph,
   evaluateLocationCertainty,
+  gradeExplicitSelection,
   normalizeLocationObservation,
+  resolveClinicalAssignment,
   satisfies,
   type AccuracyClass,
+  type ClinicalAssignmentRaw,
   type FacilityGraphDoc,
   type LocationObservationRaw,
   type NormalizedLocationObservation,
+  type SelectionAttestationRaw,
   type SpaceNode,
 } from "@workspace/facility-trust-graph";
 import { SIGNAL_KINDS, composeDeviceRisk, fromLocationCertainty } from "@workspace/posture-composition";
@@ -53,7 +59,8 @@ const DOC: FacilityGraphDoc = {
       vendorRefs: { rtls: { bed_zone_id: "bz-312a" }, ehr: { bed: "0312-A" } } },
     { spaceId: "SG-RM0312-BED-B", kind: "bed", name: "Bed B", parentId: "SG-RM0312",
       vendorRefs: { rtls: { bed_zone_id: "bz-312b" }, ehr: { bed: "0312-B" } } },
-    { spaceId: "SG-F03-CORRIDOR-W", kind: "room", name: "West corridor", parentId: "SG-F03-UNIT-4W" },
+    { spaceId: "SG-F03-CORRIDOR-W", kind: "room", name: "West corridor", parentId: "SG-F03-UNIT-4W",
+      vendorRefs: { ehr: { room: "0399" } } },
     { spaceId: "SG-RM0312-DOOR", kind: "door", name: "Room 312 door", parentId: "SG-RM0312",
       connects: ["SG-F03-CORRIDOR-W"],
       vendorRefs: { physical_access: { door_id: "door-3120", reader_id: "rdr-3120" } } },
@@ -285,6 +292,165 @@ check(
 );
 check("exhaustive (normalized): exactly 24 states grant — 3 sufficient classes (room_confirmed, bed_candidate, bed_confirmed) × 2 map-version × 2 recency × 2 confidence answers",
   normRes.noneCount === 24);
+
+// ── phase 3: clinical bed context ───────────────────────────────────────────────
+// Source-capability ceilings: the maximum class a technology can PHYSICALLY
+// vouch for, with no partial credit for a claim above it.
+check("wifi claiming room_candidate is within its ceiling — the claim stands as claimed",
+  applyCapabilityCeiling("room_candidate", "wifi").grading === "within_capability" &&
+  applyCapabilityCeiling("room_candidate", "wifi").effectiveClass === "room_candidate");
+check("THE CEILING'S TEETH: wifi claiming bed_confirmed exceeds what Wi-Fi can know — and the effective class is UNKNOWN, deliberately NOT demoted to the ceiling (a caught lie gets no partial credit)",
+  applyCapabilityCeiling("bed_confirmed", "wifi").grading === "exceeds_capability" &&
+  applyCapabilityCeiling("bed_confirmed", "wifi").effectiveClass === "unknown");
+check("ir_rtls claiming bed_confirmed is within capability — bed precision is earned by the technology, not the label",
+  applyCapabilityCeiling("bed_confirmed", "ir_rtls").grading === "within_capability" &&
+  applyCapabilityCeiling("bed_confirmed", "ir_rtls").effectiveClass === "bed_confirmed");
+check("an unrecognized technology can vouch for NOTHING — 'quantum_locator' and even the generic 'rtls' label grade unrecognized with effective class unknown",
+  applyCapabilityCeiling("bed_confirmed", "quantum_locator").grading === "unrecognized_technology" &&
+  applyCapabilityCeiling("bed_confirmed", "quantum_locator").effectiveClass === "unknown" &&
+  applyCapabilityCeiling("bed_confirmed", "rtls").grading === "unrecognized_technology");
+check("an unstated technology (null / non-string / blank) grades unstated, class unknown",
+  applyCapabilityCeiling("room_candidate", null).grading === "unstated_technology" &&
+  applyCapabilityCeiling("room_candidate", 42).grading === "unstated_technology" &&
+  applyCapabilityCeiling("room_candidate", "  ").effectiveClass === "unknown");
+check("a claim of 'unknown' from a recognized technology is within capability and stays unknown — nothing claimed, nothing granted",
+  applyCapabilityCeiling("unknown", "ir_rtls").grading === "within_capability" &&
+  applyCapabilityCeiling("unknown", "ir_rtls").effectiveClass === "unknown");
+check("technology matching normalizes case and whitespace — ' WiFi ' is wifi",
+  applyCapabilityCeiling("room_candidate", " WiFi ").grading === "within_capability");
+
+// ADT/FHIR assignment resolution: administrative truth, resolved through
+// vendor attachments, coherence-checked against the graph's own hierarchy.
+const EHR = { namespace: "ehr" };
+const fullAssignment: ClinicalAssignmentRaw = { system: "adt", nursing_unit: "4W", room: "0312", bed: "0312-A" };
+const resolvedFull = resolveClinicalAssignment(graph, fullAssignment, EHR);
+check("a coherent ADT record (unit 4W / room 0312 / bed 0312-A) resolves to Bed A at depth bed — EHR ids are attachments, never keys",
+  resolvedFull.outcome === "resolved" && resolvedFull.targetSpaceId === "SG-RM0312-BED-A" &&
+  resolvedFull.targetDepth === "bed" && resolvedFull.system === "adt");
+check("a room-only record resolves to the room at depth room",
+  resolveClinicalAssignment(graph, { room: "0312" }, EHR).targetSpaceId === "SG-RM0312" &&
+  resolveClinicalAssignment(graph, { room: "0312" }, EHR).targetDepth === "room");
+check("INCOHERENT: bed 0312-A stated with room 0399 (the corridor) — the record contradicts the graph's own hierarchy and is never 'probably the bed'",
+  resolveClinicalAssignment(graph, { room: "0399", bed: "0312-A" }, EHR).outcome === "incoherent" &&
+  resolveClinicalAssignment(graph, { room: "0399", bed: "0312-A" }, EHR).targetSpaceId === null);
+check("a stated identifier with no attachment in the graph → unmapped, target null",
+  resolveClinicalAssignment(graph, { bed: "9999-Z" }, EHR).outcome === "unmapped");
+check("an empty record poses nothing → unstated; a record with an unrecognized key, a non-object, and a hostile proxy are all malformed",
+  resolveClinicalAssignment(graph, {}, EHR).outcome === "unstated" &&
+  resolveClinicalAssignment(graph, { bed: "0312-A", patient_name: "leak" } as ClinicalAssignmentRaw, EHR).outcome === "malformed" &&
+  resolveClinicalAssignment(graph, "0312-A" as unknown as ClinicalAssignmentRaw, EHR).outcome === "malformed" &&
+  resolveClinicalAssignment(graph, new Proxy({}, { ownKeys: () => { throw new Error("hostile"); } }) as ClinicalAssignmentRaw, EHR).outcome === "malformed");
+// A second unit with its own EHR attachment, to prove EVERY pairwise
+// coherence edge — bed↔room is not the only one an ADT feed can contradict.
+const twoUnitGraph = buildFacilityGraph({
+  ...DOC,
+  spaces: [
+    ...DOC.spaces,
+    { spaceId: "SG-F03-UNIT-5E", kind: "unit", name: "5 East Tele", parentId: "SG-HOSP-A-BLDG1-F03",
+      vendorRefs: { ehr: { nursing_unit: "5E" } } },
+  ],
+});
+check("INCOHERENT on the bed↔unit edge: bed 0312-A stated under unit 5E — the bed does not descend from the stated unit",
+  resolveClinicalAssignment(twoUnitGraph, { nursing_unit: "5E", bed: "0312-A" }, EHR).outcome === "incoherent");
+check("INCOHERENT on the room↔unit edge: room 0312 stated under unit 5E",
+  resolveClinicalAssignment(twoUnitGraph, { nursing_unit: "5E", room: "0312" }, EHR).outcome === "incoherent");
+const trapGraph = buildFacilityGraph({
+  ...DOC,
+  spaces: DOC.spaces.map((s) => s.spaceId === "SG-RM0312"
+    ? { ...s, vendorRefs: { ...s.vendorRefs, ehr: { ...(s.vendorRefs?.ehr ?? {}), bed: "trap" } } } : s),
+});
+check("an ehr 'bed' id attached to a non-bed space is incoherent — the attachment's kind must match the component's claim",
+  resolveClinicalAssignment(trapGraph, { bed: "trap" }, EHR).outcome === "incoherent");
+
+// The explicit-selection ceremony: graded like every attestation — supplied
+// bound, supplied reference, absent is a first-class answer.
+const SEL_POLICY = { maxSelectionAgeSeconds: 300, referenceTime: REF };
+const freshScan: SelectionAttestationRaw = { method: "wristband_scan", attested_at: "2026-07-31T14:30:00Z" };
+check("a wristband scan inside the caller's bound is valid",
+  gradeExplicitSelection(freshScan, SEL_POLICY).standing === "valid" &&
+  gradeExplicitSelection(freshScan, SEL_POLICY).method === "wristband_scan");
+check("a scan older than the bound is stale — yesterday's ceremony does not carry today's med pass",
+  gradeExplicitSelection({ method: "wristband_scan", attested_at: "2026-07-31T14:00:00Z" }, SEL_POLICY).standing === "stale");
+check("a future-dated attestation is never valid, bound or no bound",
+  gradeExplicitSelection({ method: "wristband_scan", attested_at: "2026-07-31T15:00:00Z" }, SEL_POLICY).standing === "future_dated" &&
+  gradeExplicitSelection({ method: "wristband_scan", attested_at: "2026-07-31T15:00:00Z" }, { referenceTime: REF }).standing === "future_dated");
+check("a bound posed but unanswerable (no attested instant / no reference / a nonsense bound) is unverifiable — posed-but-unanswerable raises, everywhere",
+  gradeExplicitSelection({ method: "wristband_scan" }, SEL_POLICY).standing === "unverifiable" &&
+  gradeExplicitSelection(freshScan, { maxSelectionAgeSeconds: 300 }).standing === "unverifiable" &&
+  gradeExplicitSelection(freshScan, { maxSelectionAgeSeconds: -1, referenceTime: REF }).standing === "unverifiable");
+check("'room_presence' is not a selection ceremony — an unrecognized method never satisfies",
+  gradeExplicitSelection({ method: "room_presence", attested_at: "2026-07-31T14:30:00Z" }, SEL_POLICY).standing === "unrecognized_method");
+check("an extra key (a patient identifier trying to cross the boundary) is malformed; absent is absent; a garbled attested instant is malformed, not quietly unverifiable",
+  gradeExplicitSelection({ ...freshScan, patient_id: "P123" }, SEL_POLICY).standing === "malformed" &&
+  gradeExplicitSelection(undefined, SEL_POLICY).standing === "absent" &&
+  gradeExplicitSelection({ method: "wristband_scan", attested_at: "not-a-time" }, SEL_POLICY).standing === "malformed");
+check("no bound stated → valid by the operator's explicit visible choice",
+  gradeExplicitSelection(freshScan, {}).standing === "valid");
+
+// The bed-workflow composition: certainty, capability, assignment, ceremony.
+const normObs = (over: LocationObservationRaw = {}): NormalizedLocationObservation =>
+  normalizeLocationObservation("wow-442", graph, clean(over), { requirement: MED_REQ, referenceTime: REF });
+const wifiRoom = normObs({ accuracy_class: "room_candidate", observation_source: "wifi", space_id: "SG-RM0312", confidence: 0.78 });
+const bed = (over: Record<string, unknown> = {}) => evaluateBedWorkflow(graph, {
+  assignment: resolvedFull, observation: wifiRoom, requirement: MED_REQ, selectionPolicy: SEL_POLICY, ...over,
+});
+const headline = bed();
+check("PHASE-3 HEADLINE: a Wi-Fi room fix, a bed_confirmed med workflow, an assigned bed → STEP UP: scan the wristband — never 'open every patient in the room'",
+  headline.mode === "step_up_required" && headline.reasonCode === "EXPLICIT_SELECTION_REQUIRED" &&
+  headline.recommendedAction === "step_up");
+const satisfied = bed({ selection: freshScan });
+check("...a valid wristband scan satisfies the step-up: the workflow proceeds",
+  satisfied.mode === "explicitly_selected" && satisfied.reasonCode === "EXPLICIT_SELECTION_SATISFIED" &&
+  satisfied.recommendedAction === "none");
+check("THE PIN: the satisfied ceremony changed the MODE, not the CERTAINTY — achievedClass is still room_candidate and the embedded location verdict still says INSUFFICIENT_PRECISION",
+  satisfied.achievedClass === "room_candidate" && satisfied.location.reasonCode === "INSUFFICIENT_PRECISION" &&
+  satisfied.location.certaintyConfirmed === false);
+check("a STALE scan does not satisfy — step_up stays, with the specific reason",
+  bed({ selection: { method: "wristband_scan", attested_at: "2026-07-31T14:00:00Z" } }).reasonCode === "SELECTION_STALE" &&
+  bed({ selection: { method: "wristband_scan", attested_at: "2026-07-31T14:00:00Z" } }).recommendedAction === "step_up");
+const irBedA = normObs({ accuracy_class: "bed_confirmed", observation_source: "ir_rtls", space_id: "SG-RM0312-BED-A" });
+const confirmed = bed({ observation: irBedA });
+check("IR-RTLS bed_confirmed AT the assigned bed → location_confirmed: the only path that proceeds on location alone",
+  confirmed.mode === "location_confirmed" && confirmed.reasonCode === "BED_CERTAINTY_CONFIRMED" &&
+  confirmed.recommendedAction === "none" && confirmed.achievedClass === "bed_confirmed");
+const irBedB = normObs({ accuracy_class: "bed_confirmed", observation_source: "ir_rtls" }); // clean() sits at Bed B
+check("WRONG BED: bed_confirmed at Bed B while assigned to Bed A → ASSIGNMENT_LOCATION_MISMATCH steps up; the scan ceremony satisfies it",
+  bed({ observation: irBedB }).reasonCode === "ASSIGNMENT_LOCATION_MISMATCH" &&
+  bed({ observation: irBedB }).recommendedAction === "step_up" &&
+  bed({ observation: irBedB, selection: freshScan }).mode === "explicitly_selected");
+const wifiLie = normObs({ accuracy_class: "bed_confirmed", observation_source: "wifi", space_id: "SG-RM0312" });
+check("THE LIE IS NOT STEPPABLE: wifi claiming bed_confirmed → blocked with an ALERT, and a valid scan does NOT cure it — a ceremony never launders a source that claimed what it cannot know",
+  bed({ observation: wifiLie }).mode === "blocked" &&
+  bed({ observation: wifiLie }).reasonCode === "SOURCE_CLAIM_EXCEEDS_CAPABILITY" &&
+  bed({ observation: wifiLie }).recommendedAction === "alert" &&
+  bed({ observation: wifiLie, selection: freshScan }).mode === "blocked");
+const wrongMapObs = normObs({ observation_source: "ir_rtls", map_version: "2025.11.02" });
+check("a wrong-map fix stays RESTRICT even with a valid scan — restrict-class concerns are not steppable",
+  bed({ observation: wrongMapObs, selection: freshScan }).mode === "blocked" &&
+  bed({ observation: wrongMapObs, selection: freshScan }).reasonCode === "LOCATION_BLOCKED" &&
+  bed({ observation: wrongMapObs, selection: freshScan }).recommendedAction === "restrict");
+check("NO ASSIGNMENT: bed_confirmed presence at Bed A with nothing assigned still requires the ceremony — presence alone never picks a patient; the scan then proceeds",
+  bed({ observation: irBedA, assignment: resolveClinicalAssignment(graph, {}, EHR) }).reasonCode === "EXPLICIT_SELECTION_REQUIRED" &&
+  bed({ observation: irBedA, assignment: resolveClinicalAssignment(graph, {}, EHR), selection: freshScan }).mode === "explicitly_selected");
+check("a BROKEN assignment (unmapped bed id) is an alert the ceremony cannot cure — clinical mapping failed at operator scale",
+  bed({ assignment: resolveClinicalAssignment(graph, { bed: "9999-Z" }, EHR), selection: freshScan }).mode === "blocked" &&
+  bed({ assignment: resolveClinicalAssignment(graph, { bed: "9999-Z" }, EHR), selection: freshScan }).reasonCode === "ASSIGNMENT_BROKEN");
+const darkObs = normObs({ observation_source: "ir_rtls", source_health: "unavailable" });
+check("location gone DARK is step_up class — the ceremony is exactly the degraded-mode workflow, so a valid scan proceeds; without one, step up",
+  bed({ observation: darkObs }).recommendedAction === "step_up" &&
+  bed({ observation: darkObs, selection: freshScan }).mode === "explicitly_selected");
+const genericRtls = normObs({ accuracy_class: "bed_confirmed", observation_source: "rtls", space_id: "SG-RM0312-BED-A" });
+check("the generic 'rtls' label cannot vouch for bed certainty — unrecognized technology grades unknown and the workflow steps up to the ceremony instead of trusting the label",
+  bed({ observation: genericRtls }).mode === "step_up_required" &&
+  bed({ observation: genericRtls }).achievedClass === "unknown" &&
+  bed({ observation: genericRtls, selection: freshScan }).mode === "explicitly_selected");
+check("a HAND-CRAFTED resolution claiming a target while unstated (a buggy caller) can never reach location_confirmed — the grant re-checks the outcome, not just the target",
+  bed({ observation: irBedA, assignment: {
+    outcome: "unstated" as const, targetSpaceId: "SG-RM0312-BED-A", targetDepth: "bed" as const,
+    components: { unit: "unstated" as const, room: "unstated" as const, bed: "unstated" as const }, system: null,
+  } }).mode === "step_up_required");
+check("the bed-workflow evaluator is deterministic",
+  JSON.stringify(bed({ selection: freshScan })) === JSON.stringify(bed({ selection: freshScan })));
 
 // ── fusion into the fabric ──────────────────────────────────────────────────────
 check("location_certainty is a member of the runtime SIGNAL_KINDS array",

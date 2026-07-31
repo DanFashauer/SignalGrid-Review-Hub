@@ -202,6 +202,7 @@ export const TARGETS = [
       "lib/facility-trust-graph/src/evaluate.ts",
       "lib/facility-trust-graph/src/graph.ts",
       "lib/facility-trust-graph/src/correlate.ts",
+      "lib/facility-trust-graph/src/clinical.ts",
     ],
   },
 
@@ -567,6 +568,30 @@ const ALLOWED = [
     line: 'if (!positivelyCertain && candidates.length === 0) {',
     reason:
       "The grant backstop itself — deliberately redundant defence-in-depth, documented in the source as never firing today; it exists to catch a FUTURE weakening. Same shape and justification as the sibling backstops.",
+  },
+  {
+    file: "lib/facility-trust-graph/src/clinical.ts",
+    line: "assignment.targetSpaceId !== null &&",
+    reason:
+      "Type-guard conjunct of spatiallyConsistent, labeled inert in the source: pathsConsistent over a missing/null id is false for any graph (path() of an unknown id is empty), so mutating it to true changes no observable output. Kept for the types.",
+  },
+  {
+    file: "lib/facility-trust-graph/src/clinical.ts",
+    line: "gradedObs.spaceId !== null &&",
+    reason:
+      "Type-guard conjunct of spatiallyConsistent — same inert reasoning as the targetSpaceId guard above.",
+  },
+  {
+    file: "lib/facility-trust-graph/src/clinical.ts",
+    line: 'gradedObs.spaceInGraph === "known" &&',
+    reason:
+      "Masked by ordering that is itself pinned: an unmapped observation drives a SPACE_UNMAPPED alert, and alert-class location verdicts block before spatial consistency is consulted (the wrong-map-not-steppable control), so this conjunct cannot change an outcome today. Labeled inert in the source.",
+  },
+  {
+    file: "lib/facility-trust-graph/src/clinical.ts",
+    line: 'capability.grading === "within_capability" &&',
+    reason:
+      "Grant-conjunct defence-in-depth, labeled in the source: exceeds_capability is blocked before the grant (pinned by the wifi-lie control) and unstated/unrecognized force the effective class to unknown, which certaintyConfirmed already refuses (pinned by the generic-rtls control). Exists to catch a FUTURE weakening, per the affirmative-on-every-axis doctrine.",
   },
   {
     file: "lib/integrations/src/integrations/shift-context/evaluate.ts",

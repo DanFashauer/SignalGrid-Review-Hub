@@ -1,6 +1,6 @@
 # Facility Trust Graph — spatial trust as a first-class subsystem
 
-*Status: **phases 1–2 BUILT** (`@workspace/facility-trust-graph`, proven by `proof:facility-trust-graph`; phases 3–4 roadmap). This document records the
+*Status: **phases 1–3 BUILT** (`@workspace/facility-trust-graph`, proven by `proof:facility-trust-graph`; phase 4 roadmap). This document records the
 owner's architecture (2026-07-31, intake ledger row 16), what the fabric
 already covers, and the honest built-vs-roadmap boundary. Nothing here claims
 a live vendor integration exists — this repository is fixture-backed.*
@@ -80,9 +80,31 @@ safely.
   passback, tailgate, or a cloned badge → alert), **unassessed** (before the
   crossing or outside the window — no claim posed; clock skew lands here
   honestly, never as a silent pass), and every unreadable input raises.
-- **Phase 3:** clinical bed context — ADT/FHIR location normalization into
-  the graph; bed-level RTLS classes; the wristband-scan step-up path. Patient
-  semantics stay in the host app.
+- **Phase 3 (BUILT):** clinical bed context, three pieces in `clinical.ts`:
+  - **ADT/FHIR assignment resolution** — an EHR record's unit/room/bed
+    identifiers resolve through vendor attachments (never keys) to ONE
+    coherent target space. An assignment is ADMINISTRATIVE truth ("this
+    workflow concerns bed A"), never a location observation; a record whose
+    bed does not descend from its own stated room or unit is `incoherent` —
+    an anomaly, never "probably the bed" — and a stated identifier with no
+    attachment is `unmapped` → alert.
+  - **Source-capability ceilings** — the maximum class each recognized
+    technology can physically vouch for (Wi-Fi → `room_candidate` at best;
+    IR/ultrasound/UWB RTLS → `bed_confirmed`; the generic `rtls` label →
+    nothing). A claim above the ceiling is NOT demoted to the ceiling — a
+    caught lie gets no partial credit; the certainty becomes `unknown`, the
+    verdict an alert a ceremony cannot cure.
+  - **The wristband-scan step-up path** — when certainty cannot carry a
+    bed-level workflow (insufficient precision, wrong-bed mismatch, no
+    assignment at all, location gone dark), the verdict is a step-up whose
+    satisfier is an explicit-selection ceremony in the HOST app
+    (`wristband_scan` / `manual_selection`); the host attests only that the
+    ceremony happened and when — no patient identifier crosses the boundary
+    (an extra key is `malformed`). A valid, fresh attestation (supplied
+    bound, supplied reference instant — no clock) lets the workflow proceed
+    **without ever upgrading the accuracy class**, and it satisfies only
+    step-up-class concerns: never a wrong map, a broken clinical mapping, or
+    a source claim above its ceiling.
 - **Phase 4:** Site Context Gateway — the local-only/hybrid deployment mode
   built on `edge-sync`/`control-plane`: local normalization and sensitive
   joins, pseudonymized minimum telemetry upstream, immutable local audit,

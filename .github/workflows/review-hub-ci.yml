@@ -237,6 +237,45 @@ jobs:
       - name: "Connector discipline (gated + proven, no device actuators)"
         run: node scripts/check-connector-discipline.mjs
 
+      # SEVEN gates lived in scripts/preflight.mjs and ran NOWHERE in CI — checked
+      # against all 12 workflow files, not just this one. That made them local
+      # conveniences rather than gates: they fired only when somebody remembered to
+      # run preflight, and every one exists to catch drift that is silent by
+      # definition. A ratchet that depends on being remembered is not a ratchet.
+      #
+      # The preflight header warns about keeping these lists "in lockstep", but only
+      # in the CI→preflight direction ("a proof that runs in CI but not here would
+      # let a red build pass preflight"). The reverse gap is worse and was the one
+      # that had actually opened: a guard that runs in preflight but not in CI does
+      # not fail a pull request, so the drift it exists to catch lands on the branch
+      # unchallenged and the guard reports green forever after.
+      #
+      # The most consequential is review-invariants — the repo's automated "second
+      # reviewer", encoding the defect classes Codex repeatedly caught on this repo
+      # (fail-closed control flow, determinism, Assist-safety, truthfulness). It was
+      # the FIRST gate in preflight and ran in no workflow at all.
+      #
+      # All seven are pure Node and need no external service.
+      - name: "Invariant review (fail-closed / determinism / Assist / truth)"
+        run: node scripts/review-invariants.mjs
+      - name: "Doc orphans (a new doc must be reachable from an index)"
+        run: node scripts/check-doc-orphans.mjs
+      - name: "Proof-count sync (documented check counts match their proofs)"
+        run: node scripts/check-proof-counts.mjs
+      - name: "Proof — dual control"
+        run: pnpm run proof:dual-control
+      - name: "Pagination-truncation guard (a capped read must not look complete)"
+        run: node scripts/check-pagination-truncation.mjs
+      - name: "Absent-collection law (nothing observed ≠ nothing wrong)"
+        run: pnpm run proof:absent-collection
+      - name: "Port parity (DecisionEngine + AppWorkflows vs their TS originals)"
+        run: node scripts/check-decision-port-parity.mjs
+      # And the ratchet for the ratchets: fails if a future preflight gate is added
+      # without being wired into a workflow. It has to run HERE, not only in
+      # preflight, or it would be the very thing it exists to prevent.
+      - name: "Preflight↔CI parity (a gate that runs only locally is not a gate)"
+        run: node scripts/check-preflight-ci-parity.mjs
+
       # The Mac MCP lane and iOS shell build against this repo's contracts from
       # OUTSIDE CI's reach. This gate hard-fails when contracts change without
       # republishing the machine-readable sync manifest, and soft-reports when

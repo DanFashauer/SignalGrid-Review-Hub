@@ -109,6 +109,13 @@ if [ "$SIM_ONLY" != "--sim-only" ]; then
       skip "$p" "needs REDIS_URL (no Docker here); run it via pnpm run verify:docker"
       continue
     fi
+    # proof:live-edr reads a REAL Wazuh. Standing one up costs a ~2GB image and
+    # minutes of boot, so unlike Redis it is NOT auto-provisioned here — it is
+    # named as skipped with the command to run it, never silently passed.
+    if [ "$p" = "proof:live-edr" ] && [ -z "${WAZUH_URL:-}" ]; then
+      skip "$p" "needs a live Wazuh (WAZUH_URL); see docs/ZERO_COST_LIVE_TEST_MATRIX.md section 6"
+      continue
+    fi
     gate "$p" $PNPM run "$p"
   done
 

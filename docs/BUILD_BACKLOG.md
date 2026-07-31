@@ -157,6 +157,29 @@ only), and the DDM rig is gated on an APNs push certificate.
       After merging: `SIGNALGRID_MCP_PATH=~/signalgrid-mcp node scripts/verify-all.mjs
       --require-mcp --emit-evidence`, then commit `artifacts/live-evidence/`.
 
+- [ ] **`vuln-scan` grades an empty finding set as CLEAN by default.** ⚠️ **owner
+      decision — API change across callers.** `evaluateVulnPosture([], {})` returns
+      `clean` / `NO_FINDINGS` / action `none`. `[]` is genuinely ambiguous — a
+      scanned device with zero findings really is clean — which is why the `scanned`
+      flag exists; the question is which way the DEFAULT falls.
+      It falls the opposite way from every sibling. Measured across all four places
+      this repo grades a collection: `passkey-assurance` (`[]` → `NOT_COVERED` /
+      `step_up`), `edr-threat` (nothing observed → `AGENT_ABSENT` / `alert`), and
+      `telemetry/fleetdm` (`policies.length > 0 && every(pass)`) all DERIVE their
+      caution from the data. `vuln-scan` alone requires the caller to remember
+      `scanned: false` — and a safety property that depends on being asked for
+      politely is not a safety property. The failure mode is a caller that gets `[]`
+      from a truncated page, an errored request, or a device with no scan record and
+      forwards it: the device is reported clean, action none.
+      LATENT, not live: there are no production callers of these evaluators today —
+      only tests and proofs — which is why this is recorded rather than fixed.
+      Options: make `scanned` required (loudest, breaks every call site), flip the
+      default to `false` (safest, makes existing tests declare their intent), or
+      accept it explicitly with the reasoning written down.
+      Pinned meanwhile by `proof:absent-collection`, which asserts the current
+      behaviour so it cannot drift further and fails — with instructions — the
+      moment the default is changed.
+
 - [ ] **Truncation signal on capped reads** ⚠️ **owner decision — API change across 11
       connectors.** Eleven connectors paginate with their own copy of `getAllPages`,
       looping `while (url && pages < this.pageLimit)` and returning a plain array.

@@ -109,7 +109,8 @@
     "proof:live-edr": "tsx ./src/live-edr-proof.ts",
     "proof:graph-wire": "tsx ./src/graph-wire-proof.ts",
     "proof:live-fleet": "tsx ./src/live-fleet-proof.ts",
-    "proof:live-location": "tsx ./src/live-location-proof.ts"
+    "proof:live-location": "tsx ./src/live-location-proof.ts",
+    "proof:absent-collection": "tsx ./src/absent-collection-proof.ts"
   },
   "dependencies": {
     "@workspace/app-workflows": "workspace:*",

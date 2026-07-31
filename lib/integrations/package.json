@@ -35,7 +35,8 @@
     "./device-management-health": "./src/integrations/device-management-health/index.ts",
     "./link-usability": "./src/integrations/link-usability/index.ts",
     "./task-exception": "./src/integrations/task-exception/index.ts",
-    "./nac": "./src/integrations/nac/index.ts"
+    "./nac": "./src/integrations/nac/index.ts",
+    "./webhooks": "./src/integrations/webhooks/dispatch.ts"
   },
   "dependencies": {
     "ioredis": "^5.4.1",

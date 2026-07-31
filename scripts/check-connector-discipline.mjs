@@ -66,7 +66,6 @@ const KNOWN_GAPS = {
   siem: { severity: "ungated-emitter", reason: "sentinel forwards real events with no tier gate." },
   syslog: { severity: "ungated-emitter", reason: "forwards real log lines with no tier gate." },
   telemetry: { severity: "ungated-emitter", reason: "emits real telemetry with no tier gate." },
-  webhooks: { severity: "ungated-emitter", reason: "delivers real outbound webhooks with no tier gate." },
   // `carrier` and `graph` were listed here on the assumption they had no proof. The
   // stale-entry check below immediately disproved it: they are covered by
   // carrier-reachability-proof.ts and graph-connector-proof.ts. Entries removed —

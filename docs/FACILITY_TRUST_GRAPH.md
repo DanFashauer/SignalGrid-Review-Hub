@@ -105,6 +105,18 @@ safely.
     **without ever upgrading the accuracy class**, and it satisfies only
     step-up-class concerns: never a wrong map, a broken clinical mapping, or
     a source claim above its ceiling.
+- **Zone-presence transitions (BUILT, intake row 17):** the geofence
+  entry/exit state machine in `transition.ts`, from the session-control
+  research report. Presence is EARNED — continuous in-zone evidence spanning a
+  caller-supplied entry dwell; one radio blip never starts a session. Exit is
+  CONFIRMED — only an affirmative observation outside a caller-supplied
+  containment boundary (hysteresis via the graph: out of the room is not out
+  of the unit) past the exit grace; one missing observation never revokes,
+  and sensor silence can EXPIRE presence (step up, attenuate) but never
+  manufactures the affirmative "they left". States:
+  `present | crossing | probably_outside | confirmed_outside | never_present |
+  unknown`; disordered, future-dated, or unreadable sequences raise. No clock:
+  every instant is supplied, every bound is caller policy.
 - **Phase 4:** Site Context Gateway — the local-only/hybrid deployment mode
   built on `edge-sync`/`control-plane`: local normalization and sensitive
   joins, pseudonymized minimum telemetry upstream, immutable local audit,
@@ -126,6 +138,16 @@ safely.
   supported.
 - **Healthcare RTLS:** CenTrak, Kontakt.io, Securitas/Sonitor, Zebra UWB —
   the precision layer for multi-bed and sensitive areas, deployed selectively.
+- **Session-signal path (roadmap, row 17):** OpenID CAEP / Shared Signals is
+  the natural OUTBOUND channel for telling cooperating applications that a
+  session's context changed (exit confirmed, posture dropped, presence
+  expired). It is an emitter, so when built it lands behind the same emitter
+  discipline as itsm/siem/syslog/telemetry/webhooks — dev/alpha never emit.
+  OAuth introspection / short-lived tokens are the consuming side and are
+  already modeled by `token-binding` and `sso-session`.
+- **Bootstrap credentials (queued candidate, row 17):** TAP-style temporary
+  access grading — one-time, shortest-practical, enrollment-scope-only,
+  location as corroboration never the sole verification factor.
 - **Naming note:** the physical-access family in this repo is `pacs-access`;
   in healthcare-facing docs the expansion is always "physical access control
   system" — never bare "PACS", which collides with radiology picture archiving.

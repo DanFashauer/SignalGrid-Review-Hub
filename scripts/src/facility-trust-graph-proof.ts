@@ -17,6 +17,7 @@ import {
   buildFacilityGraph,
   evaluateLocationCertainty,
   gradeExplicitSelection,
+  gradeZonePresence,
   normalizeLocationObservation,
   resolveClinicalAssignment,
   satisfies,
@@ -451,6 +452,73 @@ check("a HAND-CRAFTED resolution claiming a target while unstated (a buggy calle
   } }).mode === "step_up_required");
 check("the bed-workflow evaluator is deterministic",
   JSON.stringify(bed({ selection: freshScan })) === JSON.stringify(bed({ selection: freshScan })));
+
+// ── zone-presence transitions: dwell, grace, hysteresis (ledger row 17) ────────
+// Presence is earned; exit is confirmed; silence does neither.
+const ZONE = "SG-RM0312";
+const at = (s: string, space = ZONE) => ({ space_id: space, observed_at: s });
+const zp = (observations: Array<{ space_id?: unknown; observed_at?: unknown }>, over: Record<string, unknown> = {}) =>
+  gradeZonePresence(graph, {
+    zoneId: ZONE,
+    exitBoundaryId: "SG-F03-UNIT-4W",
+    observations,
+    policy: { entryDwellSeconds: 30, exitGraceSeconds: 60, maxObservationAgeSeconds: 120 },
+    referenceTime: "2026-07-31T14:32:30Z",
+    ...over,
+  });
+check("ONE BLIP IS NOT AN ENTRY: a single in-zone observation spans zero seconds and never meets a positive dwell — state is crossing, presence NOT confirmed",
+  zp([at("2026-07-31T14:32:20Z")]).state === "crossing" &&
+  zp([at("2026-07-31T14:32:20Z")]).reasonCode === "ENTRY_DWELL_NOT_MET" &&
+  zp([at("2026-07-31T14:32:20Z")]).presenceConfirmed === false);
+check("PRESENCE IS EARNED: continuous in-zone evidence spanning the dwell (30.000s inclusive) → present; 29s → still crossing",
+  zp([at("2026-07-31T14:31:55Z"), at("2026-07-31T14:32:25Z")]).state === "present" &&
+  zp([at("2026-07-31T14:31:56Z"), at("2026-07-31T14:32:25Z")]).state === "crossing");
+check("a blip that ends before dwell is met is never_present (ENTRY_NOT_SUSTAINED) — the visit was a blip, not an entry",
+  zp([at("2026-07-31T14:31:00Z"), at("2026-07-31T14:31:05Z", "SG-F03-CORRIDOR-W")]).state === "never_present" &&
+  zp([at("2026-07-31T14:31:00Z"), at("2026-07-31T14:31:05Z", "SG-F03-CORRIDOR-W")]).reasonCode === "ENTRY_NOT_SUSTAINED");
+const settled = [at("2026-07-31T14:30:00Z"), at("2026-07-31T14:31:30Z")]; // 90s dwell, earned
+check("ONE MISSING OBSERVATION NEVER REVOKES: earned presence with a corridor observation inside the grace window → probably_outside, action MONITOR — retained, watched",
+  zp([...settled, at("2026-07-31T14:32:00Z", "SG-F03-CORRIDOR-W")]).state === "probably_outside" &&
+  zp([...settled, at("2026-07-31T14:32:00Z", "SG-F03-CORRIDOR-W")]).reasonCode === "ZONE_EXITED_WITHIN_GRACE" &&
+  zp([...settled, at("2026-07-31T14:32:00Z", "SG-F03-CORRIDOR-W")]).recommendedAction === "monitor");
+check("HYSTERESIS VIA CONTAINMENT: past grace but every later observation is still inside the exit boundary (the unit) → probably_outside, never confirmed",
+  zp([...settled, at("2026-07-31T14:31:31Z", "SG-F03-CORRIDOR-W")],
+    { referenceTime: "2026-07-31T14:35:00Z" }).state === "probably_outside" &&
+  zp([...settled, at("2026-07-31T14:31:31Z", "SG-F03-CORRIDOR-W")],
+    { referenceTime: "2026-07-31T14:35:00Z" }).reasonCode === "WITHIN_EXIT_BOUNDARY");
+check("EXIT IS CONFIRMED only by an affirmative observation OUTSIDE the boundary past grace — observed on the medication zone side of the floor, outside 4 West",
+  zp([...settled, at("2026-07-31T14:31:40Z", "SG-F03-ZONE-MED")],
+    { referenceTime: "2026-07-31T14:35:00Z" }).state === "confirmed_outside" &&
+  zp([...settled, at("2026-07-31T14:31:40Z", "SG-F03-ZONE-MED")],
+    { referenceTime: "2026-07-31T14:35:00Z" }).recommendedAction === "step_up");
+check("SILENCE NEVER CONFIRMS AN EXIT: earned presence then nothing, past grace → probably_outside PRESENCE_EVIDENCE_EXPIRED (step_up), NOT confirmed_outside — a dead access point is not a door event",
+  zp(settled, { referenceTime: "2026-07-31T14:40:00Z" }).state === "probably_outside" &&
+  zp(settled, { referenceTime: "2026-07-31T14:40:00Z" }).reasonCode === "PRESENCE_EVIDENCE_EXPIRED" &&
+  zp(settled, { referenceTime: "2026-07-31T14:40:00Z" }).recommendedAction === "step_up");
+check("the grace bound alone expires silent presence: NO staleness bound posed, silence past grace → probably_outside PRESENCE_EVIDENCE_EXPIRED — omitting the staleness bound never buys eternal presence",
+  zp(settled, { referenceTime: "2026-07-31T14:40:00Z", policy: { entryDwellSeconds: 30, exitGraceSeconds: 60 } }).state === "probably_outside" &&
+  zp(settled, { referenceTime: "2026-07-31T14:40:00Z", policy: { entryDwellSeconds: 30, exitGraceSeconds: 60 } }).reasonCode === "PRESENCE_EVIDENCE_EXPIRED");
+check("a stale-but-in-grace in-zone word is probably_outside EVIDENCE_STALE (monitor) — a posed staleness bound cannot hold `present` on old evidence",
+  zp([at("2026-07-31T14:28:00Z"), at("2026-07-31T14:30:00Z")],
+    { policy: { entryDwellSeconds: 30, exitGraceSeconds: 600, maxObservationAgeSeconds: 120 } }).state === "probably_outside" &&
+  zp([at("2026-07-31T14:28:00Z"), at("2026-07-31T14:30:00Z")],
+    { policy: { entryDwellSeconds: 30, exitGraceSeconds: 600, maxObservationAgeSeconds: 120 } }).reasonCode === "EVIDENCE_STALE");
+check("no in-zone observation at all → never_present (step_up); an EMPTY sequence is unknown — no evidence cannot answer a posed question",
+  zp([at("2026-07-31T14:31:00Z", "SG-F03-CORRIDOR-W")]).state === "never_present" &&
+  zp([]).state === "unknown" && zp([]).reasonCode === "NO_OBSERVATIONS");
+check("unreadable inputs all raise: garbled instant, unmapped space, disordered sequence, future-dated observation, boundary that does not contain the zone, unmapped zone",
+  zp([{ space_id: ZONE, observed_at: "not-a-time" }]).state === "unknown" &&
+  zp([at("2026-07-31T14:31:00Z", "SG-GHOST-WING")]).state === "unknown" &&
+  zp([at("2026-07-31T14:32:00Z"), at("2026-07-31T14:31:00Z")]).reasonCode === "SEQUENCE_DISORDERED" &&
+  zp([at("2026-07-31T14:33:00Z")]).reasonCode === "OBSERVATION_FUTURE_DATED" &&
+  zp([at("2026-07-31T14:31:00Z")], { exitBoundaryId: "SG-F03-CORRIDOR-W" }).reasonCode === "EXIT_BOUNDARY_INVALID" &&
+  zp([at("2026-07-31T14:31:00Z")], { zoneId: "SG-GHOST-WING" }).reasonCode === "ZONE_NOT_IN_GRAPH");
+check("a nonsense policy (negative dwell, zero staleness bound) is unreadable, never a default",
+  zp([at("2026-07-31T14:31:00Z")], { policy: { entryDwellSeconds: -1, exitGraceSeconds: 60 } }).reasonCode === "POLICY_UNREADABLE" &&
+  zp([at("2026-07-31T14:31:00Z")], { policy: { entryDwellSeconds: 30, exitGraceSeconds: 60, maxObservationAgeSeconds: 0 } }).reasonCode === "POLICY_UNREADABLE");
+check("presenceConfirmed is true for exactly ONE state — present — and the grader is deterministic",
+  zp([...settled]).presenceConfirmed === true && zp([...settled]).state === "present" &&
+  JSON.stringify(zp([...settled])) === JSON.stringify(zp([...settled])));
 
 // ── fusion into the fabric ──────────────────────────────────────────────────────
 check("location_certainty is a member of the runtime SIGNAL_KINDS array",

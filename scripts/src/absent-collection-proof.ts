@@ -22,9 +22,13 @@
 // DATA, not contingent on a caller remembering an out-of-band flag. A safety
 // property that depends on being asked for politely is not a safety property.
 //
-// This proof asserts the rule at every place in the repo that grades a collection,
-// and records the ONE site that resolves the ambiguity optimistically, so the
-// inconsistency is stated rather than left to be rediscovered by a fourth vendor.
+// This proof asserts the rule at every place in the repo that grades a collection.
+// It began by RECORDING the sites that resolved the ambiguity optimistically —
+// pinning behaviour it did not endorse, so the inconsistency was stated rather than
+// left to be rediscovered by a fourth vendor. Every one of those has since been
+// fixed, and each fix announced itself by failing an assertion here first. The
+// pins now hold the corrected behaviour in both directions: absence raises caution,
+// and an observed-empty result is still allowed to be good news.
 //
 // Pure and offline: these are all pure functions.
 
@@ -82,31 +86,53 @@ check(
   bareVerdict.protectionHealthy === false,
 );
 
-// ── 3. vuln-scan: THE ONE THAT RESOLVES THE AMBIGUITY OPTIMISTICALLY ─────────
+// ── 3. vuln-scan: the last site that resolved the ambiguity optimistically ───
 // `[]` genuinely is ambiguous — a scanned device with zero findings is legitimately
-// clean — which is exactly why `scanned` exists. The issue is which way the DEFAULT
-// falls. Every sibling above derives caution from the data; this one grades an
-// empty set as clean unless the caller remembers `scanned: false`.
+// clean — which is exactly why `scanned` exists. The question was which way the
+// DEFAULT fell, and it fell optimistically: an empty set graded clean unless the
+// caller remembered `scanned: false`, so `[]` from an errored request or a device
+// with no scan record was reported CLEAN with action `none`.
 //
-// So the failure mode is a caller who fetches findings, gets `[]` from a truncated
-// page / an errored request / a device with no scan record, and forwards it without
-// the flag: the device is reported CLEAN with recommendedAction "none".
+// FIXED BY DERIVING IT: `options.scanned ?? findings.length > 0`. A non-empty set is
+// its own evidence that a scan ran, so real findings need no flag at all; the empty
+// set — the only genuinely ambiguous case — now fails closed to NOT_SCANNED, and a
+// caller that knows a scan happened says so. That is the strong form of this file's
+// own rule: caution derived from the data, not contingent on remembering an
+// out-of-band argument.
 //
-// This is pinned as the CURRENT behaviour, not endorsed. Changing it is an API
-// change across every caller and is recorded in docs/BUILD_BACKLOG.md as an owner
-// decision. Pinned so it cannot drift further and so the inconsistency stays
-// visible — if it is ever fixed, this assertion fails and says so.
+// No legitimate caller broke, which is itself evidence the default was wrong: every
+// one already passes real findings or states `scanned: true`. The single exception
+// was proof:vuln-scan's per-device loop, where filtering to a slice discards the
+// fixture's scan record — it now states it, which is the caller doing its job.
 const emptyScan = evaluateVulnPosture([], {});
 check(
-  "vuln-scan: an empty finding set currently grades CLEAN by default (known, owner-gated)",
-  emptyScan.posture === "clean" && emptyScan.reasonCode === "NO_FINDINGS",
-  `${emptyScan.posture}/${emptyScan.reasonCode} — if this now fails, the default was fixed: ` +
-    "update this assertion and docs/BUILD_BACKLOG.md",
+  "vuln-scan: an empty finding set with no flag is NOT_SCANNED, not clean",
+  emptyScan.posture === "unknown" && emptyScan.reasonCode === "NOT_SCANNED",
+  `${emptyScan.posture}/${emptyScan.reasonCode}`,
 );
 check(
-  "…and recommends no action at all, which is the part that matters",
-  emptyScan.recommendedAction === "none",
+  "…and it raises monitor rather than recommending no action",
+  emptyScan.recommendedAction === "monitor",
   emptyScan.recommendedAction,
+);
+// The flag is still honoured in the direction that needs it: a caller who KNOWS a
+// scan ran and found nothing can say so, and gets a clean verdict.
+const scannedClean = evaluateVulnPosture([], { scanned: true });
+check(
+  "…while a caller that asserts a scan DID run still gets clean/none",
+  scannedClean.posture === "clean" && scannedClean.recommendedAction === "none",
+  `${scannedClean.posture}/${scannedClean.recommendedAction}`,
+);
+// And the ambiguous case is the ONLY one that needs the flag — a non-empty set is
+// its own evidence that a scan happened, so real findings need no ceremony.
+const derived = evaluateVulnPosture(
+  [{ sourceSystem: "vuln-scan", deviceId: "d1", findingId: "CVE-2026-0002", severity: "high", exploitAvailable: false, source: "proof" } as never],
+  {},
+);
+check(
+  "…and a non-empty set is self-evidence of a scan — graded without any flag",
+  derived.posture !== "unknown" && derived.reasonCode !== "NOT_SCANNED",
+  `${derived.posture}/${derived.reasonCode}`,
 );
 // The honest path exists and works — the gap is that it must be asked for.
 const unscanned = evaluateVulnPosture([], { scanned: false });
@@ -153,7 +179,7 @@ check(
 //   identity-risk       trusted        / NO_RISK            / none   <- was
 //   peripheral-control  no_removable   / NO_REMOVABLE       / none   <- was
 //   credential-exposure clean          / NO_FINDINGS        / none   <- was
-//   vuln-scan           clean          / NO_FINDINGS        / none   <- STILL (see below)
+//   vuln-scan           clean          / NO_FINDINGS        / none   <- was (section 3)
 //
 // This is not hypothetical. proof:live-edr MEASURED that Wazuh's alerts live in a
 // separate indexer, so "reports protection health, cannot report detections" is
@@ -261,8 +287,7 @@ if (failures.length > 0) {
   process.exit(1);
 }
 console.log(
-  "Absent-collection law pinned. Derived correctly: passkey-assurance, edr-threat's agent path,\n" +
-    "telemetry/fleetdm. Recorded as owner-gated debt: vuln-scan's `scanned` default, and the\n" +
-    "`X ?? []` normalizers in edr-threat / identity-risk / peripheral-control / credential-exposure\n" +
-    "that grade an unreported collection as good news with action \"none\".",
+  "Absent-collection law holds at every site that grades a collection. Nothing observed is not\n" +
+    "the same as nothing wrong, and in every case the caution is DERIVED from the data rather\n" +
+    "than left to a caller to request.",
 );

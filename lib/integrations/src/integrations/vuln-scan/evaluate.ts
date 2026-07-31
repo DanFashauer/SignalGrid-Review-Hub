@@ -28,7 +28,18 @@ export function evaluateVulnPosture(
   findings: readonly NormalizedVulnFinding[],
   options: EvaluateVulnOptions = {},
 ): VulnVerdict {
-  const scanned = options.scanned ?? true;
+  // DERIVED, not assumed. A non-empty finding set is itself evidence that a scan
+  // ran — nobody produces CVEs for a device they never looked at — so that case
+  // needs no flag. An EMPTY set is the genuinely ambiguous one (scanned and clean
+  // vs never scanned at all), and there the caller has to say which.
+  //
+  // Defaulting the ambiguous case to `true` was the last place in this package
+  // where absence resolved optimistically: `evaluateVulnPosture([], {})` returned
+  // clean / NO_FINDINGS / action `none`, so a caller who got `[]` from an errored
+  // request or a device with no scan record reported it as a clean device. Every
+  // sibling dimension derives its caution from the data; a safety property that
+  // depends on the caller remembering an out-of-band flag is not a safety property.
+  const scanned = options.scanned ?? findings.length > 0;
   const findingCount = findings.length;
   const exploitableCount = findings.filter((f) => f.exploitAvailable).length;
   const highestSeverity = findings.reduce<VulnSeverity>(

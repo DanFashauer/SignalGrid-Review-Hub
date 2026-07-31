@@ -219,7 +219,14 @@ only), and the DDM rig is gated on an APNs push certificate.
       behaviour so it cannot drift and fails — with instructions — the moment the
       distinction is added.
 
-- [ ] **`vuln-scan` grades an empty finding set as CLEAN by default.** ⚠️ **owner
+- [x] **`vuln-scan` grades an empty finding set as CLEAN by default.** **DONE** —
+      fixed by DERIVING the flag: `options.scanned ?? findings.length > 0`. A non-empty
+      set is its own evidence a scan ran; the empty set — the only ambiguous case —
+      now fails closed to NOT_SCANNED/monitor, and a caller that knows a scan happened
+      states it. No legitimate caller broke, which is itself evidence the default was
+      wrong. ORIGINAL ENTRY BELOW.
+
+- [x] **`vuln-scan` (original entry).** ⚠️ **owner
       decision — API change across callers.** `evaluateVulnPosture([], {})` returns
       `clean` / `NO_FINDINGS` / action `none`. `[]` is genuinely ambiguous — a
       scanned device with zero findings really is clean — which is why the `scanned`

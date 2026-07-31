@@ -14,6 +14,33 @@ picking these up:
 
 ## Now (next up)
 
+_Derived from repo data, not memory: `check-connector-discipline` reports 36/36
+families with KNOWN_GAPS empty, and `check-live-sync` reports `liveEvidence=none`.
+What remains is the LIVE-lane column of
+[ZERO_COST_LIVE_TEST_MATRIX.md](ZERO_COST_LIVE_TEST_MATRIX.md) — every dimension
+already has a fixture proof; these add a real vendor behind it._
+
+- [ ] **Keycloak 26.4 DPoP → token-binding connector.** The matrix calls this the
+      only zero-cost source of a genuinely sender-constrained token. `live-idp-proof`
+      already mints a DPoP-bound token from an in-process `oidc-provider` and checks
+      the `cnf.jkt` thumbprint, so this is about a SECOND, independent issuer
+      disagreeing or agreeing — free, Docker, no account.
+- [ ] **Wazuh (perpetual free) → edr-threat connector.** Real EDR vocabulary rather
+      than fixture shapes. Free forever, self-hosted; no trial clock.
+- [ ] **Dev Proxy → graph posture + device-management-health.** Injects Graph-authentic
+      429/`Retry-After`, 5xx and paging at the wire, exercising error-mapping and
+      pagination caps the mocks assert but have never seen over a real socket.
+- [ ] **Fleet Free + osquery → telemetry/fleetdm.ts.** A real Fleet was already built
+      from source and validated against `lib/fleet-connector` (see
+      [FLEET_LIVE_INTEGRATION.md](FLEET_LIVE_INTEGRATION.md)); this extends the same
+      rig to the telemetry adapter, which is a different code path.
+- [ ] **Android: AMAPI Colab + Test DPC on an emulator** — managed/kiosk custody
+      without hardware. Needs the Android SDK on the machine.
+
+Not free, stated so the absence is deliberate rather than forgotten: identity-risk
+and pim-activation have NO permanent free path (Entra P2 / Governance trial windows
+only), and the DDM rig is gated on an APNs push certificate.
+
 ## Next
 
 - [x] **In-app step-up completion (real WebAuthn, possession + user-verification)** — the SERVER control

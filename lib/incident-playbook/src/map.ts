@@ -190,6 +190,13 @@ function categoryForKind(kind: string, reason?: string): IncidentCategory {
     case "oauth_consent":
     case "token_binding":
     case "pacs_access":
+    // `shift_context` is the labor plane's sibling of `pacs_access`: scheduled-but-
+    // clocked-out, off-duty operation and a site mismatch are either a workforce
+    // schedule/policy question or a borrowed badge — both owned by the Identity &
+    // Access queue that already handles badge and session concerns, never the
+    // generic Service Desk. Never SecOps: the dimension deliberately step-ups
+    // rather than restricts, and its findings are policy states, not live threats.
+    case "shift_context":
     case "agent_identity":
     case "data_protection":
       return "security_compliance";

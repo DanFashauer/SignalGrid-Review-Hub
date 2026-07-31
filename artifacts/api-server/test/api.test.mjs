@@ -224,6 +224,14 @@ async function run() {
     "signal catalog → benchmark_selection is evaluated, not novel (the category the /v1 misfit rule reads)",
     (catalog.json?.evaluated ?? []).includes("benchmark_selection"),
   );
+
+  // ── /metrics: global aggregate, optionally bearer-gated, never tenant-labelled ──
+  const metricsRes = await fetch(`${BASE.replace(/\/api$/, "")}/metrics`);
+  const metricsText = await metricsRes.text();
+  check("/metrics → 200 with no METRICS_TOKEN set (Prometheus convention preserved)",
+    metricsRes.status === 200);
+  check("/metrics → carries NO tenant label — the aggregate can never become a cross-tenant side channel",
+    metricsText.length > 0 && !metricsText.includes("tenant"));
   check(
     "signal catalog → battery_health is evaluated, not novel",
     (catalog.json?.evaluated ?? []).includes("battery_health"),

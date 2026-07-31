@@ -70,16 +70,7 @@ const NOT_A_FAMILY = new Set(["adapters"]);
 // direction. That is the whole point of the self-invalidation and it is worth
 // recording that it worked on a real fix rather than only on a rehearsal.
 const KNOWN_GAPS = {
-  itsm: { severity: "ungated-emitter", reason: "servicenow/bmc-helix/ivanti create real tickets with no tier gate." },
-  siem: { severity: "ungated-emitter", reason: "sentinel forwards real events with no tier gate." },
-  // CORRECTED AFTER AUDIT. This read "forwards real log lines with no tier gate", which
-  // was false: the family opens no socket at all (no dgram, net, tls or fetch anywhere
-  // in it). It formats RFC 5424 / CEF / LEEF correctly and then dropped every event —
-  // while returning status:'sent'. The lie is fixed; the family still needs the owner's
   // gated-vs-fixture decision before a transport is added, so it stays listed.
-  syslog: { severity: "ungated-emitter", reason: "formats events but ships NO transport; needs the gated-vs-fixture decision before one is added." },
-  telemetry: { severity: "ungated-emitter", reason: "emits real telemetry with no tier gate." },
-  webhooks: { severity: "ungated-emitter", reason: "delivers real outbound webhooks with no tier gate." },
   // `carrier` and `graph` were listed here on the assumption they had no proof. The
   // stale-entry check below immediately disproved it: they are covered by
   // carrier-reachability-proof.ts and graph-connector-proof.ts. Entries removed —

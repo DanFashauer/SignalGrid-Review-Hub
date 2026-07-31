@@ -14,15 +14,15 @@ export * as deviceResolver from "./integrations/deviceResolver";
 // has one definition and one proof rather than a copy per store.
 export * as storeScope from "./integrations/store-scope";
 export * as sign from "./integrations/sign";
-export * as itsm from "./integrations/itsm/adapter";
+export * as itsm from "./integrations/itsm/index";
 export * as entitlementBinding from "./integrations/entitlement-binding/index";
 export * as responseAccountability from "./integrations/response-accountability/index";
 export * as uem from "./integrations/uem/index";
 export * as nac from "./integrations/nac/index";
-export * as siem from "./integrations/siem/webhook";
-export * as telemetry from "./integrations/telemetry/fleetdm";
+export * as siem from "./integrations/siem/index";
+export * as telemetry from "./integrations/telemetry/index";
 export * as telemetryTypes from "./integrations/telemetry/types";
-export * as webhooks from "./integrations/webhooks/dispatch";
+export * as webhooks from "./integrations/webhooks/index";
 export * as graph from "./integrations/graph";
 // Namespaced (not a bare `export *`) like every other entry here, so its
 // `normalizeReport`/`guardReadOnly` cannot collide with a sibling connector's. The

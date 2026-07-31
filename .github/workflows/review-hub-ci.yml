@@ -197,6 +197,8 @@ jobs:
 
       # Policy binding — membership IS the policy: unbound, too-wide (fail-open),
       # too-narrow, or mixed-membership group assignment.
+      - name: Proof — emitter-discipline (five outbound families gated, fixture never claims delivery)
+        run: pnpm run proof:emitter-discipline
       - name: Proof — benchmark-selection (which CIS benchmark graded this device, and from what content)
         run: pnpm run proof:benchmark-selection
       - name: Proof — policy-binding (group-assignment correctness)

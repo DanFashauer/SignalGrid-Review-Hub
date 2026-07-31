@@ -416,6 +416,15 @@ in one place.
   rather than lowering it. User verification discouraged is possession-only, a known-false
   reliance that restricts. `proof:passkey-assurance` (74 checks).
 
+- **Outbound emitters under discipline** — the five delivery families (`itsm`, `siem`, `syslog`,
+  `telemetry`, `webhooks`) each carry the same unanimous live-call gate as every read
+  connector: dev/alpha never emit; beta/prod need `SIGNALGRID_LIVE_INTEGRATIONS=true`, a
+  per-family credential, and an INJECTED transport this repository does not ship. The fixture
+  emitter records what WOULD have been sent with a literal `delivered: false` on every entry —
+  after the syslog family was found returning `status:'sent'` for events it silently dropped,
+  the surface is shaped so that claim is unrepresentable. Routing (`response-accountability`)
+  stays a verdict; emission stays an act behind this gate. `proof:emitter-discipline` (42 checks).
+
 - **Benchmark selection** ([BENCHMARK_SELECTION.md](BENCHMARK_SELECTION.md)) — a baseline answer is
   meaningless without the question that produced it. `BaselineState` records `aligned` and nothing
   about which benchmark, at what version, from whose content, covering how much. Graded against a

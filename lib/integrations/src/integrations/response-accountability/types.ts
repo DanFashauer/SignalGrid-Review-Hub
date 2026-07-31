@@ -29,9 +29,10 @@
 //
 // It does not DELIVER anything. Deciding who should be told, and by when, is a pure
 // deterministic routing decision and belongs here. Actually sending the page, the
-// ticket or the webhook is the outbound-emitter question that `itsm`, `siem`,
-// `syslog`, `telemetry` and `webhooks` represent — still ungated, and explicitly an
-// owner decision. Routing is a verdict; delivery is an action. This file emits
+// ticket or the webhook is the outbound-emitter surface that `itsm`, `siem`,
+// `syslog`, `telemetry` and `webhooks` represent — each now behind its own tier
+// gate, fixture-backed in this repository, live only with an injected transport it
+// does not ship. Routing is a verdict; delivery is an action. This file emits
 // verdicts.
 //
 // It also never touches the worker. See the ceiling note on ResponseAction.

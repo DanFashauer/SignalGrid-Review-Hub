@@ -39,7 +39,12 @@
     "./policy-binding": "./src/integrations/policy-binding/index.ts",
     "./device-management-health": "./src/integrations/device-management-health/index.ts",
     "./link-usability": "./src/integrations/link-usability/index.ts",
-    "./task-exception": "./src/integrations/task-exception/index.ts"
+    "./task-exception": "./src/integrations/task-exception/index.ts",
+    "./itsm": "./src/integrations/itsm/index.ts",
+    "./siem": "./src/integrations/siem/index.ts",
+    "./syslog": "./src/integrations/syslog/index.ts",
+    "./telemetry": "./src/integrations/telemetry/index.ts",
+    "./webhooks": "./src/integrations/webhooks/index.ts"
   },
   "dependencies": {
     "ioredis": "^5.4.1",

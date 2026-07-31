@@ -6,8 +6,10 @@
 // ROUTING IS A DECISION; DELIVERY IS AN ACTION. `routeConcern` says which team owns a
 // class of concern. It does not page them, open a ticket, or emit a webhook — that is
 // the outbound-emitter surface (`itsm`, `siem`, `syslog`, `telemetry`, `webhooks`),
-// which is still ungated and an explicit owner decision. Keeping the two apart is
-// what lets this family ship read-only while that question stays open.
+// now under the same tier gate as every connector (see each family's resolve.ts):
+// fixture-backed here, live only with tier + flag + credential + an INJECTED
+// transport this repository does not ship. Keeping routing and delivery apart is
+// still the design — a routing verdict is evidence, an emission is an act.
 
 import { evaluateResponse } from "./evaluate";
 import type { NormalizedResponseRecord, ResponseVerdict } from "./types";

@@ -116,6 +116,13 @@ if [ "$SIM_ONLY" != "--sim-only" ]; then
       skip "$p" "needs a live Wazuh (WAZUH_URL); see docs/ZERO_COST_LIVE_TEST_MATRIX.md section 6"
       continue
     fi
+    # proof:live-fleet reads a REAL Fleet (MySQL + Redis + Fleet, amd64 under
+    # emulation). Same reasoning as Wazuh: too heavy to auto-provision, so it is
+    # named as skipped with the command to run it, never silently passed.
+    if [ "$p" = "proof:live-fleet" ] && [ -z "${FLEET_URL:-}" ]; then
+      skip "$p" "needs a live Fleet (FLEET_URL + FLEET_TOKEN); see docs/FLEET_LIVE_INTEGRATION.md"
+      continue
+    fi
     gate "$p" $PNPM run "$p"
   done
 

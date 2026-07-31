@@ -107,7 +107,8 @@
     "proof:mdm-profile": "tsx ./src/mdm-profile-proof.ts",
     "proof:emit-gate": "tsx ./src/emit-gate-proof.ts",
     "proof:live-edr": "tsx ./src/live-edr-proof.ts",
-    "proof:graph-wire": "tsx ./src/graph-wire-proof.ts"
+    "proof:graph-wire": "tsx ./src/graph-wire-proof.ts",
+    "proof:live-fleet": "tsx ./src/live-fleet-proof.ts"
   },
   "dependencies": {
     "@workspace/app-workflows": "workspace:*",
@@ -139,7 +140,8 @@
     "@workspace/adaptive-proposals": "workspace:*",
     "@workspace/self-audit": "workspace:*",
     "@workspace/reliability": "workspace:*",
-    "@workspace/iac": "workspace:*"
+    "@workspace/iac": "workspace:*",
+    "@workspace/integration-bridge": "workspace:*"
   },
   "devDependencies": {
     "@playwright/test": "1.62.0",

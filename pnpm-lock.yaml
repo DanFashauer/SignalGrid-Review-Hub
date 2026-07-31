@@ -1738,6 +1738,9 @@ importers:
       '@workspace/incident-playbook':
         specifier: workspace:*
         version: link:../lib/incident-playbook
+      '@workspace/integration-bridge':
+        specifier: workspace:*
+        version: link:../lib/integration-bridge
       '@workspace/integrations':
         specifier: workspace:*
         version: link:../lib/integrations

@@ -56,7 +56,10 @@ export function evaluateCredentialExposure(
   options: EvaluateCredentialOptions = {},
 ): CredentialExposureVerdict {
   const covered = options.covered ?? true;
-  const findings = posture.findings;
+  // `null` = the source never reported the secret-scan result set; `[]` = it reported none.
+  // Both count as zero, which is why the distinction must travel separately.
+  const findingsObserved = posture.findings !== null;
+  const findings = posture.findings ?? [];
   const findingCount = findings.length;
   const exposed = findings.filter((f) => f.exposed);
   const exposedCount = exposed.length;
@@ -81,6 +84,13 @@ export function evaluateCredentialExposure(
   // Collect every applicable concern as a candidate, then let the STRONGEST win
   // (order-proof).
   const candidates: Candidate[] = [];
+  if (!findingsObserved) {
+    // Never read the feed, so "nothing found" is not a reading we are entitled to.
+    // `monitor` — a blind spot to investigate, not an alarm. Beats the `none`
+    // default and loses to any genuinely observed problem, which is the right
+    // precedence: a real finding outranks "we could not see".
+    candidates.push({ posture: "unknown", action: "monitor", reason: "SECRET_SCAN_UNOBSERVED" });
+  }
 
   const highValueExposed = exposed.some((f) => f.highValue);
   if (exposedCount > 0 && highValueExposed) {

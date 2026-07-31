@@ -64,7 +64,7 @@ export interface LocationVerdict {
   usesPreciseLocation: boolean;
 }
 
-export type LocationConnectorErrorCode = "auth_failed" | "read_only_violation" | "upstream_error" | "bad_response";
+export type LocationConnectorErrorCode = "incomplete_read" | "auth_failed" | "read_only_violation" | "upstream_error" | "bad_response";
 
 export class LocationConnectorError extends Error {
   readonly code: LocationConnectorErrorCode;

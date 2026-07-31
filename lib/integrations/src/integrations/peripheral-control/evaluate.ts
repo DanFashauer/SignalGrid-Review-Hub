@@ -60,7 +60,13 @@ export function evaluatePeripheralPosture(
   options: EvaluatePeripheralOptions = {},
 ): PeripheralVerdict {
   const covered = options.covered ?? true;
-  const removable = posture.peripherals.filter(isRemovableStorage);
+  // `null` = the source never reported a peripheral inventory; `[]` = it reported
+  // none attached. Both filter to zero removable devices, which is exactly why the
+  // distinction has to travel separately into the verdict — "no USB stick was
+  // found" and "nobody looked for one" are not the same claim about a device.
+  const peripheralsObserved = posture.peripherals !== null;
+  const peripherals = posture.peripherals ?? [];
+  const removable = peripherals.filter(isRemovableStorage);
   const removableCount = removable.length;
   const writableRemovable = removable.filter(isWritable);
   const writableRemovableCount = writableRemovable.length;
@@ -79,6 +85,12 @@ export function evaluatePeripheralPosture(
   // Collect every applicable concern as a candidate, then let the STRONGEST win
   // (order-proof).
   const candidates: Candidate[] = [];
+  if (!peripheralsObserved) {
+    // Never read the inventory, so "no removable media" is not a reading we are
+    // entitled to. `monitor` — a blind spot to investigate, not an alarm; it beats
+    // the `none` default and loses to any genuinely observed device below.
+    candidates.push({ posture: "unknown", action: "monitor", reason: "PERIPHERAL_FEED_UNOBSERVED" });
+  }
 
   for (const p of removable) {
     if (!isWritable(p)) {
@@ -107,7 +119,7 @@ export function evaluatePeripheralPosture(
   // over-restricting (it might be a benign unmapped device). This closes the
   // class-side asymmetry with normalizeAccess (which already fails safe to
   // writable). Recognized removable storage is handled by the loop above.
-  const hasUnclassifiedWritable = posture.peripherals.some(
+  const hasUnclassifiedWritable = peripherals.some(
     (p) => p.class === "unknown" && isWritable(p),
   );
   if (hasUnclassifiedWritable) {

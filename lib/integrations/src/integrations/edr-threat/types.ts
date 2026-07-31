@@ -69,7 +69,19 @@ export interface NormalizedEndpointThreat {
   realtimeProtection: boolean;
   signatureAgeHours: number | null;
   lastSeen: string | null;
-  threats: NormalizedThreatDetection[];
+  /**
+   * `null` when the source did not report a detection feed at all — distinct from
+   * `[]`, which means it reported and found nothing. The same distinction this
+   * package already draws for scalars (`signatureAgeHours: number | null`,
+   * `keyAttested: boolean | null`, rtls-custody's `present: boolean | null`),
+   * extended to the collection.
+   *
+   * It is not academic. `proof:live-edr` measured that Wazuh's alerts live in a
+   * separate indexer, so "reports agent health, cannot report detections" is the
+   * real shape of a live EDR. Flattened to `[]` it was indistinguishable from a
+   * clean scan and graded `protected` / action `none`.
+   */
+  threats: NormalizedThreatDetection[] | null;
   source: string;
 }
 
@@ -84,6 +96,7 @@ export type ThreatPosture =
 
 export type ThreatReasonCode =
   | "NO_THREATS_HEALTHY"
+  | "THREAT_FEED_UNOBSERVED"
   | "NOT_REPORTING"
   | "THREATS_REMEDIATED"
   | "PROTECTION_DEGRADED"
@@ -104,7 +117,7 @@ export interface ThreatVerdict {
   recommendedAction: ThreatAction;
 }
 
-export type EdrConnectorErrorCode = "auth_failed" | "read_only_violation" | "upstream_error" | "bad_response";
+export type EdrConnectorErrorCode = "incomplete_read" | "auth_failed" | "read_only_violation" | "upstream_error" | "bad_response";
 
 export class EdrConnectorError extends Error {
   readonly code: EdrConnectorErrorCode;

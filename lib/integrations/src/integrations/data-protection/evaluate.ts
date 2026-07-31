@@ -55,7 +55,10 @@ export function evaluateDlpPosture(
   options: EvaluateDlpOptions = {},
 ): DlpVerdict {
   const covered = options.covered ?? true;
-  const violations = posture.violations;
+  // `null` = the source never reported the DLP violation feed; `[]` = it reported none.
+  // Both count as zero, which is why the distinction must travel separately.
+  const violationsObserved = posture.violations !== null;
+  const violations = posture.violations ?? [];
   const violationCount = violations.length;
   const egressed = violations.filter((v) => v.egressed);
   const egressCount = egressed.length;
@@ -80,6 +83,13 @@ export function evaluateDlpPosture(
   // Collect every applicable concern as a candidate, then let the STRONGEST win
   // (order-proof).
   const candidates: Candidate[] = [];
+  if (!violationsObserved) {
+    // Never read the feed, so "nothing found" is not a reading we are entitled to.
+    // `monitor` — a blind spot to investigate, not an alarm. Beats the `none`
+    // default and loses to any genuinely observed problem, which is the right
+    // precedence: a real finding outranks "we could not see".
+    candidates.push({ posture: "unknown", action: "monitor", reason: "DLP_FEED_UNOBSERVED" });
+  }
 
   const regulatedEgress = egressed.some((v) => v.regulated || v.severity === "critical" || v.severity === "high");
   if (egressCount > 0 && regulatedEgress) {

@@ -22,15 +22,23 @@
 // DATA, not contingent on a caller remembering an out-of-band flag. A safety
 // property that depends on being asked for politely is not a safety property.
 //
-// This proof asserts the rule at every place in the repo that grades a collection,
-// and records the ONE site that resolves the ambiguity optimistically, so the
-// inconsistency is stated rather than left to be rediscovered by a fourth vendor.
+// This proof asserts the rule at every place in the repo that grades a collection.
+// It began by RECORDING the sites that resolved the ambiguity optimistically —
+// pinning behaviour it did not endorse, so the inconsistency was stated rather than
+// left to be rediscovered by a fourth vendor. Every one of those has since been
+// fixed, and each fix announced itself by failing an assertion here first. The
+// pins now hold the corrected behaviour in both directions: absence raises caution,
+// and an observed-empty result is still allowed to be good news.
 //
 // Pure and offline: these are all pure functions.
 
 import { evaluateVulnPosture } from "@workspace/integrations/vuln-scan";
 import { evaluateThreatPosture, normalizeEndpoint } from "@workspace/integrations/edr-threat";
 import { evaluateIdentityPasskeys } from "@workspace/integrations/passkey-assurance";
+import * as identityRisk from "@workspace/integrations/identity-risk";
+import * as peripheral from "@workspace/integrations/peripheral-control";
+import * as credential from "@workspace/integrations/credential-exposure";
+import { composeDeviceRisk, fromThreat } from "@workspace/posture-composition";
 
 let passed = 0;
 const failures: string[] = [];
@@ -79,31 +87,53 @@ check(
   bareVerdict.protectionHealthy === false,
 );
 
-// ── 3. vuln-scan: THE ONE THAT RESOLVES THE AMBIGUITY OPTIMISTICALLY ─────────
+// ── 3. vuln-scan: the last site that resolved the ambiguity optimistically ───
 // `[]` genuinely is ambiguous — a scanned device with zero findings is legitimately
-// clean — which is exactly why `scanned` exists. The issue is which way the DEFAULT
-// falls. Every sibling above derives caution from the data; this one grades an
-// empty set as clean unless the caller remembers `scanned: false`.
+// clean — which is exactly why `scanned` exists. The question was which way the
+// DEFAULT fell, and it fell optimistically: an empty set graded clean unless the
+// caller remembered `scanned: false`, so `[]` from an errored request or a device
+// with no scan record was reported CLEAN with action `none`.
 //
-// So the failure mode is a caller who fetches findings, gets `[]` from a truncated
-// page / an errored request / a device with no scan record, and forwards it without
-// the flag: the device is reported CLEAN with recommendedAction "none".
+// FIXED BY DERIVING IT: `options.scanned ?? findings.length > 0`. A non-empty set is
+// its own evidence that a scan ran, so real findings need no flag at all; the empty
+// set — the only genuinely ambiguous case — now fails closed to NOT_SCANNED, and a
+// caller that knows a scan happened says so. That is the strong form of this file's
+// own rule: caution derived from the data, not contingent on remembering an
+// out-of-band argument.
 //
-// This is pinned as the CURRENT behaviour, not endorsed. Changing it is an API
-// change across every caller and is recorded in docs/BUILD_BACKLOG.md as an owner
-// decision. Pinned so it cannot drift further and so the inconsistency stays
-// visible — if it is ever fixed, this assertion fails and says so.
+// No legitimate caller broke, which is itself evidence the default was wrong: every
+// one already passes real findings or states `scanned: true`. The single exception
+// was proof:vuln-scan's per-device loop, where filtering to a slice discards the
+// fixture's scan record — it now states it, which is the caller doing its job.
 const emptyScan = evaluateVulnPosture([], {});
 check(
-  "vuln-scan: an empty finding set currently grades CLEAN by default (known, owner-gated)",
-  emptyScan.posture === "clean" && emptyScan.reasonCode === "NO_FINDINGS",
-  `${emptyScan.posture}/${emptyScan.reasonCode} — if this now fails, the default was fixed: ` +
-    "update this assertion and docs/BUILD_BACKLOG.md",
+  "vuln-scan: an empty finding set with no flag is NOT_SCANNED, not clean",
+  emptyScan.posture === "unknown" && emptyScan.reasonCode === "NOT_SCANNED",
+  `${emptyScan.posture}/${emptyScan.reasonCode}`,
 );
 check(
-  "…and recommends no action at all, which is the part that matters",
-  emptyScan.recommendedAction === "none",
+  "…and it raises monitor rather than recommending no action",
+  emptyScan.recommendedAction === "monitor",
   emptyScan.recommendedAction,
+);
+// The flag is still honoured in the direction that needs it: a caller who KNOWS a
+// scan ran and found nothing can say so, and gets a clean verdict.
+const scannedClean = evaluateVulnPosture([], { scanned: true });
+check(
+  "…while a caller that asserts a scan DID run still gets clean/none",
+  scannedClean.posture === "clean" && scannedClean.recommendedAction === "none",
+  `${scannedClean.posture}/${scannedClean.recommendedAction}`,
+);
+// And the ambiguous case is the ONLY one that needs the flag — a non-empty set is
+// its own evidence that a scan happened, so real findings need no ceremony.
+const derived = evaluateVulnPosture(
+  [{ sourceSystem: "vuln-scan", deviceId: "d1", findingId: "CVE-2026-0002", severity: "high", exploitAvailable: false, source: "proof" } as never],
+  {},
+);
+check(
+  "…and a non-empty set is self-evidence of a scan — graded without any flag",
+  derived.posture !== "unknown" && derived.reasonCode !== "NOT_SCANNED",
+  `${derived.posture}/${derived.reasonCode}`,
 );
 // The honest path exists and works — the gap is that it must be asked for.
 const unscanned = evaluateVulnPosture([], { scanned: false });
@@ -140,6 +170,151 @@ check(
   `${realFinding.posture}/${realFinding.reasonCode}`,
 );
 
+// ── 5. THE SYSTEMIC ONE, NOW FIXED: `X ?? []` used to erase "never looked" ───
+// Five connectors normalized a MISSING collection into an EMPTY one
+// (`(raw.threats ?? []).map(...)` and siblings). After that line a source that
+// could not report and a source that reported nothing were byte-identical, and
+// every evaluator read the empty set as good news with action "none":
+//
+//   edr-threat          protected      / NO_THREATS_HEALTHY / none   <- was
+//   identity-risk       trusted        / NO_RISK            / none   <- was
+//   peripheral-control  no_removable   / NO_REMOVABLE       / none   <- was
+//   credential-exposure clean          / NO_FINDINGS        / none   <- was
+//   vuln-scan           clean          / NO_FINDINGS        / none   <- was (section 3)
+//
+// This is not hypothetical. proof:live-edr MEASURED that Wazuh's alerts live in a
+// separate indexer, so "reports protection health, cannot report detections" is
+// the real shape of the one live EDR this repo has been pointed at. Wazuh escapes
+// today only because it also cannot report realtimeProtection or signatureAgeHours,
+// which independently force degraded_protection. A vendor that reports protection
+// health but not detections lands on `protected` / action none.
+//
+// It also COMPOUNDS the capped-read defect that check-pagination-truncation.mjs
+// guards: a truncated page returns fewer items, and fewer items read as cleaner.
+// A read that never happened and a read that found nothing must not be the same
+// value — that is the whole law, and here it is violated by a single `?? []`.
+//
+// FIXED. Each of those five now carries the distinction: the normalized collection
+// is `null` when the source never reported it and `[]` when it reported none, and
+// each evaluator contributes an "unobserved" candidate that raises `monitor`
+// instead of leaving the `none` default to win. The table above is what these
+// assertions USED to pin; they now pin the opposite, and the two states must stay
+// distinguishable.
+//
+// The mechanism worked exactly as designed on the way through: the moment the fix
+// landed, this proof failed with "the distinction was added — update
+// docs/BUILD_BACKLOG.md". A pinning assertion is not a claim that the behaviour is
+// right; it is a tripwire that makes changing it deliberate.
+const healthyNoThreatFeed = normalizeEndpoint({
+  deviceId: "d1",
+  agentInstalled: true,
+  agentRunning: true,
+  realtimeProtection: true,
+  signatureAgeHours: 1,
+  source: "vendor-without-threat-feed",
+  // threats: NOT SUPPLIED — the vendor has no detection endpoint here
+});
+const noFeedVerdict = evaluateThreatPosture(healthyNoThreatFeed, {});
+const explicitZero = evaluateThreatPosture(
+  normalizeEndpoint({
+    deviceId: "d2",
+    agentInstalled: true,
+    agentRunning: true,
+    realtimeProtection: true,
+    signatureAgeHours: 1,
+    threats: [],
+    source: "vendor-with-threat-feed",
+  }),
+  {},
+);
+check(
+  "edr-threat: an unreported threat feed is NOT graded protected",
+  noFeedVerdict.posture !== "protected" && noFeedVerdict.reasonCode === "THREAT_FEED_UNOBSERVED",
+  `${noFeedVerdict.posture}/${noFeedVerdict.reasonCode}`,
+);
+check(
+  "…and it raises `monitor` — a blind spot to investigate, never action `none`",
+  noFeedVerdict.recommendedAction === "monitor",
+  noFeedVerdict.recommendedAction,
+);
+check(
+  "…and it is DISTINGUISHABLE from a vendor that actually scanned and found nothing",
+  JSON.stringify(noFeedVerdict) !== JSON.stringify(explicitZero),
+);
+check(
+  "…while a vendor that DID scan and found nothing is still graded clean (not a wall)",
+  explicitZero.posture === "protected" && explicitZero.recommendedAction === "none",
+  `${explicitZero.posture}/${explicitZero.recommendedAction}`,
+);
+
+// The same law at the other four sites. Asserted on the ACTION rather than the
+// posture name, because that is what a caller acts on and it is the part that was
+// wrong: every one of these used to recommend doing nothing about a device nobody
+// had looked at.
+for (const [label, unreported, reportedNone] of [
+  [
+    "identity-risk",
+    identityRisk.evaluateIdentityRisk(identityRisk.normalizePrincipal({ principalId: "p", source: "s" } as never), {}),
+    identityRisk.evaluateIdentityRisk(identityRisk.normalizePrincipal({ principalId: "p", source: "s", detections: [] } as never), {}),
+  ],
+  [
+    "peripheral-control",
+    peripheral.evaluatePeripheralPosture(peripheral.normalizeDevice({ deviceId: "d", source: "s" } as never), {}),
+    peripheral.evaluatePeripheralPosture(peripheral.normalizeDevice({ deviceId: "d", source: "s", peripherals: [] } as never), {}),
+  ],
+  [
+    "credential-exposure",
+    credential.evaluateCredentialExposure(credential.normalizeDevice({ deviceId: "d", source: "s" } as never), {}),
+    credential.evaluateCredentialExposure(credential.normalizeDevice({ deviceId: "d", source: "s", findings: [] } as never), {}),
+  ],
+] as [string, { recommendedAction?: string; reasonCode?: string }, { recommendedAction?: string }][]) {
+  check(
+    `${label}: an unreported collection raises monitor, not "no action"`,
+    unreported.recommendedAction === "monitor",
+    `action=${String(unreported.recommendedAction)} reason=${String(unreported.reasonCode)}`,
+  );
+  check(
+    `${label}: …and an explicitly EMPTY collection is still clean, action none`,
+    reportedNone.recommendedAction === "none",
+    `action=${String(reportedNone.recommendedAction)}`,
+  );
+}
+
+// ── 6. Does any of it REACH the fabric? ──────────────────────────────────────
+// Everything above is per-dimension. A verdict that never changes what the fabric
+// composes is a cosmetic fix, so this asserts the whole path end to end:
+// normalize → evaluate → adapter → composeDeviceRisk.
+const unobservedComposed = composeDeviceRisk([fromThreat(noFeedVerdict)]);
+const scannedComposed = composeDeviceRisk([fromThreat(explicitZero)]);
+
+check(
+  "an unobserved feed changes the COMPOSED action, not just the dimension verdict",
+  unobservedComposed.strongestAction === "monitor" && scannedComposed.strongestAction === "none",
+  `${unobservedComposed.strongestAction} vs ${scannedComposed.strongestAction}`,
+);
+check(
+  "…and the fabric can SAY WHY — the driver names the unobserved feed",
+  unobservedComposed.drivers[0]?.reason === "THREAT_FEED_UNOBSERVED",
+  String(unobservedComposed.drivers[0]?.reason),
+);
+
+// RECORDED, NOT ENDORSED — and deliberately not changed here. `TIER_BY_ACTION`
+// maps BOTH `none` and `monitor` to the tier `ok`, so a consumer reading only
+// `riskTier` still cannot tell "verified clean" from "we never looked". The finer
+// distinction is present one level down, in `strongestAction` and `drivers`.
+//
+// Reclassifying `monitor` to `watch` would be the obvious fix and is NOT a local
+// one: it would move EVERY monitor verdict in every dimension — controlled media,
+// remediated threats, NOT_REPORTING — out of `ok`. That is a decision about what
+// the tier vocabulary means, not a defect in this law, so it is pinned and stated
+// rather than quietly altered.
+check(
+  "the coarse riskTier is `ok` for both — the distinction lives in action + drivers (recorded)",
+  unobservedComposed.riskTier === "ok" && scannedComposed.riskTier === "ok",
+  `${unobservedComposed.riskTier}/${scannedComposed.riskTier} — if this changed, TIER_BY_ACTION was ` +
+    "revisited: update this assertion and say so in docs/BUILD_BACKLOG.md",
+);
+
 const total = passed + failures.length;
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${total})`);
 if (failures.length > 0) {
@@ -148,5 +323,7 @@ if (failures.length > 0) {
   process.exit(1);
 }
 console.log(
-  "Absent-collection law pinned: 3 of 4 grading paths derive caution from the data; vuln-scan's default is recorded.",
+  "Absent-collection law holds at every site that grades a collection. Nothing observed is not\n" +
+    "the same as nothing wrong, and in every case the caution is DERIVED from the data rather\n" +
+    "than left to a caller to request.",
 );

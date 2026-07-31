@@ -63,7 +63,13 @@ export interface NormalizedPeripheralPosture {
   sourceSystem: "peripheral-control";
   deviceId: string;
   policyEnforced: boolean | null;
-  peripherals: NormalizedPeripheral[];
+  /**
+   * `null` when the source did not report a peripheral/removable-media inventory at all — distinct from `[]`,
+   * which means it reported and found nothing. The same distinction this package
+   * already draws for scalars (`null = not reported`), extended to the collection:
+   * a feed that was never read must not be gradeable as a clean one.
+   */
+  peripherals: NormalizedPeripheral[] | null;
   source: string;
 }
 
@@ -79,6 +85,7 @@ export type PeripheralPosture =
 
 export type PeripheralReasonCode =
   | "NO_REMOVABLE"
+  | "PERIPHERAL_FEED_UNOBSERVED"
   | "NOT_COVERED"
   | "CONTROLLED_MEDIA"
   | "UNCLASSIFIED_PERIPHERAL"
@@ -99,7 +106,7 @@ export interface PeripheralVerdict {
   recommendedAction: PeripheralAction;
 }
 
-export type PeripheralConnectorErrorCode = "auth_failed" | "read_only_violation" | "upstream_error" | "bad_response";
+export type PeripheralConnectorErrorCode = "incomplete_read" | "auth_failed" | "read_only_violation" | "upstream_error" | "bad_response";
 
 export class PeripheralConnectorError extends Error {
   readonly code: PeripheralConnectorErrorCode;

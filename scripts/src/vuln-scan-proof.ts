@@ -59,7 +59,13 @@ check("a 9.8 CVSS with no label normalizes to critical", normalizeFinding({ devi
 for (const name of deviceNames) {
   const spec = fixture.devices[name];
   const findings = normalized.filter((f) => f.deviceId === name);
-  const v = evaluateVulnPosture(findings);
+  // `scanned: true` is stated, not assumed. Appearing in `fixture.devices` IS the
+  // scan record — these are devices the scanner reported on. Filtering to a
+  // per-device slice throws that away, and for `dev-clean` the slice is empty, so
+  // the evaluator can no longer tell "scanned, nothing found" from "never scanned"
+  // and now fails closed to NOT_SCANNED. Saying so here is the caller doing its
+  // job: only the caller still knows a scan happened.
+  const v = evaluateVulnPosture(findings, { scanned: true });
   const ok = v.posture === spec.expected.posture && v.highestSeverity === spec.expected.highestSeverity &&
     v.reasonCode === spec.expected.reasonCode && v.recommendedAction === spec.expected.recommendedAction &&
     v.exploitableCount === spec.expected.exploitableCount && v.findingCount === spec.expected.findingCount;

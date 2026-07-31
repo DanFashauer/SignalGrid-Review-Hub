@@ -92,6 +92,23 @@ export class EdrThreatConnector {
       url = body.nextPageToken ? `${firstUrl}?pageToken=${encodeURIComponent(body.nextPageToken)}` : undefined;
       pages += 1;
     }
+    // The cap is a loop/DoS guard and must stay — but exiting it with a nextPageToken
+    // still in hand means the inventory is INCOMPLETE, and a short list is
+    // indistinguishable from a complete one. For a posture fabric that is the
+    // fail-open: a device missing from the result reads as a device with no problem.
+    //
+    // Refuse rather than hand back a partial inventory dressed as a whole one. This
+    // repo already answers incompleteness that way everywhere else — policy.ts and
+    // the simulator both raise step-up because "trust is incomplete"; passkey and
+    // ddm fail closed on partial sets. The remedy is explicit: raise pageLimit, and
+    // say how much you expect to read.
+    if (url) {
+      throw new EdrConnectorError(
+        "incomplete_read",
+        `EDR/EPP read hit the ${this.pageLimit}-page cap with more pages remaining. Refusing to ` +
+          "return a partial inventory as if it were complete; raise pageLimit to read further.",
+      );
+    }
     return out;
   }
 
@@ -122,7 +139,10 @@ export function normalizeEndpoint(endpoint: EndpointThreatRaw): NormalizedEndpoi
     realtimeProtection: endpoint.realtimeProtection === true,
     signatureAgeHours: typeof endpoint.signatureAgeHours === "number" ? endpoint.signatureAgeHours : null,
     lastSeen: endpoint.lastSeen ?? null,
-    threats: (endpoint.threats ?? []).map(normalizeDetection),
+    // `?? []` here was the whole defect: it turned "this vendor has no detection
+    // endpoint" into "this vendor found nothing". Absence is preserved as null and
+    // graded by the evaluator; an explicit [] still means a real, empty result.
+    threats: endpoint.threats == null ? null : endpoint.threats.map(normalizeDetection),
     source: endpoint.source ?? "unknown",
   };
 }

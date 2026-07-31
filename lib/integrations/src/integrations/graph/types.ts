@@ -67,6 +67,7 @@ export interface GraphPostureSignal {
 }
 
 export type GraphConnectorErrorCode =
+  | "incomplete_read"
   | "auth_failed"
   | "read_only_violation"
   | "upstream_error"

@@ -37,19 +37,11 @@ const familyDir = join(repo, "lib/integrations/src/integrations");
 // debt, recorded so it is visible rather than implied by silence. Removing a name
 // from this list is how a fix gets locked in: the guard then requires the signal
 // to stay.
-const KNOWN_SILENT = new Set([
-  "carrier",
-  "credential-exposure",
-  "data-protection",
-  "edr-threat",
-  "graph",
-  "identity-risk",
-  "location-services",
-  "network-nac",
-  "peripheral-control",
-  "rtls-custody",
-  "vuln-scan",
-]);
+// EMPTY, and that is the point. All eleven now refuse a capped read instead of
+// returning a partial inventory as a complete one, so every exemption was removed
+// rather than left to read as intentional. A name back in this list means a NEW
+// connector shipped without a truncation signal — and it must arrive with a reason.
+const KNOWN_SILENT = new Set([]);
 
 /** A page-capped read: a loop bounded by a page/limit counter. */
 const CAPPED_LOOP = /while\s*\([^)]*\bpages?\s*<[^)]*\)|while\s*\([^)]*<\s*this\.(pageLimit|maxPages)\b/;

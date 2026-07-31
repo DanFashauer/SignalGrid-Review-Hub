@@ -89,7 +89,13 @@ export interface NormalizedCredentialExposure {
   sourceSystem: "credential-exposure";
   deviceId: string;
   scannerEnrolled: boolean | null;
-  findings: NormalizedSecretFinding[];
+  /**
+   * `null` when the source did not report a secret-scan result set at all — distinct from `[]`,
+   * which means it reported and found nothing. The same distinction this package
+   * already draws for scalars (`null = not reported`), extended to the collection:
+   * a feed that was never read must not be gradeable as a clean one.
+   */
+  findings: NormalizedSecretFinding[] | null;
   source: string;
 }
 
@@ -103,6 +109,7 @@ export type CredentialPosture =
 
 export type CredentialReasonCode =
   | "NO_FINDINGS"
+  | "SECRET_SCAN_UNOBSERVED"
   | "NOT_COVERED"
   | "FINDINGS_REMEDIATED"
   | "SCANNER_UNENROLLED"
@@ -122,7 +129,7 @@ export interface CredentialExposureVerdict {
   recommendedAction: CredentialRecommendedAction;
 }
 
-export type CredentialConnectorErrorCode = "auth_failed" | "read_only_violation" | "upstream_error" | "bad_response";
+export type CredentialConnectorErrorCode = "incomplete_read" | "auth_failed" | "read_only_violation" | "upstream_error" | "bad_response";
 
 export class CredentialConnectorError extends Error {
   readonly code: CredentialConnectorErrorCode;

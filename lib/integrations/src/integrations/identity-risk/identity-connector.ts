@@ -95,6 +95,18 @@ export class IdentityRiskConnector {
       url = body.nextPageToken ? `${firstUrl}?pageToken=${encodeURIComponent(body.nextPageToken)}` : undefined;
       pages += 1;
     }
+    // Exiting the cap with a next-page cursor still in hand means the inventory is
+    // INCOMPLETE, and a short list is indistinguishable from a complete one — for a
+    // posture fabric, a device missing from the result reads as a device with no
+    // problem. Refuse rather than pass a partial inventory off as a whole one; the
+    // cap itself stays, because it is the loop/DoS guard against an endless cursor.
+    if (url) {
+      throw new IdentityRiskConnectorError(
+        "incomplete_read",
+        `Identity-risk read hit the ${this.pageLimit}-page cap with more pages remaining. ` +
+          "Refusing to return a partial inventory as if it were complete; raise pageLimit to read further.",
+      );
+    }
     return out;
   }
 
@@ -123,7 +135,9 @@ export function normalizePrincipal(principal: PrincipalRiskRaw): NormalizedPrinc
     riskLevel: normalizeRiskLevel(principal.riskLevel),
     riskState: normalizeRiskState(principal.riskState),
     mfaSatisfied: typeof principal.mfaSatisfied === "boolean" ? principal.mfaSatisfied : null,
-    detections: (principal.detections ?? []).map(normalizeDetection),
+    // `?? []` here made "the source never reported this" indistinguishable from
+    // "the source reported nothing". Absence is preserved and graded downstream.
+    detections: principal.detections == null ? null : principal.detections.map(normalizeDetection),
     lastSignInAt: principal.lastSignInAt ?? null,
     source: principal.source ?? "unknown",
   };

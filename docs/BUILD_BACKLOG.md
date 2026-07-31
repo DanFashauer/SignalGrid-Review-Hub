@@ -157,7 +157,76 @@ only), and the DDM rig is gated on an APNs push certificate.
       After merging: `SIGNALGRID_MCP_PATH=~/signalgrid-mcp node scripts/verify-all.mjs
       --require-mcp --emit-evidence`, then commit `artifacts/live-evidence/`.
 
-- [ ] **`vuln-scan` grades an empty finding set as CLEAN by default.** ⚠️ **owner
+- [x] **`X ?? []` made an unreported collection indistinguishable from an empty
+      one — in FIVE connectors.** **DONE.** The normalized collection is now `null`
+      when the source never reported it and `[]` when it reported none, and each
+      evaluator contributes an "unobserved" candidate that raises `monitor` instead
+      of letting the `none` default win. New reason codes:
+      `THREAT_FEED_UNOBSERVED`, `RISK_FEED_UNOBSERVED`, `PERIPHERAL_FEED_UNOBSERVED`,
+      `SECRET_SCAN_UNOBSERVED`, `DLP_FEED_UNOBSERVED`.
+
+      | connector | unreported (was → now) | reported-none (unchanged) |
+      | --- | --- | --- |
+      | `edr-threat` | `protected`/none → `monitored`/monitor | `protected`/none |
+      | `identity-risk` | `trusted`/none → `unknown`/monitor | `trusted`/none |
+      | `peripheral-control` | `no_removable`/none → `unknown`/monitor | `no_removable`/none |
+      | `credential-exposure` | `clean`/none → `unknown`/monitor | `clean`/none |
+      | `data-protection` | `protected`/none → `unknown`/monitor | `protected`/none |
+
+      `monitor` on purpose, not something louder: the device may be entirely fine —
+      we simply never read the feed. It is a blind spot to investigate, the same
+      level as the existing `NOT_REPORTING`, and it loses to any genuinely observed
+      problem, so a real active threat still outranks "we could not see". A vendor
+      that DID look and found nothing is still clean with action `none`, which is
+      what keeps this a distinction rather than a wall.
+      Design taken from the repo rather than invented: `null = not reported,
+      distinct from an explicit false` already appears in six normalized types
+      (`rtls-custody.present`, `oauth-consent`/`sso-session` reachability,
+      `agent-identity`, `pacs-access`, `task-exception`). This extends it to
+      collections. Pinned by `proof:absent-collection` (20 assertions); suite
+      96 passed / 0 failed.
+
+      _Historical, kept because the reasoning is the point:_
+
+- [x] **`X ?? []` (original entry — the fail-open as first measured).** Each
+      normalizer did `(raw.threats ?? []).map(...)` or a sibling.
+      After that single line, "the vendor could not report this" and "the vendor
+      reported nothing" are the same value, and every evaluator downstream reads the
+      empty set as good news **with action `none`**:
+
+      | connector | unreported collection → verdict |
+      | --- | --- |
+      | `edr-threat` | `protected` / `NO_THREATS_HEALTHY` / none |
+      | `identity-risk` | `trusted` / `NO_RISK` / none |
+      | `peripheral-control` | `no_removable` / `NO_REMOVABLE` / none |
+      | `credential-exposure` | `clean` / `NO_FINDINGS` / none |
+      | `vuln-scan` | `clean` / `NO_FINDINGS` / none |
+
+      Not hypothetical: `proof:live-edr` MEASURED that Wazuh's alerts live in a
+      separate indexer, so "reports protection health, cannot report detections" is
+      the real shape of the one live EDR this repo has been pointed at. Wazuh escapes
+      today only because it also cannot report `realtimeProtection` or
+      `signatureAgeHours`, which independently force `degraded_protection`. Any
+      vendor that reports protection health but not detections lands on `protected` /
+      action none. `identity-risk` is the starkest: a principal whose risk detections
+      were never fetched is graded **trusted**.
+      It also COMPOUNDS the capped-read defect below — a truncated page returns fewer
+      items, and fewer items read as cleaner. Same root cause: a read that never
+      happened must not equal a read that found nothing.
+      Fixing it needs an "observed" distinction on five normalized types (nullable
+      collection, or an `xObserved` flag) plus new reason codes, hence owner-gated.
+      Pinned meanwhile by `proof:absent-collection`, which asserts the CURRENT
+      behaviour so it cannot drift and fails — with instructions — the moment the
+      distinction is added.
+
+- [x] **`vuln-scan` grades an empty finding set as CLEAN by default.** **DONE** —
+      fixed by DERIVING the flag: `options.scanned ?? findings.length > 0`. A non-empty
+      set is its own evidence a scan ran; the empty set — the only ambiguous case —
+      now fails closed to NOT_SCANNED/monitor, and a caller that knows a scan happened
+      states it. No legitimate caller broke, which is itself evidence the default was
+      wrong. ORIGINAL ENTRY BELOW.
+
+- [x] **`vuln-scan` (original entry).** ⚠️ **owner
       decision — API change across callers.** `evaluateVulnPosture([], {})` returns
       `clean` / `NO_FINDINGS` / action `none`. `[]` is genuinely ambiguous — a
       scanned device with zero findings really is clean — which is why the `scanned`
@@ -180,7 +249,19 @@ only), and the DDM rig is gated on an APNs push certificate.
       behaviour so it cannot drift further and fails — with instructions — the
       moment the default is changed.
 
-- [ ] **Truncation signal on capped reads** ⚠️ **owner decision — API change across 11
+- [x] **Truncation signal on capped reads.** **DONE** — all eleven now throw
+      `incomplete_read` when the page cap is hit with a next-page cursor still in
+      hand, rather than returning a partial inventory as a complete one. Chosen over
+      a richer return type because it needs NO signature change: every caller already
+      handles connector errors, so there is no new call site that can forget. The cap
+      itself stays — it is the loop/DoS guard against an endless cursor — and a tenant
+      that FITS reads normally, so it is a refusal, not a wall. The remedy is named in
+      the message: raise `pageLimit`. `KNOWN_SILENT` in the guard is now EMPTY.
+      Design taken from the repo: `policy.ts` and the simulator both answer
+      incompleteness with "trust is incomplete → step up", and passkey/ddm fail closed
+      on partial sets. ORIGINAL ENTRY BELOW.
+
+- [x] **Truncation signal on capped reads** (original entry — API change across 11
       connectors.** Eleven connectors paginate with their own copy of `getAllPages`,
       looping `while (url && pages < this.pageLimit)` and returning a plain array.
       The cap is correct (a loop/DoS guard against an endless `nextLink`) but the

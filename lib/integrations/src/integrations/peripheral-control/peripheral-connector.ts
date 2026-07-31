@@ -93,6 +93,18 @@ export class PeripheralControlConnector {
       url = body.nextPageToken ? `${firstUrl}?pageToken=${encodeURIComponent(body.nextPageToken)}` : undefined;
       pages += 1;
     }
+    // Exiting the cap with a next-page cursor still in hand means the inventory is
+    // INCOMPLETE, and a short list is indistinguishable from a complete one — for a
+    // posture fabric, a device missing from the result reads as a device with no
+    // problem. Refuse rather than pass a partial inventory off as a whole one; the
+    // cap itself stays, because it is the loop/DoS guard against an endless cursor.
+    if (url) {
+      throw new PeripheralConnectorError(
+        "incomplete_read",
+        `Peripheral-control read hit the ${this.pageLimit}-page cap with more pages remaining. ` +
+          "Refusing to return a partial inventory as if it were complete; raise pageLimit to read further.",
+      );
+    }
     return out;
   }
 
@@ -119,7 +131,9 @@ export function normalizeDevice(device: PeripheralPostureRaw): NormalizedPeriphe
     sourceSystem: "peripheral-control",
     deviceId: device.deviceId,
     policyEnforced: typeof device.policyEnforced === "boolean" ? device.policyEnforced : null,
-    peripherals: (device.peripherals ?? []).map(normalizePeripheral),
+    // `?? []` here made "the source never reported this" indistinguishable from
+    // "the source reported nothing". Absence is preserved and graded downstream.
+    peripherals: device.peripherals == null ? null : device.peripherals.map(normalizePeripheral),
     source: device.source ?? "unknown",
   };
 }

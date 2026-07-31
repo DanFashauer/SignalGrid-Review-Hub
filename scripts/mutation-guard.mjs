@@ -197,6 +197,14 @@ export const TARGETS = [
   },
 
   {
+    proof: "proof:shift-context",
+    files: [
+      "lib/integrations/src/integrations/shift-context/evaluate.ts",
+      "lib/integrations/src/integrations/shift-context/shift-context-connector.ts",
+    ],
+  },
+
+  {
     proof: "proof:benchmark-selection",
     files: [
       "lib/integrations/src/integrations/benchmark-selection/evaluate.ts",
@@ -513,6 +521,30 @@ const ALLOWED = [
     line: "if (!positivelyConfirmed && candidates.length === 0) {",
     reason:
       "The grant backstop itself — deliberately redundant defence-in-depth, documented in the source as never firing today; exists to catch a FUTURE weakening.",
+  },
+  {
+    file: "lib/integrations/src/integrations/shift-context/evaluate.ts",
+    line: 'report.reportIntegrity === "clean" &&',
+    reason:
+      "A conjunct of the grant backstop's predicate — the backstop never fires today, as its own comment states; the predicate is unobservable until a branch weakens. Same shape as the benchmark-selection and policy-binding backstops below.",
+  },
+  {
+    file: "lib/integrations/src/integrations/shift-context/evaluate.ts",
+    line: 'report.scheduleStanding === "on_shift" &&',
+    reason:
+      "Backstop-predicate conjunct — same reasoning. The schedule branch itself is NOT exempt: the unknown-standing rung is pinned to lead over a site mismatch, so deleting the branch changes a pinned reason.",
+  },
+  {
+    file: "lib/integrations/src/integrations/shift-context/evaluate.ts",
+    line: 'report.punchStatus === "clocked_in" &&',
+    reason:
+      "Backstop-predicate conjunct — same reasoning. The punch branches are covered by the off-clock, off-duty, deviation, on-break and absent-punch controls.",
+  },
+  {
+    file: "lib/integrations/src/integrations/shift-context/evaluate.ts",
+    line: 'if (!positivelyOnDuty && candidates.length === 0) {',
+    reason:
+      "The grant backstop itself — deliberately redundant defence-in-depth, documented in the source as never firing today; it exists to catch a FUTURE weakening. Same shape and justification as the benchmark-selection backstop.",
   },
   {
     file: "lib/integrations/src/integrations/benchmark-selection/evaluate.ts",

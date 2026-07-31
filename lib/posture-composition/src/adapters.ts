@@ -23,6 +23,7 @@ import type { AppUpdateVerdict } from "@workspace/integrations/app-update";
 import type { PlatformSsoVerdict } from "@workspace/integrations/platform-sso";
 import type { PolicyBindingVerdict } from "@workspace/integrations/policy-binding";
 import type { BenchmarkSelectionVerdict } from "@workspace/integrations/benchmark-selection";
+import type { ShiftContextVerdict } from "@workspace/integrations/shift-context";
 import type { DeviceManagementHealthVerdict } from "@workspace/integrations/device-management-health";
 import type { LinkUsabilityVerdict } from "@workspace/integrations/link-usability";
 // Type-only, via the "./task-exception" subpath export (wired in the same change
@@ -257,6 +258,19 @@ export function fromBenchmarkSelection(v: BenchmarkSelectionVerdict): Composable
   // would have granted. It never lowers what any other dimension says, and it never
   // asserts the device passed: that stays with `baselineCompliance`.
   return { kind: "benchmark_selection", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromShiftContext(v: ShiftContextVerdict): ComposableSignal {
+  // Labor context — is this the right TIME and SITE for this worker to be
+  // operating? Custody says which badge holds the device; access-governance says
+  // the account is alive; this says the workforce-management plane agrees the
+  // worker is scheduled now, on the clock, and where the shift places them.
+  // Off-the-clock work on a scheduled shift and off-duty operation both step up
+  // (a challenge resolves a borrowed badge without stranding an emergency
+  // call-in); an unscheduled clock-in is visible, not blocked. Never lowers what
+  // any other dimension says, and never grades WHO holds the badge — that stays
+  // with custody.
+  return { kind: "shift_context", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromDeviceManagementHealth(v: DeviceManagementHealthVerdict): ComposableSignal {

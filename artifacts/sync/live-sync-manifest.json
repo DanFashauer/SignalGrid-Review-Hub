@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 41,
-  "fingerprint": "a157a379acf032343f1290b5481ce90401dc4743b36022a6942c69bd68113cbb",
+  "manifestVersion": 42,
+  "fingerprint": "5daf8eaca7f1cd7142ae2de1b9df81a6da272921a8a8e604e5918f9e6730fee9",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -33,6 +33,7 @@
       "platform_sso",
       "policy_binding",
       "benchmark_selection",
+      "shift_context",
       "device_management_health",
       "link_usability",
       "task_exception",
@@ -120,6 +121,7 @@
       "reliability": 28,
       "response-accountability": 82,
       "self-audit": 56,
+      "shift-context": 50,
       "sso-session": 78,
       "task-exception": 195,
       "token-binding": 52,

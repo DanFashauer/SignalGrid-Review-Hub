@@ -201,6 +201,8 @@ jobs:
         run: pnpm run proof:emitter-discipline
       - name: Proof — benchmark-selection (which CIS benchmark graded this device, and from what content)
         run: pnpm run proof:benchmark-selection
+      - name: Proof — shift-context (right time and site for this worker to be operating)
+        run: pnpm run proof:shift-context
       - name: Proof — policy-binding (group-assignment correctness)
         run: pnpm run proof:policy-binding
 

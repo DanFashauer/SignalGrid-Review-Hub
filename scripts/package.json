@@ -90,6 +90,7 @@
     "proof:passkey-assurance": "tsx ./src/passkey-assurance-proof.ts",
     "proof:isolation-scope": "tsx ./src/isolation-scope-proof.ts",
     "proof:benchmark-selection": "tsx ./src/benchmark-selection-proof.ts",
+    "proof:shift-context": "tsx ./src/shift-context-proof.ts",
     "proof:emitter-discipline": "tsx ./src/emitter-discipline-proof.ts",
     "proof:policy-binding": "tsx ./src/policy-binding-proof.ts",
     "proof:device-management-health": "tsx ./src/device-management-health-proof.ts",

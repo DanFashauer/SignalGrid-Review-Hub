@@ -73,6 +73,7 @@ export const SIGNAL_KINDS = [
   "platform_sso",
   "policy_binding",
   "benchmark_selection",
+  "shift_context",
   "device_management_health",
   "link_usability",
   "task_exception",

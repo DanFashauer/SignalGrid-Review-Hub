@@ -37,6 +37,7 @@
     "./passkey-assurance": "./src/integrations/passkey-assurance/index.ts",
     "./benchmark-selection": "./src/integrations/benchmark-selection/index.ts",
     "./policy-binding": "./src/integrations/policy-binding/index.ts",
+    "./shift-context": "./src/integrations/shift-context/index.ts",
     "./device-management-health": "./src/integrations/device-management-health/index.ts",
     "./link-usability": "./src/integrations/link-usability/index.ts",
     "./task-exception": "./src/integrations/task-exception/index.ts",

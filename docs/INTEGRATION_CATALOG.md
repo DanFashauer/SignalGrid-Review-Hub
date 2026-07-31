@@ -437,6 +437,17 @@ in one place.
   Titles and versions only — CIS rule content is licensed and is not reproduced.
   `proof:benchmark-selection` (82 checks).
 
+- **Shift context** ([SHIFT_CONTEXT.md](SHIFT_CONTEXT.md)) — right person, wrong time is still the
+  wrong decision context. The labor plane (UKG, Dayforce, ADP and peers) already records whether a
+  worker is scheduled now, on the clock, and where the shift places them; nothing consumed it.
+  Scheduled-but-clocked-out is off-the-clock work or someone else's badge (step_up); operating while
+  neither scheduled nor punched in steps up rather than restricts (an emergency call-in is
+  legitimate, and a challenge resolves it); an unscheduled clock-in is visible, never blocked. The
+  schedule standing is DERIVED from the reported window at a caller-supplied reference instant — no
+  clock in any decision path — and the site question is graded only when the caller poses it.
+  Reading a schedule is not managing one: GET-only, no punch writes, nothing payroll-adjacent.
+  `proof:shift-context` (50 checks).
+
 - **Policy binding** ([POLICY_BINDING.md](POLICY_BINDING.md)) — membership **is** the policy.
   Intune dynamic groups, Fleet teams, ABM/DDM profiles, Jamf smart groups, PACS access
   levels, Entra CA groups, WMS queues, EDR policy groups and SignalGrid's own per-vertical

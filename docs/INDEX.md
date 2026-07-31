@@ -20,6 +20,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 
 ## Core orientation
 
+- [Lane coordination](LANE_COORDINATION.md): the standing protocol for parallel Claude sessions working this repo — the lane table, the shared-surface serialization rule, announce-in-the-commit, and the cloud-lane-absorbs-base merge direction. Exists because the nac/webhooks eight-file collision proved chat context is not a coordination bus; git is.
 - [Repository lineage](REPO_LINEAGE.md): explains the public/private repository split and what belongs in each repository.
 - [IP & licensing posture](IP_AND_LICENSING.md): how SignalGrid's IP is held today (copyright/MIT public code, trademark on the name, trade-secret core/hardware, patent timing) and the open decisions to settle with counsel — plus the publication boundary that keeps patent options open. Not legal advice.
 - [Alpha to public pre-production parity](ALPHA_TO_PUBLIC_PREPROD_PARITY.md): maps DEV Alpha learnings into Review Hub, private core, redesign, deferred, or archive categories.

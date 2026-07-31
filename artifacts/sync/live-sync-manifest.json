@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 38,
-  "fingerprint": "11d7fea49bcb2e6c9027a652140be465726ee236909c3235c4fa7513c409961d",
+  "manifestVersion": 39,
+  "fingerprint": "0cf5191c4a41b424727b4006aee3287c79dfec4c36378de244d72e53588be9f1",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -51,6 +51,7 @@
       "tamper_state",
       "dock_state",
       "security_baseline",
+      "benchmark_selection",
       "badge_binding"
     ],
     "taskExceptionReasonCodes": [

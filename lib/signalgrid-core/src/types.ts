@@ -188,6 +188,25 @@ export type BaselineState =
   | "unknown";
 
 /**
+ * Was the baseline answer above produced by the RIGHT test? Summarized from the
+ * benchmark-selection dimension (docs/BENCHMARK_SELECTION.md), which grades the
+ * QUESTION the way `BaselineState` records the ANSWER: which benchmark document
+ * graded this device, at what version, from whose content, on what platform,
+ * covering how many rules, and whether it is the one this workflow requires.
+ *  - confirmed:  the assessment was the right document, honestly sourced,
+ *                adequately covered, and the one this work requires,
+ *  - misfit:     an AFFIRMATIVE selection failure — a document for another
+ *                platform, an empty assessment, a benchmark off this workflow's
+ *                requirement, or one the published catalog does not carry. The
+ *                alignment answer is unreliable no matter what it says,
+ *  - unverified: not established either way (no signal, axes unknown).
+ *                Fail-safe: never read as confirmed — and, deliberately, never
+ *                matched by the ACTIVE v1 rule either, so a fleet that does not
+ *                yet emit this signal is not stepped up on day one.
+ */
+export type BenchmarkSelectionState = "confirmed" | "misfit" | "unverified";
+
+/**
  * Badge-binding state from the RFID/prox/NFC badge-reader case — whether the
  * assigned worker's credential is physically bound to this shared device at the
  * moment a workflow fires. This is the signal that ties a human to a shared
@@ -276,6 +295,7 @@ export type SignalCategory =
   | "tamper_state"
   | "dock_state"
   | "security_baseline"
+  | "benchmark_selection"
   | "badge_binding";
 
 export interface NormalizedSignal {
@@ -313,6 +333,7 @@ export type EvidenceField =
   | "tamperState"
   | "dockState"
   | "baselineState"
+  | "benchmarkSelectionState"
   | "badgeState";
 
 export type RuleCondition =
@@ -331,6 +352,7 @@ export type RuleCondition =
   | { field: "tamperState"; in: TamperState[] }
   | { field: "dockState"; in: DockState[] }
   | { field: "baselineState"; in: BaselineState[] }
+  | { field: "benchmarkSelectionState"; in: BenchmarkSelectionState[] }
   | { field: "badgeState"; in: BadgeBindingState[] };
 
 export interface PolicyRuleSpec {
@@ -395,6 +417,10 @@ export interface DecisionEvidence {
   dockState: DockState;
   /** Security-baseline (CIS/hardening) alignment for the device (default "unknown"). */
   baselineCompliance: BaselineState;
+  /** Whether the baseline answer above came from the RIGHT test (default
+   *  "unverified") — see BenchmarkSelectionState. `aligned` + `misfit` means the
+   *  device passed a test that does not apply to it. */
+  benchmarkSelection: BenchmarkSelectionState;
   /** Badge-binding state from the RFID/prox badge-reader case (default "unknown"). */
   badgeBinding: BadgeBindingState;
   /** True only when every critical input is present and not degraded. */

@@ -34,6 +34,7 @@ export const EVALUATED_CATEGORIES = [
   "tamper_state",
   "dock_state",
   "security_baseline",
+  "benchmark_selection",
   "badge_binding",
 ] as const;
 

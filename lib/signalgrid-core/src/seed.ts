@@ -413,6 +413,7 @@ function seedPolicyTests(
     tamperState: "none",
     dockState: "occupied",
     baselineCompliance: "aligned",
+    benchmarkSelection: "confirmed",
     badgeBinding: "present",
     criticalSignalsPresent: true,
   };
@@ -424,6 +425,8 @@ function seedPolicyTests(
     { name: "missing posture → restrict", evidence: { ...base, postureFreshness: "missing", criticalSignalsPresent: false }, expectedOutcome: "restrict", expectedReasonCode: "POSTURE_MISSING" },
     { name: "baseline drift → step-up", evidence: { ...base, baselineCompliance: "drifted" }, expectedOutcome: "step_up", expectedReasonCode: "BASELINE_DRIFTED" },
     { name: "baseline unknown → still allow (no fabricated block)", evidence: { ...base, baselineCompliance: "unknown" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
+    { name: "benchmark misfit → step-up (an 'aligned' answer from the wrong test is not assurance)", evidence: { ...base, benchmarkSelection: "misfit" }, expectedOutcome: "step_up", expectedReasonCode: "BENCHMARK_SELECTION_MISFIT" },
+    { name: "benchmark selection unverified → still allow (the v1 rule matches ONLY the affirmative bad state, so a fleet not yet emitting the signal is not stepped up)", evidence: { ...base, benchmarkSelection: "unverified" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
     { name: "badge removed → restrict", evidence: { ...base, badgeBinding: "removed" }, expectedOutcome: "restrict", expectedReasonCode: "BADGE_REMOVED" },
     { name: "badge forced removal → deny", evidence: { ...base, badgeBinding: "forced" }, expectedOutcome: "deny", expectedReasonCode: "BADGE_FORCED_REMOVAL" },
     { name: "badge absent/unknown → no fabricated block (allow)", evidence: { ...base, badgeBinding: "unknown" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },

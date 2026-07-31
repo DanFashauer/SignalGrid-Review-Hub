@@ -173,16 +173,28 @@ Four properties the loader **enforces rather than documents**:
   also the state most likely to be muted — at which point the unearned affirmative
   has simply moved outside the code.
 
-## Known follow-up, stated rather than implied
+## The /v1 arm
 
-The dimension fuses through `posture-composition`, where worst-concern-wins means a
-raised selection verdict raises the composed device risk. It does **not** yet have an
-arm in the `/v1` policy layer, so a policy whose rule set grants on
-`baselineCompliance === "aligned"` still grants on that path alone. The next step is a
-core evidence field plus an **active v1 rule matching only the affirmative bad state**
-(`misfit`), leaving the `unverified` arm to a later policy version so the whole fleet
-does not step up on day one. That is a change to `lib/signalgrid-core`, deliberately
-not bundled here.
+The dimension also has an arm in the core policy layer, so a policy that grants on
+`baselineCompliance === "aligned"` no longer grants on that path alone:
+
+- `DecisionEvidence.benchmarkSelection: "confirmed" | "misfit" | "unverified"`,
+  derived from a `benchmark_selection` signal. An absent or unrecognized signal
+  derives **`unverified`, never `confirmed`** — silence is not a confirmation, and
+  the core proof pins the default through `buildEvidence` rather than through
+  evidence literals (a negative control showed the literal path could not falsify
+  it).
+- The **active v1 rule** `benchmark-selection-misfit` matches **only** the
+  affirmative bad state: `misfit` → `step_up` (`BENCHMARK_SELECTION_MISFIT`).
+  `unverified` is deliberately excluded — nothing emits the signal until a
+  connector is wired, and a rule matching the default would step up the entire
+  fleet on day one. The proof pins that the absent default stays `allow` under v1.
+- The **v2 STRICT draft** widens the same rule to `["misfit", "unverified"]`
+  (`BENCHMARK_SELECTION_UNESTABLISHED_STRICT`): a tenant that opts into the strict
+  draft is asking every device to positively establish its benchmark selection.
+  The proof pins the v1/v2 divergence on identical evidence.
+- The arm **never lowers**: `confirmed` grants nothing a healthy device did not
+  already have, and every other rule still fires alongside it.
 
 Proven by `proof:benchmark-selection` (71 checks; targeted ladder checks, per-field
 integrity, hostile wire shapes, catalog-loader refusals, the comparator asserted

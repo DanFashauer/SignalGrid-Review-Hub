@@ -51,6 +51,13 @@ dimension, exactly like device compliance or posture freshness:
 | `not_assessed` | No baseline scan on record for this device yet. |
 | `unknown` | State could not be determined. **Never treated as aligned.** |
 
+Since the benchmark-selection dimension shipped, the QUESTION behind this answer
+is graded too: `DecisionEvidence.benchmarkSelection` records whether the result
+came from the right benchmark document at a current version, from CIS's own
+content, on the right platform, with real coverage — and the `benchmark-selection-misfit`
+rule steps a session up when it affirmatively did not, whatever the alignment
+answer says. See [Benchmark selection](BENCHMARK_SELECTION.md).
+
 A source that reports no baseline normalizes to `unknown`, and `unknown` never
 fabricates a healthy state and never, by itself, blocks a session — a device
 that has simply never been scanned is not penalized by the baseline rule. This

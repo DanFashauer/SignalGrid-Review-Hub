@@ -2,6 +2,7 @@ import { canonicalJson, deterministicId, digest } from "./util";
 import type {
   BadgeBindingState,
   BaselineState,
+  BenchmarkSelectionState,
   BatteryHealthState,
   ChargeState,
   ComplianceState,
@@ -64,6 +65,7 @@ export function buildEvidence(
     tamperState: readTamper(latestByCategory),
     dockState: readDock(latestByCategory),
     baselineCompliance: readBaseline(latestByCategory),
+    benchmarkSelection: readBenchmarkSelection(latestByCategory),
     badgeBinding: readBadge(latestByCategory),
   };
 
@@ -199,6 +201,11 @@ const TAMPER_STATES = ["none", "suspected", "confirmed", "sensor_unavailable"] a
 const DOCK_STATES = ["occupied", "empty", "reserved", "faulted", "offline"] as const;
 const BATTERY_HEALTH_STATES = ["healthy", "degraded", "failing"] as const;
 const BASELINE_STATES = ["aligned", "partial", "drifted", "not_assessed"] as const;
+// Only the two AFFIRMATIVE values are readable from a signal. Absent or
+// unrecognized falls back to "unverified" — the same silence-is-not-an-answer
+// rule as every other read here, and the value the active v1 rule deliberately
+// does not match.
+const BENCHMARK_SELECTION_STATES = ["confirmed", "misfit"] as const;
 const BADGE_STATES = ["present", "removed", "forced", "absent"] as const;
 
 function readCustody(latestByCategory: LatestByCategory): CustodyState {
@@ -207,6 +214,10 @@ function readCustody(latestByCategory: LatestByCategory): CustodyState {
 
 function readBaseline(latestByCategory: LatestByCategory): BaselineState {
   return readEnum(latestByCategory, "security_baseline", BASELINE_STATES) ?? "unknown";
+}
+
+function readBenchmarkSelection(latestByCategory: LatestByCategory): BenchmarkSelectionState {
+  return readEnum(latestByCategory, "benchmark_selection", BENCHMARK_SELECTION_STATES) ?? "unverified";
 }
 
 function readBadge(latestByCategory: LatestByCategory): BadgeBindingState {

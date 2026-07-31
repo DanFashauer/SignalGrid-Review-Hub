@@ -27,6 +27,7 @@ import {
   RESOLUTION_DESCRIPTOR_SHAPES,
   seedDemoStore,
   SignalGridCore,
+  SHARED_DEVICE_RULES_V1,
   SHARED_DEVICE_RULES_V2,
   validatePolicyRules,
   type Decision,
@@ -546,6 +547,113 @@ if (pending) {
       evaluatePolicy(activeV1, ev).outcome !== "allow",
     );
   }
+}
+
+// ── 11b. Benchmark-selection arm: honest default, misfit rule, strict widening ──
+//
+// The /v1 arm of the benchmark-selection dimension. Three properties, each of
+// which a negative control showed is NOT implied by the others:
+//  - an ABSENT benchmark_selection signal derives "unverified", never "confirmed"
+//    (the default was unfalsifiable until this block existed — flipping it to
+//    "confirmed" changed no seeded outcome, because every seeded evidence record
+//    was a LITERAL that never went through buildEvidence);
+//  - the ACTIVE v1 rule matches ONLY the affirmative bad state, so the absent
+//    default stays allow — a fleet that does not yet emit the signal is not
+//    stepped up on day one;
+//  - the v2 STRICT draft widens to "unverified", which makes the default itself
+//    policy-observable: with the default flipped, this replay stops stepping up.
+{
+  const identity: Identity = {
+    id: "id_bs",
+    tenantId: "tenant_northwind",
+    externalRef: "nurse.bs",
+    displayName: "Nurse",
+    state: "enabled",
+    assignedRole: "nurse",
+  };
+  const device: Device = {
+    id: "dev_bs",
+    tenantId: "tenant_northwind",
+    externalRef: "ipad-bs",
+    name: "Ward iPad",
+    osPlatform: "iPadOS",
+    osVersion: "18.5",
+    ownerType: "shared",
+    managementAgent: "intune",
+  };
+  const workflow: Workflow = {
+    id: "wf_bs",
+    tenantId: "tenant_northwind",
+    key: "clinical-session",
+    name: "Clinical session",
+    riskTier: "elevated",
+  };
+  const sig = (
+    category: SignalCategory,
+    value: NormalizedSignal["value"],
+  ): NormalizedSignal => ({
+    id: `sig_bs_${category}`,
+    tenantId: "tenant_northwind",
+    connectorId: "conn",
+    subjectType: "device",
+    subjectId: device.id,
+    category,
+    value,
+    observedAt: "2026-07-13T13:00:00.000Z",
+    freshness: "fresh",
+    sourceReference: "fixture:test",
+  });
+  const healthy = [
+    sig("device_compliance", "compliant"),
+    sig("device_management", true),
+    sig("device_encryption", true),
+    sig("os_support", true),
+    sig("posture_freshness", "fresh"),
+  ];
+  const version = (n: number, rules: typeof SHARED_DEVICE_RULES_V2) => ({
+    id: `pv_bs_${n}`,
+    tenantId: "tenant_northwind",
+    policyId: "pol_bs",
+    version: n,
+    status: "active" as const,
+    rules,
+    createdAt: "2026-07-13T13:00:00.000Z",
+    digest: "test",
+  });
+  const v1 = version(1, SHARED_DEVICE_RULES_V1);
+  const v2 = version(2, SHARED_DEVICE_RULES_V2);
+
+  const absent = buildEvidence(identity, device, workflow, healthy);
+  check(
+    "benchmark-selection: an ABSENT signal derives 'unverified' — silence is not a confirmation",
+    absent.benchmarkSelection === "unverified",
+  );
+  const junk = buildEvidence(identity, device, workflow, [...healthy, sig("benchmark_selection", "totally-fine")]);
+  check(
+    "benchmark-selection: an unrecognized signal value also derives 'unverified', never a guess",
+    junk.benchmarkSelection === "unverified",
+  );
+  const misfit = buildEvidence(identity, device, workflow, [...healthy, sig("benchmark_selection", "misfit")]);
+  check("benchmark-selection: a 'misfit' signal is read through", misfit.benchmarkSelection === "misfit");
+  check(
+    "benchmark-selection: v1 steps up on MISFIT with its own reason code — an 'aligned' answer from the wrong test is not assurance",
+    evaluatePolicy(v1, misfit).outcome === "step_up" &&
+      evaluatePolicy(v1, misfit).matchedRules.some((r) => r.reasonCode === "BENCHMARK_SELECTION_MISFIT"),
+  );
+  check(
+    "benchmark-selection: v1 does NOT step up on the absent default — the active rule matches only the affirmative bad state, so day one is quiet",
+    evaluatePolicy(v1, absent).outcome === "allow",
+  );
+  check(
+    "benchmark-selection: the v2 STRICT draft widens to 'unverified' — the same absent evidence diverges to step_up only for a tenant that opted in",
+    evaluatePolicy(v2, absent).outcome === "step_up" &&
+      evaluatePolicy(v2, absent).matchedRules.some((r) => r.reasonCode === "BENCHMARK_SELECTION_UNESTABLISHED_STRICT"),
+  );
+  check(
+    "benchmark-selection: the arm never lowers — 'confirmed' grants nothing a healthy device lacked, and a non-compliant device restricts alongside it",
+    evaluatePolicy(v1, { ...misfit, benchmarkSelection: "confirmed" }).outcome === "allow" &&
+      evaluatePolicy(v1, { ...misfit, benchmarkSelection: "confirmed", deviceCompliance: "non_compliant" }).outcome === "restrict",
+  );
 }
 
 // ── 12. Repeated evaluation does not overwrite (unique ids) ────────────────────

@@ -62,7 +62,6 @@ const NOT_A_FAMILY = new Set(["adapters"]);
  *   unproven        — gated, but no proof asserts the gate actually holds.
  */
 const KNOWN_GAPS = {
-  itsm: { severity: "ungated-emitter", reason: "servicenow/bmc-helix/ivanti create real tickets with no tier gate." },
   // `carrier` and `graph` were listed here on the assumption they had no proof. The
   // stale-entry check below immediately disproved it: they are covered by
   // carrier-reachability-proof.ts and graph-connector-proof.ts. Entries removed —

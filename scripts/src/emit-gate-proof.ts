@@ -94,6 +94,7 @@ const ROUTED: Array<[string, string]> = [
   ["siem/splunk", "lib/integrations/src/integrations/siem/splunk.ts"],
   ["siem/webhook", "lib/integrations/src/integrations/siem/webhook.ts"],
   ["telemetry/fleetdm", "lib/integrations/src/integrations/telemetry/fleetdm.ts"],
+  ["itsm/adapter", "lib/integrations/src/integrations/itsm/adapter.ts"],
 ];
 for (const [label, rel] of ROUTED) {
   const src = readFileSync(resolve(repo, rel), "utf8");
@@ -109,6 +110,14 @@ const syslogSrc = readFileSync(resolve(repo, "lib/integrations/src/integrations/
 check("syslog opens no socket (still unimplemented)", !/dgram|net\.Socket|tls\.connect/.test(syslogSrc));
 check("syslog does not report status 'sent'", !/status:\s*'sent'/.test(syslogSrc));
 check("syslog reports not_implemented instead", /not_implemented/.test(syslogSrc));
+
+// itsm gates at the FACTORY, which every one of its eight vendor adapters passes
+// through. Assert the gate runs BEFORE the pre-existing "no credentials" branch:
+// placed after it, a fully-configured dev process would still build an adapter.
+const itsmSrc = readFileSync(resolve(repo, "lib/integrations/src/integrations/itsm/adapter.ts"), "utf8");
+const gateAt = itsmSrc.indexOf("resolveEmission(");
+const credsAt = itsmSrc.indexOf("const credentials = config.credentials");
+check("itsm: the tier gate precedes the credentials branch", gateAt > 0 && credsAt > 0 && gateAt < credsAt);
 
 const total = passed + failures.length;
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${total})`);

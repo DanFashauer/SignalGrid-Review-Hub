@@ -23,6 +23,7 @@ export { BMCHelixAdapter } from './bmc-helix';
 export { IvantiAdapter } from './ivanti';
 export { ManageEngineAdapter } from './manageengine';
 export { GenericWebhookAdapter } from './generic-webhook';
+import { resolveEmission } from '../adapters/emit-gate';
 
 /**
  * Create an ITSM adapter based on vendor and configuration
@@ -31,6 +32,19 @@ export function createITSMAdapter(
   vendor: ITSMVendor,
   config: ITSMFullConfig
 ): ITSMAdapter | null {
+  // Tier gate at the FACTORY — the one chokepoint every vendor passes through.
+  // All eight adapters POST real tickets into a customer's ITSM; gating here
+  // means a non-emitting tier cannot even construct one, so a new vendor added
+  // later inherits the gate instead of having to remember it.
+  //
+  // Returning null is the existing contract for "cannot build an adapter"
+  // (see the missing-credentials branch below), so no caller changes.
+  const emission = resolveEmission();
+  if (emission.mode === 'suppressed') {
+    console.warn(`ITSM adapter not created for ${vendor}: ${emission.reason}`);
+    return null;
+  }
+
   const credentials = config.credentials;
   
   if (!credentials) {

@@ -80,6 +80,21 @@ only), and the DDM rig is gated on an APNs push certificate.
 
 ## Owner-gated (needs a decision before an agent builds it)
 
+- [ ] **Truncation signal on capped reads** ⚠️ **owner decision — API change across 11
+      connectors.** Eleven connectors paginate with their own copy of `getAllPages`,
+      looping `while (url && pages < this.pageLimit)` and returning a plain array.
+      The cap is correct (a loop/DoS guard against an endless `nextLink`) but the
+      caller learns nothing: a tenant with more pages than the cap yields a SHORT
+      list indistinguishable from a complete one. For a posture fabric that is a
+      fail-open — an absent device reads as "no such device", so a non-compliant
+      host past the cap reads as no problem. Measured over a real socket in
+      `proof:graph-wire`.
+      Fixing it changes the return type of all eleven and every caller, so it is
+      the owner's call: richer return (`{items, truncated}`), a thrown error on
+      cap-hit, or a documented accept-the-risk. `scripts/check-pagination-truncation.mjs`
+      stops a TWELFTH being added silently in the meantime — the eleven are listed
+      there, so the debt is stated rather than implied.
+
 _These need the owner's call — an agent should not act on them unsupervised._
 
 - [ ] **IP / disclosure posture** ⚠️ **owner decision first.** Before ANY detailed

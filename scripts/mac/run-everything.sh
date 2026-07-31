@@ -167,9 +167,10 @@ done.then(() => {
 NODE
   then
     record mcp PASS "initialize → tools/list → signal_catalog all answered over stdio"
-    note "wire it into Claude Desktop — add to claude_desktop_config.json:"
-    note '  { "mcpServers": { "signalgrid": { "command": "node",'
-    note "      \"args\": [\"$REPO_ROOT/artifacts/mcp-server/dist/index.mjs\"] } } }"
+    note "wire it into Claude Desktop — add to claude_desktop_config.json"
+    note "(the mcp-up.sh launcher self-updates on every Claude Desktop restart):"
+    note '  { "mcpServers": { "signalgrid": { "command": "/bin/bash",'
+    note "      \"args\": [\"$REPO_ROOT/scripts/mac/mcp-up.sh\"] } } }"
     note "then restart Claude Desktop and ask it to evaluate a room-entry scenario."
   else
     record mcp FAIL "MCP handshake failed — output above says which step"

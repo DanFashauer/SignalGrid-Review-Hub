@@ -51,6 +51,20 @@ After phase 4 prints its snippet, add it to
 
 ```json
 { "mcpServers": { "signalgrid": {
+    "command": "/bin/bash",
+    "args": ["<repo>/scripts/mac/mcp-up.sh"] } } }
+```
+
+Point it at `mcp-up.sh` (not `dist/index.mjs` directly) and **the connection
+never drifts**: every time Claude Desktop starts, the launcher fast-forwards
+the branch, reinstalls if the lockfile moved, rebuilds the server if its
+sources moved, and only then serves — failing open to the existing build (with
+a stderr warning) when offline or when your tree has local edits, never to a
+broken one. To pin a version instead, use the direct `node dist/index.mjs`
+form:
+
+```json
+{ "mcpServers": { "signalgrid": {
     "command": "node",
     "args": ["<repo>/artifacts/mcp-server/dist/index.mjs"] } } }
 ```

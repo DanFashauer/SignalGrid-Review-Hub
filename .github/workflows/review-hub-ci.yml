@@ -275,6 +275,8 @@ jobs:
       # hardware can refresh that, so staleness never blocks a commit.
       - name: Live-sync manifest drift (Mac MCP + iOS instructions current)
         run: node scripts/check-live-sync.mjs
+      - name: MCP surface drift gate (server = docs = ready message = manifest)
+        run: node scripts/check-mcp-surface.mjs
 
       - name: Docs↔proof figure guard
         run: node scripts/check-proof-figures.mjs

@@ -67,6 +67,16 @@ easier to secure, operate, and scale — with less downtime — and every worklo
 connected to it benefits. SignalGrid is complementary to the network hub, not a
 competitor to it: the two inspect different planes and neither replaces the other.
 
+## The operating-stack framing
+
+SignalGrid turns the IT operating stack into a decision fabric: digital
+workplace, network, cloud, ITSM, integration, governance, and physical-world
+signals become one explainable allow / step-up / restrict / deny decision with
+routed ownership and audit evidence. The layer-by-layer map of every existing
+surface — and the seventh, physical/operational layer the standard six-layer
+stack taxonomy has no slot for — lives in
+[OPERATING_STACK_LAYER_MAP.md](OPERATING_STACK_LAYER_MAP.md).
+
 ## Ecosystem positioning matrix
 
 | Category                          | Examples                                                                                                                                                                                                                                                                | What the category owns                                                                                                                                     | What SignalGrid consumes                                                                                                                                                                                                                                                           | What SignalGrid emits                                                                                                                                                                                                                     | Replacement boundary                                                                                                                                                                                    |

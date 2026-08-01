@@ -23,6 +23,16 @@ Conventions used throughout, non-negotiable:
 | Browser surfaces | NEW: Playwright E2E (`pnpm run test:e2e`) — 35 tests, ~126 content-bearing assertions across the review console, public website, admin console, desktop client, and mobile PWA (admin, desktop, and PWA wired to a live api-server); ~38s wall clock including all six app builds. The suite shipped with one deliberately-red test that PROVED a real product gap: the review console never surfaced the Battery health row even though the core correctly returned `restrict`/`BATTERY_FAILING` — the console's scenario list had no failing-battery entry. The one-line scenario fix landed in that same change, taking the suite to 15/15 **as it stood then** (it has since grown to the 35 tests counted above). That red-first test is the pattern to keep: E2E asserts what a human sees, not what the core knows. | What a human actually sees renders and says the right thing | $0 |
 | Real cryptography | NEW: live-idp-proof (`pnpm run proof:live-idp`) — 31/31 checks against a real in-process `oidc-provider`, through lib/enterprise-auth's production verifier: real JWKS fetch, real RS256 signatures, real expiry, wrong-aud/wrong-iss rejection, HS256 algorithm-confusion and `alg:none` rejection, and a real DPoP-bound token whose `cnf.jkt` matches the RFC 7638 thumbprint of the held key. ~3s, fully offline. | Auth layer against real crypto, not fixtures | $0 |
 
+**Running the live lanes: `pnpm run verify:live`.** Four proofs read real vendor
+software rather than fixtures (Fleet, Traccar, Keycloak, Wazuh). Each refuses without
+its server and is skipped BY NAME, which is correct but had left the live evidence
+effectively unreachable — the bring-up steps lived in four separate documents. That
+one command stands up whatever Docker allows, runs those lanes, removes what it
+started (`--keep` to leave them), and reports a lane it could not provision as
+SKIPPED with the reason rather than counting it as passed. `--only fleet,keycloak`
+narrows it. Wazuh is never auto-started (~2GB image); it runs only if WAZUH_URL is
+already set.
+
 Everything below extends this base outward to external systems.
 
 ### Dimension → first live lane (quick index)

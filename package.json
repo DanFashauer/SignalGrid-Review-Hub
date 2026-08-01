@@ -142,7 +142,8 @@
     "proof:live-location": "pnpm --filter @workspace/scripts run proof:live-location",
     "proof:absent-collection": "pnpm --filter @workspace/scripts run proof:absent-collection",
     "proof:mcp-server": "pnpm --filter @workspace/scripts run proof:mcp-server",
-    "proof:live-keycloak": "pnpm --filter @workspace/scripts run proof:live-keycloak"
+    "proof:live-keycloak": "pnpm --filter @workspace/scripts run proof:live-keycloak",
+    "verify:live": "./scripts/run-live-lanes.sh"
   },
   "private": true,
   "devDependencies": {

@@ -90,6 +90,12 @@ check("a malformed report never grades protected even when its readable half loo
 })());
 check("a NON-OBJECT report (null) is malformed — not a quietly-empty clean read", normalizeSseEgressReport("d", null as unknown as SseEgressReportRaw).reportIntegrity === "malformed");
 check("a non-boolean observation/bridge assertion is malformed, never coerced", norm({ client_state: "tunneled", service_observing_traffic: "yes", bridge_reachable: true }).reportIntegrity === "malformed");
+check("a non-boolean bridge_reachable assertion is malformed, never coerced and never mere silence", norm({ client_state: "tunneled", service_observing_traffic: true, bridge_reachable: "yes" }).reportIntegrity === "malformed");
+check("a report whose property GETTER throws is malformed (readThrew), never a silent default", (() => {
+  const trap: Record<string, unknown> = {};
+  Object.defineProperty(trap, "client_state", { enumerable: true, get() { throw new Error("boom"); } });
+  return normalizeSseEgressReport("d", trap as SseEgressReportRaw).reportIntegrity === "malformed";
+})());
 check("a hostile report whose key enumeration THROWS (Proxy ownKeys trap) is malformed, never trusted", (() => {
   const hostile = new Proxy({}, { ownKeys() { throw new Error("trap"); } });
   return normalizeSseEgressReport("d", hostile as SseEgressReportRaw).reportIntegrity === "malformed";

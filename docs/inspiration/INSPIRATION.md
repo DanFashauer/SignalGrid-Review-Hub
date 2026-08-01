@@ -143,6 +143,19 @@ It also anchors the honest register: continuous *verification*, least privilege,
   "Intune protected partner app" means Microsoft's catalog, never a
   SignalGrid partnership; companion scanner/recorder artifacts are
   dispositioned in ledger row 33.
+- [Mobile-app catalog agent — unhardened reference source](MOBILE_APP_CATALOG_AGENT.md)
+  — the owner's repository-scanner source and catalog JSON Schema, preserved
+  verbatim with SHA-256 provenance and the intake audit's VERIFIED defect list
+  (secret-leak path, symlink escape, non-determinism). Reference only; the
+  hardened integration is the queued YELLOW-lane scanner phase in
+  `docs/BUILD_BACKLOG.md`, and the scheduled PR-creating workflow is
+  deliberately unwritten pending explicit owner approval.
+- [Mobile post-configuration recorder — reference contract](MOBILE_CONFIG_RECORDER_CONTRACT.md)
+  — the recorder JSON Schema + PostgreSQL model, preserved verbatim behind a
+  binding preamble: nothing in this repository consumes them, the tenant
+  recorder tables describe a private data plane that never enters this tree,
+  an unproven rollback never permits a deploy, and version stamping defers to
+  the queued normalization-version build.
 - [Technology Ecosystem Master Catalog](TECHNOLOGY_ECOSYSTEM_MASTER_CATALOG.md)
   — the owner-compiled 21-sheet consolidation of the CIS, physical-access and
   endpoint catalogs, expanded across sixteen ecosystem domains (423 master

@@ -30,6 +30,61 @@ picking these up:
       because it touches the core decision/API contract (`test:api` response
       pins, evidence digests, spec sync) rather than one family.
 
+- [ ] **Mobile-app-catalog scanner phase (intake row 33, owner-instructed YELLOW-lane build).**
+      The owner's repository scanner is filed verbatim, UNHARDENED, in
+      [inspiration/MOBILE_APP_CATALOG_AGENT.md](inspiration/MOBILE_APP_CATALOG_AGENT.md)
+      with SHA-256 provenance; the adversarial intake audit VERIFIED (by
+      execution) defects the build must fix before any committed run: the
+      `BUNDLE_RE` JWT/dotted-secret leak into `identifiers` (which makes the
+      emitted `publicSafety.valuesRedacted: true` an overclaim), the
+      file-symlink escape, wall-clock + absolute-path non-determinism (two runs
+      must become byte-identical), unescaped markdown table cells, and
+      unbounded per-file reads. Build content: hardened scanner under
+      `scripts/mobile-app-catalog/`, an adversarial fixture tree (DOCTYPE xml
+      refused, planted fake JWT never emitted, symlink never followed) with a
+      committed golden scoped to the fixtures (never docs/inspiration),
+      `proof:mobile-app-catalog` that shells to python3 and FAILS (never
+      skips) when python3 is missing, atomic four-surface registration (root +
+      scripts package.json, preflight.mjs — amending its Node-only
+      self-description honestly — and review-hub-ci.yml) plus `.gitleaks.toml`
+      allowlisting for the planted fixture, with Mac-lane coordination first
+      (proof registration is a LANE_COORDINATION shared surface). The
+      owner-referenced scheduled PR-creating workflow stays UNWRITTEN — it
+      would be the repo's first autonomous contents-write surface — unless the
+      owner approves it as its own future phase. Online/store/vendor adapters,
+      the recorder implementation, and any Postgres deployment stay spec-only.
+- [ ] **Per-app managed-configuration RECEIPT as a decision dimension (intake
+      row 33, verified candidate gap).** Nothing today can represent "the host
+      app actually RECEIVED its managed-configuration payload, current
+      version": device-management-health `policyDrift` is device-baseline
+      scope, app-update grades the BINARY's channel/version, policy-binding
+      grades assignment-and-enforcement — each compression was adversarially
+      shown to distort (the checkInFreshness-collapse precedent). A session
+      can earn managed_healthy + current_managed + bound_correctly while the
+      host app runs on a default or stale AppConfig dictionary. Wire facts
+      exist today (Intune Graph mobileAppConfigurations deviceStatuses; Apple
+      managed-app config/feedback). Future family rules pinned by the
+      verifier: read-only, fixture-first, its own family (never folded into
+      the three neighbors), management-plane status anchors the affirmative
+      (app self-attestation corroborates or downgrades only), first scope =
+      Entra + Intune + the one launch host app. Reference contract shape:
+      [inspiration/MOBILE_CONFIG_RECORDER_CONTRACT.md](inspiration/MOBILE_CONFIG_RECORDER_CONTRACT.md)
+      — sequenced AFTER normalization-version stamping, and its recorder
+      write-plane stays out of the public tree.
+- [ ] **App Protection / MAM state as a decision dimension (intake row 33,
+      verified candidate gap; SIGNAL_SOURCE_CATALOG's own
+      "documentation-only roadmap" row).** No lib family models MAM
+      (repo-wide grep: zero matches); device-management-health's header
+      explicitly scopes the APP channel out; the connector emulator already
+      scripts MISSING_MAM_POLICY_SENSITIVE_APP → restrict as an expectation no
+      dimension can produce. Wire facts exist (Graph managedAppRegistrations
+      appliedPolicies/flaggedReasons per user+device+app). Verifier-pinned
+      rules: its own read-only fixture-first family; selective wipe NEVER
+      enters the tree (the uem actuator-deletion precedent); unknown/stale
+      raises; MAM non-applicability is an asserted positive; the emulator
+      expectation and the SIGNAL_SOURCE_CATALOG row status reconcile in the
+      same change; Intune App Protection first, other MAM vendors deferred.
+
 _Derived from repo data, not memory: `check-connector-discipline` reports 36/36
 families with KNOWN_GAPS empty, and `check-live-sync` reports `liveEvidence=none`.
 What remains is the LIVE-lane column of

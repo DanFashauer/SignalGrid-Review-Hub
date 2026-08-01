@@ -29,6 +29,15 @@
   scoped YELLOW-lane catalog-agent phase, while the first commercial profile
   stays limited to Microsoft Entra, Intune, and one shared-device host
   application.
+
+  TIER-DRIFT WARNING (found by the row-33 intake audit): this document's
+  workflow/action map matches lib/app-workflows/src/catalog.ts key-for-key
+  (20 integrations, 77 actions), but its "Derived Risk Tier" column DISAGREES
+  with the canonical catalog in places — e.g. witness.cosign, alarm.silence,
+  log.edit and node.drain read "standard" here while catalog.ts grades them
+  critical. catalog.ts is the canonical source (this file's own repo-scan
+  sheet says so); the tiers below are a derived view and must never be
+  back-imported into code.
 -->
 
 # SignalGrid Mobile App & Managed Configuration Master Catalog

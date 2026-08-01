@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 53,
-  "fingerprint": "cba425704a84eeca940233623353abdce21867ca7089417f4b0f3c2557c8cfc5",
+  "manifestVersion": 54,
+  "fingerprint": "48897b6b67722bbb5fc92e06601c542128d81bc7057471da3d826f0c9f2968c2",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -98,7 +98,7 @@
       "benchmark-selection": 82,
       "bootstrap-credential": 35,
       "caep-events": 17,
-      "challenge-capability": 34,
+      "challenge-capability": 38,
       "config-scope": 48,
       "credential-exposure": 28,
       "custody-beacon": 43,

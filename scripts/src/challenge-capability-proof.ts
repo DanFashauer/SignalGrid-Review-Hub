@@ -130,6 +130,19 @@ check("a getter that throws is malformed (readThrew), never a silent default", (
   Object.defineProperty(trap, "methods", { enumerable: true, get() { throw new Error("boom"); } });
   return normalizeChallengeReport("pair-1", trap as ChallengeCapabilityReportRaw).reportIntegrity === "malformed";
 })());
+check("a NON-OBJECT report (null) is malformed — not a quietly-empty clean read", normalizeChallengeReport("p", null as unknown as ChallengeCapabilityReportRaw).reportIntegrity === "malformed");
+check("a non-boolean bridge_reachable assertion is malformed, never coerced and never mere silence", norm({ methods: [], bridge_reachable: "yes" } as ChallengeCapabilityReportRaw).reportIntegrity === "malformed");
+check("a NON-ITERABLE methods slot asserted (a number) is malformed and does NOT throw", (() => {
+  try {
+    return norm({ methods: 42, bridge_reachable: true } as ChallengeCapabilityReportRaw).reportIntegrity === "malformed";
+  } catch {
+    return false;
+  }
+})());
+check("a hostile report whose key enumeration THROWS (Proxy ownKeys trap) is malformed, never trusted", (() => {
+  const hostile = new Proxy({}, { ownKeys() { throw new Error("trap"); } });
+  return normalizeChallengeReport("p", hostile as ChallengeCapabilityReportRaw).reportIntegrity === "malformed";
+})());
 check("an absent methods slot is CLEAN and empty — the bridge said nothing, which is absence, not corruption", (() => {
   const n = norm({ bridge_reachable: true });
   return n.reportIntegrity === "clean" && n.methods.length === 0;

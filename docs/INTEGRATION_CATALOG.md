@@ -490,7 +490,7 @@ in one place.
   operator scale: fix enrollment or swap the device BEFORE the doomed challenge; anything less
   determinate is a visible blind spot. Reading a capability inventory is not running a
   challenge: nothing is enrolled, installed, or executed — ceremony execution stays with the
-  HOST app. `proof:challenge-capability` (34 checks, incl. the exhaustive 81-cell single-method
+  HOST app. `proof:challenge-capability` (38 checks, incl. the exhaustive 81-cell single-method
   standing sweep: answerable in exactly the all-affirmed cell).
 
 - **Policy binding** ([POLICY_BINDING.md](POLICY_BINDING.md)) — membership **is** the policy.

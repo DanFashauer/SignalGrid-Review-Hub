@@ -41,6 +41,7 @@
     "./shift-context": "./src/integrations/shift-context/index.ts",
     "./bootstrap-credential": "./src/integrations/bootstrap-credential/index.ts",
     "./challenge-capability": "./src/integrations/challenge-capability/index.ts",
+    "./sse-egress": "./src/integrations/sse-egress/index.ts",
     "./device-management-health": "./src/integrations/device-management-health/index.ts",
     "./link-usability": "./src/integrations/link-usability/index.ts",
     "./task-exception": "./src/integrations/task-exception/index.ts",

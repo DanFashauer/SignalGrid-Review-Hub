@@ -493,6 +493,24 @@ in one place.
   HOST app. `proof:challenge-capability` (38 checks, incl. the exhaustive 81-cell single-method
   standing sweep: answerable in exactly the all-affirmed cell).
 
+- **SSE egress** — the mandated edge path (intake ledger row 25; Zscaler Client Connector
+  device status, Netskope client inventory, and GlobalProtect are the reference shapes).
+  `network-nac` stops at LAN admission and `edr-threat` grades the endpoint agent; neither
+  asks whether the device's internet/SaaS traffic is actually traversing the deployment's
+  mandated SWG/CASB/ZTNA edge — a frontline device with the SSE client bypassed, disabled,
+  or never installed browses raw while every console reads "protected". The SSE reports its
+  own client's state (trusted allowlist) plus whether the edge AFFIRMATIVELY observes this
+  device's traffic — a "tunneled" claim is corroborated, never believed: contradicted →
+  step_up with a critical finding, unconfirmed → unknown raises. The caller POSES whether
+  the edge is mandated for this device; unposed is `unassessed` and forecloses nothing (an
+  air-gapped terminal or out-of-mandate BYOD device is never nagged). Disabled and
+  never-installed are affirmative operator-scale defects (alert — the setup-bypassed
+  precedent); a bypass is visible and steps up (a bypass rule can be deliberate policy);
+  silence on a mandated path steps up. Reading an edge's device status is not steering
+  traffic: nothing is routed, toggled, or rewritten. `proof:sse-egress` (30 checks, incl.
+  the exhaustive 45-cell standing sweep in both poses: protected in exactly one cell,
+  unposed always quiet).
+
 - **Policy binding** ([POLICY_BINDING.md](POLICY_BINDING.md)) — membership **is** the policy.
   Intune dynamic groups, Fleet teams, ABM/DDM profiles, Jamf smart groups, PACS access
   levels, Entra CA groups, WMS queues, EDR policy groups and SignalGrid's own per-vertical

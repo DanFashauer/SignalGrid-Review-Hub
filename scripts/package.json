@@ -93,6 +93,7 @@
     "proof:shift-context": "tsx ./src/shift-context-proof.ts",
     "proof:bootstrap-credential": "tsx ./src/bootstrap-credential-proof.ts",
     "proof:challenge-capability": "tsx ./src/challenge-capability-proof.ts",
+    "proof:sse-egress": "tsx ./src/sse-egress-proof.ts",
     "proof:facility-trust-graph": "tsx ./src/facility-trust-graph-proof.ts",
     "proof:emitter-discipline": "tsx ./src/emitter-discipline-proof.ts",
     "proof:policy-binding": "tsx ./src/policy-binding-proof.ts",

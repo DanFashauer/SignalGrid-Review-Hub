@@ -26,6 +26,7 @@ import type { BenchmarkSelectionVerdict } from "@workspace/integrations/benchmar
 import type { ShiftContextVerdict } from "@workspace/integrations/shift-context";
 import type { BootstrapCredentialVerdict } from "@workspace/integrations/bootstrap-credential";
 import type { ChallengeCapabilityVerdict } from "@workspace/integrations/challenge-capability";
+import type { SseEgressVerdict } from "@workspace/integrations/sse-egress";
 import type { LocationCertaintyVerdict } from "@workspace/facility-trust-graph";
 import type { DeviceManagementHealthVerdict } from "@workspace/integrations/device-management-health";
 import type { LinkUsabilityVerdict } from "@workspace/integrations/link-usability";
@@ -308,6 +309,18 @@ export function fromChallengeCapability(v: ChallengeCapabilityVerdict): Composab
   // challenge it just reported impossible — and never lowers what any other
   // dimension says: it grades the REMEDY, not the trust.
   return { kind: "challenge_capability", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromSseEgress(v: SseEgressVerdict): ComposableSignal {
+  // The mandated edge path — is this device's traffic actually traversing the
+  // deployment's SSE, or egressing raw while every console reads "protected"?
+  // network-nac owns LAN admission and edr-threat owns the endpoint agent;
+  // this is the same blind-spot doctrine on the egress plane. Protected
+  // contributes nothing; disabled/never-installed alert (operator-scale
+  // provisioning defects); a bypass or an uncorroborated tunnel claim steps
+  // up; unposed mandates stay silent. Never lowers what any other dimension
+  // says.
+  return { kind: "sse_egress", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromDeviceManagementHealth(v: DeviceManagementHealthVerdict): ComposableSignal {

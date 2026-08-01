@@ -226,6 +226,12 @@ function categoryForKind(kind: string, reason?: string): IncidentCategory {
     // routing by "the fix is a WLAN change" — which is true of the remedy and not of the
     // owner this actually reaches.
     case "link_usability":
+    // `sse_egress` is the network plane's egress reading — a mandated edge the
+    // device's traffic is not traversing. Its findings (client disabled, never
+    // installed, bypassed, an uncorroborated tunnel claim) are provisioning and
+    // policy states on the same plane as `network`/`link_usability`, so they
+    // route the same way; they are not live threats for SecOps.
+    case "sse_egress":
       return "security_compliance";
     case "vulnerability":
       return "security_vulnerability";

@@ -239,6 +239,14 @@ export const TARGETS = [
   },
 
   {
+    proof: "proof:sse-egress",
+    files: [
+      "lib/integrations/src/integrations/sse-egress/evaluate.ts",
+      "lib/integrations/src/integrations/sse-egress/sse-egress-connector.ts",
+    ],
+  },
+
+  {
     proof: "proof:benchmark-selection",
     files: [
       "lib/integrations/src/integrations/benchmark-selection/evaluate.ts",

@@ -132,3 +132,9 @@ It also anchors the honest register: continuous *verification*, least privilege,
   — the owner-supplied deep-research report behind intake ledger row 17
   (external validation of the Facility Trust Graph architecture; source of the
   zone-presence state machine built in `transition.ts`).
+- [Physical Access Control API & GitHub catalog](PACS_VENDOR_API_CATALOG.md)
+  — the owner-compiled, source-linked inventory behind intake ledger row 26
+  (61 vendor/API entries, 24 open-source resources, 10 standards, and the
+  recommended SignalGrid integration sequencing with per-tier minimum signal
+  sets; verified 2026-07-31). Reference material only: no dependency taken,
+  and every future adapter stays behind connector discipline.

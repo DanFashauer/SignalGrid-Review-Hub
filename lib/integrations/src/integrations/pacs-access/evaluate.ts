@@ -52,6 +52,47 @@ export interface EvaluatePacsAccessOptions {
    *  operator explicitly accepts any known technology (the choice stays theirs).
    *  Unposed = the axis is not graded and never forecloses. */
   minimumCredentialTechnology?: CredentialTechnologyFloor;
+  /** The recency question (intake row 26's "event timestamp"), POSED BY THE
+   *  CALLER: how old may the graded entry event be and still stand as evidence
+   *  of a CURRENT physical entry? Graded against `referenceTime` — no clock in
+   *  any decision path. Unposed = freshness is not graded and never forecloses
+   *  (every bridge deployed before this axis keeps its behavior). */
+  maxEventAgeSeconds?: number;
+  /** The caller's "now", a strict ISO-8601 UTC (Zulu) instant — required for
+   *  the freshness axis to answer; a posed age bound without a readable
+   *  reference is posed-but-unanswerable (unknown raises). */
+  referenceTime?: string;
+}
+
+/** Freshness of the graded entry event against the caller-posed bound.
+ *  Derived, never trusted; `unassessed` when no bound was posed. */
+export type EventFreshness = "fresh" | "stale" | "unassessed" | "unknown";
+
+const INSTANT_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
+
+function instantMs(v: string | undefined | null): number | null {
+  if (typeof v !== "string" || !INSTANT_RE.test(v.trim())) return null;
+  const ms = Date.parse(v.trim());
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/** Derive the entry event's freshness. Deterministic on three supplied inputs.
+ *  Boundary: an event exactly at the bound is fresh (inclusive); a future-dated
+ *  event relative to the reference is a contradiction → unknown, never fresh. */
+export function deriveEventFreshness(
+  observedAt: string | null,
+  maxEventAgeSeconds: number | undefined,
+  referenceTime: string | undefined,
+): EventFreshness {
+  if (maxEventAgeSeconds === undefined) return "unassessed";
+  if (typeof maxEventAgeSeconds !== "number" || !Number.isFinite(maxEventAgeSeconds) || maxEventAgeSeconds <= 0) {
+    return "unknown"; // a garbled pose is a question we cannot read — never answered optimistically
+  }
+  const observedMs = instantMs(observedAt);
+  const referenceMs = instantMs(referenceTime);
+  if (observedMs === null || referenceMs === null) return "unknown";
+  if (observedMs > referenceMs) return "unknown"; // future-dated evidence is a contradiction
+  return referenceMs - observedMs <= maxEventAgeSeconds * 1000 ? "fresh" : "stale";
 }
 
 interface Candidate {
@@ -168,6 +209,31 @@ export function evaluatePacsAccess(
   } else if (credentialAssurance === "unknown") {
     unknownSignals.push("credential_technology");
     candidates.push({ posture: "unverified", action: "step_up", reason: "CREDENTIAL_TECHNOLOGY_UNKNOWN" });
+  }
+
+  // The recency axis (row 26's "event timestamp"), graded ONLY when the caller
+  // posed an age bound. A confirmed badge-in that happened long before the posed
+  // bound is not evidence of a CURRENT entry — the row-11 recency doctrine
+  // applied to the door: a confirmed answer does not stay confirmed forever.
+  const eventFreshness = deriveEventFreshness(pacs.observedAt, options.maxEventAgeSeconds, options.referenceTime);
+  if (eventFreshness === "stale") {
+    candidates.push({ posture: "stale_evidence", action: "step_up", reason: "EVENT_STALE" });
+  } else if (eventFreshness === "unknown") {
+    unknownSignals.push("event_time");
+    candidates.push({ posture: "unverified", action: "step_up", reason: "EVENT_TIME_UNKNOWN" });
+  }
+
+  // Reader/controller health (row 26's "reader/controller health") — DISTINCT
+  // from bridge reachability: the bridge can answer perfectly about a door whose
+  // controller is offline, which means the entry evidence may be blind.
+  // AFFIRMATIVE-ONLY by design: explicit offline steps up (the evidence plane
+  // behind this entry cannot be current), explicit degraded is a visible
+  // monitor, and an UNREPORTED health forecloses nothing — the axis
+  // corroborates, and bridges deployed before it keep their behavior.
+  if (pacs.controllerHealth === "offline") {
+    candidates.push({ posture: "controller_unhealthy", action: "step_up", reason: "CONTROLLER_OFFLINE" });
+  } else if (pacs.controllerHealth === "degraded") {
+    candidates.push({ posture: "controller_unhealthy", action: "monitor", reason: "CONTROLLER_DEGRADED" });
   }
 
   // Identity match must be POSITIVELY confirmed. `false` escalated above; a null

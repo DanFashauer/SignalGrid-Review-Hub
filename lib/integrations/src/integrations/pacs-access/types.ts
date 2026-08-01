@@ -48,6 +48,15 @@ export type AntipassbackState = "ok" | "violation" | "unknown";
  *  grant (door-forced alarm); `held_open` = propped/held past its relock timer. */
 export type DoorState = "secured" | "forced" | "held_open" | "unknown";
 
+/** Health of the reader/controller that produced this entry's evidence — DISTINCT
+ *  from `bridgeReachable` (the BRIDGE can answer perfectly while the door
+ *  hardware it reports on is offline, which means the entry data may be blind).
+ *  Intake ledger row 26: the owner's prescribed minimum signal set names
+ *  "reader/controller health" and nothing carried it. An AFFIRMATIVE-ONLY axis:
+ *  explicit `offline`/`degraded` grades; `unknown` (unreported) forecloses
+ *  nothing, so every bridge deployed before this axis keeps its behavior. */
+export type ControllerHealth = "online" | "degraded" | "offline" | "unknown";
+
 /** Raw PACS report about one controlled entry / holder (loosely typed — any field
  *  may degrade to null / an error string). */
 export interface PacsAccessReportRaw {
@@ -57,6 +66,11 @@ export interface PacsAccessReportRaw {
   authorization?: unknown; // authorized | out_of_schedule | out_of_zone | revoked | unknown
   antipassback?: unknown; // ok | violation | unknown
   doorState?: unknown; // secured | forced | held_open | unknown
+  /** When the graded entry event occurred — a strict ISO-8601 UTC (Zulu)
+   *  instant. Row 26's "event timestamp": without it a stale badge-in grades
+   *  exactly like a current one. */
+  observedAt?: unknown;
+  controllerHealth?: unknown; // online | degraded | offline | unknown
   /** Does the PACS badge-holder match the checked-out device holder? */
   identityMatched?: boolean | null;
   /** The PACS-attested holder and the expected checked-out badge-holder, when present. */
@@ -77,6 +91,11 @@ export interface NormalizedPacsAccess {
   authorization: AccessAuthorization;
   antipassback: AntipassbackState;
   doorState: DoorState;
+  /** The entry event's instant, when readably reported (strict Zulu); null
+   *  otherwise. Freshness is derived at EVALUATE time against a caller-posed
+   *  age bound and reference instant — no clock in any decision path. */
+  observedAt: string | null;
+  controllerHealth: ControllerHealth;
   /** true = PACS holder confirmed == checked-out holder; false = a mismatch;
    *  null = not reported. */
   identityMatched: boolean | null;
@@ -96,6 +115,8 @@ export type PacsAccessPosture =
   | "out_of_bounds"
   | "door_held"
   | "credential_below_floor"
+  | "stale_evidence"
+  | "controller_unhealthy"
   | "unverified"
   | "unknown";
 
@@ -111,6 +132,10 @@ export type PacsAccessReasonCode =
   | "DOOR_HELD_OPEN"
   | "CREDENTIAL_BELOW_FLOOR"
   | "CREDENTIAL_TECHNOLOGY_UNKNOWN"
+  | "EVENT_STALE"
+  | "EVENT_TIME_UNKNOWN"
+  | "CONTROLLER_OFFLINE"
+  | "CONTROLLER_DEGRADED"
   | "PACS_STATE_UNKNOWN"
   | "BRIDGE_UNREACHABLE"
   | "NOT_COVERED";

@@ -72,7 +72,7 @@ detects holes rather than always passing.
 Connectors whose full allow-path is currently constrained this way (mismatches=0
 over the full product): **oauth-consent** (6,480), **sso-session** (4,608, widened from 768 by the shared-account attribution axis),
 **access-governance** (4,500), **ot-posture** (324), **token-binding** (1,296),
-**pacs-access** (24,300, in both the unposed and the posed-floor grading), **agent-identity** (17,280 normalized + 870,912 raw + a parse-fidelity pass over the raw space),
+**pacs-access** (97,200, in both the unposed and the posed-floor grading), **agent-identity** (17,280 normalized + 870,912 raw + a parse-fidelity pass over the raw space),
 **device-management-health** (21,600 normalized + 1,354,752 raw + a parse-fidelity pass),
 **link-usability** (6,480 normalized + 217,728 raw + a parse-fidelity pass). These are the enum-field
 "trust grant" dimensions where

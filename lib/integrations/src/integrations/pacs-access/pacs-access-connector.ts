@@ -14,6 +14,7 @@ import {
   type AccessAuthorization,
   type AccessResult,
   type AntipassbackState,
+  type ControllerHealth,
   type CredentialTechnology,
   type CredentialType,
   type DoorState,
@@ -38,6 +39,14 @@ function oneOf<T extends string>(v: unknown, allowed: readonly T[], fallback: T)
 /** Only an explicit boolean is trusted; anything else is null (not reported). */
 function boolOrNull(v: unknown): boolean | null {
   return typeof v === "boolean" ? v : null;
+}
+
+/** A strict ISO-8601 UTC (Zulu) instant, verbatim, or null. Never a coerced date. */
+function instantStringOf(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const s = v.trim();
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(s)) return null;
+  return Number.isFinite(Date.parse(s)) ? s : null;
 }
 
 function readableString(v: unknown): string | null {
@@ -84,6 +93,8 @@ export function normalizeReport(
     authorization: oneOf<AccessAuthorization>(report.authorization, ["authorized", "out_of_schedule", "out_of_zone", "revoked", "unknown"], "unknown"),
     antipassback: oneOf<AntipassbackState>(report.antipassback, ["ok", "violation", "unknown"], "unknown"),
     doorState: oneOf<DoorState>(report.doorState, ["secured", "forced", "held_open", "unknown"], "unknown"),
+    observedAt: instantStringOf(report.observedAt),
+    controllerHealth: oneOf<ControllerHealth>(report.controllerHealth, ["online", "degraded", "offline", "unknown"], "unknown"),
     identityMatched,
     pacsSubject,
     expectedSubject,

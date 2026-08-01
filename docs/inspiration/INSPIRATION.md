@@ -132,6 +132,14 @@ It also anchors the honest register: continuous *verification*, least privilege,
   — the owner-supplied deep-research report behind intake ledger row 17
   (external validation of the Facility Trust Graph architecture; source of the
   zone-presence state machine built in `transition.ts`).
+- [Endpoint Management API & SignalGrid repository catalog](ENDPOINT_MANAGEMENT_API_CATALOG.md)
+  — the owner-compiled ten-sheet inventory behind intake ledger row 27 (135
+  API/platform entries across MDM/UEM/EMM, RMM, DEX, security/telemetry and
+  platform standards; 45 open-source resources; 31 SignalGrid repository
+  mappings; launch sequencing and the canonical normalized endpoint signal
+  set; verified 2026-07-31). Reference material only — the adopted strategy is
+  its own: one Microsoft-backed shared-device workflow first, breadth from
+  design-partner demand.
 - [Physical Access Control API & GitHub catalog](PACS_VENDOR_API_CATALOG.md)
   — the owner-compiled, source-linked inventory behind intake ledger row 26
   (61 vendor/API entries, 24 open-source resources, 10 standards, and the

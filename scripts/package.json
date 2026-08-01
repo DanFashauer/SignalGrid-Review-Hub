@@ -146,14 +146,14 @@
     "@workspace/reliability": "workspace:*",
     "@workspace/iac": "workspace:*",
     "@workspace/integration-bridge": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.29.0"
+    "@modelcontextprotocol/sdk": "^1.30.0"
   },
   "devDependencies": {
     "@playwright/test": "1.62.0",
     "@types/node": "catalog:",
     "@types/pg": "^8.11.10",
-    "esbuild": "0.27.3",
-    "oidc-provider": "9.10.0",
+    "esbuild": "0.28.1",
+    "oidc-provider": "9.11.1",
     "tsx": "catalog:"
   }
 }

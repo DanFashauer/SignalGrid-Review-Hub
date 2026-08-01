@@ -231,6 +231,14 @@ export const TARGETS = [
   },
 
   {
+    proof: "proof:challenge-capability",
+    files: [
+      "lib/integrations/src/integrations/challenge-capability/evaluate.ts",
+      "lib/integrations/src/integrations/challenge-capability/challenge-capability-connector.ts",
+    ],
+  },
+
+  {
     proof: "proof:benchmark-selection",
     files: [
       "lib/integrations/src/integrations/benchmark-selection/evaluate.ts",

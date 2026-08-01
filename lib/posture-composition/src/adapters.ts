@@ -25,6 +25,7 @@ import type { PolicyBindingVerdict } from "@workspace/integrations/policy-bindin
 import type { BenchmarkSelectionVerdict } from "@workspace/integrations/benchmark-selection";
 import type { ShiftContextVerdict } from "@workspace/integrations/shift-context";
 import type { BootstrapCredentialVerdict } from "@workspace/integrations/bootstrap-credential";
+import type { ChallengeCapabilityVerdict } from "@workspace/integrations/challenge-capability";
 import type { LocationCertaintyVerdict } from "@workspace/facility-trust-graph";
 import type { DeviceManagementHealthVerdict } from "@workspace/integrations/device-management-health";
 import type { LinkUsabilityVerdict } from "@workspace/integrations/link-usability";
@@ -295,6 +296,18 @@ export function fromBootstrapCredential(v: BootstrapCredentialVerdict): Composab
   // STRENGTH of a standing method (passkey-assurance / platform-sso own that),
   // and never lowers what any other dimension says.
   return { kind: "bootstrap_credential", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromChallengeCapability(v: ChallengeCapabilityVerdict): ComposableSignal {
+  // The answerable step-up — could this device+worker pair actually ANSWER the
+  // challenge a workflow's step_up would pose? READY contributes nothing;
+  // UNANSWERABLE alerts (an operator-scale provisioning defect: the remedy
+  // path is a dead end, so fix enrollment or swap the device before a doomed
+  // challenge); a blind spot monitors. Deliberately NEVER a step_up of its
+  // own — a dimension about challenge efficacy must not prescribe the very
+  // challenge it just reported impossible — and never lowers what any other
+  // dimension says: it grades the REMEDY, not the trust.
+  return { kind: "challenge_capability", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromDeviceManagementHealth(v: DeviceManagementHealthVerdict): ComposableSignal {

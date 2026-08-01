@@ -476,6 +476,23 @@ in one place.
   credential record is not managing one: no pass is issued, revoked, or extended.
   `proof:bootstrap-credential` (35 checks).
 
+- **Challenge capability** — the answerable step-up (intake ledger row 23; HID DigitalPersona's
+  AD/LDS + Web Client inventory and Entra's authentication-methods registry are the reference
+  shapes). The fabric's remedy doctrine chooses step_up over lockouts everywhere, and every one
+  of those verdicts silently assumed the challenge could be ANSWERED — a step-up posed to a
+  device with no enrolled method, no reader, or a dead local agent is a deny wearing a step_up
+  label. A bridge reports, per method (fingerprint / face / card-tap / PIN / OTP / security-key
+  allowlist): credential ENROLLED for the worker, AUTHENTICATOR present on the device, local
+  CLIENT healthy. The caller POSES which methods its workflow's step-up would accept; unposed is
+  `unassessed` and forecloses nothing. READY demands one accepted method positively affirmed on
+  all three axes; UNANSWERABLE demands EVERY accepted method positively broken (declaring the
+  remedy path dead is itself an affirmative claim — silence never makes it) and alerts at
+  operator scale: fix enrollment or swap the device BEFORE the doomed challenge; anything less
+  determinate is a visible blind spot. Reading a capability inventory is not running a
+  challenge: nothing is enrolled, installed, or executed — ceremony execution stays with the
+  HOST app. `proof:challenge-capability` (34 checks, incl. the exhaustive 81-cell single-method
+  standing sweep: answerable in exactly the all-affirmed cell).
+
 - **Policy binding** ([POLICY_BINDING.md](POLICY_BINDING.md)) — membership **is** the policy.
   Intune dynamic groups, Fleet teams, ABM/DDM profiles, Jamf smart groups, PACS access
   levels, Entra CA groups, WMS queues, EDR policy groups and SignalGrid's own per-vertical

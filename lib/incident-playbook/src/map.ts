@@ -209,6 +209,11 @@ function categoryForKind(kind: string, reason?: string): IncidentCategory {
     // generic Service Desk, and not SecOps: its findings are issuance/policy
     // states, not live threats.
     case "bootstrap_credential":
+    // `challenge_capability` findings are enrollment/provisioning states — a
+    // worker with no enrolled method, a device missing its authenticator or
+    // agent — owned by the same Identity & Access queue: the fix is enroll or
+    // re-provision, not a SecOps investigation and not a generic ticket.
+    case "challenge_capability":
     case "agent_identity":
     case "data_protection":
       return "security_compliance";

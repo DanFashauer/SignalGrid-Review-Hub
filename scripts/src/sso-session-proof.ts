@@ -153,6 +153,44 @@ check("an unknown-liveness bound session never composes to the 'ok' tier", compo
 const unboundUnknownState = evaluateSsoSession(await connector.fetchSession(fixture.devices["unbound-state-unknown"].deviceId));
 check("an UNBOUND session with unknown liveness (fresh+MFA) → step_up, never granted", unboundUnknownState.recommendedAction === "step_up" && unboundUnknownState.posture !== "bound_strong");
 check("no bound_strong verdict is ever emitted without subjectBound", boundUnknownState.posture !== "bound_strong" && (strong.posture !== "bound_strong" || strong.subjectBound === true));
+// ── the shared-account attribution axis ─────────────────────────────────────────
+// On a SHARED account the subject IS the account, so the subject comparison can
+// never identify a person — attribution moves to the CREDENTIAL level (whose
+// registered passkey opened the session, DigitalPersona v4.4.0-class). The axis
+// makes the legitimate shared pattern representable WITHOUT weakening anything.
+
+const sharedBase = {
+  state: "active", binding: "bound", assurance: "phishing_resistant", freshness: "fresh", idpReachable: true,
+  subject: "nurse-station-3", expectedSubject: "wf-jane", accountScope: "shared",
+} as SsoSessionReportRaw;
+
+const sharedAttributed = evaluateSsoSession(normalizeReport("d", { ...sharedBase, credentialHolder: "wf-jane" }));
+check("a SHARED-account session attributed by the holder's own credential → bound_strong grant (subject ≠ holder is EXPECTED, not a leftover)", sharedAttributed.posture === "bound_strong" && sharedAttributed.recommendedAction === "none" && sharedAttributed.subjectBound === true);
+
+const sharedForeign = normalizeReport("d", { ...sharedBase, credentialHolder: "wf-someone-else" });
+check("a shared session opened with SOMEONE ELSE'S credential normalizes to mismatched", sharedForeign.binding === "mismatched");
+check("…and a live one escalates — the leftover rule survives the shared pattern", evaluateSsoSession(sharedForeign).recommendedAction === "escalate");
+
+const sharedAnon = normalizeReport("d", sharedBase);
+check("a shared 'bound' label with NO credential holder is uncorroborated — normalized to unknown, never bound", sharedAnon.binding === "unknown");
+const sharedAnonV = evaluateSsoSession(sharedAnon);
+check("…and the live anonymous shared session is its OWN posture: unattributed_shared/step_up (re-auth as yourself, never a lockout)", sharedAnonV.posture === "unattributed_shared" && sharedAnonV.reasonCode === "SHARED_SESSION_UNATTRIBUTED" && sharedAnonV.recommendedAction === "step_up" && sharedAnonV.subjectBound === false && sharedAnonV.unknownSignals.includes("credential_holder"));
+check("an unattributed shared session never composes to the 'ok' tier", composeDeviceRisk([fromSsoSession(sharedAnonV)]).riskTier !== "ok");
+
+const individualForeignCred = normalizeReport("d", {
+  ...sharedBase, accountScope: "individual", subject: "wf-jane", credentialHolder: "wf-someone-else",
+});
+check("the credential-holder comparison only ever DOWNGRADES, on every scope — a foreign credential on an individual account is mismatched", individualForeignCred.binding === "mismatched");
+
+const individualSubjectDiffers = normalizeReport("d", {
+  ...sharedBase, accountScope: "individual", subject: "wf-bob", credentialHolder: "wf-jane",
+});
+check("on an INDIVIDUAL account the subject rule stays authoritative — a differing subject is mismatched even with a matching credential holder (a credential never upgrades a leftover)", individualSubjectDiffers.binding === "mismatched");
+
+const unknownScope = normalizeReport("d", { ...sharedBase, accountScope: "definitely-shared!!", subject: "wf-bob" });
+check("a garbled account scope normalizes to unknown and is treated as INDIVIDUAL (fail-safe: subject rule applies) — the differing subject is mismatched", unknownScope.accountScope === "unknown" && unknownScope.binding === "mismatched");
+check("a non-string credential holder is null, never fabricated", normalizeReport("d", { ...sharedBase, credentialHolder: 42 }).credentialHolder === null);
+
 // Exhaustive: brute-force the ENTIRE normalized input space the evaluator reads
 // (not fixture-bound), so the proof genuinely CONSTRAINS the allow path. Action
 // "none" is emitted by exactly two legitimate postures and nothing else:
@@ -167,6 +205,8 @@ const domains = {
   assurance: ["phishing_resistant", "mfa", "single_factor", "unknown"],
   freshness: ["fresh", "near_expiry", "expired", "unknown"],
   idpReachable: [true, false, null],
+  accountScope: ["individual", "shared", "unknown"],
+  credentialHolder: [null, "wf-1"],
 };
 const enumRes = enumerateGrantSafety({
   domains,
@@ -180,20 +220,23 @@ const enumRes = enumerateGrantSafety({
     (v.posture === "bound_strong" && v.subjectBound === true) ||
     (v.posture === "no_session" && v.subjectBound === false),
   positivelyClean: (c) => {
-    const { state, binding, assurance, freshness, idpReachable } = c;
+    const { state, binding, assurance, freshness, idpReachable, accountScope, credentialHolder } = c;
     const boundStrong =
       binding === "bound" &&
       state === "active" &&
       freshness === "fresh" &&
       (assurance === "mfa" || assurance === "phishing_resistant") &&
-      idpReachable === true;
+      idpReachable === true &&
+      // A shared account with no credential-level attribution NEVER grants —
+      // even an (unnormalized) "bound" label cannot carry it past the evaluator.
+      !(accountScope === "shared" && credentialHolder === null);
     const noSessionBaseline = state === "none" && binding !== "mismatched" && idpReachable !== false;
     return boundStrong || noSessionBaseline;
   },
 });
 check(
   `exhaustive: over all ${enumRes.combos} input combinations, action 'none' is emitted for EXACTLY the bound_strong grant + no_session baseline (mismatches=${enumRes.mismatches}${enumRes.firstMismatch ? ", first=" + enumRes.firstMismatch : ""})`,
-  enumRes.mismatches === 0 && enumRes.combos === productOf(domains) && enumRes.combos === 768,
+  enumRes.mismatches === 0 && enumRes.combos === productOf(domains) && enumRes.combos === 4608,
 );
 check("exhaustive: some clean states DO grant (the enumeration is not vacuous)", enumRes.noneCount > 0);
 

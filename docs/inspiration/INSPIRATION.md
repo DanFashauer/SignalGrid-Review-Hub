@@ -132,6 +132,17 @@ It also anchors the honest register: continuous *verification*, least privilege,
   — the owner-supplied deep-research report behind intake ledger row 17
   (external validation of the Facility Trust Graph architecture; source of the
   zone-presence state machine built in `transition.ts`).
+- [Mobile App & Managed Configuration Master Catalog](MOBILE_APP_CONFIGURATION_CATALOG.md)
+  — the owner-compiled mobile-application and managed-configuration inventory
+  behind intake ledger row 33 (760 master app/mobile-surface records spanning
+  confirmed Intune-protected apps, curated industry clients, candidate
+  ecosystem surfaces and repo-defined host-app workflow models; 101
+  managed-configuration keys; the build-metadata / AppConfig-declaration /
+  assigned-payload / App-Protection / post-configuration-recording
+  distinctions; verified 2026-08-01). Candidate rows are not claims;
+  "Intune protected partner app" means Microsoft's catalog, never a
+  SignalGrid partnership; companion scanner/recorder artifacts are
+  dispositioned in ledger row 33.
 - [Technology Ecosystem Master Catalog](TECHNOLOGY_ECOSYSTEM_MASTER_CATALOG.md)
   — the owner-compiled 21-sheet consolidation of the CIS, physical-access and
   endpoint catalogs, expanded across sixteen ecosystem domains (423 master

@@ -1074,6 +1074,25 @@ async function run() {
   for (const [r, why] of COVERAGE_EXEMPT) {
     check(`exempt route still registered: ${r} (${why})`, registered.includes(r));
   }
+
+  // The docs quote this route count as evidence. A number stated as a measurement
+  // and then left behind is the exact rot the figure guard exists to stop — but
+  // that guard only inspects numbers >= 1,000, so "33" is invisible to it. This
+  // repo already learned that the hard way here: the matrix claimed "138
+  // assertions" long after the real figure was 199, and nothing noticed.
+  //
+  // So the place that PRODUCES the number checks the doc that quotes it. The
+  // assertion total is deliberately NOT quoted in the docs any more — it changes
+  // with every added assertion and cannot be guarded from here without
+  // self-reference, and publishing a number nobody can keep true is worse than
+  // publishing none.
+  const matrix = await readFile(new URL("../../../docs/ZERO_COST_LIVE_TEST_MATRIX.md", import.meta.url), "utf8");
+  const quoted = /all (\d+) registered \/v1 routes are exercised/.exec(matrix);
+  check("the matrix quotes a route count at all", quoted !== null);
+  check(
+    `the route count quoted in the matrix matches reality (${registered.length})`,
+    quoted !== null && Number(quoted[1]) === registered.length,
+  );
 }
 
 async function main() {

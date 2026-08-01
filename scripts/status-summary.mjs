@@ -161,8 +161,58 @@ L.push(`## Live-sync loop (external builders: iOS EnterpriseShell + Mac MCP lane
 L.push(`- manifest: ${manifest ? `version **${manifest.manifestVersion}**, fingerprint \`${String(manifest.fingerprint ?? "").slice(0, 16)}…\`` : "**missing**"}`);
 L.push(`- real-hardware evidence: **${evidence}**${evidence === "none" ? " — no committed proof a real machine ran both halves against current contracts" : ""}`);
 L.push("");
+
+// ── Live-vendor lanes ────────────────────────────────────────────────────────
+// These proofs read REAL vendor software rather than fixtures, so they are opt-in
+// and skipped by name without their server. That made them invisible in this
+// report — a whole evidence category the reader could not see. Derived from
+// package.json rather than listed by hand, so a new lane appears here on its own;
+// a hand-maintained list is the drift this file exists to avoid.
+const LANE_ENV = {
+  "proof:live-edr": ["WAZUH_URL", "docs/ZERO_COST_LIVE_TEST_MATRIX.md §6"],
+  "proof:live-fleet": ["FLEET_URL", "docs/FLEET_LIVE_INTEGRATION.md"],
+  "proof:live-location": ["TRACCAR_URL", "docs/TRACCAR_LIVE_INTEGRATION.md"],
+  "proof:live-keycloak": ["KEYCLOAK_URL", "docs/KEYCLOAK_LIVE_INTEGRATION.md"],
+};
+// Only lanes that need an EXTERNAL server. `proof:live-idp` also begins "live-" but
+// runs an in-process oidc-provider and always executes in preflight — listing it as
+// "would SKIP" would be a false statement in the one file whose entire purpose is
+// not to overstate. So membership comes from LANE_ENV, intersected with the scripts
+// that actually exist, and a lane added to package.json without an entry here shows
+// up in the mismatch line below rather than being silently dropped.
+const declaredLanes = Object.keys(LANE_ENV);
+const liveLanes = declaredLanes.filter((s) => s in (pkg.scripts ?? {}));
+const undeclared = Object.keys(pkg.scripts ?? {}).filter(
+  (s) => s.startsWith("proof:live-") && s !== "proof:live-idp" && !declaredLanes.includes(s),
+);
+if (liveLanes.length) {
+  L.push(`## Live-vendor lanes (opt-in — read real vendor software, not fixtures)`);
+  L.push("");
+  L.push(`| Lane | Needs | Would run here now? |`);
+  L.push(`| --- | --- | --- |`);
+  for (const lane of liveLanes.sort()) {
+    const [envVar, doc] = LANE_ENV[lane] ?? ["(see docs)", ""];
+    const armed = envVar !== "(see docs)" && !!process.env[envVar];
+    L.push(`| \`${lane}\` | \`${envVar}\`${doc ? ` — ${doc}` : ""} | ${armed ? "yes" : "no — would SKIP"} |`);
+  }
+  L.push("");
+  L.push(
+    `\`pnpm run verify:live\` stands up what Docker allows, runs those lanes and removes what it started. ` +
+      `A lane it cannot provision is reported SKIPPED with the reason — never counted as passed. ` +
+      `Wazuh is never auto-started (~2GB image).`,
+  );
+  if (undeclared.length) {
+    L.push("");
+    L.push(
+      `> ⚠️ \`${undeclared.join("`, `")}\` looks like an external lane but has no entry in this ` +
+        `report's LANE_ENV — add one, or it goes unlisted and this section quietly under-reports.`,
+    );
+  }
+  L.push("");
+}
+
 L.push(`## Inventory`);
-L.push(`- proof gates: **${proofCount}** · browser E2E specs: **${e2eSpecs}** · CI workflows: **${workflows}**`);
+L.push(`- proof gates: **${proofCount}** · live-vendor lanes: **${liveLanes.length}** · browser E2E specs: **${e2eSpecs}** · CI workflows: **${workflows}**`);
 L.push("");
 if (failed.length) {
   L.push(`## What is red`);

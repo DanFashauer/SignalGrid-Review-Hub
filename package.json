@@ -141,7 +141,8 @@
     "proof:live-fleet": "pnpm --filter @workspace/scripts run proof:live-fleet",
     "proof:live-location": "pnpm --filter @workspace/scripts run proof:live-location",
     "proof:absent-collection": "pnpm --filter @workspace/scripts run proof:absent-collection",
-    "proof:mcp-server": "pnpm --filter @workspace/scripts run proof:mcp-server"
+    "proof:mcp-server": "pnpm --filter @workspace/scripts run proof:mcp-server",
+    "proof:live-keycloak": "pnpm --filter @workspace/scripts run proof:live-keycloak"
   },
   "private": true,
   "devDependencies": {

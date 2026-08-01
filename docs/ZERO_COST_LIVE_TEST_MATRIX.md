@@ -31,7 +31,7 @@ Everything below extends this base outward to external systems.
 | --- | --- | --- |
 | lib/webauthn | Chromium CDP virtual authenticator | 2 |
 | lib/enterprise-auth | live-idp-proof (built); then Keycloak / Okta / Entra tenants | 1, 2 |
-| token-binding connector | live-idp-proof already mints a real DPoP-bound token (built — see row above); Keycloak 26.4 adds a SECOND, independent issuer | 1, 2 |
+| token-binding connector | live-idp-proof (built); Keycloak 26.4 as a SECOND independent issuer — **DONE**, `proof:live-keycloak` | 1, 2 |
 | identity-risk connector | Entra P2 trial only — no permanent free path | 2, 10 |
 | graph posture + device-management-health | Dev Proxy wire simulation; then the one Intune trial window | 3 |
 | lib/pim-activation | P2/Governance trial window only | 3, 10 |

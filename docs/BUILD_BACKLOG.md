@@ -31,7 +31,16 @@ already has a fixture proof; these add a real vendor behind it._
       `signatureAgeHours`→`null` (not `0`, which would read as freshly updated),
       verdict `degraded_protection`/`PROTECTION_DEGRADED`/`step_up`. Skipped loudly
       by name, never silently passed, when `WAZUH_URL` is unset.
-- [ ] **Keycloak 26.4 DPoP → token-binding.** LOWER priority than it reads in the
+- [x] **Keycloak 26.4 DPoP → token-binding.** DONE — `proof:live-keycloak` (14 assertions)
+      against a real Keycloak 26.4. Its value was exactly what was predicted —
+      cross-implementation agreement, not first coverage — and that turned out to be
+      worth having: reordering the JWK members when computing the RFC 7638 thumbprint
+      yields a COMPLETELY different value, and only a second implementation catches
+      it. It also surfaced real integration work an in-process provider hides:
+      Keycloak emits no tenant claim, so a deployment needs protocol mappers. See
+      [KEYCLOAK_LIVE_INTEGRATION.md](KEYCLOAK_LIVE_INTEGRATION.md). ORIGINAL BELOW.
+
+- [x] **Keycloak (original entry).** LOWER priority than it reads in the
       matrix: `live-idp-proof` already runs a complete real DPoP ceremony (client-held
       EC key, real proof JWT, provider-minted `cnf.jkt` equal to the RFC 7638
       thumbprint, verified through enterprise-auth). Keycloak's value is

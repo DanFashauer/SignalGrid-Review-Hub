@@ -111,7 +111,8 @@
     "proof:live-fleet": "tsx ./src/live-fleet-proof.ts",
     "proof:live-location": "tsx ./src/live-location-proof.ts",
     "proof:absent-collection": "tsx ./src/absent-collection-proof.ts",
-    "proof:mcp-server": "tsx ./src/mcp-server-proof.ts"
+    "proof:mcp-server": "tsx ./src/mcp-server-proof.ts",
+    "proof:live-keycloak": "tsx ./src/live-keycloak-proof.ts"
   },
   "dependencies": {
     "@workspace/app-workflows": "workspace:*",

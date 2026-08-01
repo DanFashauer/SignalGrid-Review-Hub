@@ -955,6 +955,49 @@ async function run() {
     }
   }
 
+  // ── session lifecycle ───────────────────────────────────────────────────
+  // These four routes are documented in the OpenAPI spec and registered in the
+  // server, and the string "/v1/sessions" appeared ZERO times in this file: the
+  // whole start → read → refresh → end lifecycle was published and never once
+  // exercised. In a product whose premise is that trust is re-earned per session,
+  // that is the surface least able to afford being unverified.
+  const started = await req("POST", "/v1/sessions/start", {
+    token: KEYS.operator,
+    body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session", ttlSeconds: 600 },
+  });
+  check("session start → 200", started.status === 200);
+  check("session start returns a session and the decision that opened it", typeof started.json?.session?.id === "string" && started.json?.decision?.decisionId !== undefined);
+  check("a started session is active with an expiry", started.json?.session?.status === "active" && typeof started.json?.session?.expiresAt === "string");
+  const sessionId = started.json?.session?.id ?? "";
+
+  const fetched = await req("GET", `/v1/sessions/${sessionId}`, { token: KEYS.operator });
+  check("session read → 200 for the tenant that started it", fetched.status === 200 && fetched.json?.session?.id === sessionId);
+
+  // Cross-tenant isolation is the property that matters most here: a session id is
+  // a bearer-ish handle, and another tenant holding it must still get nothing.
+  const otherTenant = await req("GET", `/v1/sessions/${sessionId}`, { token: KEYS.atlas });
+  check("session read from ANOTHER tenant → 404, never the session", otherTenant.status === 404 && otherTenant.json?.session === undefined);
+
+  const refreshed = await req("POST", `/v1/sessions/${sessionId}/refresh`, { token: KEYS.operator, body: { ttlSeconds: 900 } });
+  check("session refresh → 200 and extends the expiry", refreshed.status === 200 && Date.parse(refreshed.json?.session?.expiresAt) > Date.parse(started.json?.session?.expiresAt));
+  const refreshOther = await req("POST", `/v1/sessions/${sessionId}/refresh`, { token: KEYS.atlas, body: {} });
+  check("session refresh from another tenant → 404", refreshOther.status === 404);
+
+  const unknownGet = await req("GET", "/v1/sessions/sess_does_not_exist", { token: KEYS.operator });
+  check("unknown session id → 404, never a fabricated session", unknownGet.status === 404 && unknownGet.json?.session === undefined);
+  const unknownEnd = await req("POST", "/v1/sessions/sess_does_not_exist/end", { token: KEYS.operator });
+  check("ending an unknown session → 404, not a cheerful success", unknownEnd.status === 404);
+
+  const ended = await req("POST", `/v1/sessions/${sessionId}/end`, { token: KEYS.operator });
+  check("session end → 200 and the session is no longer active", ended.status === 200 && ended.json?.session?.status !== "active");
+  // The one that would actually hurt: an ended session must not be revivable, or
+  // "end" is advisory rather than an control.
+  const refreshAfterEnd = await req("POST", `/v1/sessions/${sessionId}/refresh`, { token: KEYS.operator, body: { ttlSeconds: 900 } });
+  check("an ENDED session cannot be refreshed back to active", !(refreshAfterEnd.status === 200 && refreshAfterEnd.json?.session?.status === "active"));
+
+  const sessionNoAuth = await req("POST", "/v1/sessions/start", { body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" } });
+  check("session start without a token → 401", sessionNoAuth.status === 401);
+
   // ── transport hygiene ───────────────────────────────────────────────────
   check("rate-limit headers present", allow.headers.get("ratelimit-limit") !== null);
   check("security header x-content-type-options set", allow.headers.get("x-content-type-options") === "nosniff");

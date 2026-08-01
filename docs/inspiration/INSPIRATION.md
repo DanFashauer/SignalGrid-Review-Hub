@@ -132,6 +132,14 @@ It also anchors the honest register: continuous *verification*, least privilege,
   — the owner-supplied deep-research report behind intake ledger row 17
   (external validation of the Facility Trust Graph architecture; source of the
   zone-presence state machine built in `transition.ts`).
+- [Technology Ecosystem Master Catalog](TECHNOLOGY_ECOSYSTEM_MASTER_CATALOG.md)
+  — the owner-compiled 21-sheet consolidation of the CIS, physical-access and
+  endpoint catalogs, expanded across sixteen ecosystem domains (423 master
+  entries with per-row source URLs and access classes; verified 2026-07-31).
+  Filed as the ecosystem STRATEGY map, explicitly not a build queue — the
+  launch path stays Entra+Intune → one shared-device workflow → one pilot →
+  demand-driven expansion. The partner/buyer sheet is deliberately omitted
+  from the public file (publication boundary).
 - [Endpoint Management API & SignalGrid repository catalog](ENDPOINT_MANAGEMENT_API_CATALOG.md)
   — the owner-compiled ten-sheet inventory behind intake ledger row 27 (135
   API/platform entries across MDM/UEM/EMM, RMM, DEX, security/telemetry and

@@ -157,6 +157,31 @@ check("prod WITHOUT live flag stays fixture", resolveAccessGovernanceConnector({
 check("prod + live but NO token stays fixture", resolveAccessGovernanceConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" }).mode === "fixture");
 check("prod + live + token resolves live", resolveAccessGovernanceConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", ACCESS_GOVERNANCE_ACCESS_TOKEN: "t" }).mode === "live");
 
+// ── the J and M of JML (intake ledger row 27) ───────────────────────────────────
+// The leaver slice was modeled from birth; the audit of the owner's canonical
+// endpoint signal set found joiner/mover context modeled NOWHERE. The axis is
+// affirmative-only, and its teeth are the composition with an entitlement symptom.
+
+const lifecycleBase = {
+  account: { status: "active" }, entitlement: { scope: "in_scope" },
+  certification: { state: "certified" }, sod: { conflict: false }, privilege: { mode: "none" },
+} as AccessGovernanceReportRaw;
+const lc = (extra: Record<string, unknown>) => normalizeReport("p-1", { ...lifecycleBase, ...extra });
+
+const moverStale = evaluateAccessGovernancePosture(lc({ lifecycle: { stage: "recent_transfer" }, entitlement: { scope: "over_privileged" } }));
+check("a RECENT TRANSFER with over-privileged entitlements → mover_stale_entitlement/ALERT (the WHY behind the symptom, its own queue-readable reason)", moverStale.posture === "mover_stale_entitlement" && moverStale.reasonCode === "MOVER_STALE_ENTITLEMENT" && moverStale.recommendedAction === "alert" && moverStale.criticalFindings.includes("mover_stale_entitlement"));
+const moverRecert = evaluateAccessGovernancePosture(lc({ lifecycle: { stage: "recent_transfer" }, certification: { state: "recert_due" } }));
+check("a recent transfer with a recert-due entitlement is the same mover defect → alert", moverRecert.reasonCode === "MOVER_STALE_ENTITLEMENT" && moverRecert.recommendedAction === "alert");
+const joinerStanding = evaluateAccessGovernancePosture(lc({ lifecycle: { stage: "new_hire" }, privilege: { mode: "standing", sessionMonitored: true } }));
+check("a NEW HIRE already holding STANDING privilege → joiner_over_provisioned/ALERT (over-provisioned at birth)", joinerStanding.posture === "joiner_over_provisioned" && joinerStanding.reasonCode === "NEW_HIRE_OVER_PROVISIONED" && joinerStanding.recommendedAction === "alert");
+const cleanJoiner = evaluateAccessGovernancePosture(lc({ lifecycle: { stage: "new_hire" } }));
+check("a clean new hire is a visible MONITOR, never a grant and never a nag — a transition is normal life", cleanJoiner.posture === "lifecycle_transition" && cleanJoiner.reasonCode === "LIFECYCLE_TRANSITION" && cleanJoiner.recommendedAction === "monitor");
+check("a clean recent transfer is the same visible monitor", evaluateAccessGovernancePosture(lc({ lifecycle: { stage: "recent_transfer" } })).recommendedAction === "monitor");
+check("an UNREPORTED lifecycle stage forecloses nothing — the pre-axis clean grant stands (affirmative-only)", evaluateAccessGovernancePosture(lc({})).recommendedAction === "none");
+check("a garbled lifecycle stage normalizes to unknown, never a fabricated stage", lc({ lifecycle: { stage: "probably new??" } }).lifecycleStage === "unknown");
+const leaverMover = evaluateAccessGovernancePosture(lc({ lifecycle: { stage: "recent_transfer" }, entitlement: { scope: "over_privileged" }, account: { status: "leaver_pending" } }));
+check("worst-concern-wins: a leaver still outranks the mover finding", leaverMover.recommendedAction === "escalate" && leaverMover.reasonCode === "LEAVER_STILL_ACTIVE");
+
 // ── exhaustive allow-path safety ────────────────────────────────────────────────
 //
 // Brute-force the ENTIRE normalized input space (not fixture-bound), so the proof
@@ -174,6 +199,7 @@ const domains = {
   sodConflict: [true, false, null],
   privilege: ["none", "jit_active", "jit_expired", "standing", "unknown"],
   privilegedSessionMonitored: [true, false, null],
+  lifecycleStage: ["new_hire", "established", "recent_transfer", "unknown"],
 };
 const enumRes = enumerateGrantSafety({
   domains,
@@ -184,7 +210,7 @@ const enumRes = enumerateGrantSafety({
   // Only the `authorized` posture may ever contribute 'none'.
   confirmedWhenNone: (v) => v.posture === "authorized" && v.reasonCode === "FULLY_AUTHORIZED",
   positivelyClean: (c) => {
-    const { accountStatus, entitlementScope, certification, sodConflict, privilege, privilegedSessionMonitored } = c;
+    const { accountStatus, entitlementScope, certification, sodConflict, privilege, privilegedSessionMonitored, lifecycleStage } = c;
     // Session monitoring is only meaningful for an ACTIVE elevation; a JIT-active
     // session must be confirmed monitored, and a non-elevated principal has nothing
     // to monitor. A standing/expired/unknown privilege never grants.
@@ -195,13 +221,17 @@ const enumRes = enumerateGrantSafety({
       entitlementScope === "in_scope" &&
       certification === "certified" &&
       sodConflict === false &&
-      privilegeClean
+      privilegeClean &&
+      // The lifecycle axis is affirmative-only: an asserted transition is a
+      // visible monitor (never a grant), while established/unreported stages
+      // leave the pre-axis grant untouched.
+      (lifecycleStage === "established" || lifecycleStage === "unknown")
     );
   },
 });
 check(
   `exhaustive: over all ${enumRes.combos} input combinations, action 'none' is emitted for EXACTLY the positively-confirmed authorized states (mismatches=${enumRes.mismatches}${enumRes.firstMismatch ? ", first=" + enumRes.firstMismatch : ""})`,
-  enumRes.mismatches === 0 && enumRes.combos === productOf(domains) && enumRes.combos === 4500,
+  enumRes.mismatches === 0 && enumRes.combos === productOf(domains) && enumRes.combos === 18000,
 );
 check("exhaustive: some clean states DO grant (the enumeration is not vacuous)", enumRes.noneCount > 0);
 

@@ -9,6 +9,7 @@
 import {
   AccessGovernanceConnectorError,
   type AccessAccountStatus,
+  type AccessLifecycleStage,
   type AccessCertificationState,
   type AccessEntitlementScope,
   type AccessGovernanceReportRaw,
@@ -39,6 +40,7 @@ export function normalizeReport(
   source = "iga-bridge",
 ): NormalizedAccessGovernancePosture {
   const account = report.account ?? {};
+  const lifecycle = report.lifecycle ?? {};
   const entitlement = report.entitlement ?? {};
   const certification = report.certification ?? {};
   const sod = report.sod ?? {};
@@ -49,6 +51,11 @@ export function normalizeReport(
     accountStatus: oneOf<AccessAccountStatus>(
       account.status,
       ["active", "disabled", "orphaned", "leaver_pending", "unknown"],
+      "unknown",
+    ),
+    lifecycleStage: oneOf<AccessLifecycleStage>(
+      lifecycle.stage,
+      ["new_hire", "established", "recent_transfer", "unknown"],
       "unknown",
     ),
     entitlementScope: oneOf<AccessEntitlementScope>(

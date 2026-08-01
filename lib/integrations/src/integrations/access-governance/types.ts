@@ -26,6 +26,17 @@
 
 /** Identity-lifecycle account standing (the runtime slice of JML). */
 export type AccessAccountStatus = "active" | "disabled" | "orphaned" | "leaver_pending" | "unknown";
+/** Where the principal sits in the identity lifecycle — the J and M the leaver
+ *  slice above never carried (intake ledger row 27: an audit of the owner's
+ *  canonical endpoint signal set found "joiner/mover context" modeled nowhere).
+ *  Reported by the IGA bridge. AFFIRMATIVE-ONLY: an explicit `new_hire` or
+ *  `recent_transfer` grades; `unknown` (unreported) forecloses nothing, because
+ *  most bridges predate the axis and a transition is normal life, not
+ *  suspicion. What the stages buy is the WHY behind an entitlement symptom: a
+ *  recent transfer whose grants are over-privileged is the classic
+ *  pre-transfer-entitlements-never-revoked defect, and a new hire already
+ *  holding standing privilege is over-provisioned at birth. */
+export type AccessLifecycleStage = "new_hire" | "established" | "recent_transfer" | "unknown";
 /** Least-privilege appropriateness of the entitlement for the attempted action. */
 export type AccessEntitlementScope = "in_scope" | "over_privileged" | "out_of_scope" | "unknown";
 /** Access-certification freshness of the entitlement. */
@@ -39,6 +50,7 @@ export type AccessPrivilegeState = "none" | "jit_active" | "jit_expired" | "stan
  *  typed — any field may degrade to null / an error string / be absent). */
 export interface AccessGovernanceReportRaw {
   account?: { status?: unknown; [k: string]: unknown };
+  lifecycle?: { stage?: unknown; [k: string]: unknown };
   entitlement?: { scope?: unknown; [k: string]: unknown };
   certification?: { state?: unknown; [k: string]: unknown };
   sod?: { conflict?: boolean | null; [k: string]: unknown };
@@ -53,6 +65,7 @@ export interface NormalizedAccessGovernancePosture {
   /** The IGA/directory principal bound to the session (the fetch key). */
   principalId: string;
   accountStatus: AccessAccountStatus;
+  lifecycleStage: AccessLifecycleStage;
   entitlementScope: AccessEntitlementScope;
   certification: AccessCertificationState;
   /** true = a segregation-of-duties conflict is present. null = unknown (fail-safe:
@@ -78,6 +91,9 @@ export type AccessGovernancePosture =
   | "leaver_active"
   | "disabled_active"
   | "orphaned"
+  | "mover_stale_entitlement"
+  | "joiner_over_provisioned"
+  | "lifecycle_transition"
   | "unverified"
   | "unknown";
 
@@ -94,6 +110,9 @@ export type AccessGovernanceReasonCode =
   | "OVER_PRIVILEGED"
   | "CERT_STALE"
   | "STANDING_PRIVILEGE"
+  | "MOVER_STALE_ENTITLEMENT"
+  | "NEW_HIRE_OVER_PROVISIONED"
+  | "LIFECYCLE_TRANSITION"
   | "GOVERNANCE_STATE_UNKNOWN"
   | "NOT_COVERED";
 

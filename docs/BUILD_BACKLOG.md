@@ -14,6 +14,22 @@ picking these up:
 
 ## Now (next up)
 
+- [ ] **Normalization-version stamping on evidence (intake row 27, CONFIRMED gap).**
+      An adversarially-verified audit of the owner's canonical endpoint signal set
+      found that nothing in the fabric records which version of the NORMALIZER
+      produced a normalized record: `NormalizedSignal` has no version field, no
+      connector `Normalized*` type does, `EvidenceSnapshot`/`Decision`/the /v1
+      `EvaluateResult` stamp only `policyVersion`, and the near-misses
+      (`APPLE_DEVICE_MANAGEMENT_SCHEMA_VERSION`, the unconsumed
+      posture-report.contract.json `schemaVersion`, work-context's
+      `contextVersion` counter, the facility graph's `mapVersionMatch`) each
+      version something else. Scope: a `NORMALIZATION_VERSION` constant in
+      signalgrid-core stamped onto `EvidenceSnapshot`, `Decision`, and the /v1
+      response, carried through the evidence digest and the OpenAPI/Postman
+      contract sync in the SAME change — deliberately queued as its own PR
+      because it touches the core decision/API contract (`test:api` response
+      pins, evidence digests, spec sync) rather than one family.
+
 _Derived from repo data, not memory: `check-connector-discipline` reports 36/36
 families with KNOWN_GAPS empty, and `check-live-sync` reports `liveEvidence=none`.
 What remains is the LIVE-lane column of

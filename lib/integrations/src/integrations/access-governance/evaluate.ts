@@ -130,6 +130,34 @@ export function evaluateAccessGovernancePosture(
   if (posture.privilege === "standing") {
     candidates.push({ posture: "standing_privilege", action: "step_up", reason: "STANDING_PRIVILEGE" });
   }
+
+  // ── the J and M of JML (intake ledger row 27) — lifecycle CONTEXT is the WHY ──
+  // behind an entitlement symptom. AFFIRMATIVE-ONLY: the bridge must assert the
+  // stage; `unknown` forecloses nothing (most bridges predate the axis).
+  //  - a RECENT TRANSFER whose entitlements are over-privileged or recert-due is
+  //    the classic mover defect — pre-transfer grants that were never revoked.
+  //    The symptom alone already steps up above; symptom + mover context is an
+  //    operator-scale finding with its OWN reason, so the queue reads "stale
+  //    transfer entitlements", not generic drift → ALERT.
+  //  - a NEW HIRE already holding STANDING privilege is over-provisioned at
+  //    birth (the birthright-access defect) → ALERT.
+  //  - either stage with everything else clean is a visible MONITOR — a
+  //    transition is normal life, not suspicion, and nagging every transfer
+  //    would teach operators to ignore the axis.
+  if (
+    posture.lifecycleStage === "recent_transfer" &&
+    (posture.entitlementScope === "over_privileged" || posture.certification === "recert_due")
+  ) {
+    criticalFindings.push("mover_stale_entitlement");
+    candidates.push({ posture: "mover_stale_entitlement", action: "alert", reason: "MOVER_STALE_ENTITLEMENT" });
+  }
+  if (posture.lifecycleStage === "new_hire" && posture.privilege === "standing") {
+    criticalFindings.push("new_hire_standing_privilege");
+    candidates.push({ posture: "joiner_over_provisioned", action: "alert", reason: "NEW_HIRE_OVER_PROVISIONED" });
+  }
+  if (posture.lifecycleStage === "new_hire" || posture.lifecycleStage === "recent_transfer") {
+    candidates.push({ posture: "lifecycle_transition", action: "monitor", reason: "LIFECYCLE_TRANSITION" });
+  }
   // Anything unreadable raises the bar (silent-failure guard).
   if (unknownSignals.length > 0) {
     candidates.push({ posture: "unverified", action: "step_up", reason: "GOVERNANCE_STATE_UNKNOWN" });

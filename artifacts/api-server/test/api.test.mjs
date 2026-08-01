@@ -10,6 +10,7 @@
  * Run: `pnpm --filter @workspace/api-server run test:api`
  */
 import { spawn } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
@@ -41,7 +42,14 @@ function check(name, ok) {
   }
 }
 
+// Every (method, path) this test actually requests. Recorded here rather than
+// grepped afterwards because only the caller knows the concrete URL, and mapping a
+// concrete id back to a `:param` template by string matching is exactly what does
+// NOT work — an attempt at it produced contradictory counts before this existed.
+const requested = new Set();
+
 async function req(method, path, { token, body } = {}) {
+  requested.add(`${method.toUpperCase()} ${path.split("?")[0]}`);
   const headers = {};
   if (token) headers["authorization"] = `Bearer ${token}`;
   if (body !== undefined) headers["content-type"] = "application/json";
@@ -1003,6 +1011,69 @@ async function run() {
   check("security header x-content-type-options set", allow.headers.get("x-content-type-options") === "nosniff");
   check("framework header x-powered-by is not disclosed", allow.headers.get("x-powered-by") === null);
   check("request id echoed", typeof allow.headers.get("x-request-id") === "string");
+
+  // ── the five routes the coverage check found unexercised ─────────────────
+  // Registered and documented, never called. Found by the check below rather than
+  // by reading the test, which is the point of having it.
+  const ctx = await req("GET", "/v1/context", { token: KEYS.operator });
+  check("context → 200 with the caller's principal and tenant", ctx.status === 200 && typeof ctx.json?.tenant?.id === "string" && typeof ctx.json?.principal !== "undefined");
+  const ctxNoAuth = await req("GET", "/v1/context", {});
+  check("context without a token → 401", ctxNoAuth.status === 401);
+
+  const versions = await req("GET", "/v1/policies/pol_tenant_northwind_shared_device/versions", { token: KEYS.owner });
+  check("policy versions listed → 200", versions.status === 200 && Array.isArray(versions.json?.versions ?? versions.json?.policyVersions));
+
+  const hooks = await req("GET", "/v1/webhooks", { token: KEYS.owner });
+  check("webhook endpoints listed → 200", hooks.status === 200 && Array.isArray(hooks.json?.endpoints));
+
+  const connectorId = (connectors.json?.connectors ?? [])[0]?.id ?? "";
+  const syncRuns = await req("GET", `/v1/connectors/${connectorId}/sync-runs`, { token: KEYS.owner });
+  check("connector sync-runs listed → 200", syncRuns.status === 200 && Array.isArray(syncRuns.json?.syncRuns));
+  const synced = await req("POST", `/v1/connectors/${connectorId}/sync`, { token: KEYS.owner });
+  check("connector sync → 200 and records a run", synced.status === 200 && typeof synced.json?.syncRun === "object");
+  // Triggering a sync is a write: an auditor must not be able to.
+  const syncAsAuditor = await req("POST", `/v1/connectors/${connectorId}/sync`, { token: KEYS.auditor });
+  check("connector sync refused for a read-only auditor", syncAsAuditor.status === 403);
+
+  // ── route coverage: every registered /v1 route must be exercised ─────────
+  // The OpenAPI contract check proves the SPEC and the route SOURCE agree. Neither
+  // proves a route was ever called — which is how the whole session lifecycle
+  // shipped documented, registered, and untouched.
+  //
+  // This matches each concrete URL this test requested against the registered
+  // route PATTERNS (segment by segment, `:param` matching any one segment), so a
+  // request to /v1/sessions/sess_abc/refresh correctly covers
+  // POST /v1/sessions/:id/refresh. That is the mapping string-grepping could not
+  // do, and it is only possible here because the caller knows the URL it sent.
+  // `new URL` rather than path.resolve: `resolve` is shadowed inside run().
+  const routeSrc = await readFile(new URL("../src/routes/v1.ts", import.meta.url), "utf8");
+  const registered = [...routeSrc.matchAll(/router\.(get|post|put|delete|patch)\(\s*"(\/v1\/[^"]*)"/g)]
+    .map((m) => `${m[1].toUpperCase()} ${m[2]}`);
+
+  const covers = (pattern, concrete) => {
+    const [pm, pp] = pattern.split(" ");
+    const [cm, cp] = concrete.split(" ");
+    if (pm !== cm) return false;
+    const ps = pp.split("/");
+    const cs = cp.split("/");
+    if (ps.length !== cs.length) return false;
+    return ps.every((seg, i) => seg.startsWith(":") || seg === cs[i]);
+  };
+
+  // Routes deliberately not exercised, each with a reason. Empty: a route that
+  // cannot be called from an integration test is a claim worth stating, not
+  // omitting silently.
+  const COVERAGE_EXEMPT = new Map();
+
+  const uncovered = registered.filter((r) => ![...requested].some((c) => covers(r, c)) && !COVERAGE_EXEMPT.has(r));
+  for (const r of uncovered) console.error(`  uncovered route: ${r}`);
+  check(
+    `every registered /v1 route is exercised (${registered.length - uncovered.length}/${registered.length})`,
+    uncovered.length === 0,
+  );
+  for (const [r, why] of COVERAGE_EXEMPT) {
+    check(`exempt route still registered: ${r} (${why})`, registered.includes(r));
+  }
 }
 
 async function main() {

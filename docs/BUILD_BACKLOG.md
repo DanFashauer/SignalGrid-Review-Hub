@@ -65,6 +65,18 @@ picking these up:
       expressed in a shape `scripts/mutation-guard.mjs` can actually mutate — a
       `switch` arm is invisible to it and would pass vacuously over the release
       decision itself.
+      **The generalizable lesson is now a gate.** The expensive part of this episode
+      was not the wrong conclusion, it was that "does anything ship this?" took a
+      full design pass to answer when it is derivable in a second.
+      `scripts/check-package-reachability.mjs` computes the transitive closure from
+      `artifacts/*` and reports every `lib/*` package no shipped artifact can reach —
+      eight of thirty-five today, `dual-control` among them, and it prints WHY (no
+      importers at all, versus imported only by the proof harness). It is a ratchet
+      pinned at the current count, not a hard gate: unreachable is a requirement to
+      look before building, not a verdict to delete. It also corrected a hand count
+      made during that pass — `lib/db` is untracked build residue (`dist/` and
+      `node_modules/` with no manifest and no source), not a thirty-sixth package,
+      which is the ordinary reason a derived figure beats a remembered one.
 - [ ] **Change-window currency as a decision fact (intake row 45, the audit's one
       genuine near-term gap).** `change_window` exists today only as a declared
       flow signal id carrying a HEALTH status (`lib/flows/src/factory.ts:26,:94`);

@@ -303,6 +303,13 @@ jobs:
       # All seven are pure Node and need no external service.
       - name: "Doc orphans (a new doc must be reachable from an index)"
         run: node scripts/check-doc-orphans.mjs
+      # The same shape one level down: doc-orphans asks whether a reader can reach a
+      # document, this asks whether a shipped artifact can reach a library. Both catch
+      # the failure mode that never announces itself — everything green, nothing
+      # arrives. Added after a design pass found `lib/dual-control` had zero shipped
+      # consumers AFTER the work to wire it had already been scoped.
+      - name: "Package reachability (a library nobody ships is a library nobody runs)"
+        run: node scripts/check-package-reachability.mjs
       - name: "Proof — dual control"
         run: pnpm run proof:dual-control
       - name: "Pagination-truncation guard (a capped read must not look complete)"

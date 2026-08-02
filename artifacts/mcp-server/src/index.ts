@@ -285,8 +285,12 @@ server.registerTool(
       "bed_candidate, bed_confirmed) and a candidate class never satisfies a confirmed requirement: a " +
       "Wi-Fi room fix against a bed_confirmed workflow steps up (scan the wristband) — 'open every " +
       "patient in the room' is unrepresentable. Wrong map version restricts; unmapped space alerts; " +
-      "stale/degraded/unavailable step up. Try: space_id SG-RM0312, accuracy_class room_candidate, " +
-      "requiredClass bed_confirmed.",
+      "stale/degraded/unavailable step up. STATE ONLY WHAT YOU KNOW: every optional field is a CLAIM, " +
+      "and omitting one is a non-claim rather than a pass. Omit source_health and the observation " +
+      "grades as unknown — that steps up and names source_health in unknownSignals, because a source " +
+      "nobody vouched for is not a healthy one. Omit map_version and the match reads 'unassessed' " +
+      "instead of being assumed correct. Supply either only when the source actually reported it. " +
+      "Try: space_id SG-RM0312, accuracy_class room_candidate, requiredClass bed_confirmed.",
     inputSchema: {
       space_id: z.string().describe("The observed space, e.g. SG-RM0312 or SG-RM0312-BED-B"),
       accuracy_class: z.enum(ACCURACY_CLASSES as unknown as [string, ...string[]]).describe("Achieved precision"),
@@ -310,13 +314,34 @@ server.registerTool(
         maxObservationAgeSeconds: input.maxObservationAgeSeconds,
         minConfidence: input.minConfidence,
       };
+      // WHAT THE CALLER DID NOT SAY STAYS UNSAID.
+      //
+      // These two fields previously defaulted — `source_health ?? "healthy"` and
+      // `map_version ?? FIXTURE_HOSPITAL_GRAPH.mapVersion` — and that was an unearned
+      // affirmative on the one surface that answers questions directly. Both fields are
+      // `.optional()`, and the caller here is an assistant in a chat: it has no way to
+      // know an RTLS source's health or which map the source located against, so
+      // OMITTING them is the normal case, not the exceptional one.
+      //
+      // `normalizeLocationObservation` already grades absence correctly and fail-closed:
+      // an absent source_health reads "unknown", which pushes a step_up candidate AND
+      // records "source_health" in `unknownSignals`; an absent map_version reads
+      // "unassessed", which is a legitimate non-claim the grant conjunct accepts. The
+      // defaults denied it the chance — they made the two calls below indistinguishable:
+      //
+      //   caller omits everything        -> sourceHealth "healthy", unknownSignals []
+      //   caller asserts healthy + map   -> sourceHealth "healthy", unknownSignals []
+      //
+      // Identical output, opposite epistemic states, and the omitting caller got
+      // SUFFICIENT_CERTAINTY / none / known. Passing the values straight through is the
+      // whole fix: the library decides what silence means, and it already knew.
       const raw: LocationObservationRaw = {
         space_id: input.space_id,
         accuracy_class: input.accuracy_class,
         confidence: input.confidence,
         observed_at: input.observed_at,
-        map_version: input.map_version ?? FIXTURE_HOSPITAL_GRAPH.mapVersion,
-        source_health: input.source_health ?? "healthy",
+        map_version: input.map_version,
+        source_health: input.source_health,
         observation_source: input.observation_source,
       };
       const normalized = normalizeLocationObservation("mcp-subject", FIXTURE_HOSPITAL_GRAPH, raw, {

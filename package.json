@@ -108,6 +108,7 @@
     "gen:core-normalization-version": "node scripts/generate-core-normalization-version.mjs",
     "check:core-normalization-version": "node scripts/generate-core-normalization-version.mjs --check",
     "proof:change-window": "pnpm --filter @workspace/scripts run proof:change-window",
+    "proof:mcp-server": "pnpm --filter @workspace/scripts run proof:mcp-server",
     "proof:passkey-assurance": "pnpm --filter @workspace/scripts run proof:passkey-assurance",
     "proof:isolation-scope": "pnpm --filter @workspace/scripts run proof:isolation-scope",
     "proof:benchmark-selection": "pnpm --filter @workspace/scripts run proof:benchmark-selection",

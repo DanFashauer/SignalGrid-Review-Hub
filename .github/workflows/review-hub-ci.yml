@@ -197,6 +197,12 @@ jobs:
       - name: Proof — change-window (approved WHEN, by WHOM, on a current record)
         run: pnpm run proof:change-window
 
+      # MCP server — the chat surface answers questions directly, so it needs a
+      # BEHAVIOURAL gate and not only the name-drift check in check-mcp-surface.mjs.
+      # Drives the real server over its real stdio wire.
+      - name: Proof — mcp-server (silence is not an affirmative, over the real wire)
+        run: pnpm run proof:mcp-server
+
       # Policy binding — membership IS the policy: unbound, too-wide (fail-open),
       # too-narrow, or mixed-membership group assignment.
       - name: Proof — emitter-discipline (five outbound families gated, fixture never claims delivery)

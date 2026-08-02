@@ -60,6 +60,31 @@ builds; preflight sets them for the build step itself.
   moved, and a failing facility-trust-graph proof whose guard clause had been silently
   rewritten to `true`).
 
+### A name-drift gate is not a behaviour gate
+
+`scripts/check-mcp-surface.mjs` asserts the MCP server, its ready message,
+`docs/RUN_ON_MAC.md` and the live-sync manifest all list the same eight tool names.
+That is worth having and it is not coverage: a tool can pass it while returning a
+confidently wrong answer, and one did. `evaluate_location_certainty` defaulted two
+optional inputs — `source_health ?? "healthy"` and `map_version ?? <the graph's own
+version>` — before handing them to the decision library. The caller of an MCP tool is
+an assistant in a chat that cannot know an RTLS source's health, so omitting the field
+is the normal case, and every one of those calls was answered as though the source had
+been confirmed healthy. Two calls in opposite epistemic states returned byte-identical
+verdicts of `SUFFICIENT_CERTAINTY / none / known` with `unknownSignals` empty.
+
+`pnpm run proof:mcp-server` (23 checks) closes it by driving the real server over its
+real newline-delimited JSON-RPC stdio wire — no MCP SDK dependency, because testing
+through the vendor's client object would prove the client agrees with the server rather
+than that the server is right. Its negative control is recorded: reintroducing the two
+`??` defaults drops it from 23/23 to 16/23.
+
+**The general rule this leaves behind: on any surface that answers a caller, every
+optional input is a CLAIM, and omitting it is a non-claim rather than a pass.** Hand
+the caller's value through and let the normalizer decide what silence means — the
+libraries in `lib/` already grade absence fail-closed, and a `??` in the adapter is
+how that grading gets bypassed.
+
 ### Where new work is allowed to land
 
 `node scripts/check-package-reachability.mjs` computes the transitive closure from the

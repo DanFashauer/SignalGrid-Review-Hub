@@ -71,10 +71,22 @@ form:
 
 Restart Claude Desktop. Claude now has the fabric's tools —
 `list_room_scenarios`, `evaluate_room_entry`, `signal_catalog`, `scan_signals`,
-`evaluate_decision`, `facility_graph`, and `evaluate_location_certainty` (ask it:
-*"a Wi-Fi room fix in Room 312 for a med-admin workflow — allow it?"* and watch
-the multi-bed rule step it up) — and every call runs your local, fixture-backed
-decision core. No cloud, no vendor, nothing leaves the machine.
+`evaluate_decision`, `facility_graph`, `evaluate_location_certainty`, and
+`fabric_status` (ask it: *"a Wi-Fi room fix in Room 312 for a med-admin
+workflow — allow it?"* and watch the multi-bed rule step it up) — and every call
+runs your local, fixture-backed decision core. No cloud, no vendor, nothing
+leaves the machine.
+
+**Ask `fabric_status` first if you have been away.** It answers "what does
+SignalGrid model *today*" — the composable signal kinds and categories the grid
+fuses, the registered tool surface, proof counts, the shared posture-report
+contract hash, the filed reference catalogs, and the intake ledger's tally of
+what was assessed and how each input was dispositioned. Every figure is derived
+at call time from the generated live-sync manifest and the repository's own
+documents, so it stays true as the fabric grows instead of drifting the way a
+curated summary would. If a source cannot be read it says so rather than
+reporting zeros — an empty answer that looked like an answer is precisely the
+defect class this repository exists to refuse.
 
 ## Option A — Open it in a browser (zero setup — works on iPhone/iPad)
 

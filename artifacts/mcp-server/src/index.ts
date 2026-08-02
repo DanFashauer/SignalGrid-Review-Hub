@@ -11,6 +11,9 @@
 // MCP client config example:
 //   { "command": "node", "args": ["<repo>/artifacts/mcp-server/dist/index.mjs"] }
 
+import { readFileSync, readdirSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -37,6 +40,116 @@ function tokenForTenant(tenantId: string): string {
 }
 
 const asText = (data: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] });
+
+// ── fabric_status: what the grid models TODAY ────────────────────────────────
+//
+// DERIVED, never hand-maintained. Every number below is read at call time from
+// the generated live-sync manifest and the repository's own documents, so this
+// tool cannot quietly drift away from the fabric the way a curated list would.
+// The repo's absent-collection law applies: a read that FAILS reports the
+// failure, never an empty or zeroed answer that would read as "nothing there".
+//
+// Both `tsx src/index.ts` (dev) and `dist/index.mjs` (built) sit three levels
+// below the repository root.
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+
+type ReadResult<T> = { ok: true; value: T } | { ok: false; error: string };
+
+function readJson<T>(relPath: string): ReadResult<T> {
+  try {
+    return { ok: true, value: JSON.parse(readFileSync(resolve(REPO_ROOT, relPath), "utf8")) as T };
+  } catch (err) {
+    return { ok: false, error: `could not read ${relPath}: ${err instanceof Error ? err.message : "unknown error"}` };
+  }
+}
+
+function readText(relPath: string): ReadResult<string> {
+  try {
+    return { ok: true, value: readFileSync(resolve(REPO_ROOT, relPath), "utf8") };
+  } catch (err) {
+    return { ok: false, error: `could not read ${relPath}: ${err instanceof Error ? err.message : "unknown error"}` };
+  }
+}
+
+/** The verdict vocabulary the ledger actually uses. A row may claim several —
+ *  "BUILT (one gap) + COVERED" is a real and common shape — so these are counted
+ *  as rows CLAIMING each verdict, never as a partition of the rows. */
+const LEDGER_VERDICTS = [
+  "BUILT",
+  "COVERED",
+  "OUT OF SCOPE",
+  "POSITIONED",
+  "FILED",
+  "QUEUED",
+  "PENDING",
+  "documented_roadmap",
+  "REFUSAL",
+] as const;
+
+/** Tally the intake ledger's dispositions straight from its table rows.
+ *  Reports `rowsWithoutParsedDisposition` so an incomplete parse can never be
+ *  mistaken for a complete tally — the same law the fabric applies to a failed
+ *  read: silence is reported, never rendered as a clean answer. */
+function ledgerSummary(): unknown {
+  const read = readText("docs/INTAKE_LEDGER.md");
+  if (!read.ok) return { unavailable: read.error };
+  const rows = read.value.split("\n").filter((l) => /^\|\s*\d+\s*\|/.test(l));
+  const verdictCounts: Record<string, number> = {};
+  let highest = 0;
+  let unparsed = 0;
+  for (const row of rows) {
+    const n = Number(row.match(/^\|\s*(\d+)\s*\|/)?.[1] ?? 0);
+    if (n > highest) highest = n;
+    // The disposition is the bolded verdict in the row's final cell; it is often
+    // compound, and carries parenthetical qualifiers.
+    const cells = row.split("|");
+    const finalCell = cells[cells.length - 2] ?? "";
+    const bolded = finalCell.match(/\*\*([^*]+)\*\*/)?.[1];
+    if (!bolded) {
+      unparsed += 1;
+      continue;
+    }
+    let matchedAny = false;
+    for (const verdict of LEDGER_VERDICTS) {
+      if (bolded.includes(verdict)) {
+        verdictCounts[verdict] = (verdictCounts[verdict] ?? 0) + 1;
+        matchedAny = true;
+      }
+    }
+    if (!matchedAny) unparsed += 1;
+  }
+  return {
+    rowsRecorded: rows.length,
+    highestRow: highest,
+    rowsWithoutParsedDisposition: unparsed,
+    note: "A row may claim more than one verdict (e.g. 'BUILT (one gap) + COVERED'), so these counts are rows claiming each verdict, not a partition of the rows.",
+    verdictCounts,
+  };
+}
+
+/** The owner-supplied and repo-compiled reference catalogs actually on disk. */
+function filedCatalogs(): unknown {
+  try {
+    const files = readdirSync(resolve(REPO_ROOT, "docs/inspiration"))
+      .filter((f) => f.endsWith("_CATALOG.md") || f.endsWith("CATALOG.md"))
+      .sort();
+    return { count: files.length, files };
+  } catch (err) {
+    return { unavailable: `could not list docs/inspiration: ${err instanceof Error ? err.message : "unknown error"}` };
+  }
+}
+
+interface SyncManifest {
+  manifestVersion?: number;
+  fingerprint?: string;
+  body?: {
+    signalKinds?: string[];
+    signalCategories?: string[];
+    proofCounts?: Record<string, unknown>;
+    mcpTools?: string[];
+    contract?: { path?: string; sha256?: string };
+  };
+}
 
 const server = new McpServer({ name: "signalgrid", version: "0.1.0" });
 
@@ -217,7 +330,47 @@ server.registerTool(
   },
 );
 
+server.registerTool(
+  "fabric_status",
+  {
+    title: "Fabric status — what SignalGrid models today",
+    description:
+      "Report the CURRENT state of the decision fabric, derived at call time from the generated live-sync " +
+      "manifest and the repository's own documents — never a hand-maintained list, so it cannot drift. " +
+      "Returns the composable signal kinds and categories the grid fuses, the registered MCP tool surface, " +
+      "proof counts, the shared posture-report contract hash, the filed reference catalogs, and the intake " +
+      "ledger's disposition tally (how many inputs were assessed and what happened to each). Use this to " +
+      "answer 'what does SignalGrid cover now?' without reading the repository. Everything reported is " +
+      "fixture-backed and public-safe: no live vendor integration, credential, or tenant data exists here.",
+    inputSchema: {},
+  },
+  async () => {
+    const manifest = readJson<SyncManifest>("artifacts/sync/live-sync-manifest.json");
+    if (!manifest.ok) {
+      // Fail loudly. A zeroed answer here would be the exact unearned
+      // affirmative this repository exists to refuse.
+      return { isError: true, content: [{ type: "text" as const, text: manifest.error }] };
+    }
+    const body = manifest.value.body ?? {};
+    return asText({
+      manifestVersion: manifest.value.manifestVersion,
+      manifestFingerprint: manifest.value.fingerprint,
+      signalKinds: { count: (body.signalKinds ?? []).length, kinds: body.signalKinds ?? [] },
+      signalCategories: { count: (body.signalCategories ?? []).length, categories: body.signalCategories ?? [] },
+      mcpTools: body.mcpTools ?? [],
+      proofCounts: body.proofCounts ?? {},
+      sharedPostureContract: body.contract ?? {},
+      filedCatalogs: filedCatalogs(),
+      intakeLedger: ledgerSummary(),
+      boundary:
+        "Public-safe and fixture-backed. Every connector is gated behind tier + SIGNALGRID_LIVE_INTEGRATIONS " +
+        "+ a credential + an injected transport this repository does not ship. No vendor partnership, " +
+        "certification, or compliance claim is made by this surface.",
+    });
+  },
+);
+
 const transport = new StdioServerTransport();
 await server.connect(transport);
 // stderr is safe for logs; stdout is the MCP transport.
-console.error("SignalGrid MCP server ready (stdio). Tools: list_room_scenarios, evaluate_room_entry, signal_catalog, scan_signals, evaluate_decision, facility_graph, evaluate_location_certainty.");
+console.error("SignalGrid MCP server ready (stdio). Tools: list_room_scenarios, evaluate_room_entry, signal_catalog, scan_signals, evaluate_decision, facility_graph, evaluate_location_certainty, fabric_status.");

@@ -2,18 +2,43 @@ version: 2
 # Dependabot keeps dependencies patched via automated pull requests.
 # Public-safe: it only reads manifests and opens PRs; it touches no secrets.
 #
-# Concept / pre-dev stage: updates are batched into a single grouped PR per
-# ecosystem and run monthly, so the repo stays clean and dependency review is a
-# quick, occasional task rather than a flood of individual PRs.
+# GROUPING POLICY — minor/patch together, majors alone.
+#
+# This used to be `patterns: ["*"]` with no update-type split, so every update
+# landed in ONE pull request. PR #154 was the result: 65 packages in a single PR,
+# red and unmergeable, because two breaking majors (zod 3→4 and typescript 5→7,
+# alongside recharts / react-day-picker / react-resizable-panels) took 63 harmless
+# updates down with them — 132 typecheck errors in a PR nobody could reasonably
+# review or bisect, and no way to land the safe 63 without the breaking few.
+#
+# A grouped PR is a convenience only while every member is safe to merge together.
+# The moment one member needs code changes the group stops being a convenience and
+# becomes a blockage, and the bigger the group the longer that blockage lasts.
+#
+# So:
+#   - minor + patch stay grouped into one routine PR. Those are the updates that
+#     are usually green, and batching them keeps review an occasional task, which
+#     was the original intent of grouping and is still right.
+#   - MAJORS are deliberately in NO group. Anything ungrouped gets its own pull
+#     request, so each breaking library arrives alone, reviewable on its own terms
+#     and bisectable. One red major then blocks nothing but itself.
+#
+# `open-pull-requests-limit` rises accordingly: majors now arrive separately, and a
+# limit of 2 would silently suppress them — leaving the repo looking current while
+# breaking updates queued invisibly. A suppressed update is not a deferred one; it
+# is one nobody was told about.
 updates:
   - package-ecosystem: npm
     directory: "/"
     schedule:
       interval: monthly
-    open-pull-requests-limit: 2
+    open-pull-requests-limit: 8
     groups:
-      npm-dependencies:
+      npm-minor-and-patch:
         patterns: ["*"]
+        update-types:
+          - minor
+          - patch
     commit-message:
       prefix: "deps"
     labels:
@@ -23,10 +48,13 @@ updates:
     directory: "/"
     schedule:
       interval: monthly
-    open-pull-requests-limit: 2
+    open-pull-requests-limit: 4
     groups:
-      github-actions:
+      github-actions-minor-and-patch:
         patterns: ["*"]
+        update-types:
+          - minor
+          - patch
     commit-message:
       prefix: "ci"
     labels:

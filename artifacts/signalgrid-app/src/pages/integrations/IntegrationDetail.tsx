@@ -4,7 +4,8 @@ import { useGetIntegration } from "@workspace/api-client-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { IntegrationStatusBadge } from "@/components/StatusBadge";
 import { formatTimeAgo, formatDate } from "@/lib/format";
-import { ArrowLeft, Github, ExternalLink } from "lucide-react";
+import { ArrowLeft, ExternalLink } from "lucide-react";
+import { GithubIcon } from "@/components/ui/brand-icons";
 
 type ExtendedIntegration = {
   id: string;
@@ -80,7 +81,7 @@ export function IntegrationDetail() {
                 rel="noopener noreferrer"
                 className="text-xs font-mono text-muted-foreground hover:text-primary flex items-center gap-1.5 transition-colors"
               >
-                <Github className="w-3.5 h-3.5" /> GitHub Repository
+                <GithubIcon className="w-3.5 h-3.5" /> GitHub Repository
               </a>
             )}
             {integration.apiDocsUrl && (

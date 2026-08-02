@@ -132,6 +132,21 @@ It also anchors the honest register: continuous *verification*, least privilege,
   — the owner-supplied deep-research report behind intake ledger row 17
   (external validation of the Facility Trust Graph architecture; source of the
   zone-presence state machine built in `transition.ts`).
+- [OT / ICS / SCADA & Industrial Control API & GitHub catalog](OT_ICS_SCADA_API_CATALOG.md)
+  — the 151-platform industrial inventory behind intake ledger row 45, and the
+  only catalog in this folder **compiled by this repository** rather than
+  supplied by the owner (verified 2026-08-02). Ten sections spanning OT asset
+  visibility and ICS network monitoring, SCADA/HMI/DCS, PLC/RTU/IED and safety
+  controllers, historians/gateways/protocol tooling, OT remote access, OT
+  segmentation, industrial SIEM, open-source ICS security tooling, digital twin,
+  and standards including ATT&CK for ICS. Because the repo authored it, the rows
+  carry the repo's own honesty bar: 120 verified documentation URLs, 76 verified
+  repositories, and 28 rows honestly recorded as "no detailed public contract
+  located". Paywalled bodies (IEC 62443, ISA-95/99, ISO) appear by title and
+  scope only. It carries the Purdue-level mapping against the fabric that
+  actually exists, the change-window gap, and the **safety-state refusal** —
+  SignalGrid gates who may attempt a bypass; the plant's safety system decides
+  whether the machine is safe to move.
 - [Asset Management & IT Governance API & GitHub catalog](ASSET_MANAGEMENT_IT_GOVERNANCE_API_CATALOG.md)
   — the owner-compiled 330-product inventory behind intake ledger row 44
   (16 ecosystems spanning ITAM/CMDB/SAM, SaaS management, cyber-asset

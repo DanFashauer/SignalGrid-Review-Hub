@@ -30,6 +30,37 @@ picking these up:
       because it touches the core decision/API contract (`test:api` response
       pins, evidence digests, spec sync) rather than one family.
 
+- [ ] **Wire `@workspace/dual-control` into the planner's `dual_approval` path
+      (intake row 45, surfaced independently by two verifiers).** The evaluator is
+      complete and proven — a twelve-term grant conjunction, mutation-swept — but
+      repo-wide its ONLY importer is `scripts/src/dual-control-proof.ts`. The
+      planner meanwhile emits `disposition: "dual_approval"` with
+      `requiresApprovals: 2` (`lib/flows/src/index.ts:307-311`) and the factory
+      flows already carry it on OT and other high-blast-radius actions. Nothing is
+      overclaimed — `docs/DUAL_CONTROL.md` correctly scopes the package as a
+      primitive whose answer "the host system performs the action, or not" on — so
+      this is an unwired primitive, not a false affirmative. But the honest hole is
+      real and worth naming: today a `dual_approval` disposition is a *declared
+      requirement* that no shipped surface *validates*. Scope: have the path that
+      consumes a planned `dual_approval` action actually call
+      `evaluateDualControl`, so the Granted / SecondAuthorizerRequired / Denied
+      ladder decides the release; a proof pinning that a planned dual_approval
+      action cannot proceed on one authorizer, on two identical identities, or on
+      two attestations from the same credential instance. This is a launch-path
+      repair that happens also to serve OT, not an OT feature.
+- [ ] **Change-window currency as a decision fact (intake row 45, the audit's one
+      genuine near-term gap).** `change_window` exists today only as a declared
+      flow signal id carrying a HEALTH status (`lib/flows/src/factory.ts:26,:94`);
+      `pim-activation` grades ticket validity and change class but never answers
+      "are we inside the approved window right now". The shape is already built and
+      proven one family over: `shift-context` derives schedule standing from a
+      source-reported window plus a caller-supplied reference instant, with no
+      clock in any decision path — the same construction this needs. Scope: a
+      derived in-window / outside-window / window-absent state on the change plane,
+      caller-posed and affirmative-only so unposed forecloses nothing, fail-closed
+      on an unreadable window, plus its proof. Not OT-specific — it serves the
+      launch path's own change-control story, which is why it is queued here rather
+      than on the OT expansion map.
 - [ ] **Mobile-app-catalog scanner phase (intake row 33, owner-instructed YELLOW-lane build).**
       The owner's repository scanner is filed verbatim, UNHARDENED, in
       [inspiration/MOBILE_APP_CATALOG_AGENT.md](inspiration/MOBILE_APP_CATALOG_AGENT.md)

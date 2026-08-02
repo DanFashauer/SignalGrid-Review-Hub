@@ -177,6 +177,16 @@ function categoryForKind(kind: string, reason?: string): IncidentCategory {
     // compliance queue — not a live incident and not the generic Service Desk.
     case "app_update":
       return "security_compliance";
+    // `change_window` is the change plane's governance reading: an operation running
+    // outside the window its own approval authorizes, under a record nobody approved,
+    // by an implementer the record does not name, or on a record too old to be
+    // evidence about now. All four are change-governance states owned by the same
+    // compliance queue that already holds `policy_binding` and `benchmark_selection`
+    // — never the generic Service Desk, and never SecOps: a change worked against a
+    // rejected record is a governance breach to reconcile with the CAB, not an
+    // intrusion to investigate.
+    case "change_window":
+      return "security_compliance";
     // Identity, authorization & data-governance signals. `platform_sso` belongs
     // here rather than with the device kinds: its findings — a policy claimed on a
     // method that cannot enforce it, a password-grade method where phishing

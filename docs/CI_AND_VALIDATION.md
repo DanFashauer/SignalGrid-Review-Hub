@@ -23,22 +23,62 @@ The docs sanity job verifies that required public-review docs exist and checks f
 
 ## Required local checks
 
-Before opening or updating a pull request, run these commands from the repository root:
+Before opening or updating a pull request, run **one command** from the repository root:
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm run typecheck
-PORT=3000 BASE_PATH=/ pnpm run build
-pnpm run proof:intune-entra-posture
-pnpm run proof:signalgrid-simulator
-pnpm run proof:signalgrid-grid
-pnpm run proof:microsoft-graph-sandbox
-pnpm run proof:connector-emulator
-git grep -nE "SignalGrid is production-ready|SignalGrid replaces|SignalGrid is an Imprivata partner|SignalGrid is MFi certified|autonomous production remediation|replaces ServiceNow|replaces PagerDuty|replaces CrowdStrike|replaces Defender|replaces ControlUp|Imprivata partner|MFi certified|replaces Jamf|replaces Intune|replaces Apple Configurator|replaces GroundControl" -- README.md docs artifacts/signalgrid-review/src || true
-git diff --check
+node scripts/preflight.mjs          # the whole gate suite; --quick skips the heavy web/app builds
 ```
 
-`PORT` and `BASE_PATH` are required because several Vite review surfaces read those environment variables during production builds.
+`preflight.mjs` is the ordered mirror of every CI job that needs nothing but Node — well
+over a hundred gates, including the typecheck, the build, every `proof:*`, the
+unsafe-claim scan, and the drift ratchets. Its own header states honestly which three CI
+jobs it does *not* mirror (Postgres, the Docker-compose smoke, and gitleaks), so a green
+preflight means everything reproducible locally is green, not that CI cannot go red.
+
+**Run the whole thing, not a hand-picked subset.** This section used to list five proofs
+and a `git grep`, and that list was the defect it looked like a control against: it
+omitted `proof:incident-playbook`, so a change that added a new composable signal kind
+without an owning incident queue passed every check a contributor was told to run and
+went red in CI. Picking the gates that "obviously relate" to a change is exactly how the
+derived ones — the gates that exist because the relationship is *not* obvious — get
+skipped.
+
+`PORT` and `BASE_PATH` are required by several Vite review surfaces during production
+builds; preflight sets them for the build step itself.
+
+### Two consequences worth knowing before you push
+
+- **A new composable signal kind needs an owning queue.** `proof:incident-playbook`
+  enumerates the runtime `SIGNAL_KINDS` union and asserts that no kind falls through to
+  the generic Service Desk, so adding one to `lib/posture-composition/src/types.ts`
+  requires a matching `categoryForKind` case in `lib/incident-playbook/src/map.ts`.
+- **Never run `scripts/mutation-guard.mjs` concurrently with anything else, and never
+  under a timeout that may kill it.** It mutates source files in place and restores them
+  afterwards; a sweep killed part-way leaves the tree mutated, which then surfaces as
+  unrelated phantom failures elsewhere (a "stale allowlist entry" for code that had not
+  moved, and a failing facility-trust-graph proof whose guard clause had been silently
+  rewritten to `true`).
+
+### Where new work is allowed to land
+
+`node scripts/check-package-reachability.mjs` computes the transitive closure from the
+shipped artifacts and reports every `lib/*` package none of them can reach. Eight of
+thirty-five are unreachable today — one with no importers at all, the rest imported only
+by the proof harness — and the check is a ratchet pinned at that count rather than a hard
+gate, because unreachable is a requirement to *look*, not a verdict to delete.
+
+Before building into a library, ask it how that library ships:
+
+```bash
+node scripts/check-package-reachability.mjs --why @workspace/<package>
+```
+
+It prints the shortest artifact→package path, or says plainly that the package is
+unreachable and that work landed there is work nothing can call. It exists because a
+design pass once scoped a repair into `lib/dual-control` before establishing that
+`planFlowActions` has zero shipped consumers — the wiring would have been proven by a
+proof and reachable by nothing.
 
 ## Branch protection
 

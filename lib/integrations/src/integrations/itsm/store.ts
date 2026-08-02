@@ -40,7 +40,7 @@ export type ITSMVendor = z.infer<typeof ITSMVendorSchema>;
 export const ITSMGenericWebhookConfigSchema = z.object({
   url: z.string().url(),
   method: z.enum(['POST', 'PUT', 'PATCH']).default('POST'),
-  headers: z.record(z.string()).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
   bodyTemplate: z.string().min(1),
   signingAlgorithm: z.enum(['hmac-sha256', 'hmac-sha512']).optional(),
   retryPolicy: z.object({

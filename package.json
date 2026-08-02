@@ -105,6 +105,7 @@
     "proof:custody-beacon": "pnpm --filter @workspace/scripts run proof:custody-beacon",
     "proof:app-update": "pnpm --filter @workspace/scripts run proof:app-update",
     "proof:platform-sso": "pnpm --filter @workspace/scripts run proof:platform-sso",
+    "proof:change-window": "pnpm --filter @workspace/scripts run proof:change-window",
     "proof:passkey-assurance": "pnpm --filter @workspace/scripts run proof:passkey-assurance",
     "proof:isolation-scope": "pnpm --filter @workspace/scripts run proof:isolation-scope",
     "proof:benchmark-selection": "pnpm --filter @workspace/scripts run proof:benchmark-selection",

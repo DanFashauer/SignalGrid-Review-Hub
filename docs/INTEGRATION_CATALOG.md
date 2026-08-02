@@ -465,6 +465,21 @@ in one place.
   Reading a schedule is not managing one: GET-only, no punch writes, nothing payroll-adjacent.
   `proof:shift-context` (50 checks).
 
+- **Change window** — an approval is a claim about a SPECIFIC time, actor and record. `change_window`
+  existed here only as a declared flow signal carrying a HEALTH status ("is the ITSM reachable"),
+  never "are we inside the approved window right now". Four axes: window standing DERIVED from the
+  record's bounds at a caller-supplied reference instant (no clock in any decision path), the ITSM's
+  own approval state as the one trusted allowlisted enum, the named implementer compared only when
+  the caller poses the operating actor, and record currency against a caller-supplied maximum age.
+  A rejected or cancelled record restricts — the organization holds an explicit denial, not an
+  absence; everything else that fails steps up, because windows slip and stranding an operator
+  mid-change is the worst possible moment to block. THE ASYMMETRY IS THE DESIGN: this dimension can
+  only raise. There is no "we are in the maintenance window, so relax" rung — that is how change
+  integrations usually work, and it would let anyone who can write an ITSM row write themselves a
+  grant. `change_class: emergency` is carried as evidence for the human answering the step-up and is
+  never read by the gate. Reading a change record is not managing one: no change is raised,
+  approved, scheduled or closed. `proof:change-window` (63 checks).
+
 - **Bootstrap credential** — the auth plane's provenance reading (intake ledger row 17's queued
   candidate; Entra Temporary Access Pass and its peers are the reference shape). A temporary
   bootstrap pass may reach ONLY authenticator enrollment or recovery: a bootstrap session on an

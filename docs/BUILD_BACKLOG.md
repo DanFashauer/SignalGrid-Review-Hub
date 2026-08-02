@@ -77,19 +77,30 @@ picking these up:
       made during that pass — `lib/db` is untracked build residue (`dist/` and
       `node_modules/` with no manifest and no source), not a thirty-sixth package,
       which is the ordinary reason a derived figure beats a remembered one.
-- [ ] **Change-window currency as a decision fact (intake row 45, the audit's one
-      genuine near-term gap).** `change_window` exists today only as a declared
-      flow signal id carrying a HEALTH status (`lib/flows/src/factory.ts:26,:94`);
-      `pim-activation` grades ticket validity and change class but never answers
-      "are we inside the approved window right now". The shape is already built and
-      proven one family over: `shift-context` derives schedule standing from a
-      source-reported window plus a caller-supplied reference instant, with no
-      clock in any decision path — the same construction this needs. Scope: a
-      derived in-window / outside-window / window-absent state on the change plane,
-      caller-posed and affirmative-only so unposed forecloses nothing, fail-closed
-      on an unreadable window, plus its proof. Not OT-specific — it serves the
-      launch path's own change-control story, which is why it is queued here rather
-      than on the OT expansion map.
+- [x] **Change-window currency as a decision fact (intake row 45, the audit's one
+      genuine near-term gap).** DONE — the `change-window` family
+      (`@workspace/integrations/change-window`), `proof:change-window` (63 checks),
+      fused as the `change_window` signal kind via `fromChangeWindow`.
+      `change_window` had existed only as a declared flow signal id carrying a
+      HEALTH status (`lib/flows/src/factory.ts:26,:94`) — "is the ITSM reachable",
+      never "are we inside the approved window right now".
+      Four axes, following the shift-context template (derived / trusted / posed)
+      plus the caller-posed recency shape: window standing DERIVED from the record's
+      bounds at a caller-supplied reference instant, the ITSM's approval state as the
+      one trusted allowlisted enum, the named implementer compared only when the
+      caller poses the operating actor, and record currency against a caller-supplied
+      maximum age. Rejected/cancelled restricts; everything else that fails steps up.
+      **The design decision worth recording is the one that was refused.** Change
+      integrations conventionally RELAX controls inside a window, and that is a grant
+      manufactured from an ITSM row. This family can only raise: the proof asserts it
+      by composition, fusing all 576 reachable verdicts alongside an
+      already-stepping-up device and confirming none of them lowers the outcome. For
+      the same reason `change_class: "emergency"` is carried as evidence for the human
+      answering the step-up and never read by the gate — otherwise anyone who can write
+      that field can write themselves a pass.
+      Placement was checked before building, using the new reachability ratchet:
+      `pim-activation` (where the backlog's own text pointed) is proof-only, so the
+      work went to `lib/integrations` + `posture-composition`, both of which ship.
 - [ ] **Mobile-app-catalog scanner phase (intake row 33, owner-instructed YELLOW-lane build).**
       The owner's repository scanner is filed verbatim, UNHARDENED, in
       [inspiration/MOBILE_APP_CATALOG_AGENT.md](inspiration/MOBILE_APP_CATALOG_AGENT.md)

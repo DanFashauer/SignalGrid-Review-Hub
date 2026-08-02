@@ -186,6 +186,13 @@ export const TARGETS = [
     ],
   },
   {
+    proof: "proof:change-window",
+    files: [
+      "lib/integrations/src/integrations/change-window/evaluate.ts",
+      "lib/integrations/src/integrations/change-window/change-window-connector.ts",
+    ],
+  },
+  {
     proof: "proof:emitter-discipline",
     files: [
       "lib/integrations/src/integrations/itsm/resolve.ts",
@@ -357,6 +364,36 @@ const ALLOWED = [
     line: "readThrew ||",
     reason:
       "Genuinely inert, verified by the same 239-shape diff with the term mutated to `false`: ZERO outputs changed. A throwing accessor forces every field to undefined in the catch block, and the per-field checks below already mark the report malformed on that alone. Kept for the same reason as the !plain term beside it — a read that THREW is a distinct fact from a read that returned nothing, and stating it here keeps the integrity flag honest if the field checks ever stop covering undefined.",
+  },
+  {
+    file: 'lib/integrations/src/integrations/change-window/evaluate.ts',
+    line: 'report.reportIntegrity === "clean" &&',
+    reason:
+      'Defence-in-depth backstop that CANNOT fire today, verified rather than asserted: the whole block was removed and all 1,656 shapes the proof enumerates (576 normalized states x covered/uncovered, plus 504 raw wire records) were diffed — ZERO outputs changed. Every non-confirmed state already pushes a raising candidate above it, so the candidate list is never empty when positivelyAuthorizedChange is false. Kept as the last thing standing between a weakened branch and a surviving seed grant; it pushes its own GRANT_BACKSTOP reason so a firing is visible in the record. Same shape as the passkey-assurance, platform-sso and policy-binding backstops.',
+  },
+  {
+    file: 'lib/integrations/src/integrations/change-window/evaluate.ts',
+    line: 'report.approvalState === "approved" &&',
+    reason:
+      'Defence-in-depth backstop that CANNOT fire today, verified rather than asserted: the whole block was removed and all 1,656 shapes the proof enumerates (576 normalized states x covered/uncovered, plus 504 raw wire records) were diffed — ZERO outputs changed. Every non-confirmed state already pushes a raising candidate above it, so the candidate list is never empty when positivelyAuthorizedChange is false. Kept as the last thing standing between a weakened branch and a surviving seed grant; it pushes its own GRANT_BACKSTOP reason so a firing is visible in the record. Same shape as the passkey-assurance, platform-sso and policy-binding backstops.',
+  },
+  {
+    file: 'lib/integrations/src/integrations/change-window/evaluate.ts',
+    line: 'report.windowStanding === "inside" &&',
+    reason:
+      'Defence-in-depth backstop that CANNOT fire today, verified rather than asserted: the whole block was removed and all 1,656 shapes the proof enumerates (576 normalized states x covered/uncovered, plus 504 raw wire records) were diffed — ZERO outputs changed. Every non-confirmed state already pushes a raising candidate above it, so the candidate list is never empty when positivelyAuthorizedChange is false. Kept as the last thing standing between a weakened branch and a surviving seed grant; it pushes its own GRANT_BACKSTOP reason so a firing is visible in the record. Same shape as the passkey-assurance, platform-sso and policy-binding backstops.',
+  },
+  {
+    file: 'lib/integrations/src/integrations/change-window/evaluate.ts',
+    line: '(report.actorAuthorization === "authorized" || report.actorAuthorization === "unassessed") &&',
+    reason:
+      'Defence-in-depth backstop that CANNOT fire today, verified rather than asserted: the whole block was removed and all 1,656 shapes the proof enumerates (576 normalized states x covered/uncovered, plus 504 raw wire records) were diffed — ZERO outputs changed. Every non-confirmed state already pushes a raising candidate above it, so the candidate list is never empty when positivelyAuthorizedChange is false. Kept as the last thing standing between a weakened branch and a surviving seed grant; it pushes its own GRANT_BACKSTOP reason so a firing is visible in the record. Same shape as the passkey-assurance, platform-sso and policy-binding backstops.',
+  },
+  {
+    file: 'lib/integrations/src/integrations/change-window/evaluate.ts',
+    line: 'if (!positivelyAuthorizedChange && candidates.length === 0) {',
+    reason:
+      'Defence-in-depth backstop that CANNOT fire today, verified rather than asserted: the whole block was removed and all 1,656 shapes the proof enumerates (576 normalized states x covered/uncovered, plus 504 raw wire records) were diffed — ZERO outputs changed. Every non-confirmed state already pushes a raising candidate above it, so the candidate list is never empty when positivelyAuthorizedChange is false. Kept as the last thing standing between a weakened branch and a surviving seed grant; it pushes its own GRANT_BACKSTOP reason so a firing is visible in the record. Same shape as the passkey-assurance, platform-sso and policy-binding backstops.',
   },
   {
     file: 'lib/integrations/src/integrations/passkey-assurance/evaluate.ts',

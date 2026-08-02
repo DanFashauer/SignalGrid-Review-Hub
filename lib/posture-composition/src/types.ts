@@ -74,6 +74,7 @@ export const SIGNAL_KINDS = [
   "policy_binding",
   "benchmark_selection",
   "shift_context",
+  "change_window",
   "location_certainty",
   "bootstrap_credential",
   "challenge_capability",

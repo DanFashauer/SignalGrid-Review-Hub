@@ -194,6 +194,8 @@ jobs:
         run: pnpm run proof:platform-sso
       - name: Proof — passkey-assurance (credential worth, not just "passkey")
         run: pnpm run proof:passkey-assurance
+      - name: Proof — change-window (approved WHEN, by WHOM, on a current record)
+        run: pnpm run proof:change-window
 
       # Policy binding — membership IS the policy: unbound, too-wide (fail-open),
       # too-narrow, or mixed-membership group assignment.

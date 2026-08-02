@@ -24,6 +24,7 @@ import type { PlatformSsoVerdict } from "@workspace/integrations/platform-sso";
 import type { PolicyBindingVerdict } from "@workspace/integrations/policy-binding";
 import type { BenchmarkSelectionVerdict } from "@workspace/integrations/benchmark-selection";
 import type { ShiftContextVerdict } from "@workspace/integrations/shift-context";
+import type { ChangeWindowVerdict } from "@workspace/integrations/change-window";
 import type { BootstrapCredentialVerdict } from "@workspace/integrations/bootstrap-credential";
 import type { ChallengeCapabilityVerdict } from "@workspace/integrations/challenge-capability";
 import type { SseEgressVerdict } from "@workspace/integrations/sse-egress";
@@ -285,6 +286,24 @@ export function fromShiftContext(v: ShiftContextVerdict): ComposableSignal {
   // any other dimension says, and never grades WHO holds the badge — that stays
   // with custody.
   return { kind: "shift_context", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromChangeWindow(v: ChangeWindowVerdict): ComposableSignal {
+  // Change governance — is this change-class operation running under a record the
+  // organization approved, inside the window that record authorizes, by the
+  // implementer it names, on a read current enough to be evidence about now? A
+  // rejected or cancelled record restricts (the organization holds an explicit
+  // denial, the access-governance-decertified class); everything else that fails
+  // steps up, because windows slip and emergency work overruns, and stranding an
+  // operator mid-change is the worst possible moment to block.
+  //
+  // NOTE THE ASYMMETRY, which is the whole design: this adapter can only RAISE.
+  // There is no "we are in the maintenance window, so relax" rung — that is how
+  // change integrations usually work elsewhere, and it would let anyone who can
+  // write an ITSM row write themselves a grant. `changeClass` (emergency/standard)
+  // is carried as evidence for the human answering the step-up and is never read
+  // by the gate.
+  return { kind: "change_window", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromBootstrapCredential(v: BootstrapCredentialVerdict): ComposableSignal {

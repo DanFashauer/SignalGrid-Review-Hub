@@ -19,6 +19,12 @@
 // stale/never-certified entitlement, or an over-broad role STEP UP; anything
 // unreadable steps up; a principal no governance source observes is a blind spot
 // (unknown), never "authorized". Nothing unknown ever reads as authorized.
+// And the read itself has a currency (intake ledger row 42): the IGA plane is
+// cadence-based, so an affirmative "authorized" relayed from a sync that last
+// ran before the caller's posed age bound STEPS UP — the row-11/26 recency
+// doctrine applied to the governance read. Stale BAD news keeps outranking:
+// a leaver_pending relayed stale still escalates; staleness never launders a
+// known concern down to a challenge.
 //
 // SignalGrid changes no entitlement — every signal is read-only. It consumes the
 // evaluated governance state (it does NOT re-pull raw directory group membership,
@@ -55,6 +61,15 @@ export interface AccessGovernanceReportRaw {
   certification?: { state?: unknown; [k: string]: unknown };
   sod?: { conflict?: boolean | null; [k: string]: unknown };
   privilege?: { mode?: unknown; sessionMonitored?: boolean | null; [k: string]: unknown };
+  /** When the relayed governance state was last synchronized from its upstream
+   *  sources (the HR-feed/SCIM/provisioning pipeline's last successful read for
+   *  this principal — Entra emits it per object as provisioning-log
+   *  `activityDateTime` / `onPremisesLastSyncDateTime`). Strict ISO-8601 UTC.
+   *  The IGA plane is cadence-based ("quarterly / on change"), so every relayed
+   *  fact has an age — this is the instant that makes the age gradable.
+   *  Optional: bridges deployed before the axis simply do not report it
+   *  (intake ledger row 42). */
+  observedAt?: unknown;
   [k: string]: unknown;
 }
 
@@ -76,6 +91,10 @@ export interface NormalizedAccessGovernancePosture {
    *  privilege is elevated. false on an elevated session is a hard restrict.
    *  null = unknown. */
   privilegedSessionMonitored: boolean | null;
+  /** Source-reported instant the relayed governance state was last synchronized
+   *  (see `AccessGovernanceReportRaw.observedAt`). null = not reported. Graded
+   *  only against a caller-posed age bound — never against a clock. */
+  observedAt: string | null;
   source: string;
 }
 
@@ -94,6 +113,7 @@ export type AccessGovernancePosture =
   | "mover_stale_entitlement"
   | "joiner_over_provisioned"
   | "lifecycle_transition"
+  | "stale_governance_read"
   | "unverified"
   | "unknown";
 
@@ -113,6 +133,8 @@ export type AccessGovernanceReasonCode =
   | "MOVER_STALE_ENTITLEMENT"
   | "NEW_HIRE_OVER_PROVISIONED"
   | "LIFECYCLE_TRANSITION"
+  | "GOVERNANCE_READ_STALE"
+  | "GOVERNANCE_READ_TIME_UNKNOWN"
   | "GOVERNANCE_STATE_UNKNOWN"
   | "NOT_COVERED";
 

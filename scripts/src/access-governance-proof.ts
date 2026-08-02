@@ -19,6 +19,7 @@ import {
   AccessGovernanceConnector,
   AccessGovernanceConnectorError,
   createMockAccessGovernanceTransport,
+  deriveGovernanceReadFreshness,
   evaluateAccessGovernancePosture,
   guardReadOnly,
   normalizeReport,
@@ -182,6 +183,59 @@ check("a garbled lifecycle stage normalizes to unknown, never a fabricated stage
 const leaverMover = evaluateAccessGovernancePosture(lc({ lifecycle: { stage: "recent_transfer" }, entitlement: { scope: "over_privileged" }, account: { status: "leaver_pending" } }));
 check("worst-concern-wins: a leaver still outranks the mover finding", leaverMover.recommendedAction === "escalate" && leaverMover.reasonCode === "LEAVER_STILL_ACTIVE");
 
+// ── the governance-read recency axis (intake ledger row 42) ─────────────────────
+// The IGA plane is cadence-based ("quarterly / on change"), so a bridge whose
+// upstream HR/SCIM sync silently broke keeps truthfully relaying its LAST
+// evaluation: affirmative values, aged. Before this axis the concrete audit
+// scenario — transfer three weeks ago, sync broken four weeks, bridge relays
+// established/in_scope/certified — reached FULLY_AUTHORIZED/none. The axis is
+// the row-26 caller-posed shape (source-reported instant + caller age bound +
+// caller reference instant, no clock in any decision path), capped at step_up,
+// with worst-concern-wins keeping stale bad news outranking.
+const REF = "2026-08-02T12:00:00Z";
+const DAY_SECONDS = 86400;
+const readOpts = { maxGovernanceReadAgeSeconds: DAY_SECONDS, referenceTime: REF };
+const cleanAt = (observedAt: unknown) => normalizeReport("p-2", { ...lifecycleBase, observedAt } as AccessGovernanceReportRaw);
+
+check(
+  "freshness derivation: unposed → unassessed; garbled pose → unknown; future-dated → unknown; exactly at the bound → fresh (inclusive); past it → stale",
+  deriveGovernanceReadFreshness("2026-08-02T11:00:00Z", undefined, REF) === "unassessed" &&
+    deriveGovernanceReadFreshness("2026-08-02T11:00:00Z", 0, REF) === "unknown" &&
+    deriveGovernanceReadFreshness("2026-08-03T00:00:00Z", DAY_SECONDS, REF) === "unknown" &&
+    deriveGovernanceReadFreshness("2026-08-01T12:00:00Z", DAY_SECONDS, REF) === "fresh" &&
+    deriveGovernanceReadFreshness("2026-08-01T11:59:59Z", DAY_SECONDS, REF) === "stale",
+);
+// Loosely-typed callers exist (the pose crosses an API boundary): a NON-NUMBER
+// bound must be an unreadable question, and a NON-FINITE one must never grade —
+// an Infinity bound would otherwise answer "fresh" for ANY aged read, the exact
+// optimistic default the axis exists to forbid.
+check(
+  "a malformed pose never grades: a string bound → unknown; Infinity → unknown (never an always-fresh answer); NaN → unknown (never a fabricated stale)",
+  deriveGovernanceReadFreshness("2026-08-02T11:00:00Z", "3600" as unknown as number, REF) === "unknown" &&
+    deriveGovernanceReadFreshness("2020-01-01T00:00:00Z", Number.POSITIVE_INFINITY, REF) === "unknown" &&
+    deriveGovernanceReadFreshness("2026-08-02T11:00:00Z", Number.NaN, REF) === "unknown",
+);
+
+const freshClean = evaluateAccessGovernancePosture(cleanAt("2026-08-02T11:00:00Z"), readOpts);
+check("a FRESH read on a clean principal still grants — the axis challenges staleness, never governance itself", freshClean.posture === "authorized" && freshClean.recommendedAction === "none");
+
+const staleClean = evaluateAccessGovernancePosture(cleanAt("2026-07-01T00:00:00Z"), readOpts);
+check("the audit scenario: an affirmative clean state relayed from a STALE sync → stale_governance_read/STEP_UP, no longer FULLY_AUTHORIZED/none", staleClean.posture === "stale_governance_read" && staleClean.reasonCode === "GOVERNANCE_READ_STALE" && staleClean.recommendedAction === "step_up");
+
+const staleLeaver = evaluateAccessGovernancePosture(
+  normalizeReport("p-3", { ...lifecycleBase, account: { status: "leaver_pending" }, observedAt: "2026-07-01T00:00:00Z" } as AccessGovernanceReportRaw),
+  readOpts,
+);
+check("stale BAD news keeps outranking: a leaver_pending relayed from the same stale sync still ESCALATES — staleness never launders a known concern down to a challenge", staleLeaver.recommendedAction === "escalate" && staleLeaver.reasonCode === "LEAVER_STILL_ACTIVE");
+
+const posedUnanswerable = evaluateAccessGovernancePosture(cleanAt(undefined), readOpts);
+check("posed-but-unanswerable: a posed bound with no reported instant → unknown raises (step_up), never authorized", posedUnanswerable.recommendedAction === "step_up" && posedUnanswerable.reasonCode === "GOVERNANCE_READ_TIME_UNKNOWN" && posedUnanswerable.unknownSignals.includes("governance_read_time"));
+
+const unposedOldRead = evaluateAccessGovernancePosture(cleanAt("2020-01-01T00:00:00Z"));
+check("AFFIRMATIVE-ONLY: an unposed axis forecloses nothing — every caller and bridge deployed before it keeps its behavior", unposedOldRead.posture === "authorized" && unposedOldRead.recommendedAction === "none");
+
+check("a garbled bridge timestamp normalizes to null (unknown), never an invented recency", cleanAt("last tuesday-ish").observedAt === null && cleanAt("2026-08-02T11:00:00+02:00").observedAt === null && cleanAt("2026-08-02T11:00:00Z").observedAt === "2026-08-02T11:00:00Z");
+
 // ── exhaustive allow-path safety ────────────────────────────────────────────────
 //
 // Brute-force the ENTIRE normalized input space (not fixture-bound), so the proof
@@ -201,6 +255,25 @@ const domains = {
   privilegedSessionMonitored: [true, false, null],
   lifecycleStage: ["new_hire", "established", "recent_transfer", "unknown"],
 };
+const positivelyCleanBase = (c: Record<string, unknown>): boolean => {
+  const { accountStatus, entitlementScope, certification, sodConflict, privilege, privilegedSessionMonitored, lifecycleStage } = c;
+  // Session monitoring is only meaningful for an ACTIVE elevation; a JIT-active
+  // session must be confirmed monitored, and a non-elevated principal has nothing
+  // to monitor. A standing/expired/unknown privilege never grants.
+  const privilegeClean =
+    privilege === "none" || (privilege === "jit_active" && privilegedSessionMonitored === true);
+  return (
+    accountStatus === "active" &&
+    entitlementScope === "in_scope" &&
+    certification === "certified" &&
+    sodConflict === false &&
+    privilegeClean &&
+    // The lifecycle axis is affirmative-only: an asserted transition is a
+    // visible monitor (never a grant), while established/unreported stages
+    // leave the pre-axis grant untouched.
+    (lifecycleStage === "established" || lifecycleStage === "unknown")
+  );
+};
 const enumRes = enumerateGrantSafety({
   domains,
   build: (c) =>
@@ -209,31 +282,35 @@ const enumRes = enumerateGrantSafety({
   actionOf: (v) => v.recommendedAction,
   // Only the `authorized` posture may ever contribute 'none'.
   confirmedWhenNone: (v) => v.posture === "authorized" && v.reasonCode === "FULLY_AUTHORIZED",
-  positivelyClean: (c) => {
-    const { accountStatus, entitlementScope, certification, sodConflict, privilege, privilegedSessionMonitored, lifecycleStage } = c;
-    // Session monitoring is only meaningful for an ACTIVE elevation; a JIT-active
-    // session must be confirmed monitored, and a non-elevated principal has nothing
-    // to monitor. A standing/expired/unknown privilege never grants.
-    const privilegeClean =
-      privilege === "none" || (privilege === "jit_active" && privilegedSessionMonitored === true);
-    return (
-      accountStatus === "active" &&
-      entitlementScope === "in_scope" &&
-      certification === "certified" &&
-      sodConflict === false &&
-      privilegeClean &&
-      // The lifecycle axis is affirmative-only: an asserted transition is a
-      // visible monitor (never a grant), while established/unreported stages
-      // leave the pre-axis grant untouched.
-      (lifecycleStage === "established" || lifecycleStage === "unknown")
-    );
-  },
+  positivelyClean: positivelyCleanBase,
 });
 check(
   `exhaustive: over all ${enumRes.combos} input combinations, action 'none' is emitted for EXACTLY the positively-confirmed authorized states (mismatches=${enumRes.mismatches}${enumRes.firstMismatch ? ", first=" + enumRes.firstMismatch : ""})`,
   enumRes.mismatches === 0 && enumRes.combos === productOf(domains) && enumRes.combos === 18000,
 );
 check("exhaustive: some clean states DO grant (the enumeration is not vacuous)", enumRes.noneCount > 0);
+
+// The recency axis brute-forced (intake ledger row 42): with the currency
+// question POSED, a grant additionally requires a FRESH read — over the whole
+// extended input space (a stale or unreadable instant can never reach 'none').
+// The UNPOSED enumeration above stays byte-identical: the axis never
+// forecloses for callers that did not pose it.
+const FRESH_AT = "2026-08-02T11:00:00Z";
+const posedDomains = { ...domains, observedAt: [FRESH_AT, "2026-07-01T00:00:00Z", null] };
+const posedEnum = enumerateGrantSafety({
+  domains: posedDomains,
+  build: (c) =>
+    ({ sourceSystem: "access-governance", principalId: "enum", source: "enum", ...c }) as NormalizedAccessGovernancePosture,
+  evaluate: (p) => evaluateAccessGovernancePosture(p, readOpts),
+  actionOf: (v) => v.recommendedAction,
+  confirmedWhenNone: (v) => v.posture === "authorized" && v.reasonCode === "FULLY_AUTHORIZED",
+  positivelyClean: (c) => positivelyCleanBase(c) && c.observedAt === FRESH_AT,
+});
+check(
+  `exhaustive (recency axis POSED): over all ${posedEnum.combos} combinations, 'none' additionally requires a fresh governance read (mismatches=${posedEnum.mismatches}${posedEnum.firstMismatch ? ", first=" + posedEnum.firstMismatch : ""})`,
+  posedEnum.mismatches === 0 && posedEnum.combos === productOf(posedDomains) && posedEnum.combos === 54000,
+);
+check("exhaustive (posed): fresh clean states DO grant (the posed enumeration is not vacuous)", posedEnum.noneCount > 0);
 
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);

@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 59,
-  "fingerprint": "ed2c545cfde165552ef43ffd202c63bd64297afb1fdb1447dc527c0caf7e1975",
+  "manifestVersion": 60,
+  "fingerprint": "9f13ec657e025ae4e693e795ae18f2c7c574c32c372b78cc343d34fdbce239f0",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -91,7 +91,7 @@
       "step_before_assemble"
     ],
     "proofCounts": {
-      "access-governance": 65,
+      "access-governance": 75,
       "adaptive-proposals": 37,
       "agent-behavior": 45,
       "agent-identity": 143,

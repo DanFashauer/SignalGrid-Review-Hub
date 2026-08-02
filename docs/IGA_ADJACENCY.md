@@ -43,6 +43,20 @@ context — and can **emit** a recertification or access-review request back whe
 a runtime decision suggests one. IGA remains the system of record for
 entitlements and lifecycle; SignalGrid never tries to own that.
 
+Because the IGA cadence above is periodic while the decision is continuous,
+the consumed state itself has a currency: a bridge whose upstream HR/SCIM sync
+silently broke keeps truthfully relaying its **last** evaluation — affirmative
+values, aged. The `access-governance` family therefore carries a
+governance-read recency axis (intake ledger row 42): the bridge reports the
+instant its relayed state was last synchronized (the shape Entra exposes
+read-only per object — provisioning-log `activityDateTime`,
+`onPremisesLastSyncDateTime`, the synchronization job's last successful
+execution), the caller poses how old that read may be, and a stale read steps
+up — a challenge, never a lockout, and never a downgrade of stale *bad* news
+(a leaver relayed stale still escalates). Consuming that timestamp owns the
+provisioning pipeline no more than consuming certification state owns
+certifications.
+
 ```
 IGA  ──(governance state: entitlements, cert status, privileged flag)──▶  SignalGrid
 SignalGrid  ──(runtime decision evidence, review / recertification request)──▶  IGA

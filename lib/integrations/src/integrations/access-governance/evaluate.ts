@@ -21,6 +21,9 @@ import {
  *    UNMONITORED privileged session → RESTRICT (the grant is ungoverned — contain);
  *  - an OVER-PRIVILEGED (not least-privilege) role, a STALE / never-attested
  *    certification, or STANDING (not JIT) privilege → STEP_UP (governance drift);
+ *  - a governance read RELAYED FROM A SYNC older than the caller's posed age
+ *    bound → STEP_UP (the answer may be right, but it is old — a challenge,
+ *    never a lockout; stale BAD news keeps outranking via worst-concern-wins);
  *  - anything unreadable → STEP_UP (never trust silence).
  *
  * `covered=false` = no IGA/entitlement source observes this principal at all →
@@ -39,6 +42,53 @@ const ACTION_SEVERITY: Record<AccessGovernanceRecommendedAction, number> = {
 export interface EvaluateAccessGovernanceOptions {
   /** False when no IGA/entitlement source observes this principal. Default true. */
   covered?: boolean;
+  /** The governance-read recency question (intake ledger row 42), POSED BY THE
+   *  CALLER: how old may the relayed governance state be and still stand as
+   *  evidence of the principal's CURRENT standing? The IGA plane is
+   *  cadence-based ("quarterly / on change"), so a bridge whose upstream
+   *  HR/SCIM sync silently broke keeps truthfully relaying its last evaluation
+   *  — affirmative, and aged. Graded against `referenceTime` — no clock in any
+   *  decision path. Unposed = the axis is not graded and never forecloses
+   *  (every caller and bridge deployed before the axis keeps its behavior). */
+  maxGovernanceReadAgeSeconds?: number;
+  /** The caller's "now", a strict ISO-8601 UTC (Zulu) instant — required for
+   *  the recency axis to answer; a posed age bound without a readable
+   *  reference is posed-but-unanswerable (unknown raises). */
+  referenceTime?: string;
+}
+
+/** Freshness of the relayed governance read against the caller-posed bound.
+ *  Derived, never trusted; `unassessed` when no bound was posed. */
+export type GovernanceReadFreshness = "fresh" | "stale" | "unassessed" | "unknown";
+
+const INSTANT_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
+
+function instantMs(v: string | undefined | null): number | null {
+  if (typeof v !== "string" || !INSTANT_RE.test(v.trim())) return null;
+  const ms = Date.parse(v.trim());
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/** Derive the governance read's freshness. Deterministic on three supplied
+ *  inputs. Boundary: a read exactly at the bound is fresh (inclusive); a
+ *  future-dated read relative to the reference is a contradiction → unknown,
+ *  never fresh. */
+export function deriveGovernanceReadFreshness(
+  observedAt: string | null,
+  maxGovernanceReadAgeSeconds: number | undefined,
+  referenceTime: string | undefined,
+): GovernanceReadFreshness {
+  if (maxGovernanceReadAgeSeconds === undefined) return "unassessed";
+  // Number.isFinite coerces nothing, so it alone rejects every non-number a
+  // loosely-typed caller can pose (strings, NaN, ±Infinity, objects).
+  if (!Number.isFinite(maxGovernanceReadAgeSeconds) || maxGovernanceReadAgeSeconds <= 0) {
+    return "unknown"; // a garbled pose is a question we cannot read — never answered optimistically
+  }
+  const observedMs = instantMs(observedAt);
+  const referenceMs = instantMs(referenceTime);
+  if (observedMs === null || referenceMs === null) return "unknown";
+  if (observedMs > referenceMs) return "unknown"; // future-dated evidence is a contradiction
+  return referenceMs - observedMs <= maxGovernanceReadAgeSeconds * 1000 ? "fresh" : "stale";
 }
 
 interface Candidate {
@@ -158,6 +208,31 @@ export function evaluateAccessGovernancePosture(
   if (posture.lifecycleStage === "new_hire" || posture.lifecycleStage === "recent_transfer") {
     candidates.push({ posture: "lifecycle_transition", action: "monitor", reason: "LIFECYCLE_TRANSITION" });
   }
+
+  // ── the governance-read recency axis (intake ledger row 42) — graded ONLY when
+  // the caller posed an age bound. The IGA plane is cadence-based, so a bridge
+  // whose upstream HR/SCIM sync silently broke keeps truthfully relaying its
+  // last evaluation: affirmative values, aged. A relayed "authorized" older
+  // than the posed bound is not evidence of CURRENT standing → step_up, a
+  // challenge and never a lockout (capped by design: the fact is "the answer
+  // is old", not "the answer is bad"). Because this is one CANDIDATE on the
+  // worst-concern-wins ladder, stale bad news keeps outranking — a
+  // leaver_pending relayed from a stale sync still escalates; staleness never
+  // launders a known concern down to a challenge.
+  const readFreshness = deriveGovernanceReadFreshness(
+    posture.observedAt ?? null,
+    options.maxGovernanceReadAgeSeconds,
+    options.referenceTime,
+  );
+  if (readFreshness === "stale") {
+    candidates.push({ posture: "stale_governance_read", action: "step_up", reason: "GOVERNANCE_READ_STALE" });
+  } else if (readFreshness === "unknown") {
+    // Posed-but-unanswerable: the caller asked the currency question and the
+    // bridge/reference could not answer it — unknown raises, never grants.
+    unknownSignals.push("governance_read_time");
+    candidates.push({ posture: "unverified", action: "step_up", reason: "GOVERNANCE_READ_TIME_UNKNOWN" });
+  }
+
   // Anything unreadable raises the bar (silent-failure guard).
   if (unknownSignals.length > 0) {
     candidates.push({ posture: "unverified", action: "step_up", reason: "GOVERNANCE_STATE_UNKNOWN" });

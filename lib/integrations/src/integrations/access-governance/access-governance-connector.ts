@@ -32,6 +32,15 @@ function oneOf<T extends string>(v: unknown, allowed: readonly T[], fallback: T)
   return (allowed as readonly string[]).includes(s) ? (s as T) : fallback;
 }
 
+/** A strict ISO-8601 UTC (Zulu) instant, or null. Anything unreadable is null —
+ *  a garbled timestamp is unknown, never an invented recency. */
+function instantStringOf(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const s = v.trim();
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(s)) return null;
+  return Number.isFinite(Date.parse(s)) ? s : null;
+}
+
 /** Normalize an IGA/PAM-bridge report. Defensive throughout: a missing/errored
  *  field yields the fail-safe unknown/null, never a fabricated "authorized". */
 export function normalizeReport(
@@ -75,6 +84,7 @@ export function normalizeReport(
       "unknown",
     ),
     privilegedSessionMonitored: typeof privilege.sessionMonitored === "boolean" ? privilege.sessionMonitored : null,
+    observedAt: instantStringOf(report.observedAt),
     source,
   };
 }

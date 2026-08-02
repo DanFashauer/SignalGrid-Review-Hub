@@ -132,6 +132,16 @@ It also anchors the honest register: continuous *verification*, least privilege,
   — the owner-supplied deep-research report behind intake ledger row 17
   (external validation of the Facility Trust Graph architecture; source of the
   zone-presence state machine built in `transition.ts`).
+- [Asset Management & IT Governance API & GitHub catalog](ASSET_MANAGEMENT_IT_GOVERNANCE_API_CATALOG.md)
+  — the owner-compiled 330-product inventory behind intake ledger row 44
+  (16 ecosystems spanning ITAM/CMDB/SAM, SaaS management, cyber-asset
+  intelligence, EAM/CMMS, FinOps/TBM, enterprise architecture, PPM, GRC/IRM,
+  TPRM, data governance, policy-as-code, DAM and software supply-chain; 40
+  open-source resources; 28 standards; 10 repository mappings; verified
+  2026-08-02). The relevance score is the owner's internal sequencing model,
+  never an analyst ranking; source platforms remain systems of record; the
+  launch wedge stays Entra + Intune + one shared-device host app, with the
+  first authoritative-asset connector design-partner-sequenced at P1.
 - [ControlUp ONE / DEX / EUC & Digital Experience API Catalog](CONTROLUP_DEX_EUC_API_CATALOG.md)
   — the owner-compiled 62-platform inventory behind intake ledger row 36
   (direct DEX/EUC, VDI/DaaS-native, network/SASE DEM, observability, and

@@ -30,24 +30,41 @@ picking these up:
       because it touches the core decision/API contract (`test:api` response
       pins, evidence digests, spec sync) rather than one family.
 
-- [ ] **Wire `@workspace/dual-control` into the planner's `dual_approval` path
-      (intake row 45, surfaced independently by two verifiers).** The evaluator is
-      complete and proven — a twelve-term grant conjunction, mutation-swept — but
-      repo-wide its ONLY importer is `scripts/src/dual-control-proof.ts`. The
-      planner meanwhile emits `disposition: "dual_approval"` with
-      `requiresApprovals: 2` (`lib/flows/src/index.ts:307-311`) and the factory
-      flows already carry it on OT and other high-blast-radius actions. Nothing is
-      overclaimed — `docs/DUAL_CONTROL.md` correctly scopes the package as a
-      primitive whose answer "the host system performs the action, or not" on — so
-      this is an unwired primitive, not a false affirmative. But the honest hole is
-      real and worth naming: today a `dual_approval` disposition is a *declared
-      requirement* that no shipped surface *validates*. Scope: have the path that
-      consumes a planned `dual_approval` action actually call
-      `evaluateDualControl`, so the Granted / SecondAuthorizerRequired / Denied
-      ladder decides the release; a proof pinning that a planned dual_approval
-      action cannot proceed on one authorizer, on two identical identities, or on
-      two attestations from the same credential instance. This is a launch-path
-      repair that happens also to serve OT, not an OT feature.
+- [ ] **A REACHABLE dual-control surface — OWNER-GATED, and NOT the defect the
+      row-45 audit first described.** A three-seam design pass with adversarial
+      critique (and independent re-verification by hand) established facts that
+      correct the original framing, and they are recorded here because the
+      original framing overstated the risk:
+      1. `planFlowActions` has **zero shipped consumers**. `ActionPlan` and
+         `requiresApprovals` occur repo-wide only in `lib/flows/src/index.ts` and
+         `scripts/src/flows-proof.ts`; the sole other mention is a *comment* in
+         `grid-config.ts`. `artifacts/api-server` imports eleven symbols from
+         `@workspace/flows` and `planFlowActions` is not among them. So its
+         `dual_approval` disposition is unreachable from any product path, and
+         wiring the evaluator into it would be a decorative wire into dead code —
+         all three critiques reached `closesDefect: false` for exactly this reason.
+      2. The surface that DOES ship — `lib/app-workflows` via
+         `POST /v1/app-workflows/evaluate` — is rigorous, not lax. The route
+         deliberately does not read `confirmedActionKeys` from the request body
+         ("This route NEVER releases held actions on a request-supplied signal");
+         the one release path is `POST /v1/app-workflows/complete-step-up`, a real
+         WebAuthn ceremony with user-verification required, an action-bound
+         single-use challenge, tenant-scoped credential storage, and the release
+         flag derived server-side from the verified assertion.
+      **Therefore there is no live "two clicks instead of two people" defect on any
+      shipped path.** `@workspace/dual-control` is an unwired primitive whose
+      absence costs nothing today, because nothing today reaches a state it would
+      have gated. What remains is a genuine PRODUCT question rather than a repair:
+      should a two-person ceremony exist on a reachable surface at all — and if so,
+      on which action class? That is the owner's call, not an agent's, because it
+      adds a runtime obligation to the launch path rather than fixing something
+      broken. If taken, the design pass's own conclusions bind: evidence must cross
+      the seam (a raw `DualControlRequestRaw` normalized by the primitive's own
+      normalizer), never a caller-supplied verdict; a ceremony must bind to one
+      action id and not be replayable across actions; and every new guard must be
+      expressed in a shape `scripts/mutation-guard.mjs` can actually mutate — a
+      `switch` arm is invisible to it and would pass vacuously over the release
+      decision itself.
 - [ ] **Change-window currency as a decision fact (intake row 45, the audit's one
       genuine near-term gap).** `change_window` exists today only as a declared
       flow signal id carrying a HEALTH status (`lib/flows/src/factory.ts:26,:94`);

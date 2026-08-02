@@ -30,8 +30,15 @@ picking these up:
       unchanged version satisfies every conjunct. `scripts/generate-core-normalization-version.mjs`
       recomputes the digest FROM SOURCE (a mechanical import closure over 12 core files)
       and derives the integer from the comparison, so there is no consistent pair a human
-      can write that it will reproduce. Six in-process negative controls and floors F1–F8
-      run on every invocation; `--check` is wired into preflight and CI.
+      can write that it will reproduce. Ten in-process negative controls (six on the digest,
+      four on the version rule) and floors F1–F8 run on every invocation; `--check` is wired
+      into preflight and CI.
+      The version rule itself is hardened against the one direction it must never fail in:
+      a bare `catch { /* genesis *\/ }` used to swallow EVERY read failure, so deleting or
+      corrupting the artifact silently restarted the counter at 1 and re-minted a number
+      that already meant something else. Now only `ENOENT` is genesis, genesis is refused
+      outright when the artifact has git history, and a hand-edited version or digest is
+      rejected rather than propagated (`"3" + 1 === "31"`).
       Migration is a single conditional spread in the digest body: an unstamped snapshot's
       canonical body stays byte-identical to the pre-stamp one, so rows written before the
       field existed keep verifying with no version-conditional branch anywhere. Pinned by

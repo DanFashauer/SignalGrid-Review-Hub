@@ -326,19 +326,144 @@ if (floorFailures.length > 0) {
 console.log("  floors: F1–F8 passed");
 
 const artifactPath = join(repoRoot, ARTIFACT);
-let previous = null;
-try {
-  previous = JSON.parse(readFileSync(artifactPath, "utf8"));
-} catch {
-  /* genesis */
+
+/**
+ * Read the previous artifact, distinguishing ABSENT from UNREADABLE.
+ *
+ * The first version of this was `try { JSON.parse(readFileSync(...)) } catch { /* genesis *\/ }`,
+ * and that bare catch swallowed every failure mode into "genesis" — which restarts the
+ * counter at 1. That is the ONE direction this stamp must never fail in. Deleting the
+ * artifact (or truncating it, or leaving a merge conflict marker in it) would silently
+ * mint a second, different version 1, and any durable snapshot already stamped `1` would
+ * then claim provenance it does not have. Over-stating change is harmless; re-using a
+ * version number for different content is precisely the under-statement the whole
+ * mechanism exists to detect.
+ *
+ * So: ENOENT is the only genesis path. Everything else fails loudly.
+ */
+function readPrevious(path) {
+  let text;
+  try {
+    text = readFileSync(path, "utf8");
+  } catch (err) {
+    if (err && err.code === "ENOENT") return null;
+    throw new Error(`${ARTIFACT} exists but could not be read (${err && err.code}): ${err && err.message}`);
+  }
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    throw new Error(
+      `${ARTIFACT} exists but is not valid JSON: ${err instanceof Error ? err.message : "parse failed"}.\n` +
+        "  Refusing to treat a corrupt artifact as genesis — that would restart the version at 1\n" +
+        "  and re-use a number that already means something else. Restore it from git:\n" +
+        `    git checkout -- ${ARTIFACT}`,
+    );
+  }
 }
 
-const version =
-  previous === null
-    ? 1
-    : previous.sourcesDigest === computed.sourcesDigest
-      ? previous.version
-      : previous.version + 1;
+/** Has this artifact ever existed in git history? If it has, it must not be reborn at 1. */
+function artifactHasGitHistory() {
+  try {
+    return execFileSync("git", ["log", "--oneline", "-1", "--", ARTIFACT], {
+      cwd: repoRoot, encoding: "utf8", maxBuffer: 1 << 20,
+    }).trim().length > 0;
+  } catch {
+    // No git, or a repository this file cannot be queried in. We cannot ESTABLISH that
+    // the artifact is new, and monotonicity is not a property to assume — fail closed by
+    // reporting "history unknown" as if history existed. Genesis already happened once
+    // in this repository, so the only caller this can inconvenience is a fresh fork,
+    // which can delete the artifact from a git-backed checkout instead.
+    return true;
+  }
+}
+
+/**
+ * The version rule, as a PURE function so its negative controls can exercise every branch
+ * without touching the filesystem. Every argument is supplied; nothing is read in here.
+ */
+export function deriveVersion({ previous, computedDigest, hasGitHistory }) {
+  if (previous === null) {
+    if (hasGitHistory) {
+      throw new Error(
+        `${ARTIFACT} is absent from the working tree but PRESENT in git history — refusing to restart at version 1.\n` +
+          "  A version number that has already been published must never be re-used for different\n" +
+          "  content: a durable snapshot stamped with it would claim a provenance it does not have.\n" +
+          `  Restore the artifact and regenerate:  git checkout -- ${ARTIFACT}`,
+      );
+    }
+    return 1;
+  }
+  if (!Number.isInteger(previous.version) || previous.version < 1) {
+    throw new Error(
+      `${ARTIFACT} has a non-integer or non-positive version (${JSON.stringify(previous.version)}).\n` +
+        "  The bump is `previous + 1`, so a hand-edited or missing value would produce a\n" +
+        '  nonsense successor ("3" + 1 === "31") rather than an error.',
+    );
+  }
+  if (typeof previous.sourcesDigest !== "string" || previous.sourcesDigest.length === 0) {
+    throw new Error(
+      `${ARTIFACT} has no usable sourcesDigest (${JSON.stringify(previous.sourcesDigest)}).\n` +
+        "  Without it the comparison below always reports 'changed', so the version would churn\n" +
+        "  on every run and stop meaning anything.",
+    );
+  }
+  return previous.sourcesDigest === computedDigest ? previous.version : previous.version + 1;
+}
+
+// Negative controls for the version rule itself, run unconditionally like NC-1..NC-5 above
+// and for the same reason: this rule is the part a reader is most likely to assume is
+// obviously correct, and it was the part that was wrong.
+{
+  const fail = [];
+  const D = "digest-a";
+  const expectThrow = (label, args) => {
+    try { deriveVersion(args); fail.push(label); } catch { /* expected */ }
+  };
+  // NC-6 — genesis is refused once the artifact has history (the deletion attack).
+  expectThrow("NC-6: genesis was allowed despite git history — a deleted artifact would re-mint version 1",
+    { previous: null, computedDigest: D, hasGitHistory: true });
+  // NC-7 — ...but a genuinely new artifact still starts at 1, or nothing could ever begin.
+  if (deriveVersion({ previous: null, computedDigest: D, hasGitHistory: false }) !== 1) {
+    fail.push("NC-7: a genuinely new artifact did not start at version 1");
+  }
+  // NC-8 — the comparison is the whole mechanism: hold on match, bump on change.
+  if (deriveVersion({ previous: { version: 7, sourcesDigest: D }, computedDigest: D, hasGitHistory: true }) !== 7) {
+    fail.push("NC-8: an unchanged digest did not hold the version");
+  }
+  if (deriveVersion({ previous: { version: 7, sourcesDigest: D }, computedDigest: "digest-b", hasGitHistory: true }) !== 8) {
+    fail.push("NC-8: a changed digest did not bump the version");
+  }
+  // NC-9 — a hand-edited artifact is rejected rather than propagated.
+  expectThrow("NC-9: a string version was accepted (\"3\" + 1 === \"31\")",
+    { previous: { version: "3", sourcesDigest: D }, computedDigest: D, hasGitHistory: true });
+  expectThrow("NC-9: version 0 was accepted",
+    { previous: { version: 0, sourcesDigest: D }, computedDigest: D, hasGitHistory: true });
+  expectThrow("NC-9: a missing sourcesDigest was accepted",
+    { previous: { version: 3 }, computedDigest: D, hasGitHistory: true });
+  if (fail.length > 0) {
+    console.error("\n✗ VERSION-RULE NEGATIVE CONTROLS FAILED — the monotonicity guarantee is not real:");
+    for (const f of fail) console.error(`    ${f}`);
+    process.exit(1);
+  }
+  console.log("  version-rule negative controls: 4 passed (NC-6 genesis-after-deletion, NC-7 true genesis, NC-8 hold/bump, NC-9 hand-edited artifact)");
+}
+
+// Both of these throw on a state that must NOT be silently resolved. Reported the way
+// every other failure in this file is — a stated reason and exit 1, never a stack trace,
+// because the reader who hits this needs the instruction and not the call site.
+let previous;
+let version;
+try {
+  previous = readPrevious(artifactPath);
+  version = deriveVersion({
+    previous,
+    computedDigest: computed.sourcesDigest,
+    hasGitHistory: artifactHasGitHistory(),
+  });
+} catch (err) {
+  console.error(`\n✗ ${err instanceof Error ? err.message : String(err)}`);
+  process.exit(1);
+}
 
 const artifact = {
   schema: "signalgrid.core-normalization-version/1",

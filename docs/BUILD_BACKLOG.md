@@ -53,6 +53,27 @@ picking these up:
       would be the repo's first autonomous contents-write surface — unless the
       owner approves it as its own future phase. Online/store/vendor adapters,
       the recorder implementation, and any Postgres deployment stay spec-only.
+      Intake row 46 (the Crucix reference) did NOT change that gate, but it did
+      specify the design the gate is holding, so the owner's decision is now a
+      yes/no on something concrete rather than on a blank: the agent the owner
+      calls **Watchtower / Catalog Sentinel** would watch vendor API docs,
+      GitHub repositories, OpenAPI specs, platform documentation, AppConfig
+      schemas and standards bodies, and its loop is fixed by the owner as
+      watch → fetch/parse/hash → compare prior version → classify change →
+      score impact → generate an evidence artifact → **open a PR or issue** →
+      require review → update the catalog only after merge. Two properties of
+      that loop are the whole reason it could ever be safe and must survive
+      into any implementation: it never mutates a catalog directly, and it
+      never changes product behaviour — a proposal cannot activate itself, the
+      same law `@workspace/adaptive-proposals` already enforces. The verified
+      caveat from row 46: the referenced architecture (AGPL-3.0, so a
+      reference only — never a source to copy, and reciprocity against a
+      private core is a human legal question) is prior art for the sweep,
+      delta, severity and evidence half ONLY. It opens no pull requests and
+      writes to no repository, persisting to a local run directory instead. So
+      the contents-write half still has no precedent to point at, and the
+      first write surface would be exactly that: first. Sequencing is the
+      owner's own — P2/P3, explicitly after the launch wedge.
 - [ ] **Per-app managed-configuration RECEIPT as a decision dimension (intake
       row 33, verified candidate gap).** Nothing today can represent "the host
       app actually RECEIVED its managed-configuration payload, current

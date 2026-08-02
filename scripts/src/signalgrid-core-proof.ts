@@ -26,6 +26,8 @@ import {
   MemoryStore,
   RESOLUTION_DESCRIPTOR_SHAPES,
   seedDemoStore,
+  verifySnapshot,
+  CORE_NORMALIZATION_VERSION,
   SignalGridCore,
   SHARED_DEVICE_RULES_V1,
   SHARED_DEVICE_RULES_V2,
@@ -128,32 +130,47 @@ for (const scenario of scenarios) {
   decisions.push(core.getDecision(T.operator, result.decisionId));
 }
 
-// ── 1b. The LEGACY evidence-digest body, pinned ───────────────────────────────
+// ── 1b. Provenance stamping: the migration, proven rather than promised ───────
 //
-// The ONLY pinned digest literal in this repository, and it earns the exception.
+// `coreNormalizationVersion` records WHICH BUILD of the core decision path derived a
+// snapshot's facts (intake ledger row 27). Adding a field to a tamper-evident record
+// is the dangerous part: durable Postgres rows written before the field existed must
+// keep verifying, or the operator console renders them as "tampered" — and it has no
+// third state to render instead.
 //
-// `snapshotDigestBody()` was extracted so `buildSnapshot` and `verifySnapshot` stop
-// hand-maintaining the same eight-key literal, and a provenance field is being added
-// to the snapshot on top of that. Both changes are claimed to leave the digest of an
-// UNSTAMPED snapshot byte-identical — which is the whole migration story, because
-// durable Postgres rows written before the change must keep verifying `true`. A
-// claim of byte-identity that nothing checks is exactly the unearned affirmative
-// this repository hunts, so it is checked.
-//
-// The value was captured on the pre-refactor tree, from the same first-decision
-// sample the evidence bundle below prints, and it must not move. If it ever does,
-// the correct reaction is NOT to update this literal: it means legacy snapshots
-// stopped verifying, and the operator console renders that as "tampered".
+// The mechanism is a CONDITIONAL spread in the shared digest body: an unstamped
+// snapshot's canonical JSON is byte-identical to the pre-stamp one, so no
+// version-conditional branch and no precondition exists anywhere. These four checks
+// are what make that a fact rather than a claim.
 const LEGACY_SNAPSHOT_DIGEST = "28d821302756a247";
-const pinnedSnapshot = core.getSnapshot(T.operator, decisions[0].evidenceSnapshotId);
+const freshSnapshot = core.getSnapshot(T.operator, decisions[0].evidenceSnapshotId);
+
+// The exact shape a pre-stamp row deserializes into: every field the same, no stamp.
+const { coreNormalizationVersion: _omitted, ...legacyFields } = freshSnapshot;
+const legacySnapshot = { ...legacyFields, digest: LEGACY_SNAPSHOT_DIGEST };
+
 check(
-  `legacy evidence-digest body is unchanged (${LEGACY_SNAPSHOT_DIGEST}) — durable snapshots written before the digest refactor still verify`,
-  pinnedSnapshot.digest === LEGACY_SNAPSHOT_DIGEST,
-  `digest moved to ${pinnedSnapshot.digest}: a snapshot minted before this change would now read as tampered`,
+  `MIGRATION: an UNSTAMPED snapshot still digests to the pinned legacy value (${LEGACY_SNAPSHOT_DIGEST}) and verifies — durable rows written before provenance existed are not accused of tampering`,
+  verifySnapshot(legacySnapshot) === true,
+  "the legacy body moved: every pre-stamp snapshot in Postgres would now read as tampered",
 );
 check(
-  "...and that same snapshot verifies through the shared digest body",
-  core.verifyEvidence(T.operator, decisions[0].evidenceSnapshotId) === true,
+  "the stamp is INSIDE the tamper-evidence: deleting it from a stamped snapshot fails verification",
+  verifySnapshot({ ...legacyFields, digest: freshSnapshot.digest }) === false,
+);
+check(
+  "a stamp cannot be FORGED onto a legacy row: adding it fails verification",
+  verifySnapshot({
+    ...legacyFields,
+    coreNormalizationVersion: CORE_NORMALIZATION_VERSION,
+    digest: LEGACY_SNAPSHOT_DIGEST,
+  }) === false,
+);
+check(
+  `all three carriers report the version that was actually digested (v${CORE_NORMALIZATION_VERSION})`,
+  freshSnapshot.coreNormalizationVersion === CORE_NORMALIZATION_VERSION &&
+    decisions[0].coreNormalizationVersion === CORE_NORMALIZATION_VERSION,
+  `snapshot=${freshSnapshot.coreNormalizationVersion} decision=${decisions[0].coreNormalizationVersion} constant=${CORE_NORMALIZATION_VERSION}`,
 );
 
 // ── 2. Fail-closed invariant across every decision ────────────────────────────

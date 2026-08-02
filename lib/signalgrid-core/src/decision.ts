@@ -147,6 +147,10 @@ export function evaluateDecision(
     reviewStatus,
     reviewable,
     explanation: evaluation.explanation,
+    // COPIED from the snapshot, never re-read from the constant: one read at mint time
+    // means every carrier reports the version that was actually digested, even if the
+    // process were somehow running mixed builds.
+    coreNormalizationVersion: snapshot.coreNormalizationVersion,
   };
   store.putDecision(decision);
 
@@ -187,6 +191,7 @@ export function evaluateDecision(
     reviewable,
     latencyMs,
     explanation: evaluation.explanation,
+    coreNormalizationVersion: snapshot.coreNormalizationVersion,
   };
 
   return { decision, result };

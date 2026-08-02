@@ -1,3 +1,4 @@
+export { CORE_NORMALIZATION_VERSION } from "./core-normalization-version";
 export * from "./types";
 export * from "./util";
 export * from "./store";

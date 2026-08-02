@@ -312,6 +312,11 @@ jobs:
       # consumers AFTER the work to wire it had already been scoped.
       - name: "Package reachability (a library nobody ships is a library nobody runs)"
         run: node scripts/check-package-reachability.mjs
+      # The provenance stamp is GENERATED, so the gate is "regenerate and compare
+      # content" — deliberately not `git diff`, which is blind to untracked files and
+      # would have passed on the very commit that introduced the artifacts.
+      - name: "Core normalization-version (provenance stamp tracks the covered core source)"
+        run: node scripts/generate-core-normalization-version.mjs --check
       - name: "Proof — dual control"
         run: pnpm run proof:dual-control
       - name: "Pagination-truncation guard (a capped read must not look complete)"

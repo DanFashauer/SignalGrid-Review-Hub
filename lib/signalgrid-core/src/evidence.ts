@@ -1,3 +1,4 @@
+import { CORE_NORMALIZATION_VERSION } from "./core-normalization-version";
 import { canonicalJson, deterministicId, digest } from "./util";
 import type {
   BadgeBindingState,
@@ -121,7 +122,7 @@ type SnapshotDigestFields = Pick<
   | "policyVersionId"
   | "policyVersion"
   | "sourceReferences"
->;
+> & Pick<EvidenceSnapshot, "coreNormalizationVersion">;
 
 function snapshotDigestBody(fields: SnapshotDigestFields): string {
   return canonicalJson({
@@ -133,6 +134,15 @@ function snapshotDigestBody(fields: SnapshotDigestFields): string {
     policyVersionId: fields.policyVersionId,
     policyVersion: fields.policyVersion,
     sourceReferences: fields.sourceReferences,
+    // CONDITIONAL, and this single spread is the entire migration story: an unstamped
+    // snapshot's canonical body is byte-identical to the pre-stamp one, so durable rows
+    // written before this field existed keep verifying `true` with no version-conditional
+    // branch and no precondition anywhere. Both tamper directions still fail — delete the
+    // key from a stamped row and it recomputes to the legacy body; add it to a legacy row
+    // and it recomputes to a stamped body. Proven by the pinned legacy digest above.
+    ...(fields.coreNormalizationVersion === undefined
+      ? {}
+      : { coreNormalizationVersion: fields.coreNormalizationVersion }),
   });
 }
 
@@ -157,6 +167,7 @@ export function buildSnapshot(
     policyVersionId: version.id,
     policyVersion: version.version,
     sourceReferences,
+    coreNormalizationVersion: CORE_NORMALIZATION_VERSION,
   };
   return {
     id,

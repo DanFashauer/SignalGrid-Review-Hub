@@ -73,11 +73,11 @@ is the normal case, and every one of those calls was answered as though the sour
 been confirmed healthy. Two calls in opposite epistemic states returned byte-identical
 verdicts of `SUFFICIENT_CERTAINTY / none / known` with `unknownSignals` empty.
 
-`pnpm run proof:mcp-answer-discipline` (46 checks) closes it by driving the real server
+`pnpm run proof:mcp-answer-discipline` (55 checks) closes it by driving the real server
 over its real newline-delimited JSON-RPC stdio wire — no MCP SDK dependency, because
 testing through the vendor's client object would prove the client agrees with the server
 rather than that the server is right. Its negative control is recorded: reintroducing the
-two `??` defaults drops it from 46/46 to 39/46.
+two `??` defaults drops it from 55/55 to 48/55.
 
 **The same class, found again one layer up — an advertised contract that was not
 enforced.** Every tool published `additionalProperties: false` and enforced none of it:
@@ -96,7 +96,7 @@ A 6.5-year-stale fix graded as sufficient certainty because a key fell on the fl
 droppable field is one that would *tighten* the verdict, so the loss is one-directional.
 The core already applies this law one layer down (`hasUnrecognizedKey` → `malformed`); the
 adapter applied it to the observation and not to the requirement. Fixed by publishing
-`z.object({...}).strict()`. Removing `.strict()` drops the proof to 34/46.
+`z.object({...}).strict()`. Removing `.strict()` drops the proof to 43/55.
 
 **Two naming conventions in that tool are deliberate, and pinned so nobody tidies them.**
 snake_case inputs mirror `LocationObservationRaw` (what the source reported); camelCase
@@ -107,6 +107,20 @@ the partition from the library's own `LOCATION_OBSERVATION_KEYS` rather than fro
 spelling, because spelling is not the discriminator: `confidence` has no underscore and is
 an observation field. The first draft of that check classified by underscore and failed on
 exactly that case.
+
+**Where a surface's omission semantics actually live.** `evaluate_room_entry` takes two
+inputs that RELEASE held actions, and omission is normalized three times on the way down
+— in the MCP adapter (`stepUpSatisfied ?? false`), again in `lib/room-sim`, and again by
+`lib/orchestration`'s strict `=== true`. Only the OUTERMOST one is falsifiable from the
+chat surface: flipping either inner default leaves the proof at full marks because the
+layer above has already turned `undefined` into `false`, while flipping the adapter's
+default drops it to 53/55. That was measured rather than assumed, and it is recorded in
+the proof itself so a future lane hardening the library comparison knows its change is
+unobservable from here. `stepUpSatisfied` is also a caller-*asserted* simulation input
+rather than a ceremony the tool performs — the shipped path
+(`/v1/app-workflows/complete-step-up`, verified WebAuthn) is deliberately stricter, and
+the tool description now says so, because an assistant reads it to decide how to report
+the answer.
 
 **There are two MCP proofs and neither is redundant.** `pnpm run proof:mcp-server`
 (11 checks) came from the Mac lane on the same day — both lanes noticed the same hole

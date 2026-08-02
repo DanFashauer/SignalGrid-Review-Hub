@@ -172,7 +172,14 @@ server.registerTool(
     description:
       "Run the real decision core (identity, device posture, custody, badge, baseline, workflow risk) " +
       "for a scenario, then the orchestration plan (allow/step-up/restrict/deny → downstream actions, " +
-      "sensitive actions held for human confirmation). Optionally confirm assist actions or complete a step-up.",
+      "sensitive actions held for human confirmation). " +
+      "`stepUpSatisfied` and `confirmedActionIds` are SIMULATION INPUTS you assert, not ceremonies this " +
+      "tool performs: passing stepUpSatisfied:true tells the planner to answer as if a badge tap had " +
+      "already succeeded, so the released plan it returns is a what-if and never evidence that anyone " +
+      "authenticated. The shipped product path is deliberately stricter — POST /v1/app-workflows/evaluate " +
+      "refuses to release on a request-supplied signal at all, and the only release is " +
+      "POST /v1/app-workflows/complete-step-up with a verified WebAuthn assertion. Omit both to see the " +
+      "fail-closed answer, which is what the grid actually returns until a real ceremony happens.",
     inputSchema: z.object({
       scenarioId: z.string().describe("A scenario id from list_room_scenarios"),
       confirmedActionIds: z.array(z.string()).optional().describe("Ids of assist actions a clinician has confirmed"),

@@ -454,7 +454,100 @@ try {
   check("SPELLING IS NOT THE RULE: `confidence` carries no underscore and is still an OBSERVATION field, so a casing-based 'consistency' pass would misfile it",
     OBS.includes("confidence") && observationInputs.includes("confidence"));
 
-  // ── 15. an unmapped vendor id is null, never a guess ──────────────────────
+  // ── 15. evaluate_room_entry's optional inputs — the release must be EARNED ─
+  //
+  // `stepUpSatisfied` and `confirmedActionIds` are the only two inputs on this surface
+  // that RELEASE something. Both default fail-closed in the library
+  // (`input.stepUpSatisfied === true` is a strict comparison, and `?? []` is an empty
+  // confirmation set), so the risk is not the default — it is that nothing pinned the
+  // default, and a `!== false` or a truthiness check would read identically at a glance.
+  //
+  // The anti-vacuity half matters as much as the fail-closed half: without proving the
+  // flag DOES release when passed, a planner that had stopped releasing entirely would
+  // satisfy every negative check here.
+  //
+  // WHICH MUTATION ACTUALLY TESTS THIS — recorded because two obvious ones do NOT, and
+  // finding that out is the only reason these checks are known to be falsifiable at all.
+  // Omission is normalized THREE times on the way down:
+  //
+  //   artifacts/mcp-server/src/index.ts   `stepUpSatisfied ?? false`   <- the only live one
+  //   lib/room-sim/src/index.ts           `options.stepUpSatisfied ?? false`
+  //   lib/orchestration/src/index.ts      `input.stepUpSatisfied === true`
+  //
+  // Flipping either of the inner two leaves this proof at full marks, because the layer
+  // above has already turned `undefined` into `false` — they are genuinely inert THROUGH
+  // THIS SURFACE (measured, not assumed). Flipping the outermost `?? false` to `?? true`
+  // drops this section by exactly its two omission checks. A future lane hardening the
+  // library comparison should know its change is unobservable from here, and that the
+  // adapter is where omission semantics for the chat surface are actually decided.
+  const STEP_UP_SCENARIO = "baseline-drift";
+  const dispositions = (r: ToolResult): string[] => {
+    const plan = (r.json?.["plan"] as { actions?: { disposition?: string }[] } | undefined) ?? {};
+    return (plan.actions ?? []).map((a) => String(a.disposition));
+  };
+  const appliedIds = (r: ToolResult): string[] => {
+    const plan = (r.json?.["plan"] as { actions?: { id?: string; disposition?: string }[] } | undefined) ?? {};
+    return (plan.actions ?? []).filter((a) => a.disposition === "applied").map((a) => String(a.id));
+  };
+
+  const heldRun = await callTool(mcp, "evaluate_room_entry", { scenarioId: STEP_UP_SCENARIO });
+  check("the step-up fixture really is a step_up decision (the rest of this section is vacuous otherwise)",
+    ((heldRun.json?.["decision"] as { outcome?: string } | undefined) ?? {}).outcome === "step_up",
+    `outcome=${String(((heldRun.json?.["decision"] as { outcome?: string } | undefined) ?? {}).outcome)}`);
+  check("OMITTING stepUpSatisfied holds every releasable action at step_up — silence never releases",
+    dispositions(heldRun).includes("step_up") && !dispositions(heldRun).includes("assist"),
+    `dispositions=${dispositions(heldRun).join(",")}`);
+
+  // Byte-identity is the WRONG test here and the first draft used it. Unlike the location
+  // tool, this one MINTS a `decisionId` per evaluation, so two identical calls legitimately
+  // differ — and the failing check is what surfaced it. Normalising exactly that one field
+  // turns the test into the stronger claim: the identifier is the ONLY thing that varies,
+  // so no clock or randomness reaches the verdict or the plan.
+  const sansDecisionId = (r: ToolResult): string =>
+    r.text.replace(/"decisionId":\s*"[^"]*"/g, '"decisionId":"<minted>"');
+  const heldAgain = await callTool(mcp, "evaluate_room_entry", { scenarioId: STEP_UP_SCENARIO });
+  check("DETERMINISM: two identical evaluations differ ONLY in the minted decisionId — nothing else moves",
+    sansDecisionId(heldAgain) === sansDecisionId(heldRun) && heldAgain.text !== heldRun.text);
+  const explicitFalse = await callTool(mcp, "evaluate_room_entry", { scenarioId: STEP_UP_SCENARIO, stepUpSatisfied: false });
+  check("an explicit stepUpSatisfied:false is indistinguishable from omitting it — no third behaviour hides between them",
+    sansDecisionId(explicitFalse) === sansDecisionId(heldRun));
+
+  const released = await callTool(mcp, "evaluate_room_entry", { scenarioId: STEP_UP_SCENARIO, stepUpSatisfied: true });
+  check("ANTI-VACUITY: asserting stepUpSatisfied:true DOES release the held actions, so the flag is load-bearing",
+    dispositions(released).includes("assist") && !dispositions(released).includes("step_up"),
+    `dispositions=${dispositions(released).join(",")}`);
+
+  check("OMITTING confirmedActionIds applies nothing — a sensitive action is never auto-applied",
+    appliedIds(released).length === 0,
+    `applied=${appliedIds(released).join(",")}`);
+  const firstAssist = ((released.json?.["plan"] as { actions?: { id?: string; disposition?: string }[] } | undefined) ?? {})
+    .actions?.find((a) => a.disposition === "assist")?.id;
+  const confirmed = await callTool(mcp, "evaluate_room_entry", {
+    scenarioId: STEP_UP_SCENARIO, stepUpSatisfied: true, confirmedActionIds: [String(firstAssist)],
+  });
+  check("confirming ONE action id applies exactly that one — confirmation does not spill onto its neighbours",
+    appliedIds(confirmed).length === 1 && appliedIds(confirmed)[0] === String(firstAssist),
+    `applied=${appliedIds(confirmed).join(",")} expected=${String(firstAssist)}`);
+
+  // ── 16. and the surface SAYS what those inputs are ────────────────────────
+  //
+  // The two inputs above release actions on a caller-asserted boolean. On a public-safe
+  // fixture surface that is the demo mechanism and is fine — but the shipped product path
+  // is deliberately stricter (`/v1/app-workflows/evaluate` refuses to release on a
+  // request-supplied signal at all; the only release is a verified WebAuthn assertion at
+  // `/v1/app-workflows/complete-step-up`). An assistant reads this description to decide
+  // what to send and how to report the answer, so the asymmetry has to be IN it. Checked
+  // over the wire against the served description, not against the source.
+  const roomEntrySchema = ((listed.result as { tools?: { name: string; description?: string }[] } | undefined)?.tools ?? [])
+    .find((t) => t.name === "evaluate_room_entry");
+  const roomDesc = String(roomEntrySchema?.description ?? "");
+  check("evaluate_room_entry discloses that stepUpSatisfied is asserted by the caller, not a ceremony it performs",
+    /SIMULATION INPUTS|assert/i.test(roomDesc) && /never evidence/i.test(roomDesc),
+    `description=${roomDesc.slice(0, 60)}…`);
+  check("...and names the stricter shipped path so the what-if is not mistaken for the product's behaviour",
+    roomDesc.includes("/v1/app-workflows/complete-step-up") && /WebAuthn/i.test(roomDesc));
+
+  // ── 17. an unmapped vendor id is null, never a guess ──────────────────────
   const vendor = await callTool(mcp, "facility_graph", {
     vendorNamespace: "cisco", vendorKey: "zone_id", vendorId: "no-such-zone",
   });

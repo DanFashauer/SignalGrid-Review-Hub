@@ -160,7 +160,7 @@ server.registerTool(
     description:
       "List the synthetic Trusted-Entry scenarios across verticals — smart-hospital (a nurse approaching " +
       "a room), warehouse (a picker at a zone), and global-fleet (a driver at a vehicle). Public-safe fixtures.",
-    inputSchema: {},
+    inputSchema: z.object({}).strict(),
   },
   async () => asText({ scenarios: listScenarios() }),
 );
@@ -173,11 +173,11 @@ server.registerTool(
       "Run the real decision core (identity, device posture, custody, badge, baseline, workflow risk) " +
       "for a scenario, then the orchestration plan (allow/step-up/restrict/deny → downstream actions, " +
       "sensitive actions held for human confirmation). Optionally confirm assist actions or complete a step-up.",
-    inputSchema: {
+    inputSchema: z.object({
       scenarioId: z.string().describe("A scenario id from list_room_scenarios"),
       confirmedActionIds: z.array(z.string()).optional().describe("Ids of assist actions a clinician has confirmed"),
       stepUpSatisfied: z.boolean().optional().describe("True once a badge tap / biometric step-up is satisfied"),
-    },
+    }).strict(),
   },
   async ({ scenarioId, confirmedActionIds, stepUpSatisfied }) => {
     try {
@@ -201,7 +201,7 @@ server.registerTool(
   {
     title: "Signal catalog",
     description: "List the signal categories the grid evaluates today plus known candidate (roadmap) categories.",
-    inputSchema: {},
+    inputSchema: z.object({}).strict(),
   },
   async () => asText(signalCatalog()),
 );
@@ -213,11 +213,11 @@ server.registerTool(
     description:
       "Classify a batch of incoming signals as evaluated / candidate / novel and raise a first-seen alert for " +
       "signal types the grid does not yet use — for discovering new signals to bring into the grid.",
-    inputSchema: {
+    inputSchema: z.object({
       signals: z
         .array(z.object({ category: z.string(), sourceReference: z.string().optional() }))
         .describe("Incoming signals, each with a category string"),
-    },
+    }).strict(),
   },
   async ({ signals }) => asText(scanSignals(signals)),
 );
@@ -229,11 +229,11 @@ server.registerTool(
     description:
       "Run the decision core for an explicit identity/device/workflow (advanced). Returns the outcome, reason " +
       "codes, and explanation. Uses the public-safe demo tenant.",
-    inputSchema: {
+    inputSchema: z.object({
       identityRef: z.string().describe("e.g. nurse.compliant"),
       deviceRef: z.string().describe("e.g. ipad-ward-01"),
       workflowKey: z.string().describe("e.g. clinical-session, med-admin, general-lookup"),
-    },
+    }).strict(),
   },
   async ({ identityRef, deviceRef, workflowKey }) => {
     try {
@@ -254,12 +254,12 @@ server.registerTool(
       "root-first path, or resolve a VENDOR identifier (cisco / physical_access / ehr / rtls) to the " +
       "space it is attached to. Vendor ids are attachments, never keys — an unmapped id returns null, " +
       "never a guess. Public-safe fixture; no real facility is described.",
-    inputSchema: {
+    inputSchema: z.object({
       spaceId: z.string().optional().describe("A SignalGrid spaceId to fetch (with its ancestor path)"),
       vendorNamespace: z.string().optional().describe("Vendor namespace, e.g. cisco, physical_access, ehr, rtls"),
       vendorKey: z.string().optional().describe("Vendor key, e.g. zone_id, reader_id, bed"),
       vendorId: z.string().optional().describe("The vendor's identifier value to resolve"),
-    },
+    }).strict(),
   },
   async ({ spaceId, vendorNamespace, vendorKey, vendorId }) => {
     const g = FIXTURE_HOSPITAL_GRAPH;
@@ -290,8 +290,13 @@ server.registerTool(
       "grades as unknown — that steps up and names source_health in unknownSignals, because a source " +
       "nobody vouched for is not a healthy one. Omit map_version and the match reads 'unassessed' " +
       "instead of being assumed correct. Supply either only when the source actually reported it. " +
+      "TWO NAMING CONVENTIONS, and the split is deliberate rather than sloppy: snake_case fields " +
+      "(space_id, accuracy_class, observed_at, map_version, source_health, observation_source) are what " +
+      "the SOURCE reported, and camelCase fields (requiredClass, minConfidence, maxObservationAgeSeconds, " +
+      "referenceTime) are what YOU require — observation versus policy. Spell them exactly; unknown keys " +
+      "are rejected rather than ignored, so a mis-spelled bound can never silently become no bound at all. " +
       "Try: space_id SG-RM0312, accuracy_class room_candidate, requiredClass bed_confirmed.",
-    inputSchema: {
+    inputSchema: z.object({
       space_id: z.string().describe("The observed space, e.g. SG-RM0312 or SG-RM0312-BED-B"),
       accuracy_class: z.enum(ACCURACY_CLASSES as unknown as [string, ...string[]]).describe("Achieved precision"),
       requiredClass: z
@@ -303,9 +308,12 @@ server.registerTool(
       referenceTime: z.string().optional().describe("The caller's 'now' (ISO-8601 UTC) for staleness"),
       maxObservationAgeSeconds: z.number().optional().describe("Maximum acceptable observation age"),
       map_version: z.string().optional().describe("The map the source located against (fixture graph is 2026.07.14)"),
-      source_health: z.enum(["healthy", "degraded", "unavailable"]).optional(),
+      source_health: z
+        .enum(["healthy", "degraded", "unavailable"])
+        .optional()
+        .describe("The SOURCE's own reported health. Omit it if the source did not report one — omitted grades as unknown and raises."),
       observation_source: z.string().optional().describe("e.g. cisco_spaces, rtls, scan"),
-    },
+    }).strict(),
   },
   async (input) => {
     try {
@@ -367,7 +375,7 @@ server.registerTool(
       "ledger's disposition tally (how many inputs were assessed and what happened to each). Use this to " +
       "answer 'what does SignalGrid cover now?' without reading the repository. Everything reported is " +
       "fixture-backed and public-safe: no live vendor integration, credential, or tenant data exists here.",
-    inputSchema: {},
+    inputSchema: z.object({}).strict(),
   },
   async () => {
     const manifest = readJson<SyncManifest>("artifacts/sync/live-sync-manifest.json");

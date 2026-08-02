@@ -65,6 +65,10 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+// DERIVED, not hardcoded: the casing pin below asserts the tool's snake_case inputs are
+// exactly the observation keys the library recognizes. Importing the list means the pin
+// tracks the type it mirrors instead of becoming a second copy that can drift from it.
+import { LOCATION_OBSERVATION_KEYS } from "@workspace/facility-trust-graph";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const MCP_DIR = resolve(REPO_ROOT, "artifacts/mcp-server");
@@ -343,7 +347,114 @@ try {
     check(`${readOnly} answers without arguments`, !r.isError && r.json !== null);
   }
 
-  // ── 13. an unmapped vendor id is null, never a guess ──────────────────────
+  // ── 13. THE STRICTNESS CONTRACT — advertised, and now actually enforced ────
+  //
+  // Every tool published `additionalProperties: false` and enforced none of it. The
+  // SDK wraps a raw shape with `z.object(shape)`, and zod's default for an object is
+  // STRIP: an unknown key is silently dropped and the call proceeds.
+  //
+  // That is not a robustness nit, and it is worse than the `?? "healthy"` defect above,
+  // because there the caller said nothing. Here the caller DID pose a bound — correctly
+  // deciding the observation needed a freshness limit — and spelled it in the OTHER
+  // convention this same tool uses. Measured on the real wire before the fix, against an
+  // observation dated 2020 with the caller's own reference instant in 2026:
+  //
+  //   max_observation_age_seconds: 60  ->  DROPPED. recency "unbounded", SUFFICIENT_CERTAINTY, none
+  //   maxObservationAgeSeconds:    60  ->  recency "stale", LOCATION_STALE, step_up
+  //
+  // A 6.5-year-stale fix graded as sufficient certainty, because a key fell on the floor.
+  // Every droppable field is one that would TIGHTEN the verdict (an absent bound reads
+  // `unbounded`, which satisfies the grant conjunct), so the loss is one-directional: no
+  // mis-spelling can ever raise. And the core already applies exactly this law one layer
+  // down — `normalizeLocationObservation` runs `hasUnrecognizedKey` and marks the report
+  // `malformed`. The adapter applied it to the observation and not to the requirement.
+  //
+  // Fixed by publishing `z.object({...}).strict()` instead of a raw shape, so the schema
+  // the server enforces is the schema it advertises.
+  const strictTargets = [
+    { tool: "list_room_scenarios", args: {} },
+    { tool: "signal_catalog", args: {} },
+    { tool: "fabric_status", args: {} },
+    { tool: "facility_graph", args: { spaceId: "SG-RM0312" } },
+    { tool: "scan_signals", args: { signals: [{ category: "device_compliance" }] } },
+    { tool: "evaluate_room_entry", args: { scenarioId: "no-such-scenario" } },
+    { tool: "evaluate_decision", args: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" } },
+    { tool: LOCATION_TOOL, args: { ...BASE, source_health: "healthy" } },
+  ];
+  const listedSchemas = new Map(
+    ((listed.result as { tools?: { name: string; inputSchema?: Record<string, unknown> }[] } | undefined)?.tools ?? [])
+      .map((t) => [t.name, t.inputSchema ?? {}]),
+  );
+  for (const { tool, args } of strictTargets) {
+    check(`${tool} ADVERTISES additionalProperties:false`,
+      listedSchemas.get(tool)?.["additionalProperties"] === false,
+      `got ${JSON.stringify(listedSchemas.get(tool)?.["additionalProperties"])}`);
+    const bogus = await callTool(mcp, tool, { ...args, totally_bogus_key_xyz: 1 });
+    check(`${tool} ENFORCES it — an unrecognized key is refused, not quietly dropped`, bogus.isError);
+  }
+
+  // The headline pair, and its negative control. Without the second call the first
+  // proves only that the server rejects things, not that it rejects the RIGHT thing.
+  const STALE_OBS = {
+    ...BASE, source_health: "healthy", map_version: FIXTURE_MAP_VERSION,
+    observed_at: "2020-01-01T00:00:00Z", referenceTime: "2026-08-02T00:00:00Z",
+  } as const;
+  const misCasedAge = await callTool(mcp, LOCATION_TOOL, { ...STALE_OBS, max_observation_age_seconds: 60 });
+  check("THE DROPPED BOUND: a mis-cased maxObservationAgeSeconds is an ERROR, not a silent grant on a 6.5-year-stale fix",
+    misCasedAge.isError);
+  const correctAge = await callTool(mcp, LOCATION_TOOL, { ...STALE_OBS, maxObservationAgeSeconds: 60 });
+  check("...and the correctly-spelled bound still grades the same observation stale",
+    verdict(correctAge)["recommendedAction"] === "step_up" && norm(correctAge)["recency"] === "stale",
+    `action=${String(verdict(correctAge)["recommendedAction"])} recency=${String(norm(correctAge)["recency"])}`);
+
+  const misCasedConf = await callTool(mcp, LOCATION_TOOL, {
+    ...BASE, source_health: "healthy", map_version: FIXTURE_MAP_VERSION, confidence: 0.1, min_confidence: 0.99,
+  });
+  check("the same for the confidence floor: a mis-cased min_confidence is refused rather than dropped",
+    misCasedConf.isError);
+  const correctConf = await callTool(mcp, LOCATION_TOOL, {
+    ...BASE, source_health: "healthy", map_version: FIXTURE_MAP_VERSION, confidence: 0.1, minConfidence: 0.99,
+  });
+  check("...and the correctly-spelled floor still refuses a 0.1 confidence against a 0.99 requirement",
+    verdict(correctConf)["recommendedAction"] === "step_up",
+    `action=${String(verdict(correctConf)["recommendedAction"])}`);
+
+  // ── 14. the casing split is DELIBERATE, and pinned so nobody "tidies" it ───
+  //
+  // This check exists because an adversarial pass over this very surface proposed
+  // "assert the schema uses one casing convention" as a fix, and that would have been a
+  // regression. The two conventions carry provenance:
+  //
+  //   snake_case  -> mirrors `LocationObservationRaw` — the wire shape a location SOURCE emits
+  //   camelCase   -> mirrors `LocationRequirement`    — the caller's POLICY, "supplied never invented"
+  //
+  // Renaming `requiredClass` to `required_class` "for consistency" would silently
+  // reclassify a policy field as an observation field. Derived from the library's own
+  // key list rather than hardcoded, so the pin cannot drift from the types it mirrors.
+  // MEMBERSHIP IS THE DISCRIMINATOR, NOT SPELLING — and the first draft of this check
+  // got that wrong, which is worth keeping rather than quietly correcting. It classified
+  // by "contains an underscore" and failed on `confidence`: a single word, no underscore,
+  // and unambiguously an OBSERVATION field (what the source reported). Had the check been
+  // written the naive way and passed, it would have licensed exactly the rename it exists
+  // to prevent. So the partition is derived from the library's key list.
+  const OBS = LOCATION_OBSERVATION_KEYS as readonly string[];
+  const locSchema = listedSchemas.get(LOCATION_TOOL) ?? {};
+  const locProps = Object.keys((locSchema["properties"] as Record<string, unknown>) ?? {});
+  const observationInputs = locProps.filter((k) => OBS.includes(k));
+  const posedInputs = locProps.filter((k) => !OBS.includes(k));
+  /** The caller-posed half — `LocationRequirement` plus the reference instant. */
+  const EXPECTED_POSED = ["requiredClass", "minConfidence", "maxObservationAgeSeconds", "referenceTime"];
+
+  check("the location tool publishes BOTH halves — what the source reported AND what the caller requires",
+    observationInputs.length > 0 && posedInputs.length > 0,
+    `observation=${observationInputs.join(",")} posed=${posedInputs.join(",")}`);
+  check("the caller-posed inputs are exactly the requirement set — nothing has drifted into it",
+    posedInputs.length === EXPECTED_POSED.length && EXPECTED_POSED.every((k) => posedInputs.includes(k)),
+    `posed=${posedInputs.join(",")}`);
+  check("SPELLING IS NOT THE RULE: `confidence` carries no underscore and is still an OBSERVATION field, so a casing-based 'consistency' pass would misfile it",
+    OBS.includes("confidence") && observationInputs.includes("confidence"));
+
+  // ── 15. an unmapped vendor id is null, never a guess ──────────────────────
   const vendor = await callTool(mcp, "facility_graph", {
     vendorNamespace: "cisco", vendorKey: "zone_id", vendorId: "no-such-zone",
   });

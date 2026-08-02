@@ -73,11 +73,40 @@ is the normal case, and every one of those calls was answered as though the sour
 been confirmed healthy. Two calls in opposite epistemic states returned byte-identical
 verdicts of `SUFFICIENT_CERTAINTY / none / known` with `unknownSignals` empty.
 
-`pnpm run proof:mcp-answer-discipline` (23 checks) closes it by driving the real server
+`pnpm run proof:mcp-answer-discipline` (46 checks) closes it by driving the real server
 over its real newline-delimited JSON-RPC stdio wire — no MCP SDK dependency, because
 testing through the vendor's client object would prove the client agrees with the server
 rather than that the server is right. Its negative control is recorded: reintroducing the
-two `??` defaults drops it from 23/23 to 16/23.
+two `??` defaults drops it from 46/46 to 39/46.
+
+**The same class, found again one layer up — an advertised contract that was not
+enforced.** Every tool published `additionalProperties: false` and enforced none of it:
+the SDK wraps a raw shape with `z.object(shape)`, and zod's default for an object is
+STRIP, so an unknown key was silently dropped and the call proceeded. This is worse than
+the `??` defaults, because there the caller said nothing, whereas here the caller *did*
+pose a bound and spelled it in the other convention the same tool uses. Measured on the
+wire against an observation dated 2020 with the caller's own 2026 reference instant:
+
+```
+max_observation_age_seconds: 60   ->  DROPPED. recency "unbounded", SUFFICIENT_CERTAINTY, none
+maxObservationAgeSeconds:    60   ->  recency "stale", LOCATION_STALE, step_up
+```
+
+A 6.5-year-stale fix graded as sufficient certainty because a key fell on the floor. Every
+droppable field is one that would *tighten* the verdict, so the loss is one-directional.
+The core already applies this law one layer down (`hasUnrecognizedKey` → `malformed`); the
+adapter applied it to the observation and not to the requirement. Fixed by publishing
+`z.object({...}).strict()`. Removing `.strict()` drops the proof to 34/46.
+
+**Two naming conventions in that tool are deliberate, and pinned so nobody tidies them.**
+snake_case inputs mirror `LocationObservationRaw` (what the source reported); camelCase
+mirror `LocationRequirement` (what the caller poses). An adversarial pass over this
+surface proposed "assert one casing convention" as a fix — that would have been a
+regression, silently reclassifying a policy field as an observation field. The pin derives
+the partition from the library's own `LOCATION_OBSERVATION_KEYS` rather than from
+spelling, because spelling is not the discriminator: `confidence` has no underscore and is
+an observation field. The first draft of that check classified by underscore and failed on
+exactly that case.
 
 **There are two MCP proofs and neither is redundant.** `pnpm run proof:mcp-server`
 (11 checks) came from the Mac lane on the same day — both lanes noticed the same hole

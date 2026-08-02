@@ -1,7 +1,8 @@
 // Package-reachability check — a library nobody ships is a library nobody runs.
 //
-//   node scripts/check-package-reachability.mjs            # report; fail only if unreachable GREW
-//   node scripts/check-package-reachability.mjs --update   # accept the current count as the new pin
+//   node scripts/check-package-reachability.mjs                    # report; fail only if unreachable GREW
+//   node scripts/check-package-reachability.mjs --update           # accept the current count as the new pin
+//   node scripts/check-package-reachability.mjs --why @workspace/x # print the shortest artifact→x path
 //
 // WHY THIS EXISTS — a mistake, not a theory. An audit reported a missing
 // two-person-approval wiring in `lib/dual-control` and it read as a launch-path
@@ -148,21 +149,66 @@ while (queue.length > 0) {
   for (const dep of edges.get(name) ?? []) queue.push(dep);
 }
 
+// Why a package is unreachable, derived rather than annotated: a package nothing at
+// all imports is a different situation from one only the proof harness imports, and
+// the difference decides what to do about it.
+const importersOf = (target) => [...edges].filter(([, deps]) => deps.has(target)).map(([name]) => name);
+const classifyImporters = (name) => {
+  const importers = importersOf(name);
+  if (importers.length === 0) return "no importers at all";
+  return `imported only by: ${importers.sort().join(", ")}`;
+};
+
+// `--why` — the question this gate exists to answer, asked about ONE package.
+//
+// "Is `posture-composition` reachable?" is answered by the ceiling; "HOW does it
+// ship?" is what actually decides where to put new work, and the honest answer is
+// often several hops away from where anyone would guess. Breadth-first, so the
+// path printed is the shortest one and not an arbitrary walk.
+const whyIndex = process.argv.indexOf("--why");
+if (whyIndex !== -1) {
+  const target = process.argv[whyIndex + 1];
+  if (!target || !packages.has(target)) {
+    console.error(`--why needs a workspace package name. Unknown: ${target ?? "(none given)"}`);
+    console.error(`Known: ${[...packages.keys()].sort().join(", ")}`);
+    process.exit(2);
+  }
+  const cameFrom = new Map();
+  const seen = new Set(roots);
+  const bfs = [...roots];
+  let found = roots.includes(target);
+  while (bfs.length > 0 && !found) {
+    const name = bfs.shift();
+    for (const dep of edges.get(name) ?? []) {
+      if (seen.has(dep)) continue;
+      seen.add(dep);
+      cameFrom.set(dep, name);
+      if (dep === target) { found = true; break; }
+      bfs.push(dep);
+    }
+  }
+  if (!found) {
+    console.log(`${target} is NOT reachable from any shipped artifact.`);
+    console.log(`  ${classifyImporters(target)}`);
+    console.log("  Building into it lands work nothing can call. Confirm a consuming");
+    console.log("  surface ships first, or wire one as part of the same change.");
+    process.exit(0);
+  }
+  const path = [target];
+  let cursor = target;
+  while (cameFrom.has(cursor)) {
+    cursor = cameFrom.get(cursor);
+    path.unshift(cursor);
+  }
+  console.log(`${target} ships via:\n\n  ${path.join("\n    → ")}\n`);
+  process.exit(0);
+}
+
 const libs = [...packages]
   .filter(([, meta]) => meta.group === "lib")
   .map(([name]) => name)
   .sort();
 const unreachable = libs.filter((name) => !reachable.has(name));
-
-// Why each one is unreachable, derived rather than annotated: a package nothing at
-// all imports is a different situation from one only the proof harness imports, and
-// the difference decides what to do about it.
-const importersOf = (target) => [...edges].filter(([, deps]) => deps.has(target)).map(([name]) => name);
-const classify = (name) => {
-  const importers = importersOf(name);
-  if (importers.length === 0) return "no importers at all";
-  return `imported only by: ${importers.sort().join(", ")}`;
-};
 
 console.log("Package-reachability check — every library should be reachable from a shipped artifact\n");
 console.log(`  shipped artifacts (roots):    ${roots.length}`);
@@ -201,7 +247,7 @@ try {
 }
 
 const report = (log) => {
-  for (const name of unreachable) log(`    · ${name} — ${classify(name)}`);
+  for (const name of unreachable) log(`    · ${name} — ${classifyImporters(name)}`);
 };
 
 if (process.argv.includes("--update") || pin === null) {

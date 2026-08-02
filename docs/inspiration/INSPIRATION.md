@@ -132,6 +132,15 @@ It also anchors the honest register: continuous *verification*, least privilege,
   — the owner-supplied deep-research report behind intake ledger row 17
   (external validation of the Facility Trust Graph architecture; source of the
   zone-presence state machine built in `transition.ts`).
+- [ControlUp ONE / DEX / EUC & Digital Experience API Catalog](CONTROLUP_DEX_EUC_API_CATALOG.md)
+  — the owner-compiled 62-platform inventory behind intake ledger row 36
+  (direct DEX/EUC, VDI/DaaS-native, network/SASE DEM, observability, and
+  endpoint-automation adjacencies; per-row API access classes, GitHub coverage
+  honesty, 12 standards; verified 2026-08-01). The similarity model is the
+  owner's internal comparison, never an analyst ranking; DEX platforms remain
+  systems of record; sequencing preserved — the Entra+Intune wedge first, one
+  read-only DEX platform per design-partner demand, governed remediation only
+  after simulation/approval/rollback evidence.
 - [Mobile App & Managed Configuration Master Catalog](MOBILE_APP_CONFIGURATION_CATALOG.md)
   — the owner-compiled mobile-application and managed-configuration inventory
   behind intake ledger row 33 (760 master app/mobile-surface records spanning

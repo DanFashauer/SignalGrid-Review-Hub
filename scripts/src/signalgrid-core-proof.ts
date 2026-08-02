@@ -128,6 +128,34 @@ for (const scenario of scenarios) {
   decisions.push(core.getDecision(T.operator, result.decisionId));
 }
 
+// ── 1b. The LEGACY evidence-digest body, pinned ───────────────────────────────
+//
+// The ONLY pinned digest literal in this repository, and it earns the exception.
+//
+// `snapshotDigestBody()` was extracted so `buildSnapshot` and `verifySnapshot` stop
+// hand-maintaining the same eight-key literal, and a provenance field is being added
+// to the snapshot on top of that. Both changes are claimed to leave the digest of an
+// UNSTAMPED snapshot byte-identical — which is the whole migration story, because
+// durable Postgres rows written before the change must keep verifying `true`. A
+// claim of byte-identity that nothing checks is exactly the unearned affirmative
+// this repository hunts, so it is checked.
+//
+// The value was captured on the pre-refactor tree, from the same first-decision
+// sample the evidence bundle below prints, and it must not move. If it ever does,
+// the correct reaction is NOT to update this literal: it means legacy snapshots
+// stopped verifying, and the operator console renders that as "tampered".
+const LEGACY_SNAPSHOT_DIGEST = "28d821302756a247";
+const pinnedSnapshot = core.getSnapshot(T.operator, decisions[0].evidenceSnapshotId);
+check(
+  `legacy evidence-digest body is unchanged (${LEGACY_SNAPSHOT_DIGEST}) — durable snapshots written before the digest refactor still verify`,
+  pinnedSnapshot.digest === LEGACY_SNAPSHOT_DIGEST,
+  `digest moved to ${pinnedSnapshot.digest}: a snapshot minted before this change would now read as tampered`,
+);
+check(
+  "...and that same snapshot verifies through the shared digest body",
+  core.verifyEvidence(T.operator, decisions[0].evidenceSnapshotId) === true,
+);
+
 // ── 2. Fail-closed invariant across every decision ────────────────────────────
 
 for (const decision of decisions) {

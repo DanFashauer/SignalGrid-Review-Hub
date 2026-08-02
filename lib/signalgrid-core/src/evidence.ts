@@ -95,6 +95,47 @@ export function deriveCriticalSignalsPresent(
   );
 }
 
+/**
+ * The EXACT set of fields the snapshot digest covers, in one place.
+ *
+ * WHY THIS EXISTS. `buildSnapshot` and `verifySnapshot` each hand-wrote the same
+ * eight-key literal. Two hand-maintained copies of a definition that must agree is
+ * the shape this repository keeps finding defects in — and here the failure would
+ * have been maximally quiet: add a field to the minting body and forget the
+ * verifying one, and every freshly-minted snapshot verifies FALSE, which the
+ * operator console renders as "tampered". Drop a field from the verifying body only,
+ * and tampering in that field stops being detected at all. One function, two callers,
+ * no way to disagree.
+ *
+ * The parameter is typed as the snapshot's own field set so a future field added to
+ * `EvidenceSnapshot` cannot silently miss the digest: it must be added here, or it is
+ * deliberately outside the tamper-evidence and that is a visible decision.
+ */
+type SnapshotDigestFields = Pick<
+  EvidenceSnapshot,
+  | "tenantId"
+  | "decisionId"
+  | "capturedAt"
+  | "evidence"
+  | "signalsUsed"
+  | "policyVersionId"
+  | "policyVersion"
+  | "sourceReferences"
+>;
+
+function snapshotDigestBody(fields: SnapshotDigestFields): string {
+  return canonicalJson({
+    tenantId: fields.tenantId,
+    decisionId: fields.decisionId,
+    capturedAt: fields.capturedAt,
+    evidence: fields.evidence,
+    signalsUsed: fields.signalsUsed,
+    policyVersionId: fields.policyVersionId,
+    policyVersion: fields.policyVersion,
+    sourceReferences: fields.sourceReferences,
+  });
+}
+
 export function buildSnapshot(
   tenantId: string,
   decisionId: string,
@@ -107,7 +148,7 @@ export function buildSnapshot(
     ...new Set(signalsUsed.map((signal) => signal.sourceReference)),
   ].sort();
   const id = deterministicId("evid", tenantId, decisionId);
-  const body = canonicalJson({
+  const fields: SnapshotDigestFields = {
     tenantId,
     decisionId,
     capturedAt,
@@ -116,34 +157,17 @@ export function buildSnapshot(
     policyVersionId: version.id,
     policyVersion: version.version,
     sourceReferences,
-  });
+  };
   return {
     id,
-    tenantId,
-    decisionId,
-    capturedAt,
-    evidence,
-    signalsUsed,
-    policyVersionId: version.id,
-    policyVersion: version.version,
-    sourceReferences,
-    digest: digest(body),
+    ...fields,
+    digest: digest(snapshotDigestBody(fields)),
   };
 }
 
 /** Recompute a snapshot digest to confirm it has not been altered. */
 export function verifySnapshot(snapshot: EvidenceSnapshot): boolean {
-  const body = canonicalJson({
-    tenantId: snapshot.tenantId,
-    decisionId: snapshot.decisionId,
-    capturedAt: snapshot.capturedAt,
-    evidence: snapshot.evidence,
-    signalsUsed: snapshot.signalsUsed,
-    policyVersionId: snapshot.policyVersionId,
-    policyVersion: snapshot.policyVersion,
-    sourceReferences: snapshot.sourceReferences,
-  });
-  return digest(body) === snapshot.digest;
+  return digest(snapshotDigestBody(snapshot)) === snapshot.digest;
 }
 
 type LatestByCategory = Map<NormalizedSignal["category"], NormalizedSignal>;

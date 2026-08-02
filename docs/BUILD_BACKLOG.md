@@ -144,6 +144,34 @@ only), and the DDM rig is gated on an APNs push certificate.
 
 ## Owner-gated (needs a decision before an agent builds it)
 
+- [ ] **The UI-library majors (recharts / react-day-picker / react-resizable-panels /
+      zod 4 + @hookform/resolvers).** Must ship WITH the bump — measured, not assumed.
+      The grouping policy is fixed (`f51d86a`), so these now arrive as separate
+      per-library PRs instead of one 65-package wall. What is already pre-landed and
+      what cannot be, so nobody repeats the experiment:
+
+      **Pre-landed** (version-agnostic, verified green under BOTH majors):
+      `z.string().ip()` → node's `isIP`; `z.record(v)` → `z.record(k, v)` (`642dd20`);
+      lucide's removed brand icons inlined as local SVG components (`f51d86a`).
+
+      **Cannot pre-land — tried and reverted.** The policy forms need
+      react-hook-form's three-generic form, `useForm<z.input<S>, unknown,
+      z.output<S>>`, because zod's `.default()` gives `active` an optional INPUT type
+      and a required OUTPUT type; `z.infer` is the OUTPUT, so typing the form with it
+      contradicts the resolver and instantiates `Control<T>` with two different T's —
+      which surfaces as the misleading "two different types with this name exist"
+      (there is exactly ONE react-hook-form in the store; it is not a duplicate
+      install). But the CURRENT `@hookform/resolvers` types `zodResolver` loosely
+      enough that the explicit generics fail against it. So the fix is correct only
+      alongside the new resolver, and forcing it earlier needs a cast — obfuscating
+      today's code to suit tomorrow's dependency. It belongs in the bump PR.
+
+      Remaining after the pre-landed work: ~120 errors, ~96 of them three VENDORED
+      shadcn components duplicated per artifact (chart 60, resizable 30, calendar 6).
+      The browser E2E suite covers five of the six artifacts, so that migration can be
+      verified as RENDERING rather than merely typechecking — which is the standard it
+      should be held to.
+
 - [ ] **Merge `signalgrid-mcp#fix/unblock-live-evidence` → `liveEvidence` goes
       `none` → `fresh`.** ⚠️ **one merge in the OTHER repo; everything else is done.**
       This is the repo's longest-standing gap (`STATUS.md`: "real-hardware evidence:

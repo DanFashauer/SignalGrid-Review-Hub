@@ -11,7 +11,7 @@
     "start": "node dist/index.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "zod": "catalog:",
     "@workspace/signalgrid-core": "workspace:*",
     "@workspace/room-sim": "workspace:*",
@@ -19,7 +19,7 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "esbuild": "0.27.3",
+    "esbuild": "0.28.1",
     "tsx": "catalog:"
   }
 }

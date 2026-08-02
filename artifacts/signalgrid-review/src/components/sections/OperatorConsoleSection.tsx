@@ -511,6 +511,23 @@ function DecisionDetail({
             value={evidenceVerified ? "verified" : "tampered"}
             tone={evidenceVerified ? "ok" : "warn"}
           />
+          {/*
+            The THIRD STATE this panel did not previously have.
+
+            "Snapshot integrity" is a boolean and renders only verified/tampered, which
+            is why provenance is reported on its own row rather than folded into it: a
+            snapshot minted before stamping existed is not tampered, it is simply
+            unstamped, and there was no way to say that. Absence is shown as absence —
+            never coerced to 0, never back-dated to 1.
+          */}
+          <EvidenceRow
+            label="Core normalization"
+            value={
+              snapshot.coreNormalizationVersion === undefined
+                ? "unstamped (pre-provenance)"
+                : `v${snapshot.coreNormalizationVersion}`
+            }
+          />
           <div className="pt-1">
             <p className="text-[11px] text-muted-foreground mb-1">
               Source references

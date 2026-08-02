@@ -14,21 +14,43 @@ picking these up:
 
 ## Now (next up)
 
-- [ ] **Normalization-version stamping on evidence (intake row 27, CONFIRMED gap).**
-      An adversarially-verified audit of the owner's canonical endpoint signal set
-      found that nothing in the fabric records which version of the NORMALIZER
-      produced a normalized record: `NormalizedSignal` has no version field, no
-      connector `Normalized*` type does, `EvidenceSnapshot`/`Decision`/the /v1
-      `EvaluateResult` stamp only `policyVersion`, and the near-misses
-      (`APPLE_DEVICE_MANAGEMENT_SCHEMA_VERSION`, the unconsumed
-      posture-report.contract.json `schemaVersion`, work-context's
-      `contextVersion` counter, the facility graph's `mapVersionMatch`) each
-      version something else. Scope: a `NORMALIZATION_VERSION` constant in
-      signalgrid-core stamped onto `EvidenceSnapshot`, `Decision`, and the /v1
-      response, carried through the evidence digest and the OpenAPI/Postman
-      contract sync in the SAME change — deliberately queued as its own PR
-      because it touches the core decision/API contract (`test:api` response
-      pins, evidence digests, spec sync) rather than one family.
+- [x] **27a — Normalization-version stamping on evidence (intake row 27). BUILT.**
+      An adversarially-verified audit of the owner's canonical endpoint signal set found
+      that nothing in the fabric recorded which version of the code produced a normalized
+      record: `EvidenceSnapshot`/`Decision`/the /v1 `EvaluateResult` stamped only
+      `policyVersion`, and the near-misses (`APPLE_DEVICE_MANAGEMENT_SCHEMA_VERSION`, the
+      unconsumed posture-report.contract.json `schemaVersion`, work-context's
+      `contextVersion`, the facility graph's `mapVersionMatch`) each version something
+      else. `coreNormalizationVersion` now rides all three carriers and the /v1 response,
+      inside the tamper-evident digest.
+      **It is GENERATED, not a constant somebody bumps** — three designs went through four
+      refute-by-default critics each, and the hand-set-constant-plus-pin design was killed
+      by a specific attack: its pin is a committed file and a text editor is a second
+      writer, so a human who edits the source and pastes the printed digest under an
+      unchanged version satisfies every conjunct. `scripts/generate-core-normalization-version.mjs`
+      recomputes the digest FROM SOURCE (a mechanical import closure over 12 core files)
+      and derives the integer from the comparison, so there is no consistent pair a human
+      can write that it will reproduce. Six in-process negative controls and floors F1–F8
+      run on every invocation; `--check` is wired into preflight and CI.
+      Migration is a single conditional spread in the digest body: an unstamped snapshot's
+      canonical body stays byte-identical to the pre-stamp one, so rows written before the
+      field existed keep verifying with no version-conditional branch anywhere. Pinned by
+      the legacy digest in `proof:signalgrid-core`.
+
+- [ ] **27b — Per-connector normalizer versioning. REFUSED, with reasons — this is a
+      decision, not unbuilt scope.** The original row also asked for a version on the ~47
+      `normalize*` functions under `lib/integrations`. It is not being built, and the
+      refusal is recorded here so no future lane reads it as a gap:
+      `lib/signalgrid-core/package.json` declares ZERO dependencies, so the core
+      structurally cannot import them; nothing they produce is persisted or digested; and
+      a version on them would therefore appear in no durable artifact where anything could
+      ever detect that it was wrong. Unfalsifiable ceremony is precisely the defect the
+      stamp exists to close, pointed backwards.
+      **The refusal is self-invalidating rather than permanent.** Floors F7 and F8 in the
+      generator fail the day it stops being true: F7 fails if `putSignal` is ever called
+      from outside the core, and F8 fails if `lib/persistence` ever gains a signals table.
+      Either would mean a signal could be normalized by one build and evaluated by another,
+      at which point reopen this.
 
 - [ ] **A REACHABLE dual-control surface — OWNER-GATED, and NOT the defect the
       row-45 audit first described.** A three-seam design pass with adversarial
@@ -125,6 +147,18 @@ picking these up:
       one), plus the proof case that reproduces the overwrite. Bundle it with any future
       work that makes handoff-sim reachable rather than shipping a lone repair into a
       package nothing calls.
+
+- [ ] **Mirror `coreNormalizationVersion` into the Swift models (row 27a follow-through).**
+      The stamp now rides three TypeScript carriers (`EvidenceSnapshot`, `Decision`,
+      `EvaluateResult`) and the `/v1` OpenAPI response, all as an OPTIONAL field. The iOS
+      mirror in `native/ios/.../Models.swift` has not been updated: the three structs need
+      an `Int?`, with four construction sites in `MockSignalGridAPI.swift` (lines 86, 406,
+      478, 515). **Not attempted blind.** No Swift toolchain exists in the cloud lane, so
+      an edit here could not be compiled, and `native/ios` is the one tree where an
+      uncompiled change is invisible until a human opens Xcode. Left as a recorded gap for
+      the Mac lane rather than a plausible-looking patch. It is not urgent: the field is
+      optional on every carrier and Swift's decoder ignores unknown keys, so the current
+      apps decode the new payload correctly today — they simply cannot yet SHOW the stamp.
 
 - [ ] **Mobile-app-catalog scanner phase (intake row 33, owner-instructed YELLOW-lane build).**
       The owner's repository scanner is filed verbatim, UNHARDENED, in

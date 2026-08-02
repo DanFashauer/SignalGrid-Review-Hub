@@ -26,6 +26,8 @@ export interface V1MatchedRule {
 export type V1Outcome = "allow" | "step_up" | "restrict" | "deny";
 
 export interface V1Decision {
+  /** Absent on decisions minted before provenance stamping — "unstamped", not zero. */
+  coreNormalizationVersion?: number;
   decisionId: string;
   outcome: V1Outcome;
   reasonCodes: string[];

@@ -73,11 +73,21 @@ is the normal case, and every one of those calls was answered as though the sour
 been confirmed healthy. Two calls in opposite epistemic states returned byte-identical
 verdicts of `SUFFICIENT_CERTAINTY / none / known` with `unknownSignals` empty.
 
-`pnpm run proof:mcp-server` (23 checks) closes it by driving the real server over its
-real newline-delimited JSON-RPC stdio wire — no MCP SDK dependency, because testing
-through the vendor's client object would prove the client agrees with the server rather
-than that the server is right. Its negative control is recorded: reintroducing the two
-`??` defaults drops it from 23/23 to 16/23.
+`pnpm run proof:mcp-answer-discipline` (23 checks) closes it by driving the real server
+over its real newline-delimited JSON-RPC stdio wire — no MCP SDK dependency, because
+testing through the vendor's client object would prove the client agrees with the server
+rather than that the server is right. Its negative control is recorded: reintroducing the
+two `??` defaults drops it from 23/23 to 16/23.
+
+**There are two MCP proofs and neither is redundant.** `pnpm run proof:mcp-server`
+(11 checks) came from the Mac lane on the same day — both lanes noticed the same hole
+independently, which is the second entry in `LANE_COORDINATION.md`'s collision log. It
+boots the PUBLISHED plugin path through the vendor's own SDK client and asserts the
+served surface equals the surface the live-sync manifest declares to external builders;
+it catches a server that will not start, a handler that throws, a manifest that has
+drifted. `proof:mcp-answer-discipline` asks the other half: given that it serves, is the
+answer EARNED. A server passes either while failing the other, so they were kept as a
+pair rather than one being discarded to resolve a filename collision.
 
 **The general rule this leaves behind: on any surface that answers a caller, every
 optional input is a CLAIM, and omitting it is a non-claim rather than a pass.** Hand

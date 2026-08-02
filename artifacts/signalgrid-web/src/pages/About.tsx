@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Linkedin, Github } from "lucide-react";
+import { GithubIcon, LinkedinIcon } from "@/components/ui/brand-icons";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 
@@ -146,7 +146,7 @@ export default function About() {
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border text-sm hover:border-primary/50 transition-colors"
                 >
-                  <Linkedin className="w-4 h-4" /> LinkedIn
+                  <LinkedinIcon className="w-4 h-4" /> LinkedIn
                 </a>
                 <a
                   href="https://github.com/DanFashauer"
@@ -154,7 +154,7 @@ export default function About() {
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border text-sm hover:border-primary/50 transition-colors"
                 >
-                  <Github className="w-4 h-4" /> GitHub
+                  <GithubIcon className="w-4 h-4" /> GitHub
                 </a>
               </div>
             </div>

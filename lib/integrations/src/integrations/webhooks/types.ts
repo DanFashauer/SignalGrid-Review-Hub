@@ -89,7 +89,7 @@ export const WebhookPayloadSchema = z.object({
     service: z.string(),
     version: z.string(),
   }),
-  data: z.record(z.unknown()),
+  data: z.record(z.string(), z.unknown()),
   deliveryId: z.string().uuid(), // For idempotency
 });
 

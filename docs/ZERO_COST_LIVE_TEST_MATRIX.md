@@ -16,12 +16,22 @@ Conventions used throughout, non-negotiable:
 | Every decision dimension | 82 deterministic proof scripts (`pnpm run proof:*`), grant-safety enumeration (millions of raw states), mutation guard (500 mutations, 460 killed, 40 documented-inert, 0 survivors), figure/registry/count drift guards | The decision logic itself, adversarially | $0, every commit |
 | Cloud connectors | Connector-emulator harness (`proof:connector-emulator`, scenario packs) | Connector normalize/evaluate against emulated vendor responses incl. malformed/hostile | $0 |
 | REAL hardware posture | The signalgrid-mcp Mac lane: `verify:all` on the owner's Mac collects genuine macOS posture (encryption, screen lock, system extensions, USB inventory) and runs it through the real fabric verdict ([RUN_ON_MAC.md](RUN_ON_MAC.md)) | Live end-to-end on real hardware the owner already owns | $0 |
-| API surface | API integration test (boots the real server, 138 assertions), OpenAPI contract check, Postman collection kept in sync | The wire contract | $0 |
+| API surface | API integration test (boots the real server; a route-coverage check proves all 33 registered /v1 routes are exercised, and the test itself verifies that this very number still matches the server), OpenAPI contract check, Postman collection kept in sync | The wire contract | $0 |
 | Persistence | Postgres audit-ledger + decision-store proofs (Dockerized) | Durability + tamper-evidence on a real database | $0 |
 | Prod shape | Docker compose smoke in CI | The deployable stack boots | $0 |
 | Supply chain | CodeQL, gitleaks, Dependabot, CycloneDX SBOM, release-age policy on new deps | The repo itself | $0 (public repo) |
 | Browser surfaces | NEW: Playwright E2E (`pnpm run test:e2e`) — 35 tests, ~126 content-bearing assertions across the review console, public website, admin console, desktop client, and mobile PWA (admin, desktop, and PWA wired to a live api-server); ~38s wall clock including all six app builds. The suite shipped with one deliberately-red test that PROVED a real product gap: the review console never surfaced the Battery health row even though the core correctly returned `restrict`/`BATTERY_FAILING` — the console's scenario list had no failing-battery entry. The one-line scenario fix landed in that same change, taking the suite to 15/15 **as it stood then** (it has since grown to the 35 tests counted above). That red-first test is the pattern to keep: E2E asserts what a human sees, not what the core knows. | What a human actually sees renders and says the right thing | $0 |
 | Real cryptography | NEW: live-idp-proof (`pnpm run proof:live-idp`) — 31/31 checks against a real in-process `oidc-provider`, through lib/enterprise-auth's production verifier: real JWKS fetch, real RS256 signatures, real expiry, wrong-aud/wrong-iss rejection, HS256 algorithm-confusion and `alg:none` rejection, and a real DPoP-bound token whose `cnf.jkt` matches the RFC 7638 thumbprint of the held key. ~3s, fully offline. | Auth layer against real crypto, not fixtures | $0 |
+
+**Running the live lanes: `pnpm run verify:live`.** Four proofs read real vendor
+software rather than fixtures (Fleet, Traccar, Keycloak, Wazuh). Each refuses without
+its server and is skipped BY NAME, which is correct but had left the live evidence
+effectively unreachable — the bring-up steps lived in four separate documents. That
+one command stands up whatever Docker allows, runs those lanes, removes what it
+started (`--keep` to leave them), and reports a lane it could not provision as
+SKIPPED with the reason rather than counting it as passed. `--only fleet,keycloak`
+narrows it. Wazuh is never auto-started (~2GB image); it runs only if WAZUH_URL is
+already set.
 
 Everything below extends this base outward to external systems.
 
@@ -31,7 +41,7 @@ Everything below extends this base outward to external systems.
 | --- | --- | --- |
 | lib/webauthn | Chromium CDP virtual authenticator | 2 |
 | lib/enterprise-auth | live-idp-proof (built); then Keycloak / Okta / Entra tenants | 1, 2 |
-| token-binding connector | live-idp-proof already mints a real DPoP-bound token (built — see row above); Keycloak 26.4 adds a SECOND, independent issuer | 1, 2 |
+| token-binding connector | live-idp-proof (built); Keycloak 26.4 as a SECOND independent issuer — **DONE**, `proof:live-keycloak` | 1, 2 |
 | identity-risk connector | Entra P2 trial only — no permanent free path | 2, 10 |
 | graph posture + device-management-health | Dev Proxy wire simulation; then the one Intune trial window | 3 |
 | lib/pim-activation | P2/Governance trial window only | 3, 10 |

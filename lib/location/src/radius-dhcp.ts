@@ -4,6 +4,7 @@
 // Connects to existing Location Signals module
 // ============================================================================
 
+import { isIP } from 'node:net';
 import { z } from 'zod';
 import { createLocationStore } from './store';
 import { validateLocationSignal } from './validate';
@@ -17,6 +18,16 @@ import type { LocationSignal, LocationMode, LocationSource } from './types';
  * RADIUS Accounting Request (RFC 2866)
  * Can be sent by NAS (Network Access Server) like Cisco ISE, Aruba ClearPass
  */
+// Zod 3 spells this `z.string()` + `.ip()`; Zod 4 removed it in favour of `z.ipv4()` /
+// `z.ipv6()`. Neither spelling compiles under both, and this schema must survive the
+// dependency bump without changing what it ACCEPTS — so validation is delegated to
+// node's own parser instead. That is also simply more correct: a hand-rolled IPv6
+// regex (compressed forms, zone ids, v4-mapped addresses) is a classic source of
+// validators that are subtly wrong in the direction of accepting junk.
+//
+// `isIP` returns 4, 6, or 0 — matching Zod 3's `.ip()`, which accepted both families.
+const ipAddress = () => z.string().refine((v) => isIP(v) !== 0, { message: 'Invalid IP address' });
+
 export const RADIUSAccountingSchema = z.object({
   // Event type
   eventType: z.enum(['Start', 'Stop', 'Interim-Update', 'Accounting-On', 'Accounting-Off']),
@@ -65,12 +76,12 @@ export const DHCPLeaseSchema = z.object({
   hostname: z.string().optional(), // DHCP hostname option
   
   // IP assignment
-  ipAddress: z.string().ip(), // Required
+  ipAddress: ipAddress(), // Required
   leaseTime: z.number().optional(), // Seconds
   
   // DHCP Server info
-  serverIp: z.string().ip().optional(),
-  relayAgent: z.string().ip().optional(), // Circuit ID for location
+  serverIp: ipAddress().optional(),
+  relayAgent: ipAddress().optional(), // Circuit ID for location
   
   // Circuit/Location info (Option 82)
   circuitId: z.string().optional(), // VLAN/subnet info

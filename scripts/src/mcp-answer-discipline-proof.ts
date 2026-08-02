@@ -1,0 +1,363 @@
+// MCP ANSWER DISCIPLINE — is what the server serves EARNED?
+//
+// WHY THERE ARE TWO MCP PROOFS, because that looks like duplication and is not.
+// Both lanes independently found the MCP server under-covered on the same day and
+// both wrote a proof; the add/add conflict is recorded in `docs/LANE_COORDINATION.md`
+// as the second collision of exactly the kind that file exists to prevent. They were
+// kept as a pair rather than one being discarded, because they ask different
+// questions and each is blind to the other's failure:
+//
+//   proof:mcp-server (Mac lane, scripts/src/mcp-server-proof.ts)
+//       Does the PUBLISHED plugin path boot, complete a real handshake through the
+//       vendor's own SDK client, and serve exactly the tools the live-sync manifest
+//       declares to external builders? Catches: a server that does not start, a
+//       handler that throws, a manifest that has drifted from the served surface.
+//
+//   proof:mcp-answer-discipline (this file)
+//       Given that it serves, is the ANSWER earned? Catches: a tool that boots
+//       perfectly, serves its declared name, returns well-formed JSON — and
+//       manufactures an affirmative the caller never asserted.
+//
+// A server can pass either one while failing the other. This file speaks the wire
+// directly rather than through the SDK, deliberately: the SDK is the right tool for
+// proving a consumer can talk to us, and the wrong one for proving the bytes are
+// honest, since it would only demonstrate that the vendor's client and the vendor's
+// server agree with each other.
+//
+// WHY THIS ONE EXISTS. `scripts/check-mcp-surface.mjs` covers the server too, but
+// that gate is a NAME-drift check: it asserts the server, the ready message,
+// `docs/RUN_ON_MAC.md` and the live-sync manifest all list the same eight tool
+// names. A tool can pass that gate while returning a confidently wrong answer,
+// and one did — see THE HEADLINE below.
+//
+// The gap was not academic. `evaluate_location_certainty` defaulted two optional
+// inputs before handing them to the decision library:
+//
+//     map_version:   input.map_version   ?? FIXTURE_HOSPITAL_GRAPH.mapVersion
+//     source_health: input.source_health ?? "healthy"
+//
+// The caller of an MCP tool is an assistant in a chat. It has no way to know an
+// RTLS source's health, so omitting the field is the NORMAL case — and the server
+// answered every one of those calls as though the source had been confirmed
+// healthy. `normalizeLocationObservation` grades an absent source_health as
+// "unknown", which raises to step_up and names the axis in `unknownSignals`; the
+// default denied it the chance. Two calls in opposite epistemic states — one that
+// asserted nothing, one that asserted everything — returned byte-identical
+// verdicts of SUFFICIENT_CERTAINTY / none / known, with `unknownSignals` empty.
+// That is the unearned affirmative, on the surface that answers questions
+// directly, and it is the exact shape this repository keeps finding.
+//
+// WHAT THIS PROOF DOES. It speaks newline-delimited JSON-RPC to a spawned
+// `artifacts/mcp-server`, over the same transport a chat client uses. No MCP SDK
+// dependency is added to `@workspace/scripts` — the wire IS the contract, and
+// testing it through the vendor's client object would prove the client agrees with
+// the server rather than that the server is right.
+//
+// WHAT IT DELIBERATELY DOES NOT CLAIM. It covers the location tool deeply (the
+// dimension that had the defect), plus the wire surface, determinism and error
+// honesty across the registered set. It does NOT yet enumerate the optional-input
+// space of `evaluate_room_entry` or `evaluate_decision`; both were read during this
+// work and their optional inputs default FAIL-CLOSED (`confirmedActionIds ?? []`,
+// `stepUpSatisfied ?? false`), which is the safe direction, but "was read once" is
+// not a gate. Recorded here so a future lane reads this as scope not yet covered
+// rather than scope already proven.
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { existsSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const MCP_DIR = resolve(REPO_ROOT, "artifacts/mcp-server");
+const PROTOCOL_VERSION = "2025-06-18";
+
+let passed = 0;
+const failures: string[] = [];
+const check = (name: string, ok: boolean, detail?: string): void => {
+  if (ok) { passed += 1; console.log(`  ok — ${name}`); }
+  else { failures.push(name); console.log(`  FAIL — ${name}${detail === undefined ? "" : `  [${detail}]`}`); }
+};
+
+console.log("MCP server behavioural proof (real stdio wire)");
+
+// ── a minimal MCP stdio client ───────────────────────────────────────────────
+//
+// MCP's stdio transport is newline-delimited JSON-RPC 2.0 (NOT the Content-Length
+// framing LSP uses). One message per line, no embedded newlines. That is the whole
+// protocol surface this proof needs, which is why it can be written without a
+// dependency.
+interface Rpc { jsonrpc: "2.0"; id?: number; method?: string; params?: unknown; result?: unknown; error?: { message?: string } }
+
+class McpStdio {
+  private child: ChildProcessWithoutNullStreams;
+  private buffer = "";
+  private nextId = 1;
+  private pending = new Map<number, { resolve: (r: Rpc) => void; reject: (e: Error) => void }>();
+  private exited: string | null = null;
+
+  constructor() {
+    const local = resolve(MCP_DIR, "node_modules/.bin/tsx");
+    if (!existsSync(local)) {
+      throw new Error(`tsx not found at ${local} — run \`pnpm install\` before this proof`);
+    }
+    this.child = spawn(local, ["src/index.ts"], {
+      cwd: MCP_DIR,
+      stdio: ["pipe", "pipe", "pipe"],
+    }) as ChildProcessWithoutNullStreams;
+    this.child.stdout.setEncoding("utf8");
+    this.child.stdout.on("data", (chunk: string) => this.onData(chunk));
+    // The server writes its human-readable ready banner to stderr; it is not part
+    // of the protocol stream and must never be parsed as one.
+    this.child.stderr.setEncoding("utf8");
+    this.child.stderr.on("data", () => { /* banner + logs, deliberately ignored */ });
+    this.child.on("exit", (code, signal) => {
+      this.exited = `server exited early (code=${code} signal=${signal})`;
+      for (const [, p] of this.pending) p.reject(new Error(this.exited));
+      this.pending.clear();
+    });
+  }
+
+  private onData(chunk: string): void {
+    this.buffer += chunk;
+    let nl: number;
+    while ((nl = this.buffer.indexOf("\n")) >= 0) {
+      const line = this.buffer.slice(0, nl).trim();
+      this.buffer = this.buffer.slice(nl + 1);
+      if (line.length === 0) continue;
+      let msg: Rpc;
+      try { msg = JSON.parse(line) as Rpc; } catch { continue; }
+      if (typeof msg.id === "number") {
+        const waiter = this.pending.get(msg.id);
+        if (waiter) { this.pending.delete(msg.id); waiter.resolve(msg); }
+      }
+    }
+  }
+
+  private write(payload: unknown): void {
+    if (this.exited !== null) throw new Error(this.exited);
+    this.child.stdin.write(`${JSON.stringify(payload)}\n`);
+  }
+
+  notify(method: string, params: unknown = {}): void {
+    this.write({ jsonrpc: "2.0", method, params });
+  }
+
+  request(method: string, params: unknown = {}): Promise<Rpc> {
+    const id = this.nextId++;
+    return new Promise<Rpc>((res, rej) => {
+      // A hung server must fail this proof, never hang CI behind the job timeout
+      // where the cause is invisible.
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        rej(new Error(`no response to ${method} within 30s`));
+      }, 30_000);
+      this.pending.set(id, {
+        resolve: (r) => { clearTimeout(timer); res(r); },
+        reject: (e) => { clearTimeout(timer); rej(e); },
+      });
+      this.write({ jsonrpc: "2.0", id, method, params });
+    });
+  }
+
+  async handshake(): Promise<void> {
+    await this.request("initialize", {
+      protocolVersion: PROTOCOL_VERSION,
+      capabilities: {},
+      clientInfo: { name: "signalgrid-mcp-proof", version: "0" },
+    });
+    this.notify("notifications/initialized");
+  }
+
+  close(): void { this.child.kill("SIGTERM"); }
+}
+
+/** One tool call, returned both as raw text (for byte-identity assertions) and parsed. */
+interface ToolResult { isError: boolean; text: string; json: Record<string, unknown> | null }
+
+async function callTool(mcp: McpStdio, name: string, args: unknown): Promise<ToolResult> {
+  const rpc = await mcp.request("tools/call", { name, arguments: args });
+  const result = (rpc.result ?? {}) as { isError?: boolean; content?: { type: string; text?: string }[] };
+  const text = result.content?.map((c) => c.text ?? "").join("") ?? "";
+  const rpcErrored = rpc.error !== undefined;
+  let json: Record<string, unknown> | null = null;
+  try { json = JSON.parse(text) as Record<string, unknown>; } catch { json = null; }
+  return { isError: rpcErrored || result.isError === true, text, json };
+}
+
+const LOCATION_TOOL = "evaluate_location_certainty";
+/** The observation every case below varies from: a room-confirmed fix meeting a
+ *  room-confirmed requirement. Every axis the tool grades is otherwise satisfied,
+ *  so any raise is attributable to the field under test. */
+const BASE = { space_id: "SG-RM0312", accuracy_class: "room_confirmed", requiredClass: "room_confirmed" } as const;
+const FIXTURE_MAP_VERSION = "2026.07.14";
+
+const norm = (r: ToolResult): Record<string, unknown> =>
+  (r.json?.["normalized"] as Record<string, unknown> | undefined) ?? {};
+const verdict = (r: ToolResult): Record<string, unknown> =>
+  (r.json?.["verdict"] as Record<string, unknown> | undefined) ?? {};
+const unknownSignals = (r: ToolResult): string[] => {
+  const v = verdict(r)["unknownSignals"] ?? norm(r)["unknownSignals"];
+  return Array.isArray(v) ? (v as string[]) : [];
+};
+
+const EXPECTED_TOOLS = [
+  "list_room_scenarios",
+  "evaluate_room_entry",
+  "signal_catalog",
+  "scan_signals",
+  "evaluate_decision",
+  "facility_graph",
+  "evaluate_location_certainty",
+  "fabric_status",
+];
+
+const mcp = new McpStdio();
+try {
+  await mcp.handshake();
+
+  // ── 1. the wire surface actually registers what the static gate reads ──────
+  //
+  // `check-mcp-surface.mjs` derives the tool list from SOURCE TEXT. This asserts
+  // the running server registers exactly those names — a tool that fails to
+  // register (a throwing module-level init, a name typo'd in one place only)
+  // passes the static gate and disappears here.
+  const listed = await mcp.request("tools/list");
+  const tools = ((listed.result as { tools?: { name: string }[] } | undefined)?.tools ?? []).map((t) => t.name);
+  check(`server registers exactly the ${EXPECTED_TOOLS.length} expected tools over the wire`,
+    tools.length === EXPECTED_TOOLS.length && EXPECTED_TOOLS.every((t) => tools.includes(t)),
+    `got ${tools.length}: ${tools.join(", ")}`);
+
+  // ── 2. THE HEADLINE — silence is not an affirmative ───────────────────────
+  const omitted = await callTool(mcp, LOCATION_TOOL, BASE);
+  check("THE HEADLINE: omitting source_health grades the source as unknown, NOT healthy",
+    norm(omitted)["sourceHealth"] === "unknown",
+    `sourceHealth=${String(norm(omitted)["sourceHealth"])}`);
+  check("...and the unstated axis is NAMED in unknownSignals rather than silently passed",
+    unknownSignals(omitted).includes("source_health"),
+    `unknownSignals=${JSON.stringify(unknownSignals(omitted))}`);
+  check("...and the verdict RAISES: a source nobody vouched for cannot yield a grant",
+    verdict(omitted)["recommendedAction"] === "step_up" && verdict(omitted)["state"] === "degraded",
+    `action=${String(verdict(omitted)["recommendedAction"])} state=${String(verdict(omitted)["state"])}`);
+
+  // ── 3. an unstated map version is RECORDED as unstated ─────────────────────
+  //
+  // Deliberately NOT asserted as a raise. `positivelyCertain` accepts
+  // "unassessed" as a legitimate non-claim: the map version is a property of the
+  // source's own frame, not a risk signal, so never claiming one is not held
+  // against the caller — while claiming a WRONG one restricts. What must never
+  // happen is the server inventing the graph's own version and reporting
+  // "matched", because that makes the evidence lie even where the verdict agrees.
+  check("an omitted map_version reads 'unassessed' — the server does not silently match it against the graph's own version",
+    norm(omitted)["mapVersionMatch"] === "unassessed",
+    `mapVersionMatch=${String(norm(omitted)["mapVersionMatch"])}`);
+
+  // ── 4. the direct regression test for the defect ──────────────────────────
+  const asserted = await callTool(mcp, LOCATION_TOOL, {
+    ...BASE, source_health: "healthy", map_version: FIXTURE_MAP_VERSION,
+  });
+  check("THE REGRESSION TEST: asserting nothing and asserting everything are DISTINGUISHABLE (a `??` default makes them byte-identical — that is how the defect presented)",
+    omitted.text !== asserted.text);
+
+  // ── 5. anti-vacuity: the grant is still reachable when it is EARNED ────────
+  //
+  // Without this, a tool that stepped up unconditionally would satisfy every
+  // assertion above. The affirmative must be available to a caller who states it.
+  check("ANTI-VACUITY: a caller that ASSERTS a healthy source and the matching map still earns the grant",
+    verdict(asserted)["recommendedAction"] === "none" &&
+      verdict(asserted)["reasonCode"] === "SUFFICIENT_CERTAINTY" &&
+      verdict(asserted)["state"] === "known",
+    `action=${String(verdict(asserted)["recommendedAction"])} reason=${String(verdict(asserted)["reasonCode"])}`);
+  check("...and that earned grant reports NO unknown axes",
+    unknownSignals(asserted).length === 0,
+    `unknownSignals=${JSON.stringify(unknownSignals(asserted))}`);
+
+  // ── 6. per-axis attribution ───────────────────────────────────────────────
+  //
+  // Sections 2–5 vary two fields at once, so on their own they cannot say WHICH
+  // one raised. These isolate each.
+  const onlyHealthOmitted = await callTool(mcp, LOCATION_TOOL, { ...BASE, map_version: FIXTURE_MAP_VERSION });
+  check("ATTRIBUTION: with the map version stated, omitting source_health ALONE still raises",
+    verdict(onlyHealthOmitted)["recommendedAction"] === "step_up" &&
+      norm(onlyHealthOmitted)["mapVersionMatch"] === "matched",
+    `action=${String(verdict(onlyHealthOmitted)["recommendedAction"])}`);
+  const onlyMapOmitted = await callTool(mcp, LOCATION_TOOL, { ...BASE, source_health: "healthy" });
+  check("ATTRIBUTION: with the source stated healthy, omitting map_version alone does NOT raise — it is recorded unassessed",
+    verdict(onlyMapOmitted)["recommendedAction"] === "none" &&
+      norm(onlyMapOmitted)["mapVersionMatch"] === "unassessed",
+    `action=${String(verdict(onlyMapOmitted)["recommendedAction"])} match=${String(norm(onlyMapOmitted)["mapVersionMatch"])}`);
+
+  // ── 7. an ASSERTED bad state still raises through the wire ────────────────
+  //
+  // The unknown path and the asserted-bad path are different branches; proving one
+  // says nothing about the other.
+  for (const [health, why] of [["degraded", "SOURCE_DEGRADED"], ["unavailable", "SOURCE_UNAVAILABLE"]] as const) {
+    const r = await callTool(mcp, LOCATION_TOOL, { ...BASE, source_health: health, map_version: FIXTURE_MAP_VERSION });
+    check(`an asserted '${health}' source raises with ${why}`,
+      verdict(r)["recommendedAction"] === "step_up" && verdict(r)["reasonCode"] === why,
+      `action=${String(verdict(r)["recommendedAction"])} reason=${String(verdict(r)["reasonCode"])}`);
+  }
+
+  // ── 8. the multi-bed rule the tool description advertises ─────────────────
+  //
+  // A candidate class never satisfies a confirmed requirement. This is the claim
+  // the tool makes about itself in its own description, checked over the wire.
+  const candidate = await callTool(mcp, LOCATION_TOOL, {
+    space_id: "SG-RM0312", accuracy_class: "room_candidate", requiredClass: "bed_confirmed",
+    source_health: "healthy", map_version: FIXTURE_MAP_VERSION,
+  });
+  check("THE MULTI-BED RULE: a room_candidate fix never satisfies a bed_confirmed requirement",
+    verdict(candidate)["recommendedAction"] === "step_up",
+    `action=${String(verdict(candidate)["recommendedAction"])}`);
+
+  // ── 9. a wrong map version is a different failure than an absent one ──────
+  const wrongMap = await callTool(mcp, LOCATION_TOOL, {
+    ...BASE, source_health: "healthy", map_version: "1999.01.01",
+  });
+  check("a CLAIMED but wrong map version is refused, and is not conflated with never having claimed one",
+    verdict(wrongMap)["recommendedAction"] !== "none" &&
+      norm(wrongMap)["mapVersionMatch"] === "mismatched",
+    `action=${String(verdict(wrongMap)["recommendedAction"])} match=${String(norm(wrongMap)["mapVersionMatch"])}`);
+
+  // ── 10. determinism: no clock, no randomness on the answer path ───────────
+  const again = await callTool(mcp, LOCATION_TOOL, { ...BASE, source_health: "healthy", map_version: FIXTURE_MAP_VERSION });
+  check("the same arguments twice return byte-identical text (no clock or randomness in the answer path)",
+    again.text === asserted.text);
+
+  // ── 11. error honesty: a bad input errors, it does not answer confidently ──
+  const badSpace = await callTool(mcp, LOCATION_TOOL, { ...BASE, space_id: "SG-DOES-NOT-EXIST", source_health: "healthy" });
+  check("an unmapped space is surfaced as a conflict, never as a grant",
+    verdict(badSpace)["recommendedAction"] !== "none",
+    `action=${String(verdict(badSpace)["recommendedAction"])}`);
+  const badEnum = await callTool(mcp, LOCATION_TOOL, { ...BASE, accuracy_class: "definitely_a_bed" });
+  check("an out-of-enum accuracy_class is REJECTED rather than coerced into an answer",
+    badEnum.isError);
+  const badScenario = await callTool(mcp, "evaluate_room_entry", { scenarioId: "no-such-scenario" });
+  check("evaluate_room_entry reports an unknown scenario as an error rather than inventing a decision",
+    badScenario.isError);
+
+  // ── 12. the read-only tools answer without arguments ──────────────────────
+  //
+  // Cheap, but it is the difference between "registered" and "works": a tool that
+  // throws on invocation still appears in tools/list.
+  for (const readOnly of ["list_room_scenarios", "signal_catalog", "facility_graph", "fabric_status"]) {
+    const r = await callTool(mcp, readOnly, {});
+    check(`${readOnly} answers without arguments`, !r.isError && r.json !== null);
+  }
+
+  // ── 13. an unmapped vendor id is null, never a guess ──────────────────────
+  const vendor = await callTool(mcp, "facility_graph", {
+    vendorNamespace: "cisco", vendorKey: "zone_id", vendorId: "no-such-zone",
+  });
+  check("an unmapped vendor identifier resolves to null rather than a nearest guess",
+    vendor.json !== null && vendor.json["resolved"] === null);
+} finally {
+  mcp.close();
+}
+
+const total = passed + failures.length;
+console.log(`figures=toolsRegistered=${EXPECTED_TOOLS.length},locationAxesIsolated=2,assertedBadStates=2`);
+console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
+if (failures.length > 0) {
+  console.error("Failed checks:");
+  for (const f of failures) console.error(`  - ${f}`);
+  process.exitCode = 1;
+}

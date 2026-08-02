@@ -6,7 +6,8 @@ import { IntegrationStatusBadge } from "@/components/StatusBadge";
 import { formatTimeAgo } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search, ExternalLink, Github } from "lucide-react";
+import { Search, ExternalLink } from "lucide-react";
+import { GithubIcon } from "@/components/ui/brand-icons";
 
 type ExtendedIntegration = {
   id: string;
@@ -263,7 +264,7 @@ export function IntegrationList() {
                           onClick={(e) => e.stopPropagation()}
                           className="text-[10px] font-mono text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors"
                         >
-                          <Github className="w-3 h-3" /> GitHub
+                          <GithubIcon className="w-3 h-3" /> GitHub
                         </a>
                       )}
                       {integration.apiDocsUrl && (

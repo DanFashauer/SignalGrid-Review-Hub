@@ -197,11 +197,13 @@ jobs:
       - name: Proof — change-window (approved WHEN, by WHOM, on a current record)
         run: pnpm run proof:change-window
 
-      # MCP server — the chat surface answers questions directly, so it needs a
-      # BEHAVIOURAL gate and not only the name-drift check in check-mcp-surface.mjs.
-      # Drives the real server over its real stdio wire.
-      - name: Proof — mcp-server (silence is not an affirmative, over the real wire)
-        run: pnpm run proof:mcp-server
+      # MCP answer discipline — the SECOND of two MCP proofs, and deliberately so.
+      # `proof:mcp-server` (further down, from the Mac lane) asks whether the published
+      # plugin path boots and serves the tools the manifest declares. This asks whether
+      # what it serves is EARNED: every optional input is a claim, and omitting one must
+      # not be answered as an affirmative. Different questions, both load-bearing.
+      - name: Proof — mcp-answer-discipline (silence is not an affirmative)
+        run: pnpm run proof:mcp-answer-discipline
 
       # Policy binding — membership IS the policy: unbound, too-wide (fail-open),
       # too-narrow, or mixed-membership group assignment.
@@ -333,6 +335,8 @@ jobs:
         run: node scripts/check-decision-port-parity.mjs
       - name: "Read-error swallowing (a failed lookup must not report nothing-found)"
         run: node scripts/check-read-error-swallowing.mjs
+      - name: "Proof — mcp-server (published plugin path boots + serves declared tools)"
+        run: pnpm run proof:mcp-server
       # And the ratchet for the ratchets: fails if a future preflight gate is added
       # without being wired into a workflow. It has to run HERE, not only in
       # preflight, or it would be the very thing it exists to prevent.

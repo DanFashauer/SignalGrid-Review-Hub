@@ -43,6 +43,34 @@ git history — and the owner, who sees both chats.
 5. **Keep this table current.** A lane that changes branch, scope, or goes
    dormant updates its row in the same commit as the change.
 
+## Collision log
+
+Kept because the protocol above is only as persuasive as the evidence that it is
+needed. Both entries are real, both cost real time.
+
+1. **nac + webhooks, eight files** (PR #152, merge `d125a0a`) — the reason this
+   file exists. Both lanes independently implemented nac discipline and webhooks
+   gating. Resolved by preferring the deeper nac implementation and keeping BOTH
+   webhook gates as complementary layers.
+2. **`scripts/src/mcp-server-proof.ts`, add/add** — both lanes noticed on the same
+   day that the MCP server was the only answer-producing surface with no
+   behavioural proof, and both wrote one. Rule 4 ("`git log` both branches first")
+   would have caught it and neither lane ran it.
+   **Resolved by keeping both, because they ask different questions.** The Mac
+   lane's `proof:mcp-server` boots the PUBLISHED plugin path through the vendor's
+   own SDK client and asserts the served surface equals the surface the live-sync
+   manifest declares — it catches a server that will not start, a handler that
+   throws, a manifest that has drifted. The cloud lane's proof, renamed to
+   `proof:mcp-answer-discipline`, speaks the raw wire and asks whether what is
+   served is EARNED — it caught `source_health ?? "healthy"`, which made a caller
+   who asserted nothing indistinguishable from one who asserted everything. A
+   server passes either while failing the other, so discarding one to resolve a
+   filename collision would have discarded a live gate.
+   **What the auto-merge silently produced, worth knowing:** duplicate
+   `"proof:mcp-server"` keys in BOTH `package.json` files. Duplicate JSON keys are
+   valid and last-one-wins, so a gate can disappear without any parser complaining.
+   Whenever this merge lands on a shared registry file, `grep -c` the key.
+
 ## Standing hazards (learned, not hypothetical)
 
 - `validate-sim-macos.sh` runs `pnpm add -w` and rewrites `package.json` /

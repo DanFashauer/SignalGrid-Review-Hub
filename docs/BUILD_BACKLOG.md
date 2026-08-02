@@ -260,7 +260,16 @@ already has a fixture proof; these add a real vendor behind it._
       `signatureAgeHours`→`null` (not `0`, which would read as freshly updated),
       verdict `degraded_protection`/`PROTECTION_DEGRADED`/`step_up`. Skipped loudly
       by name, never silently passed, when `WAZUH_URL` is unset.
-- [ ] **Keycloak 26.4 DPoP → token-binding.** LOWER priority than it reads in the
+- [x] **Keycloak 26.4 DPoP → token-binding.** DONE — `proof:live-keycloak` (14 assertions)
+      against a real Keycloak 26.4. Its value was exactly what was predicted —
+      cross-implementation agreement, not first coverage — and that turned out to be
+      worth having: reordering the JWK members when computing the RFC 7638 thumbprint
+      yields a COMPLETELY different value, and only a second implementation catches
+      it. It also surfaced real integration work an in-process provider hides:
+      Keycloak emits no tenant claim, so a deployment needs protocol mappers. See
+      [KEYCLOAK_LIVE_INTEGRATION.md](KEYCLOAK_LIVE_INTEGRATION.md). ORIGINAL BELOW.
+
+- [x] **Keycloak (original entry).** LOWER priority than it reads in the
       matrix: `live-idp-proof` already runs a complete real DPoP ceremony (client-held
       EC key, real proof JWT, provider-minted `cnf.jkt` equal to the RFC 7638
       thumbprint, verified through enterprise-auth). Keycloak's value is
@@ -363,6 +372,34 @@ only), and the DDM rig is gated on an APNs push certificate.
       `docs/APP_WORKFLOW_TEMPLATES.md`.
 
 ## Owner-gated (needs a decision before an agent builds it)
+
+- [ ] **The UI-library majors (recharts / react-day-picker / react-resizable-panels /
+      zod 4 + @hookform/resolvers).** Must ship WITH the bump — measured, not assumed.
+      The grouping policy is fixed (`f51d86a`), so these now arrive as separate
+      per-library PRs instead of one 65-package wall. What is already pre-landed and
+      what cannot be, so nobody repeats the experiment:
+
+      **Pre-landed** (version-agnostic, verified green under BOTH majors):
+      `z.string().ip()` → node's `isIP`; `z.record(v)` → `z.record(k, v)` (`642dd20`);
+      lucide's removed brand icons inlined as local SVG components (`f51d86a`).
+
+      **Cannot pre-land — tried and reverted.** The policy forms need
+      react-hook-form's three-generic form, `useForm<z.input<S>, unknown,
+      z.output<S>>`, because zod's `.default()` gives `active` an optional INPUT type
+      and a required OUTPUT type; `z.infer` is the OUTPUT, so typing the form with it
+      contradicts the resolver and instantiates `Control<T>` with two different T's —
+      which surfaces as the misleading "two different types with this name exist"
+      (there is exactly ONE react-hook-form in the store; it is not a duplicate
+      install). But the CURRENT `@hookform/resolvers` types `zodResolver` loosely
+      enough that the explicit generics fail against it. So the fix is correct only
+      alongside the new resolver, and forcing it earlier needs a cast — obfuscating
+      today's code to suit tomorrow's dependency. It belongs in the bump PR.
+
+      Remaining after the pre-landed work: ~120 errors, ~96 of them three VENDORED
+      shadcn components duplicated per artifact (chart 60, resizable 30, calendar 6).
+      The browser E2E suite covers five of the six artifacts, so that migration can be
+      verified as RENDERING rather than merely typechecking — which is the standard it
+      should be held to.
 
 - [ ] **Merge `signalgrid-mcp#fix/unblock-live-evidence` → `liveEvidence` goes
       `none` → `fresh`.** ⚠️ **one merge in the OTHER repo; everything else is done.**

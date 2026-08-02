@@ -34,9 +34,20 @@ jobs:
   sbom:
     name: CycloneDX SBOM
     runs-on: ubuntu-latest
+    # Write scope is needed ONLY to push a regenerated SBOM back to a dependabot
+    # branch (see the step below). The workflow default stays read-only, so this is
+    # the single job that can write, and it can only write to dependabot PRs.
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # On a pull_request event, checkout defaults to a MERGE commit in detached
+          # HEAD — pushing that back would send the merge, not the branch. Check out
+          # the PR's actual head branch so the SBOM commit below lands on it, and so
+          # the SBOM is generated from what the branch really contains.
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
@@ -51,6 +62,41 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Generate SBOM
         run: pnpm run sbom
+
+      # The committed SBOM must match the lockfile — that is the whole point of the
+      # verify step below, and it is a good invariant.
+      #
+      # But it made EVERY dependency update red by construction. Dependabot changes
+      # the lockfile and cannot regenerate the SBOM, so the verify step failed on all
+      # eight of its pull requests — including four whose only failure was this one.
+      # A guard that no automated update can ever satisfy does not enforce the
+      # invariant, it just guarantees a permanently red bot and trains reviewers to
+      # merge past it.
+      #
+      # So for dependabot's own branches, regenerate and commit rather than fail. The
+      # invariant is kept true instead of merely asserted, and the human review is
+      # about the dependency change rather than about a mechanical file.
+      #
+      # Tightly gated: dependabot only, same-repo branches only (never a fork), and
+      # only when the SBOM actually changed. A GITHUB_TOKEN push does not retrigger
+      # workflows, so this cannot loop.
+      - name: Commit refreshed SBOM (dependabot only)
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.actor == 'dependabot[bot]' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          if git diff --quiet -- artifacts/sbom/cyclonedx.json; then
+            echo "SBOM already in sync — nothing to commit."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/sbom/cyclonedx.json
+          git commit -m "deps: regenerate CycloneDX SBOM for the updated lockfile"
+          git push origin "HEAD:${GITHUB_HEAD_REF}"
+          echo "Committed a refreshed SBOM to ${GITHUB_HEAD_REF}."
+
       - name: Verify SBOM is committed and up to date
         run: git diff --exit-code -- artifacts/sbom/cyclonedx.json
       - name: Upload SBOM

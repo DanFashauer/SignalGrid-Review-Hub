@@ -151,6 +151,12 @@ if [ "$SIM_ONLY" != "--sim-only" ]; then
       skip "$p" "needs a live Traccar (TRACCAR_URL/USER/PASS); see docs/TRACCAR_LIVE_INTEGRATION.md"
       continue
     fi
+    # proof:live-keycloak needs a real Keycloak with the DPoP feature AND a client
+    # carrying tenant/role protocol mappers — configuration a proof cannot invent.
+    if [ "$p" = "proof:live-keycloak" ] && [ -z "${KEYCLOAK_URL:-}" ]; then
+      skip "$p" "needs a live Keycloak (KEYCLOAK_URL); see docs/KEYCLOAK_LIVE_INTEGRATION.md"
+      continue
+    fi
     gate "$p" $PNPM run "$p"
   done
 

@@ -108,7 +108,7 @@
     "gen:core-normalization-version": "node scripts/generate-core-normalization-version.mjs",
     "check:core-normalization-version": "node scripts/generate-core-normalization-version.mjs --check",
     "proof:change-window": "pnpm --filter @workspace/scripts run proof:change-window",
-    "proof:mcp-server": "pnpm --filter @workspace/scripts run proof:mcp-server",
+    "proof:mcp-answer-discipline": "pnpm --filter @workspace/scripts run proof:mcp-answer-discipline",
     "proof:passkey-assurance": "pnpm --filter @workspace/scripts run proof:passkey-assurance",
     "proof:isolation-scope": "pnpm --filter @workspace/scripts run proof:isolation-scope",
     "proof:benchmark-selection": "pnpm --filter @workspace/scripts run proof:benchmark-selection",
@@ -159,7 +159,10 @@
     "proof:graph-wire": "pnpm --filter @workspace/scripts run proof:graph-wire",
     "proof:live-fleet": "pnpm --filter @workspace/scripts run proof:live-fleet",
     "proof:live-location": "pnpm --filter @workspace/scripts run proof:live-location",
-    "proof:absent-collection": "pnpm --filter @workspace/scripts run proof:absent-collection"
+    "proof:absent-collection": "pnpm --filter @workspace/scripts run proof:absent-collection",
+    "proof:mcp-server": "pnpm --filter @workspace/scripts run proof:mcp-server",
+    "proof:live-keycloak": "pnpm --filter @workspace/scripts run proof:live-keycloak",
+    "verify:live": "./scripts/run-live-lanes.sh"
   },
   "private": true,
   "devDependencies": {

@@ -106,6 +106,38 @@ Those systems authenticate users, manage devices, record work, investigate event
 
 In practical terms, SignalGrid can consume identity/session context from IAM, posture and freshness from UEM/MDM, governance context from IGA, operational state from ITSM, endpoint/user-experience health from DEX and endpoint platforms, API/service health from monitoring and observability tools, security context from SIEM/SOAR and endpoint telemetry, network context from NAC, and physical/workflow shared-device state from RTLS, DockBridge, and dock/edge systems. It can then emit decisions, audit context, and action requests back to the connected systems that already own execution and records.
 
+### "Our vendors already integrate with each other — why do we need a layer above that?"
+
+Use those integrations too. They are real, they work, and SignalGrid does not replace them.
+
+The reference case is an EDR isolating a host while the UEM still reports that device healthy and
+compliant: the worker loses access, the help desk sees no explanation, and Security and IT hold
+different versions of reality. Vendor-to-vendor workflows close exactly that pair — a detection
+triggers a management action and a user notification, and the reverse workflow is designed in
+advance. That is the right way to solve a two-system problem.
+
+What a point-to-point workflow cannot do is answer a question whose inputs come from more than its
+own pair. The EDR says contained; the UEM says compliant; the asset register names a different
+custodian; the identity plane says the account is privileged; the badge plane puts the worker in a
+restricted zone; the host app has a critical action half-finished; the ITSM says an approved change
+window is open. Each integration in that list knows two of those facts.
+
+**SignalGrid does not reconcile an EDR with a UEM. It consumes whatever each of them concluded,
+keeps both on the record ranked, and lets the stronger concern decide — so a disagreement between
+two vendors can only ever raise assurance, never grant it.**
+
+Two consequences are worth stating precisely, because they are the difference between this and an
+arbiter. First, the fabric never adjudicates: `composeDeviceRisk` retains every input signal in
+`drivers`, ranked, rather than discarding the calmer one, and strongest-concern-wins is
+unconditional — so there is no code path in which one vendor's verdict overrides another's into a
+grant. Second, coexistence is not contradiction. "The EDR contained this host" and "the UEM says
+this device passes its compliance policy" are two different predicates — runtime behaviour versus
+configuration conformance — and both are routinely true at the same moment. This fabric models
+contradiction only where one predicate has two answers (a tunnel claimed but not observed, an
+identity that does not match itself, a badge crossing that the space graph refuses). Treating two
+true statements about different things as a conflict would manufacture an alarm out of a normal
+state, so it deliberately does not.
+
 ### "Why isn't this just an app on our data platform's ontology?"
 
 Because a fail-closed gate at the device is not a data-modelling problem.

@@ -101,6 +101,31 @@ picking these up:
       Placement was checked before building, using the new reachability ratchet:
       `pim-activation` (where the backlog's own text pointed) is proof-only, so the
       work went to `lib/integrations` + `posture-composition`, both of which ship.
+- [ ] **`ReleaseLedger.holds` loses the second hold on the same task (found by the row-48
+      second-pass audit; LATENT, not live — record the distinction).** `holds` is
+      `Readonly<Record<string, string>>` (`lib/handoff-sim/src/types.ts:137`) — one
+      exception per task — and `lib/handoff-sim/src/simulate.ts:134` assigns
+      `holdsMap[step.taskRef] = carriedEntry`, which OVERWRITES the entry when a second
+      hold-grade exception fires on the same task. A release naming the surviving
+      exception then succeeds while the overwritten one is still in
+      `unresolvedExceptionRefs`, moving the task held → active with an unresolved hold
+      outstanding.
+      The type's own comment is what makes this worth recording: `holds` was added
+      *after* adversarial review demonstrated the CROSS-task version of exactly this
+      hole ("a resolved+verified exception could free ANY held task, including one whose
+      own blocker was still open"). The same-task twin was left behind by the fix.
+      **Why it is latent rather than live, stated so nobody over-reacts to it:**
+      `@workspace/handoff-sim` is not reachable from any shipped artifact — verified with
+      `node scripts/check-package-reachability.mjs --why @workspace/handoff-sim`, which
+      reports it imported only by the proof harness. The shipped decision plane does not
+      consult this ledger; it ANDs over its whole condition set structurally every call.
+      And the trace still carries the overwritten entry, so the evidence is not lost even
+      in the simulation. Fix shape: `holds` becomes `Record<string, string[]>` (or the
+      release check asserts every unresolved entry naming the task, not just the recorded
+      one), plus the proof case that reproduces the overwrite. Bundle it with any future
+      work that makes handoff-sim reachable rather than shipping a lone repair into a
+      package nothing calls.
+
 - [ ] **Mobile-app-catalog scanner phase (intake row 33, owner-instructed YELLOW-lane build).**
       The owner's repository scanner is filed verbatim, UNHARDENED, in
       [inspiration/MOBILE_APP_CATALOG_AGENT.md](inspiration/MOBILE_APP_CATALOG_AGENT.md)

@@ -132,6 +132,19 @@ It also anchors the honest register: continuous *verification*, least privilege,
   — the owner-supplied deep-research report behind intake ledger row 17
   (external validation of the Facility Trust Graph architecture; source of the
   zone-presence state machine built in `transition.ts`).
+- [Communications Systems & Mobile Apps API & GitHub catalog](COMMUNICATIONS_SYSTEMS_API_CATALOG.md)
+  — the owner-compiled 441-system inventory behind intake ledger row 47 (16
+  ecosystems from GSMA Open Gateway/CAMARA and CPaaS through mission-critical
+  PTT, clinical communications and mobile-OS push; 71 CAMARA API records, 97
+  mobile applications, 71 open-source resources, 66 standards; verified
+  2026-08-02, all five bundle hashes and every stated count re-derived at
+  intake). Its audit produced zero new verbs: the fabric already covers the
+  decision-relevant senses of presence, reachability, network quality,
+  authorized-region and dispatch ownership. Two boundaries are load-bearing —
+  CAMARA availability is commercial rather than technical, and **"verify
+  delivery" is a named refusal**: a platform receipt is dominated by a human
+  acknowledgement, and the only thing it would add is permission to stop
+  escalating.
 - [OT / ICS / SCADA & Industrial Control API & GitHub catalog](OT_ICS_SCADA_API_CATALOG.md)
   — the 151-platform industrial inventory behind intake ledger row 45, and the
   only catalog in this folder **compiled by this repository** rather than

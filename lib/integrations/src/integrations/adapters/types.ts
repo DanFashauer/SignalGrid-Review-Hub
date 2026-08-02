@@ -209,32 +209,35 @@ export interface NACAdapter {
 }
 
 // ============================================================================
-// Notify Types
+// Notify Types — DELETED, deliberately (intake ledger row 47)
 // ============================================================================
-
-export interface NotifyRequest {
-  channel: 'email' | 'sms' | 'slack' | 'teams' | 'webhook' | 'push';
-  recipients: string[];
-  subject?: string;
-  message: string;
-  priority?: 'urgent' | 'high' | 'normal' | 'low';
-  correlationId?: string;
-  caseId?: string;
-}
-
-export interface NotifyResponse {
-  notificationId: string;
-  status: 'sent' | 'queued' | 'failed';
-  channel: string;
-  sentAt?: string;
-}
-
-export interface NotifyAdapter {
-  readonly name: string;
-  readonly vendor: string;
-  notify(request: NotifyRequest): Promise<NotifyResponse>;
-  healthCheck?(): Promise<boolean>;
-}
+//
+// A `NotifyAdapter` / `NotifyRequest` / `NotifyResponse` trio used to live here
+// with zero implementations and zero callers. It was removed because dead code
+// is not neutral when it contradicts a law the rest of the repository enforces:
+//
+//   1. `NotifyResponse.status` included the literal `'sent'`. That is exactly
+//      the claim this codebase eradicated — a `sent` status reported for an
+//      event that never left the process was a REAL defect found in our own
+//      syslog adapter, and it is why every outbound family now records a
+//      literal `delivered: false` in fixture mode. A type declaring `'sent'`
+//      is that defect kept alive in the type system, waiting for an
+//      implementer.
+//   2. `NotifyRequest` carried `recipients: string[]` and `message: string` —
+//      the ONLY place in the tree where a recipient address or message body
+//      could be held. The embedded-UX law says the worker uses their own host
+//      app and the fabric composes no user-facing content; the audit's
+//      strongest evidence for that law was structural ("there is nowhere to
+//      put a recipient"), and this type was the one exception that made the
+//      claim nearly-true instead of true.
+//
+// What the fabric does instead is unchanged and is the honest half: it decides
+// whether an action may proceed, names the owning queue via `routeConcern`
+// (with an explicit unrouted hole rather than a silent default), grades whether
+// a response was acknowledged and whether the underlying concern actually
+// cleared, and emits governed events through the six gated outbound families —
+// none of which claims a message reached a person. Delivery to a human is the
+// host system's to perform and to attest.
 
 // ============================================================================
 // Adapter Registry
@@ -245,7 +248,6 @@ export interface AdapterRegistry {
   siem: SIEMAdapter | null;
   uem: UEMAdapter | null;
   nac: NACAdapter | null;
-  notify: NotifyAdapter | null;
 }
 
 export interface AdapterConfig {
@@ -265,8 +267,8 @@ export interface AdapterConfig {
     provider: 'ise' | 'clearpass' | 'webhook' | 'none';
     config?: Record<string, unknown>;
   };
-  notify?: {
-    provider: 'smtp' | 'slack' | 'teams' | 'webhook' | 'none';
-    config?: Record<string, unknown>;
-  };
+  // No `notify` provider slot: see the deleted Notify Types block above. A
+  // configurable smtp/slack/teams sender is the surface that would have made
+  // the fabric a message deliverer, and there is deliberately nowhere to
+  // configure one.
 }

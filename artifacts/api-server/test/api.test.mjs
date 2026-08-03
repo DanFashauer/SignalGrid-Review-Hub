@@ -424,6 +424,14 @@ async function run() {
   check("reconcile: a set exactly at the cap is accepted (the bound is not off by one)",
     atCap.status === 200 && atCap.json?.reconciliation?.considered === 64);
 
+  // Registration ORDER, not just registration: `/v1/keys` sits deliberately ABOVE
+  // the auth guard, so a new route added in the wrong place would be served
+  // unauthenticated and nothing else in this suite would notice.
+  const unauthed = await req("POST", "/v1/decisions/reconcile", {
+    body: { records: [{ id: "x", outcome: "allow", provenance: prov() }] },
+  });
+  check("reconcile: sits BELOW the auth guard (no token → 401)", unauthed.status === 401);
+
   // Reconciliation stores nothing — the decision list is unchanged by all of the above.
   const afterReconcile = await req("GET", "/v1/decisions", { token: KEYS.operator });
   check("reconcile: minted no decision record (the route stores nothing)",

@@ -313,6 +313,122 @@ async function run() {
   const gateUnknown = await req("POST", "/v1/app-workflows/evaluate", { token: KEYS.operator, body: { integrationId: "nope", identityRef: "nurse.compliant", deviceRef: "ipad-ward-01" } });
   check("app-workflows unknown integration → 404", gateUnknown.status === 404);
 
+  // ── Reconciliation: which decision wins after a partition ──────────────────
+  //
+  // The wire arm of `reconcileDecisions`. The cases below are the ones a wire
+  // surface can get wrong that the library proof cannot see: a route that
+  // defaults the two provenance booleans, a route that truncates an oversized
+  // set, and a route that treats a posed bound with no stated ages as no bound.
+  const prov = (over = {}) => ({
+    policyVersion: 1,
+    evaluatedOffline: false,
+    policyKnownSuperseded: false,
+    ...over,
+  });
+
+  // The headline: an offline device holding the NEWER policy says allow; the
+  // connected control plane said deny. The deny stands.
+  const partitioned = await req("POST", "/v1/decisions/reconcile", {
+    token: KEYS.operator,
+    body: {
+      records: [
+        { id: "cloud", outcome: "deny", provenance: prov({ policyVersion: 7, coreNormalizationVersion: 2 }) },
+        { id: "device", outcome: "allow", provenance: prov({ policyVersion: 8, coreNormalizationVersion: 2, evaluatedOffline: true }) },
+      ],
+    },
+  });
+  check("reconcile: offline authority cannot relax a connected deny",
+    partitioned.status === 200 && partitioned.json?.reconciliation?.outcome === "deny");
+  check("reconcile: the veto is named in the response",
+    partitioned.json?.reconciliation?.reasonCodes?.includes("OFFLINE_AUTHORITY_CANNOT_RELAX") === true);
+  check("reconcile: the device is still reported as the provenance authority",
+    JSON.stringify(partitioned.json?.reconciliation?.authorityIds) === JSON.stringify(["device"]));
+
+  // The un-stick path — the same shape with the authority CONNECTED.
+  const unstuck = await req("POST", "/v1/decisions/reconcile", {
+    token: KEYS.operator,
+    body: {
+      records: [
+        { id: "stale-device", outcome: "deny", provenance: prov({ policyVersion: 7, coreNormalizationVersion: 2 }) },
+        { id: "cloud", outcome: "allow", provenance: prov({ policyVersion: 8, coreNormalizationVersion: 2 }) },
+      ],
+    },
+  });
+  check("reconcile: a connected newer policy DOES relax a stale deny",
+    unstuck.json?.reconciliation?.outcome === "allow" &&
+    unstuck.json?.reconciliation?.reasonCodes?.includes("NEWER_PROVENANCE_RELAXED_STALE_DECISION") === true);
+
+  // Order-independence, over the wire rather than in-process: the same set sent
+  // in the reverse order must produce the same answer.
+  const reversed = await req("POST", "/v1/decisions/reconcile", {
+    token: KEYS.operator,
+    body: {
+      records: [
+        { id: "device", outcome: "allow", provenance: prov({ policyVersion: 8, coreNormalizationVersion: 2, evaluatedOffline: true }) },
+        { id: "cloud", outcome: "deny", provenance: prov({ policyVersion: 7, coreNormalizationVersion: 2 }) },
+      ],
+    },
+  });
+  check("reconcile: reversing the record order does not move the answer",
+    JSON.stringify(reversed.json?.reconciliation) === JSON.stringify(partitioned.json?.reconciliation));
+
+  // THE ROUTE MUST NOT DEFAULT EITHER PROVENANCE BOOLEAN. A `?? false` in the
+  // parser would turn each of these into a 200, and the request that was
+  // silently completed would be indistinguishable from an honest one.
+  const noOffline = await req("POST", "/v1/decisions/reconcile", {
+    token: KEYS.operator,
+    body: { records: [{ id: "x", outcome: "allow", provenance: { policyVersion: 1, policyKnownSuperseded: false } }] },
+  });
+  check("reconcile: an omitted evaluatedOffline is a 400, not an 'online'", noOffline.status === 400);
+  const noSuperseded = await req("POST", "/v1/decisions/reconcile", {
+    token: KEYS.operator,
+    body: { records: [{ id: "x", outcome: "allow", provenance: { policyVersion: 1, evaluatedOffline: false } }] },
+  });
+  check("reconcile: an omitted policyKnownSuperseded is a 400, not a 'current'", noSuperseded.status === 400);
+
+  // A posed bound with NO stated ages expires every offline record — it does not
+  // quietly become "no bound".
+  const unstated = await req("POST", "/v1/decisions/reconcile", {
+    token: KEYS.operator,
+    body: {
+      records: [{ id: "device", outcome: "allow", provenance: prov({ policyVersion: 8, coreNormalizationVersion: 2, evaluatedOffline: true }) }],
+      standingBound: { maxStandingSeconds: 3600 },
+    },
+  });
+  check("reconcile: a bound with no stated ages expires the offline record",
+    unstated.json?.reconciliation?.outcome === "step_up" &&
+    unstated.json?.reconciliation?.reasonCodes?.includes("OFFLINE_STANDING_AGE_UNSTATED") === true);
+
+  // Refusals the route owns rather than the library.
+  const empty = await req("POST", "/v1/decisions/reconcile", { token: KEYS.operator, body: { records: [] } });
+  check("reconcile: an empty record set is refused, not defaulted", empty.status === 400);
+  const notArray = await req("POST", "/v1/decisions/reconcile", { token: KEYS.operator, body: { records: "two" } });
+  check("reconcile: a non-array records field is a 400", notArray.status === 400);
+  const oversized = await req("POST", "/v1/decisions/reconcile", {
+    token: KEYS.operator,
+    body: {
+      records: Array.from({ length: 65 }, (_, i) => ({
+        id: `r${i}`, outcome: "allow", provenance: prov({ policyVersion: 1, coreNormalizationVersion: 1 }),
+      })),
+    },
+  });
+  check("reconcile: an oversized set is REFUSED rather than truncated", oversized.status === 400);
+  const atCap = await req("POST", "/v1/decisions/reconcile", {
+    token: KEYS.operator,
+    body: {
+      records: Array.from({ length: 64 }, (_, i) => ({
+        id: `r${i}`, outcome: "allow", provenance: prov({ policyVersion: 1, coreNormalizationVersion: 1 }),
+      })),
+    },
+  });
+  check("reconcile: a set exactly at the cap is accepted (the bound is not off by one)",
+    atCap.status === 200 && atCap.json?.reconciliation?.considered === 64);
+
+  // Reconciliation stores nothing — the decision list is unchanged by all of the above.
+  const afterReconcile = await req("GET", "/v1/decisions", { token: KEYS.operator });
+  check("reconcile: minted no decision record (the route stores nothing)",
+    afterReconcile.status === 200 && Array.isArray(afterReconcile.json?.decisions));
+
   // A step_up keeps its high-assurance actions held — the product API never
   // releases them from a request-supplied signal (real completion requires a
   // hardware-backed WebAuthn assertion; see docs/EMBEDDED_UX_PRINCIPLE.md).

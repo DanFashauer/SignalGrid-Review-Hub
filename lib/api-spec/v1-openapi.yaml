@@ -98,6 +98,85 @@ paths:
         "200": { description: Evidence snapshot + verified flag }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  # Reconciliation stores NOTHING. Every record is caller-supplied and the reduction is
+  # pure, so there is no decision id to mint and no evidence snapshot to write — the
+  # route answers a question about records the caller already holds.
+  #
+  # `evaluatedOffline` and `policyKnownSuperseded` are REQUIRED on every record and are
+  # not defaulted anywhere on the path. Omitting one is a 400, not an "online". Both
+  # defaults would point the permissive way: an omitted field would buy the record the
+  # right to relax a better-informed decision.
+  /v1/decisions/reconcile:
+    post:
+      operationId: reconcileDecisions
+      tags: [decisions]
+      summary: Decide which decision stands after a network partition (order-independent, clock-free)
+      description: >-
+        Reduces the set of decisions that exist for one subject and action — the one a
+        device minted offline and the one the control plane minted — to the one that
+        stands. Neither a last-write-wins tiebreak nor a CRDT join: an order-independent
+        set reduction over the product order on (policyVersion, coreNormalizationVersion)
+        with a one-directional veto, so a newer policy lets a device be MORE restrictive
+        on its own but never less restrictive than a better-connected evaluation. No
+        clock is read; the standing bound is posed by the caller as a bound plus the
+        elapsed seconds per record. At most 64 records, and an oversized request is
+        REFUSED rather than truncated — a dropped record can only remove a restriction.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [records]
+              properties:
+                records:
+                  type: array
+                  minItems: 1
+                  maxItems: 64
+                  items:
+                    type: object
+                    required: [id, outcome, provenance]
+                    properties:
+                      id: { type: string }
+                      outcome: { type: string, enum: [allow, step_up, restrict, deny] }
+                      provenance:
+                        type: object
+                        required: [policyVersion, evaluatedOffline, policyKnownSuperseded]
+                        properties:
+                          policyVersion: { type: integer, minimum: 1 }
+                          coreNormalizationVersion:
+                            type: integer
+                            minimum: 1
+                            description: >-
+                              Optional. ABSENT MEANS UNKNOWN, never zero — an unstamped
+                              record is incomparable with every stamped one and always
+                              forces the fail-closed join.
+                          evaluatedOffline:
+                            type: boolean
+                            description: Whether a required source was unreachable when this decision was made.
+                          policyKnownSuperseded:
+                            type: boolean
+                            description: >-
+                              Whether the evaluating node already knew a newer policy
+                              bundle was available. Captured at mint time, so a node that
+                              has since caught up cannot retroactively claim currency.
+                standingBound:
+                  type: object
+                  description: >-
+                    Optional, caller-posed. An offline decision past its bound is RAISED
+                    to the floor, never dropped. A record whose age is not stated is
+                    treated as expired.
+                  required: [maxStandingSeconds]
+                  properties:
+                    maxStandingSeconds: { type: number, exclusiveMinimum: 0 }
+                    elapsedSecondsById:
+                      type: object
+                      additionalProperties: { type: number, minimum: 0 }
+                    floor: { type: string, enum: [allow, step_up, restrict, deny] }
+      responses:
+        "200": { description: The outcome that stands, its reason codes, the provenance frontier, whether it was contested, and which records expired }
+        "400": { $ref: "#/components/responses/ValidationError" }
+
   /v1/decisions/{id}/simulate:
     post:
       operationId: simulateDecision

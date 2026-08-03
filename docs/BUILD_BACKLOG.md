@@ -207,14 +207,17 @@ picking these up:
       whatever the device uploads, so the gap is that the device cannot decide locally
       *whether its own held decision still stands* before it reconnects.
 
-- [ ] **`/v1` arm for decision reconciliation (intake row 51 follow-through).**
-      Continuity is a library primitive today with no wire surface. Exposing it needs a
-      request/response contract, an OpenAPI entry, the Postman regeneration, and a console
-      surface that shows the frontier and the reason codes — self-contained work, and
-      deliberately not bolted onto the intake that built the primitive. The contract
-      question to settle first: reconciliation takes a SET, so the arm is a POST with a
-      body rather than an evaluate-shaped call, and the standing bound is caller-posed
-      (bound + per-record elapsed seconds) which the wire format has to carry explicitly.
+- [x] **`/v1` arm for decision reconciliation (intake row 51 follow-through). BUILT.**
+      `POST /v1/decisions/reconcile` — OpenAPI entry, Postman sample, and API integration
+      coverage. The route stores nothing and reads nothing: every record is
+      caller-supplied and the reduction is pure, so there is no decision to mint. Two
+      properties are the wire layer's own rather than the library's, and both are tested:
+      the parser fills NOTHING in (an omitted `evaluatedOffline` is a 400, not an
+      "online" — a `?? false` here would be the MCP adapter's defect one layer out), and
+      an oversized set is REFUSED rather than truncated, because a dropped record can only
+      remove a restriction. See `docs/OFFLINE_FIRST_SYNC_CATALOG.md` §2a. What remains is
+      the operator-console surface — showing the frontier, the reason codes and which
+      records expired — which is UI work, tracked in the catalog's backlog table.
 
 - [ ] **Mobile-app-catalog scanner phase (intake row 33, owner-instructed YELLOW-lane build).**
       The owner's repository scanner is filed verbatim, UNHARDENED, in

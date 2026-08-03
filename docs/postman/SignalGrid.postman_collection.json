@@ -911,6 +911,33 @@
           }
         },
         {
+          "name": "Reconcile decisions across a partition",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"records\": [\n    {\n      \"id\": \"cloud\",\n      \"outcome\": \"deny\",\n      \"provenance\": {\n        \"policyVersion\": 7,\n        \"coreNormalizationVersion\": 2,\n        \"evaluatedOffline\": false,\n        \"policyKnownSuperseded\": false\n      }\n    },\n    {\n      \"id\": \"device\",\n      \"outcome\": \"allow\",\n      \"provenance\": {\n        \"policyVersion\": 8,\n        \"coreNormalizationVersion\": 2,\n        \"evaluatedOffline\": true,\n        \"policyKnownSuperseded\": false\n      }\n    }\n  ],\n  \"standingBound\": {\n    \"maxStandingSeconds\": 3600,\n    \"elapsedSecondsById\": {\n      \"device\": 600\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/decisions/reconcile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "decisions",
+                "reconcile"
+              ]
+            }
+          }
+        },
+        {
           "name": "Step-up: enrollment options",
           "request": {
             "method": "POST",

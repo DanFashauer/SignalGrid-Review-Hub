@@ -115,6 +115,36 @@ Each of the five negative controls listed in the proof header was applied to
 mutation did *not* break L4 the way the first draft of that comment predicted, which is
 why the proof now states that choice as an outcome as well as an ordering.
 
+### 2a. On the wire
+
+`POST /v1/decisions/reconcile` (`artifacts/api-server/src/routes/v1.ts`), documented in
+`lib/api-spec/v1-openapi.yaml` and exercised by the API integration test.
+
+**The route stores nothing and reads nothing.** Every record is caller-supplied and the
+reduction is pure, so there is no decision id to mint and no evidence snapshot to write.
+That is deliberate rather than incidental: the reconciler answers a question about
+records the caller already holds, and minting a decision here would create a record with
+no evidence behind it.
+
+Two properties belong to the wire layer specifically, because they are the ones a
+correct library can still be wrapped badly by:
+
+- **The parser fills nothing in.** `evaluatedOffline` and `policyKnownSuperseded` are
+  passed through exactly as sent, absent included, so the library's refusal is what the
+  caller meets. A `?? false` here would be the MCP adapter's defect at a different layer
+  — an omitted field buying a record the right to relax — and it would be invisible from
+  the wire, because a defaulted request and an honest one produce the same 200. Two of
+  the API tests exist only to hold that line.
+- **An oversized set is REFUSED, never truncated.** The reduction is O(n²) in the record
+  count so a cap is necessary, and refusing is the load-bearing half: truncating would
+  silently drop records, and dropping a record can only ever remove a restriction. That
+  is the same asymmetry that makes an expired local decision get raised to a floor
+  rather than dropped, applied to the transport.
+
+A posed `standingBound` with no `elapsedSecondsById` becomes an EMPTY map, not an absent
+bound — so every offline record reads as age-unstated and expires. Treating it as "no
+bound posed" would let a caller pose a bound and then escape it by omitting the ages.
+
 ---
 
 ## 3. The state types the proposal names
@@ -231,7 +261,7 @@ Recorded with reasons so a future lane does not read these as unbuilt scope.
 | Open | Note |
 | --- | --- |
 | Swift mirror of `reconcileDecisions` | The device is where an offline decision is actually minted, so `EnterpriseShell` should reconcile on reconnect rather than let the server do it alone. Blocked in the cloud lane (no Swift toolchain) and subject to golden rule 1 — it goes *around* `DecisionEngine.swift`, in a new file, in the `SignalContext.swift` pattern. Tracked alongside the `coreNormalizationVersion` Swift-mirror entry in `docs/BUILD_BACKLOG.md`. |
-| `/v1` arm for reconciliation | Continuity is a library primitive today. Exposing it needs a wire contract, an OpenAPI entry and a console surface; that is a separate, self-contained piece of work rather than something to bolt onto this intake. |
+| Operator console surface for reconciliation | The `/v1` arm ships (see §2a); nothing yet *shows* a reconciliation — the frontier, the reason codes and which records expired are a natural decision-detail panel, and that is UI work rather than fabric work. |
 
 ---
 

@@ -1,6 +1,13 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
-import { CoreError, verifySnapshot, type EvaluateRequest } from "@workspace/signalgrid-core";
+import {
+  CoreError,
+  reconcileDecisions,
+  verifySnapshot,
+  type EvaluateRequest,
+  type ReconcilableDecision,
+  type StandingBound,
+} from "@workspace/signalgrid-core";
 import { getDecisionStore, getSessionStore, type Session } from "@workspace/persistence";
 import { listAppIntegrations, findAppIntegration, planAppSession } from "@workspace/app-workflows";
 import { webauthn, webauthnStore } from "@workspace/webauthn";
@@ -123,6 +130,32 @@ router.get("/v1/decisions/:id/evidence", async (req: Request, res: Response, nex
   } catch (err) {
     next(err);
   }
+});
+
+/**
+ * Reconcile decisions that were made on both sides of a network partition.
+ *
+ * A frontline device that keeps working offline keeps DECIDING offline, so on
+ * reconnect two answers exist for one subject and action. `reconcileDecisions`
+ * (`lib/signalgrid-core/src/continuity.ts`) says which one stands; this is its wire arm.
+ *
+ * THE ROUTE STORES NOTHING AND READS NOTHING. Every record is caller-supplied and the
+ * reduction is pure, so there is no decision id to mint, no evidence snapshot, and
+ * nothing to persist. That is deliberate: the reconciler answers a question about
+ * records the caller already holds, and minting a new decision here would create a
+ * record with no evidence behind it.
+ *
+ * WHAT THIS PARSER DELIBERATELY DOES NOT DO: fill anything in. `evaluatedOffline` and
+ * `policyKnownSuperseded` are passed through exactly as sent, absent included, so the
+ * library's refusal is what the caller meets. A `?? false` here would be the MCP
+ * adapter's defect at a different layer — an omitted field buying the record the right
+ * to relax — and it would be invisible from the wire, because a defaulted request and
+ * an honest one produce the same 200.
+ */
+router.post("/v1/decisions/reconcile", (req: Request, res: Response) => {
+  const { records, standingBound } = parseReconcile(req.body);
+  const result = reconcileDecisions(records, standingBound ? { standingBound } : {});
+  res.json(envelope(req, { reconciliation: result }));
 });
 
 // ── Sessions: durable start / refresh / end lifecycle ────────────────────────
@@ -686,6 +719,86 @@ function parseEvaluate(body: unknown): EvaluateRequest {
       ? sanitizeContext(record["requestContext"] as Record<string, unknown>)
       : undefined;
   return { identityRef, deviceRef, workflowKey, requestContext };
+}
+
+/**
+ * How many decision records one reconcile call may carry.
+ *
+ * The reduction computes a Pareto frontier, which is O(n²) in the record count, so an
+ * unbounded array is a cost the caller controls. The bound REFUSES rather than
+ * truncates, and that is the load-bearing half: truncating would silently drop records
+ * from the set, and dropping a record can only ever remove a restriction — the same
+ * asymmetry that makes an expired local decision get RAISED to a floor instead of
+ * dropped. A partial answer here would be indistinguishable from a complete one.
+ *
+ * Sized for what the surface actually is: the decisions held for ONE subject and action
+ * across a partition, which is a handful in practice. A caller that genuinely has more
+ * has a different problem than reconciliation.
+ */
+const MAX_RECONCILE_RECORDS = 64;
+
+/**
+ * Parse a reconcile request WITHOUT completing it.
+ *
+ * Shape and type are checked here so a malformed body is a clean 400 instead of a
+ * library exception; SEMANTICS are left entirely to `reconcileDecisions`, which already
+ * refuses an unstated `evaluatedOffline`, a non-integer `policyVersion`, a negative
+ * elapsed, a duplicate id carrying two different answers, and an empty set. Re-checking
+ * those here would create a second place for the rules to live and a second place for
+ * them to drift.
+ */
+function parseReconcile(body: unknown): {
+  records: ReconcilableDecision[];
+  standingBound?: StandingBound;
+} {
+  if (!body || typeof body !== "object") {
+    throw new CoreError("validation", "Request body must be a JSON object.", 400);
+  }
+  const record = body as Record<string, unknown>;
+  const raw = record["records"];
+  if (!Array.isArray(raw)) {
+    throw new CoreError("validation", "records must be an array of decision records.", 400);
+  }
+  if (raw.length > MAX_RECONCILE_RECORDS) {
+    throw new CoreError(
+      "validation",
+      `records may carry at most ${MAX_RECONCILE_RECORDS} decisions; ${raw.length} were sent. ` +
+        "The request is refused rather than truncated — a dropped record can only remove a restriction.",
+      400,
+    );
+  }
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      throw new CoreError("validation", "Each record must be a JSON object.", 400);
+    }
+    const provenance = (entry as Record<string, unknown>)["provenance"];
+    if (!provenance || typeof provenance !== "object" || Array.isArray(provenance)) {
+      throw new CoreError("validation", "Each record must carry a provenance object.", 400);
+    }
+  }
+  const records = raw as ReconcilableDecision[];
+
+  const boundRaw = record["standingBound"];
+  if (boundRaw === undefined) return { records };
+  if (!boundRaw || typeof boundRaw !== "object" || Array.isArray(boundRaw)) {
+    throw new CoreError("validation", "standingBound must be a JSON object when present.", 400);
+  }
+  const bound = boundRaw as Record<string, unknown>;
+  const elapsed = bound["elapsedSecondsById"];
+  if (elapsed !== undefined && (!elapsed || typeof elapsed !== "object" || Array.isArray(elapsed))) {
+    throw new CoreError("validation", "standingBound.elapsedSecondsById must be an object.", 400);
+  }
+  // A missing `elapsedSecondsById` becomes an EMPTY map rather than an absent bound —
+  // so every offline record reads as age-unstated and expires. Treating it as "no bound
+  // posed" would let a caller pose a bound and then escape it by omitting the ages,
+  // which is the shape this whole surface exists to refuse.
+  return {
+    records,
+    standingBound: {
+      ...(bound as unknown as StandingBound),
+      elapsedSecondsById: (elapsed ?? {}) as Record<string, number>,
+    },
+  };
 }
 
 const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);

@@ -144,7 +144,7 @@
     "proof:mcp-server": "pnpm --filter @workspace/scripts run proof:mcp-server",
     "proof:live-keycloak": "pnpm --filter @workspace/scripts run proof:live-keycloak",
     "verify:live": "./scripts/run-live-lanes.sh",
-    "prepare": "node scripts/install-git-hooks.mjs"
+    "prepare": "test -f scripts/install-git-hooks.mjs && node scripts/install-git-hooks.mjs || exit 0"
   },
   "private": true,
   "devDependencies": {

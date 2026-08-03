@@ -71,6 +71,31 @@ needed. Both entries are real, both cost real time.
    valid and last-one-wins, so a gate can disappear without any parser complaining.
    Whenever this merge lands on a shared registry file, `grep -c` the key.
 
+3. **A root `prepare` hook broke the prod image, and only CI could see it.** The Mac
+   lane added `"prepare": "node scripts/install-git-hooks.mjs"` to the root
+   `package.json`. `Dockerfile.api` deliberately copies a MINIMAL slice of `scripts/`
+   — the workspace manifest plus the one hook entrypoint it knew about — so the new
+   file was not in the image and `pnpm install` died inside `docker build` with
+   `Cannot find module '/app/scripts/install-git-hooks.mjs'`. Every local gate stayed
+   green, because every local gate reads source.
+   **Two things are worth carrying forward.** First, it surfaced on the cloud lane's
+   PR before the base branch's own CI showed it, because GitHub builds the PR MERGE
+   ref — my branch plus the current base — so a lane can be broken by a base commit it
+   has not merged yet. Checking `mergeable_state` is not enough; the merge ref runs
+   code neither branch has in isolation. Second, `install-git-hooks.mjs` is written to
+   be non-fatal in every branch (it exits 0 on CI, on a missing `.git`, on a missing
+   hook file) and none of that care survived the file being ABSENT, because
+   `node <missing file>` fails before its first line runs. **A script's own defensive
+   handling cannot cover the case where the script is not there.**
+   Resolved by copying the entrypoint in both Dockerfiles — which also surfaced that
+   `Dockerfile.web` had never copied `scripts/` at all and would have failed on the
+   OLDER `preinstall` hook for anyone who built it, latent because the compose smoke
+   only builds the API image — and by deriving the requirement instead of remembering
+   it: `scripts/check-docker-lifecycle-copy.mjs` reads the root lifecycle hooks out of
+   `package.json` and fails if any Dockerfile that runs `pnpm install` does not carry
+   their entrypoints. Wired into preflight and CI, since the compose smoke is one of
+   the three CI jobs preflight does not mirror.
+
 ## Standing hazards (learned, not hypothetical)
 
 - `validate-sim-macos.sh` runs `pnpm add -w` and rewrites `package.json` /

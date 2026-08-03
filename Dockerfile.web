@@ -5,6 +5,13 @@ WORKDIR /app
 RUN corepack enable pnpm
 
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+# Same requirement as Dockerfile.api: the root `preinstall` and `prepare` hooks run
+# from here, so their entrypoints must exist in the image or `pnpm install` dies.
+# This image is NOT built by the prod-compose smoke, so the omission was latent —
+# `docker build -f Dockerfile.web .` has been failing on the preinstall hook for
+# anyone who tried it, with nothing in CI to say so. Found by deriving the required
+# list from package.json rather than by building it.
+COPY scripts/package.json scripts/enforce-pnpm.cjs scripts/install-git-hooks.mjs ./scripts/
 COPY lib/ ./lib/
 COPY artifacts/signalgrid-web/ ./artifacts/signalgrid-web/
 COPY artifacts/signalgrid-app/ ./artifacts/signalgrid-app/

@@ -52,6 +52,12 @@ const STEPS = [
   // `--lockfile-only` resolves without fetching tarballs: exit 0 when consistent
   // even with an unwarmed store, exit 1 on a real mismatch. Both verified.
   { name: "Lockfile matches manifests (what CI installs with)", cmd: ["pnpm", "install", "--frozen-lockfile", "--lockfile-only"] },
+  // Immediately after the lockfile gate, and for the same reason: the Docker-compose
+  // smoke is one of the three CI jobs this file does NOT mirror, so anything only a
+  // `docker build` can see is invisible here by construction. A root lifecycle hook
+  // whose entrypoint the Dockerfile does not COPY is exactly that — every source-reading
+  // gate stays green and the image build dies on `pnpm install`. Reads two text files.
+  { name: "Docker carries every install-hook entrypoint", cmd: ["node", "scripts/check-docker-lifecycle-copy.mjs"] },
   { name: "Invariant review (fail-closed / determinism / Assist / truth)", cmd: ["node", "scripts/review-invariants.mjs"] },
   { name: "Docs sanity (required docs + unsafe-claim scan)", cmd: ["node", "scripts/docs-sanity.mjs"] },
   { name: "Doc orphans (a new doc must be reachable from an index)", cmd: ["node", "scripts/check-doc-orphans.mjs"] },

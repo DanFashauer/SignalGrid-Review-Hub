@@ -198,6 +198,55 @@ The rule that follows is short: **when the caller is an agent, every optional in
 a claim, and omitting it is a non-claim rather than a pass.** Hand the caller's value
 through and let the normalizer decide what silence means.
 
+## Where SignalGrid sits when the buyer builds an AI platform team
+
+The tool role above answers *what calls SignalGrid*. The next question is *who owns the
+thing that calls it*, and the enterprise-AI operating-model literature has converged on
+an answer: a dedicated **AI Platform Engineering** organization, running AI the way
+DevOps taught the industry to run cloud — ModelOps, PromptOps, KnowledgeOps, AgentOps,
+GovernanceOps, and a shared platform beneath them all.
+
+Three of those domains are outside SignalGrid **by construction, not by omission**, and
+the distinction is worth stating precisely because "we don't do that" and "we cannot do
+that and that is the point" are different claims. SignalGrid runs no model, holds no
+prompt in any decision path, and owns no knowledge base. Golden rule 2 forbids a clock or
+a random source in a decision path, and `@workspace/signalgrid-core` declares zero
+dependencies. ModelOps, PromptOps and KnowledgeOps have nothing to attach to here — and
+that emptiness is what keeps the core small enough to be replayed, digested and proven.
+
+Where SignalGrid *does* sit is in that team's service catalogue, next to shared identity
+and shared observability: **the shared policy-enforcement and governance service.** The
+charter such a team is given — "identity integration, platform governance, security
+controls, platform reliability" — names the seam directly. And the framing that
+governance is *an operational capability rather than an annual audit* is not an
+aspiration to adopt here; it is the fabric's premise, already load-bearing: every
+decision is per-action at runtime, carrying its policy version and a digest-sealed
+evidence snapshot into a chained ledger.
+
+### One metric in that operating model points the wrong way
+
+The literature proposes replacing benchmark scores with business metrics, and the list is
+mostly right: hours saved, incident-resolution speed, workflows completed autonomously,
+recommendations accepted, operational risk reduced. One entry on it is different:
+**"how often did humans intervene."**
+
+SignalGrid produces that number — a `step_up` *is* a human intervention, and
+`MetricsSummary.byOutcome` counts them. Read as an efficiency metric it has an obvious
+direction: drive it down. And the cheapest way to drive it down is to stop asking.
+
+That is the unearned affirmative arriving as a KPI rather than as a code defect, which
+makes it harder to see than any of the versions this repo has already fixed in source. A
+dropped `?? "healthy"` is a diff someone can review. A quarterly target that rewards
+fewer step-ups is a goal nobody reviews as a change to the decision path at all, and it
+applies pressure to every future policy edit at once.
+
+So the position is: **the step-up rate is a health signal, not a cost.** It says the
+fabric is finding the cases it should find. A falling step-up rate with unchanged device,
+identity and workflow posture is a regression to investigate, not an improvement to
+report — and the pairing that makes it legible is the one the fabric already emits
+alongside it: `restrictDenyRate` and `decisionsWithEvidence`. Intervention counts mean
+nothing without the posture they were measured against.
+
 This is not theoretical. Three defects of exactly that shape were found and fixed on
 SignalGrid's own MCP surface in a single session:
 

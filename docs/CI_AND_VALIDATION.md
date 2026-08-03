@@ -181,6 +181,28 @@ The response was to register the file by hand rather than widen the rule until i
 rule is correct for what it was written to cover; stretching it to catch one more case
 would have made it harder to reason about and no more complete.
 
+**The same shape turned up again in a different guard** (intake ledger row 55).
+`proof:absent-collection` pins one law — *nothing observed is not the same as nothing
+wrong* — at every site that grades a collection, and it named seven. The `carrier`
+dimension was not among them, and it held the plainest violation in the repository:
+`wifiOnly` was derived from three absences (no ICCID, no SMS capability, no data
+session) and asserted the positive fact "this device has no cellular backchannel at
+all", which the evaluator short-circuited on ahead of every other check while
+reporting `locatable: false`.
+
+What made it invisible is that no amount of carrier-side evidence can settle the
+question. A carrier API reports SIMs on the account it was asked about; silence covers
+a partial read, a paginated tail, an eSIM on another operator's platform, and a device
+attached to a private 5G network it has never heard of. So the fix is not a fourth
+condition but a change of plane: the axis is posed from device inventory, a
+carrier-only read now asserts its own ceiling (`unknown` on every signal, pinned by the
+proof), and *no radio* and *nobody told us* resolve to different postures so no
+consumer can conflate them. Five assertions were added to the law's proof and
+negative-controlled — restoring the old default fails three of them.
+
+Both cases share a lesson worth stating once: a guard's registry is itself a claim
+about coverage, and it goes stale in exactly the way the guard exists to prevent.
+
 **The sweep immediately earned it.** 22 mutations, 18 killed, **four survivors** — all
 four shape-checks that the proof's `refuses()` helper structurally could not distinguish,
 because it asserts only that a `CoreError` with code `validation` came back and each shape

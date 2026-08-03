@@ -39,6 +39,7 @@ import * as identityRisk from "@workspace/integrations/identity-risk";
 import * as peripheral from "@workspace/integrations/peripheral-control";
 import * as credential from "@workspace/integrations/credential-exposure";
 import { composeDeviceRisk, fromThreat } from "@workspace/posture-composition";
+import { evaluateReachability, normalizeSession } from "@workspace/integrations/carrier";
 
 let passed = 0;
 const failures: string[] = [];
@@ -314,6 +315,65 @@ check(
   `${unobservedComposed.riskTier}/${scannedComposed.riskTier} — if this changed, TIER_BY_ACTION was ` +
     "revisited: update this assertion and say so in docs/BUILD_BACKLOG.md",
 );
+
+// ── carrier: the site the law was WRITTEN for, and was never enrolled at ──────
+//
+// Intake ledger row 55. This proof pinned the law at seven sites and `carrier` was
+// not one of them, so the plainest violation in the repository sat outside the gate
+// that exists to catch it. The normalizer read:
+//
+//     const wifiOnly = !session.iccid && session.smsCapable !== true && session.dataConnected !== true;
+//
+// — three absences combined into the positive assertion "this device has NO cellular
+// backchannel at all", which the evaluator then short-circuited on ahead of every
+// other check, reporting `locatable: false`. A coverage rule that is right for what
+// it covers can still leave a hole; the response is to enrol the site, not to widen
+// a rule until it fits.
+//
+// The deeper reason this one could never be fixed by adding a fourth condition: a
+// carrier API cannot prove the absence of a radio. It reports SIMs on the account it
+// was asked about, and silence there covers a partial read, a paginated tail, an
+// eSIM on another operator's platform, and a PRIVATE 5G attachment it has never
+// heard of. So the axis is POSED from the device-inventory plane, and the caution is
+// still derived rather than requested: omitting it yields `unknown`, which forecloses.
+{
+  const SILENT = { deviceId: "d", sessionState: "", dataConnected: false, smsCapable: false, billingState: "active" };
+  const OBSERVED = "2026-08-03T12:00:00Z";
+  const NOW = Date.parse(OBSERVED);
+
+  const unposed = normalizeSession(SILENT, OBSERVED);
+  check(
+    "carrier: a wholly silent carrier record does NOT assert an absent radio",
+    unposed.cellularBackchannel === "unknown",
+    `backchannel=${unposed.cellularBackchannel}`,
+  );
+  const unposedVerdict = evaluateReachability(unposed, NOW);
+  check(
+    "carrier: …it raises monitor and names the coverage gap, rather than alerting on a fact nobody observed",
+    unposedVerdict.recommendedAction === "monitor" && unposedVerdict.reasonCode === "BACKCHANNEL_UNPOSED",
+    `action=${unposedVerdict.recommendedAction} reason=${unposedVerdict.reasonCode}`,
+  );
+  const posedAbsent = evaluateReachability(normalizeSession(SILENT, OBSERVED, "absent"), NOW);
+  check(
+    "carrier: …and an explicitly POSED absent radio is still allowed to be the strong finding",
+    posedAbsent.reasonCode === "NO_CELLULAR_BACKCHANNEL" && posedAbsent.recommendedAction === "alert",
+    `action=${posedAbsent.recommendedAction} reason=${posedAbsent.reasonCode}`,
+  );
+  // The distinction has to be VISIBLE, not merely internal: a consumer reading the
+  // posture must be able to tell "no radio" from "we could not tell".
+  check(
+    "carrier: the two answers are different postures, so no consumer can conflate them",
+    unposedVerdict.posture !== posedAbsent.posture,
+    `${unposedVerdict.posture} vs ${posedAbsent.posture}`,
+  );
+  // NON-VACUITY: a posed `present` must not make the silent record look reachable.
+  const posedPresent = evaluateReachability(normalizeSession(SILENT, OBSERVED, "present"), NOW);
+  check(
+    "carrier: posing `present` does not launder an unreadable session into reachability",
+    posedPresent.posture !== "reachable" && posedPresent.locatable === false,
+    `posture=${posedPresent.posture} locatable=${posedPresent.locatable}`,
+  );
+}
 
 const total = passed + failures.length;
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${total})`);

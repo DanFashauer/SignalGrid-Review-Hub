@@ -27,7 +27,7 @@ import {
 interface ExpectedRow {
   cellularReachability: string;
   smsReachable: boolean;
-  wifiOnly: boolean;
+  cellularBackchannel: string;
   provisioning: string;
   posture: string;
   reasonCode: string;
@@ -85,7 +85,36 @@ const connector = new CarrierReachabilityConnector(
 const listed = await connector.listSessions();
 check(`pagination reassembles all ${fixture.sessions.length} sessions`, listed.length === fixture.sessions.length);
 
-const signals = await connector.fetchReachability(OBSERVED_AT);
+// THE CEILING OF A CARRIER-ONLY READ, asserted before anything else uses it.
+// Whether a device HAS a radio is a device-inventory fact; this connector talks to
+// one plane and must not guess at another's. Intake ledger row 55: the previous
+// version derived it from three absences (no ICCID, no SMS capability, no data
+// session) and asserted "no cellular backchannel at all" — so a device the carrier
+// simply could not see was reported as having no radio, with `locatable: false`
+// attached. A private-5G attachment produces exactly that wire shape.
+const unposed = await connector.fetchReachability(OBSERVED_AT);
+check(
+  `a carrier-only read can NEVER assert the backchannel axis — all ${unposed.length} signals read \`unknown\``,
+  unposed.length > 0 && unposed.every((s) => s.cellularBackchannel === "unknown"),
+);
+check(
+  "...and that includes the device whose every relevant field is silent — silence is not a finding",
+  unposed.find((s) => s.deviceId === "dev-private-5g")?.cellularBackchannel === "unknown",
+);
+// A posed map cannot be poisoned through the prototype chain.
+check(
+  "a prototype key cannot pose the axis",
+  (await connector.fetchReachability(OBSERVED_AT, JSON.parse('{"__proto__":{"dev-private-5g":"absent"}}')))
+    .every((s) => s.cellularBackchannel === "unknown"),
+);
+
+// Now pose each fixture's own answer and check the normalization end to end.
+const posed: Record<string, string> = {};
+for (const s of fixture.sessions) posed[s.deviceId] = s.expected.cellularBackchannel;
+const signals = await connector.fetchReachability(
+  OBSERVED_AT,
+  posed as Readonly<Record<string, "present" | "absent" | "unknown">>,
+);
 const byDevice = new Map<string, ReachabilitySignal>(signals.map((s) => [s.deviceId, s]));
 
 for (const s of fixture.sessions) {
@@ -94,9 +123,9 @@ for (const s of fixture.sessions) {
     !!sig &&
     sig.cellularReachability === s.expected.cellularReachability &&
     sig.smsReachable === s.expected.smsReachable &&
-    sig.wifiOnly === s.expected.wifiOnly &&
+    sig.cellularBackchannel === s.expected.cellularBackchannel &&
     sig.provisioning === s.expected.provisioning;
-  check(`normalize ${s.deviceId} → ${s.expected.cellularReachability}/${s.expected.provisioning}${s.expected.wifiOnly ? "/wifiOnly" : ""}`, normOk);
+  check(`normalize ${s.deviceId} → ${s.expected.cellularReachability}/${s.expected.provisioning}/${s.expected.cellularBackchannel}`, normOk);
 }
 check(
   "provenance is deterministic (sourceSystem + observedAt + correlationId)",

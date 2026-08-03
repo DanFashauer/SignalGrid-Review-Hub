@@ -325,6 +325,56 @@ the concrete form of this positioning: if SignalGrid is going to sit in the tool
 of an agent architecture, the thing it owes that architecture is an answer that never
 claims more than the caller gave it.
 
+## Where SignalGrid sits when the network is private 5G
+
+Intake ledger row 55. The owner's framing is the right one and worth keeping verbatim:
+**5G connects the devices; SignalGrid decides what the connected situation means.**
+Private wireless, network slicing and MEC give the grid more real-world signals; none
+of them decide anything about a workflow, and SignalGrid does not run a network.
+
+The expansion story is genuinely large — manufacturing, warehouse, logistics,
+healthcare, smart city, energy, fleet, remote operations — and it is explicitly **not
+the launch wedge**. The wedge stays Entra + Intune → one shared-device workflow → one
+customer-approved sandbox → one live decision loop. This section is the expansion map,
+recorded so the sequencing is a decision rather than a drift.
+
+**What already exists.** The connectivity plane is not a gap; it is four deliberately
+non-overlapping dimensions, each of which stops where the next begins:
+
+| Question | Dimension | Where it stops |
+| --- | --- | --- |
+| Was the device admitted to the network? | `network-nac` | The point of connection — 802.1X, segment, quarantine, and the switch port as coarse location. |
+| Is the link it landed on actually carrying traffic? | `link-usability` | Association, auth, DHCP and DNS as separate rungs, because "associated" is a console number standing in for a fact it does not cover. |
+| Is its egress traversing the mandated edge? | `sse-egress` | Graded only when the deployment poses a mandate. |
+| Can we reach it out of band once managed Wi-Fi is gone? | `carrier` | What a carrier API can see — and, since row 55, honest about what it cannot. |
+
+That separation is the same point NIST's 5G design guidance makes about keeping data,
+control and operations/maintenance planes apart: **separate evidence sources, not one
+vague "the network is good" signal.** The fabric arrived at it one plane at a time and
+the boundary is written into each dimension's header rather than left to convention.
+
+**What the private-network premise actually changed.** It exposed a live conflation in
+`carrier`, which had derived "this device has no cellular backchannel at all" from three
+absences — no ICCID, no SMS capability, no data session. A public carrier API cannot
+prove the absence of a radio; it reports SIMs on the account it was asked about. A
+device attached to a private 5G network produces exactly that silent record and is
+emphatically not Wi-Fi-only. The axis is now posed from the device-inventory plane, and
+the two answers — *no radio* and *nobody told us* — are different postures so no
+consumer can conflate them.
+
+**What stays refused, and why.** Slice membership, QoS state and edge-node identity are
+real and are **admissible when the launch plane changes** — the same disposition row 53
+gave evidence-substitution. The reason is not that they are uninteresting: "this session
+is on the URLLC slice" is precisely the kind of affirmative that, if stale, would
+manufacture a grant for a latency-critical action over a best-effort path. It is that a
+dimension nobody consumes fires forever with no listener, and today no workflow poses a
+slice requirement. The entry requirement is a deployment that states one.
+
+Sensor readings and sensor semantics stay out entirely: what a temperature or torque
+value *means* is domain safety, and domain safety belongs in the host app. `freshUntil`
+is refused for the fourth time on the row-48 reasoning — a source asserting its own
+validity window is a self-certified affirmative; the caller poses the bound.
+
 ## Claim boundaries
 
 This public positioning artifact intentionally avoids unsafe claims:

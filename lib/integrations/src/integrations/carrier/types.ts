@@ -38,6 +38,11 @@ export interface CarrierCollection<T> {
 }
 
 export type CellularReachability = "online" | "idle" | "offline" | "unknown";
+/** Whether the device has a cellular backchannel AT ALL — a hardware/provisioning
+ *  fact, distinct from whether it is reachable right now. `present` and `absent`
+ *  are both POSITIVE statements from the device-inventory plane; `unknown` means
+ *  nobody said, which a carrier read alone can never resolve. */
+export type CellularBackchannel = "present" | "absent" | "unknown";
 export type ProvisioningState = "active" | "suspended" | "deactivated" | "unknown";
 export type Freshness = "fresh" | "stale" | "unknown";
 
@@ -56,8 +61,14 @@ export interface ReachabilitySignal {
   freshness: Freshness;
   roaming: boolean;
   provisioning: ProvisioningState;
-  /** True when the device has NO cellular backchannel at all (Wi-Fi-only). */
-  wifiOnly: boolean;
+  /** Does this device HAVE a cellular backchannel at all?
+   *
+   *  POSED from the device-inventory plane, never derived from carrier silence —
+   *  see the long note on `normalizeSession`. `absent` is a positive statement
+   *  that the hardware has no modem (or no provisioned profile of any kind);
+   *  `unknown` is the honest default, and it is what a device on a PRIVATE 5G
+   *  network reads as, because no public carrier API can see one. */
+  cellularBackchannel: CellularBackchannel;
 }
 
 // ── Pure evaluator output ──────────────────────────────────────────────────────
@@ -66,7 +77,11 @@ export type ReachabilityPosture =
   | "reachable"
   | "degraded"
   | "unreachable"
-  | "wifi_only_blindspot"
+  | "no_cellular_backchannel"
+  /** The device-inventory plane never said whether a radio exists, and the carrier
+   *  read could not resolve it either. A COVERAGE state, not a claim about the
+   *  device — a private-5G attachment reads exactly like this. */
+  | "backchannel_unverified"
   | "unknown";
 
 export type ReachabilityReasonCode =
@@ -75,7 +90,8 @@ export type ReachabilityReasonCode =
   | "CELLULAR_IDLE_SMS_OK"
   | "OFFLINE_SMS_ONLY"
   | "FULLY_UNREACHABLE"
-  | "WIFI_ONLY_NO_CELLULAR"
+  | "NO_CELLULAR_BACKCHANNEL"
+  | "BACKCHANNEL_UNPOSED"
   | "PROVISIONING_SUSPENDED"
   | "STALE_LAST_SEEN"
   | "REACHABILITY_UNKNOWN";

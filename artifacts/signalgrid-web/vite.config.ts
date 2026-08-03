@@ -34,9 +34,17 @@ export default defineConfig({
         // Split stable vendor code into long-term-cacheable chunks so an app
         // change does not bust React / animation library caches, and the
         // initial payload is not one monolithic bundle.
-        manualChunks: {
-          "react-vendor": ["react", "react-dom"],
-          motion: ["framer-motion"],
+        //
+        // FUNCTION form, not the object form. Vite 8 replaces Rollup with
+        // Rolldown, which supports only the function — an object fails the build
+        // outright with "TypeError: manualChunks is not a function". The function
+        // works under both bundlers, so this is not a migration so much as a
+        // correction: the other four artifacts in this repo already write it this
+        // way, and signalgrid-web was the odd one out.
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          if (id.includes("/react/") || id.includes("/react-dom/") || id.includes("/scheduler/")) return "react-vendor";
+          if (id.includes("framer-motion")) return "motion";
         },
       },
     },

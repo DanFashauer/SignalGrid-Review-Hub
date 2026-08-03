@@ -166,13 +166,6 @@
     },
     {
       "type": "library",
-      "name": "@date-fns/tz",
-      "version": "1.4.1",
-      "bom-ref": "pkg:npm/%40date-fns/tz@1.4.1",
-      "purl": "pkg:npm/%40date-fns/tz@1.4.1"
-    },
-    {
-      "type": "library",
       "name": "@esbuild/linux-x64",
       "version": "0.27.3",
       "bom-ref": "pkg:npm/%40esbuild/linux-x64@0.27.3",
@@ -985,13 +978,6 @@
     },
     {
       "type": "library",
-      "name": "@tabby_ai/hijri-converter",
-      "version": "1.0.5",
-      "bom-ref": "pkg:npm/%40tabby_ai/hijri-converter@1.0.5",
-      "purl": "pkg:npm/%40tabby_ai/hijri-converter@1.0.5"
-    },
-    {
-      "type": "library",
       "name": "@tailwindcss/node",
       "version": "4.3.0",
       "bom-ref": "pkg:npm/%40tailwindcss/node@4.3.0",
@@ -1650,24 +1636,10 @@
     },
     {
       "type": "library",
-      "name": "date-fns-jalali",
-      "version": "4.1.0-0",
-      "bom-ref": "pkg:npm/date-fns-jalali@4.1.0-0",
-      "purl": "pkg:npm/date-fns-jalali@4.1.0-0"
-    },
-    {
-      "type": "library",
       "name": "date-fns",
       "version": "3.6.0",
       "bom-ref": "pkg:npm/date-fns@3.6.0",
       "purl": "pkg:npm/date-fns@3.6.0"
-    },
-    {
-      "type": "library",
-      "name": "date-fns",
-      "version": "4.1.0",
-      "bom-ref": "pkg:npm/date-fns@4.1.0",
-      "purl": "pkg:npm/date-fns@4.1.0"
     },
     {
       "type": "library",
@@ -3085,13 +3057,6 @@
     },
     {
       "type": "library",
-      "name": "react-day-picker",
-      "version": "9.14.0",
-      "bom-ref": "pkg:npm/react-day-picker@9.14.0",
-      "purl": "pkg:npm/react-day-picker@9.14.0"
-    },
-    {
-      "type": "library",
       "name": "react-dom",
       "version": "19.1.0",
       "bom-ref": "pkg:npm/react-dom@19.1.0",
@@ -3145,13 +3110,6 @@
       "version": "2.7.2",
       "bom-ref": "pkg:npm/react-remove-scroll@2.7.2",
       "purl": "pkg:npm/react-remove-scroll@2.7.2"
-    },
-    {
-      "type": "library",
-      "name": "react-resizable-panels",
-      "version": "2.1.9",
-      "bom-ref": "pkg:npm/react-resizable-panels@2.1.9",
-      "purl": "pkg:npm/react-resizable-panels@2.1.9"
     },
     {
       "type": "library",

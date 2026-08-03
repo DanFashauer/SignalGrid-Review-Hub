@@ -191,4 +191,23 @@ if (failed) {
   console.error(`\nPreflight FAILED at: ${failed}. Fix before pushing.`);
   process.exit(1);
 }
-console.log(`\nPreflight PASSED${quick ? " (quick — heavy builds skipped)" : ""}. Safe to push.`);
+// "Safe to push" was an overstatement, and it was believed. This harness mirrors
+// THREE of the six CI jobs; the other three need external services it cannot start.
+// Twice now a green preflight was read as proof and the push went red anyway — once
+// on a lockfile CI could not install, once on a Docker image build. Both times the
+// header already said this. A caveat nobody reads at the moment of decision is not a
+// caveat, so it now prints WITH the verdict rather than being documented above it.
+//
+// Same rule the status file follows: never claim more than the run verified.
+const UNCOVERED = [
+  "deploy-stack        (Docker image + compose smoke)",
+  "durable-persistence (Postgres audit ledger)",
+  "secret-scan         (gitleaks)",
+];
+console.log(`\nPreflight PASSED${quick ? " (quick — heavy builds skipped)" : ""} — everything it runs is green.`);
+console.log("\n  NOT covered by this harness (CI runs these; a green preflight says nothing about them):");
+for (const j of UNCOVERED) console.log(`    · ${j}`);
+if (quick) console.log("    · the full monorepo build + browser E2E (--quick skipped them; drop --quick to include)");
+console.log("\n  Changed a Dockerfile, a lifecycle script, or dependencies? Build the image before");
+console.log("  pushing — `docker compose -f docker-compose.prod.yml up -d --build` — because");
+console.log("  nothing above does.");

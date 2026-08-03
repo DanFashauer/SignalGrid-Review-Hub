@@ -144,6 +144,40 @@ only), and the DDM rig is gated on an APNs push certificate.
 
 ## Owner-gated (needs a decision before an agent builds it)
 
+- [ ] **186 vendored shadcn components are unreferenced, holding 21 packages alive.**
+      ⚠️ **Owner decision: is this dead code, or an installed component library?**
+      Measured, not estimated — same conservative check that justified deleting
+      chart/calendar/resizable (`e5bad8e`): a component counts only if its module
+      path appears NOWHERE in the repo outside its own file.
+
+      31 distinct components, each unused in **all six** artifacts: accordion, alert,
+      aspect-ratio, avatar, breadcrumb, button-group, carousel, checkbox, collapsible,
+      command, context-menu, drawer, dropdown-menu, empty, field, hover-card,
+      input-group, input-otp, item, kbd, menubar, navigation-menu, pagination, popover,
+      progress, radio-group, scroll-area, slider, sonner, spinner, toggle-group.
+
+      They keep **21 packages** in the tree that nothing else imports: 16 `@radix-ui/*`
+      plus `cmdk`, `embla-carousel-react`, `input-otp`, `next-themes`, `sonner`. Each is
+      a future major that will break code nobody calls — precisely what happened with
+      react-resizable-panels (#157) and react-day-picker.
+
+      WHY THIS IS NOT SIMPLY DELETED, unlike the first three: those were BLOCKING a
+      dependency update, so removing them resolved a live problem. These block nothing
+      today, and vendored shadcn components are commonly kept on purpose so a developer
+      can reach for `dropdown-menu` without re-adding it. That trade-off — 21 fewer
+      dependencies against having the palette ready — is a workflow preference, not an
+      engineering fact, and it is not mine to settle.
+
+      If the answer is "delete": it is reversible (`npx shadcn@latest add <name>`
+      regenerates them), and the same verification applies — typecheck, 6/6 build,
+      E2E 35/35, then regenerate the SBOM, which will fail preflight until you do.
+
+      NOTE ON METHOD: a reachability analysis from entry points reported 281/314
+      unreachable. That number is WRONG and was discarded — four artifacts load
+      components through dynamic `import()`, and mockup-sandbox through an auto-generated
+      module map that is empty at rest, so a static graph walk cannot see them. The
+      186 figure above uses textual reference only, which makes no such assumption.
+
 - [ ] **The UI-library majors (recharts / react-day-picker / react-resizable-panels /
       zod 4 + @hookform/resolvers).** Must ship WITH the bump — measured, not assumed.
       The grouping policy is fixed (`f51d86a`), so these now arrive as separate

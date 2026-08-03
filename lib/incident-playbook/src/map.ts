@@ -224,6 +224,19 @@ function categoryForKind(kind: string, reason?: string): IncidentCategory {
     // agent — owned by the same Identity & Access queue: the fix is enroll or
     // re-provision, not a SecOps investigation and not a generic ticket.
     case "challenge_capability":
+    // `service_lifecycle` is the joiner-mover-leaver plane read from the SERVICE
+    // side: entitlements stripped with no departure recorded, entitlements
+    // outliving one, or a service plan assigned AFTER a departure no rehire
+    // explains. Same queue as `access_governance`, and deliberately so — these are
+    // the two witnesses whose DISAGREEMENT is the finding, so splitting them across
+    // queues would hand each half to someone who cannot see the other.
+    //
+    // Never SecOps: a half-finished offboarding is a governance failure to complete,
+    // not an intrusion to investigate — and the most common cause of the stripped
+    // reading is an automated licence-reclamation sweep, which is finance's
+    // housekeeping rather than anybody's attack. Never the generic Service Desk: the
+    // fix is an entitlement decision, not a ticket.
+    case "service_lifecycle":
     case "agent_identity":
     case "data_protection":
       return "security_compliance";

@@ -22,6 +22,7 @@
 //   8. NO NETWORK I/O in the family.
 
 import { readFileSync, readdirSync } from "node:fs";
+import { composeDeviceRisk, fromServiceLifecycle } from "@workspace/posture-composition";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -743,6 +744,58 @@ const verdicts = space.map((s) => evaluateServiceLifecycle(s));
   check(
     "...and that scan fires on a planted clock read",
     /\bDate\.now\s*\(|\bnew\s+Date\s*\(\s*\)|\bMath\.random\s*\(/.test("const t = Date.now();"),
+  );
+}
+
+// ── 13. The composition adapter carries the distinction, not just the action ──
+//
+// A dimension that never reaches a decision is a dimension nobody consumes. The
+// adapter is what puts this one in front of `composeDeviceRisk` — and the thing it
+// must not lose on the way is that THREE outcomes carry action `none` and mean
+// different things: `consistent` is corroboration, `unassessed` is a deployment with
+// no licensing bridge, and `deferred` is this dimension standing down because
+// access-governance already holds the concern. A composition layer reading the action
+// alone would call all three fine.
+{
+  const signal = (fixture: string) => fromServiceLifecycle(evaluateServiceLifecycleFixture(fixture)!);
+
+  check(
+    "the adapter maps onto the unified ladder without inventing a rung",
+    (["consistent-current-employee", "stripped-while-account-plane-clean", "re-armed-after-departure"] as const).every(
+      (f) => signal(f).action === evaluateServiceLifecycleFixture(f)!.recommendedAction,
+    ),
+  );
+  check(
+    "…and it carries the reason code through, so evidence names WHICH finding fired",
+    signal("re-armed-after-departure").reason === "SERVICE_REASSIGNED_AFTER_CLOSURE",
+  );
+
+  const nonePostures = new Set(
+    (["consistent-current-employee", "no-service-plane", "account-plane-already-authoritative"] as const).map((f) => {
+      const sig = signal(f);
+      return sig.action === "none" ? sig.posture : `UNEXPECTED_ACTION:${sig.action}`;
+    }),
+  );
+  check(
+    `three action-\`none\` outcomes survive the adapter as ${nonePostures.size} distinct postures`,
+    nonePostures.size === 3 && ["consistent", "unassessed", "deferred"].every((p) => nonePostures.has(p)),
+  );
+
+  // And the restrict actually drives a composed decision — the whole point of wiring
+  // an adapter rather than leaving the dimension on a shelf.
+  const composed = composeDeviceRisk([signal("re-armed-after-departure")]);
+  check(
+    `a re-armed departed account drives the composed action to restrict (${composed.strongestAction})`,
+    composed.strongestAction === "restrict",
+  );
+  check(
+    "…and the driver names this dimension, so an operator can see where it came from",
+    JSON.stringify(composed).includes("service_lifecycle"),
+  );
+  // NON-VACUITY: the clean fixture must NOT drive a restrict.
+  check(
+    "…while a consistent principal composes to no action at all",
+    composeDeviceRisk([signal("consistent-current-employee")]).strongestAction === "none",
   );
 }
 

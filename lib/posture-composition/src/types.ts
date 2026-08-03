@@ -82,6 +82,7 @@ export const SIGNAL_KINDS = [
   "device_management_health",
   "link_usability",
   "task_exception",
+  "service_lifecycle",
   "detection",
 ] as const;
 

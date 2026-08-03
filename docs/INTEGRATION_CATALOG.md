@@ -576,7 +576,7 @@ proof reports — the numbers below are therefore evidence, not claims.
 - **`proof:entitlement-binding` (57 checks)** — whether a grant is *reviewable*, not
   merely correct. Includes a **1,200-state sweep** with the clean path pinned to
   *exactly 18*, plus coherence checks that reject a report contradicting itself.
-- **`proof:service-lifecycle` (76 checks)** — whether the *service* plane still agrees
+- **`proof:service-lifecycle` (82 checks)** — whether the *service* plane still agrees
   with the *account* plane that this principal is here. `access-governance` grades
   `accountStatus`, and `active` is its clean state; but a Microsoft tenant reclaims the
   licence first (it bills monthly) and disables the account second (it costs nothing),
@@ -598,6 +598,12 @@ proof reports — the numbers below are therefore evidence, not claims.
   mistake "we never looked" for "we looked and it was fine". No clock appears anywhere
   in the family: the ordering question is answered by comparing two source-reported
   instants to each other, asserted by a source scan alongside the vendor-call scan.
+  The dimension reaches a decision through `fromServiceLifecycle` in
+  `posture-composition` — the same path every other restrict-capable dimension takes —
+  and the proof asserts what that path must not lose: the three action-`none` outcomes
+  survive the adapter as three distinct postures, and a re-armed departed account
+  actually drives the composed action to `restrict` while a consistent one composes to
+  nothing.
 - **`proof:device-resolver` (14 checks)** — the injection boundary. `deviceResolver`
   typed its NAC adapter map as `any`, so the read-only `NACAdapter` interface was not
   enforced at the one call site that consumes it. TypeScript alone cannot close this:

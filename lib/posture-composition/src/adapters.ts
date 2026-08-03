@@ -28,6 +28,7 @@ import type { ChangeWindowVerdict } from "@workspace/integrations/change-window"
 import type { BootstrapCredentialVerdict } from "@workspace/integrations/bootstrap-credential";
 import type { ChallengeCapabilityVerdict } from "@workspace/integrations/challenge-capability";
 import type { SseEgressVerdict } from "@workspace/integrations/sse-egress";
+import type { ServiceLifecycleVerdict } from "@workspace/integrations/service-lifecycle";
 import type { LocationCertaintyVerdict } from "@workspace/facility-trust-graph";
 import type { DeviceManagementHealthVerdict } from "@workspace/integrations/device-management-health";
 import type { LinkUsabilityVerdict } from "@workspace/integrations/link-usability";
@@ -340,6 +341,27 @@ export function fromSseEgress(v: SseEgressVerdict): ComposableSignal {
   // up; unposed mandates stay silent. Never lowers what any other dimension
   // says.
   return { kind: "sse_egress", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromServiceLifecycle(v: ServiceLifecycleVerdict): ComposableSignal {
+  // Does the SERVICE plane still agree with the ACCOUNT plane that this principal is
+  // here? `access-governance` grades accountStatus and `active` is its clean state —
+  // but a tenant reclaims the licence first (it bills monthly) and disables the account
+  // second (it costs nothing), so a functional leaver reads `active` until a
+  // cadence-based IGA sync catches up. This is the second witness that contradicts it.
+  //
+  // Its actions are already on the unified ladder and its ceiling is `restrict`, never
+  // escalate: it RELAYS a lifecycle fact and access-governance OWNS lifecycle authority,
+  // so a relayed fact must not outrank its owner. A service plan assigned after an
+  // unsuperseded departure restricts; entitlements outliving a recorded closure, and a
+  // stripped principal with no closure recorded anywhere, step up.
+  //
+  // TWO OUTCOMES CARRY ACTION `none` AND MEAN DIFFERENT THINGS, which is exactly why
+  // the posture rides along here rather than the action alone: `consistent` is
+  // corroboration, `unassessed` is a deployment with no licensing bridge, and
+  // `deferred` is this dimension standing down because access-governance already
+  // carries the concern. A consumer reading only the action would call all three fine.
+  return { kind: "service_lifecycle", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromDeviceManagementHealth(v: DeviceManagementHealthVerdict): ComposableSignal {

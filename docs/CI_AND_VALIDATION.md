@@ -168,6 +168,34 @@ this file deliberately is not, so sharing the constant would drag a reconciliati
 into the stamp on every decision record. The proof reads both literals as text and fails
 if they diverge.
 
+### A scope that cannot express the document is not a scope
+
+`check-proof-figures.mjs` scopes by `##`/`###` **section** — deliberately, because
+paragraph scope was tried first and missed the drift that actually happened. But
+`docs/INTAKE_LEDGER.md` is one `## Ledger` section holding fifty-plus rows about
+fifty-plus unrelated inputs, so under pure section scope every comma-formatted number
+anywhere in that table was checked against every proof named anywhere in that table. A
+row stating its *own* proof's live figures failed against five other proofs it merely
+shares a table with.
+
+The rule now: **a table row that names a proof is self-scoping; a row that names none
+inherits its section's scope.** That keeps the coverage that matters — a laws table whose
+figures sit under a heading paragraph naming the proof is still checked against it,
+because those rows name no proof of their own — while stopping one row from being judged
+against another row's proof. Both directions were verified by negative control: a wrong
+number inside a self-scoped ledger row is caught (against exactly one proof, not six),
+and a wrong number in a table row naming no proof is still caught through its section.
+
+Measured coverage went **up**, not down: 27 → 31 distinct figures checked, because four
+figures that could not previously live in the ledger at all now do and are guarded.
+
+The same pass fixed a latent defect in the guard's own coverage line. `checked` counted
+(proof, figure) *pairs*, and one figure can pair with several proofs sharing a scope — so
+subtracting it from the document total understated the gap, and with enough multi-proof
+sections would have gone negative. Distinct figures are now counted separately from
+pairs. A guard that announces its own partial coverage has to measure that number as
+carefully as the ones it polices.
+
 ### Where new work is allowed to land
 
 `node scripts/check-package-reachability.mjs` computes the transitive closure from the

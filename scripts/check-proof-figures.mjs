@@ -22,9 +22,12 @@
 //
 //     figures=normalized=21600,raw=1354752,grants=3
 //
-// The guard runs the proof, reads that line, and then scans the docs. In any PARAGRAPH
-// that names the proof, every comma-formatted number >= 1,000 must be one of that proof's
-// live figures — unless it is marked historical.
+// The guard runs the proof, reads that line, and then scans the docs. In any SCOPE that
+// names the proof — a `##`/`###` section, or a single table row that names a proof of its
+// own — every comma-formatted number >= 1,000 must be one of that proof's live figures,
+// unless it is marked historical. See `scopesMentioning` for why a table row is its own
+// unit: the intake ledger is one section holding fifty-plus rows about fifty-plus
+// unrelated inputs, and section scope judged each row against every other row's proof.
 //
 // HISTORICAL NUMBERS ARE LEGITIMATE and the repo uses them deliberately ("proof 96 -> 162
 // checks", "down from six once the roam contradiction was modelled"). They are recognised
@@ -106,13 +109,34 @@ function liveFigures(proof) {
   return values;
 }
 
-/** Scope by SECTION, not paragraph.
+/** Any registered-or-not `proof:<name>` mention. Used to decide whether a table row
+ *  carries its own scope — see `scopesMentioning`. Deliberately NOT limited to the
+ *  PROOFS registry: a row naming a proof that emits no `figures=` line is still a row
+ *  about that proof, and inheriting the section's scope would be wrong for it too. */
+const PROOF_MENTION_RE = /\bproof:[a-z0-9-]+/;
+
+/** Scope by SECTION — except for a table row that names its own proof.
  *
- *  Paragraph scope was the first attempt and it was too narrow to catch the drift that
- *  actually happened: the stale "eight" and "1,788" sat in a paragraph about a REMOVED
- *  guard, several paragraphs from the one naming the proof. A doc section is the unit a
- *  reader treats as being about one thing, so it is the unit the figures belong to. */
-function sectionsMentioning(text, needle) {
+ *  SECTION, not paragraph, because paragraph scope was the first attempt and it was too
+ *  narrow to catch the drift that actually happened: the stale "eight" and "1,788" sat
+ *  in a paragraph about a REMOVED guard, several paragraphs from the one naming the
+ *  proof. A doc section is the unit a reader treats as being about one thing.
+ *
+ *  THE TABLE-ROW EXCEPTION, and the measurement that forced it. `docs/INTAKE_LEDGER.md`
+ *  is one `## Ledger` section holding fifty-plus rows about fifty-plus unrelated inputs.
+ *  Under pure section scope every comma-formatted number anywhere in that table was
+ *  checked against every proof named anywhere in that table — so a row stating its OWN
+ *  proof's live figures failed against five other proofs it merely shares a table with.
+ *  That is not drift detection; it is a scope that cannot express what the document is.
+ *
+ *  The rule: a table row that names a proof is SELF-SCOPING; a row that names none
+ *  inherits its section's scope. That keeps the coverage that matters — a laws table
+ *  whose figures sit under a heading paragraph naming the proof is still checked against
+ *  it, because those rows name no proof of their own — while stopping one row from being
+ *  judged against another row's proof. It can only ever remove (proof, figure) pairs that
+ *  were never about each other; it cannot hide a number from the proof it belongs to,
+ *  because the row that names that proof is exactly the row that stays scoped to it. */
+function scopesMentioning(text, needle) {
   const lines = text.split("\n");
   const bounds = [];
   lines.forEach((l, i) => {
@@ -121,11 +145,26 @@ function sectionsMentioning(text, needle) {
   bounds.push(lines.length);
   const sections = [];
   for (let i = 0; i < bounds.length - 1; i += 1) {
-    sections.push(lines.slice(bounds[i], bounds[i + 1]).join("\n"));
+    sections.push({ start: bounds[i], lines: lines.slice(bounds[i], bounds[i + 1]) });
   }
   // A doc with no headings is one section.
-  if (sections.length === 0) sections.push(text);
-  return sections.filter((sec) => sec.includes(needle)).map((sec) => ({ p: sec }));
+  if (sections.length === 0) sections.push({ start: 0, lines });
+
+  const scopes = [];
+  for (const section of sections) {
+    // Self-scoped rows are BLANKED rather than removed, so a match's line offset inside
+    // the inherited scope still maps back to its real line number in the file.
+    const inherited = section.lines.map((line, offset) => {
+      if (/^\s*\|/.test(line) && PROOF_MENTION_RE.test(line)) {
+        if (line.includes(needle)) scopes.push({ p: line, startLine: section.start + offset });
+        return "";
+      }
+      return line;
+    });
+    const joined = inherited.join("\n");
+    if (joined.includes(needle)) scopes.push({ p: joined, startLine: section.start });
+  }
+  return scopes;
 }
 
 function main() {
@@ -133,6 +172,14 @@ function main() {
 
   let failures = 0;
   let checked = 0;
+  /** DISTINCT figures reached, keyed by file + line + value.
+   *
+   *  `checked` counts (proof, figure) PAIRS, and one figure can be paired with several
+   *  proofs that share a scope — so subtracting it from the document's total to report
+   *  "not checked" understates the gap, and with enough multi-proof sections would go
+   *  negative. The coverage line this guard prints is itself a measurement; it gets the
+   *  same treatment as the ones it polices. */
+  const reached = new Set();
   const docFiles = readdirSync(docsDir).filter((f) => f.endsWith(".md"));
 
   for (const proof of PROOFS) {
@@ -147,9 +194,11 @@ function main() {
 
     for (const file of docFiles) {
       const text = readFileSync(join(docsDir, file), "utf8");
-      for (const { p } of sectionsMentioning(text, proof)) {
+      for (const { p, startLine } of scopesMentioning(text, proof)) {
         for (const m of p.matchAll(FIGURE_RE)) {
           checked += 1;
+          const lineNo = startLine + p.slice(0, m.index).split("\n").length - 1;
+          reached.add(`${file}:${lineNo}:${m.index}:${m[0]}`);
           if (figures.has(m[0])) continue;
           // A deliberate comparison to a past value or a counterfactual, in either
           // direction. Judged by the words around the number rather than by an allowlist of
@@ -158,7 +207,7 @@ function main() {
           const before = p.slice(0, m.index);
           const after = p.slice(m.index + m[0].length);
           if (HISTORICAL_BEFORE.test(before) || HISTORICAL_AFTER.test(after)) continue;
-          console.error(`\n✗ docs/${file} — "${m[0]}" is stated in a paragraph about ${proof},`);
+          console.error(`\n✗ docs/${file} — "${m[0]}" is stated in a ${p.includes("\n") ? "section" : "table row"} about ${proof},`);
           console.error(`  but that proof's live figures are: ${live.join(", ")}`);
           const line = p.split("\n").find((l) => l.includes(m[0])) ?? "";
           console.error(`  ${line.trim().slice(0, 160)}`);
@@ -193,10 +242,10 @@ function main() {
     0,
   );
 
-  console.log(`\nfigures checked in docs: ${checked}`);
+  console.log(`\nfigures checked in docs: ${reached.size} distinct (${checked} proof×figure pairs)`);
   console.log(
-    `NOT checked — out of SCOPE: ${allCommaFigures - checked} of ${allCommaFigures} comma-formatted figures ` +
-      `sit outside any proof-named section`,
+    `NOT checked — out of SCOPE: ${allCommaFigures - reached.size} of ${allCommaFigures} comma-formatted figures ` +
+      `sit outside any proof-named scope`,
   );
   console.log(
     `NOT checked — out of SHAPE: ~${bareMeasurements} bare measurement-adjacent numbers ` +

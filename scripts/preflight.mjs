@@ -42,7 +42,16 @@ const STEPS = [
   // afterwards. That dance leaked the four darwin entries into pnpm-lock.yaml while
   // package.json had been restored without them. Every other gate passed, because
   // every other gate reads source rather than the lockfile.
-  { name: "Lockfile matches manifests (what CI installs with)", cmd: ["pnpm", "install", "--frozen-lockfile", "--ignore-scripts", "--offline"] },
+  //
+  // `--lockfile-only`, NOT `--offline`. The first version used `--offline` to keep
+  // the check fast, and that conflated two different failures: a genuine
+  // lockfile/manifest mismatch, and a package simply not being in the local store.
+  // Rebasing a dependency PR failed it with ERR_PNPM_NO_OFFLINE_TARBALL over a
+  // lockfile that was perfectly consistent — a gate that cries wolf precisely on
+  // the branches that change dependencies, which is the only time it matters.
+  // `--lockfile-only` resolves without fetching tarballs: exit 0 when consistent
+  // even with an unwarmed store, exit 1 on a real mismatch. Both verified.
+  { name: "Lockfile matches manifests (what CI installs with)", cmd: ["pnpm", "install", "--frozen-lockfile", "--lockfile-only"] },
   { name: "Invariant review (fail-closed / determinism / Assist / truth)", cmd: ["node", "scripts/review-invariants.mjs"] },
   { name: "Docs sanity (required docs + unsafe-claim scan)", cmd: ["node", "scripts/docs-sanity.mjs"] },
   { name: "Doc orphans (a new doc must be reachable from an index)", cmd: ["node", "scripts/check-doc-orphans.mjs"] },

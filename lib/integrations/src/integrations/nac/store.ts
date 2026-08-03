@@ -34,10 +34,16 @@ import { scopedConfigKey } from "../store-scope";
 export const NACProviderSchema = z.enum(["ise", "clearpass"]);
 export type NACProvider = z.infer<typeof NACProviderSchema>;
 
-export const NACConfigSchema = z.object({
-  provider: NACProviderSchema,
-  enabled: z.boolean().default(true),
-});
+/** STRICT for the same reason as `UEMConfigSchema` — see the note there. `enabled`
+ *  defaults to true, so a misspelled key was dropped and the connector came back ON
+ *  while the operator believed they had switched it off. Write and read both go through
+ *  this schema, so tightening it cannot reject a record this code wrote. */
+export const NACConfigSchema = z
+  .object({
+    provider: NACProviderSchema,
+    enabled: z.boolean().default(true),
+  })
+  .strict();
 export type NACConfig = z.infer<typeof NACConfigSchema>;
 
 /** Key PREFIX, not a key. The tenant id is appended by `scopedConfigKey`; this was a

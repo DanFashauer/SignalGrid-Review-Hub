@@ -216,6 +216,38 @@ await exercise({
   b: { provider: "jamf", enabled: false },
 });
 
+// ── a misspelled `enabled` must be REFUSED, not silently dropped ─────────────
+//
+// Both config schemas default `enabled` to TRUE, so before they were `.strict()` an
+// unrecognized key was stripped and the connector came back ON. An operator writing
+// `{provider:"intune", enable:false}` — one missing letter, trying to switch this
+// connector OFF — got `enabled: true` and a SUCCESSFUL parse. Nothing reported that
+// the field had been discarded.
+//
+// The asymmetry is what makes it a defect rather than untidiness, and it is the same
+// one the MCP adapter had: a disabled connector contributes no reading and the fabric
+// raises on the resulting unknown, while an unintentionally-enabled one contributes
+// affirmatives that can support a grant. The silent direction is the permissive one.
+console.log("\nMisspelled config keys");
+for (const [label, schema, provider] of [
+  ["nac", nac.NACConfigSchema, "ise"],
+  ["uem", uem.UEMConfigSchema, "intune"],
+] as const) {
+  // The affirmative control first: the correct spelling must still round-trip, or
+  // "rejects the typo" would be satisfied by a schema that rejects everything.
+  const good = schema.safeParse({ provider, enabled: false });
+  check(`${label}: a correctly-spelled enabled:false is accepted and preserved`,
+    good.success && good.data.enabled === false);
+  for (const typo of ["enable", "Enabled", "isEnabled"]) {
+    const res = schema.safeParse({ provider, [typo]: false });
+    check(`${label}: \`${typo}: false\` is REFUSED rather than dropped into enabled:true`, !res.success);
+  }
+  // And omission still means the documented default, which is a separate claim.
+  const omitted = schema.safeParse({ provider });
+  check(`${label}: omitting enabled entirely still means the documented default (true)`,
+    omitted.success && omitted.data.enabled === true);
+}
+
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${passed + failures.length})`);
 if (failures.length) {
   console.error("\nFAILED:");

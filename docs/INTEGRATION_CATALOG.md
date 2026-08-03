@@ -587,7 +587,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   check with a door beside it. Source faults are reported rather than swallowed: a
   bare `catch { return null }` made an unreachable UEM indistinguishable from "no such
   device".
-- **`proof:config-scope` (48 checks)** — tenant scoping for the connector
+- **`proof:config-scope` (58 checks)** — tenant scoping for the connector
   *configuration* stores. Both `uem/store.ts` and `nac/store.ts` keyed their entry on a
   flat constant (`"uem:config"`, `"nac:config"`) in a repository where every other
   persisted reader is keyed on `(id, tenant_id)`. **Severity, stated honestly: nothing

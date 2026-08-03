@@ -36,10 +36,31 @@ import { scopedConfigKey } from "../store-scope";
 export const UEMProviderSchema = z.enum(["intune", "jamf", "workspace_one"]);
 export type UEMProvider = z.infer<typeof UEMProviderSchema>;
 
-export const UEMConfigSchema = z.object({
-  provider: UEMProviderSchema,
-  enabled: z.boolean().default(true),
-});
+/**
+ * STRICT, and the strictness is the point rather than tidiness.
+ *
+ * `enabled` defaults to TRUE, so a key zod does not recognize is dropped and the
+ * connector comes back ON. An operator writing `{provider:"intune", enable:false}` —
+ * one missing letter, trying to turn this connector OFF — got `enabled: true` and a
+ * successful parse, with nothing anywhere reporting that the field had been discarded.
+ * That is the same shape as the MCP adapter's dropped bounds: a caller states an
+ * intention, the schema silently discards it, and the DEFAULT is the affirmative
+ * direction. The asymmetry is what makes it worth fixing — a disabled connector
+ * contributes no reading and the fabric raises on the resulting unknown, while an
+ * unintentionally-enabled one contributes affirmatives that can support a grant.
+ *
+ * Safe to tighten on the READ path because the WRITE path is this same schema
+ * (`setUEMConfig` parses before storing), so no stored record can carry a key this
+ * now rejects. `parse` already threw on malformed data; this widens "malformed" to
+ * include "contains a field I do not know about", which for a two-field config is
+ * always a typo and never a forward-compatible extension.
+ */
+export const UEMConfigSchema = z
+  .object({
+    provider: UEMProviderSchema,
+    enabled: z.boolean().default(true),
+  })
+  .strict();
 export type UEMConfig = z.infer<typeof UEMConfigSchema>;
 
 /** Key PREFIX, not a key. See `nac/store.ts` — both stores carried the same flat,

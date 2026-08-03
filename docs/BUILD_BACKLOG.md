@@ -167,6 +167,28 @@ picking these up:
       optional on every carrier and Swift's decoder ignores unknown keys, so the current
       apps decode the new payload correctly today — they simply cannot yet SHOW the stamp.
 
+- [ ] **Mirror `reconcileDecisions` into Swift (intake row 51 follow-through).**
+      `lib/signalgrid-core/src/continuity.ts` answers which decision wins when a device
+      has been deciding offline, and the device is where an offline decision is actually
+      minted — so `EnterpriseShell` should reconcile on reconnect rather than leave it to
+      the server alone. Blocked in the cloud lane for the same reason as the
+      `coreNormalizationVersion` mirror above: no Swift toolchain, and `native/ios` is the
+      one tree where an uncompiled change stays invisible until a human opens Xcode.
+      **Golden rule 1 applies:** this goes AROUND `DecisionEngine.swift` in a new file, in
+      the `SignalContext.swift` pattern — the port stays byte-faithful, and reconciliation
+      is not part of what was ported. Nothing is broken meanwhile: the TS side reconciles
+      whatever the device uploads, so the gap is that the device cannot decide locally
+      *whether its own held decision still stands* before it reconnects.
+
+- [ ] **`/v1` arm for decision reconciliation (intake row 51 follow-through).**
+      Continuity is a library primitive today with no wire surface. Exposing it needs a
+      request/response contract, an OpenAPI entry, the Postman regeneration, and a console
+      surface that shows the frontier and the reason codes — self-contained work, and
+      deliberately not bolted onto the intake that built the primitive. The contract
+      question to settle first: reconciliation takes a SET, so the arm is a POST with a
+      body rather than an evaluate-shaped call, and the standing bound is caller-posed
+      (bound + per-record elapsed seconds) which the wire format has to carry explicitly.
+
 - [ ] **Mobile-app-catalog scanner phase (intake row 33, owner-instructed YELLOW-lane build).**
       The owner's repository scanner is filed verbatim, UNHARDENED, in
       [inspiration/MOBILE_APP_CATALOG_AGENT.md](inspiration/MOBILE_APP_CATALOG_AGENT.md)

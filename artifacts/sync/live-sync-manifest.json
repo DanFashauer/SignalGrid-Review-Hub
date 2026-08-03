@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 68,
-  "fingerprint": "ccaa4f127879c3bf7296b013472e4166655905ce23b110615e99e45492eca45f",
+  "manifestVersion": 69,
+  "fingerprint": "0f9f629687feed3b13696e62fa655d83f1aabcc1857969aff9c2923ee5ab2651",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -105,6 +105,7 @@
       "config-scope": 58,
       "credential-exposure": 28,
       "custody-beacon": 43,
+      "decision-continuity": 60,
       "device-attestation": 60,
       "device-management-health": 162,
       "device-resolver": 14,

@@ -138,6 +138,36 @@ the caller's value through and let the normalizer decide what silence means — 
 libraries in `lib/` already grade absence fail-closed, and a `??` in the adapter is
 how that grading gets bypassed.
 
+### Proving a merge rule, not just a merge
+
+`proof:decision-continuity` (60 checks) guards `lib/signalgrid-core/src/continuity.ts`,
+which answers "which decision wins" when a device has been deciding offline. It is worth
+noting here because of *how* it is guarded rather than what it guards.
+
+Five laws are **measured over exhaustive sweeps** rather than asserted on examples:
+order-independence over 9,216 ordered pairs and 13,824 three-record sets in all six
+permutations; idempotence over the same pair space; monotonicity over 55,296 additions
+(no non-dominating record ever relaxed the outcome); the offline veto over 3,744
+compromised-frontier pairs; and the un-stick path over 288 clean-authority pairs. Two of
+those sweeps carry an explicit **non-vacuity check** — a sweep that finds zero
+counterexamples because it found zero *opportunities* proves nothing, and that failure
+mode is invisible unless you look for it.
+
+The negative controls did real work rather than confirming the design. The proof header
+records five mutations with their measured scores, and one of them **changed the code**:
+the first draft predicted that reading an absent `coreNormalizationVersion` as zero would
+break the offline-veto law, and measuring showed it did not. The design choice was still
+right — reading absence as zero lets a stamped record dominate on an axis where nothing
+is known about its opponent, converting a legacy `deny` into an `allow` — so the proof
+now pins it as an **outcome** as well as an ordering. A prediction that survives being
+measured is evidence; a prediction that is never measured is a comment.
+
+The one duplication in the file is pinned rather than tolerated: `continuity.ts` keeps its
+own `OUTCOME_RANK` because `policy.ts` is inside the core-normalization import closure and
+this file deliberately is not, so sharing the constant would drag a reconciliation edit
+into the stamp on every decision record. The proof reads both literals as text and fails
+if they diverge.
+
 ### Where new work is allowed to land
 
 `node scripts/check-package-reachability.mjs` computes the transitive closure from the

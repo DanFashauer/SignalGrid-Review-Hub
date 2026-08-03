@@ -479,6 +479,9 @@ jobs:
       - name: Edge-sync (config-down integrity) proof
         run: pnpm run proof:edge-sync
 
+      - name: Decision-continuity (which decision wins across a partition) proof
+        run: pnpm run proof:decision-continuity
+
       - name: Telemetry-up (decision plane → control plane) proof
         run: pnpm run proof:telemetry-up
 

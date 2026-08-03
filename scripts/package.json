@@ -22,6 +22,7 @@
     "proof:ddm-connector": "tsx ./src/ddm-connector-proof.ts",
     "proof:fleet-connector": "tsx ./src/fleet-connector-proof.ts",
     "proof:edge-sync": "tsx ./src/edge-sync-proof.ts",
+    "proof:decision-continuity": "tsx ./src/decision-continuity-proof.ts",
     "proof:flows": "tsx ./src/flows-proof.ts",
     "proof:grid-coverage": "tsx ./src/grid-coverage-proof.ts",
     "proof:grid-config": "tsx ./src/grid-config-proof.ts",

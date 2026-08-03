@@ -32,6 +32,17 @@ const quick = process.argv.includes("--quick");
 // three are still proven only in CI, and a push can go red on them after a clean
 // preflight. `heavy` steps (full monorepo build) are skipped only under --quick.
 const STEPS = [
+  // FIRST, because it is the first thing CI does and the cheapest way to be told
+  // this push cannot even install. It was missing, and that omission let preflight
+  // print "Safe to push" over a lockfile that did not match its manifests — CI then
+  // failed on `Install dependencies` before running a single gate.
+  //
+  // The specific way it broke is worth naming: this harness adds darwin platform
+  // binaries to build locally (the repo pins linux-x64) and restores the manifests
+  // afterwards. That dance leaked the four darwin entries into pnpm-lock.yaml while
+  // package.json had been restored without them. Every other gate passed, because
+  // every other gate reads source rather than the lockfile.
+  { name: "Lockfile matches manifests (what CI installs with)", cmd: ["pnpm", "install", "--frozen-lockfile", "--ignore-scripts", "--offline"] },
   { name: "Invariant review (fail-closed / determinism / Assist / truth)", cmd: ["node", "scripts/review-invariants.mjs"] },
   { name: "Docs sanity (required docs + unsafe-claim scan)", cmd: ["node", "scripts/docs-sanity.mjs"] },
   { name: "Doc orphans (a new doc must be reachable from an index)", cmd: ["node", "scripts/check-doc-orphans.mjs"] },

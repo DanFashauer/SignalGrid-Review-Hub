@@ -375,6 +375,37 @@ value *means* is domain safety, and domain safety belongs in the host app. `fres
 is refused for the fourth time on the row-48 reasoning — a source asserting its own
 validity window is a self-certified affirmative; the caller poses the bound.
 
+## Where SignalGrid is the wrong answer
+
+Intake ledger row 56. Everything else in this document says where SignalGrid fits.
+A document that only ever says that is making the unbounded affirmative this whole
+repository exists to refuse — it implies *every* deployment by never naming an
+exception.
+
+The asymmetry is worth stating plainly, because the codebase already holds itself to
+the opposite standard. Every signal here must be able to say "not applicable":
+`sse-egress` is `unassessed` until a deployment poses a mandate, `challenge-capability`
+forecloses nothing until a workflow states its accepted methods, `service-lifecycle`
+reports `unassessed` where no licensing bridge exists, and the `uem` dimension had to
+be repaired specifically because BYOD-unsupervised fired forever with no way to say
+"this axis does not apply to me." The product had no such state. It does now.
+
+Each entry below is derived from a constraint this repository already states somewhere
+else — none of them is a market opinion.
+
+| Not a fit when… | Why, and where that comes from |
+| --- | --- |
+| **The fleet is unsupervised and will stay that way.** | Platform honesty: an app cannot grant device access, restrict other apps, make itself non-removable, or self-kiosk. Those are MDM/OS capabilities needing a supervised device (Apple Business Manager + APNs). Without an enforcement partner, SignalGrid is a decision layer whose decisions nothing can carry out. |
+| **One human owns one device and signs in once.** | The premise that makes runtime re-evaluation worth its cost is a SHARED, badge-checked-out device where the identity changes every shift while the grant does not. On assigned single-user hardware with a stable session, Conditional Access already covers the question. |
+| **There is exactly one authoritative plane.** | The fabric's value is CONTRADICTION between planes — the EDR that says contained while the UEM says compliant, the account plane that says `active` while the service plane says stripped. One system of record means nothing to reconcile, and a reconciliation layer over a single source is overhead with no finding to produce. |
+| **You want the fix executed for you.** | `RemediationStatus` has deliberately no `executed` state, and `@workspace/iac` stops at a governed plan→approve→apply boundary. Entra, Intune, Exchange, AD, IGA, PAM and the host applications remain systems of record and run their own actions. A buyer who wants an autonomous remediator wants a different product. |
+| **Domain safety is the requirement.** | The embedded-UX law: SignalGrid is invisible to end users and returns allow/step_up/restrict/deny on the ACTION. Patient lookup, clinical guidelines, order verification and their peers belong in the host apps. A gate cannot make an unsafe workflow safe. |
+| **A compliance certificate is the deliverable.** | Claude Code does not guarantee HIPAA or SOC 2 here, and a human compliance review is required rather than optional. The audit trail is evidence for a review, not a substitute for one. |
+
+Saying this costs a little reach and buys the thing the rest of the document depends
+on: a reader who finds their own exclusion listed has a reason to believe the
+inclusions were written with the same care.
+
 ## Claim boundaries
 
 This public positioning artifact intentionally avoids unsafe claims:

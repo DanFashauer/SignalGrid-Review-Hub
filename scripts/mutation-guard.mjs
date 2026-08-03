@@ -150,6 +150,17 @@ export const TARGETS = [
     files: ["lib/verdict-attestation/src/attest.ts", "lib/verdict-attestation/src/canonical.ts"],
   },
   {
+    // NOT a connector, and registered anyway. `check-guard-registries.mjs` derives its
+    // mutation-coverage requirement from `enumerateGrantSafety`, which is the connector
+    // allow-path harness — so this file legitimately passed that gate while being exactly
+    // the population the gate exists for. `reconcileDecisions` can return `allow`, and a
+    // weakened branch in it would let a stale or offline record produce one. The
+    // registry guard's scoping is right for what it was written to cover; the honest
+    // response is to register this by hand rather than widen a rule until it fits.
+    proof: "proof:decision-continuity",
+    files: ["lib/signalgrid-core/src/continuity.ts"],
+  },
+  {
     proof: "proof:custody-beacon",
     files: [
       "lib/integrations/src/integrations/custody-beacon/evaluate.ts",

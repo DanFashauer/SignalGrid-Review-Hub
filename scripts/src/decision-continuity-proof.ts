@@ -35,6 +35,16 @@
 //   58/60  an unstated elapsed treated as fresh (kills the standing bound)
 //   59/60  the veto scanned over the whole set instead of the frontier (kills L5)
 //
+// MUTATION SWEEP. Registering this file with `scripts/mutation-guard.mjs` was worth doing
+// and the first run said so: 22 mutations, 18 killed, FOUR SURVIVORS — all shape-checks
+// that `refuses()` could not tell apart, because each throws something either way. The
+// distinction that matters is CoreError (a 400 at the wire) versus TypeError (an unmapped
+// 500), and the empty-set guard needed a MESSAGE pin because removing it still produced a
+// validation CoreError from deeper in. Five assertions closed all four; the sweep now
+// reads 22/22 killed, 0 survivors. Run: `node scripts/mutation-guard.mjs
+// --proof=proof:decision-continuity` (never under a kill-able timeout — it mutates the
+// file on disk and restores in a `finally`).
+//
 // FIGURES. Printed as a `figures=` line for `scripts/check-proof-figures.mjs`.
 //
 // Run: pnpm --filter @workspace/scripts run proof:decision-continuity
@@ -51,6 +61,7 @@ import {
   type DecisionOutcome,
   type DecisionProvenance,
   type ReconcilableDecision,
+  type StandingBound,
 } from "@workspace/signalgrid-core";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -242,6 +253,48 @@ const refuses = (name: string, fn: () => unknown): void => {
 };
 
 refuses("reconciling zero decisions is refused, not defaulted", () => reconcileDecisions([]));
+
+// ── the four shapes the mutation sweep proved were unguarded ─────────────────
+//
+// Registering this file with `scripts/mutation-guard.mjs` killed 18 of 22 mutations and
+// left FOUR guards standing — every one of them a shape-check that `refuses()` alone
+// could not distinguish, because it asserts only that a CoreError with code "validation"
+// came back and each of these shapes throws SOMETHING either way. The distinction the
+// checks below draw is the one that matters at the wire: with the guard, the caller gets
+// a CoreError the error middleware maps to 400; without it, `null.id` /
+// `Object.entries(undefined)` throw a TypeError, which is an unmapped 500. A malformed
+// body must not be able to produce a server error.
+//
+// `refuses()` asserts `err instanceof CoreError`, so a TypeError fails it — that is
+// exactly the discriminator these need, and it is why they had to be written as separate
+// cases rather than folded into the existing ones.
+refuses("a non-array records argument is refused (not iterated as a string)", () =>
+  reconcileDecisions("two" as unknown as ReconcilableDecision[]));
+refuses("a null record is refused as a CoreError, never a TypeError", () =>
+  reconcileDecisions([null as unknown as ReconcilableDecision]));
+refuses("a null provenance is refused as a CoreError, never a TypeError", () =>
+  reconcileDecisions([{ id: "x", outcome: "allow", provenance: null as unknown as DecisionProvenance }]));
+refuses("an absent elapsedSecondsById is refused as a CoreError, never a TypeError", () =>
+  reconcileDecisions([rec("x", "allow", { evaluatedOffline: true })], {
+    standingBound: { maxStandingSeconds: 10 } as StandingBound,
+  }));
+
+// The empty-set guard needed a MESSAGE pin rather than another refusal: with the guard
+// removed the call still throws a validation CoreError, just from `mostRestrictiveOutcome`
+// deeper in, so every code-only assertion passed over a hole. What the guard actually buys
+// is a caller-accurate message instead of an internal one, and that is what is checked.
+{
+  let message = "";
+  try {
+    reconcileDecisions([]);
+  } catch (err) {
+    message = err instanceof Error ? err.message : String(err);
+  }
+  check(
+    "the empty-set refusal names the caller's mistake, not an internal helper",
+    message.includes("requires at least one decision"),
+  );
+}
 refuses("an omitted evaluatedOffline is refused (omission is not 'online')", () =>
   reconcileDecisions([{ id: "x", outcome: "allow", provenance: { policyVersion: 1, policyKnownSuperseded: false } as DecisionProvenance }]));
 refuses("an omitted policyKnownSuperseded is refused (omission is not 'current')", () =>

@@ -140,7 +140,7 @@ how that grading gets bypassed.
 
 ### Proving a merge rule, not just a merge
 
-`proof:decision-continuity` (60 checks) guards `lib/signalgrid-core/src/continuity.ts`,
+`proof:decision-continuity` (65 checks) guards `lib/signalgrid-core/src/continuity.ts`,
 which answers "which decision wins" when a device has been deciding offline. It is worth
 noting here because of *how* it is guarded rather than what it guards.
 
@@ -167,6 +167,34 @@ own `OUTCOME_RANK` because `policy.ts` is inside the core-normalization import c
 this file deliberately is not, so sharing the constant would drag a reconciliation edit
 into the stamp on every decision record. The proof reads both literals as text and fails
 if they diverge.
+
+### A coverage rule that is right for what it covers can still leave a hole
+
+`scripts/check-guard-registries.mjs` derives its mutation-coverage requirement from proofs
+importing `enumerateGrantSafety` — the connector allow-path harness — because that is
+"the population where an unfalsifiable guard is most dangerous". `continuity.ts` is not a
+connector, so `proof:decision-continuity` passed that gate legitimately while being
+exactly the population the gate exists for: `reconcileDecisions` can return `allow`, and a
+weakened branch would let a stale or offline record produce one.
+
+The response was to register the file by hand rather than widen the rule until it fit. The
+rule is correct for what it was written to cover; stretching it to catch one more case
+would have made it harder to reason about and no more complete.
+
+**The sweep immediately earned it.** 22 mutations, 18 killed, **four survivors** — all
+four shape-checks that the proof's `refuses()` helper structurally could not distinguish,
+because it asserts only that a `CoreError` with code `validation` came back and each shape
+throws *something* either way. Remove the null-record guard and `record.id` throws a
+**TypeError**; remove the `elapsedSecondsById` guard and `Object.entries(undefined)` does
+the same. At the wire that is the difference between a 400 and an unmapped 500, and
+`refuses()` asserting `err instanceof CoreError` is the discriminator — which is why the
+new cases had to be written separately rather than folded into existing ones.
+
+The empty-set guard was the instructive one: with it removed, `reconcileDecisions([])`
+still throws a validation `CoreError`, just from `mostRestrictiveOutcome` deeper in, so
+every code-only assertion passed straight over the hole. What that guard buys is a
+caller-accurate message rather than an internal one, so it needed a **message** pin. Five
+assertions (60 → 65 checks) took the sweep to 22/22 killed, 0 survivors.
 
 ### A scope that cannot express the document is not a scope
 

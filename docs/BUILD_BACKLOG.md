@@ -167,6 +167,33 @@ picking these up:
       optional on every carrier and Swift's decoder ignores unknown keys, so the current
       apps decode the new payload correctly today — they simply cannot yet SHOW the stamp.
 
+- [ ] **A webhook WRITE route and its validation are one change, not two.**
+      Opened as "should `CreateWebhookSchema`/`UpdateWebhookSchema` be `.strict()`?" and
+      deferred once as "a breaking client contract change". **Both halves of that framing
+      were wrong, and measuring settled it.** There is no client contract to break:
+      `artifacts/api-server` exposes only `GET /v1/webhooks` and
+      `GET /v1/webhooks/deliveries`, and `createWebhook`/`updateWebhook` have ZERO callers
+      anywhere in the repository. And `.strict()` on its own would be decorative, because
+      nothing calls `.parse()` on either schema — they are type sources, and a schema
+      nobody parses cannot reject anything.
+      The live finding underneath is different and worse: both write functions accept a
+      typed argument and never validate it, so `url: z.string().url()` is a URL in the
+      type system and an arbitrary string at runtime. Nothing untrusted can reach them
+      today because the route does not exist; the day it does, whatever the handler passes
+      lands in Redis and the delivery path POSTs to the stored `url`. That is the SSRF
+      shape, latent behind a missing route rather than behind a check.
+      Fix shape, in this order: (1) `CreateWebhookSchema.parse` / `UpdateWebhookSchema.parse`
+      at the top of each function — the boundary belongs on the exported function, not in
+      one handler; (2) THEN `.strict()` on both, which is load-bearing only once a parse
+      exists, and closes the same asymmetry the `uem`/`nac` config schemas were tightened
+      for (`secrets` for `secret` → an unsigned webhook; `state` for `status` → a webhook
+      that stays enabled; a misspelled `rotateSecret` → a compromised secret still live).
+      NOT pre-fixed, on the `lib/dual-control` precedent recorded in
+      `check-package-reachability.mjs`: a repair shipped into a path nothing calls is
+      proven by a proof and reachable by nothing, and it leaves the next reader believing
+      a boundary is defended when the boundary does not exist yet. The trap is marked at
+      both call sites and on both schemas instead.
+
 - [ ] **Mirror `reconcileDecisions` into Swift (intake row 51 follow-through).**
       `lib/signalgrid-core/src/continuity.ts` answers which decision wins when a device
       has been deciding offline, and the device is where an offline decision is actually

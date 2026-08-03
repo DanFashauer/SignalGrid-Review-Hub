@@ -70,7 +70,39 @@ function now(): string {
 }
 
 /**
- * Create a new webhook
+ * Create a new webhook.
+ *
+ * ⚠️ BEFORE YOU GIVE THIS FUNCTION A ROUTE, READ THIS.
+ *
+ * It takes a `CreateWebhookRequest` and never parses one. `CreateWebhookSchema` is a
+ * TYPE SOURCE here, not a validator — nothing in the repository calls `.parse()` on it,
+ * so `url: z.string().url()` is a URL in the type system and an arbitrary string at
+ * runtime. The same is true of `updateWebhook` below. Today that costs nothing: both
+ * functions have ZERO callers, and `artifacts/api-server` exposes only
+ * `GET /v1/webhooks` and `GET /v1/webhooks/deliveries` — there is no write route, so
+ * nothing untrusted can reach either one.
+ *
+ * The moment a POST/PATCH route exists, that changes shape completely: whatever the
+ * route hands in lands in Redis unvalidated, and the delivery path then POSTs to the
+ * stored `url`. That is the SSRF shape, latent behind a missing route rather than
+ * behind a check.
+ *
+ * So the route and the validation are ONE change, not two:
+ *   1. `CreateWebhookSchema.parse(input)` / `UpdateWebhookSchema.parse(input)` at the
+ *      top of each function — the boundary is here, not in the handler, because an
+ *      exported function cannot assume its only caller is the one you are writing.
+ *   2. THEN `.strict()` on both schemas. Not before: a schema nobody parses cannot
+ *      reject anything, so strictness added on its own is decorative. With a parse in
+ *      place it is load-bearing, and it is the same asymmetry the `uem`/`nac` config
+ *      schemas were tightened for — an operator writing `secrets` for `secret` gets an
+ *      UNSIGNED webhook, and one writing `state` for `status` gets a webhook that stays
+ *      ENABLED. Both silent, both in the permissive direction.
+ *
+ * Recorded rather than pre-fixed on the `lib/dual-control` precedent
+ * (`scripts/check-package-reachability.mjs`): a repair shipped into a path nothing calls
+ * is proven by a proof and reachable by nothing, and it makes the next reader believe
+ * the boundary is defended when the boundary does not exist yet. See
+ * `docs/BUILD_BACKLOG.md`.
  */
 export async function createWebhook(
   input: CreateWebhookRequest
@@ -161,7 +193,12 @@ export async function getWebhooksForEvent(event: WebhookEventType): Promise<Webh
 }
 
 /**
- * Update webhook
+ * Update webhook.
+ *
+ * ⚠️ Unvalidated for the same reason as `createWebhook` — read the note there before
+ * adding a route. `rotateSecret` is the field that makes this one worse than the create
+ * path: a caller that misspells it gets a successful update and a secret that was NOT
+ * rotated, while believing a compromised one has just been retired.
  */
 export async function updateWebhook(
   id: string,

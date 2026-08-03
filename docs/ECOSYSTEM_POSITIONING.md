@@ -159,6 +159,64 @@ model whether the cart in bay three is checked out to a badge that is still vali
 device's posture still supports the app the worker is about to open. Those are facts this fabric
 produces, and publishing them into an ontology is a candidate integration — not a current one.
 
+## Where SignalGrid sits when the caller is an agent
+
+Take any "agent as a service" reference architecture — the loop (think, act, observe,
+repeat), the runtime blocks (context, RAG, harness, memory, loop, operations,
+evaluation), the build path (LangChain, LangGraph, CrewAI, n8n), and a row across the
+bottom labelled **Tools & Integrations — what the agent can act on**.
+
+SignalGrid is not the agent in that picture. It is one of the tools in that row.
+
+This is worth stating because it is the opposite of how the fabric is usually
+introduced, and because it settles two questions at once:
+
+- **What SignalGrid is not.** It is not an agent framework, not a model gateway, and
+  not an LLMOps observability product. Context engineering, retrieval, memory,
+  prompt management, token cost, latency traces, plan quality and regression scoring
+  are how you build and operate an agent. They are outside the boundary, and being
+  outside it is what keeps the decision core small enough to be deterministic.
+- **What SignalGrid is.** The runtime that answers allow / step_up / restrict / deny
+  when that agent — or the human it is working for — tries to do something on a
+  frontline device. The governance column those posters draw (authorization, tool
+  permissions, audit logs, rate limits, policy enforcement, human-in-the-loop) is not
+  a feature list here; it is a set of GATES with named reason codes. An agent acting
+  unrecorded is `AGENT_UNRECORDED` → restrict. An approval that lapsed while access
+  persisted is `APPROVAL_EXPIRED` → escalate, ranked above one that never existed. A
+  rate no person could produce is `SUPERHUMAN_CADENCE`. A policy that is bound but
+  running in report-only mode is governed on paper and gated by nothing.
+
+### The discipline the tool role demands
+
+Being a tool inside somebody else's loop changes who the caller is, and that changes
+what silence means. A human operator omits a field because they judged it irrelevant.
+**An agent omits a field because it does not know the answer** — it cannot know an
+RTLS source's health or which map a fix was taken against, so omission is the normal
+case rather than the exceptional one.
+
+The rule that follows is short: **when the caller is an agent, every optional input is
+a claim, and omitting it is a non-claim rather than a pass.** Hand the caller's value
+through and let the normalizer decide what silence means.
+
+This is not theoretical. Three defects of exactly that shape were found and fixed on
+SignalGrid's own MCP surface in a single session:
+
+1. `source_health ?? "healthy"` — an assistant that asserted nothing and one that
+   asserted everything received byte-identical `SUFFICIENT_CERTAINTY / none / known`.
+2. `additionalProperties: false` advertised and never enforced — a caller who
+   correctly posed a freshness bound, spelled in the other of the two naming
+   conventions the same tool uses, had it silently dropped; a 6.5-year-stale location
+   fix then graded as sufficient certainty.
+3. A connector config schema where a misspelled `enabled` key re-enabled a connector
+   an operator had switched off.
+
+All three are the same failure with different clothes, and all three are now pinned by
+`proof:mcp-answer-discipline`, which drives the real server over its real stdio wire
+and asks not whether it answers but whether the answer is **earned**. That proof is
+the concrete form of this positioning: if SignalGrid is going to sit in the tools row
+of an agent architecture, the thing it owes that architecture is an answer that never
+claims more than the caller gave it.
+
 ## Claim boundaries
 
 This public positioning artifact intentionally avoids unsafe claims:

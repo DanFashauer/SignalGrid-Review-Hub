@@ -153,3 +153,33 @@ test("audit chain and operations panels render verified, non-empty state", async
   // The remediation queue keeps its safety promise on-screen.
   await expect(c.getByText("SignalGrid never executes a change.")).toBeVisible();
 });
+
+test("the continuity panel shows the offline device LOSING to the connected deny", async ({ page }) => {
+  // The panel runs the real reconciler in the browser, so this asserts the thing a
+  // reviewer would otherwise have to take on faith: that the case which distinguishes
+  // this from last-write-wins actually resolves the way the docs say. Written as a
+  // browser assertion for the same reason the Battery health row was — the core can be
+  // right while nothing on screen says so.
+  const c = console_(page);
+  await expect(
+    c.getByText("Decision continuity — which decision wins after a partition"),
+  ).toBeVisible();
+
+  const offlineCase = c
+    .locator("div")
+    .filter({ hasText: /^Offline device holds the NEWER policy and says allow/ })
+    .first();
+  await expect(offlineCase).toBeVisible();
+  // Both sides are shown with their provenance, so the reader can see that the losing
+  // record is the NEWER one — which is the whole point of the case.
+  await expect(offlineCase).toContainText("p8/c2 said ALLOW");
+  await expect(offlineCase).toContainText("p7/c2 said DENY");
+  await expect(offlineCase).toContainText("OFFLINE_AUTHORITY_CANNOT_RELAX");
+
+  // And the un-stick path is on screen too, so the panel cannot be read as
+  // "restriction always wins" — a lattice that could only tighten would be useless.
+  await expect(c.getByText("NEWER_PROVENANCE_RELAXED_STALE_DECISION")).toBeVisible();
+
+  // Silence about an offline decision's age expires it rather than granting it standing.
+  await expect(c.getByText("OFFLINE_STANDING_AGE_UNSTATED")).toBeVisible();
+});

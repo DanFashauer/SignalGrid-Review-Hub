@@ -145,6 +145,24 @@ A posed `standingBound` with no `elapsedSecondsById` becomes an EMPTY map, not a
 bound — so every offline record reads as age-unstated and expires. Treating it as "no
 bound posed" would let a caller pose a bound and then escape it by omitting the ages.
 
+### 2b. On screen
+
+The Operator Console (`artifacts/signalgrid-review/.../OperatorConsoleSection.tsx`) runs
+the real `reconcileDecisions` in the browser, the same way it already runs the real
+decision core — so the outcome, reason codes, frontier and expiry a reviewer reads are
+whatever the function returns, not a mock-up of an answer.
+
+Four cases, chosen because they are the ones that distinguish this from the two merges a
+reader will assume: an offline device holding the NEWER policy losing to a connected
+`deny` (why it is not last-write-wins), a connected control plane relaxing a stale `deny`
+(why it is not a pure join), a staged rollout where neither side is newer, and an offline
+answer whose age nobody stated.
+
+Pinned by a Playwright assertion in `scripts/src/e2e/review-console.spec.ts`, on the
+precedent that made the Battery health row visible: **the core can be right while nothing
+on screen says so.** The assertion was negative-controlled — flipping the first case's
+device to online drops that one test and leaves the other 35 passing.
+
 ---
 
 ## 3. The state types the proposal names
@@ -261,7 +279,7 @@ Recorded with reasons so a future lane does not read these as unbuilt scope.
 | Open | Note |
 | --- | --- |
 | Swift mirror of `reconcileDecisions` | The device is where an offline decision is actually minted, so `EnterpriseShell` should reconcile on reconnect rather than let the server do it alone. Blocked in the cloud lane (no Swift toolchain) and subject to golden rule 1 — it goes *around* `DecisionEngine.swift`, in a new file, in the `SignalContext.swift` pattern. Tracked alongside the `coreNormalizationVersion` Swift-mirror entry in `docs/BUILD_BACKLOG.md`. |
-| Operator console surface for reconciliation | The `/v1` arm ships (see §2a); nothing yet *shows* a reconciliation — the frontier, the reason codes and which records expired are a natural decision-detail panel, and that is UI work rather than fabric work. |
+| *(nothing open)* | The library, the `/v1` arm (§2a) and the operator-console panel (§2b) all ship. The Swift mirror below is the only remaining piece, and it is blocked on toolchain rather than design. |
 
 ---
 

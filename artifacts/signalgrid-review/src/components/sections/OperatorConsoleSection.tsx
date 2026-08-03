@@ -1,9 +1,13 @@
 import { useMemo, useState } from "react";
 import {
   SignalGridCore,
+  reconcileDecisions,
   type AuditEvent,
   type Decision,
   type DecisionOutcome,
+  type DecisionProvenance,
+  type ReconcilableDecision,
+  type StandingBound,
   type EvidenceSnapshot,
   type MetricsSummary,
   type PolicyVersion,
@@ -209,11 +213,174 @@ export default function OperatorConsoleSection() {
         </div>
       </div>
 
+      <ContinuityPanel />
+
       <OperationsPanels
         audit={audit}
         deliveries={deliveries}
         remediations={remediations}
       />
+    </div>
+  );
+}
+
+/**
+ * Decision continuity — what happens when the device and the control plane
+ * disagree because the network was down.
+ *
+ * Runs the REAL reconciler (`reconcileDecisions` from `@workspace/signalgrid-core`)
+ * in the browser, exactly as the rest of this console runs the real core. Nothing here
+ * is a mock-up of an answer: the outcome, reason codes, frontier and expiry below are
+ * whatever the function returns for the inputs shown next to them, so a change to the
+ * reduction changes what a reviewer reads here.
+ *
+ * The four cases are the ones that distinguish this from the two merges a reader will
+ * assume — a clock tiebreak and a CRDT join. Case 1 is the reason it is not
+ * last-write-wins, case 2 is the reason it is not a pure join, case 3 is what happens
+ * when neither side is newer, and case 4 is the bound on how long an offline answer may
+ * stand.
+ */
+function ContinuityPanel() {
+  const cases = useMemo(() => {
+    const prov = (over: Partial<DecisionProvenance>): DecisionProvenance => ({
+      policyVersion: 1,
+      evaluatedOffline: false,
+      policyKnownSuperseded: false,
+      ...over,
+    });
+    const specs: Array<{
+      title: string;
+      question: string;
+      records: ReconcilableDecision[];
+      standingBound?: StandingBound;
+    }> = [
+      {
+        title: "Offline device holds the NEWER policy and says allow",
+        question:
+          "The control plane, fully connected, said deny under policy 7. The device evaluated policy 8 alone with a source unreachable. Newer — but on less evidence.",
+        records: [
+          { id: "control-plane", outcome: "deny", provenance: prov({ policyVersion: 7, coreNormalizationVersion: 2 }) },
+          { id: "device", outcome: "allow", provenance: prov({ policyVersion: 8, coreNormalizationVersion: 2, evaluatedOffline: true }) },
+        ],
+      },
+      {
+        title: "Connected control plane relaxes a stale deny",
+        question:
+          "The same shape with the authority ONLINE. Policy 8 exists precisely so something policy 7 restricted can now be allowed — a lattice that could not do this would be safe and stuck.",
+        records: [
+          { id: "stale-device", outcome: "deny", provenance: prov({ policyVersion: 7, coreNormalizationVersion: 2 }) },
+          { id: "control-plane", outcome: "allow", provenance: prov({ policyVersion: 8, coreNormalizationVersion: 2 }) },
+        ],
+      },
+      {
+        title: "Staged rollout — neither side is newer",
+        question:
+          "One node is ahead on policy, the other on the core build. The provenances are incomparable, so no side is the authority.",
+        records: [
+          { id: "node-a", outcome: "allow", provenance: prov({ policyVersion: 8, coreNormalizationVersion: 1 }) },
+          { id: "node-b", outcome: "restrict", provenance: prov({ policyVersion: 7, coreNormalizationVersion: 2 }) },
+        ],
+      },
+      {
+        title: "An offline answer whose age nobody stated",
+        question:
+          "A bound is posed but the caller says nothing about how long this decision has been standing. Silence is not freshness.",
+        records: [
+          { id: "device", outcome: "allow", provenance: prov({ policyVersion: 8, coreNormalizationVersion: 2, evaluatedOffline: true }) },
+        ],
+        standingBound: { maxStandingSeconds: 3600, elapsedSecondsById: {} },
+      },
+    ];
+    return specs.map((spec) => ({
+      ...spec,
+      result: reconcileDecisions(spec.records, spec.standingBound ? { standingBound: spec.standingBound } : {}),
+    }));
+  }, []);
+
+  return (
+    <div className="border border-border rounded-lg bg-card/40 p-5 space-y-4">
+      <div>
+        <p className="text-sm font-semibold text-foreground">
+          Decision continuity — which decision wins after a partition
+        </p>
+        <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+          A device that keeps working offline keeps deciding offline, so on reconnect two
+          answers exist for one subject and action. This runs the real reconciler in your
+          browser. It is not a clock tiebreak — on a shared device the clock is settable
+          by whoever holds it — and not a CRDT join, because a join only moves one way
+          and policy relaxation moves the other.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {cases.map((c) => (
+          <div key={c.title} className="border border-border/70 rounded-md p-4 space-y-3">
+            <div>
+              <p className="text-xs font-semibold text-foreground">{c.title}</p>
+              <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">{c.question}</p>
+            </div>
+
+            <div className="space-y-1">
+              {c.records.map((r) => (
+                <div key={r.id} className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-mono text-muted-foreground truncate">
+                    {r.id}
+                    {r.provenance.evaluatedOffline ? " · offline" : ""}
+                  </span>
+                  <span className="text-[11px] font-mono text-muted-foreground">
+                    p{r.provenance.policyVersion}
+                    {r.provenance.coreNormalizationVersion === undefined
+                      ? "/c?"
+                      : `/c${r.provenance.coreNormalizationVersion}`}{" "}
+                    said {outcomeLabel[r.outcome]}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/60">
+              <span className="text-[11px] text-muted-foreground">Stands</span>
+              <span
+                className={`text-[10px] font-mono px-2 py-0.5 rounded border ${outcomeTone[c.result.outcome]}`}
+              >
+                {outcomeLabel[c.result.outcome]}
+              </span>
+            </div>
+
+            <div className="space-y-1">
+              <EvidenceRow
+                label="Provenance authority"
+                value={c.result.authorityIds.join(", ")}
+                mono
+              />
+              <EvidenceRow
+                label="Contested frontier"
+                value={c.result.contested ? "yes — fail-closed" : "no"}
+                tone={c.result.contested ? "warn" : undefined}
+              />
+              {c.result.expiredIds.length > 0 && (
+                <EvidenceRow
+                  label="Expired to floor"
+                  value={c.result.expiredIds.join(", ")}
+                  mono
+                  tone="warn"
+                />
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-1">
+              {c.result.reasonCodes.map((code) => (
+                <span
+                  key={code}
+                  className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-border/70 text-muted-foreground"
+                >
+                  {code}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

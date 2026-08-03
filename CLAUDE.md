@@ -52,6 +52,15 @@ proofs miss:
 - **Added or changed a package's deps?** Regenerate the lockfile —
   `pnpm install --lockfile-only` — and commit `pnpm-lock.yaml`. CI runs
   `pnpm install --frozen-lockfile` (Node 22) and fails hard on drift.
+  A **pre-push hook now enforces this** (`.githooks/pre-push`, ~0.5s), installed
+  automatically by `pnpm install` via the `prepare` script. It exists because this
+  rule was already written here, in these words, and a branch still reached the
+  remote with a mismatched lockfile — CI failed on `Install dependencies` before
+  running a single gate. The cause was mechanical, not forgetfulness: local builds
+  add darwin platform binaries and restore the manifests afterwards, and that
+  restore re-diverged the lockfile *after* it had been correctly regenerated. If you
+  do that dance, restore the manifests FIRST and regenerate the lockfile after.
+  Bypass with `git push --no-verify` when you mean to.
 - **Touched the api-server?** `pnpm --filter @workspace/api-server run test:api`
   must pass **with every assertion green** (the suite prints `N/N`; 163/163 at the
   time of writing — the printed total grows as coverage does, so compare passed

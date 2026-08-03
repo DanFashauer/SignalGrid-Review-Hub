@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# pre-push — the one check that is cheap enough to always run, guarding the one
+# failure that has actually reached the remote.
+#
+# WHY THIS EXISTS. CLAUDE.md already says, correctly and in plain words:
+#
+#   "Added or changed a package's deps? Regenerate the lockfile ... CI runs
+#    pnpm install --frozen-lockfile and fails hard on drift."
+#
+# That rule was written down, and the branch was still pushed with a lockfile that
+# did not match its manifests. CI failed on `Install dependencies` before running a
+# single gate. The cause was mechanical: this repo pins linux-x64 binaries, so local
+# builds add the darwin ones and restore the manifests afterwards — and that restore
+# re-diverged the lockfile AFTER it had been correctly regenerated. Nothing checked
+# between that moment and the push.
+#
+# A rule that depends on remembering is not a control. This is.
+#
+# SCOPE IS DELIBERATELY TINY. `pnpm install --frozen-lockfile --lockfile-only`
+# resolves against the manifests without fetching tarballs and takes about half a
+# second. The full harness (./validate-sim-macos.sh) and preflight stay manual,
+# because a pre-push hook that costs minutes gets bypassed with --no-verify, and a
+# bypassed hook is worth less than no hook: it teaches the habit of skipping.
+#
+# Bypass with `git push --no-verify` when you genuinely mean to (e.g. pushing a
+# work-in-progress branch for someone else to look at).
+
+set -uo pipefail
+cd "$(git rev-parse --show-toplevel)" || exit 0
+
+if ! command -v pnpm >/dev/null 2>&1; then
+  echo "pre-push: pnpm not on PATH — skipping the lockfile check (not failing the push)."
+  exit 0
+fi
+
+if pnpm install --frozen-lockfile --lockfile-only >/tmp/sg-prepush.log 2>&1; then
+  exit 0
+fi
+
+echo ""
+echo "  ✗ pre-push blocked: pnpm-lock.yaml does not match the package manifests."
+echo ""
+echo "    CI installs with --frozen-lockfile and will fail on 'Install dependencies'"
+echo "    before running any gate, so this push would go red without testing anything."
+echo ""
+echo "    Fix:  pnpm install --lockfile-only && git add pnpm-lock.yaml"
+echo ""
+echo "    If you added darwin platform binaries to build locally, restore the"
+echo "    manifests FIRST and regenerate the lockfile after — restoring afterwards is"
+echo "    what caused this the last time."
+echo ""
+tail -5 /tmp/sg-prepush.log | sed 's/^/    /'
+echo ""
+echo "    Intentional? Re-run with: git push --no-verify"
+echo ""
+exit 1

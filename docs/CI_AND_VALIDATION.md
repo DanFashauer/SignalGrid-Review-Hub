@@ -224,6 +224,24 @@ sections would have gone negative. Distinct figures are now counted separately f
 pairs. A guard that announces its own partial coverage has to measure that number as
 carefully as the ones it polices.
 
+**The right rule was attached to the wrong syntax.** `INTEGRATION_CATALOG`'s
+endpoint-management/NAC/entitlement proofs section is a bulleted list of one entry per
+proof — the ledger table's structure written with `-` instead of `|`. It behaved
+correctly only because none of the proofs it named were registered with the figure guard.
+Registering one (`proof:service-lifecycle`) immediately made every *other* bullet's
+figures — entitlement-binding's sweep size, uem's, response-accountability's two — read
+as claims about the one registered proof, and the guard failed on numbers that were
+perfectly accurate about their own subject. So a top-level list item that names a proof
+is now self-scoping too, reconstructed as the `-` line plus its indented continuations,
+because a multi-line bullet is one bullet.
+
+Narrowing a guard needs evidence rather than an argument, so the pair sets were computed
+under both scopings and differenced: exactly five pairs lost, none gained, and every lost
+pair is the newly-registered proof against a number belonging to a different bullet (one
+of which was never a figure at all — it is a character-length allowlist bound). No proof
+loses a pair of its own. That is the same safety property the table-row rule claims, this
+time measured rather than reasoned about.
+
 ### Where new work is allowed to land
 
 `node scripts/check-package-reachability.mjs` computes the transitive closure from the

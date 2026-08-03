@@ -16,6 +16,7 @@ export * as storeScope from "./integrations/store-scope";
 export * as sign from "./integrations/sign";
 export * as itsm from "./integrations/itsm/index";
 export * as entitlementBinding from "./integrations/entitlement-binding/index";
+export * as serviceLifecycle from "./integrations/service-lifecycle/index";
 export * as responseAccountability from "./integrations/response-accountability/index";
 export * as uem from "./integrations/uem/index";
 export * as nac from "./integrations/nac/index";

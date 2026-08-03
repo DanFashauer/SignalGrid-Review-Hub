@@ -50,7 +50,7 @@ const docsDir = join(repoRoot, "docs");
 
 /** Proofs that emit a `figures=` line. A proof that does not is simply not checked here —
  *  this guard never invents a figure it was not given. */
-export const PROOFS = ["proof:device-management-health", "proof:link-usability", "proof:task-exception", "proof:verdict-attestation", "proof:work-context", "proof:handoff-sim", "proof:adaptive-proposals", "proof:self-audit", "proof:reliability", "proof:iac", "proof:agent-behavior", "proof:dual-control", "proof:custody-beacon", "proof:app-update", "proof:platform-sso", "proof:passkey-assurance", "proof:benchmark-selection", "proof:shift-context", "proof:change-window", "proof:bootstrap-credential", "proof:caep-events", "proof:facility-trust-graph", "proof:emitter-discipline", "proof:policy-binding", "proof:isolation-scope", "proof:mcp-answer-discipline", "proof:decision-continuity"];
+export const PROOFS = ["proof:device-management-health", "proof:link-usability", "proof:task-exception", "proof:verdict-attestation", "proof:work-context", "proof:handoff-sim", "proof:adaptive-proposals", "proof:self-audit", "proof:reliability", "proof:iac", "proof:agent-behavior", "proof:dual-control", "proof:custody-beacon", "proof:app-update", "proof:platform-sso", "proof:passkey-assurance", "proof:benchmark-selection", "proof:shift-context", "proof:change-window", "proof:bootstrap-credential", "proof:caep-events", "proof:facility-trust-graph", "proof:emitter-discipline", "proof:policy-binding", "proof:isolation-scope", "proof:mcp-answer-discipline", "proof:decision-continuity", "proof:service-lifecycle"];
 
 /** Words marking a number as a deliberate reference to a PAST value or a counterfactual.
  *
@@ -135,7 +135,28 @@ const PROOF_MENTION_RE = /\bproof:[a-z0-9-]+/;
  *  it, because those rows name no proof of their own — while stopping one row from being
  *  judged against another row's proof. It can only ever remove (proof, figure) pairs that
  *  were never about each other; it cannot hide a number from the proof it belongs to,
- *  because the row that names that proof is exactly the row that stays scoped to it. */
+ *  because the row that names that proof is exactly the row that stays scoped to it.
+ *
+ *  THE SAME UNIT IN THE OTHER SYNTAX: a top-level LIST ITEM. `INTEGRATION_CATALOG`'s
+ *  "Endpoint-management, NAC, entitlement and provisioning proofs" section is a bulleted
+ *  list of one entry per proof — structurally identical to the ledger table, written with
+ *  `-` instead of `|`. It went unnoticed only because none of the proofs it named were
+ *  registered here; the moment one was, every OTHER bullet's figures (1,200 for
+ *  entitlement-binding, 3,600 and 14,400 for response-accountability) were judged against
+ *  that one proof. The table-row rule was the right rule attached to the wrong syntax.
+ *
+ *  A list item is its `- `/`* ` line plus the indented lines continuing it, so the block
+ *  is reconstructed rather than assumed to be one line — a multi-line bullet is one
+ *  bullet. Nested bullets stay with their parent: they are continuation, not a new
+ *  subject.
+ *
+ *  NARROWING A GUARD NEEDS EVIDENCE, NOT AN ARGUMENT, so this one was measured rather
+ *  than reasoned about: the (proof, figure) pair sets were computed under both the old
+ *  and new scoping and differenced. Exactly five pairs are lost and none is gained, and
+ *  every lost pair is `proof:service-lifecycle` against a number belonging to a
+ *  different bullet — 1,200 (entitlement-binding), 1,440 (uem), 3,600 and 14,400
+ *  (response-accountability), and 1,128, which is a character-length allowlist bound and
+ *  never was a figure. No other proof loses a pair; no proof loses one of its own. */
 function scopesMentioning(text, needle) {
   const lines = text.split("\n");
   const bounds = [];
@@ -152,15 +173,31 @@ function scopesMentioning(text, needle) {
 
   const scopes = [];
   for (const section of sections) {
-    // Self-scoped rows are BLANKED rather than removed, so a match's line offset inside
+    // Self-scoped units are BLANKED rather than removed, so a match's line offset inside
     // the inherited scope still maps back to its real line number in the file.
-    const inherited = section.lines.map((line, offset) => {
+    const inherited = [...section.lines];
+
+    for (let i = 0; i < inherited.length; i += 1) {
+      const line = inherited[i];
+      // A table row: one line, self-scoping when it names a proof.
       if (/^\s*\|/.test(line) && PROOF_MENTION_RE.test(line)) {
-        if (line.includes(needle)) scopes.push({ p: line, startLine: section.start + offset });
-        return "";
+        if (line.includes(needle)) scopes.push({ p: line, startLine: section.start + i });
+        inherited[i] = "";
+        continue;
       }
-      return line;
-    });
+      // A top-level list item: this line plus its indented continuations.
+      if (/^[-*] /.test(line)) {
+        let end = i + 1;
+        while (end < inherited.length && /^\s+\S/.test(inherited[end])) end += 1;
+        const block = inherited.slice(i, end).join("\n");
+        if (PROOF_MENTION_RE.test(block)) {
+          if (block.includes(needle)) scopes.push({ p: block, startLine: section.start + i });
+          for (let k = i; k < end; k += 1) inherited[k] = "";
+        }
+        i = end - 1;
+      }
+    }
+
     const joined = inherited.join("\n");
     if (joined.includes(needle)) scopes.push({ p: joined, startLine: section.start });
   }

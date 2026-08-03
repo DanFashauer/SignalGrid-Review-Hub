@@ -161,6 +161,13 @@ export const TARGETS = [
     files: ["lib/signalgrid-core/src/continuity.ts"],
   },
   {
+    proof: "proof:service-lifecycle",
+    files: [
+      "lib/integrations/src/integrations/service-lifecycle/evaluate.ts",
+      "lib/integrations/src/integrations/service-lifecycle/index.ts",
+    ],
+  },
+  {
     proof: "proof:custody-beacon",
     files: [
       "lib/integrations/src/integrations/custody-beacon/evaluate.ts",

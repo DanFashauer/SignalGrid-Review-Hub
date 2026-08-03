@@ -576,6 +576,28 @@ proof reports — the numbers below are therefore evidence, not claims.
 - **`proof:entitlement-binding` (57 checks)** — whether a grant is *reviewable*, not
   merely correct. Includes a **1,200-state sweep** with the clean path pinned to
   *exactly 18*, plus coherence checks that reject a report contradicting itself.
+- **`proof:service-lifecycle` (76 checks)** — whether the *service* plane still agrees
+  with the *account* plane that this principal is here. `access-governance` grades
+  `accountStatus`, and `active` is its clean state; but a Microsoft tenant reclaims the
+  licence first (it bills monthly) and disables the account second (it costs nothing),
+  so an object that is functionally a leaver reads `active` until a cadence-based IGA
+  sync catches up. This dimension reads the other witness — Graph `assignedPlans` /
+  `provisionedPlans` / `employeeLeaveDateTime` / `employeeHireDate` — and preserves the
+  disagreement instead of resolving it. A **7,776-state exhaustive sweep** pins the
+  clean path to *exactly 104* states collapsing to 13 named shapes, and `restrict` to
+  the single affirmative act: a service plan assigned after a departure that no rehire
+  explains. Three properties are measured rather than asserted. (1) The **named refusal
+  is mechanical** — `provisioning` ("the mailbox is still provisioning") is carried and
+  never graded, proved by **23,328** single-field swaps changing zero verdicts, with the
+  same sweep over a graded field as the non-vacuity control. (2) The **dominance rule is
+  directional** — a positively-reported account-plane concern silences every finding,
+  while `unposed` does not, because the suppression is the permissive move and is
+  therefore the half that must be earned. (3) **Coverage is not corroboration** —
+  `unassessed` (no licensing bridge) and `consistent` are different postures although
+  both carry action `none`, so a composition layer reading the action alone cannot
+  mistake "we never looked" for "we looked and it was fine". No clock appears anywhere
+  in the family: the ordering question is answered by comparing two source-reported
+  instants to each other, asserted by a source scan alongside the vendor-call scan.
 - **`proof:device-resolver` (14 checks)** — the injection boundary. `deviceResolver`
   typed its NAC adapter map as `any`, so the read-only `NACAdapter` interface was not
   enforced at the one call site that consumes it. TypeScript alone cannot close this:

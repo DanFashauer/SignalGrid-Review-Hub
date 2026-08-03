@@ -70,6 +70,7 @@
     "proof:credential-exposure": "tsx ./src/credential-exposure-proof.ts",
     "proof:macos-posture": "tsx ./src/macos-posture-proof.ts",
     "proof:entitlement-binding": "tsx ./src/entitlement-binding-proof.ts",
+    "proof:service-lifecycle": "tsx ./src/service-lifecycle-proof.ts",
     "proof:response-accountability": "tsx ./src/response-accountability-proof.ts",
     "proof:device-resolver": "tsx ./src/device-resolver-proof.ts",
     "proof:config-scope": "tsx ./src/config-scope-proof.ts",

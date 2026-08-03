@@ -198,6 +198,65 @@ The rule that follows is short: **when the caller is an agent, every optional in
 a claim, and omitting it is a non-claim rather than a pass.** Hand the caller's value
 through and let the normalizer decide what silence means.
 
+## Where SignalGrid sits when enforcement moves off the endpoint
+
+Hardware-enforced edge microsegmentation puts a first-hop device in front of an asset
+and enforces layer 2-4 policy OUTSIDE the host OS. For assets that cannot defend
+themselves — unpatchable controllers, legacy equipment, medical devices, kiosks,
+contractor endpoints — it is a genuinely strong control, and it is not a competitor to
+anything SignalGrid does. **SignalGrid is not the packet-enforcement appliance and
+should not become one.**
+
+The reason it matters here is a second-order effect that the prevention story hides:
+
+> *The telemetry did not disappear. It moved.*
+
+Successful prevention complicates reconstruction. Traffic becomes an encrypted tunnel;
+source context shifts to the overlay; passive sensors and discovery paths that used to
+answer questions stop being asked. The evidence still exists — it is just generated
+somewhere else, by something else, in a different shape. **And trust moves with it:**
+the edge firmware, its policy service, the overlay credentials and the management plane
+all join the trusted computing and recovery path. Whoever can change fleet-wide policy
+can reroute traffic, isolate systems, or break the recovery channel.
+
+### The failure mode is substitution, not absence
+
+The fabric already handles evidence going *absent*. `proof:absent-collection` pins
+NOTHING OBSERVED IS NOT THE SAME AS NOTHING WRONG at every site that grades a
+collection, and an unreachable source raises assurance rather than passing.
+
+Relocation is a different shape, and it is the harder one. The source does not go
+silent — it is **replaced by a different source answering a different predicate that
+sounds affirmative.** A passive sensor answers *"what did I observe on the wire?"* An
+enforcement appliance answers *"I enforced policy and allowed the flow."* Those are not
+the same claim: the first is an observation, the second attests the enforcer's own
+output. Substituting one for the other is the watermelon distinction
+(`response-accountability`) crossed with a dominance failure — a weaker affirmative
+standing in where a stronger one has quietly stopped answering.
+
+Nothing in the fabric detects that today, because a healthy affirmative arriving looks
+exactly like a healthy affirmative arriving. Naming it is the point: **a deployment can
+improve its prevention posture and degrade its explainability in the same change, and
+neither number moves in a way anyone is watching.**
+
+### So the position is narrow and it holds
+
+SignalGrid correlates identity, asset, endpoint, edge-policy, network, workflow and
+management-plane evidence, and answers one question per action: *should this verified
+person, on this asset, through this enforcement policy, in this workflow and operational
+context, be permitted to do this now?* The hardware blocks the packet. The fabric keeps
+the decision explainable afterwards — who changed the policy, why the flow was blocked,
+which asset and worker were involved, what the evidence says now and where it lives.
+
+**The entry requirement, if such a source is ever consumed, is a visibility contract.**
+Not a feature list — a statement, per connector, of what remains locally visible, what
+becomes encrypted, where flow records are generated, how original source context is
+preserved, how policy changes are attributed, how fail-open and fail-closed are
+reported, how human bypass is detected, how evidence is exported when the management
+plane is unavailable, and which system owns the authoritative record. A connector that
+cannot say where the evidence now lives cannot be graded — only believed, which is the
+one thing this fabric never does with a vendor's own affirmative.
+
 ## Where SignalGrid sits when the buyer builds an AI platform team
 
 The tool role above answers *what calls SignalGrid*. The next question is *who owns the

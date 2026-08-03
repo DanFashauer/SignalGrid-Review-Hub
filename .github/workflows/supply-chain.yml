@@ -81,9 +81,14 @@ jobs:
       # only when the SBOM actually changed. A GITHUB_TOKEN push does not retrigger
       # workflows, so this cannot loop.
       - name: Commit refreshed SBOM (dependabot only)
+        # Gate on the PR's AUTHOR, not `github.actor`. `actor` is whoever triggered
+        # the run, so the moment a human clicks "re-run jobs" it becomes that human
+        # and this step silently skips — which is precisely the case most likely to
+        # be used to test whether this works. The PR author does not change on a
+        # re-run, so it is the property actually being asked about.
         if: >-
           github.event_name == 'pull_request' &&
-          github.actor == 'dependabot[bot]' &&
+          github.event.pull_request.user.login == 'dependabot[bot]' &&
           github.event.pull_request.head.repo.full_name == github.repository
         run: |
           if git diff --quiet -- artifacts/sbom/cyclonedx.json; then
@@ -94,7 +99,17 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add artifacts/sbom/cyclonedx.json
           git commit -m "deps: regenerate CycloneDX SBOM for the updated lockfile"
-          git push origin "HEAD:${GITHUB_HEAD_REF}"
+          # A Dependabot-triggered run gets a READ-ONLY GITHUB_TOKEN by default; the
+          # job-scoped `permissions: contents: write` above is what elevates it. If
+          # that is ever not in effect, the push fails with a bare git error that
+          # looks like this whole approach is broken. Say what it actually means.
+          if ! git push origin "HEAD:${GITHUB_HEAD_REF}"; then
+            echo "::error::Could not push the refreshed SBOM to ${GITHUB_HEAD_REF}."
+            echo "::error::Most likely the token is read-only for this run. Check that"
+            echo "::error::Settings → Actions → Workflow permissions allows write, and"
+            echo "::error::that this job's contents:write permission is in effect."
+            exit 1
+          fi
           echo "Committed a refreshed SBOM to ${GITHUB_HEAD_REF}."
 
       - name: Verify SBOM is committed and up to date

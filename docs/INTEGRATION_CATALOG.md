@@ -557,12 +557,25 @@ recently. Their documented counts are enforced by `pnpm run check:proof-counts`,
 which runs each proof and fails the build when a number here disagrees with what the
 proof reports — the numbers below are therefore evidence, not claims.
 
-- **`proof:uem` (50 checks)** — the read-only MDM/UEM dimension across Intune, Jamf
+- **`proof:uem` (55 checks)** — the read-only MDM/UEM dimension across Intune, Jamf
   and Workspace ONE. Includes a **1,440-state exhaustive sweep** whose grant path is
   pinned to *exactly 9* fully-confirmed states, four isolated live-call-gate refusals,
   and a source scan asserting no vendor-API call. `personal` ownership on an
   unsupervised device grades `monitor`, not a grant: vendors report personal ownership
   as a residual bucket rather than a positive confirmation.
+  It also supplies `carrier`'s posed `cellularBackchannel` axis, which until now had no
+  production supplier at all — the axis was consumed by the evaluator and posed only in
+  fixtures, so every real deployment read `unknown` forever while the fixtures pretended
+  otherwise. `cellularHardware` is **affirmative-only and two-state by construction**: a
+  volunteered `imei`/`meid`/`iccid` proves a modem, anything else is `unknown`, and
+  `absent` is *not in the type*. That is deliberate rather than an omission — a missing
+  identifier is a missing identifier, not a missing radio, and deriving `absent` from its
+  silence is precisely the row-55 defect one layer up. The reading is directly assignable
+  to the three-state carrier axis without a mapper, so the type carries the law instead of
+  a convention asking politely; a true `absent` needs an administrative declaration or a
+  model catalog, neither of which is a UEM read. The axis is also proved **carried, not
+  graded** — swapping only `cellularHardware` across all 1,440 swept states changes no
+  verdict, because a device's radio is not a management-posture fact.
 - **`proof:nac` (32 checks)** — Cisco ISE and Aruba ClearPass endpoint identity,
   read-only. Hostile-identifier cases are asserted against the **filter builder**, not
   merely the validator, and fixture lookups are scoped to the identifier kind so a

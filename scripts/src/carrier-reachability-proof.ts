@@ -11,6 +11,7 @@
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { cellularHardwareFrom, type UemCellularHardware } from "@workspace/integrations/uem";
 import {
   CarrierConnectorError,
   CarrierReachabilityConnector,
@@ -20,6 +21,7 @@ import {
   normalizeSession,
   resolveCarrierReachabilityConnector,
   type CarrierSessionRaw,
+  type CellularBackchannel,
   type ReachabilitySignal,
   type ReachabilityVerdict,
 } from "@workspace/integrations/carrier";
@@ -191,6 +193,66 @@ check(
 // Sanity: normalizeSession is a pure function usable without the connector.
 check("normalizeSession is pure and standalone", normalizeSession(rawSessions[0], OBSERVED_AT).deviceId === rawSessions[0].deviceId);
 
+// ── The posed axis now has a REAL SUPPLIER ────────────────────────────────────
+//
+// Before this, `cellularBackchannel` was consumed by the evaluator and posed only in
+// FIXTURES — every production deployment read `unknown` forever while this proof's
+// own fixtures pretended the axis worked. The doc comment on `normalizeSession` named
+// "the device-inventory plane" as the source; nothing was ever connected to it.
+//
+// `uem`'s `cellularHardware` is that supplier, and the interesting property is what it
+// CANNOT say.
+{
+  const fromUem = (...ids: readonly unknown[]): UemCellularHardware => cellularHardwareFrom(...ids);
+
+  // Assignable to the carrier axis with no mapper and no cast — the type system
+  // carrying the law rather than a convention asking politely.
+  const posedFromInventory: CellularBackchannel = fromUem("359881234567890");
+  const posedFromSilence: CellularBackchannel = fromUem(null, undefined, "");
+  check(
+    "a uem hardware reading is directly assignable to the posed carrier axis",
+    posedFromInventory === "present" && posedFromSilence === "unknown",
+  );
+
+  // THE LAW THAT MATTERS: the supplier can never produce `absent`. Row 55 removed
+  // absent-by-inference from `carrier` because a carrier API cannot prove a radio's
+  // absence. A UEM cannot either — a missing IMEI is a missing identifier, not a
+  // missing modem — so sweeping every identifier shape must never yield a third value.
+  const SHAPES: readonly (readonly unknown[])[] = [
+    [], [null], [undefined], [""], ["  "], [false], [0], [{}], [[]], [null, undefined, ""],
+    ["359881234567890"], ["", "89014103211118510720"], [null, null, "A1000009B7C1D2"],
+  ];
+  const produced = new Set<string>(SHAPES.map((sh) => fromUem(...sh)));
+  check(
+    `across ${SHAPES.length} identifier shapes the supplier produces {${[...produced].sort().join(", ")}} and never absent`,
+    !produced.has("absent") && produced.size === 2,
+  );
+
+  // End-to-end consequence: a device the inventory plane is silent about must NOT take
+  // the short-circuit row 55 removed. Silence keeps it eligible for a real reachability
+  // read rather than being declared unlocatable.
+  const sess = (deviceId: string): CarrierSessionRaw =>
+    ({ deviceId, sessionState: "active", dataConnected: true }) as CarrierSessionRaw;
+  const silent = normalizeSession(sess("dev-silent"), "2026-01-01T00:00:00.000Z", fromUem(null));
+  const known = normalizeSession(sess("dev-known"), "2026-01-01T00:00:00.000Z", fromUem("359881234567890"));
+  check(
+    "an inventory-silent device poses `unknown`, not `absent` — no short-circuit",
+    silent.cellularBackchannel === "unknown",
+  );
+  check(
+    "an inventory-confirmed modem poses `present`, so the supplier is not inert",
+    known.cellularBackchannel === "present",
+  );
+  check(
+    "NON-VACUITY: the supplier actually distinguishes the two cases",
+    silent.cellularBackchannel !== known.cellularBackchannel,
+  );
+}
+
+// Computed HERE, not earlier. It was previously snapshotted mid-file, so any check
+// added below that point printed a denominator smaller than the numerator — the
+// proof under-reporting its own coverage, which is the stale-figure defect this
+// repository guards against everywhere else.
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) {

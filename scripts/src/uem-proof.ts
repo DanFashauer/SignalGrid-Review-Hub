@@ -18,6 +18,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  cellularHardwareFrom,
   evaluateUem,
   normalizeJamfDevice,
   normalizeIntuneDevice,
@@ -122,7 +123,7 @@ for (const vendor of VENDORS)
             total += 1;
             const state: NormalizedUemDeviceState = {
               deviceId: "d", vendor, enrollment, compliance, supervision, ownership,
-              osVersion: null, lastCheckInAgeSeconds: null, reportIntegrity,
+              osVersion: null, lastCheckInAgeSeconds: null, cellularHardware: "unknown", reportIntegrity,
             };
             const v = evaluateUem(state);
             if (v.recommendedAction !== "none") continue;
@@ -168,7 +169,7 @@ check(`...and the grant path is REACHABLE — exactly 9 confirmed-clean states (
         for (const ownership of OWNERSHIPS) {
           const v = evaluateUem({
             deviceId: "d", vendor: "jamf", enrollment, compliance, supervision, ownership,
-            osVersion: null, lastCheckInAgeSeconds: null, reportIntegrity: "intact",
+            osVersion: null, lastCheckInAgeSeconds: null, cellularHardware: "unknown", reportIntegrity: "intact",
           });
           if ((v.recommendedAction as string) === "escalate") escalated += 1;
         }
@@ -188,7 +189,7 @@ check(`...and the grant path is REACHABLE — exactly 9 confirmed-clean states (
   const clean: NormalizedUemDeviceState = {
     deviceId: "d", vendor: "jamf", enrollment: "enrolled", compliance: "compliant",
     supervision: "supervised", ownership: "corporate",
-    osVersion: null, lastCheckInAgeSeconds: null, reportIntegrity: "intact",
+    osVersion: null, lastCheckInAgeSeconds: null, cellularHardware: "unknown", reportIntegrity: "intact",
   };
   const isolated = [
     evaluateUem({ ...clean, enrollment: "unknown" }),
@@ -214,7 +215,7 @@ check(`...and the grant path is REACHABLE — exactly 9 confirmed-clean states (
   const base: NormalizedUemDeviceState = {
     deviceId: "d", vendor: "intune", enrollment: "enrolled", compliance: "compliant",
     supervision: "unsupervised", ownership: "corporate",
-    osVersion: null, lastCheckInAgeSeconds: null, reportIntegrity: "intact",
+    osVersion: null, lastCheckInAgeSeconds: null, cellularHardware: "unknown", reportIntegrity: "intact",
   };
 
   const corporate = evaluateUem(base);
@@ -377,6 +378,74 @@ check("no fixture carries a wall-clock timestamp — ages are durations supplied
   check("...and the scan actually detects a planted vendor call",
     banned.some((re) => re.test(`await fetch("https://vendor/api", { method: "POST" })`)) &&
     banned.some((re) => re.test(`const { Redis } = await import("ioredis");`)));
+}
+
+// ── Cellular hardware: affirmative-only, and CARRIED rather than graded ──────
+//
+// `cellularHardware` exists to supply `carrier`'s posed `cellularBackchannel` axis,
+// which had no production supplier at all before this — every real deployment read
+// `unknown` forever while the fixtures pretended otherwise.
+//
+// Two laws, and the second is the one a later reader would break.
+{
+  // LAW 1 — the reading is AFFIRMATIVE ONLY. A volunteered identifier proves a modem;
+  // nothing else does. `absent` is not in the type, so the strongest available check is
+  // that no input whatsoever produces anything but the two legal values, and that the
+  // no-identifier case lands on `unknown` rather than on a confident negative.
+  const IDENTIFIER_CASES: readonly (readonly unknown[])[] = [
+    [], [undefined], [null], [""], ["   "], [false], [0], [{}], [[]],
+    ["359881234567890"], [undefined, "89014103211118510720"], [null, null, "A1000009B7C1D2"],
+  ];
+  const readings = IDENTIFIER_CASES.map((c) => cellularHardwareFrom(...c));
+  check(
+    `every one of ${IDENTIFIER_CASES.length} identifier shapes reads present|unknown, never a third value`,
+    readings.every((r) => r === "present" || r === "unknown"),
+  );
+  check(
+    "a volunteered IMEI/ICCID/MEID reads `present` — one identifier is enough",
+    readings.slice(-3).every((r) => r === "present"),
+  );
+  check(
+    "NO identifier reads `unknown`, NOT a confident negative — absence of evidence is not evidence of absence",
+    readings.slice(0, 9).every((r) => r === "unknown"),
+  );
+  // NON-VACUITY: if the helper returned a constant, the two assertions above would
+  // both hold vacuously in one direction. Assert both values actually occur.
+  check(
+    "NON-VACUITY: both readings are reachable, so neither assertion above is vacuous",
+    readings.includes("present") && readings.includes("unknown"),
+  );
+
+  // LAW 2 — CARRIED, NOT GRADED. The uem evaluator must not read this axis: a device's
+  // radio is not a management-posture fact, and letting it move the verdict would mean
+  // a Wi-Fi-only tablet grading differently from a cellular one for no security reason.
+  // Measured the same way service-lifecycle measures its `provisioning` refusal —
+  // swapping ONLY this field across the whole swept space must change nothing.
+  let compared = 0;
+  let differing = 0;
+  for (const vendor of VENDORS)
+    for (const enrollment of ENROLLMENTS)
+      for (const compliance of COMPLIANCES)
+        for (const supervision of SUPERVISIONS)
+          for (const ownership of OWNERSHIPS)
+            for (const reportIntegrity of INTEGRITIES) {
+              const base: NormalizedUemDeviceState = {
+                deviceId: "d", vendor, enrollment, compliance, supervision, ownership,
+                osVersion: null, lastCheckInAgeSeconds: null,
+                cellularHardware: "unknown", reportIntegrity,
+              };
+              compared += 1;
+              if (
+                JSON.stringify(evaluateUem({ ...base, cellularHardware: "present" })) !==
+                JSON.stringify(evaluateUem(base))
+              ) {
+                differing += 1;
+              }
+            }
+  check(
+    `carried-not-graded is MECHANICAL: ${compared} single-field swaps, ${differing} verdict changes`,
+    differing === 0 && compared > 0,
+  );
 }
 
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${passed + failures.length})`);

@@ -86,6 +86,31 @@ export type UemReportIntegrity = "intact" | "malformed";
 
 /** The vendor-neutral device state the evaluator grades. Deliberately small: it
  *  carries only what a decision needs, and every field can say `unknown`. */
+/**
+ * Whether this device HAS a cellular radio, as read from the device-inventory plane.
+ *
+ * DELIBERATELY TWO STATES, NOT THREE — and the missing third is the whole point.
+ *
+ * `carrier`'s `cellularBackchannel` axis has three (`present` | `absent` | `unknown`),
+ * and this type is assignable to it precisely BECAUSE it omits `absent`. That is a
+ * type-level statement of a fact this plane cannot know: a UEM reports the identifiers
+ * a device volunteered at enrollment, and a MISSING `imei`/`meid`/`iccid` is a missing
+ * identifier, not a missing modem. It covers a Wi-Fi-only tablet, yes — but equally an
+ * eSIM never activated, a payload the tenant restricted by scope, a partial sync, and a
+ * device whose cellular details Intune simply does not populate for that platform.
+ *
+ * This is the SAME defect the `carrier` connector carried until intake ledger row 55:
+ * three absences combined into the positive assertion "this hardware has no modem".
+ * Deriving `absent` here from a missing identifier would reintroduce it one layer up,
+ * which is exactly the mistake a later reader "completing the mapping" would make. The
+ * type makes that unrepresentable rather than merely discouraged.
+ *
+ * A true `absent` needs an authoritative hardware fact — an administrative declaration,
+ * or a model catalog stating the SKU ships without a modem. Neither is a UEM read, and
+ * neither is in this repository.
+ */
+export type UemCellularHardware = "present" | "unknown";
+
 export interface NormalizedUemDeviceState {
   /** Opaque device identifier as reported by the vendor. Never a serial. */
   readonly deviceId: string;
@@ -107,6 +132,11 @@ export interface NormalizedUemDeviceState {
    *  golden rule 2, and the reason this dimension could never have been replayed
    *  deterministically. Freshness policy belongs to the caller that owns the clock. */
   readonly lastCheckInAgeSeconds: number | null;
+  /** AFFIRMATIVE-ONLY radio reading — `present` when the vendor volunteered a cellular
+   *  identifier, `unknown` otherwise. Never `absent`; see UemCellularHardware. It is
+   *  directly assignable to `carrier`'s posed `cellularBackchannel` axis, so a caller
+   *  bridging the two planes cannot accidentally widen it. */
+  readonly cellularHardware: UemCellularHardware;
   readonly reportIntegrity: UemReportIntegrity;
 }
 

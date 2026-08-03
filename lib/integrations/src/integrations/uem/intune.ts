@@ -9,6 +9,7 @@
 
 import type {
   NormalizedUemDeviceState,
+  UemCellularHardware,
   UemCompliance,
   UemEnrollment,
   UemOwnership,
@@ -24,10 +25,32 @@ export interface IntuneManagedDevicePayload {
   readonly osVersion?: unknown;
   /** Graph `managedDeviceOwnerType`: `unknown` | `company` | `personal`. */
   readonly managedDeviceOwnerType?: unknown;
+  /** Graph cellular identifiers. Read AFFIRMATIVELY ONLY — presence proves a modem,
+   *  absence proves nothing. See UemCellularHardware. */
+  readonly imei?: unknown;
+  readonly meid?: unknown;
+  readonly iccid?: unknown;
 }
 
 const asString = (v: unknown): string | null =>
   typeof v === "string" && v.trim() !== "" ? v.trim() : null;
+
+/**
+ * AFFIRMATIVE-ONLY cellular-hardware reading.
+ *
+ * A volunteered identifier is positive evidence of a modem — a device cannot hold an
+ * IMEI, MEID or ICCID without one. Anything else is `unknown`, NEVER `absent`: see
+ * `UemCellularHardware` for why the absent case is not derivable from this plane and
+ * is deliberately not representable in that type.
+ *
+ * Note the shape of the test — `.some(present)` rather than `.every(absent)`. The two
+ * are not mirror images here: one identifier is enough to prove the modem, whereas no
+ * number of missing identifiers proves its absence. Writing it the other way round is
+ * how the `carrier` connector acquired the row-55 defect in the first place.
+ */
+export function cellularHardwareFrom(...identifiers: readonly unknown[]): UemCellularHardware {
+  return identifiers.some((v) => typeof v === "string" && v.trim() !== "") ? "present" : "unknown";
+}
 
 /**
  * Graph's `complianceState` enum, mapped without inventing members.
@@ -106,6 +129,7 @@ export function normalizeIntuneDevice(raw: IntuneManagedDevicePayload): Normaliz
       ownership: "unknown",
       osVersion: null,
       lastCheckInAgeSeconds: null,
+      cellularHardware: "unknown",
       reportIntegrity: "malformed",
     };
   }
@@ -123,6 +147,7 @@ export function normalizeIntuneDevice(raw: IntuneManagedDevicePayload): Normaliz
     ownership: ownershipFrom(raw.managedDeviceOwnerType),
     osVersion: asString(raw.osVersion),
     lastCheckInAgeSeconds: null,
+    cellularHardware: cellularHardwareFrom(raw.imei, raw.meid, raw.iccid),
     reportIntegrity: "intact",
   };
 }

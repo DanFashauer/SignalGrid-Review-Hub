@@ -77,6 +77,7 @@ export function normalizeJamfDevice(raw: JamfComputerPayload): NormalizedUemDevi
       ownership: "unknown",
       osVersion: null,
       lastCheckInAgeSeconds: null,
+      cellularHardware: "unknown",
       reportIntegrity: "malformed",
     };
   }
@@ -127,6 +128,7 @@ export function normalizeJamfDevice(raw: JamfComputerPayload): NormalizedUemDevi
     // read here would make this dimension non-replayable. The caller that owns the
     // clock supplies the age. See the note on `lastCheckInAgeSeconds` in types.ts.
     lastCheckInAgeSeconds: null,
+    cellularHardware: "unknown",
     reportIntegrity: "intact",
   };
 }

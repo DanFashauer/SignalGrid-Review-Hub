@@ -18,7 +18,7 @@ export * from "./types";
 // outside its own directory, which is part of why its unscoped key went unnoticed.
 export * from "./store";
 export { evaluateUem } from "./evaluate";
-export { normalizeIntuneDevice } from "./intune";
+export { normalizeIntuneDevice, cellularHardwareFrom } from "./intune";
 export { normalizeJamfDevice } from "./jamf";
 export { normalizeWorkspaceOneDevice, WORKSPACE_ONE_READ_CONTRACT } from "./workspace-one";
 
@@ -97,6 +97,7 @@ export function normalizeUemDevice(vendor: UemVendor, raw: unknown): NormalizedU
         ownership: "unknown",
         osVersion: null,
         lastCheckInAgeSeconds: null,
+        cellularHardware: "unknown",
         reportIntegrity: "malformed",
       };
   }
@@ -116,6 +117,7 @@ export const UEM_FIXTURES: Readonly<Record<string, NormalizedUemDeviceState>> = 
     ownership: "corporate",
     osVersion: "17.5.1",
     lastCheckInAgeSeconds: 300,
+    cellularHardware: "unknown",
     reportIntegrity: "intact",
   },
   "intune-retiring": {
@@ -127,6 +129,7 @@ export const UEM_FIXTURES: Readonly<Record<string, NormalizedUemDeviceState>> = 
     ownership: "corporate",
     osVersion: "17.5.1",
     lastCheckInAgeSeconds: 900,
+    cellularHardware: "unknown",
     reportIntegrity: "intact",
   },
   "jamf-uneval": {
@@ -139,6 +142,7 @@ export const UEM_FIXTURES: Readonly<Record<string, NormalizedUemDeviceState>> = 
     ownership: "unknown",
     osVersion: "14.6",
     lastCheckInAgeSeconds: 120,
+    cellularHardware: "unknown",
     reportIntegrity: "intact",
   },
   "ws1-noncompliant": {
@@ -151,6 +155,7 @@ export const UEM_FIXTURES: Readonly<Record<string, NormalizedUemDeviceState>> = 
     ownership: "corporate",
     osVersion: "17.4",
     lastCheckInAgeSeconds: 60,
+    cellularHardware: "unknown",
     reportIntegrity: "intact",
   },
   // THE BYOD CASE, and the reason the ownership axis exists. Enrolled, compliant,
@@ -167,6 +172,7 @@ export const UEM_FIXTURES: Readonly<Record<string, NormalizedUemDeviceState>> = 
     ownership: "personal",
     osVersion: "18.1",
     lastCheckInAgeSeconds: 240,
+    cellularHardware: "unknown",
     reportIntegrity: "intact",
   },
   // The same device with ownership unreadable — steps up, because we cannot tell
@@ -180,6 +186,7 @@ export const UEM_FIXTURES: Readonly<Record<string, NormalizedUemDeviceState>> = 
     ownership: "unknown",
     osVersion: "18.1",
     lastCheckInAgeSeconds: 240,
+    cellularHardware: "unknown",
     reportIntegrity: "intact",
   },
   unattributable: {
@@ -191,6 +198,7 @@ export const UEM_FIXTURES: Readonly<Record<string, NormalizedUemDeviceState>> = 
     ownership: "unknown",
     osVersion: null,
     lastCheckInAgeSeconds: null,
+    cellularHardware: "unknown",
     reportIntegrity: "malformed",
   },
 });

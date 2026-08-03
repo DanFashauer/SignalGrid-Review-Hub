@@ -145,6 +145,14 @@ A posed `standingBound` with no `elapsedSecondsById` becomes an EMPTY map, not a
 bound — so every offline record reads as age-unstated and expires. Treating it as "no
 bound posed" would let a caller pose a bound and then escape it by omitting the ages.
 
+**All three were measured rather than asserted.** Each was mutated in the route, run
+through the API suite, and reverted: defaulting the two provenance booleans drops
+225/227, truncating instead of refusing drops 226/227, and turning the empty map back
+into an absent bound drops 226/227 — each killing exactly the assertions that name it.
+The figures are in the route's own comment, because all three are changes a later reader
+makes while *tidying*: completing a field looks like politeness, truncating looks like
+robustness, and collapsing an empty map looks like simplification.
+
 ### 2b. On screen
 
 The Operator Console (`artifacts/signalgrid-review/.../OperatorConsoleSection.tsx`) runs

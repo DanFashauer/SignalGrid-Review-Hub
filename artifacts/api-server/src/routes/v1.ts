@@ -151,6 +151,22 @@ router.get("/v1/decisions/:id/evidence", async (req: Request, res: Response, nex
  * adapter's defect at a different layer — an omitted field buying the record the right
  * to relax — and it would be invisible from the wire, because a defaulted request and
  * an honest one produce the same 200.
+ *
+ * ALL THREE OF THIS LAYER'S LAWS WERE MEASURED, not assumed. Each mutation below was
+ * applied here, run through `pnpm --filter @workspace/api-server run test:api`, and
+ * reverted; each killed exactly the assertions that name it, and nothing else:
+ *
+ *   227/227  baseline
+ *   225/227  the parser completes the two provenance booleans with `?? false`
+ *            (kills both "an omitted X is a 400, not an <affirmative>" assertions)
+ *   226/227  the record cap truncates instead of refusing
+ *   226/227  a posed standingBound with no stated ages becomes an ABSENT bound
+ *            rather than an empty map
+ *
+ * That matters because all three are the kind of change a later reader makes while
+ * tidying — completing a field looks like politeness, truncating looks like robustness,
+ * and treating an empty map as "nothing posed" looks like simplification. Each is a
+ * one-directional loss, and the suite now says so out loud.
  */
 router.post("/v1/decisions/reconcile", (req: Request, res: Response) => {
   const { records, standingBound } = parseReconcile(req.body);

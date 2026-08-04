@@ -138,6 +138,21 @@ const truncate = (s) => (s.length > 58 ? `${s.slice(0, 55)}...` : s);
 // coverage, and this was the fourth time the right rule was found attached to the wrong
 // set. When a family moves code between files, re-check what this list still reaches.
 export const TARGETS = [
+  // `posture-composition` was registered here and REMOVED in the same session. The sweep
+  // returned `mutations=0`: `compose.ts` is a sort plus a table lookup and `adapters.ts`
+  // is pass-through mapping (`action: v.recommendedAction as UnifiedAction`), so there is
+  // no branching to falsify. Registering it bought nothing while making the registry read
+  // as if the fusion were covered. What protects those files instead is a COMPLETENESS
+  // check in `proof:posture-composition` — every SIGNAL_KIND emitted by exactly one
+  // adapter, no adapter emitting a kind outside the union — which is the property that
+  // can actually be wrong. The zero-mutation failure below now makes this mistake
+  // impossible to repeat quietly.
+  {
+    // Routing decides which humans see a finding. A finding sent to the wrong queue is
+    // functionally a finding nobody got.
+    proof: "proof:incident-playbook",
+    files: ["lib/incident-playbook/src/map.ts"],
+  },
   {
     proof: "proof:device-management-health",
     files: [
@@ -984,12 +999,26 @@ function main() {
   let hung = 0;
   let allowed = 0;
   const survivors = [];
+  const zeroMutation = [];
 
   for (const target of targets) {
     console.log(`── ${target.proof}`);
     for (const file of target.files) {
       const mutations = mutationsFor(file);
       console.log(`   ${file} — ${mutations.length} mutations`);
+      // A registered file the mutators cannot touch is a FALSE COVERAGE CLAIM, and a
+      // quiet one: the run says "every registered guard is falsifiable", which is
+      // vacuously true of a file with no guards in it. Someone reading TARGETS sees the
+      // entry and concludes the file is swept.
+      //
+      // Found by registering `posture-composition` and getting `mutations=0`. Those
+      // adapters are pass-through mapping — `action: v.recommendedAction as
+      // UnifiedAction` — with no branching to falsify, so the entry bought nothing while
+      // looking like coverage. The entry was removed; this makes the next one impossible
+      // rather than a thing someone has to notice.
+      if (mutations.length === 0) {
+        zeroMutation.push(`${target.proof} → ${file}`);
+      }
       for (const mutation of mutations) {
         total += 1;
         writeFileSync(mutation.abs, mutation.content);
@@ -1042,6 +1071,20 @@ function main() {
     process.exit(1);
   }
 
+  if (zeroMutation.length > 0) {
+    console.error("\nMutation guard FAILED — registered, but NOTHING IN IT CAN BE MUTATED:\n");
+    for (const entry of zeroMutation) console.error(`  ✗ ${entry}`);
+    console.error(
+      "\nThis is a false coverage claim, and a quiet one: the summary above would have read\n" +
+        "\"every registered guard is falsifiable\", which is vacuously true of a file containing\n" +
+        "no guards. A reader of TARGETS sees the entry and concludes the file is swept.\n\n" +
+        "Either the file has no falsifiable logic — in which case remove the entry and protect it\n" +
+        "some other way (a completeness check, a shape pin) — or it has logic this line-oriented\n" +
+        "mutator cannot reach, in which case add a mutator for that shape.",
+    );
+    process.exitCode = 1;
+    return;
+  }
   console.log("\nMutation guard passed — every registered guard is falsifiable, or documented as inert.");
 
 }

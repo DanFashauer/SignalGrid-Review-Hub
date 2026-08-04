@@ -389,6 +389,34 @@ only), and the DDM rig is gated on an APNs push certificate.
 
 ## Next
 
+- [ ] **Two findings from the "status reported rather than measured" sweep — recorded, not fixed.**
+      The sweep that produced the `itsm` tri-state health fix turned up two more instances of the
+      same class. Neither was fixed in that pass, because in both cases the honest fix is wider
+      than the defect and the blast radius needs a deliberate decision rather than a drive-by edit.
+
+      1. **Twelve connectors fabricate an HTTP status they never observed.** Every
+         `*-connector.ts` with the shape `async healthCheck(...)` returns
+         `{ healthy: true, status: 200 }` after awaiting an INJECTED transport. Two problems ride
+         together. The `200` is invented — the success path never reads a status code, so a 201,
+         202 or 204 is reported as 200, and a reviewer reading the field believes a server said it.
+         More importantly, `healthy: true` means "the injected transport resolved", which in
+         fixture mode is true without anything being contacted. The connector cannot know which
+         transport it was handed, so the honest fix probably belongs at the resolution layer —
+         which already reports `mode: "fixture"` with a reason — rather than in twelve constructors.
+         Sites: `access-governance`, `agent-identity`, `device-attestation`,
+         `device-management-health`, `link-usability`, `macos-posture`, `oauth-consent`,
+         `ot-posture`, `pacs-access`, `sso-session`, `task-exception`, `token-binding`.
+
+      2. **`sourcingToSignalStates` labels a CAPABILITY with the HEALTH vocabulary.**
+         `lib/flows/src/signal-sourcing.ts` emits `{ id, status: "healthy" }` for every source whose
+         acquisition method is *wireable* — meaning it COULD be connected, not that it is currently
+         delivering. The docstring says so plainly and `proof:grid-coverage` pins the semantics, and
+         its only consumers are coverage evaluations, so nothing today reads it as a live health
+         claim. The risk is vocabulary drift: `status: "healthy"` is produced elsewhere in this repo
+         by things that DID observe. Fixing it means changing the `SignalState` vocabulary, which
+         ripples through coverage, flows, the control-plane route and several proofs — worth doing
+         deliberately, not incidentally.
+
 - [x] **In-app step-up completion (real WebAuthn, possession + user-verification)** — the SERVER control
       is real: `/v1/step-up/enroll/{options,verify}` + `/v1/step-up/challenge` +
       `/v1/app-workflows/complete-step-up` wire the hardened `@workspace/webauthn`

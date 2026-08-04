@@ -4,7 +4,7 @@
  * Creates ITSM adapter instances based on vendor and configuration.
  */
 
-import type { ITSMAdapter, ITSMTicketRequest } from '../adapters/types';
+import type { ITSMAdapter, ITSMAdapterHealth, ITSMTicketRequest } from '../adapters/types';
 import { ServiceNowAdapter } from './servicenow';
 import { JiraAdapter } from './jira';
 import { ZendeskAdapter } from './zendesk';
@@ -242,19 +242,38 @@ export class ITSMAdapterManager {
   }
   
   /**
-   * Health check all adapters
+   * Health check all adapters.
+   *
+   * Returns a THREE-state result per vendor, not a boolean. `healthCheck` is
+   * optional on `ITSMAdapter`, and this method used to record `true` for an
+   * adapter that exposes none — so "we never asked" and "we asked and it is
+   * fine" arrived at the caller as the same value. Nothing downstream could
+   * tell them apart, which is the unearned affirmative this repository keeps
+   * finding: a green state reported without the thing that would establish it.
+   *
+   * An adapter that throws is `unhealthy`, not an exception that aborts the
+   * sweep. Every shipped adapter catches internally, but the interface does not
+   * require it, and one bad adapter taking down the whole result would leave
+   * every OTHER vendor unreported — a worse failure than the one being reported.
    */
-  async healthCheck(): Promise<Record<ITSMVendor, boolean>> {
-    const results: Record<ITSMVendor, boolean> = {} as Record<ITSMVendor, boolean>;
-    
+  async healthCheck(): Promise<Record<ITSMVendor, ITSMAdapterHealth>> {
+    const results: Record<ITSMVendor, ITSMAdapterHealth> = {} as Record<
+      ITSMVendor,
+      ITSMAdapterHealth
+    >;
+
     for (const [vendor, adapter] of this.adapters) {
-      if (adapter.healthCheck) {
-        results[vendor] = await adapter.healthCheck();
-      } else {
-        results[vendor] = true;
+      if (!adapter.healthCheck) {
+        results[vendor] = 'unchecked';
+        continue;
+      }
+      try {
+        results[vendor] = (await adapter.healthCheck()) ? 'healthy' : 'unhealthy';
+      } catch {
+        results[vendor] = 'unhealthy';
       }
     }
-    
+
     return results;
   }
 }

@@ -42,6 +42,23 @@ export interface ITSMAdapter {
   healthCheck?(): Promise<boolean>;
 }
 
+/**
+ * What an aggregate health sweep can honestly say about ONE vendor.
+ *
+ * `unchecked` is the reason this type exists. `healthCheck` is optional on
+ * `ITSMAdapter`, so an adapter may expose none — and an adapter that was never
+ * asked has not been found healthy. The aggregate previously returned a plain
+ * boolean and recorded `true` for exactly that case, which made "we did not
+ * look" render identically to "we looked and it is fine" on any surface reading
+ * the result.
+ *
+ * That is the unearned affirmative this repository keeps finding, in the same
+ * family whose watermelon note already warns about it: a green state reported
+ * without the thing that would establish it. A boolean cannot express the third
+ * outcome, so the boolean had to go.
+ */
+export type ITSMAdapterHealth = "healthy" | "unhealthy" | "unchecked";
+
 // ============================================================================
 // SIEM Types
 // ============================================================================

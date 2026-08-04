@@ -16,6 +16,9 @@
   },
   "references": [
     {
+      "path": "../../lib/flows"
+    },
+    {
       "path": "../../lib/signalgrid-core"
     },
     {

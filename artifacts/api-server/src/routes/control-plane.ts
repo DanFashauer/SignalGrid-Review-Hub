@@ -9,7 +9,7 @@ import {
   sourcingToSignalStates, summarizeSourcing, fidelityOf, isWireable, gridDoesLifting, type SignalSource,
   planZeroTouchSetup, lintSetupRecording, setupRecordingValid, type DeviceSetupRecording,
   fleetResilience, type AppService,
-  buildCoverageReport, isKnownPlane, KNOWN_SOURCE_PLANES,
+  buildCoverageReport, isKnownPlane, KNOWN_SOURCE_PLANES, EVIDENCE_AXES,
 } from "@workspace/flows";
 import { recommend, DEMO_USAGE } from "@workspace/recommendations";
 import { discover, planOnboarding, discoverySummary, DEMO_SOURCES, DEMO_OBSERVED } from "@workspace/signal-discovery";
@@ -404,8 +404,11 @@ router.get("/cp/v1/grid/evidence-coverage", (req, res) => {
 
   const planes = requested.filter(isKnownPlane);
   res.json({
+    // The axis count is DERIVED. It was hardcoded as "18" in prose the client actually
+    // receives, next to a `report.totalAxes` that computes it — so a nineteenth axis
+    // would have shipped a response whose own note contradicted its own payload.
     note:
-      "Which of the 18 decision evidence axes a declared estate can honestly answer. " +
+      `Which of the ${EVIDENCE_AXES.length} decision evidence axes a declared estate can honestly answer. ` +
       "Parameterise with ?planes=identity,device_management. No customer data is read or required. " +
       "`silentHoles` is the headline: axes that are dark AND ungraded, where silence would otherwise look like health.",
     knownPlanes: KNOWN_SOURCE_PLANES,

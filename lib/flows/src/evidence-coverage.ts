@@ -70,7 +70,12 @@ export interface EvidenceAxis {
   readonly id: string;
   /** What the axis actually decides, in a sentence a non-engineer can act on. */
   readonly question: string;
-  /** Planes that can supply it. First match wins for fidelity purposes. */
+  /**
+   * Planes that can supply it. An UNORDERED allowlist — `buildCoverageReport` asks
+   * whether any declared plane is in it, never which one came first. (It once said
+   * "first match wins for fidelity purposes"; the fidelity field it referred to was a
+   * hardcoded constant and is gone. Order is not load-bearing.)
+   */
   readonly answerableBy: readonly SourcePlane[];
   /**
    * TRUE when the ACTIVE v1 rule set still grants on this axis's ignorance member.
@@ -296,7 +301,6 @@ export function buildCoverageReport(declaredPlanes: readonly SourcePlane[]): Cov
     return {
       axis,
       coverage: "needs_instrumentation" as const,
-      fidelity: "none" as const,
       missingPlanes: axis.answerableBy,
       silentHole: axis.dayOneQuiet,
     };
@@ -324,6 +328,30 @@ export function buildCoverageReport(declaredPlanes: readonly SourcePlane[]): Cov
 export const KNOWN_SOURCE_PLANES: readonly SourcePlane[] = [
   ...new Set(EVIDENCE_AXES.flatMap((a) => a.answerableBy)),
 ].sort();
+
+/**
+ * The question that establishes whether a deployment HAS each plane, in the words
+ * you would use in the room. A surface that asks the operator to tick `dock_hardware`
+ * is asking them to read our schema; asking "are the devices returned to instrumented
+ * cradles?" is answerable by the person who actually knows.
+ *
+ * This is a `Record` over the UNION rather than a lookup with a fallback on purpose,
+ * and the proof asserts its keys equal `KNOWN_SOURCE_PLANES` exactly. That comparison
+ * is the gate on the defect this file already shipped once: `dex` and
+ * `access_governance` were members of `SourcePlane` that no axis could be answered by,
+ * so the type said they were real while every consumer treated them as unrecognised.
+ * The compiler makes a MISSING prompt impossible; only this runtime comparison makes a
+ * plane that answers NOTHING impossible.
+ */
+export const SOURCE_PLANE_PROMPTS: Record<SourcePlane, string> = {
+  identity: "Do you have an identity provider we can read — Entra ID, Okta, another OIDC IdP?",
+  device_management: "Do you have an MDM/UEM enrolling these devices — Intune, Jamf, Workspace ONE?",
+  endpoint_security: "Do you run an EDR/EPP agent on them?",
+  badge_custody: "Do the devices carry a badge reader — an RFID/prox case or sled?",
+  physical_access: "Do you have a physical access-control system — door controllers, badge readers at entries?",
+  workforce_management: "Do you have a workforce-management or time-and-attendance system?",
+  dock_hardware: "Are the devices returned to instrumented cradles or docks between shifts?",
+};
 
 /**
  * Sanity check on the model itself: a declared plane must be one this map knows.

@@ -737,7 +737,7 @@ paths:
       operationId: cpGridEvidenceCoverage
       tags: [control-plane]
       security: []
-      summary: Which of the 18 decision evidence axes a declared estate can honestly answer
+      summary: Which decision-evidence axes a declared estate can honestly answer
       description: >
         Parameterised by the caller's declared source planes. Reads no customer data.
         `silentHoles` is the headline — axes that are dark AND ungraded, where silence

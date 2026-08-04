@@ -749,6 +749,25 @@ async function run() {
   // hardcoded to zero. Pin the real numbers against the engine instead.
   check("evidence-coverage wedge pins the measured counts (10 answerable, 6 silent holes)", covWedge.json?.report?.answerable === 10 && covWedge.json?.report?.silentHoles === 6);
   check("evidence-coverage empty estate pins the measured hole count (11)", covEmpty.json?.report?.silentHoles === 11);
+  // The `note` is prose the CLIENT receives, so a stale number in it is a published
+  // contradiction, not an internal comment. It said "18" as a literal beside a
+  // `totalAxes` that computes the same thing; a nineteenth axis would have shipped a
+  // response arguing with itself. Pinned to the payload rather than to a number here.
+  check(
+    "evidence-coverage note states the SAME axis count the payload reports",
+    String(covWedge.json?.note ?? "").includes(`${covWedge.json?.report?.totalAxes} decision evidence axes`),
+  );
+  // The three coverage buckets partition the axis table. Every surface leads with
+  // `silentHoles`, which is a SUBSET of `needsInstrumentation` — so a reader given all
+  // four numbers and no denominator cannot tell which ones are meant to add up.
+  check(
+    "evidence-coverage buckets partition the axis total, and silentHoles is a subset of the dark ones",
+    covWedge.json?.report?.answerable +
+      covWedge.json?.report?.needsInstrumentation +
+      covWedge.json?.report?.notSourced ===
+      covWedge.json?.report?.totalAxes &&
+      covWedge.json?.report?.silentHoles <= covWedge.json?.report?.needsInstrumentation,
+  );
 
   // REPEATED PARAMS ARE THE OTHER STANDARD SERIALISATION AND MUST NOT BE DROPPED.
   // Express hands these back as an array; the first draft coerced that to undefined

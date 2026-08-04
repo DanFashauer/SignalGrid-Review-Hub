@@ -30,6 +30,7 @@ import {
   buildCoverageReport,
   EVIDENCE_AXES,
   KNOWN_SOURCE_PLANES,
+  SOURCE_PLANE_PROMPTS,
   isKnownPlane,
   type SourcePlane,
 } from "@workspace/flows";
@@ -48,15 +49,11 @@ const check = (name: string, ok: boolean): void => {
 
 console.log("Evidence-coverage proof — what can this estate actually answer?\n");
 
-const ALL_PLANES: SourcePlane[] = [
-  "identity",
-  "device_management",
-  "endpoint_security",
-  "badge_custody",
-  "physical_access",
-  "workforce_management",
-  "dock_hardware",
-];
+// DERIVED, not hand-listed. A hand-written copy silently halves the sweep the moment
+// an axis names a new plane: the power set below would enumerate 2^7 estates while the
+// model had eight planes, and every "across all N estates" line in this file would name
+// a space that excludes the newest one — while still printing `ok`.
+const ALL_PLANES: readonly SourcePlane[] = KNOWN_SOURCE_PLANES;
 
 // ── 1. THE DAY-ONE-QUIET FLAGS ARE MEASURED, NOT ASSERTED ────────────────────
 //
@@ -187,7 +184,8 @@ const ALL_PLANES: SourcePlane[] = [
 
 // ── 2. AN UNDECLARED PLANE NEVER MAKES AN AXIS ANSWERABLE ────────────────────
 //
-// Swept over the FULL power set of planes (2^9 = 512 estates) rather than spot-
+// Swept over the FULL power set of planes (2^ALL_PLANES.length estates — the count is
+// printed by the check itself rather than quoted here) rather than spot-
 // checked, because this is the property the whole artifact's honesty rests on: the
 // report must never credit a deployment with a capability it did not declare.
 {
@@ -268,13 +266,19 @@ const ALL_PLANES: SourcePlane[] = [
 {
   const wedge = buildCoverageReport(["identity", "device_management"]);
   const dark = wedge.findings.filter((f) => f.coverage === "needs_instrumentation");
+  // PINNED BY EQUALITY, not by `> 0`. The inequalities these replace were satisfied by
+  // any non-degenerate table: dropping `device_management` from `batteryHealth` moves
+  // the wedge to 9 answerable / 7 silent holes and the old assertions stayed green — on
+  // the two numbers this artifact leads with in a meeting, and which two other surfaces
+  // (the api suite and the console E2E) already state as measurements. A figure quoted
+  // in three places and gated in two is a fossil waiting to happen.
   check(
-    `the Entra + Intune wedge answers ${wedge.answerable} axes and leaves ${dark.length} needing instrumentation`,
-    wedge.answerable > 0 && dark.length > 0,
+    `the Entra + Intune wedge answers EXACTLY 10 of ${wedge.totalAxes} axes and leaves ${dark.length} needing instrumentation`,
+    wedge.answerable === 10 && dark.length === 6,
   );
   check(
-    `…of which ${wedge.silentHoles} are SILENT holes — dark AND ungraded, where a naive backtest would read health`,
-    wedge.silentHoles > 0 && wedge.silentHoles <= dark.length,
+    `…of which EXACTLY 6 are SILENT holes — dark AND ungraded, where a naive backtest would read health`,
+    wedge.silentHoles === 6 && wedge.silentHoles <= dark.length,
   );
   check(
     "every dark axis names the planes that would answer it, so the gap is actionable rather than a complaint",
@@ -312,6 +316,60 @@ console.log("");
     !isKnownPlane("not-a-real-plane") &&
       !(KNOWN_SOURCE_PLANES as readonly string[]).includes("not-a-real-plane"),
   );
+  // ── THE PROMPT MAP IS THE GATE ON THE DEFECT THIS FILE ALREADY SHIPPED ───────
+  //
+  // `dex` and `access_governance` were members of `SourcePlane` that no axis could be
+  // answered by. The compiler was happy — a union member costs nothing — so the type
+  // claimed two planes the whole system treated as unrecognised, and the proof's
+  // power-set sweep reported 512 estates where only 128 were distinct.
+  //
+  // `SOURCE_PLANE_PROMPTS` is a `Record` over the union, so the COMPILER now refuses a
+  // plane with no prompt. This comparison closes the other direction, which no compiler
+  // can see: a prompt whose plane answers NOTHING. Both directions are needed — a union
+  // member is only real if it is both askable and load-bearing.
+  const promptKeys = Object.keys(SOURCE_PLANE_PROMPTS).sort();
+  check(
+    `every declared SourcePlane answers at least one axis (${promptKeys.length} prompts, ${KNOWN_SOURCE_PLANES.length} load-bearing)`,
+    promptKeys.length === KNOWN_SOURCE_PLANES.length &&
+      promptKeys.every((p, i) => p === KNOWN_SOURCE_PLANES[i]),
+  );
+  check(
+    "…and every prompt is SHAPED like a question, not a snake_case key prettied up",
+    Object.values(SOURCE_PLANE_PROMPTS).every(
+      (prompt) => prompt.trim().endsWith("?") && prompt.length > 20 && !prompt.includes("_"),
+    ),
+  );
+  // Shape alone is worth almost nothing, which an adversarial pass demonstrated: it
+  // stayed green when every prompt was replaced by the key prettied up ("Do you have
+  // device management?"), when all seven were set to one identical string, and — worst —
+  // when two prompts were SWAPPED, which puts "are the devices returned to instrumented
+  // cradles?" under the Identity heading on a customer-facing page.
+  //
+  // So the pairing is pinned here, independently, by naming for each plane a term the
+  // question must contain. Restating the expectation in a second place is the point: a
+  // check derived from the thing it checks can only ever confirm that the thing equals
+  // itself. Distinctness kills the identical-string case; the terms kill the swap.
+  const PROMPT_MUST_MENTION: Record<SourcePlane, string> = {
+    identity: "identity provider",
+    device_management: "MDM/UEM",
+    endpoint_security: "EDR/EPP",
+    badge_custody: "badge reader",
+    physical_access: "access-control system",
+    workforce_management: "time-and-attendance",
+    dock_hardware: "cradles",
+  };
+  const misworded = (Object.keys(PROMPT_MUST_MENTION) as SourcePlane[]).filter(
+    (p) => !SOURCE_PLANE_PROMPTS[p].includes(PROMPT_MUST_MENTION[p]),
+  );
+  check(
+    `…and each prompt asks about ITS OWN plane — a swapped pair is a mislabelled question on a customer-facing page${misworded.length ? `: ${misworded.join(", ")}` : ""}`,
+    misworded.length === 0,
+  );
+  check(
+    "…and no two planes share a prompt, so the surface cannot ask the same content-free question seven times",
+    new Set(Object.values(SOURCE_PLANE_PROMPTS)).size === promptKeys.length,
+  );
+
   // Fail-closed direction that matters: an unknown plane can never ADD coverage.
   const declared = buildCoverageReport(["identity"]);
   const withJunk = buildCoverageReport(["identity", "not-a-real-plane"] as never);

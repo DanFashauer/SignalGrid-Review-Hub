@@ -103,16 +103,57 @@ REDIS_PORT=6381   # not 6379/6380: leaves a local Redis and docker-verify's alon
 SKIPPED=0; skipped_gates=""
 skip() { printf "  \033[33mSKIP\033[0m  %s  (%s)\n" "$1" "$2"; SKIPPED=$((SKIPPED+1)); skipped_gates="$skipped_gates $1"; }
 
-if [ -z "${REDIS_URL:-}" ] && docker info >/dev/null 2>&1; then
+# TWO BUGS lived in the block below, and both were found by running this harness
+# against PR #152 rather than by reading it. That branch adds proof:config-scope,
+# which asserts REDIS_URL is UNSET so it can prove the in-memory path — the
+# documented default deployment — is genuinely the one under test. It failed here
+# while passing 58/58 in isolation. proof:device-resolver passed all 14 assertions
+# and was then killed by the 200s alarm, because a dangling ioredis client kept
+# retrying a dead endpoint and the process never exited.
+#
+# BUG 1 — REDIS_URL was `export`ed process-wide for ONE proof that needs it. Every
+# other proof silently switched to a Redis path it was never written for. Redis is
+# provisioned for proof:enrollment-race; it is now handed to that gate ALONE, and
+# an ambient REDIS_URL is likewise confined to it rather than leaking into all ~110.
+#
+# BUG 2 — readiness was never actually established. The wait loop breaks on PONG,
+# but falls through after 20 tries and exported REDIS_URL regardless, so a slow
+# container yielded a URL pointing at nothing. Worse, `docker exec redis-cli ping`
+# tests the server from INSIDE the container, while every proof connects from the
+# HOST through `-p 6381:6379` — and that port forwarding comes up strictly later
+# than the server does. The probe could not observe what the proofs depend on.
+# That is the whole reason device-resolver saw ECONNREFUSED on 6381 while
+# enrollment-race, running later in the same suite, connected fine.
+#
+# Now the host port is probed, and the URL is set ONLY when a real connection
+# succeeded. No connection → no URL → enrollment-race SKIPs loudly, which is the
+# behaviour this block already promised for the no-Docker case.
+SGVAL_REDIS_URL=""
+if [ -n "${REDIS_URL:-}" ]; then
+  # Someone set it deliberately. Honour it for the race proof, but do not let it
+  # reach the other proofs — several are written for the no-Redis default and one
+  # now asserts it.
+  SGVAL_REDIS_URL="$REDIS_URL"
+  unset REDIS_URL
+  echo "-- using your REDIS_URL for proof:enrollment-race only (unset for the rest)"
+elif docker info >/dev/null 2>&1; then
   docker rm -f "$REDIS_CONTAINER" >/dev/null 2>&1
   if docker run -d --name "$REDIS_CONTAINER" -p "$REDIS_PORT:6379" redis:7 >/dev/null 2>&1; then
+    trap 'docker rm -f "$REDIS_CONTAINER" >/dev/null 2>&1' EXIT
     for _ in $(seq 1 20); do
-      docker exec "$REDIS_CONTAINER" redis-cli ping 2>/dev/null | grep -q PONG && break
+      if docker exec "$REDIS_CONTAINER" redis-cli ping 2>/dev/null | grep -q PONG &&
+         (exec 3<>"/dev/tcp/127.0.0.1/$REDIS_PORT") 2>/dev/null; then
+        exec 3>&- 2>/dev/null
+        SGVAL_REDIS_URL="redis://127.0.0.1:$REDIS_PORT"
+        break
+      fi
       sleep 1
     done
-    export REDIS_URL="redis://127.0.0.1:$REDIS_PORT"
-    echo "-- started $REDIS_CONTAINER on $REDIS_PORT for proof:enrollment-race"
-    trap 'docker rm -f "$REDIS_CONTAINER" >/dev/null 2>&1' EXIT
+    if [ -n "$SGVAL_REDIS_URL" ]; then
+      echo "-- started $REDIS_CONTAINER on $REDIS_PORT for proof:enrollment-race"
+    else
+      echo "-- $REDIS_CONTAINER never answered on 127.0.0.1:$REDIS_PORT; enrollment-race will SKIP"
+    fi
   fi
 fi
 
@@ -127,8 +168,13 @@ if [ "$SIM_ONLY" != "--sim-only" ]; then
   for p in $(node -e "const s=require('./package.json').scripts;console.log(Object.keys(s).filter(k=>k.startsWith('proof:')&&!['proof:signalgrid-simulator','proof:room-sim','proof:signalgrid-core','proof:signalgrid-grid'].includes(k)).join(' '))"); do
     # The race proof needs a real shared store. With one, run it like any other
     # gate; without one, say so — an unrun proof is never a passed proof.
-    if [ "$p" = "proof:enrollment-race" ] && [ -z "${REDIS_URL:-}" ]; then
-      skip "$p" "needs REDIS_URL (no Docker here); run it via pnpm run verify:docker"
+    if [ "$p" = "proof:enrollment-race" ]; then
+      if [ -z "$SGVAL_REDIS_URL" ]; then
+        skip "$p" "needs a reachable REDIS_URL (no Docker, or the container never answered); run it via pnpm run verify:docker"
+        continue
+      fi
+      # Injected for THIS gate only — see the two bugs documented above.
+      gate "$p" env REDIS_URL="$SGVAL_REDIS_URL" $PNPM run "$p"
       continue
     fi
     # proof:live-edr reads a REAL Wazuh. Standing one up costs a ~2GB image and

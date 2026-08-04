@@ -75,6 +75,7 @@
     "proof:enterprise-auth": "pnpm --filter @workspace/scripts run proof:enterprise-auth",
     "proof:entitlement-binding": "pnpm --filter @workspace/scripts run proof:entitlement-binding",
     "proof:event-contract": "pnpm --filter @workspace/scripts run proof:event-contract",
+    "proof:evidence-coverage": "pnpm --filter @workspace/scripts run proof:evidence-coverage",
     "proof:fabric-evals": "pnpm --filter @workspace/scripts run proof:fabric-evals",
     "proof:fabric-scenario": "pnpm --filter @workspace/scripts run proof:fabric-scenario",
     "proof:facility-trust-graph": "pnpm --filter @workspace/scripts run proof:facility-trust-graph",

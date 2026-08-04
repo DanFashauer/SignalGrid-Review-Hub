@@ -125,6 +125,8 @@ jobs:
         run: pnpm run proof:service-lifecycle
       - name: "Proof: session-readiness (is the app actually usable)"
         run: pnpm run proof:session-readiness
+      - name: "Proof: evidence-coverage (what can this estate answer)"
+        run: pnpm run proof:evidence-coverage
       - name: "Proof: response-accountability (watermelon detection)"
         run: pnpm run proof:response-accountability
       - name: "Proof: device-resolver (read-only injection boundary)"

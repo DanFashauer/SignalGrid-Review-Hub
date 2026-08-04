@@ -381,6 +381,7 @@ export * from "./grid-coverage";
 // / unavailable) and what that costs. The outcome depends on how the source
 // systems are configured.
 export * from "./signal-sourcing";
+export * from "./evidence-coverage";
 
 // Grid config — workflows as code: a declarative grid (signals + workflows +
 // situations) that the CI/CD pipeline validates before the Grid runs it (GitOps).

@@ -11,6 +11,8 @@
 // current — a forced update to a version already running is satisfied by
 // construction; the enumeration pins exactly that set of granting states).
 import {
+  resolveAppUpdateConnector,
+  makeDefaultAppUpdateTransport,
   AppUpdateConnector,
   AppUpdateConnectorError,
   createMockAppUpdateTransport,
@@ -24,6 +26,7 @@ import {
 } from "@workspace/integrations/app-update";
 import { SIGNAL_KINDS, composeDeviceRisk, fromAppUpdate } from "@workspace/posture-composition";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
+import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
 
 let passed = 0;
 const failures: string[] = [];
@@ -304,6 +307,33 @@ check("...and a confirmed-current app contributes none — the dimension never l
 // Determinism.
 const d1 = normalizeReport("det", "a", { installed_version: "2.1.0", latest_version: "2.4.0", force_update: true, channel: "managed" });
 check("evaluator is deterministic", JSON.stringify(evaluateAppUpdate(d1)) === JSON.stringify(evaluateAppUpdate(d1)));
+
+
+// ── The live-call gate and the default transport, each condition ISOLATED ────
+//
+// See `lib/live-gate.ts` for why this replaced what was here (or filled the hole where
+// nothing was). Short version: the gate was tested as a cumulative ladder, so only its
+// last condition was falsifiable, and the mutation guard could delete the tier check —
+// the control behind "dev and alpha never make live vendor calls" — with every proof
+// green. The default fetch transport was never executed by anything at all.
+checkLiveGateIsolated({
+  check,
+  family: "app-update",
+  resolve: (env) => resolveAppUpdateConnector(env),
+  full: {
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    APP_UPDATE_ACCESS_TOKEN: "t",
+  },
+});
+
+await checkDefaultTransport({
+  check,
+  family: "app-update",
+  transport: makeDefaultAppUpdateTransport("https://vendor.invalid/app-update") as (a: never) => Promise<unknown>,
+  arg: { deviceRef: "deviceRef-1", appRef: "appRef-1", token: "t" },
+  codeOf: (err) => (err instanceof AppUpdateConnectorError ? err.code : undefined),
+});
 
 const total = passed + failures.length;
 console.log(`figures=normalizedCombos=${normRes.combos},rawCombos=${rawRes.combos},grantingCombos=${normRes.noneCount},rawGrantingCombos=${rawRes.noneCount},ladderRungs=6`);

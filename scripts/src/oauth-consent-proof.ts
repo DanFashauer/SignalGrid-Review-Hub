@@ -15,6 +15,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  makeDefaultOAuthConsentTransport,
   OAuthConsentConnector,
   OAuthConsentConnectorError,
   createMockOAuthConsentTransport,
@@ -27,6 +28,7 @@ import {
 } from "@workspace/integrations/oauth-consent";
 import { composeDeviceRisk, fromOAuthConsent } from "@workspace/posture-composition";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
+import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
 
 interface Expected {
   posture: string;
@@ -206,10 +208,33 @@ let missingErr: OAuthConsentConnectorError | null = null;
 try { await connector.fetchConsent("no-such-principal"); } catch (err) { missingErr = err instanceof OAuthConsentConnectorError ? err : null; }
 check("an unknown principal surfaces upstream_error, never an invented governed grant", missingErr?.code === "upstream_error");
 
-check("dev tier resolves to fixture mode", resolveOAuthConsentConnector({ SIGNALGRID_TIER: "dev" }).mode === "fixture");
-check("prod WITHOUT live flag stays fixture", resolveOAuthConsentConnector({ SIGNALGRID_TIER: "prod" }).mode === "fixture");
-check("prod + live but NO token stays fixture", resolveOAuthConsentConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" }).mode === "fixture");
-check("prod + live + token resolves live", resolveOAuthConsentConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", OAUTH_CONSENT_ACCESS_TOKEN: "t" }).mode === "live");
+
+
+// ── The live-call gate and the default transport, each condition ISOLATED ────
+//
+// See `lib/live-gate.ts` for why this replaced what was here (or filled the hole where
+// nothing was). Short version: the gate was tested as a cumulative ladder, so only its
+// last condition was falsifiable, and the mutation guard could delete the tier check —
+// the control behind "dev and alpha never make live vendor calls" — with every proof
+// green. The default fetch transport was never executed by anything at all.
+checkLiveGateIsolated({
+  check,
+  family: "oauth-consent",
+  resolve: (env) => resolveOAuthConsentConnector(env),
+  full: {
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    OAUTH_CONSENT_ACCESS_TOKEN: "t",
+  },
+});
+
+await checkDefaultTransport({
+  check,
+  family: "oauth-consent",
+  transport: makeDefaultOAuthConsentTransport("https://vendor.invalid/oauth-consent") as (a: never) => Promise<unknown>,
+  arg: { principalId: "principalId-1", token: "t" },
+  codeOf: (err) => (err instanceof OAuthConsentConnectorError ? err.code : undefined),
+});
 
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);

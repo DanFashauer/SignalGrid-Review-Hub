@@ -132,6 +132,6 @@ drift detection would be exactly the fail-open the dimension exists to catch.
 - Registered with the mutation guard from day one (TARGETS, zero survivors), not
   queued.
 
-Proven by `proof:policy-binding` (46 checks; targeted ladder checks, per-field integrity,
+Proven by `proof:policy-binding` (59 checks; targeted ladder checks, per-field integrity,
 hostile shapes, both grant-safety enumerations, connector surface, fusion;
 deterministic, offline).

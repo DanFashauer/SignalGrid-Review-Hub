@@ -120,15 +120,30 @@ const truncate = (s) => (s.length > 58 ? `${s.slice(0, 55)}...` : s);
 
 // ── registry ──────────────────────────────────────────────────────────────────
 //
-// Scoped on purpose to the files whose correctness is the allow-path: the normalizers
-// and evaluators of the grant-emitting connectors. Widening this is cheap; widening it
-// without meaning to would make the gate slow and its output unreadable.
+// Scoped on purpose to the files whose correctness is the allow-path: the normalizers,
+// evaluators AND LIVE-CALL GATES of the grant-emitting connectors. Widening this is
+// cheap; widening it without meaning to would make the gate slow and its output
+// unreadable.
+//
+// THE GATES WERE ADDED LATE, AND THE REASON IS THE WARNING. This comment previously said
+// "normalizers and evaluators", which was accurate when the gate lived in
+// `<family>-connector.ts` alongside the normalizer. Newer families put it in `index.ts`,
+// and twenty-one older families therefore had an `index.ts` that had never been mutated
+// — sitting inside a registry that read as complete. Registering them returned the same
+// survivors family after family, including `if (tier !== "beta" && tier !== "prod")`,
+// the control behind the claim that dev and alpha never make live vendor calls. Five of
+// those families' proofs never called their resolver at all.
+//
+// A registry is a coverage CLAIM. Zero survivors over the wrong population is not
+// coverage, and this was the fourth time the right rule was found attached to the wrong
+// set. When a family moves code between files, re-check what this list still reaches.
 export const TARGETS = [
   {
     proof: "proof:device-management-health",
     files: [
       "lib/integrations/src/integrations/device-management-health/evaluate.ts",
       "lib/integrations/src/integrations/device-management-health/device-management-health-connector.ts",
+      "lib/integrations/src/integrations/device-management-health/index.ts",
     ],
   },
   {
@@ -136,6 +151,7 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/link-usability/evaluate.ts",
       "lib/integrations/src/integrations/link-usability/link-usability-connector.ts",
+      "lib/integrations/src/integrations/link-usability/index.ts",
     ],
   },
   {
@@ -143,6 +159,7 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/task-exception/evaluate.ts",
       "lib/integrations/src/integrations/task-exception/task-exception-connector.ts",
+      "lib/integrations/src/integrations/task-exception/index.ts",
     ],
   },
   {
@@ -172,6 +189,7 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/custody-beacon/evaluate.ts",
       "lib/integrations/src/integrations/custody-beacon/custody-beacon-connector.ts",
+      "lib/integrations/src/integrations/custody-beacon/index.ts",
     ],
   },
   {
@@ -179,6 +197,7 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/app-update/evaluate.ts",
       "lib/integrations/src/integrations/app-update/app-update-connector.ts",
+      "lib/integrations/src/integrations/app-update/index.ts",
     ],
   },
   {
@@ -186,6 +205,7 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/platform-sso/evaluate.ts",
       "lib/integrations/src/integrations/platform-sso/platform-sso-connector.ts",
+      "lib/integrations/src/integrations/platform-sso/index.ts",
     ],
   },
   {
@@ -201,6 +221,7 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/passkey-assurance/evaluate.ts",
       "lib/integrations/src/integrations/passkey-assurance/passkey-assurance-connector.ts",
+      "lib/integrations/src/integrations/passkey-assurance/index.ts",
     ],
   },
   {
@@ -208,6 +229,7 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/change-window/evaluate.ts",
       "lib/integrations/src/integrations/change-window/change-window-connector.ts",
+      "lib/integrations/src/integrations/change-window/index.ts",
     ],
   },
   {
@@ -238,6 +260,7 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/shift-context/evaluate.ts",
       "lib/integrations/src/integrations/shift-context/shift-context-connector.ts",
+      "lib/integrations/src/integrations/shift-context/index.ts",
     ],
   },
   {
@@ -252,6 +275,7 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/bootstrap-credential/evaluate.ts",
       "lib/integrations/src/integrations/bootstrap-credential/bootstrap-credential-connector.ts",
+      "lib/integrations/src/integrations/bootstrap-credential/index.ts",
     ],
   },
 
@@ -276,6 +300,7 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/benchmark-selection/evaluate.ts",
       "lib/integrations/src/integrations/benchmark-selection/benchmark-selection-connector.ts",
+      "lib/integrations/src/integrations/benchmark-selection/index.ts",
       "lib/integrations/src/integrations/benchmark-selection/catalog.ts",
     ],
   },
@@ -285,6 +310,7 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/policy-binding/evaluate.ts",
       "lib/integrations/src/integrations/policy-binding/policy-binding-connector.ts",
+      "lib/integrations/src/integrations/policy-binding/index.ts",
     ],
   },
 
@@ -293,6 +319,7 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/agent-behavior/evaluate.ts",
       "lib/integrations/src/integrations/agent-behavior/agent-behavior-connector.ts",
+      "lib/integrations/src/integrations/agent-behavior/index.ts",
     ],
   },
   {
@@ -300,6 +327,7 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/agent-identity/evaluate.ts",
       "lib/integrations/src/integrations/agent-identity/agent-identity-connector.ts",
+      "lib/integrations/src/integrations/agent-identity/index.ts",
     ],
   },
   {
@@ -307,6 +335,7 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/oauth-consent/evaluate.ts",
       "lib/integrations/src/integrations/oauth-consent/oauth-consent-connector.ts",
+      "lib/integrations/src/integrations/oauth-consent/index.ts",
     ],
   },
   {
@@ -314,6 +343,7 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/sso-session/evaluate.ts",
       "lib/integrations/src/integrations/sso-session/sso-session-connector.ts",
+      "lib/integrations/src/integrations/sso-session/index.ts",
     ],
   },
   {
@@ -321,6 +351,7 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/access-governance/evaluate.ts",
       "lib/integrations/src/integrations/access-governance/access-governance-connector.ts",
+      "lib/integrations/src/integrations/access-governance/index.ts",
     ],
   },
   {
@@ -348,6 +379,7 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/uem/evaluate.ts",
       "lib/integrations/src/integrations/uem/intune.ts",
+      "lib/integrations/src/integrations/uem/index.ts",
     ],
   },
   {
@@ -355,6 +387,7 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/ot-posture/evaluate.ts",
       "lib/integrations/src/integrations/ot-posture/ot-connector.ts",
+      "lib/integrations/src/integrations/ot-posture/index.ts",
     ],
   },
   {
@@ -369,6 +402,7 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/pacs-access/evaluate.ts",
       "lib/integrations/src/integrations/pacs-access/pacs-access-connector.ts",
+      "lib/integrations/src/integrations/pacs-access/index.ts",
     ],
   },
   {

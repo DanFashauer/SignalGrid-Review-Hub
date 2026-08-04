@@ -55,8 +55,30 @@ export function makeDefaultOtTransport(baseUrl: string): OtReportTransport {
       signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) {
-      throw new OtConnectorError(res.status === 401 ? "auth_failed" : "upstream_error", `bridge returned ${res.status}`, res.status);
+      // 403 belongs with 401, not with 500. A token that is valid but unscoped is OUR
+      // misconfiguration; a 500 is the gateway's problem. Reporting the first as
+      // `upstream_error` sends the ticket to the wrong owner, and this family was the
+      // only one of twenty that did so — found once the default transport was actually
+      // executed by a test rather than only read.
+      throw new OtConnectorError(
+        res.status === 401 || res.status === 403 ? "auth_failed" : "upstream_error",
+        `bridge returned ${res.status}`,
+        res.status,
+      );
     }
-    return (await res.json()) as OtDeviceReportRaw;
+    // A 200 is not a promise that the body is a record. Without this, a maintenance
+    // HTML page threw a raw SyntaxError past the typed error surface, and an array or a
+    // bare `null` was cast straight to a report — `typeof null === "object"`, so the
+    // null check is not redundant with the typeof.
+    let body: unknown;
+    try {
+      body = await res.json();
+    } catch {
+      throw new OtConnectorError("bad_response", "gateway returned a non-JSON body", res.status);
+    }
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      throw new OtConnectorError("bad_response", "gateway returned a non-object body", res.status);
+    }
+    return body as OtDeviceReportRaw;
   };
 }

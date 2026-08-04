@@ -232,7 +232,7 @@ The dimension also has an arm in the core policy layer, so a policy that grants 
 - The arm **never lowers**: `confirmed` grants nothing a healthy device did not
   already have, and every other rule still fires alongside it.
 
-Proven by `proof:benchmark-selection` (82 checks; targeted ladder checks including
+Proven by `proof:benchmark-selection` (95 checks; targeted ladder checks including
 the temporal axis, per-field integrity, hostile wire shapes, catalog-loader
 refusals, the comparators asserted directly, both grant-safety enumerations,
 connector surface, fusion; deterministic, offline).

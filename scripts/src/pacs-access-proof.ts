@@ -22,12 +22,14 @@ import {
   evaluatePacsAccess,
   guardReadOnly,
   normalizeReport,
+  makeDefaultPacsAccessTransport,
   resolvePacsAccessConnector,
   type NormalizedPacsAccess,
   type PacsAccessReportRaw,
 } from "@workspace/integrations/pacs-access";
 import { composeDeviceRisk, fromPacsAccess } from "@workspace/posture-composition";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
+import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
 
 interface Expected {
   posture: string;
@@ -290,10 +292,32 @@ let missingErr: PacsAccessConnectorError | null = null;
 try { await connector.fetchAccess("no-such-device"); } catch (err) { missingErr = err instanceof PacsAccessConnectorError ? err : null; }
 check("an unknown device surfaces upstream_error, never an invented granted entry", missingErr?.code === "upstream_error");
 
-check("dev tier resolves to fixture mode", resolvePacsAccessConnector({ SIGNALGRID_TIER: "dev" }).mode === "fixture");
-check("prod WITHOUT live flag stays fixture", resolvePacsAccessConnector({ SIGNALGRID_TIER: "prod" }).mode === "fixture");
-check("prod + live but NO token stays fixture", resolvePacsAccessConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" }).mode === "fixture");
-check("prod + live + token resolves live", resolvePacsAccessConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", PACS_ACCESS_ACCESS_TOKEN: "t" }).mode === "live");
+// The live-call gate, each condition ISOLATED.
+//
+// This replaces a four-step cumulative ladder (dev → prod → prod+flag → prod+flag+token)
+// that read like coverage and was not: at every rung the conditions below the one under
+// test were also failing, so only the last was genuinely exercised. The mutation guard
+// showed the consequence — `if (tier !== "beta" && tier !== "prod")` could be deleted
+// outright with this proof green, and that check is the control behind the claim that
+// dev and alpha never make live vendor calls. See `lib/live-gate.ts`.
+checkLiveGateIsolated({
+  check,
+  family: "pacs-access",
+  resolve: (env) => resolvePacsAccessConnector(env),
+  full: {
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    PACS_ACCESS_ACCESS_TOKEN: "t",
+  },
+});
+
+await checkDefaultTransport({
+  check,
+  family: "pacs-access",
+  transport: makeDefaultPacsAccessTransport("https://bridge.invalid/pacs") as (a: never) => Promise<unknown>,
+  arg: { deviceId: "dev-1", token: "t" },
+  codeOf: (err) => (err instanceof PacsAccessConnectorError ? err.code : undefined),
+});
 
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);

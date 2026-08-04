@@ -90,7 +90,7 @@ service) with vendor codes carried verbatim in a passthrough audit field, never
 in the enum. Integrity-class exceptions (assignment mismatch, bypassed
 procedure) restrict and route to security operations; inventory-class alert and
 route to operations — the worker is never punished for the warehouse's inventory
-problem. Proven offline by `pnpm run proof:task-exception` (195 checks): 1,728
+problem. Proven offline by `pnpm run proof:task-exception` (204 checks): 1,728
 normalized states + 127,400 raw wire reports enumerated, exactly 5 granting
 shapes, each individually asserted coherent; four self-contradiction relations
 (including the `not_applicable` mirror caught in a sibling dimension's review,
@@ -113,7 +113,7 @@ Fail-safe by construction, matched to the plant-floor stakes:
 - a **stale gateway** (we're blind to the device) or any **unreadable** control → `step_up` (never trust silence);
 - an unrecognized value normalizes to the safe `unknown`; a device **no gateway sees** is a blind spot, never `secure`.
 
-Proven fully offline by `pnpm run proof:ot-posture` (37 checks, no plant access, no network). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid changes no device setting — every signal is read-only, and this is not a vendor partnership or certification claim.
+Proven fully offline by `pnpm run proof:ot-posture` (46 checks, no plant access, no network). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid changes no device setting — every signal is read-only, and this is not a vendor partnership or certification claim.
 
 ## Factory-floor workflows — automating the plant (built, fixture-backed)
 
@@ -139,7 +139,7 @@ Fail-safe by construction, matched to a shared frontline session's stakes:
 - a governance state **relayed from a sync older than the caller's posed age bound** → `step_up` (intake ledger row 42: the IGA plane is cadence-based, so a bridge whose upstream HR/SCIM sync silently broke keeps truthfully relaying its last evaluation — affirmative values, aged; the answer may be right, but it is old. The row-26 caller-posed shape: source-reported `observedAt` + `maxGovernanceReadAgeSeconds` + `referenceTime`, no clock in any decision path, unposed forecloses nothing — and worst-concern-wins keeps stale **bad** news outranking: a `leaver_pending` relayed stale still escalates);
 - an unrecognized value normalizes to the safe `unknown`, and any unreadable governance signal steps up; a principal **no IGA source observes** is a blind spot (`unknown`), never `authorized`.
 
-Proven fully offline by `pnpm run proof:access-governance` (75 checks, no directory access, no network — incl. the 18,000-combination brute-force of the widened input space, the 54,000-combination re-enumeration with the recency axis posed (a grant additionally requires a fresh governance read), and the intake-row-27 lifecycle axis: `lifecycleStage` gives the J and M the leaver slice never carried; a recent transfer with over-privileged or recert-due entitlements is `mover_stale_entitlement` → alert with its own queue-readable reason, a new hire already holding standing privilege is `joiner_over_provisioned` → alert, a clean transition is a visible monitor — never a grant, never a nag — and an unreported stage forecloses nothing, so pre-axis bridges keep their behavior). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid changes no entitlement — every signal is read-only, and this is not a vendor partnership or certification claim.
+Proven fully offline by `pnpm run proof:access-governance` (84 checks, no directory access, no network — incl. the 18,000-combination brute-force of the widened input space, the 54,000-combination re-enumeration with the recency axis posed (a grant additionally requires a fresh governance read), and the intake-row-27 lifecycle axis: `lifecycleStage` gives the J and M the leaver slice never carried; a recent transfer with over-privileged or recert-due entitlements is `mover_stale_entitlement` → alert with its own queue-readable reason, a new hire already holding standing privilege is `joiner_over_provisioned` → alert, a clean transition is a visible monitor — never a grant, never a nag — and an unreported stage forecloses nothing, so pre-axis bridges keep their behavior). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid changes no entitlement — every signal is read-only, and this is not a vendor partnership or certification claim.
 
 ## Hardware-rooted device attestation — the assurance dimension (built, fixture-backed)
 
@@ -173,7 +173,7 @@ Fail-safe by construction, matched to a shared frontline session's stakes:
 
 It also fails closed on self-contradictory or unverifiable reports: a `bound` label is trusted only with **corroborating subject evidence** — both subjects readable and equal; two readable subjects that **differ** normalize to `mismatched`, and a `bound` label with a missing/unreadable subject (a lookup failure or error string) is downgraded to `unknown` so an evidence-free "bound" can never grant. The locally-determinable concerns (a subject mismatch, an active unbound session) are evaluated **before** the IdP-outage downgrade, so an IdP being unreachable can never soften a leftover from `escalate` to `step_up`; and a **near-expiry** bound session raises the bar rather than passing as a calm monitor.
 
-Proven fully offline by `pnpm run proof:sso-session` (88 checks, no network, no keys — incl. the 4,608-combination brute-force of the widened input space: an unattributed shared session falls out of the allow path in every cell). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid reads and decides on the evaluated session state — it changes no session and mints no tokens; every signal is read-only, and this is not an Okta / Microsoft / Ping partnership or certification claim.
+Proven fully offline by `pnpm run proof:sso-session` (97 checks, no network, no keys — incl. the 4,608-combination brute-force of the widened input space: an unattributed shared session falls out of the allow path in every cell). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid reads and decides on the evaluated session state — it changes no session and mints no tokens; every signal is read-only, and this is not an Okta / Microsoft / Ping partnership or certification claim.
 
 ## OAuth-consent / workload identity — the delegated-access dimension (built, fixture-backed)
 
@@ -188,7 +188,7 @@ Fail-safe by construction, matched to a shared frontline session's stakes:
 - the **only** paths that contribute a grant are a positively-confirmed clean state — a **known** consent type (admin- or user-consented) + verified publisher + least scope + managed/no workload, **or** no grants at all — **and only with the IdP confirmed reachable** (`idpReachable === true`); an **unknown** consent type (like any other unknown field) never grants, and the IdP unreachable or **unreported**, or an unknown grant state, all step up;
 - an unrecognized value normalizes to the safe `unknown`, never a fabricated `present`/`verified`/`admin`.
 
-Proven fully offline by `pnpm run proof:oauth-consent` (65 checks, no network, no keys). Live calls are gated exactly like every other connector. SignalGrid reads and decides on the evaluated grant state — it revokes no grant and changes no consent; every signal is read-only, and this is not a Microsoft / Okta / Google partnership or certification claim.
+Proven fully offline by `pnpm run proof:oauth-consent` (74 checks, no network, no keys). Live calls are gated exactly like every other connector. SignalGrid reads and decides on the evaluated grant state — it revokes no grant and changes no consent; every signal is read-only, and this is not a Microsoft / Okta / Google partnership or certification claim.
 
 ## Token binding / proof-of-possession — the replayable-token dimension (built, fixture-backed)
 
@@ -204,7 +204,7 @@ Fail-safe by construction, matched to a shared frontline session's stakes:
 - the **only** path that contributes a grant is a positively-confirmed sender-constrained token — DPoP or mTLS, an **attested hardware** key, audience-restricted, bound to **this** device, with the bridge **reachable** — every other state, and every unknown/unreported field, raises the bar;
 - an unrecognized value normalizes to the safe `unknown`, and a self-contradictory `bearer`-token-with-a-`hardware`-key report is forced to `keyProtection: none` (fail closed) so it can never read as a protected key.
 
-Proven fully offline by `pnpm run proof:token-binding` (52 checks, no network, no keys) — including a brute-force enumeration of the **entire 1,296-combination** normalized input space asserting action `none` is emitted for *exactly* the positively-confirmed sender-constrained tokens (0 mismatches), via the shared grant-safety harness. Live calls are gated exactly like every other connector. SignalGrid reads and decides on the evaluated binding state — it mints and binds no tokens; every signal is read-only, and this is not a partnership or certification claim.
+Proven fully offline by `pnpm run proof:token-binding` (61 checks, no network, no keys) — including a brute-force enumeration of the **entire 1,296-combination** normalized input space asserting action `none` is emitted for *exactly* the positively-confirmed sender-constrained tokens (0 mismatches), via the shared grant-safety harness. Live calls are gated exactly like every other connector. SignalGrid reads and decides on the evaluated binding state — it mints and binds no tokens; every signal is read-only, and this is not a partnership or certification claim.
 
 ## Physical access-control (PACS) — the badge/door dimension (built, fixture-backed)
 
@@ -223,7 +223,7 @@ Fail-safe by construction, matched to a shared frontline session's stakes:
 - **reader/controller health** (intake row 26), distinct from bridge reachability: an explicit `offline` controller behind an entry steps up (the evidence plane may be blind) and `degraded` is a visible monitor — affirmative-only, so an unreported health never forecloses and pre-axis bridges keep their behavior;
 - the **mixed-estate axis** (intake row 21): a "granted" backed by a clonable static-identifier read and one backed by a cryptographic credential are different facts, and the caller may POSE a per-workflow technology floor — a read below it → `step_up` `CREDENTIAL_BELOW_FLOOR` (a stronger challenge, deliberately **never** restrict/deny: modernization is evolutionary, and the legacy estate is graded, not condemned); a posed floor the PACS could not answer → `step_up` (silence is not a cryptographic credential); an UNPOSED floor is `unassessed` and forecloses nothing, so a deployment adopts the axis at its own pace.
 
-Proven fully offline by `pnpm run proof:pacs-access` (92 checks, no network, no door control) — including a brute-force enumeration of the **entire 97,200-combination** normalized input space, graded twice: unposed (the technology axis forecloses nothing) and under a posed cryptographic floor (the allow path additionally demands a cryptographic read — exactly one third of the unposed grants — with 0 mismatches both ways), via the shared grant-safety harness. Live calls are gated exactly like every other connector. SignalGrid reads and decides on the evaluated access state — it changes no door and revokes no credential; every signal is read-only, and this is not a vendor partnership or certification claim.
+Proven fully offline by `pnpm run proof:pacs-access` (101 checks, no network, no door control) — including a brute-force enumeration of the **entire 97,200-combination** normalized input space, graded twice: unposed (the technology axis forecloses nothing) and under a posed cryptographic floor (the allow path additionally demands a cryptographic read — exactly one third of the unposed grants — with 0 mismatches both ways), via the shared grant-safety harness. Live calls are gated exactly like every other connector. SignalGrid reads and decides on the evaluated access state — it changes no door and revokes no credential; every signal is read-only, and this is not a vendor partnership or certification claim.
 
 ## Agentic / non-human identity — the "who is actually acting" dimension (built, fixture-backed)
 
@@ -255,7 +255,7 @@ A confirmed human is now reported `human_actor` / `monitor`. That composes to th
 
 The residual limit is now narrow and honest: a bridge that lies about the actor label still avoids the agent-governance judgements, so a mislabelled agent is monitored rather than escalated. It is no longer *granted*, which is the property that matters. Trustworthy actor attribution still has to come from the bridge — this dimension now says so rather than papering over it.
 
-Proven fully offline by `pnpm run proof:agent-identity` (143 checks, no network), 0 mismatches on all three enumerations:
+Proven fully offline by `pnpm run proof:agent-identity` (152 checks, no network), 0 mismatches on all three enumerations:
 
 - **normalized space (17,280 states)** — every value the normalizer can emit, against the evaluator alone. Action `none` is emitted for *exactly* the fully-governed non-human identity — two states, one per non-human actor type — and never on an actor label alone or a report flagged malformed, which the evaluator refuses independently so the allow path does not *depend* on the claim having been voided;
 - **raw wire space (870,912 reports)** — the same fields carrying the values a real bridge emits: junk enum spellings, JSON nulls, string-quoted booleans, numbers, arrays, objects, absent keys, and a snake_case aliased extra key. This is the pass that exercises the parse layer; its clean predicate is written as a positive allowlist of raw wire values (the contract a bridge must satisfy) rather than as the negation of the guard;
@@ -310,7 +310,7 @@ The reorder that replaced it has its own smaller version of that trade, and the 
 
 The same review found a larger and undisclosed instance of it, since fixed. `MANAGEMENT_UNREACHABLE` was raised **last**, so an *asserted* "the management plane did not answer for this device" lost the `step_up` tie to any generic `MANAGEMENT_STATE_UNKNOWN` from a single unreadable field: it headlined **9** of the raw reports while **225,792** of them carried an explicit `managementReachable: false`. An asserted negative losing to an unknown is the inverse of what worst-concern-wins is for, so the explicit `false` is now judged near the top as the known-bad fact it is, and headlines **18,246**. It does not headline all 225,792, and should not: a retired enrollment still outranks it on severity, and an unreadable envelope or a self-contradictory report is a better diagnosis than "the plane was quiet". The unreported (`null`) case stays where it was — a field the bridge never mentioned is a gap like any other.
 
-Proven fully offline by `pnpm run proof:device-management-health` (162 checks, no network), 0 mismatches on all three enumerations via the shared grant-safety harness: the **normalized space (21,600 states)** against the evaluator alone, the **raw wire space (1,354,752 reports)** carrying the values a real bridge emits — junk enum spellings, JSON nulls, string-quoted booleans, numbers, arrays, objects, absent keys, and a snake_case aliased extra key — and a **parse-fidelity pass** over that same space asserting `reportIntegrity` against an independent allowlist. Exactly three raw reports grant — one per consistent channel shape — so the seven-way confirmation is provably tight. The third pass is what makes the integrity conditions provable at all: grant-ness alone cannot see them, since every malformed value already normalizes to a denying sentinel. The whole set is mutation-tested rather than assumed: **11** deliberate weakenings of the normalizer and evaluator were each applied and reverted, and every one is now caught. Two of them — deleting either of two terms in the consistency guard — previously left the proof green, which is precisely the load-bearing-but-unproven state the third pass exists to prevent, so each term now has a fixture of its own. Live calls are gated exactly like every other connector: fixture mode unless tier is beta/prod **and** `SIGNALGRID_LIVE_INTEGRATIONS=true` **and** `DEVICE_MANAGEMENT_HEALTH_ACCESS_TOKEN` is set. SignalGrid reads and decides on the evaluated management state; every signal is read-only, and this is not a vendor partnership or certification claim.
+Proven fully offline by `pnpm run proof:device-management-health` (173 checks, no network), 0 mismatches on all three enumerations via the shared grant-safety harness: the **normalized space (21,600 states)** against the evaluator alone, the **raw wire space (1,354,752 reports)** carrying the values a real bridge emits — junk enum spellings, JSON nulls, string-quoted booleans, numbers, arrays, objects, absent keys, and a snake_case aliased extra key — and a **parse-fidelity pass** over that same space asserting `reportIntegrity` against an independent allowlist. Exactly three raw reports grant — one per consistent channel shape — so the seven-way confirmation is provably tight. The third pass is what makes the integrity conditions provable at all: grant-ness alone cannot see them, since every malformed value already normalizes to a denying sentinel. The whole set is mutation-tested rather than assumed: **11** deliberate weakenings of the normalizer and evaluator were each applied and reverted, and every one is now caught. Two of them — deleting either of two terms in the consistency guard — previously left the proof green, which is precisely the load-bearing-but-unproven state the third pass exists to prevent, so each term now has a fixture of its own. Live calls are gated exactly like every other connector: fixture mode unless tier is beta/prod **and** `SIGNALGRID_LIVE_INTEGRATIONS=true` **and** `DEVICE_MANAGEMENT_HEALTH_ACCESS_TOKEN` is set. SignalGrid reads and decides on the evaluated management state; every signal is read-only, and this is not a vendor partnership or certification claim.
 
 ## Link usability — "associated" is not "usable" (built, fixture-backed)
 
@@ -342,7 +342,7 @@ A second contradiction lives in the same six fields and was missed in the first 
 
 The same review found the mirror-image defect in ordering. An **asserted** `not_associated` with the progress ladder silent — an ordinary shape when a controller has no client entry — reported the generic `LINK_STATE_UNKNOWN`, because the association branch sat *after* the ladder's `unknown` block and lost the tie by being second. Measured: its guard was satisfied 360 times across the normalized space and its candidate won **zero** times. A confirmed fact suppressed by a gap, which is the same inversion `MANAGEMENT_UNREACHABLE` suffered in `device-management-health` and which this dimension had already fixed for `controllerReachable === false` forty lines earlier. The principle had been applied to one asserted negative and not the other; it now applies to both.
 
-Proven fully offline by `pnpm run proof:link-usability` (154 checks, no network), 0 mismatches on all three enumerations via the shared grant-safety harness: the **normalized space (6,480 states)**, the **raw wire space (217,728 reports)** carrying the values a real bridge emits, and a **parse-fidelity pass** over that same space asserting `reportIntegrity` against an independent allowlist. Exactly **three** shapes grant — one per coherent roam pair — and that count is pinned **over the enumerated wire space**, so a fourth route within it is a test failure rather than a silent widening. That qualifier is load-bearing and was missing: the proof itself demonstrates a route outside the enumeration, since a Proxy that lies in `ownKeys` while still answering `getOwnPropertyDescriptor` keeps its values readable and grants. The proof also audits the whole raw space for the cite-a-disbelieved-claim pattern on both contradiction relations: across **20,160** ladder-contradictory and **19,440** roam-contradictory reports, not one cites the disbelieved half. `linkUsable` is separately asserted to agree with `action === "none"` on every one of the 6,480 normalized states — a mutation widening it survived until that check existed. Live calls are gated exactly like every other connector: fixture mode unless tier is beta/prod **and** `SIGNALGRID_LIVE_INTEGRATIONS=true` **and** `LINK_USABILITY_ACCESS_TOKEN` is set. SignalGrid reads and decides on the evaluated link state; every signal is read-only, and this is not a vendor partnership or certification claim.
+Proven fully offline by `pnpm run proof:link-usability` (163 checks, no network), 0 mismatches on all three enumerations via the shared grant-safety harness: the **normalized space (6,480 states)**, the **raw wire space (217,728 reports)** carrying the values a real bridge emits, and a **parse-fidelity pass** over that same space asserting `reportIntegrity` against an independent allowlist. Exactly **three** shapes grant — one per coherent roam pair — and that count is pinned **over the enumerated wire space**, so a fourth route within it is a test failure rather than a silent widening. That qualifier is load-bearing and was missing: the proof itself demonstrates a route outside the enumeration, since a Proxy that lies in `ownKeys` while still answering `getOwnPropertyDescriptor` keeps its values readable and grants. The proof also audits the whole raw space for the cite-a-disbelieved-claim pattern on both contradiction relations: across **20,160** ladder-contradictory and **19,440** roam-contradictory reports, not one cites the disbelieved half. `linkUsable` is separately asserted to agree with `action === "none"` on every one of the 6,480 normalized states — a mutation widening it survived until that check existed. Live calls are gated exactly like every other connector: fixture mode unless tier is beta/prod **and** `SIGNALGRID_LIVE_INTEGRATIONS=true` **and** `LINK_USABILITY_ACCESS_TOKEN` is set. SignalGrid reads and decides on the evaluated link state; every signal is read-only, and this is not a vendor partnership or certification claim.
 
 ## Entra PIM activation — the one surface where SignalGrid *decides* (built, offline-proven)
 
@@ -399,18 +399,18 @@ in one place.
   "removed and dark" (`escalate`) — a call native Lost Mode cannot make on a shared fleet,
   since it needs the device powered and online. A stale sighting confirms nothing: an
   expired in-zone reading on a dark device is graded as location-unknown, not as benign.
-  `proof:custody-beacon` (43 checks).
+  `proof:custody-beacon` (56 checks).
 
 - **App-update currency** ([APP_UPDATE_CURRENCY.md](APP_UPDATE_CURRENCY.md)) — the honest
   half of "custom OTA updates". An iOS app cannot install or replace itself; distribution
   stays with itms-services / MDM InstallApplication / ABM. What *is* posture: `min_version`
-  floors, `force_update`, and install-channel provenance. `proof:app-update` (57 checks).
+  floors, `force_update`, and install-channel provenance. `proof:app-update` (70 checks).
 
 - **Platform SSO** ([PLATFORM_SSO.md](PLATFORM_SSO.md)) — "passwordless" and "satisfies MFA"
   are not automatic; the **method** decides the credential's worth. Only a user-registered
   Secure Enclave key or smart card is phishing-resistant. A login policy claimed on a method
   that cannot enforce it is config drift, and a policy genuinely in force is graded for
-  lockout exposure. `proof:platform-sso` (52 checks).
+  lockout exposure. `proof:platform-sso` (65 checks).
 
 - **Passkey assurance** ([PASSKEY_ASSURANCE.md](PASSKEY_ASSURANCE.md)) — "a passkey is a
   passkey" is the misconception, and the line falls at **attestation**, not at
@@ -418,7 +418,7 @@ in one place.
   provenance than a synced one. A synced credential's custody is unknowable by
   construction — no administrator can query where it synced — so it forecloses the grant
   rather than lowering it. User verification discouraged is possession-only, a known-false
-  reliance that restricts. `proof:passkey-assurance` (74 checks).
+  reliance that restricts. `proof:passkey-assurance` (87 checks).
 
 - **Outbound emitters under discipline** — the six delivery families (`itsm`, `siem`, `syslog`,
   `telemetry`, `webhooks`, `caep-events`) each carry the same unanimous live-call gate as every
@@ -452,7 +452,7 @@ in one place.
   merely labels its checks "CIS" establishes nothing, and a run older than the operator's stated
   age bound cannot confirm anything today (all three temporal inputs supplied, never sampled).
   Titles and versions only — CIS rule content is licensed and is not reproduced.
-  `proof:benchmark-selection` (82 checks).
+  `proof:benchmark-selection` (95 checks).
 
 - **Shift context** ([SHIFT_CONTEXT.md](SHIFT_CONTEXT.md)) — right person, wrong time is still the
   wrong decision context. The labor plane (UKG, Dayforce, ADP and peers) already records whether a
@@ -463,7 +463,7 @@ in one place.
   schedule standing is DERIVED from the reported window at a caller-supplied reference instant — no
   clock in any decision path — and the site question is graded only when the caller poses it.
   Reading a schedule is not managing one: GET-only, no punch writes, nothing payroll-adjacent.
-  `proof:shift-context` (50 checks).
+  `proof:shift-context` (63 checks).
 
 - **Change window** — an approval is a claim about a SPECIFIC time, actor and record. `change_window`
   existed here only as a declared flow signal carrying a HEALTH status ("is the ITSM reachable"),
@@ -478,7 +478,7 @@ in one place.
   integrations usually work, and it would let anyone who can write an ITSM row write themselves a
   grant. `change_class: emergency` is carried as evidence for the human answering the step-up and is
   never read by the gate. Reading a change record is not managing one: no change is raised,
-  approved, scheduled or closed. `proof:change-window` (63 checks).
+  approved, scheduled or closed. `proof:change-window` (76 checks).
 
 - **Bootstrap credential** — the auth plane's provenance reading (intake ledger row 17's queued
   candidate; Entra Temporary Access Pass and its peers are the reference shape). A temporary
@@ -492,7 +492,7 @@ in one place.
   a STANDING strong credential and only that; a perfectly-used bootstrap pass still reads
   monitor, because a temporary credential is an elevated state, not a clean one. Reading a
   credential record is not managing one: no pass is issued, revoked, or extended.
-  `proof:bootstrap-credential` (35 checks).
+  `proof:bootstrap-credential` (48 checks).
 
 - **Challenge capability** — the answerable step-up (intake ledger row 23; HID DigitalPersona's
   AD/LDS + Web Client inventory and Entra's authentication-methods registry are the reference
@@ -537,7 +537,7 @@ in one place.
   report-only, a compliance policy whose only noncompliance action is "notify", and ASR in
   audit mode all leave a perfectly-bound device ungated, so `bound_correctly` requires
   `enforcing` and an absent enforcement answer raises rather than granting.
-  `proof:policy-binding` (46 checks).
+  `proof:policy-binding` (59 checks).
 
 - **Dual control** ([DUAL_CONTROL.md](DUAL_CONTROL.md)) — two-person integrity for the
   highest-blast-radius actions: two distinct identities, distinct credential instances, user

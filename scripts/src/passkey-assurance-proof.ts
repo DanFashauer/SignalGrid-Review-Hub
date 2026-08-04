@@ -16,6 +16,8 @@
 // surface, and fusion.
 
 import {
+  makeDefaultPasskeyTransport,
+  PasskeyConnectorError,
   evaluatePasskey,
   evaluateIdentityPasskeys,
   normalizeReport,
@@ -27,6 +29,7 @@ import {
   type PasskeyReportRaw,
 } from "@workspace/integrations/passkey-assurance";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
+import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
 
 let passed = 0;
 const failures: string[] = [];
@@ -480,6 +483,33 @@ check("end-to-end — the fetched set does NOT confirm, because one credential i
 // Determinism.
 const d1 = normalizeReport("det", { ...GRANT, credential_type: "synced", attestation: "not_provided" });
 check("evaluator is deterministic", JSON.stringify(evaluatePasskey(d1)) === JSON.stringify(evaluatePasskey(d1)));
+
+
+// ── The live-call gate and the default transport, each condition ISOLATED ────
+//
+// See `lib/live-gate.ts` for why this replaced what was here (or filled the hole where
+// nothing was). Short version: the gate was tested as a cumulative ladder, so only its
+// last condition was falsifiable, and the mutation guard could delete the tier check —
+// the control behind "dev and alpha never make live vendor calls" — with every proof
+// green. The default fetch transport was never executed by anything at all.
+checkLiveGateIsolated({
+  check,
+  family: "passkey-assurance",
+  resolve: (env) => resolvePasskeyConnector(env),
+  full: {
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    PASSKEY_ACCESS_TOKEN: "t",
+  },
+});
+
+await checkDefaultTransport({
+  check,
+  family: "passkey-assurance",
+  transport: makeDefaultPasskeyTransport("https://vendor.invalid/passkey-assurance") as (a: never) => Promise<unknown>,
+  arg: { identityRef: "identityRef-1", token: "t" },
+  codeOf: (err) => (err instanceof PasskeyConnectorError ? err.code : undefined),
+});
 
 const total = passed + failures.length;
 console.log(`figures=normalizedCombos=${normRes.combos},rawCombos=${rawRes.combos},grantingCombos=${normRes.noneCount},syncedGrantingCombos=${syncedGrants},ladderRungs=6`);

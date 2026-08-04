@@ -12,6 +12,8 @@
 // never grants. The grant requires bound + matched + clean hygiene + enforcing +
 // clean parse, with the mismatch direction pinned moot-when-matched.
 import {
+  resolvePolicyBindingConnector,
+  makeDefaultPolicyBindingTransport,
   PolicyBindingConnector,
   PolicyBindingConnectorError,
   createMockPolicyBindingTransport,
@@ -23,6 +25,7 @@ import {
 } from "@workspace/integrations/policy-binding";
 import { SIGNAL_KINDS, composeDeviceRisk, fromPolicyBinding } from "@workspace/posture-composition";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
+import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
 
 let passed = 0;
 const failures: string[] = [];
@@ -274,6 +277,33 @@ check("a healthy device bound to a REPORT-ONLY policy composes to monitor, not n
 // Determinism.
 const d1 = normalizeReport("det", { binding: "bound", profile_match: "mismatched", mismatch_direction: "wider", membership_hygiene: "clean", enforcement: "enforcing" });
 check("evaluator is deterministic", JSON.stringify(evaluatePolicyBinding(d1)) === JSON.stringify(evaluatePolicyBinding(d1)));
+
+
+// ── The live-call gate and the default transport, each condition ISOLATED ────
+//
+// See `lib/live-gate.ts` for why this replaced what was here (or filled the hole where
+// nothing was). Short version: the gate was tested as a cumulative ladder, so only its
+// last condition was falsifiable, and the mutation guard could delete the tier check —
+// the control behind "dev and alpha never make live vendor calls" — with every proof
+// green. The default fetch transport was never executed by anything at all.
+checkLiveGateIsolated({
+  check,
+  family: "policy-binding",
+  resolve: (env) => resolvePolicyBindingConnector(env),
+  full: {
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    POLICY_BINDING_ACCESS_TOKEN: "t",
+  },
+});
+
+await checkDefaultTransport({
+  check,
+  family: "policy-binding",
+  transport: makeDefaultPolicyBindingTransport("https://vendor.invalid/policy-binding") as (a: never) => Promise<unknown>,
+  arg: { deviceRef: "deviceRef-1", token: "t" },
+  codeOf: (err) => (err instanceof PolicyBindingConnectorError ? err.code : undefined),
+});
 
 const total = passed + failures.length;
 console.log(`figures=normalizedCombos=${normRes.combos},rawCombos=${rawRes.combos},grantingCombos=${normRes.noneCount},rawGrantingCombos=${rawRes.noneCount},ladderRungs=6`);

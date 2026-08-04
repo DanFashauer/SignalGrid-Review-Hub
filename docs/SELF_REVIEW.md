@@ -316,6 +316,62 @@ If the MCP checkout isn't found it prints how to get it and continues with the
 Review-Hub side. Each repo's own CI still guards its half of the contract
 independently; `verify:all` is the local convenience that runs the pair together.
 
+#### The cumulative-ladder defect, and why the swept population is the thing to audit
+
+A worked example of how these gates fail, kept because the failure was invisible for
+twenty-one connector families at once and the shape recurs.
+
+Every gated connector answers the same question the same way: tier must be `beta`/`prod`,
+`SIGNALGRID_LIVE_INTEGRATIONS` must be `"true"`, and a family credential must be present.
+Most proofs tested it like this:
+
+```ts
+check("dev tier resolves to fixture mode",   resolveX({ SIGNALGRID_TIER: "dev" }).mode === "fixture");
+check("prod WITHOUT live flag stays fixture", resolveX({ SIGNALGRID_TIER: "prod" }).mode === "fixture");
+check("prod + live but NO token stays fixture", resolveX({ tier: "prod", live: "true" }).mode === "fixture");
+check("prod + live + token resolves live",   resolveX({ tier: "prod", live: "true", token }).mode === "live");
+```
+
+Four checks, one per condition, reading like complete coverage. It is not. Each rung adds
+one variable, so at every step the conditions *below* the one under test are also failing.
+Delete the tier check and case 1 still returns `fixture` — the flag is absent too. Only
+the last condition in the chain is genuinely exercised. **A ladder tests its top rung.**
+
+Nothing caught it because the gate files were not in the mutation guard's swept
+population. The registry's stated scope — "the normalizers and evaluators of the
+grant-emitting connectors" — was written when the gate lived in `<family>-connector.ts`;
+newer families put it in `index.ts`, and the older twenty-one had an `index.ts` nobody had
+ever mutated. Registering them and sweeping produced the same two survivors family after
+family:
+
+```
+if (tier !== "beta" && tier !== "prod")          → if (false)   SURVIVED
+if (env.SIGNALGRID_LIVE_INTEGRATIONS !== "true") → if (false)   SURVIVED
+```
+
+The first is the control behind a claim this repo makes in writing — that dev and alpha
+never make live vendor calls. It could be deleted outright with every gate green. Five
+families were worse still: their proofs never called the resolver at all.
+
+The fix is a shape, not a count (`scripts/src/lib/live-gate.ts`): start from an env where
+**every** gate passes, knock out exactly one variable, require a refusal, and assert
+separately that the full env does go live so the whole thing cannot pass vacuously. Same
+law as "a guard over N fields needs N controls", moved to the code that decides whether we
+touch a customer's network.
+
+Two lessons worth carrying:
+
+- **Audit the swept population, not just the sweep result.** A registry that returns zero
+  survivors over the wrong file set is a coverage claim, not coverage. This was the fourth
+  instance of the right rule attached to the wrong population.
+- **Injecting a transport means the default one is never executed.** The connector proofs
+  all inject, correctly — they test decision logic, not HTTP. The consequence was that
+  `makeDefaultXTransport` had never run in any test, and once it did, `ot-posture` turned
+  out to be the one family of twenty that reported a 403 as `upstream_error` (their
+  service) rather than `auth_failed` (our credential), and the only one with no
+  body-shape check at all — so a maintenance HTML page threw a raw `SyntaxError` past the
+  typed error surface, and a JSON array or a bare `null` was cast straight to a report.
+
 ### 2. Adversarial — the invariant reviewer + an agent read
 `pnpm run review:invariants` is a deterministic, dependency-free "second
 reviewer" that encodes the classes of defect this repo's reviews keep catching,

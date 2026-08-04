@@ -11,6 +11,8 @@
 // control is enforced that the OS is not enforcing. A policy genuinely in force
 // carries lockout exposure (expired/unconfigured grace, missing break-glass).
 import {
+  resolvePlatformSsoConnector,
+  makeDefaultPlatformSsoTransport,
   PlatformSsoConnector,
   PlatformSsoConnectorError,
   createMockPlatformSsoTransport,
@@ -22,6 +24,7 @@ import {
 } from "@workspace/integrations/platform-sso";
 import { SIGNAL_KINDS, composeDeviceRisk, fromPlatformSso } from "@workspace/posture-composition";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
+import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
 
 let passed = 0;
 const failures: string[] = [];
@@ -277,6 +280,33 @@ check("...and a confirmed phishing-resistant credential contributes none — the
 // Determinism.
 const d1 = normalizeReport("det", { registration: "user", method: "password_sync", login_policy: "required", offline_grace: "expired" });
 check("evaluator is deterministic", JSON.stringify(evaluatePlatformSso(d1)) === JSON.stringify(evaluatePlatformSso(d1)));
+
+
+// ── The live-call gate and the default transport, each condition ISOLATED ────
+//
+// See `lib/live-gate.ts` for why this replaced what was here (or filled the hole where
+// nothing was). Short version: the gate was tested as a cumulative ladder, so only its
+// last condition was falsifiable, and the mutation guard could delete the tier check —
+// the control behind "dev and alpha never make live vendor calls" — with every proof
+// green. The default fetch transport was never executed by anything at all.
+checkLiveGateIsolated({
+  check,
+  family: "platform-sso",
+  resolve: (env) => resolvePlatformSsoConnector(env),
+  full: {
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    PLATFORM_SSO_ACCESS_TOKEN: "t",
+  },
+});
+
+await checkDefaultTransport({
+  check,
+  family: "platform-sso",
+  transport: makeDefaultPlatformSsoTransport("https://vendor.invalid/platform-sso") as (a: never) => Promise<unknown>,
+  arg: { deviceRef: "deviceRef-1", token: "t" },
+  codeOf: (err) => (err instanceof PlatformSsoConnectorError ? err.code : undefined),
+});
 
 const total = passed + failures.length;
 console.log(`figures=normalizedCombos=${normRes.combos},rawCombos=${rawRes.combos},grantingCombos=${normRes.noneCount},rawGrantingCombos=${rawRes.noneCount},ladderRungs=6`);

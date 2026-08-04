@@ -104,7 +104,7 @@ benchmark-selection's:
   NOT clocked in, and the `offclock-medroom` room-entry scenario — identity,
   posture, and custody all green — steps up on `SHIFT_CONTEXT_MISFIT` alone.
 
-Proven by `proof:shift-context` (50 checks; the coherence ladder, both
+Proven by `proof:shift-context` (63 checks; the coherence ladder, both
 derivations asserted directly, the posed/unposed site split, hostile wire
 shapes, the live-call gate clause by clause, both grant-safety enumerations,
 fusion; deterministic, offline).

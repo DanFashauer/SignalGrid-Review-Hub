@@ -9,6 +9,8 @@
 // pinned here, plus the exhaustive sweeps proving the clean state is exactly
 // the standing-credential conjunction and nothing else.
 import {
+  makeDefaultBootstrapCredentialTransport,
+  BootstrapCredentialConnectorError,
   deriveLifetimeStanding,
   evaluateBootstrapCredential,
   guardReadOnly,
@@ -22,6 +24,7 @@ import {
 } from "@workspace/integrations/bootstrap-credential";
 import { SIGNAL_KINDS, composeDeviceRisk, fromBootstrapCredential } from "@workspace/posture-composition";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
+import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
 
 let passed = 0;
 const failures: string[] = [];
@@ -258,6 +261,33 @@ check("...and a standing credential contributes none — the dimension never low
 // Determinism.
 check("evaluator is deterministic",
   JSON.stringify(ev(bootstrap(), "operational")) === JSON.stringify(ev(bootstrap(), "operational")));
+
+
+// ── The live-call gate and the default transport, each condition ISOLATED ────
+//
+// See `lib/live-gate.ts` for why this replaced what was here (or filled the hole where
+// nothing was). Short version: the gate was tested as a cumulative ladder, so only its
+// last condition was falsifiable, and the mutation guard could delete the tier check —
+// the control behind "dev and alpha never make live vendor calls" — with every proof
+// green. The default fetch transport was never executed by anything at all.
+checkLiveGateIsolated({
+  check,
+  family: "bootstrap-credential",
+  resolve: (env) => resolveBootstrapCredentialConnector(env),
+  full: {
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    BOOTSTRAP_CREDENTIAL_ACCESS_TOKEN: "t",
+  },
+});
+
+await checkDefaultTransport({
+  check,
+  family: "bootstrap-credential",
+  transport: makeDefaultBootstrapCredentialTransport("https://vendor.invalid/bootstrap-credential") as (a: never) => Promise<unknown>,
+  arg: { subjectRef: "subjectRef-1", token: "t" },
+  codeOf: (err) => (err instanceof BootstrapCredentialConnectorError ? err.code : undefined),
+});
 
 const total = passed + failures.length;
 console.log(`figures=normalizedCombos=${normRes.combos},rawCombos=${rawRes.combos},grantingCombos=${normRes.noneCount},rawGrantingCombos=${rawRes.noneCount},gateClauses=4,ladderRungs=6`);

@@ -25,6 +25,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  makeDefaultLinkUsabilityTransport,
   LINK_USABILITY_REPORT_KEYS,
   LinkUsabilityConnector,
   LinkUsabilityConnectorError,
@@ -38,6 +39,7 @@ import {
 } from "@workspace/integrations/link-usability";
 import { composeDeviceRisk, fromLinkUsability } from "@workspace/posture-composition";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
+import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
 
 interface Expected {
   posture: string;
@@ -518,12 +520,35 @@ let missingErr: LinkUsabilityConnectorError | null = null;
 try { await connector.fetchLink("no-such-device"); } catch (err) { missingErr = err instanceof LinkUsabilityConnectorError ? err : null; }
 check("an unknown device surfaces upstream_error, never an invented healthy link", missingErr?.code === "upstream_error");
 
-check("dev tier resolves to fixture mode", resolveLinkUsabilityConnector({ SIGNALGRID_TIER: "dev" }).mode === "fixture");
-check("prod WITHOUT live flag stays fixture", resolveLinkUsabilityConnector({ SIGNALGRID_TIER: "prod" }).mode === "fixture");
-check("prod + live but NO token stays fixture", resolveLinkUsabilityConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" }).mode === "fixture");
-check("prod + live + token resolves live", resolveLinkUsabilityConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", LINK_USABILITY_ACCESS_TOKEN: "t" }).mode === "live");
 
 console.log(`figures=normalized=${enumRes.combos},raw=${rawEnumRes.combos},grants=${rawEnumRes.noneCount},contradictory=${contradictoryCount},roamContradictory=${roamContradictoryCount}`);
+
+// ── The live-call gate and the default transport, each condition ISOLATED ────
+//
+// See `lib/live-gate.ts` for why this replaced what was here (or filled the hole where
+// nothing was). Short version: the gate was tested as a cumulative ladder, so only its
+// last condition was falsifiable, and the mutation guard could delete the tier check —
+// the control behind "dev and alpha never make live vendor calls" — with every proof
+// green. The default fetch transport was never executed by anything at all.
+checkLiveGateIsolated({
+  check,
+  family: "link-usability",
+  resolve: (env) => resolveLinkUsabilityConnector(env),
+  full: {
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    LINK_USABILITY_ACCESS_TOKEN: "t",
+  },
+});
+
+await checkDefaultTransport({
+  check,
+  family: "link-usability",
+  transport: makeDefaultLinkUsabilityTransport("https://vendor.invalid/link-usability") as (a: never) => Promise<unknown>,
+  arg: { deviceId: "deviceId-1", token: "t" },
+  codeOf: (err) => (err instanceof LinkUsabilityConnectorError ? err.code : undefined),
+});
+
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

@@ -16,6 +16,7 @@
 // asserts that `change_class: "emergency"` — the field most likely to be written by
 // someone who wants a pass — changes nothing.
 import {
+  makeDefaultChangeWindowTransport,
   ChangeWindowConnector,
   ChangeWindowConnectorError,
   compareChangeActors,
@@ -31,6 +32,7 @@ import {
 } from "@workspace/integrations/change-window";
 import { ACTION_RANK, SIGNAL_KINDS, composeDeviceRisk, fromChangeWindow } from "@workspace/posture-composition";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
+import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
 
 let passed = 0;
 const failures: string[] = [];
@@ -421,6 +423,33 @@ check("THE ASYMMETRY IN COMPOSITION: an authorized change does NOT rescue a degr
 const d1 = normalizeChangeReport("det", clean(), { operatingActorRef: ACTOR, referenceTime: REF, maxChangeRecordAgeSeconds: MAX_AGE });
 check("evaluator is deterministic",
   JSON.stringify(evaluateChangeWindow(d1)) === JSON.stringify(evaluateChangeWindow(d1)));
+
+
+// ── The live-call gate and the default transport, each condition ISOLATED ────
+//
+// See `lib/live-gate.ts` for why this replaced what was here (or filled the hole where
+// nothing was). Short version: the gate was tested as a cumulative ladder, so only its
+// last condition was falsifiable, and the mutation guard could delete the tier check —
+// the control behind "dev and alpha never make live vendor calls" — with every proof
+// green. The default fetch transport was never executed by anything at all.
+checkLiveGateIsolated({
+  check,
+  family: "change-window",
+  resolve: (env) => resolveChangeWindowConnector(env),
+  full: {
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    CHANGE_WINDOW_ACCESS_TOKEN: "t",
+  },
+});
+
+await checkDefaultTransport({
+  check,
+  family: "change-window",
+  transport: makeDefaultChangeWindowTransport("https://vendor.invalid/change-window") as (a: never) => Promise<unknown>,
+  arg: { changeRef: "changeRef-1", token: "t" },
+  codeOf: (err) => (err instanceof ChangeWindowConnectorError ? err.code : undefined),
+});
 
 const total = passed + failures.length;
 console.log(`figures=normalizedCombos=${normRes.combos},rawCombos=${rawRes.combos},grantingCombos=${normRes.noneCount},rawGrantingCombos=${rawRes.noneCount},gateClauses=5,ladderRungs=6`);

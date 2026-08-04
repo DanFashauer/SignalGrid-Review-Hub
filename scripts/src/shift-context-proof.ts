@@ -10,6 +10,7 @@
 // reference instant is caller-supplied), and the same worker grades differently at
 // two reference instants — the temporal point, pinned directly.
 import {
+  makeDefaultShiftContextTransport,
   ShiftContextConnector,
   ShiftContextConnectorError,
   compareSites,
@@ -24,6 +25,7 @@ import {
 } from "@workspace/integrations/shift-context";
 import { SIGNAL_KINDS, composeDeviceRisk, fromShiftContext } from "@workspace/posture-composition";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
+import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
 
 let passed = 0;
 const failures: string[] = [];
@@ -307,6 +309,33 @@ check("...and a confirmed labor context contributes none — the dimension never
 const d1 = normalizeShiftReport("det", clean(), { deviceSite: SITE, referenceTime: REF });
 check("evaluator is deterministic",
   JSON.stringify(evaluateShiftContext(d1)) === JSON.stringify(evaluateShiftContext(d1)));
+
+
+// ── The live-call gate and the default transport, each condition ISOLATED ────
+//
+// See `lib/live-gate.ts` for why this replaced what was here (or filled the hole where
+// nothing was). Short version: the gate was tested as a cumulative ladder, so only its
+// last condition was falsifiable, and the mutation guard could delete the tier check —
+// the control behind "dev and alpha never make live vendor calls" — with every proof
+// green. The default fetch transport was never executed by anything at all.
+checkLiveGateIsolated({
+  check,
+  family: "shift-context",
+  resolve: (env) => resolveShiftContextConnector(env),
+  full: {
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    SHIFT_CONTEXT_ACCESS_TOKEN: "t",
+  },
+});
+
+await checkDefaultTransport({
+  check,
+  family: "shift-context",
+  transport: makeDefaultShiftContextTransport("https://vendor.invalid/shift-context") as (a: never) => Promise<unknown>,
+  arg: { workerRef: "workerRef-1", token: "t" },
+  codeOf: (err) => (err instanceof ShiftContextConnectorError ? err.code : undefined),
+});
 
 const total = passed + failures.length;
 console.log(`figures=normalizedCombos=${normRes.combos},rawCombos=${rawRes.combos},grantingCombos=${normRes.noneCount},rawGrantingCombos=${rawRes.noneCount},gateClauses=4,ladderRungs=6`);

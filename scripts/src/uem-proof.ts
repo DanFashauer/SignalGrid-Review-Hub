@@ -380,6 +380,165 @@ check("no fixture carries a wall-clock timestamp — ages are durations supplied
     banned.some((re) => re.test(`const { Redis } = await import("ioredis");`)));
 }
 
+// ── Two branches the mutation guard found unfalsifiable (registry gap) ───────
+//
+// `uem` met this registry's own stated scope — "normalizers and evaluators of the
+// grant-emitting connectors" — and was absent from it anyway, so its evaluator had
+// never been mutation-swept. Registering it surfaced two live branches that no
+// assertion pinned. Both are REAL BEHAVIOUR WITH NO TEST, the case the grant-safety
+// enumeration structurally cannot catch because it only enumerates the ALLOW path.
+{
+  // ── 1. VENDOR_UNKNOWN reaches `indeterminate`, not `managed_degraded` ──
+  //
+  // The winner is chosen with `>`, not `>=`, so among equal-ranked candidates the
+  // EARLIEST push wins — and `VENDOR_UNKNOWN` is pushed last. It can therefore only
+  // become the winner when it is the SOLE step_up: an unattributable report whose
+  // enrollment, compliance and supervision are all otherwise confirmed good.
+  //
+  // That state's posture is the whole point of the rule stated in the source — an
+  // unconfirmed input is INDETERMINATE, not degraded, because we do not know the
+  // device is worse, only that we cannot say it is good. Reporting `managed_degraded`
+  // would assert a fact not in evidence. Nothing pinned it until now.
+  const unattributable: NormalizedUemDeviceState = {
+    deviceId: "d", vendor: "unknown", enrollment: "enrolled", compliance: "compliant",
+    supervision: "supervised", ownership: "corporate",
+    osVersion: null, lastCheckInAgeSeconds: null,
+    cellularHardware: "unknown", reportIntegrity: "intact",
+  };
+  const unattributableVerdict = evaluateUem(unattributable);
+  check(
+    "an unattributable but otherwise-healthy report is VENDOR_UNKNOWN, the sole step_up",
+    unattributableVerdict.reasonCode === "VENDOR_UNKNOWN" &&
+      unattributableVerdict.recommendedAction === "step_up",
+  );
+  check(
+    `…and its posture is \`indeterminate\`, NOT \`managed_degraded\` (${unattributableVerdict.posture}) — we cannot say it is good, which is not the same as saying it is bad`,
+    unattributableVerdict.posture === "indeterminate",
+  );
+  // NON-VACUITY: the same state with an attributable vendor must grant, or the pair
+  // above proves only that some step_up happened for some unrelated reason.
+  const attributable = evaluateUem({ ...unattributable, vendor: "intune" });
+  check(
+    "NON-VACUITY: identical state with a known vendor grants — provenance is the only difference",
+    attributable.recommendedAction === "none" && attributable.posture === "managed_compliant",
+  );
+
+  // ── 1b. The WHOLE reason→posture map, pinned as a shape ──
+  //
+  // The first sweep killed the VENDOR_UNKNOWN disjunct above but left its four
+  // siblings alive, which says something sharper than "one branch lacked a test":
+  // `postureFor` was unpinned for EVERY non-grant state. The 1,440-state sweep only
+  // ever asserted things about the allow path, so the entire mapping from reason to
+  // posture — the part an operator reads to decide what to do — was unverified.
+  //
+  // Pinning each disjunct one at a time would be five assertions that rot the moment a
+  // sixth reason appears. Instead the map is derived from the swept space and compared
+  // against the table the SOURCE claims, so a new reason with no posture rule fails
+  // here rather than silently defaulting to `managed_degraded`.
+  const EXPECTED_POSTURE: Record<string, string> = {
+    // Affirmatively absent or ending management. Not merely degraded.
+    DEVICE_NOT_ENROLLED: "unmanaged",
+    DEVICE_RETIRED: "unmanaged",
+    // The management story is exactly right for the ownership — compliant, with a
+    // monitor-level note, so an operator sees it without being alarmed.
+    BYOD_UNSUPERVISED_EXPECTED: "managed_compliant",
+    // Driven by an UNCONFIRMED input. We do not know the device is worse, only that we
+    // cannot say it is good; `managed_degraded` here would assert a fact not in evidence.
+    ENROLLMENT_STATE_UNKNOWN: "indeterminate",
+    COMPLIANCE_STATE_UNKNOWN: "indeterminate",
+    SUPERVISION_STATE_UNKNOWN: "indeterminate",
+    UNSUPERVISED_OWNERSHIP_UNKNOWN: "indeterminate",
+    VENDOR_UNKNOWN: "indeterminate",
+    COMPLIANCE_NOT_EVALUATED: "indeterminate",
+    // An unreadable report is ignorance too, not a finding.
+    REPORT_MALFORMED: "indeterminate",
+    // CONFIRMED bad facts — degraded, and deliberately not `unmanaged`: a device that
+    // is enrolled but non-compliant still has a management story, and conflating the
+    // two would misdirect whoever acts on the verdict.
+    DEVICE_NON_COMPLIANT: "managed_degraded",
+    COMPLIANCE_IN_GRACE_PERIOD: "managed_degraded",
+    DEVICE_UNSUPERVISED: "managed_degraded",
+    // The clean grant.
+    UEM_MANAGED_COMPLIANT: "managed_compliant",
+  };
+  // The four entries above `UEM_MANAGED_COMPLIANT` were added because this very check
+  // rejected the first draft of this table: it had an invented `UEM_DEVICE_NON_COMPLIANT`
+  // and omitted the other three. That is the assertion doing its job — a hand-written
+  // expectation is a claim, and this one was wrong until the sweep contradicted it.
+
+  const observed = new Map<string, Set<string>>();
+  for (const vendor of VENDORS)
+    for (const enrollment of ENROLLMENTS)
+      for (const compliance of COMPLIANCES)
+        for (const supervision of SUPERVISIONS)
+          for (const ownership of OWNERSHIPS)
+            for (const reportIntegrity of INTEGRITIES) {
+              const v = evaluateUem({
+                deviceId: "d", vendor, enrollment, compliance, supervision, ownership,
+                osVersion: null, lastCheckInAgeSeconds: null,
+                cellularHardware: "unknown", reportIntegrity,
+              });
+              if (!observed.has(v.reasonCode)) observed.set(v.reasonCode, new Set());
+              observed.get(v.reasonCode)!.add(v.posture);
+            }
+
+  const multi = [...observed].filter(([, set]) => set.size > 1).map(([r]) => r);
+  check(
+    `every reachable reason maps to exactly ONE posture (${observed.size} reasons reachable)`,
+    multi.length === 0,
+  );
+  const mismatched = [...observed]
+    .filter(([reason, set]) => EXPECTED_POSTURE[reason] !== [...set][0])
+    .map(([reason, set]) => `${reason}→${[...set][0]} (expected ${EXPECTED_POSTURE[reason] ?? "UNLISTED"})`);
+  check(
+    `the reason→posture map matches what the source claims${mismatched.length ? `: ${mismatched.join(", ")}` : ""}`,
+    mismatched.length === 0,
+  );
+  // NON-VACUITY: the map must actually contain the three distinct non-grant postures,
+  // or a mapping that collapsed everything to one value would satisfy the checks above.
+  const postures = new Set([...observed.values()].flatMap((set) => [...set]));
+  check(
+    `NON-VACUITY: the swept space reaches ${postures.size} distinct postures, so the map is not collapsed`,
+    postures.size >= 3,
+  );
+
+  // ── 2. A payload with no device id is MALFORMED, not silently intact ──
+  //
+  // `normalizeIntuneDevice` returns an all-unknown record with
+  // `reportIntegrity: "malformed"` when the vendor volunteered no `id`. Nothing fed it
+  // such a payload, so the guard was unfalsifiable — and skipping it does not merely
+  // lose a label: the record would flow on carrying `reportIntegrity: "intact"`,
+  // claiming a trustworthy read of a device it cannot even name.
+  for (const [label, payload] of [
+    ["absent", {}],
+    ["null", { id: null }],
+    ["empty string", { id: "" }],
+    ["whitespace", { id: "   " }],
+    ["non-string", { id: 12345 }],
+  ] as const) {
+    const norm = normalizeIntuneDevice(payload as never);
+    check(
+      `an Intune payload with a ${label} id normalizes to malformed, every axis unknown`,
+      norm.reportIntegrity === "malformed" &&
+        norm.enrollment === "unknown" &&
+        norm.compliance === "unknown" &&
+        norm.supervision === "unknown" &&
+        norm.ownership === "unknown" &&
+        norm.cellularHardware === "unknown",
+    );
+  }
+  // NON-VACUITY: a well-formed payload must NOT be malformed, or the loop above is
+  // satisfied by a normalizer that reports malformed unconditionally.
+  const wellFormed = normalizeIntuneDevice({
+    id: "dev-1", managementState: "managed", complianceState: "compliant",
+    isSupervised: true, managedDeviceOwnerType: "company",
+  } as never);
+  check(
+    "NON-VACUITY: a well-formed payload reads `intact`, so the malformed path is not unconditional",
+    wellFormed.reportIntegrity === "intact",
+  );
+}
+
 // ── Cellular hardware: affirmative-only, and CARRIED rather than graded ──────
 //
 // `cellularHardware` exists to supply `carrier`'s posed `cellularBackchannel` axis,

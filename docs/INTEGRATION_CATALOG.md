@@ -557,12 +557,23 @@ recently. Their documented counts are enforced by `pnpm run check:proof-counts`,
 which runs each proof and fails the build when a number here disagrees with what the
 proof reports — the numbers below are therefore evidence, not claims.
 
-- **`proof:uem` (55 checks)** — the read-only MDM/UEM dimension across Intune, Jamf
+- **`proof:uem` (67 checks)** — the read-only MDM/UEM dimension across Intune, Jamf
   and Workspace ONE. Includes a **1,440-state exhaustive sweep** whose grant path is
   pinned to *exactly 9* fully-confirmed states, four isolated live-call-gate refusals,
   and a source scan asserting no vendor-API call. `personal` ownership on an
   unsupervised device grades `monitor`, not a grant: vendors report personal ownership
   as a residual bucket rather than a positive confirmation.
+  It is now **registered in the mutation guard**, which it had never been despite
+  meeting that registry's own stated scope — "the normalizers and evaluators of the
+  grant-emitting connectors" — and its evaluator returning `none` on nine states.
+  Registering it surfaced four unfalsifiable branches, all in `postureFor`: the whole
+  **reason→posture map was unpinned for every non-grant state**, because the
+  1,440-state sweep only ever asserted things about the allow path. The map an operator
+  reads to decide what to *do* was the part nothing verified. It is now pinned as a
+  SHAPE — the mapping is derived from the swept space and compared against the table the
+  source claims, so a new reason with no posture rule fails loudly instead of silently
+  defaulting to `managed_degraded`. That check earned its keep immediately by rejecting
+  the first draft of its own expected table.
   It also supplies `carrier`'s posed `cellularBackchannel` axis, which until now had no
   production supplier at all — the axis was consumed by the evaluator and posed only in
   fixtures, so every real deployment read `unknown` forever while the fixtures pretended

@@ -324,6 +324,19 @@ export const TARGETS = [
     ],
   },
   {
+    // `uem` was absent from this registry despite meeting its own stated scope rule —
+    // it is a grant-emitting connector (its evaluator returns `none` on exactly nine
+    // fully-confirmed states, which proof:uem pins). Third instance of the same class
+    // this session: the right rule attached to the wrong population. Registries are
+    // themselves claims about coverage, and go stale exactly the way the guards they
+    // hold exist to prevent.
+    proof: "proof:uem",
+    files: [
+      "lib/integrations/src/integrations/uem/evaluate.ts",
+      "lib/integrations/src/integrations/uem/intune.ts",
+    ],
+  },
+  {
     proof: "proof:ot-posture",
     files: [
       "lib/integrations/src/integrations/ot-posture/evaluate.ts",

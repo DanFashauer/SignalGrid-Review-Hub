@@ -236,6 +236,14 @@ function categoryForKind(kind: string, reason?: string): IncidentCategory {
     // reading is an automated licence-reclamation sweep, which is finance's
     // housekeeping rather than anybody's attack. Never the generic Service Desk: the
     // fix is an entitlement decision, not a ticket.
+    // `break_glass` is the governance record of an emergency clinical override —
+    // unjustified, unbounded, never-reviewed, or invoked by someone who did not need
+    // it. An ACCESS-GOVERNANCE question, owned by the same queue as
+    // `access_governance` and `service_lifecycle`. Never SecOps: a clinician reaching
+    // past a gate to reach a patient is not an intrusion, and treating it as one is
+    // how a hospital learns to stop reporting. Never the generic Service Desk: the
+    // fix is a policy and review-loop decision, not a ticket.
+    case "break_glass":
     case "service_lifecycle":
     case "agent_identity":
     case "data_protection":

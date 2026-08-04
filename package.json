@@ -50,6 +50,7 @@
     "proof:audit-ledger-pg": "pnpm --filter @workspace/scripts run proof:audit-ledger-pg",
     "proof:benchmark-selection": "pnpm --filter @workspace/scripts run proof:benchmark-selection",
     "proof:bootstrap-credential": "pnpm --filter @workspace/scripts run proof:bootstrap-credential",
+    "proof:break-glass": "pnpm --filter @workspace/scripts run proof:break-glass",
     "proof:caep-events": "pnpm --filter @workspace/scripts run proof:caep-events",
     "proof:carrier-reachability": "pnpm --filter @workspace/scripts run proof:carrier-reachability",
     "proof:challenge-capability": "pnpm --filter @workspace/scripts run proof:challenge-capability",

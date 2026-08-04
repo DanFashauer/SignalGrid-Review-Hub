@@ -30,6 +30,7 @@ import type { ChallengeCapabilityVerdict } from "@workspace/integrations/challen
 import type { SseEgressVerdict } from "@workspace/integrations/sse-egress";
 import type { ServiceLifecycleVerdict } from "@workspace/integrations/service-lifecycle";
 import type { SessionReadinessVerdict } from "@workspace/integrations/session-readiness";
+import type { BreakGlassVerdict } from "@workspace/integrations/break-glass";
 import type { LocationCertaintyVerdict } from "@workspace/facility-trust-graph";
 import type { DeviceManagementHealthVerdict } from "@workspace/integrations/device-management-health";
 import type { LinkUsabilityVerdict } from "@workspace/integrations/link-usability";
@@ -342,6 +343,23 @@ export function fromSseEgress(v: SseEgressVerdict): ComposableSignal {
   // up; unposed mandates stay silent. Never lowers what any other dimension
   // says.
   return { kind: "sse_egress", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromBreakGlass(v: BreakGlassVerdict): ComposableSignal {
+  // Was this emergency override ACCOUNTABLE? Not whether it should have been allowed
+  // — it already happened, and the host application granted it.
+  //
+  // ITS CEILING IS `alert`, LOWER THAN EVERY OTHER DIMENSION HERE, and that is the
+  // point rather than a limitation. Every other family can at least step up. This one
+  // cannot, because stepping up on an emergency override means inserting friction
+  // between a clinician and a patient, and no governance value justifies that. The
+  // override is graded after the fact, for the compliance owner, never against the
+  // person at the bedside.
+  //
+  // The posture rides along because `accountable` and `unassessed` both look calm
+  // from the action alone: one is a reviewed, justified, time-boxed override, the
+  // other is a deployment whose break-glass programme reported nothing at all.
+  return { kind: "break_glass", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromSessionReadiness(v: SessionReadinessVerdict): ComposableSignal {

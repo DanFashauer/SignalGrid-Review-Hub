@@ -127,6 +127,8 @@ jobs:
         run: pnpm run proof:session-readiness
       - name: "Proof: evidence-coverage (what can this estate answer)"
         run: pnpm run proof:evidence-coverage
+      - name: "Proof: break-glass (emergency override accountability)"
+        run: pnpm run proof:break-glass
       - name: "Proof: response-accountability (watermelon detection)"
         run: pnpm run proof:response-accountability
       - name: "Proof: device-resolver (read-only injection boundary)"

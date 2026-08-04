@@ -12,6 +12,7 @@
     "./app-update": "./src/integrations/app-update/index.ts",
     "./benchmark-selection": "./src/integrations/benchmark-selection/index.ts",
     "./bootstrap-credential": "./src/integrations/bootstrap-credential/index.ts",
+    "./break-glass": "./src/integrations/break-glass/index.ts",
     "./caep-events": "./src/integrations/caep-events/index.ts",
     "./carrier": "./src/integrations/carrier/index.ts",
     "./challenge-capability": "./src/integrations/challenge-capability/index.ts",

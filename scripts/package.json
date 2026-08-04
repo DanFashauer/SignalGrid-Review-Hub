@@ -26,6 +26,7 @@
     "proof:audit-ledger-pg": "tsx ./src/audit-ledger-pg-proof.ts",
     "proof:benchmark-selection": "tsx ./src/benchmark-selection-proof.ts",
     "proof:bootstrap-credential": "tsx ./src/bootstrap-credential-proof.ts",
+    "proof:break-glass": "tsx ./src/break-glass-proof.ts",
     "proof:caep-events": "tsx ./src/caep-events-proof.ts",
     "proof:carrier-reachability": "tsx ./src/carrier-reachability-proof.ts",
     "proof:challenge-capability": "tsx ./src/challenge-capability-proof.ts",

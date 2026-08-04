@@ -324,6 +324,13 @@ export const TARGETS = [
     ],
   },
   {
+    proof: "proof:break-glass",
+    files: [
+      "lib/integrations/src/integrations/break-glass/evaluate.ts",
+      "lib/integrations/src/integrations/break-glass/index.ts",
+    ],
+  },
+  {
     proof: "proof:session-readiness",
     files: [
       "lib/integrations/src/integrations/session-readiness/evaluate.ts",

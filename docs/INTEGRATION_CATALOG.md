@@ -557,6 +557,29 @@ recently. Their documented counts are enforced by `pnpm run check:proof-counts`,
 which runs each proof and fails the build when a number here disagrees with what the
 proof reports — the numbers below are therefore evidence, not claims.
 
+- **`proof:break-glass` (46 checks)** — emergency-override accountability, the one genuine
+  gap the Healthcare 360 audit returned (intake ledger row 59). A **648-state exhaustive
+  sweep**. This is the sharpest row-45 candidate in the fabric, because break-glass is BY
+  DESIGN a grant that bypasses the checks — that is its correct function — so an
+  unjustified, unbounded, unreviewed invocation is indistinguishable from a legitimate one
+  unless the accountability evidence is itself graded. **The ceiling is `alert`, and it is
+  lower than every other family here on purpose**: no `step_up`, no `restrict`, no `deny`,
+  asserted over the whole space including the worst state the model can express. The
+  override already happened; this grades the RECORD of it, and adding friction to emergency
+  care would be a clinical-safety harm the embedded-UX law puts in the host application's
+  hands, not this one's. The normalizer is deliberately ASYMMETRIC — a missing
+  `justification` reads `absent`, not `unknown`, because "did the workflow capture a reason"
+  has a definite answer when the field is not there, while every other absent axis falls to
+  its ignorance member. No clock is read: whether a bound has elapsed arrives as a
+  caller-supplied state. Read-only with **no actuators** — it cannot revoke, close or expire
+  an override; emergency access is the EHR's to grant. Registered in the mutation guard from
+  birth, and it earned that in the first sweep, which found the ignorance branch written as
+  a CONJUNCTION: a record that captured a justification from a genuinely unassigned invoker,
+  while saying nothing about scope, expiry or review, graded fully `accountable` — silence
+  reading as health, inside the dimension written to catch it. A second survivor indicted the
+  proof rather than the source: the clean set was pinned by negative conditions
+  (`scope !== "broad"`), which `unknown` satisfies, and is now pinned by EQUALITY to one
+  enumerated shape.
 - **`proof:session-readiness` (52 checks)** — the DEX/EUC readiness dimension, from the
   IGEL + ControlUp tap-to-app work (intake ledger row 57). A **1,728-state exhaustive
   sweep** whose clean set is pinned to exact SHAPES rather than a count. The headline law

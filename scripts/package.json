@@ -7,6 +7,7 @@
     "autopilot:backlog-check": "tsx ./src/autopilot-backlog-check.ts",
     "bench:decision-latency": "tsx ./src/latency-bench.ts",
     "build:room-console": "node ./build-room-console.mjs",
+    "build:evidence-coverage": "node ./build-evidence-coverage.mjs",
     "hello": "tsx ./src/hello.ts",
     "level10:audit": "tsx ./src/level-10-audit.ts",
     "phase:gate": "tsx ./src/phase-gate.ts",
@@ -133,7 +134,7 @@
     "smoke:connector-emulator": "pnpm run proof:connector-emulator",
     "sync:manifest": "node ../scripts/generate-sync-manifest.mjs",
     "test:e2e": "playwright test --config playwright.config.ts --tsconfig ../tsconfig.base.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.page.json --noEmit"
   },
   "dependencies": {
     "@workspace/facility-trust-graph": "workspace:*",

@@ -503,8 +503,17 @@ jobs:
 
       - name: Postman collection is committed in sync
         run: |
+          # ls-files first: `git diff` says nothing about an UNTRACKED path, so the
+          # diff alone passes for a file that was never committed or was deleted.
+          git ls-files --error-unmatch docs/postman > /dev/null || (echo "::error::docs/postman is not tracked." && exit 1)
           pnpm run build:postman
           git diff --exit-code docs/postman || (echo "::error::Postman collection out of date — run 'pnpm run build:postman' and commit." && exit 1)
+
+      - name: Evidence Coverage page is committed in sync
+        run: |
+          git ls-files --error-unmatch docs/evidence-coverage.html > /dev/null || (echo "::error::docs/evidence-coverage.html is not tracked — generated pages must be committed." && exit 1)
+          pnpm run build:evidence-coverage
+          git diff --exit-code -- docs/evidence-coverage.html || (echo "::error::docs/evidence-coverage.html out of date — run 'pnpm run build:evidence-coverage' and commit." && exit 1)
 
       - name: Decision-latency pilot gate
         run: pnpm run bench:decision-latency

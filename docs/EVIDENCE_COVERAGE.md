@@ -5,9 +5,21 @@
 > because its entire output is the size of the gap.
 
 Modeled in `@workspace/flows` (`lib/flows/src/evidence-coverage.ts`); proven by
-`pnpm run proof:evidence-coverage` (25 checks). Two surfaces render it, both from the
-same function: `GET /cp/v1/grid/evidence-coverage` and the **Evidence Coverage**
-section of the review console (`artifacts/signalgrid-review`).
+`pnpm run proof:evidence-coverage` (25 checks). Three surfaces render it, all from the
+same function — none holds a transcribed copy of another's numbers:
+
+| Surface | Where | For |
+|---|---|---|
+| `GET /cp/v1/grid/evidence-coverage` | api-server control plane | scripting, integration, a terminal |
+| **Evidence Coverage** section | the review console (`artifacts/signalgrid-review`) | reading the report beside the rest of the review |
+| [`docs/evidence-coverage.html`](evidence-coverage.html) | one self-contained file | handing to someone — opens from a file, works offline, no server |
+
+The standalone page is built by `pnpm run build:evidence-coverage`, which esbuild-bundles
+the real model into `tools/evidence-coverage/shell.html`. It is **committed**, gated in
+sync by preflight and CI, and rebuilt from source by the Pages workflow before publishing
+so a stale commit can never reach the site. Publishing itself is manual
+(`.github/workflows/pages.yml` is `workflow_dispatch`); until someone dispatches it, the
+page exists only in the repo.
 
 ## Why this exists — the artifact it replaced
 

@@ -188,7 +188,19 @@ const STEPS = [
   { name: "Safety gate (guardrails)", cmd: ["pnpm", "run", "safety:check"] },
   // Mirrors the CI "Postman collection is committed in sync" step: regenerate,
   // then fail if the committed collection drifted.
-  { name: "Postman collection committed in sync", cmd: ["bash", "-c", "pnpm run build:postman && git diff --exit-code docs/postman"] },
+  // `git ls-files --error-unmatch` FIRST. `git diff --exit-code <path>` reports nothing at
+  // all for an UNTRACKED path, so on its own this gate passes whether the file is correct,
+  // corrupt, forgotten at `git add`, deleted, or gitignored. Demonstrated, not theorised: a
+  // review replaced a generated file's entire contents with garbage and the diff-only form
+  // exited 0.
+  { name: "Postman collection committed in sync", cmd: ["bash", "-c", "git ls-files --error-unmatch docs/postman >/dev/null && pnpm run build:postman && git diff --exit-code docs/postman"] },
+  // Mirrors the CI "Evidence Coverage page is committed in sync" step. The page is a
+  // GENERATED artifact with the real coverage model bundled into it, and its browser
+  // E2E loads the COMMITTED file — so a stale commit would be tested instead of the
+  // current model, and would keep passing for every model change that did not happen to
+  // move one of the pinned figures. esbuild's output is byte-stable for a given input,
+  // which is what makes the diff a usable gate rather than a flake.
+  { name: "Evidence Coverage page committed in sync", cmd: ["bash", "-c", "git ls-files --error-unmatch docs/evidence-coverage.html >/dev/null && pnpm run build:evidence-coverage && git diff --exit-code -- docs/evidence-coverage.html"] },
   { name: "Decision-latency pilot gate (bench)", cmd: ["pnpm", "run", "bench:decision-latency"] },
   // Mirrors the supply-chain job's "SBOM is committed and up to date" gate:
   // regenerate the CycloneDX SBOM and fail if it drifted (e.g. a new dependency

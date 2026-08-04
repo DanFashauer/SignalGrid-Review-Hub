@@ -6,6 +6,7 @@
     "types": ["node"]
   },
   "include": ["src"],
+  "exclude": ["src/evidence-coverage-page.ts"],
   "references": [
     {
       "path": "../lib/signalgrid-core"

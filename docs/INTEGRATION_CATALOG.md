@@ -557,6 +557,25 @@ recently. Their documented counts are enforced by `pnpm run check:proof-counts`,
 which runs each proof and fails the build when a number here disagrees with what the
 proof reports — the numbers below are therefore evidence, not claims.
 
+- **`proof:session-readiness` (52 checks)** — the DEX/EUC readiness dimension, from the
+  IGEL + ControlUp tap-to-app work (intake ledger row 57). A **1,728-state exhaustive
+  sweep** whose clean set is pinned to exact SHAPES rather than a count. The headline law
+  is that SILENCE IS NEVER READINESS: an endpoint nobody instrumented, a DEX plane that
+  cannot be read, and an app that genuinely came up instantly all produce the same
+  *absence* of a bad reading, so `measurement` (`measured` / `not_instrumented` /
+  `plane_unreachable`) carries the honesty that `appReadiness` alone cannot. The second
+  law is that the SAME measurement must not produce the same answer for different work:
+  42s against a posed 30s budget restricts a critical workflow and merely alerts a routine
+  one, asserted as a pair and then mechanically across the whole space. The budget is
+  POSED, never defaulted — omitting it is its own finding, which forecloses pose-then-
+  remove. Ceiling `restrict`: never escalate, never deny, because a slow app is an
+  operational fact rather than an intrusion. Read-only with **no actuators**, though the
+  vendor API offers reboot, wake, shadow and profile-update — ControlUp stays the DEX
+  system of record, IGEL the endpoint OS, Imprivata the access workflow. Registered in
+  the mutation guard from birth, and it earned that immediately: the first sweep found
+  the equal-rank tie-break unfalsifiable (the more specific candidate was also pushed
+  first — the same `service-lifecycle` defect, fixed by pushing the less specific one
+  first) and a three-field malformed guard with only one control.
 - **`proof:uem` (67 checks)** — the read-only MDM/UEM dimension across Intune, Jamf
   and Workspace ONE. Includes a **1,440-state exhaustive sweep** whose grant path is
   pinned to *exactly 9* fully-confirmed states, four isolated live-call-gate refusals,

@@ -29,6 +29,7 @@ import type { BootstrapCredentialVerdict } from "@workspace/integrations/bootstr
 import type { ChallengeCapabilityVerdict } from "@workspace/integrations/challenge-capability";
 import type { SseEgressVerdict } from "@workspace/integrations/sse-egress";
 import type { ServiceLifecycleVerdict } from "@workspace/integrations/service-lifecycle";
+import type { SessionReadinessVerdict } from "@workspace/integrations/session-readiness";
 import type { LocationCertaintyVerdict } from "@workspace/facility-trust-graph";
 import type { DeviceManagementHealthVerdict } from "@workspace/integrations/device-management-health";
 import type { LinkUsabilityVerdict } from "@workspace/integrations/link-usability";
@@ -341,6 +342,26 @@ export function fromSseEgress(v: SseEgressVerdict): ComposableSignal {
   // up; unposed mandates stay silent. Never lowers what any other dimension
   // says.
   return { kind: "sse_egress", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromSessionReadiness(v: SessionReadinessVerdict): ComposableSignal {
+  // Is the app this worker needs actually USABLE right now — the tap-to-app question,
+  // consumed as an input rather than reproduced. `app-update` grades a version's
+  // currency and stability; `link-usability` asks whether the network link carries
+  // traffic; this asks the only question the worker cares about, which is whether the
+  // thing they tapped for is working.
+  //
+  // Its actions are already on the unified ladder and its ceiling is `restrict` —
+  // never escalate, never deny. A slow or unmeasured app is an operational fact, not
+  // evidence of an intrusion, and this dimension has no standing to end a shift over a
+  // broker delay.
+  //
+  // THE POSTURE MATTERS MORE THAN THE ACTION HERE, which is why it rides along.
+  // `unassessed` is a deployment whose endpoints nobody instrumented or whose DEX plane
+  // is down — no bad news and no news — while `ready` is a corroborated measurement.
+  // A consumer reading only the action would report both as fine, which is exactly the
+  // green-dashboard failure this dimension exists to prevent.
+  return { kind: "session_readiness", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromServiceLifecycle(v: ServiceLifecycleVerdict): ComposableSignal {

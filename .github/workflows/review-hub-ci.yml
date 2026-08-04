@@ -123,6 +123,8 @@ jobs:
         run: pnpm run proof:entitlement-binding
       - name: "Proof: service-lifecycle (account plane vs service plane)"
         run: pnpm run proof:service-lifecycle
+      - name: "Proof: session-readiness (is the app actually usable)"
+        run: pnpm run proof:session-readiness
       - name: "Proof: response-accountability (watermelon detection)"
         run: pnpm run proof:response-accountability
       - name: "Proof: device-resolver (read-only injection boundary)"

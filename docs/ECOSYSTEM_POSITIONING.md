@@ -375,6 +375,33 @@ value *means* is domain safety, and domain safety belongs in the host app. `fres
 is refused for the fourth time on the row-48 reasoning — a source asserting its own
 validity window is a self-certified affirmative; the caller poses the bound.
 
+### "ControlUp and IGEL already show us the clinician's login journey."
+
+They do, and it is genuinely useful work. IGEL + ControlUp's Tap-to-App correlates the
+physical endpoint with the virtual desktop and application layers, so healthcare IT can
+see when the application actually becomes functional from the clinician's point of view.
+It answers a question nothing else answers as well: **where is time being lost.**
+
+That is a measurement, and it is an input to a decision rather than the decision:
+
+> ControlUp and IGEL show how long it takes a clinician to get from tap to app.
+> SignalGrid decides whether that clinician, on that device, in that workflow,
+> with that context, should be allowed to continue — and what must happen next
+> when something is wrong.
+
+Concretely, on the same badge tap: the DEX plane reports that the app was usable after
+42 seconds and that the delay sat between endpoint tap and VDI reconnect. SignalGrid
+takes that reading alongside identity state, device posture, location, session origin,
+and the risk of the action being attempted, and returns an outcome per action — allow
+the chart view, hold the medication order until app state and session ownership are
+verified, route the performance problem to the EUC owner, record the evidence.
+
+The boundary is the same one this document draws everywhere else. ControlUp remains the
+DEX system of record, IGEL remains the endpoint OS, Imprivata remains the access
+workflow, and the VDA remains the session broker. SignalGrid reads them and replaces
+none of them — the `session-readiness` family is read-only and exposes no actuator, even
+though the vendor API offers reboot, wake, shadow and profile-update.
+
 ## Where SignalGrid is the wrong answer
 
 Intake ledger row 56. Everything else in this document says where SignalGrid fits.

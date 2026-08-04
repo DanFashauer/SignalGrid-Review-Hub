@@ -324,6 +324,13 @@ export const TARGETS = [
     ],
   },
   {
+    proof: "proof:session-readiness",
+    files: [
+      "lib/integrations/src/integrations/session-readiness/evaluate.ts",
+      "lib/integrations/src/integrations/session-readiness/index.ts",
+    ],
+  },
+  {
     // `uem` was absent from this registry despite meeting its own stated scope rule —
     // it is a grant-emitting connector (its evaluator returns `none` on exactly nine
     // fully-confirmed states, which proof:uem pins). Third instance of the same class
@@ -372,6 +379,18 @@ export const TARGETS = [
 // fine" is not one. An entry whose `line` no longer matches fails the gate: the code
 // moved and nobody re-derived whether the justification still holds.
 const ALLOWED = [
+  {
+    file: "lib/integrations/src/integrations/session-readiness/evaluate.ts",
+    line: "state.elapsedToUsableSeconds !== null &&",
+    reason:
+      "Genuinely inert by JS coercion, and checkable in one line: the surrounding branch is " +
+      "`budget !== null && elapsed !== null && elapsed > budget.thresholdSeconds`, and " +
+      "`null > 30` evaluates to false because null coerces to 0 — so removing the explicit " +
+      "null check cannot change any outcome. It is kept because it states what the branch " +
+      "MEANS (compare two numbers) rather than relying on a coercion subtlety a later reader " +
+      "would have to know, and it becomes load-bearing the moment the comparison changes " +
+      "shape — e.g. to a `>=`-style staleness test where null would coerce the wrong way.",
+  },
   // The four entries below were classified by BEHAVIOURAL DIFF, not by reading. For each,
   // the mutation was applied and the full output — not just grant-ness — was compared
   // across the connector's whole input space. That is what separates "genuinely inert"

@@ -273,6 +273,19 @@ function categoryForKind(kind: string, reason?: string): IncidentCategory {
     // device-custody event, and routes to the same Endpoint / Mobility owner that handles
     // device loss/recovery, not the generic Service Desk.
     case "custody_beacon":
+    // `session_readiness` is the DEX plane's reading — an app that never came up, a
+    // posed tap-to-app budget exceeded, an endpoint nobody instrumented, a DEX plane
+    // that cannot be read. These are END-USER-COMPUTING problems and they route to the
+    // Endpoint / Mobility owner who actually operates the endpoint, VDI broker and DEX
+    // agent.
+    //
+    // Deliberately NOT `security_compliance`, even though the sibling this dimension is
+    // most often paired with (`sso_session`) lives there: a slow VDI reconnect is a
+    // performance owner's work, and routing it to Identity & Access would hand it to a
+    // team who cannot fix it. Deliberately NOT SecOps either — paging a security analyst
+    // for a broker delay trains everyone to ignore the channel. And never the generic
+    // Service Desk: the fix is an endpoint/broker change, not a ticket.
+    case "session_readiness":
     case "peripheral":
       return "asset_device";
     // Active security incidents — live threats, exposed credentials, detections.

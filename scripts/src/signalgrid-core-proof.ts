@@ -373,6 +373,37 @@ if (v2) {
       "simulate: stored decision is unchanged after simulation",
       core.getDecision(T.operator, staleDecision.id).outcome === "step_up",
     );
+
+    // ── THE IDENTITY ROUND TRIP — replay against a decision's OWN version ──
+    //
+    // Everything this product says about being "explainable and replayable" rests on
+    // one property: the same immutable evidence, run against the same policy version,
+    // reproduces the same outcome. Until now NOTHING asserted it. The proofs covered
+    // cross-core determinism and CROSS-VERSION change (v1 → v2 above), which is a
+    // different claim entirely — a simulator that always returned `changed: true`
+    // would satisfy every one of them.
+    //
+    // Found by an adversarial review of a proposed customer-facing replay artifact:
+    // a repo-wide grep for `changed === false` and `storedOutcome ===` returned
+    // nothing. That made the central sales claim the one thing with no test behind it.
+    const identity = core.simulateDecision(T.operator, staleDecision.id, staleDecision.policyVersionId);
+    check(
+      "simulate: replaying a decision against its OWN policy version reproduces it exactly",
+      identity.simulatedOutcome === identity.storedOutcome && identity.changed === false,
+      `${identity.storedOutcome} → ${identity.simulatedOutcome}, changed=${identity.changed}`,
+    );
+    check(
+      "…and reproduces its reason codes, not merely its outcome — the explanation replays too",
+      JSON.stringify([...identity.simulatedReasonCodes].sort()) ===
+        JSON.stringify([...staleDecision.reasonCodes].sort()),
+      `${identity.simulatedReasonCodes.join(",")} vs ${staleDecision.reasonCodes.join(",")}`,
+    );
+    // NON-VACUITY: the v2 case above already shows `changed: true` is reachable, so
+    // this pair cannot be satisfied by a simulator hardwired to report no change.
+    check(
+      "NON-VACUITY: `changed` is genuinely bidirectional across the two replays",
+      identity.changed === false && sim.changed === true,
+    );
   }
 }
 

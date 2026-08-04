@@ -109,6 +109,7 @@ const STEPS = [
   { name: "Proof: service-lifecycle (does the SERVICE plane still agree the principal is here)", cmd: ["pnpm", "run", "proof:service-lifecycle"] },
   { name: "Proof: session-readiness (is the app this worker needs actually usable)", cmd: ["pnpm", "run", "proof:session-readiness"] },
   { name: "Proof: credential-rotation (is the secret still inside its own policy)", cmd: ["pnpm", "run", "proof:credential-rotation"] },
+  { name: "Proof: observability-integrity (is that silence an observation or a gap)", cmd: ["pnpm", "run", "proof:observability-integrity"] },
   { name: "Proof: evidence-coverage (what can this estate actually answer)", cmd: ["pnpm", "run", "proof:evidence-coverage"] },
   { name: "Proof: break-glass (was the emergency override accountable)", cmd: ["pnpm", "run", "proof:break-glass"] },
   { name: "Proof: response-accountability (the watermelon — closed but unresolved)", cmd: ["pnpm", "run", "proof:response-accountability"] },

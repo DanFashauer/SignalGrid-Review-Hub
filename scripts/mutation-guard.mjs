@@ -293,6 +293,13 @@ export const TARGETS = [
     ],
   },
   {
+    proof: "proof:observability-integrity",
+    files: [
+      "lib/integrations/src/integrations/observability-integrity/evaluate.ts",
+      "lib/integrations/src/integrations/observability-integrity/normalize.ts",
+    ],
+  },
+  {
     proof: "proof:bootstrap-credential",
     files: [
       "lib/integrations/src/integrations/bootstrap-credential/evaluate.ts",

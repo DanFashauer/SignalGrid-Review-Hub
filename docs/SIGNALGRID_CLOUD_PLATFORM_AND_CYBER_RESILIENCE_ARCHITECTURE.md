@@ -10,6 +10,7 @@ replaces the others.
 | **SignalGrid operational trust** | **Should this actor perform this action on this resource in this workflow and context *right now*?** |
 
 > Platform engineering makes the safe path easy.
+> Observability explains the state of that path.
 > Cybersecurity makes unsafe conditions visible and containable.
 > SignalGrid decides whether the current actor and action may use the path now —
 > and verifies the outcome.
@@ -18,7 +19,7 @@ replaces the others.
 
 ## Read this first: what this repository actually implements
 
-This document describes a **nine-layer architecture**. This repository implements
+This document describes a **ten-layer architecture**. This repository implements
 the bottom half of it. The top is the environment SignalGrid *consumes and refers
 to* — not something SignalGrid provides, and not something built here.
 
@@ -34,11 +35,12 @@ page is bound by: *never present a design intention as a shipped capability*.
 | 2 | Cloud landing-zone foundation | **NOT BUILT** — assumed. No Organizations/OU/account model, no network topology, no AWS provisioning exists here |
 | 3 | Platform-engineering control plane | **PARTIAL** — declarative config + GitOps + governed plan/approve/apply exist ([`IAC_GITOPS.md`](IAC_GITOPS.md), `@workspace/iac`, `/cp/v1/iac`). No developer portal, no service catalog, no AWS pipelines |
 | 4 | Cybersecurity control and resilience loop | **PARTIAL** — the repo *consumes* control-plane evidence through the read-only connector families enumerated by `scripts/check-connector-discipline.mjs` (it derives the count from the filesystem and prints it; an earlier hand count here said 49 by counting directories, one of which is `adapters` and not a family). It does not detect, scan, or run an IR process |
-| 5 | Signal and evidence fabric | **BUILT** — normalization, provenance, freshness, contradiction detection, source and policy versioning |
-| 6 | SignalGrid operational trust decision | **BUILT** — allow / step-up / restrict / deny, deterministic and fixture-backed |
-| 7 | Governed execution | **PARTIAL BY DESIGN** — see [Governed execution](#8-governed-execution-adapters). Write actuators were deliberately deleted, not deferred |
-| 8 | Verification, recovery and release | **PARTIAL** — teardown-proof, decision continuity across partitions, exception release. Not a general post-execution verifier |
-| 9 | Governance and feedback | **PARTIAL** — audit ledger, policy versioning, simulation, recommendations, self-audit. No cost or SLO plane for cloud workloads |
+| 5 | Observability and evidence collection | **PARTIAL** — the repo grades a stream's own collection state, fidelity and staleness (`observability-integrity`) and consumes DEX readiness (`session-readiness`), and it computes SLOs and error budgets for the DECISION plane (`@workspace/reliability`). It runs no collector, stores no telemetry, and has no SLO plane for cloud workloads |
+| 6 | Signal and evidence fabric | **BUILT** — normalization, provenance, freshness, contradiction detection, source and policy versioning |
+| 7 | SignalGrid operational trust decision | **BUILT** — allow / step-up / restrict / deny, deterministic and fixture-backed |
+| 8 | Governed execution | **PARTIAL BY DESIGN** — see [Governed execution](#8-governed-execution-adapters). Write actuators were deliberately deleted, not deferred |
+| 9 | Verification, recovery and release | **PARTIAL** — teardown-proof, decision continuity across partitions, exception release. Not a general post-execution verifier |
+| 10 | Governance and feedback | **PARTIAL** — audit ledger, policy versioning, simulation, recommendations, self-audit. No cost or SLO plane for cloud workloads |
 
 Everything below is written against that table. Where a section describes
 something unbuilt, it says so in the section.
@@ -73,30 +75,36 @@ something unbuilt, it says so in the section.
 └──────────────────────────────────────────────────────────────┘
                               ↓
 ┌──────────────────────────────────────────────────────────────┐
-│ 5. SIGNAL AND EVIDENCE FABRIC                        BUILT   │
+│ 5. OBSERVABILITY AND EVIDENCE COLLECTION           PARTIAL   │
+│ Traces • logs • metrics • events • incidents • pipelines     │
+│ collection state • fidelity • sampling • staleness           │
+└──────────────────────────────────────────────────────────────┘
+                              ↓
+┌──────────────────────────────────────────────────────────────┐
+│ 6. SIGNAL AND EVIDENCE FABRIC                        BUILT   │
 │ Normalize • provenance • freshness • confidence              │
 │ contradictions • ownership • policy and source versions      │
 └──────────────────────────────────────────────────────────────┘
                               ↓
 ┌──────────────────────────────────────────────────────────────┐
-│ 6. SIGNALGRID OPERATIONAL TRUST DECISION             BUILT   │
+│ 7. SIGNALGRID OPERATIONAL TRUST DECISION             BUILT   │
 │ ALLOW • STEP-UP • RESTRICT • DENY                            │
 └──────────────────────────────────────────────────────────────┘
                               ↓
 ┌──────────────────────────────────────────────────────────────┐
-│ 7. GOVERNED EXECUTION                     PARTIAL BY DESIGN  │
+│ 8. GOVERNED EXECUTION                     PARTIAL BY DESIGN  │
 │ AWS • CI/CD • IAM • UEM • EDR • ITSM • host app              │
 │ communication • network • cloud • workflow systems           │
 └──────────────────────────────────────────────────────────────┘
                               ↓
 ┌──────────────────────────────────────────────────────────────┐
-│ 8. VERIFICATION, RECOVERY AND RELEASE              PARTIAL   │
+│ 9. VERIFICATION, RECOVERY AND RELEASE              PARTIAL   │
 │ Confirm action • observe resulting state • rollback          │
 │ restore workflow • re-evaluate trust • release restriction   │
 └──────────────────────────────────────────────────────────────┘
                               ↓
 ┌──────────────────────────────────────────────────────────────┐
-│ 9. GOVERNANCE AND FEEDBACK                         PARTIAL   │
+│ 10. GOVERNANCE AND FEEDBACK                        PARTIAL   │
 │ Audit • SLOs • cost • control effectiveness • lessons        │
 │ recommendation • simulation • approval • policy versioning   │
 └──────────────────────────────────────────────────────────────┘
@@ -186,6 +194,44 @@ Related: [`SIGNAL_SOURCING.md`](SIGNAL_SOURCING.md), and
 estate, which evidence axes it can answer, which are dark, and which are dark
 *and* ungraded.
 
+### The observability plane, and what its silence is worth
+
+**PARTIAL.** Observability is the layer that explains *why* a system is in a
+state; monitoring only reports *that* it is. SignalGrid consumes that explanation
+and answers a different question with it — should this actor continue this
+workflow while the system is in this state?
+
+The distinction that earns this a decision dimension rather than a dashboard tile
+is narrower than "we read telemetry", and it is worth stating exactly. Two failure
+modes look identical from the outside:
+
+| The system is healthy | Nobody was watching |
+| --- | --- |
+| No error was reported because none occurred | No error was reported because the exporter died, the span was sampled away, or the metric was dropped against a cost cap |
+
+A fabric that cannot tell those apart will accept the second as the first for as
+long as anyone keeps not reporting. `session-readiness` already covers the LOUD
+version — a plane that is unreachable or was never instrumented. The quiet version
+is `observability-integrity`: a stream that is up, current and healthy while
+carrying one record in a hundred. It grades collection state, stream fidelity and
+staleness against a caller-supplied reference instant, and exposes a single field
+— `silenceIsEvidence` — that is true only when the stream is reporting at full
+fidelity inside its own declared interval. Sampling is not treated as a defect; it
+is treated as a limit on what silence can support. A 1%-sampled trace stream is
+excellent evidence about aggregate latency and nearly none that a specific event
+did not happen.
+
+What is NOT built here: no collector, no agent, no storage, no query engine, no
+SLO plane for cloud workloads, and no incident tooling. `@workspace/reliability`
+computes SLOs and error budgets for **the decision plane itself** — not for the
+services being observed. Collecting is the platform's job. Deciding what its
+silence is worth is this one's.
+
+The reference shapes are deliberately the open standards — OpenTelemetry for
+generating and exporting traces, metrics and logs; Prometheus/OpenMetrics scrape
+state for up-ness and interval — because those are specified in public and can be
+implemented against without depending on any vendor's proprietary schema.
+
 ## 7. Operational trust decisions
 
 **BUILT.** Deterministic, fixture-backed, no wall-clock or randomness in the
@@ -264,7 +310,7 @@ delivered to the system that owns the action (host app, ITSM, webhook, CAEP
 session-signal emitter), and *that* system acts. SignalGrid does not reach into
 AWS, IAM, UEM or EDR and change anything.
 
-An architecture doc that showed layer 7 as a solid box would be describing a
+An architecture doc that showed layer 8 as a solid box would be describing a
 product with a much larger blast radius than this one.
 
 ## 9. Verification and rollback
@@ -405,7 +451,7 @@ SignalGrid                                 = runtime trust, decision, routing,
 
 The landing zone establishes the boundary. The platform provides the deployment
 path. Cybersecurity identifies the unsafe state. **SignalGrid decides whether this
-exact action may proceed now** — and, when layer 8 is real, whether it did what it
+exact action may proceed now** — and, when layer 9 is real, whether it did what it
 was supposed to.
 
 ---

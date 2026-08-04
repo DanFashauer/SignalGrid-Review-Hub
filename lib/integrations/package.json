@@ -35,6 +35,7 @@
     "./nac": "./src/integrations/nac/index.ts",
     "./network-nac": "./src/integrations/network-nac/index.ts",
     "./oauth-consent": "./src/integrations/oauth-consent/index.ts",
+    "./observability-integrity": "./src/integrations/observability-integrity/index.ts",
     "./ot-posture": "./src/integrations/ot-posture/index.ts",
     "./pacs-access": "./src/integrations/pacs-access/index.ts",
     "./passkey-assurance": "./src/integrations/passkey-assurance/index.ts",

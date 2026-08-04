@@ -19,6 +19,7 @@
 //  - The full standing space is enumerated: protected in EXACTLY one cell.
 
 import {
+  makeDefaultSseEgressTransport,
   SseEgressConnector,
   SseEgressConnectorError,
   createMockSseEgressTransport,
@@ -29,6 +30,7 @@ import {
   type SseEgressReportRaw,
 } from "@workspace/integrations/sse-egress";
 import { composeDeviceRisk, fromSseEgress } from "@workspace/posture-composition";
+import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
 
 let passed = 0;
 const failures: string[] = [];
@@ -147,6 +149,36 @@ check("dev tier resolves to fixture mode", resolveSseEgressConnector({ SIGNALGRI
 check("prod WITHOUT live flag stays fixture", resolveSseEgressConnector({ SIGNALGRID_TIER: "prod" }).mode === "fixture");
 check("prod + live but NO token stays fixture", resolveSseEgressConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" }).mode === "fixture");
 check("prod + live + token resolves live", resolveSseEgressConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", SSE_EGRESS_ACCESS_TOKEN: "t" }).mode === "live");
+
+
+// ── The live-call gate, each condition ISOLATED ──────────────────────────────
+//
+// Replaces / supplements a cumulative ladder in which each step added one variable, so
+// the conditions below the one under test were also failing and only the last was
+// genuinely exercised. See lib/live-gate.ts. The tier check is the control behind the
+// written claim that dev and alpha never make live vendor calls.
+checkLiveGateIsolated({
+  check,
+  family: "sse-egress",
+  resolve: (env) => resolveSseEgressConnector(env),
+  full: {
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    SSE_EGRESS_ACCESS_TOKEN: "t",
+  },
+});
+
+
+// The DEFAULT transport, which injecting one everywhere meant nothing ever executed.
+// Its two guards survived every sweep: without `!res.ok` a vendor's 500 body is parsed
+// as a report, and without the body-shape check an array or a bare `null` becomes one.
+await checkDefaultTransport({
+  check,
+  family: "sse-egress",
+  transport: makeDefaultSseEgressTransport("https://vendor.invalid/sse-egress") as (a: never) => Promise<unknown>,
+  arg: { deviceId: "d-1", token: "t" },
+  codeOf: (err) => (err instanceof SseEgressConnectorError ? err.code : undefined),
+});
 
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);

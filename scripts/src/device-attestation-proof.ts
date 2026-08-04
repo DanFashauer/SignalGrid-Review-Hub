@@ -15,6 +15,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  makeDefaultAttestationTransport,
   DeviceAttestationConnector,
   AttestationConnectorError,
   createMockAttestationTransport,
@@ -25,6 +26,7 @@ import {
   type AttestationReportRaw,
 } from "@workspace/integrations/device-attestation";
 import { composeDeviceRisk, fromAttestation } from "@workspace/posture-composition";
+import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
 
 interface Expected {
   posture: string;
@@ -178,6 +180,36 @@ check("dev tier resolves to fixture mode", resolveAttestationConnector({ SIGNALG
 check("prod WITHOUT live flag stays fixture", resolveAttestationConnector({ SIGNALGRID_TIER: "prod" }).mode === "fixture");
 check("prod + live but NO token stays fixture", resolveAttestationConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" }).mode === "fixture");
 check("prod + live + token resolves live", resolveAttestationConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", DEVICE_ATTESTATION_ACCESS_TOKEN: "t" }).mode === "live");
+
+
+// ── The live-call gate, each condition ISOLATED ──────────────────────────────
+//
+// Replaces / supplements a cumulative ladder in which each step added one variable, so
+// the conditions below the one under test were also failing and only the last was
+// genuinely exercised. See lib/live-gate.ts. The tier check is the control behind the
+// written claim that dev and alpha never make live vendor calls.
+checkLiveGateIsolated({
+  check,
+  family: "device-attestation",
+  resolve: (env) => resolveAttestationConnector(env),
+  full: {
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    DEVICE_ATTESTATION_ACCESS_TOKEN: "t",
+  },
+});
+
+
+// The DEFAULT transport, which injecting one everywhere meant nothing ever executed.
+// Its two guards survived every sweep: without `!res.ok` a vendor's 500 body is parsed
+// as a report, and without the body-shape check an array or a bare `null` becomes one.
+await checkDefaultTransport({
+  check,
+  family: "device-attestation",
+  transport: makeDefaultAttestationTransport("https://vendor.invalid/device-attestation") as (a: never) => Promise<unknown>,
+  arg: { deviceId: "d-1", token: "t" },
+  codeOf: (err) => (err instanceof AttestationConnectorError ? err.code : undefined),
+});
 
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);

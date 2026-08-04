@@ -171,7 +171,11 @@ export function lookupNacFixture(identifier: unknown, type: NacIdentifierType): 
         // error the ISE normalizer was just fixed for, so this matches nothing.
         return false;
       default:
-        return false;
+        // Unreachable: NacIdentifierType is a closed union of mac|serial|cert, all
+        // handled above. Kept as the fail-closed default so a FOURTH identifier type
+        // added tomorrow matches nothing until someone writes its comparison, rather
+        // than falling through to a truthy accident.
+        return false; // unreachable-by-type, fail-closed default
     }
   };
   return Object.values(NAC_FIXTURES).find(matches) ?? null;

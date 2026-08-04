@@ -26,6 +26,7 @@ import {
   type GraphRequest,
   type GraphUserRaw,
 } from "@workspace/integrations/graph";
+import { checkLiveGateIsolated } from "./lib/live-gate.js";
 
 interface Fixture {
   accessToken: string;
@@ -140,21 +141,28 @@ check("a bad token surfaces a typed auth_failed error", authError?.code === "aut
 const goodHealth = await connector.healthCheck();
 check("health check reports healthy with a valid token", goodHealth.healthy === true && goodHealth.status === 200);
 
-// ── gating: live vendor calls off unless explicitly enabled ────────────────────
-check("dev tier resolves to fixture mode (no live calls)", resolveGraphPostureConnector({ SIGNALGRID_TIER: "dev" }).mode === "fixture");
-check("prod tier WITHOUT live flag stays fixture mode", resolveGraphPostureConnector({ SIGNALGRID_TIER: "prod" }).mode === "fixture");
-check(
-  "prod tier WITH live flag but no token stays fixture mode",
-  resolveGraphPostureConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" }).mode === "fixture",
-);
-check(
-  "prod tier + live flag + token resolves to a live connector",
-  resolveGraphPostureConnector({
+// ── The live-call gate, each condition ISOLATED ──────────────────────────────
+//
+// This replaced a four-step cumulative ladder (dev → prod → prod+flag → prod+flag+token).
+// Each rung added one variable, so at every step the conditions BELOW the one under test
+// were also failing and only the last was genuinely exercised. See lib/live-gate.ts —
+// the same defect was found and fixed across twenty-one other families; graph was missed
+// there because it is not in the grant-safety population, which is exactly how a
+// population gap hides one more instance.
+//
+// It matters most here. `graph` is the read-only Microsoft connector a design partner
+// would point at their OWN tenant, so the tier check is what stops their credentials
+// being used from a dev or alpha tier.
+checkLiveGateIsolated({
+  check,
+  family: "graph",
+  resolve: (env) => resolveGraphPostureConnector(env),
+  full: {
     SIGNALGRID_TIER: "prod",
     SIGNALGRID_LIVE_INTEGRATIONS: "true",
     GRAPH_ACCESS_TOKEN: "a-real-token",
-  }).mode === "live",
-);
+  },
+});
 
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);

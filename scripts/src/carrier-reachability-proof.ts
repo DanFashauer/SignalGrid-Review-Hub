@@ -25,6 +25,7 @@ import {
   type ReachabilitySignal,
   type ReachabilityVerdict,
 } from "@workspace/integrations/carrier";
+import { checkLiveGateIsolated } from "./lib/live-gate.js";
 
 interface ExpectedRow {
   cellularReachability: string;
@@ -253,6 +254,24 @@ check("normalizeSession is pure and standalone", normalizeSession(rawSessions[0]
 // added below that point printed a denominator smaller than the numerator — the
 // proof under-reporting its own coverage, which is the stale-figure defect this
 // repository guards against everywhere else.
+
+// ── The live-call gate, each condition ISOLATED ──────────────────────────────
+//
+// Replaces / supplements a cumulative ladder in which each step added one variable, so
+// the conditions below the one under test were also failing and only the last was
+// genuinely exercised. See lib/live-gate.ts. The tier check is the control behind the
+// written claim that dev and alpha never make live vendor calls.
+checkLiveGateIsolated({
+  check,
+  family: "carrier",
+  resolve: (env) => resolveCarrierReachabilityConnector(env),
+  full: {
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    CARRIER_ACCESS_TOKEN: "t",
+  },
+});
+
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) {

@@ -223,6 +223,23 @@ check("no fixture carries a wall-clock timestamp",
     banned.some((re) => re.test(`const { Redis } = await import("ioredis");`)));
 }
 
+// A CERT-KIND LOOKUP MATCHES NOTHING, ON PURPOSE, AND THAT IS NOW TESTED.
+//
+// `NACEndpointInfo` carries `certSubject` — a subject DN — not a certificate serial.
+// Comparing a supplied serial against a subject would be the same category error the
+// ISE normalizer was fixed for, so the `cert` branch returns false unconditionally.
+// Real behaviour with a real reason, and nothing pinned it: the mutation guard flipped
+// that `return false` to `return true` and no assertion noticed — which would have made
+// a cert lookup match whichever fixture happened to come first.
+check(
+  "a cert-kind fixture lookup matches nothing — a subject DN is not a serial",
+  lookupNacFixture("de:ad:be:ef", "cert") === null,
+);
+check(
+  "NON-VACUITY: the same table DOES resolve a mac-kind lookup, so the check above is not passing over an empty table",
+  lookupNacFixture(Object.values(NAC_FIXTURES)[0].macAddress ?? "", "mac") !== null,
+);
+
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${passed + failures.length})`);
 if (failures.length) {
   console.error("\nFAILED:");

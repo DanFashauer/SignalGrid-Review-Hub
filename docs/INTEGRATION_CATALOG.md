@@ -155,7 +155,7 @@ The assurance model is the whole point — a cryptographic proof outranks any se
 - hardware **provably not attestation-capable** (Intel Macs, no Secure Enclave) → `not_attestable`/`none` — it **abstains**: attestation is an assurance *upgrade*, not a universal requirement, and the baseline posture is gated by the other dimensions. The abstain is granted **only** to a *self-consistent* report (declares incapable **and** carries no chain or attested facts); a report that claims `attestable:false` yet still presents a verified chain is malformed/tampered — it never abstains, it fails closed (a conflicting chain proving SIP off still `escalate`s; a conflicting "clean" chain is floored at `step_up`, never the top tier);
 - an unrecognized value normalizes to the safe `unknown`, a non-boolean flag becomes `null` (never a fabricated `true`), and a device no attestation source covers is a blind spot (`unknown`/`step_up`), never attested-secure.
 
-Proven fully offline by `pnpm run proof:device-attestation` (60 checks, no network, no keys). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. The trust boundary is deliberate: an upstream read-only bridge performs the X.509 chain verification to Apple's Enterprise Attestation Root and decodes the leaf OIDs; **SignalGrid consumes that already-verified record** — it normalizes and decides on it, and does not itself perform the crypto, issue certificates, or mint attestations. Every signal is read-only, and this is not an Apple partnership or certification claim.
+Proven fully offline by `pnpm run proof:device-attestation` (73 checks, no network, no keys). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. The trust boundary is deliberate: an upstream read-only bridge performs the X.509 chain verification to Apple's Enterprise Attestation Root and decodes the leaf OIDs; **SignalGrid consumes that already-verified record** — it normalizes and decides on it, and does not itself perform the crypto, issue certificates, or mint attestations. Every signal is read-only, and this is not an Apple partnership or certification claim.
 
 ## SSO session-binding — the shared-device identity dimension (built, fixture-backed)
 
@@ -508,7 +508,7 @@ in one place.
   operator scale: fix enrollment or swap the device BEFORE the doomed challenge; anything less
   determinate is a visible blind spot. Reading a capability inventory is not running a
   challenge: nothing is enrolled, installed, or executed — ceremony execution stays with the
-  HOST app. `proof:challenge-capability` (38 checks, incl. the exhaustive 81-cell single-method
+  HOST app. `proof:challenge-capability` (51 checks, incl. the exhaustive 81-cell single-method
   standing sweep: answerable in exactly the all-affirmed cell).
 
 - **SSE egress** — the mandated edge path (intake ledger row 25; Zscaler Client Connector
@@ -525,7 +525,7 @@ in one place.
   never-installed are affirmative operator-scale defects (alert — the setup-bypassed
   precedent); a bypass is visible and steps up (a bypass rule can be deliberate policy);
   silence on a mandated path steps up. Reading an edge's device status is not steering
-  traffic: nothing is routed, toggled, or rewritten. `proof:sse-egress` (32 checks, incl.
+  traffic: nothing is routed, toggled, or rewritten. `proof:sse-egress` (45 checks, incl.
   the exhaustive 45-cell standing sweep in both poses: protected in exactly one cell,
   unposed always quiet).
 
@@ -629,7 +629,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   model catalog, neither of which is a UEM read. The axis is also proved **carried, not
   graded** — swapping only `cellularHardware` across all 1,440 swept states changes no
   verdict, because a device's radio is not a management-posture fact.
-- **`proof:nac` (32 checks)** — Cisco ISE and Aruba ClearPass endpoint identity,
+- **`proof:nac` (34 checks)** — Cisco ISE and Aruba ClearPass endpoint identity,
   read-only. Hostile-identifier cases are asserted against the **filter builder**, not
   merely the validator, and fixture lookups are scoped to the identifier kind so a
   certificate query cannot be answered by a MAC match. The normalizers now take **no
@@ -696,7 +696,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   deployment without `REDIS_URL` set, which is this package's documented default. The
   id rule is an **allowlist** (`/^[A-Za-z0-9._-]{1,128}$/`), so the characters nobody
   thought of are refused by default rather than enumerated by someone who tried.
-- **`proof:network-nac` (37 checks)** — 802.1X / NAC access posture, read-only. The
+- **`proof:network-nac` (42 checks)** — 802.1X / NAC access posture, read-only. The
   device's network SEGMENT is now evaluated against an operator-supplied policy rather
   than merely carried: an unexpected VLAN steps up, a segment the operator marked
   high-consequence (management / security / OT) restricts, and a policy that cannot be

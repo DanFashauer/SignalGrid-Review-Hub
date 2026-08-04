@@ -18,6 +18,7 @@
 //    in EXACTLY the all-affirmed cell.
 
 import {
+  makeDefaultChallengeCapabilityTransport,
   CHALLENGE_METHODS,
   ChallengeCapabilityConnector,
   ChallengeCapabilityConnectorError,
@@ -29,6 +30,7 @@ import {
   type ChallengeCapabilityReportRaw,
 } from "@workspace/integrations/challenge-capability";
 import { composeDeviceRisk, fromChallengeCapability } from "@workspace/posture-composition";
+import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
 
 let passed = 0;
 const failures: string[] = [];
@@ -205,6 +207,36 @@ check("dev tier resolves to fixture mode", resolveChallengeCapabilityConnector({
 check("prod WITHOUT live flag stays fixture", resolveChallengeCapabilityConnector({ SIGNALGRID_TIER: "prod" }).mode === "fixture");
 check("prod + live but NO token stays fixture", resolveChallengeCapabilityConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" }).mode === "fixture");
 check("prod + live + token resolves live", resolveChallengeCapabilityConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", CHALLENGE_CAPABILITY_ACCESS_TOKEN: "t" }).mode === "live");
+
+
+// ── The live-call gate, each condition ISOLATED ──────────────────────────────
+//
+// Replaces / supplements a cumulative ladder in which each step added one variable, so
+// the conditions below the one under test were also failing and only the last was
+// genuinely exercised. See lib/live-gate.ts. The tier check is the control behind the
+// written claim that dev and alpha never make live vendor calls.
+checkLiveGateIsolated({
+  check,
+  family: "challenge-capability",
+  resolve: (env) => resolveChallengeCapabilityConnector(env),
+  full: {
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    CHALLENGE_CAPABILITY_ACCESS_TOKEN: "t",
+  },
+});
+
+
+// The DEFAULT transport, which injecting one everywhere meant nothing ever executed.
+// Its two guards survived every sweep: without `!res.ok` a vendor's 500 body is parsed
+// as a report, and without the body-shape check an array or a bare `null` becomes one.
+await checkDefaultTransport({
+  check,
+  family: "challenge-capability",
+  transport: makeDefaultChallengeCapabilityTransport("https://vendor.invalid/challenge-capability") as (a: never) => Promise<unknown>,
+  arg: { deviceRef: "d-1", token: "t" },
+  codeOf: (err) => (err instanceof ChallengeCapabilityConnectorError ? err.code : undefined),
+});
 
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);

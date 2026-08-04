@@ -297,6 +297,7 @@ export const TARGETS = [
   {
     proof: "proof:challenge-capability",
     files: [
+      "lib/integrations/src/integrations/challenge-capability/index.ts",
       "lib/integrations/src/integrations/challenge-capability/evaluate.ts",
       "lib/integrations/src/integrations/challenge-capability/challenge-capability-connector.ts",
     ],
@@ -305,6 +306,7 @@ export const TARGETS = [
   {
     proof: "proof:sse-egress",
     files: [
+      "lib/integrations/src/integrations/sse-egress/index.ts",
       "lib/integrations/src/integrations/sse-egress/evaluate.ts",
       "lib/integrations/src/integrations/sse-egress/sse-egress-connector.ts",
     ],
@@ -408,6 +410,7 @@ export const TARGETS = [
   {
     proof: "proof:token-binding",
     files: [
+      "lib/integrations/src/integrations/token-binding/index.ts",
       "lib/integrations/src/integrations/token-binding/evaluate.ts",
       "lib/integrations/src/integrations/token-binding/token-binding-connector.ts",
     ],
@@ -427,6 +430,80 @@ export const TARGETS = [
       "lib/dual-control/src/normalize.ts",
     ],
   },
+  // ── The remaining live-call gates ───────────────────────────────────────────
+  //
+  // Sixteen more gated connectors whose `index.ts` had never been mutated. The
+  // twenty-one-family pass was scoped to the grant-safety population and these are not
+  // in it — a population defined for one purpose reused for another, which is the same
+  // error one layer up. `graph` mattered most: it is the read-only Microsoft connector a
+  // design partner points at their own tenant first.
+  //
+  // Three — entitlement-binding, nac, response-accountability — already tested their
+  // gate in isolation. Built after the lesson, they needed registering, not fixing.
+  {
+    proof: "proof:graph-connector",
+    files: ["lib/integrations/src/integrations/graph/index.ts"],
+  },
+  {
+    proof: "proof:carrier-reachability",
+    files: ["lib/integrations/src/integrations/carrier/index.ts"],
+  },
+  {
+    proof: "proof:credential-exposure",
+    files: ["lib/integrations/src/integrations/credential-exposure/index.ts"],
+  },
+  {
+    proof: "proof:data-protection",
+    files: ["lib/integrations/src/integrations/data-protection/index.ts"],
+  },
+  {
+    proof: "proof:device-attestation",
+    files: ["lib/integrations/src/integrations/device-attestation/index.ts"],
+  },
+  {
+    proof: "proof:edr-threat",
+    files: ["lib/integrations/src/integrations/edr-threat/index.ts"],
+  },
+  {
+    proof: "proof:entitlement-binding",
+    files: ["lib/integrations/src/integrations/entitlement-binding/index.ts"],
+  },
+  {
+    proof: "proof:identity-risk",
+    files: ["lib/integrations/src/integrations/identity-risk/index.ts"],
+  },
+  {
+    proof: "proof:location-services",
+    files: ["lib/integrations/src/integrations/location-services/index.ts"],
+  },
+  {
+    proof: "proof:macos-posture",
+    files: ["lib/integrations/src/integrations/macos-posture/index.ts"],
+  },
+  {
+    proof: "proof:nac",
+    files: ["lib/integrations/src/integrations/nac/index.ts"],
+  },
+  {
+    proof: "proof:network-nac",
+    files: ["lib/integrations/src/integrations/network-nac/index.ts"],
+  },
+  {
+    proof: "proof:peripheral-control",
+    files: ["lib/integrations/src/integrations/peripheral-control/index.ts"],
+  },
+  {
+    proof: "proof:response-accountability",
+    files: ["lib/integrations/src/integrations/response-accountability/index.ts"],
+  },
+  {
+    proof: "proof:rtls-custody",
+    files: ["lib/integrations/src/integrations/rtls-custody/index.ts"],
+  },
+  {
+    proof: "proof:vuln-scan",
+    files: ["lib/integrations/src/integrations/vuln-scan/index.ts"],
+  },
 ];
 
 // ── known-inert survivors ─────────────────────────────────────────────────────
@@ -435,6 +512,21 @@ export const TARGETS = [
 // fine" is not one. An entry whose `line` no longer matches fails the gate: the code
 // moved and nobody re-derived whether the justification still holds.
 const ALLOWED = [
+  {
+    file: "lib/integrations/src/integrations/nac/index.ts",
+    line: "unreachable-by-type, fail-closed default",
+    reason:
+      "The `default:` arm of a switch over `NacIdentifierType`, a closed union of " +
+      "mac|serial|cert whose three members are all handled above it. No input can reach " +
+      "this line, so flipping it to `return true` cannot change any outcome and no test " +
+      "can falsify it. Kept because it is the fail-closed default: a FOURTH identifier " +
+      "type added tomorrow matches nothing until someone writes its comparison, instead " +
+      "of falling through to a truthy accident — at which point this line becomes " +
+      "load-bearing and this exemption should be deleted. Note the SIBLING `return false` " +
+      "in the `cert` arm is NOT exempt: it is real behaviour (a subject DN is not a " +
+      "serial) and is pinned by `proof:nac`. The two lines were textually identical, " +
+      "which is why the inert one now says so.",
+  },
   {
     file: "lib/integrations/src/integrations/session-readiness/evaluate.ts",
     line: "state.elapsedToUsableSeconds !== null &&",

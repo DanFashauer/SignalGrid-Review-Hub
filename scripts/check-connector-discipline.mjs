@@ -178,6 +178,55 @@ const families = readdirSync(familyDir, { withFileTypes: true })
 
 console.log(`families derived from the filesystem: ${families.length}\n`);
 
+// ── 0. The files this gate used to walk straight past ────────────────────────
+//
+// The enumeration above takes DIRECTORIES only, which was right for what it was
+// written to cover and became a blind spot the moment anything outbound landed in the
+// integrations root as a loose file. It reported "48 of 48 families are gated, proven
+// and action-free" — accurate, and not the same claim as "nothing here makes an
+// ungated vendor call".
+//
+// What was hiding there: `dispatcher.ts`, an unsigned-tier, ungated
+// `fetch(t.url, { method: "POST" })` that shipped the whole IntegrationEvent to an
+// arbitrary list of URLs, with `const TARGETS = []` and a TODO inviting someone to
+// populate it. Dead, unexported, zero callers — and a trap, because the supported path
+// (the gated, signed, proven `webhooks/` family) already existed alongside it. Deleted
+// rather than gated: a second implementation of a disciplined family is debt whether
+// or not it has a gate bolted on.
+//
+// A gate that enumerates one shape of thing will keep passing while the next problem
+// arrives in a different shape. This scans the loose files too.
+const looseFiles = readdirSync(familyDir, { withFileTypes: true })
+  .filter((e) => e.isFile() && e.name.endsWith(".ts"))
+  .map((e) => e.name)
+  .sort();
+
+let looseProblems = 0;
+for (const name of looseFiles) {
+  const path = join(familyDir, name);
+  const lines = readFileSync(path, "utf8").split("\n");
+  const code = lines.filter((l) => !isComment(l)).join("\n");
+  const outbound = MUTATING_REQUEST.test(code) && /\bfetch\s*\(/.test(code);
+  const gated = /SIGNALGRID_LIVE_INTEGRATIONS/.test(code);
+  if (outbound && !gated) {
+    looseProblems += 1;
+    bad(
+      `integrations/${name}: makes an ungated outbound call (mutating fetch, no ` +
+        `SIGNALGRID_LIVE_INTEGRATIONS gate) from a loose file rather than a family. ` +
+        `Move it into a gated family, or delete it if a gated family already does this.`,
+    );
+  }
+  if (ACTION_CALL.test(code)) {
+    looseProblems += 1;
+    bad(`integrations/${name}: performs a device action over the network from a loose file.`);
+  }
+}
+// Only claim the clean result when it is true. A ✓ printed beside its own ✗ is the
+// kind of output a reader learns to skim past.
+if (looseProblems === 0) {
+  ok(`${looseFiles.length} loose files in the integrations root carry no ungated egress and no device action`);
+}
+
 const results = families.map(analyzeFamily);
 const disciplined = results.filter((r) => r.gated && r.proven && !r.performsAction);
 

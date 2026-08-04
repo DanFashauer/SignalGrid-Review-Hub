@@ -6,14 +6,17 @@
 // in-memory when REDIS_URL is unset.
 //
 // Namespaced exports avoid cross-category name collisions.
-export * as types from "./integrations/types";
+// `types`, `dispatcher` and `sign` were exported here. Removed with the files: they
+// were an ungated `fetch(url, { method: "POST" })` that shipped the whole event body to
+// an arbitrary target list, plus its HMAC helper and its event type — a second,
+// undisciplined implementation of what the gated, signed, proven `webhooks/` family
+// already does. `TARGETS` was an empty array with a TODO to populate it, so the code
+// was inert AND an invitation. Zero callers anywhere in the repo.
 export * as adapterTypes from "./integrations/adapters/types";
-export * as dispatcher from "./integrations/dispatcher";
 export * as deviceResolver from "./integrations/deviceResolver";
 // Tenant scoping for the connector CONFIGURATION stores. Exported so the scoping rule
 // has one definition and one proof rather than a copy per store.
 export * as storeScope from "./integrations/store-scope";
-export * as sign from "./integrations/sign";
 export * as itsm from "./integrations/itsm/index";
 export * as entitlementBinding from "./integrations/entitlement-binding/index";
 export * as serviceLifecycle from "./integrations/service-lifecycle/index";

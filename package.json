@@ -51,6 +51,7 @@
     "proof:audit-ledger": "pnpm --filter @workspace/scripts run proof:audit-ledger",
     "proof:audit-ledger-pg": "pnpm --filter @workspace/scripts run proof:audit-ledger-pg",
     "proof:benchmark-selection": "pnpm --filter @workspace/scripts run proof:benchmark-selection",
+    "proof:credential-rotation": "pnpm --filter @workspace/scripts run proof:credential-rotation",
     "proof:bootstrap-credential": "pnpm --filter @workspace/scripts run proof:bootstrap-credential",
     "proof:break-glass": "pnpm --filter @workspace/scripts run proof:break-glass",
     "proof:caep-events": "pnpm --filter @workspace/scripts run proof:caep-events",

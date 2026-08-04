@@ -18,6 +18,7 @@
     "./challenge-capability": "./src/integrations/challenge-capability/index.ts",
     "./change-window": "./src/integrations/change-window/index.ts",
     "./credential-exposure": "./src/integrations/credential-exposure/index.ts",
+    "./credential-rotation": "./src/integrations/credential-rotation/index.ts",
     "./custody-beacon": "./src/integrations/custody-beacon/index.ts",
     "./data-protection": "./src/integrations/data-protection/index.ts",
     "./device-attestation": "./src/integrations/device-attestation/index.ts",

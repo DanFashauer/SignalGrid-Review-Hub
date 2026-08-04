@@ -33,7 +33,7 @@ page is bound by: *never present a design intention as a shipped capability*.
 | 1 | Business and workflow context | **BUILT** — workflow keys, risk tiers, criticality, actor/device/agent context feed every evaluation |
 | 2 | Cloud landing-zone foundation | **NOT BUILT** — assumed. No Organizations/OU/account model, no network topology, no AWS provisioning exists here |
 | 3 | Platform-engineering control plane | **PARTIAL** — declarative config + GitOps + governed plan/approve/apply exist ([`IAC_GITOPS.md`](IAC_GITOPS.md), `@workspace/iac`, `/cp/v1/iac`). No developer portal, no service catalog, no AWS pipelines |
-| 4 | Cybersecurity control and resilience loop | **PARTIAL** — the repo *consumes* control-plane evidence through 49 read-only connector families. It does not detect, scan, or run an IR process |
+| 4 | Cybersecurity control and resilience loop | **PARTIAL** — the repo *consumes* control-plane evidence through the read-only connector families enumerated by `scripts/check-connector-discipline.mjs` (it derives the count from the filesystem and prints it; an earlier hand count here said 49 by counting directories, one of which is `adapters` and not a family). It does not detect, scan, or run an IR process |
 | 5 | Signal and evidence fabric | **BUILT** — normalization, provenance, freshness, contradiction detection, source and policy versioning |
 | 6 | SignalGrid operational trust decision | **BUILT** — allow / step-up / restrict / deny, deterministic and fixture-backed |
 | 7 | Governed execution | **PARTIAL BY DESIGN** — see [Governed execution](#8-governed-execution-adapters). Write actuators were deliberately deleted, not deferred |

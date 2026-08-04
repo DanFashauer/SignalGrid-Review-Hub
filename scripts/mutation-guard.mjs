@@ -286,6 +286,13 @@ export const TARGETS = [
     ],
   },
   {
+    proof: "proof:credential-rotation",
+    files: [
+      "lib/integrations/src/integrations/credential-rotation/evaluate.ts",
+      "lib/integrations/src/integrations/credential-rotation/normalize.ts",
+    ],
+  },
+  {
     proof: "proof:bootstrap-credential",
     files: [
       "lib/integrations/src/integrations/bootstrap-credential/evaluate.ts",

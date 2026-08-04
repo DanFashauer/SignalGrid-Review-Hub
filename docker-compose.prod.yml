@@ -37,6 +37,29 @@ services:
       DATABASE_URL: postgres://sg:sg@db:5432/signalgrid
     ports:
       - "8080:8080"
+    # `db` has a healthcheck and `api` waits for it — but nothing described whether
+    # `api` ITSELF was ready. `docker compose ps` printed "Up" the moment the
+    # container started, which is a statement about the process existing, not about
+    # the server answering. Anyone reading that (me, twice) treats it as ready.
+    #
+    # CI does probe /api/healthz with `curl --retry 60`, so the pipeline was covered.
+    # Nothing else was: `up -d --wait` had no health condition to wait on for the one
+    # service that serves traffic, and a container that boots and then fails to listen
+    # is indistinguishable from a working one at the compose level.
+    #
+    # wget, not curl: this image is node:22-alpine and has BusyBox wget but NO curl —
+    # verified by running the image, not assumed. A healthcheck whose binary is absent
+    # reports unhealthy forever, which is a worse failure than having none.
+    #
+    # /healthz is a pure liveness handler (no DB touch), so this answers "is the server
+    # answering" and deliberately not "is Postgres reachable" — those are different
+    # questions and conflating them makes a DB blip restart a healthy API.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/api/healthz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 20s
     depends_on:
       db:
         condition: service_healthy

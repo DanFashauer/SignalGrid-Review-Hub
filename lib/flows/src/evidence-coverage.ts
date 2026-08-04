@@ -26,7 +26,7 @@
 // That needs NO customer data, no CSV, no connector and no security review, and it
 // cannot flatter the engine, because its entire output is the size of the gap.
 
-import { fidelityOf, isWireable, type Fidelity, type SignalSource } from "./signal-sourcing";
+import { isWireable } from "./signal-sourcing";
 
 /**
  * A source plane a deployment either has or does not have.
@@ -39,12 +39,23 @@ export type SourcePlane =
   | "identity" // Entra ID / an OIDC IdP
   | "device_management" // Intune / Jamf / Workspace ONE
   | "endpoint_security" // an EDR/EPP
-  | "dex" // ControlUp or an equivalent digital-experience agent
   | "badge_custody" // an RFID/prox badge reader plane
   | "physical_access" // PACS / door controllers
   | "workforce_management" // WFM / scheduling / time-and-attendance
-  | "access_governance" // IGA
   | "dock_hardware"; // SmartDock or equivalent instrumented cradle
+//
+// `dex` (ControlUp-class digital-experience) and `access_governance` (IGA) were
+// DECLARED HERE AND ANSWERED NO AXIS. Two consequences, both bad and both live: the
+// API refused `?planes=dex` as "unrecognised" while the type, the docstring and
+// `lib/integrations/src/integrations/access-governance/` all said it was real; and
+// because neither appeared in any `answerableBy`, both bits were no-ops in the proof's
+// power-set sweep, which reported 512 estates where only 128 were distinct.
+//
+// They are gone rather than wired up because the honest reason is a MODEL BOUNDARY:
+// those planes feed `posture-composition` (38 signal kinds), not the 18-axis
+// `DecisionEvidence` struct this report is about. A plane belongs here only when it
+// answers one of THESE axes. Adding a `dex` axis is a real option later; declaring the
+// plane without one was the unearned affirmative.
 
 /**
  * One evidence axis of the decision engine, and what it takes to answer it.
@@ -105,7 +116,9 @@ export const EVIDENCE_AXES: readonly EvidenceAxis[] = [
     id: "deviceEncrypted",
     question: "Is the disk encrypted?",
     answerableBy: ["device_management"],
-    dayOneQuiet: false,
+    // MEASURED, not assumed. An ignorant `deviceEncrypted` returns allow on the active
+    // v1 rules — the encryption question is graded only on an affirmative false.
+    dayOneQuiet: true,
   },
   {
     id: "osSupported",
@@ -117,7 +130,9 @@ export const EVIDENCE_AXES: readonly EvidenceAxis[] = [
     id: "ownerType",
     question: "Is this corporate hardware or someone's personal device?",
     answerableBy: ["device_management"],
-    dayOneQuiet: false,
+    // MEASURED. An ignorant `ownerType` returns allow — v1 grades the affirmative
+    // `personal` case, not the ignorance case.
+    dayOneQuiet: true,
   },
   {
     id: "postureFreshness",
@@ -137,7 +152,9 @@ export const EVIDENCE_AXES: readonly EvidenceAxis[] = [
     id: "custodyState",
     question: "Is the device in someone's hands, or in a drawer / in maintenance?",
     answerableBy: ["badge_custody", "dock_hardware"],
-    dayOneQuiet: false,
+    // MEASURED. An ignorant `custodyState` returns allow. seed.ts pins the affirmative
+    // `maintenance` state to restrict; nobody pinned the ignorance state.
+    dayOneQuiet: true,
   },
   {
     id: "dockChargeState",
@@ -155,7 +172,9 @@ export const EVIDENCE_AXES: readonly EvidenceAxis[] = [
     id: "tamperState",
     question: "Has the device or its cradle been physically interfered with?",
     answerableBy: ["dock_hardware"],
-    dayOneQuiet: false,
+    // MEASURED. An ignorant `tamperState` returns allow. seed.ts pins
+    // `sensor_unavailable` to step_up; plain ignorance is ungraded.
+    dayOneQuiet: true,
   },
   {
     id: "dockState",
@@ -210,8 +229,14 @@ export type AxisCoverage =
 export interface AxisFinding {
   readonly axis: EvidenceAxis;
   readonly coverage: AxisCoverage;
-  /** Fidelity of the best declared plane, or `none`. */
-  readonly fidelity: Fidelity;
+  // NO `fidelity` FIELD, DELIBERATELY. One used to be here and it was a CONSTANT
+  // dressed as a measurement: the construction below hardcoded `method: "api"`, so
+  // `fidelityOf` returned "high" for every answerable axis in every estate. It also
+  // contradicted this server's own `/cp/v1/grid/sourcing`, which rates badge binding
+  // as `native` and RTLS custody as degraded `grid_collected` — LOW fidelity. Two
+  // routes on one deployment, opposite confidence for the same signal. This model
+  // holds no per-axis method data, so it reports no per-axis confidence rather than
+  // inventing one a prospect would read as measured.
   /** Planes that would answer it and are NOT declared. Empty when answerable. */
   readonly missingPlanes: readonly SourcePlane[];
   /**
@@ -252,7 +277,6 @@ export function buildCoverageReport(declaredPlanes: readonly SourcePlane[]): Cov
       return {
         axis,
         coverage: "not_sourced" as const,
-        fidelity: "none" as const,
         missingPlanes: [],
         // Not a hole: nobody expected a source plane to supply it. Calling a
         // caller-posed axis a gap would inflate the finding count, and an inflated
@@ -262,19 +286,9 @@ export function buildCoverageReport(declaredPlanes: readonly SourcePlane[]): Cov
     }
     const present = axis.answerableBy.filter((p) => declared.has(p));
     if (present.length > 0) {
-      // Every plane in this model is a vendor API read, so fidelity comes from the
-      // shared `fidelityOf` rather than being invented here — one definition of
-      // confidence across the codebase.
-      const source: SignalSource = {
-        id: axis.id,
-        name: axis.question,
-        system: present[0]!,
-        method: "api",
-      };
       return {
         axis,
         coverage: "answerable" as const,
-        fidelity: fidelityOf(source),
         missingPlanes: [],
         silentHole: false,
       };
@@ -298,6 +312,18 @@ export function buildCoverageReport(declaredPlanes: readonly SourcePlane[]): Cov
     totalAxes: EVIDENCE_AXES.length,
   };
 }
+
+/**
+ * Every source plane any axis can be answered by, DERIVED from the axis table.
+ *
+ * Hand-listing these would be a second copy of a fact the table already states, and
+ * a copy that drifts silently the moment an axis names a new plane. Callers need the
+ * runtime list to tell a user what is valid — a 400 that refuses an unrecognised
+ * plane without naming the recognised ones is a dead end, not a control.
+ */
+export const KNOWN_SOURCE_PLANES: readonly SourcePlane[] = [
+  ...new Set(EVIDENCE_AXES.flatMap((a) => a.answerableBy)),
+].sort();
 
 /**
  * Sanity check on the model itself: a declared plane must be one this map knows.

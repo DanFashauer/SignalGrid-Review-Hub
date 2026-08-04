@@ -153,6 +153,9 @@ const cpRequests = [
   item("Grid coverage (situations handled)", "GET", "/cp/v1/grid/coverage", { auth: NOAUTH }),
   item("Signal sourcing (api / native / grid-collected / gap)", "GET", "/cp/v1/grid/sourcing", { auth: NOAUTH }),
   item("Grid config (workflows as code — validation)", "GET", "/cp/v1/grid/config", { auth: NOAUTH }),
+  // Query string carried on the URL so the collection demonstrates the parameterised
+  // form — a partner-facing call whose whole point is the estate you declare.
+  item("Evidence coverage (what YOUR estate can answer)", "GET", "/cp/v1/grid/evidence-coverage?planes=identity,device_management", { auth: NOAUTH }),
   item("Zero-touch provisioning plan (simulated)", "GET", "/cp/v1/grid/provisioning", { auth: NOAUTH }),
   item("App resilience (downtime, PHI-safe)", "GET", "/cp/v1/apps/resilience", { auth: NOAUTH }),
 ];

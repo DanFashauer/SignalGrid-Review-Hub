@@ -1552,6 +1552,34 @@
           }
         },
         {
+          "name": "Evidence coverage (what YOUR estate can answer)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cp/v1/grid/evidence-coverage?planes=identity,device_management",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cp",
+                "v1",
+                "grid",
+                "evidence-coverage"
+              ],
+              "query": [
+                {
+                  "key": "planes",
+                  "value": "identity,device_management"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
           "name": "Zero-touch provisioning plan (simulated)",
           "request": {
             "method": "GET",

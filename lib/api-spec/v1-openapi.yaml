@@ -732,6 +732,27 @@ paths:
       responses:
         "200": { description: Sourcing summary + per-signal path and fidelity }
 
+  /cp/v1/grid/evidence-coverage:
+    get:
+      operationId: cpGridEvidenceCoverage
+      tags: [control-plane]
+      security: []
+      summary: Which of the 18 decision evidence axes a declared estate can honestly answer
+      description: >
+        Parameterised by the caller's declared source planes. Reads no customer data.
+        `silentHoles` is the headline — axes that are dark AND ungraded, where silence
+        would otherwise read as health. An unrecognised plane is refused with 400 rather
+        than dropped, because dropping one would understate what the estate can answer.
+      parameters:
+        - name: planes
+          in: query
+          required: false
+          schema: { type: string }
+          description: Comma-separated source planes, e.g. `identity,device_management`. Omit for the empty estate.
+      responses:
+        "200": { description: Coverage report — per-axis findings, answerable/needsInstrumentation/notSourced counts, and silentHoles }
+        "400": { description: An unrecognised source plane was supplied; the response names it and lists the valid planes }
+
   /cp/v1/grid/config:
     get:
       operationId: cpGridConfig

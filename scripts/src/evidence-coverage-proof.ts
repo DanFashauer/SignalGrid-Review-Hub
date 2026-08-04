@@ -29,6 +29,8 @@ import type { DecisionEvidence, PolicyVersion } from "@workspace/signalgrid-core
 import {
   buildCoverageReport,
   EVIDENCE_AXES,
+  KNOWN_SOURCE_PLANES,
+  isKnownPlane,
   type SourcePlane,
 } from "@workspace/flows";
 
@@ -50,11 +52,9 @@ const ALL_PLANES: SourcePlane[] = [
   "identity",
   "device_management",
   "endpoint_security",
-  "dex",
   "badge_custody",
   "physical_access",
   "workforce_management",
-  "access_governance",
   "dock_hardware",
 ];
 
@@ -111,8 +111,32 @@ const ALL_PLANES: SourcePlane[] = [
     evaluatePolicy(active, base).outcome === "allow",
   );
 
-  // The ignorance member of each axis this model flags as day-one quiet.
+  // The ignorance member of EVERY axis that has one — not just the ones already
+  // claimed quiet.
+  //
+  // THE FIRST DRAFT LISTED ONLY THE SEVEN `dayOneQuiet: true` AXES, and that made this
+  // check one-directional in the dangerous direction. Axes marked `false` had no entry,
+  // so the `continue` below skipped them, so the loop could only ever detect "model says
+  // quiet, engine grades it" — the cry-wolf direction. It structurally could not detect
+  // "model says graded, engine is QUIET", which is the direction that UNDERCOUNTS holes
+  // in a report whose headline is a hole count.
+  //
+  // An adversarial review ran the engine over all eighteen and found four live
+  // mismatches: deviceEncrypted, ownerType, custodyState and tamperState all return
+  // `allow` on their ignorance member while the table claimed they were graded. The
+  // report was telling a prospect 7 silent holes on an empty estate when the truth was
+  // 11, and 4 on the Entra+Intune wedge when the truth was 6 — understating the exact
+  // danger it exists to name, which is the defect that killed the replay backtest.
   const IGNORANCE: Record<string, unknown> = {
+    identityEnabled: false,
+    deviceManaged: false,
+    deviceCompliance: "unknown",
+    deviceEncrypted: "unknown",
+    osSupported: "unknown",
+    ownerType: "unknown",
+    postureFreshness: "unknown",
+    custodyState: "unknown",
+    tamperState: "unknown",
     dockChargeState: "unknown",
     batteryHealth: "unknown",
     dockState: "unknown",
@@ -120,13 +144,25 @@ const ALL_PLANES: SourcePlane[] = [
     benchmarkSelection: "unverified",
     shiftContext: "unverified",
     badgeBinding: "unknown",
+    criticalSignalsPresent: false,
   };
+
+  // Every axis except the POSED one must have a modelled ignorance member. Without
+  // this, dropping an entry silently re-opens the one-directional hole above.
+  const POSED_BY_CALLER = new Set(["workflowRiskTier"]);
+  const unmodelled = EVIDENCE_AXES
+    .filter((a) => IGNORANCE[a.id] === undefined && !POSED_BY_CALLER.has(a.id))
+    .map((a) => a.id);
+  check(
+    `every axis has a modelled ignorance member, or is posed by the caller${unmodelled.length ? `: missing ${unmodelled.join(", ")}` : ""}`,
+    unmodelled.length === 0,
+  );
 
   const claimed = EVIDENCE_AXES.filter((a) => a.dayOneQuiet).map((a) => a.id).sort();
   const mismatches: string[] = [];
   for (const axis of EVIDENCE_AXES) {
     const ignorance = IGNORANCE[axis.id];
-    if (ignorance === undefined) continue; // not an axis with a modelled ignorance member
+    if (ignorance === undefined) continue; // posed by the caller — pinned by the check above
     const result = evaluatePolicy(active, { ...base, [axis.id]: ignorance } as typeof base);
     const actuallyQuiet = result.outcome === "allow";
     if (actuallyQuiet !== axis.dayOneQuiet) {
@@ -134,7 +170,7 @@ const ALL_PLANES: SourcePlane[] = [
     }
   }
   check(
-    `every day-one-quiet flag matches the LIVE engine${mismatches.length ? `: ${mismatches.join("; ")}` : ""}`,
+    `every day-one-quiet flag matches the LIVE engine, in BOTH directions (${EVIDENCE_AXES.length - POSED_BY_CALLER.size} axes probed)${mismatches.length ? `: ${mismatches.join("; ")}` : ""}`,
     mismatches.length === 0,
   );
   check(
@@ -254,7 +290,38 @@ console.log("");
 {
   const wedge = buildCoverageReport(["identity", "device_management"]);
   const empty = buildCoverageReport([]);
-  console.log(
+  // ── KNOWN_SOURCE_PLANES IS DERIVED, AND THAT IS THE POINT ────────────────────
+//
+// The control-plane arm refuses an unrecognised plane and names the recognised ones.
+// That list must come from the axis table, not a second hand-written copy — a copy
+// drifts silently the moment an axis names a new plane, and the failure is invisible:
+// the 400 would omit a plane that IS valid, so a caller would stop asking for it.
+{
+  check(
+    `KNOWN_SOURCE_PLANES agrees with isKnownPlane on every member (${KNOWN_SOURCE_PLANES.length})`,
+    KNOWN_SOURCE_PLANES.every((p) => isKnownPlane(p)),
+  );
+  const fromAxes = [...new Set(EVIDENCE_AXES.flatMap((a) => a.answerableBy))].sort();
+  check(
+    "…and contains exactly the planes the axis table names — derived, not a copy",
+    KNOWN_SOURCE_PLANES.length === fromAxes.length &&
+      KNOWN_SOURCE_PLANES.every((p, i) => p === fromAxes[i]),
+  );
+  check(
+    "NON-VACUITY: an invented plane is NOT known, so the agreement above is not trivially true of everything",
+    !isKnownPlane("not-a-real-plane") &&
+      !(KNOWN_SOURCE_PLANES as readonly string[]).includes("not-a-real-plane"),
+  );
+  // Fail-closed direction that matters: an unknown plane can never ADD coverage.
+  const declared = buildCoverageReport(["identity"]);
+  const withJunk = buildCoverageReport(["identity", "not-a-real-plane"] as never);
+  check(
+    "an unrecognised plane cannot raise answerable coverage — the report is not improvable by invention",
+    withJunk.answerable === declared.answerable && withJunk.silentHoles === declared.silentHoles,
+  );
+}
+
+console.log(
     `figures=axes=${EVIDENCE_AXES.length},estates=${1 << ALL_PLANES.length},wedgeAnswerable=${wedge.answerable},wedgeSilentHoles=${wedge.silentHoles},emptySilentHoles=${empty.silentHoles}`,
   );
 }

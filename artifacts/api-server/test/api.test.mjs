@@ -731,6 +731,40 @@ async function run() {
   check("grid sourcing marks vendor-integrated signals high fidelity + not grid-lifted", srcSignals.filter((r) => r.method === "api" || r.method === "native").every((r) => r.fidelity === "high" && r.wireable === true && r.gridLifted === false));
   check("grid sourcing marks grid-collected as the Grid doing the lifting", srcSignals.filter((r) => r.method === "grid_collected").every((r) => r.gridLifted === true && r.wireable === true));
 
+  // ── evidence-coverage: the design-partner artifact ──────────────────────────
+  const covEmpty = await req("GET", "/cp/v1/grid/evidence-coverage");
+  check("evidence-coverage responds 200 with no planes declared", covEmpty.status === 200);
+  check("evidence-coverage on an empty estate answers ZERO axes", covEmpty.json?.report?.answerable === 0);
+  check("evidence-coverage on an empty estate reports silent holes (silence looking like health)", covEmpty.json?.report?.silentHoles > 0);
+  check("evidence-coverage names the recognised planes so a 400 is actionable", Array.isArray(covEmpty.json?.knownPlanes) && covEmpty.json.knownPlanes.length > 0);
+
+  const covWedge = await req("GET", "/cp/v1/grid/evidence-coverage?planes=identity,device_management");
+  check("evidence-coverage with a declared estate answers MORE axes than the empty one", covWedge.json?.report?.answerable > covEmpty.json?.report?.answerable);
+  check("evidence-coverage with a declared estate has FEWER silent holes", covWedge.json?.report?.silentHoles < covEmpty.json?.report?.silentHoles);
+  check("evidence-coverage echoes the declared planes it actually used", Array.isArray(covWedge.json?.report?.declaredPlanes) && covWedge.json.report.declaredPlanes.length === 2);
+  check("evidence-coverage wedge responds 200", covWedge.status === 200);
+  // NOT `answerable < totalAxes` — that was a TAUTOLOGY. Two axes (workflowRiskTier,
+  // criticalSignalsPresent) have no source plane at all, so `answerable` can never
+  // reach 18 for ANY input; the assertion could not fail even if silentHoles were
+  // hardcoded to zero. Pin the real numbers against the engine instead.
+  check("evidence-coverage wedge pins the measured counts (10 answerable, 6 silent holes)", covWedge.json?.report?.answerable === 10 && covWedge.json?.report?.silentHoles === 6);
+  check("evidence-coverage empty estate pins the measured hole count (11)", covEmpty.json?.report?.silentHoles === 11);
+
+  // REPEATED PARAMS ARE THE OTHER STANDARD SERIALISATION AND MUST NOT BE DROPPED.
+  // Express hands these back as an array; the first draft coerced that to undefined
+  // and returned a full empty-estate report attributed to a two-plane estate.
+  const covRepeated = await req("GET", "/cp/v1/grid/evidence-coverage?planes=identity&planes=device_management");
+  check("evidence-coverage accepts repeated ?planes= params (200)", covRepeated.status === 200);
+  check("evidence-coverage repeated params match the comma form EXACTLY — no silent drop", covRepeated.json?.report?.answerable === covWedge.json?.report?.answerable && covRepeated.json?.report?.silentHoles === covWedge.json?.report?.silentHoles);
+  check("evidence-coverage repeated params are NOT read as an empty estate", covRepeated.json?.report?.answerable > covEmpty.json?.report?.answerable);
+
+  // AN UNRECOGNISED PLANE IS REFUSED, NOT DROPPED. Dropping it would understate what
+  // the estate can answer, and the prospect could never catch that error.
+  const covBad = await req("GET", "/cp/v1/grid/evidence-coverage?planes=identity,teleportation");
+  check("evidence-coverage REFUSES an unrecognised plane (400)", covBad.status === 400);
+  check("evidence-coverage names the offending plane rather than silently ignoring it", String(covBad.json?.message ?? "").includes("teleportation"));
+  check("evidence-coverage 400 still lists the valid planes", Array.isArray(covBad.json?.knownPlanes) && covBad.json.knownPlanes.length > 0);
+
   const gridConfig = await req("GET", "/cp/v1/grid/config");
   check("grid config validates clean", gridConfig.status === 200 && gridConfig.json?.valid === true);
   check("grid config warns on the unwired gap signal (surfaced, not blocking)", (gridConfig.json?.summary?.warnings ?? 0) >= 1);

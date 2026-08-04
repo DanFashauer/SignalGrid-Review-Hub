@@ -11,6 +11,7 @@
 import { spawnSync } from "node:child_process";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { uncoveredLines } from "./lib/ci-jobs.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const quick = process.argv.includes("--quick");
@@ -234,11 +235,11 @@ if (failed) {
 // caveat, so it now prints WITH the verdict rather than being documented above it.
 //
 // Same rule the status file follows: never claim more than the run verified.
-const UNCOVERED = [
-  "deploy-stack        (Docker image + compose smoke)",
-  "durable-persistence (Postgres audit ledger)",
-  "secret-scan         (gitleaks)",
-];
+// DERIVED from .github/workflows/, not hand-listed. It used to be three strings while
+// the repo ran nineteen CI jobs, so CodeQL, the level-10 audit, the emulator smoke,
+// phase-pr-evidence and the whole iOS suite were missing from the one list whose job is
+// to say what is missing. See scripts/lib/ci-jobs.mjs.
+const UNCOVERED = uncoveredLines();
 console.log(`\nPreflight PASSED${quick ? " (quick — heavy builds skipped)" : ""} — everything it runs is green.`);
 console.log("\n  NOT covered by this harness (CI runs these; a green preflight says nothing about them):");
 for (const j of UNCOVERED) console.log(`    · ${j}`);

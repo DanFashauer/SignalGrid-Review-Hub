@@ -44,6 +44,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { MIRRORED, NOT_A_GATE, classifyCiJobs } from "./lib/ci-jobs.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const WORKFLOW_DIR = join(repo, ".github/workflows");
@@ -135,6 +136,27 @@ for (const [gate, reason] of LOCAL_ONLY) {
     problems += 1;
   }
 }
+
+// ── The other direction: preflight's own "not covered" disclaimer ────────────
+//
+// That footer is the most load-bearing line the harness prints — it is read at the
+// moment someone decides to push. It is now DERIVED (scripts/lib/ci-jobs.mjs) rather
+// than a hardcoded three, but a derived list still depends on a hand-written
+// classification, and a classification that outlives its job silently shrinks the
+// disclaimer. Same rule as LOCAL_ONLY above: a stale exemption re-permits the gap it
+// was granted for and reads as intentional ever after.
+const { jobs: ciJobs, uncovered: ciUncovered, stale: ciStale } = classifyCiJobs();
+for (const id of ciStale) {
+  console.error(
+    `  ✗ ${id}: classified in scripts/lib/ci-jobs.mjs but NO workflow defines it any more — ` +
+      `delete the entry. Leaving it silently shortens preflight's "not covered" list.`,
+  );
+  problems += 1;
+}
+console.log(
+  `CI job coverage: ${ciJobs.length} jobs, ${MIRRORED.size} mirrored by preflight, ` +
+    `${NOT_A_GATE.size} not a gate, ${ciUncovered.length} reported as uncovered`,
+);
 
 console.log(
   `preflight↔CI parity: ${gates.length} preflight gates, ${workflows.length} workflow files, ` +

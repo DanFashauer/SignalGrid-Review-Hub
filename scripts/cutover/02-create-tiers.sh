@@ -8,7 +8,7 @@ banner "Phase 6 · 02 — Create & push tier branches"
 
 MONO="${MONO:-}"
 [ -n "$MONO" ] && [ -d "$MONO/.git" ] || die "Set MONO to the repo from step 01, e.g. export MONO=/tmp/…/mono"
-cd "$MONO"
+cd "$MONO" || die "cannot enter $MONO"
 
 git rev-parse --verify dev >/dev/null 2>&1 || die "Local 'dev' branch not found — run 01 first."
 

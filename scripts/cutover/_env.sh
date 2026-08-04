@@ -14,6 +14,8 @@ DEV_MAIN="${DEV_MAIN:-main}"
 # Required CI status-check context = the job name in review-hub-ci.yml.
 CI_CHECK_CONTEXT="${CI_CHECK_CONTEXT:-SignalGrid CI}"
 
+# shellcheck disable=SC2034  # read by 02-create-tiers.sh, 03-protect-and-environments.sh
+# and 04-archive-sources.sh, which source this file; shellcheck cannot see across that.
 TIERS=(dev alpha beta prod)
 DRY_RUN="${DRY_RUN:-0}"
 

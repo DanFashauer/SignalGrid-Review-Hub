@@ -509,6 +509,11 @@ jobs:
           pnpm run build:postman
           git diff --exit-code docs/postman || (echo "::error::Postman collection out of date — run 'pnpm run build:postman' and commit." && exit 1)
 
+      - name: Shell lint (shellcheck)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          node scripts/check-shell.mjs
+
       - name: Evidence Coverage page is committed in sync
         run: |
           git ls-files --error-unmatch docs/evidence-coverage.html > /dev/null || (echo "::error::docs/evidence-coverage.html is not tracked — generated pages must be committed." && exit 1)

@@ -22,7 +22,7 @@
 # boot. It runs only if WAZUH_URL is already set, and says so otherwise.
 # =============================================================================
 set -uo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || { echo "cannot enter repo root" >&2; exit 1; }
 
 KEEP=0
 ONLY=""
@@ -74,7 +74,12 @@ if wanted fleet; then
       started="$started sg-fleet sg-fleet-mysql sg-fleet-redis"
       curl -s -X POST http://127.0.0.1:8412/api/v1/setup -H 'Content-Type: application/json' -d '{"admin":{"name":"SG","email":"sg@signalgrid.test","password":"SignalGrid!2026x","password_confirmation":"SignalGrid!2026x"},"org_info":{"org_name":"SG"},"server_url":"http://127.0.0.1:8412"}' >/dev/null 2>&1
       export FLEET_URL=http://127.0.0.1:8412
-      export FLEET_TOKEN=$(curl -s -X POST $FLEET_URL/api/v1/fleet/login -H 'Content-Type: application/json' -d '{"email":"sg@signalgrid.test","password":"SignalGrid!2026x"}' | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d).token||'')}catch(e){console.log('')}})")
+      # Declared then exported SEPARATELY (SC2155): `export X=$(cmd)` returns the
+      # EXPORT's status, not the command's, so a failed login would export an empty
+      # token and the live lane below would run against fixtures while reporting it
+      # ran live. `export` is required — proof:live-fleet is a child process.
+      FLEET_TOKEN=$(curl -s -X POST "$FLEET_URL"/api/v1/fleet/login -H 'Content-Type: application/json' -d '{"email":"sg@signalgrid.test","password":"SignalGrid!2026x"}' | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d).token||'')}catch(e){console.log('')}})")
+      export FLEET_TOKEN
       SECRET=$(curl -s -H "Authorization: Bearer $FLEET_TOKEN" $FLEET_URL/api/v1/fleet/spec/enroll_secret | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d).spec.secrets[0].secret)}catch(e){console.log('')}})")
       curl -s -X POST $FLEET_URL/api/v1/fleet/global/policies -H "Authorization: Bearer $FLEET_TOKEN" -H 'Content-Type: application/json' -d '{"name":"Disk encryption","query":"SELECT 1;","platform":"darwin"}' >/dev/null 2>&1
       curl -s -X POST $FLEET_URL/api/v1/osquery/enroll -H 'Content-Type: application/json' -d "{\"enroll_secret\":\"$SECRET\",\"host_identifier\":\"SG-TEST\",\"host_details\":{\"system_info\":{\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"hostname\":\"sg\",\"hardware_serial\":\"SGTEST\"},\"os_version\":{\"name\":\"macOS\",\"platform\":\"darwin\"}}}" >/dev/null 2>&1

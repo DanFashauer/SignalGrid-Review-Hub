@@ -26,7 +26,7 @@
 set -u
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$REPO_ROOT"
+cd "$REPO_ROOT" || { echo "cannot enter $REPO_ROOT" >&2; exit 1; }
 
 FAST=0; NO_IOS=0; KEEP_UP=0; PLAN=0
 for arg in "$@"; do
@@ -39,7 +39,6 @@ for arg in "$@"; do
   esac
 done
 
-PHASES=(prereqs proofs api mcp ios)
 declare -a RESULTS=()
 FAILED=0
 

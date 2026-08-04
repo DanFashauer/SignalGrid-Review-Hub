@@ -60,6 +60,11 @@ const STEPS = [
   // gate stays green and the image build dies on `pnpm install`. Reads two text files.
   { name: "Docker carries every install-hook entrypoint", cmd: ["node", "scripts/check-docker-lifecycle-copy.mjs"] },
   { name: "Invariant review (fail-closed / determinism / Assist / truth)", cmd: ["node", "scripts/review-invariants.mjs"] },
+  // Shell was the only language here with no static analysis: CodeQL takes JS/TS,
+  // tsc takes types, gitleaks takes secrets, the proofs take behaviour. See
+  // scripts/check-shell.mjs for why the floor is `warning` and why the Mac lane's
+  // validate-sim-macos.sh is DEFERRED rather than excluded.
+  { name: "Shell lint (the one language with no static analysis)", cmd: ["node", "scripts/check-shell.mjs"] },
   { name: "Docs sanity (required docs + unsafe-claim scan)", cmd: ["node", "scripts/docs-sanity.mjs"] },
   { name: "Doc orphans (a new doc must be reachable from an index)", cmd: ["node", "scripts/check-doc-orphans.mjs"] },
   { name: "Package reachability (a library nobody ships is a library nobody runs)", cmd: ["node", "scripts/check-package-reachability.mjs"] },

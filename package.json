@@ -14,6 +14,7 @@
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "build:postman": "node scripts/build-postman.mjs",
     "build:room-console": "pnpm --filter @workspace/scripts run build:room-console",
+    "lint:shell": "node scripts/check-shell.mjs",
     "build:evidence-coverage": "pnpm --filter @workspace/scripts run build:evidence-coverage",
     "check:core-normalization-version": "node scripts/generate-core-normalization-version.mjs --check",
     "check:doc-orphans": "node scripts/check-doc-orphans.mjs",

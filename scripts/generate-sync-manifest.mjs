@@ -152,7 +152,12 @@ export function computeBody() {
       sha256: createHash("sha256").update(contractBytes).digest("hex"),
     },
     signalKinds: extractConstArray(SOURCES.signalKinds, "SIGNAL_KINDS"),
-    signalCategories: extractTypeUnion(SOURCES.signalCategories, "SignalCategory"),
+    // `SignalCategory` used to be a hand-written union and is now derived from the
+    // `SIGNAL_CATEGORIES` const array — the same correction `SIGNAL_KINDS` already
+    // carries, made so the count is readable at runtime instead of existing only in the
+    // type system. The extractor follows the value, not the type: a bare union has
+    // nothing to publish from once the members move.
+    signalCategories: extractConstArray(SOURCES.signalCategories, "SIGNAL_CATEGORIES"),
     taskExceptionReasonCodes: extractTypeUnion(SOURCES.taskException, "TaskExceptionReasonCode"),
     workContextTrustCeilings: extractConstArray(SOURCES.workContext, "CONTEXT_TRUST_CEILINGS"),
     handoffSimRefusalCodes: extractTypeUnion(SOURCES.handoffSim, "HandoffSimErrorCode"),

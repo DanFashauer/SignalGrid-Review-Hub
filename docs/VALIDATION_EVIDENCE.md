@@ -10,7 +10,7 @@ Harness: `validate-sim-macos.sh`. Result **as recorded at the time of this run:
 33 / 33 gates green** — the whole suite as it then stood.
 
 > **This section is a dated record, not a current measurement.** The suite has
-> since grown to **87 gates** (4 named simulator gates + 78 looped `proof:*`
+> since grown well past that (4 named simulator gates + every looped `proof:*`
 > gates + 5 non-proof gates; derive it with the command below). Re-run the
 > harness to refresh it — and note the harness prints
 > `== SUMMARY: N passed, M failed ==`, so read `M` against 0 rather than pinning
@@ -22,7 +22,7 @@ Harness: `validate-sim-macos.sh`. Result **as recorded at the time of this run:
 
 | Group | Gates | Result |
 |---|---|---|
-| Real-life simulator | `proof:signalgrid-simulator` (11 scenarios / 39 assertions), `proof:room-sim`, `proof:signalgrid-core`, `proof:signalgrid-grid` | PASS |
+| Real-life simulator | `proof:signalgrid-simulator` (11 scenarios / 43 assertions), `proof:room-sim`, `proof:signalgrid-core`, `proof:signalgrid-grid` | PASS |
 | CI-mirror proof suite | the remaining `proof:*` gates at that time — 24 then, 78 now (incl. `-pg` gates via in-memory fallback) | PASS |
 | Non-proof gates | `typecheck`, `test:api`, `safety:check`, `docs:sanity`, `review:invariants` | PASS |
 | Hygiene | `git diff --check` | clean |

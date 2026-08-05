@@ -8,7 +8,7 @@ rest is how a rehearsal starts reading as evidence.
 | Tier | Where it runs | What it genuinely proves | What it cannot prove |
 | --- | --- | --- | --- |
 | **Linux CI** (`review-hub-ci.yml`) | every PR | typecheck, build, every proof, API tests, safety gate, supply chain | anything macOS- or device-specific |
-| **Mac rehearsal** (`mac-lane.yml`) | dispatch + weekly, `macos-latest` | the full 87-gate suite passes on macOS; iOS targets compile | **nothing about real hardware** — a hosted runner is a throwaway VM |
+| **Mac rehearsal** (`mac-lane.yml`) | dispatch + weekly, `macos-latest` | the full suite passes on macOS; iOS targets compile | **nothing about real hardware** — a hosted runner is a throwaway VM |
 | **Real Mac** (your machine) | you, by hand | genuine macOS posture read off a real managed device; the signalgrid-mcp half against the shared contract | on-device MDM enforcement, unless the Mac is actually supervised |
 
 The middle row is new, and it closed a real hole. `verify-all.mjs` gated evidence

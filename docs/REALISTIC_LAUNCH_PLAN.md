@@ -87,7 +87,9 @@ securely tenant-scoped.
 
 ### Current active engineering state
 
-PR #35 is merged. PR #36 remains open as the Autopilot Evidence Bot. Its workflows
+**STALE — CORRECTED.** PR #36 was CLOSED WITHOUT MERGING on 2026-07-15; `docs/BRANCHES.md` already records it as closed-unmerged. The only non-Dependabot PR open today is #152. The paragraph below described it as open with outstanding review findings and made clearing it the first action of Week 1, which would have sent a reader chasing a PR that no longer exists. Retained struck-through rather than deleted so the correction is visible.
+
+~~PR #35 is merged. PR #36 remains open as the Autopilot Evidence Bot. Its workflows~~
 are green, but two automated-review P2 findings remain around committed-diff checking and
 unsafe-claim suppression.
 

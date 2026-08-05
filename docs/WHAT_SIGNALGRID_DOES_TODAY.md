@@ -15,7 +15,7 @@ Ground truth lives in code: `lib/signalgrid-core/src/types.ts`
 ## What the deterministic core evaluates today
 
 At the moment a workflow fires, the core fuses the following normalized evidence
-into one decision. These — and only these — are the dimensions a policy rule can
+into one decision. These are the dimensions a policy rule can
 test today:
 
 | Evidence dimension | What it captures |
@@ -36,15 +36,22 @@ test today:
 | Badge binding (reader case) | present / removed / forced / absent / unknown — who is bound to the shared device right now |
 | Critical signals present | derived fail-closed gate — `allow` is suppressed when a critical input is degraded |
 
-### The 13 normalized signal categories
+### The 15 normalized signal categories
 
-The connector layer normalizes source data into exactly **13 signal categories**
+The connector layer normalizes source data into exactly **15 signal categories**
 that feed the evidence above:
 
 `identity_state`, `device_compliance`, `device_management`, `device_encryption`,
 `os_support`, `posture_freshness`, `custody_state`, `charge_state`,
 `battery_health`, `tamper_state`, `dock_state`, `security_baseline`,
-`badge_binding`.
+`benchmark_selection`, `shift_context`, `badge_binding`.
+
+This count is DERIVED, not maintained by hand. `SIGNAL_CATEGORIES` in
+`lib/signalgrid-core/src/types.ts` is a const array and the `SignalCategory` union
+is derived from it, so `pnpm run proof:signalgrid-core` emits the real number and
+`scripts/check-proof-figures.mjs` fails this document if it drifts. It previously
+said 13 — omitting `benchmark_selection` and `shift_context`, both of which ship
+active v1 policy rules — because nothing could check it.
 
 ### The four outcomes
 
@@ -72,8 +79,19 @@ The website groups these into five **evaluated-today** dimensions:
 
 ## What is deterministic and fixture-backed
 
-- No live vendor / Microsoft Graph / Apple / dock-vendor call is made anywhere in
-  this repository. Every signal is a synthetic, public-safe fixture.
+- **Every signal in every proof, demo and default run is a synthetic,
+  public-safe fixture.** No live vendor call happens by default, and none can
+  happen without deliberate configuration.
+- Live vendor transports DO EXIST in this repository and are gated off, which is
+  a different statement from "there is no such code". `lib/integrations/.../graph/`
+  ships a real Microsoft Graph transport; a live call requires ALL of
+  `SIGNALGRID_TIER` in {beta, prod}, `SIGNALGRID_LIVE_INTEGRATIONS=true`, and a
+  credential — each checked independently, so removing any one falls back to
+  fixtures. `scripts/cutover/03-protect-and-environments.sh` sets that flag for
+  the beta and prod environments, so the gate is a real switch rather than dead
+  code. An earlier version of this line claimed no such call was made "anywhere
+  in this repository", which a reader would reasonably have taken as a statement
+  about the code rather than about the default configuration.
 - The core is isomorphic and deterministic (injectable clock; no `Date.now` /
   `Math.random`), so proofs and reviews reproduce the exact same decision,
   evidence snapshot, and audit chain every run.
@@ -87,16 +105,20 @@ These appear in the design, the integration catalog, and the marketing site as
 decision inputs in the core today, and any surface that shows them must say so:
 
 - **Network / cellular posture** (Wi-Fi/NAC/eSIM reachability) — candidate.
-- **Session / shift context** (shift-window and role-match logic) — candidate.
+  (Session / shift context was listed here and has been removed: it is evaluated
+  today, with an active v1 `shift-context-misfit` step-up rule in `policy.ts`.)
 - **Operational signals** (SIEM / SOAR / ITSM / monitoring state) — candidate.
 - **RTLS / precise indoor location** — candidate.
 - The **broader integration catalog** (~149 candidate sources across ~16
   categories in the catalog taxonomy) — these are *candidate signal-source
-  categories*, distinct from the 13 categories the core normalizes today, and
+  categories*, distinct from the 15 categories the core normalizes today, and
   none is a live integration.
-- **Native app shells** (React Native / Expo, Tauri / Electron) — the current
-  cross-platform delivery is responsive web + PWA; native is a documented next
-  step.
+- **Cross-platform app shells** (React Native / Expo, Tauri / Electron) — not
+  built; responsive web + PWA is the cross-platform delivery. This is NOT a
+  statement about native iOS: `native/ios/` ships two real Xcode targets,
+  EnterpriseShell (the kiosk-until-auth shell carrying the Assist gate) and
+  SignalGridMobile, merged via PRs #107/#125/#128 and built in CI. They are
+  simulator-verified; no MDM-enrolled hardware evidence exists.
 - **Certifications / authorizations** (SOC 2, FedRAMP, CMMC, STIG, EAL, FIPS) —
   design targets and signal mappings only; nothing is certified or authorized.
 
@@ -106,7 +128,7 @@ The repo intentionally has two surfaces that must not be conflated:
 
 1. **Product-core lineage** — `@workspace/signalgrid-core` and the Review Hub's
    Operator Console / Worker Self-Service run the real, deterministic decision
-   loop with the 13 categories and 4 outcomes above. This is the truth.
+   loop with the 15 categories and 4 outcomes above. This is the truth.
 2. **Catalog / app-shell lineage** — the `/api/integrations` catalog (~149
    candidate sources, ~16 taxonomy categories) and the platform app shells
    (`signalgrid-app`, `-desktop`, `-mobile-pwa`) illustrate the broader vision
@@ -114,13 +136,13 @@ The repo intentionally has two surfaces that must not be conflated:
    what the core evaluates.
 
 When a surface shows "16 categories" or "~149 sources," it means the candidate
-catalog taxonomy — not the 13 categories the core evaluates. When it shows the
+catalog taxonomy — not the 15 categories the core evaluates. When it shows the
 signal dimensions a decision actually uses, it means the five evaluated-today
 dimensions above.
 
 ## How to verify
 
-- `pnpm run proof:signalgrid-core` — 206 assertions over the real core: outcomes,
+- `pnpm run proof:signalgrid-core` — 209 assertions over the real core: outcomes,
   fail-closed, tenant isolation, RBAC, tamper-evidence, determinism, the
   security-baseline dimension, the badge-binding (reader case) dimension, the
   dock/SmartDock hardware-state dimension, and untrusted-input hardening.

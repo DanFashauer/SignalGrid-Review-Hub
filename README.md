@@ -70,14 +70,18 @@ This repository is not the production SignalGrid core, not a customer deployment
 
 | Repository                          | Role going forward                                                             |
 | ----------------------------------- | ------------------------------------------------------------------------------ |
-| `DanFashauer/SignalGrid`            | Private protected source, backup, and core foundation.                         |
+| `DanFashauer/SignalGrid`            | **Retired.** Legacy beta/POC, superseded by this repo (see line above and `docs/REPO_LAYOUT.md`). Not an active core. |
 | `DanFashauer/SignalGrid-Review-Hub` | Public pre-production and post-launch review/validation surface.               |
 | `DanFashauer/DEV`                   | Legacy Alpha repository and future Home/profile transition area after cleanup. |
 | `DanFashauer/Home`                  | Future personal homepage, resume, and founder profile if created separately.   |
 
 ## Relationship to the private SignalGrid core
 
-The private SignalGrid repository remains the protected source and core foundation. Review Hub documents the public-facing strategy, validation model, milestone plan, and integration assumptions that can be discussed externally. Validated concepts may later move into the private core implementation, while protected implementation details, credentials, customer data, and sensitive deployment logic remain private.
+**The public/private boundary is an OPEN DECISION, not a settled arrangement, and this paragraph used to describe it as settled in a way that contradicted the rest of this same file.** `DanFashauer/SignalGrid` is retired — stated four paragraphs above, and in `docs/REPO_LAYOUT.md`, which this README links as the canonical reference. It is not a protected production core, because no such active repository currently exists: `docs/PRIVATE_CORE_HANDOFF.md` is a blueprint, not an implementation.
+
+So today THIS repository is the single canonical source, and it contains product-shaped runtime logic — real OIDC verification (`lib/enterprise-auth`), durable Postgres persistence (`lib/persistence`, `lib/audit`), gated live vendor transports, and the deterministic decision core. Anyone assessing IP exposure should assess it here.
+
+Choosing between a public-core model (proprietary value in hosted operations, connectors and implementation) and an open-spec-plus-private-SaaS model is a founder decision that has not been made. Until it is, no document should assert that protected implementation lives elsewhere.
 
 ## Relationship to DEV and future Home
 

@@ -39,6 +39,8 @@ import {
   type NormalizedSignal,
   type SignalCategory,
   type Workflow,
+  SIGNAL_CATEGORIES,
+  EVIDENCE_FIELDS,
 } from "@workspace/signalgrid-core";
 
 interface Assertion {
@@ -1582,3 +1584,21 @@ if (failed.length > 0) {
 }
 
 console.log("\nAll core invariants hold.");
+
+// ── figures= — the line `scripts/check-proof-figures.mjs` reads ────────────────
+//
+// WHY THIS EXISTS, and it is a defect that recurred rather than a nicety.
+//
+// This proof — the largest in the repo, and the one every product document cites —
+// was NOT in the figure guard's PROOFS registry and emitted no `figures=` line, so
+// nothing checked any number a document stated about it. `docs/WHAT_SIGNALGRID_DOES_TODAY.md`
+// drifted to "188 assertions", was hand-corrected to 206, and had drifted again to
+// 209 by the time an audit re-derived it. The same figure going stale twice is the
+// evidence that correcting the number is not the fix; making it checkable is.
+//
+// The counts are DERIVED here, never restated: `assertions.length` is the real total,
+// and the two enum sizes are read from the same `types.ts` the docs call ground truth.
+// A document that states a different value now fails the guard instead of aging quietly.
+console.log(
+  `\nfigures=assertions=${assertions.length},categories=${SIGNAL_CATEGORIES.length},evidenceFields=${EVIDENCE_FIELDS.length}`,
+);

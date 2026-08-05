@@ -301,22 +301,38 @@ export type DockState =
  */
 export type BatteryHealthState = "healthy" | "degraded" | "failing" | "unknown";
 
-export type SignalCategory =
-  | "identity_state"
-  | "device_compliance"
-  | "device_management"
-  | "device_encryption"
-  | "os_support"
-  | "posture_freshness"
-  | "custody_state"
-  | "charge_state"
-  | "battery_health"
-  | "tamper_state"
-  | "dock_state"
-  | "security_baseline"
-  | "benchmark_selection"
-  | "shift_context"
-  | "badge_binding";
+/** Every normalized signal category the core evaluates.
+ *
+ *  Declared as a const ARRAY with the union derived from it, rather than as a bare
+ *  union — the same correction `SIGNAL_KINDS` in @workspace/posture-composition
+ *  already carries, and for the same reason, now demonstrated twice.
+ *
+ *  A bare union is invisible at runtime, so nothing can COUNT it. Every document
+ *  that wanted to state how many categories exist had to restate the list by hand,
+ *  and `docs/WHAT_SIGNALGRID_DOES_TODAY.md` duly drifted: it claimed 13 while the
+ *  union held 15, having already been hand-corrected once from an earlier wrong
+ *  figure. Deriving the union from the array makes the list enumerable, so
+ *  `signalgrid-core-proof.ts` can emit a real count and the figure guard can hold
+ *  every document to it. The failure mode is designed out rather than watched for. */
+export const SIGNAL_CATEGORIES = [
+  "identity_state",
+  "device_compliance",
+  "device_management",
+  "device_encryption",
+  "os_support",
+  "posture_freshness",
+  "custody_state",
+  "charge_state",
+  "battery_health",
+  "tamper_state",
+  "dock_state",
+  "security_baseline",
+  "benchmark_selection",
+  "shift_context",
+  "badge_binding",
+] as const;
+
+export type SignalCategory = (typeof SIGNAL_CATEGORIES)[number];
 
 export interface NormalizedSignal {
   id: string;
@@ -337,25 +353,33 @@ export type DecisionOutcome = "allow" | "step_up" | "restrict" | "deny";
 export type Severity = "low" | "medium" | "high" | "critical";
 
 /** Fields of the normalized decision-evidence context a rule can test. */
-export type EvidenceField =
-  | "identityEnabled"
-  | "deviceManaged"
-  | "deviceCompliance"
-  | "deviceEncrypted"
-  | "osSupported"
-  | "ownerType"
-  | "postureFreshness"
-  | "workflowRiskTier"
-  | "criticalSignalsPresent"
-  | "custodyState"
-  | "chargeState"
-  | "batteryHealth"
-  | "tamperState"
-  | "dockState"
-  | "baselineState"
-  | "benchmarkSelectionState"
-  | "shiftContextState"
-  | "badgeState";
+/** Every evidence field a policy rule can test. Const array for the same reason
+ *  `SIGNAL_CATEGORIES` above is one: the controls documentation claimed "these —
+ *  and only these — are the dimensions a policy rule can test today" over a list
+ *  of 15 while the union held 18, and no gate could see the difference because a
+ *  union cannot be counted. */
+export const EVIDENCE_FIELDS = [
+  "identityEnabled",
+  "deviceManaged",
+  "deviceCompliance",
+  "deviceEncrypted",
+  "osSupported",
+  "ownerType",
+  "postureFreshness",
+  "workflowRiskTier",
+  "criticalSignalsPresent",
+  "custodyState",
+  "chargeState",
+  "batteryHealth",
+  "tamperState",
+  "dockState",
+  "baselineState",
+  "benchmarkSelectionState",
+  "shiftContextState",
+  "badgeState",
+] as const;
+
+export type EvidenceField = (typeof EVIDENCE_FIELDS)[number];
 
 export type RuleCondition =
   | { field: "identityEnabled"; equals: boolean | "unknown" }

@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 81,
-  "fingerprint": "f3fd8fe159bcfe80a9a5f3c3adce38602c8381a0d8cb76114e1403fc4935f9d3",
+  "manifestVersion": 82,
+  "fingerprint": "699ee8fad57f8f03fa7ed6a0ca61da5bc5d7e2f1857670f23d5b66b81d4d0e9f",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -45,6 +45,9 @@
       "service_lifecycle",
       "session_readiness",
       "break_glass",
+      "credential_rotation",
+      "observability_integrity",
+      "local_authority",
       "detection"
     ],
     "signalCategories": [

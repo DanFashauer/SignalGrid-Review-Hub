@@ -85,6 +85,9 @@ export const SIGNAL_KINDS = [
   "service_lifecycle",
   "session_readiness",
   "break_glass",
+  "credential_rotation",
+  "observability_integrity",
+  "local_authority",
   "detection",
 ] as const;
 

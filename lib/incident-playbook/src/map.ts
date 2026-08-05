@@ -169,6 +169,12 @@ function categoryForKind(kind: string, reason?: string): IncidentCategory {
     // graded against the wrong benchmark document, a superseded version, content
     // that is not CIS's own, or a run that evaluated almost nothing. A measurement
     // failure about the compliance evidence itself, owned by the same queue.
+    // `credential_rotation` is secrets hygiene: a static secret past the maximum age
+    // its own policy declares, or one with no rotation policy at all. A governance
+    // state about the credential rather than a live compromise — the leaked-secret
+    // case is `credential_exposure`, which routes to SecOps below. Owned by the same
+    // compliance queue that owns the other "configured wrong, quietly" dimensions.
+    case "credential_rotation":
     case "benchmark_selection":
       return "security_compliance";
     // `app_update` is the per-app sibling of `device_management_health`: a host app
@@ -293,6 +299,18 @@ function categoryForKind(kind: string, reason?: string): IncidentCategory {
     // team who cannot fix it. Deliberately NOT SecOps either — paging a security analyst
     // for a broker delay trains everyone to ignore the channel. And never the generic
     // Service Desk: the fix is an endpoint/broker change, not a ticket.
+    // `observability_integrity` is the evidence plane grading itself — an exporter that
+    // stopped, a stream sampled or dropped or cost-capped. The fix is an instrumentation
+    // or pipeline change, so it reaches the same endpoint/platform owner as the readiness
+    // dimension above. Deliberately NOT SecOps: a sample rate is not an intrusion, and
+    // paging an analyst for one trains everybody to ignore the channel.
+    case "observability_integrity":
+    // `local_authority` is most often a device that restarted and has not been unlocked,
+    // so its vault, network credential and offline grant are unreadable. That is an
+    // ERRAND — somebody walks over and types a passcode — which is precisely the asset /
+    // device-support queue. Routing it to a security queue would describe a locked iPad
+    // as an incident.
+    case "local_authority":
     case "session_readiness":
     case "peripheral":
       return "asset_device";

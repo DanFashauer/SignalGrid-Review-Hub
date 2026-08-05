@@ -31,6 +31,9 @@ import type { SseEgressVerdict } from "@workspace/integrations/sse-egress";
 import type { ServiceLifecycleVerdict } from "@workspace/integrations/service-lifecycle";
 import type { SessionReadinessVerdict } from "@workspace/integrations/session-readiness";
 import type { BreakGlassVerdict } from "@workspace/integrations/break-glass";
+import type { CredentialRotationVerdict } from "@workspace/integrations/credential-rotation";
+import type { ObservabilityIntegrityVerdict } from "@workspace/integrations/observability-integrity";
+import type { LocalAuthorityVerdict } from "@workspace/integrations/local-authority";
 import type { LocationCertaintyVerdict } from "@workspace/facility-trust-graph";
 import type { DeviceManagementHealthVerdict } from "@workspace/integrations/device-management-health";
 import type { LinkUsabilityVerdict } from "@workspace/integrations/link-usability";
@@ -380,6 +383,57 @@ export function fromSessionReadiness(v: SessionReadinessVerdict): ComposableSign
   // A consumer reading only the action would report both as fine, which is exactly the
   // green-dashboard failure this dimension exists to prevent.
   return { kind: "session_readiness", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromCredentialRotation(v: CredentialRotationVerdict): ComposableSignal {
+  // Is the secret this actor is presenting still inside its OWN rotation policy?
+  // `credential-exposure` sees a secret that LEAKED, `token-binding` sees one that is
+  // replayable, `bootstrap-credential` sees a temporary pass being used as a pass.
+  // A four-hundred-day-old service secret that has never leaked is invisible to all
+  // three, which is the whole reason this dimension exists.
+  //
+  // Its actions are already on the unified ladder and its ceiling is `restrict`, never
+  // escalate: an overdue key is a hygiene fact about the credential, not evidence of an
+  // intrusion, and a dimension that could escalate on date arithmetic alone would be a
+  // blunt instrument wired to a clock.
+  //
+  // THE POSTURE RIDES ALONG because the action alone cannot distinguish the two clean
+  // states. `rotation_not_applicable` (a correctly-classified short-lived credential)
+  // and `rotation_current` (a static secret genuinely inside its window) both emit
+  // `none`, and they are different facts about how much was actually established.
+  return { kind: "credential_rotation", posture: v.posture, action: v.action as UnifiedAction, reason: v.reasonCodes[0] ?? "CREDENTIAL_ROTATION" };
+}
+
+export function fromObservabilityIntegrity(v: ObservabilityIntegrityVerdict): ComposableSignal {
+  // When a decision is about to rest on the ABSENCE of a reported problem, is that
+  // absence an observation or a gap? `session-readiness` already covers a telemetry
+  // plane that goes SILENT; this covers the one that is reachable, current and
+  // healthy-looking while carrying one record in a hundred.
+  //
+  // Its actions are already on the unified ladder and its ceiling is `restrict`, never
+  // escalate: a sampled stream is a limit on what silence can support, not an intrusion.
+  //
+  // THE POSTURE RIDES ALONG for the reason this dimension exists at all. `evidence_sound`
+  // and `evidence_reduced` are both "no bad news", and a consumer reading only the
+  // action would treat a 1%-sampled stream and a full-fidelity one as the same evidence.
+  // They are not: one supports "that did not happen" and the other does not.
+  return { kind: "observability_integrity", posture: v.posture, action: v.action as UnifiedAction, reason: v.reasonCodes[0] ?? "OBSERVABILITY_INTEGRITY" };
+}
+
+export function fromLocalAuthority(v: LocalAuthorityVerdict): ComposableSignal {
+  // May this device act on its OWN authority right now, and did it ever establish that
+  // authority since it last booted? `signalgrid-core/continuity.ts` reconciles offline
+  // decisions after they exist; this is the gate in front of them.
+  //
+  // Its actions are already on the unified ladder and its ceiling is `restrict`, never
+  // escalate and never deny: a device that cannot act alone is narrowed to recovery,
+  // because the worker standing at it may be the person who can unlock it.
+  //
+  // THE POSTURE RIDES ALONG because `awaiting_unlock` is operationally different from
+  // every other restrict in the fabric. It is fixed by a human walking over and typing a
+  // passcode — an errand, not an investigation — and a consumer reading only `restrict`
+  // would route it like a compromise.
+  return { kind: "local_authority", posture: v.posture, action: v.action as UnifiedAction, reason: v.reasonCodes[0] ?? "LOCAL_AUTHORITY" };
 }
 
 export function fromServiceLifecycle(v: ServiceLifecycleVerdict): ComposableSignal {

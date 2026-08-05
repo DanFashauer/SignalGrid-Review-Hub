@@ -77,6 +77,35 @@ const KNOWN_GAPS = {
   // which is the self-invalidating half of this registry doing its job on its first run.
 };
 
+
+/**
+ * Families that are disciplined but not yet CONSUMED, each with a reason.
+ *
+ * Deliberately separate from KNOWN_GAPS. These families ARE gated, proven and
+ * action-free, so rule 2 would fire on a KNOWN_GAPS entry for them and demand its
+ * deletion — correctly, because that registry tracks a different debt. Conflating the
+ * two would make one of the two checks unusable.
+ *
+ * Self-invalidating in the same way: rule 2c below FAILS if a listed family has since
+ * acquired a consumer, so an exemption cannot outlive its subject.
+ */
+const UNWIRED_OK = {
+  "caep-events": {
+    reason:
+      "Outbound CAEP / Shared Signals emitter. It has no adapter because it is not a " +
+      "decision dimension — it PUBLISHES session signals to a relying party rather than " +
+      "contributing a verdict. Its consumer is a control-plane egress path that does not " +
+      "exist yet; until it does, this is a latent trap rather than a live exposure, which " +
+      "is the same posture the five ungated emitters were held in before they were gated.",
+  },
+  syslog: {
+    reason:
+      "Outbound syslog emitter, same shape as caep-events: it forwards, it does not " +
+      "decide. Its four siblings (itsm, siem, telemetry, webhooks) each acquired a " +
+      "consumer; this one has not, so it is real network code no code path reaches.",
+  },
+};
+
 /** A device action performed over the network.
  *
  *  TWO ROUNDS OF FALSE POSITIVES shaped this, and both are worth recording because
@@ -260,11 +289,71 @@ for (const name of Object.keys(KNOWN_GAPS)) {
   }
 }
 
+// ── 2c. Listed as unwired but since consumed → FAIL (no exemption outlives its subject) ──
+for (const name of Object.keys(UNWIRED_OK)) {
+  const r = results.find((x) => x.name === name);
+  if (!r) {
+    bad(`UNWIRED_OK lists "${name}", which is no longer a connector family. Remove the entry.`);
+    continue;
+  }
+  if (r.consumers.some((c) => !/-proof\.ts$/.test(c))) {
+    bad(
+      `UNWIRED_OK lists "${name}" as consumed by nothing, but something now imports it. ` +
+        `Delete the entry — a stale exemption reports success over something nobody is checking any more.`,
+    );
+  }
+}
+
 // ── 3. Announce the debt in full, every run ─────────────────────────────────────
 const gaps = results
   .filter((r) => KNOWN_GAPS[r.name])
   .map((r) => ({ ...r, ...KNOWN_GAPS[r.name] }))
   .sort((a, b) => (a.severity === "violation" ? -1 : b.severity === "violation" ? 1 : 0));
+
+
+// ── 2b. Gated and proven, and consumed by NOTHING → FAIL ────────────────────────
+//
+// WHY THIS EXISTS, and it is a defect this gate previously reported success over.
+//
+// `consumersOf` has been computed since the ungated-emitter audit, but only ever
+// COUNTED — printed beside a known gap so a wiring change could not happen quietly.
+// The inverse case was never checked, and three families reached the branch in that
+// state: `credential-rotation`, `observability-integrity` and `local-authority` were
+// each gated, proven, mutation-swept, registered in preflight and CI, and imported by
+// nothing but their own proof. This gate printed "51 of 51 families are gated, proven
+// and action-free" over them, which was true and was not the claim a reader takes from
+// it. "51 connector families" reads as 51 dimensions feeding decisions.
+//
+// A proven island is the unearned affirmative in its purest form: every gate green,
+// and the thing the green implies — that the dimension participates — established by
+// nobody. It was found by a human looking, which AGENTS.md and this file's own header
+// both say is not a control.
+//
+// FAILING rather than counting, deliberately. At the time this was added every family
+// had a consumer, so there is no pre-existing debt to hold a PR hostage to — the rule
+// only ever blocks a NEW island. A family that genuinely should stand alone for a
+// while can say so in KNOWN_GAPS, where rule 5 will delete the entry the moment it is
+// wired up.
+for (const r of results) {
+  // A PROOF IS NOT A CONSUMER. `consumersOf` deliberately counts every tracked file
+  // outside the family's own directory, which includes `scripts/src/<name>-proof.ts` —
+  // so an island always has exactly one 'consumer' and a naive check here can never
+  // fire. The first draft of this check was written that way and a negative control
+  // caught it: the gate still passed with the adapter import deleted. Exercising a new
+  // guard against the failure it claims to catch is the only thing that distinguishes
+  // it from decoration.
+  const participating = r.consumers.filter((c) => !/-proof\.ts$/.test(c));
+  if (participating.length > 0) continue;
+  if (KNOWN_GAPS[r.name] || UNWIRED_OK[r.name]) continue;
+  bad(
+    `${r.name}: gated and proven, and NOTHING imports it outside its own directory and proof. ` +
+      `A dimension nothing consumes does not participate in any decision, however green its own ` +
+      `gates are. Wire it into a consumer (for a decision dimension that usually means a ` +
+      `\`from${r.name.replace(/(^|-)([a-z])/g, (_, __, c) => c.toUpperCase())}\` adapter in ` +
+      `@workspace/posture-composition, plus a SIGNAL_KINDS entry and incident routing), or add ` +
+      `it to UNWIRED_OK in this file with a reason.`,
+  );
+}
 
 ok(`${disciplined.length} of ${families.length} families are gated, proven and action-free`);
 

@@ -995,6 +995,14 @@ async function run() {
       });
       check("gateway DENIES the deferred POST /v1/decisions/reconcile (404)", gwReconcile.status === 404);
 
+      // The gateway half of the assurance assertion. /v1/context needs a credential,
+      // and under this profile the demo bearers are refused — so the posture is read
+      // from the 401 body's absence rather than guessed: what IS provable here without
+      // a real IdP is that the fence keeps the step-up routes out of the served set,
+      // which is exactly what stepUpAnswerable derives from.
+      const gwStepUp = await fetch(`${BASE4}/v1/step-up/challenge`, { method: "POST" });
+      check("gateway: no served route can answer a step_up (shadow mode, 404)", gwStepUp.status === 404);
+
       // The demo console is not served at the root either — it renders verdicts with
       // no enforced/observed label, which is Blocker 10 in rendered form.
       const gwConsole = await fetch(`http://localhost:${PORT4}/console`);
@@ -1069,6 +1077,20 @@ async function run() {
   // Registered and documented, never called. Found by the check below rather than
   // by reading the test, which is the point of having it.
   const ctx = await req("GET", "/v1/context", { token: KEYS.operator });
+  // ── ASSURANCE POSTURE (Blocker 10) ────────────────────────────────────────────
+  //
+  // Every field is DERIVED, so the test's job is to prove it tracks reality rather
+  // than reporting a constant. `stepUpAnswerable` is the one that matters: it is the
+  // difference between "the gate returned step_up" and "this deployment can resolve
+  // one", and it is asserted in BOTH profiles — true here where every router is
+  // mounted, false under the gateway profile below. A field that reads the same in
+  // both would be a label, not a measurement.
+  check("assurance: signals are fixtures under the review-demo default (not a claim about a real device)",
+    ctx.json?.assurance?.signalSource === "fixtures");
+  check("assurance: a verdict is advisory — SignalGrid actuates nothing on any device",
+    ctx.json?.assurance?.verdictEffect === "advisory");
+  check("assurance: step_up IS answerable under review-demo (the step-up routes are mounted)",
+    ctx.json?.assurance?.stepUpAnswerable === true);
   check("context → 200 with the caller's principal and tenant", ctx.status === 200 && typeof ctx.json?.tenant?.id === "string" && typeof ctx.json?.principal !== "undefined");
   const ctxNoAuth = await req("GET", "/v1/context", {});
   check("context without a token → 401", ctxNoAuth.status === 401);

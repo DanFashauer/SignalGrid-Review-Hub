@@ -9,6 +9,7 @@ import { decisionsTotal } from "../lib/metrics";
 import { requireTenantContext } from "../middlewares/context";
 import { v1RateLimiter } from "../middlewares/rateLimit";
 import { demoSurfacesEnabled } from "../lib/profile";
+import { resolveAssurancePosture } from "../lib/assurance";
 
 /**
  * /v1 — the product-shaped SignalGrid surface.
@@ -40,9 +41,12 @@ router.get("/v1/keys", (req: Request, res: Response) => {
 // Everything below requires a tenant context and is rate-limited.
 router.use("/v1", v1RateLimiter, requireTenantContext);
 
+// `assurance` is derived on every call rather than cached: a deployment that is
+// promoted, or has live integrations switched on, must not keep reporting the
+// posture it booted with.
 router.get("/v1/context", (req: Request, res: Response) => {
   const { principal, tenant } = core.context(token(req));
-  res.json(envelope(req, { principal, tenant }));
+  res.json(envelope(req, { principal, tenant, assurance: resolveAssurancePosture() }));
 });
 
 // The decision core stays pure/in-memory; when a durable store is configured

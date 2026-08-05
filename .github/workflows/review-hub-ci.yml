@@ -312,6 +312,15 @@ jobs:
       - name: "Connector discipline (gated + proven, no device actuators)"
         run: node scripts/check-connector-discipline.mjs
 
+      # The declared product edge must match the real one, in BOTH directions. The
+      # omission direction is the freeze: a new connector family, signal kind, API
+      # path or app surface fails this until a human classifies it, because
+      # "unexamined" is the door breadth walks back in through.
+      - name: "Launch profile (declared product edge == real one)"
+        run: node scripts/check-launch-profile.mjs
+      - name: Proof — launch profile (Limited GA scope is coherent; figures published)
+        run: pnpm run proof:launch-profile
+
       # SEVEN gates lived in scripts/preflight.mjs and ran NOWHERE in CI — checked
       # against all 12 workflow files, not just this one. That made them local
       # conveniences rather than gates: they fired only when somebody remembered to

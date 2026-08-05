@@ -54,6 +54,7 @@
     "proof:credential-rotation": "pnpm --filter @workspace/scripts run proof:credential-rotation",
     "proof:observability-integrity": "pnpm --filter @workspace/scripts run proof:observability-integrity",
     "proof:local-authority": "pnpm --filter @workspace/scripts run proof:local-authority",
+    "proof:launch-profile": "pnpm --filter @workspace/scripts run proof:launch-profile",
     "proof:bootstrap-credential": "pnpm --filter @workspace/scripts run proof:bootstrap-credential",
     "proof:break-glass": "pnpm --filter @workspace/scripts run proof:break-glass",
     "proof:caep-events": "pnpm --filter @workspace/scripts run proof:caep-events",

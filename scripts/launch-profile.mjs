@@ -322,7 +322,10 @@ export const SURFACES = [
   {
     key: "app-surfaces",
     derivedFrom:
-      "every directory under artifacts/, plus every `type: application` target in BOTH " +
+      "every git-TRACKED directory under artifacts/ and tools/ (gitignored build output such "+
+      "as artifacts/level-10 and artifacts/proof is not a surface, and reading the filesystem "+
+      "instead made this gate answer differently on a machine that had run the harness), plus "+
+      "every `type: application` target in BOTH " +
       "native/ios/project.yml and native/ios/SignalGridMobile/project.yml, prefixed `ios:` " +
       "(test targets and the SignalGridMobileCore framework are excluded — neither is a " +
       "surface anyone meets)",
@@ -393,16 +396,8 @@ export const SURFACES = [
     reason: "Build/verify harness. Not a product surface.",
   },
   {
-    id: "level-10",
-    reason: "Audit harness. Not a product surface.",
-  },
-  {
     id: "live-evidence",
     reason: "Evidence artifacts written by verification lanes. Not a product surface.",
-  },
-  {
-    id: "proof",
-    reason: "Proof outputs. Not a product surface.",
   },
   {
     id: "sbom",

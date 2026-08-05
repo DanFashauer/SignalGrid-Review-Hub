@@ -42,7 +42,7 @@ Every figure in this section is published by `proof:launch-profile` and checked 
 docs↔proof figure guard on each run — stated here, beside the numbers, because scope
 is per-section and a proof named three sections away checks nothing.
 
-`scripts/launch-profile.mjs` classifies **166 classified items** across **4 profile
+`scripts/launch-profile.mjs` classifies **164 classified items** across **4 profile
 surfaces** — connector families, signal kinds, published API paths, and client/app
 surfaces. Every item carries exactly one status:
 
@@ -51,7 +51,7 @@ surfaces. Every item carries exactly one status:
 | `launch` | **17 launch items** | In the Limited GA surface. |
 | `deferred` | **134 deferred items** | Real, gated, proven, staying in the repository — not Limited GA. |
 | `demo_only` | **8 demo only items** | Exists to demonstrate or explain. Must never be presented as shipping product. |
-| `internal` | **7 internal items** | Harness, generator or evidence plumbing. Not a product surface at all. |
+| `internal` | **5 internal items** | Harness, generator or evidence plumbing. Not a product surface at all. |
 
 `deferred` is not a demotion. It is the freeze working.
 
@@ -74,7 +74,7 @@ connector surface not at all.
 it did, `/v1/decisions/{id}/evidence` — which is not garnish but the product's
 entire claim — plus `/v1/context`, `/v1/keys`, `/v1/audit` and `/v1/metrics`.
 
-**App surfaces (3 of 20).** `api-server` (the product), `signalgrid-review` (the one
+**App surfaces (3 of 18).** `api-server` (the product), `signalgrid-review` (the one
 operator console), `ios:EnterpriseShell` (the one host app, shipping as the
 integration reference a design partner builds against).
 
@@ -119,6 +119,15 @@ because it read only one of the two iOS project files. An adversarial re-derivat
 then found `tools/room-console` — a real, user-facing page that bundles the decision
 core and runs it in a browser — which every manifest-keyed derivation misses,
 because it has no manifest. A surface is a surface because a person can open it.
+
+A fourth defect appeared only in CI. The derivation read directory entries off disk,
+so it counted gitignored build output — `artifacts/level-10` and `artifacts/proof`
+exist on a machine that has run the harness and not in a clean checkout.
+It had answered 20 surfaces locally against 19 in CI, and went red on a mismatch
+that existed only because the two runs were asking different questions. It now
+derives from
+`git ls-files`, which is one reproducible answer everywhere and also the right
+question: a directory that is not in version control is output, not a surface.
 
 `proof:launch-profile` publishes the figures this document quotes, so the
 docs↔proof figure guard fails the build if this page and the profile ever disagree.

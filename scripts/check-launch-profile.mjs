@@ -28,6 +28,7 @@
 // itself — a self-reported total is the fossil class this repo keeps finding.
 
 import { readdirSync, readFileSync, existsSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SURFACES, STATUSES, GAPS, LAUNCH_PROFILE_VERSION, PRODUCT_NAME } from "./launch-profile.mjs";
@@ -82,15 +83,44 @@ function deriveApiPaths() {
  *    manifest files misses it entirely. That is precisely the silent omission this
  *    gate exists to prevent, and the gate had it. A surface is a surface because a
  *    person can open it, not because it declared a manifest.
+ *
+ *  · TRACKED FILES, NOT THE FILESYSTEM — and this one only showed up in CI. The
+ *    first version read directory entries off disk, which meant it saw whatever
+ *    GENERATED output happened to be lying around: `artifacts/level-10/` and
+ *    `artifacts/proof/` are both gitignored build output, present on a machine that
+ *    has run the harness and absent in a clean checkout. So the gate answered "20
+ *    surfaces" locally and "19" in CI, the profile was written against the polluted
+ *    answer, and the build went red on a mismatch that existed only because the two
+ *    runs were asking different questions. Deriving from `git ls-files` gives one
+ *    reproducible answer everywhere, and it is also the RIGHT question: a directory
+ *    that is not in version control is not a product surface, it is output.
  */
-function deriveAppSurfaces() {
-  const artifacts = readdirSync(join(repoRoot, "artifacts"), { withFileTypes: true })
-    .filter((e) => e.isDirectory())
-    .map((e) => e.name);
 
-  const tools = readdirSync(join(repoRoot, "tools"), { withFileTypes: true })
-    .filter((e) => e.isDirectory())
-    .map((e) => `tools:${e.name}`);
+/** Top-level directories under `prefix` that git actually tracks. Fails closed:
+ *  if git cannot answer, the gate stops rather than falling back to a filesystem
+ *  read whose result depends on what a previous command happened to write. */
+function trackedDirs(prefix) {
+  const run = spawnSync("git", ["ls-files", "-z", "--", prefix], {
+    cwd: repoRoot,
+    encoding: "buffer",
+  });
+  if (run.status !== 0) {
+    die(`\`git ls-files -- ${prefix}\` failed; refusing to guess the surface from disk.`);
+  }
+  const files = run.stdout.toString("utf8").split("\0").filter(Boolean);
+  if (files.length === 0) die(`git tracks nothing under ${prefix} — the derivation anchor moved.`);
+  const dirs = new Set();
+  for (const f of files) {
+    const rest = f.slice(prefix.length);
+    if (!rest.includes("/")) continue; // a loose file at the root is not a surface
+    dirs.add(rest.split("/")[0]);
+  }
+  return [...dirs];
+}
+
+function deriveAppSurfaces() {
+  const artifacts = trackedDirs("artifacts/");
+  const tools = trackedDirs("tools/").map((d) => `tools:${d}`);
 
   const projects = ["native/ios/project.yml", "native/ios/SignalGridMobile/project.yml"];
   const ios = [];

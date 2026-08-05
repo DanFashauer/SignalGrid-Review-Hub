@@ -300,6 +300,13 @@ export const TARGETS = [
     ],
   },
   {
+    proof: "proof:local-authority",
+    files: [
+      "lib/integrations/src/integrations/local-authority/evaluate.ts",
+      "lib/integrations/src/integrations/local-authority/normalize.ts",
+    ],
+  },
+  {
     proof: "proof:bootstrap-credential",
     files: [
       "lib/integrations/src/integrations/bootstrap-credential/evaluate.ts",

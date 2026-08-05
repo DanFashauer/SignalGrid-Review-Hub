@@ -28,6 +28,7 @@
     "proof:benchmark-selection": "tsx ./src/benchmark-selection-proof.ts",
     "proof:credential-rotation": "tsx ./src/credential-rotation-proof.ts",
     "proof:observability-integrity": "tsx ./src/observability-integrity-proof.ts",
+    "proof:local-authority": "tsx ./src/local-authority-proof.ts",
     "proof:bootstrap-credential": "tsx ./src/bootstrap-credential-proof.ts",
     "proof:break-glass": "tsx ./src/break-glass-proof.ts",
     "proof:caep-events": "tsx ./src/caep-events-proof.ts",

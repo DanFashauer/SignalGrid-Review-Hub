@@ -30,6 +30,7 @@
     "./identity-risk": "./src/integrations/identity-risk/index.ts",
     "./itsm": "./src/integrations/itsm/index.ts",
     "./link-usability": "./src/integrations/link-usability/index.ts",
+    "./local-authority": "./src/integrations/local-authority/index.ts",
     "./location-services": "./src/integrations/location-services/index.ts",
     "./macos-posture": "./src/integrations/macos-posture/index.ts",
     "./nac": "./src/integrations/nac/index.ts",

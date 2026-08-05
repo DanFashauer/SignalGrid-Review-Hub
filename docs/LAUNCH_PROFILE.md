@@ -48,9 +48,9 @@ surfaces. Every item carries exactly one status:
 
 | Status | Count | Meaning |
 |---|---|---|
-| `launch` | **17 launch items** | In the Limited GA surface. |
+| `launch` | **16 launch items** | In the Limited GA surface. |
 | `deferred` | **134 deferred items** | Real, gated, proven, staying in the repository — not Limited GA. |
-| `demo_only` | **8 demo only items** | Exists to demonstrate or explain. Must never be presented as shipping product. |
+| `demo_only` | **9 demo only items** | Exists to demonstrate or explain. Must never be presented as shipping product. |
 | `internal` | **5 internal items** | Harness, generator or evidence plumbing. Not a product surface at all. |
 
 `deferred` is not a demotion. It is the freeze working.
@@ -69,10 +69,18 @@ connector surface not at all.
 **Signal kinds (3 of 41).** `device_posture`, `device_management_health`,
 `local_authority` — exactly what the three launch families produce.
 
-**Published API paths (8 of 54).** The Assist gate itself
+**Published API paths (7 of 54).** The Assist gate itself
 (`/v1/decisions/evaluate`), the three routes an operator console needs to see what
 it did, `/v1/decisions/{id}/evidence` — which is not garnish but the product's
-entire claim — plus `/v1/context`, `/v1/keys`, `/v1/audit` and `/v1/metrics`.
+entire claim — plus `/v1/context`, `/v1/audit` and `/v1/metrics`. All seven sit
+below the auth guard in `routes/v1.ts`, checked rather than assumed.
+
+Version 1 listed `/v1/keys` as an eighth, described as "API-key authentication for
+the above". That was reasoned, not read. The route is a demo credential dispenser
+sitting *above* the auth guard, handing the raw owner bearer for every seeded tenant
+to anonymous callers — and `demoSurfacesEnabled()` had already been refusing to
+register it outside the review demo. The runtime fence was right and the declared
+scope was wrong. It is `demo_only` in version 2.
 
 **App surfaces (3 of 18).** `api-server` (the product), `signalgrid-review` (the one
 operator console), `ios:EnterpriseShell` (the one host app, shipping as the

@@ -66,7 +66,21 @@
 
 /** Bumped whenever a status changes. Not a semver — a serial number, so a doc or a
  *  review can name the exact revision of the scope it was written against. */
-export const LAUNCH_PROFILE_VERSION = 1;
+export const LAUNCH_PROFILE_VERSION = 2;
+
+// VERSION HISTORY, kept because a scope decision that changes silently is not a
+// decision anyone can hold you to.
+//
+//   2  `/v1/keys` moved launch → demo_only. Version 1 called it "API-key
+//      authentication for the above", which was reasoned rather than read: the
+//      route is a demo credential dispenser sitting ABOVE the auth guard, handing
+//      the raw owner bearer for every seeded tenant to anonymous callers, and
+//      `demoSurfacesEnabled()` had ALREADY been refusing to register it outside
+//      review-demo. The runtime fence was right and the scope was wrong — found
+//      by checking the launch set against the code instead of against intent.
+//      The other seven launch paths were verified the same way and all sit below
+//      the guard.
+//   1  Initial profile.
 
 export const PRODUCT_NAME = "SignalGrid Shared-Device Trust Gateway";
 export const TARGET = "Limited GA, 2027-02-04";
@@ -264,11 +278,20 @@ export const SURFACES = [
       "explainable and reproducible, so this route is not optional garnish — it is the claim.",
   },
   { id: "/v1/context", reason: "Tenant context. \"Tenant-aware\" is in the criterion." },
-  { id: "/v1/keys", reason: "API-key authentication for the above." },
   { id: "/v1/audit", reason: "The durable audit ledger a regulated pilot is bought on." },
   { id: "/v1/metrics", reason: "Operability. A service nobody can watch cannot be run." },
   ],
-    demo_only: [],
+    demo_only: [
+      {
+        id: "/v1/keys",
+        reason:
+          "NOT an authentication mechanism — a demo CREDENTIAL DISPENSER. It sits ABOVE the " +
+          "auth guard in routes/v1.ts and publishes DEMO_KEYS, the raw owner bearer for every " +
+          "seeded tenant, to anonymous callers. `demoSurfacesEnabled()` already refuses to " +
+          "register it outside review-demo, so the runtime fence had this right while this " +
+          "profile said it ships. Corrected in version 2.",
+      },
+    ],
     internal: [],
     deferred: [
       "/v1/decisions/reconcile",

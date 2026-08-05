@@ -70,3 +70,74 @@ export function resolveProfile(): ProductProfile {
 export function demoSurfacesEnabled(profile: ProductProfile = resolveProfile()): boolean {
   return profile === "review-demo";
 }
+
+// ── The GA served surface ─────────────────────────────────────────────────────
+//
+// `demoSurfacesEnabled` above answers "may this deployment show demo
+// affordances". It does NOT answer the question a customer deployment actually
+// raises: WHAT DOES THIS SERVER SERVE? Under `shared-device-gateway` it still
+// mounts the integrations catalog, the monitoring routes, the simulator, the
+// signal radar and all 46 deferred `/v1` paths. Every one of those is real work
+// that is not part of Limited GA, and a surface nobody scoped is a surface nobody
+// reviewed — which is Blocker 8 stated precisely.
+//
+// So the gateway profile carries an ALLOWLIST, and everything outside it 404s.
+//
+// WHY AN ALLOWLIST AND NOT A DENYLIST. A denylist has to be updated every time a
+// route is added, and the failure mode of forgetting is that the new route SHIPS.
+// An allowlist's failure mode is that a new route 404s until someone adds it —
+// noisy, immediate, and safe. Fail-closed is the whole doctrine of this codebase
+// applied to its own attack surface.
+//
+// WHY 404 AND NOT 403. A route that exists and refuses still answers "does this
+// deployment have a control plane?". A 404 from this allowlist is indistinguishable
+// from a route that was never registered, which is the same reasoning
+// `routes/index.ts` already gives for not mounting the demo routers at all.
+//
+// THIS LIST IS CROSS-CHECKED, not trusted: `scripts/check-launch-profile.mjs`
+// holds it against the `launch` entries of the published-API-paths surface in
+// `scripts/launch-profile.mjs`. Runtime and governance are written in different
+// files, by different mechanisms, and a gate compares them — so neither can drift
+// into agreeing with itself.
+export const GA_ALLOWED_ROUTES: readonly { method: string; path: string }[] = [
+  { method: "GET", path: "/healthz" },
+  { method: "GET", path: "/v1/context" },
+  { method: "POST", path: "/v1/decisions/evaluate" },
+  { method: "GET", path: "/v1/decisions" },
+  { method: "GET", path: "/v1/decisions/:id" },
+  { method: "GET", path: "/v1/decisions/:id/evidence" },
+  { method: "GET", path: "/v1/audit" },
+  { method: "GET", path: "/v1/metrics" },
+];
+
+/** `/v1/decisions/:id` → /^\/v1\/decisions\/[^/]+$/ — anchored at BOTH ends so
+ *  `/v1/decisions/abc/resolution` cannot ride in on a prefix match. */
+function pathMatcher(pattern: string): RegExp {
+  const source = pattern
+    .split("/")
+    .map((seg) => (seg.startsWith(":") ? "[^/]+" : seg.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
+    .join("/");
+  return new RegExp(`^${source}$`);
+}
+
+const GA_MATCHERS = GA_ALLOWED_ROUTES.map((r) => ({ method: r.method, re: pathMatcher(r.path) }));
+
+/**
+ * Is this request inside the Limited GA surface?
+ *
+ * THE METHOD IS PART OF THE ANSWER, and that is not tidiness — it closes a hole the
+ * test caught on the first run. With paths alone, `/v1/decisions/:id` matches
+ * `[^/]+` in the id position, so `POST /v1/decisions/reconcile` — a DEFERRED route —
+ * sailed through the fence looking exactly like a decision id. A parameterised
+ * allowlist entry silently swallows its literal siblings, and the sibling here was a
+ * write path. Pinning the method separates `GET /v1/decisions/:id` (launch) from
+ * `POST /v1/decisions/reconcile` (deferred) without a denylist of names to maintain.
+ *
+ * Query strings are never consulted: scoping by a client-supplied query parameter is
+ * exactly the defect the control-plane router was unmounted for.
+ */
+export function routeServedByGateway(method: string, path: string): boolean {
+  const clean = path.split("?")[0]!.replace(/\/+$/, "") || "/";
+  const verb = method.toUpperCase();
+  return GA_MATCHERS.some((m) => m.method === verb && m.re.test(clean));
+}

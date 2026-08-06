@@ -115,7 +115,7 @@ export const AREAS = [
  *
  * This does not decide the licensing question — it refuses to let it go unasked.
  */
-export const REPUBLICATION_FORMATS = [".pdf", ".docx", ".pptx", ".xlsx", ".epub"];
+export const REPUBLICATION_FORMATS = [".pdf", ".docx", ".doc", ".pptx", ".xlsx", ".epub"]
 
 /**
  * The licence basis for each third-party asset, keyed by repo-relative path.
@@ -141,20 +141,16 @@ export const REPUBLICATION_FORMATS = [".pdf", ".docx", ".pptx", ".xlsx", ".epub"
  * full coverage."
  */
 export const THIRD_PARTY_DISPOSITIONS = [
-  {
-    path: "attached_assets/Best_Endpoint_Management_Tools_Reviews_2026_Gartner_Peer_Insig_1779426199751.pdf",
-    basis: "OWNER_PENDING",
-    note:
-      "Gartner Peer Insights report, reproduced whole in a PUBLIC repository. Gartner content is licensed and its redistribution is restricted; nothing in this repository establishes a right to republish it. Intake ledger row 62 already recorded a related source marked 'unauthorized reproduction prohibited'. Nothing in the repo references this file and it is not copied to GitHub Pages.",
-    ownerDecision:
-      "Remove from the public tree (reversible; the assessment it fed is already recorded in the intake ledger), or record the licence that permits publication. Removal from HEAD does NOT remove it from git history — purging that needs a rewrite, which NOTICE says the provenance record should not undergo.",
-  },
-  {
-    path: "attached_assets/Best_Identity_Governance_and_Administration_Reviews_2026_Gartn_1779499491759.pdf",
-    basis: "OWNER_PENDING",
-    note: "Same as above — Gartner Peer Insights, reproduced whole, no established right to republish, unreferenced, not on Pages.",
-    ownerDecision: "As above: remove from the public tree, or record the licence that permits publication.",
-  },
+  // Empty, and that is the point: the four entries that lived here were REMOVED from
+  // the tree rather than dispositioned. Two Gartner Peer Insights reports and two full
+  // scrapes of fleetdm.com pages (one of them a 404 page) were reproduced whole in a
+  // public repository with no established right to republish them. Nothing referenced
+  // any of the four.
+  //
+  // The knowledge survived the files: the Gartner assessments are recorded in the
+  // intake ledger, and what the Fleet GitOps page taught is written up in the repo's
+  // own docs in the repo's own words. Deleting a source you have already learned from
+  // costs nothing; republishing it costs a licence you do not have.
 ];
 
 /**
@@ -167,6 +163,29 @@ export const THIRD_PARTY_DISPOSITIONS = [
  * switched-off gate is worse than none because the policy still reads as enforced.
  */
 export const CONTENT_RULES = [
+  {
+    id: "scraped_web_page",
+    // WHY: the format list above catches a PDF because a PDF LOOKS like someone else's
+    // document. A markdown file does not — and two 1,400-line scrapes of fleetdm.com
+    // sat in this repository, cookie banner and all, passing every gate, because
+    // `.md` is the same extension the repo's own docs use. Extension is a proxy for
+    // provenance and a bad one.
+    //
+    // The tell is the furniture a scraper drags along: consent-banner text and CDN
+    // asset hosts that no hand-written doc would ever contain.
+    pattern: /cdn-cookieyes\.com|This website or its third-party tools process personal data|\bcookieyes\b/i,
+    message: "looks like a SCRAPED WEB PAGE (consent-banner / CDN furniture). Reproducing someone else's page whole in a public repo is republication regardless of file extension. Summarize it in your own words instead, or record the licence.",
+    controls: {
+      mustMatch: [
+        "![](https://cdn-cookieyes.com/assets/images/close.svg)",
+        "This website or its third-party tools process personal data",
+      ],
+      mustNotMatch: [
+        "we process personal data under a documented lawful basis",
+        "third-party tools are gated behind SIGNALGRID_LIVE_INTEGRATIONS",
+      ],
+    },
+  },
   {
     id: "credential_in_url",
     why: "A username:password embedded in a URL to a real host is a live credential published in git history, where deleting the file does not remove it.",

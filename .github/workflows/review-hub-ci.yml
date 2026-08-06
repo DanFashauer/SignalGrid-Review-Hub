@@ -234,6 +234,8 @@ jobs:
 
       - name: Guard-registry drift check
         run: node scripts/check-guard-registries.mjs
+      - name: "Assessor package (links/commands an external reviewer follows)"
+        run: node scripts/check-assessor-package.mjs
       - name: "Connector discipline (gated + proven, no device actuators)"
         run: node scripts/check-connector-discipline.mjs
 

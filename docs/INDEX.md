@@ -24,6 +24,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 ## Core orientation
 
 - [Repository lineage](REPO_LINEAGE.md): explains the public/private repository split and what belongs in each repository.
+- [Publication boundary](PUBLICATION_BOUNDARY.md): that split enforced rather than remembered — `pnpm run guard:boundary` requires every tracked path to be classified with a stated reason, so nothing reaches this public repository unexamined. Covers what the gate cannot establish, why `OWNER_PENDING` is not a snooze, and the two third-party documents currently awaiting an owner decision.
 - [IP & licensing posture](IP_AND_LICENSING.md): how SignalGrid's IP is held today (copyright/MIT public code, trademark on the name, trade-secret core/hardware, patent timing) and the open decisions to settle with counsel — plus the publication boundary that keeps patent options open. Not legal advice.
 - [Alpha to public pre-production parity](ALPHA_TO_PUBLIC_PREPROD_PARITY.md): maps DEV Alpha learnings into Review Hub, private core, redesign, deferred, or archive categories.
 - [Roadmap to private core](ROADMAP_TO_PRIVATE_CORE.md): defines how validated public concepts move toward protected core implementation.

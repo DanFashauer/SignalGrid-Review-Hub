@@ -108,6 +108,7 @@
     "guard:figures": "node scripts/check-proof-figures.mjs",
     "guard:mutations": "node scripts/mutation-guard.mjs",
     "guard:registries": "node scripts/check-guard-registries.mjs",
+    "guard:boundary": "node scripts/check-publication-boundary.mjs",
     "proof:grant-safety": "pnpm --filter @workspace/scripts run proof:grant-safety",
     "proof:fabric-evals": "pnpm --filter @workspace/scripts run proof:fabric-evals",
     "proof:fabric-scenario": "pnpm --filter @workspace/scripts run proof:fabric-scenario",

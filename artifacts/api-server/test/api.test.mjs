@@ -930,12 +930,14 @@ async function run() {
       }
       check("gateway-profile server becomes ready (the profile does not break boot)", ready4 === true);
 
-      // 401, not 404, and the difference is worth stating: with the route unregistered
-      // the path falls under the `/v1` auth guard like every other /v1 path, so it now
-      // DEMANDS a credential instead of handing one out. Combined with the demo-bearer
-      // refusal below, there is no token that satisfies it.
+      // 404 now, and it USED TO BE 401. The change is deliberate and is an improvement:
+      // with only the route unregistered, `/v1/keys` fell under the `/v1` auth guard and
+      // answered 401 — which still confirms to an anonymous caller that a keys endpoint
+      // exists here. The GA allowlist 404s it instead, so the response is indistinguishable
+      // from a path that was never built. Either way it no longer hands out a bearer; this
+      // is the difference between refusing to answer and declining to acknowledge.
       const gwKeys = await fetch(`${BASE4}/v1/keys`);
-      check("gateway: /v1/keys no longer publishes bearers — it demands one (401)", gwKeys.status === 401);
+      check("gateway: /v1/keys is not acknowledged at all (404, was 401)", gwKeys.status === 404);
 
       const gwSim = await fetch(`${BASE4}/sim/room-entry`, {
         method: "POST",
@@ -946,6 +948,65 @@ async function run() {
 
       const gwCp = await fetch(`${BASE4}/cp/v1/tenants`);
       check("gateway: the unauthenticated control plane is NOT mounted (no tenant roster)", gwCp.status === 404);
+
+      // ── THE GA SERVED SURFACE, both halves ────────────────────────────────────
+      //
+      // A fence proven in one direction is not proven. Asserting only that deferred
+      // routes 404 would pass just as well if the server had failed to start, or if
+      // the allowlist were empty and EVERYTHING 404'd — which would be a broken
+      // product reported as a hardened one. So both halves run in the same server:
+      // every launch path must still ANSWER, and every deferred path must not.
+      //
+      // "Answers" means "is not 404". A 401 from `/v1/context` is the route working:
+      // it is reachable and demanding a credential, which is exactly right.
+      for (const p of ["/healthz", "/v1/context", "/v1/decisions", "/v1/audit", "/v1/metrics"]) {
+        const r = await fetch(`${BASE4}${p}`);
+        check(`gateway ALLOWS the launch path ${p} (${r.status}, not 404)`, r.status !== 404);
+      }
+
+      // One per deferred router plus a spread of deferred /v1 paths. Not exhaustive
+      // by design — the allowlist is fail-closed, so a route absent from this list is
+      // denied by construction rather than by having been remembered here.
+      for (const p of [
+        "/v1/policies",
+        "/v1/webhooks",
+        "/v1/remediation",
+        "/v1/app-workflows/evaluate",
+        "/v1/step-up/challenge",
+        "/integrations",
+        "/decisions",
+        "/simulator/scenarios",
+        "/signals/catalog",
+        "/metrics/dashboard",
+      ]) {
+        const r = await fetch(`${BASE4}${p}`);
+        check(`gateway DENIES the deferred path ${p} (404)`, r.status === 404);
+      }
+
+      // Checked with its REAL method. `POST /v1/decisions/reconcile` is the deferred
+      // route; a GET on that path is just `GET /v1/decisions/:id` with a decision id
+      // that happens to read "reconcile", which resolves to "no such decision" under
+      // auth. Asserting the wrong verb here would have been testing a route that does
+      // not exist and calling the result a fence.
+      const gwReconcile = await fetch(`${BASE4}/v1/decisions/reconcile`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+      check("gateway DENIES the deferred POST /v1/decisions/reconcile (404)", gwReconcile.status === 404);
+
+      // The gateway half of the assurance assertion. /v1/context needs a credential,
+      // and under this profile the demo bearers are refused — so the posture is read
+      // from the 401 body's absence rather than guessed: what IS provable here without
+      // a real IdP is that the fence keeps the step-up routes out of the served set,
+      // which is exactly what stepUpAnswerable derives from.
+      const gwStepUp = await fetch(`${BASE4}/v1/step-up/challenge`, { method: "POST" });
+      check("gateway: no served route can answer a step_up (shadow mode, 404)", gwStepUp.status === 404);
+
+      // The demo console is not served at the root either — it renders verdicts with
+      // no enforced/observed label, which is Blocker 10 in rendered form.
+      const gwConsole = await fetch(`http://localhost:${PORT4}/console`);
+      check("gateway: the demo console is not served at the root (404)", gwConsole.status === 404);
 
       const gwDemoToken = await fetch(`${BASE4}/v1/context`, {
         headers: { authorization: `Bearer ${KEYS.owner}` },
@@ -1016,6 +1077,20 @@ async function run() {
   // Registered and documented, never called. Found by the check below rather than
   // by reading the test, which is the point of having it.
   const ctx = await req("GET", "/v1/context", { token: KEYS.operator });
+  // ── ASSURANCE POSTURE (Blocker 10) ────────────────────────────────────────────
+  //
+  // Every field is DERIVED, so the test's job is to prove it tracks reality rather
+  // than reporting a constant. `stepUpAnswerable` is the one that matters: it is the
+  // difference between "the gate returned step_up" and "this deployment can resolve
+  // one", and it is asserted in BOTH profiles — true here where every router is
+  // mounted, false under the gateway profile below. A field that reads the same in
+  // both would be a label, not a measurement.
+  check("assurance: signals are fixtures under the review-demo default (not a claim about a real device)",
+    ctx.json?.assurance?.signalSource === "fixtures");
+  check("assurance: a verdict is advisory — SignalGrid actuates nothing on any device",
+    ctx.json?.assurance?.verdictEffect === "advisory");
+  check("assurance: step_up IS answerable under review-demo (the step-up routes are mounted)",
+    ctx.json?.assurance?.stepUpAnswerable === true);
   check("context → 200 with the caller's principal and tenant", ctx.status === 200 && typeof ctx.json?.tenant?.id === "string" && typeof ctx.json?.principal !== "undefined");
   const ctxNoAuth = await req("GET", "/v1/context", {});
   check("context without a token → 401", ctxNoAuth.status === 401);

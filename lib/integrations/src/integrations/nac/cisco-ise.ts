@@ -1,4 +1,5 @@
 // Cisco ISE → endpoint lookup. READ-ONLY. See the removal note below.
+import { resolveEmission } from '../adapters/emit-gate';
 import type {
   NACAdapter,
   NACEndpointInfo
@@ -127,6 +128,10 @@ export class CiscoISEAdapter implements NACAdapter {
    * Health check - verify Cisco ISE connectivity
    */
   async healthCheck(): Promise<boolean> {
+    // GATED. A health check is still a live call — see check-ungated-fetch.mjs.
+    const emission = resolveEmission();
+    if (emission.mode !== "live") return false;
+
     try {
       await this.ensureAuthenticated();
       

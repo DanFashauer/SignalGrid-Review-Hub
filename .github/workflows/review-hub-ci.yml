@@ -238,6 +238,8 @@ jobs:
         run: node scripts/check-publication-boundary.mjs
       - name: "Connector discipline (gated + proven, no device actuators)"
         run: node scripts/check-connector-discipline.mjs
+      - name: "Ungated fetch (the live boundary covers every outbound path)"
+        run: node scripts/check-ungated-fetch.mjs
       - name: "Assessor package (links/commands an external reviewer follows)"
         run: node scripts/check-assessor-package.mjs
 

@@ -58,6 +58,7 @@
     "safety:check": "node scripts/safety-check.mjs",
     "docs:sanity": "node scripts/docs-sanity.mjs",
     "guard:assessor-package": "node scripts/check-assessor-package.mjs",
+    "guard:ungated-fetch": "node scripts/check-ungated-fetch.mjs",
     "check:proof-counts": "node scripts/check-proof-counts.mjs",
     "review:invariants": "node scripts/review-invariants.mjs",
     "preflight": "node scripts/preflight.mjs",

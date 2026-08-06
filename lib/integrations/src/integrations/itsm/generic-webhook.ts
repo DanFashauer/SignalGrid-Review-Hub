@@ -11,6 +11,7 @@
  */
 
 import crypto from 'crypto';
+import { resolveEmission } from '../adapters/emit-gate';
 import type { ITSMAdapter, ITSMTicketRequest, ITSMTicketResponse } from '../adapters/types';
 
 export interface GenericWebhookConfig {
@@ -207,6 +208,14 @@ export class GenericWebhookAdapter implements ITSMAdapter {
   }
 
   async healthCheck(): Promise<boolean> {
+    // GATED, like every other outbound path. A health check is still a LIVE CALL:
+    // it resolves a configured hostname and opens a connection from wherever the
+    // process runs. Ungated, it reached the network in dev/alpha with no credential
+    // — outside the three-condition boundary the security-review package tells an
+    // assessor to verify FIRST. Found by review taking that document at its word.
+    const emission = resolveEmission();
+    if (emission.mode !== "live") return false;
+
     try {
       // Just test connectivity, not full auth
       const response = await fetch(this.config.url, {

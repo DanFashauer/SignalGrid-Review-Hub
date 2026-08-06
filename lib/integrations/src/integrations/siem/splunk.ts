@@ -107,6 +107,10 @@ export class SplunkAdapter implements SIEMAdapter {
    * Health check - verify Splunk connectivity
    */
   async healthCheck(): Promise<boolean> {
+    // GATED. A health check is still a live call — see check-ungated-fetch.mjs.
+    const emission = resolveEmission();
+    if (emission.mode !== "live") return false;
+
     try {
       // Try to get server info
       const url = new URL('/services/server/info', this.config.hecUrl);

@@ -12,6 +12,9 @@ export {
   createMockDeviceManagementHealthTransport,
   type MockDeviceManagementHealthOptions,
 } from "./mock-transport";
+export * from "./graph-transport";
+
+import { GRAPH_V1_ROOT, makeGraphDeviceManagementHealthTransport } from "./graph-transport";
 
 /**
  * Gated resolution, mirroring the product's live-integration policy: dev/alpha never
@@ -43,20 +46,40 @@ export function resolveDeviceManagementHealthConnector(
   if (!accessToken) {
     return { mode: "fixture", reason: "DEVICE_MANAGEMENT_HEALTH_ACCESS_TOKEN is not set" };
   }
+  // TRANSPORT SELECTION IS EXPLICIT, and the default is unchanged on purpose.
+  //
+  // `graph` talks to a real tenant (graph.microsoft.com/v1.0/deviceManagement/
+  // managedDevices/{id}, read-only). `bridge` is the pre-existing bespoke endpoint.
+  // Switching the DEFAULT to graph would silently repoint every existing beta/prod
+  // deployment at a different upstream on upgrade — a behaviour change disguised as
+  // a fix. Opting in is one environment variable; guessing on someone's behalf is
+  // not recoverable.
+  const transportKind = (env.DEVICE_MANAGEMENT_HEALTH_TRANSPORT?.trim().toLowerCase() || "bridge") as
+    | "bridge"
+    | "graph";
+  if (transportKind !== "bridge" && transportKind !== "graph") {
+    return { mode: "fixture", reason: `unrecognized DEVICE_MANAGEMENT_HEALTH_TRANSPORT "${transportKind}"` };
+  }
+
   const config: DeviceManagementHealthConnectorConfig = {
     accessToken,
     baseUrl:
       env.DEVICE_MANAGEMENT_HEALTH_BASE_URL?.trim() ||
-      "https://device-management-bridge.local/device-management-health",
-    source: "device-management-health-bridge",
+      (transportKind === "graph" ? GRAPH_V1_ROOT : "https://device-management-bridge.local/device-management-health"),
+    source: transportKind === "graph" ? "microsoft-graph-device-management" : "device-management-health-bridge",
   };
-  return {
-    mode: "live",
-    connector: new DeviceManagementHealthConnector(
-      config,
-      transportOverride ?? makeDefaultDeviceManagementHealthTransport(config.baseUrl),
-    ),
-  };
+
+  // The graph transport needs an explicit clock (determinism law). Supplying it here,
+  // at the process edge, keeps `Date.now` out of every signal and decision path while
+  // still letting a real deployment measure real freshness. Proofs construct the
+  // transport directly with a fixed instant and never reach this branch.
+  const transport =
+    transportOverride ??
+    (transportKind === "graph"
+      ? makeGraphDeviceManagementHealthTransport({ baseUrl: config.baseUrl, now: () => new Date() })
+      : makeDefaultDeviceManagementHealthTransport(config.baseUrl));
+
+  return { mode: "live", connector: new DeviceManagementHealthConnector(config, transport) };
 }
 
 /** Build a live bridge transport bound to a specific base URL (honors config). */

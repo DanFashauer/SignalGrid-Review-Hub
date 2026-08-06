@@ -28,6 +28,13 @@ import { fileURLToPath } from "node:url";
 import {
   DEVICE_MANAGEMENT_HEALTH_REPORT_KEYS,
   DeviceManagementHealthConnector,
+  GRAPH_MANAGED_DEVICE_SELECT,
+  makeGraphDeviceManagementHealthTransport,
+  mapAgentFreshness,
+  mapCheckInFreshness,
+  mapComplianceCoverage,
+  mapEnrollmentState,
+  mapManagedDeviceToRaw,
   DeviceManagementHealthConnectorError,
   createMockDeviceManagementHealthTransport,
   evaluateDeviceManagementHealth,
@@ -578,6 +585,62 @@ check("dev tier resolves to fixture mode", resolveDeviceManagementHealthConnecto
 check("prod WITHOUT live flag stays fixture", resolveDeviceManagementHealthConnector({ SIGNALGRID_TIER: "prod" }).mode === "fixture");
 check("prod + live but NO token stays fixture", resolveDeviceManagementHealthConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" }).mode === "fixture");
 check("prod + live + token resolves live", resolveDeviceManagementHealthConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", DEVICE_MANAGEMENT_HEALTH_ACCESS_TOKEN: "t" }).mode === "live");
+
+// ── GRAPH TRANSPORT (launch Blocker 5): tenant-ready, and honest about its reach ──
+//
+// The only live transport this family had pointed at a bespoke bridge that does not
+// exist. These assert the REAL Graph mapping, and — the part that matters — that the
+// two axes one Graph call cannot answer stay `unknown` rather than being invented.
+{
+  const NOW = new Date("2026-08-06T12:00:00.000Z");
+  const raw = mapManagedDeviceToRaw(
+    {
+      lastSyncDateTime: "2026-08-06T10:00:00Z",
+      complianceState: "compliant",
+      managementState: "managed",
+      deviceRegistrationState: "registered",
+      managementAgent: "mdm",
+    },
+    NOW,
+    8,
+  );
+  check("graph: a 2h-old sync is fresh", raw.mdmCheckInFreshness === "fresh");
+  check("graph: managed + registered is enrolled", raw.enrollmentState === "enrolled");
+  check("graph: compliant is covered", raw.complianceCoverage === "covered");
+  check("graph: an MDM-only device has no agent channel (not_applicable, not broken)", raw.agentCheckInFreshness === "not_applicable");
+  check("graph: a successful call means the management plane answered", raw.managementReachable === true);
+
+  // THE LOAD-BEARING PAIR. managedDevices/{id} cannot answer these; inventing a value
+  // would fabricate a measurement, and `unknown` RAISES assurance (fail-closed).
+  check("graph: policyDrift is unknown — Graph cannot answer it from this call", raw.policyDrift === "unknown");
+  check("graph: remediationHealth is unknown — a different resource entirely", raw.remediationHealth === "unknown");
+
+  check("graph: a 9h-old sync is stale at an 8h threshold", mapCheckInFreshness("2026-08-06T03:00:00Z", NOW, 8) === "stale");
+  check("graph: the epoch means never checked in", mapCheckInFreshness("1970-01-01T00:00:00Z", NOW, 8) === "never");
+  // A future timestamp is clock skew, not extreme freshness — reading it as fresh
+  // would let a skewed device look healthy indefinitely.
+  check("graph: a FUTURE sync is unknown, never fresh", mapCheckInFreshness("2027-01-01T00:00:00Z", NOW, 8) === "unknown");
+  check("graph: a missing sync is unknown", mapCheckInFreshness(undefined, NOW, 8) === "unknown");
+  check("graph: retirePending is retired even when registered", mapEnrollmentState("retirePending", "registered") === "retired");
+  check("graph: compliance 'error' is NOT coverage", mapComplianceCoverage("error") === "unknown");
+  check("graph: compliance 'conflict' is NOT coverage", mapComplianceCoverage("conflict") === "unknown");
+  check("graph: an unhealthy ConfigMgr agent is stale", mapAgentFreshness("configurationManagerClientMdm", { state: "unhealthy" }) === "stale");
+
+  // The transport must refuse to exist without an explicit clock.
+  let clockErr = false;
+  try { makeGraphDeviceManagementHealthTransport({ now: undefined as unknown as () => Date }); } catch { clockErr = true; }
+  check("graph: the transport REFUSES to build without an explicit clock (determinism law)", clockErr);
+
+  // Selection is explicit, and the default must NOT have moved to graph.
+  const dflt = resolveDeviceManagementHealthConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", DEVICE_MANAGEMENT_HEALTH_ACCESS_TOKEN: "t" });
+  check("graph: the DEFAULT transport is still the bridge (no silent repoint on upgrade)", dflt.mode === "live");
+  const bad = resolveDeviceManagementHealthConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", DEVICE_MANAGEMENT_HEALTH_ACCESS_TOKEN: "t", DEVICE_MANAGEMENT_HEALTH_TRANSPORT: "nonsense" });
+  check("graph: an unrecognized transport falls back to FIXTURE, never to a guess", bad.mode === "fixture");
+  const g = resolveDeviceManagementHealthConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", DEVICE_MANAGEMENT_HEALTH_ACCESS_TOKEN: "t", DEVICE_MANAGEMENT_HEALTH_TRANSPORT: "graph" });
+  check("graph: opting in resolves live against graph.microsoft.com", g.mode === "live");
+  check("graph: the tier gate still governs the graph transport", resolveDeviceManagementHealthConnector({ SIGNALGRID_TIER: "dev", SIGNALGRID_LIVE_INTEGRATIONS: "true", DEVICE_MANAGEMENT_HEALTH_ACCESS_TOKEN: "t", DEVICE_MANAGEMENT_HEALTH_TRANSPORT: "graph" }).mode === "fixture");
+  check("graph: $select asks for exactly the 7 fields the mapping reads", GRAPH_MANAGED_DEVICE_SELECT.length === 7);
+}
 
 // One machine-readable line, derived from the SAME variables the checks above asserted
 // on — not restated by hand, which is the mistake this feeds a guard against.

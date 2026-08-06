@@ -79,6 +79,18 @@ const DENYLIST = [
   "STIG hardened",
   "EAL5+ certified",
   "FIPS 140-2 validated",
+  // AUTONOMY OVER-CLAIMS. Added after `docs/fabric-console.html` — a PUBLISHED page —
+  // was found saying "The grid runs itself", "the grid carries out the response by
+  // itself, no human in the loop", and "grow to 100% with no human in the loop",
+  // while this scan reported green. The denylist covered "autonomous production
+  // remediation" and nothing else in the class, so the claim only had to be phrased
+  // in ordinary English to walk past. docs/PUBLIC_MESSAGING_GUARDRAILS.md already
+  // mapped this exact claim to its safe form; nothing enforced the mapping.
+  "no human in the loop",
+  "the grid runs itself",
+  "the grid does the rest",
+  "carries out the response by itself",
+  "acts on its own",
 ];
 // Docs whose PURPOSE is to enumerate the forbidden phrases (a "do not say" list),
 // so every denylist phrase legitimately appears there as a negative example — the

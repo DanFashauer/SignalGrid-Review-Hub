@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>SignalGrid — build the grid</title>
-<meta name="description" content="You add signals and workflows. The grid does the rest — automatically. Every signal lets it see more; every workflow lets it do more. Watch coverage of real situations grow to 100% with no human in the loop. Public-safe: illustrative data, no live tenant, no action taken." />
+<meta name="description" content="You add signals and workflows; the grid evaluates more situations as you do. Every signal lets it see more; every workflow lets it assess more. Coverage here is illustrative. SignalGrid decides and explains — it does not act: high-risk responses are simulated or approval-required. Public-safe: illustrative data, no live tenant, no action taken." />
 <meta property="og:title" content="SignalGrid — build the grid" />
 <meta property="og:description" content="Add signals and workflows; the grid handles the rest by itself. The more you add, the smarter it gets and the more of your infrastructure it controls." />
 <meta property="og:type" content="website" />
@@ -114,7 +114,7 @@
   .item[aria-pressed="true"] .tick { background: var(--accent); border-color: var(--accent); color: #fff; }
   .item[aria-pressed="true"] .act { color: var(--accent-ink); }
 
-  /* situation board (grid acts on its own) */
+  /* situation board (situations the grid evaluates) */
   .board { display: flex; flex-direction: column; gap: 8px; }
   .sit {
     border: 1px solid var(--line); border-radius: 10px; background: var(--panel); box-shadow: var(--shadow);
@@ -170,14 +170,14 @@
       </div>
     </section>
 
-    <section aria-label="The grid runs itself">
-      <h2 class="h">The grid runs itself — situations across the floor</h2>
+    <section aria-label="Situations the grid evaluates">
+      <h2 class="h">What the grid evaluates — situations across the floor</h2>
       <div class="board" id="board"></div>
     </section>
   </div>
 
   <footer>
-    <b>How this works.</b> Each situation is caught only when its <b>workflow is active</b> and the <b>signals it needs are wired</b> — then the grid carries out the response by itself, no human in the loop. Missing either one is a blind spot, and the fix is always to <b>add</b>.
+    <b>How this works.</b> Each situation is caught only when its <b>workflow is active</b> and the <b>signals it needs are wired</b> — then the grid <b>evaluates</b> it and returns allow / step-up / restrict / deny with the evidence behind it. It does not carry the response out: the host app acts, and any high-risk response is simulated or approval-required. Missing a workflow or a signal is a blind spot, and the fix is always to <b>add</b>.
     Each signal tag shows <b>how</b> it reaches the grid: <code>via API</code> or <code>native</code> when the source system integrates, or <code>grid-collected</code> when it doesn&rsquo;t and the grid does the lifting itself — so the outcome depends on how your existing systems are configured (see <code>docs/SIGNAL_SOURCING.md</code>).
     This mirrors the real fusion + orchestration logic in the
     <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub">Review Hub</a> (proven by <code>proof:fabric-scenario</code> and <code>proof:grid-coverage</code>), running on illustrative data — <b>no live tenant, no action taken</b>.

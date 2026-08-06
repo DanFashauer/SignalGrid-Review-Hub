@@ -1,10 +1,13 @@
-# Admin flows: configure signals + flows, the Grid does the rest
+# Admin flows: configure signals + flows, the Grid evaluates them
 
 Administrators don't write logic. They **register signals** and **configure
-flows**, and the Grid runs them: it decides each action from the live trust
-decision (the Assist model), and it watches each flow's own health — self-healing
-or raising an incident when something breaks. Fully customizable; it compounds
-(more signals ⇒ smarter, faster). See `@workspace/flows`.
+flows**, and the Grid evaluates them: it derives each action from the live trust
+decision (the Assist model), and it watches each flow's own health — recovering a
+flow it owns, or raising an incident when something breaks. Whether a derived
+action is ever carried out is the admin's call, set per action by the approval
+policy below; carrying it out belongs to the host app and to the systems of
+record. Fully customizable; it compounds (more signals ⇒ smarter, faster). See
+`@workspace/flows`.
 
 ## What an admin configures
 

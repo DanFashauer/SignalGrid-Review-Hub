@@ -6,7 +6,7 @@
 <title>SignalGrid — build the grid</title>
 <meta name="description" content="You add signals and workflows; the grid evaluates more situations as you do. Every signal lets it see more; every workflow lets it assess more. Coverage here is illustrative. SignalGrid decides and explains — it does not act: high-risk responses are simulated or approval-required. Public-safe: illustrative data, no live tenant, no action taken." />
 <meta property="og:title" content="SignalGrid — build the grid" />
-<meta property="og:description" content="Add signals and workflows; the grid handles the rest by itself. The more you add, the smarter it gets and the more of your infrastructure it controls." />
+<meta property="og:description" content="Add signals and workflows; the grid evaluates more of what happens. SignalGrid decides and explains — it does not act. The more you add, the more of your infrastructure it can reason about." />
 <meta property="og:type" content="website" />
 <style>
   :root {
@@ -143,13 +143,13 @@
     <div class="brand"><b>Signal</b><span>Grid</span></div>
   </header>
 
-  <p class="thesis">You add <b>signals</b> and <b>workflows</b>. The grid does the rest — <b>automatically</b>.</p>
-  <p class="sub">Every signal lets the grid <em>see</em> more; every workflow lets it <em>do</em> more. You never touch the actions — they run inside the workflows you built. The more you add, the more of the organization's infrastructure the grid controls on its own.</p>
+  <p class="thesis">You add <b>signals</b> and <b>workflows</b>. The grid <b>evaluates</b> — and shows its evidence.</p>
+  <p class="sub">Every signal lets the grid <em>see</em> more; every workflow lets it <em>assess</em> more. SignalGrid returns allow / step-up / restrict / deny with the evidence behind it; it does not carry the response out — the host app and the systems of record do, and any high-risk response is simulated or approval-required. The more you add, the more of the organization's activity the grid can reason about.</p>
 
   <div class="payoff" aria-live="polite">
     <div class="top">
       <span class="big" id="pctBig">0%</span>
-      <span class="cap" id="cap">of situations the grid handles by itself</span>
+      <span class="cap" id="cap">of situations the grid can evaluate</span>
       <div class="stats">
         <span class="stat"><b id="sN">0</b> signals wired</span>
         <span class="stat"><b id="wN">0</b> workflows active</span>
@@ -204,7 +204,10 @@
   ];
   var SRC_LABEL = { api:"via API", native:"native", collected:"grid-collected" };
 
-  // Each workflow needs signals and, when active + fed, runs its action by itself.
+  // Each workflow needs signals; when active + fed, the grid can evaluate the
+  // situation and RECOMMEND the response below. Carrying it out is the host app's
+  // and the systems of record's, and any high-risk response is simulated or
+  // approval-required — see docs/PUBLIC_MESSAGING_GUARDRAILS.md.
   var WORKFLOWS = [
     { id:"w_lost",   t:"Lost-Device Response",           needs:["custody","reachability"], act:"locate → restrict → escalate" },
     { id:"w_acct",   t:"Account-Compromise Containment", needs:["identity","device"],      act:"deny session → isolate → step-up" },
@@ -244,13 +247,13 @@
 
   function statusOf(sit) {
     var w = wfById[sit.wf];
-    if (!onWf[w.id]) return { tone:"blocked", state:"blind spot", detail:"No workflow. Build <b>" + esc(w.t) + "</b> to handle this." };
+    if (!onWf[w.id]) return { tone:"blocked", state:"blind spot", detail:"No workflow. Build <b>" + esc(w.t) + "</b> to evaluate this." };
     var missing = w.needs.filter(function (n){ return !onSig[n]; });
     if (missing.length) {
       var names = missing.map(function (n){ return sigById[n].t; }).join(", ");
       return { tone:"watch", state:"partial", detail:"<b>" + esc(w.t) + "</b> is active but needs the <b>" + esc(names) + "</b> signal" + (missing.length > 1 ? "s" : "") + ". Wire " + (missing.length > 1 ? "them" : "it") + "." };
     }
-    return { tone:"ok", state:"auto-handled", detail:"<b>" + esc(w.t) + "</b> fires by itself → <span class=\"auto\">" + esc(w.act) + "</span>" };
+    return { tone:"ok", state:"evaluated", detail:"<b>" + esc(w.t) + "</b> evaluates it and recommends → <span class=\"auto\">" + esc(w.act) + "</span> <em>(simulated or approval-required)</em>" };
   }
   function toneVar(t){ return t==="ok"?"var(--ok)":t==="watch"?"var(--watch)":t==="blocked"?"var(--blocked)":"var(--ink-faint)"; }
   function toneBg(t){ return t==="ok"?"var(--ok-bg)":t==="watch"?"var(--watch-bg)":t==="blocked"?"var(--blocked-bg)":"transparent"; }
@@ -305,7 +308,7 @@
     elBar.style.setProperty("--pct", pct + "%");
     elPct.textContent = pct + "%";
     document.getElementById("cap").textContent = handled === total
-      ? "the grid handles every situation by itself" : "of situations the grid handles by itself (" + handled + "/" + total + ")";
+      ? "the grid can evaluate every situation on this board" : "of situations the grid can evaluate (" + handled + "/" + total + ")";
     elSN.textContent = sOn; elWN.textContent = wOn;
     elSCount.textContent = sOn + "/" + SIGNALS.length;
     elWCount.textContent = wOn + "/" + WORKFLOWS.length;

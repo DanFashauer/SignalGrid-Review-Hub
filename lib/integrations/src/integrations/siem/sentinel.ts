@@ -135,6 +135,10 @@ export class SentinelAdapter implements SIEMAdapter {
    * Health check - verify Sentinel connectivity
    */
   async healthCheck(): Promise<boolean> {
+    // GATED. A health check is still a live call — see check-ungated-fetch.mjs.
+    const emission = resolveEmission();
+    if (emission.mode !== "live") return false;
+
     try {
       const token = await this.getAccessToken();
       

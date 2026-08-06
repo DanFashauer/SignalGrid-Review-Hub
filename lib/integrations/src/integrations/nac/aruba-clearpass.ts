@@ -8,6 +8,7 @@
 // actions to be simulated and approval-required, so these are gone rather than
 // gated. What remains reads: look an endpoint up, and check connectivity.
 
+import { resolveEmission } from '../adapters/emit-gate';
 import type {
   NACAdapter,
   NACEndpointInfo
@@ -127,6 +128,10 @@ export class ArubaClearPassAdapter implements NACAdapter {
    * Health check - verify ClearPass connectivity
    */
   async healthCheck(): Promise<boolean> {
+    // GATED. A health check is still a live call — see check-ungated-fetch.mjs.
+    const emission = resolveEmission();
+    if (emission.mode !== "live") return false;
+
     try {
       await this.ensureAuthenticated();
       

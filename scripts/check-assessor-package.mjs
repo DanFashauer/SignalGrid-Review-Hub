@@ -60,7 +60,12 @@ for (const c of commands) {
 // ── 3. named source paths ────────────────────────────────────────────────────
 // Backticked paths under the source roots the package sends an assessor to. A
 // trailing `/*` means "this directory, whose children vary" — check the parent.
-const paths = [...new Set([...text.matchAll(/`((?:lib|artifacts|native|scripts)\/[A-Za-z0-9._\-/*]+)`/g)].map((m) => m[1]))];
+// Any backticked path with a slash — NOT a hand-maintained root list. The first
+// version listed lib/artifacts/native/scripts, so a reference to `attached_assets/`
+// (which the package does make) went unchecked: renaming that directory would have
+// left this gate green while the package pointed at nothing. A partial root list is
+// the same defect class as a partial coverage list.
+const paths = [...new Set([...text.matchAll(/`([A-Za-z0-9._-]+\/[A-Za-z0-9._\-/*]*)`/g)].map((m) => m[1]))];
 for (const p of paths) {
   const probe = p.endsWith("/*") ? p.slice(0, -2) : p;
   if (!existsSync(resolve(repoRoot, probe))) failures.push(`source path does not exist: ${p}`);

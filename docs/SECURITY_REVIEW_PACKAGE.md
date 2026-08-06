@@ -50,14 +50,32 @@ There is no executor in this repository. See
 
 ## 3. The single most important thing to verify first
 
-**The fixture/live boundary.** Every connector in this repository is fixture-backed by
-default. A live call requires a tier (`beta`/`prod`), the environment flag
+**The fixture/live boundary.** Connectors are fixture-backed by default. A live call
+is intended to require a tier (`beta`/`prod`), the environment flag
 `SIGNALGRID_LIVE_INTEGRATIONS=true`, **and** a credential — each checked
 independently, so no single misconfiguration opens a live path.
 
 An assessor should treat that as a claim to attack, not a fact to accept. It is the
 load-bearing assumption behind every other safety property here: if it does not hold,
 "fixture-backed" is decoration.
+
+**It did not hold, and this is what that looked like.** The first automated review of
+this document went looking and found eleven `healthCheck()` methods — across the SIEM
+webhook, Splunk, Sentinel, two NAC adapters and six ITSM adapters — performing a real
+`fetch` to a configured URL with **none** of the three conditions checked. They are
+now gated, and `pnpm run guard:ungated-fetch` fails the build if a twelfth appears.
+
+Two things an assessor should take from that. First, the boundary is younger than the
+claim: treat the fix as new code, not settled ground. Second, the reason it was missed
+is instructive — a health check does not *feel* like an emission (it returns a boolean
+and sends nothing) while still opening a connection from wherever the process runs.
+Look for other paths that are outbound without looking like it.
+
+**Known remaining scope:** sixteen other outbound class methods (`createTicket`,
+`lookupEndpoint`, token fetches, retry helpers) are counted but **not** enforced by
+that gate — whether each is gated by a caller one level up is an open audit, printed
+on every run. `lib/integrations/src/integrations/telemetry/mde.ts` is gated by a local `config.enabled` flag rather than
+the tier boundary, which is weaker than every other connector.
 
 ## 4. Threat model and controls
 
@@ -69,10 +87,9 @@ load-bearing assumption behind every other safety property here: if it does not 
 - [Security-baseline alignment](SECURITY_BASELINE_ALIGNMENT.md) — CIS and other
   hardening baselines as a decision dimension.
 - [Product data model](PRODUCT_DATA_MODEL.md) — what is stored, and what is not.
-- **Publication boundary** — how public/private separation is enforced rather than
-  remembered, via a `check-publication-boundary` gate. *In flight in PR #167 and not
-  yet on this branch; deliberately not linked, because a link to a document that does
-  not exist here is exactly the defect this package's own gate refuses.*
+- [Publication boundary](PUBLICATION_BOUNDARY.md) — how public/private separation is
+  enforced rather than remembered (`scripts/check-publication-boundary.mjs`), now
+  merged and running in CI.
 
 ## 5. Reproducing the evidence
 
@@ -84,8 +101,8 @@ then:
 | `pnpm run preflight` | The whole local gate suite. Prints, every run, the CI jobs it does **not** cover. |
 | `pnpm run typecheck` | Type integrity across all packages. |
 | `pnpm run review:invariants` | Fail-closed / determinism / Assist-model / truthfulness invariants. |
-| `pnpm run proof:signalgrid-core` | The decision core, over its full state space. |
-| `pnpm run proof:grant-safety` | Brute-forces the **allow path** across every grant-emitting connector. |
+| `pnpm run proof:signalgrid-core` | The decision core over a fixed set of seeded end-to-end scenarios, plus targeted and malformed-input assertions. **Not** an exhaustive enumeration of the core's state space — corrected after review; combinations outside those fixtures are not exercised here. |
+| `pnpm run proof:grant-safety` | Self-tests the shared grant-safety *harness* against a toy evaluator — it does **not** exercise any real connector. The per-connector allow-path enumerations live in each connector's own proof (e.g. `proof:device-management-health`, which sweeps its full raw wire space). Corrected after review pointed out this row promised the latter and ran the former. |
 | `pnpm run proof:isolation-scope` | Cross-tenant isolation. |
 | `pnpm run safety:check` | The consolidated guardrail gate. |
 | `pnpm run docs:sanity` | Required docs + the unsafe-claim scan. |
@@ -128,6 +145,9 @@ the honest posture.
   [Public messaging guardrails](PUBLIC_MESSAGING_GUARDRAILS.md).
 - **Two third-party documents** currently sit in `attached_assets/` awaiting an owner
   licensing decision; the boundary gate prints them on every run.
+- **This document has been wrong before.** Its first version overstated the live-call
+  boundary, the grant-safety command and the core proof's coverage — all three found by
+  an automated reviewer and corrected above. Read it as a starting map, not a survey.
 
 ## 8. Disclosure
 

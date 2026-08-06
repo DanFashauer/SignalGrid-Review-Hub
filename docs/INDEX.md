@@ -140,6 +140,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Post-merge connector smoke evidence automation](POST_MERGE_CONNECTOR_SMOKE_EVIDENCE.md): explains the automatic Connector Emulator Smoke run and evidence manifest after merges to `SignalGrid_Alpha`.
 - [Validation commands](VALIDATION_COMMANDS.md): lists the standard install, typecheck, build, proof, unsafe-claim scan, and diff hygiene commands.
 - [CI and validation](CI_AND_VALIDATION.md): explains Review Hub CI, required local checks, docs sanity checks, and future branch-protection expectations.
+- [Independent security review — assessor package](SECURITY_REVIEW_PACKAGE.md): the material an external assessor needs to begin, assembled so engaging one is a scheduling problem rather than a discovery problem. Scope, the fixture/live boundary to attack first, reproducible evidence commands, and limitations disclosed rather than discovered. **Preparation only — no independent review has been performed.** Kept navigable by `pnpm run guard:assessor-package`.
 - [Product profile](PRODUCT_PROFILE.md): what a customer deployment refuses that the
   public review deployment serves — three unauthenticated surfaces (published owner
   bearers, an anonymous simulator that writes, an unauthenticated control plane), gated

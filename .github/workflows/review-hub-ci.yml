@@ -238,6 +238,8 @@ jobs:
         run: node scripts/check-publication-boundary.mjs
       - name: "Connector discipline (gated + proven, no device actuators)"
         run: node scripts/check-connector-discipline.mjs
+      - name: "Assessor package (links/commands an external reviewer follows)"
+        run: node scripts/check-assessor-package.mjs
 
       # SEVEN gates lived in scripts/preflight.mjs and ran NOWHERE in CI — checked
       # against all 12 workflow files, not just this one. That made them local

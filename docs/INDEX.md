@@ -24,7 +24,6 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 ## Core orientation
 
 - [Repository lineage](REPO_LINEAGE.md): explains the public/private repository split and what belongs in each repository.
-- [Independent security review — assessor package](SECURITY_REVIEW_PACKAGE.md): the material an external assessor needs to begin, assembled so engaging one is a scheduling problem rather than a discovery problem. Scope, the fixture/live boundary to attack first, reproducible evidence commands, and limitations disclosed rather than discovered. **Preparation only — no independent review has been performed.** Kept navigable by `pnpm run guard:assessor-package`.
 - [IP & licensing posture](IP_AND_LICENSING.md): how SignalGrid's IP is held today (copyright/MIT public code, trademark on the name, trade-secret core/hardware, patent timing) and the open decisions to settle with counsel — plus the publication boundary that keeps patent options open. Not legal advice.
 - [Alpha to public pre-production parity](ALPHA_TO_PUBLIC_PREPROD_PARITY.md): maps DEV Alpha learnings into Review Hub, private core, redesign, deferred, or archive categories.
 - [Roadmap to private core](ROADMAP_TO_PRIVATE_CORE.md): defines how validated public concepts move toward protected core implementation.
@@ -140,6 +139,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Post-merge connector smoke evidence automation](POST_MERGE_CONNECTOR_SMOKE_EVIDENCE.md): explains the automatic Connector Emulator Smoke run and evidence manifest after merges to `SignalGrid_Alpha`.
 - [Validation commands](VALIDATION_COMMANDS.md): lists the standard install, typecheck, build, proof, unsafe-claim scan, and diff hygiene commands.
 - [CI and validation](CI_AND_VALIDATION.md): explains Review Hub CI, required local checks, docs sanity checks, and future branch-protection expectations.
+- [Independent security review — assessor package](SECURITY_REVIEW_PACKAGE.md): the material an external assessor needs to begin, assembled so engaging one is a scheduling problem rather than a discovery problem. Scope, the fixture/live boundary to attack first, reproducible evidence commands, and limitations disclosed rather than discovered. **Preparation only — no independent review has been performed.** Kept navigable by `pnpm run guard:assessor-package`.
 - [Product profile](PRODUCT_PROFILE.md): what a customer deployment refuses that the
   public review deployment serves — three unauthenticated surfaces (published owner
   bearers, an anonymous simulator that writes, an unauthenticated control plane), gated

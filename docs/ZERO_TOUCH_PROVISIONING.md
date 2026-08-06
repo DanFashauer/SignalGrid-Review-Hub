@@ -17,8 +17,9 @@ A `DeviceSetupRecording` is: a **device match** (serial prefix and/or model — 
 least one), one or more **triggers** (`first_boot` / `network_join` /
 `serial_match`), and an ordered list of **steps** (`wifi`, `profile`, `cert`,
 `app_install`, `policy`, `restriction`, `account`). A step may be marked
-`sensitive` (regulated/lockdown config) or `gridLifted` (the Grid performs it
-itself because the vendor system exposes no API — see
+`sensitive` (regulated/lockdown config) or `gridLifted` (the step is carried out
+by the Grid rather than by a vendor API, because the vendor system exposes none —
+still subject to the simulated-by-default apply boundary below; see
 [SIGNAL_SOURCING.md](SIGNAL_SOURCING.md)).
 
 `lintSetupRecording` validates it before it can be used — fail-safe errors: no

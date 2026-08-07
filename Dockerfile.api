@@ -1,4 +1,18 @@
-FROM node:22-alpine AS builder
+# linux/amd64 + glibc is the one triple `pnpm-workspace.yaml` ships a complete
+# native set for. Both halves are load-bearing.
+#
+# Unpinned, this stage inherited the build host's arch: linux/amd64 on the CI
+# runner (which is why it always passed there) and linux/arm64 on an Apple Silicon
+# Mac, where `@esbuild/linux-arm64` is stripped and the `pnpm run build` below dies
+# with "You installed esbuild for another platform".
+#
+# Alpine (musl) happens to work for THIS stage — esbuild ships one statically
+# linked linux-x64 binary and has no musl variant to strip. That is luck, not a
+# property: the moment anything here reaches rollup, lightningcss or oxide, musl
+# breaks, since only their -gnu variants survive. Sitting on the same supported
+# triple as Dockerfile.web costs a few MB and removes the whole class.
+# Guarded by scripts/check-container-native-base.mjs.
+FROM --platform=linux/amd64 node:22-bookworm-slim AS builder
 
 WORKDIR /app
 

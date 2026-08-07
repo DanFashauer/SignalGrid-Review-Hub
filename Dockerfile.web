@@ -1,4 +1,19 @@
-FROM node:22-alpine AS builder
+# glibc, and pinned to amd64 — both are load-bearing. `pnpm-workspace.yaml` keeps
+# exactly one triple per native family: **linux-x64-gnu**. Alpine is musl, and
+# `@rollup/rollup-linux-x64-musl`, `lightningcss-linux-x64-musl` and
+# `@tailwindcss/oxide-linux-x64-musl` are all stripped — so the vite build below
+# could never succeed in an alpine builder, on any host. Unpinned, an Apple
+# Silicon Mac would also target linux/arm64, where both the gnu and musl arm64
+# variants are stripped too.
+#
+# Nothing caught it because docker-compose.prod.yml (what CI's deploy-stack job
+# builds) contains only `db` and `api`; this image is referenced solely by the dev
+# docker-compose.yml, which no gate ever built. Now guarded by
+# scripts/check-container-native-base.mjs.
+#
+# The runtime stage below stays native-arch: nginx serves static files and needs
+# none of this.
+FROM --platform=linux/amd64 node:22-bookworm-slim AS builder
 
 WORKDIR /app
 

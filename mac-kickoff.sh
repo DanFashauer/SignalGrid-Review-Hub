@@ -237,6 +237,37 @@ else
   a green-looking artifact over a run that did not happen launders an assumption
   into a record."
   ok "durable half green — artifacts/live-evidence/docker-run.json refreshed"
+
+  # The delivery images, actually built.
+  #
+  # `scripts/check-container-native-base.mjs` proves STATICALLY that both builder
+  # stages target a triple the workspace ships binaries for. That check exists
+  # because Dockerfile.web had been unbuildable and nothing noticed: CI's
+  # deploy-stack job builds docker-compose.prod.yml, which declares only `db` and
+  # `api`, so the web image was referenced by the dev compose file alone and no
+  # job ever built it.
+  #
+  # A static check is not a build. This is the only lane with a Docker daemon, so
+  # it is the only place the real answer can be obtained. Both builder stages are
+  # pinned --platform=linux/amd64; on Apple Silicon that runs under emulation and
+  # is SLOW the first time (Docker Desktop → Settings → General → "Use Rosetta for
+  # x86_64/amd64 emulation" makes a large difference).
+  #
+  # Deliberately not written into docker-run.json: that artifact's claim is about
+  # durable persistence against a real Postgres, and widening it to mean "and the
+  # images build" would make a single green stand for two different things.
+  echo "   building the delivery images (docker compose build api web — emulated amd64, slow on first run)"
+  if docker compose -f "$REPO_ROOT/docker-compose.yml" build api web; then
+    ok "api + web images build for real (not just the static native-base check)"
+  else
+    die "the delivery images failed to build.
+
+  This is a real defect, not an environment quirk. Both builder stages pin
+  linux/amd64 on a glibc base because that is the ONE triple pnpm-workspace.yaml
+  keeps native binaries for; if the build still fails, read the error before
+  changing a base image — and run 'node scripts/check-container-native-base.mjs'
+  to see which triple the workspace currently supports."
+  fi
 fi
 
 step "7/7  commit the evidence"

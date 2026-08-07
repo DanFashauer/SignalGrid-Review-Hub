@@ -71,6 +71,9 @@ const STEPS = [
   { name: "Assessor package (every link, command and path in it resolves)", cmd: ["node", "scripts/check-assessor-package.mjs"] },
   { name: "Connector discipline (every family gated + proven, none acting on a device)", cmd: ["node", "scripts/check-connector-discipline.mjs"] },
   { name: "Ungated fetch (a health check is still a live call)", cmd: ["node", "scripts/check-ungated-fetch.mjs"] },
+  // A core proof can show authorizedContext refuses the wrong role; only this shows the
+  // ROUTES still call it. Without it a handler could regress to context() and stay green.
+  { name: "Durable-path authorization (a durable read must authorize, not just authenticate)", cmd: ["node", "scripts/check-durable-path-authorization.mjs"] },
   // SIX offline proofs ran in NO pull-request gate — not here, not in any workflow
   // except mac-lane.yml, which fires weekly and on dispatch, never on a PR. Each is
   // self-described as pure and offline, so there was no reason for it beyond nobody

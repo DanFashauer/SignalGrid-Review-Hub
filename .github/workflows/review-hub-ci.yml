@@ -246,6 +246,24 @@ jobs:
         run: node scripts/check-connector-discipline.mjs
       - name: "Ungated fetch (the live boundary covers every outbound path)"
         run: node scripts/check-ungated-fetch.mjs
+
+      # Six offline proofs that ran in NO pull-request gate. They executed only in
+      # mac-lane.yml, which loops every proof:* key but triggers on workflow_dispatch
+      # and a weekly cron — never on pull_request — and is framed as a rehearsal, not
+      # evidence. So a break in cross-tenant scoping, or a renamed ASAM bundle id in a
+      # .mobileconfig, passed preflight and every check on the way in.
+      - name: "Proof — emit-gate (no outbound family sends from a non-emitting tier)"
+        run: pnpm run proof:emit-gate
+      - name: "Proof — isolation-scope (no tenant can read another's row)"
+        run: pnpm run proof:isolation-scope
+      - name: "Proof — nac (read-only; no device action reachable, live path gated)"
+        run: pnpm run proof:nac
+      - name: "Proof — webhooks (outbound delivery gated, refusals explain themselves)"
+        run: pnpm run proof:webhooks
+      - name: "Proof — mdm-profile (the shipped profiles say what the product claims)"
+        run: pnpm run proof:mdm-profile
+      - name: "Proof — graph-wire (throttling, 5xx, auth, malformed bodies fail closed)"
+        run: pnpm run proof:graph-wire
       - name: "Assessor package (links/commands an external reviewer follows)"
         run: node scripts/check-assessor-package.mjs
 

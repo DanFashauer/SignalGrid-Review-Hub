@@ -10,6 +10,7 @@ import { CiscoISEAdapter, CiscoISEConfig } from './cisco-ise';
 import { ArubaClearPassAdapter, ArubaClearPassConfig } from './aruba-clearpass';
 import type { NACAdapter, NACEndpointInfo } from '../adapters/types';
 import { appendAuditRecord } from '@workspace/audit';
+import { resolveEmission } from '../adapters/emit-gate';
 
 // ============================================================================
 // Types
@@ -162,13 +163,29 @@ export async function lookupEndpoint(
   identifier: string,
   type: 'mac' | 'serial' | 'cert' = 'mac'
 ): Promise<NACEndpointInfo | null> {
+  // GATED. This function is the package's public NAC surface — `lib/integrations`
+  // re-exports this whole module as `nac`, so `nac.lookupEndpoint(...)` was callable
+  // from anywhere and reached Cisco ISE / Aruba ClearPass at ANY tier, with no
+  // SIGNALGRID_LIVE_INTEGRATIONS check. The quarantine ACTUATORS were correctly deleted
+  // in #150 (see the note below); the read path they sat beside was left behind, which
+  // is the more common shape — the dangerous-looking code gets removed and the merely
+  // live-calling code inherits the clean bill of health.
+  //
+  // null is already this function's answer for "cannot tell you" (unconfigured, or a
+  // failed lookup), and null is the fail-CLOSED value downstream: an absent NAC reading
+  // raises assurance rather than granting anything.
+  const emission = resolveEmission();
+  if (emission.mode !== 'live') {
+    return null;
+  }
+
   const adapter = await getNACAdapter();
-  
+
   if (!adapter) {
     console.warn('[NACStore] NAC not configured');
     return null;
   }
-  
+
   try {
     return await adapter.lookupEndpoint(identifier, type);
   } catch (error) {
@@ -193,12 +210,21 @@ export async function getNACHealthStatus(): Promise<{ provider: string | null; h
     return { provider: null, healthy: false, message: 'NAC not enabled' };
   }
   
+  // Same gate, same reason: a health check resolves the configured ISE/ClearPass
+  // hostname and opens a connection. "not live" is reported as not-healthy with the
+  // reason stated, rather than as a failure — the caller learns why, and nothing
+  // reads it as a working connection.
+  const emission = resolveEmission();
+  if (emission.mode !== 'live') {
+    return { provider: config.provider, healthy: false, message: `Not checked: ${emission.reason ?? 'live integrations are gated off'}` };
+  }
+
   const adapter = await getNACAdapter();
-  
+
   if (!adapter) {
     return { provider: config.provider, healthy: false, message: 'Adapter not initialized' };
   }
-  
+
   try {
     const healthy = await adapter.healthCheck?.() ?? false;
     return { 

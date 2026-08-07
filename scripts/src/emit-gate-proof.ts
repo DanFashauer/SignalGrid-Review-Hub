@@ -119,6 +119,92 @@ const gateAt = itsmSrc.indexOf("resolveEmission(");
 const credsAt = itsmSrc.indexOf("const credentials = config.credentials");
 check("itsm: the tier gate precedes the credentials branch", gateAt > 0 && credsAt > 0 && gateAt < credsAt);
 
+// ── 7. The four paths that were reaching the network without the gate ───────
+// Found by an audit of the boundary in August 2026. Each is asserted the way that
+// can actually FAIL: the gate token must appear in the method body BEFORE the
+// first outbound call. "The file mentions resolveEmission somewhere" is the
+// assertion that let three of these hide — sentinel.ts named the gate in
+// sendEvent() while sendEvents() beside it POSTed ungated.
+//
+// The regex for an outbound call matches any "fetch"-containing callee, because
+// the fourth defect here was precisely that: servicenow.ts and jira.ts reach the
+// network only through `fetchWithTimeout`, and every check looking for the literal
+// `fetch(` skipped them entirely and reported green.
+const OUTBOUND_CALL = /(?<![\w$])[\w$]*[Ff]etch[\w$]*\s*\(/;
+
+// Comments are blanked before searching. The first draft of this proof did not do
+// that and failed on servicenow.healthCheck() — because the explanatory comment
+// ABOVE the gate contains the word "fetch", so the "first outbound call" landed on
+// prose. Worth keeping as a note: the failure was in the assertion, not the code,
+// and a proof that cannot tell a comment from a call is measuring the wrong thing.
+function stripComments(s: string): string {
+  return s.replace(/\/\*[\s\S]*?\*\//g, (m) => " ".repeat(m.length))
+          .replace(/\/\/[^\n]*/g, (m) => " ".repeat(m.length));
+}
+
+/**
+ * @param callRe the first OUTBOUND expression for this method. Defaults to a direct
+ *   fetch; `nac.lookupEndpoint()` reaches the network by delegating to an adapter it
+ *   builds, so it passes the builder instead. Naming the real outbound step per site
+ *   keeps each assertion falsifiable rather than approximately true.
+ */
+function gateBeforeFirstCall(rel: string, methodRe: RegExp, label: string, callRe: RegExp = OUTBOUND_CALL): void {
+  const src = stripComments(readFileSync(resolve(repo, rel), "utf8"));
+  const m = src.match(methodRe);
+  if (!m || m.index === undefined) {
+    check(`${label}: method located in source`, false);
+    return;
+  }
+  const body = src.slice(m.index);
+  const gateAt = body.search(/resolveEmission\s*\(/);
+  // Search AFTER the declaration line, so a method whose own name contains "fetch"
+  // does not match itself.
+  const afterDecl = body.indexOf("\n");
+  const callOffset = body.slice(afterDecl).search(callRe);
+  const callAt = callOffset === -1 ? -1 : callOffset + afterDecl;
+  check(`${label}: reaches the network at all (assertion is not vacuous)`, callAt > 0);
+  check(`${label}: gated BEFORE its first outbound call`, gateAt > 0 && callAt > 0 && gateAt < callAt);
+}
+
+gateBeforeFirstCall(
+  "lib/integrations/src/integrations/itsm/servicenow.ts",
+  /async healthCheck\s*\(/,
+  "servicenow.healthCheck()",
+);
+gateBeforeFirstCall(
+  "lib/integrations/src/integrations/itsm/jira.ts",
+  /async healthCheck\s*\(/,
+  "jira.healthCheck()",
+);
+gateBeforeFirstCall(
+  "lib/integrations/src/integrations/siem/sentinel.ts",
+  /async sendEvents\s*\(/,
+  "sentinel.sendEvents()",
+);
+gateBeforeFirstCall(
+  "lib/integrations/src/integrations/nac/store.ts",
+  /export async function lookupEndpoint\s*\(/,
+  "nac.lookupEndpoint()",
+  // This one delegates: it builds a Cisco ISE / Aruba ClearPass adapter and calls
+  // through it, so getNACAdapter() IS the outbound step. Gating after it would
+  // construct an authenticated vendor client before deciding whether to be live.
+  /getNACAdapter\s*\(/,
+);
+
+// mde gates at its single `isEnabled()` choke point, which all five of its outbound
+// methods already guard on — so assert the choke point itself, not each caller.
+// Asserted as "config flag AND emission gate": returning `config.enabled` alone was
+// the defect, and a tenant-controlled value is not a deployment boundary.
+const mdeSrc = readFileSync(resolve(repo, "lib/integrations/src/integrations/telemetry/mde.ts"), "utf8");
+const mdeEnabled = mdeSrc.slice(mdeSrc.indexOf("isEnabled(): boolean"));
+const mdeBody = mdeEnabled.slice(0, mdeEnabled.indexOf("\n  }"));
+check("mde.isEnabled(): requires the local config flag", /config\?\.enabled/.test(mdeBody));
+check("mde.isEnabled(): ALSO requires the emission gate", /resolveEmission\s*\(\)\.mode === ['"]live['"]/.test(mdeBody));
+check(
+  "mde: every outbound method still routes through isEnabled()",
+  (mdeSrc.match(/if \(!this\.isEnabled\(\)\)/g) ?? []).length >= 5,
+);
+
 const total = passed + failures.length;
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${total})`);
 if (failures.length > 0) {

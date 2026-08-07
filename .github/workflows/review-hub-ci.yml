@@ -246,6 +246,11 @@ jobs:
         run: node scripts/check-connector-discipline.mjs
       - name: "Ungated fetch (the live boundary covers every outbound path)"
         run: node scripts/check-ungated-fetch.mjs
+      # decision:read was enforced in memory and skipped on the durable path — the branch
+      # returned before listDecisions/getDecision/getSnapshot ever authorized. The core proof
+      # covers the new authorizedContext method; this covers the ROUTES calling it.
+      - name: "Durable-path authorization (a durable read must authorize, not just authenticate)"
+        run: node scripts/check-durable-path-authorization.mjs
 
       # Six offline proofs that ran in NO pull-request gate. They executed only in
       # mac-lane.yml, which loops every proof:* key but triggers on workflow_dispatch

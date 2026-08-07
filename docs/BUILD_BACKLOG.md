@@ -396,6 +396,29 @@ _(see `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` for the full app-workflow roadmap)
 
 ## Done (recent)
 
+- [x] The delivery images could not be built (fourth blocker of this class) —
+      `Dockerfile.web` used a `node:22-alpine` builder, and alpine is **musl**,
+      while `pnpm-workspace.yaml` strips `@rollup/rollup-linux-x64-musl`,
+      `lightningcss-linux-x64-musl` and `@tailwindcss/oxide-linux-x64-musl`. The
+      vite build inside it could never have succeeded, on any host. Neither
+      builder stage pinned `--platform`, so both also inherited the build host's
+      architecture: linux/amd64 on the CI runner (which is why the API image
+      always passed there) and linux/arm64 on an Apple Silicon Mac, where
+      `@esbuild/linux-arm64` is stripped too. Nothing caught it because CI's
+      `deploy-stack` job builds `docker-compose.prod.yml`, which declares only
+      `db` and `api`; the web image is referenced solely by the dev
+      `docker-compose.yml`, which no job ever built. Fixed by pinning both
+      builder stages to `--platform=linux/amd64` on `node:22-bookworm-slim` —
+      linux-x64-gnu is the one triple the workspace ships a complete native set
+      for. New gate `scripts/check-container-native-base.mjs` (preflight + CI)
+      derives the supported triples from `pnpm-workspace.yaml` at run time and
+      fails any bundler build stage that is unpinned or targets an unsupported
+      triple; it was written against the defect and reproduced it before the fix.
+      `mac-kickoff.sh --with-docker` now also runs `docker compose build api web`,
+      because a static check is not a build and that lane is the only one with a
+      daemon. Same shape as the three blockers before it: something reported
+      success while not doing its job.
+
 - [x] macOS / Windows desktop host-app demo (cross-platform parity) —
       `docs/embedded-desktop-demo.html` (published at `/desktop-demo.html`): the
       same invisible Assist flow as the mobile demo, in a generic NOC desktop app

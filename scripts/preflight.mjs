@@ -57,6 +57,10 @@ const STEPS = [
   { name: "Docs sanity (required docs + unsafe-claim scan)", cmd: ["node", "scripts/docs-sanity.mjs"] },
   { name: "Doc orphans (a new doc must be reachable from an index)", cmd: ["node", "scripts/check-doc-orphans.mjs"] },
   { name: "Guard-registry drift (coverage lists derived, not trusted)", cmd: ["node", "scripts/check-guard-registries.mjs"] },
+  // Pure static analysis of the Dockerfiles against pnpm-workspace.yaml — no
+  // daemon needed, which is the point: the web image was unbuildable for months
+  // because no gate ever built it.
+  { name: "Container native base (a Dockerfile that cannot build is not a deploy path)", cmd: ["node", "scripts/check-container-native-base.mjs"] },
   { name: "Publication boundary (nothing reaches a public repo unclassified)", cmd: ["node", "scripts/check-publication-boundary.mjs"] },
   { name: "Pagination-truncation guard (a capped read must not look complete)", cmd: ["node", "scripts/check-pagination-truncation.mjs"] },
   { name: "Absent-collection law (nothing observed ≠ nothing wrong)", cmd: ["pnpm", "run", "proof:absent-collection"] },

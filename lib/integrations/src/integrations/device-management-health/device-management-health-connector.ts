@@ -13,6 +13,7 @@ import {
   type ComplianceCoverage,
   type DeviceManagementHealthReportRaw,
   type EnrollmentState,
+  type RootCauseEvidence,
   type MdmCheckInFreshness,
   type NormalizedDeviceManagementHealth,
   type PolicyDrift,
@@ -167,6 +168,7 @@ const REMEDIATION = ["healthy", "issues_detected", "failed", "not_applicable", "
 const DRIFT = ["on_baseline", "drifted", "unknown"] as const;
 const COVERAGE = ["covered", "uncovered", "unknown"] as const;
 const ENROLLMENT = ["enrolled", "failed", "retired", "unknown"] as const;
+const ROOT_CAUSE_EVIDENCE = ["available", "unavailable", "not_supported", "unknown"] as const;
 
 /** Normalize a management-health report. Defensive throughout: a missing/errored field
  *  yields the fail-safe unknown/null, never a fabricated "fresh"/"enrolled". */
@@ -203,6 +205,7 @@ export function normalizeReport(
     complianceCoverage: read("complianceCoverage"),
     enrollmentState: read("enrollmentState"),
     managementReachable: read("managementReachable"),
+    rootCauseEvidence: read("rootCauseEvidence"),
   };
 
   const mdmCheckInFreshness = oneOf<MdmCheckInFreshness>(raw.mdmCheckInFreshness, MDM_CHECK_IN, "unknown");
@@ -211,6 +214,10 @@ export function normalizeReport(
   const policyDrift = oneOf<PolicyDrift>(raw.policyDrift, DRIFT, "unknown");
   const complianceCoverage = oneOf<ComplianceCoverage>(raw.complianceCoverage, COVERAGE, "unknown");
   const enrollmentState = oneOf<EnrollmentState>(raw.enrollmentState, ENROLLMENT, "unknown");
+  // Absent normalizes to "unknown" — every bridge written before this field existed
+  // keeps working and simply reports that it does not say. "unknown" is graded as
+  // "no evidence", so silence never buys a diagnosis.
+  const rootCauseEvidence = oneOf<RootCauseEvidence>(raw.rootCauseEvidence, ROOT_CAUSE_EVIDENCE, "unknown");
 
   const malformed =
     !plain ||
@@ -222,6 +229,7 @@ export function normalizeReport(
     enumMalformed(raw.policyDrift, DRIFT) ||
     enumMalformed(raw.complianceCoverage, COVERAGE) ||
     enumMalformed(raw.enrollmentState, ENROLLMENT) ||
+    enumMalformed(raw.rootCauseEvidence, ROOT_CAUSE_EVIDENCE) ||
     boolMalformed(raw.managementReachable);
   const reportIntegrity: ReportIntegrity = malformed ? "malformed" : "clean";
 
@@ -253,6 +261,7 @@ export function normalizeReport(
     policyDrift,
     complianceCoverage,
     enrollmentState,
+    rootCauseEvidence,
     managementReachable: boolOrNull(raw.managementReachable),
     reportIntegrity,
     source,

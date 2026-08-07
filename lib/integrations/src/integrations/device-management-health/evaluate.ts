@@ -212,8 +212,36 @@ export function evaluateDeviceManagementHealth(
     criticalFindings.push("enrollment_retired");
     candidates.push({ posture: "unenrolled_device", action: "restrict", reason: "ENROLLMENT_RETIRED" });
   } else if (health.enrollmentState === "failed") {
+    // A STATUS IS NOT A DIAGNOSIS.
+    //
+    // The management portal reports the RESULT; the reason lives on the device. Both of
+    // these used to emit `ENROLLMENT_FAILED`:
+    //
+    //   · the portal says failed and nobody has looked at anything
+    //   · the log was collected and a certificate request rejection is the confirmed cause
+    //
+    // The ACTION is `restrict` either way and always was — so this changes no outcome and
+    // fixes no fail-open hole. What it fixes is the CLAIM. Asserting a named failure
+    // cause the connector cannot support is the same defect class as a gate reporting
+    // success it did not earn, and it misroutes: which owner picks this up (PKI, app
+    // packaging, network, identity) is precisely what the absent evidence would say.
+    //
+    // Only an explicit `available` earns the diagnosis. `unavailable`, `unknown` and
+    // `not_supported` all fall to the honest form. `not_supported` is deliberately NOT
+    // promoted: a source that structurally cannot explain itself still has not explained
+    // itself, and letting "I can never tell you" read as "nothing more to find" is how
+    // an absent check becomes a passed one.
     criticalFindings.push("enrollment_failed");
-    candidates.push({ posture: "unenrolled_device", action: "restrict", reason: "ENROLLMENT_FAILED" });
+    if (health.rootCauseEvidence === "available") {
+      candidates.push({ posture: "unenrolled_device", action: "restrict", reason: "ENROLLMENT_FAILED" });
+    } else {
+      unknownSignals.push("enrollment_root_cause");
+      candidates.push({
+        posture: "unenrolled_device",
+        action: "restrict",
+        reason: "ENROLLMENT_ROOT_CAUSE_UNVERIFIED",
+      });
+    }
   } else if (health.enrollmentState === "unknown") {
     unknownSignals.push("enrollment_state");
     candidates.push({ posture: "unverified", action: "step_up", reason: "MANAGEMENT_STATE_UNKNOWN" });

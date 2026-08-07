@@ -77,6 +77,15 @@ console.log(`devices=${names.length}`);
 
 const reports: Record<string, DeviceManagementHealthReportRaw> = {};
 for (const n of names) reports[fixture.devices[n].deviceId] = fixture.devices[n].report;
+// The reports map is keyed by deviceId, so two fixture entries sharing one deviceId
+// silently overwrite each other: the loser is still ITERATED and still "checked", but
+// against the winner's report. It looks like coverage and is not. Caught while adding
+// the root-cause fixture, which reused an id already in the file.
+const uniqueIds = new Set(names.map((n) => fixture.devices[n].deviceId));
+check(
+  "every fixture device has a UNIQUE deviceId (a collision silently drops a case from the table)",
+  uniqueIds.size === names.length,
+);
 const transport = createMockDeviceManagementHealthTransport({ reports, expectedToken: fixture.accessToken });
 const connector = new DeviceManagementHealthConnector({ accessToken: fixture.accessToken, baseUrl: BASE_URL }, transport);
 
@@ -336,7 +345,8 @@ const forged = evaluateDeviceManagementHealth({
   sourceSystem: "device-management-health", deviceId: "forged", source: "test",
   mdmCheckInFreshness: "fresh", agentCheckInFreshness: "fresh", remediationHealth: "healthy",
   policyDrift: "on_baseline", complianceCoverage: "covered",
-  enrollmentState: "enrolled", managementReachable: true, reportIntegrity: "malformed",
+  enrollmentState: "enrolled", managementReachable: true, rootCauseEvidence: "available",
+  reportIntegrity: "malformed",
 });
 check("the EVALUATOR independently refuses a malformed report, even a fully clean-looking one", forged.recommendedAction === "step_up" && forged.managementEffective === false);
 
@@ -641,6 +651,50 @@ check("prod + live + token resolves live", resolveDeviceManagementHealthConnecto
   check("graph: the tier gate still governs the graph transport", resolveDeviceManagementHealthConnector({ SIGNALGRID_TIER: "dev", SIGNALGRID_LIVE_INTEGRATIONS: "true", DEVICE_MANAGEMENT_HEALTH_ACCESS_TOKEN: "t", DEVICE_MANAGEMENT_HEALTH_TRANSPORT: "graph" }).mode === "fixture");
   check("graph: $select asks for exactly the 7 fields the mapping reads", GRAPH_MANAGED_DEVICE_SELECT.length === 7);
 }
+
+// ── A STATUS IS NOT A DIAGNOSIS ──────────────────────────────────────────────────
+// The management portal reports the RESULT; the device holds the REASON. Before this
+// axis, "the portal says enrollment failed and nobody looked" and "the log was
+// collected and a cert rejection is the confirmed cause" emitted the IDENTICAL reason
+// code. The action was `restrict` in both cases and still is — so these assertions
+// pin a TRUTHFULNESS property, not an outcome change. Written to fail if the
+// distinction is removed.
+const failedNoEvidence = normalizeReport("rc1", {
+  mdmCheckInFreshness: "fresh", agentCheckInFreshness: "fresh", remediationHealth: "healthy",
+  policyDrift: "on_baseline", complianceCoverage: "covered", enrollmentState: "failed",
+  managementReachable: true,
+});
+const failedWithEvidence = normalizeReport("rc2", {
+  mdmCheckInFreshness: "fresh", agentCheckInFreshness: "fresh", remediationHealth: "healthy",
+  policyDrift: "on_baseline", complianceCoverage: "covered", enrollmentState: "failed",
+  managementReachable: true, rootCauseEvidence: "available",
+});
+const evNo = evaluateDeviceManagementHealth(failedNoEvidence);
+const evYes = evaluateDeviceManagementHealth(failedWithEvidence);
+
+check("a bridge that omits rootCauseEvidence stays CLEAN (no breaking change for existing bridges)", failedNoEvidence.reportIntegrity === "clean" && failedNoEvidence.rootCauseEvidence === "unknown");
+check("a reported enrollment failure with NO device-side evidence is not stated as a diagnosis", evNo.reasonCode === "ENROLLMENT_ROOT_CAUSE_UNVERIFIED");
+check("...and the missing root cause is surfaced as an unknown signal, not swallowed", evNo.unknownSignals.includes("enrollment_root_cause"));
+check("a reported enrollment failure WITH device-side evidence keeps the named diagnosis", evYes.reasonCode === "ENROLLMENT_FAILED");
+check("...and claims no unknown root cause", evYes.unknownSignals.includes("enrollment_root_cause") === false);
+check("the two cases are genuinely distinguishable (the assertion is not vacuous)", evNo.reasonCode !== evYes.reasonCode);
+check("neither case is allowed to grant — the OUTCOME is unchanged by this axis", evNo.recommendedAction === "restrict" && evYes.recommendedAction === "restrict" && evNo.managementEffective === false && evYes.managementEffective === false);
+// not_supported is NOT promoted to a diagnosis: a source that structurally cannot
+// explain itself still has not explained itself. Letting "I can never tell you" read as
+// "nothing more to find" is exactly how an absent check becomes a passed one.
+const notSupported = evaluateDeviceManagementHealth(normalizeReport("rc3", {
+  mdmCheckInFreshness: "fresh", agentCheckInFreshness: "fresh", remediationHealth: "healthy",
+  policyDrift: "on_baseline", complianceCoverage: "covered", enrollmentState: "failed",
+  managementReachable: true, rootCauseEvidence: "not_supported",
+}));
+check("'not_supported' does NOT buy a diagnosis — it is still an unverified root cause", notSupported.reasonCode === "ENROLLMENT_ROOT_CAUSE_UNVERIFIED");
+const unavailable = evaluateDeviceManagementHealth(normalizeReport("rc4", {
+  mdmCheckInFreshness: "fresh", agentCheckInFreshness: "fresh", remediationHealth: "healthy",
+  policyDrift: "on_baseline", complianceCoverage: "covered", enrollmentState: "failed",
+  managementReachable: true, rootCauseEvidence: "unavailable",
+}));
+check("'unavailable' is likewise unverified", unavailable.reasonCode === "ENROLLMENT_ROOT_CAUSE_UNVERIFIED");
+check("an unparseable rootCauseEvidence is MALFORMED, not silently read as available", normalizeReport("rc5", { enrollmentState: "failed", rootCauseEvidence: "probably?" }).reportIntegrity === "malformed");
 
 // One machine-readable line, derived from the SAME variables the checks above asserted
 // on — not restated by hand, which is the mistake this feeds a guard against.

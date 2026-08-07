@@ -74,6 +74,27 @@
       },
       "expected": {
         "posture": "unenrolled_device",
+        "reasonCode": "ENROLLMENT_ROOT_CAUSE_UNVERIFIED",
+        "recommendedAction": "restrict",
+        "criticalFindingsCount": 2,
+        "unknownSignalsCount": 1,
+        "managementEffective": false
+      }
+    },
+    "enrollment-failed-diagnosed": {
+      "deviceId": "ipad-ward-34",
+      "report": {
+        "mdmCheckInFreshness": "fresh",
+        "agentCheckInFreshness": "not_applicable",
+        "remediationHealth": "not_applicable",
+        "policyDrift": "on_baseline",
+        "complianceCoverage": "uncovered",
+        "enrollmentState": "failed",
+        "managementReachable": true,
+        "rootCauseEvidence": "available"
+      },
+      "expected": {
+        "posture": "unenrolled_device",
         "reasonCode": "ENROLLMENT_FAILED",
         "recommendedAction": "restrict",
         "criticalFindingsCount": 2,

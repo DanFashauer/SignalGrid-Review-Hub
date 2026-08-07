@@ -49,6 +49,20 @@
 //
 // Runtime-only stages are not checked: they copy an already-built bundle and
 // may stay native-arch, which is faster and correct.
+//
+// WHAT THIS DOES NOT PROVE — and the way it was learned. A green here means the
+// base image targets a triple whose native binaries exist. It does NOT mean the
+// image builds. It cannot: the build context is assembled BY the Dockerfile, so a
+// file that is never COPY'd simply is not there, and no amount of reading this
+// file will reveal it. Immediately after this gate first went green, a real build
+// on the owner's Mac found Dockerfile.web still broken twice over — neither
+// `tsconfig.base.json` (both app tsconfigs `extends` it) nor
+// `scripts/enforce-pnpm.cjs` (the root `preinstall` hook runs it) was copied in.
+//
+// So `review-hub-ci.yml`'s deploy-stack job now runs `docker build -f
+// Dockerfile.web` for real. This gate is the cheap check that runs everywhere in a
+// second; that build is the one that actually answers the question. Keep both —
+// but do not let a green here be read as the stronger claim.
 
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -164,4 +178,9 @@ if (failures.length) {
   console.error(`Container native-base check FAILED (${failures.length} issue${failures.length > 1 ? "s" : ""}).`);
   process.exit(1);
 }
-console.log(`Container native-base check passed — ${checked} build stage${checked === 1 ? "" : "s"} can actually build.`);
+console.log(
+  `Container native-base check passed — ${checked} build stage${checked === 1 ? "" : "s"} target a supported triple.\n` +
+    "  NOT established: that these images BUILD. A missing COPY is invisible to a static\n" +
+    "  read of the Dockerfile, and exactly that shipped past an earlier green here. The\n" +
+    "  deploy-stack job builds them for real; this is the cheap check, not the answer.",
+);

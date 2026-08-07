@@ -15,7 +15,8 @@ picking these up:
 ## Now (next up)
 
 _Derived from repo data, not memory: `check-connector-discipline` reports 36/36
-families with KNOWN_GAPS empty, and `check-live-sync` reports `liveEvidence=none`.
+families with KNOWN_GAPS empty, and `check-live-sync` reports `liveEvidence=fresh`
+(`artifacts/live-evidence/mac-run.json`, minted on a real Mac 2026-08-07).
 What remains is the LIVE-lane column of
 [ZERO_COST_LIVE_TEST_MATRIX.md](ZERO_COST_LIVE_TEST_MATRIX.md) — every dimension
 already has a fixture proof; these add a real vendor behind it._
@@ -206,11 +207,21 @@ only), and the DDM rig is gated on an APNs push certificate.
       verified as RENDERING rather than merely typechecking — which is the standard it
       should be held to.
 
-- [ ] **Run the Mac lane → `liveEvidence` goes `none` → `fresh`.** ⚠️ **the blocking
-      merge in the OTHER repo is DONE; what remains needs the owner's Mac.**
-      This is the repo's longest-standing gap (`STATUS.md`: "real-hardware evidence:
-      none"), and it turned out not to need a supervised device or any purchase.
-      Two things blocked it, both now cleared:
+- [x] **Run the Mac lane → `liveEvidence` goes `none` → `fresh`.** **DONE 2026-08-07**
+      — `artifacts/live-evidence/mac-run.json`, minted on the owner's Mac
+      (macOS 26.6, arm64) and committed as `d107fa2`. `check-live-sync` now reports
+      `liveEvidence=fresh`. This was the repo's longest-standing gap, and it turned
+      out to need no supervised device and no purchase.
+      A THIRD blocker existed and was invisible until a real Mac ran the lane: the
+      evidence gate required `pnpm run build`, which pnpm-workspace.yaml makes
+      impossible on macOS by stripping the darwin native binaries — a step the
+      toolchain forbids on the only platform allowed to mint evidence. Fixed in
+      `10dbc0b` (#176): steps that are structurally impossible on a platform are
+      recorded UNAVAILABLE with the reason rather than failing, derived from the
+      workspace config and only when the binary genuinely does not resolve. The
+      evidence file carries `preflightCoverage` naming what did not run, so a green
+      `mac-run.json` cannot be read as "the web bundle builds".
+      The original two blockers, both cleared:
       1. *Review-Hub half* — `verify-all.mjs` runs the FULL preflight, which includes
          `pnpm run build`, believed unrunnable on macOS. It runs fine once the four
          stripped darwin binaries are supplied (commit `d637404`). **Cleared.**
@@ -234,12 +245,13 @@ only), and the DDM rig is gated on an APNs push certificate.
       was produced against a local ad-hoc merge — the evidence schema records
       `mcpCommit`/`mcpDirty`, and publishing a run against an unpushed dirty tree
       would be exactly the manufactured confidence this repo keeps deleting.
-      **Now runnable against merged code** — on the owner's Mac, with a
-      `signalgrid-mcp` checkout at the sibling path `../signalgrid-mcp`:
-      `SIGNALGRID_MCP_PATH=~/signalgrid-mcp node scripts/verify-all.mjs
-      --require-mcp --emit-evidence`, then commit `artifacts/live-evidence/`.
-      This step cannot be done from CI or a cloud sandbox: `--emit-evidence` refuses
-      when the process is not on macOS, on purpose, because green-ness is not
+      The committed run was minted against merged code with a clean checkout —
+      `mcpCommit: 369e08e`, `mcpDirty: false` — so it is attributable and
+      reproducible rather than "some tree passed once".
+      **To refresh it** (the manifest fingerprint changes whenever contracts move,
+      which turns the evidence stale): `./mac-kickoff.sh` from the repo root on the
+      owner's Mac. It cannot be done from CI or a cloud sandbox — `--emit-evidence`
+      refuses off-macOS AND on CI runners, on purpose, because green-ness is not
       hardware.
 
 - [x] **`X ?? []` made an unreported collection indistinguishable from an empty

@@ -30,6 +30,8 @@
 #
 # Flags:
 #   --skip-mcp-register   leave `claude mcp` alone (step 4 becomes a no-op)
+#   --with-docker         also run the Docker lane (step 6) — the durable half
+#                         against a real Postgres, in the deployed topology
 #   --no-push             do everything, commit nothing, push nothing
 #   --yes                 don't pause for confirmation before the commit
 
@@ -43,12 +45,14 @@ MCP_SERVER_NAME="signalgrid-macos"
 SKIP_REGISTER=0
 NO_PUSH=0
 ASSUME_YES=0
+WITH_DOCKER=0
 for arg in "$@"; do
   case "$arg" in
     --skip-mcp-register) SKIP_REGISTER=1 ;;
+    --with-docker)       WITH_DOCKER=1 ;;
     --no-push)           NO_PUSH=1 ;;
     --yes|-y)            ASSUME_YES=1 ;;
-    -h|--help)           sed -n '2,40p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help)           sed -n '2,42p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "unknown flag: $arg (try --help)" >&2; exit 2 ;;
   esac
 done
@@ -62,7 +66,7 @@ die()  { printf '\n\033[31mFAILED\033[0m %s\n' "$*" >&2; exit 1; }
 # 0. Refuse early and clearly on the wrong machine, rather than failing deep in
 #    step 5 with a confusing message from verify-all.
 # ---------------------------------------------------------------------------
-step "0/6  preflight — is this the right machine?"
+step "0/7  preflight — is this the right machine?"
 [ "$(uname -s)" = "Darwin" ] || die "this is $(uname -s), not macOS.
 
   The Mac lane exists to record a REAL managed Mac. verify:all --emit-evidence
@@ -78,7 +82,7 @@ ok "node $(node -v), pnpm $(pnpm -v)"
 # ---------------------------------------------------------------------------
 # 1. Review-Hub side up to date.
 # ---------------------------------------------------------------------------
-step "1/6  update this repo"
+step "1/7  update this repo"
 BRANCH="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD)"
 if [ -n "$(git -C "$REPO_ROOT" status --porcelain)" ]; then
   warn "working tree is dirty — NOT pulling, so nothing of yours is clobbered."
@@ -93,7 +97,7 @@ ok "at $(git -C "$REPO_ROOT" rev-parse --short HEAD) on $BRANCH"
 # ---------------------------------------------------------------------------
 # 2. The signalgrid-mcp checkout, at a path verify-all can actually find.
 # ---------------------------------------------------------------------------
-step "2/6  signalgrid-mcp checkout"
+step "2/7  signalgrid-mcp checkout"
 if [ -d "$MCP_DIR/.git" ]; then
   ok "found $MCP_DIR"
   if [ -z "$(git -C "$MCP_DIR" status --porcelain)" ]; then
@@ -127,7 +131,7 @@ fi
 #    back to a bare python3 that almost certainly has no pytest, so skipping this
 #    produces a confusing failure two steps later.
 # ---------------------------------------------------------------------------
-step "3/6  build the signalgrid-mcp venv (its own ./verify.sh)"
+step "3/7  build the signalgrid-mcp venv (its own ./verify.sh)"
 if [ -x "$MCP_DIR/.venv/bin/pytest" ]; then
   ok ".venv already present — reusing it"
   ok "installed SDK: $("$MCP_DIR/.venv/bin/python" -c 'import importlib.metadata as m; print("mcp " + m.version("mcp"))' 2>/dev/null || echo 'mcp version unknown')"
@@ -144,7 +148,7 @@ fi
 # 4. The Claude Code registration. Separate from everything above: it governs
 #    your editor's MCP client, not this verification run.
 # ---------------------------------------------------------------------------
-step "4/6  claude mcp registration"
+step "4/7  claude mcp registration"
 if [ "$SKIP_REGISTER" = "1" ]; then
   ok "skipped (--skip-mcp-register)"
 elif ! command -v claude >/dev/null 2>&1; then
@@ -171,7 +175,7 @@ fi
 # ---------------------------------------------------------------------------
 # 5. The actual point: both halves, then mint evidence.
 # ---------------------------------------------------------------------------
-step "5/6  verify:all --require-mcp --emit-evidence"
+step "5/7  verify:all --require-mcp --emit-evidence"
 echo "   Review-Hub preflight + signalgrid-mcp pytest against the shared contract."
 echo "   This is the slow part (full proof suite). Nothing is emitted unless BOTH halves pass."
 SIGNALGRID_MCP_PATH="$MCP_DIR" pnpm run verify:all -- --require-mcp --emit-evidence
@@ -187,11 +191,61 @@ ok "both halves green"
 # 6. Commit the evidence. It is the deliverable — an uncommitted run proves
 #    nothing to anyone but you.
 # ---------------------------------------------------------------------------
-step "6/6  commit the evidence"
+# ---------------------------------------------------------------------------
+# 6. The Docker lane. A DIFFERENT claim from step 5, not a bigger one.
+#
+#    Everything above runs the decision core in memory: it proves the logic and
+#    nothing about the deployment. The audit ledger's tamper-evidence, the
+#    decision store's tenant isolation and the session lifecycle only become real
+#    claims when they run against Postgres over a socket, in the topology
+#    docker-compose.prod.yml actually deploys. That is one of the three CI jobs
+#    preflight openly says it cannot cover locally — and with Docker present, it
+#    can be covered here instead of taken on faith from CI.
+#
+#    Opt-in rather than automatic: it pulls images, starts containers and takes
+#    minutes, and a script that silently starts containers on someone's machine
+#    is a script people stop trusting. When Docker is available and the flag is
+#    absent, say so, so the option is discoverable rather than buried in --help.
+# ---------------------------------------------------------------------------
+step "6/7  Docker lane (durable half against a real Postgres)"
+DOCKER_OK=0
+if docker version --format '{{.Server.Version}}' >/dev/null 2>&1; then DOCKER_OK=1; fi
+
+if [ "$WITH_DOCKER" != "1" ]; then
+  if [ "$DOCKER_OK" = "1" ]; then
+    ok "skipped — Docker IS running here ($(docker version --format '{{.Server.Version}}' 2>/dev/null))."
+    echo "        Re-run with --with-docker to also prove the durable half:"
+    echo "        the audit ledger, decision-store isolation and session lifecycle"
+    echo "        against a real postgres:16, which no in-memory proof can show."
+  else
+    ok "skipped (--with-docker not given; no Docker daemon detected either)"
+  fi
+elif [ "$DOCKER_OK" != "1" ]; then
+  # Asked for explicitly and unavailable is a REFUSAL, not a quiet skip — the
+  # caller asked for a claim this run cannot make.
+  die "--with-docker was given, but no Docker daemon is reachable.
+
+  Start Docker Desktop and re-run. Refusing to continue quietly: you asked for the
+  durable-persistence claim, and skipping it while reporting success would be
+  exactly the manufactured confidence this lane exists to prevent."
+else
+  ok "Docker $(docker version --format '{{.Server.Version}}' 2>/dev/null) reachable"
+  echo "   running scripts/docker-verify.mjs --emit-evidence (pulls postgres:16 + redis:7 on first run)"
+  node "$REPO_ROOT/scripts/docker-verify.mjs" --emit-evidence || die "the Docker lane failed.
+
+  Read the output above. Like step 5 this mints nothing on a red or partial run —
+  a green-looking artifact over a run that did not happen launders an assumption
+  into a record."
+  ok "durable half green — artifacts/live-evidence/docker-run.json refreshed"
+fi
+
+step "7/7  commit the evidence"
 EVIDENCE_DIR="artifacts/live-evidence"
 if [ -z "$(git -C "$REPO_ROOT" status --porcelain -- "$EVIDENCE_DIR" 2>/dev/null)" ]; then
   warn "no change under $EVIDENCE_DIR — nothing to commit."
-  warn "(verify:all passed, so this likely means an identical run is already committed.)"
+  warn "(the lanes passed, so this likely means an identical run is already committed:"
+  warn " the evidence is keyed on the manifest fingerprint, which only moves when"
+  warn " contracts do.)"
   exit 0
 fi
 git -C "$REPO_ROOT" status --short -- "$EVIDENCE_DIR"

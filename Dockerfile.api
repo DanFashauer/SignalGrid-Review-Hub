@@ -18,7 +18,22 @@ WORKDIR /app
 
 RUN corepack enable pnpm
 
-COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+# tsconfig.base.json — the SAME omission as Dockerfile.web, and this image shipped
+# with it because esbuild disagrees with vite about how bad it is. vite treats an
+# unresolvable `extends` as fatal; esbuild emits a warning and carries on with its
+# own defaults. So this build printed
+#
+#     ▲ [WARNING] Cannot find base config file "../../tsconfig.base.json"
+#     16 warnings
+#
+# on every run, went green, and produced a bundle compiled WITHOUT the repo's
+# declared compilerOptions — `target: es2022` most consequentially, since esbuild
+# uses it to decide what to downlevel. The emitted `dist/index.mjs` was therefore
+# not the artifact this repo's config describes.
+#
+# Found by reading the log of the web-build step added alongside it, not by any
+# gate: nothing fails a build over warnings, and nobody reads 16 of them.
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json tsconfig.base.json ./
 # The root `preinstall` runs `node scripts/enforce-pnpm.cjs`, and `scripts` is a
 # workspace package — copy its manifest + the guard so the install resolves the
 # workspace and the preinstall hook both succeed (its src isn't needed to build

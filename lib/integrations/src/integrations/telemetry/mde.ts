@@ -12,7 +12,7 @@
  */
 
 import { MDEDevice, MDEConfig, MDEPostureSignal } from './types';
-import { resolveEmission, EMIT_SUPPRESSED } from '../adapters/emit-gate';
+import { resolveEmission } from '../adapters/emit-gate';
 
 export class MDEAdapter {
   private config: MDEConfig | null = null;
@@ -40,8 +40,27 @@ export class MDEAdapter {
     };
   }
 
+  /**
+   * May this adapter reach Microsoft Graph right now?
+   *
+   * BOTH conditions, not just the local one. Every outbound method in this class
+   * already guards on `isEnabled()`, so this single point covers all five fetch sites
+   * — the token fetch included.
+   *
+   * It used to return `config.enabled` alone. That is a value a tenant's own stored
+   * configuration controls, not the deployment boundary: with it true, this adapter
+   * reached graph.microsoft.com from dev and alpha with no SIGNALGRID_LIVE_INTEGRATIONS
+   * check — the one connector outside the three-condition rule the security-review
+   * package tells an assessor to verify first. The file even IMPORTED resolveEmission
+   * and never called it, which is how the gap read as intentional for so long.
+   *
+   * `check-ungated-fetch.mjs` carried an EXEMPT entry describing exactly this, printed
+   * on every run and explicitly labelled "an OPEN QUESTION, not a clearance". It was
+   * disclosed, never hidden. Now it is closed, and the exemption is deleted.
+   */
   isEnabled(): boolean {
-    return this.config?.enabled ?? false;
+    if (!(this.config?.enabled ?? false)) return false;
+    return resolveEmission().mode === 'live';
   }
 
   private getGraphUrl(): string {

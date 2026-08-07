@@ -22,11 +22,33 @@
 // load-bearing, remembered is the same as absent.
 //
 // WHAT IT CANNOT DO, stated because the tempting version overclaims. This is a static
-// scan for `fetch(` inside connector sources, checking that the enclosing function
+// scan for fetch calls inside connector sources, checking that the enclosing function
 // mentions the gate. It cannot prove the gate is reached on every path, cannot follow
 // a fetch through a helper in another module, and does not look outside
 // `lib/integrations`. It proves that no connector function calls fetch WITHOUT
 // naming the gate — a necessary condition, not a sufficient one.
+//
+// THE BLIND SPOT THAT MADE IT LIE. For its whole life this gate matched the literal
+// string `fetch(`. Its very first line is `if (!text.includes("fetch(")) continue;` —
+// so a file that reaches the network exclusively through the repo's own
+// `fetchWithTimeout()` helper contains no such substring and was never scanned AT ALL.
+// Four adapter files were in that position, and two of them — `itsm/servicenow.ts` and
+// `itsm/jira.ts` — have no gate token anywhere in the file, with `healthCheck()`
+// methods that are precisely the ENFORCED class this gate was written to catch. It
+// printed green over them.
+//
+// That is worse than the original defect. The original was an ungated call nobody had
+// looked for; this was an ungated call the designated looker reported as absent.
+//
+// Two changes, so the shape cannot recur:
+//
+//   · FETCH_CALL matches any identifier containing "fetch", not the bare builtin. A
+//     false positive here is loud and takes a minute to fix; a false negative is a
+//     silent hole in the boundary the security package tells assessors to check first.
+//   · assertNoUnseenWrapper() DERIVES the wrapper names — it reads every helper under
+//     `lib/integrations/src/utils/` that itself calls the real `fetch`, and fails if
+//     any of their names would not be matched by FETCH_CALL. Name the next helper
+//     `httpPost` and this gate fails demanding to be widened, instead of going quiet.
 
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -35,19 +57,52 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SCAN_ROOT = "lib/integrations/src/integrations";
+const UTIL_ROOT = "lib/integrations/src/utils";
 const GATE_TOKENS = ["resolveEmission", "SIGNALGRID_LIVE_INTEGRATIONS", "resolveLive", "mode !== \"live\"", "mode === \"live\""];
+
+// Any callee whose identifier contains "fetch" — the builtin AND every wrapper around
+// it. The negative lookbehind keeps `obj.fetch(` and `this.doFetch(` in scope while
+// excluding nothing that matters; breadth is the point.
+const FETCH_CALL = /(?<![\w$])[\w$]*[Ff]etch[\w$]*\s*\(/;
+
+/**
+ * The gate's own blind-spot detector.
+ *
+ * FETCH_CALL is a naming convention, and a convention that nobody enforces is a
+ * convention that eventually gets broken — which is exactly how the `fetchWithTimeout`
+ * hole opened. So: find every helper under utils/ that calls the real `fetch`, and
+ * assert its exported name would be MATCHED by FETCH_CALL. A future `httpPost()` helper
+ * fails this with an explicit instruction, rather than silently removing files from the
+ * scan the way its predecessor did.
+ */
+function assertNoUnseenWrapper() {
+  const utilFiles = execFileSync("git", ["ls-files", UTIL_ROOT], { cwd: repoRoot, encoding: "utf8" })
+    .split("\n")
+    .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"));
+  const unseen = [];
+  for (const file of utilFiles) {
+    const text = readFileSync(resolve(repoRoot, file), "utf8");
+    // Does this helper reach the real network primitive?
+    if (!/(?<![\w$.])fetch\s*\(/.test(text)) continue;
+    for (const m of text.matchAll(/^export\s+(?:async\s+)?function\s+([\w$]+)/gm)) {
+      const name = m[1];
+      if (!FETCH_CALL.test(`${name}(`)) unseen.push(`${file} → ${name}()`);
+    }
+  }
+  return unseen;
+}
 
 // Files whose `fetch` is not a connector reaching a vendor. Each needs a reason a
 // reader can check — an unexplained exemption is how a gate quietly stops gating.
 const EXEMPT = new Map([
   ["adapters/emit-gate.ts", "the gate itself"],
-  [
-    "telemetry/mde.ts",
-    "GATED ONLY BY A LOCAL CONFIG FLAG (`isEnabled()` reads `config.enabled`), NOT by " +
-      "the tier + SIGNALGRID_LIVE_INTEGRATIONS boundary. That is weaker than every other " +
-      "connector and is an OPEN QUESTION, not a clearance — recorded here, printed every " +
-      "run, rather than quietly fixed in a commit about something else.",
-  ],
+  // telemetry/mde.ts WAS exempt here, with a stated reason printed on every run: it was
+  // gated by a local `config.enabled` flag instead of the tier + SIGNALGRID_LIVE_INTEGRATIONS
+  // boundary, and the entry called that "an OPEN QUESTION, not a clearance". The question
+  // is now answered — `MDEAdapter.isEnabled()` requires resolveEmission().mode === "live"
+  // as well, which covers all five of its fetch sites — so the exemption is deleted rather
+  // than left standing as a permanent apology. An exemption that outlives its reason
+  // becomes a hole nobody re-examines.
 ]);
 
 const files = execFileSync("git", ["ls-files", SCAN_ROOT], { cwd: repoRoot, encoding: "utf8" })
@@ -63,15 +118,25 @@ for (const file of files) {
   const rel = file.slice(`${SCAN_ROOT}/`.length);
   if (EXEMPT.has(rel)) continue;
   const text = readFileSync(resolve(repoRoot, file), "utf8");
-  if (!text.includes("fetch(")) continue;
+  if (!FETCH_CALL.test(text)) continue;
   scanned += 1;
 
   // Split into top-level-ish function bodies by scanning for `fetch(` and walking
   // back to the nearest enclosing `function`/method opener.
   const lines = text.split("\n");
   for (let i = 0; i < lines.length; i += 1) {
-    if (!/\bfetch\(/.test(lines[i])) continue;
+    if (!FETCH_CALL.test(lines[i])) continue;
     if (/^\s*(\/\/|\*)/.test(lines[i])) continue; // a mention in a comment
+    // An `import { fetchWithTimeout } from …` line names a wrapper without calling it.
+    if (/^\s*import\b/.test(lines[i])) continue;
+    // Widening FETCH_CALL from the bare builtin to any "fetch"-containing identifier
+    // also matches DECLARATIONS — `async fetchPosture(deviceId: string)` is a method
+    // signature, not a call. Counting those would have inflated the unenforced list
+    // with ~30 phantom sites and buried the two real ones. A declaration names
+    // parameters with types and opens a body; a call does neither.
+    if (/^\s*(export\s+)?(private\s+|public\s+|protected\s+)?(async\s+)?[\w$]+\s*(<[^>]*>)?\s*\([^)]*\)\s*:\s*\w/.test(lines[i])) continue;
+    if (/^\s*(export\s+)?(async\s+)?function\s/.test(lines[i])) continue;
+    if (/^\s*(private\s+|public\s+|protected\s+)?(async\s+)?[\w$]+\s*\($/.test(lines[i])) continue; // multi-line signature
     fetchSites += 1;
     // Walk back to the enclosing declaration. Only CLASS METHODS are in scope: they
     // are externally callable on a constructed adapter, so nothing stands between a
@@ -132,6 +197,20 @@ if (fetchSites === 0) {
   console.error("\n✗ zero fetch sites found — the scan matched nothing, which means it is measuring nothing.");
   process.exit(1);
 }
+
+const unseenWrappers = assertNoUnseenWrapper();
+if (unseenWrappers.length > 0) {
+  console.error(
+    `\n✗ ${unseenWrappers.length} network helper(s) whose name FETCH_CALL would not match:\n` +
+      unseenWrappers.map((u) => `    ${u}`).join("\n") +
+      "\n\n  Every connector file that reaches the network only through such a helper would be\n" +
+      "  skipped by this scan entirely — the exact defect that let two ungated healthCheck()\n" +
+      "  methods sit behind a green gate. Widen FETCH_CALL, or rename the helper so its name\n" +
+      "  contains \"fetch\".",
+  );
+  process.exit(1);
+}
+console.log(`  network helpers under utils/:     all named so the scan can see them`);
 
 // The unenforced remainder, printed every run so partial coverage is never mistaken
 // for full coverage — the same convention as the guard registries.

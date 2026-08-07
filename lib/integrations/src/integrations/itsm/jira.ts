@@ -1,5 +1,6 @@
 import type { ITSMAdapter, ITSMTicketRequest, ITSMTicketResponse } from '../adapters/types';
 import { fetchWithTimeout, TIMEOUT_PRESETS } from '../../utils/fetchWithTimeout';
+import { resolveEmission } from '../adapters/emit-gate';
 
 /**
  * Jira Service Management Adapter Configuration
@@ -193,6 +194,12 @@ export class JiraAdapter implements ITSMAdapter {
    * Health check - verify connectivity
    */
   async healthCheck(): Promise<boolean> {
+    // GATED, like every other outbound path — see the note on ServiceNow's healthCheck.
+    // `/rest/api/3/myself` looks like the most harmless call in the file and is still a
+    // credentialed request to a customer's Atlassian tenant from wherever this runs.
+    const emission = resolveEmission();
+    if (emission.mode !== "live") return false;
+
     try {
       const url = `${this.config.baseUrl}/rest/api/3/myself`;
       const response = await fetchWithTimeout(url, {

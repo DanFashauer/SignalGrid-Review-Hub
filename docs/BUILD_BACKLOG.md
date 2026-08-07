@@ -206,27 +206,41 @@ only), and the DDM rig is gated on an APNs push certificate.
       verified as RENDERING rather than merely typechecking — which is the standard it
       should be held to.
 
-- [ ] **Merge `signalgrid-mcp#fix/unblock-live-evidence` → `liveEvidence` goes
-      `none` → `fresh`.** ⚠️ **one merge in the OTHER repo; everything else is done.**
+- [ ] **Run the Mac lane → `liveEvidence` goes `none` → `fresh`.** ⚠️ **the blocking
+      merge in the OTHER repo is DONE; what remains needs the owner's Mac.**
       This is the repo's longest-standing gap (`STATUS.md`: "real-hardware evidence:
       none"), and it turned out not to need a supervised device or any purchase.
-      Two things blocked it, both now cleared or diagnosed:
+      Two things blocked it, both now cleared:
       1. *Review-Hub half* — `verify-all.mjs` runs the FULL preflight, which includes
          `pnpm run build`, believed unrunnable on macOS. It runs fine once the four
          stripped darwin binaries are supplied (commit `d637404`). **Cleared.**
       2. *signalgrid-mcp half* — its `pyproject.toml` pinned `mcp>=1.9.0` with no
-         upper bound. The MCP Python SDK released **2.0.0**, removing
-         `create_connected_server_and_client_session` from `mcp.shared.memory`, so a
-         fresh checkout fails at pytest COLLECTION: 4 files error, 0 tests run. It
-         reads as a broken repo but is a moved API. Pinning `<2` restores it and
-         `verify.sh` exits 0. **Fix pushed as a branch, NOT merged — owner call.**
+         upper bound. The MCP Python SDK released **2.0.0**, which removes
+         `mcp.server.fastmcp` outright (it moved under `mcp/server/mcpserver/`) and
+         turns `mcp/types.py` into a package. `src/signalgrid_mcp/app.py` imports
+         both, so the server raises `ModuleNotFoundError` at import and a client sees
+         only `-32000: Connection closed`; pytest fails at COLLECTION with 4 errors
+         and 0 tests run. It reads as a broken repo but is a moved API. **MERGED as
+         `signalgrid-mcp` `369e08e` (PR #12) on 2026-08-06** — pinned `mcp>=1.9.0,<2`,
+         which resolves 1.29.0. Verified as a matched pair: 99 tests pass under the
+         pin; `ModuleNotFoundError` + 4 collection errors under 2.0.0. **Cleared.**
+
+         Note for anyone registering the server with a client: `uv run --with
+         mcp[cli]` builds an isolated environment and **ignores `pyproject.toml`**, so
+         the merge does not fix such a registration. It has to carry the bound itself:
+         `--with 'mcp[cli]<2'`.
       Verified end-to-end on 2026-07-31: with both in place, both halves pass and
       `mac-run.json` mints. That evidence was deliberately NOT committed, because it
       was produced against a local ad-hoc merge — the evidence schema records
       `mcpCommit`/`mcpDirty`, and publishing a run against an unpushed dirty tree
       would be exactly the manufactured confidence this repo keeps deleting.
-      After merging: `SIGNALGRID_MCP_PATH=~/signalgrid-mcp node scripts/verify-all.mjs
+      **Now runnable against merged code** — on the owner's Mac, with a
+      `signalgrid-mcp` checkout at the sibling path `../signalgrid-mcp`:
+      `SIGNALGRID_MCP_PATH=~/signalgrid-mcp node scripts/verify-all.mjs
       --require-mcp --emit-evidence`, then commit `artifacts/live-evidence/`.
+      This step cannot be done from CI or a cloud sandbox: `--emit-evidence` refuses
+      when the process is not on macOS, on purpose, because green-ness is not
+      hardware.
 
 - [x] **`X ?? []` made an unreported collection indistinguishable from an empty
       one — in FIVE connectors.** **DONE.** The normalized collection is now `null`

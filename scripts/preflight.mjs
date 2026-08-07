@@ -11,6 +11,7 @@
 import { spawnSync } from "node:child_process";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { nativeBuildExclusion } from "./lib/platform-native-build.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const quick = process.argv.includes("--quick");
@@ -70,11 +71,15 @@ const STEPS = [
   { name: "Proof-count sync (documented check counts match their proofs)", cmd: ["node", "scripts/check-proof-counts.mjs"] },
   { name: "Live-sync manifest (external builders see current contracts)", cmd: ["node", "scripts/check-live-sync.mjs"] },
   { name: "Typecheck (all packages)", cmd: ["pnpm", "run", "typecheck"] },
-  { name: "Build (all packages)", cmd: ["pnpm", "run", "build"], heavy: true, env: { PORT: "3000", BASE_PATH: "/" } },
+  // needsNativeBuild: rollup/esbuild/lightningcss/oxide platform binaries. The
+  // workspace strips every triple but linux-x64, so on other platforms this step
+  // is structurally absent rather than failing — see scripts/lib/platform-native-build.mjs.
+  { name: "Build (all packages)", cmd: ["pnpm", "run", "build"], heavy: true, needsNativeBuild: true, env: { PORT: "3000", BASE_PATH: "/" } },
   { name: "Proof: intune-entra-posture", cmd: ["pnpm", "run", "proof:intune-entra-posture"] },
   { name: "Proof: signalgrid-core", cmd: ["pnpm", "run", "proof:signalgrid-core"] },
   { name: "Proof: live-idp (real OIDC provider, real DPoP)", cmd: ["pnpm", "run", "proof:live-idp"] },
-  { name: "Browser E2E (review console, website, admin)", cmd: ["pnpm", "run", "test:e2e"], heavy: true },
+  // Drives the built bundles, so it inherits the same platform constraint.
+  { name: "Browser E2E (review console, website, admin)", cmd: ["pnpm", "run", "test:e2e"], heavy: true, needsNativeBuild: true },
   { name: "Proof: signalgrid-simulator", cmd: ["pnpm", "run", "proof:signalgrid-simulator"] },
   { name: "Proof: signalgrid-grid", cmd: ["pnpm", "run", "proof:signalgrid-grid"] },
   { name: "Proof: microsoft-graph-sandbox", cmd: ["pnpm", "run", "proof:microsoft-graph-sandbox"] },
@@ -163,10 +168,26 @@ const STEPS = [
   { name: "CycloneDX SBOM committed in sync", cmd: ["bash", "-c", "pnpm run sbom && git diff --exit-code -- artifacts/sbom/cyclonedx.json"] },
 ];
 
+// Is the native web build structurally impossible here? Derived from the committed
+// pnpm-workspace.yaml plus whether the binaries actually resolve — never from a
+// flag, so nobody can buy a skip by asking for one. On linux-x64 (CI) the binaries
+// are present by design and this is always false, leaving the build mandatory.
+const nativeExclusion = nativeBuildExclusion(repo);
+if (nativeExclusion.excluded) {
+  console.log(`ℹ native web build unavailable on ${nativeExclusion.target} — ${nativeExclusion.reason}\n`);
+}
+
 const results = [];
 let failed = null;
 for (const step of STEPS) {
   if (quick && step.heavy) { results.push({ name: step.name, status: "skipped" }); continue; }
+  if (step.needsNativeBuild && nativeExclusion.excluded) {
+    // NOT a pass. Recorded as absent, with the reason, and surfaced in the summary
+    // and the final verdict so a reader is never told more than actually ran.
+    results.push({ name: step.name, status: "unavailable" });
+    console.log(`▶ ${step.name} … unavailable on this platform`);
+    continue;
+  }
   process.stdout.write(`▶ ${step.name} … `);
   const [bin, ...args] = step.cmd;
   const r = spawnSync(bin, args, {
@@ -188,7 +209,14 @@ for (const step of STEPS) {
 }
 
 console.log("\n── preflight summary ──");
-for (const r of results) console.log(`  ${r.status === "ok" ? "✓" : r.status === "skipped" ? "–" : "✗"} ${r.name}${r.status === "skipped" ? " (skipped)" : ""}`);
+for (const r of results) {
+  const mark = r.status === "ok" ? "✓" : "–";
+  const note =
+    r.status === "skipped" ? " (skipped)"
+    : r.status === "unavailable" ? " (UNAVAILABLE on this platform — not run, not passed)"
+    : "";
+  console.log(`  ${mark} ${r.name}${note}`);
+}
 
 if (failed) {
   console.error(`\nPreflight FAILED at: ${failed}. Fix before pushing.`);
@@ -207,7 +235,18 @@ const UNCOVERED = [
   "durable-persistence (Postgres audit ledger)",
   "secret-scan         (gitleaks)",
 ];
+const unavailable = results.filter((r) => r.status === "unavailable");
 console.log(`\nPreflight PASSED${quick ? " (quick — heavy builds skipped)" : ""} — everything it runs is green.`);
+if (unavailable.length > 0) {
+  // Stated WITH the verdict, not below it. "Everything it runs is green" is true
+  // and also incomplete; a reader deciding whether to trust this run needs to know
+  // which steps never ran, and that this platform CANNOT run them.
+  console.log(`\n  ${unavailable.length} step(s) did NOT run — unavailable on ${nativeExclusion.target}, not passed:`);
+  for (const r of unavailable) console.log(`    · ${r.name}`);
+  console.log(`    reason: ${nativeExclusion.reason}`);
+  console.log("    These still run in CI on linux-x64, where the binaries exist. A green here");
+  console.log("    is NOT evidence the web bundle builds.");
+}
 console.log("\n  NOT covered by this harness (CI runs these; a green preflight says nothing about them):");
 for (const j of UNCOVERED) console.log(`    · ${j}`);
 if (quick) console.log("    · the full monorepo build + browser E2E (--quick skipped them; drop --quick to include)");

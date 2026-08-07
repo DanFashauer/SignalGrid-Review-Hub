@@ -149,7 +149,8 @@ This documentation set explains SignalGrid's public pre-production and post-laun
   bearers, an anonymous simulator that writes, an unauthenticated control plane), gated
   behind SIGNALGRID_PRODUCT_PROFILE=shared-device-gateway. Additive: unset changes nothing.
 - [The Mac lane](MAC_LANE.md): what a cloud macOS runner can prove and what only the
-  owner's real Mac can — the full 87-gate suite now runs on `macos-latest` (dispatch +
+  owner's real Mac can — the full suite (every `proof:*` gate plus the non-proof
+  gates) now runs on `macos-latest` (dispatch +
   weekly) as a REHEARSAL, while live evidence stays mintable only off CI. Closes a hole
   where a hosted macOS runner satisfied the "real machine" check by construction.
 - [Live-sync loop](LIVE_SYNC_LOOP.md): keeps the owner's Mac MCP lane and the iOS EnterpriseShell building against current repo contracts — a deterministic sync manifest (`scripts/generate-sync-manifest.mjs`), a drift gate (`scripts/check-live-sync.mjs`, hard on manifest drift, report-only on real-hardware evidence staleness), and the owner's one-command evidence run (`verify:all --require-mcp --emit-evidence`).

@@ -96,6 +96,14 @@ export const AREAS = [
   { path: ".npmrc", class: "tooling", reason: "Package manager settings." },
   { path: ".gitleaks.toml", class: "tooling", reason: "Secret-scanner configuration." },
   { path: "validate-sim-macos.sh", class: "tooling", reason: "The full local harness." },
+  {
+    path: "mac-kickoff.sh",
+    class: "tooling",
+    reason:
+      "One-command Mac lane: updates both repos, builds the signalgrid-mcp venv, " +
+      "re-registers the MCP server, runs verify:all --emit-evidence. Public-safe — " +
+      "it contains only public repo URLs and paths derived at runtime, no credentials.",
+  },
   { path: "CLAUDE.md", class: "tooling", reason: "Working rules for this repository." },
   { path: "AGENTS.md", class: "tooling", reason: "Agent-lane rules." },
 

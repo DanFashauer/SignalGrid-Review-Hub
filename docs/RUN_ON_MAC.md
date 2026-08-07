@@ -1,5 +1,22 @@
 # Run SignalGrid — iPhone, iPad, or Mac
 
+> **Just want the Mac lane to run itself?** From the repo root on your Mac:
+>
+> ```bash
+> ./mac-kickoff.sh
+> ```
+>
+> It updates both repos, clones `signalgrid-mcp` to a path `verify:all` actually
+> searches, builds that repo's venv, re-registers the MCP server with the SDK
+> bound the registration has to carry itself (`--with 'mcp[cli]<2'`), runs
+> `verify:all --require-mcp --emit-evidence`, and offers to commit the evidence.
+> It refuses immediately and says why if it is not on macOS. `--help` lists the
+> flags (`--skip-mcp-register`, `--no-push`, `--yes`).
+>
+> This is the one lane that cannot be automated off this machine: `--emit-evidence`
+> refuses off-macOS **and** on CI runners, on purpose, because green-ness is not
+> hardware. See [MAC_LANE.md](./MAC_LANE.md) for what each half proves.
+
 The smart-hospital simulation (Phase 1: **Trusted Room Entry**) runs entirely on
 your own device with no cloud, no database, and no connection to any employer
 system. Everything is **synthetic and public-safe** — fixture identities, rooms,

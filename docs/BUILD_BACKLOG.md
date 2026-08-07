@@ -396,6 +396,26 @@ _(see `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` for the full app-workflow roadmap)
 
 ## Done (recent)
 
+- [x] …and the platform pin was necessary but not sufficient — the follow-up the
+      entry below needed. A real `docker compose build` on the owner's Mac, the
+      first one ever run, found `Dockerfile.web` still broken twice over after the
+      fix: `tsconfig.base.json` was never copied into the build context (both app
+      tsconfigs open with `"extends": "../../tsconfig.base.json"`, so vite could not
+      resolve it) and neither were `scripts/package.json` + `scripts/enforce-pnpm.cjs`
+      (the root `preinstall` hook runs the latter, so `pnpm install` crashed before
+      it began). `Dockerfile.api` already carried that second pair, with a comment
+      explaining why — the rule was copied between files instead of shared, and the
+      copy fell behind.
+      Both fixed; `docker compose up` now brings api + web + nginx up with all three
+      answering healthchecks. The durable correction is that CI's deploy-stack job
+      now runs `docker build -f Dockerfile.web` for real, because
+      `check-container-native-base.mjs` **cannot** catch this class: the build context
+      is assembled BY the Dockerfile, so a path that is never COPY'd does not exist,
+      and no static read reveals it. That guard's header and its success message now
+      say so instead of implying the stronger claim. The gate was not wrong — it was
+      answering a narrower question than its output suggested, which is the same
+      defect shape it was built to catch.
+
 - [x] The delivery images could not be built (fourth blocker of this class) —
       `Dockerfile.web` used a `node:22-alpine` builder, and alpine is **musl**,
       while `pnpm-workspace.yaml` strips `@rollup/rollup-linux-x64-musl`,

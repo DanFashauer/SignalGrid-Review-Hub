@@ -532,6 +532,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # The web image, built for real — the gap that let two broken COPY lines ship.
+      #
+      # docker-compose.prod.yml declares only `db` and `api`, so the step below has
+      # never built Dockerfile.web. #179 added a STATIC gate proving its base image
+      # targets a platform triple the workspace ships binaries for, and that gate was
+      # green while the image still could not build: `tsconfig.base.json` and
+      # `scripts/enforce-pnpm.cjs` were never copied into the context, so the install
+      # crashed in its preinstall hook and vite could not resolve the tsconfig
+      # `extends`. Found by the owner's Mac lane, which is the only place a real
+      # build was happening.
+      #
+      # A static check cannot see this class at all: the build context is assembled
+      # BY the Dockerfile, so a path that is never COPY'd simply does not exist. The
+      # only thing that proves an image builds is building it. Kept as its own step
+      # rather than folded into compose, so a web-image failure is legible on sight
+      # instead of arriving as a compose error.
+      - name: Build the web image (a static base check is not a build)
+        run: docker build --file Dockerfile.web --tag signalgrid-web:ci .
+
       # Build the API image and bring up the durable stack (api + Postgres) so
       # the packaged deployment is proven, not just the source. DATABASE_URL in
       # the compose file turns on the gated persistence layer.

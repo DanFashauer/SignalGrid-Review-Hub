@@ -48,6 +48,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { nativeBuildExclusion } from "./lib/platform-native-build.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const contractPath = resolve(
@@ -56,6 +57,11 @@ const contractPath = resolve(
 );
 const requireMcp = process.argv.includes("--require-mcp");
 const emitEvidence = process.argv.includes("--emit-evidence");
+// Same derivation preflight uses, from the same module, so the evidence cannot
+// claim a coverage the run did not have. Computed here rather than parsed out of
+// preflight's stdout: a text scrape would silently start lying the day the wording
+// changes, and this file's whole job is to not do that.
+const preflightNative = nativeBuildExclusion(repoRoot);
 
 /** Are we on a hosted CI runner? Checked because the darwin test alone does NOT
  *  exclude a cloud sandbox — a GitHub macOS runner passes it. `CI` is set by every
@@ -279,6 +285,20 @@ if (emitEvidence) {
         manifestFingerprint: manifest.fingerprint,
         manifestVersion: manifest.manifestVersion,
         platform: process.platform,
+        // WHAT THE PREFLIGHT ACTUALLY RAN. On macOS the workspace strips the native
+        // binaries the web build needs, so `Build (all packages)` and the browser
+        // E2E do not run — they are absent, not passed. Recording it here is the
+        // whole reason that skip is allowed to exist: a reader must be able to see
+        // that this evidence does NOT attest to the web bundle building. Null-safe:
+        // on linux-x64 nothing is excluded and this reads {excluded:false, steps:[]}.
+        preflightCoverage: {
+          nativeBuildExcluded: preflightNative.excluded,
+          target: preflightNative.target,
+          stepsNotRun: preflightNative.excluded
+            ? ["Build (all packages)", "Browser E2E (review console, website, admin)"]
+            : [],
+          reason: preflightNative.reason,
+        },
         reviewHubPass: true,
         mcpPass: true,
         mcpCheckoutFound: true,

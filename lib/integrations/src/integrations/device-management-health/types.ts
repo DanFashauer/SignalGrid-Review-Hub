@@ -94,6 +94,49 @@ export type ComplianceCoverage = "covered" | "uncovered" | "unknown";
  *  removed from management but potentially still in someone's hands. */
 export type EnrollmentState = "enrolled" | "failed" | "retired" | "unknown";
 
+/** Does device-side evidence exist for WHY a reported failure happened?
+ *
+ *  The management portal reports the RESULT. It rarely reports the REASON — that lives
+ *  on the device, in agent logs, event logs, the MDM diagnostic report, certificate
+ *  request state, script exit codes. Every UEM has this split; it is not an Intune
+ *  quirk.
+ *
+ *  Without this axis, two very different situations produced the identical verdict and
+ *  the identical reason code:
+ *
+ *    · the portal says enrollment failed, and nobody has looked at anything
+ *    · the portal says enrollment failed, the agent log was collected, and a
+ *      certificate request rejection is the confirmed cause
+ *
+ *  Both emitted `ENROLLMENT_FAILED`. The outcome (`restrict`) was already safe, so this
+ *  is NOT a fail-open defect — it is a TRUTHFULNESS defect, which this repo treats as
+ *  the same class: a decision asserting a diagnosis it has not earned. It also misroutes,
+ *  because "who owns this" (PKI vs app packaging vs network vs identity) is exactly what
+ *  the missing evidence would have told you.
+ *
+ *  This is the mirror of the absent-collection law (`proof:absent-collection`): that one
+ *  says NOTHING OBSERVED IS NOT THE SAME AS NOTHING WRONG. This one says A STATUS IS NOT
+ *  A DIAGNOSIS.
+ *
+ *  Deliberately VENDOR-NEUTRAL and four-valued. Naming the actual artifacts here
+ *  (`imeLogAvailable`, `companyPortalLogAvailable`, `win32DetectionState`) was
+ *  considered and rejected: those are Intune/Windows shapes, and burning them into a
+ *  normalized contract that Jamf, Workspace ONE and Fleet also map into would make the
+ *  contract quietly Intune-shaped and leave every other vendor reporting `unknown`
+ *  forever. Vendor specifics belong in `sourceReferences`, which the report already
+ *  carries.
+ *
+ *    available     — device-side evidence was collected and explains the result
+ *    unavailable   — evidence COULD exist but was not collected (device offline, not
+ *                    requested, upload blocked). The dangerous one, and the default
+ *                    reading for a bare portal status.
+ *    not_supported — this source genuinely cannot supply device-side evidence. An
+ *                    honest permanent answer, not a gap to chase.
+ *    unknown       — the bridge did not say. Treated as `unavailable` for grading;
+ *                    kept distinct so "did not answer" and "answered no" stay legible.
+ */
+export type RootCauseEvidence = "available" | "unavailable" | "not_supported" | "unknown";
+
 /** Raw management-health report about one device (loosely typed).
  *
  *  EVERY field is `unknown`, including the boolean. A bridge is an external system: it
@@ -107,6 +150,7 @@ export interface DeviceManagementHealthReportRaw {
   complianceCoverage?: unknown; // covered | uncovered | unknown
   enrollmentState?: unknown; // enrolled | failed | retired | unknown
   managementReachable?: unknown; // boolean
+  rootCauseEvidence?: unknown; // available | unavailable | not_supported | unknown
   [k: string]: unknown;
 }
 
@@ -126,6 +170,10 @@ export const DEVICE_MANAGEMENT_HEALTH_REPORT_KEYS = [
   "complianceCoverage",
   "enrollmentState",
   "managementReachable",
+  // Registered so a bridge that DOES supply it is not marked malformed for an
+  // unrecognized key. Absent stays clean and normalizes to "unknown" — every existing
+  // bridge keeps working and simply reports that it does not say.
+  "rootCauseEvidence",
 ] as const;
 
 /** Did the raw report parse cleanly?
@@ -152,6 +200,10 @@ export interface NormalizedDeviceManagementHealth {
   /** true = management plane answered for this device; false = it did not; null = not
    *  reported. Only an explicit true can back a grant. */
   managementReachable: boolean | null;
+  /** Is there device-side evidence for WHY a reported failure happened? Only
+   *  `available` lets a reported failure be stated as a diagnosis rather than a
+   *  symptom. See RootCauseEvidence. */
+  rootCauseEvidence: RootCauseEvidence;
   reportIntegrity: ReportIntegrity;
   source: string;
 }
@@ -175,6 +227,12 @@ export type DeviceManagementHealthReasonCode =
   | "MANAGEMENT_HEALTHY"
   | "ENROLLMENT_RETIRED"
   | "ENROLLMENT_FAILED"
+  // The portal reported a failure and no device-side evidence explains it. Distinct
+  // from ENROLLMENT_FAILED on purpose: same outcome, different CLAIM. This one says
+  // "a failure is reported and the cause is unverified" instead of asserting a
+  // diagnosis, and it tells an operator the next step is to collect logs — not to
+  // guess an owner.
+  | "ENROLLMENT_ROOT_CAUSE_UNVERIFIED"
   | "COMPLIANCE_UNCOVERED"
   | "POLICY_DRIFTED"
   | "MDM_CHECKIN_NEVER"

@@ -6,3 +6,9 @@ target/
 # is committed and enforced by a pre-push hook: a dependency resolved fresh on every
 # CI run is a dependency nobody chose. The lockfile is what makes "the tests passed"
 # a statement about a specific set of code.
+
+# Tauri writes gen/schemas/ during the build, and the file set is PLATFORM-SPECIFIC
+# (linux-schema.json here, windows-schema.json on the Windows runner). Committing it
+# would mean the tree drifts depending on which machine last built — the same trap as
+# a committed lockfile that gets regenerated per platform.
+app/gen/

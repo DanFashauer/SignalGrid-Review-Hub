@@ -70,16 +70,39 @@ on-device enforcement. See `docs/MAC_LANE.md` for that boundary.
 gate client for the desktop shell — on **both `ubuntu-latest` and `windows-latest`**,
 with `fail-fast: false` so a green Linux cannot hide a red Windows.
 
-**What exists and what does not.** `native/desktop/core` is a Rust crate: the Assist
-outcome vocabulary, fail-closed wire parsing, and endpoint validation, with 38 tests.
-There is **no desktop application binary yet** — `artifacts/signalgrid-desktop` remains
-a Vite web app, exactly as `docs/APP_SUITE_MATRIX.md` has always said. The core came
-first deliberately: everything that decides what a worker is told is testable with
-`cargo test`, on any machine, with no display server, installer, or signing
-certificate. The shell can then be thin, because nothing important is left in it.
+| Job | What it proves |
+| --- | --- |
+| `Assist core (ubuntu-latest)` / `(windows-latest)` | the trust rules compile and their 38 tests pass on both platforms |
+| `Desktop shell (ubuntu-latest)` / `(windows-latest)` | a **runnable executable** builds on both, and is uploaded as a CI artifact |
+| `Shared Assist vectors bind every client` | see the next section |
 
-Windows is a separate job for the same reason iPad is one in the Apple lane: a
-platform claimed from a build that never ran on it is a claim nothing checks.
+**The core came first, deliberately.** `native/desktop/core` is a Rust crate — the
+Assist outcome vocabulary, fail-closed wire parsing, endpoint validation, 38 tests.
+Everything that decides what a worker is told is testable with `cargo test` on any
+machine, with no display server, installer, or signing certificate. `native/desktop/app`
+is then a Tauri shell thin enough that nothing important can hide in it: it renders a
+decision and says what the host app may do with it.
+
+Windows is a separate job for the same reason iPad is one in the Apple lane: a platform
+claimed from a build that never ran on it is a claim nothing checks.
+
+**What the shell does not do.** It does not decide anything and it does not touch the
+network. The decision it renders is a **fixture**, labelled as one *on screen* — a
+`step_up`, chosen because it is the outcome most likely to be mishandled (an `allow`
+would let a shell that ignores the outcome entirely still look correct). Its unit tests
+assert the fixture stays a `step_up`, that it never renders as proceedable, and that an
+unconfigured gate URL is **stated** rather than left blank.
+
+**What CI produces is an executable, not an installer.** No bundling, no code signing,
+no notarisation, no auto-update. On Linux the binary needs WebKitGTK present at run
+time. `artifacts/signalgrid-desktop` remains a separate Vite web app — the operator
+console — exactly as `docs/APP_SUITE_MATRIX.md` says.
+
+**The icons are source.** `native/desktop/app/icons/generate-icons.mjs` encodes them as
+a plain-text grid and emits deterministic PNG and ICO bytes; CI asserts the committed
+files still match. Same reasoning `.github/workflows/android.yml` gives for having no
+Gradle wrapper jar: a public repository should not carry a binary no reviewer reads and
+no gate inspects.
 
 ## One set of Assist cases, three clients
 

@@ -89,6 +89,69 @@ jobs:
             exit 1
           fi
 
+  app:
+    name: Desktop shell (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: native/desktop/app
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Tauri's Linux backend is WebKitGTK. Windows uses the WebView2 runtime, which
+      # ships with the runner image and with Windows 10/11 — nothing to install there.
+      - name: Linux webview dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libayatana-appindicator3-dev librsvg2-dev patchelf
+
+      - name: Rust version
+        run: |
+          rustc --version
+          cargo --version
+
+      # The icons are generated from a plain-text grid in the script itself, so the
+      # repository carries no binary an author cannot review. This asserts the
+      # committed bytes still match that description — the same reasoning that keeps a
+      # Gradle wrapper jar out of the Android lane.
+      - name: Icons match their generator
+        run: node icons/generate-icons.mjs --check
+
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test
+
+      - name: Build the executable
+        run: cargo build --release
+
+      # An executable, not an installer: no bundling, no code signing, no notarisation.
+      # Uploading it makes "the desktop app builds" checkable by running the thing
+      # rather than by reading a green tick.
+      - name: Upload the executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: signalgrid-assist-desktop-${{ matrix.os }}
+          path: |
+            native/desktop/app/target/release/signalgrid-assist-desktop
+            native/desktop/app/target/release/signalgrid-assist-desktop.exe
+          if-no-files-found: error
+
   conformance:
     name: Shared Assist vectors bind every client
     runs-on: ubuntu-latest

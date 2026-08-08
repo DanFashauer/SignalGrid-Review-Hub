@@ -224,11 +224,27 @@ BUILD-TIME  nofile=1024      <- podman build RUN steps
 RUN-TIME    nofile=20000     <- podman run
 ```
 
-**Podman's build steps default to 1024 file descriptors.** Rollup opens hundreds of
-modules concurrently; at 1024 it hits `EMFILE` and reports whichever module lost the
-race as "failed to resolve". The nondeterminism was the tell — a config or filesystem
-fault would fail the same way twice. Docker's builder inherits the daemon's far higher
-limit, so the defect never appeared there.
+**The two paths do not share a default.** Confirmed against podman 4.9.3's own source
+(the exact version measured), not inferred:
+
+- `podman run` goes through **libpod**, where `libpod/define/config.go` sets
+  `RLimitDefaultValue = uint64(1048576)` — clamped here to the host's 20000 hard limit.
+- `podman build` RUN steps go through **buildah**, and 4.9.3's vendored buildah has
+  **no equivalent constant**. They inherit the OCI runtime's 1024.
+
+Rollup opens hundreds of modules concurrently; at 1024 it hits `EMFILE` and reports
+whichever module lost the race as "failed to resolve". The nondeterminism was the tell —
+a config or filesystem fault fails the same way twice. Docker's builder inherits the
+daemon's far higher limit, so the defect never appeared there.
+
+**This is not `containers.conf`.** Its `default_ulimits` entry is commented out on the
+tested host, so nothing local was imposing 1024.
+
+**Upstream appears to have closed this.** In podman 6.2.0-dev, the vendored buildah
+(`vendor/go.podman.io/buildah/define/types.go`) *does* define
+`RLimitDefaultValue = uint64(1048576)`. So on a recent Podman the web image may build
+with no flag at all — the `--ulimit` below is a compatibility measure, harmless where
+the default is already high. **Not verified on 6.x**, only read in its source.
 
 Two changes fix it, and both are now in the repo:
 

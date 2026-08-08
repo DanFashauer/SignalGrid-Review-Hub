@@ -13,7 +13,7 @@
 #
 # The runtime stage below stays native-arch: nginx serves static files and needs
 # none of this.
-FROM --platform=linux/amd64 node:22-bookworm-slim AS builder
+FROM --platform=linux/amd64 docker.io/library/node:22-bookworm-slim AS builder
 
 WORKDIR /app
 

@@ -166,6 +166,41 @@ for (const file of dockerfiles) {
   }
 }
 
+// ── Every base image must name its registry ──────────────────────────────────
+//
+// `node:22-bookworm-slim` is not a name, it is a LOOKUP against whatever search
+// list the engine happens to be configured with. Docker silently implies
+// docker.io; podman resolves it through a shortnames alias file shipped by the
+// host. A real run on a Mac printed the tell:
+//
+//   Resolved "node" as an alias (/usr/share/containers/registries.conf.d/000-shortnames.conf)
+//
+// The machine, not this repository, decided where the base image came from. That
+// is a supply-chain decision living in host config, and it is the same rule
+// docker-verify.mjs already applies to the postgres/redis images it runs — this
+// file simply did not enforce it on the images it reads, so three FROMs drifted.
+// Fully qualified works identically on both engines.
+const FROM_LINE = /^FROM\s+(?:--\S+\s+)*(\S+)/;
+for (const file of dockerfiles) {
+  const text = read(file);
+  text.split("\n").forEach((line, i) => {
+    const m = FROM_LINE.exec(line);
+    if (!m) return;
+    const image = m[1];
+    // A registry host has a dot (docker.io, ghcr.io, gcr.io) or is localhost.
+    const host = image.split("/")[0];
+    const qualified = host === "localhost" || /\./.test(host);
+    // `FROM builder` — a reference to an earlier named stage — is not an image.
+    const isStageRef = !image.includes("/") && !image.includes(":");
+    if (qualified || isStageRef) return;
+    bad(
+      `${file}:${i + 1} — base image "${image}" has no registry. Which registry it ` +
+        `resolves to is then decided by host config (docker implies docker.io; podman ` +
+        `uses a shortnames alias file). Write it out: docker.io/library/${image}`,
+    );
+  });
+}
+
 if (checked === 0) {
   // Zero build stages found means the parser stopped matching reality, not that
   // the repo stopped shipping images. A guard that silently checks nothing is

@@ -1,23 +1,54 @@
-# Consolidated iOS CI/CD Workflow
+# The Apple lane: iOS, iPadOS and macOS.
 # Combines: build, test, lint, security analysis
+#
+# WHAT EACH JOB IS FOR, because the three cover different claims:
+#
+#   build-and-test  — the EnterpriseShell app target, built and tested on BOTH an
+#                     iPhone and an iPad simulator. `project.yml` sets
+#                     TARGETED_DEVICE_FAMILY "1,2" on every app target, which is a
+#                     claim about iPad. Until the matrix below existed, CI picked
+#                     "the first available iOS simulator" — in practice always an
+#                     iPhone — so the iPad half of that claim was asserted and never
+#                     checked. A declaration nothing exercises is a declaration that
+#                     drifts.
+#   macos-native    — the decision port and the mobile core, compiled and run as
+#                     native macOS binaries via SwiftPM. No simulator, no Xcode
+#                     project. See native/ios/Package.swift for why.
+#   lint-and-security
+#
+# Two of these three are new. The iPhone path is the one that already existed.
 
-name: iOS CI
+name: Apple CI (iOS / iPadOS / macOS)
 
 on:
   push:
     branches: [main, SignalGrid_Alpha]
     paths:
       - 'native/ios/**'
+      - '.github/workflows/ios-ci.yml'
+      - 'scripts/check-ios-port-sources.mjs'
   pull_request:
     branches: [main, SignalGrid_Alpha]
     paths:
       - 'native/ios/**'
+      - '.github/workflows/ios-ci.yml'
+      - 'scripts/check-ios-port-sources.mjs'
+  workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-test:
-    name: Build & Test
+    name: EnterpriseShell (${{ matrix.family }} simulator)
     runs-on: macos-latest
+    strategy:
+      # Both device families run even if one fails, so a green iPhone never hides
+      # a red iPad — the whole reason the matrix is here.
+      fail-fast: false
+      matrix:
+        family: [iPhone, iPad]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -43,13 +74,30 @@ jobs:
             xcodegen generate
           fi
 
-      - name: Pick an available iOS simulator
+      # The picker's own negative controls, run before it is trusted. Cheap, and it
+      # keeps the "must not fall back to an iPhone" rule from being a comment.
+      - name: Simulator picker self-test
+        run: python3 native/ios/scripts/pick-simulator.py --self-test
+
+      - name: Pick an available ${{ matrix.family }} simulator
         id: sim
+        env:
+          FAMILY: ${{ matrix.family }}
         run: |
-          UDID=$(xcrun simctl list devices available -j | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];ids=[x['udid'] for k,v in d.items() if 'iOS' in k for x in v if x.get('isAvailable')];print(ids[0] if ids else '')")
-          if [ -z "$UDID" ]; then echo "No available iOS simulator" >&2; exit 1; fi
+          set -o pipefail
+          # The picker exits non-zero when the family is absent rather than falling
+          # back to whatever simulator happens to exist. A runner image that stops
+          # shipping iPads must turn this job red, not silently retest iPhone.
+          if ! PICKED=$(xcrun simctl list devices available -j \
+              | python3 native/ios/scripts/pick-simulator.py "$FAMILY"); then
+            echo "::error::No available $FAMILY simulator on this runner."
+            xcrun simctl list devices available >&2
+            exit 1
+          fi
+          UDID=${PICKED%%$'\t'*}
+          NAME=${PICKED#*$'\t'}
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
-          echo "Using simulator $UDID"
+          echo "Using $FAMILY simulator: $NAME ($UDID)"
 
       - name: Build EnterpriseShell
         working-directory: native/ios
@@ -69,6 +117,39 @@ jobs:
             -destination "id=${{ steps.sim.outputs.udid }}" \
             CODE_SIGNING_ALLOWED=NO \
             test
+
+  macos-native:
+    name: macOS native (SwiftPM, no simulator)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Swift version
+        run: swift --version
+
+      # The two SwiftPM packages must compile the same sources their Xcode
+      # counterparts do. This derives both lists and compares them, so the two
+      # consumers cannot quietly drift into testing different code.
+      - name: Port sources match between SwiftPM and XcodeGen
+        run: node scripts/check-ios-port-sources.mjs
+
+      # The parity port (DecisionEngine / AppWorkflows and the services around
+      # them) as a native macOS binary. Passing here proves two things the iOS
+      # simulator run cannot: the port is genuinely pure Foundation, and the whole
+      # logic suite runs without booting anything.
+      - name: EnterpriseShell decision port — build and test on macOS
+        working-directory: native/ios
+        run: swift test
+
+      - name: SignalGridMobileCore — build and test on macOS
+        working-directory: native/ios/SignalGridMobile/SignalGridMobileCore
+        run: swift test
 
   signalgrid-mobile:
     name: SignalGridMobile (Operator + Wardlink)

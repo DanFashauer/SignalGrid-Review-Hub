@@ -3,6 +3,10 @@ EnterpriseShell.xcodeproj/
 # Local build output
 .build-dd/
 DerivedData/
+# SwiftPM build output for Package.swift (the macOS run of the decision port)
+.build/
+.swiftpm/
+Package.resolved
 # run-ios.sh screenshots
 *.png
 # …but asset-catalog images (app icon, etc.) are real tracked assets, not screenshots.

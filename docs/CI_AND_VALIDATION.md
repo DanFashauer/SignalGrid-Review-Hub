@@ -21,6 +21,49 @@ pnpm run proof:connector-emulator
 
 The docs sanity job verifies that required public-review docs exist and checks for narrow, direct unsafe claims such as production-ready, replacement, partner, MFi certification, or autonomous production-remediation claims. It is not intended to block explicit disclaimers, guardrail language, or validation-command examples that document the scanner itself.
 
+## Apple lane — iOS, iPadOS and macOS
+
+`.github/workflows/ios-ci.yml` runs on `macos-latest` for any change under
+`native/ios/**` (and for changes to the workflow itself). It carries four jobs:
+
+| Job | What it proves |
+| --- | --- |
+| `EnterpriseShell (iPhone simulator)` | the app target builds and its unit tests pass on iPhone |
+| `EnterpriseShell (iPad simulator)` | the same, on iPad |
+| `macOS native (SwiftPM, no simulator)` | the decision port and `SignalGridMobileCore` build and test as native macOS binaries |
+| `SignalGridMobile` / `Lint & Security` | `scripts/verify.sh`, SwiftLint, and the credential/insecure-URL scan |
+
+**Why iPad is its own job.** Every app target in `native/ios/project.yml` sets
+`TARGETED_DEVICE_FAMILY: "1,2"` — a claim that the app supports iPad. Before this
+matrix existed the workflow picked *the first available iOS simulator*, which on
+GitHub's images is always an iPhone, so the iPad half of that claim was asserted and
+never once built. The matrix uses `fail-fast: false`, so a green iPhone cannot hide a
+red iPad, and `native/ios/scripts/pick-simulator.py` **refuses** rather than falling
+back when a device family is missing from the runner — the fallback is precisely what
+made the gap invisible. That refusal has its own negative controls
+(`pick-simulator.py --self-test`), which run in the job before the picker is trusted.
+
+**Why macOS is not a simulator run.** `native/ios/Package.swift` compiles the six
+pure-Foundation port files — `DecisionEngine.swift`, `AppWorkflows.swift` and the
+services around them — as a SwiftPM library, and runs the same XCTest suite against
+it. That buys two things a simulator run cannot: the whole logic suite runs in seconds
+with nothing booted, and "the port is pure Foundation" stops being a comment and
+becomes a compile error the moment somebody reaches for UIKit.
+
+The Xcode test target and the SwiftPM package deliberately compile *the same files*
+rather than a copy — duplicating a byte-faithful port to make it testable would defeat
+the reason it is byte-faithful. The test sources carry
+`#if canImport(EnterpriseShellPort)` around their import so one set of tests serves
+both builds. Because both file lists are hand-maintained,
+`scripts/check-ios-port-sources.mjs` derives them from `Package.swift` and
+`project.yml` and fails if they diverge; it runs in `preflight` and in the
+`macos-native` job. Without it the two lanes could drift into testing different code
+while both stayed green.
+
+**What none of this proves.** A hosted macOS runner is a throwaway VM and a simulator
+is not a device: nothing here says anything about MDM enrolment, supervision, or
+on-device enforcement. See `docs/MAC_LANE.md` for that boundary.
+
 ## Required local checks
 
 Before opening or updating a pull request, run these commands from the repository root:

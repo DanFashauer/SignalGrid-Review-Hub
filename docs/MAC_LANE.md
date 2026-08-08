@@ -119,3 +119,63 @@ restrict other apps, make itself non-removable, or self-kiosk. Those are MDM/OS
 capabilities needing a supervised device (Apple Business Manager + APNs). A hosted
 runner cannot be enrolled, and a simulator cannot either. If a claim depends on
 enforcement rather than observation, no lane in this table establishes it.
+
+## Docker or Podman — the container lane runs on either
+
+The container lanes no longer spell the engine as the literal string `docker`.
+`scripts/lib/container-engine.mjs` (and its shell twin `container-engine.sh`) resolve
+one engine and every lane uses it.
+
+```bash
+pnpm run verify:docker                      # auto-detect: docker if its daemon answers, else podman
+CONTAINER_ENGINE=podman pnpm run verify:docker   # pin the engine explicitly
+```
+
+**Auto-detection prefers Docker**, so an existing machine behaves exactly as it did.
+Podman is opt-in, or picked up automatically when Docker is installed but its daemon
+is not running — which is precisely the state that used to make the whole lane
+unavailable.
+
+`CONTAINER_ENGINE` is **authoritative**. If it names an engine that does not answer,
+the run FAILS rather than quietly using the other one — you asked to test a specific
+engine, and silently testing the other makes the result mean something different.
+Same rule as `SIGNALGRID_MCP_PATH`.
+
+### On a Mac
+
+Podman needs no Docker Desktop and no licence:
+
+```bash
+brew install podman && podman machine init && podman machine start
+CONTAINER_ENGINE=podman ./mac-kickoff.sh --with-docker
+```
+
+### What was actually verified, and what was not
+
+Verified under **podman 4.9.3, linux/amd64, rootful**, in this repo's cloud sandbox:
+
+- `podman build -f Dockerfile.api` completes both stages and commits an image, with
+  **no Dockerfile change** — they are ordinary OCI Dockerfiles.
+- That image runs and serves `/api/healthz` → `{"status":"ok","tier":"dev","liveIntegrations":false}`.
+- **The full `docker-verify` lane passes**: postgres:16 + redis:7, the three
+  durable-persistence proofs (22 assertions) and the enrollment-race proof (4).
+- Docker could not run in that same sandbox at all — no daemon. Podman is daemonless,
+  so it gave the container lane back where there previously was none.
+
+**NOT verified — do not read the above as covering it:**
+
+- **Anything on macOS.** Podman on a Mac runs a VM (`podman machine`), a different
+  execution model. It has to be tried on the actual Mac.
+- **Rootless podman.** The verified run was rootful; rootless changes port binding
+  below 1024 and volume ownership.
+- **CI.** CI still uses Docker, deliberately — it is preinstalled on the runners and
+  works, so switching it would be churn with risk and no benefit. The scripts run on
+  either engine, so this is a default, not a dependency.
+
+### One thing this fixed for both engines
+
+Images are now named with their registry — `docker.io/library/postgres:16`, not
+`postgres:16`. A short name is not a name, it is a lookup against whatever search
+list the engine is configured with: Docker silently implies `docker.io`, Podman
+refuses outright. Relying on the implicit default put a supply-chain decision in host
+config instead of in the repo. Podman surfaced it; the fix is an improvement on both.

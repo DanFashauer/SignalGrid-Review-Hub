@@ -9,7 +9,7 @@
 # this stack makes no external calls out of the box.
 services:
   db:
-    image: postgres:16
+    image: docker.io/library/postgres:16
     restart: unless-stopped
     environment:
       POSTGRES_USER: sg

@@ -118,7 +118,7 @@ skip() { printf "  \033[33mSKIP\033[0m  %s  (%s)\n" "$1" "$2"; SKIPPED=$((SKIPPE
 #
 # BUG 2 — readiness was never actually established. The wait loop breaks on PONG,
 # but falls through after 20 tries and exported REDIS_URL regardless, so a slow
-# container yielded a URL pointing at nothing. Worse, `docker exec redis-cli ping`
+# container yielded a URL pointing at nothing. Worse, `"$SG_ENGINE" exec redis-cli ping`
 # tests the server from INSIDE the container, while every proof connects from the
 # HOST through `-p 6381:6379` — and that port forwarding comes up strictly later
 # than the server does. The probe could not observe what the proofs depend on.
@@ -136,12 +136,12 @@ if [ -n "${REDIS_URL:-}" ]; then
   SGVAL_REDIS_URL="$REDIS_URL"
   unset REDIS_URL
   echo "-- using your REDIS_URL for proof:enrollment-race only (unset for the rest)"
-elif docker info >/dev/null 2>&1; then
-  docker rm -f "$REDIS_CONTAINER" >/dev/null 2>&1
-  if docker run -d --name "$REDIS_CONTAINER" -p "$REDIS_PORT:6379" redis:7 >/dev/null 2>&1; then
-    trap 'docker rm -f "$REDIS_CONTAINER" >/dev/null 2>&1' EXIT
+elif { . "$(dirname "$0")/scripts/lib/container-engine.sh"; sg_resolve_engine; }; then
+  "$SG_ENGINE" rm -f "$REDIS_CONTAINER" >/dev/null 2>&1
+  if "$SG_ENGINE" run -d --name "$REDIS_CONTAINER" -p "$REDIS_PORT:6379" "$SG_IMAGE_REDIS" >/dev/null 2>&1; then
+    trap '"$SG_ENGINE" rm -f "$REDIS_CONTAINER" >/dev/null 2>&1' EXIT
     for _ in $(seq 1 20); do
-      if docker exec "$REDIS_CONTAINER" redis-cli ping 2>/dev/null | grep -q PONG &&
+      if "$SG_ENGINE" exec "$REDIS_CONTAINER" redis-cli ping 2>/dev/null | grep -q PONG &&
          (exec 3<>"/dev/tcp/127.0.0.1/$REDIS_PORT") 2>/dev/null; then
         exec 3>&- 2>/dev/null
         SGVAL_REDIS_URL="redis://127.0.0.1:$REDIS_PORT"
@@ -170,7 +170,7 @@ if [ "$SIM_ONLY" != "--sim-only" ]; then
     # gate; without one, say so — an unrun proof is never a passed proof.
     if [ "$p" = "proof:enrollment-race" ]; then
       if [ -z "$SGVAL_REDIS_URL" ]; then
-        skip "$p" "needs a reachable REDIS_URL (no Docker, or the container never answered); run it via pnpm run verify:docker"
+        skip "$p" "needs a reachable REDIS_URL (no container engine, or the container never answered); run it via pnpm run verify:docker"
         continue
       fi
       # Injected for THIS gate only — see the two bugs documented above.

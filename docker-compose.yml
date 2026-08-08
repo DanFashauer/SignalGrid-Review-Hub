@@ -26,7 +26,7 @@ services:
       - api
 
   nginx:
-    image: nginx:alpine
+    image: docker.io/library/nginx:alpine
     restart: unless-stopped
     ports:
       - "80:80"

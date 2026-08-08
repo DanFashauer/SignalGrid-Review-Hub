@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+      The window theme, and ONLY the window theme.
+
+      The manifest previously named Theme.Material3.DayNight.NoActionBar, which does
+      not exist here: that style ships in the Material COMPONENTS library
+      (com.google.android.material), an XML-era dependency this app does not have.
+      Compose's material3 artifact provides composables, not XML styles. AAPT was
+      right to refuse.
+
+      The fix is not to add that library. This app's UI is entirely Compose, so the
+      only thing an XML theme still governs is the window between process start and
+      the first frame Compose draws. Pulling in the whole Material Components stack to
+      style that moment would add a dependency whose only job is to be unused —
+      exactly the kind of weight that accumulates unnoticed.
+
+      So: a platform theme, no dependency. MaterialTheme in MainActivity does the
+      actual theming. `android:Theme.Material.Light.NoActionBar` is available from
+      API 21 and this app's minSdk is 26, so no version guard is needed.
+    -->
+    <style name="Theme.SignalGridAssist" parent="android:Theme.Material.Light.NoActionBar" />
+
+</resources>

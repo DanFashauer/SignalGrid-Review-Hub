@@ -151,7 +151,11 @@
     "proof:mcp-server": "pnpm --filter @workspace/scripts run proof:mcp-server",
     "proof:live-keycloak": "pnpm --filter @workspace/scripts run proof:live-keycloak",
     "verify:live": "./scripts/run-live-lanes.sh",
-    "prepare": "test -f scripts/install-git-hooks.mjs && node scripts/install-git-hooks.mjs || exit 0"
+    "prepare": "test -f scripts/install-git-hooks.mjs && node scripts/install-git-hooks.mjs || exit 0",
+    "proof:backup-restore": "pnpm --filter @workspace/scripts run proof:backup-restore",
+    "db:backup": "pnpm --filter @workspace/scripts run db:backup",
+    "db:restore": "pnpm --filter @workspace/scripts run db:restore",
+    "db:verify-backup": "pnpm --filter @workspace/scripts run db:verify-backup"
   },
   "private": true,
   "devDependencies": {

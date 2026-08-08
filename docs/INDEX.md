@@ -161,6 +161,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Proof coverage audit](PROOF_COVERAGE_AUDIT.md): which claims are proven, by which proof, and where the gaps are.
 - [Owner-only actions](OWNER_ACTIONS.md): the steps no automated session can perform — branch protection, alert dismissal, Pages, secrets.
 - [Deployment — durable stack](DEPLOYMENT.md): the environment variables a real deployment must set, including `SIGNALGRID_ENROLLMENT_SECRET` (required for any non-demo deployment, because the demo core publishes operator/owner tokens via `/v1/keys`).
+- [Backup and restore](BACKUP_AND_RESTORE.md): how a self-hosted operator takes, verifies and restores a backup — and what the CI proof establishes by destroying a real database and restoring it with the audit chain still verifying.
 - [Domain setup](DOMAIN_SETUP.md): signalgrid.app on GitHub Pages.
 - [Phase 6 cutover runbook](PHASE6_CUTOVER_RUNBOOK.md) and [PIM activation live runbook](PIM_ACTIVATION_LIVE_RUNBOOK.md): the staged operational procedures.
 - [Zero-cost live-test matrix](ZERO_COST_LIVE_TEST_MATRIX.md): what can be validated against real systems without spend.

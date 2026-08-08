@@ -122,6 +122,59 @@ GroundControl-style tooling). SignalGrid and SmartDock are designed to
 - Deterministic and fixture-backed: the seeded SmartDock connector produces the
   same signals, decision, and audit chain on every run.
 
+## The firmware core — what is built, and what a green build means
+
+`firmware/dock/core` is a `no_std` Rust crate: the dock's judgement, with no operating
+system under it. `.github/workflows/firmware.yml` builds and tests it on every change.
+
+**What the lane proves, in the exact words that are true: it compiles for real MCU
+hardware, and its output conforms in simulation.**
+
+| Step | The claim it supports |
+| --- | --- |
+| `cargo test` (28 tests) | the fail-closed rules behave as written |
+| `cargo build --target thumbv7em-none-eabihf` | it builds for a Cortex-M4F: no `std`, no allocator, no OS |
+| `readelf -h` on the emitted object | the output really is `Machine: ARM`, not an x86 build wearing a target name |
+| `cargo run --example emit_fixtures` → `check-dock-firmware-contract.mjs` | what the firmware **actually emits** is accepted by the fabric |
+
+The three rules the firmware exists to get right, each with tests that fail if removed:
+
+1. **A sensor that did not answer never produces a value.** A silent frame reports
+   `unknown` on every axis. One test brute-forces every combination of
+   not-reported/faulted across five sensors and asserts no combination ever yields
+   `none`, `empty`, `occupied`, `absent`, or `checked_in`.
+2. **Tamper latches.** Once a breach is observed it stays `confirmed` until an operator
+   acknowledges it — not when the case is closed again, and not when the switch goes
+   quiet. A tamper that clears itself is the most security-relevant signal the dock has
+   becoming the least reliable one. A broken switch reports `sensor_unavailable`, which
+   is a different fact from "no reading" and one an operator can act on.
+3. **Custody is never inferred from absence.** An empty bay with no checkout record is
+   an `exception` — a device that left without being signed out. It is not
+   `checked_out` (nobody claimed it) and certainly not `checked_in`.
+
+Plus one embedded-specific rule, in `wire.rs`: **a buffer that does not fit produces
+nothing.** The tempting shortcut is to write until full and send what fits, but
+truncated JSON sometimes *parses* — and a record that arrives missing its `tamperState`
+is indistinguishable from a dock with nothing to report. A test asserts that *every*
+buffer size below the required length refuses, not just the boundary.
+
+The contract gate derives both the field list and the legal values from
+`lib/signalgrid-core/src/dock.ts` and `types.ts` rather than restating them, so adding a
+state to the fabric and not to the firmware fails the build — and vice versa. It also
+requires the fixtures to show more than one value per field, and to include the
+silent-dock case; a firmware that answered `unknown` to everything would otherwise pass.
+
+### What a green firmware build does NOT mean
+
+- **No hardware has run this.** Nothing has been flashed to a dock.
+- **There is no driver layer, bootloader, secure element, radio, or transport.**
+  `SensorFrame` is the seam where a driver would hand readings in. Everything past that
+  seam is in this repository and tested; everything before it is not written.
+- **Nothing about timing, power, RF, thermal, or the enclosure** is addressed.
+- **No firmware-image attestation or secure boot.** A dock that can be reflashed by
+  anyone with physical access is a dock whose signals cannot be trusted, and that is an
+  unsolved problem here, not a solved one.
+
 ## Non-claims
 
 SmartDock is a pre-production hardware design concept. It is not production-ready

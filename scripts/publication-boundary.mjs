@@ -67,7 +67,12 @@ export const AREAS = [
   // ── the public-safe reference implementation ──────────────────────────────
   { path: "lib", class: "public_safe_code", reason: "Decision core, connectors and flow layer. Deterministic and fixture-backed by construction." },
   { path: "artifacts", class: "public_safe_code", reason: "API server, web surfaces and MCP server built from lib/." },
-  { path: "native", class: "public_safe_code", reason: "iOS apps. Byte-faithful ports of the TS simulator; parity is the published claim." },
+  // Reason updated: this said "iOS apps" while the directory had grown to hold the
+  // Android and desktop clients too. A classification whose stated reason no longer
+  // describes what it covers is the same defect this gate exists to catch, one level up
+  // — the paths were classified, but by a sentence that had stopped being true.
+  { path: "native", class: "public_safe_code", reason: "The client apps — iOS/iPadOS/macOS, Android, and the Windows/Linux desktop shell — plus the Assist-wire conformance vectors they share. Fixture-backed; no live gate, no customer data." },
+  { path: "firmware", class: "public_safe_code", reason: "SmartDock firmware core: a no_std Rust crate turning sensor readings into a custody event. No drivers, no keys, no vendor material — the sensor seam is where hardware would attach, and nothing past it is proprietary." },
   { path: "tools", class: "public_safe_code", reason: "The room-console page — a user-facing surface that bundles the decision core." },
 
   // ── invented data ─────────────────────────────────────────────────────────

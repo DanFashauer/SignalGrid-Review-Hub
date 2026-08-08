@@ -19,7 +19,6 @@ WORKDIR /app
 
 RUN corepack enable pnpm
 
-<<<<<<< Updated upstream
 # tsconfig.base.json is NOT optional here. Both app tsconfigs open with
 # `"extends": "../../tsconfig.base.json"`, and vite reads them during the build —
 # without it the build fails on an unresolvable extends. It was missing, and no
@@ -31,13 +30,6 @@ COPY pnpm-workspace.yaml pnpm-lock.yaml package.json tsconfig.base.json ./
 # both of these. Dockerfile.api already carried this pair with the same comment;
 # this file was written without it. Copying a rule rather than sharing it is how
 # one copy silently falls behind, which is what happened.
-=======
-COPY pnpm-workspace.yaml pnpm-lock.yaml package.json tsconfig.base.json ./
-# The root `preinstall` runs `node scripts/enforce-pnpm.cjs`, and `scripts` is a
-# workspace package — copy its manifest + the guard so the install resolves the
-# workspace and the preinstall hook both succeed (its src isn't needed to build
-# the web bundle).
->>>>>>> Stashed changes
 COPY scripts/package.json scripts/enforce-pnpm.cjs ./scripts/
 COPY lib/ ./lib/
 COPY artifacts/signalgrid-web/ ./artifacts/signalgrid-web/

@@ -310,6 +310,12 @@ jobs:
       # about text that lies about itself, and nothing else in this repo looked.
       - name: "Text safety (no file may render differently from how it executes)"
         run: node scripts/check-text-safety.mjs
+      # Cheap and direct. The container jobs DID fail on the conflict marker that
+      # reached Dockerfile.web, but only because a build happens to parse that file
+      # — a marker in a doc, fixture or Swift source produces no build failure at
+      # all. This finds it in milliseconds, everywhere.
+      - name: "Merge markers (no unresolved conflict may be committed)"
+        run: node scripts/check-merge-markers.mjs
       - name: "Proof — mcp-server (published plugin path boots + serves declared tools)"
         run: pnpm run proof:mcp-server
       # And the ratchet for the ratchets: fails if a future preflight gate is added

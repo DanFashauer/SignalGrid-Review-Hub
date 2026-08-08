@@ -70,6 +70,10 @@ const STEPS = [
   // is what it appears to be: no bidirectional control or invisible character may
   // make a tracked file render differently from how it executes (CVE-2021-42574).
   { name: "Text safety (no file may render differently from how it executes)", cmd: ["node", "scripts/check-text-safety.mjs"] },
+  // Sibling of the gate above. That one catches text engineered to deceive; this
+  // one catches text nobody meant to ship — and a conflict marker reached the
+  // default branch in Dockerfile.web, where it broke the web image outright.
+  { name: "Merge markers (no unresolved conflict may be committed)", cmd: ["node", "scripts/check-merge-markers.mjs"] },
   { name: "Proof: mcp-server (the published plugin path boots and serves its declared tools)", cmd: ["pnpm", "run", "proof:mcp-server"] },
   { name: "Preflight↔CI parity (a gate that runs only locally is not a gate)", cmd: ["node", "scripts/check-preflight-ci-parity.mjs"] },
   { name: "Assessor package (every link, command and path in it resolves)", cmd: ["node", "scripts/check-assessor-package.mjs"] },

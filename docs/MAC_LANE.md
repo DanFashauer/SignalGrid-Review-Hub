@@ -194,9 +194,30 @@ unverified. Nothing in the web-image build needed root. The repo's choice of 543
 (Postgres) and 6380 (Redis) keeps every published port above 1024, which is what makes
 rootless a non-event here.
 
-**Still NOT verified on macOS:** the full `docker-verify` lane (Postgres + Redis + the
-durable proofs) end-to-end under `podman machine`. The image build is proven; the
-running topology is not.
+**The running topology is proven too**, in the same session:
+
+```
+$ CONTAINER_ENGINE=podman pnpm run verify:docker
+  ok — container engine reachable — podman 6.0.2 (CONTAINER_ENGINE, daemonless)
+  ok — postgres:16 container started / accepting connections
+  ok — redis:7 container started / accepting connections
+  ok — proof:audit-ledger-pg    durable audit ledger
+  ok — proof:decision-store-pg  durable decision + evidence store
+  ok — proof:session-store-pg   durable session lifecycle
+  ok — proof:enrollment-race    concurrent enrollment loses no credential
+engine=podman version=6.0.2 pgProofs=3 pgAssertions=22 raceAssertions=4 result=pass
+```
+
+**22 and 4 are the same figures the rootful linux/amd64 sandbox produced.** Identical
+assertion counts from a rootless VM on Apple Silicon and a rootful container on
+linux/amd64 — two different execution models, same durable behaviour. That is the
+claim `CONTAINER_ENGINE` was built to make honestly: it names which engine answered,
+so this is a statement about podman 6.0.2 specifically and not a green tick that could
+have come from docker.
+
+Nothing on the macOS container lane is unverified any more. What remains outside it:
+a **physical** iOS device (the simulator cannot be MDM-enrolled) and a supervised
+device via ABM + APNs — neither is a container question.
 
 CI now runs the container lane under **both** engines on every PR — `Prod stack
 (Podman)` alongside `Prod stack (Docker compose smoke)` — so a divergence between them

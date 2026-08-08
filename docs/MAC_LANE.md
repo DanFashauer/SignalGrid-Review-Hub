@@ -161,14 +161,42 @@ Verified under **podman 4.9.3, linux/amd64, rootful**, in this repo's cloud sand
 - Docker could not run in that same sandbox at all — no daemon. Podman is daemonless,
   so it gave the container lane back where there previously was none.
 
-**NOT verified — do not read the above as covering it:**
+### macOS, verified 2026-08-08 — podman 6.0.2, applehv, ROOTLESS
 
-- **Anything on macOS.** Podman on a Mac runs a VM (`podman machine`), a different
-  execution model. It has to be tried on the actual Mac.
-- **Rootless podman.** The verified run was rootful; rootless changes port binding
-  below 1024 and volume ownership.
-- **Rootless podman.** The verified run was rootful; rootless changes port binding
-  below 1024 and volume ownership.
+The two entries that used to sit under "NOT verified" have now been run on a real
+Apple Silicon Mac, and one of them **overturned a limitation this repo had written
+down as permanent**.
+
+`podman build --file Dockerfile.web .` — **no `--ulimit` flag** — completed both
+stages and committed `3a3bbbe051d0`:
+
+```
+STEP 11/13: RUN BASE_PATH=/ pnpm run build      → 2189 modules transformed, 14.11s
+STEP 13/13: RUN BASE_PATH=/app/ pnpm run build  → 2798 modules transformed, 22.37s
+[2/2] COMMIT --> 3a3bbbe051d0
+```
+
+**2,798 modules is the same count that needs `--ulimit nofile=65536` in CI.** So the
+descriptor ceiling is a property of the podman VERSION, not of podman:
+
+| | file-descriptor default for `RUN` steps |
+| --- | --- |
+| podman 4.9.3 (CI) | **1024** — buildah 4.9.3 vendors no `RLimitDefaultValue`, so it inherits the OCI runtime's limit. Rollup opens hundreds of modules concurrently, hits `EMFILE`, and reports whichever module lost the race as unresolvable. The nondeterminism is the tell. |
+| podman 6.0.2 (macOS) | **high** — its vendored buildah defines the constant, matching what libpod always did for `podman run`. |
+
+`--ulimit nofile` therefore stays in the CI workflow, which runs 4.9.3, and is
+**unnecessary on podman 5.x/6.x**. Before this run that was inference from reading
+podman's source; it is now measured.
+
+**Also settled by the same run:** the macOS VM path works (`podman machine init`
+→ `applehv`, 4 CPU / 8 GiB), and it ran **rootless** — the mode previously listed as
+unverified. Nothing in the web-image build needed root. The repo's choice of 5433
+(Postgres) and 6380 (Redis) keeps every published port above 1024, which is what makes
+rootless a non-event here.
+
+**Still NOT verified on macOS:** the full `docker-verify` lane (Postgres + Redis + the
+durable proofs) end-to-end under `podman machine`. The image build is proven; the
+running topology is not.
 
 CI now runs the container lane under **both** engines on every PR — `Prod stack
 (Podman)` alongside `Prod stack (Docker compose smoke)` — so a divergence between them

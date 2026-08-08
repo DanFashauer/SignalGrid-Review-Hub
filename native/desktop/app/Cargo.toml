@@ -1,0 +1,24 @@
+[package]
+name = "signalgrid-assist-desktop"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.77"
+description = "A reference desktop host-app shell showing an Assist decision. Windows and Linux."
+license = "UNLICENSED"
+publish = false
+
+# Deliberately NOT a cargo workspace member with ../core. Keeping the two crates
+# independent means the core lane stays fast and has its own lockfile: `cargo test`
+# in ../core resolves ~12 packages, not the ~500 a webview app pulls in. The trust
+# rules get a gate that a GUI toolchain outage cannot take down.
+[dependencies]
+signalgrid-assist-core = { path = "../core" }
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[lints.rust]
+unsafe_code = "forbid"

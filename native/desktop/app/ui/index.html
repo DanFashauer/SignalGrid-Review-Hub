@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SignalGrid Assist — reference host shell</title>
+    <style>
+      :root {
+        --bg: #0b0f19;
+        --panel: #131a2a;
+        --line: #1e2942;
+        --text: #e6ecf7;
+        --muted: #92a1bd;
+        --accent: #38bdf8;
+        --warn: #fbbf24;
+        --stop: #f87171;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 28px;
+        background: var(--bg);
+        color: var(--text);
+        font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+      h1 { font-size: 17px; margin: 0 0 4px; letter-spacing: -0.01em; }
+      .sub { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 18px 20px;
+        margin-bottom: 14px;
+      }
+      .outcome { display: flex; align-items: baseline; gap: 12px; }
+      .badge {
+        font-weight: 650;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        font-size: 13px;
+        padding: 4px 10px;
+        border-radius: 6px;
+        border: 1px solid currentColor;
+      }
+      .allow { color: #4ade80; }
+      .step_up { color: var(--warn); }
+      .restrict { color: var(--accent); }
+      .deny { color: var(--stop); }
+      .verdict { color: var(--muted); font-size: 13px; }
+      h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin: 0 0 8px; }
+      ul { margin: 0; padding-left: 18px; }
+      li { margin-bottom: 3px; }
+      code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; color: var(--muted); }
+      .fixture {
+        border-color: #3b2f12;
+        background: #1c1608;
+        color: var(--warn);
+        font-size: 13px;
+      }
+      .empty { color: var(--muted); font-style: italic; }
+    </style>
+  </head>
+  <body>
+    <h1>SignalGrid Assist</h1>
+    <p class="sub">Reference desktop host-app shell — Windows and Linux</p>
+
+    <div class="panel fixture" id="fixture-note">Loading…</div>
+
+    <div class="panel">
+      <div class="outcome">
+        <span class="badge" id="badge">…</span>
+        <span class="verdict" id="verdict"></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Why</h2>
+      <ul id="reasons"></ul>
+    </div>
+
+    <div class="panel">
+      <h2>Obligations</h2>
+      <ul id="obligations"></ul>
+    </div>
+
+    <div class="panel">
+      <h2>Gate</h2>
+      <div id="gate"></div>
+      <div style="margin-top: 10px"><code id="decision-id"></code></div>
+    </div>
+
+    <script>
+      // No framework and no build step: the whole point of this shell is that nothing
+      // important lives in it. Every rule it displays was decided in the Rust core.
+      const list = (el, items, emptyText) => {
+        el.innerHTML = "";
+        if (!items || items.length === 0) {
+          const li = document.createElement("li");
+          li.className = "empty";
+          li.textContent = emptyText;
+          el.appendChild(li);
+          return;
+        }
+        for (const item of items) {
+          const li = document.createElement("li");
+          li.textContent = item; // textContent, never innerHTML — gate text is data
+          el.appendChild(li);
+        }
+      };
+
+      async function render() {
+        const d = await window.__TAURI__.core.invoke("decision");
+
+        document.getElementById("fixture-note").textContent = d.fixture
+          ? "Fixture decision. This build does not contact a gate — the outcome below is a canned response, shown so the shell can be built and reviewed without one."
+          : "Live decision.";
+
+        const badge = document.getElementById("badge");
+        badge.textContent = d.assist;
+        badge.className = "badge " + d.assist;
+
+        document.getElementById("verdict").textContent = d.proceeds
+          ? "The host app may proceed with nothing further."
+          : "The host app must NOT proceed on this alone.";
+
+        list(document.getElementById("reasons"), d.reasons, "The gate gave no reason.");
+        list(document.getElementById("obligations"), d.obligations, "None.");
+
+        const gate = document.getElementById("gate");
+        gate.textContent = d.gate
+          ? d.gate
+          : d.gate_refusal || "No gate URL is configured.";
+        gate.className = d.gate ? "" : "empty";
+
+        document.getElementById("decision-id").textContent = d.decision_id
+          ? "decision " + d.decision_id
+          : "no decision id";
+      }
+
+      render().catch((e) => {
+        // A shell that silently renders nothing on failure looks like an empty
+        // decision. Say what happened instead.
+        document.getElementById("fixture-note").textContent =
+          "Could not read the decision from the core: " + e;
+      });
+    </script>
+  </body>
+</html>

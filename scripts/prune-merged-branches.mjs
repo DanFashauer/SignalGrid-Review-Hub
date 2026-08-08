@@ -71,6 +71,57 @@ const headers = {
   "user-agent": "signalgrid-branch-prune",
 };
 
+// ── Rendering untrusted names safely ─────────────────────────────────────────
+//
+// A branch name is NOT a safe string. Git's ref grammar forbids spaces, control
+// characters, `~ ^ : ? * [ \` and `..` — and permits everything else, including
+// `$`, backticks, parentheses, `&`, `;`, `|`, `%` and single quotes. So
+// `x$(whoami)` is a perfectly legal branch name, and every one of these helpers
+// exists because the obvious rendering of it is wrong in a different way.
+//
+// CodeQL flagged the file write below as "network data written to file system".
+// That is the right finding and the summary understates it: the most serious sink
+// is not the file, it is the RESTORE COMMAND. This script's whole safety story is
+// that a human can copy a line out of the run summary and paste it into a shell to
+// undo a deletion — so an unquoted branch name there is command injection with a
+// helpful "paste this" label on it.
+
+/** Single-quote for POSIX sh. Inside single quotes only `'` is special. */
+const shellQuote = (s) => `'${s.replaceAll("'", `'\\''`)}'`;
+
+/** Render as a code span that cannot break out of it. Backticks in a name would
+ *  close a markdown span and let the rest inject headings into the audit record —
+ *  the record being the only evidence of what this run did. HTML entities render
+ *  the name faithfully and escape nothing into markup. */
+const escapeHtml = (s) =>
+  s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+const mdCode = (s) => `<code>${escapeHtml(s)}</code>`;
+
+/** Encode a ref for a URL path WITHOUT destroying its slashes — `claude/foo` is
+ *  two path segments and must stay two, but a `%` inside a segment is a legal ref
+ *  character that would otherwise be read as the start of a percent-escape. */
+const encodeRefPath = (ref) => ref.split("/").map(encodeURIComponent).join("/");
+
+// The helpers are checked against the adversarial cases before they are used, for
+// the same reason the text-safety gate tests itself: an escaper that has quietly
+// stopped escaping produces output that looks exactly like correct output.
+{
+  const cases = [
+    [shellQuote("x$(whoami)"), `'x$(whoami)'`],
+    [shellQuote("it's"), `'it'\\''s'`],
+    [mdCode("a`b"), "<code>a`b</code>"],
+    [mdCode("<script>"), "<code>&lt;script&gt;</code>"],
+    [encodeRefPath("claude/a b"), "claude/a%20b"],
+    [encodeRefPath("claude/100%"), "claude/100%25"],
+  ];
+  const bad = cases.filter(([got, want]) => got !== want);
+  if (bad.length > 0) {
+    console.error("✗ escaping self-test FAILED — refusing to render untrusted names.\n");
+    for (const [got, want] of bad) console.error(`    got ${JSON.stringify(got)} want ${JSON.stringify(want)}`);
+    process.exit(1);
+  }
+}
+
 async function api(path, init = {}) {
   const res = await fetch(`${API}${path}`, { ...init, headers });
   if (!res.ok) {
@@ -188,7 +239,7 @@ for (const b of branches) {
 
 // ── The recovery record, emitted BEFORE any deletion ──────────────────────────
 const restore = doomed
-  .map((d) => `git push origin ${d.sha}:refs/heads/${d.name}`)
+  .map((d) => `git push origin ${d.sha}:refs/heads/${shellQuote(d.name)}`)
   .join("\n");
 
 const summary = [
@@ -206,7 +257,7 @@ const summary = [
   "",
   "### Kept, and why",
   "",
-  ...kept.map((k) => `- \`${k.name}\` — ${k.reason}`),
+  ...kept.map((k) => `- ${mdCode(k.name)} — ${escapeHtml(k.reason)}`),
   "",
 ];
 
@@ -219,14 +270,14 @@ const failed = [];
 if (APPLY) {
   for (const d of doomed) {
     try {
-      await api(`/repos/${OWNER}/${REPO}/git/refs/heads/${d.name}`, { method: "DELETE" });
+      await api(`/repos/${OWNER}/${REPO}/git/refs/heads/${encodeRefPath(d.name)}`, { method: "DELETE" });
       deleted += 1;
     } catch (err) {
       failed.push(`${d.name}: ${err.message}`);
     }
   }
   summary.push(`### Result`, "", `- deleted: ${deleted}`, `- failed: ${failed.length}`, "");
-  for (const f of failed) summary.push(`- \`${f}\``);
+  for (const f of failed) summary.push(`- ${mdCode(f)}`);
   console.log(`\ndeleted=${deleted} failed=${failed.length}`);
 } else {
   console.log(`\nDRY RUN — nothing was deleted. Re-run with apply=true to act on this plan.`);

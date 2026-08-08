@@ -4,6 +4,15 @@ A visitor to this repo sees the branch list before they see anything else. This
 file says what that list means, so an outsider can tell live work from residue
 without asking.
 
+## Stop the backlog rebuilding — one repo setting
+
+**Settings → General → Pull Requests → "Automatically delete head branches."** With
+it on, a squash-merged branch is deleted the moment its PR merges, and the 60-odd
+branch backlog this file exists to describe never forms again. The prune workflow
+below then only ever has history to deal with, not a steady inflow.
+
+That setting is the cure. Everything after this is the cleanup.
+
 ## The convention
 
 | Prefix | Meaning | Lifetime |
@@ -39,16 +48,50 @@ reversible**: a deleted branch is restored with
 git push origin <tip-sha>:refs/heads/<branch>
 ```
 
-To prune (needs a shell whose git can push delete refspecs — a sandboxed agent
-proxy may refuse those with HTTP 403 while allowing ordinary pushes):
+**To prune: Actions → "Branch prune" → Run workflow.** Leave `apply` unchecked for a
+dry run that writes the full plan and a restore command per branch to the run
+summary; read it, then run again with `apply` checked. It works from the GitHub
+mobile app, so this needs no laptop.
 
-```bash
-awk '!/^#/ {print $2}' artifacts/sync/merged-branches-to-prune.txt \
-  | xargs -n 20 git push origin --delete
-```
+The workflow (`.github/workflows/branch-prune.yml`,
+`scripts/prune-merged-branches.mjs`) **re-derives everything at run time and never
+reads the snapshot below.** Two independent sufficient conditions, either of which
+releases a branch:
 
-Regenerate the list before trusting it — it is a snapshot, not a live view. Verify
-each entry against its PR merge state, not against `git branch --merged`.
+1. it has a **merged** pull request, or
+2. its tip is **already contained** in the default branch (compare status
+   `identical` or `behind`) — every commit on it is reachable from the default
+   branch, so the ref is a pointer and nothing else.
+
+Condition 2 exists because the four tier pointers `alpha`/`beta`/`dev`/`prod` were
+absorbed by direct push and never had a pull request. Judging on PR state alone
+would strand them forever; judging by name would be a hand-typed exception list
+that goes stale the moment someone adds a fifth.
+
+Everything else is **refused and named in the summary**: the default branch,
+`dependabot/*`, any open PR, any protected branch, any branch carrying commits that
+exist nowhere else, and — importantly — any branch whose API lookup *errored*. A
+failed read is not an empty result, and the consequence here is irreversible.
+
+### Why a workflow rather than a command
+
+This is worth recording because the previous explanation, given here and repeated
+three times, was **wrong**. The blocker was described as "a sandboxed agent proxy
+refusing delete refspecs with HTTP 403". The proxy never saw the request: its
+failure log was empty and it reported no git conflicts. The real refusal came from
+the maintaining agent's own **permission classifier**, which treats
+`git push --delete` as destructive git — a local guardrail, correctly applied, and
+nothing to do with network policy. The GitHub MCP surface has `create_branch` and no
+delete counterpart, so that route was closed too.
+
+Neither was worth fighting. A runner already holds `contents: write`, which is
+exactly the permission a ref deletion needs. Moving the operation there is the fix:
+not more permission for the agent, but the work running where the permission
+already is.
+
+`artifacts/sync/merged-branches-to-prune.txt` remains as the **historical recovery
+record** — a dated capture of `<tip-sha> <branch>`. It is no longer an input to
+anything.
 
 ## Known orphan: `codex/add-signalgrid-autopilot-evidence-bot`
 

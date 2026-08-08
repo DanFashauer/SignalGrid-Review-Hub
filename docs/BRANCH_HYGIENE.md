@@ -66,26 +66,69 @@ are about the code rather than its age:
   (`.github/workflows/signalgrid-autopilot-evidence.yml`, two `docs/*.md`,
   `.gitattributes`). It would fail on its first run.
 
-**One idea in it is worth keeping.** `check-text-safety.cjs` scans for U+FEFF and the
-bidirectional override/isolate range (U+202A–U+202E, U+2066–U+2069). Those are the
-**Trojan Source** class (CVE-2021-42574): invisible characters that make source render
-differently from how it compiles. **No such scan exists anywhere in this repo today** —
-gitleaks looks for secrets, not for text that lies about itself. For a codebase whose
-entire premise is that what you read is what runs, that is a real gap. It belongs as a
-derived, repo-wide gate over tracked files, not as a five-path allowlist.
+**One idea in it was worth keeping, and has now been taken.** `check-text-safety.cjs`
+scanned for U+FEFF and the bidirectional override/isolate range (U+202A–U+202E,
+U+2066–U+2069) — the **Trojan Source** class (CVE-2021-42574): invisible characters
+that make source render differently from how it compiles. No such scan existed
+anywhere in this repo; gitleaks looks for secrets, not for text that lies about
+itself, and for a codebase whose premise is that what you read is what runs, that was
+a real gap.
 
-Tracked as an open item. The branch is kept until that gate exists, then deleted.
+`scripts/check-text-safety.mjs` now closes it, and closes it the way this repo builds
+gates rather than the way the orphan did:
 
-## State when this was written
+- **Scope derived, not typed.** Tracked files come from `git ls-files`; the character
+  set comes from Unicode general category **Cf** (`\p{Cf}`), which is the standard's
+  own name for invisible formatting characters and contains the entire Trojan Source
+  range by definition. Four blank-rendering *letters* (the Hangul fillers) are named
+  explicitly, because no Unicode property means "letter that looks like nothing".
+- **Its silence is tested.** A scan for characters that almost never occur is
+  indistinguishable from a scan that is not looking. So planted specimens — stated
+  independently of the detector — must be caught before the gate will report on the
+  repository at all. The first draft read its specimens *out of* the detector; a
+  mutation test killed it, because deleting a code point deleted its only test too.
 
-72 remote branches, of which **59 were verified merged** and are listed for pruning,
-leaving 13: the default branch, 7 Dependabot branches, 2 open-PR branches
-(`claude/signalgrid-launch-plan-emxm01` → #152, `claude/container-engine-podman` → #186),
-and 3 `codex/*` orphans — the evidence-bot branch above, plus
-`codex/review-hub-local-dev-api-health` and
-`codex/signalgrid-real-life-simulator-foundation`, whose content **did** reach the
-default branch by another route (`scripts/enforce-pnpm.cjs` and 21 simulator files are
-present) but which are not ancestors of it.
+Wired into `scripts/preflight.mjs` and `Review Hub CI`.
+
+**The open item is closed, so the branch is no longer being kept for it.** It is
+deliberately NOT in the prune list: that list holds branches verified *merged*, and
+this one never was, so deleting it discards its two files rather than tidying a
+pointer. It is now an ordinary owner decision — delete it, or keep it as a museum
+piece — with nothing outstanding depending on the answer. Its tip is recorded here so
+the choice stays reversible either way:
+
+```bash
+# restore if deleted
+git push origin 9b3e618eebe8368415d337c6e86849ca5ea31777:refs/heads/codex/add-signalgrid-autopilot-evidence-bot
+```
+
+## State at the last capture
+
+**These are snapshot numbers and they go stale — recompute rather than cite them.**
+The prune list's own header carries the date and the `SignalGrid_Alpha` commit it was
+taken at, and this is the command that recomputes what is left over:
+
+```bash
+comm -23 <(git branch -r | grep -v HEAD | sed 's|.*origin/||' | sort) \
+         <(awk '!/^#/ {print $2}' artifacts/sync/merged-branches-to-prune.txt | sort)
+```
+
+At the 2026-08-08 capture: **75 remote branches, 63 verified merged** and listed for
+pruning, leaving 12 —
+
+- `SignalGrid_Alpha`, the default branch.
+- 7 `dependabot/*` branches, bot-owned.
+- 1 open-PR branch: `claude/signalgrid-launch-plan-emxm01` → #152.
+- 3 `codex/*` orphans: the evidence-bot branch above, plus
+  `codex/review-hub-local-dev-api-health` and
+  `codex/signalgrid-real-life-simulator-foundation`, whose content **did** reach the
+  default branch by another route (`scripts/enforce-pnpm.cjs` and 21 simulator files
+  are present) but which are not ancestors of it.
+
+Merged state was read from each pull request, not from `git branch --merged` — for the
+squash reason above. Note that GitHub's *list* endpoint returns `merged: false` even
+for merged pull requests; the field that is actually populated there is `merged_at`,
+and reading the wrong one would misclassify every branch on this page as live.
 
 The four tier branches `alpha`, `beta`, `dev`, `prod` are in the prune list. They had
 not moved since 2026-07-15 and nothing in CI or the compose files referenced them; as

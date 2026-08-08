@@ -66,6 +66,10 @@ const STEPS = [
   { name: "Absent-collection law (nothing observed ≠ nothing wrong)", cmd: ["pnpm", "run", "proof:absent-collection"] },
   { name: "Port parity (DecisionEngine + AppWorkflows must not drift from their TS originals)", cmd: ["node", "scripts/check-decision-port-parity.mjs"] },
   { name: "Read-error swallowing (a failed lookup must not report \"nothing found\")", cmd: ["node", "scripts/check-read-error-swallowing.mjs"] },
+  // Every other gate here checks what the text MEANS. This one checks that the text
+  // is what it appears to be: no bidirectional control or invisible character may
+  // make a tracked file render differently from how it executes (CVE-2021-42574).
+  { name: "Text safety (no file may render differently from how it executes)", cmd: ["node", "scripts/check-text-safety.mjs"] },
   { name: "Proof: mcp-server (the published plugin path boots and serves its declared tools)", cmd: ["pnpm", "run", "proof:mcp-server"] },
   { name: "Preflight↔CI parity (a gate that runs only locally is not a gate)", cmd: ["node", "scripts/check-preflight-ci-parity.mjs"] },
   { name: "Assessor package (every link, command and path in it resolves)", cmd: ["node", "scripts/check-assessor-package.mjs"] },

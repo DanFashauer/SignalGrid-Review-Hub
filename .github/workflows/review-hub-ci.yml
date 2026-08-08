@@ -552,35 +552,36 @@ jobs:
       - name: Podman version (a missing engine must fail loudly, not skip)
         run: podman version --format '{{.Server.Version}}'
 
-      # Same Dockerfile, no changes — they are ordinary OCI files.
-      - name: Build the API image with podman
-        run: podman build --platform linux/amd64 --file Dockerfile.api --tag signalgrid-api:ci .
-
-      # SCOPE, STATED OUT LOUD. Dockerfile.WEB is deliberately NOT built here, and
-      # this job must not be read as covering it.
+      # THE FIX, and why it is needed. Podman's build RUN steps default to
+      # nofile=1024, while `podman run` gets the host's limit (20000 here). Rollup
+      # opens hundreds of modules concurrently during `vite build`; at 1024 it hits
+      # EMFILE and reports whichever module lost the race as "failed to resolve" —
+      # which is exactly why a DIFFERENT package failed on every run. Docker's builder
+      # inherits the daemon's much higher limit, so the same Dockerfile never fails
+      # there. Measured, not guessed:
       #
-      # Under podman, `vite build` inside a RUN step fails to resolve imports through
-      # pnpm's symlinked node_modules — nondeterministically naming a different
-      # unresolvable package each run (motion-dom, @radix-ui/react-context,
-      # @radix-ui/react-toast). Under docker the same Dockerfile builds fine, so this
-      # is an engine difference, not a dependency defect. Reproduced and narrowed:
+      #   BUILD-TIME  nofile=1024     (podman build RUN)
+      #   RUN-TIME    nofile=20000    (podman run)
       #
-      #   · the committed install layer is CORRECT — every symlink resolves, targets exist
-      #   · running the same `pnpm run build` in a container FROM that image SUCCEEDS
-      #   · collapsing install+build into one RUN layer does NOT fix it
-      #   · node-linker=hoisted fails differently (MODULE_NOT_FOUND on the vite binary)
-      #   · Dockerfile.API builds fine under podman — it uses esbuild, whose resolution
-      #     does not walk the symlink web the way rollup does
-      #
-      # Root cause not yet established, so nothing is claimed about it. The docker job
-      # below builds the web image and gates it; that coverage is unchanged. Tracked in
-      # docs/MAC_LANE.md. Do NOT "fix" this by deleting the docker web-image build.
-      - name: State what this job does NOT cover
+      # Raise it to the host's hard limit, capped. Do NOT hardcode 65535: a value
+      # above the hard limit fails at container init with "error setting rlimit".
+      - name: Compute a safe nofile limit for podman build
         run: |
-          echo "NOT covered by this job: the WEB image under podman (Dockerfile.web)."
-          echo "It fails under podman and builds under docker; see the comment above."
-          echo "The docker job gates the web image. This job gates the API image and"
-          echo "the durable lane under podman."
+          LIM=$(ulimit -Hn)
+          case "$LIM" in unlimited) LIM=65536 ;; esac
+          [ "$LIM" -gt 65536 ] && LIM=65536
+          echo "PODMAN_NOFILE=$LIM" >> "$GITHUB_ENV"
+          echo "podman build will use nofile=$LIM (was defaulting to 1024)"
+
+      - name: Build the API image with podman
+        run: podman build --ulimit nofile=$PODMAN_NOFILE:$PODMAN_NOFILE --platform linux/amd64 --file Dockerfile.api --tag signalgrid-api:ci .
+
+      # The web image — the one that used to fail. It builds under podman once the
+      # descriptor limit is raised AND nginx:alpine is fully qualified in the runtime
+      # stage (podman refuses unqualified short names; docker silently implies
+      # docker.io). Both engines now build both images.
+      - name: Build the web image with podman
+        run: podman build --ulimit nofile=$PODMAN_NOFILE:$PODMAN_NOFILE --platform linux/amd64 --file Dockerfile.web --tag signalgrid-web:ci .
 
       - name: Setup Node 22
         uses: actions/setup-node@v7

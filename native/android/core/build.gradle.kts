@@ -17,6 +17,10 @@ plugins {
     kotlin("plugin.serialization") version "2.1.0"
 }
 
+// A coordinate so the app build can depend on this via composite substitution.
+group = "com.signalgrid"
+version = "0.1.0"
+
 repositories { mavenCentral() }
 
 dependencies {

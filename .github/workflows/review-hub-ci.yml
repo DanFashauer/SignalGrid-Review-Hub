@@ -303,6 +303,13 @@ jobs:
         run: node scripts/check-decision-port-parity.mjs
       - name: "Read-error swallowing (a failed lookup must not report nothing-found)"
         run: node scripts/check-read-error-swallowing.mjs
+      # Every other gate here checks what the text MEANS. This one checks the text is
+      # what it appears to be — no bidirectional control or invisible character may
+      # make a tracked file render differently from how it executes (CVE-2021-42574).
+      # gitleaks scans for secrets and CodeQL for dataflow; neither has an opinion
+      # about text that lies about itself, and nothing else in this repo looked.
+      - name: "Text safety (no file may render differently from how it executes)"
+        run: node scripts/check-text-safety.mjs
       - name: "Proof — mcp-server (published plugin path boots + serves declared tools)"
         run: pnpm run proof:mcp-server
       # And the ratchet for the ratchets: fails if a future preflight gate is added

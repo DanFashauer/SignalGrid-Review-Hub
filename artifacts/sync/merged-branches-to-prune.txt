@@ -1,4 +1,4 @@
-# Verified-merged branches, captured 2026-08-07 at Alpha=4ec5c1c
+# Verified-merged branches, captured 2026-08-08 at Alpha=f411d32
 # Each line: <tip-sha> <branch>. The tip is recorded so a deletion is RECOVERABLE:
 #   git push origin <tip-sha>:refs/heads/<branch>
 7ee88efb46123d2126f400f64508e7c2e0dbce47 alpha
@@ -6,7 +6,10 @@
 e3fa32b22c4d6c00d90a07880f5ffa2f367ed9e6 claude/assessor-package
 9eeb5a8f0b3ae56896bd755ffb4e9de39bac5169 claude/backlog-mcp-pin-merged
 5afcd839282e139e2098492a66e632e66f89eb3e claude/boundary-gate
+53798009fb4a88599eaddbc40924731311957da6 claude/branch-hygiene
+aba2184393008b018b3a4cf7982a6a17280427ce claude/container-engine-podman
 2f37c0aef439dd69dc787d6a80d06d81693d3192 claude/container-native-base
+b843d7b68cf25dea0121aa81a04cb0199e408dba claude/delivery-gap-analysis
 c47c34f344f4727e66cdd61416d9962f9fa9c691 claude/dmh-graph-transport
 f4082f4de93b2fc962d735070327276bd7473b0c claude/doc-truth-orphans
 f342859bd581b13304f32a4c5cd97d1caf23dbd1 claude/docker-web-build-for-real
@@ -21,6 +24,7 @@ da0b9451dcdf1d6bae89c3ea1d67b491f8d11ba3 claude/live-evidence-fresh
 7d16b936b1b6b60aeae7e6d5501781d8b1258359 claude/mac-docker-lane
 8f5cc3a3582cdfe9bf50a6b53ad2f58691ea70cd claude/mac-kickoff
 8b5666a4289ee2dd36147717c4a99c00134d40f5 claude/mac-lane-platform-skip
+ddf36770c89570090c4fe588c59fc8218f12e5f0 claude/podman-web-image-fix
 471e047193bf2e2a5803a01711d4ab01d60f7165 claude/public-claim-autonomy-fix
 4ad1a446ca32a63da73dc7075721891ad49d25f2 claude/stale-gate-figures
 5fb98fb578acd914562aea0cc58eda1d96272842 claude/ungated-healthcheck

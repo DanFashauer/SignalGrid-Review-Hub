@@ -543,6 +543,29 @@ jobs:
           DATABASE_URL: postgres://sg:sg@localhost:5432/signalgrid
         run: pnpm run proof:session-store-pg
 
+      # Backup and restore, END TO END. Seeds the tamper-evident ledger, backs it up,
+      # DESTROYS the schema, restores, and re-verifies the chain — plus the negative
+      # controls (a flipped byte, a truncated archive, a missing manifest must all be
+      # REFUSED). A backup nobody has restored is not a backup, and until this existed
+      # the repository had no `pg_dump` anywhere at all.
+      #
+      # pg_dump/pg_restore must be at least as new as the server (16). ubuntu-latest
+      # ships 16 client tools; asserted rather than assumed, because a silent version
+      # skew would fail here in a confusing way.
+      - name: Assert the Postgres client tools match the server major
+        run: |
+          CLIENT=$(pg_dump --version | grep -oE '[0-9]+' | head -1)
+          echo "pg_dump major: $CLIENT"
+          if [ "$CLIENT" -lt 16 ]; then
+            echo "::error::pg_dump $CLIENT cannot dump a PostgreSQL 16 server"
+            exit 1
+          fi
+
+      - name: Backup/restore proof on Postgres
+        env:
+          DATABASE_URL: postgres://sg:sg@localhost:5432/signalgrid
+        run: pnpm run proof:backup-restore
+
   # Podman is the repo's chosen runtime (scripts/lib/container-engine.mjs). It was
   # verified locally — full docker-verify lane green under podman 4.9.3 — but a local
   # run is not a gate, and the whole point of that abstraction is that BOTH engines

@@ -112,7 +112,11 @@
     "proof:live-location": "tsx ./src/live-location-proof.ts",
     "proof:absent-collection": "tsx ./src/absent-collection-proof.ts",
     "proof:mcp-server": "tsx ./src/mcp-server-proof.ts",
-    "proof:live-keycloak": "tsx ./src/live-keycloak-proof.ts"
+    "proof:live-keycloak": "tsx ./src/live-keycloak-proof.ts",
+    "proof:backup-restore": "tsx ./src/backup-restore-proof.ts",
+    "db:backup": "tsx ./src/backup-cli.ts backup",
+    "db:restore": "tsx ./src/backup-cli.ts restore",
+    "db:verify-backup": "tsx ./src/backup-cli.ts verify"
   },
   "dependencies": {
     "@workspace/app-workflows": "workspace:*",

@@ -196,3 +196,31 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Strategic Options Decision Tree](STRATEGIC_OPTIONS_DECISION_TREE.md): planning tree for design partner, investment, OEM, acquisition, and last-option buyout paths.
 - [Target Buyer / Partner Matrix](TARGET_BUYER_PARTNER_MATRIX.md): category-based buyer and partner matrix.
 - [Demo and Simulation Expansion Plan](DEMO_AND_SIMULATION_EXPANSION_PLAN.md): docs-first Level 10 demo expansion plan.
+
+
+## Subdirectory sets — design notes, records, and drafts
+
+These live under `docs/<subdir>/` rather than at the top level. They were listed
+here after `scripts/check-doc-orphans.mjs` was changed to walk subdirectories: it
+previously read only `docs/*.md`, so these files could not be counted, reported, or
+linked — the gate reported "no unreachable documents" about a set it never opened.
+Each is labelled with what it actually is, because several are drafts or historical
+records rather than current guidance.
+
+**Microsoft Graph sandbox connector — design set (fixture-backed, read-only).**
+
+- [Sandbox connector design](connectors/MICROSOFT_GRAPH_SANDBOX_CONNECTOR.md): the read-only, fixture-backed design for reading Graph/Entra/Intune-style posture into SignalGrid trust inputs. Microsoft stays the system of record; SignalGrid normalizes, decides, routes, and audits. Includes the non-goals.
+- [Signal model](connectors/MICROSOFT_GRAPH_SIGNAL_MODEL.md): the canonical field mapping (`sourceSystem`, `subjectId`, `deviceId`, `identityStatus`, …) those observations normalize into.
+- [Permission boundary](connectors/MICROSOFT_GRAPH_PERMISSION_BOUNDARY.md): the least-privilege read-only permission set. The names are deliberately generic placeholders, not a live tenant grant.
+- [Fixture strategy](connectors/MICROSOFT_GRAPH_FIXTURE_STRATEGY.md): why fixtures must be deterministic and public-safe, and which cases the set covers.
+- [Local environment placeholder example](env/MICROSOFT_GRAPH_ENV_EXAMPLE.md): placeholder documentation for a future PC-only Graph sandbox smoke test. Not a real `.env`, and it holds no real values.
+
+**Consolidation records (Phase 6 cutover).**
+
+- [Consolidation records overview](consolidation/README.md): what the auditable cutover artifacts are and how they were produced.
+- [Issue migration checklist](consolidation/MIGRATION_CHECKLIST.md): pre-filled migrate/close triage of the open issues across the consolidation sources, snapshotted 2026-07-14.
+- [Home-repo README draft](consolidation/HOME_REPO_README.md): a DRAFT post-cutover README for the home repo, kept here so it is reviewable and nothing is destroyed before cutover. It is not this repo's README.
+
+**Preview assets.**
+
+- [Pre-announcement assets](preview/README.md): public-safe, self-contained visual assets framed as pre-launch — no production, compliance, or partnership claims.

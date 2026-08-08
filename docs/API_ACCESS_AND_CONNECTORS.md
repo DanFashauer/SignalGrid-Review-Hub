@@ -107,9 +107,21 @@ options layered on it. Longer answer, honestly:
   ```
 - **`signalgrid-mcp` (device-posture source) — shipped, separate repo.** A distinct,
   standalone **read-only** MCP server (`DanFashauer/signalgrid-mcp`, Python, released
-  at `v1.0.2`, 18 tools, 30 tests) that reads **macOS device security posture**
+  at `v1.0.2`, **22 tools**) that reads **macOS device security posture**
   directly from the endpoint — firewall, stealth mode, FileVault, SIP, Gatekeeper,
-  and similar. It is the mirror image of the in-repo server: that one exposes
+  and similar.
+
+  That tool count is no longer hand-copied. It said "18 tools, 30 tests" — a
+  transcription of another repo that nothing here could check, and both numbers had
+  drifted (22 tools; the test figure was counting something else). `pnpm run
+  verify:all` now DERIVES the count from the `signalgrid-mcp` checkout it already
+  locates for the contract test and fails on drift. With no checkout present it
+  prints the count as UNVERIFIED and says so — it does not assert a number it did
+  not read. The test count is gone rather than corrected: `def test_` functions and
+  pytest's collected total are different quantities, and a figure whose definition
+  is ambiguous cannot be checked.
+
+  It is the mirror image of the in-repo server: that one exposes
   SignalGrid *as* tools; this one is a *signal source*. Because it collects posture
   straight from the device rather than through a vendor API, it is the concrete
   example of the **`grid_collected`** sourcing path (see

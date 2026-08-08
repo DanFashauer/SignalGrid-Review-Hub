@@ -198,6 +198,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Demo and Simulation Expansion Plan](DEMO_AND_SIMULATION_EXPANSION_PLAN.md): docs-first Level 10 demo expansion plan.
 
 
+- [Delivery gap analysis](DELIVERY_GAP_ANALYSIS.md): every product surface — deployment models, apps per platform, dock/charging, website and marketing — measured against the tree rather than the task list, with BUILT / PARTIAL / ABSENT and the search that establishes each. Contradicts several tasks marked complete; where it does, the tree wins.
 - [Branch hygiene](BRANCH_HYGIENE.md): what each branch prefix means, which branches are load-bearing, why squash-merge makes `git branch --merged` an unreliable signal, and the reversible pruning procedure.
 
 ## Subdirectory sets — design notes, records, and drafts

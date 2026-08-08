@@ -1,0 +1,78 @@
+name: Android
+
+# The Android client, built and tested on every pull request.
+#
+# WHY THIS EXISTS ON DAY ONE. `native/android/core` has unit tests that pass. Until
+# this workflow existed they passed only because someone ran them by hand, and a test
+# nothing re-runs is a test that rots silently — the repository has spent its history
+# removing exactly that shape. Wiring the lane at the same time as the code is
+# cheaper than discovering in three months that the suite has not run since.
+#
+# TWO JOBS, DELIBERATELY SPLIT, because they fail for different reasons and one of
+# them can run anywhere:
+#
+#   core — pure Kotlin, no Android SDK, no emulator. Runs on any JDK. This is where
+#          the Assist vocabulary and the fail-closed parsing live, so the logic that
+#          decides what a worker is told has a gate that cannot be broken by an SDK
+#          licence prompt or an image download.
+#   app  — the Android module. Needs the SDK; this is its only build.
+#
+# A red `core` means the behaviour changed. A red `app` means the shell or toolchain
+# changed. Collapsing them into one job would make those indistinguishable.
+
+on:
+  pull_request:
+    paths:
+      - "native/android/**"
+      - ".github/workflows/android.yml"
+  push:
+    branches: [SignalGrid_Alpha]
+    paths:
+      - "native/android/**"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    name: Assist core (pure Kotlin, no SDK)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # No committed Gradle wrapper. A wrapper means a binary .jar in the tree, and
+      # this repo would rather pin the version here in plain text than carry an
+      # opaque blob that no reviewer reads and no gate inspects.
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+
+      - name: Test
+        run: gradle -p native/android/core test --console=plain
+
+      # `BUILD SUCCESSFUL` is printed by a run that executed zero tests just as
+      # happily as by one that executed eleven. Assert on the XML the runner wrote.
+      - name: Assert the tests actually ran
+        run: node scripts/check-android-core-tests.mjs
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-core-test-results
+          path: native/android/core/build/reports/tests/test/
+          if-no-files-found: warn

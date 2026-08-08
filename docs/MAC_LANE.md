@@ -212,30 +212,56 @@ work deferred to nowhere. Checked rather than assumed:
 Everything else in the list above is cloud-runnable today. If a doc tells you to go to
 the Mac for something not in that short list, the doc is wrong.
 
-### Open defect: the web image does not build under Podman
+### Solved: why the web image used to fail under Podman
 
-`Dockerfile.api` builds under Podman and the full durable lane passes. **`Dockerfile.web`
-does not.** Under Podman, `vite build` inside a `RUN` step fails to resolve imports
-through pnpm's symlinked `node_modules`, naming a *different* unresolvable package on
-each run (`motion-dom`, `@radix-ui/react-context`, `@radix-ui/react-toast`). The same
-Dockerfile builds fine under Docker, so this is an **engine difference, not a
-dependency defect**.
+`Dockerfile.web` used to fail under Podman with `vite build` reporting a **different**
+unresolvable module on every run (`motion-dom`, `@radix-ui/react-context`,
+`@radix-ui/react-toast`, `clsx`, …). Docker built the same file fine. Root cause,
+measured rather than guessed:
 
-Narrowed, so the next person does not repeat it:
+```
+BUILD-TIME  nofile=1024      <- podman build RUN steps
+RUN-TIME    nofile=20000     <- podman run
+```
 
-- The committed install layer is **correct** — every symlink resolves, targets exist.
-- Running the same `pnpm run build` in a container **from that image succeeds**.
-- Collapsing install+build into a single `RUN` layer does **not** fix it.
-- `node-linker=hoisted` fails differently (`MODULE_NOT_FOUND` on the vite binary).
-- `Dockerfile.api` is unaffected — esbuild's resolution does not walk the symlink web
-  the way rollup does.
+**The two paths do not share a default.** Confirmed against podman 4.9.3's own source
+(the exact version measured), not inferred:
 
-**Root cause is not established, so nothing is claimed about it.** The `Prod stack
-(Podman)` CI job therefore builds the API image and runs the durable lane, and states
-in its own output that it does not cover the web image. The Docker job still builds and
-gates the web image — that coverage is unchanged, and removing it to make Podman look
-complete would be exactly the manufactured green this repo exists to prevent.
+- `podman run` goes through **libpod**, where `libpod/define/config.go` sets
+  `RLimitDefaultValue = uint64(1048576)` — clamped here to the host's 20000 hard limit.
+- `podman build` RUN steps go through **buildah**, and 4.9.3's vendored buildah has
+  **no equivalent constant**. They inherit the OCI runtime's 1024.
 
-**Consequence for a full Podman-only workflow:** producing the web image still needs
-Docker today. Everything else — API image, durable lane, all 110 gates — runs under
-Podman.
+Rollup opens hundreds of modules concurrently; at 1024 it hits `EMFILE` and reports
+whichever module lost the race as "failed to resolve". The nondeterminism was the tell —
+a config or filesystem fault fails the same way twice. Docker's builder inherits the
+daemon's far higher limit, so the defect never appeared there.
+
+**This is not `containers.conf`.** Its `default_ulimits` entry is commented out on the
+tested host, so nothing local was imposing 1024.
+
+**Upstream appears to have closed this.** In podman 6.2.0-dev, the vendored buildah
+(`vendor/go.podman.io/buildah/define/types.go`) *does* define
+`RLimitDefaultValue = uint64(1048576)`. So on a recent Podman the web image may build
+with no flag at all — the `--ulimit` below is a compatibility measure, harmless where
+the default is already high. **Not verified on 6.x**, only read in its source.
+
+Two changes fix it, and both are now in the repo:
+
+1. `podman build --ulimit nofile=<hard limit, capped>`. Do **not** hardcode 65535 — a
+   value above the host's hard limit fails at container init with
+   `error setting rlimit`. CI computes it from `ulimit -Hn`.
+2. `FROM docker.io/library/nginx:alpine` in the runtime stage. Podman refuses
+   unqualified short names; Docker silently implies `docker.io`. Same registry-naming
+   fix already applied to the compose files.
+
+**Both engines now build both images**, and the `Prod stack (Podman)` CI job builds the
+web image rather than declaring it out of scope.
+
+What was ruled out along the way, each by experiment, so nobody re-runs them: a single
+combined `RUN` layer; `node-linker=hoisted`; `--shamefully-hoist`; `--isolation=chroot`
+(its apparent success was layer-cache reuse — with `--no-cache` it failed 3/3);
+undeclared dependencies (all were declared); and the storage driver — **`vfs` fails
+identically to `overlay`**, which is what finally killed the filesystem theory and
+pointed at the process environment instead.
+

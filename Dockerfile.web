@@ -43,7 +43,7 @@ RUN BASE_PATH=/ pnpm run build
 WORKDIR /app/artifacts/signalgrid-app
 RUN BASE_PATH=/app/ pnpm run build
 
-FROM nginx:alpine AS runtime
+FROM docker.io/library/nginx:alpine AS runtime
 
 # Vite emits to dist/public (see each app's vite.config.ts outDir).
 COPY --from=builder /app/artifacts/signalgrid-web/dist/public/ /usr/share/nginx/html/

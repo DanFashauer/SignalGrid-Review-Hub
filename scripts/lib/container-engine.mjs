@@ -105,7 +105,11 @@ export function resolveContainerEngine() {
     };
   }
 
-  // Auto-detect. Docker first so an existing machine behaves exactly as before.
+  // Auto-detect in KNOWN order — podman first. (This comment used to say "Docker
+  // first so an existing machine behaves exactly as before", which was true before
+  // the order was flipped and false the moment it was. A comment asserting the
+  // opposite of the line under it is worse than no comment: it is the code's own
+  // documentation lying about it.)
   for (const engine of KNOWN) {
     const version = probe(engine);
     if (version) {

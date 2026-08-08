@@ -133,6 +133,7 @@
     "proof:webauthn-verify": "tsx ./src/webauthn-verify-proof.ts",
     "proof:webhooks": "tsx ./src/webhooks-proof.ts",
     "proof:work-context": "tsx ./src/work-context-proof.ts",
+    "proof:zero-trust-principles": "tsx ./src/zero-trust-principles-proof.ts",
     "sbom": "tsx ./src/generate-sbom.ts",
     "self-audit:run": "tsx ./src/self-audit-run.ts",
     "smoke:connector-emulator": "pnpm run proof:connector-emulator",

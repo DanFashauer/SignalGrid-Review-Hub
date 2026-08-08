@@ -158,6 +158,7 @@
     "proof:webauthn-verify": "pnpm --filter @workspace/scripts run proof:webauthn-verify",
     "proof:webhooks": "pnpm --filter @workspace/scripts run proof:webhooks",
     "proof:work-context": "pnpm --filter @workspace/scripts run proof:work-context",
+    "proof:zero-trust-principles": "pnpm --filter @workspace/scripts run proof:zero-trust-principles",
     "review:invariants": "node scripts/review-invariants.mjs",
     "safety:check": "node scripts/safety-check.mjs",
     "sbom": "pnpm --filter @workspace/scripts run sbom",

@@ -360,6 +360,8 @@ jobs:
         run: node scripts/check-pagination-truncation.mjs
       - name: "Absent-collection law (nothing observed ≠ nothing wrong)"
         run: pnpm run proof:absent-collection
+      - name: "Zero Trust principles (the doctrine holds against the shipped decision core)"
+        run: pnpm run proof:zero-trust-principles
       - name: "Port parity (DecisionEngine + AppWorkflows vs their TS originals)"
         run: node scripts/check-decision-port-parity.mjs
       - name: "Read-error swallowing (a failed lookup must not report nothing-found)"

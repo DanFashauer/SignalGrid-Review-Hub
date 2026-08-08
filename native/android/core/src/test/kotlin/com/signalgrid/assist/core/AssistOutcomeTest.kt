@@ -17,11 +17,25 @@ class AssistOutcomeTest {
     }
 
     @Test
-    fun `casing and the hyphen spelling do not change the outcome`() {
+    fun `casing and surrounding space do not change the outcome`() {
+        // Casing and padding are formatting artefacts of whatever serialised the
+        // value. The SPELLING is not — see the next test.
         assertEquals(Assist.STEP_UP, Assist.parse("STEP_UP"))
-        assertEquals(Assist.STEP_UP, Assist.parse("step-up"))
-        assertEquals(Assist.STEP_UP, Assist.parse(" StepUp "))
+        assertEquals(Assist.STEP_UP, Assist.parse("  step_up  "))
         assertEquals(Assist.DENY, Assist.parse("DENY"))
+        assertEquals(Assist.ALLOW, Assist.parse(" Allow "))
+    }
+
+    @Test
+    fun `a near-miss spelling denies rather than being guessed through`() {
+        // These three USED TO PARSE AS STEP_UP. That was more permissive than denying
+        // — STEP_UP offers the worker a challenge and so a route to proceeding, DENY
+        // offers none — and it contradicted this client's own fail-closed rule. The
+        // wire vocabulary is exactly {allow, step_up, restrict, deny}; see
+        // VALID_OUTCOMES in lib/signalgrid-core/src/policy.ts.
+        assertEquals(Assist.DENY, Assist.parse("step-up"))
+        assertEquals(Assist.DENY, Assist.parse("stepup"))
+        assertEquals(Assist.DENY, Assist.parse("StepUp"))
     }
 
     @Test
@@ -51,10 +65,19 @@ class AssistOutcomeTest {
     }
 
     @Test
-    fun `allow and restrict proceed, deny does not`() {
+    fun `allow is the only outcome that proceeds with nothing further`() {
+        // RESTRICT USED TO BE TRUE HERE. `lib/orchestration/src/index.ts` maps
+        // restrict to orchestration mode "hold", not "proceed": it means "continue
+        // under a reduced capability ceiling", and applying that ceiling is further
+        // action. A host app reading true would have carried on at FULL capability,
+        // discarding the restriction entirely.
         assertTrue(Assist.ALLOW.proceedsWithoutFurtherAction)
-        assertTrue(Assist.RESTRICT.proceedsWithoutFurtherAction)
+        assertFalse(Assist.RESTRICT.proceedsWithoutFurtherAction)
+        assertFalse(Assist.STEP_UP.proceedsWithoutFurtherAction)
         assertFalse(Assist.DENY.proceedsWithoutFurtherAction)
+        // Stated as the invariant, not four separate facts: exactly one outcome
+        // proceeds. A fifth "nearly allow" added later fails this.
+        assertEquals(1, Assist.entries.count { it.proceedsWithoutFurtherAction })
     }
 
     @Test

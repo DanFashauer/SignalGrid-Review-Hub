@@ -1,0 +1,8 @@
+# Cargo build output.
+target/
+
+# Cargo.lock IS committed (see core/Cargo.lock). Convention says a library omits it;
+# this repo's rule is stronger and applies here for the same reason `pnpm-lock.yaml`
+# is committed and enforced by a pre-push hook: a dependency resolved fresh on every
+# CI run is a dependency nobody chose. The lockfile is what makes "the tests passed"
+# a statement about a specific set of code.

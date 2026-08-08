@@ -27,15 +27,30 @@ enum class Assist {
     DENY;
 
     /**
-     * Does this outcome, ON ITS OWN, let the host app continue?
+     * Does this outcome, ON ITS OWN, let the host app continue with nothing further?
      *
-     * STEP_UP is deliberately FALSE. It is the answer most likely to be mishandled: a
-     * host app that treats "step up" as "yes, eventually" and opens the screen while
-     * the challenge is pending has already granted the access. The challenge has to
-     * complete and the gate has to be asked again.
+     * ONLY ALLOW.
+     *
+     * STEP_UP is the answer most likely to be mishandled: a host app that treats
+     * "step up" as "yes, eventually" and opens the screen while the challenge is
+     * pending has already granted the access.
+     *
+     * RESTRICT USED TO RETURN TRUE HERE, AND THAT WAS A DEFECT. It was found by the
+     * shared conformance vectors on their first run against the Rust desktop client,
+     * which disagreed. Checked against the source of truth rather than settled by
+     * preference: `lib/orchestration/src/index.ts` maps `restrict` to orchestration
+     * mode `hold`, not `proceed`. RESTRICT means "continue, but under a reduced
+     * capability ceiling" — applying that ceiling IS further action, and a host app
+     * that read `true` here would carry on at FULL capability, silently discarding
+     * the restriction. Which is the whole failure this property exists to prevent,
+     * reproduced in the property itself.
+     *
+     * Use [requiresChallenge] and the decision's obligations to tell the three
+     * non-proceeding outcomes apart; do not reintroduce a second thing that is
+     * "nearly allow".
      */
     val proceedsWithoutFurtherAction: Boolean
-        get() = this == ALLOW || this == RESTRICT
+        get() = this == ALLOW
 
     /** True when the worker must be shown something before anything else happens. */
     val requiresChallenge: Boolean
@@ -54,12 +69,23 @@ enum class Assist {
          * Returns null ONLY for a genuinely absent value, so a caller can tell
          * "the server said something I don't understand" (deny) apart from "the
          * server said nothing at all" (a transport problem, reported as such).
+         *
+         * NO SPELLING ALIASES. This used to accept "step-up" and "stepup" as STEP_UP,
+         * which contradicted the paragraph directly above it. The wire vocabulary is
+         * exactly four values — see `VALID_OUTCOMES` in `lib/signalgrid-core/src/
+         * policy.ts` and `AccessOutcome` in `lib/fleet-connector/src/client.ts`;
+         * neither spelling appears anywhere in the product. So a gate sending
+         * "stepup" is a gate this client does not understand, and mapping it to
+         * STEP_UP is strictly MORE PERMISSIVE than denying: STEP_UP offers the worker
+         * a challenge and therefore a route to proceeding, where DENY offers none.
+         * Guessing a route forward from a misspelling is the exact thing the comment
+         * above forbids. Found by the shared conformance vectors.
          */
         fun parse(raw: String?): Assist? {
             if (raw == null || raw.isBlank()) return null
             return when (raw.trim().lowercase()) {
                 "allow" -> ALLOW
-                "step_up", "step-up", "stepup" -> STEP_UP
+                "step_up" -> STEP_UP
                 "restrict" -> RESTRICT
                 "deny" -> DENY
                 else -> DENY

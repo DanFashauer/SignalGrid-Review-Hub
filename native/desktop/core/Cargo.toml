@@ -1,0 +1,18 @@
+[package]
+name = "signalgrid-assist-core"
+version = "0.1.0"
+edition = "2021"
+# 2021 rather than 2024: nothing here needs the newer edition, and pinning to the
+# older one keeps the crate buildable on the stable Rust that ships in distro
+# packages and older CI images. A gate that only builds on the newest toolchain is
+# a gate that stops running the first time an image lags.
+rust-version = "1.74"
+description = "The Assist gate client for the SignalGrid desktop shell: outcome vocabulary, fail-closed wire parsing, and endpoint validation."
+license = "UNLICENSED"
+publish = false
+
+[dependencies]
+serde_json = "1"
+
+[lints.rust]
+unsafe_code = "forbid"

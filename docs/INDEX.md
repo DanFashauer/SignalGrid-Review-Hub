@@ -198,6 +198,8 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Demo and Simulation Expansion Plan](DEMO_AND_SIMULATION_EXPANSION_PLAN.md): docs-first Level 10 demo expansion plan.
 
 
+- [Branch hygiene](BRANCH_HYGIENE.md): what each branch prefix means, which branches are load-bearing, why squash-merge makes `git branch --merged` an unreliable signal, and the reversible pruning procedure.
+
 ## Subdirectory sets — design notes, records, and drafts
 
 These live under `docs/<subdir>/` rather than at the top level. They were listed

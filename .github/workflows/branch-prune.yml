@@ -31,6 +31,10 @@ on:
         description: "Actually delete the branches. Leave unchecked for a dry run."
         type: boolean
         default: false
+      force_branches:
+        description: "Comma-separated exact branch names to delete EVEN IF they hold unmerged commits. Each is tagged archive/<branch> first; if the tag fails, the branch stays. Cannot override the default-branch, dependabot, open-PR or protected refusals."
+        type: string
+        default: ""
 
 # Deleting a ref is a write to contents. Reading PR merge state needs pull-requests.
 # Nothing else is granted.
@@ -59,4 +63,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           APPLY: ${{ inputs.apply }}
+          FORCE_BRANCHES: ${{ inputs.force_branches }}
         run: node scripts/prune-merged-branches.mjs

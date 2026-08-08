@@ -55,6 +55,28 @@
 // record can be made.
 
 const APPLY = process.env.APPLY === "true";
+
+// Branches to delete even though they carry commits that exist nowhere else. This is
+// the ONE way past the "unmerged work" refusal, and it is deliberately awkward: an
+// explicit, comma-separated list of exact names, typed per run, never a pattern.
+//
+// It cannot override the other refusals. The default branch, `dependabot/*`, an open
+// pull request and branch protection stay refused even when named here — those are
+// about breaking something live, not about losing history, and naming a branch does
+// not make deleting it safe.
+//
+// AND IT CANNOT DELETE UNANCHORED WORK. Before a forced branch is removed, its tip is
+// tagged `archive/<branch>`. If that tag cannot be created, the branch is NOT deleted.
+// That ordering is the whole safety property: a recorded SHA in a document only works
+// while the object stays reachable, and an unreferenced commit is eventually collected.
+// A tag is a real ref, so the commits survive the branch indefinitely and the work is
+// restorable with `git push origin archive/<branch>:refs/heads/<branch>`.
+const FORCE = new Set(
+  (process.env.FORCE_BRANCHES ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
+);
 const TOKEN = process.env.GH_TOKEN;
 const [OWNER, REPO] = (process.env.GITHUB_REPOSITORY ?? "").split("/");
 
@@ -154,6 +176,7 @@ console.log(`Mode: ${APPLY ? "APPLY (branches will be deleted)" : "DRY RUN (noth
 console.log(`${branches.length} remote branches\n`);
 
 const doomed = [];
+const forced = []; // {name, sha, unique} — unmerged, named explicitly, archived then deleted
 const kept = []; // {branch, reason}
 
 for (const b of branches) {
@@ -228,25 +251,38 @@ for (const b of branches) {
     continue;
   }
 
-  kept.push({
-    name,
-    reason:
-      prs.length === 0
-        ? `no pull request, and ${cmp.ahead_by} commit(s) exist ONLY here (${cmp.status}) — this is unmerged work`
-        : `PR(s) closed WITHOUT merging, and ${cmp.ahead_by} commit(s) exist ONLY here (${cmp.status})`,
-  });
+  const unmerged =
+    prs.length === 0
+      ? `no pull request, and ${cmp.ahead_by} commit(s) exist ONLY here (${cmp.status}) — this is unmerged work`
+      : `PR(s) closed WITHOUT merging, and ${cmp.ahead_by} commit(s) exist ONLY here (${cmp.status})`;
+
+  if (FORCE.has(name)) {
+    forced.push({ name, sha, unique: cmp.ahead_by, note: unmerged });
+    continue;
+  }
+  kept.push({ name, reason: unmerged });
 }
 
 // ── The recovery record, emitted BEFORE any deletion ──────────────────────────
-const restore = doomed
-  .map((d) => `git push origin ${d.sha}:refs/heads/${shellQuote(d.name)}`)
-  .join("\n");
+const restore = [
+  ...doomed.map((d) => `git push origin ${d.sha}:refs/heads/${shellQuote(d.name)}`),
+  // A forced branch restores from its archive tag, which is a real ref and therefore
+  // survives indefinitely — unlike a bare SHA, which only works until the unreferenced
+  // object is collected. These are the ones that actually need a durable anchor.
+  ...forced.map((f) => `git push origin ${shellQuote(`archive/${f.name}`)}:refs/heads/${shellQuote(f.name)}`),
+].join("\n");
 
 const summary = [
   `## Branch prune — ${APPLY ? "APPLIED" : "dry run"}`,
   "",
   `- ${branches.length} remote branches examined`,
-  `- **${doomed.length}** with a merged pull request${APPLY ? " — deleted" : " — would be deleted"}`,
+  `- **${doomed.length}** released by the normal rules${APPLY ? " — deleted" : " — would be deleted"}`,
+  ...(forced.length > 0
+    ? [
+        `- **${forced.length} FORCED** — carry unmerged commits and were named explicitly.`,
+        `  Each is tagged \`archive/<branch>\` at its tip BEFORE deletion; if the tag fails, the branch stays.`,
+      ]
+    : []),
   `- ${kept.length} kept`,
   "",
   "### Restore any of these",
@@ -262,6 +298,9 @@ const summary = [
 ];
 
 for (const d of doomed) console.log(`  prune  ${d.name}  — ${d.why}  ${d.sha}`);
+for (const f of forced) {
+  console.log(`  FORCE  ${f.name}  — ${f.unique} unique commit(s); archive tag first, then delete  ${f.sha}`);
+}
 for (const k of kept) console.log(`  keep   ${k.name}  — ${k.reason}`);
 
 // ── Delete ────────────────────────────────────────────────────────────────────
@@ -276,6 +315,49 @@ if (APPLY) {
       failed.push(`${d.name}: ${err.message}`);
     }
   }
+  // FORCED branches: anchor, verify the anchor, and only then delete.
+  //
+  // The order is the safety property, not a nicety. These branches hold the only copy
+  // of their commits; once the ref is gone the objects are unreferenced and a future
+  // garbage collection takes them. Tagging first means the work outlives the branch.
+  // A tag that fails to create leaves the branch ALONE — the alternative is deleting
+  // unmerged work having just failed to save it, which is the worst outcome available.
+  for (const f of forced) {
+    const tag = `archive/${f.name}`;
+    try {
+      await api(`/repos/${OWNER}/${REPO}/git/refs`, {
+        method: "POST",
+        body: JSON.stringify({ ref: `refs/tags/${tag}`, sha: f.sha }),
+      });
+    } catch (err) {
+      // Already existing is fine — the anchor is what matters, not who made it.
+      if (!/already exists/i.test(err.message)) {
+        failed.push(`${f.name}: archive tag FAILED, branch left in place (${err.message})`);
+        continue;
+      }
+    }
+    // Read the tag back. A POST that reported success but left no ref would mean
+    // deleting on the strength of an anchor that is not there.
+    let anchored = false;
+    try {
+      const ref = await api(`/repos/${OWNER}/${REPO}/git/ref/tags/${encodeRefPath(tag)}`);
+      anchored = ref?.object?.sha === f.sha;
+    } catch {
+      anchored = false;
+    }
+    if (!anchored) {
+      failed.push(`${f.name}: archive tag not readable at ${f.sha}, branch left in place`);
+      continue;
+    }
+    try {
+      await api(`/repos/${OWNER}/${REPO}/git/refs/heads/${encodeRefPath(f.name)}`, { method: "DELETE" });
+      deleted += 1;
+      console.log(`  archived ${tag} then deleted ${f.name}`);
+    } catch (err) {
+      failed.push(`${f.name}: ${err.message}`);
+    }
+  }
+
   summary.push(`### Result`, "", `- deleted: ${deleted}`, `- failed: ${failed.length}`, "");
   for (const f of failed) summary.push(`- ${mdCode(f)}`);
   console.log(`\ndeleted=${deleted} failed=${failed.length}`);

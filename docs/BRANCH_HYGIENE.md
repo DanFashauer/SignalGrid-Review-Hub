@@ -73,6 +73,30 @@ Everything else is **refused and named in the summary**: the default branch,
 exist nowhere else, and — importantly — any branch whose API lookup *errored*. A
 failed read is not an empty result, and the consequence here is irreversible.
 
+### Deleting a branch that holds unmerged work
+
+The `force_branches` input takes a comma-separated list of **exact** branch names and
+releases them despite the unmerged-work refusal. It is deliberately awkward — exact
+names typed per run, never a pattern — and it is narrow:
+
+- **It cannot override the other refusals.** The default branch, `dependabot/*`, an
+  open pull request and branch protection stay refused even when named. Those are
+  about breaking something live, not about losing history, and naming a branch does
+  not make deleting it safe. (Verified: naming all three of those changed nothing.)
+- **It cannot delete unanchored work.** The tip is tagged `archive/<branch>` first,
+  the tag is then *read back* to confirm it exists at that SHA, and only then is the
+  branch deleted. A tag that fails to create or fails to verify leaves the branch
+  alone. Deleting unmerged work immediately after failing to save it is the worst
+  outcome available, so the code makes it unreachable.
+
+The ordering is the entire safety property. A tip SHA written in a document works only
+while the object stays reachable, and an unreferenced commit is eventually collected;
+a tag is a real ref, so the commits outlive the branch indefinitely. Restore with:
+
+```bash
+git push origin archive/<branch>:refs/heads/<branch>
+```
+
 ### Why a workflow rather than a command
 
 This is worth recording because the previous explanation, given here and repeated
@@ -133,17 +157,19 @@ gates rather than the way the orphan did:
 
 Wired into `scripts/preflight.mjs` and `Review Hub CI`.
 
-**The open item is closed, so the branch is no longer being kept for it.** It is
-deliberately NOT in the prune list: that list holds branches verified *merged*, and
-this one never was, so deleting it discards its two files rather than tidying a
-pointer. It is now an ordinary owner decision — delete it, or keep it as a museum
-piece — with nothing outstanding depending on the answer. Its tip is recorded here so
-the choice stays reversible either way:
+**The open item is closed, and the owner then chose to delete the branch.** It was
+never merged, so removing it discarded a pointer to commits that existed nowhere else
+— which is why it went through `force_branches` rather than the normal rules, and why
+its tip was tagged before the ref was removed. The work is still there:
 
 ```bash
-# restore if deleted
-git push origin 9b3e618eebe8368415d337c6e86849ca5ea31777:refs/heads/codex/add-signalgrid-autopilot-evidence-bot
+# the four commits live on, restore the branch with
+git push origin archive/codex/add-signalgrid-autopilot-evidence-bot:refs/heads/codex/add-signalgrid-autopilot-evidence-bot
 ```
+
+The same applies to `codex/review-hub-local-dev-api-health` (1 commit) and
+`codex/signalgrid-real-life-simulator-foundation` (4 commits), deleted in the same
+run and anchored at `archive/<branch>` the same way.
 
 ## State at the last capture
 

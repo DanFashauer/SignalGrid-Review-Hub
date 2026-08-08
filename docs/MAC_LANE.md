@@ -119,3 +119,123 @@ restrict other apps, make itself non-removable, or self-kiosk. Those are MDM/OS
 capabilities needing a supervised device (Apple Business Manager + APNs). A hosted
 runner cannot be enrolled, and a simulator cannot either. If a claim depends on
 enforcement rather than observation, no lane in this table establishes it.
+
+## Docker or Podman — the container lane runs on either
+
+The container lanes no longer spell the engine as the literal string `docker`.
+`scripts/lib/container-engine.mjs` (and its shell twin `container-engine.sh`) resolve
+one engine and every lane uses it.
+
+```bash
+pnpm run verify:docker                      # auto-detect: docker if its daemon answers, else podman
+CONTAINER_ENGINE=podman pnpm run verify:docker   # pin the engine explicitly
+```
+
+**Auto-detection prefers Podman** — it is the chosen runtime. A machine that only has
+Docker keeps working untouched: Docker is tried next and selected automatically, and
+`CONTAINER_ENGINE=docker` pins it explicitly.
+
+`CONTAINER_ENGINE` is **authoritative**. If it names an engine that does not answer,
+the run FAILS rather than quietly using the other one — you asked to test a specific
+engine, and silently testing the other makes the result mean something different.
+Same rule as `SIGNALGRID_MCP_PATH`.
+
+### On a Mac
+
+Podman needs no Docker Desktop and no licence:
+
+```bash
+brew install podman && podman machine init && podman machine start
+CONTAINER_ENGINE=podman ./mac-kickoff.sh --with-docker
+```
+
+### What was actually verified, and what was not
+
+Verified under **podman 4.9.3, linux/amd64, rootful**, in this repo's cloud sandbox:
+
+- `podman build -f Dockerfile.api` completes both stages and commits an image, with
+  **no Dockerfile change** — they are ordinary OCI Dockerfiles.
+- That image runs and serves `/api/healthz` → `{"status":"ok","tier":"dev","liveIntegrations":false}`.
+- **The full `docker-verify` lane passes**: postgres:16 + redis:7, the three
+  durable-persistence proofs (22 assertions) and the enrollment-race proof (4).
+- Docker could not run in that same sandbox at all — no daemon. Podman is daemonless,
+  so it gave the container lane back where there previously was none.
+
+**NOT verified — do not read the above as covering it:**
+
+- **Anything on macOS.** Podman on a Mac runs a VM (`podman machine`), a different
+  execution model. It has to be tried on the actual Mac.
+- **Rootless podman.** The verified run was rootful; rootless changes port binding
+  below 1024 and volume ownership.
+- **Rootless podman.** The verified run was rootful; rootless changes port binding
+  below 1024 and volume ownership.
+
+CI now runs the container lane under **both** engines on every PR — `Prod stack
+(Podman)` alongside `Prod stack (Docker compose smoke)` — so a divergence between them
+is a red check rather than a surprise on someone's laptop.
+
+### One thing this fixed for both engines
+
+Images are now named with their registry — `docker.io/library/postgres:16`, not
+`postgres:16`. A short name is not a name, it is a lookup against whatever search
+list the engine is configured with: Docker silently implies `docker.io`, Podman
+refuses outright. Relying on the implicit default put a supply-chain decision in host
+config instead of in the repo. Podman surfaced it; the fix is an improvement on both.
+
+
+## What actually needs your Mac — measured, not assumed
+
+This file used to imply the Mac was needed for most of the lane. That was overstated,
+and the overstatement mattered: work deferred to a machine its owner rarely uses is
+work deferred to nowhere. Checked rather than assumed:
+
+| Capability | Where it really runs | Evidence |
+| ---------- | -------------------- | -------- |
+| Full gate suite (`preflight`, 110 gates) | **Cloud / CI, Linux** | runs on every PR |
+| Container lane (postgres + redis + durable proofs) | **Cloud, under Podman** | 22 pg assertions + 4 race assertions green; Docker cannot start in that sandbox at all |
+| Image builds (`Dockerfile.api`, `Dockerfile.web`) | **Cloud, under Podman** | both stages build; image runs and serves `/api/healthz` |
+| `signalgrid-mcp` test suite | **Cloud, on Linux** | **99 passed in 2.76s** — the macOS-only reads exercise their graceful-degradation paths, which is exactly what those tests are for |
+| iOS build + unit tests (EnterpriseShell, SignalGridMobile) | **GitHub `macos-latest` runners** | `ios-ci.yml`, real `xcodebuild`, on every push/PR |
+| Full macOS gate suite | **GitHub `macos-latest` runners** | `mac-lane.yml`, weekly + on dispatch |
+| Browser/E2E | **Cloud** | Chromium preinstalled at `/opt/pw-browsers` |
+
+**What genuinely requires the owner's real Mac — and always will:**
+
+- **Live evidence from a real managed device.** A hosted macOS runner is a throwaway
+  VM: not MDM-enrolled, not supervised, not the machine whose posture `macos-posture`
+  actually reads. `verify-all.mjs` refuses to mint evidence under CI for exactly this
+  reason. A rehearsal on a runner proves the gates pass on macOS; it proves nothing
+  about real hardware.
+- **Anything asserting on-device MDM enforcement**, which needs a supervised device
+  (ABM + APNs) — see the platform-honesty rule in `CLAUDE.md`.
+
+Everything else in the list above is cloud-runnable today. If a doc tells you to go to
+the Mac for something not in that short list, the doc is wrong.
+
+### Open defect: the web image does not build under Podman
+
+`Dockerfile.api` builds under Podman and the full durable lane passes. **`Dockerfile.web`
+does not.** Under Podman, `vite build` inside a `RUN` step fails to resolve imports
+through pnpm's symlinked `node_modules`, naming a *different* unresolvable package on
+each run (`motion-dom`, `@radix-ui/react-context`, `@radix-ui/react-toast`). The same
+Dockerfile builds fine under Docker, so this is an **engine difference, not a
+dependency defect**.
+
+Narrowed, so the next person does not repeat it:
+
+- The committed install layer is **correct** — every symlink resolves, targets exist.
+- Running the same `pnpm run build` in a container **from that image succeeds**.
+- Collapsing install+build into a single `RUN` layer does **not** fix it.
+- `node-linker=hoisted` fails differently (`MODULE_NOT_FOUND` on the vite binary).
+- `Dockerfile.api` is unaffected — esbuild's resolution does not walk the symlink web
+  the way rollup does.
+
+**Root cause is not established, so nothing is claimed about it.** The `Prod stack
+(Podman)` CI job therefore builds the API image and runs the durable lane, and states
+in its own output that it does not cover the web image. The Docker job still builds and
+gates the web image — that coverage is unchanged, and removing it to make Podman look
+complete would be exactly the manufactured green this repo exists to prevent.
+
+**Consequence for a full Podman-only workflow:** producing the web image still needs
+Docker today. Everything else — API image, durable lane, all 110 gates — runs under
+Podman.

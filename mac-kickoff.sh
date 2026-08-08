@@ -207,29 +207,36 @@ ok "both halves green"
 #    is a script people stop trusting. When Docker is available and the flag is
 #    absent, say so, so the option is discoverable rather than buried in --help.
 # ---------------------------------------------------------------------------
-step "6/7  Docker lane (durable half against a real Postgres)"
+step "6/7  Container lane (durable half against a real Postgres)"
+# Docker OR podman — these are OCI images and either engine runs them. Podman needs
+# no daemon and no Docker Desktop licence, which on a Mac is the difference between
+# "install a whole desktop app" and `brew install podman && podman machine start`.
+# shellcheck source=scripts/lib/container-engine.sh
+. "$(dirname "$0")/scripts/lib/container-engine.sh"
 DOCKER_OK=0
-if docker version --format '{{.Server.Version}}' >/dev/null 2>&1; then DOCKER_OK=1; fi
+if sg_resolve_engine; then DOCKER_OK=1; fi
+ENGINE_DESC="${SG_ENGINE:-none} $("${SG_ENGINE:-true}" version --format '{{.Server.Version}}' 2>/dev/null)"
 
 if [ "$WITH_DOCKER" != "1" ]; then
   if [ "$DOCKER_OK" = "1" ]; then
-    ok "skipped — Docker IS running here ($(docker version --format '{{.Server.Version}}' 2>/dev/null))."
+    ok "skipped — a container engine IS running here ($ENGINE_DESC)."
     echo "        Re-run with --with-docker to also prove the durable half:"
     echo "        the audit ledger, decision-store isolation and session lifecycle"
     echo "        against a real postgres:16, which no in-memory proof can show."
   else
-    ok "skipped (--with-docker not given; no Docker daemon detected either)"
+    ok "skipped (--with-docker not given; no container engine detected either)"
   fi
 elif [ "$DOCKER_OK" != "1" ]; then
   # Asked for explicitly and unavailable is a REFUSAL, not a quiet skip — the
   # caller asked for a claim this run cannot make.
-  die "--with-docker was given, but no Docker daemon is reachable.
+  die "--with-docker was given, but no container engine is reachable.
 
-  Start Docker Desktop and re-run. Refusing to continue quietly: you asked for the
-  durable-persistence claim, and skipping it while reporting success would be
+  Start Docker Desktop, or install podman (\`brew install podman && podman machine init
+  && podman machine start\`), then re-run. Refusing to continue quietly: you asked for
+  the durable-persistence claim, and skipping it while reporting success would be
   exactly the manufactured confidence this lane exists to prevent."
 else
-  ok "Docker $(docker version --format '{{.Server.Version}}' 2>/dev/null) reachable"
+  ok "container engine $ENGINE_DESC reachable"
   echo "   running scripts/docker-verify.mjs --emit-evidence (pulls postgres:16 + redis:7 on first run)"
   node "$REPO_ROOT/scripts/docker-verify.mjs" --emit-evidence || die "the Docker lane failed.
 

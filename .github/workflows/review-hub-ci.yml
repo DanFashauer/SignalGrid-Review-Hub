@@ -530,6 +530,74 @@ jobs:
           DATABASE_URL: postgres://sg:sg@localhost:5432/signalgrid
         run: pnpm run proof:session-store-pg
 
+  # Podman is the repo's chosen runtime (scripts/lib/container-engine.mjs). It was
+  # verified locally — full docker-verify lane green under podman 4.9.3 — but a local
+  # run is not a gate, and the whole point of that abstraction is that BOTH engines
+  # keep working. So the container lane runs here under podman on every PR, next to
+  # the docker job below, and a divergence between them shows up as a red check
+  # rather than as a surprise on someone's laptop.
+  #
+  # CONTAINER_ENGINE=podman is set explicitly rather than relying on auto-detection:
+  # this job exists to prove PODMAN specifically, and a silent fallback to docker
+  # would leave it green while testing the thing the other job already covers.
+  podman-stack:
+    name: Prod stack (Podman)
+    runs-on: ubuntu-latest
+    env:
+      CONTAINER_ENGINE: podman
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Podman version (a missing engine must fail loudly, not skip)
+        run: podman version --format '{{.Server.Version}}'
+
+      # Same Dockerfile, no changes — they are ordinary OCI files.
+      - name: Build the API image with podman
+        run: podman build --platform linux/amd64 --file Dockerfile.api --tag signalgrid-api:ci .
+
+      # SCOPE, STATED OUT LOUD. Dockerfile.WEB is deliberately NOT built here, and
+      # this job must not be read as covering it.
+      #
+      # Under podman, `vite build` inside a RUN step fails to resolve imports through
+      # pnpm's symlinked node_modules — nondeterministically naming a different
+      # unresolvable package each run (motion-dom, @radix-ui/react-context,
+      # @radix-ui/react-toast). Under docker the same Dockerfile builds fine, so this
+      # is an engine difference, not a dependency defect. Reproduced and narrowed:
+      #
+      #   · the committed install layer is CORRECT — every symlink resolves, targets exist
+      #   · running the same `pnpm run build` in a container FROM that image SUCCEEDS
+      #   · collapsing install+build into one RUN layer does NOT fix it
+      #   · node-linker=hoisted fails differently (MODULE_NOT_FOUND on the vite binary)
+      #   · Dockerfile.API builds fine under podman — it uses esbuild, whose resolution
+      #     does not walk the symlink web the way rollup does
+      #
+      # Root cause not yet established, so nothing is claimed about it. The docker job
+      # below builds the web image and gates it; that coverage is unchanged. Tracked in
+      # docs/MAC_LANE.md. Do NOT "fix" this by deleting the docker web-image build.
+      - name: State what this job does NOT cover
+        run: |
+          echo "NOT covered by this job: the WEB image under podman (Dockerfile.web)."
+          echo "It fails under podman and builds under docker; see the comment above."
+          echo "The docker job gates the web image. This job gates the API image and"
+          echo "the durable lane under podman."
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Enable corepack (pnpm)
+        run: corepack enable pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The durable lane: postgres + redis under podman, then the three
+      # durable-persistence proofs and the enrollment-race proof against them.
+      - name: Durable verification lane under podman
+        run: node scripts/docker-verify.mjs
+
   deploy-stack:
     name: Prod stack (Docker compose smoke)
     runs-on: ubuntu-latest

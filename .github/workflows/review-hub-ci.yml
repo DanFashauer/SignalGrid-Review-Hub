@@ -530,6 +530,52 @@ jobs:
           DATABASE_URL: postgres://sg:sg@localhost:5432/signalgrid
         run: pnpm run proof:session-store-pg
 
+  # Podman is the repo's chosen runtime (scripts/lib/container-engine.mjs). It was
+  # verified locally — full docker-verify lane green under podman 4.9.3 — but a local
+  # run is not a gate, and the whole point of that abstraction is that BOTH engines
+  # keep working. So the container lane runs here under podman on every PR, next to
+  # the docker job below, and a divergence between them shows up as a red check
+  # rather than as a surprise on someone's laptop.
+  #
+  # CONTAINER_ENGINE=podman is set explicitly rather than relying on auto-detection:
+  # this job exists to prove PODMAN specifically, and a silent fallback to docker
+  # would leave it green while testing the thing the other job already covers.
+  podman-stack:
+    name: Prod stack (Podman)
+    runs-on: ubuntu-latest
+    env:
+      CONTAINER_ENGINE: podman
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Podman version (a missing engine must fail loudly, not skip)
+        run: podman version --format '{{.Server.Version}}'
+
+      # Same Dockerfiles, no changes — they are ordinary OCI files. If podman ever
+      # needs a Dockerfile of its own, that is a defect worth failing on.
+      - name: Build the web image with podman
+        run: podman build --platform linux/amd64 --file Dockerfile.web --tag signalgrid-web:ci .
+
+      - name: Build the API image with podman
+        run: podman build --platform linux/amd64 --file Dockerfile.api --tag signalgrid-api:ci .
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Enable corepack (pnpm)
+        run: corepack enable pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The durable lane: postgres + redis under podman, then the three
+      # durable-persistence proofs and the enrollment-race proof against them.
+      - name: Durable verification lane under podman
+        run: node scripts/docker-verify.mjs
+
   deploy-stack:
     name: Prod stack (Docker compose smoke)
     runs-on: ubuntu-latest

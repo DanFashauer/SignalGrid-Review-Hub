@@ -11,8 +11,8 @@
 # fails rather than quietly using the other one, because a caller who named an engine
 # is making a claim about what is being tested.
 #
-# Auto-detection prefers docker so existing machines behave exactly as before; podman
-# is picked up only when docker is absent or its daemon is not running.
+# Auto-detection prefers PODMAN (the chosen runtime); docker is tried next, so a
+# machine that only has docker keeps working with no change.
 
 sg_resolve_engine() {
   if [ -n "${CONTAINER_ENGINE:-}" ]; then
@@ -24,7 +24,7 @@ sg_resolve_engine() {
     SG_ENGINE=""
     return 1
   fi
-  for _sg_e in docker podman; do
+  for _sg_e in podman docker; do
     if command -v "$_sg_e" >/dev/null 2>&1 &&
       "$_sg_e" version --format '{{.Server.Version}}' >/dev/null 2>&1; then
       SG_ENGINE="$_sg_e"

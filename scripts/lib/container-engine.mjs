@@ -31,11 +31,8 @@
 //     · Rootless podman. The sandbox run was rootful (`rootless=false`); rootless
 //       changes port binding below 1024 and volume ownership.
 //
-// DEFAULTING, deliberately conservative. Auto-detection prefers DOCKER when both are
-// present, so nothing about an existing machine's behaviour changes by upgrading.
-// Podman is opt-in via CONTAINER_ENGINE=podman. The exception is a host that has
-// podman and no usable docker — there, picking podman is strictly better than
-// refusing to run.
+// DEFAULTING. Auto-detection prefers PODMAN (see KNOWN below). A machine with only
+// docker still works untouched — docker is tried next and selected automatically.
 //
 // CONTAINER_ENGINE IS AUTHORITATIVE. If it is set and that engine does not work, this
 // FAILS rather than quietly falling back to the other one. Same discipline as
@@ -45,7 +42,15 @@
 
 import { spawnSync } from "node:child_process";
 
-const KNOWN = ["docker", "podman"];
+// PODMAN FIRST. The owner chose podman as the target runtime, and it is the better
+// default on the merits: daemonless (so it works where no daemon is running — this
+// repo's own cloud sandbox, where docker cannot start at all), rootless-capable, and
+// no Docker Desktop licence on a Mac. Docker remains fully supported and is selected
+// automatically when podman is absent, or explicitly with CONTAINER_ENGINE=docker.
+//
+// The order is the whole of the "conversion": nothing else had to change, because
+// these were always OCI images built from ordinary Dockerfiles.
+const KNOWN = ["podman", "docker"];
 
 /** Ask an engine for its server version. Returns null when it is absent or unusable. */
 function probe(engine) {

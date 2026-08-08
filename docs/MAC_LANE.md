@@ -131,10 +131,9 @@ pnpm run verify:docker                      # auto-detect: docker if its daemon 
 CONTAINER_ENGINE=podman pnpm run verify:docker   # pin the engine explicitly
 ```
 
-**Auto-detection prefers Docker**, so an existing machine behaves exactly as it did.
-Podman is opt-in, or picked up automatically when Docker is installed but its daemon
-is not running — which is precisely the state that used to make the whole lane
-unavailable.
+**Auto-detection prefers Podman** — it is the chosen runtime. A machine that only has
+Docker keeps working untouched: Docker is tried next and selected automatically, and
+`CONTAINER_ENGINE=docker` pins it explicitly.
 
 `CONTAINER_ENGINE` is **authoritative**. If it names an engine that does not answer,
 the run FAILS rather than quietly using the other one — you asked to test a specific
@@ -168,9 +167,12 @@ Verified under **podman 4.9.3, linux/amd64, rootful**, in this repo's cloud sand
   execution model. It has to be tried on the actual Mac.
 - **Rootless podman.** The verified run was rootful; rootless changes port binding
   below 1024 and volume ownership.
-- **CI.** CI still uses Docker, deliberately — it is preinstalled on the runners and
-  works, so switching it would be churn with risk and no benefit. The scripts run on
-  either engine, so this is a default, not a dependency.
+- **Rootless podman.** The verified run was rootful; rootless changes port binding
+  below 1024 and volume ownership.
+
+CI now runs the container lane under **both** engines on every PR — `Prod stack
+(Podman)` alongside `Prod stack (Docker compose smoke)` — so a divergence between them
+is a red check rather than a surprise on someone's laptop.
 
 ### One thing this fixed for both engines
 
@@ -179,3 +181,33 @@ Images are now named with their registry — `docker.io/library/postgres:16`, no
 list the engine is configured with: Docker silently implies `docker.io`, Podman
 refuses outright. Relying on the implicit default put a supply-chain decision in host
 config instead of in the repo. Podman surfaced it; the fix is an improvement on both.
+
+
+## What actually needs your Mac — measured, not assumed
+
+This file used to imply the Mac was needed for most of the lane. That was overstated,
+and the overstatement mattered: work deferred to a machine its owner rarely uses is
+work deferred to nowhere. Checked rather than assumed:
+
+| Capability | Where it really runs | Evidence |
+| ---------- | -------------------- | -------- |
+| Full gate suite (`preflight`, 110 gates) | **Cloud / CI, Linux** | runs on every PR |
+| Container lane (postgres + redis + durable proofs) | **Cloud, under Podman** | 22 pg assertions + 4 race assertions green; Docker cannot start in that sandbox at all |
+| Image builds (`Dockerfile.api`, `Dockerfile.web`) | **Cloud, under Podman** | both stages build; image runs and serves `/api/healthz` |
+| `signalgrid-mcp` test suite | **Cloud, on Linux** | **99 passed in 2.76s** — the macOS-only reads exercise their graceful-degradation paths, which is exactly what those tests are for |
+| iOS build + unit tests (EnterpriseShell, SignalGridMobile) | **GitHub `macos-latest` runners** | `ios-ci.yml`, real `xcodebuild`, on every push/PR |
+| Full macOS gate suite | **GitHub `macos-latest` runners** | `mac-lane.yml`, weekly + on dispatch |
+| Browser/E2E | **Cloud** | Chromium preinstalled at `/opt/pw-browsers` |
+
+**What genuinely requires the owner's real Mac — and always will:**
+
+- **Live evidence from a real managed device.** A hosted macOS runner is a throwaway
+  VM: not MDM-enrolled, not supervised, not the machine whose posture `macos-posture`
+  actually reads. `verify-all.mjs` refuses to mint evidence under CI for exactly this
+  reason. A rehearsal on a runner proves the gates pass on macOS; it proves nothing
+  about real hardware.
+- **Anything asserting on-device MDM enforcement**, which needs a supervised device
+  (ABM + APNs) — see the platform-honesty rule in `CLAUDE.md`.
+
+Everything else in the list above is cloud-runnable today. If a doc tells you to go to
+the Mac for something not in that short list, the doc is wrong.

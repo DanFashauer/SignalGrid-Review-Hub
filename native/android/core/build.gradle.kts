@@ -14,11 +14,16 @@
 //      does not decide anything.
 plugins {
     kotlin("jvm") version "2.1.0"
+    kotlin("plugin.serialization") version "2.1.0"
 }
 
 repositories { mavenCentral() }
 
 dependencies {
+    // JSON, in the module that can be tested without an emulator. The parsing of a
+    // /v1 response is where a client most easily becomes permissive by accident, so
+    // it belongs here rather than in the Android shell where no gate can reach it.
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     testImplementation(kotlin("test"))
 }
 

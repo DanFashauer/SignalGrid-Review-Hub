@@ -71,6 +71,11 @@ const STEPS = [
   // that gives it a macOS run. Both lists are hand-written, so both can drift, and the
   // drift is invisible: two green lanes covering different code.
   { name: "iOS port sources (Xcode and SwiftPM must compile the same port)", cmd: ["node", "scripts/check-ios-port-sources.mjs"] },
+  // Three languages now implement the same fail-closed Assist rule (TypeScript,
+  // Kotlin, Rust), each with its own tests — which is exactly how they diverge while
+  // all three stay green. This checks every client is bound to ONE shared set of
+  // cases. It found two real Kotlin defects the day it was written.
+  { name: "Assist conformance (every client answers the shared cases the same way)", cmd: ["node", "scripts/check-assist-conformance.mjs"] },
   { name: "Read-error swallowing (a failed lookup must not report \"nothing found\")", cmd: ["node", "scripts/check-read-error-swallowing.mjs"] },
   // Every other gate here checks what the text MEANS. This one checks that the text
   // is what it appears to be: no bidirectional control or invisible character may

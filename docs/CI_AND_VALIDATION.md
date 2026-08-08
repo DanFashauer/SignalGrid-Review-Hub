@@ -64,6 +64,66 @@ while both stayed green.
 is not a device: nothing here says anything about MDM enrolment, supervision, or
 on-device enforcement. See `docs/MAC_LANE.md` for that boundary.
 
+## Desktop lane — Windows and Linux
+
+`.github/workflows/desktop.yml` builds and tests `native/desktop/core` — the Assist
+gate client for the desktop shell — on **both `ubuntu-latest` and `windows-latest`**,
+with `fail-fast: false` so a green Linux cannot hide a red Windows.
+
+**What exists and what does not.** `native/desktop/core` is a Rust crate: the Assist
+outcome vocabulary, fail-closed wire parsing, and endpoint validation, with 38 tests.
+There is **no desktop application binary yet** — `artifacts/signalgrid-desktop` remains
+a Vite web app, exactly as `docs/APP_SUITE_MATRIX.md` has always said. The core came
+first deliberately: everything that decides what a worker is told is testable with
+`cargo test`, on any machine, with no display server, installer, or signing
+certificate. The shell can then be thin, because nothing important is left in it.
+
+Windows is a separate job for the same reason iPad is one in the Apple lane: a
+platform claimed from a build that never ran on it is a claim nothing checks.
+
+## One set of Assist cases, three clients
+
+There are now three independent implementations of the same fail-closed rule —
+TypeScript in `lib/` (the source of truth), Kotlin in `native/android/core`, and Rust
+in `native/desktop/core`. Each had its own hand-written tests, which is precisely the
+arrangement in which they diverge silently: every suite stays green while one client
+starts treating a malformed response differently from the others.
+
+`native/shared/assist-wire-conformance.json` is **one set of 42 cases every client
+must agree on** — happy paths, transport failures, captive-portal HTML, truncated
+bodies, wrong-typed fields, and the near-misses (`allow_all`, `disallow`, `allowed`)
+that a lenient parser could talk itself into accepting. Each client has a test that
+reads the file and asserts its own parser agrees, case by case.
+
+**It found two real defects in the Kotlin client on its first run**, neither visible
+to that client's own suite:
+
+| Defect | Why it mattered | Settled by |
+| --- | --- | --- |
+| `RESTRICT.proceedsWithoutFurtherAction` returned `true` | a host app would have carried on at **full** capability on a restrict decision, silently discarding the ceiling | `lib/orchestration/src/index.ts` maps `restrict` → mode `hold`, not `proceed` |
+| `parse()` accepted `"stepup"` / `"step-up"` as `STEP_UP` | strictly **more permissive** than denying: `STEP_UP` offers a challenge and so a route to proceeding, `DENY` offers none | the wire vocabulary is exactly four values (`VALID_OUTCOMES` in `lib/signalgrid-core/src/policy.ts`) — neither spelling appears anywhere in the product |
+
+Both were fixed against the source of truth rather than by editing the vectors to
+match. **Never make a case pass by weakening it**: a disagreement here is a client
+that will mishandle a real gate response.
+
+Two things keep the file itself honest:
+
+- **A non-vacuity floor.** A suite made only of denials is satisfied by a client that
+  returns `DENY` unconditionally and decides nothing. The file declares its own
+  minimum case count and required outcomes; every client asserts them *before* running
+  the cases, and asserts afterwards that a proceedable case actually proceeded.
+- **`scripts/check-assist-conformance.mjs`**, which derives the client list from
+  `native/*/core` on disk rather than a written-down list — so a fourth client added
+  without wiring the vectors fails the gate rather than quietly opting out. It runs in
+  `preflight` and in the desktop workflow.
+
+**Not established by a green run:** that the clients' tests *ran* (the language lanes
+do that); iOS, which ports the decision engine rather than consuming `/v1` as a wire
+client and is covered by `scripts/check-decision-port-parity.mjs`; or the TypeScript
+source the vectors were written *from* — a case that misread the product would be
+wrong in every client at once, and consistently.
+
 ## Required local checks
 
 Before opening or updating a pull request, run these commands from the repository root:

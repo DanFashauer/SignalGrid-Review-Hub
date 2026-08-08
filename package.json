@@ -135,6 +135,7 @@
     "check:text-safety": "node scripts/check-text-safety.mjs",
     "check:merge-markers": "node scripts/check-merge-markers.mjs",
     "check:ios-port-sources": "node scripts/check-ios-port-sources.mjs",
+    "check:assist-conformance": "node scripts/check-assist-conformance.mjs",
     "branches:stale": "bash scripts/cleanup-merged-branches.sh",
     "branches:clean": "bash scripts/cleanup-merged-branches.sh --apply",
     "proof:nac": "pnpm --filter @workspace/scripts run proof:nac",

@@ -211,3 +211,31 @@ work deferred to nowhere. Checked rather than assumed:
 
 Everything else in the list above is cloud-runnable today. If a doc tells you to go to
 the Mac for something not in that short list, the doc is wrong.
+
+### Open defect: the web image does not build under Podman
+
+`Dockerfile.api` builds under Podman and the full durable lane passes. **`Dockerfile.web`
+does not.** Under Podman, `vite build` inside a `RUN` step fails to resolve imports
+through pnpm's symlinked `node_modules`, naming a *different* unresolvable package on
+each run (`motion-dom`, `@radix-ui/react-context`, `@radix-ui/react-toast`). The same
+Dockerfile builds fine under Docker, so this is an **engine difference, not a
+dependency defect**.
+
+Narrowed, so the next person does not repeat it:
+
+- The committed install layer is **correct** — every symlink resolves, targets exist.
+- Running the same `pnpm run build` in a container **from that image succeeds**.
+- Collapsing install+build into a single `RUN` layer does **not** fix it.
+- `node-linker=hoisted` fails differently (`MODULE_NOT_FOUND` on the vite binary).
+- `Dockerfile.api` is unaffected — esbuild's resolution does not walk the symlink web
+  the way rollup does.
+
+**Root cause is not established, so nothing is claimed about it.** The `Prod stack
+(Podman)` CI job therefore builds the API image and runs the durable lane, and states
+in its own output that it does not cover the web image. The Docker job still builds and
+gates the web image — that coverage is unchanged, and removing it to make Podman look
+complete would be exactly the manufactured green this repo exists to prevent.
+
+**Consequence for a full Podman-only workflow:** producing the web image still needs
+Docker today. Everything else — API image, durable lane, all 110 gates — runs under
+Podman.

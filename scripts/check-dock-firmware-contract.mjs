@@ -27,12 +27,34 @@ const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 const TYPES_TS = "lib/signalgrid-core/src/types.ts";
 const DOCK_TS = "lib/signalgrid-core/src/dock.ts";
 
-/** Parse `export type Name = "a" | "b" | ...;` out of the TypeScript source. */
+/**
+ * Parse `export type Name = "a" | "b" | ...;` out of the TypeScript source.
+ *
+ * WHY THIS IS NOT ONE REGEX. The obvious pattern for a string union is
+ * `(?:\s*\|?\s*"[^"]*")+`, and CodeQL was right to reject it: `\s*`, `\|?` and `\s*`
+ * can all match the same whitespace, so the group is ambiguous and the engine
+ * backtracks exponentially on input like `export type X=` followed by many ` ""`.
+ *
+ * It is tempting to wave that away — the input is a file in this repository, not
+ * something a stranger sends. But "the input is trusted" is the reasoning that ages
+ * badly, and this is a GATE: a gate that can be made to hang is a gate that stops
+ * gating, and it would hang silently, looking like a slow build.
+ *
+ * So: capture the right-hand side with `[^;]*` (one quantifier, one character class,
+ * linear), then pull the quoted values out and check that what remains is only pipes
+ * and whitespace. Every pattern below has a single unambiguous quantifier.
+ */
 function parseUnions(source) {
   const unions = new Map();
-  const re = /export type (\w+)\s*=\s*((?:\s*\|?\s*"[^"]*")+)\s*;/g;
-  for (const m of source.matchAll(re)) {
-    const values = [...m[2].matchAll(/"([^"]*)"/g)].map((v) => v[1]);
+  for (const m of source.matchAll(/export type (\w+)\s*=\s*([^;]*);/g)) {
+    const rhs = m[2];
+    const values = [...rhs.matchAll(/"([^"]*)"/g)].map((v) => v[1]);
+    if (values.length === 0) continue;
+    // Anything other than the quoted values, pipes and whitespace means this is not a
+    // plain string union — a mapped type, a reference, a template literal. Skip it
+    // rather than half-understanding it.
+    const residue = rhs.replace(/"[^"]*"/g, "");
+    if (!/^[|\s]*$/.test(residue)) continue;
     unions.set(m[1], values);
   }
   return unions;
@@ -237,6 +259,30 @@ function selfTest() {
     console.log("  ok — union parsing reads single and multi-value unions");
   } else {
     console.log("  FAIL — union parsing is wrong");
+    failed += 1;
+  }
+
+  // A non-string union must be skipped rather than half-parsed.
+  const mixed = parseUnions('export type Ref = Something | "a";\nexport type Ok = "x" | "y";');
+  if (!mixed.has("Ref") && mixed.get("Ok")?.length === 2) {
+    console.log("  ok — a union that is not purely string literals is skipped");
+  } else {
+    console.log("  FAIL — a non-string union was parsed as a vocabulary");
+    failed += 1;
+  }
+
+  // REGRESSION CONTROL for the ReDoS CodeQL found. The old pattern
+  // `(?:\s*\|?\s*"[^"]*")+` backtracks exponentially on exactly this shape; the
+  // current one is linear. Timed rather than asserted in prose, because "I rewrote it
+  // to be linear" is a claim and this is a measurement.
+  const adversarial = `export type 0=${' ""'.repeat(60)}`;
+  const startedAt = process.hrtime.bigint();
+  parseUnions(adversarial);
+  const tookMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
+  if (tookMs < 250) {
+    console.log(`  ok — the pathological input parses in ${tookMs.toFixed(1)}ms (no backtracking blowup)`);
+  } else {
+    console.log(`  FAIL — pathological input took ${tookMs.toFixed(0)}ms; the parser can be made to hang`);
     failed += 1;
   }
   return failed;

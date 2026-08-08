@@ -588,15 +588,23 @@ jobs:
           case "$LIM" in unlimited) LIM=65536 ;; esac
           [ "$LIM" -gt 65536 ] && LIM=65536
           echo "PODMAN_NOFILE=$LIM" >> "$GITHUB_ENV"
-          echo "podman build will use nofile=$LIM (was defaulting to 1024)"
+          echo "podman build will use nofile=$LIM (podman 4.9.3 defaults RUN steps to 1024)"
 
       - name: Build the API image with podman
         run: podman build --ulimit nofile=$PODMAN_NOFILE:$PODMAN_NOFILE --platform linux/amd64 --file Dockerfile.api --tag signalgrid-api:ci .
 
       # The web image — the one that used to fail. It builds under podman once the
-      # descriptor limit is raised AND nginx:alpine is fully qualified in the runtime
-      # stage (podman refuses unqualified short names; docker silently implies
-      # docker.io). Both engines now build both images.
+      # descriptor limit is raised AND the base images are fully qualified (podman
+      # refuses unqualified short names, or resolves them through a host alias file;
+      # docker silently implies docker.io). Both engines now build both images.
+      #
+      # THE ULIMIT IS A 4.9.3 WORKAROUND, NOT A PODMAN ONE — measured, not inferred.
+      # The same web image, 2,798 modules, builds on podman 6.0.2 (macOS/applehv,
+      # rootless) with NO --ulimit flag at all: buildah 6.x defines the
+      # RLimitDefaultValue that 4.9.3's vendored copy lacks, so RUN steps stop
+      # inheriting the OCI runtime's 1024. Keep the flag while this runner is on
+      # 4.9.3; drop it when the runner image ships podman 5.x or newer. See
+      # docs/MAC_LANE.md for the run that established this.
       - name: Build the web image with podman
         run: podman build --ulimit nofile=$PODMAN_NOFILE:$PODMAN_NOFILE --platform linux/amd64 --file Dockerfile.web --tag signalgrid-web:ci .
 

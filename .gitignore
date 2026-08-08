@@ -67,3 +67,10 @@ Thumbs.db
 # Self-audit real-run status (one machine's run; never the canonical repo state)
 artifacts/self-audit/
 artifacts/build-loop/
+
+# Gradle build output (native/android). The Kotlin core module is compiled and
+# unit-tested locally and in CI; neither the class files, the jar, nor Gradle's
+# own caches belong in the repository.
+native/android/**/build/
+native/android/**/.gradle/
+.gradle/

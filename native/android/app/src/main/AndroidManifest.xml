@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- The Assist gate is reached over the network. Nothing else is requested:
+         no location, no storage, no contacts. A trust client that asks for
+         permissions it does not need trains people to grant them without reading. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.SignalGridAssist"
+        android:allowBackup="false"
+        android:fullBackupContent="false">
+
+        <!-- cleartextTrafficPermitted defaults to FALSE on API 28+, and GateEndpoint
+             refuses plaintext to any non-loopback host regardless. Two independent
+             layers: one the platform enforces, one this repository tests. -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:screenOrientation="fullSensor">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

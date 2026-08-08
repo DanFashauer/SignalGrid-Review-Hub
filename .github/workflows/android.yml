@@ -76,3 +76,51 @@ jobs:
           name: android-core-test-results
           path: native/android/core/build/reports/tests/test/
           if-no-files-found: warn
+
+  app:
+    name: Android app (assembleDebug)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+
+      # The runner image ships the Android SDK; this only accepts the licences the
+      # build needs. It is the one thing this job has that the `core` job does not,
+      # and the reason the two are separate: a licence or SDK problem must not be
+      # reportable as "the Assist logic broke".
+      - name: Accept Android SDK licences
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+
+      - name: assembleDebug
+        run: gradle -p native/android/app assembleDebug --console=plain
+
+      # An apk that was not produced is not an apk that built. `BUILD SUCCESSFUL` is
+      # not the evidence; the artifact is.
+      - name: Assert the apk exists
+        run: |
+          APK=$(find native/android/app/build/outputs/apk -name "*.apk" -type f | head -1)
+          if [ -z "$APK" ]; then
+            echo "::error::assembleDebug reported success but produced no .apk"
+            find native/android/app/build -maxdepth 4 -type d || true
+            exit 1
+          fi
+          echo "built: $APK ($(stat -c%s "$APK") bytes)"
+
+      - name: Upload the apk
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: signalgrid-assist-debug-apk
+          path: native/android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: warn

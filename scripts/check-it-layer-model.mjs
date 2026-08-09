@@ -43,11 +43,16 @@ import {
   REASON_CODE_LAYERS,
   FAMILY_LAYERS,
   NOT_A_FAMILY,
+  ITSM_LAYERS,
+  IT_TO_ITSM_LAYER,
+  ITSM_OBJECT_TYPES,
+  VERIFICATION_CLASSES,
   IT_LAYER_MODEL_VERSION,
 } from "./it-layer-model.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const POLICY = join(repo, "lib/signalgrid-core/src/policy.ts");
+const RESOLUTION = join(repo, "lib/signalgrid-core/src/resolution.ts");
 const FAMILY_DIR = join(repo, "lib/integrations/src/integrations");
 
 const failures = [];
@@ -125,6 +130,58 @@ function readRuleCodes(source) {
     }
   }
   return codes;
+}
+
+/**
+ * Resolution descriptors: reason code → { baseClass, hasTransform }.
+ *
+ * This is the source the ITSM object type and the verification class are DERIVED from.
+ * `resolution.ts` already states, once, whether a refusal has a served fix and who can
+ * apply it; that is the same fact ITSM needs in order to say "request", "change" or
+ * "incident". Copying it into the model would be a second truth that goes stale.
+ */
+function readResolutionDescriptors(source) {
+  const out = new Map();
+  const start = source.indexOf("DESCRIPTORS");
+  if (start === -1) return out;
+  const body = source.slice(start);
+  const starts = [...body.matchAll(/\n {2}([A-Z0-9_]+):\s*\{/g)];
+  for (let i = 0; i < starts.length; i += 1) {
+    const code = starts[i][1];
+    const from = starts[i].index;
+    const to = starts[i + 1]?.index ?? body.length;
+    const block = body.slice(from, to);
+    const baseClass = block.match(/baseClass:\s*"(auto_proposed|requires_approval|manual_only)"/)?.[1];
+    if (!baseClass) continue;
+    // `transform: null` means there is nothing to re-evaluate against — the fix cannot
+    // be simulated, so a human has to attest it happened.
+    const hasTransform = !/transform:\s*null/.test(block);
+    out.set(code, { baseClass, hasTransform });
+  }
+  return out;
+}
+
+/**
+ * The whole ITSM derivation, in one place so it can be read as a rule rather than
+ * inferred from a table. Nothing here is declared per reason code.
+ */
+function deriveItsm(code, impact, itLayer, descriptor) {
+  if (impact === "allow") return { object: "none", verification: "not_applicable" };
+  // A policy-plane code is not a fault in any source system — the policy itself is the
+  // gap, and a gap that will recur until someone changes policy is a PROBLEM.
+  if (itLayer === "strategic_it_management") {
+    return { object: "problem", verification: "human_evidence_required" };
+  }
+  if (!descriptor) {
+    // A refusal with no served path at all. `buildResolutionPlan` routes these to a
+    // human rather than promising a self-service fix, so an incident is the honest
+    // carrier — and the absence is worth seeing, not smoothing over.
+    return { object: "incident", verification: "human_evidence_required" };
+  }
+  const verification = descriptor.hasTransform ? "simulated_reevaluation" : "human_evidence_required";
+  if (descriptor.baseClass === "auto_proposed") return { object: "service_request", verification };
+  if (descriptor.baseClass === "requires_approval") return { object: "change", verification };
+  return { object: "incident", verification };
 }
 
 /** Families are directories containing an index.ts — the SAME derivation
@@ -236,6 +293,54 @@ function main() {
     if (n === 0) fail(`layer "${id}" has no connector family — the model claims cross-layer coverage it does not have`);
   }
 
+  // ── ITSM: the bridge, then the derivation ─────────────────────────────────
+  const itsmById = new Map(ITSM_LAYERS.map((l) => [l.id, l]));
+  const bridge = new Map(IT_TO_ITSM_LAYER.map((b) => [b.itLayer, b.itsmLayer]));
+  // Total in both directions: every IT layer bridges, and every bridge target is real.
+  for (const l of LAYERS) {
+    if (!bridge.has(l.id)) fail(`IT layer "${l.id}" has no ITSM layer — a refusal there could not be routed to a service`);
+  }
+  for (const b of IT_TO_ITSM_LAYER) {
+    if (!itsmById.has(b.itsmLayer)) fail(`bridge maps ${b.itLayer} to "${b.itsmLayer}", which is not an ITSM layer`);
+    if (!layerById.has(b.itLayer)) fail(`bridge names IT layer "${b.itLayer}", which does not exist`);
+  }
+
+  const descriptors = readResolutionDescriptors(readFileSync(RESOLUTION, "utf8"));
+  if (descriptors.size === 0) {
+    fail(`no resolution descriptors parsed out of ${RESOLUTION} — the ITSM derivation would be vacuous`);
+  }
+
+  const itsmCounts = new Map(ITSM_OBJECT_TYPES.map((t) => [t, 0]));
+  const verificationCounts = new Map(VERIFICATION_CLASSES.map((v) => [v, 0]));
+  const perItsmLayer = new Map(ITSM_LAYERS.map((l) => [l.id, 0]));
+  const noServedPath = [];
+  for (const entry of REASON_CODE_LAYERS) {
+    const impact = emitted.get(entry.code);
+    if (!impact) continue; // already reported by the bijection above
+    const itsmLayer = bridge.get(entry.layer);
+    if (itsmLayer) perItsmLayer.set(itsmLayer, perItsmLayer.get(itsmLayer) + 1);
+    const d = descriptors.get(entry.code);
+    const { object, verification } = deriveItsm(entry.code, impact, entry.layer, d);
+    if (!ITSM_OBJECT_TYPES.includes(object)) fail(`${entry.code} derived an unknown ITSM object "${object}"`);
+    if (!VERIFICATION_CLASSES.includes(verification)) fail(`${entry.code} derived an unknown verification class "${verification}"`);
+    itsmCounts.set(object, itsmCounts.get(object) + 1);
+    verificationCounts.set(verification, verificationCounts.get(verification) + 1);
+    if (!d && impact !== "allow" && entry.layer !== "strategic_it_management") noServedPath.push(entry.code);
+  }
+
+  // Layer 1 must stay empty. A reason code landing in the user-interface layer would
+  // mean SignalGrid had grown a worker-facing surface, which the embedded-UX law
+  // forbids — so this is asserted, not assumed.
+  for (const l of ITSM_LAYERS) {
+    const n = perItsmLayer.get(l.id);
+    if (!l.expectsReasonCodes && n > 0) {
+      fail(`${l.name} is meant to carry NO reason codes (the host app owns everything the worker sees) but ${n} landed there`);
+    }
+    if (l.expectsReasonCodes && n === 0) {
+      fail(`${l.name} carries no reason codes, so the model claims ITSM coverage it does not have`);
+    }
+  }
+
   // ── Report ────────────────────────────────────────────────────────────────
   console.log(`IT-layer model v${IT_LAYER_MODEL_VERSION}`);
   console.log(`  reason codes: ${emitted.size} emitted, ${classified.size} classified`);
@@ -253,6 +358,25 @@ function main() {
   }
   console.log(`\n  families per layer:`);
   for (const l of LAYERS) console.log(`    ${String(perLayer.get(l.id)).padStart(2)}  ${l.name}`);
+
+  console.log(`\n  ITSM routing, DERIVED from resolution.ts (${descriptors.size} descriptors):`);
+  console.log(`    reason codes per ITSM layer:`);
+  for (const l of ITSM_LAYERS) {
+    const n = perItsmLayer.get(l.id);
+    console.log(`      ${String(n).padStart(2)}  ${l.name}${l.expectsReasonCodes ? "" : "   (empty BY DESIGN — the host app owns the worker's surface)"}`);
+  }
+  console.log(`    carried by:`);
+  for (const t of ITSM_OBJECT_TYPES) console.log(`      ${t.padEnd(16)} ${itsmCounts.get(t)}`);
+  console.log(`    verified by:`);
+  for (const v of VERIFICATION_CLASSES) console.log(`      ${v.padEnd(24)} ${verificationCounts.get(v)}`);
+  if (noServedPath.length) {
+    // Reported, not failed. A refusal with no served fix is a legitimate state — it
+    // means a human owns it. It is printed because it is the honest measure of how much
+    // of the estate SignalGrid can route to a self-service or approval path, and a
+    // silent count would let that shrink unnoticed.
+    console.log(`\n    ${noServedPath.length} refusal(s) have NO served resolution path — a human owns these:`);
+    for (const c of noServedPath) console.log(`      · ${c}`);
+  }
 
   if (failures.length) {
     console.error(`\nIT-layer model gate FAILED — ${failures.length} problem(s):`);
@@ -342,6 +466,41 @@ function selfTest() {
     {
       name: "an exclusion naming a directory that IS a family is caught",
       run: () => existsSync(join(FAMILY_DIR, "graph", "index.ts")),
+    },
+    {
+      name: "the resolution-descriptor parser finds real descriptors (an empty read would make the ITSM derivation vacuous)",
+      run: () => readResolutionDescriptors(readFileSync(RESOLUTION, "utf8")).size > 15,
+    },
+    {
+      name: "a descriptor with transform: null is read as NOT re-evaluatable (it needs a human, not a simulation)",
+      run: () => {
+        const d = readResolutionDescriptors(readFileSync(RESOLUTION, "utf8"));
+        return d.get("IDENTITY_DISABLED")?.hasTransform === false && d.get("POSTURE_STALE")?.hasTransform === true;
+      },
+    },
+    {
+      name: "an approval-gated fix derives a CHANGE, a self-service fix derives a SERVICE REQUEST",
+      run: () =>
+        deriveItsm("X", "restrict", "it_operations", { baseClass: "requires_approval", hasTransform: true }).object === "change" &&
+        deriveItsm("X", "step_up", "it_operations", { baseClass: "auto_proposed", hasTransform: true }).object === "service_request",
+    },
+    {
+      name: "a refusal with NO descriptor derives an incident needing human evidence (never a silent self-service promise)",
+      run: () => {
+        const r = deriveItsm("X", "restrict", "it_operations", undefined);
+        return r.object === "incident" && r.verification === "human_evidence_required";
+      },
+    },
+    {
+      name: "an allow derives no ITSM object at all (nothing is ticketed that was not refused)",
+      run: () => deriveItsm("TRUST_ESTABLISHED", "allow", "strategic_it_management", undefined).object === "none",
+    },
+    {
+      name: "the ITSM bridge is total over the seven IT layers",
+      run: () => {
+        const b = new Set(IT_TO_ITSM_LAYER.map((x) => x.itLayer));
+        return LAYERS.every((l) => b.has(l.id));
+      },
     },
   ];
   let bad = 0;

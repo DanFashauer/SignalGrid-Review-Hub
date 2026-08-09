@@ -102,6 +102,101 @@ export const LAYERS = [
 ];
 
 /**
+ * The ITSM control stack, nested INSIDE the seven-layer model above.
+ *
+ * Four layers, six domains each, recorded verbatim. This is where a SignalGrid decision
+ * stops being a verdict and becomes owned work: a ticket, an owner, a verification, a
+ * restoration. See docs/SIGNALGRID_ENTERPRISE_ITSM_LAYER_MODEL.md.
+ *
+ * NOTE WHAT IS DELIBERATELY EMPTY. No reason code maps to `user_interface`, and that is
+ * not an oversight — it is the embedded-UX law in the data. SignalGrid is invisible to
+ * the worker; the host application owns the portal, the catalog, the knowledge article
+ * and the accessibility of whatever the worker actually sees. A reason code appearing
+ * in Layer 1 would mean SignalGrid had grown a user surface, and the gate treats that
+ * as a failure rather than a feature.
+ */
+export const ITSM_LAYERS = [
+  {
+    id: "user_interface",
+    name: "Layer 1 — User / Interface",
+    domains: ["Service Portal", "Service Catalog", "Self-Service Knowledge", "Service Desk", "Experience Feedback", "Digital Accessibility"],
+    signalGridRole:
+      "NONE, deliberately. The host application owns everything the worker sees. SignalGrid returns a decision; it never renders one.",
+    expectsReasonCodes: false,
+  },
+  {
+    id: "service_delivery",
+    name: "Layer 2 — Service Delivery",
+    domains: ["Incident Management", "Service Requests", "Problem Management", "Change Enablement", "Service Levels", "Continual Improvement"],
+    signalGridRole:
+      "Where a refusal becomes a routed object: which incident, request, problem or change should carry it, and who owns that object.",
+    expectsReasonCodes: true,
+  },
+  {
+    id: "infrastructure_technology",
+    name: "Layer 3 — Infrastructure / Technology",
+    domains: ["Monitoring & Events", "Service Configuration", "IT Asset Management", "Cloud Operations", "Release & Deployment", "Observability & Automation"],
+    signalGridRole:
+      "Supplies the operational evidence a decision rests on, and the evidence that a remediation actually took.",
+    expectsReasonCodes: true,
+  },
+  {
+    id: "governance_security",
+    name: "Layer 4 — Governance / Security",
+    domains: ["I&T Governance", "Risk & Compliance", "Information Security", "Service Performance", "Supplier Management", "AI Governance"],
+    signalGridRole:
+      "Governs who may change policy, approve an exception, and judge whether a control is effective. Also where 'AI may recommend; policy decides' is enforced.",
+    expectsReasonCodes: true,
+  },
+];
+
+/**
+ * The bridge between the two taxonomies — SEVEN rows, declared once, rather than an
+ * ITSM layer written onto each of the thirty-one reason codes.
+ *
+ * Declaring it per code would be thirty-one chances to disagree with the IT layer
+ * already recorded above. One bridge cannot disagree with itself.
+ */
+export const IT_TO_ITSM_LAYER = [
+  { itLayer: "strategic_it_management", itsmLayer: "governance_security" },
+  { itLayer: "it_security_risk_management", itsmLayer: "governance_security" },
+  { itLayer: "it_infrastructure", itsmLayer: "infrastructure_technology" },
+  { itLayer: "it_operations", itsmLayer: "infrastructure_technology" },
+  { itLayer: "software_development_applications", itsmLayer: "service_delivery" },
+  { itLayer: "it_service_development_applications", itsmLayer: "service_delivery" },
+  { itLayer: "it_service_management", itsmLayer: "service_delivery" },
+];
+
+/**
+ * ITSM object types a refusal can be carried by. `none` is for affirmative outcomes —
+ * an allow has nothing to route, and inventing a ticket for it would be noise.
+ *
+ * WHICH ONE APPLIES IS DERIVED, NOT DECLARED. `check-it-layer-model.mjs` reads the
+ * resolution descriptors in `lib/signalgrid-core/src/resolution.ts` and maps:
+ *
+ *   auto_proposed    + a transform  → service_request  (the worker can do it)
+ *   requires_approval + a transform → change           (approval-gated)
+ *   manual_only / no descriptor     → incident         (a human owns it)
+ *   a policy-plane code             → problem          (the policy itself is the gap)
+ *   an allow                        → none
+ *
+ * Same reasoning as `decisionImpact`: the resolution class is already stated once, and
+ * a second copy here would go stale the first time a descriptor changed.
+ */
+export const ITSM_OBJECT_TYPES = ["incident", "problem", "change", "service_request", "none"];
+
+/**
+ * How a remediation gets proven. Also derived — from whether the descriptor carries an
+ * evidence transform, which is exactly the question "can this fix be re-evaluated?"
+ *
+ * This is the mechanical form of the owner's requirement that a restriction must not be
+ * released until the fix is verified: a `simulated_reevaluation` code can be re-run
+ * against transformed evidence and shown to reach allow; a `human_evidence_required`
+ * code cannot, and needs a person to attest.
+ */
+export const VERIFICATION_CLASSES = ["simulated_reevaluation", "human_evidence_required", "not_applicable"];
+
+/**
  * Closed set of owner roles. Nine, because nine is what it took to cover the layers
  * without a catch-all — and a catch-all owner is the same thing as no owner.
  *

@@ -222,6 +222,9 @@ Named so the boundary is explicit rather than discovered by a customer.
 
 ```text
 Enterprise IT Layer Model                       ← this document (the container)
+  ├─ Enterprise ITSM Layer Model                SIGNALGRID_ENTERPRISE_ITSM_LAYER_MODEL.md
+  │    └─ what happens to a refusal AFTER it is made: which object carries it,
+  │       who works it, and what must be true before the restriction lifts
   ├─ Zero Trust Decision Principles             SIGNALGRID_ZERO_TRUST_DECISION_PRINCIPLES.md
   ├─ SSO Evidence-First Troubleshooting         SIGNALGRID_SSO_EVIDENCE_FIRST_TROUBLESHOOTING.md
   ├─ Authentication & Credential Architecture   AUTHENTICATION_AND_CREDENTIAL_ARCHITECTURE.md
@@ -240,6 +243,7 @@ Enterprise IT Layer Model                       ← this document (the container
 | SSO first-relevant-divergence | IAM plus IT Service Management (the troubleshooting loop) |
 | OAuth / JWT / API keys | Identity & Access Management |
 | Intune logs and portal state | IT Operations + IT Service Management |
+| ITSM control stack (incident/problem/change/request) | All four ITSM layers — see `SIGNALGRID_ENTERPRISE_ITSM_LAYER_MODEL.md` |
 | GitOps / desired state | DevOps & Automation + IT Operations |
 | KRIs and risk trend | Strategic IT Management + Service Quality & Metrics |
 | Observability plane | IT Monitoring & Maintenance |

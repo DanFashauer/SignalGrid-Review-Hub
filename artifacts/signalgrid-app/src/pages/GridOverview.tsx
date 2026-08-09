@@ -36,6 +36,20 @@ export function GridOverview() {
   // The honest headline: autonomous where every dependency holds; the caveats are
   // named, never hidden (gaps in sourcing, blocked apps, config errors).
   const caveats: string[] = [];
+  // The caveat that was missing, and the one that gates the green line below.
+  //
+  // "The grid is handling its situations on its own" is a claim about now. Coverage
+  // from a projection is a claim about a ceiling — no signal was observed, nothing was
+  // contacted. The old caveat list named signal gaps, blocked apps and config errors,
+  // all real; it had no entry for "this number was never measured", so an estate with
+  // no `unavailable` signals would show a full green all-clear computed entirely from
+  // acquisition method.
+  //
+  // This makes the green branch unreachable while /cp/v1 serves a projection, which is
+  // the correct outcome rather than a regression: that sentence cannot be earned by a
+  // ceiling. It becomes reachable again the moment coverage is computed from observed
+  // signal states, which is exactly when it would be true.
+  if (covProjected) caveats.push("coverage is a ceiling, not a reading — no signal was observed");
   if (gaps > 0) caveats.push(`${gaps} signal gap${gaps === 1 ? "" : "s"}`);
   if (blocked > 0) caveats.push(`${blocked} app${blocked === 1 ? "" : "s"} blocked`);
   if (config && !configOk) caveats.push(`${config.summary.errors} config error${config.summary.errors === 1 ? "" : "s"}`);

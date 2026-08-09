@@ -214,6 +214,26 @@ nothing reported        ≠  nothing wrong
 a status                ≠  a diagnosis
 ```
 
+### 6.1 The transition chain
+
+Those prohibitions are instances of one law, and naming the law is more useful than
+listing the instances, because the list is never finished:
+
+> **Configured ≠ Emitted ≠ Delivered ≠ Processed ≠ Validated ≠ Identified ≠ Authorized
+> ≠ Secure. Every transition is a claim. Every claim deserves evidence.**
+
+Rule 1 — *every affirmative must be earned* — applied to a chain of transitions reads:
+**every green state must be earned at the exact boundary where it is claimed.** A system
+that reports success at the end of a chain has asserted seven things, and this repository
+has been bitten by nearly every one of those collapses in turn: a gate written but not
+wired into CI, a rule present but never fired, a manifest recording a head hash from the
+wrong row, a status reported rather than measured.
+
+Worked out boundary by boundary for federation — the place the collapse is most
+expensive and most common — in
+`SIGNALGRID_SSO_EVIDENCE_FIRST_TROUBLESHOOTING.md`. **Doctrine, not built**; that
+document says so in its own first line.
+
 ---
 
 ## 7. Local authority and offline constraints
@@ -427,6 +447,8 @@ It prints, on every run, what a green does **not** establish. If a principle abo
 holding, that run goes red on the commit that broke it — which is the entire reason this
 document has a proof attached rather than a changelog.
 
-Related: `docs/LAUNCH_PROFILE.md`, `docs/CI_AND_VALIDATION.md`,
-`docs/PRODUCT_CORE_THREAT_MODEL.md`, `docs/SECURITY_CONTROLS_MATRIX.md`,
-`docs/REALISTIC_LAUNCH_PLAN.md`.
+Related: `docs/SIGNALGRID_ENTERPRISE_IT_LAYER_MODEL.md` (the container this sits in, and
+where each refusal's owner is recorded), `docs/SIGNALGRID_SSO_EVIDENCE_FIRST_TROUBLESHOOTING.md`
+(§6.1 worked out boundary by boundary), `docs/LAUNCH_PROFILE.md`,
+`docs/CI_AND_VALIDATION.md`, `docs/PRODUCT_CORE_THREAT_MODEL.md`,
+`docs/SECURITY_CONTROLS_MATRIX.md`, `docs/REALISTIC_LAUNCH_PLAN.md`.

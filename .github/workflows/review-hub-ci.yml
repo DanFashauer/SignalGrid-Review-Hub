@@ -362,6 +362,10 @@ jobs:
         run: pnpm run proof:absent-collection
       - name: "Zero Trust principles (the doctrine holds against the shipped decision core)"
         run: pnpm run proof:zero-trust-principles
+      - name: "IT-layer model (every refusal has an owner; nothing routes to a phantom)"
+        run: node scripts/check-it-layer-model.mjs
+      - name: "IT-layer model self-test (the gate can actually fail)"
+        run: node scripts/check-it-layer-model.mjs --self-test
       - name: "Port parity (DecisionEngine + AppWorkflows vs their TS originals)"
         run: node scripts/check-decision-port-parity.mjs
       - name: "Read-error swallowing (a failed lookup must not report nothing-found)"

@@ -78,6 +78,12 @@ const STEPS = [
   // Trust; this asserts the checkable half against `evaluatePolicy` as shipped, so the
   // document cannot quietly stop describing the product.
   { name: "Zero Trust principles (the doctrine holds against the shipped decision core)", cmd: ["pnpm", "run", "proof:zero-trust-principles"] },
+  // Completeness in both directions: every reason code a refusal can carry has an IT
+  // layer and an owner, and nothing is classified that nothing emits. A new family or
+  // a new rule fails this until a human classifies it — which is also one more
+  // mechanical guard on the breadth freeze.
+  { name: "IT-layer model (every refusal has an owner; nothing routes to a phantom)", cmd: ["node", "scripts/check-it-layer-model.mjs"] },
+  { name: "IT-layer model self-test (the gate can actually fail)", cmd: ["node", "scripts/check-it-layer-model.mjs", "--self-test"] },
   { name: "Port parity (DecisionEngine + AppWorkflows must not drift from their TS originals)", cmd: ["node", "scripts/check-decision-port-parity.mjs"] },
   { name: "Read-error swallowing (a failed lookup must not report \"nothing found\")", cmd: ["node", "scripts/check-read-error-swallowing.mjs"] },
   { name: "Proof: mcp-server (the published plugin path boots and serves its declared tools)", cmd: ["pnpm", "run", "proof:mcp-server"] },

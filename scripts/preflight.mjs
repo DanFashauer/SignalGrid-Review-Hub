@@ -279,6 +279,13 @@ const STEPS = [
   // move one of the pinned figures. esbuild's output is byte-stable for a given input,
   // which is what makes the diff a usable gate rather than a flake.
   { name: "Evidence Coverage page committed in sync", cmd: ["bash", "-c", "git ls-files --error-unmatch docs/evidence-coverage.html >/dev/null && pnpm run build:evidence-coverage && git diff --exit-code -- docs/evidence-coverage.html"] },
+  // Same shape, and it was the one generated doc with NO gate at all. docs/STATUS.md
+  // is produced by scripts/status-summary.mjs; nothing ran it, so it drifted to 95
+  // proof gates against a real 122, 8 E2E specs against 10, 12 CI workflows against
+  // 16. It understated the work, which is the safe direction and precisely why it
+  // survived — a derived figure nobody re-derives is stale the moment the thing it
+  // counts changes.
+  { name: "STATUS.md committed in sync", cmd: ["bash", "-c", "git ls-files --error-unmatch docs/STATUS.md >/dev/null && pnpm run status:write && git diff --exit-code -- docs/STATUS.md"] },
   { name: "Decision-latency pilot gate (bench)", cmd: ["pnpm", "run", "bench:decision-latency"] },
   // Mirrors the supply-chain job's "SBOM is committed and up to date" gate:
   // regenerate the CycloneDX SBOM and fail if it drifted (e.g. a new dependency

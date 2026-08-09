@@ -171,7 +171,10 @@ check(
 );
 
 const total = passed + failures.length;
-console.log(`\nfigures=securityOpsChecks=${total}`);
+// No `figures=` line on purpose: this is a doctrine proof, like proof:zero-trust-principles,
+// and its assertion count is prose in the ledger, not a measured product figure the docs
+// quote. Publishing a `figures=` line would oblige registration with the figure guard
+// (check-guard-registries.mjs) for a number that guards nothing real.
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length) {
   console.error("\nFailed checks:");

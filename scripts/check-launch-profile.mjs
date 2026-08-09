@@ -232,6 +232,69 @@ for (const gap of GAPS) {
   }
 }
 
+// ── Is each declared gap STILL OPEN? ──────────────────────────────────────────
+//
+// The loop above checks a gap points at a real surface. It never asked the only
+// question that matters: is the thing still missing? Two gaps had been closed in
+// code and stayed declared here for exactly that reason. A gap is a claim about
+// the repository, and an unchecked claim is the defect this file exists to catch.
+//
+// Comments are stripped first, deliberately: a gap must not be closable by prose
+// describing the work. That is the same trap as a proof asserting a gap's wording.
+const stripComments = (s) =>
+  s.replace(/\/\*[\s\S]*?\*\//g, (m) => " ".repeat(m.length)).replace(/\/\/[^\n]*/g, (m) => " ".repeat(m.length));
+
+function conditionMet(cond) {
+  if (cond.dir) {
+    const dirPath = join(repoRoot, cond.dir);
+    if (!existsSync(dirPath)) return { met: false, why: `${cond.dir} does not exist` };
+    for (const f of readdirSync(dirPath)) {
+      if (!f.endsWith(".ts")) continue;
+      const src = stripComments(readFileSync(join(dirPath, f), "utf8"));
+      if (cond.anyFileContainsAll.every((needle) => src.includes(needle))) {
+        return { met: true, why: `${cond.dir}/${f} now carries ${cond.anyFileContainsAll.join(" + ")}` };
+      }
+    }
+    return { met: false, why: `no file in ${cond.dir} carries all of ${cond.anyFileContainsAll.join(" + ")}` };
+  }
+  const filePath = join(repoRoot, cond.file);
+  // A missing file cannot establish that work was done. Fail closed: treat the gap
+  // as still open and say why, rather than silently reporting it closed.
+  if (!existsSync(filePath)) return { met: false, why: `${cond.file} does not exist` };
+  const src = stripComments(readFileSync(filePath, "utf8"));
+  if (cond.contains !== undefined) {
+    return src.includes(cond.contains)
+      ? { met: true, why: `${cond.file} now contains "${cond.contains}"` }
+      : { met: false, why: `${cond.file} still lacks "${cond.contains}"` };
+  }
+  return !src.includes(cond.absent)
+    ? { met: true, why: `${cond.file} no longer contains "${cond.absent}"` }
+    : { met: false, why: `${cond.file} still contains "${cond.absent}"` };
+}
+
+for (const gap of GAPS) {
+  if (!Array.isArray(gap.closedWhen) || gap.closedWhen.length === 0) {
+    console.error(
+      `\n✗ gap "${gap.id}" has no closedWhen condition. A gap nobody can be told to delete is a gap` +
+        `\n  that will outlive the work that closes it — which is how two of these went stale.`,
+    );
+    failures += 1;
+    continue;
+  }
+  const results = gap.closedWhen.map(conditionMet);
+  if (results.every((r) => r.met)) {
+    console.error(
+      `\n✗ gap "${gap.id}" appears CLOSED — the work it says is missing is present:\n` +
+        results.map((r) => `    · ${r.why}`).join("\n") +
+        `\n  Remove it from GAPS, or reword it to name what is still missing. A gap that outlived` +
+        `\n  its own fix still reads as a decided limitation, and it makes the real gaps cheaper to ignore.`,
+    );
+    failures += 1;
+  } else {
+    console.log(`  gap still open: ${gap.id} — ${results.find((r) => !r.met).why}`);
+  }
+}
+
 console.log(
   `\n  totals: launch=${totals.launch} deferred=${totals.deferred} ` +
     `demo_only=${totals.demo_only} internal=${totals.internal} ` +

@@ -450,15 +450,54 @@ export const SURFACES = [
  * Kept as data rather than prose so the proof can count them and no document can
  * quietly describe the launch set as complete. A launch profile whose gaps live
  * only in a paragraph is a launch profile that will be read as a readiness claim.
+ *
+ * WHY EACH GAP NOW CARRIES `closedWhen`, and it is the correction this list needed.
+ *
+ * A declared gap is a claim about the code, and until now nothing checked it. The
+ * gate verified that a gap named a real surface; the proof verified that its prose
+ * was long enough and that one gap's text still contained the words "Graph
+ * transport". Both are checks on the description, not on the world — the same
+ * "compares a thing to itself" defect this repo keeps finding, wearing a governance
+ * hat.
+ *
+ * It had already gone wrong. TWO of the five gaps below had been closed in code —
+ * the runtime allowlist fence and the served-vs-published surface, both with tests
+ * asserting a 404 for every deferred path — and this list still declared them
+ * missing, as did LAUNCH_PROFILE.md. A third had drifted: the Graph transport it
+ * said "has not been written" exists and is selectable.
+ *
+ * A stale gap understates readiness rather than overstating it, which is the safer
+ * direction and is exactly why it can rot for so long unnoticed. It is still a
+ * false statement about the repository, and worse, it makes the honest gaps cheaper
+ * to ignore: a reader who finds two of five wrong stops trusting the other three.
+ *
+ * So each gap now states, mechanically, what would make it CLOSED, and
+ * `check-launch-profile.mjs` evaluates that against source. Every condition met →
+ * the build fails until the gap is removed or reworded. `closedWhen` is required;
+ * a gap with no closure condition is one nobody can ever be told to delete.
+ *
+ * Conditions are evaluated against comment-stripped source on purpose: a gap must
+ * not be closable by a sentence describing the work.
  */
 export const GAPS = [
   {
     id: "device-management-health",
     surface: "connector-families",
     whatIsMissing:
-      "A Microsoft Graph transport. The family's live default points at a generic bridge " +
-      "URL, so today it cannot be part of the one read-only Entra/Intune connector. Until " +
-      "it is, the launch connector set is graph alone.",
+      "A Microsoft Graph transport shipped as the DEFAULT. The transport itself now exists " +
+      "(`graph-transport.ts`, mapping Graph's managedDevice onto the connector's raw report) " +
+      "and is selectable with DEVICE_MANAGEMENT_HEALTH_TRANSPORT=graph — but the live default " +
+      "is still the generic bridge URL, so an operator who sets nothing gets the bespoke " +
+      "endpoint rather than Graph. Until the default flips, this family is not part of the " +
+      "one read-only Entra/Intune connector without explicit configuration, and the launch " +
+      "connector set is graph alone.",
+    // Closed when the resolver stops defaulting the transport kind to "bridge".
+    closedWhen: [
+      {
+        file: "lib/integrations/src/integrations/device-management-health/index.ts",
+        absent: 'toLowerCase() || "bridge"',
+      },
+    ],
   },
   {
     id: "step-up-answerability",
@@ -468,37 +507,29 @@ export const GAPS = [
       "answer one. /v1/step-up/* exists and is deferred on purpose — enabling bounded " +
       "enforcement is a later phase of the owner's plan, not this one. Stated here so " +
       "\"returns step_up\" is never read as \"performs step-up\".",
+    // Closed when the GA allowlist admits a step-up path — i.e. a served route can
+    // answer the verdict the gate returns. Deliberate today, so this is the one gap
+    // expected to stay open longest; it still gets a condition, because "deliberate"
+    // and "permanent" are different and only the second needs no check.
+    closedWhen: [
+      { file: "artifacts/api-server/src/lib/profile.ts", contains: "/v1/step-up" },
+    ],
   },
   {
     id: "runtime-launch-status",
     surface: "published-api-paths",
     whatIsMissing:
-      "A runtime report of enforced-vs-observed-vs-simulated per signal kind. It would close " +
-      "Blocker 10 more completely than a governance file can, and it is deliberately not " +
-      "built here: it widens the API surface and adds diff to a pull request Blocker 1 says " +
-      "is already too large to review.",
-  },
-  {
-    id: "served-surface-exceeds-published",
-    surface: "published-api-paths",
-    whatIsMissing:
-      "The server serves more than it publishes. Every contract path is mounted under /api, " +
-      "and `/`, `/console` and `/metrics` are registered directly on the Express app outside " +
-      "it — /metrics being open to anonymous callers unless METRICS_TOKEN is set. A Limited " +
-      "GA build should register exactly the launch set and 404 the rest; today nothing " +
-      "asserts that, so this profile governs the published contract and says so.",
-  },
-  {
-    id: "runtime-profile-fence",
-    surface: "published-api-paths",
-    whatIsMissing:
-      "A runtime fence that matches this file. `artifacts/api-server/src/lib/profile.ts` " +
-      "ALREADY declares ProductProfile = review-demo | shared-device-gateway — the launch " +
-      "profile has a runtime counterpart carrying the same product name. It currently " +
-      "unmounts only the simulator router, the control-plane router and /v1/keys. Making it " +
-      "serve exactly the launch set, with a test asserting 404 for everything deferred, is " +
-      "the single highest-value follow-on from this file and is NOT done here: it is runtime " +
-      "behaviour, and this commit deliberately changes none.",
+      "A runtime report of enforced-vs-observed-vs-simulated per signal kind. The labels " +
+      "exist here, in a governance file; nothing serves them, so an operator cannot ask the " +
+      "running server what it is actually enforcing. It would close Blocker 10 more " +
+      "completely than a governance file can, and it is deliberately not built here: it " +
+      "widens the API surface and adds diff to a pull request Blocker 1 says is already too " +
+      "large to review.",
+    // Closed when some route file carries all three labels — the shape a served
+    // report must have. Verified against today's tree: no routes file has all three.
+    closedWhen: [
+      { dir: "artifacts/api-server/src/routes", anyFileContainsAll: ['"enforced"', '"observed"', '"simulated"'] },
+    ],
   },
 ];
 

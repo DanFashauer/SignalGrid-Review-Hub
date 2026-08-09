@@ -121,11 +121,28 @@ check("every gap names what is missing, at length",
 check("every gap names a surface the profile actually has",
   GAPS.every((g) => SURFACES.some((s: ProfileSurface) => s.key === g.surface)));
 
-// The single most consequential gap: the one connector is not yet a Microsoft
-// connector end to end. If that ever stops being true this assertion should be
-// updated deliberately, not silently.
-check("the Entra/Intune transport gap is recorded",
-  GAPS.some((g) => g.id === "device-management-health" && /Graph transport/i.test(g.whatIsMissing)));
+// This assertion USED to read: "the Entra/Intune transport gap is recorded", passing
+// if that gap's text still matched /Graph transport/. It was green throughout the
+// period when the Graph transport had been written — because it tested the wording,
+// not the world. Two other gaps went stale under the same blind spot.
+//
+// So the assertion is now about the mechanism rather than the sentence: every gap
+// must carry a machine-checkable closure condition, which `check-launch-profile.mjs`
+// evaluates against source and FAILS on when met. A gap that cannot be shown to be
+// closed is a gap nobody will ever be told to delete.
+check("every gap carries a machine-checkable closure condition",
+  GAPS.every((g) => Array.isArray(g.closedWhen) && g.closedWhen.length > 0));
+// Read as plain records rather than through the union. `launch-profile.d.mts` is a
+// hand-written declaration over a plain-JS module, so the union constrains what this
+// FILE may assume and not what that file actually contains — the two can drift, and
+// a structural assertion that only restates the type would be another check on a
+// description. These read the real objects.
+const conditions = GAPS.flatMap((g) => g.closedWhen as unknown as Record<string, unknown>[]);
+check("…and each condition names a file or a directory to read, not a claim to trust",
+  conditions.every((c) => typeof c.file === "string" || typeof c.dir === "string"));
+check("…and states what presence or absence would close it",
+  conditions.every((c) =>
+    typeof c.contains === "string" || typeof c.absent === "string" || Array.isArray(c.anyFileContainsAll)));
 
 // ── figures= — the line `scripts/check-proof-figures.mjs` reads ───────────────
 //

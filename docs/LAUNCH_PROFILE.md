@@ -88,23 +88,42 @@ integration reference a design partner builds against).
 
 ## The gaps — read these before reading the launch set as readiness
 
-There are **5 declared gaps**: work a `launch` entry needs that does not exist yet.
+There are **3 declared gaps**: work a `launch` entry needs that does not exist yet.
 They are held as data in `GAPS`, not as prose, so the proof can count them and no
 document can quietly describe the launch set as complete.
 
-The two that matter most:
+**There were five, and two of them had been fixed without anyone noticing.** Both the
+runtime fence and the served-vs-published surface were built — with tests asserting a
+404 for every deferred path, and a positive control confirming the server is up so
+those 404s read as refusals rather than a dead port — while this file and `GAPS` went
+on declaring them missing. A third, the Graph transport, had been written and was
+still described as unwritten.
 
-- **The one connector is not yet Microsoft end to end.** `device-management-health`
-  defaults its live transport to a generic bridge URL, not Graph. Shipping it as
-  part of the one Entra/Intune connector needs a Graph-backed transport that has not
-  been written. This is the concrete content of the plan's Blocker 5.
-- **A runtime fence already exists and does not yet match this file.**
-  `artifacts/api-server/src/lib/profile.ts` already declares
-  `ProductProfile = "review-demo" | "shared-device-gateway"` — the launch profile has
-  a runtime counterpart carrying the same product name. Today it unmounts only the
-  simulator router, the control-plane router and `/v1/keys`. Making it serve exactly
-  the launch set, with a test asserting a 404 for everything deferred, is the single
-  highest-value follow-on from this work.
+Nothing caught it because nothing was looking. The gate checked that a gap named a
+real surface; the proof checked that its text was long enough and that one gap's
+wording still contained the words "Graph transport". Both test the description rather
+than the world — the same defect this repository keeps finding, wearing a governance
+hat. A stale gap understates readiness, which is the safer direction and is exactly
+why it can rot unnoticed; it is still false, and it makes the honest gaps cheaper to
+ignore once a reader finds that two of five were wrong.
+
+So every gap now carries a **`closedWhen`** condition — files to read and strings that
+must be present or absent — which `check-launch-profile.mjs` evaluates against
+comment-stripped source. All conditions met, the build fails until the gap is removed
+or reworded. Comments are stripped deliberately: a gap must not be closable by a
+sentence describing the work. `closedWhen` is mandatory, because a gap nobody can be
+told to delete is a gap that will outlive its own fix.
+
+The one that matters most:
+
+- **The one connector is not yet Microsoft end to end.** The Graph transport now
+  exists (`graph-transport.ts`, mapping Graph's `managedDevice` onto the connector's
+  raw report) and is selectable with `DEVICE_MANAGEMENT_HEALTH_TRANSPORT=graph` — but
+  the live **default** is still the generic bridge URL, so an operator who configures
+  nothing does not get Graph. Until that default flips, `device-management-health` is
+  not part of the one Entra/Intune connector without explicit configuration, and the
+  launch connector set is `graph` alone. This is the remaining content of the plan's
+  Blocker 5.
 
 ## How it cannot go stale
 

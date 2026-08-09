@@ -30,10 +30,26 @@ export interface ProfileSurface {
   deferred: string[];
 }
 
+/**
+ * One mechanical condition that, if met, means the gap has been closed. Read against
+ * comment-stripped source so prose describing the work cannot close a gap.
+ */
+export type GapClosureCondition =
+  | { file: string; contains: string }
+  | { file: string; absent: string }
+  | { dir: string; anyFileContainsAll: string[] };
+
 export interface ProfileGap {
   id: string;
   surface: string;
   whatIsMissing: string;
+  /**
+   * REQUIRED. What would make this gap closed, checkable by
+   * `check-launch-profile.mjs` — which fails the build when every condition holds.
+   * Without it a gap is a claim about the code that nothing ever re-reads, and two
+   * of these outlived their own fixes for exactly that reason.
+   */
+  closedWhen: GapClosureCondition[];
 }
 
 export const LAUNCH_PROFILE_VERSION: number;

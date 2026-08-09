@@ -148,17 +148,35 @@ model. Run the gate for current figures:
 node scripts/check-it-layer-model.mjs
 ```
 
-### What the derivation found
+### What the derivation found, and what was done about it
 
-**Four refusals have no served resolution path at all** —
+The first run reported **four refusals with no served resolution path at all** —
 `BENCHMARK_SELECTION_MISFIT`, `BENCHMARK_SELECTION_UNESTABLISHED_STRICT`,
-`SHIFT_CONTEXT_MISFIT`, `SHIFT_CONTEXT_UNESTABLISHED_STRICT`. A worker hitting one of
-these is stopped with no self-service step attached, so a human owns it.
+`SHIFT_CONTEXT_MISFIT`, `SHIFT_CONTEXT_UNESTABLISHED_STRICT`. A worker hitting one was
+stopped with an honest human owner and nothing else: no step, no simulation, no route
+back. `buildResolutionPlan` was right to send them to a person rather than promise a fix
+it did not have — but *correct* and *useful* are different.
 
-That is **reported, not failed**. A refusal a human owns is legitimate. It is printed on
-every run because it is the honest measure of how much of the estate SignalGrid can
-route to a served path, and a silent count would let that shrink unnoticed. It is also a
-concrete backlog: four codes that would benefit from resolution descriptors.
+**All four now carry descriptors**, and the shape of that fix is the interesting part.
+
+Both are `requires_approval`; **neither is `auto_proposed`**, and the shift-context one
+is why the distinction matters. `SHIFT_CONTEXT_MISFIT` fires on scheduled-but-clocked-out
+(which *is* off-the-clock work, a wage-and-hour control), on operating while neither
+scheduled nor punched in, or on someone else's badge. A self-service step here would read
+"clock in to continue" — coaching a worker around the control in the first case and
+deepening an impersonation in the last. **A dimension that exists to detect off-the-clock
+operation must not offer clocking in as its remedy.** The path back is a supervisor
+confirming the labour record: a real served path, re-evaluatable, with a human who owns
+the exception.
+
+`pnpm run proof:zero-trust-principles` pins all of it — that the four paths exist and are
+re-evaluatable, that none is self-service, that the shift step is routed to an operator,
+and that its guidance never tells the worker to clock in. The wording is asserted, not
+merely written, so a later edit cannot quietly turn it back into a prompt.
+
+The counter stays in the gate's output regardless. A refusal a human owns is legitimate,
+and printing the number every run is the honest measure of how much of the estate can be
+routed to a served path — a silent count would let that shrink unnoticed.
 
 ---
 

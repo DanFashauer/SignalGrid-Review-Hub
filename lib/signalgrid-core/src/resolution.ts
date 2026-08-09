@@ -40,6 +40,15 @@ type EvidenceTransform = Partial<
     | "dockState"
     | "baselineCompliance"
     | "badgeBinding"
+    // Added with the descriptors for the four refusals that previously had no served
+    // path. This list is a WHITELIST, not a convenience: it names the evidence a
+    // resolution is allowed to claim it changed, and every entry is a field some
+    // human or system can actually put right. `criticalSignalsPresent` is
+    // deliberately absent and must stay absent — it is DERIVED from the others by
+    // `deriveCriticalSignalsPresent`, and letting a transform set it directly would
+    // let a resolution assert completeness it had not earned.
+    | "benchmarkSelection"
+    | "shiftContext"
   >
 >;
 
@@ -236,6 +245,71 @@ const DESCRIPTORS: Record<string, ResolutionDescriptor> = {
     workerAction: "This device drifted from its security baseline and needs review before this workflow — an operator will re-apply the hardening profile.",
     operatorAction: "Approve a baseline re-apply (CIS/hardening profile) for this device, then re-evaluate.",
     transform: { baselineCompliance: "aligned" },
+    hardwareOriented: false,
+  },
+
+  // ── The four refusals that used to have NO served path ─────────────────────
+  //
+  // Found by the ITSM derivation in `scripts/check-it-layer-model.mjs`, which reads
+  // this table to decide what carries a refusal. These four had no descriptor, so a
+  // worker stopped by one got an honest human owner and nothing else: no step, no
+  // simulation, no way back. `buildResolutionPlan` was right to route them to a
+  // person rather than promise a fix it did not have — but "correct" and "useful"
+  // are different, and this closes the gap the derivation made visible.
+  //
+  // BOTH ARE `requires_approval`, NEITHER IS `auto_proposed`, and that is the whole
+  // judgement here.
+
+  // Benchmark selection: the hardening answer rests on the wrong document — another
+  // platform's benchmark, an empty assessment, or one this workflow does not accept.
+  // No worker can fix that; re-assigning a baseline is a security-engineering action.
+  BENCHMARK_SELECTION_MISFIT: {
+    baseClass: "requires_approval",
+    workerAction:
+      "This device's hardening result was measured against the wrong benchmark. It needs a security owner — nothing you can do on the device changes it.",
+    operatorAction:
+      "Assign the benchmark that matches this device's platform and this workflow's requirement, re-run the assessment, then re-evaluate.",
+    transform: { benchmarkSelection: "confirmed" },
+    hardwareOriented: false,
+  },
+  BENCHMARK_SELECTION_UNESTABLISHED_STRICT: {
+    baseClass: "requires_approval",
+    workerAction:
+      "This device's benchmark selection has not been established, and this workflow requires it. A security owner has to confirm which benchmark applies.",
+    operatorAction:
+      "Establish the applicable benchmark for this platform (the strict policy will not accept an unverified selection), then re-evaluate.",
+    transform: { benchmarkSelection: "confirmed" },
+    hardwareOriented: false,
+  },
+
+  // Shift context: the labor plane disagrees with this moment. `auto_proposed` was
+  // considered and REJECTED, and the reason matters more than the classification.
+  //
+  // A self-service step here would read "clock in to continue" — and the misfit
+  // states are precisely: scheduled-but-clocked-out (which IS off-the-clock work, a
+  // wage-and-hour control), operating while neither scheduled nor punched in, or
+  // someone else's badge. Prompting the worker would coach them around the control
+  // in the first case and deepen an impersonation in the last. A dimension that
+  // exists to detect off-the-clock operation must not offer clocking in as its fix.
+  //
+  // So the path back is a supervisor confirming the labor record — a real served
+  // path, re-evaluatable, with a human who owns the exception.
+  SHIFT_CONTEXT_MISFIT: {
+    baseClass: "requires_approval",
+    workerAction:
+      "The labor system does not show you on shift for this. Ask your supervisor to confirm your shift record — do not clock in to get past this.",
+    operatorAction:
+      "Have the supervisor or workforce-management owner verify this worker's shift, punch state and site, correct the record if it is wrong, then re-evaluate.",
+    transform: { shiftContext: "confirmed" },
+    hardwareOriented: false,
+  },
+  SHIFT_CONTEXT_UNESTABLISHED_STRICT: {
+    baseClass: "requires_approval",
+    workerAction:
+      "Your shift could not be confirmed, and this workflow requires it. Ask your supervisor to confirm your shift record.",
+    operatorAction:
+      "Establish the labor-plane answer for this worker (the strict policy will not accept an unverified shift), then re-evaluate.",
+    transform: { shiftContext: "confirmed" },
     hardwareOriented: false,
   },
 };

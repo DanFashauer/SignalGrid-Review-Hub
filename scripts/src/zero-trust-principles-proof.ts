@@ -26,6 +26,7 @@ import {
   buildResolutionPlan,
   simulateResolution,
   proposeRemediation,
+  RESOLUTION_DESCRIPTOR_SHAPES,
   type Decision,
   type DecisionEvidence,
   type PolicyVersion,
@@ -324,6 +325,54 @@ function main() {
     "…and a state with no served fix is routed to a human rather than claiming one " +
       "(the answerability check is not vacuous)",
     !unanswerablePlan.autoResolvable,
+  );
+
+  // ── Every refusal has a served path, and the labour one does not coach ──────
+  //
+  // The ITSM derivation found four refusals with NO resolution descriptor at all:
+  // a worker was stopped with an honest human owner and nothing else. They now have
+  // descriptors, and both halves of that are asserted here — that the path exists,
+  // and that ONE of them says the right thing.
+  //
+  // The second assertion is the load-bearing one. `SHIFT_CONTEXT_MISFIT` fires on
+  // scheduled-but-clocked-out, off-duty operation, or someone else's badge. A
+  // self-service step reading "clock in to continue" would coach a worker around a
+  // wage-and-hour control in the first case and deepen an impersonation in the last.
+  // The classification is `requires_approval` on purpose; this pins the wording so a
+  // later edit cannot quietly turn it back into a prompt to clock in.
+  const NEWLY_SERVED = [
+    "BENCHMARK_SELECTION_MISFIT",
+    "BENCHMARK_SELECTION_UNESTABLISHED_STRICT",
+    "SHIFT_CONTEXT_MISFIT",
+    "SHIFT_CONTEXT_UNESTABLISHED_STRICT",
+  ];
+  const shapesByCode = new Map(RESOLUTION_DESCRIPTOR_SHAPES.map((s) => [s.reasonCode, s]));
+  check(
+    `all ${NEWLY_SERVED.length} previously-unserved refusals now carry a re-evaluatable path`,
+    NEWLY_SERVED.every((c) => shapesByCode.get(c)?.hasTransform === true),
+  );
+  check(
+    "…and none of them is self-service — a benchmark swap and a labour record both need an authorised human",
+    NEWLY_SERVED.every((c) => shapesByCode.get(c)?.baseClass === "requires_approval"),
+  );
+
+  const shiftPlan = buildResolutionPlan(asDecision("step_up", ["SHIFT_CONTEXT_MISFIT"]), {
+    tenantId,
+    primaryHardwareChannel: "device_prompt",
+    autoProposeEnabled: true,
+  });
+  const shiftStep = shiftPlan.steps.find((s) => s.reasonCode === "SHIFT_CONTEXT_MISFIT");
+  check(
+    "an off-the-clock refusal produces a step at all (the worker is not left with nothing)",
+    Boolean(shiftStep),
+  );
+  check(
+    "…routed to an OPERATOR, never offered to the worker as self-service",
+    shiftStep?.audience === "operator",
+  );
+  check(
+    "…and the guidance never tells the worker to clock in — the control is not coached around",
+    Boolean(shiftStep) && !/clock\s*in(?!\s*to get past)/i.test(`${shiftStep!.action}`),
   );
 
   // ── Automated response stays ADVISORY in Limited GA ─────────────────────────

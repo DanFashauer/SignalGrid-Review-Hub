@@ -150,7 +150,12 @@ const cpRequests = [
   item("Signal discovery + auto-onboard", "GET", "/cp/v1/signal-discovery", { auth: NOAUTH }),
   item("DDM / device-health signals (macOS 27)", "GET", "/cp/v1/ddm", { auth: NOAUTH }),
   item("Fleet MDM host posture (osquery, fixtures)", "GET", "/cp/v1/fleet-mdm", { auth: NOAUTH }),
-  item("Grid coverage (situations handled)", "GET", "/cp/v1/grid/coverage", { auth: NOAUTH }),
+  // NOT "situations handled". This arm serves a projection: the signal states are
+  // inferred from each source's acquisition method, so nothing was contacted and the
+  // figures are a ceiling. The response says so in `coverage.basis`, and the name a
+  // partner reads in their client should agree with the payload rather than promise
+  // more than it.
+  item("Grid coverage (CEILING at full health — see coverage.basis)", "GET", "/cp/v1/grid/coverage", { auth: NOAUTH }),
   item("Signal sourcing (api / native / grid-collected / gap)", "GET", "/cp/v1/grid/sourcing", { auth: NOAUTH }),
   item("Grid config (workflows as code — validation)", "GET", "/cp/v1/grid/config", { auth: NOAUTH }),
   // Query string carried on the URL so the collection demonstrates the parameterised

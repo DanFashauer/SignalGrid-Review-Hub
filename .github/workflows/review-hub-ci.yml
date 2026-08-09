@@ -526,7 +526,7 @@ jobs:
       - name: Flows (admin flow config + health) proof
         run: pnpm run proof:flows
 
-      - name: Grid-coverage (build the grid — situations handled) proof
+      - name: Grid-coverage (build the grid — the coverage ceiling and its basis) proof
         run: pnpm run proof:grid-coverage
 
       - name: Grid-config (workflows as code — CI validation) proof

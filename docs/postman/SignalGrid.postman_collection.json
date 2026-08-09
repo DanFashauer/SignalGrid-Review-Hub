@@ -1486,7 +1486,7 @@
           }
         },
         {
-          "name": "Grid coverage (situations handled)",
+          "name": "Grid coverage (CEILING at full health — see coverage.basis)",
           "request": {
             "method": "GET",
             "header": [],

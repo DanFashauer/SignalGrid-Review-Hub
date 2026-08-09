@@ -16,6 +16,7 @@ import { decisionsTotal } from "../lib/metrics";
 import { requireTenantContext } from "../middlewares/context";
 import { v1RateLimiter } from "../middlewares/rateLimit";
 import { demoSurfacesEnabled } from "../lib/profile";
+import { resolveAssurancePosture } from "../lib/assurance";
 
 /**
  * /v1 — the product-shaped SignalGrid surface.
@@ -47,9 +48,12 @@ router.get("/v1/keys", (req: Request, res: Response) => {
 // Everything below requires a tenant context and is rate-limited.
 router.use("/v1", v1RateLimiter, requireTenantContext);
 
+// `assurance` is derived on every call rather than cached: a deployment that is
+// promoted, or has live integrations switched on, must not keep reporting the
+// posture it booted with.
 router.get("/v1/context", (req: Request, res: Response) => {
   const { principal, tenant } = core.context(token(req));
-  res.json(envelope(req, { principal, tenant }));
+  res.json(envelope(req, { principal, tenant, assurance: resolveAssurancePosture() }));
 });
 
 // The decision core stays pure/in-memory; when a durable store is configured
@@ -78,7 +82,11 @@ router.get("/v1/decisions", async (req: Request, res: Response, next: NextFuncti
   try {
     const store = getDecisionStore();
     if (store) {
-      const tenantId = core.context(token(req)).tenant.id;
+      // authorizedContext, NOT context: context() only AUTHENTICATES. This branch
+      // returns without ever reaching core.listDecisions/getDecision/getSnapshot, each
+      // of which authorizes "decision:read" — so the permission was enforced in memory
+      // and skipped on the durable path. See SignalGridCore.authorizedContext.
+      const tenantId = core.authorizedContext(token(req), "decision:read").tenant.id;
       const decisions = await store.listDecisions(tenantId);
       res.json(envelope(req, { decisions, total: decisions.length }));
       return;
@@ -94,7 +102,11 @@ router.get("/v1/decisions/:id", async (req: Request, res: Response, next: NextFu
   try {
     const store = getDecisionStore();
     if (store) {
-      const tenantId = core.context(token(req)).tenant.id;
+      // authorizedContext, NOT context: context() only AUTHENTICATES. This branch
+      // returns without ever reaching core.listDecisions/getDecision/getSnapshot, each
+      // of which authorizes "decision:read" — so the permission was enforced in memory
+      // and skipped on the durable path. See SignalGridCore.authorizedContext.
+      const tenantId = core.authorizedContext(token(req), "decision:read").tenant.id;
       // getDecision is keyed on (id, tenant_id): a cross-tenant id returns null,
       // which we surface as the same 404 the in-memory path throws.
       const decision = await store.getDecision(tenantId, param(req, "id"));
@@ -113,7 +125,11 @@ router.get("/v1/decisions/:id/evidence", async (req: Request, res: Response, nex
   try {
     const store = getDecisionStore();
     if (store) {
-      const tenantId = core.context(token(req)).tenant.id;
+      // authorizedContext, NOT context: context() only AUTHENTICATES. This branch
+      // returns without ever reaching core.listDecisions/getDecision/getSnapshot, each
+      // of which authorizes "decision:read" — so the permission was enforced in memory
+      // and skipped on the durable path. See SignalGridCore.authorizedContext.
+      const tenantId = core.authorizedContext(token(req), "decision:read").tenant.id;
       const decision = await store.getDecision(tenantId, param(req, "id"));
       if (!decision) throw new CoreError("not_found", `Decision "${param(req, "id")}" not found.`, 404);
       const evidence = await store.getSnapshot(tenantId, decision.evidenceSnapshotId);

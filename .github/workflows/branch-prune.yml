@@ -1,0 +1,67 @@
+name: Branch prune
+
+# Delete remote branches whose pull request is MERGED.
+#
+# WHY A WORKFLOW AND NOT A COMMAND. Deleting a ref needs `contents: write`. The
+# agent sandbox that maintains this repo does not have it — its permission
+# classifier refuses `git push --delete` as destructive git, and the GitHub MCP
+# surface has no delete-branch tool. A runner already holds exactly that token, and
+# this workflow can be started from the GitHub mobile app, so the operation lives
+# here instead of waiting on someone to open a laptop.
+#
+# HOW TO RUN IT (phone or desktop): Actions → "Branch prune" → Run workflow.
+#   · Leave `apply` unchecked first. That is a DRY RUN — it deletes nothing and
+#     writes the full plan, plus a restore command per branch, to the run summary.
+#   · Read the plan. Then run it again with `apply` checked.
+#
+# The safety rules live in scripts/prune-merged-branches.mjs, next to the code that
+# enforces them. In short: the default branch, `dependabot/*`, anything with an
+# open PR, anything without a MERGED PR, and anything whose PR lookup errored are
+# all refused — and each refusal is named in the summary rather than passed over
+# quietly.
+#
+# THIS IS THE CLEANUP, NOT THE CURE. Turn on Settings → General → Pull Requests →
+# "Automatically delete head branches" and merged branches stop accumulating in the
+# first place. This workflow then only ever has the backlog to deal with.
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Actually delete the branches. Leave unchecked for a dry run."
+        type: boolean
+        default: false
+      force_branches:
+        description: "Comma-separated exact branch names to delete EVEN IF they hold unmerged commits. Each is tagged archive/<branch> first; if the tag fails, the branch stays. Cannot override the default-branch, dependabot, open-PR or protected refusals."
+        type: string
+        default: ""
+
+# Deleting a ref is a write to contents. Reading PR merge state needs pull-requests.
+# Nothing else is granted.
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: branch-prune
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    name: Prune merged branches
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Plan, and delete only when asked
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPLY: ${{ inputs.apply }}
+          FORCE_BRANCHES: ${{ inputs.force_branches }}
+        run: node scripts/prune-merged-branches.mjs

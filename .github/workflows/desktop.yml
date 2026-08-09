@@ -1,0 +1,167 @@
+name: Desktop (Windows / Linux)
+
+# The desktop Assist client, built and tested on the two platforms it targets.
+#
+# WHY A CORE CRATE BEFORE A WINDOW. `artifacts/signalgrid-desktop` is a Vite web app;
+# there is no Windows or Linux binary in this repository, and `docs/APP_SUITE_MATRIX.md`
+# has always said so. This is the first half of closing that: the decisions that matter
+# — what an unrecognised outcome means, whether a non-JSON body is an allow, whether a
+# plaintext URL may be used at all — live in a crate that `cargo test` can check with no
+# display server, no installer, and no signing certificate. The shell comes next and
+# will be thin, because everything worth testing is already out of it.
+#
+# WHY BOTH RUNNERS. "Windows support" claimed from a Linux-only build is the same shape
+# of unchecked claim as the iPad one the Apple lane just fixed — a target nothing
+# compiles for. `windows-latest` is free on this public repo, so the claim costs one job.
+
+on:
+  pull_request:
+    paths:
+      - "native/desktop/**"
+      - "native/shared/**"
+      - "scripts/check-assist-conformance.mjs"
+      - ".github/workflows/desktop.yml"
+  push:
+    branches: [SignalGrid_Alpha]
+    paths:
+      - "native/desktop/**"
+      - "native/shared/**"
+      - "scripts/check-assist-conformance.mjs"
+      - ".github/workflows/desktop.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    name: Assist core (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      # Both platforms run even if one fails, so a green Linux never hides a red
+      # Windows — which is the whole reason Windows is here.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: native/desktop/core
+    steps:
+      - uses: actions/checkout@v7
+
+      # The toolchain that ships with the runner image. No pinned nightly and no
+      # rustup toolchain file: the crate declares rust-version 1.74 and edition 2021
+      # precisely so it builds on whatever recent stable is present.
+      - name: Rust version
+        run: |
+          rustc --version
+          cargo --version
+
+      - name: Format
+        run: cargo fmt --check
+
+      # Warnings become errors here rather than scrolling past. `unsafe_code` is
+      # already forbidden in Cargo.toml; this catches the rest.
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      # One run, then assert on what it printed. `test result: ok` is emitted by a run
+      # that executed ZERO tests just as happily as by one that executed thirty-eight,
+      # so a green line is not on its own evidence that anything ran — the same trap
+      # `scripts/check-android-core-tests.mjs` exists for on the Kotlin side.
+      #
+      # `bash` explicitly, so the Windows job uses git-bash and both platforms run the
+      # identical assertion rather than two dialects of it. awk only: no bc, no paste.
+      - name: Test, and assert the tests actually ran
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test -- --nocapture 2>&1 | tee test-output.txt
+          RAN=$(awk '/^test result: ok\./ { for (i = 1; i <= NF; i++) if ($i == "passed;") total += $(i-1) } END { print total + 0 }' test-output.txt)
+          echo "tests that reported passing: $RAN"
+          if [ "$RAN" -lt 30 ]; then
+            echo "::error::only $RAN test(s) ran. The suite has ~38; a collapse toward zero must not read as green."
+            exit 1
+          fi
+
+  app:
+    name: Desktop shell (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: native/desktop/app
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Tauri's Linux backend is WebKitGTK. Windows uses the WebView2 runtime, which
+      # ships with the runner image and with Windows 10/11 — nothing to install there.
+      - name: Linux webview dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libayatana-appindicator3-dev librsvg2-dev patchelf
+
+      - name: Rust version
+        run: |
+          rustc --version
+          cargo --version
+
+      # The icons are generated from a plain-text grid in the script itself, so the
+      # repository carries no binary an author cannot review. This asserts the
+      # committed bytes still match that description — the same reasoning that keeps a
+      # Gradle wrapper jar out of the Android lane.
+      - name: Icons match their generator
+        run: node icons/generate-icons.mjs --check
+
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test
+
+      - name: Build the executable
+        run: cargo build --release
+
+      # An executable, not an installer: no bundling, no code signing, no notarisation.
+      # Uploading it makes "the desktop app builds" checkable by running the thing
+      # rather than by reading a green tick.
+      - name: Upload the executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: signalgrid-assist-desktop-${{ matrix.os }}
+          path: |
+            native/desktop/app/target/release/signalgrid-assist-desktop
+            native/desktop/app/target/release/signalgrid-assist-desktop.exe
+          if-no-files-found: error
+
+  conformance:
+    name: Shared Assist vectors bind every client
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # Checks the vector file is non-vacuous and that every native/*/core client has
+      # a test consuming it. Pure Node — no Rust, no JDK, no SDK.
+      - name: Assist conformance gate
+        run: node scripts/check-assist-conformance.mjs

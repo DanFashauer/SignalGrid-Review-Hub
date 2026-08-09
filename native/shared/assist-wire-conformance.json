@@ -1,0 +1,325 @@
+{
+  "$comment": "Shared Assist-wire conformance vectors. EVERY client implementation must run these and agree. Do not edit a case to make a client pass \u2014 a disagreement here is a client that will mis-handle a real gate response.",
+  "version": 1,
+  "requires": {
+    "$comment": "Non-vacuity floor, asserted by each client's test before the cases run. Without it a client that returns DENY unconditionally passes every deny case and the suite proves nothing.",
+    "minCases": 30,
+    "outcomesPresent": [
+      "allow",
+      "step_up",
+      "restrict",
+      "deny"
+    ]
+  },
+  "cases": [
+    {
+      "id": "allow-happy-path",
+      "why": "the only shape that may proceed with no further action",
+      "status": 200,
+      "body": "{\"assist\":\"allow\",\"decisionId\":\"dec_1\"}",
+      "expect": "allow"
+    },
+    {
+      "id": "allow-with-unknown-field",
+      "why": "a newer server adding a field must not break an older client",
+      "status": 200,
+      "body": "{\"assist\":\"allow\",\"somethingAddedLater\":{\"a\":1}}",
+      "expect": "allow"
+    },
+    {
+      "id": "allow-no-reasons",
+      "why": "reasons is genuinely optional on an allow; absence is not an error",
+      "status": 200,
+      "body": "{\"assist\":\"allow\"}",
+      "expect": "allow"
+    },
+    {
+      "id": "allow-201",
+      "why": "any 2xx is a completed request, not only 200",
+      "status": 201,
+      "body": "{\"assist\":\"allow\"}",
+      "expect": "allow"
+    },
+    {
+      "id": "step-up",
+      "why": "not a refusal, but NOT proceedable either \u2014 the challenge is unanswered",
+      "status": 200,
+      "body": "{\"assist\":\"step_up\",\"reasons\":[\"unmanaged device\"],\"obligations\":[\"webauthn\"]}",
+      "expect": "step_up"
+    },
+    {
+      "id": "restrict",
+      "why": "a reduced capability ceiling, not a denial",
+      "status": 200,
+      "body": "{\"assist\":\"restrict\",\"reasons\":[\"shared account\"]}",
+      "expect": "restrict"
+    },
+    {
+      "id": "deny-explicit",
+      "why": "the gate said no, and said why",
+      "status": 200,
+      "body": "{\"assist\":\"deny\",\"reasons\":[\"device is jailbroken\"]}",
+      "expect": "deny"
+    },
+    {
+      "id": "allow-uppercase",
+      "why": "servers differ on casing; the vocabulary does not",
+      "status": 200,
+      "body": "{\"assist\":\"ALLOW\"}",
+      "expect": "allow"
+    },
+    {
+      "id": "step-up-mixed-case-padded",
+      "why": "surrounding space in an enum value is a formatting artefact",
+      "status": 200,
+      "body": "{\"assist\":\"  Step_Up  \"}",
+      "expect": "step_up"
+    },
+    {
+      "id": "http-500",
+      "why": "a server error is not a decision",
+      "status": 500,
+      "body": "{\"assist\":\"allow\"}",
+      "expect": "deny",
+      "expectExplanationContains": [
+        "500"
+      ]
+    },
+    {
+      "id": "http-502",
+      "why": "same, through a proxy",
+      "status": 502,
+      "body": "{\"assist\":\"allow\"}",
+      "expect": "deny",
+      "expectExplanationContains": [
+        "502"
+      ]
+    },
+    {
+      "id": "http-503",
+      "why": "same, while the gate is down",
+      "status": 503,
+      "body": "{\"assist\":\"allow\"}",
+      "expect": "deny",
+      "expectExplanationContains": [
+        "503"
+      ]
+    },
+    {
+      "id": "http-401",
+      "why": "we could not ask; a body saying allow must not rescue it",
+      "status": 401,
+      "body": "{\"assist\":\"allow\"}",
+      "expect": "deny"
+    },
+    {
+      "id": "http-403",
+      "why": "same as 401 \u2014 an authorization failure ON the gate",
+      "status": 403,
+      "body": "{\"assist\":\"allow\"}",
+      "expect": "deny"
+    },
+    {
+      "id": "http-404",
+      "why": "the route is gone; silence is not consent",
+      "status": 404,
+      "body": "{\"assist\":\"allow\"}",
+      "expect": "deny"
+    },
+    {
+      "id": "http-429",
+      "why": "rate limited is not permitted",
+      "status": 429,
+      "body": null,
+      "expect": "deny"
+    },
+    {
+      "id": "status-zero-timeout",
+      "why": "the shape a timeout or DNS failure usually takes",
+      "status": 0,
+      "body": null,
+      "expect": "deny"
+    },
+    {
+      "id": "http-302-redirect-body",
+      "why": "a redirect body is not a decision",
+      "status": 302,
+      "body": "{\"assist\":\"allow\"}",
+      "expect": "deny"
+    },
+    {
+      "id": "empty-body",
+      "why": "200 with nothing in it",
+      "status": 200,
+      "body": "",
+      "expect": "deny"
+    },
+    {
+      "id": "whitespace-body",
+      "why": "200 with only whitespace",
+      "status": 200,
+      "body": "   ",
+      "expect": "deny"
+    },
+    {
+      "id": "null-body",
+      "why": "no body was read at all",
+      "status": 200,
+      "body": null,
+      "expect": "deny"
+    },
+    {
+      "id": "captive-portal-html",
+      "why": "the realistic hostile case on hospital or warehouse wifi",
+      "status": 200,
+      "body": "<!doctype html><html><body>Sign in to WiFi</body></html>",
+      "expect": "deny"
+    },
+    {
+      "id": "truncated-json",
+      "why": "a cut connection mid-body must not throw or pass",
+      "status": 200,
+      "body": "{\"assist\":\"al",
+      "expect": "deny"
+    },
+    {
+      "id": "json-array",
+      "why": "valid JSON, wrong shape",
+      "status": 200,
+      "body": "[\"allow\"]",
+      "expect": "deny"
+    },
+    {
+      "id": "json-string",
+      "why": "valid JSON, wrong shape",
+      "status": 200,
+      "body": "\"allow\"",
+      "expect": "deny"
+    },
+    {
+      "id": "json-number",
+      "why": "valid JSON, wrong shape",
+      "status": 200,
+      "body": "0",
+      "expect": "deny"
+    },
+    {
+      "id": "json-literal-null",
+      "why": "valid JSON, wrong shape",
+      "status": 200,
+      "body": "null",
+      "expect": "deny"
+    },
+    {
+      "id": "missing-assist",
+      "why": "the object arrived but said nothing about the decision",
+      "status": 200,
+      "body": "{\"decisionId\":\"dec_3\",\"reasons\":[\"x\"]}",
+      "expect": "deny",
+      "expectExplanationContains": [
+        "assist"
+      ]
+    },
+    {
+      "id": "empty-object",
+      "why": "nothing said at all",
+      "status": 200,
+      "body": "{}",
+      "expect": "deny"
+    },
+    {
+      "id": "assist-null",
+      "why": "present and unreadable",
+      "status": 200,
+      "body": "{\"assist\":null}",
+      "expect": "deny"
+    },
+    {
+      "id": "assist-empty-string",
+      "why": "present and empty",
+      "status": 200,
+      "body": "{\"assist\":\"\"}",
+      "expect": "deny"
+    },
+    {
+      "id": "assist-blank-string",
+      "why": "present and blank",
+      "status": 200,
+      "body": "{\"assist\":\"   \"}",
+      "expect": "deny"
+    },
+    {
+      "id": "assist-number",
+      "why": "present, wrong type",
+      "status": 200,
+      "body": "{\"assist\":1}",
+      "expect": "deny"
+    },
+    {
+      "id": "assist-object",
+      "why": "present, wrong type",
+      "status": 200,
+      "body": "{\"assist\":{\"value\":\"allow\"}}",
+      "expect": "deny"
+    },
+    {
+      "id": "assist-array",
+      "why": "present, wrong type",
+      "status": 200,
+      "body": "{\"assist\":[\"allow\"]}",
+      "expect": "deny"
+    },
+    {
+      "id": "assist-bool",
+      "why": "present, wrong type",
+      "status": 200,
+      "body": "{\"assist\":true}",
+      "expect": "deny"
+    },
+    {
+      "id": "unknown-outcome-from-newer-server",
+      "why": "a restriction this build cannot enforce",
+      "status": 200,
+      "body": "{\"assist\":\"allow_with_conditions\"}",
+      "expect": "deny"
+    },
+    {
+      "id": "allow-all",
+      "why": "contains the word allow, is not the word allow",
+      "status": 200,
+      "body": "{\"assist\":\"allow_all\"}",
+      "expect": "deny"
+    },
+    {
+      "id": "disallow",
+      "why": "contains allow as a substring and means the opposite",
+      "status": 200,
+      "body": "{\"assist\":\"disallow\"}",
+      "expect": "deny"
+    },
+    {
+      "id": "allowed",
+      "why": "a plausible typo that must not be guessed through",
+      "status": 200,
+      "body": "{\"assist\":\"allowed\"}",
+      "expect": "deny"
+    },
+    {
+      "id": "stepup-no-underscore",
+      "why": "close is not the same as correct",
+      "status": 200,
+      "body": "{\"assist\":\"stepup\"}",
+      "expect": "deny"
+    },
+    {
+      "id": "wrong-key-case",
+      "why": "Assist is not assist; JSON keys are case sensitive",
+      "status": 200,
+      "body": "{\"Assist\":\"allow\"}",
+      "expect": "deny",
+      "expectExplanationContains": [
+        "assist"
+      ]
+    }
+  ]
+}

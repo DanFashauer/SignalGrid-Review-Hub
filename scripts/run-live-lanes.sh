@@ -44,7 +44,12 @@ ok()   { printf "  \033[32mPASS\033[0m  %s\n" "$1"; pass=$((pass+1)); }
 bad()  { printf "  \033[31mFAIL\033[0m  %s  (log: %s)\n" "$1" "$2"; fail=$((fail+1)); failed_lanes="$failed_lanes $1"; }
 skip() { printf "  \033[33mSKIP\033[0m  %s  (%s)\n" "$1" "$2"; skipped=$((skipped+1)); skipped_lanes="$skipped_lanes $1"; }
 
-have_docker() { docker info >/dev/null 2>&1; }
+# shellcheck source=lib/container-engine.sh
+. "$(dirname "$0")/lib/container-engine.sh"
+# Engine-agnostic: these are OCI images, so podman runs them as well as docker.
+# Resolved ONCE here so every lane below reports and uses the same engine.
+sg_resolve_engine || true
+have_engine() { [ -n "${SG_ENGINE:-}" ]; }
 wait_http() { # url  seconds
   local i=0
   until [ "$(curl -s -o /dev/null -w '%{http_code}' "$1" 2>/dev/null)" = "200" ]; do
@@ -53,23 +58,23 @@ wait_http() { # url  seconds
 }
 
 echo "== SignalGrid live-vendor lanes =="
-have_docker || echo "   (docker unavailable — only lanes whose env vars are already set can run)"
+have_engine || echo "   (no container engine available — only lanes whose env vars are already set can run)"
 
 # ── Fleet ────────────────────────────────────────────────────────────────────
 if wanted fleet; then
   if [ -n "${FLEET_URL:-}" ]; then
     :
-  elif have_docker; then
+  elif have_engine; then
     echo "-- bringing up Fleet (mysql + redis + fleet, amd64 under emulation)"
-    docker network create sg-fleetnet >/dev/null 2>&1
-    docker rm -f sg-fleet sg-fleet-mysql sg-fleet-redis >/dev/null 2>&1
-    docker run -d --name sg-fleet-mysql --network sg-fleetnet -e MYSQL_ROOT_PASSWORD=root \
-      -e MYSQL_DATABASE=fleet -e MYSQL_USER=fleet -e MYSQL_PASSWORD=fleet mysql:8.0 >/dev/null 2>&1
-    docker run -d --name sg-fleet-redis --network sg-fleetnet redis:7 >/dev/null 2>&1
-    for _ in $(seq 1 90); do docker exec sg-fleet-mysql mysqladmin ping -ufleet -pfleet >/dev/null 2>&1 && break; sleep 2; done
+    "$SG_ENGINE" network create sg-fleetnet >/dev/null 2>&1
+    "$SG_ENGINE" rm -f sg-fleet sg-fleet-mysql sg-fleet-redis >/dev/null 2>&1
+    "$SG_ENGINE" run -d --name sg-fleet-mysql --network sg-fleetnet -e MYSQL_ROOT_PASSWORD=root \
+      -e MYSQL_DATABASE=fleet -e MYSQL_USER=fleet -e MYSQL_PASSWORD=fleet "$SG_IMAGE_MYSQL" >/dev/null 2>&1
+    "$SG_ENGINE" run -d --name sg-fleet-redis --network sg-fleetnet "$SG_IMAGE_REDIS" >/dev/null 2>&1
+    for _ in $(seq 1 90); do "$SG_ENGINE" exec sg-fleet-mysql mysqladmin ping -ufleet -pfleet >/dev/null 2>&1 && break; sleep 2; done
     E="-e FLEET_MYSQL_ADDRESS=sg-fleet-mysql:3306 -e FLEET_MYSQL_DATABASE=fleet -e FLEET_MYSQL_USERNAME=fleet -e FLEET_MYSQL_PASSWORD=fleet -e FLEET_REDIS_ADDRESS=sg-fleet-redis:6379 -e FLEET_SERVER_TLS=false"
-    docker run --rm --platform linux/amd64 --network sg-fleetnet $E fleetdm/fleet:latest fleet prepare db --no-prompt >/dev/null 2>&1
-    docker run -d --name sg-fleet --platform linux/amd64 --network sg-fleetnet -p 8412:8080 $E fleetdm/fleet:latest fleet serve >/dev/null 2>&1
+    "$SG_ENGINE" run --rm --platform linux/amd64 --network sg-fleetnet $E docker.io/fleetdm/fleet:latest fleet prepare db --no-prompt >/dev/null 2>&1
+    "$SG_ENGINE" run -d --name sg-fleet --platform linux/amd64 --network sg-fleetnet -p 8412:8080 $E docker.io/fleetdm/fleet:latest fleet serve >/dev/null 2>&1
     if wait_http http://127.0.0.1:8412/healthz 120; then
       started="$started sg-fleet sg-fleet-mysql sg-fleet-redis"
       curl -s -X POST http://127.0.0.1:8412/api/v1/setup -H 'Content-Type: application/json' -d '{"admin":{"name":"SG","email":"sg@signalgrid.test","password":"SignalGrid!2026x","password_confirmation":"SignalGrid!2026x"},"org_info":{"org_name":"SG"},"server_url":"http://127.0.0.1:8412"}' >/dev/null 2>&1
@@ -94,10 +99,10 @@ fi
 
 # ── Traccar ──────────────────────────────────────────────────────────────────
 if wanted location; then
-  if [ -z "${TRACCAR_URL:-}" ] && have_docker; then
+  if [ -z "${TRACCAR_URL:-}" ] && have_engine; then
     echo "-- bringing up Traccar"
-    docker rm -f sg-traccar >/dev/null 2>&1
-    docker run -d --name sg-traccar -p 8482:8082 -p 5055:5055 traccar/traccar:latest >/dev/null 2>&1
+    "$SG_ENGINE" rm -f sg-traccar >/dev/null 2>&1
+    "$SG_ENGINE" run -d --name sg-traccar -p 8482:8082 -p 5055:5055 docker.io/traccar/traccar:latest >/dev/null 2>&1
     if wait_http http://127.0.0.1:8482/api/server 120; then
       started="$started sg-traccar"
       curl -s -X POST http://127.0.0.1:8482/api/users -H 'Content-Type: application/json' \
@@ -114,10 +119,10 @@ fi
 
 # ── Keycloak ─────────────────────────────────────────────────────────────────
 if wanted keycloak; then
-  if [ -z "${KEYCLOAK_URL:-}" ] && have_docker; then
+  if [ -z "${KEYCLOAK_URL:-}" ] && have_engine; then
     echo "-- bringing up Keycloak (DPoP feature)"
-    docker rm -f sg-keycloak >/dev/null 2>&1
-    docker run -d --name sg-keycloak -p 8480:8080 -e KC_BOOTSTRAP_ADMIN_USERNAME=admin \
+    "$SG_ENGINE" rm -f sg-keycloak >/dev/null 2>&1
+    "$SG_ENGINE" run -d --name sg-keycloak -p 8480:8080 -e KC_BOOTSTRAP_ADMIN_USERNAME=admin \
       -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin quay.io/keycloak/keycloak:26.4 start-dev --features=dpop >/dev/null 2>&1
     if wait_http http://127.0.0.1:8480/realms/master 180; then
       started="$started sg-keycloak"
@@ -154,8 +159,8 @@ fi
 if [ "$KEEP" -eq 0 ] && [ -n "$started" ]; then
   echo; echo "-- removing containers this run started:$started"
   # shellcheck disable=SC2086
-  docker rm -f $started >/dev/null 2>&1
-  docker network rm sg-fleetnet >/dev/null 2>&1
+  "$SG_ENGINE" rm -f $started >/dev/null 2>&1
+  "$SG_ENGINE" network rm sg-fleetnet >/dev/null 2>&1
 else
   [ -n "$started" ] && echo "-- leaving running (--keep):$started"
 fi

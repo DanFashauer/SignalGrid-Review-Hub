@@ -1,19 +1,23 @@
-# Admin flows: configure signals + flows, the Grid does the rest
+# Admin flows: configure signals + flows, the Grid evaluates them
 
 Administrators don't write logic. They **register signals** and **configure
-flows**, and the Grid runs them: it decides each action from the live trust
-decision (the Assist model), and it watches each flow's own health — self-healing
-or raising an incident when something breaks. Fully customizable; it compounds
-(more signals ⇒ smarter, faster). See `@workspace/flows`.
+flows**, and the Grid evaluates them: it derives each action from the live trust
+decision (the Assist model), and it watches each flow's own health — emitting a
+simulated recovery plan for a flow with a configured agent, or an incident
+descriptor when something breaks. Whether a derived
+action is ever carried out is the admin's call, set per action by the approval
+policy below; carrying it out belongs to the host app and to the systems of
+record. Fully customizable; it compounds (more signals ⇒ smarter, faster). See
+`@workspace/flows`.
 
 ## What an admin configures
 
 A **flow** is: the **signals** it depends on, the **actions** it drives, and per
 action an **approval policy** — the admin's call on what's automated vs. gated:
 
-| Approval policy | Who acts |
+| Approval policy | What it authorizes |
 |---|---|
-| `automated` | the Grid performs it (on an allow) |
+| `automated` | cleared to run with no human approval (on an allow) |
 | `admin_approval` | one administrator approves |
 | `dual_approval` | two administrators approve (four-eyes) |
 | `user_override_on_downtime` | the **only** time an end user acts — a break-glass override, permitted **only** during a declared downtime, gated by its disaster-recovery safety nets |
@@ -25,16 +29,25 @@ can't itself break things.
 ## What the Grid does with it
 
 - **Action dispositions** — `planFlowActions(flow, decision, {downtime})` maps the
-  admin's config + the live decision to `automated / admin_approval /
-  dual_approval / user_override / blocked`. Deny/restrict blocks everything except
-  a downtime override.
+  admin's config + the live decision to one of the **six** members of
+  `ActionDisposition`: `automated / admin_approval / dual_approval /
+  user_override / held / blocked`. Deny/restrict blocks everything except a
+  downtime override, and an **unsatisfied `step_up` holds every action** — nothing
+  runs until the challenge is answered. `held` was missing from this list while the
+  type carried it, which read as though a pending step-up left actions free.
+  It **plans** dispositions; it does not perform them. The module contains no
+  executor and contacts nothing — carrying an action out belongs to the host app
+  and the systems of record.
 - **Flow health** — `evaluateFlowHealth(flow, signals)` → `healthy / degraded /
   broken` from the observed signal states (a missing/broken required signal breaks
   the flow; a stale one degrades it).
 - **Break resolution** — `resolveFlowBreak(...)` is the "self-fix or raise an
-  incident" fork the business configures:
-  - flow has an **auto-resolving agent** → **self-heal** (uptime protected, no page);
-  - flow has a **non-auto-resolving agent** → self-heal **and** a fallback incident;
+  incident" fork the business configures. Every "self-heal" below is a **named
+  agent plus an ordered list of steps** — the code emits the step literally as
+  `Offload to <agent> for smart remediation (simulated)`. No remediation is
+  executed and no agent is contacted:
+  - flow has an **auto-resolving agent** → **self-heal plan** (no page raised);
+  - flow has a **non-auto-resolving agent** → self-heal plan **and** a fallback incident;
   - flow has **no agent** → an **ITSM-agnostic incident** (severity, support team,
     and the target ITSM named) — patient-safety / high-assurance flows page a human.
 - **Grid intelligence** — `gridIntelligence(...)` scores how smart the Grid is

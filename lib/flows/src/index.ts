@@ -17,7 +17,11 @@
 
 /**
  * How an action is authorized. Admins pick this per action, per flow.
- * - `automated`             — the Grid performs it (on an allow decision).
+ * - `automated`             — cleared to run with no human approval (on an allow
+ *   decision). NOT "the Grid performs it": this module plans dispositions and
+ *   contains no executor. Who carries the action out is the host app and the
+ *   systems of record — the same boundary the file header states for incidents
+ *   and self-heal.
  * - `admin_approval`        — one administrator must approve.
  * - `dual_approval`         — two administrators must approve (four-eyes).
  * - `user_override_on_downtime` — the ONLY case an end user acts: a break-glass
@@ -298,7 +302,7 @@ export function planFlowActions(
       switch (a.approval) {
         case "automated":
           disposition = "automated";
-          reason = "Automated by configuration — the Grid performs it";
+          reason = "Automated by configuration — cleared to run without human approval";
           break;
         case "admin_approval":
           disposition = "admin_approval";

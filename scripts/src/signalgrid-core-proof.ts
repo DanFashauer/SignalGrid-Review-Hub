@@ -259,6 +259,47 @@ expectError("rbac: auditor cannot evaluate decisions", "forbidden", () =>
 expectError("rbac: operator cannot read the audit ledger", "forbidden", () =>
   core.listAudit(T.operator),
 );
+
+// ── authorizedContext: the durable-path bypass this exists to prevent ──────────
+// Three GA read routes take `context(token).tenant.id`, query Postgres directly and
+// RETURN — never reaching listDecisions/getDecision/getSnapshot, which are what
+// actually authorize "decision:read". So the permission held in memory and vanished
+// the moment DATABASE_URL was set: dev stricter than prod.
+//
+// It was invisible to the API suite for a specific reason worth pinning: seedApiKeys
+// types its role as "owner" | "operator" | "auditor" (seed.ts:969), and all three
+// HAVE decision:read — so no token the demo build can mint could reach it. A real
+// deployment mints principals through registerVerifiedPrincipal, which accepts the
+// full Role union including `connector`. These assertions therefore mint that
+// principal explicitly rather than relying on the demo seed.
+{
+  const connectorToken = "sgk_proof_connector_rbac";
+  core.registerVerifiedPrincipal(connectorToken, {
+    tenantId: core.context(T.owner).tenant.id,
+    role: "connector",
+    subjectId: "svc_proof_connector",
+    principalType: "service",
+    keyReference: "proof:connector",
+  });
+  check(
+    "authorizedContext: a connector principal is authenticated (the token is valid)",
+    core.context(connectorToken).principal.role === "connector",
+  );
+  expectError(
+    "authorizedContext: ...but connector CANNOT obtain a read context — the durable path is gated",
+    "forbidden",
+    () => core.authorizedContext(connectorToken, "decision:read"),
+  );
+  check(
+    "authorizedContext: a role that HAS the permission still gets its context",
+    core.authorizedContext(T.owner, "decision:read").principal.role === "owner",
+  );
+  expectError(
+    "authorizedContext: connector is refused decision:read via the core method too (not a route-only guard)",
+    "forbidden",
+    () => core.listDecisions(connectorToken),
+  );
+}
 check(
   "rbac: auditor CAN read the audit ledger",
   core.listAudit(T.auditor).length > 0,

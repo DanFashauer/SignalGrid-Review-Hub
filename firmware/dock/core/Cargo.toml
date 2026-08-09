@@ -1,0 +1,17 @@
+[package]
+name = "signalgrid-dock-firmware"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.74"
+description = "SmartDock firmware core: sensor readings to a custody event, no_std, no allocator."
+license = "UNLICENSED"
+publish = false
+
+# NO DEPENDENCIES, deliberately. This is the code that decides what a dock reports
+# about a device somebody is holding, and it has to build for a Cortex-M part with no
+# allocator and no operating system. Every crate added here is a crate that must also
+# be no_std, must also be audited, and must also fit in flash.
+[dependencies]
+
+[lints.rust]
+unsafe_code = "forbid"

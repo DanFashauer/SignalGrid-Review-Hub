@@ -102,6 +102,23 @@ export class SentinelAdapter implements SIEMAdapter {
       return [];
     }
 
+    // Gate first, exactly as sendEvent() above does. This method did NOT, and it was
+    // the only sendEvents in the repo that failed to — splunk.ts gates both the single
+    // and the batch path. So the singular call was suppressed in dev/alpha while the
+    // batch call, carrying MORE data, fetched an Azure AD token and POSTed to the
+    // customer's Log Analytics workspace with none of the three conditions checked.
+    //
+    // Suppressing per event rather than returning [] keeps the caller's contract: it
+    // asked about N events and gets N answers, each honestly labelled as not sent.
+    const emission = resolveEmission();
+    if (emission.mode === 'suppressed') {
+      return events.map((event) => ({
+        eventId: `suppressed-${event.type}-${event.timestamp}`,
+        status: EMIT_SUPPRESSED,
+        receivedAt: new Date().toISOString(),
+      }));
+    }
+
     // Build batch payload
     const payloads = events.map(e => this.buildEventPayload(e));
     
@@ -135,6 +152,10 @@ export class SentinelAdapter implements SIEMAdapter {
    * Health check - verify Sentinel connectivity
    */
   async healthCheck(): Promise<boolean> {
+    // GATED. A health check is still a live call — see check-ungated-fetch.mjs.
+    const emission = resolveEmission();
+    if (emission.mode !== "live") return false;
+
     try {
       const token = await this.getAccessToken();
       

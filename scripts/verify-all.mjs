@@ -45,9 +45,10 @@
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { nativeBuildExclusion } from "./lib/platform-native-build.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const contractPath = resolve(
@@ -56,6 +57,11 @@ const contractPath = resolve(
 );
 const requireMcp = process.argv.includes("--require-mcp");
 const emitEvidence = process.argv.includes("--emit-evidence");
+// Same derivation preflight uses, from the same module, so the evidence cannot
+// claim a coverage the run did not have. Computed here rather than parsed out of
+// preflight's stdout: a text scrape would silently start lying the day the wording
+// changes, and this file's whole job is to not do that.
+const preflightNative = nativeBuildExclusion(repoRoot);
 
 /** Are we on a hosted CI runner? Checked because the darwin test alone does NOT
  *  exclude a cloud sandbox — a GitHub macOS runner passes it. `CI` is set by every
@@ -159,8 +165,67 @@ if (!explicitPathError && !mcpPath) {
   }
 }
 
+// 2b) Derive the documented signalgrid-mcp tool count instead of trusting it.
+//
+// docs/API_ACCESS_AND_CONNECTORS.md quoted "18 tools, 30 tests" for a repo that
+// lives somewhere else. Nothing checked it, so nothing caught it drifting to 22.
+// This is the ONLY place the two repos meet, so this is where the number gets
+// checked — against the checkout, not against memory.
+//
+// WHAT IT DOES NOT DO. It cannot run without a checkout, and a missing checkout is
+// NOT a pass: the summary reports UNVERIFIED, because "we did not look" and "we
+// looked and it was right" are different findings. Same law as proof:absent-collection.
+const DOC_WITH_COUNT = "docs/API_ACCESS_AND_CONNECTORS.md";
+let toolCountStatus = "UNVERIFIED (no signalgrid-mcp checkout)";
+
+if (mcpPath) {
+  // Tools are FastMCP-decorated functions under src/signalgrid_mcp/tools/. Count the
+  // decorators in that directory only — the checkout's .venv vendors FastMCP's own
+  // test fixtures, which carry the same decorator and would inflate a naive count.
+  const toolsDir = resolve(mcpPath, "src/signalgrid_mcp/tools");
+  const DECORATOR = /^\s*@(?:mcp|server|app)\.tool\b/gm;
+  let derived = 0;
+  try {
+    for (const entry of readdirSync(toolsDir)) {
+      if (!entry.endsWith(".py")) continue;
+      derived += (readFileSync(resolve(toolsDir, entry), "utf8").match(DECORATOR) ?? []).length;
+    }
+  } catch {
+    derived = 0;
+  }
+
+  if (derived === 0) {
+    // Zero means the layout moved, not that the server lost its tools.
+    console.log(`\n✗ derived 0 tools from ${toolsDir} — the deriver is stale, not the MCP empty.`);
+    toolCountStatus = "FAIL (deriver found no tools)";
+    mcpOk = false;
+  } else {
+    const docText = readFileSync(resolve(repoRoot, DOC_WITH_COUNT), "utf8");
+    const claimed = docText.match(/\*\*(\d+)\s+tools\*\*/);
+    if (!claimed) {
+      console.log(`\n✗ ${DOC_WITH_COUNT} no longer states a "**N tools**" figure — this check cannot bind.`);
+      toolCountStatus = "FAIL (no claim found to check)";
+      mcpOk = false;
+    } else if (Number(claimed[1]) !== derived) {
+      console.log(
+        [
+          `\n✗ signalgrid-mcp tool count DRIFTED.`,
+          `    ${DOC_WITH_COUNT} says: ${claimed[1]}`,
+          `    ${toolsDir} has:  ${derived}`,
+          "  Update the doc to the derived number — it is the one that was measured.",
+        ].join("\n"),
+      );
+      toolCountStatus = `FAIL (doc ${claimed[1]} vs derived ${derived})`;
+      mcpOk = false;
+    } else {
+      toolCountStatus = `PASS (${derived} tools, derived and matching the doc)`;
+    }
+  }
+}
+
 // 3) Unified summary.
 console.log("\n=== verify:all summary ===");
+console.log(`  mcp tool count:       ${toolCountStatus}`);
 console.log(`  Review-Hub preflight: ${rhOk ? "PASS" : "FAIL"}`);
 console.log(`  signalgrid-mcp:       ${mcpRan ? (mcpOk ? "PASS" : "FAIL") : "SKIPPED (not found)"}`);
 console.log(`  shared contract:      ${contractPath}`);
@@ -279,6 +344,20 @@ if (emitEvidence) {
         manifestFingerprint: manifest.fingerprint,
         manifestVersion: manifest.manifestVersion,
         platform: process.platform,
+        // WHAT THE PREFLIGHT ACTUALLY RAN. On macOS the workspace strips the native
+        // binaries the web build needs, so `Build (all packages)` and the browser
+        // E2E do not run — they are absent, not passed. Recording it here is the
+        // whole reason that skip is allowed to exist: a reader must be able to see
+        // that this evidence does NOT attest to the web bundle building. Null-safe:
+        // on linux-x64 nothing is excluded and this reads {excluded:false, steps:[]}.
+        preflightCoverage: {
+          nativeBuildExcluded: preflightNative.excluded,
+          target: preflightNative.target,
+          stepsNotRun: preflightNative.excluded
+            ? ["Build (all packages)", "Browser E2E (review console, website, admin)"]
+            : [],
+          reason: preflightNative.reason,
+        },
         reviewHubPass: true,
         mcpPass: true,
         mcpCheckoutFound: true,

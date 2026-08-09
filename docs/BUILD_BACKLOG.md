@@ -296,7 +296,8 @@ picking these up:
       same change; Intune App Protection first, other MAM vendors deferred.
 
 _Derived from repo data, not memory: `check-connector-discipline` reports 36/36
-families with KNOWN_GAPS empty, and `check-live-sync` reports `liveEvidence=none`.
+families with KNOWN_GAPS empty, and `check-live-sync` reports `liveEvidence=fresh`
+(`artifacts/live-evidence/mac-run.json`, minted on a real Mac 2026-08-07).
 What remains is the LIVE-lane column of
 [ZERO_COST_LIVE_TEST_MATRIX.md](ZERO_COST_LIVE_TEST_MATRIX.md) — every dimension
 already has a fixture proof; these add a real vendor behind it._
@@ -515,27 +516,52 @@ only), and the DDM rig is gated on an APNs push certificate.
       verified as RENDERING rather than merely typechecking — which is the standard it
       should be held to.
 
-- [ ] **Merge `signalgrid-mcp#fix/unblock-live-evidence` → `liveEvidence` goes
-      `none` → `fresh`.** ⚠️ **one merge in the OTHER repo; everything else is done.**
-      This is the repo's longest-standing gap (`STATUS.md`: "real-hardware evidence:
-      none"), and it turned out not to need a supervised device or any purchase.
-      Two things blocked it, both now cleared or diagnosed:
+- [x] **Run the Mac lane → `liveEvidence` goes `none` → `fresh`.** **DONE 2026-08-07**
+      — `artifacts/live-evidence/mac-run.json`, minted on the owner's Mac
+      (macOS 26.6, arm64) and committed as `d107fa2`. `check-live-sync` now reports
+      `liveEvidence=fresh`. This was the repo's longest-standing gap, and it turned
+      out to need no supervised device and no purchase.
+      A THIRD blocker existed and was invisible until a real Mac ran the lane: the
+      evidence gate required `pnpm run build`, which pnpm-workspace.yaml makes
+      impossible on macOS by stripping the darwin native binaries — a step the
+      toolchain forbids on the only platform allowed to mint evidence. Fixed in
+      `10dbc0b` (#176): steps that are structurally impossible on a platform are
+      recorded UNAVAILABLE with the reason rather than failing, derived from the
+      workspace config and only when the binary genuinely does not resolve. The
+      evidence file carries `preflightCoverage` naming what did not run, so a green
+      `mac-run.json` cannot be read as "the web bundle builds".
+      The original two blockers, both cleared:
       1. *Review-Hub half* — `verify-all.mjs` runs the FULL preflight, which includes
          `pnpm run build`, believed unrunnable on macOS. It runs fine once the four
          stripped darwin binaries are supplied (commit `d637404`). **Cleared.**
       2. *signalgrid-mcp half* — its `pyproject.toml` pinned `mcp>=1.9.0` with no
-         upper bound. The MCP Python SDK released **2.0.0**, removing
-         `create_connected_server_and_client_session` from `mcp.shared.memory`, so a
-         fresh checkout fails at pytest COLLECTION: 4 files error, 0 tests run. It
-         reads as a broken repo but is a moved API. Pinning `<2` restores it and
-         `verify.sh` exits 0. **Fix pushed as a branch, NOT merged — owner call.**
+         upper bound. The MCP Python SDK released **2.0.0**, which removes
+         `mcp.server.fastmcp` outright (it moved under `mcp/server/mcpserver/`) and
+         turns `mcp/types.py` into a package. `src/signalgrid_mcp/app.py` imports
+         both, so the server raises `ModuleNotFoundError` at import and a client sees
+         only `-32000: Connection closed`; pytest fails at COLLECTION with 4 errors
+         and 0 tests run. It reads as a broken repo but is a moved API. **MERGED as
+         `signalgrid-mcp` `369e08e` (PR #12) on 2026-08-06** — pinned `mcp>=1.9.0,<2`,
+         which resolves 1.29.0. Verified as a matched pair: 99 tests pass under the
+         pin; `ModuleNotFoundError` + 4 collection errors under 2.0.0. **Cleared.**
+
+         Note for anyone registering the server with a client: `uv run --with
+         mcp[cli]` builds an isolated environment and **ignores `pyproject.toml`**, so
+         the merge does not fix such a registration. It has to carry the bound itself:
+         `--with 'mcp[cli]<2'`.
       Verified end-to-end on 2026-07-31: with both in place, both halves pass and
       `mac-run.json` mints. That evidence was deliberately NOT committed, because it
       was produced against a local ad-hoc merge — the evidence schema records
       `mcpCommit`/`mcpDirty`, and publishing a run against an unpushed dirty tree
       would be exactly the manufactured confidence this repo keeps deleting.
-      After merging: `SIGNALGRID_MCP_PATH=~/signalgrid-mcp node scripts/verify-all.mjs
-      --require-mcp --emit-evidence`, then commit `artifacts/live-evidence/`.
+      The committed run was minted against merged code with a clean checkout —
+      `mcpCommit: 369e08e`, `mcpDirty: false` — so it is attributable and
+      reproducible rather than "some tree passed once".
+      **To refresh it** (the manifest fingerprint changes whenever contracts move,
+      which turns the evidence stale): `./mac-kickoff.sh` from the repo root on the
+      owner's Mac. It cannot be done from CI or a cloud sandbox — `--emit-evidence`
+      refuses off-macOS AND on CI runners, on purpose, because green-ness is not
+      hardware.
 
 - [x] **`X ?? []` made an unreported collection indistinguishable from an empty
       one — in FIVE connectors.** **DONE.** The normalized collection is now `null`
@@ -678,6 +704,49 @@ _These need the owner's call — an agent should not act on them unsupervised._
 _(see `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` for the full app-workflow roadmap)_
 
 ## Done (recent)
+
+- [x] …and the platform pin was necessary but not sufficient — the follow-up the
+      entry below needed. A real `docker compose build` on the owner's Mac, the
+      first one ever run, found `Dockerfile.web` still broken twice over after the
+      fix: `tsconfig.base.json` was never copied into the build context (both app
+      tsconfigs open with `"extends": "../../tsconfig.base.json"`, so vite could not
+      resolve it) and neither were `scripts/package.json` + `scripts/enforce-pnpm.cjs`
+      (the root `preinstall` hook runs the latter, so `pnpm install` crashed before
+      it began). `Dockerfile.api` already carried that second pair, with a comment
+      explaining why — the rule was copied between files instead of shared, and the
+      copy fell behind.
+      Both fixed; `docker compose up` now brings api + web + nginx up with all three
+      answering healthchecks. The durable correction is that CI's deploy-stack job
+      now runs `docker build -f Dockerfile.web` for real, because
+      `check-container-native-base.mjs` **cannot** catch this class: the build context
+      is assembled BY the Dockerfile, so a path that is never COPY'd does not exist,
+      and no static read reveals it. That guard's header and its success message now
+      say so instead of implying the stronger claim. The gate was not wrong — it was
+      answering a narrower question than its output suggested, which is the same
+      defect shape it was built to catch.
+
+- [x] The delivery images could not be built (fourth blocker of this class) —
+      `Dockerfile.web` used a `node:22-alpine` builder, and alpine is **musl**,
+      while `pnpm-workspace.yaml` strips `@rollup/rollup-linux-x64-musl`,
+      `lightningcss-linux-x64-musl` and `@tailwindcss/oxide-linux-x64-musl`. The
+      vite build inside it could never have succeeded, on any host. Neither
+      builder stage pinned `--platform`, so both also inherited the build host's
+      architecture: linux/amd64 on the CI runner (which is why the API image
+      always passed there) and linux/arm64 on an Apple Silicon Mac, where
+      `@esbuild/linux-arm64` is stripped too. Nothing caught it because CI's
+      `deploy-stack` job builds `docker-compose.prod.yml`, which declares only
+      `db` and `api`; the web image is referenced solely by the dev
+      `docker-compose.yml`, which no job ever built. Fixed by pinning both
+      builder stages to `--platform=linux/amd64` on `node:22-bookworm-slim` —
+      linux-x64-gnu is the one triple the workspace ships a complete native set
+      for. New gate `scripts/check-container-native-base.mjs` (preflight + CI)
+      derives the supported triples from `pnpm-workspace.yaml` at run time and
+      fails any bundler build stage that is unpinned or targets an unsupported
+      triple; it was written against the defect and reproduced it before the fix.
+      `mac-kickoff.sh --with-docker` now also runs `docker compose build api web`,
+      because a static check is not a build and that lane is the only one with a
+      daemon. Same shape as the three blockers before it: something reported
+      success while not doing its job.
 
 - [x] macOS / Windows desktop host-app demo (cross-platform parity) —
       `docs/embedded-desktop-demo.html` (published at `/desktop-demo.html`): the

@@ -1,4 +1,5 @@
 import type { ITSMAdapter, ITSMTicketRequest, ITSMTicketResponse } from '../adapters/types';
+import { resolveEmission } from '../adapters/emit-gate';
 
 /**
  * Freshservice ITSM Adapter Configuration
@@ -82,6 +83,14 @@ export class FreshserviceAdapter implements ITSMAdapter {
    * Health check - verify Freshservice connectivity
    */
   async healthCheck(): Promise<boolean> {
+    // GATED, like every other outbound path. A health check is still a LIVE CALL:
+    // it resolves a configured hostname and opens a connection from wherever the
+    // process runs. Ungated, it reached the network in dev/alpha with no credential
+    // — outside the three-condition boundary the security-review package tells an
+    // assessor to verify FIRST. Found by review taking that document at its word.
+    const emission = resolveEmission();
+    if (emission.mode !== "live") return false;
+
     try {
       const url = `${this.config.instanceUrl}/api/v2/tickets?page=1&per_page=1`;
       const response = await fetch(url, {

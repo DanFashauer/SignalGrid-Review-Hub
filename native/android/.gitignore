@@ -1,0 +1,21 @@
+# Gradle and Kotlin build output. Regenerable, machine-specific, and large — a
+# 1.4 MB `build/` tree turned up as "untracked files, please commit" the first time
+# the suite ran here, which is how this file came to exist. None of it is source.
+build/
+.gradle/
+.kotlin/
+
+# Android Studio / IntelliJ, and the SDK path a developer's machine writes.
+# `local.properties` in particular is a filesystem path from someone's laptop; it
+# is per-machine by definition and breaks every other machine that reads it.
+.idea/
+*.iml
+local.properties
+captures/
+
+# Signing material. Nothing here is used by the CI lane — it builds unsigned — but
+# a keystore accidentally added to a PUBLIC repository cannot be un-published, so
+# the ignore comes before anyone needs it rather than after.
+*.jks
+*.keystore
+keystore.properties

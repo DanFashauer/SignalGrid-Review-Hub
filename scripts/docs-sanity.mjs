@@ -8,8 +8,22 @@
 // Ported verbatim from the inline CI logic: same required-doc list, same
 // denylist, same disclaimer/boundary allow-list so non-claim framing (a
 // guardrail, a "does not…", a pre-announcement note) is not flagged.
+//
+// CONTROLS. Every exemption here is a hole by construction, so each is exercised
+// in BOTH directions by appending to a scanned doc and re-running. Reproduce with
+// docs/WHAT_SIGNALGRID_DOES_TODAY.md:
+//
+//   A  "The grid runs itself."                         → FAILS  (case-insensitivity)
+//   B  "…does not claim:" + "- Autonomous production
+//      remediation."                                   → PASSES (lead-in negation)
+//   C  "…ships today:" + the same bullet               → FAILS  (not a list waiver)
+//   D  "…does not act." + blank + the same bullet      → FAILS  (no colon, no scope)
+//   E  restored tree                                   → PASSES
+//
+// C and D are the ones that matter: they show the lead-in rule exempts a DENIED
+// claim, not any claim that happens to be in a list.
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -79,7 +93,34 @@ const DENYLIST = [
   "STIG hardened",
   "EAL5+ certified",
   "FIPS 140-2 validated",
+  // AUTONOMY OVER-CLAIMS. Added after `docs/fabric-console.html` — a PUBLISHED page —
+  // was found saying "The grid runs itself", "the grid carries out the response by
+  // itself, no human in the loop", and "grow to 100% with no human in the loop",
+  // while this scan reported green. The denylist covered "autonomous production
+  // remediation" and nothing else in the class, so the claim only had to be phrased
+  // in ordinary English to walk past. docs/PUBLIC_MESSAGING_GUARDRAILS.md already
+  // mapped this exact claim to its safe form; nothing enforced the mapping.
+  "no human in the loop",
+  "the grid runs itself",
+  "the grid does the rest",
+  "carries out the response by itself",
+  "acts on its own",
+  // A SECOND ROUND, found only once the scan was made case-insensitive (see -niF
+  // below). The most prominent claim on the published console — its one-line thesis,
+  // `The grid does the rest — automatically` — was invisible to the case-sensitive
+  // scan because the denylist entry was lowercase and the sentence started a line.
+  // Re-reading the two published surfaces with that fixed turned up four more
+  // phrasings of the same claim that no entry covered at all:
+  "handles the rest by itself",
+  "handles by itself",
+  "handles every situation by itself",
+  "the grid controls on its own",
 ];
+// This list can never be complete, and saying so is part of the gate. It denies
+// PHRASINGS, not the claim; the claim is "SignalGrid acts", and English has an
+// unbounded number of ways to say it. Two rounds of extension have each found live
+// instances the previous round did not cover. Treat a green here as "none of the
+// phrasings we have thought of", never as "no autonomy over-claim".
 // Docs whose PURPOSE is to enumerate the forbidden phrases (a "do not say" list),
 // so every denylist phrase legitimately appears there as a negative example — the
 // same file-level exemption review-invariants.mjs uses for its own guard docs.
@@ -103,6 +144,42 @@ function hasBareClaim(content, phrase) {
   }
   return false;
 }
+// NEGATION SCOPES OVER A LIST IT INTRODUCES. `hasBareClaim` sees one line, so a
+// bullet inherits nothing from the sentence above it — and every "Non-goals" list in
+// this repo is written exactly that way:
+//
+//     This pack explicitly does not claim:
+//
+//     - Autonomous production remediation.        <- a denied claim, read as a claim
+//
+// The case-sensitive scan never reached these lines, so making it case-insensitive
+// turned four correct disclaimers into four failures. The fix is not to exempt the
+// phrase (that would blind the gate to a real use of it elsewhere in the same file)
+// and not to exempt the files (they carry real claims too). It is to give the bullet
+// the context a reader gives it.
+//
+// Deliberately narrow: the lead-in must END IN A COLON — the mark that it introduces
+// what follows. A negated sentence that merely happens to sit above an unrelated list
+// does not launder it.
+const LIST_ITEM = /^\s*(?:[-*+]|\d+[.)])\s/;
+function listLeadIn(path, lineNo) {
+  let text;
+  try {
+    text = readFileSync(resolve(repo, path), "utf8");
+  } catch {
+    return null; // unreadable → no exemption, which is the fail-closed direction
+  }
+  const lines = text.split("\n");
+  const self = lines[lineNo - 1];
+  if (self === undefined || !LIST_ITEM.test(self)) return null;
+  for (let i = lineNo - 2; i >= 0; i -= 1) {
+    const l = lines[i];
+    if (l.trim() === "" || LIST_ITEM.test(l)) continue; // still inside the list
+    return l.trimEnd().endsWith(":") ? l : null;
+  }
+  return null;
+}
+
 const SCAN_PATHS = [
   "README.md",
   "docs",
@@ -119,18 +196,26 @@ for (const phrase of DENYLIST) {
     // --untracked also scans new, not-yet-staged files (excluding gitignored),
     // so a brand-new doc with an unsafe claim is caught by preflight BEFORE it
     // is committed — a tracked-only scan would miss it (matches review-invariants).
-    out = execFileSync("git", ["grep", "--untracked", "-nF", "--", phrase, "--", ...SCAN_PATHS], { cwd: repo, encoding: "utf8" });
+    // -i is load-bearing. Without it this scan was CASE-SENSITIVE, so a denylist
+    // entry written lowercase ("the grid runs itself") did not match a sentence that
+    // began with it ("The grid runs itself."). Capitalising one letter walked past
+    // the gate. Found by a control that refused to fail: a bare claim appended to a
+    // scanned doc produced no finding at all.
+    out = execFileSync("git", ["grep", "--untracked", "-niF", "--", phrase, "--", ...SCAN_PATHS], { cwd: repo, encoding: "utf8" });
   } catch {
     out = ""; // git grep exits non-zero when there are no matches
   }
   for (const line of out.split("\n").filter(Boolean)) {
     // git grep line = "path:lineno:content" — split off the path + content.
-    const m = /^(.*?):\d+:(.*)$/.exec(line);
+    const m = /^(.*?):(\d+):(.*)$/.exec(line);
     const path = m ? m[1] : "";
-    const content = m ? m[2] : line;
+    const lineNo = m ? Number(m[2]) : 0;
+    const content = m ? m[3] : line;
     if (META_FILES.has(path)) continue;
     if (META.test(content)) continue;
     if (!hasBareClaim(content, phrase)) continue;
+    const leadIn = lineNo > 0 ? listLeadIn(path, lineNo) : null;
+    if (leadIn !== null && (NEGATOR.test(leadIn) || META.test(leadIn))) continue;
     problems.push(`Unsafe direct claim found for '${phrase}': ${line}`);
     claimHits += 1;
   }

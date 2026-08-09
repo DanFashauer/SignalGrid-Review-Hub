@@ -26,6 +26,18 @@ regexes = [
   # commit that first introduced the literal — a config allowlist can.
   '''pg-s3cr3t-never-persisted''',
   '''s3cr3t-should-never-appear''',
+  # The fake vendor key in the work-context proof's NEGATIVE CONTROL. It exists to
+  # prove the credential-refusal guard fires on `sk_live…` shapes, so the scanner
+  # flagging it is the guard's own test material being read as the thing it guards
+  # against. Allowlisted by exact value — a real `sk_live_` key is still caught.
+  '''sk_live_51H8xample''',
+  # Placeholder credentials in the review console's INTEGRATION DOCUMENTATION
+  # samples (artifacts/signalgrid-review/src/data/integrationData.ts). They are the
+  # literal words a reader replaces, not secrets. Anchored to the auth-header shape
+  # rather than allowlisting the file, so a genuine token pasted into that same file
+  # is still caught.
+  '''Authorization: (?:Bearer )?YOUR_(?:TOKEN|API_KEY)''',
+  '''-u "api_user:api_password"''',
 ]
 # Documentation is prose + illustrative examples (e.g. `Authorization: Bearer …`,
 # vendor feature lists), which trip the generic-api-key / curl-auth-header rules.

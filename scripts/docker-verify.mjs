@@ -29,9 +29,20 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { resolveContainerEngine, describeEngine } from "./lib/container-engine.mjs";
+
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const emitEvidence = process.argv.includes("--emit-evidence");
 const keepUp = process.argv.includes("--keep");
+
+// Images are named WITH their registry. `postgres:16` is not a name, it is a lookup
+// against whatever search list the engine happens to be configured with — Docker
+// silently implies docker.io, Podman refuses outright ("short-name did not resolve
+// to an alias"). Relying on an implicit default means the registry an image comes
+// from is decided by host config rather than by this file, which is the wrong place
+// for a supply-chain decision. Fully-qualified works identically on both engines.
+const PG_IMAGE = "docker.io/library/postgres:16";
+const REDIS_IMAGE = "docker.io/library/redis:7";
 
 /** Postgres is published on 5433 so a developer's local 5432 is never disturbed. */
 const PG_PORT = 5433;
@@ -54,27 +65,32 @@ const record = (name, ok, detail = "") => {
   return ok;
 };
 
-console.log("Docker verification — the real deployment topology, against a real database\n");
+console.log("Container verification — the real deployment topology, against a real database\n");
 
-// ── 1. Docker must actually be there. A missing daemon is a REFUSAL, not a skip ──
-const dockerVersion = run("docker", ["version", "--format", "{{.Server.Version}}"]);
-const dockerUp = dockerVersion.status === 0 && (dockerVersion.stdout ?? "").trim().length > 0;
-if (!record("docker daemon reachable", dockerUp, (dockerVersion.stderr ?? "").trim().split("\n")[0])) {
+// ── 1. An engine must actually be there. A missing one is a REFUSAL, not a skip ──
+//
+// Engine-agnostic on purpose: these are OCI images built from ordinary Dockerfiles,
+// so docker and podman both run them. Which one answered is RECORDED rather than
+// assumed — "docker daemon reachable" printed while podman did the work would be a
+// false statement about how the evidence was produced.
+const resolved = resolveContainerEngine();
+if (!record(`container engine reachable — ${describeEngine(resolved)}`, resolved.ok)) {
   console.error(
-    "\nDocker is not available. This script verifies the DEPLOYED topology, so there is\n" +
-      "nothing it can honestly check without it — refusing to report a pass.\n" +
-      "  macOS: start Docker Desktop, then re-run.\n",
+    `\n${resolved.detail}\n\n` +
+      "This script verifies the DEPLOYED topology, so there is nothing it can honestly\n" +
+      "check without an engine — refusing to report a pass.\n",
   );
   process.exit(1);
 }
-const serverVersion = (dockerVersion.stdout ?? "").trim();
+const ENGINE = resolved.engine;
+const serverVersion = resolved.version;
 
 // ── 2. Bring up Postgres in the prod image ────────────────────────────────────
-run("docker", ["rm", "-f", PG_CONTAINER]); // idempotent: clear a previous run
-const up = run("docker", [
+run(ENGINE, ["rm", "-f", PG_CONTAINER]); // idempotent: clear a previous run
+const up = run(ENGINE, [
   "run", "-d", "--name", PG_CONTAINER,
   "-e", "POSTGRES_USER=sg", "-e", "POSTGRES_PASSWORD=sg", "-e", "POSTGRES_DB=signalgrid",
-  "-p", `${PG_PORT}:5432`, "postgres:16",
+  "-p", `${PG_PORT}:5432`, PG_IMAGE,
 ]);
 if (!record("postgres:16 container started", up.status === 0, (up.stderr ?? "").trim().split("\n")[0])) {
   process.exit(1);
@@ -83,22 +99,22 @@ if (!record("postgres:16 container started", up.status === 0, (up.stderr ?? "").
 // Wait for readiness rather than sleeping a guessed interval.
 let ready = false;
 for (let i = 0; i < 60 && !ready; i += 1) {
-  const probe = run("docker", ["exec", PG_CONTAINER, "pg_isready", "-U", "sg", "-d", "signalgrid"]);
+  const probe = run(ENGINE, ["exec", PG_CONTAINER, "pg_isready", "-U", "sg", "-d", "signalgrid"]);
   ready = probe.status === 0;
   if (!ready) run("sleep", ["1"]);
 }
 record("postgres accepting connections", ready);
 
 // ── 2b. Redis, for the credential store's concurrency claim ───────────────────
-run("docker", ["rm", "-f", REDIS_CONTAINER]);
-const redisUp = run("docker", [
-  "run", "-d", "--name", REDIS_CONTAINER, "-p", `${REDIS_PORT}:6379`, "redis:7",
+run(ENGINE, ["rm", "-f", REDIS_CONTAINER]);
+const redisUp = run(ENGINE, [
+  "run", "-d", "--name", REDIS_CONTAINER, "-p", `${REDIS_PORT}:6379`, REDIS_IMAGE,
 ]);
 record("redis:7 container started", redisUp.status === 0, (redisUp.stderr ?? "").trim().split("\n")[0]);
 
 let redisReady = false;
 for (let i = 0; i < 60 && !redisReady; i += 1) {
-  const probe = run("docker", ["exec", REDIS_CONTAINER, "redis-cli", "ping"]);
+  const probe = run(ENGINE, ["exec", REDIS_CONTAINER, "redis-cli", "ping"]);
   redisReady = probe.status === 0 && (probe.stdout ?? "").includes("PONG");
   if (!redisReady) run("sleep", ["1"]);
 }
@@ -109,8 +125,8 @@ const teardown = () => {
     console.log(`\n(--keep) leaving ${PG_CONTAINER} on ${PG_PORT} and ${REDIS_CONTAINER} on ${REDIS_PORT}.`);
     return;
   }
-  run("docker", ["rm", "-f", PG_CONTAINER]);
-  run("docker", ["rm", "-f", REDIS_CONTAINER]);
+  run(ENGINE, ["rm", "-f", PG_CONTAINER]);
+  run(ENGINE, ["rm", "-f", REDIS_CONTAINER]);
 };
 
 if (!ready) {
@@ -156,7 +172,7 @@ if (redisReady) {
 
 const allGreen = results.every((r) => r.ok);
 console.log(
-  `\ndocker=${serverVersion} pgProofs=${PG_PROOFS.length} pgAssertions=${pgAssertions} ` +
+  `\nengine=${ENGINE} version=${serverVersion} pgProofs=${PG_PROOFS.length} pgAssertions=${pgAssertions} ` +
     `raceAssertions=${raceAssertions} ` +
     `result=${allGreen ? "pass" : "fail"}`,
 );
@@ -181,17 +197,21 @@ if (emitEvidence) {
       mkdirSync(evidenceDir, { recursive: true });
       // Public-safe by construction: fingerprints, booleans and counts only.
       const evidence = {
-        kind: "docker-run",
+        kind: "container-run",
         manifestFingerprint: manifest.fingerprint,
-        dockerServerVersion: serverVersion,
+        // WHICH engine, not just which version. An evidence file that says only
+        // "dockerServerVersion" while podman did the work misdescribes its own
+        // provenance, and provenance is the entire value of the artifact.
+        containerEngine: ENGINE,
+        containerEngineVersion: serverVersion,
         durablePersistencePass: true,
         pgProofsRun: PG_PROOFS.length,
         pgAssertionsPassed: pgAssertions,
         enrollmentRaceAssertionsPassed: raceAssertions,
         note:
-          "A real Docker daemon ran postgres:16 and redis:7; the three durable-persistence " +
-          "proofs and the concurrent-enrollment race proof passed against them. Emission is " +
-          "refused unless every step is green.",
+          `A real container engine (${ENGINE} ${serverVersion}) ran postgres:16 and redis:7; ` +
+          "the three durable-persistence proofs and the concurrent-enrollment race proof " +
+          "passed against them. Emission is refused unless every step is green.",
       };
       const path = resolve(evidenceDir, "docker-run.json");
       writeFileSync(path, `${JSON.stringify(evidence, null, 2)}\n`);

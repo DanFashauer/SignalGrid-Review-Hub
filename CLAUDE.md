@@ -7,7 +7,7 @@ first change. These rules override default behavior.
 
 A pnpm/TypeScript monorepo for **SignalGrid** — a signal- and location-driven
 **Assist gate** for frontline devices. The decision core is deterministic and
-fixture-backed; a "real-life simulator" subsystem plus 82 `proof:*` gates prove
+fixture-backed; a "real-life simulator" subsystem plus a `proof:*` gate suite prove
 behavior without a database. Native iOS lives under `native/ios/`.
 
 Layout: `lib/*` (decision core, connectors, flows), `artifacts/api-server`

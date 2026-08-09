@@ -309,8 +309,43 @@ jobs:
       # instead of in the compose smoke minutes later.
       - name: "Docker carries every install-hook entrypoint"
         run: node scripts/check-docker-lifecycle-copy.mjs
+      # deploy-stack builds docker-compose.prod.yml, which contains only `db` and
+      # `api` — so Dockerfile.web was never built by any job and had been
+      # unbuildable (alpine is musl; only the -gnu native binaries survive the
+      # workspace overrides). Static, so it catches that without a daemon.
+      - name: "Container native base (a Dockerfile that cannot build is not a deploy path)"
+        run: node scripts/check-container-native-base.mjs
+      - name: "Publication boundary (public repo — nothing arrives unclassified)"
+        run: node scripts/check-publication-boundary.mjs
       - name: "Connector discipline (gated + proven, no device actuators)"
         run: node scripts/check-connector-discipline.mjs
+      - name: "Ungated fetch (the live boundary covers every outbound path)"
+        run: node scripts/check-ungated-fetch.mjs
+      # decision:read was enforced in memory and skipped on the durable path — the branch
+      # returned before listDecisions/getDecision/getSnapshot ever authorized. The core proof
+      # covers the new authorizedContext method; this covers the ROUTES calling it.
+      - name: "Durable-path authorization (a durable read must authorize, not just authenticate)"
+        run: node scripts/check-durable-path-authorization.mjs
+
+      # Six offline proofs that ran in NO pull-request gate. They executed only in
+      # mac-lane.yml, which loops every proof:* key but triggers on workflow_dispatch
+      # and a weekly cron — never on pull_request — and is framed as a rehearsal, not
+      # evidence. So a break in cross-tenant scoping, or a renamed ASAM bundle id in a
+      # .mobileconfig, passed preflight and every check on the way in.
+      - name: "Proof — emit-gate (no outbound family sends from a non-emitting tier)"
+        run: pnpm run proof:emit-gate
+      - name: "Proof — isolation-scope (no tenant can read another's row)"
+        run: pnpm run proof:isolation-scope
+      - name: "Proof — nac (read-only; no device action reachable, live path gated)"
+        run: pnpm run proof:nac
+      - name: "Proof — webhooks (outbound delivery gated, refusals explain themselves)"
+        run: pnpm run proof:webhooks
+      - name: "Proof — mdm-profile (the shipped profiles say what the product claims)"
+        run: pnpm run proof:mdm-profile
+      - name: "Proof — graph-wire (throttling, 5xx, auth, malformed bodies fail closed)"
+        run: pnpm run proof:graph-wire
+      - name: "Assessor package (links/commands an external reviewer follows)"
+        run: node scripts/check-assessor-package.mjs
 
       # The declared product edge must match the real one, in BOTH directions. The
       # omission direction is the freeze: a new connector family, signal kind, API
@@ -370,6 +405,19 @@ jobs:
         run: node scripts/check-decision-port-parity.mjs
       - name: "Read-error swallowing (a failed lookup must not report nothing-found)"
         run: node scripts/check-read-error-swallowing.mjs
+      # Every other gate here checks what the text MEANS. This one checks the text is
+      # what it appears to be — no bidirectional control or invisible character may
+      # make a tracked file render differently from how it executes (CVE-2021-42574).
+      # gitleaks scans for secrets and CodeQL for dataflow; neither has an opinion
+      # about text that lies about itself, and nothing else in this repo looked.
+      - name: "Text safety (no file may render differently from how it executes)"
+        run: node scripts/check-text-safety.mjs
+      # Cheap and direct. The container jobs DID fail on the conflict marker that
+      # reached Dockerfile.web, but only because a build happens to parse that file
+      # — a marker in a doc, fixture or Swift source produces no build failure at
+      # all. This finds it in milliseconds, everywhere.
+      - name: "Merge markers (no unresolved conflict may be committed)"
+        run: node scripts/check-merge-markers.mjs
       - name: "Proof — mcp-server (published plugin path boots + serves declared tools)"
         run: pnpm run proof:mcp-server
       # And the ratchet for the ratchets: fails if a future preflight gate is added
@@ -619,12 +667,135 @@ jobs:
           DATABASE_URL: postgres://sg:sg@localhost:5432/signalgrid
         run: pnpm run proof:session-store-pg
 
+      # Backup and restore, END TO END. Seeds the tamper-evident ledger, backs it up,
+      # DESTROYS the schema, restores, and re-verifies the chain — plus the negative
+      # controls (a flipped byte, a truncated archive, a missing manifest must all be
+      # REFUSED). A backup nobody has restored is not a backup, and until this existed
+      # the repository had no `pg_dump` anywhere at all.
+      #
+      # pg_dump/pg_restore must be at least as new as the server (16). ubuntu-latest
+      # ships 16 client tools; asserted rather than assumed, because a silent version
+      # skew would fail here in a confusing way.
+      - name: Assert the Postgres client tools match the server major
+        run: |
+          CLIENT=$(pg_dump --version | grep -oE '[0-9]+' | head -1)
+          echo "pg_dump major: $CLIENT"
+          if [ "$CLIENT" -lt 16 ]; then
+            echo "::error::pg_dump $CLIENT cannot dump a PostgreSQL 16 server"
+            exit 1
+          fi
+
+      - name: Backup/restore proof on Postgres
+        env:
+          DATABASE_URL: postgres://sg:sg@localhost:5432/signalgrid
+        run: pnpm run proof:backup-restore
+
+  # Podman is the repo's chosen runtime (scripts/lib/container-engine.mjs). It was
+  # verified locally — full docker-verify lane green under podman 4.9.3 — but a local
+  # run is not a gate, and the whole point of that abstraction is that BOTH engines
+  # keep working. So the container lane runs here under podman on every PR, next to
+  # the docker job below, and a divergence between them shows up as a red check
+  # rather than as a surprise on someone's laptop.
+  #
+  # CONTAINER_ENGINE=podman is set explicitly rather than relying on auto-detection:
+  # this job exists to prove PODMAN specifically, and a silent fallback to docker
+  # would leave it green while testing the thing the other job already covers.
+  podman-stack:
+    name: Prod stack (Podman)
+    runs-on: ubuntu-latest
+    env:
+      CONTAINER_ENGINE: podman
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Podman version (a missing engine must fail loudly, not skip)
+        run: podman version --format '{{.Server.Version}}'
+
+      # THE FIX, and why it is needed. `podman run` goes through libpod, which sets
+      # RLimitDefaultValue = 1048576 (clamped to the host hard limit). `podman build`
+      # RUN steps go through BUILDAH, whose 4.9.3 vendored copy has no such constant,
+      # so they inherit the OCI runtime's nofile=1024. Confirmed in podman 4.9.3's own
+      # source. Newer podman (6.2.0-dev) vendors a buildah that DOES define it, so this
+      # flag is a compatibility measure — harmless where the default is already high. Rollup
+      # opens hundreds of modules concurrently during `vite build`; at 1024 it hits
+      # EMFILE and reports whichever module lost the race as "failed to resolve" —
+      # which is exactly why a DIFFERENT package failed on every run. Docker's builder
+      # inherits the daemon's much higher limit, so the same Dockerfile never fails
+      # there. Measured, not guessed:
+      #
+      #   BUILD-TIME  nofile=1024     (podman build RUN)
+      #   RUN-TIME    nofile=20000    (podman run)
+      #
+      # Raise it to the host's hard limit, capped. Do NOT hardcode 65535: a value
+      # above the hard limit fails at container init with "error setting rlimit".
+      - name: Compute a safe nofile limit for podman build
+        run: |
+          LIM=$(ulimit -Hn)
+          case "$LIM" in unlimited) LIM=65536 ;; esac
+          [ "$LIM" -gt 65536 ] && LIM=65536
+          echo "PODMAN_NOFILE=$LIM" >> "$GITHUB_ENV"
+          echo "podman build will use nofile=$LIM (podman 4.9.3 defaults RUN steps to 1024)"
+
+      - name: Build the API image with podman
+        run: podman build --ulimit nofile=$PODMAN_NOFILE:$PODMAN_NOFILE --platform linux/amd64 --file Dockerfile.api --tag signalgrid-api:ci .
+
+      # The web image — the one that used to fail. It builds under podman once the
+      # descriptor limit is raised AND the base images are fully qualified (podman
+      # refuses unqualified short names, or resolves them through a host alias file;
+      # docker silently implies docker.io). Both engines now build both images.
+      #
+      # THE ULIMIT IS A 4.9.3 WORKAROUND, NOT A PODMAN ONE — measured, not inferred.
+      # The same web image, 2,798 modules, builds on podman 6.0.2 (macOS/applehv,
+      # rootless) with NO --ulimit flag at all: buildah 6.x defines the
+      # RLimitDefaultValue that 4.9.3's vendored copy lacks, so RUN steps stop
+      # inheriting the OCI runtime's 1024. Keep the flag while this runner is on
+      # 4.9.3; drop it when the runner image ships podman 5.x or newer. See
+      # docs/MAC_LANE.md for the run that established this.
+      - name: Build the web image with podman
+        run: podman build --ulimit nofile=$PODMAN_NOFILE:$PODMAN_NOFILE --platform linux/amd64 --file Dockerfile.web --tag signalgrid-web:ci .
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Enable corepack (pnpm)
+        run: corepack enable pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The durable lane: postgres + redis under podman, then the three
+      # durable-persistence proofs and the enrollment-race proof against them.
+      - name: Durable verification lane under podman
+        run: node scripts/docker-verify.mjs
+
   deploy-stack:
     name: Prod stack (Docker compose smoke)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      # The web image, built for real — the gap that let two broken COPY lines ship.
+      #
+      # docker-compose.prod.yml declares only `db` and `api`, so the step below has
+      # never built Dockerfile.web. #179 added a STATIC gate proving its base image
+      # targets a platform triple the workspace ships binaries for, and that gate was
+      # green while the image still could not build: `tsconfig.base.json` and
+      # `scripts/enforce-pnpm.cjs` were never copied into the context, so the install
+      # crashed in its preinstall hook and vite could not resolve the tsconfig
+      # `extends`. Found by the owner's Mac lane, which is the only place a real
+      # build was happening.
+      #
+      # A static check cannot see this class at all: the build context is assembled
+      # BY the Dockerfile, so a path that is never COPY'd simply does not exist. The
+      # only thing that proves an image builds is building it. Kept as its own step
+      # rather than folded into compose, so a web-image failure is legible on sight
+      # instead of arriving as a compose error.
+      - name: Build the web image (a static base check is not a build)
+        run: docker build --file Dockerfile.web --tag signalgrid-web:ci .
 
       # Build the API image and bring up the durable stack (api + Postgres) so
       # the packaged deployment is proven, not just the source. DATABASE_URL in

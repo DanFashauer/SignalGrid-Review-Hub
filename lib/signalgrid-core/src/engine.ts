@@ -29,6 +29,7 @@ import {
   type Decision,
   type EvaluateRequest,
   type EvaluateResult,
+  type Permission,
   type EvidenceSnapshot,
   type MetricsSummary,
   type Policy,
@@ -104,6 +105,34 @@ export class SignalGridCore {
     const principal = authenticate(this.store, token);
     const tenant = this.requireTenant(principal.tenantId);
     return { principal, tenant };
+  }
+
+  /**
+   * `context()` AUTHENTICATES ONLY — it deliberately carries no permission, because
+   * plenty of callers legitimately need the tenant before they know what they are
+   * about to do. That is exactly how a hole opened.
+   *
+   * Three GA read routes are written as: if a durable decision store is configured,
+   * take `context(token).tenant.id`, query Postgres directly, and RETURN. The
+   * in-memory fallback on the very same handlers goes through `listDecisions` /
+   * `getDecision` / `getSnapshot`, each of which calls
+   * `authorize(principal, "decision:read")`. So the permission was enforced on the
+   * path CI exercises most and skipped on the path production uses, and `connector`
+   * — the one role WITHOUT `decision:read` — could read a tenant's whole decision
+   * history the moment DATABASE_URL was set. Dev was stricter than prod.
+   *
+   * Tenant isolation still held throughout (every durable query is keyed by
+   * tenantId), so this was privilege escalation inside a tenant, never across one.
+   *
+   * The fix is shaped so the mistake is hard to repeat: a caller that needs a
+   * tenantId in order to READ must name the permission to get it. `permission` is
+   * the typed `Permission` union, so a typo does not compile, and the throw is the
+   * same `forbidden`/403 as every other path — raised BEFORE any query runs.
+   */
+  authorizedContext(token: string, permission: Permission): TenantContext {
+    const ctx = this.context(token);
+    authorize(ctx.principal, permission);
+    return ctx;
   }
 
   /**

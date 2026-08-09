@@ -5,6 +5,7 @@ import router from "./routes";
 import { CONSOLE_HTML } from "./console-html";
 import { logger } from "./lib/logger";
 import { requestContext } from "./middlewares/context";
+import { demoSurfacesEnabled } from "./lib/profile";
 import { errorHandler } from "./middlewares/errors";
 import { globalRateLimiter } from "./middlewares/rateLimit";
 import { metricsMiddleware } from "./middlewares/metrics";
@@ -79,9 +80,14 @@ app.use(requestContext);
 
 // Trusted Room Entry simulation console (Phase 1 smart-hospital demo). Served at
 // the root for a friendly local URL: http://localhost:8080/console
-app.get(["/", "/console"], (_req, res) => {
-  res.type("html").send(CONSOLE_HTML);
-});
+// Not registered under `shared-device-gateway`: a customer deployment has no
+// reason to serve a demo console at its root, and the page renders verdicts with
+// no enforced/observed label (Blocker 10).
+if (demoSurfacesEnabled()) {
+  app.get(["/", "/console"], (_req, res) => {
+    res.type("html").send(CONSOLE_HTML);
+  });
+}
 
 // Prometheus scrape endpoint (operational metrics). Global AGGREGATE only —
 // counters/latencies with no tenant label and no request payloads, so the

@@ -1,4 +1,5 @@
 import type { ITSMAdapter, ITSMTicketRequest, ITSMTicketResponse } from '../adapters/types';
+import { resolveEmission } from '../adapters/emit-gate';
 
 /**
  * ManageEngine ServiceDesk Plus / ServiceNow Plus Adapter Configuration
@@ -87,6 +88,14 @@ export class ManageEngineAdapter implements ITSMAdapter {
    * Health check - verify ServiceDesk Plus connectivity
    */
   async healthCheck(): Promise<boolean> {
+    // GATED, like every other outbound path. A health check is still a LIVE CALL:
+    // it resolves a configured hostname and opens a connection from wherever the
+    // process runs. Ungated, it reached the network in dev/alpha with no credential
+    // — outside the three-condition boundary the security-review package tells an
+    // assessor to verify FIRST. Found by review taking that document at its word.
+    const emission = resolveEmission();
+    if (emission.mode !== "live") return false;
+
     try {
       const url = `${this.config.instanceUrl}/api/v3/requests?page=1&page_size=1`;
       const response = await fetch(url, {

@@ -94,6 +94,18 @@ See [Security-Baseline Alignment](SECURITY_BASELINE_ALIGNMENT.md) for the model.
 
 - These are review artifacts, not production apps; nothing here is "available
   now," app-store-published, or production-ready.
-- No native iOS/Android/macOS/Windows binary is shipped or claimed; the current
-  cross-platform delivery is responsive web + PWA.
+- **No signed, installable, or store-published binary exists for any platform.** This
+  bullet used to say no native binary was "shipped or claimed", and that has become
+  imprecise rather than wrong, so here is the current state exactly:
+
+  | Platform | What CI actually produces | What it is not |
+  | --- | --- | --- |
+  | Android | an **unsigned debug APK** (`.github/workflows/android.yml`) | not release-signed, not on Play |
+  | Windows / Linux | an **unsigned executable** (`.github/workflows/desktop.yml`) | not an installer, not code-signed, no auto-update |
+  | iOS / iPadOS | a simulator build + tests (`ios-ci.yml`) | no `.ipa`, no provisioning profile, not on the App Store |
+  | macOS | a native SwiftPM build + tests of the decision port | no `.app`, no notarisation |
+
+  These are build artifacts attached to a CI run so that "it builds" can be checked by
+  running the thing. Distribution, signing and notarisation are untouched. The
+  cross-platform *delivery* story remains responsive web + PWA.
 - Administrative high-risk actions are approval-gated and simulated, with no autonomous production remediation.

@@ -47,6 +47,29 @@ no compliance, certification, or partnership claims. See
 docs/PUBLIC_MESSAGING_GUARDRAILS.md.
 
 ------------------------------------------------------------------------
+Third-party CONTENT (not code)
+------------------------------
+
+Reference material that originates elsewhere — vendor reports, analyst research,
+articles, saved web pages, screenshots of other people's documents — is NOT
+committed to this repository, whatever its file format.
+
+This is a separate question from the open-source dependencies below, and it runs in
+the opposite direction. The dependency question is "may we USE this?". This one is
+"may we REPUBLISH this?" — and committing a file to a public repository is
+publishing it. A licence to read something is not a licence to redistribute it.
+
+The rule is: learn from a source, then write what you learned in your own words and
+cite it. The summary is ours to publish; the source is not.
+
+`scripts/check-publication-boundary.mjs` enforces this. It fails the build on any
+reproduced-whole document (PDF, DOCX, PPTX, XLSX, EPUB) with no recorded licence
+basis, and on markdown that carries the tell-tale furniture of a scraped web page
+(consent banners, CDN asset hosts). It was added after four such files — two
+licensed analyst reports and two full page scrapes — were found already committed
+here. They have been removed from the tree; note that removal from HEAD does not
+remove them from git history.
+
 Third-party components
 ------------------------------------------------------------------------
 

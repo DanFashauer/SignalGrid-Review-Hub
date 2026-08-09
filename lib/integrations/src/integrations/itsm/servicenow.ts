@@ -1,5 +1,6 @@
 import type { ITSMAdapter, ITSMTicketRequest, ITSMTicketResponse } from '../adapters/types';
 import { fetchWithTimeout, TIMEOUT_PRESETS } from '../../utils/fetchWithTimeout';
+import { resolveEmission } from '../adapters/emit-gate';
 
 /**
  * ServiceNow Adapter Configuration
@@ -142,9 +143,22 @@ export class ServiceNowAdapter implements ITSMAdapter {
    * Health check - verify connectivity and authentication
    */
   async healthCheck(): Promise<boolean> {
+    // GATED, like every other outbound path. A health check is still a LIVE CALL: it
+    // resolves a configured hostname and opens a connection from wherever the process
+    // runs. Note the gate goes BEFORE ensureAuthenticated() — that helper performs its
+    // own OAuth token fetch, so gating after it would still have reached the network.
+    //
+    // This one survived the sweep that fixed the other seven for a mechanical reason
+    // worth recording: check-ungated-fetch.mjs matched the literal string `fetch(`, and
+    // this file reaches the network only through `fetchWithTimeout`. The file was never
+    // scanned at all, so the gate printed green over it. The detector now matches any
+    // "fetch"-containing callee and fails if a util helper is named so it cannot see it.
+    const emission = resolveEmission();
+    if (emission.mode !== "live") return false;
+
     try {
       await this.ensureAuthenticated();
-      
+
       const url = `${this.config.instanceUrl}/api/now/table/${this.config.table}?sysparm_limit=1`;
       const response = await fetchWithTimeout(url, {
         method: 'GET',

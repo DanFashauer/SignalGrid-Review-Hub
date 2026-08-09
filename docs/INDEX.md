@@ -10,6 +10,8 @@ This documentation set explains SignalGrid's public pre-production and post-laun
   It names the commit it describes, so a reader can tell at a glance whether it is stale.
 - [The Launch Profile](LAUNCH_PROFILE.md): what ships as *SignalGrid Shared-Device Trust Gateway* and what does not — every connector family, signal kind, published API path and client surface classified `launch` / `deferred` / `demo_only` / `internal`, with the declared gaps held as data. `scripts/check-launch-profile.mjs` enforces a bijection against the repository in both directions, which is also how the breadth freeze is enforced mechanically rather than by agreement.
 - [Realistic Launch Plan](REALISTIC_LAUNCH_PLAN.md): public-safe, honest sequence from today's review surface to a real company, paid pilot, and production SaaS — with readiness scores, phased engineering, budget ranges, and a 30-day operating plan as planning hypotheses, not current claims.
+- [Founder Execution Report](FOUNDER_EXECUTION_REPORT.md): the operating contract, delivery gates, workstreams, decision rights, and definition of done for an AI-assisted execution team working around the founder.
+- [Authentication and Credential Architecture](AUTHENTICATION_AND_CREDENTIAL_ARCHITECTURE.md): authoritative separation of OAuth, OIDC, JWT, API keys, passkeys, sender binding, offline leases, and webhook signing across SignalGrid surfaces.
 - [Product Core Foundation](PRODUCT_CORE_FOUNDATION.md): the deterministic, fixture-backed, public-safe product core (tenancy, auth/RBAC, read-only connector sync, versioned policy engine, decision loop, evidence snapshots, tamper-evident audit ledger), its `/v1` API, the in-browser Operator Console, and the core proof — realizing plan phases B–D in a review-safe form. Companions: [Product Data Model](PRODUCT_DATA_MODEL.md), [Product Core Threat Model](PRODUCT_CORE_THREAT_MODEL.md), [Security Controls Matrix](SECURITY_CONTROLS_MATRIX.md), [Run & Go-Live runbook](RUN_AND_GO_LIVE.md), [Private-Core Hand-off spec](PRIVATE_CORE_HANDOFF.md), [Ecosystem Flow & Resolution Assistant](ECOSYSTEM_FLOW_AND_RESOLUTION.md), [DockBridge Product Connector](DOCKBRIDGE_PRODUCT_CONNECTOR.md), [Security-Baseline Alignment (CIS & other hardening baselines)](SECURITY_BASELINE_ALIGNMENT.md), [App Suite Platform × Persona Matrix](APP_SUITE_MATRIX.md), [What SignalGrid Does Today (implemented vs candidate)](WHAT_SIGNALGRID_DOES_TODAY.md), the `/v1` OpenAPI spec ([`lib/api-spec/v1-openapi.yaml`](../lib/api-spec/v1-openapi.yaml)), and the vulnerability-disclosure policy ([`SECURITY.md`](../SECURITY.md)).
 - [SignalGrid Enterprise IT Layer Model](SIGNALGRID_ENTERPRISE_IT_LAYER_MODEL.md): the container model — the seven-layer IT operating stack, and where SignalGrid sits across it. Answers the question that costs people the most time when a workflow is refused: **who fixes it?** Every reason code the core can emit and every connector family carries a layer, a system of record, an evidence type and an owner, enforced for completeness in both directions by `scripts/check-it-layer-model.mjs`. Decision impact is read from the rule set rather than declared, so it cannot drift. Companion: [SSO Evidence-First Troubleshooting](SIGNALGRID_SSO_EVIDENCE_FIRST_TROUBLESHOOTING.md) — the first-relevant-divergence method and the eight-state transition chain (`Configured ≠ Emitted ≠ … ≠ Secure`), doctrine and explicitly not built.
 - [SignalGrid Enterprise ITSM Layer Model](SIGNALGRID_ENTERPRISE_ITSM_LAYER_MODEL.md): nested inside the IT layer model — what happens to a refusal *after* it is made. Which ITSM object carries it (incident / problem / change / service request), who works it, and what must be true before the restriction lifts. The routing is **derived** from the shipped resolution descriptors rather than declared, so it cannot drift; Layer 1 (User/Interface) is asserted EMPTY because the host app owns everything the worker sees. States the framework-naming rule too: SignalGrid references ITSM vocabulary and COBIT governance concepts, and claims conformance to neither.
@@ -29,6 +31,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 
 - [Lane coordination](LANE_COORDINATION.md): the standing protocol for parallel Claude sessions working this repo — the lane table, the shared-surface serialization rule, announce-in-the-commit, and the cloud-lane-absorbs-base merge direction. Exists because the nac/webhooks eight-file collision proved chat context is not a coordination bus; git is.
 - [Repository lineage](REPO_LINEAGE.md): explains the public/private repository split and what belongs in each repository.
+- [Publication boundary](PUBLICATION_BOUNDARY.md): that split enforced rather than remembered — `pnpm run guard:boundary` requires every tracked path to be classified with a stated reason, so nothing reaches this public repository unexamined. Covers what the gate cannot establish, why `OWNER_PENDING` is not a snooze, and the two third-party documents currently awaiting an owner decision.
 - [IP & licensing posture](IP_AND_LICENSING.md): how SignalGrid's IP is held today (copyright/MIT public code, trademark on the name, trade-secret core/hardware, patent timing) and the open decisions to settle with counsel — plus the publication boundary that keeps patent options open. Not legal advice.
 - [Alpha to public pre-production parity](ALPHA_TO_PUBLIC_PREPROD_PARITY.md): maps DEV Alpha learnings into Review Hub, private core, redesign, deferred, or archive categories.
 - [Roadmap to private core](ROADMAP_TO_PRIVATE_CORE.md): defines how validated public concepts move toward protected core implementation.
@@ -36,6 +39,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 ### The decision fabric — build the grid
 
 - [Open orchestration vision](OPEN_ORCHESTRATION_VISION.md): the open, central, GitOps-native decision-orchestration direction (config-as-code, zero-touch provisioning, "decisions on your behalf") and its honest boundary — what is built (`lib/posture-composition`, `lib/flows` grid-coverage / signal-sourcing / grid-config / app-resilience) vs roadmap.
+- [IaC engine design notes](IAC_ENGINE_DESIGN_NOTES.md): what is worth borrowing from Terraform / OpenTofu / Pulumi as DESIGN for `@workspace/iac` — durable plan artifacts bound to their approval, refresh/plan/apply as three phases, stable resource addressing, teardown as the graph run backwards, and Pulumi's Automation API as the embeddable posture SignalGrid actually needs. Also what NOT to borrow, and the licence table that settles it: Pulumi Apache-2.0, OpenTofu MPL-2.0, Terraform BSL 1.1 (which bars embedded competing use). Ideas only — no code from any of them is copied here.
 - [Signal sourcing](SIGNAL_SOURCING.md): how each signal reaches the Grid — API / native integration / grid-collected (the Grid does the lifting) / unavailable (a real gap) — so coverage honestly reflects how the source systems are configured. Modeled in `@workspace/flows` signal-sourcing; proven by `proof:grid-coverage`.
 - [Teardown-proof](PROVISIONING_TEARDOWN_PROOF.md): prove the retreat before you trust the deploy — a device-setup recording is not deploy-ready until its reversal is proven (every step reversed, the system extension deactivated + restart-gated, the allow profile removed last in dependency order, a clean-state check), with an owner-gated, simulated-by-default decommission rehearsal. `@workspace/flows` provisioning-teardown; proven by `proof:provisioning-teardown`.
 - [Credential-exposure signal](CREDENTIAL_EXPOSURE_SIGNAL.md): endpoint secret-exposure (shell history / `.env` / CLI caches / AI-agent configs & logs) as a read-only decision signal — SignalGrid consumes a detection tool's verdict (GitGuardian/Wiz/Truffle/Microsoft) and turns it into allow/step-up/restrict/deny to contain the blast radius of a device assumed compromised. It does not scan or remediate. Modeled in `@workspace/integrations` credential-exposure; proven by `proof:credential-exposure`.
@@ -72,6 +76,20 @@ This documentation set explains SignalGrid's public pre-production and post-laun
   These live proofs REFUSE without a server and are skipped by name, never silently; they are opt-in, and the fixture proofs remain the CI-gated evidence of record.
 - [Run on a Mac, iPhone, or iPad](RUN_ON_MAC.md): the owner's one-command path to seeing it run.
 - [Inspiration & positioning references](inspiration/INSPIRATION.md): the IAM-landscape framing (Domains → Capabilities → Outcomes) mapped to SignalGrid, plus verdict-first XDR fusion and the NIST SP 800-207 policy-engine model.
+- **Source catalogs and research behind the built dimensions** — filed verbatim so a later
+  edit is visibly an edit, and linked here because a source nobody can reach is a source
+  nobody can check. Each was assessed through `INTAKE_LEDGER.md` before anything was built
+  from it: [Endpoint Management API catalog](inspiration/ENDPOINT_MANAGEMENT_API_CATALOG.md),
+  [PACS vendor API catalog](inspiration/PACS_VENDOR_API_CATALOG.md),
+  [OT/ICS/SCADA API catalog](inspiration/OT_ICS_SCADA_API_CATALOG.md),
+  [Asset management & IT governance API catalog](inspiration/ASSET_MANAGEMENT_IT_GOVERNANCE_API_CATALOG.md),
+  [Communications systems API catalog](inspiration/COMMUNICATIONS_SYSTEMS_API_CATALOG.md),
+  [ControlUp DEX/EUC API catalog](inspiration/CONTROLUP_DEX_EUC_API_CATALOG.md),
+  [Technology ecosystem master catalog](inspiration/TECHNOLOGY_ECOSYSTEM_MASTER_CATALOG.md),
+  [Mobile app & managed-configuration catalog](inspiration/MOBILE_APP_CONFIGURATION_CATALOG.md),
+  [Mobile app catalog agent](inspiration/MOBILE_APP_CATALOG_AGENT.md),
+  [Mobile config recorder contract](inspiration/MOBILE_CONFIG_RECORDER_CONTRACT.md), and the
+  [spatial-trust research report](inspiration/SPATIAL_TRUST_RESEARCH_REPORT.md).
 - [Operator console — Build the grid surfaces](OPERATOR_GRID_CONSOLE.md): the mobile PWA's capstone Grid overview plus five read-only detail views (grid intelligence, device recorder, app resilience, signal sourcing, grid config), each mapped to its `/cp/v1` read and `@workspace/flows` model — the "see the grid in action" entry point.
 - [Architecture — signals in, decisions out](architecture.html): a one-page, self-contained diagram of the whole fabric — every vendor system / database / cloud-SaaS as a read-only signal, fused into one verdict (allow/step-up/restrict/deny), orchestrated out (verdict · incident · action · webhook · audit), with the honest sourcing boundary and built-vs-roadmap marked.
 - Live demo (self-contained, offline): [`docs/fabric-console.html`](fabric-console.html) — add signals + workflows and watch the Grid handle real situations by itself.
@@ -152,12 +170,14 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Post-merge connector smoke evidence automation](POST_MERGE_CONNECTOR_SMOKE_EVIDENCE.md): explains the automatic Connector Emulator Smoke run and evidence manifest after merges to `SignalGrid_Alpha`.
 - [Validation commands](VALIDATION_COMMANDS.md): lists the standard install, typecheck, build, proof, unsafe-claim scan, and diff hygiene commands.
 - [CI and validation](CI_AND_VALIDATION.md): explains Review Hub CI, required local checks, docs sanity checks, and future branch-protection expectations.
+- [Independent security review — assessor package](SECURITY_REVIEW_PACKAGE.md): the material an external assessor needs to begin, assembled so engaging one is a scheduling problem rather than a discovery problem. Scope, the fixture/live boundary to attack first, reproducible evidence commands, and limitations disclosed rather than discovered. **Preparation only — no independent review has been performed.** Kept navigable by `pnpm run guard:assessor-package`.
 - [Product profile](PRODUCT_PROFILE.md): what a customer deployment refuses that the
   public review deployment serves — three unauthenticated surfaces (published owner
   bearers, an anonymous simulator that writes, an unauthenticated control plane), gated
   behind SIGNALGRID_PRODUCT_PROFILE=shared-device-gateway. Additive: unset changes nothing.
 - [The Mac lane](MAC_LANE.md): what a cloud macOS runner can prove and what only the
-  owner's real Mac can — the full suite now runs on `macos-latest` (dispatch +
+  owner's real Mac can — the full suite (every `proof:*` gate plus the non-proof
+  gates) now runs on `macos-latest` (dispatch +
   weekly) as a REHEARSAL, while live evidence stays mintable only off CI. Closes a hole
   where a hosted macOS runner satisfied the "real machine" check by construction.
 - [Live-sync loop](LIVE_SYNC_LOOP.md): keeps the owner's Mac MCP lane and the iOS EnterpriseShell building against current repo contracts — a deterministic sync manifest (`scripts/generate-sync-manifest.mjs`), a drift gate (`scripts/check-live-sync.mjs`, hard on manifest drift, report-only on real-hardware evidence staleness), and the owner's one-command evidence run (`verify:all --require-mcp --emit-evidence`).
@@ -168,6 +188,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Proof coverage audit](PROOF_COVERAGE_AUDIT.md): which claims are proven, by which proof, and where the gaps are.
 - [Owner-only actions](OWNER_ACTIONS.md): the steps no automated session can perform — branch protection, alert dismissal, Pages, secrets.
 - [Deployment — durable stack](DEPLOYMENT.md): the environment variables a real deployment must set, including `SIGNALGRID_ENROLLMENT_SECRET` (required for any non-demo deployment, because the demo core publishes operator/owner tokens via `/v1/keys`).
+- [Backup and restore](BACKUP_AND_RESTORE.md): how a self-hosted operator takes, verifies and restores a backup — and what the CI proof establishes by destroying a real database and restoring it with the audit chain still verifying.
 - [Domain setup](DOMAIN_SETUP.md): signalgrid.app on GitHub Pages.
 - [Phase 6 cutover runbook](PHASE6_CUTOVER_RUNBOOK.md) and [PIM activation live runbook](PIM_ACTIVATION_LIVE_RUNBOOK.md): the staged operational procedures.
 - [Zero-cost live-test matrix](ZERO_COST_LIVE_TEST_MATRIX.md): what can be validated against real systems without spend.
@@ -203,3 +224,34 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Strategic Options Decision Tree](STRATEGIC_OPTIONS_DECISION_TREE.md): planning tree for design partner, investment, OEM, acquisition, and last-option buyout paths.
 - [Target Buyer / Partner Matrix](TARGET_BUYER_PARTNER_MATRIX.md): category-based buyer and partner matrix.
 - [Demo and Simulation Expansion Plan](DEMO_AND_SIMULATION_EXPANSION_PLAN.md): docs-first Level 10 demo expansion plan.
+
+
+- [Delivery gap analysis](DELIVERY_GAP_ANALYSIS.md): every product surface — deployment models, apps per platform, dock/charging, website and marketing — measured against the tree rather than the task list, with BUILT / PARTIAL / ABSENT and the search that establishes each. Contradicts several tasks marked complete; where it does, the tree wins.
+- [Branch hygiene](BRANCH_HYGIENE.md): what each branch prefix means, which branches are load-bearing, why squash-merge makes `git branch --merged` an unreliable signal, and the reversible pruning procedure.
+
+## Subdirectory sets — design notes, records, and drafts
+
+These live under `docs/<subdir>/` rather than at the top level. They were listed
+here after `scripts/check-doc-orphans.mjs` was changed to walk subdirectories: it
+previously read only `docs/*.md`, so these files could not be counted, reported, or
+linked — the gate reported "no unreachable documents" about a set it never opened.
+Each is labelled with what it actually is, because several are drafts or historical
+records rather than current guidance.
+
+**Microsoft Graph sandbox connector — design set (fixture-backed, read-only).**
+
+- [Sandbox connector design](connectors/MICROSOFT_GRAPH_SANDBOX_CONNECTOR.md): the read-only, fixture-backed design for reading Graph/Entra/Intune-style posture into SignalGrid trust inputs. Microsoft stays the system of record; SignalGrid normalizes, decides, routes, and audits. Includes the non-goals.
+- [Signal model](connectors/MICROSOFT_GRAPH_SIGNAL_MODEL.md): the canonical field mapping (`sourceSystem`, `subjectId`, `deviceId`, `identityStatus`, …) those observations normalize into.
+- [Permission boundary](connectors/MICROSOFT_GRAPH_PERMISSION_BOUNDARY.md): the least-privilege read-only permission set. The names are deliberately generic placeholders, not a live tenant grant.
+- [Fixture strategy](connectors/MICROSOFT_GRAPH_FIXTURE_STRATEGY.md): why fixtures must be deterministic and public-safe, and which cases the set covers.
+- [Local environment placeholder example](env/MICROSOFT_GRAPH_ENV_EXAMPLE.md): placeholder documentation for a future PC-only Graph sandbox smoke test. Not a real `.env`, and it holds no real values.
+
+**Consolidation records (Phase 6 cutover).**
+
+- [Consolidation records overview](consolidation/README.md): what the auditable cutover artifacts are and how they were produced.
+- [Issue migration checklist](consolidation/MIGRATION_CHECKLIST.md): pre-filled migrate/close triage of the open issues across the consolidation sources, snapshotted 2026-07-14.
+- [Home-repo README draft](consolidation/HOME_REPO_README.md): a DRAFT post-cutover README for the home repo, kept here so it is reviewable and nothing is destroyed before cutover. It is not this repo's README.
+
+**Preview assets.**
+
+- [Pre-announcement assets](preview/README.md): public-safe, self-contained visual assets framed as pre-launch — no production, compliance, or partnership claims.

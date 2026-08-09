@@ -1,0 +1,125 @@
+name: Dock firmware
+
+# The SmartDock firmware core.
+#
+# WHAT THIS LANE PROVES, in the exact words that are true:
+#
+#   compiles for real MCU hardware + simulated conformance.
+#
+# NOT "the dock works". Nothing here has been flashed to anything. There is no driver
+# layer, no bootloader, no secure element, no radio and no enclosure. `SensorFrame` is
+# the seam where a driver would hand readings in; everything past that seam is in this
+# repository and is tested, and everything before it is not written yet.
+#
+# The reason the lane is still worth having is that the part past the seam is the part
+# that can mislead the fabric — a dock that reports "no tamper" because its switch
+# stopped answering does more harm than a dock that reports nothing at all. That
+# reasoning is testable without hardware, so it is tested without hardware.
+
+on:
+  pull_request:
+    paths:
+      - "firmware/**"
+      - "lib/signalgrid-core/src/types.ts"
+      - "lib/signalgrid-core/src/dock.ts"
+      - "scripts/check-dock-firmware-contract.mjs"
+      - ".github/workflows/firmware.yml"
+  push:
+    branches: [SignalGrid_Alpha]
+    paths:
+      - "firmware/**"
+      - "lib/signalgrid-core/src/types.ts"
+      - "lib/signalgrid-core/src/dock.ts"
+      - "scripts/check-dock-firmware-contract.mjs"
+      - ".github/workflows/firmware.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    name: Dock firmware (host tests + Cortex-M build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: firmware/dock/core
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Rust version
+        run: |
+          rustc --version
+          cargo --version
+
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Test on the host
+        run: cargo test -- --nocapture
+
+      # `test result: ok` is printed by a run that executed zero tests just as happily as
+      # by one that executed twenty-eight.
+      - name: Assert the tests actually ran
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test 2>&1 | tee test-output.txt
+          RAN=$(awk '/^test result: ok\./ { for (i = 1; i <= NF; i++) if ($i == "passed;") total += $(i-1) } END { print total + 0 }' test-output.txt)
+          echo "tests that reported passing: $RAN"
+          if [ "$RAN" -lt 20 ]; then
+            echo "::error::only $RAN test(s) ran. The suite has ~28; a collapse toward zero must not read as green."
+            exit 1
+          fi
+
+      # THE CLAIM THAT MATTERS. Building for thumbv7em-none-eabihf is what separates
+      # "this is Rust that happens to be about docks" from "this could be flashed": no
+      # std, no allocator, no OS, and the actual Cortex-M4F instruction set.
+      - name: Add the Cortex-M4F target
+        run: rustup target add thumbv7em-none-eabihf
+
+      - name: Build for Cortex-M4F (no_std, no allocator)
+        run: cargo build --release --target thumbv7em-none-eabihf
+
+      # A target name being accepted is not proof the output is for that target. Read
+      # the ELF header of what was actually produced.
+      - name: Assert the emitted object really is ARM
+        shell: bash
+        run: |
+          RLIB=$(ls target/thumbv7em-none-eabihf/release/*.rlib | head -1)
+          WORK=$(mktemp -d)
+          cp "$RLIB" "$WORK/" && (cd "$WORK" && ar x ./*.rlib)
+          OBJ=$(ls "$WORK"/*.o | head -1)
+          if [ -z "$OBJ" ]; then echo "::error::no object files inside $RLIB"; exit 1; fi
+          readelf -h "$OBJ" | tee /dev/stderr | grep -q 'Machine:.*ARM' \
+            || { echo "::error::the emitted object is not ARM"; exit 1; }
+          echo "confirmed: $(file "$OBJ")"
+
+      # Run the real evaluate/encode path and check what it emits against the
+      # vocabularies derived from the TypeScript the fabric normalises with.
+      - name: Emit fixture records from the firmware
+        run: cargo run --example emit_fixtures > "$RUNNER_TEMP/dock-events.jsonl"
+
+      - name: Firmware output matches the fabric's contract
+        working-directory: ${{ github.workspace }}
+        run: node scripts/check-dock-firmware-contract.mjs "$RUNNER_TEMP/dock-events.jsonl"
+
+      - name: Upload the emitted records
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dock-firmware-emitted-records
+          path: ${{ runner.temp }}/dock-events.jsonl
+          if-no-files-found: warn

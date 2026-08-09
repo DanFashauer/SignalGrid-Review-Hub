@@ -1,5 +1,14 @@
 import XCTest
 
+// In Xcode these sources are compiled directly into the test bundle (see
+// `EnterpriseShellTests` in ../project.yml), so there is no module to import. Under
+// SwiftPM (../Package.swift) the same files are a library, and this brings it in.
+// `canImport` keeps one set of tests serving both, with no #if around the tests
+// themselves — a divergence there is how two builds start proving different things.
+#if canImport(EnterpriseShellPort)
+@testable import EnterpriseShellPort
+#endif
+
 /// Locks the Swift `DecisionEngine` port to the invariants of the TypeScript
 /// reference (`lib/signalgrid-simulator/src/decisionEngine.ts`,
 /// `SIMULATOR_DECISION_ENGINE.md`). If the port drifts from the reference rules,

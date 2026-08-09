@@ -12,6 +12,7 @@ import { spawnSync } from "node:child_process";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { uncoveredLines } from "./lib/ci-jobs.mjs";
+import { nativeBuildExclusion } from "./lib/platform-native-build.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const quick = process.argv.includes("--quick");
@@ -71,6 +72,11 @@ const STEPS = [
   { name: "Core normalization-version (the provenance stamp must track the code it names)", cmd: ["node", "scripts/generate-core-normalization-version.mjs", "--check"] },
   { name: "Guard-registry drift (coverage lists derived, not trusted)", cmd: ["node", "scripts/check-guard-registries.mjs"] },
   { name: "CI\u2194preflight drift (every proof runs in both places)", cmd: ["node", "scripts/check-ci-preflight-sync.mjs"] },
+  // Pure static analysis of the Dockerfiles against pnpm-workspace.yaml — no
+  // daemon needed, which is the point: the web image was unbuildable for months
+  // because no gate ever built it.
+  { name: "Container native base (a Dockerfile that cannot build is not a deploy path)", cmd: ["node", "scripts/check-container-native-base.mjs"] },
+  { name: "Publication boundary (nothing reaches a public repo unclassified)", cmd: ["node", "scripts/check-publication-boundary.mjs"] },
   { name: "Pagination-truncation guard (a capped read must not look complete)", cmd: ["node", "scripts/check-pagination-truncation.mjs"] },
   { name: "Absent-collection law (nothing observed ≠ nothing wrong)", cmd: ["pnpm", "run", "proof:absent-collection"] },
   // The doctrine layer, checked against the engine rather than against itself.
@@ -85,21 +91,61 @@ const STEPS = [
   { name: "IT-layer model (every refusal has an owner; nothing routes to a phantom)", cmd: ["node", "scripts/check-it-layer-model.mjs"] },
   { name: "IT-layer model self-test (the gate can actually fail)", cmd: ["node", "scripts/check-it-layer-model.mjs", "--self-test"] },
   { name: "Port parity (DecisionEngine + AppWorkflows must not drift from their TS originals)", cmd: ["node", "scripts/check-decision-port-parity.mjs"] },
+  // Sibling of the gate above, one level down. That one keeps the Swift port faithful
+  // to the TypeScript reference; this one keeps the two BUILD SYSTEMS that compile the
+  // Swift port compiling the same files — the Xcode test target and the SwiftPM package
+  // that gives it a macOS run. Both lists are hand-written, so both can drift, and the
+  // drift is invisible: two green lanes covering different code.
+  { name: "iOS port sources (Xcode and SwiftPM must compile the same port)", cmd: ["node", "scripts/check-ios-port-sources.mjs"] },
+  // Three languages now implement the same fail-closed Assist rule (TypeScript,
+  // Kotlin, Rust), each with its own tests — which is exactly how they diverge while
+  // all three stay green. This checks every client is bound to ONE shared set of
+  // cases. It found two real Kotlin defects the day it was written.
+  { name: "Assist conformance (every client answers the shared cases the same way)", cmd: ["node", "scripts/check-assist-conformance.mjs"] },
   { name: "Read-error swallowing (a failed lookup must not report \"nothing found\")", cmd: ["node", "scripts/check-read-error-swallowing.mjs"] },
+  // Every other gate here checks what the text MEANS. This one checks that the text
+  // is what it appears to be: no bidirectional control or invisible character may
+  // make a tracked file render differently from how it executes (CVE-2021-42574).
+  { name: "Text safety (no file may render differently from how it executes)", cmd: ["node", "scripts/check-text-safety.mjs"] },
+  // Sibling of the gate above. That one catches text engineered to deceive; this
+  // one catches text nobody meant to ship — and a conflict marker reached the
+  // default branch in Dockerfile.web, where it broke the web image outright.
+  { name: "Merge markers (no unresolved conflict may be committed)", cmd: ["node", "scripts/check-merge-markers.mjs"] },
   { name: "Proof: mcp-server (the published plugin path boots and serves its declared tools)", cmd: ["pnpm", "run", "proof:mcp-server"] },
   { name: "Preflight↔CI parity (a gate that runs only locally is not a gate)", cmd: ["node", "scripts/check-preflight-ci-parity.mjs"] },
+  { name: "Assessor package (every link, command and path in it resolves)", cmd: ["node", "scripts/check-assessor-package.mjs"] },
   { name: "Connector discipline (every family gated + proven, none acting on a device)", cmd: ["node", "scripts/check-connector-discipline.mjs"] },
   { name: "Launch profile (the declared product edge matches the real one)", cmd: ["node", "scripts/check-launch-profile.mjs"] },
+  { name: "Ungated fetch (a health check is still a live call)", cmd: ["node", "scripts/check-ungated-fetch.mjs"] },
+  // A core proof can show authorizedContext refuses the wrong role; only this shows the
+  // ROUTES still call it. Without it a handler could regress to context() and stay green.
+  { name: "Durable-path authorization (a durable read must authorize, not just authenticate)", cmd: ["node", "scripts/check-durable-path-authorization.mjs"] },
+  // SIX offline proofs ran in NO pull-request gate — not here, not in any workflow
+  // except mac-lane.yml, which fires weekly and on dispatch, never on a PR. Each is
+  // self-described as pure and offline, so there was no reason for it beyond nobody
+  // wiring them up. proof:isolation-scope is the one that stings: it asserts no tenant
+  // can read another tenant's row, across every scoped reader, and a break in that
+  // would have passed preflight and every PR check.
+  { name: "Proof: emit-gate (no outbound family sends from a non-emitting tier)", cmd: ["pnpm", "run", "proof:emit-gate"] },
+  { name: "Proof: isolation-scope (no tenant can read another's row)", cmd: ["pnpm", "run", "proof:isolation-scope"] },
+  { name: "Proof: nac (read-only, no device action reachable, live path gated)", cmd: ["pnpm", "run", "proof:nac"] },
+  { name: "Proof: webhooks (outbound delivery gated; refusals explain themselves)", cmd: ["pnpm", "run", "proof:webhooks"] },
+  { name: "Proof: mdm-profile (the shipped profiles say what the product claims)", cmd: ["pnpm", "run", "proof:mdm-profile"] },
+  { name: "Proof: graph-wire (throttling, 5xx, auth and malformed bodies fail closed)", cmd: ["pnpm", "run", "proof:graph-wire"] },
   { name: "Docs\u2194proof FIGURE guard (a measured number must still be one)", cmd: ["node", "scripts/check-proof-figures.mjs"] },
   { name: "Proof-count sync (documented check counts match their proofs)", cmd: ["node", "scripts/check-proof-counts.mjs"] },
   { name: "Live-sync manifest (external builders see current contracts)", cmd: ["node", "scripts/check-live-sync.mjs"] },
   { name: "MCP surface (chat connection must match the fabric)", cmd: ["node", "scripts/check-mcp-surface.mjs"] },
   { name: "Typecheck (all packages)", cmd: ["pnpm", "run", "typecheck"] },
-  { name: "Build (all packages)", cmd: ["pnpm", "run", "build"], heavy: true, env: { PORT: "3000", BASE_PATH: "/" } },
+  // needsNativeBuild: rollup/esbuild/lightningcss/oxide platform binaries. The
+  // workspace strips every triple but linux-x64, so on other platforms this step
+  // is structurally absent rather than failing — see scripts/lib/platform-native-build.mjs.
+  { name: "Build (all packages)", cmd: ["pnpm", "run", "build"], heavy: true, needsNativeBuild: true, env: { PORT: "3000", BASE_PATH: "/" } },
   { name: "Proof: intune-entra-posture", cmd: ["pnpm", "run", "proof:intune-entra-posture"] },
   { name: "Proof: signalgrid-core", cmd: ["pnpm", "run", "proof:signalgrid-core"] },
   { name: "Proof: live-idp (real OIDC provider, real DPoP)", cmd: ["pnpm", "run", "proof:live-idp"] },
-  { name: "Browser E2E (review console, website, admin)", cmd: ["pnpm", "run", "test:e2e"], heavy: true },
+  // Drives the built bundles, so it inherits the same platform constraint.
+  { name: "Browser E2E (review console, website, admin)", cmd: ["pnpm", "run", "test:e2e"], heavy: true, needsNativeBuild: true },
   { name: "Proof: signalgrid-simulator", cmd: ["pnpm", "run", "proof:signalgrid-simulator"] },
   { name: "Proof: signalgrid-grid", cmd: ["pnpm", "run", "proof:signalgrid-grid"] },
   { name: "Proof: microsoft-graph-sandbox", cmd: ["pnpm", "run", "proof:microsoft-graph-sandbox"] },
@@ -182,6 +228,11 @@ const STEPS = [
   { name: "Proof: observability (metrics endpoint)", cmd: ["pnpm", "run", "proof:observability"] },
   { name: "Proof: enterprise-auth (OIDC/JWT)", cmd: ["pnpm", "run", "proof:enterprise-auth"] },
   { name: "Proof: webauthn-verify", cmd: ["pnpm", "run", "proof:webauthn-verify"] },
+  // Absorbed from the base lane. It SELF-SKIPS when DATABASE_URL is unset, which is
+  // exactly why it belongs here rather than on the CI-only exempt list: preflight
+  // stays deterministic and needs no Postgres, and an operator who HAS a database
+  // gets the restore path exercised locally.
+  { name: "Proof: backup-restore (the restore path, exercised not assumed)", cmd: ["pnpm", "run", "proof:backup-restore"] },
   { name: "Proof: audit-ledger", cmd: ["pnpm", "run", "proof:audit-ledger"] },
   { name: "Proof: session-store", cmd: ["pnpm", "run", "proof:session-store"] },
   { name: "Proof: orchestration", cmd: ["pnpm", "run", "proof:orchestration"] },
@@ -229,10 +280,26 @@ const STEPS = [
   { name: "CycloneDX SBOM committed in sync", cmd: ["bash", "-c", "pnpm run sbom && git diff --exit-code -- artifacts/sbom/cyclonedx.json"] },
 ];
 
+// Is the native web build structurally impossible here? Derived from the committed
+// pnpm-workspace.yaml plus whether the binaries actually resolve — never from a
+// flag, so nobody can buy a skip by asking for one. On linux-x64 (CI) the binaries
+// are present by design and this is always false, leaving the build mandatory.
+const nativeExclusion = nativeBuildExclusion(repo);
+if (nativeExclusion.excluded) {
+  console.log(`ℹ native web build unavailable on ${nativeExclusion.target} — ${nativeExclusion.reason}\n`);
+}
+
 const results = [];
 let failed = null;
 for (const step of STEPS) {
   if (quick && step.heavy) { results.push({ name: step.name, status: "skipped" }); continue; }
+  if (step.needsNativeBuild && nativeExclusion.excluded) {
+    // NOT a pass. Recorded as absent, with the reason, and surfaced in the summary
+    // and the final verdict so a reader is never told more than actually ran.
+    results.push({ name: step.name, status: "unavailable" });
+    console.log(`▶ ${step.name} … unavailable on this platform`);
+    continue;
+  }
   process.stdout.write(`▶ ${step.name} … `);
   const [bin, ...args] = step.cmd;
   const r = spawnSync(bin, args, {
@@ -254,7 +321,14 @@ for (const step of STEPS) {
 }
 
 console.log("\n── preflight summary ──");
-for (const r of results) console.log(`  ${r.status === "ok" ? "✓" : r.status === "skipped" ? "–" : "✗"} ${r.name}${r.status === "skipped" ? " (skipped)" : ""}`);
+for (const r of results) {
+  const mark = r.status === "ok" ? "✓" : "–";
+  const note =
+    r.status === "skipped" ? " (skipped)"
+    : r.status === "unavailable" ? " (UNAVAILABLE on this platform — not run, not passed)"
+    : "";
+  console.log(`  ${mark} ${r.name}${note}`);
+}
 
 if (failed) {
   console.error(`\nPreflight FAILED at: ${failed}. Fix before pushing.`);
@@ -273,7 +347,21 @@ if (failed) {
 // phase-pr-evidence and the whole iOS suite were missing from the one list whose job is
 // to say what is missing. See scripts/lib/ci-jobs.mjs.
 const UNCOVERED = uncoveredLines();
+// Kept from the base lane and complementary to the line above: a step the platform
+// could not run is UNAVAILABLE, never passed. Two different honesty problems — what CI
+// covers that preflight does not, and what preflight could not execute here.
+const unavailable = results.filter((r) => r.status === "unavailable");
 console.log(`\nPreflight PASSED${quick ? " (quick — heavy builds skipped)" : ""} — everything it runs is green.`);
+if (unavailable.length > 0) {
+  // Stated WITH the verdict, not below it. "Everything it runs is green" is true
+  // and also incomplete; a reader deciding whether to trust this run needs to know
+  // which steps never ran, and that this platform CANNOT run them.
+  console.log(`\n  ${unavailable.length} step(s) did NOT run — unavailable on ${nativeExclusion.target}, not passed:`);
+  for (const r of unavailable) console.log(`    · ${r.name}`);
+  console.log(`    reason: ${nativeExclusion.reason}`);
+  console.log("    These still run in CI on linux-x64, where the binaries exist. A green here");
+  console.log("    is NOT evidence the web bundle builds.");
+}
 console.log("\n  NOT covered by this harness (CI runs these; a green preflight says nothing about them):");
 for (const j of UNCOVERED) console.log(`    · ${j}`);
 if (quick) console.log("    · the full monorepo build + browser E2E (--quick skipped them; drop --quick to include)");

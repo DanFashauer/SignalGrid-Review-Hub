@@ -21,6 +21,132 @@ pnpm run proof:connector-emulator
 
 The docs sanity job verifies that required public-review docs exist and checks for narrow, direct unsafe claims such as production-ready, replacement, partner, MFi certification, or autonomous production-remediation claims. It is not intended to block explicit disclaimers, guardrail language, or validation-command examples that document the scanner itself.
 
+## Apple lane — iOS, iPadOS and macOS
+
+`.github/workflows/ios-ci.yml` runs on `macos-latest` for any change under
+`native/ios/**` (and for changes to the workflow itself). It carries four jobs:
+
+| Job | What it proves |
+| --- | --- |
+| `EnterpriseShell (iPhone simulator)` | the app target builds and its unit tests pass on iPhone |
+| `EnterpriseShell (iPad simulator)` | the same, on iPad |
+| `macOS native (SwiftPM, no simulator)` | the decision port and `SignalGridMobileCore` build and test as native macOS binaries |
+| `SignalGridMobile` / `Lint & Security` | `scripts/verify.sh`, SwiftLint, and the credential/insecure-URL scan |
+
+**Why iPad is its own job.** Every app target in `native/ios/project.yml` sets
+`TARGETED_DEVICE_FAMILY: "1,2"` — a claim that the app supports iPad. Before this
+matrix existed the workflow picked *the first available iOS simulator*, which on
+GitHub's images is always an iPhone, so the iPad half of that claim was asserted and
+never once built. The matrix uses `fail-fast: false`, so a green iPhone cannot hide a
+red iPad, and `native/ios/scripts/pick-simulator.py` **refuses** rather than falling
+back when a device family is missing from the runner — the fallback is precisely what
+made the gap invisible. That refusal has its own negative controls
+(`pick-simulator.py --self-test`), which run in the job before the picker is trusted.
+
+**Why macOS is not a simulator run.** `native/ios/Package.swift` compiles the six
+pure-Foundation port files — `DecisionEngine.swift`, `AppWorkflows.swift` and the
+services around them — as a SwiftPM library, and runs the same XCTest suite against
+it. That buys two things a simulator run cannot: the whole logic suite runs in seconds
+with nothing booted, and "the port is pure Foundation" stops being a comment and
+becomes a compile error the moment somebody reaches for UIKit.
+
+The Xcode test target and the SwiftPM package deliberately compile *the same files*
+rather than a copy — duplicating a byte-faithful port to make it testable would defeat
+the reason it is byte-faithful. The test sources carry
+`#if canImport(EnterpriseShellPort)` around their import so one set of tests serves
+both builds. Because both file lists are hand-maintained,
+`scripts/check-ios-port-sources.mjs` derives them from `Package.swift` and
+`project.yml` and fails if they diverge; it runs in `preflight` and in the
+`macos-native` job. Without it the two lanes could drift into testing different code
+while both stayed green.
+
+**What none of this proves.** A hosted macOS runner is a throwaway VM and a simulator
+is not a device: nothing here says anything about MDM enrolment, supervision, or
+on-device enforcement. See `docs/MAC_LANE.md` for that boundary.
+
+## Desktop lane — Windows and Linux
+
+`.github/workflows/desktop.yml` builds and tests `native/desktop/core` — the Assist
+gate client for the desktop shell — on **both `ubuntu-latest` and `windows-latest`**,
+with `fail-fast: false` so a green Linux cannot hide a red Windows.
+
+| Job | What it proves |
+| --- | --- |
+| `Assist core (ubuntu-latest)` / `(windows-latest)` | the trust rules compile and their 38 tests pass on both platforms |
+| `Desktop shell (ubuntu-latest)` / `(windows-latest)` | a **runnable executable** builds on both, and is uploaded as a CI artifact |
+| `Shared Assist vectors bind every client` | see the next section |
+
+**The core came first, deliberately.** `native/desktop/core` is a Rust crate — the
+Assist outcome vocabulary, fail-closed wire parsing, endpoint validation, 38 tests.
+Everything that decides what a worker is told is testable with `cargo test` on any
+machine, with no display server, installer, or signing certificate. `native/desktop/app`
+is then a Tauri shell thin enough that nothing important can hide in it: it renders a
+decision and says what the host app may do with it.
+
+Windows is a separate job for the same reason iPad is one in the Apple lane: a platform
+claimed from a build that never ran on it is a claim nothing checks.
+
+**What the shell does not do.** It does not decide anything and it does not touch the
+network. The decision it renders is a **fixture**, labelled as one *on screen* — a
+`step_up`, chosen because it is the outcome most likely to be mishandled (an `allow`
+would let a shell that ignores the outcome entirely still look correct). Its unit tests
+assert the fixture stays a `step_up`, that it never renders as proceedable, and that an
+unconfigured gate URL is **stated** rather than left blank.
+
+**What CI produces is an executable, not an installer.** No bundling, no code signing,
+no notarisation, no auto-update. On Linux the binary needs WebKitGTK present at run
+time. `artifacts/signalgrid-desktop` remains a separate Vite web app — the operator
+console — exactly as `docs/APP_SUITE_MATRIX.md` says.
+
+**The icons are source.** `native/desktop/app/icons/generate-icons.mjs` encodes them as
+a plain-text grid and emits deterministic PNG and ICO bytes; CI asserts the committed
+files still match. Same reasoning `.github/workflows/android.yml` gives for having no
+Gradle wrapper jar: a public repository should not carry a binary no reviewer reads and
+no gate inspects.
+
+## One set of Assist cases, three clients
+
+There are now three independent implementations of the same fail-closed rule —
+TypeScript in `lib/` (the source of truth), Kotlin in `native/android/core`, and Rust
+in `native/desktop/core`. Each had its own hand-written tests, which is precisely the
+arrangement in which they diverge silently: every suite stays green while one client
+starts treating a malformed response differently from the others.
+
+`native/shared/assist-wire-conformance.json` is **one set of 42 cases every client
+must agree on** — happy paths, transport failures, captive-portal HTML, truncated
+bodies, wrong-typed fields, and the near-misses (`allow_all`, `disallow`, `allowed`)
+that a lenient parser could talk itself into accepting. Each client has a test that
+reads the file and asserts its own parser agrees, case by case.
+
+**It found two real defects in the Kotlin client on its first run**, neither visible
+to that client's own suite:
+
+| Defect | Why it mattered | Settled by |
+| --- | --- | --- |
+| `RESTRICT.proceedsWithoutFurtherAction` returned `true` | a host app would have carried on at **full** capability on a restrict decision, silently discarding the ceiling | `lib/orchestration/src/index.ts` maps `restrict` → mode `hold`, not `proceed` |
+| `parse()` accepted `"stepup"` / `"step-up"` as `STEP_UP` | strictly **more permissive** than denying: `STEP_UP` offers a challenge and so a route to proceeding, `DENY` offers none | the wire vocabulary is exactly four values (`VALID_OUTCOMES` in `lib/signalgrid-core/src/policy.ts`) — neither spelling appears anywhere in the product |
+
+Both were fixed against the source of truth rather than by editing the vectors to
+match. **Never make a case pass by weakening it**: a disagreement here is a client
+that will mishandle a real gate response.
+
+Two things keep the file itself honest:
+
+- **A non-vacuity floor.** A suite made only of denials is satisfied by a client that
+  returns `DENY` unconditionally and decides nothing. The file declares its own
+  minimum case count and required outcomes; every client asserts them *before* running
+  the cases, and asserts afterwards that a proceedable case actually proceeded.
+- **`scripts/check-assist-conformance.mjs`**, which derives the client list from
+  `native/*/core` on disk rather than a written-down list — so a fourth client added
+  without wiring the vectors fails the gate rather than quietly opting out. It runs in
+  `preflight` and in the desktop workflow.
+
+**Not established by a green run:** that the clients' tests *ran* (the language lanes
+do that); iOS, which ports the decision engine rather than consuming `/v1` as a wire
+client and is covered by `scripts/check-decision-port-parity.mjs`; or the TypeScript
+source the vectors were written *from* — a case that misread the product would be
+wrong in every client at once, and consistently.
+
 ## Required local checks
 
 Before opening or updating a pull request, run **one command** from the repository root:

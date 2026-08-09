@@ -6,7 +6,7 @@ import {
   listFlows, evaluateFlowHealth, resolveFlowBreak, gridIntelligence, type SignalState,
   DEMO_FLOWS, GRID_SITUATIONS, evaluateGridCoverage,
   lintGridConfig, gridConfigValid, summarizeGridConfig, governanceScorecard, type GridConfig,
-  sourcingToSignalStates, summarizeSourcing, fidelityOf, isWireable, gridDoesLifting, type SignalSource,
+  projectSourcingAsSignalStates, summarizeSourcing, fidelityOf, isWireable, gridDoesLifting, type SignalSource,
   planZeroTouchSetup, lintSetupRecording, setupRecordingValid, type DeviceSetupRecording,
   fleetResilience, type AppService,
   buildCoverageReport, isKnownPlane, KNOWN_SOURCE_PLANES, EVIDENCE_AXES,
@@ -317,11 +317,17 @@ const GRID_SIGNAL_SOURCES: SignalSource[] = [
 const GRID_CONFIG: GridConfig = { signals: GRID_SIGNAL_SOURCES, workflows: [...DEMO_FLOWS], situations: [...GRID_SITUATIONS] };
 
 router.get("/cp/v1/grid/coverage", (_req, res) => {
-  const wired = sourcingToSignalStates(GRID_SIGNAL_SOURCES);
+  // A CEILING, not a reading. Nothing here observed a signal: the states are
+  // projected from each source's acquisition method, so the coverage below is what
+  // this sourcing posture would allow once every wireable signal is actually wired
+  // and healthy. `coverage.basis` says so in the payload — it is derived by
+  // evaluateGridCoverage from the projection wrapper, not asserted here, so this
+  // route cannot drift into claiming a measurement it never took.
+  const projection = projectSourcingAsSignalStates(GRID_SIGNAL_SOURCES);
   res.json({
-    note: "Which situations the Grid handles on its own, given the active workflows + the signals it can source. Fixture data — read-only.",
+    note: "The CEILING this sourcing posture allows: which situations the Grid would handle on its own once every wireable signal is wired and healthy, given the active workflows. Nothing was observed or contacted — see coverage.basis. Fixture data, read-only.",
     sourcing: summarizeSourcing(GRID_SIGNAL_SOURCES),
-    coverage: evaluateGridCoverage(DEMO_FLOWS, GRID_SITUATIONS, wired),
+    coverage: evaluateGridCoverage(DEMO_FLOWS, GRID_SITUATIONS, projection),
   });
 });
 

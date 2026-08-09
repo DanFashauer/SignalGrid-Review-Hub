@@ -79,21 +79,51 @@ export function gridDoesLifting(method: AcquisitionMethod): boolean {
 }
 
 /**
- * Translate each source's acquisition posture into the wired signal states the
- * Grid actually sees. A source with a usable path (api / native / grid_collected)
- * is wired and healthy; an `unavailable` source yields NO state at all, so it
- * reads as missing downstream — fail-safe (the Grid never pretends to have a
- * signal it cannot obtain). Fidelity is deliberately NOT folded into health: a
- * grid-collected signal is present and working, just lower-confidence, and that
- * confidence is surfaced separately (see summarizeSourcing / fidelityOf) so
- * nothing over-trusts a signal the Grid had to synthesize.
+ * Signal states inferred from how signals COULD be sourced — never from anything
+ * observed. The tag is the whole point: it is the only way to construct one, so a
+ * consumer that accepts this type knows, from the type alone, that every `healthy`
+ * inside it is a hypothesis about a wireable path rather than a reading.
  */
-export function sourcingToSignalStates(sources: readonly SignalSource[]): SignalState[] {
-  const out: SignalState[] = [];
+export interface SourcingProjection {
+  readonly basis: "projected_from_sourcing";
+  readonly states: readonly SignalState[];
+}
+
+/**
+ * A PROJECTION, and the wrapper exists so nothing downstream can forget that.
+ *
+ * `SignalState.status` is a HEALTH vocabulary — "the observed state of a signal the
+ * grid consumes". What this function has is not an observation. It has a
+ * CONFIGURATION fact: this source's acquisition method is one the Grid could wire.
+ * Emitting `status: "healthy"` from that collapses four distinct states into one:
+ *
+ *     wireable  ≠  wired  ≠  delivering  ≠  healthy
+ *
+ * Nothing here contacted anything. Returning a bare `SignalState[]` let that
+ * distinction fall out of the type, and it did: `evaluateGridCoverage` went on to
+ * report situations as "active and fully fed" and to compute a percentage
+ * documented as what the Grid handles "right now" — present-tense operational
+ * claims, assembled from a capability nobody had measured.
+ *
+ * So the projection is returned WRAPPED. `evaluateGridCoverage` derives its basis
+ * from the wrapper rather than being told, which means the ceiling framing cannot
+ * be lost by a caller who forgets to pass a flag — there is no flag to forget.
+ * `summarizeGridConfig` already understood this and named its field
+ * `coveragePctAtFullHealth`; that understanding now lives in the type instead of in
+ * one caller's good judgement.
+ *
+ * Fail-safe on the input side, unchanged: an `unavailable` source yields NO state at
+ * all, so it reads as missing downstream and the Grid never projects a signal it
+ * cannot obtain. Fidelity is deliberately NOT folded in either — a grid-collected
+ * signal is lower-confidence, and that confidence is surfaced separately (see
+ * summarizeSourcing / fidelityOf) so nothing over-trusts a synthesized signal.
+ */
+export function projectSourcingAsSignalStates(sources: readonly SignalSource[]): SourcingProjection {
+  const states: SignalState[] = [];
   for (const s of sources) {
-    if (isWireable(s.method)) out.push({ id: s.id, status: "healthy" });
+    if (isWireable(s.method)) states.push({ id: s.id, status: "healthy" });
   }
-  return out;
+  return { basis: "projected_from_sourcing", states };
 }
 
 export interface SourcingSummary {

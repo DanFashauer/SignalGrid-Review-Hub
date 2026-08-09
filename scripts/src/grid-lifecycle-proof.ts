@@ -37,7 +37,7 @@ import {
   resolveAppResilience,
   fleetResilience,
   setupRecordingValid,
-  sourcingToSignalStates,
+  projectSourcingAsSignalStates,
   summarizeGridConfig,
   summarizeSourcing,
   type AppService,
@@ -109,13 +109,13 @@ check("the composed grid config lints clean (zero errors)", lintGridConfig(confi
 check("the config would fully cover its situations at health", summarizeGridConfig(config).coveragePctAtFullHealth === 100);
 
 // ── 4. COVER — with the sourced signals wired, what does the Grid handle? ───────
-const wired = sourcingToSignalStates(sources);
+const wired = projectSourcingAsSignalStates(sources);
 const coverage = evaluateGridCoverage(DEMO_FLOWS, GRID_SITUATIONS, wired);
 check("with every signal sourced, the Grid handles every situation itself", coverage.coveragePct === 100 && coverage.handled === GRID_SITUATIONS.length);
 
 // Fail-safe propagation: an ungettable source becomes a coverage gap, not a green.
 const withGap: SignalSource[] = sources.map((s) => (s.id === "custody" ? { ...s, method: "unavailable" } : s));
-const gapWired = sourcingToSignalStates(withGap);
+const gapWired = projectSourcingAsSignalStates(withGap);
 const gapCoverage = evaluateGridCoverage(DEMO_FLOWS, GRID_SITUATIONS, gapWired);
 const areaSituation = gapCoverage.situations.find((r) => r.workflowId === "flow_controlled_area")!;
 check("an unavailable source propagates to a coverage gap (custody → controlled-area not handled)", areaSituation.status !== "auto_handled" && gapCoverage.coveragePct < 100);
@@ -153,7 +153,7 @@ check("strip the recorded reversal and the setup is no longer deploy-ready (retr
 // ── determinism of the whole lifecycle ──────────────────────────────────────────
 const run = () => JSON.stringify({
   provision: planZeroTouchSetup(recording, tablet),
-  coverage: evaluateGridCoverage(DEMO_FLOWS, GRID_SITUATIONS, sourcingToSignalStates(sources)),
+  coverage: evaluateGridCoverage(DEMO_FLOWS, GRID_SITUATIONS, projectSourcingAsSignalStates(sources)),
   ehr: resolveAppResilience(suite[0]),
   decommission: planTeardown(recording, tablet),
 });

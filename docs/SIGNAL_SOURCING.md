@@ -7,7 +7,7 @@ Grid reads it; if it does not, the Grid either collects the signal another way o
 surfaces the gap. This page states that boundary plainly so no claim over-reaches.
 
 Modeled in code as `@workspace/flows` → `signal-sourcing.ts`
-(`AcquisitionMethod`, `sourcingToSignalStates`, `summarizeSourcing`,
+(`AcquisitionMethod`, `projectSourcingAsSignalStates`, `summarizeSourcing`,
 `fidelityOf`), and exercised by `pnpm run proof:grid-coverage`.
 
 ## The four acquisition paths
@@ -26,10 +26,10 @@ Modeled in code as `@workspace/flows` → `signal-sourcing.ts`
   preferred path for every signal.
 - **The Grid compensates where it must.** Where a system won't integrate, the Grid
   does the lifting — a collector, log ingestion, network observation, or a derived
-  proxy. The signal is still delivered, but it is flagged **lower fidelity** and it
-  costs more to stand up. `sourcingToSignalStates` still wires it (it is present and
-  working); `fidelityOf` reports the reduced confidence so nothing over-trusts a
-  signal the Grid had to synthesize.
+  proxy. The signal is still obtainable, but it is flagged **lower fidelity** and it
+  costs more to stand up. `projectSourcingAsSignalStates` still counts it as wireable;
+  `fidelityOf` reports the reduced confidence so nothing over-trusts a signal the Grid
+  had to synthesize.
   - *A concrete, shipped example:* `signalgrid-mcp` (`DanFashauer/signalgrid-mcp`,
     released) reads **macOS device posture** — device identity, OS build, security
     controls (firewall, stealth mode, FileVault, SIP, Gatekeeper), MDM enrollment,
@@ -55,18 +55,48 @@ Modeled in code as `@workspace/flows` → `signal-sourcing.ts`
 
 Feed the sourcing posture into grid coverage and the dependency is exact:
 
-- Every required signal available via `api` / `native` → the Grid can handle its
-  situations on its own.
-- A required signal is `grid_collected` → still wired, still handled — the Grid did
-  the lifting — but the sourcing summary shows it was the Grid's work, not the
-  vendor's.
-- A required signal is `unavailable` → its situation drops out of autonomous
-  coverage. That is a truthful gap, not a false green.
+(Read these as ceilings — see *Wireable ≠ wired* below. They describe what the
+sourcing posture allows, not what is running.)
+
+- Every required signal available via `api` / `native` → the Grid *could* handle its
+  situations on its own once those signals are wired and healthy.
+- A required signal is `grid_collected` → still wireable, so it does not lower the
+  ceiling — the Grid does the lifting — but the sourcing summary shows it was the
+  Grid's work, not the vendor's.
+- A required signal is `unavailable` → its situation drops out of the ceiling
+  entirely. That is a truthful gap, not a false green.
 
 So "the more you add, the smarter the Grid" (see `docs/inspiration/INSPIRATION.md`)
 carries a caveat this model makes explicit: *what you can add, and at what fidelity,
 is dictated by what your existing systems support* — and where they support nothing,
 the Grid does the lifting or the gap is named.
+
+### Wireable ≠ wired ≠ delivering ≠ healthy
+
+Everything above is about **acquisition posture** — how a signal *could* reach the
+Grid. None of it observes anything. That distinction used to be lost the moment
+sourcing met coverage, because the projection emitted `status: "healthy"` into a
+health vocabulary and the coverage result went on to report situations as "active
+and fully fed" with a percentage documented as what the Grid handles *right now*.
+Four states collapsed into one, and the resulting present-tense claim was assembled
+from a configuration fact nobody had measured.
+
+`projectSourcingAsSignalStates` therefore returns a tagged `SourcingProjection`
+rather than a bare array, and `evaluateGridCoverage` **derives** `coverage.basis`
+from what it was handed:
+
+| Input | `basis` | What the numbers mean |
+|---|---|---|
+| `SignalState[]` (real observations) | `observed` | What the Grid handles right now. |
+| `SourcingProjection` | `projected_from_sourcing` | A **ceiling** — what it would handle once every wireable signal is wired and healthy. `unavailable` sources still cap it. |
+
+Under a projection the per-situation wording changes too, not just the tag: a
+"handled" situation reads *every signal it requires has a wireable source … nothing
+here was observed*, never "fully fed". There is no flag to pass, so there is none to
+set wrongly and none to forget — the basis follows the argument. `GET
+/cp/v1/grid/coverage` serves a projection and says so; `summarizeGridConfig` names
+its field `coveragePctAtFullHealth` for the same reason. Pinned by
+`proof:grid-coverage`, including that the basis changes the claim and never the count.
 
 ## Seeing it — the operator surface
 

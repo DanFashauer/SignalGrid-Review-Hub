@@ -13,6 +13,19 @@
 // semantics (missing/broken/stale) are defined in exactly one place.
 
 import { evaluateFlowHealth, type Flow, type SignalState } from "./index";
+import type { SourcingProjection } from "./signal-sourcing";
+
+/**
+ * What the coverage numbers were computed FROM. Derived from the argument's shape,
+ * never passed in — a caller cannot mislabel a projection as an observation, and a
+ * caller cannot forget to label one either.
+ *
+ * - `observed`               — real signal states. Coverage is a present-tense fact.
+ * - `projected_from_sourcing` — states inferred from acquisition method alone. Nothing
+ *   was contacted, so coverage is a CEILING: what the Grid would handle once every
+ *   wireable signal is actually wired and healthy. `unavailable` sources still cap it.
+ */
+export type CoverageBasis = "observed" | "projected_from_sourcing";
 
 /**
  * How well the Grid covers a situation right now:
@@ -44,6 +57,12 @@ export interface SituationCoverageResult {
 
 export interface GridCoverage {
   situations: SituationCoverageResult[];
+  /**
+   * What these numbers were computed from. Read it before reading anything else:
+   * under `projected_from_sourcing` every figure below is a CEILING, not a
+   * measurement.
+   */
+  basis: CoverageBasis;
   /** Count auto-handled by the Grid with no human in the loop. */
   handled: number;
   /** Workflow active but under-fed. */
@@ -51,13 +70,26 @@ export interface GridCoverage {
   /** No active workflow at all. */
   blindSpots: number;
   total: number;
-  /** 0..100 — share of situations the Grid handles autonomously right now. */
+  /**
+   * 0..100 — share of situations covered.
+   *
+   * Under `basis: "observed"` this is what the Grid handles autonomously right now.
+   * Under `basis: "projected_from_sourcing"` it is the CEILING that sourcing posture
+   * allows — what would be handled once every wireable signal is wired and healthy.
+   * The two are not interchangeable and the field name deliberately does not say
+   * which it is; `basis` does.
+   */
   coveragePct: number;
 }
 
 /**
  * Evaluate how much of the situation set the Grid handles on its own, given the
- * currently ACTIVE workflows and the currently WIRED signal states.
+ * currently ACTIVE workflows and the signal states supplied.
+ *
+ * Read `result.basis` before reading `result.coveragePct`. Pass a `SignalState[]`
+ * and you get a measurement of now; pass a `SourcingProjection` and you get a
+ * ceiling, with every reason string reworded to say so. The basis is DERIVED from
+ * the argument's shape — there is no flag to set and therefore none to get wrong.
  *
  * Fail-safe: a situation resolves to `auto_handled` ONLY when its workflow is in
  * `activeWorkflows`, that workflow declares at least one required signal, and its
@@ -71,8 +103,13 @@ export interface GridCoverage {
 export function evaluateGridCoverage(
   activeWorkflows: readonly Flow[],
   situations: readonly GridSituation[],
-  wiredSignals: readonly SignalState[],
+  wiredSignals: readonly SignalState[] | SourcingProjection,
 ): GridCoverage {
+  // Derive the basis from what was handed in. A projection can only be built by
+  // projectSourcingAsSignalStates, so this is the one place the distinction has to
+  // be read and it cannot be spoofed by a caller passing the wrong flag.
+  const projected = !Array.isArray(wiredSignals);
+  const basis: CoverageBasis = projected ? "projected_from_sourcing" : "observed";
   // Group active workflows by id. When several active workflows share an id we
   // keep them ALL and require every one to be healthy (most-restrictive wins),
   // so a healthy duplicate can never mask a genuinely-broken flow of the same id.
@@ -82,7 +119,9 @@ export function evaluateGridCoverage(
     if (list) list.push(wf);
     else byId.set(wf.id, [wf]);
   }
-  const states = [...wiredSignals];
+  const states: SignalState[] = projected
+    ? [...(wiredSignals as SourcingProjection).states]
+    : [...(wiredSignals as readonly SignalState[])];
 
   const results: SituationCoverageResult[] = situations.map((sit) => {
     const flows = byId.get(sit.workflowId) ?? [];
@@ -111,7 +150,13 @@ export function evaluateGridCoverage(
         workflowId: sit.workflowId,
         status: "auto_handled",
         missingSignals: [],
-        reason: `${name} is active and fully fed — the Grid runs its response by itself.`,
+        // The projected wording is the correction this whole change exists for.
+        // "is active and fully fed" states a present operational fact; under a
+        // projection nothing was contacted, so the only true statement available is
+        // about the sources being wireable and what that WOULD yield.
+        reason: projected
+          ? `${name} is active and every signal it requires has a wireable source — once they are wired and healthy the Grid would run its response by itself. Nothing here was observed.`
+          : `${name} is active and fully fed — the Grid runs its response by itself.`,
       };
     }
     // Active but not runnable: some required signal is broken/missing/stale, or
@@ -136,7 +181,7 @@ export function evaluateGridCoverage(
   const total = results.length;
   const coveragePct = total ? Math.round((handled / total) * 100) : 0;
 
-  return { situations: results, handled, partial, blindSpots, total, coveragePct };
+  return { situations: results, basis, handled, partial, blindSpots, total, coveragePct };
 }
 
 // ── public-safe demo situations, tied to the demo flows ──────────────────────

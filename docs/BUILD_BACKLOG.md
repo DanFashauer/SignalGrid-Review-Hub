@@ -390,11 +390,9 @@ only), and the DDM rig is gated on an APNs push certificate.
 
 ## Next
 
-- [ ] **One finding left from the "status reported rather than measured" sweep.**
+- [x] **Both findings from the "status reported rather than measured" sweep — FIXED.**
       The sweep that produced the `itsm` tri-state health fix turned up two more instances of the
-      same class. The first is now fixed and gated (below); the second is still open, because the
-      honest fix is wider than the defect and the blast radius needs a deliberate decision rather
-      than a drive-by edit.
+      same class. Both are now closed and both are pinned.
 
       1. ~~**Twelve connectors fabricate an HTTP status they never observed.**~~ **FIXED, and gated
          so it cannot come back.** Every `*-connector.ts` with the shape `async healthCheck(...)`
@@ -422,15 +420,34 @@ only), and the DDM rig is gated on an APNs push certificate.
          belongs at the resolution layer — which already reports `mode: "fixture"` with a reason —
          rather than in twelve constructors. Still open, deliberately not closed with the status fix.
 
-      2. **`sourcingToSignalStates` labels a CAPABILITY with the HEALTH vocabulary.**
-         `lib/flows/src/signal-sourcing.ts` emits `{ id, status: "healthy" }` for every source whose
-         acquisition method is *wireable* — meaning it COULD be connected, not that it is currently
-         delivering. The docstring says so plainly and `proof:grid-coverage` pins the semantics, and
-         its only consumers are coverage evaluations, so nothing today reads it as a live health
-         claim. The risk is vocabulary drift: `status: "healthy"` is produced elsewhere in this repo
-         by things that DID observe. Fixing it means changing the `SignalState` vocabulary, which
-         ripples through coverage, flows, the control-plane route and several proofs — worth doing
-         deliberately, not incidentally.
+      2. ~~**`sourcingToSignalStates` labels a CAPABILITY with the HEALTH vocabulary.**~~ **FIXED —
+         and it was worse than this entry said.** `lib/flows/src/signal-sourcing.ts` emitted
+         `{ id, status: "healthy" }` for every source whose acquisition method is *wireable* —
+         meaning it COULD be connected, not that it is delivering. This entry concluded "its only
+         consumers are coverage evaluations, so nothing today reads it as a live health claim."
+         **That was wrong, and re-reading the consumer rather than the producer is what found it.**
+         `evaluateGridCoverage` took those states and returned `reason: "<flow> is active and fully
+         fed — the Grid runs its response by itself"` with a `coveragePct` documented as what the
+         Grid handles "right now" — present-tense operational claims assembled from a configuration
+         fact nobody had measured. `GET /cp/v1/grid/coverage` served exactly that.
+
+         The fix was NOT the one this entry proposed. Changing the `SignalStatus` vocabulary would
+         have been wrong: `evaluateFlowHealth` would then have to decide what a "wireable" signal
+         does to flow health, re-conflating the two axes. Instead the projection carries its own
+         basis: `projectSourcingAsSignalStates` returns a tagged `SourcingProjection`, and
+         `evaluateGridCoverage` **derives** `coverage.basis` (`observed` | `projected_from_sourcing`)
+         from the argument's shape. There is no flag to pass, so none to set wrongly and none to
+         forget. Under a projection every reason string is reworded — "every signal it requires has
+         a wireable source … nothing here was observed", never "fully fed" — because a reader skims
+         the reason, and a tag alone would have fixed nothing.
+
+         Coverage MATH is untouched; only the claim changed. That is asserted, not asserted-about:
+         `proof:grid-coverage` (45 assertions) pins both bases, that the basis is derived rather
+         than passed (same inputs, opposite bases), the wording on each side, and that the count is
+         identical across them. `summarizeGridConfig` had already reached this conclusion alone —
+         it named its field `coveragePctAtFullHealth` — and that judgement now lives in the type
+         instead of in one caller's care. Documented in `docs/SIGNAL_SOURCING.md` §"Wireable ≠
+         wired ≠ delivering ≠ healthy".
 
 - [x] **In-app step-up completion (real WebAuthn, possession + user-verification)** — the SERVER control
       is real: `/v1/step-up/enroll/{options,verify}` + `/v1/step-up/challenge` +

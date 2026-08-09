@@ -15,7 +15,7 @@
 
 import type { Flow, SignalState } from "./index";
 import { evaluateGridCoverage, type GridSituation } from "./grid-coverage";
-import { type AcquisitionMethod, type SignalSource, sourcingToSignalStates, summarizeSourcing } from "./signal-sourcing";
+import { type AcquisitionMethod, type SignalSource, projectSourcingAsSignalStates, summarizeSourcing } from "./signal-sourcing";
 
 /** A whole grid, as authored config: signals (+ how sourced), workflows, situations. */
 export interface GridConfig {
@@ -246,8 +246,11 @@ export interface GridConfigSummary {
 export function summarizeGridConfig(config: GridConfig): GridConfigSummary {
   const issues = lintGridConfig(config);
   const errors = issues.filter((i) => i.severity === "error").length;
-  const wired: SignalState[] = sourcingToSignalStates(config.signals ?? []);
-  const coverage = evaluateGridCoverage(config.workflows ?? [], config.situations ?? [], wired);
+  // Passed through as the PROJECTION, not unwrapped. That is what makes
+  // `coveragePctAtFullHealth` below an honest name rather than a hopeful one: the
+  // coverage result carries basis "projected_from_sourcing" and says ceiling, not now.
+  const projection = projectSourcingAsSignalStates(config.signals ?? []);
+  const coverage = evaluateGridCoverage(config.workflows ?? [], config.situations ?? [], projection);
   return {
     signals: (config.signals ?? []).length,
     workflows: (config.workflows ?? []).length,

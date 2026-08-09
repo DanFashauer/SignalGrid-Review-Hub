@@ -402,13 +402,46 @@ change as a skeptic trying to break it, with these questions:
   request-supplied signal.
 - **Proven?** Is there a passing proof/test that exercises the new behavior end
   to end — including the failure and fail-closed paths, not just the happy path?
+- **If the change IS a check — can it fail, and can it pass?** Both halves,
+  separately. See below; this one was learned the expensive way.
+
+### When the change is a gate, review the gate as well as its subject
+
+A gate has two failure modes and they are opposite, so a single green run
+proves neither:
+
+- **It can never fail.** The unfalsifiable guard — it compares a thing to
+  itself, or asserts the wording of a description rather than the state of the
+  world. Two live examples this repo has already paid for: a proof that checked
+  a declared launch gap's *text* still said "Graph transport" (green throughout
+  the period the transport existed), and a fabricated-status check that would
+  have been vacuous had it never been run against the pre-fix tree.
+  **Antidote:** a negative control. Reintroduce the exact defect, watch the gate
+  go red, restore. If you cannot make it fail on purpose, you have not got a gate.
+- **It can never pass.** Rarer, louder, and easy to ship because the subject of
+  the gate is real. `docs/STATUS.md` is generated, so a "regenerate and diff"
+  check looked right by analogy with the Postman collection, the
+  evidence-coverage page and the SBOM. But STATUS.md embeds the HEAD short sha
+  *by design* — that is its staleness tell — so the commit that adds the file
+  changes HEAD and it can never equal its own regeneration. Red on arrival, and
+  it took a CI run to notice because the drift it was catching was genuine.
+  **Antidote:** run the gate once *after* committing, in the state CI will see.
+
+The general form: verifying that a gate's SUBJECT is a real problem is not the
+same as verifying that the gate's MECHANISM works. Do both, and do the second
+one in the state the gate will actually run in.
 
 ## The checklist before opening a PR
 
 1. `pnpm run preflight` is green (or `--quick` during the loop, full before push).
+   Run **preflight itself**, not a hand-picked subset of its gates — a curated
+   list omits whatever you did not think of, which on one occasion was every
+   generated-artifact sync check and cost a red build.
 2. The change has a proof/test that covers its **failure** paths, not just success.
-3. An adversarial read of the diff against the questions above found nothing.
-4. Docs / comments / labels updated to stay true to the code.
-5. One reviewable concern per PR.
+3. If the change adds or edits a gate, it was negative-controlled — made to fail
+   on purpose and then restored — and run once after committing.
+4. An adversarial read of the diff against the questions above found nothing.
+5. Docs / comments / labels updated to stay true to the code.
+6. One reviewable concern per PR.
 
-When all five hold, push. Codex becomes a confirmation, not a rework loop.
+When all six hold, push. Codex becomes a confirmation, not a rework loop.

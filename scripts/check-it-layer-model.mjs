@@ -202,6 +202,36 @@ function main() {
     fail(`no reason codes parsed out of ${POLICY} — the parser has broken, and an empty derivation would pass every check below vacuously`);
   }
 
+  // ── Parser-completeness cross-check ───────────────────────────────────────
+  //
+  // The block parser above reads a rule's fields together, which is what lets it
+  // pair each reasonCode with its own outcome. But its structured reading has a
+  // blind spot: a rule written in a form the block splitter does not recognise
+  // (e.g. the whole object on one line, so the `\n  {\n` opener never matches) is
+  // simply not seen. Its reasonCode is then absent from `ruleCodes`, so the
+  // bijection below has nothing to miss — the code ships UNCLASSIFIED and the gate
+  // stays green. Verified: a one-line V1 rule emitting BRAND_NEW_UNCLASSIFIED
+  // passed this gate before this check existed.
+  //
+  // So cross-check the structured reading against a form-agnostic one: every
+  // `reasonCode: "LITERAL"` in policy.ts (a plain scan that cannot miss on layout,
+  // and that ignores `rule.reasonCode` because that is not a quoted literal) must
+  // have been picked up by the parser. A divergence means a rule exists in a shape
+  // the parser cannot read — which is a parser bug, reported as one, rather than a
+  // silent unclassified code.
+  const literalCodes = new Set(
+    [...source.matchAll(/reasonCode:\s*"([A-Z0-9_]+)"/g)].map((m) => m[1]),
+  );
+  for (const code of literalCodes) {
+    if (!ruleCodes.has(code)) {
+      fail(
+        `reason code ${code} appears as a literal in ${POLICY} but the rule parser did not read it — ` +
+          `a rule is written in a shape the block parser cannot see, so this code would ship UNCLASSIFIED. ` +
+          `Fix the rule's formatting (multi-line object) or the parser, not this check.`,
+      );
+    }
+  }
+
   // ── Engine specials exist as literals ─────────────────────────────────────
   // These are emitted by evaluatePolicy directly, so they never appear as a rule.
   // Verify each one is genuinely in the file rather than trusting the list.
@@ -442,6 +472,22 @@ function selfTest() {
     {
       name: "the parser ignores a reason-code-shaped string outside any rule set",
       run: () => readRuleCodes(`// see ALSO_NOT_A_RULE and reasonCode: "NOT_A_RULE"`).size === 0,
+    },
+    {
+      // The additive blind spot: a real rule whose reasonCode is a literal in the
+      // file but whose object shape the block parser cannot read. The completeness
+      // cross-check exists to catch exactly this, so pin that the two readings
+      // diverge on the pathological form — the divergence is what fails the build.
+      name: "a one-line rule's reasonCode is a file literal the block parser misses (the additive blind spot the cross-check closes)",
+      run: () => {
+        const oneLine =
+          `export const SHARED_DEVICE_RULES_V1: PolicyRuleSpec[] = [\n` +
+          `  { id: "zz", description: "d", match: [], outcome: "deny", reasonCode: "ONE_LINE_PROBE", severity: "high" },\n];\n`;
+        const parsed = readRuleCodes(oneLine).has("ONE_LINE_PROBE");
+        const literal = /reasonCode:\s*"ONE_LINE_PROBE"/.test(oneLine);
+        // The blind spot is real precisely when the literal is present but the parse misses it.
+        return literal && !parsed;
+      },
     },
     {
       // The defect this gate found in its own first parser. Without this control the

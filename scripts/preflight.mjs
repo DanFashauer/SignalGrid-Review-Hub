@@ -84,6 +84,11 @@ const STEPS = [
   // Trust; this asserts the checkable half against `evaluatePolicy` as shipped, so the
   // document cannot quietly stop describing the product.
   { name: "Zero Trust principles (the doctrine holds against the shipped decision core)", cmd: ["pnpm", "run", "proof:zero-trust-principles"] },
+  // Sibling doctrine layer: the Security Operations Evidence Fabric. Asserts the
+  // checkable half against the shipped engine and source — fail-closed on a security
+  // signal gap, the ~90 SecOps codes genuinely unminted, and the real-vs-fixture crypto
+  // boundary matching the code. No new product scope.
+  { name: "Security Operations Evidence (doctrine holds against engine + crypto source)", cmd: ["pnpm", "run", "proof:security-operations-evidence"] },
   // Completeness in both directions: every reason code a refusal can carry has an IT
   // layer and an owner, and nothing is classified that nothing emits. A new family or
   // a new rule fails this until a human classifies it — which is also one more

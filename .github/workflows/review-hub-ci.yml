@@ -403,6 +403,8 @@ jobs:
         run: pnpm run proof:absent-collection
       - name: "Zero Trust principles (the doctrine holds against the shipped decision core)"
         run: pnpm run proof:zero-trust-principles
+      - name: "Security Operations Evidence (doctrine holds against engine + crypto source)"
+        run: pnpm run proof:security-operations-evidence
       - name: "IT-layer model (every refusal has an owner; nothing routes to a phantom)"
         run: node scripts/check-it-layer-model.mjs
       - name: "IT-layer model self-test (the gate can actually fail)"

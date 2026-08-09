@@ -279,13 +279,15 @@ const STEPS = [
   // move one of the pinned figures. esbuild's output is byte-stable for a given input,
   // which is what makes the diff a usable gate rather than a flake.
   { name: "Evidence Coverage page committed in sync", cmd: ["bash", "-c", "git ls-files --error-unmatch docs/evidence-coverage.html >/dev/null && pnpm run build:evidence-coverage && git diff --exit-code -- docs/evidence-coverage.html"] },
-  // Same shape, and it was the one generated doc with NO gate at all. docs/STATUS.md
-  // is produced by scripts/status-summary.mjs; nothing ran it, so it drifted to 95
-  // proof gates against a real 122, 8 E2E specs against 10, 12 CI workflows against
-  // 16. It understated the work, which is the safe direction and precisely why it
-  // survived — a derived figure nobody re-derives is stale the moment the thing it
-  // counts changes.
-  { name: "STATUS.md committed in sync", cmd: ["bash", "-c", "git ls-files --error-unmatch docs/STATUS.md >/dev/null && pnpm run status:write && git diff --exit-code -- docs/STATUS.md"] },
+  // NOT a regenerate-and-diff gate, unlike the three above, and the difference is
+  // load-bearing: docs/STATUS.md embeds the HEAD sha by design (its own staleness
+  // tell), so the commit that adds it changes HEAD and it can never equal its own
+  // regeneration. Its generator is also slow and hits the network. So gate the part
+  // that actually rots — the inventory counts, which are cheap and offline. They had
+  // drifted to 95 proof gates against a real 122, 8 E2E specs against 10, and 12 CI
+  // workflows against 16.
+  { name: "STATUS.md figures still describe the repo", cmd: ["node", "scripts/check-status-figures.mjs"] },
+  { name: "STATUS.md figure gate self-test (the gate can actually fail)", cmd: ["node", "scripts/check-status-figures.mjs", "--self-test"] },
   { name: "Decision-latency pilot gate (bench)", cmd: ["pnpm", "run", "bench:decision-latency"] },
   // Mirrors the supply-chain job's "SBOM is committed and up to date" gate:
   // regenerate the CycloneDX SBOM and fail if it drifted (e.g. a new dependency

@@ -19,6 +19,11 @@ export function GridOverview() {
   const res = useQuery({ queryKey: ["cp-app-resilience-page"], queryFn: () => controlPlane.appResilience() });
 
   const coverage = cov.data?.coverage;
+  // `/cp/v1/grid/coverage` serves a projection — states inferred from acquisition
+  // method, nothing contacted — so these figures are a ceiling, not a reading. The
+  // hero metric used to paint 100% emerald and the pillar card used to say "handled".
+  // Green is reserved for an observed basis, because green means measured.
+  const covProjected = coverage?.basis === "projected_from_sourcing";
   const sourcing = src.data?.summary;
   const config = cfg.data;
   const plan = prov.data?.plan;
@@ -55,7 +60,7 @@ export function GridOverview() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Metric label="Coverage" value={coverage ? `${coverage.coveragePct}%` : "-"} accent={coverage && coverage.coveragePct === 100 ? "text-emerald-400" : "text-amber-400"} sub={coverage ? `${coverage.handled}/${coverage.total} situations` : ""} />
+            <Metric label={covProjected ? "Coverage ceiling" : "Coverage"} value={coverage ? `${coverage.coveragePct}%` : "-"} accent={coverage && coverage.coveragePct === 100 && !covProjected ? "text-emerald-400" : "text-amber-400"} sub={coverage ? `${coverage.handled}/${coverage.total} situations` : ""} />
             <Metric label="Signals sourced" value={sourcing ? `${sourcing.wireable}/${sourcing.total}` : "-"} accent={sourcing ? (sourcing.unavailable ? "text-amber-400" : "text-emerald-400") : undefined} sub={sourcing ? `${sourcing.vendorIntegrated} vendor · ${sourcing.gridCollected} grid-lifted` : ""} />
             <Metric label="Config" value={config ? (configOk ? "valid" : "invalid") : "-"} accent={config ? (configOk ? "text-emerald-400" : "text-red-400") : undefined} sub={config ? `${config.summary.errors} err · ${config.summary.warnings} warn` : ""} />
             <Metric label="Apps workable" value={fleet ? `${fleet.workable}/${fleet.total}` : "-"} accent={fleet ? (fleet.blocked ? "text-amber-400" : "text-emerald-400") : undefined} sub={fleet ? (fleet.blocked ? `${fleet.blocked} blocked` : "all workable") : ""} />
@@ -79,7 +84,7 @@ export function GridOverview() {
 
       {/* Pillars — each links to its surface */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <PillarCard href="/intelligence" title="Grid intelligence" line={coverage ? `${coverage.coveragePct}% coverage · ${coverage.handled}/${coverage.total} handled` : "flow health · recommendations"} />
+        <PillarCard href="/intelligence" title="Grid intelligence" line={coverage ? `${coverage.coveragePct}% ${covProjected ? "ceiling" : "coverage"} · ${coverage.handled}/${coverage.total} ${covProjected ? "reachable" : "handled"}` : "flow health · recommendations"} />
         <PillarCard href="/signal-sourcing" title="Signal sourcing" line={sourcing ? `${sourcing.wireable}/${sourcing.total} wireable · ${gaps} gap${gaps === 1 ? "" : "s"}` : "how each signal reaches the grid"} tone={gaps > 0 ? "warn" : "ok"} />
         <PillarCard href="/grid-config" title="Grid config" line={config ? `${config.summary.workflows} workflows · ${config.summary.signals} signals · ${configOk ? "valid" : "invalid"}` : "workflows as code"} tone={config ? (configOk ? "ok" : "bad") : undefined} />
         <PillarCard href="/provisioning" title="Device recorder" line={plan ? `${plan.steps.length} steps · ${plan.matched ? "matched" : "no match"} · simulated` : "zero-touch provisioning"} />

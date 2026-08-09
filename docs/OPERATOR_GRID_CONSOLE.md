@@ -17,7 +17,7 @@ staff.
 | View | Route | What it shows | Backed by | Model |
 |---|---|---|---|---|
 | **Grid overview** | `/grid` | The whole grid at a glance — coverage, sourced signals + gaps, config validity, apps workable — with caveats *named*, not hidden, and links into each surface. | composes the five reads below | (capstone) |
-| **Grid intelligence** | `/intelligence` | Flow health, recommendations, signal discovery, and the coverage rollup (situations handled on their own). | `/cp/v1/flows/health`, `/recommendations`, `/signal-discovery`, `/grid/coverage` | grid-coverage, recommendations, signal-discovery |
+| **Grid intelligence** | `/intelligence` | Flow health, recommendations, signal discovery, and the coverage rollup (a CEILING — the situations this sourcing posture could handle once every wireable signal is wired and healthy; `coverage.basis` says which). | `/cp/v1/flows/health`, `/recommendations`, `/signal-discovery`, `/grid/coverage` | grid-coverage, recommendations, signal-discovery |
 | **Device recorder** | `/provisioning` | Zero-touch provisioning — the recording as a Designer artifact, its CI validation, and a simulated plan preview; a non-matching device is shown **untouched**. | `/cp/v1/grid/provisioning` | provisioning |
 | **App resilience** | `/app-resilience` | Each clinical app's availability → resilience mode; a PHI app with no safe path is **blocked and surfaced**, never a workaround. | `/cp/v1/apps/resilience` | app-resilience |
 | **Signal sourcing** | `/signal-sourcing` | How each signal reaches the Grid — API / native / grid-collected / **gap** — and at what fidelity. | `/cp/v1/grid/sourcing` | signal-sourcing |

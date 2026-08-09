@@ -9,6 +9,23 @@ import { controlPlane, type FlowHealthRow, type DiscoveredSignal } from "@/lib/c
 const STATUS_DOT: Record<string, string> = { healthy: "bg-emerald-400", degraded: "bg-amber-400", broken: "bg-red-400" };
 const COV_DOT: Record<string, string> = { auto_handled: "bg-emerald-400", partial: "bg-amber-400", blind_spot: "bg-red-400" };
 const COV_TEXT: Record<string, string> = { auto_handled: "text-emerald-400", partial: "text-amber-400", blind_spot: "text-red-400" };
+
+// Coverage wording, derived from `coverage.basis` rather than written into the markup.
+//
+// `/cp/v1/grid/coverage` serves a PROJECTION: the signal states are inferred from each
+// source's acquisition method, so nothing was contacted and the figures are a ceiling.
+// This panel used to be titled "situations handled autonomously" and paint 100%
+// emerald — an operator reading it would believe the Grid was running responses it had
+// never been asked to run. Green now requires an OBSERVED basis, because green means
+// measured, and "auto handled" becomes "could handle" when nothing was measured.
+const projected = (b: string | undefined) => b === "projected_from_sourcing";
+const covTitle = (b: string | undefined) =>
+  projected(b) ? "Build the grid · situations this sourcing posture could handle" : "Build the grid · situations handled autonomously";
+const covLabel = (b: string | undefined) => (projected(b) ? "Coverage ceiling" : "Coverage");
+const covRowText = (status: string, b: string | undefined) =>
+  (projected(b) && status === "auto_handled" ? "could handle" : status.replace(/_/g, " "));
+const covAccent = (pct: number | undefined, b: string | undefined) =>
+  pct === 100 && !projected(b) ? "text-emerald-400" : "text-amber-400";
 const CLASS_STYLE: Record<string, string> = {
   evaluated: "border-emerald-400/30 text-emerald-400",
   candidate: "border-amber-400/30 text-amber-400",
@@ -44,11 +61,11 @@ export function Intelligence() {
       {/* Build the grid — the decision-fabric layer, live from /cp/v1 */}
       <Card className="border-primary/30">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-mono uppercase tracking-wider text-primary">Build the grid · situations handled autonomously</CardTitle>
+          <CardTitle className="text-sm font-mono uppercase tracking-wider text-primary">{covTitle(cov?.coverage.basis)}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Metric label="Coverage" value={cov ? `${cov.coverage.coveragePct}%` : "-"} sub={cov ? `${cov.coverage.handled}/${cov.coverage.total} situations` : ""} accent={cov && cov.coverage.coveragePct === 100 ? "text-emerald-400" : "text-amber-400"} />
+            <Metric label={covLabel(cov?.coverage.basis)} value={cov ? `${cov.coverage.coveragePct}%` : "-"} sub={cov ? `${cov.coverage.handled}/${cov.coverage.total} situations` : ""} accent={cov ? covAccent(cov.coverage.coveragePct, cov.coverage.basis) : undefined} />
             <Metric label="Signals sourced" value={cov ? `${cov.sourcing.wireable}/${cov.sourcing.total}` : "-"} sub={cov ? `${cov.sourcing.vendorIntegrated} vendor · ${cov.sourcing.gridCollected} grid-lifted` : ""} />
             <Metric label="Config" value={cfg ? (cfg.valid ? "valid" : "invalid") : "-"} sub={cfg ? `${cfg.summary.errors} errors · ${cfg.summary.warnings} warnings` : ""} accent={cfg ? (cfg.valid ? "text-emerald-400" : "text-red-400") : undefined} />
             <Metric label="Apps workable" value={appRes ? `${appRes.fleet.workable}/${appRes.fleet.total}` : "-"} sub={appRes ? (appRes.fleet.blocked ? `${appRes.fleet.blocked} blocked` : "all workable") : ""} accent={appRes ? (appRes.fleet.blocked ? "text-amber-400" : "text-emerald-400") : undefined} />
@@ -61,7 +78,7 @@ export function Intelligence() {
                   <span className="truncate">{s.label}</span>
                 </span>
                 <span className={`shrink-0 uppercase ${COV_TEXT[s.status] ?? "text-muted-foreground"}`}>
-                  {s.status.replace(/_/g, " ")}{s.missingSignals.length > 0 ? ` · needs ${s.missingSignals.join(", ")}` : ""}
+                  {covRowText(s.status, cov?.coverage.basis)}{s.missingSignals.length > 0 ? ` · needs ${s.missingSignals.join(", ")}` : ""}
                 </span>
               </div>
             ))}

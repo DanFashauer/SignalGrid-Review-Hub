@@ -390,23 +390,37 @@ only), and the DDM rig is gated on an APNs push certificate.
 
 ## Next
 
-- [ ] **Two findings from the "status reported rather than measured" sweep — recorded, not fixed.**
+- [ ] **One finding left from the "status reported rather than measured" sweep.**
       The sweep that produced the `itsm` tri-state health fix turned up two more instances of the
-      same class. Neither was fixed in that pass, because in both cases the honest fix is wider
-      than the defect and the blast radius needs a deliberate decision rather than a drive-by edit.
+      same class. The first is now fixed and gated (below); the second is still open, because the
+      honest fix is wider than the defect and the blast radius needs a deliberate decision rather
+      than a drive-by edit.
 
-      1. **Twelve connectors fabricate an HTTP status they never observed.** Every
-         `*-connector.ts` with the shape `async healthCheck(...)` returns
-         `{ healthy: true, status: 200 }` after awaiting an INJECTED transport. Two problems ride
-         together. The `200` is invented — the success path never reads a status code, so a 201,
-         202 or 204 is reported as 200, and a reviewer reading the field believes a server said it.
-         More importantly, `healthy: true` means "the injected transport resolved", which in
-         fixture mode is true without anything being contacted. The connector cannot know which
-         transport it was handed, so the honest fix probably belongs at the resolution layer —
-         which already reports `mode: "fixture"` with a reason — rather than in twelve constructors.
-         Sites: `access-governance`, `agent-identity`, `device-attestation`,
-         `device-management-health`, `link-usability`, `macos-posture`, `oauth-consent`,
-         `ot-posture`, `pacs-access`, `sso-session`, `task-exception`, `token-binding`.
+      1. ~~**Twelve connectors fabricate an HTTP status they never observed.**~~ **FIXED, and gated
+         so it cannot come back.** Every `*-connector.ts` with the shape `async healthCheck(...)`
+         returned `{ healthy: true, status: 200 }` after awaiting an INJECTED transport. There is no
+         HTTP response on that path, so a 201, 202 or 204 upstream was reported as 200 and a reviewer
+         reading the field believed a server had said it. All twelve now return `status: null` on the
+         success path — a value the type can hold and which means exactly what happened: the
+         transport resolved, no status was observed. Sites fixed: `access-governance`,
+         `agent-identity`, `device-attestation`, `device-management-health`, `link-usability`,
+         `macos-posture`, `oauth-consent`, `ot-posture`, `pacs-access`, `sso-session`,
+         `task-exception`, `token-binding`.
+
+         `scripts/check-fabricated-status.mjs` enforces it in preflight and CI. The gate is built on
+         a distinction rather than a blanket ban: eleven families (`graph`, `carrier`,
+         `credential-exposure`, `data-protection`, `edr-threat`, `identity-risk`,
+         `location-services`, `network-nac`, `peripheral-control`, `rtls-custody`, `vuln-scan`) hold
+         a real `Response` and `return { healthy: res.ok, status: res.status }` — a reading, not a
+         claim, which must keep passing. Those 22 files are a positive control with a floor, so a
+         green cannot be reached by making the honest connectors stop measuring. Verified against
+         the pre-fix tree: 12/12 would have failed.
+
+         **What this did NOT fix**, stated so the green is not read as more than it is: `healthy:
+         true` still means "the injected transport resolved", which in fixture mode is true without
+         anything being contacted. The connector cannot know which transport it was handed, so that
+         belongs at the resolution layer — which already reports `mode: "fixture"` with a reason —
+         rather than in twelve constructors. Still open, deliberately not closed with the status fix.
 
       2. **`sourcingToSignalStates` labels a CAPABILITY with the HEALTH vocabulary.**
          `lib/flows/src/signal-sourcing.ts` emits `{ id, status: "healthy" }` for every source whose

@@ -244,10 +244,26 @@ export class LinkUsabilityConnector {
     private readonly transport: LinkUsabilityTransport,
   ) {}
 
-  async healthCheck(deviceId: string): Promise<{ healthy: boolean; status: number }> {
+  /**
+   * NOTE ON `status: null`. The success path returns null, NOT 200.
+   *
+   * This connector is handed an INJECTED transport that resolves a payload — there is
+   * no HTTP response here and therefore no status code to read. The old `status: 200`
+   * was invented: a 201, 202 or 204 upstream reported as 200, and a reviewer reading
+   * the field believed a server had said it. `null` is the honest value — "the
+   * transport resolved; no status was observed" — and the type can now say it.
+   *
+   * The failure path keeps a real number because the error carries one.
+   *
+   * NOT FIXED HERE, and stated so the remaining gap is not mistaken for closed:
+   * `healthy: true` still means "the injected transport resolved", which in fixture
+   * mode is true without anything being contacted. That fix belongs at the resolution
+   * layer, which already reports `mode: "fixture"` with a reason — see the backlog.
+   */
+  async healthCheck(deviceId: string): Promise<{ healthy: boolean; status: number | null }> {
     try {
       await this.transport({ deviceId, token: this.config.accessToken });
-      return { healthy: true, status: 200 };
+      return { healthy: true, status: null };
     } catch (err) {
       const status = err instanceof LinkUsabilityConnectorError ? err.status : 0;
       return { healthy: false, status };

@@ -321,6 +321,12 @@ jobs:
         run: node scripts/check-connector-discipline.mjs
       - name: "Ungated fetch (the live boundary covers every outbound path)"
         run: node scripts/check-ungated-fetch.mjs
+      # Sibling of the gate above: that one asks whether the call was allowed to happen,
+      # this one asks whether the result reported was one anybody observed.
+      - name: "Fabricated status (a connector may not report a status it never observed)"
+        run: node scripts/check-fabricated-status.mjs
+      - name: "Fabricated status self-test (the gate can actually fail)"
+        run: node scripts/check-fabricated-status.mjs --self-test
       # decision:read was enforced in memory and skipped on the durable path — the branch
       # returned before listDecisions/getDecision/getSnapshot ever authorized. The core proof
       # covers the new authorizedContext method; this covers the ROUTES calling it.

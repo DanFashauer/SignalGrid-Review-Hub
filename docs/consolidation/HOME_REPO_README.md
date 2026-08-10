@@ -37,8 +37,8 @@ three sources with full git history preserved:
 | `SignalGrid` (this repo) | Original home; history retained as ancestry | **home** |
 
 How the merge was done and how to reproduce it is documented in
-[`docs/CONSOLIDATION_HARVEST.md`](docs/CONSOLIDATION_HARVEST.md) and
-[`docs/PHASE6_CUTOVER_RUNBOOK.md`](docs/PHASE6_CUTOVER_RUNBOOK.md).
+[`docs/PHASE6_CUTOVER_RUNBOOK.md`](docs/PHASE6_CUTOVER_RUNBOOK.md). (The harvest
+inventory doc was retired 2026-08-10 once the merge it described was long done.)
 
 ---
 
@@ -122,8 +122,7 @@ pnpm --filter @workspace/api-server run dev
   [security controls](docs/SECURITY_CONTROLS_MATRIX.md)
 - Category definition: [`docs/OPERATIONAL_TRUST_ORCHESTRATION.md`](docs/OPERATIONAL_TRUST_ORCHESTRATION.md)
 - Branching & environments: [`docs/BRANCHING_AND_ENVIRONMENTS.md`](docs/BRANCHING_AND_ENVIRONMENTS.md)
-- Consolidation & cutover: [`docs/CONSOLIDATION_HARVEST.md`](docs/CONSOLIDATION_HARVEST.md) ·
-  [`docs/PHASE6_CUTOVER_RUNBOOK.md`](docs/PHASE6_CUTOVER_RUNBOOK.md)
+- Consolidation & cutover: [`docs/PHASE6_CUTOVER_RUNBOOK.md`](docs/PHASE6_CUTOVER_RUNBOOK.md)
 - Agent guardrails: [`AGENTS.md`](AGENTS.md)
 
 ## Founder

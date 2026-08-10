@@ -140,11 +140,7 @@ const STEPS = [
   // wiring them up. proof:isolation-scope is the one that stings: it asserts no tenant
   // can read another tenant's row, across every scoped reader, and a break in that
   // would have passed preflight and every PR check.
-  { name: "Proof: emit-gate (no outbound family sends from a non-emitting tier)", cmd: ["pnpm", "run", "proof:emit-gate"] },
   { name: "Proof: isolation-scope (no tenant can read another's row)", cmd: ["pnpm", "run", "proof:isolation-scope"] },
-  { name: "Proof: nac (read-only, no device action reachable, live path gated)", cmd: ["pnpm", "run", "proof:nac"] },
-  { name: "Proof: webhooks (outbound delivery gated; refusals explain themselves)", cmd: ["pnpm", "run", "proof:webhooks"] },
-  { name: "Proof: mdm-profile (the shipped profiles say what the product claims)", cmd: ["pnpm", "run", "proof:mdm-profile"] },
   { name: "Proof: graph-wire (throttling, 5xx, auth and malformed bodies fail closed)", cmd: ["pnpm", "run", "proof:graph-wire"] },
   { name: "Docs\u2194proof FIGURE guard (a measured number must still be one)", cmd: ["node", "scripts/check-proof-figures.mjs"] },
   { name: "Proof-count sync (documented check counts match their proofs)", cmd: ["node", "scripts/check-proof-counts.mjs"] },

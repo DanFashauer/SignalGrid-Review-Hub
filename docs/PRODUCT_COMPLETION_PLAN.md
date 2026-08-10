@@ -146,5 +146,100 @@ work, not code, and no amount of building in this repository substitutes for the
 
 ---
 
+## 9. Full-repo scan findings (2026-08-10) — the circle, diagnosed
+
+A four-reader scan of the entire tree (artifacts, lib, docs, harness/native/CI),
+run after the owner disclosed that **no Microsoft tenant or endpoint estate is
+available and none can be obtained**. Findings verified with file-path evidence;
+this section replaces feel with numbers.
+
+**The seam nobody closed.** The product's decision loop and its UI are
+disconnected. Six distinct surfaces render decisions; the one classified `launch`
+(`signalgrid-review`) is a scrolling review deck, while the app with the routed
+console IA (`signalgrid-app`) is classified `demo_only` — and its decision list
+and detail read **24 synthetic fixtures** from `monitoring.ts`, not the real
+`/v1` decisions the engine produces. `GET /v1/decisions`, `/:id`, `/:id/evidence`
+and `/v1/audit` are implemented, run with no database and no vendor, and **no UI
+calls them**. The decision-detail screen is 87 lines covering 3 of the 12
+elements §4 requires; the good rendering exists — inside the review deck, where
+no operator would find it.
+
+**The core cannot speak two of its three launch families.**
+`device_management_health` and `local_authority` never became signal categories
+in `signalgrid-core` (`types.ts` `SIGNAL_CATEGORIES`/`EVIDENCE_FIELDS`). Fifty-one
+families were built; two of the three that matter were never wired into the
+engine's own vocabulary. **Four parallel decision engines** exist (core,
+simulator, posture-composition, the emulator's own) and the console runs the
+simulator's, not the product's. The Graph connector's fixture mode returns a
+*reason string*, not a working connector; `lib/integration-bridge` maps only
+FleetDM; `local-authority` has no mock transport.
+
+**The breadth is NOT entangled — good news.** The api-server does not import
+`@workspace/integrations` at all; deleting all 48 deferred families would not
+break the console. The map never contaminated the engine. It contaminated the
+*attention*.
+
+**The docs are the loop.** 204 top-level documents: ~27% serve an operator, ~39%
+are doctrine/positioning. Twelve documents compete to be the same readiness gate;
+one identical positioning sentence appears 27 times across 13 files; **46 files
+claim to be canonical**; two plans are dead (a cutover runbook declaring this
+repo "Archived", and its manifest). ~85 files (~40%) belong in a research
+library, not the product path. A design partner needs ~9.
+
+**The gate suite protects the wrong ratio.** 166 preflight steps; **~10% protect
+the launch surface**. Every docs edit fires the full proof wall. Five doctrine
+proofs sit in the critical path — including three added the same week the freeze
+was being written to stop exactly that category.
+
+**The demo already exists and is buried.** `docs/room-entry-console.html` — the
+decision core inlined into one offline HTML file, 20 scenarios across three
+settings — plus `docker-compose.sim.yml` (one container, fixture-safe,
+`/console`). Referenced once, in a Mac runbook. `pnpm run demo` now names it.
+
+## 10. Demo-first execution order (replaces the six-month sequence for solo work)
+
+The six-month arc (§7) remains the shape of the *company* plan, but Months 2 and
+5 assumed a tenant the owner cannot provide. The solo-completable target is a
+**fully self-contained, honestly-labelled demonstration product** that people
+*with* resources can evaluate — and for them, the already-built gated Graph
+transport turns "we have Intune" into a configuration step, not a build.
+
+**D0 — surface what exists (done in this commit).** `pnpm run demo`; the 57 MB
+of untracked iOS build junk deleted; findings ratified here.
+
+**D1 — close the seam (the real build).** Make `signalgrid-core` speak all three
+launch families (`SIGNAL_CATEGORIES` + `EVIDENCE_FIELDS`); extend
+`integration-bridge` with graph / device-management-health / local-authority
+draft mappers; make fixture mode return a *working* fixture-backed connector
+(graph via the existing mock transport; add `local-authority/mock-transport`);
+retire the simulator engine from the api-server decision surface. Exit test:
+**connector sync → core decision → evidence, all three families, zero network.**
+
+**D2 — one console (P0 tasks #237–240).** Bind Decisions list + Detail + a new
+Audit route to `/v1`; build §4's decision detail where the operator lives;
+assurance labels on every verdict; reclassify `signalgrid-app` as the console in
+the launch profile (and the review deck as the review deck). Exit test: *evaluate
+a decision in the UI, open it, see all 12 elements, verify the audit chain —
+without the founder in the room.*
+
+**D3 — cut the noise.** Move ~85 doctrine/positioning docs to `docs/research/`
+with a stub index; retire the two dead plans; collapse the twelve readiness docs
+to `PILOT_READINESSCRITERIA` + pointers; move the five doctrine proofs and
+deferred-family proofs to a `verify:breadth` lane out of the per-push critical
+path (kept, still runnable, no longer a tax); retire or dispatch-gate the noisy
+workflows (`level-10-audit`, `scheduled-verification`, `promote`).
+
+**D4 — the partner kit.** One demo script narrating the room console + full
+console; a "bring your tenant" onboarding doc (the env flips:
+`DEVICE_MANAGEMENT_HEALTH_TRANSPORT=graph`, `SIGNALGRID_LIVE_INTEGRATIONS`,
+token); a feedback form; published links. Exit test: *a stranger with an Intune
+tenant can evaluate SignalGrid against it without the owner present.*
+
+**What stays true throughout:** every fixture-backed verdict is labelled
+fixture-backed (§5). The demo's honesty about being a demo is the product
+demonstrating its own thesis.
+
+---
+
 *The strongest product move now is not another dimension. It is making one
 decision so clear that an operator trusts it without being told to.*

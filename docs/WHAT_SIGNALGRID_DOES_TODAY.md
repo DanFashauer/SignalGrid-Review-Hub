@@ -53,6 +53,15 @@ proofs and doctrine while the engine had no vocabulary for them. Both ship with
 active v1 rules that match only the AFFIRMATIVE bad state (`broken`, `withheld`);
 silence stays quiet, so a fleet not yet emitting either signal sees no change.
 
+**Declared divergence:** these two categories are evaluated by the SERVED core
+(`/v1`) only. The demo simulator engine and its byte-faithful iOS port have no
+vocabulary for them yet, so a device affirmatively reporting a broken management
+plane is restricted by `/v1` while an on-device demo evaluation would not react.
+Day-one-quiet bounds the exposure (no emitted signal, no divergence), and
+`scripts/check-decision-port-parity.mjs` pins the gap in both directions — the
+declaration goes stale loudly if either side changes. Porting the categories to
+the simulator + Swift mirror is Mac-lane work, tracked in the backlog.
+
 This count is DERIVED, not maintained by hand. `SIGNAL_CATEGORIES` in
 `lib/signalgrid-core/src/types.ts` is a const array and the `SignalCategory` union
 is derived from it, so `pnpm run proof:signalgrid-core` emits the real number and

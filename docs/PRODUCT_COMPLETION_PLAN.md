@@ -247,6 +247,155 @@ tenant can evaluate SignalGrid against it without the owner present.*
 fixture-backed (§5). The demo's honesty about being a demo is the product
 demonstrating its own thesis.
 
+## 11. Second scan (2026-08-10, verification pass) — corrections and the revised plan
+
+The owner asked for the §9 findings to be re-verified before more building. Three
+independent sweeps re-checked every load-bearing claim against the tree as it
+stands after D1. The thesis held; specific numbers and two prescriptions did not.
+This section is the record, and D2–D4 below are restated in their corrected form
+— where §10 and §11 disagree, §11 governs.
+
+### 11.1 What the first scan got wrong (and what is actually true)
+
+- **Decision-rendering surfaces: 11–12, not 6** — signalgrid-app has four
+  (Decisions list, DecisionDetail, Dashboard table, LiveDecisionPanel), the
+  review deck three, desktop and mobile-pwa one each, plus the api-server
+  `/console`, the offline room console, and iOS SignalGridOperator.
+- **"Zero /v1 UI consumers" was too strong.** Two signalgrid-app surfaces
+  already call the real `/v1` (LiveDecisionPanel evaluates; AppWorkflows), and
+  **iOS SignalGridOperator already consumes `/v1` decisions, evidence and audit
+  end to end** — its `DecisionDetailView.swift` renders ~11 of the 12 detail
+  elements and is the ready-made model for the web rewrite. What remains exactly
+  true: **no web list/detail/evidence/audit view calls `/v1`**, while the launch
+  profile justifies `/v1/decisions` as "the console's list view."
+- **DecisionDetail.tsx is worse than reported:** 87 lines, and only outcome +
+  latency carry live data. The fixture `Decision` type structurally cannot carry
+  9 of the 12 elements, so the page needs a source change, not a facelift.
+- **Three API clients, not two** — the orval fixtures client (app/desktop/pwa),
+  the hand-written `v1.ts` (hardcoded demo bearer; outcome spelled `step_up`),
+  and `control-plane.ts`. The fixtures client and `v1.ts` disagree on the
+  outcome enum spelling and the id field, which breaks naive convergence.
+- **Decision ladders: five-to-six, not four** — the scan missed
+  `facility-trust-graph`, which maintains its own severity table **twice**
+  (`evaluate.ts` and `clinical.ts`). No mapping exists between the core's 4
+  outcomes, the simulator's 10, posture-composition's 8 and the graph's 6.
+- **Connector families: exactly 51** (3 launch + 48 deferred), not "48–50."
+- **Docs: 204 top-level is exact, but "46 canonical claims" was false** — that
+  figure was the old doc-orphan count (now pinned at 10). Genuine
+  self-canonical claims: ~3, non-overlapping. The real sickness is the
+  clusters: **14 readiness docs (12 written in one 8-day July burst, never
+  touched again)** and ~58 positioning/doctrine docs.
+- **Gate suite: 167 entries, 163 distinct — four gates are exact duplicates**
+  (`proof:nac`, `proof:webhooks`, `proof:emit-gate`, `proof:mdm-profile` each
+  run twice under two names). Launch-protecting share is ~15% (band 13–17%),
+  not 10%; the sharper fact stands: **47 gates fire on deferred families every
+  push**, nearly double the launch coverage, and 8 doctrine-document proofs sit
+  in the per-push critical path.
+- **The "noisy workflows" prescription was mostly backwards.** `promote.yml` is
+  already dispatch-only (and recently maintained — keep it);
+  `level-10-audit.yml` is path-scoped with no cron and is the only one of the
+  three that can be deleted freely; `scheduled-verification.yml` is the sole
+  cron, and deleting it or promote without removing their entries from
+  `scripts/lib/ci-jobs.mjs` in the same commit fails the preflight parity gate.
+- **The ~85-doc move was oversold.** Only ~45 docs are genuinely free to move
+  (sales/social/founder/competitive/stale-readiness). 25 docs are hard-required
+  by literal path in `docs-sanity.mjs`; the orphan gate sits at its 10/10
+  ceiling so the INDEX must be rewritten in the same commit; and three gates
+  scan `docs/*.md` **non-recursively** (`check-proof-figures`,
+  `check-proof-counts`, `generate-sync-manifest`), so a moved doc silently
+  leaves guard scope — the exact "green while unchecked" defect this repo hunts.
+  Several would-be "positioning" docs are enforced by dedicated preflight
+  proofs (the IT-layer model by two gates; the five vertical models by one
+  each) and are not free to move at all.
+
+### 11.2 New finding the first scan missed entirely
+
+**The two D1 categories are core-only, and nothing can notice.**
+`device_management_health` and `local_authority` exist in `signalgrid-core`
+(with active restrict-on-affirmative-bad rules) but the simulator and the iOS
+EnterpriseShell port have no vocabulary for them. The parity gate compares
+simulator↔Swift only — both sides are equally blind, so it stays green. A
+device affirmatively reporting a broken management plane would get `restrict`
+from `/v1` and `allow` from the on-device engine. Day-one-quiet limits the
+blast radius (a fleet not emitting the new signals sees no divergence), but the
+gap is real, silent, and ungated; there is also **no core↔simulator equivalence
+gate at all**. Related: the launch profile still records device-management-health
+as shipping in "shadow mode returning step_up" while the core now carries an
+active restrict rule — the two statements need reconciling.
+
+### 11.3 D2, restated (bind the console to /v1) — the verified work list
+
+The launch profile currently names `signalgrid-review` as "the one operator
+console" while classifying `signalgrid-app` demo-only; §10's ratified direction
+(reclassify signalgrid-app as the console, review deck as the review deck)
+resolves that contradiction and stands. Concretely:
+
+1. Extend `artifacts/signalgrid-app/src/lib/v1.ts` beyond evaluate:
+   `listDecisions`, `getDecision`, `getEvidence`, `getAudit`, `getContext`;
+   replace the hardcoded demo bearer with injectable token plumbing (demo key
+   as default, still labelled demo).
+2. Reconcile the type split (fixtures `step-up`/`id` vs `/v1` `step_up`/
+   `decisionId`) — adopt the `/v1` shapes; fix `OutcomeBadge`/`outcomeTone` and
+   `format.ts` (string timestamps).
+3. Rewrite `DecisionDetail.tsx` on the model of iOS `DecisionDetailView.swift`
+   (the proven 11/12-element rendering): outcome, reason codes, matched rules,
+   evidence snapshot (id/digest/policy version), signals used with per-signal
+   freshness, tenant, latency, audit link, assurance label, resolution.
+4. Move `DecisionList.tsx` and the Dashboard recent-decisions table off the
+   monitoring fixtures onto `/v1/decisions`.
+5. Add an Audit route rendering `/v1/audit` with the chain-verification result.
+6. Assurance labels (P0 #238): read `/v1/context` and render the assurance
+   posture wherever a verdict appears — `assurance.ts` names today's unlabeled
+   consoles as an open defect; this closes it.
+7. Widen the GA route fence (`artifacts/api-server/src/lib/profile.ts`): the
+   launch profile publishes decisions/evidence/audit, but `GA_ALLOWED_ROUTES`
+   currently allows only evaluate + list — add `GET /v1/decisions/{id}`,
+   `/{id}/evidence`, `/v1/audit`, `/v1/context`.
+8. Reclassify surfaces in `scripts/launch-profile.mjs` (app → launch console;
+   review → review deck) and satisfy `check-launch-profile.mjs`.
+9. Update the pinned e2e/observability expectations
+   (`admin-console.spec.ts`, `decision-matrix.spec.ts`, `observability-proof.ts`).
+10. Check the OpenAPI `EvaluateResult` schema against what the detail view
+    needs (tenant, assurance, per-signal freshness) — spec drift is suspected;
+    `proof:api-contract` gates it.
+
+**D2.5 — truthfulness of the seam (from §11.2):** declare the core↔simulator/
+iOS category gap where product truth lives (WHAT_SIGNALGRID_DOES_TODAY + launch
+profile), reconcile the shadow-mode wording with the active restrict rule, and
+add a pinned known-divergence list so the gap is loud instead of silent. Porting
+the two categories into the simulator + Swift (via the SignalContext pattern,
+never by editing the ported engines' behavior) is a Mac-lane task, sequenced
+after the declaration, not before.
+
+### 11.4 D3, restated (cut the noise) — re-sequenced to survive the gates
+
+Order matters; each step names the gate that would otherwise fail:
+
+1. **Quick wins, zero risk:** delete the four duplicate preflight gates;
+   delete `level-10-audit.yml` (uncovered by the parity maps — breaks nothing);
+   retire `docs/CONSOLIDATION_HARVEST.md` (already an orphan; ratchet the
+   orphan pin 10 → 9).
+2. **Make the three doc scanners recursive first**
+   (`check-proof-figures.mjs`, `check-proof-counts.mjs`,
+   `generate-sync-manifest.mjs`), so moved docs stay inside guard scope.
+3. **Move the ~45 free docs** (sales/social/founder/competitive + the 12-doc
+   stale readiness burst, keeping `PILOT_READINESS_CRITERIA`) to
+   `docs/research/`, rewriting `docs/INDEX.md` and regenerating the live-sync
+   manifest in the same commit.
+4. **verify:breadth lane:** move the 47 deferred-family gates and the 8
+   doctrine-doc proofs out of per-push preflight into a `verify:breadth`
+   command with a matching CI lane, updating `scripts/lib/ci-jobs.mjs` and both
+   parity checks in the same change — kept, runnable, no longer a per-push tax.
+5. `scheduled-verification.yml`: keep or retire deliberately; if retired, its
+   `ci-jobs.mjs` entry goes in the same commit. `promote.yml` stays.
+6. The 25 `docs-sanity.mjs` REQUIRED_DOCS stay put for now; touching that list
+   is its own reviewed change, not a side effect of a move.
+
+### 11.5 D4 stands as written
+
+With one addition: `docs/DEMO_SCRIPT_FOR_PARTNERS.md` already exists — the kit
+revises it rather than starting blank.
+
 ---
 
 *The strongest product move now is not another dimension. It is making one

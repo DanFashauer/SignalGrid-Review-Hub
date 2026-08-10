@@ -6,6 +6,7 @@ export function OutcomeBadge({ outcome }: { outcome: string }) {
     case "allow":
       return <Badge variant="outline" className="bg-status-allow border-transparent font-mono uppercase">Allow</Badge>;
     case "step-up":
+    case "step_up": // the /v1 core's spelling; the fixtures client says "step-up"
       return <Badge variant="outline" className="bg-status-step-up border-transparent font-mono uppercase">Step-Up</Badge>;
     case "restrict":
       return <Badge variant="outline" className="bg-status-restrict border-transparent font-mono uppercase">Restrict</Badge>;

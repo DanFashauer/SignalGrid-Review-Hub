@@ -62,6 +62,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location.startsWith("/audit")}>
+                  <Link href="/audit">
+                    <ShieldAlert className="w-4 h-4 mr-2" />
+                    <span>Audit</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location.startsWith("/signals")}>
                   <Link href="/signals">
                     <Activity className="w-4 h-4 mr-2" />

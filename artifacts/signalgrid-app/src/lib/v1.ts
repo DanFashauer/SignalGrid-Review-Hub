@@ -12,6 +12,13 @@
 
 const DEMO_OPERATOR_TOKEN = "sgk_demo_northwind_operator";
 
+// Injectable token: defaults to the public-safe demo operator key, and a hosted
+// deployment (or a future login flow) can swap it without touching call sites.
+let activeToken = DEMO_OPERATOR_TOKEN;
+export function setV1Token(token: string): void {
+  activeToken = token.trim() || DEMO_OPERATOR_TOKEN;
+}
+
 // Mirror main.tsx: relative in dev (Vite proxies /api) and same-origin deploys;
 // prefixed when a hosted build points at a remote api-server.
 const BASE = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, "") ?? "";
@@ -52,7 +59,7 @@ export async function evaluateV1(req: V1EvaluateRequest): Promise<V1Decision> {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${DEMO_OPERATOR_TOKEN}`,
+      authorization: `Bearer ${activeToken}`,
     },
     body: JSON.stringify(req),
   });
@@ -70,6 +77,118 @@ export async function evaluateV1(req: V1EvaluateRequest): Promise<V1Decision> {
 
   const json = (await res.json()) as { decision: V1Decision };
   return json.decision;
+}
+
+// ── decisions / evidence / audit / context: the console's read surface ────────
+// These are the routes the launch profile publishes as "the console's list
+// view" and "the claim" — served by the deterministic core, consumed here.
+
+/** The full persisted decision record (`GET /v1/decisions[/:id]`) — a superset
+ *  of the evaluate result: ids are `id` (not `decisionId`) and the record
+ *  carries subjects, review state and creation time. */
+export interface V1DecisionRecord {
+  id: string;
+  tenantId: string;
+  identityId: string;
+  deviceId: string;
+  workflowId: string;
+  outcome: V1Outcome;
+  policyId: string;
+  policyVersionId: string;
+  policyVersion: number;
+  matchedRules: V1MatchedRule[];
+  reasonCodes: string[];
+  signalIds: string[];
+  evidenceSnapshotId: string;
+  requestContext: Record<string, string>;
+  latencyMs: number;
+  createdAt: string;
+  reviewStatus: string;
+  reviewable: boolean;
+  explanation: string;
+  coreNormalizationVersion?: number;
+}
+
+export interface V1SignalUsed {
+  id: string;
+  category: string;
+  value: string | number | boolean | null;
+  observedAt: string;
+  freshness: string;
+  sourceReference: string;
+}
+
+export interface V1EvidenceSnapshot {
+  id: string;
+  tenantId: string;
+  decisionId: string;
+  capturedAt: string;
+  /** The normalized facts the policy evaluated — key/value, rendered as-is. */
+  evidence: Record<string, unknown>;
+  signalsUsed: V1SignalUsed[];
+  policyVersionId: string;
+  policyVersion: number;
+  sourceReferences: string[];
+  coreNormalizationVersion?: number;
+}
+
+export interface V1AuditEvent {
+  id: string;
+  tenantId: string;
+  seq: number;
+  type: string;
+  actor: string;
+  subject: string;
+  summary: string;
+  references: string[];
+  recordedAt: string;
+  prevDigest: string;
+  digest: string;
+}
+
+export interface V1ChainVerification {
+  valid: boolean;
+  brokenAtSeq: number | null;
+  length: number;
+}
+
+/** Deployment assurance posture from `/v1/context` — what these verdicts ARE. */
+export interface V1Assurance {
+  profile: string;
+  tier: string;
+  signalSource: "live" | "fixtures";
+  verdictEffect: "advisory";
+  stepUpAnswerable: boolean;
+}
+
+export async function listDecisionsV1(): Promise<V1DecisionRecord[]> {
+  const json = await v1<{ decisions: V1DecisionRecord[] }>(`/api/v1/decisions`, { method: "GET" }, activeToken);
+  return json.decisions;
+}
+
+export async function getDecisionV1(id: string): Promise<V1DecisionRecord> {
+  const json = await v1<{ decision: V1DecisionRecord }>(
+    `/api/v1/decisions/${encodeURIComponent(id)}`,
+    { method: "GET" },
+    activeToken,
+  );
+  return json.decision;
+}
+
+export async function getEvidenceV1(id: string): Promise<{ evidence: V1EvidenceSnapshot; verified: boolean }> {
+  return v1<{ evidence: V1EvidenceSnapshot; verified: boolean }>(
+    `/api/v1/decisions/${encodeURIComponent(id)}/evidence`,
+    { method: "GET" },
+    activeToken,
+  );
+}
+
+export async function getAuditV1(): Promise<{ events: V1AuditEvent[]; chain: V1ChainVerification }> {
+  return v1<{ events: V1AuditEvent[]; chain: V1ChainVerification }>(`/api/v1/audit`, { method: "GET" }, activeToken);
+}
+
+export async function getContextV1(): Promise<{ assurance: V1Assurance }> {
+  return v1<{ assurance: V1Assurance }>(`/api/v1/context`, { method: "GET" }, activeToken);
 }
 
 // ── app-workflows: gate the software people use, not just the doors ───────────
@@ -126,7 +245,7 @@ export async function listAppWorkflowIntegrations(): Promise<V1AppIntegration[]>
   const json = await v1<{ integrations: V1AppIntegration[] }>(
     `/api/v1/app-workflows/integrations`,
     { method: "GET" },
-    DEMO_OPERATOR_TOKEN,
+    activeToken,
   );
   return json.integrations;
 }

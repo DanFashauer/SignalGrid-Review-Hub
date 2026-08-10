@@ -90,17 +90,35 @@ test("live decision panel evaluates a RESTRICT through the real /v1 core", async
   await expect(page.getByText(/policy pol_tenant_northwind_shared_device v1/)).toBeVisible();
 });
 
-test("decisions page lists the fixture decision stream", async ({ page }) => {
+test("decisions page lists the REAL /v1 decision ledger", async ({ page }) => {
   await page.goto(`${BASE}/decisions`, { waitUntil: "domcontentloaded" });
 
   await expect(page.getByRole("heading", { name: "Decisions" })).toBeVisible();
-  // The table shows identity/device/workflow, not raw decision ids. SG-0100
-  // is the first fixture device (unique on this page); SG-0105 is the row the
-  // fixture cycle marks "restrict" — pairing the device with its outcome
-  // badge proves rows render as coherent records, not shuffled cells.
-  await expect(page.getByText("SG-0100")).toBeVisible();
-  await expect(page.locator("tr").filter({ hasText: "SG-0105" })).toContainText("Restrict");
-  await expect(page.getByText("med-admin").first()).toBeVisible();
+  // The list is the core's own ledger now, seeded at api-server boot by
+  // running the real decision loop over the demo subjects. Pairing a device
+  // with its outcome badge proves rows render as coherent records: the
+  // non-compliant ward iPad restricts; the disabled account denies.
+  await expect(page.getByText("nurse.compliant").first()).toBeVisible();
+  await expect(page.locator("tr").filter({ hasText: "ipad-ward-02" })).toContainText("Restrict");
+  await expect(page.locator("tr").filter({ hasText: "nurse.disabled" })).toContainText("Deny");
+});
+
+test("decision detail renders the trust moment from /v1 (reasons, rules, verified evidence)", async ({ page }) => {
+  await page.goto(`${BASE}/decisions`, { waitUntil: "domcontentloaded" });
+  await page.locator("tr").filter({ hasText: "ipad-ward-02" }).first().click();
+
+  // Reason codes + matched rules from the core, and the evidence snapshot's
+  // digest re-verified server-side on this request.
+  await expect(page.getByText("DEVICE_NONCOMPLIANT").first()).toBeVisible();
+  await expect(page.getByText("digest verified")).toBeVisible();
+  await expect(page.getByText("Signals used")).toBeVisible();
+});
+
+test("audit page verifies the tamper-evident chain from /v1", async ({ page }) => {
+  await page.goto(`${BASE}/audit`, { waitUntil: "domcontentloaded" });
+
+  await expect(page.getByRole("heading", { name: "Audit" })).toBeVisible();
+  await expect(page.getByText("chain verified")).toBeVisible();
 });
 
 test("policies page lists the seeded policy catalog", async ({ page }) => {

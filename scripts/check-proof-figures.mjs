@@ -380,7 +380,9 @@ function main() {
    *  several proofs is counted once. Printed every run — see the coverage block below. */
   const quoted = new Set();
   const attributedElsewhere = new Set();
-  const docFiles = readdirSync(docsDir).filter((f) => f.endsWith(".md"));
+  // RECURSIVE on purpose (D3): a doc moved into docs/research/ must stay inside
+  // guard scope — a non-recursive scan let a move silently un-check a figure.
+  const docFiles = readdirSync(docsDir, { recursive: true }).map(String).filter((f) => f.endsWith(".md"));
 
   for (const proof of PROOFS) {
     const figures = liveFigures(proof);

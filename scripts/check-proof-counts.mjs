@@ -22,7 +22,8 @@ const docsDir = join(repoRoot, "docs");
 const PATTERN = /proof:([a-z0-9-]+)`?\s*\((\d+)\s+checks/g;
 
 const claims = new Map(); // proofName -> { count, files:Set }
-for (const file of readdirSync(docsDir).filter((f) => f.endsWith(".md"))) {
+// RECURSIVE on purpose (D3): moved docs stay inside guard scope.
+for (const file of readdirSync(docsDir, { recursive: true }).map(String).filter((f) => f.endsWith(".md"))) {
   const text = readFileSync(join(docsDir, file), "utf8");
   for (const m of text.matchAll(PATTERN)) {
     const [, name, count] = m;

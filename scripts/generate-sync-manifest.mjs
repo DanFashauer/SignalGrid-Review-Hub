@@ -106,7 +106,8 @@ function extractProofCounts() {
   const PATTERN = /proof:([a-z0-9-]+)`?\s*\((\d+)\s+checks/g;
   const docsDir = join(repoRoot, "docs");
   const counts = {};
-  for (const file of readdirSync(docsDir).filter((f) => f.endsWith(".md")).sort()) {
+  // RECURSIVE on purpose (D3): moved docs stay inside manifest scope.
+  for (const file of readdirSync(docsDir, { recursive: true }).map(String).filter((f) => f.endsWith(".md")).sort()) {
     const text = readFileSync(join(docsDir, file), "utf8");
     for (const m of text.matchAll(PATTERN)) {
       const [, name, count] = m;

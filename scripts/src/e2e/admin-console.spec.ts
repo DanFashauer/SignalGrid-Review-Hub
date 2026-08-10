@@ -98,9 +98,13 @@ test("decisions page lists the REAL /v1 decision ledger", async ({ page }) => {
   // running the real decision loop over the demo subjects. Pairing a device
   // with its outcome badge proves rows render as coherent records: the
   // non-compliant ward iPad restricts; the disabled account denies.
+  // `.first()` throughout: other specs in this suite evaluate the SAME demo
+  // subjects against the shared server, so a device can have several ledger
+  // rows by the time this test runs — every one of them carries the same
+  // deterministic outcome, so asserting the first is sufficient and stable.
   await expect(page.getByText("nurse.compliant").first()).toBeVisible();
-  await expect(page.locator("tr").filter({ hasText: "ipad-ward-02" })).toContainText("Restrict");
-  await expect(page.locator("tr").filter({ hasText: "nurse.disabled" })).toContainText("Deny");
+  await expect(page.locator("tr").filter({ hasText: "ipad-ward-02" }).first()).toContainText("Restrict");
+  await expect(page.locator("tr").filter({ hasText: "nurse.disabled" }).first()).toContainText("Deny");
 });
 
 test("decision detail renders the trust moment from /v1 (reasons, rules, verified evidence)", async ({ page }) => {

@@ -183,8 +183,14 @@ export async function getEvidenceV1(id: string): Promise<{ evidence: V1EvidenceS
   );
 }
 
+// The audit ledger requires `audit:read`, which the operator role DELIBERATELY
+// lacks (separation of duties: the person acting is not the person attesting).
+// The console reads it with the public-safe demo AUDITOR key instead of
+// widening the operator role — RBAC demonstrated, not weakened.
+const DEMO_AUDITOR_TOKEN = "sgk_demo_northwind_auditor";
+
 export async function getAuditV1(): Promise<{ events: V1AuditEvent[]; chain: V1ChainVerification }> {
-  return v1<{ events: V1AuditEvent[]; chain: V1ChainVerification }>(`/api/v1/audit`, { method: "GET" }, activeToken);
+  return v1<{ events: V1AuditEvent[]; chain: V1ChainVerification }>(`/api/v1/audit`, { method: "GET" }, DEMO_AUDITOR_TOKEN);
 }
 
 export async function getContextV1(): Promise<{ assurance: V1Assurance }> {

@@ -20,7 +20,7 @@ export function Audit() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Audit</h1>
         <p className="text-muted-foreground mt-1 font-mono text-sm">
-          TAMPER-EVIDENT LEDGER · /v1 CORE <AssuranceBadge />
+          TAMPER-EVIDENT LEDGER · /v1 CORE · READ WITH THE DEMO AUDITOR KEY (audit:read) <AssuranceBadge />
         </p>
       </div>
 

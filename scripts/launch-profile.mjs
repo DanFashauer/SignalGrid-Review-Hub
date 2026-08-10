@@ -358,8 +358,13 @@ export const SURFACES = [
     reason: "The product: one tenant-aware decision service. The whole of \"one product\".",
   },
   {
-    id: "signalgrid-review",
-    reason: "The one operator console. Every other web surface below is not it.",
+    id: "signalgrid-app",
+    reason:
+      "The one operator console, bound to the served /v1 surface: decisions list, decision " +
+      "detail (reason codes, matched rules, digest-verified evidence, per-signal freshness), " +
+      "the tamper-evident audit ledger, and an assurance label on every verdict. Ratified by " +
+      "the 2026-08-10 product-design review (PRODUCT_COMPLETION_PLAN §10/§11): the console " +
+      "must read the same API a customer would, not an in-browser copy of the core.",
   },
   {
     id: "ios:EnterpriseShell",
@@ -381,16 +386,20 @@ export const SURFACES = [
       "it as a shipped integration would be the exact class of claim this repo polices.",
   },
   {
-    id: "signalgrid-app",
-    reason: "A second client surface. Blocker 8 names exactly this; the console is the one.",
+    id: "signalgrid-review",
+    reason:
+      "The review deck: runs the decision core IN THE BROWSER (zero network) so a reviewer " +
+      "can inspect every mechanism offline. Invaluable as a demo and review artifact — but a " +
+      "console that does not exercise the served API cannot be THE console, so the launch " +
+      "console role moved to signalgrid-app when it bound to /v1.",
   },
   {
     id: "signalgrid-desktop",
-    reason: "A third client surface. Same reason.",
+    reason: "A second client surface (fixture-fed). Blocker 8 names exactly this; the console is the one.",
   },
   {
     id: "signalgrid-mobile-pwa",
-    reason: "A fourth client surface. Same reason.",
+    reason: "A third client surface (fixture-fed). Same reason.",
   },
   {
     id: "tools:room-console",

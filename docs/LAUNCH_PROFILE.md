@@ -82,9 +82,15 @@ to anonymous callers — and `demoSurfacesEnabled()` had already been refusing t
 register it outside the review demo. The runtime fence was right and the declared
 scope was wrong. It is `demo_only` in version 2.
 
-**App surfaces (3 of 18).** `api-server` (the product), `signalgrid-review` (the one
-operator console), `ios:EnterpriseShell` (the one host app, shipping as the
-integration reference a design partner builds against).
+**App surfaces (3 of 18).** `api-server` (the product), `signalgrid-app` (the one
+operator console — bound to the served `/v1` surface: decisions list, decision
+detail, digest-verified evidence, audit ledger, assurance labels), and
+`ios:EnterpriseShell` (the one host app, shipping as the integration reference a
+design partner builds against). The console role moved from `signalgrid-review`
+on 2026-08-10 when signalgrid-app bound to `/v1`: a console that runs an
+in-browser copy of the core cannot be THE console, because it never exercises
+the API a customer would. `signalgrid-review` remains the zero-network review
+deck — reclassified `demo_only`, not diminished.
 
 ## The gaps — read these before reading the launch set as readiness
 

@@ -1,12 +1,13 @@
 import React from "react";
 import { Link } from "wouter";
-import { 
-  useGetDashboardMetrics, 
-  useGetDecisionSeries, 
-  useListDecisions, 
+import {
+  useGetDashboardMetrics,
+  useGetDecisionSeries,
   useListIntegrations,
   useListLatestSignals
 } from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
+import { listDecisionsV1 } from "@/lib/v1";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { OutcomeBadge, IntegrationStatusBadge, SignalStatusBadge } from "@/components/StatusBadge";
@@ -16,7 +17,9 @@ import { formatTimeAgo, formatDate } from "@/lib/format";
 export function Dashboard() {
   const { data: metrics, isLoading: isLoadingMetrics } = useGetDashboardMetrics({ window: "24h" });
   const { data: seriesData } = useGetDecisionSeries({ window: "24h", granularity: "hour" });
-  const { data: decisionsData } = useListDecisions({ limit: 20 });
+  // The recent-decisions card reads the REAL /v1 ledger; the charts above it
+  // remain labelled fixture telemetry until their own /v1 series exists.
+  const { data: v1Decisions } = useQuery({ queryKey: ["v1-decisions"], queryFn: listDecisionsV1, refetchInterval: 15_000 });
   const { data: integrationsData } = useListIntegrations();
   const { data: signalsData } = useListLatestSignals({ limit: 10 });
 
@@ -82,13 +85,13 @@ export function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <Card className="border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-mono uppercase tracking-wider text-muted-foreground">Recent decisions (fixture)</CardTitle>
+            <CardTitle className="text-sm font-mono uppercase tracking-wider text-muted-foreground">Recent decisions · /v1 core</CardTitle>
             <Link href="/decisions" className="text-xs text-primary hover:underline">View All</Link>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {(decisionsData?.decisions ?? []).slice(0, 5).map(d => (
-                <div key={d.id} className="flex items-center justify-between p-3 border border-border rounded bg-card/50 hover:bg-card/80 transition-colors">
+              {(v1Decisions ?? []).slice(0, 5).map(d => (
+                <Link key={d.id} href={`/decisions/${d.id}`} className="flex items-center justify-between p-3 border border-border rounded bg-card/50 hover:bg-card/80 transition-colors">
                   <div className="flex items-center gap-3">
                     <OutcomeBadge outcome={d.outcome} />
                     <div className="flex flex-col">
@@ -97,10 +100,10 @@ export function Dashboard() {
                     </div>
                   </div>
                   <div className="text-right flex flex-col">
-                    <span className="text-xs text-muted-foreground font-mono">{formatTimeAgo(d.evaluatedAt)}</span>
-                    <span className="text-xs font-mono text-muted-foreground">{d.latencyMs}ms</span>
+                    <span className="text-xs text-muted-foreground font-mono">{formatTimeAgo(d.createdAt)}</span>
+                    <span className="text-xs font-mono text-muted-foreground">{Math.round(d.latencyMs)}ms</span>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </CardContent>

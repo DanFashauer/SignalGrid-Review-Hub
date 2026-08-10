@@ -47,7 +47,7 @@ const b = JSON.stringify(scanSignals([{ category: "z_new" }, { category: "a_new"
 check("radar reports are deterministic", a === b);
 
 // ── catalog ──────────────────────────────────────────────────────────────────
-check("catalog lists the 15 evaluated categories", signalCatalog().evaluated.length === 15);
+check("catalog lists the 17 evaluated categories (15 + the two launch families wired into the core on 2026-08-10)", signalCatalog().evaluated.length === 17);
 check("catalog lists candidate categories", signalCatalog().candidate.length > 0);
 
 const total = passed + failures.length;

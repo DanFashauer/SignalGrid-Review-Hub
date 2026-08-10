@@ -36,15 +36,22 @@ test today:
 | Badge binding (reader case) | present / removed / forced / absent / unknown — who is bound to the shared device right now |
 | Critical signals present | derived fail-closed gate — `allow` is suppressed when a critical input is degraded |
 
-### The 15 normalized signal categories
+### The 17 normalized signal categories
 
-The connector layer normalizes source data into exactly **15 signal categories**
+The connector layer normalizes source data into exactly **17 signal categories**
 that feed the evidence above:
 
 `identity_state`, `device_compliance`, `device_management`, `device_encryption`,
 `os_support`, `posture_freshness`, `custody_state`, `charge_state`,
 `battery_health`, `tamper_state`, `dock_state`, `security_baseline`,
-`benchmark_selection`, `shift_context`, `badge_binding`.
+`benchmark_selection`, `shift_context`, `badge_binding`,
+`device_management_health`, `local_authority`.
+
+The last two were added when the 2026-08-10 full-repo scan found the core could
+not represent two of its three LAUNCH families — they existed as connectors,
+proofs and doctrine while the engine had no vocabulary for them. Both ship with
+active v1 rules that match only the AFFIRMATIVE bad state (`broken`, `withheld`);
+silence stays quiet, so a fleet not yet emitting either signal sees no change.
 
 This count is DERIVED, not maintained by hand. `SIGNAL_CATEGORIES` in
 `lib/signalgrid-core/src/types.ts` is a const array and the `SignalCategory` union

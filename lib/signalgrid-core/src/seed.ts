@@ -453,6 +453,8 @@ function seedPolicyTests(
     benchmarkSelection: "confirmed",
     shiftContext: "confirmed",
     badgeBinding: "present",
+    managementHealthState: "healthy",
+    localAuthorityState: "verified",
     criticalSignalsPresent: true,
   };
   const cases: Array<Omit<PolicyTest, "id" | "tenantId" | "policyId">> = [
@@ -468,6 +470,10 @@ function seedPolicyTests(
     { name: "shift-context misfit → step-up (the labor plane disagrees with this moment: off the clock, off duty, or the wrong site)", evidence: { ...base, shiftContext: "misfit" }, expectedOutcome: "step_up", expectedReasonCode: "SHIFT_CONTEXT_MISFIT" },
     { name: "shift-context unverified → still allow (same day-one-quiet rule: the v1 rule matches ONLY the affirmative mismatch)", evidence: { ...base, shiftContext: "unverified" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
     { name: "badge removed → restrict", evidence: { ...base, badgeBinding: "removed" }, expectedOutcome: "restrict", expectedReasonCode: "BADGE_REMOVED" },
+    { name: "management plane broken → restrict (a failed management plane cannot vouch for posture)", evidence: { ...base, managementHealthState: "broken" }, expectedOutcome: "restrict", expectedReasonCode: "MANAGEMENT_HEALTH_BROKEN" },
+    { name: "management health unknown → still allow (day-one-quiet: the v1 rule matches ONLY the affirmative broken state)", evidence: { ...base, managementHealthState: "unknown" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
+    { name: "local authority withheld → restrict (the control plane revoked this device's authority to act locally)", evidence: { ...base, localAuthorityState: "withheld" }, expectedOutcome: "restrict", expectedReasonCode: "LOCAL_AUTHORITY_WITHHELD" },
+    { name: "local authority unverified → still allow (day-one-quiet: only the affirmative withhold fires)", evidence: { ...base, localAuthorityState: "unverified" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
     { name: "badge forced removal → deny", evidence: { ...base, badgeBinding: "forced" }, expectedOutcome: "deny", expectedReasonCode: "BADGE_FORCED_REMOVAL" },
     { name: "badge absent/unknown → no fabricated block (allow)", evidence: { ...base, badgeBinding: "unknown" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
     { name: "custody maintenance → restrict", evidence: { ...base, custodyState: "maintenance" }, expectedOutcome: "restrict", expectedReasonCode: "CUSTODY_MAINTENANCE" },

@@ -15,6 +15,8 @@ import type {
   EvidenceSnapshot,
   Freshness,
   Identity,
+  LocalAuthorityGrantState,
+  ManagementHealthState,
   NormalizedSignal,
   PolicyVersion,
   TamperState,
@@ -70,6 +72,8 @@ export function buildEvidence(
     benchmarkSelection: readBenchmarkSelection(latestByCategory),
     shiftContext: readShiftContext(latestByCategory),
     badgeBinding: readBadge(latestByCategory),
+    managementHealthState: readManagementHealth(latestByCategory),
+    localAuthorityState: readLocalAuthority(latestByCategory),
   };
 
   return {
@@ -267,6 +271,24 @@ function readShiftContext(latestByCategory: LatestByCategory): ShiftContextState
 
 function readBadge(latestByCategory: LatestByCategory): BadgeBindingState {
   return readEnum(latestByCategory, "badge_binding", BADGE_STATES) ?? "unknown";
+}
+
+// Rollup of the device-management-health family. All three values are readable —
+// the family computes them from enrollment, check-in freshness and policy drift —
+// but SILENCE reads as "unknown", never as a healthy management plane.
+const MANAGEMENT_HEALTH_STATES = ["healthy", "degraded", "broken"] as const;
+// Only the two AFFIRMATIVE values are readable for local authority; absent or
+// unrecognized falls back to "unverified" — the same day-one-quiet rule as
+// benchmark_selection and shift_context, so nothing fires until a connector
+// actually emits the signal.
+const LOCAL_AUTHORITY_STATES = ["verified", "withheld"] as const;
+
+function readManagementHealth(latestByCategory: LatestByCategory): ManagementHealthState {
+  return readEnum(latestByCategory, "device_management_health", MANAGEMENT_HEALTH_STATES) ?? "unknown";
+}
+
+function readLocalAuthority(latestByCategory: LatestByCategory): LocalAuthorityGrantState {
+  return readEnum(latestByCategory, "local_authority", LOCAL_AUTHORITY_STATES) ?? "unverified";
 }
 
 function readCharge(latestByCategory: LatestByCategory): ChargeState {

@@ -49,6 +49,10 @@ type EvidenceTransform = Partial<
     // let a resolution assert completeness it had not earned.
     | "benchmarkSelection"
     | "shiftContext"
+    // The two launch-family rollups: a restored management plane and a re-verified
+    // local-authority grant are both states a named owner can actually produce.
+    | "managementHealthState"
+    | "localAuthorityState"
   >
 >;
 
@@ -310,6 +314,29 @@ const DESCRIPTORS: Record<string, ResolutionDescriptor> = {
     operatorAction:
       "Establish the labor-plane answer for this worker (the strict policy will not accept an unverified shift), then re-evaluate.",
     transform: { shiftContext: "confirmed" },
+    hardwareOriented: false,
+  },
+
+  // The two launch-family refusals (PRODUCT_COMPLETION_PLAN §10 D1). Both are
+  // `requires_approval`: restoring a management plane and re-verifying a device's
+  // local authority are operator actions against systems of record, never
+  // something the worker fixes on the device.
+  MANAGEMENT_HEALTH_BROKEN: {
+    baseClass: "requires_approval",
+    workerAction:
+      "This device's management system has failed — its safety answers can't be trusted right now. Swap to a healthy device; an operator has to repair this one's enrollment.",
+    operatorAction:
+      "Re-enroll the device in the management plane (or complete the failed enrollment), confirm a fresh check-in, then re-evaluate.",
+    transform: { managementHealthState: "healthy" },
+    hardwareOriented: false,
+  },
+  LOCAL_AUTHORITY_WITHHELD: {
+    baseClass: "requires_approval",
+    workerAction:
+      "This device's permission to act on its own was withdrawn by the control plane. Nothing on the device changes that — an operator has to re-verify its authority.",
+    operatorAction:
+      "Re-issue the device's local-authority lease (verify its clock source and revocation state first), then re-evaluate.",
+    transform: { localAuthorityState: "verified" },
     hardwareOriented: false,
   },
 };

@@ -144,7 +144,13 @@ for (const scenario of scenarios) {
 // snapshot's canonical JSON is byte-identical to the pre-stamp one, so no
 // version-conditional branch and no precondition exists anywhere. These four checks
 // are what make that a fact rather than a claim.
-const LEGACY_SNAPSHOT_DIGEST = "28d821302756a247";
+// Re-pinned 2026-08-10 (was 28d821302756a247): the evidence body gained the two
+// launch-family fields (managementHealthState, localAuthorityState), so the canonical
+// body of a FRESH unstamped snapshot moved. TRUE pre-change rows still verify — the
+// digest FUNCTION is unchanged and each row is verified against its own stored body —
+// this constant is the canary that makes an evidence-shape change loud instead of
+// silent, and the normalization-version bump records the same change as provenance.
+const LEGACY_SNAPSHOT_DIGEST = "b8d6988973734339";
 const freshSnapshot = core.getSnapshot(T.operator, decisions[0].evidenceSnapshotId);
 
 // The exact shape a pre-stamp row deserializes into: every field the same, no stamp.

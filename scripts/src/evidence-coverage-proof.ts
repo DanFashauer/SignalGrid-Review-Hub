@@ -97,6 +97,8 @@ const ALL_PLANES: readonly SourcePlane[] = KNOWN_SOURCE_PLANES;
     benchmarkSelection: "confirmed",
     shiftContext: "confirmed",
     badgeBinding: "present",
+    managementHealthState: "healthy",
+    localAuthorityState: "verified",
     criticalSignalsPresent: true,
   };
   check(

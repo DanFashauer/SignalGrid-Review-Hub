@@ -251,6 +251,8 @@ export const REASON_CODE_LAYERS = [
   { code: "POSTURE_STALE", layer: "it_operations", domain: "IT Monitoring & Maintenance", systemOfRecord: "MDM / UEM", evidenceType: "posture freshness", owner: "endpoint_operations_owner" },
   { code: "POSTURE_STALE_STRICT", layer: "it_operations", domain: "IT Monitoring & Maintenance", systemOfRecord: "MDM / UEM", evidenceType: "posture freshness", owner: "endpoint_operations_owner" },
   { code: "POSTURE_MISSING", layer: "it_operations", domain: "IT Monitoring & Maintenance", systemOfRecord: "MDM / UEM", evidenceType: "posture freshness", owner: "endpoint_operations_owner" },
+  { code: "MANAGEMENT_HEALTH_BROKEN", layer: "it_operations", domain: "IT Monitoring & Maintenance", systemOfRecord: "MDM / UEM management plane", evidenceType: "management-plane health rollup", owner: "endpoint_operations_owner" },
+  { code: "LOCAL_AUTHORITY_WITHHELD", layer: "it_security_risk_management", domain: "Identity & Access Management", systemOfRecord: "SignalGrid control plane (offline-lease registry)", evidenceType: "local-authority grant state", owner: "it_governance_owner" },
 
   // ── Risk / benchmark ──────────────────────────────────────────────────────
   { code: "CRITICAL_WORKFLOW_UNTRUSTED_DEVICE", layer: "it_security_risk_management", domain: "IT Risk Assessment", systemOfRecord: "device ownership register", evidenceType: "ownership vs workflow risk", owner: "it_governance_owner" },

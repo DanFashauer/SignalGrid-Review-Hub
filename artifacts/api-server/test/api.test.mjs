@@ -227,7 +227,7 @@ async function run() {
 
   // ── Signal Radar: new-signal detection ───────────────────────────────────
   const catalog = await req("GET", "/signals/catalog");
-  check("signal catalog → 200 with 15 evaluated categories", catalog.status === 200 && catalog.json?.evaluated?.length === 15);
+  check("signal catalog → 200 with 17 evaluated categories (15 + the two launch families the 2026-08-10 scan found unrepresented)", catalog.status === 200 && catalog.json?.evaluated?.length === 17);
   check(
     "signal catalog → shift_context is evaluated, not novel (the category the /v1 misfit rule reads)",
     (catalog.json?.evaluated ?? []).includes("shift_context"),

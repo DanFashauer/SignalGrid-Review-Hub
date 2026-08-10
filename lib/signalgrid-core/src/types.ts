@@ -330,9 +330,29 @@ export const SIGNAL_CATEGORIES = [
   "benchmark_selection",
   "shift_context",
   "badge_binding",
+  // The two launch families the core could not previously represent — found by the
+  // 2026-08-10 full-repo scan (PRODUCT_COMPLETION_PLAN §9): device-management-health
+  // and local-authority shipped as connectors, proofs and doctrine while the engine
+  // had no vocabulary for either. Coarse rollups by design, like security_baseline
+  // rolling up the whole CIS engine: the family computes, the core reads the verdict.
+  "device_management_health",
+  "local_authority",
 ] as const;
 
 export type SignalCategory = (typeof SIGNAL_CATEGORIES)[number];
+
+/** Rollup of the device-management-health family: is the MANAGEMENT PLANE itself
+ *  trustworthy for this device — enrollment live, check-ins fresh, policy on
+ *  baseline. `broken` is affirmative (enrollment failed/retired, never checked in);
+ *  silence reads as `unknown`, never as healthy. */
+export type ManagementHealthState = "healthy" | "degraded" | "broken" | "unknown";
+
+/** Rollup of the local-authority family: may this shared device act on its own
+ *  authority right now (offline lease live, clock trusted). Only the two
+ *  AFFIRMATIVE values are readable from a signal — `verified` and `withheld` —
+ *  absent or unrecognized falls back to `unverified`, the same
+ *  silence-is-not-an-answer rule as benchmark_selection and shift_context. */
+export type LocalAuthorityGrantState = "verified" | "withheld" | "unverified";
 
 export interface NormalizedSignal {
   id: string;
@@ -377,6 +397,8 @@ export const EVIDENCE_FIELDS = [
   "benchmarkSelectionState",
   "shiftContextState",
   "badgeState",
+  "managementHealthState",
+  "localAuthorityState",
 ] as const;
 
 export type EvidenceField = (typeof EVIDENCE_FIELDS)[number];
@@ -399,7 +421,9 @@ export type RuleCondition =
   | { field: "baselineState"; in: BaselineState[] }
   | { field: "benchmarkSelectionState"; in: BenchmarkSelectionState[] }
   | { field: "shiftContextState"; in: ShiftContextState[] }
-  | { field: "badgeState"; in: BadgeBindingState[] };
+  | { field: "badgeState"; in: BadgeBindingState[] }
+  | { field: "managementHealthState"; in: ManagementHealthState[] }
+  | { field: "localAuthorityState"; in: LocalAuthorityGrantState[] };
 
 export interface PolicyRuleSpec {
   id: string;
@@ -473,6 +497,12 @@ export interface DecisionEvidence {
   shiftContext: ShiftContextState;
   /** Badge-binding state from the RFID/prox badge-reader case (default "unknown"). */
   badgeBinding: BadgeBindingState;
+  /** Management-plane health rollup from the device-management-health family
+   *  (default "unknown" — silence is not a healthy management plane). */
+  managementHealthState: ManagementHealthState;
+  /** Local-authority grant rollup (default "unverified" — day-one-quiet until the
+   *  connector emits it, like benchmarkSelection and shiftContext). */
+  localAuthorityState: LocalAuthorityGrantState;
   /** True only when every critical input is present and not degraded. */
   criticalSignalsPresent: boolean;
 }

@@ -37,6 +37,8 @@ export const EVALUATED_CATEGORIES = [
   "benchmark_selection",
   "shift_context",
   "badge_binding",
+  "device_management_health",
+  "local_authority",
 ] as const;
 
 // Compile-time guard: EVALUATED_CATEGORIES must exactly equal SignalCategory.

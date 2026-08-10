@@ -135,6 +135,17 @@ const IN_FIELDS: Record<string, ReadonlySet<string>> = {
     "absent",
     "unknown",
   ]),
+  managementHealthState: new Set([
+    "healthy",
+    "degraded",
+    "broken",
+    "unknown",
+  ]),
+  localAuthorityState: new Set([
+    "verified",
+    "withheld",
+    "unverified",
+  ]),
 };
 
 function reject(message: string): never {
@@ -368,6 +379,10 @@ function matches(condition: RuleCondition, evidence: DecisionEvidence): boolean 
       return condition.in.includes(evidence.shiftContext);
     case "badgeState":
       return condition.in.includes(evidence.badgeBinding);
+    case "managementHealthState":
+      return condition.in.includes(evidence.managementHealthState);
+    case "localAuthorityState":
+      return condition.in.includes(evidence.localAuthorityState);
     default: {
       // Exhaustiveness guard at compile time; fail-closed at runtime so an
       // unknown/malformed condition (e.g. from an authored draft) never matches.
@@ -648,6 +663,29 @@ export const SHARED_DEVICE_RULES_V1: PolicyRuleSpec[] = [
     outcome: "step_up",
     reasonCode: "SHIFT_CONTEXT_MISFIT",
     severity: "medium",
+  },
+  // Both launch-family rules follow the benchmark-selection day-one-quiet shape:
+  // the ACTIVE rule matches only the AFFIRMATIVE bad state the connector reported.
+  // "unknown"/"unverified" — the default until a connector emits the signal — stays
+  // quiet, so adding the category cannot change any existing decision, and the
+  // grant-safety enumeration is widened only by states a source positively asserted.
+  {
+    id: "management-health-broken",
+    description:
+      "The management plane affirmatively failed for this device (enrollment failed/retired or never checked in) — its posture answers cannot be trusted, so restrict until management is restored.",
+    match: [{ field: "managementHealthState", in: ["broken"] }],
+    outcome: "restrict",
+    reasonCode: "MANAGEMENT_HEALTH_BROKEN",
+    severity: "high",
+  },
+  {
+    id: "local-authority-withheld",
+    description:
+      "The control plane affirmatively withheld this device's authority to act locally (lease revoked or clock untrusted) — restrict autonomous operation until authority is re-verified.",
+    match: [{ field: "localAuthorityState", in: ["withheld"] }],
+    outcome: "restrict",
+    reasonCode: "LOCAL_AUTHORITY_WITHHELD",
+    severity: "high",
   },
   {
     id: "healthy-allow",

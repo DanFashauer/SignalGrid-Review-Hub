@@ -14,10 +14,12 @@
 // reports is ours.
 
 import { LocalAuthorityConnectorError, type LocalAuthorityReportRaw } from "./types";
+import { createMockLocalAuthorityTransport } from "./mock-transport";
 
 export * from "./types";
 export * from "./evaluate";
 export * from "./normalize";
+export { createMockLocalAuthorityTransport, type MockLocalAuthorityOptions } from "./mock-transport";
 
 /** Injected so every test and the proof drive the SAME code path the live call
  *  uses. A transport the tests replace wholesale would leave the real one never
@@ -29,7 +31,7 @@ export type LocalAuthorityTransport = (args: {
 
 export type LocalAuthorityResolution =
   | { mode: "live"; fetchState: (deviceRef: string) => Promise<LocalAuthorityReportRaw> }
-  | { mode: "fixture"; reason: string };
+  | { mode: "fixture"; reason: string; fetchState: (deviceRef: string) => Promise<LocalAuthorityReportRaw> };
 
 /**
  * Gated resolution, mirroring the product's live-integration policy: dev/alpha
@@ -43,16 +45,31 @@ export function resolveLocalAuthorityConnector(
   env: NodeJS.ProcessEnv = process.env,
   transportOverride?: LocalAuthorityTransport,
 ): LocalAuthorityResolution {
+  // Fixture mode now carries a WORKING fetchState over the committed demo
+  // records, through the same mock-transport failure surface a live source has
+  // (bad token → 401, unknown device → 404). Deterministic, offline, synthetic
+  // data only; `mode` remains the source of truth for what the data IS.
+  const fixture = (reason: string): LocalAuthorityResolution => {
+    const transport = createMockLocalAuthorityTransport({
+      records: { ...DEMO_LOCAL_AUTHORITY_RECORDS },
+      expectedToken: FIXTURE_LOCAL_AUTHORITY_TOKEN,
+    });
+    return {
+      mode: "fixture",
+      reason,
+      fetchState: (deviceRef) => transport({ deviceRef, token: FIXTURE_LOCAL_AUTHORITY_TOKEN }),
+    };
+  };
   const tier = (env.SIGNALGRID_TIER ?? "dev").toLowerCase();
   if (tier !== "beta" && tier !== "prod") {
-    return { mode: "fixture", reason: `tier "${tier}" never makes live vendor calls` };
+    return fixture(`tier "${tier}" never makes live vendor calls`);
   }
   if (env.SIGNALGRID_LIVE_INTEGRATIONS !== "true") {
-    return { mode: "fixture", reason: "SIGNALGRID_LIVE_INTEGRATIONS is not 'true'" };
+    return fixture("SIGNALGRID_LIVE_INTEGRATIONS is not 'true'");
   }
   const token = env.LOCAL_AUTHORITY_TOKEN?.trim();
   if (!token) {
-    return { mode: "fixture", reason: "LOCAL_AUTHORITY_TOKEN is not set" };
+    return fixture("LOCAL_AUTHORITY_TOKEN is not set");
   }
   const baseUrl = env.LOCAL_AUTHORITY_BASE_URL?.trim() || "https://edge.local/v1/devices";
   const transport = transportOverride ?? makeDefaultLocalAuthorityTransport(baseUrl);
@@ -96,6 +113,9 @@ export function makeDefaultLocalAuthorityTransport(baseUrl: string): LocalAuthor
   };
 }
 
+/** Obviously-fake token the fixture-mode transport expects. Never a real secret. */
+export const FIXTURE_LOCAL_AUTHORITY_TOKEN = "fixture-demo-token-not-a-secret";
+
 /** Deterministic fixtures — the shapes a reviewer should be able to reproduce.
  *  The second is the headline case: everything looks healthy and the device
  *  cannot read its own credentials. */
@@ -126,6 +146,20 @@ export const DEMO_LOCAL_AUTHORITY_RECORDS: Readonly<Record<string, LocalAuthorit
     localAuthState: "verified",
     clockConfidence: "device_asserted",
     grantIssuedAt: "2026-01-01T06:00:00.000Z",
+    maxDisconnectedSeconds: 43200,
+    source: "demo-edge",
+    observedAt: "2026-01-01T08:00:00.000Z",
+  },
+  // The decay case: dark past the 12-hour interval its own grant declares.
+  // Everything else is healthy — vault readable, human authenticated, trusted
+  // clock — so the ONLY thing that restricts is the grant's own arithmetic
+  // (issued 18:00 the previous day, evaluated at the 08:00 reference → 14h).
+  "ipad.er.overheld": {
+    deviceRef: "ipad.er.overheld",
+    protectedDataState: "available",
+    localAuthState: "verified",
+    clockConfidence: "trusted",
+    grantIssuedAt: "2025-12-31T18:00:00.000Z",
     maxDisconnectedSeconds: 43200,
     source: "demo-edge",
     observedAt: "2026-01-01T08:00:00.000Z",

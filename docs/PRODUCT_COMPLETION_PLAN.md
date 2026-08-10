@@ -207,13 +207,21 @@ transport turns "we have Intune" into a configuration step, not a build.
 **D0 — surface what exists (done in this commit).** `pnpm run demo`; the 57 MB
 of untracked iOS build junk deleted; findings ratified here.
 
-**D1 — close the seam (the real build).** Make `signalgrid-core` speak all three
-launch families (`SIGNAL_CATEGORIES` + `EVIDENCE_FIELDS`); extend
-`integration-bridge` with graph / device-management-health / local-authority
-draft mappers; make fixture mode return a *working* fixture-backed connector
-(graph via the existing mock transport; add `local-authority/mock-transport`);
-retire the simulator engine from the api-server decision surface. Exit test:
-**connector sync → core decision → evidence, all three families, zero network.**
+**D1 — close the seam (the real build). DONE.** The core half: `signalgrid-core`
+speaks all three launch families (`SIGNAL_CATEGORIES` 17, `EVIDENCE_FIELDS` 20,
+day-one-quiet v1 rules `MANAGEMENT_HEALTH_BROKEN` / `LOCAL_AUTHORITY_WITHHELD`,
+core-normalization v4). The integrations half: `integration-bridge` gained
+`graphPostureToDrafts` / `deviceManagementHealthToDrafts` /
+`localAuthorityToDrafts`; fixture-mode resolution for all three families now
+returns a *working* fixture-backed connector (graph over its mock transport
+seeded from `fixtures/microsoft-graph/`, drift-pinned; device-management-health
+over demo reports; the new `local-authority/mock-transport`). The exit test is
+`proof:launch-seam` (preflight + CI): **connector sync → core decision →
+evidence, all three families, with `fetch` disabled for the run.** One planned
+line item was corrected rather than done: the api-server *decision* surface
+(`/v1` via `SignalGridCore.demo()`) never imported the simulator engine — the
+simulator serves only its own `/simulator/*` demo routes, which the room-entry
+demo uses, so it stays.
 
 **D2 — one console (P0 tasks #237–240).** Bind Decisions list + Detail + a new
 Audit route to `/v1`; build §4's decision detail where the operator lives;

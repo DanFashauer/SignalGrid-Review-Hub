@@ -78,6 +78,7 @@
     "proof:intune-entra-posture": "tsx ./src/intune-entra-posture-proof.ts",
     "proof:isolation-scope": "tsx ./src/isolation-scope-proof.ts",
     "proof:launch-profile": "tsx ./src/launch-profile-proof.ts",
+    "proof:launch-seam": "tsx ./src/launch-seam-proof.ts",
     "proof:link-usability": "tsx ./src/link-usability-proof.ts",
     "proof:live-edr": "tsx ./src/live-edr-proof.ts",
     "proof:live-fleet": "tsx ./src/live-fleet-proof.ts",

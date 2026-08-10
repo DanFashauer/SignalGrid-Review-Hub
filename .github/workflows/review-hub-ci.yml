@@ -361,6 +361,12 @@ jobs:
         run: node scripts/check-launch-profile.mjs
       - name: Proof — launch profile (Limited GA scope is coherent; figures published)
         run: pnpm run proof:launch-profile
+      # The connector→decision seam, closed and pinned: fixture-mode resolution
+      # hands back WORKING connectors for all three launch families, and their
+      # output flows through the integration bridge into a core decision whose
+      # evidence carries the family facts — with fetch() disabled for the run.
+      - name: Proof — launch seam (fixture connector → bridge → decision, offline)
+        run: pnpm run proof:launch-seam
 
       # SEVEN gates lived in scripts/preflight.mjs and ran NOWHERE in CI — checked
       # against all 12 workflow files, not just this one. That made them local

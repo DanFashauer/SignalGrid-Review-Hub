@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 27,
-  "fingerprint": "92dc47183d99f138c7c35db377c0ef5f3f86dc88e21e693dedaf173ff88fee91",
+  "manifestVersion": 28,
+  "fingerprint": "b857fc78948056c01b8184a079ed4374213476111a72bf747e3cc0a0e7faa59a",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -65,7 +65,9 @@
       "security_baseline",
       "benchmark_selection",
       "shift_context",
-      "badge_binding"
+      "badge_binding",
+      "device_management_health",
+      "local_authority"
     ],
     "taskExceptionReasonCodes": [
       "TASK_STREAM_HEALTHY",

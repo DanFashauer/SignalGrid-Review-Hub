@@ -405,6 +405,8 @@ jobs:
         run: pnpm run proof:zero-trust-principles
       - name: "Security Operations Evidence (doctrine holds against engine + crypto source)"
         run: pnpm run proof:security-operations-evidence
+      - name: "KPI / KRI / KCI model (an indicator informs assurance, never creates a grant)"
+        run: pnpm run proof:kpi-kri-kci
       - name: "IT-layer model (every refusal has an owner; nothing routes to a phantom)"
         run: node scripts/check-it-layer-model.mjs
       - name: "IT-layer model self-test (the gate can actually fail)"

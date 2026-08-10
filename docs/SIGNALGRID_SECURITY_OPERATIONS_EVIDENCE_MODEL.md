@@ -287,10 +287,13 @@ node scripts/check-it-layer-model.mjs --self-test    # controls, including the a
 Related: `SIGNALGRID_ENTERPRISE_IT_LAYER_MODEL.md` (the container),
 `SIGNALGRID_ZERO_TRUST_DECISION_PRINCIPLES.md`,
 `SIGNALGRID_ENTERPRISE_ITSM_LAYER_MODEL.md`,
+[`SIGNALGRID_ENTERPRISE_KPI_KRI_KCI_MODEL.md`](./SIGNALGRID_ENTERPRISE_KPI_KRI_KCI_MODEL.md)
+(the control-effectiveness companion — now built),
 `SIGNALGRID_SSO_EVIDENCE_FIRST_TROUBLESHOOTING.md`, `LAUNCH_PROFILE.md`,
 `SECURITY_REVIEW_PACKAGE.md`.
 
-> **Two named models are referenced by the source material but do not exist yet:**
-> a KPI/KRI/KCI model and an Authentication & Federation model. They are named here as
-> *planned*, not linked, so this document contains no link to a phantom. When either is
-> built, this line is where the link goes.
+> **One named companion is now built; one is still planned.** The KPI/KRI/KCI model is
+> linked above — the line the earlier draft said "is where the link goes" is now that
+> link. An Authentication & Federation model is still referenced by the source material
+> and does not exist yet; it is named as *planned*, not linked, so this document links no
+> phantom.

@@ -89,6 +89,7 @@ const STEPS = [
   // signal gap, the ~90 SecOps codes genuinely unminted, and the real-vs-fixture crypto
   // boundary matching the code. No new product scope.
   { name: "Security Operations Evidence (doctrine holds against engine + crypto source)", cmd: ["pnpm", "run", "proof:security-operations-evidence"] },
+  { name: "KPI / KRI / KCI model (an indicator informs assurance, never creates a grant)", cmd: ["pnpm", "run", "proof:kpi-kri-kci"] },
   // Completeness in both directions: every reason code a refusal can carry has an IT
   // layer and an owner, and nothing is classified that nothing emits. A new family or
   // a new rule fails this until a human classifies it — which is also one more

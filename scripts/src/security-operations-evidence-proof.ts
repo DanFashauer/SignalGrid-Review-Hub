@@ -20,7 +20,7 @@
 //
 //   pnpm run proof:security-operations-evidence
 
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -162,12 +162,22 @@ check(
   /PUBLIC-SAFE FIXTURES/.test(cpSrc) && /asymmetric signing/.test(cpSrc),
 );
 
-// ── the doc names its two absent companions rather than linking phantoms ──────
+// ── the doc links the built companion and still links no phantom ──────────────
+// This assertion tracks the world, not a frozen snapshot: the KPI/KRI/KCI model was the
+// "planned, not linked" companion when this doc shipped; it is now built, so the doc
+// SHOULD link it. The Authentication & Federation model is still absent, so the doc must
+// still NOT link it. Both halves matter — the second is the no-phantom guarantee.
 const docSrc = readFileSync(join(repo, "docs/SIGNALGRID_SECURITY_OPERATIONS_EVIDENCE_MODEL.md"), "utf8");
+const kpiDocExists = existsSync(join(repo, "docs/SIGNALGRID_ENTERPRISE_KPI_KRI_KCI_MODEL.md"));
+const kpiLinked = /\]\([^)]*SIGNALGRID_ENTERPRISE_KPI_KRI_KCI_MODEL\.md\)/.test(docSrc);
 check(
-  "the doc references no markdown link to a file that does not exist (KPI/KRI/KCI and Auth/Federation are named, not linked)",
-  !/\]\(SIGNALGRID_ENTERPRISE_KPI_KRI_KCI_MODEL\.md\)/.test(docSrc) &&
-    !/\]\(SIGNALGRID_AUTHENTICATION_AND_FEDERATION_MODEL\.md\)/.test(docSrc),
+  "the now-built KPI/KRI/KCI companion is BOTH present on disk AND linked from this doc (no dangling reference)",
+  kpiDocExists && kpiLinked,
+);
+check(
+  "the still-absent Auth/Federation model is named but NOT linked — no link to a phantom",
+  !existsSync(join(repo, "docs/SIGNALGRID_AUTHENTICATION_AND_FEDERATION_MODEL.md")) &&
+    !/\]\([^)]*SIGNALGRID_AUTHENTICATION_AND_FEDERATION_MODEL\.md\)/.test(docSrc),
 );
 
 const total = passed + failures.length;

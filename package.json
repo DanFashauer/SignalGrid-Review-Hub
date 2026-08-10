@@ -171,6 +171,7 @@
     "proof:work-context": "pnpm --filter @workspace/scripts run proof:work-context",
     "proof:zero-trust-principles": "pnpm --filter @workspace/scripts run proof:zero-trust-principles",
     "proof:security-operations-evidence": "pnpm --filter @workspace/scripts run proof:security-operations-evidence",
+    "proof:kpi-kri-kci": "pnpm --filter @workspace/scripts run proof:kpi-kri-kci",
     "review:invariants": "node scripts/review-invariants.mjs",
     "safety:check": "node scripts/safety-check.mjs",
     "sbom": "pnpm --filter @workspace/scripts run sbom",

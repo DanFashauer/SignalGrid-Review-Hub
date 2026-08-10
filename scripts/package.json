@@ -140,6 +140,7 @@
     "proof:zero-trust-principles": "tsx ./src/zero-trust-principles-proof.ts",
     "proof:security-operations-evidence": "tsx ./src/security-operations-evidence-proof.ts",
     "proof:kpi-kri-kci": "tsx ./src/kpi-kri-kci-model-proof.ts",
+    "proof:municipal-resilience": "tsx ./src/municipal-resilience-proof.ts",
     "sbom": "tsx ./src/generate-sbom.ts",
     "self-audit:run": "tsx ./src/self-audit-run.ts",
     "smoke:connector-emulator": "pnpm run proof:connector-emulator",

@@ -11,7 +11,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Product Completion Plan](PRODUCT_COMPLETION_PLAN.md): **the operating plan of record** — what "done" means, and what stops now. Completion is not 100% of the vision; it is *a customer can understand it, a technical buyer can test it, a security reviewer can trust its boundaries, and an operator can use it without the founder explaining every screen.* Sequences the plans that already exist rather than restating them, names the five screens the product must be explainable in, ranks the work P0→P3, and **widens the breadth freeze to cover new vertical/doctrine documents** — the gap through which intake kept flowing. Ends by stating plainly which items this repository can close and which need a real tenant, managed infrastructure, an independent reviewer, or a design partner, because a plan that hides its dependencies is its own unearned affirmative.
 - [The Launch Profile](LAUNCH_PROFILE.md): what ships as *SignalGrid Shared-Device Trust Gateway* and what does not — every connector family, signal kind, published API path and client surface classified `launch` / `deferred` / `demo_only` / `internal`, with the declared gaps held as data. `scripts/check-launch-profile.mjs` enforces a bijection against the repository in both directions, which is also how the breadth freeze is enforced mechanically rather than by agreement.
 - [Realistic Launch Plan](REALISTIC_LAUNCH_PLAN.md): public-safe, honest sequence from today's review surface to a real company, paid pilot, and production SaaS — with readiness scores, phased engineering, budget ranges, and a 30-day operating plan as planning hypotheses, not current claims.
-- [Founder Execution Report](FOUNDER_EXECUTION_REPORT.md): the operating contract, delivery gates, workstreams, decision rights, and definition of done for an AI-assisted execution team working around the founder.
+- [Founder Execution Report](research/FOUNDER_EXECUTION_REPORT.md): the operating contract, delivery gates, workstreams, decision rights, and definition of done for an AI-assisted execution team working around the founder.
 - [Authentication and Credential Architecture](AUTHENTICATION_AND_CREDENTIAL_ARCHITECTURE.md): authoritative separation of OAuth, OIDC, JWT, API keys, passkeys, sender binding, offline leases, and webhook signing across SignalGrid surfaces.
 - [Product Core Foundation](PRODUCT_CORE_FOUNDATION.md): the deterministic, fixture-backed, public-safe product core (tenancy, auth/RBAC, read-only connector sync, versioned policy engine, decision loop, evidence snapshots, tamper-evident audit ledger), its `/v1` API, the in-browser Operator Console, and the core proof — realizing plan phases B–D in a review-safe form. Companions: [Product Data Model](PRODUCT_DATA_MODEL.md), [Product Core Threat Model](PRODUCT_CORE_THREAT_MODEL.md), [Security Controls Matrix](SECURITY_CONTROLS_MATRIX.md), [Run & Go-Live runbook](RUN_AND_GO_LIVE.md), [Private-Core Hand-off spec](PRIVATE_CORE_HANDOFF.md), [Ecosystem Flow & Resolution Assistant](ECOSYSTEM_FLOW_AND_RESOLUTION.md), [DockBridge Product Connector](DOCKBRIDGE_PRODUCT_CONNECTOR.md), [Security-Baseline Alignment (CIS & other hardening baselines)](SECURITY_BASELINE_ALIGNMENT.md), [App Suite Platform × Persona Matrix](APP_SUITE_MATRIX.md), [What SignalGrid Does Today (implemented vs candidate)](WHAT_SIGNALGRID_DOES_TODAY.md), the `/v1` OpenAPI spec ([`lib/api-spec/v1-openapi.yaml`](../lib/api-spec/v1-openapi.yaml)), and the vulnerability-disclosure policy ([`SECURITY.md`](../SECURITY.md)).
 - [SignalGrid Enterprise IT Layer Model](SIGNALGRID_ENTERPRISE_IT_LAYER_MODEL.md): the container model — the seven-layer IT operating stack, and where SignalGrid sits across it. Answers the question that costs people the most time when a workflow is refused: **who fixes it?** Every reason code the core can emit and every connector family carries a layer, a system of record, an evidence type and an owner, enforced for completeness in both directions by `scripts/check-it-layer-model.mjs`. Decision impact is read from the rule set rather than declared, so it cannot drift. Companion: [SSO Evidence-First Troubleshooting](SIGNALGRID_SSO_EVIDENCE_FIRST_TROUBLESHOOTING.md) — the first-relevant-divergence method and the eight-state transition chain (`Configured ≠ Emitted ≠ … ≠ Secure`), doctrine and explicitly not built.
@@ -22,14 +22,14 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [SignalGrid ITOM / ITSM Bridge Model](SIGNALGRID_ITOM_ITSM_BRIDGE_MODEL.md): the two planes enterprise operations keeps collapsing into one. **ITOM says what is broken. ITSM says who owns it. SignalGrid decides what can safely continue.** Both planes can be entirely correct — event correlated, incident opened, owner assigned, SLA running — while the question that matters goes unasked: the worker is holding the device *now*, may this action proceed? Carries the event-to-decision lifecycle (observe → correlate → decide → route → verify → release → feed back), the rule that a restriction lifts on **re-evaluated evidence and not on ticket closure**, and the sharpest boundary in the model: agentic automation and automated remediation are ITOM capabilities that SignalGrid *governs* — an AIOps recommendation with no approval owner and no verification plan is routed, never executed. Settles one proposed code mechanically: `ITSM_SERVICE_OWNER_UNRESOLVED` is **structurally unreachable**, because every one of the 29 reason codes the engine emits is classified with an owner from a closed 9-role set or the build fails. Re-checked by `pnpm run proof:itom-itsm-bridge`.
 - [SignalGrid Municipal Critical Services Trust & Resilience Model](SIGNALGRID_MUNICIPAL_CRITICAL_SERVICES_RESILIENCE_MODEL.md): the public-sector vertical reading, nested under the IT layer model as *Public Sector / Municipal Operations*. Nineteen municipal failure themes — automation overreach, unmonitored vendor access, fragmented data ownership, legacy exposure, communications redundancy, institutional knowledge, access workarounds and the rest — each mapped to a shipped surface or honestly marked out of scope. The core finding: **the vulnerability is the missing proof chain** across systems, people, vendors, data, services and ownership — and a city is a federation of services, never one tenant with one risk score. The ~39 `MUNICIPAL_*` codes and the vertical catalog stay SPECIFICATION (Limited GA untouched); the theme→family mapping is drift-checked by `pnpm run proof:municipal-resilience`.
 - [Executive One-Pager](EXECUTIVE_ONE_PAGER.md): quickest buyer/partner/founder overview.
-- [Strategic Buyer / Partner Pitch Pack](STRATEGIC_BUYER_PARTNER_PITCH_PACK.md): strategic narrative and positioning.
+- [Strategic Buyer / Partner Pitch Pack](research/STRATEGIC_BUYER_PARTNER_PITCH_PACK.md): strategic narrative and positioning.
 - [Level 10 Completion Matrix](LEVEL_10_COMPLETION_MATRIX.md): readiness scores, evidence, gaps, owners, and risk lanes.
 - [Level 10 Autopilot Runbook](LEVEL_10_AUTOPILOT_RUNBOOK.md): hands-off one-input-to-one-phase operating model.
-- [Pitch Execution Pack](PITCH_EXECUTION_PACK.md): outbound call materials, email templates, and diligence flow.
-- [Social Media Preannouncement Packet](SOCIAL_MEDIA_PREANNOUNCEMENT_PACKET.md): public-safe founder/category-building sequence.
-- [Real-World Testing Readiness Plan](REAL_WORLD_TESTING_READINESS_PLAN.md): staged path from synthetic proof to controlled private validation.
+- [Pitch Execution Pack](research/PITCH_EXECUTION_PACK.md): outbound call materials, email templates, and diligence flow.
+- [Social Media Preannouncement Packet](research/SOCIAL_MEDIA_PREANNOUNCEMENT_PACKET.md): public-safe founder/category-building sequence.
+- [Real-World Testing Readiness Plan](research/REAL_WORLD_TESTING_READINESS_PLAN.md): staged path from synthetic proof to controlled private validation.
 - [Company Operating Pack](COMPANY_OPERATING_PACK.md): founder-control strategy and strategic options.
-- [Target Buyer / Partner Matrix](TARGET_BUYER_PARTNER_MATRIX.md): category-based target map without unsupported named-company claims.
+- [Target Buyer / Partner Matrix](research/TARGET_BUYER_PARTNER_MATRIX.md): category-based target map without unsupported named-company claims.
 - [Demo and Simulation Expansion Plan](DEMO_AND_SIMULATION_EXPANSION_PLAN.md): next demo-room plan and UI follow-up boundary.
 
 ## Core orientation
@@ -39,7 +39,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Lane coordination](LANE_COORDINATION.md): the standing protocol for parallel Claude sessions working this repo — the lane table, the shared-surface serialization rule, announce-in-the-commit, and the cloud-lane-absorbs-base merge direction. Exists because the nac/webhooks eight-file collision proved chat context is not a coordination bus; git is.
 - [Repository lineage](REPO_LINEAGE.md): explains the public/private repository split and what belongs in each repository.
 - [Publication boundary](PUBLICATION_BOUNDARY.md): that split enforced rather than remembered — `pnpm run guard:boundary` requires every tracked path to be classified with a stated reason, so nothing reaches this public repository unexamined. Covers what the gate cannot establish, why `OWNER_PENDING` is not a snooze, and the two third-party documents currently awaiting an owner decision.
-- [IP & licensing posture](IP_AND_LICENSING.md): how SignalGrid's IP is held today (copyright/MIT public code, trademark on the name, trade-secret core/hardware, patent timing) and the open decisions to settle with counsel — plus the publication boundary that keeps patent options open. Not legal advice.
+- [IP & licensing posture](research/IP_AND_LICENSING.md): how SignalGrid's IP is held today (copyright/MIT public code, trademark on the name, trade-secret core/hardware, patent timing) and the open decisions to settle with counsel — plus the publication boundary that keeps patent options open. Not legal advice.
 - [Alpha to public pre-production parity](ALPHA_TO_PUBLIC_PREPROD_PARITY.md): maps DEV Alpha learnings into Review Hub, private core, redesign, deferred, or archive categories.
 - [Roadmap to private core](ROADMAP_TO_PRIVATE_CORE.md): defines how validated public concepts move toward protected core implementation.
 
@@ -105,8 +105,8 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 
 - [Why SignalGrid](WHY_SIGNALGRID_VERTICALS.md): the layer that simplifies the complexity, and why the same fabric serves very different frontlines.
 - [Vision — the person-first grid](VISION_PERSON_FIRST_GRID.md) and [the trust fabric for the smart hospital](SMART_HOSPITAL_TRUST_FABRIC.md): the long-range framing.
-- [Market landscape & positioning](MARKET_LANDSCAPE.md), with the category comparisons: [Entra](COMPETITIVE_ENTRA.md), [Imprivata](COMPETITIVE_IMPRIVATA.md), [Oloid](COMPETITIVE_OLOID.md), [SGNL](COMPETITIVE_SGNL.md), [Teleport](COMPETITIVE_TELEPORT.md), and the [battlecard](COMPETITIVE_BATTLECARD.md).
-- [SignalGrid and IGA — adjacent, not overlapping](IGA_ADJACENCY.md): why runtime decisioning is not identity governance.
+- [Market landscape & positioning](research/MARKET_LANDSCAPE.md), with the category comparisons: [Entra](research/COMPETITIVE_ENTRA.md), [Imprivata](research/COMPETITIVE_IMPRIVATA.md), [Oloid](research/COMPETITIVE_OLOID.md), [SGNL](research/COMPETITIVE_SGNL.md), [Teleport](research/COMPETITIVE_TELEPORT.md), and the [battlecard](research/COMPETITIVE_BATTLECARD.md).
+- [SignalGrid and IGA — adjacent, not overlapping](research/IGA_ADJACENCY.md): why runtime decisioning is not identity governance.
 - [macOS 27 / DDM signal opportunity](MACOS_27_DDM_SIGNAL_OPPORTUNITY.md): new OS signal sources, and why they are tailwind.
 - [What needs Dan](WHAT_NEEDS_DAN.md): the decisions and actions that cannot be delegated.
 - [SignalGrid real-life simulator](SIGNALGRID_REAL_LIFE_SIMULATOR.md): explains the public-safe deterministic simulator foundation and its runtime trust layers.
@@ -115,7 +115,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Simulator event model](SIMULATOR_EVENT_MODEL.md): documents deterministic simulator event types and normalized event shape.
 - [Simulator decision engine](SIMULATOR_DECISION_ENGINE.md): documents fixture-based inputs, outputs, rules, and guardrails.
 - [Simulator validation runbook](SIMULATOR_VALIDATION_RUNBOOK.md): lists local setup, smoke URLs, expected scenario outputs, and validation commands.
-- [Milestone strategy](MILESTONE_STRATEGY.md): uses tags/releases rather than messy repository copies.
+- [Milestone strategy](research/MILESTONE_STRATEGY.md): uses tags/releases rather than messy repository copies.
 - [Mobile and platform strategy](MOBILE_AND_PLATFORM_STRATEGY.md): describes operator mobile, admin companion, PWA, desktop, and endpoint-agent boundaries.
 - [Integration catalog](INTEGRATION_CATALOG.md): lists integration categories, first proof direction, and vendor-claim boundaries.
 - [API signal discovery](API_SIGNAL_DISCOVERY.md): living research catalog of public, read-only vendor APIs studied as candidate signal sources, and how each maps onto a normalized decision dimension.
@@ -127,36 +127,36 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Identity Trust Layer strategy](IDENTITY_TRUST_LAYER_STRATEGY.md): documents IAM/IdP/IGA systems as core SignalGrid signal sources while preserving the Entra ID + Intune first proof.
 - [Operational Health / DEX Layer Strategy](OPERATIONAL_HEALTH_DEX_LAYER_STRATEGY.md): documents endpoint health, API/service health, DEX/user-experience, monitoring, alerting, ITSM routing, remediation-request, and audit-evidence signals as a future SignalGrid layer.
 - [Microsoft Graph and MCP strategy](MICROSOFT_GRAPH_AND_MCP_STRATEGY.md): documents Graph / Graph SDK as the first Microsoft identity/posture path and MCP as a later agentic connector direction.
-- [Apple Open Source Platform Strategy](APPLE_OPEN_SOURCE_PLATFORM_STRATEGY.md): maps Apple open-source and Apple-participating projects to future SignalGrid Apple platform directions without adding implementation code.
+- [Apple Open Source Platform Strategy](research/APPLE_OPEN_SOURCE_PLATFORM_STRATEGY.md): maps Apple open-source and Apple-participating projects to future SignalGrid Apple platform directions without adding implementation code.
 - [Microsoft Graph PC test gate](MICROSOFT_GRAPH_PC_TEST_GATE.md): defines the local-only gate for a future read-only sandbox smoke test without adding live Graph calls to Review Hub CI.
 - [Microsoft Graph live smoke test runbook](MICROSOFT_GRAPH_LIVE_SMOKE_TEST_RUNBOOK.md): documents the PC-only procedure, sanitization rules, non-goals, and follow-up PR boundary for future live read-only testing.
 - [Frontline context signals roadmap](FRONTLINE_CONTEXT_SIGNALS.md): captures future healthcare/frontline context inputs while preserving the Intune / Entra first-proof sequence.
 - [Kontakt.io / RTLS integration notes](KONTAKT_RTLS_INTEGRATION_NOTES.md): documents a future RTLS/location/staff-safety candidate path, fixture-proof boundary, source-system ownership, and guardrails.
 - [Agentic connector strategy](AGENTIC_CONNECTOR_STRATEGY.md): documents future MCP-style connector and governed agentic-operations direction without claiming production readiness or partnerships.
-- [Visual-code asset strategy](VISUAL_CODE_ASSET_STRATEGY.md): defines how diagrams, Review Hub visuals, and public graphics should remain source-controlled visual code where practical.
+- [Visual-code asset strategy](research/VISUAL_CODE_ASSET_STRATEGY.md): defines how diagrams, Review Hub visuals, and public graphics should remain source-controlled visual code where practical.
 - [Ecosystem positioning](ECOSYSTEM_POSITIONING.md): explains where SignalGrid fits relative to IAM, IGA, UEM/MDM, healthcare access, ITSM, SIEM/SOAR, NAC, endpoint telemetry, and dock/edge systems.
 - [IT operating stack layer map](OPERATING_STACK_LAYER_MAP.md): the seven-layer organizing taxonomy (six IT-operating-stack layers + the physical/operational extension) mapping every existing family and package to its layer, with the catalog-overlay field schema and the executive decision-fabric framing. An organizing lens, explicitly not a launch-scope change.
 - [DockBridge strategy](DOCKBRIDGE_STRATEGY.md): documents future edge/dock event orchestration for shared-device workflows.
 - [SignalGrid SmartDock](SIGNALGRID_SMARTDOCK.md): the optional embedded smart-charging dock hardware layer (power + network in, decisions in SaaS cloud or on-site); a pre-production design concept realised in the core as the `embedded_smartdock` ingestion mode.
 - [Hardware partner matrix](HARDWARE_PARTNER_MATRIX.md): maps public-safe candidate hardware categories for Physical Custody, DockBridge, and shared-device trust signals.
-- [Beam Mobile partner-candidate brief](BEAM_MOBILE_PARTNER_CANDIDATE_BRIEF.md): frames Beam Mobile as a candidate healthcare shared iPhone/iPad case, battery, charging, and dock layer without claiming partnership or endorsement.
+- [Beam Mobile partner-candidate brief](research/BEAM_MOBILE_PARTNER_CANDIDATE_BRIEF.md): frames Beam Mobile as a candidate healthcare shared iPhone/iPad case, battery, charging, and dock layer without claiming partnership or endorsement.
 - [Physical Custody signal model](PHYSICAL_CUSTODY_SIGNAL_MODEL.md): defines a vendor-neutral fixture schema and custody decision examples for future DockBridge proof work.
 - [Credential Reader Signal Model](CREDENTIAL_READER_SIGNAL_MODEL.md): defines public-safe badge, credential-reader, mobile credential-event, smart-locker, identity-correlation, and custody-correlation signal semantics.
 - [Smart Locker Identity & Custody Model](SMART_LOCKER_IDENTITY_CUSTODY_MODEL.md): documents fixture-backed locker, kiosk, dock, bay-assignment, and custody workflow patterns.
 - [Configuration/profile orchestration strategy](CONFIG_PROFILE_ORCHESTRATION_STRATEGY.md): outlines AI-assisted remediation scaffolding with approval, validation, test ring, and rollback guardrails.
-- [Partner and alliance strategy](PARTNER_AND_ALLIANCE_STRATEGY.md): frames ecosystem paths without claiming current partnerships or certifications.
+- [Partner and alliance strategy](research/PARTNER_AND_ALLIANCE_STRATEGY.md): frames ecosystem paths without claiming current partnerships or certifications.
 - [Production path](PRODUCTION_PATH.md): defines conservative gates from public strategy to private-core proof and eventual production readiness.
 
 
 ## v0.2 investor / design-partner product foundation
 
-- [SignalGrid v0.2 Readiness Plan](SIGNALGRID_V0_2_READINESS_PLAN.md): defines the product reality statement, staged readiness model, target architecture, guardrails, and next recommended engineering phase.
+- [SignalGrid v0.2 Readiness Plan](research/SIGNALGRID_V0_2_READINESS_PLAN.md): defines the product reality statement, staged readiness model, target architecture, guardrails, and next recommended engineering phase.
 - [v0.2 Epic Backlog](V0_2_EPIC_BACKLOG.md): converts the readiness plan into scoped future engineering epics with acceptance criteria, risk lanes, sequences, and dependencies.
 - [Microsoft Connector First Path](MICROSOFT_CONNECTOR_FIRST_PATH.md): documents the read-only, sandbox/mock-first Entra ID and Intune connector path with normalized posture signals and non-goals.
 - [Secure Tenancy Foundation Plan](SECURE_TENANCY_FOUNDATION_PLAN.md): defines tenant-aware data access, authorization, RBAC, audit, rate limiting, validation, and PII-safe logging requirements.
 - [Pilot Readiness Criteria](PILOT_READINESS_CRITERIA.md): lists paid-pilot prerequisites, private-context controls, and customer success criteria.
-- [Product Reality Checklist](PRODUCT_REALITY_CHECKLIST.md): keeps v0.2 focused on one workflow, one decision loop, one connector path, one tenant model, one pilot story, and one investor narrative.
-- [Investor / Design-Partner Readiness](INVESTOR_DESIGN_PARTNER_READINESS.md): outlines the package requirements and public-safe narrative for design-partner and investor conversations.
+- [Product Reality Checklist](research/PRODUCT_REALITY_CHECKLIST.md): keeps v0.2 focused on one workflow, one decision loop, one connector path, one tenant model, one pilot story, and one investor narrative.
+- [Investor / Design-Partner Readiness](research/INVESTOR_DESIGN_PARTNER_READINESS.md): outlines the package requirements and public-safe narrative for design-partner and investor conversations.
 
 ## Review workflow
 
@@ -205,36 +205,42 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 
 ## Buyer, partner, and testing readiness
 
-- [Buyer / Partner Readiness Pack](BUYER_PARTNER_READINESS_PACK.md): packages validated public state for buyer, partner, investor, and design-partner conversations without unsupported claims.
-- [Strategic Buyer / Partner Pitch Pack](STRATEGIC_BUYER_PARTNER_PITCH_PACK.md): provides the one-page positioning, demo narrative, outreach scaffolds, target-category map, strategic paths, founder-control preference, and public-safety guardrails for factual strategic conversations.
-- [Pitch Execution Pack](PITCH_EXECUTION_PACK.md): organizes outbound-ready pitch materials from the merged strategic pack.
+- [Buyer / Partner Readiness Pack](research/BUYER_PARTNER_READINESS_PACK.md): packages validated public state for buyer, partner, investor, and design-partner conversations without unsupported claims.
+- [Strategic Buyer / Partner Pitch Pack](research/STRATEGIC_BUYER_PARTNER_PITCH_PACK.md): provides the one-page positioning, demo narrative, outreach scaffolds, target-category map, strategic paths, founder-control preference, and public-safety guardrails for factual strategic conversations.
+- [Pitch Execution Pack](research/PITCH_EXECUTION_PACK.md): organizes outbound-ready pitch materials from the merged strategic pack.
 - [Executive One-Pager](EXECUTIVE_ONE_PAGER.md): gives a concise buyer-facing summary of SignalGrid, current proof status, synthetic boundaries, and non-claims.
-- [Outreach Email Templates](OUTREACH_EMAIL_TEMPLATES.md): provides short editable drafts for strategic partners, design partners, investors/acquirers, healthcare/shared-device workflow companies, credential-reader / locker / custody hardware companies, and identity / MDM / UEM companies.
-- [First-Call Talk Track](FIRST_CALL_TALK_TRACK.md): provides the opener, problem framing, product framing, proof/demo sequence, partnership/acquisition path, founder-control preference, and next ask.
+- [Outreach Email Templates](research/OUTREACH_EMAIL_TEMPLATES.md): provides short editable drafts for strategic partners, design partners, investors/acquirers, healthcare/shared-device workflow companies, credential-reader / locker / custody hardware companies, and identity / MDM / UEM companies.
+- [First-Call Talk Track](research/FIRST_CALL_TALK_TRACK.md): provides the opener, problem framing, product framing, proof/demo sequence, partnership/acquisition path, founder-control preference, and next ask.
 - [Demo Script for Partners](DEMO_SCRIPT_FOR_PARTNERS.md): defines a public-safe walkthrough using the Review Hub, Connector Emulator Dashboard, Credential Reader / Smart Locker Dashboard, Connector Emulator Smoke evidence, Autopilot Control Plane, and Strategic Buyer / Partner Pitch Pack.
-- [Diligence Checklist](DILIGENCE_CHECKLIST.md): lists proof assets, docs to send, questions to ask, technical validation next steps, business/control terms, and guardrails.
-- [Social Media Pre-Announcement Packet](SOCIAL_MEDIA_PREANNOUNCEMENT_PACKET.md): packages founder-led pre-announcement/category-building copy and sequencing.
-- [LinkedIn Post Drafts](LINKEDIN_POST_DRAFTS.md): provides LinkedIn-ready founder, problem, shared-device, frontline, architecture, partner, proof, and soft-CTA drafts.
-- [Social Platform Message Variants](SOCIAL_PLATFORM_MESSAGE_VARIANTS.md): provides shorter X/Twitter-style, email, partner DM, website hero, and pinned-profile variants.
-- [Social Visual Concepts](SOCIAL_VISUAL_CONCEPTS.md): defines minimal enterprise visual ideas for fragmented signals, decision flow, shared-device context, and systems-of-record architecture.
+- [Diligence Checklist](research/DILIGENCE_CHECKLIST.md): lists proof assets, docs to send, questions to ask, technical validation next steps, business/control terms, and guardrails.
+- [Social Media Pre-Announcement Packet](research/SOCIAL_MEDIA_PREANNOUNCEMENT_PACKET.md): packages founder-led pre-announcement/category-building copy and sequencing.
+- [LinkedIn Post Drafts](research/LINKEDIN_POST_DRAFTS.md): provides LinkedIn-ready founder, problem, shared-device, frontline, architecture, partner, proof, and soft-CTA drafts.
+- [Social Platform Message Variants](research/SOCIAL_PLATFORM_MESSAGE_VARIANTS.md): provides shorter X/Twitter-style, email, partner DM, website hero, and pinned-profile variants.
+- [Social Visual Concepts](research/SOCIAL_VISUAL_CONCEPTS.md): defines minimal enterprise visual ideas for fragmented signals, decision flow, shared-device context, and systems-of-record architecture.
 - [Public Messaging Guardrails](PUBLIC_MESSAGING_GUARDRAILS.md): lists public phrases to avoid, safer alternatives, safe framing patterns, and a pre-post checklist.
-- [Pitch Target Categories](PITCH_TARGET_CATEGORIES.md): groups potential buyer, partner, investor, and design-partner audiences by category without company-specific claims.
-- [Partnership and Acquisition Paths](PARTNERSHIP_AND_ACQUISITION_PATHS.md): frames design-partner, OEM, investment, acquisition-with-founder-leadership, and last-option full-buyout paths.
-- [Founder Strategic Options](FOUNDER_STRATEGIC_OPTIONS.md): frames founder-control, partnership, investment, OEM, acquisition, and buyout paths as business-strategy options only.
-- [Founder Control Requirements](FOUNDER_CONTROL_REQUIREMENTS.md): records founder CEO/product/creative-control preferences and conversation filters without legal or financial guarantees.
-- [Real-World Testing Readiness Plan](REAL_WORLD_TESTING_READINESS_PLAN.md): stages Review Hub readiness from synthetic proof through limited pilot boundaries without adding live testing implementation.
-- [Real-World Testing Checklist](REAL_WORLD_TESTING_CHECKLIST.md): operational checklist for staged validation readiness.
-- [Sandbox Validation Requirements](SANDBOX_VALIDATION_REQUIREMENTS.md): guardrails before any private sandbox scope.
-- [Design Partner Readiness](DESIGN_PARTNER_READINESS.md): dry-run criteria and agenda for design-partner conversations.
+- [Pitch Target Categories](research/PITCH_TARGET_CATEGORIES.md): groups potential buyer, partner, investor, and design-partner audiences by category without company-specific claims.
+- [Partnership and Acquisition Paths](research/PARTNERSHIP_AND_ACQUISITION_PATHS.md): frames design-partner, OEM, investment, acquisition-with-founder-leadership, and last-option full-buyout paths.
+- [Founder Strategic Options](research/FOUNDER_STRATEGIC_OPTIONS.md): frames founder-control, partnership, investment, OEM, acquisition, and buyout paths as business-strategy options only.
+- [Founder Control Requirements](research/FOUNDER_CONTROL_REQUIREMENTS.md): records founder CEO/product/creative-control preferences and conversation filters without legal or financial guarantees.
+- [Real-World Testing Readiness Plan](research/REAL_WORLD_TESTING_READINESS_PLAN.md): stages Review Hub readiness from synthetic proof through limited pilot boundaries without adding live testing implementation.
+- [Real-World Testing Checklist](research/REAL_WORLD_TESTING_CHECKLIST.md): operational checklist for staged validation readiness.
+- [Sandbox Validation Requirements](research/SANDBOX_VALIDATION_REQUIREMENTS.md): guardrails before any private sandbox scope.
+- [Design Partner Readiness](research/DESIGN_PARTNER_READINESS.md): dry-run criteria and agenda for design-partner conversations.
 - [Company Operating Pack](COMPANY_OPERATING_PACK.md): founder/company operating paths and non-legal strategic framing.
-- [Founder Role and Control Strategy](FOUNDER_ROLE_AND_CONTROL_STRATEGY.md): founder/CEO and retained product leadership preference.
-- [Strategic Options Decision Tree](STRATEGIC_OPTIONS_DECISION_TREE.md): planning tree for design partner, investment, OEM, acquisition, and last-option buyout paths.
-- [Target Buyer / Partner Matrix](TARGET_BUYER_PARTNER_MATRIX.md): category-based buyer and partner matrix.
+- [Founder Role and Control Strategy](research/FOUNDER_ROLE_AND_CONTROL_STRATEGY.md): founder/CEO and retained product leadership preference.
+- [Strategic Options Decision Tree](research/STRATEGIC_OPTIONS_DECISION_TREE.md): planning tree for design partner, investment, OEM, acquisition, and last-option buyout paths.
+- [Target Buyer / Partner Matrix](research/TARGET_BUYER_PARTNER_MATRIX.md): category-based buyer and partner matrix.
 - [Demo and Simulation Expansion Plan](DEMO_AND_SIMULATION_EXPANSION_PLAN.md): docs-first Level 10 demo expansion plan.
 
 
 - [Delivery gap analysis](DELIVERY_GAP_ANALYSIS.md): every product surface — deployment models, apps per platform, dock/charging, website and marketing — measured against the tree rather than the task list, with BUILT / PARTIAL / ABSENT and the search that establishes each. Contradicts several tasks marked complete; where it does, the tree wins.
 - [Branch hygiene](BRANCH_HYGIENE.md): what each branch prefix means, which branches are load-bearing, why squash-merge makes `git branch --merged` an unreliable signal, and the reversible pruning procedure.
+
+## Research — strategy, positioning and outreach (relocated 2026-08-10)
+
+- [research/README.md](research/README.md) — what moved and why (plan §11.4)
+- [research/FUNDRAISING_OPTIONS.md](research/FUNDRAISING_OPTIONS.md)
+- [research/REAL_WORLD_TESTING_READINESS_PACK.md](research/REAL_WORLD_TESTING_READINESS_PACK.md)
 
 ## Subdirectory sets — design notes, records, and drafts
 

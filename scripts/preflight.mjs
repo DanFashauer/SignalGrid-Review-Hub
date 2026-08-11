@@ -79,19 +79,15 @@ const STEPS = [
   { name: "Publication boundary (nothing reaches a public repo unclassified)", cmd: ["node", "scripts/check-publication-boundary.mjs"] },
   { name: "Pagination-truncation guard (a capped read must not look complete)", cmd: ["node", "scripts/check-pagination-truncation.mjs"] },
   { name: "Absent-collection law (nothing observed ≠ nothing wrong)", cmd: ["pnpm", "run", "proof:absent-collection"] },
-  // The doctrine layer, checked against the engine rather than against itself.
-  // docs/SIGNALGRID_ZERO_TRUST_DECISION_PRINCIPLES.md states how SignalGrid reads Zero
-  // Trust; this asserts the checkable half against `evaluatePolicy` as shipped, so the
-  // document cannot quietly stop describing the product.
-  { name: "Zero Trust principles (the doctrine holds against the shipped decision core)", cmd: ["pnpm", "run", "proof:zero-trust-principles"] },
-  // Sibling doctrine layer: the Security Operations Evidence Fabric. Asserts the
-  // checkable half against the shipped engine and source — fail-closed on a security
-  // signal gap, the ~90 SecOps codes genuinely unminted, and the real-vs-fixture crypto
-  // boundary matching the code. No new product scope.
-  { name: "Security Operations Evidence (doctrine holds against engine + crypto source)", cmd: ["pnpm", "run", "proof:security-operations-evidence"] },
-  { name: "KPI / KRI / KCI model (an indicator informs assurance, never creates a grant)", cmd: ["pnpm", "run", "proof:kpi-kri-kci"] },
-  { name: "Municipal resilience model (the proof chain doctrine holds against engine + source)", cmd: ["pnpm", "run", "proof:municipal-resilience"] },
-  { name: "ITOM / ITSM bridge (every refusal the engine emits has a real owner)", cmd: ["pnpm", "run", "proof:itom-itsm-bridge"] },
+  // The doctrine-document proofs (zero-trust, security-operations-evidence,
+  // kpi-kri-kci, municipal-resilience, itom-itsm-bridge, grid-lifecycle,
+  // factory-flows, fabric-scenario) and the 47 deferred-family gates moved to
+  // the BREADTH LANE on 2026-08-11 — `pnpm run verify:breadth`
+  // (scripts/verify-breadth.mjs), a parallel required CI job on every PR. They
+  // are kept and still gate every pull request; they no longer tax every local
+  // per-push run. check-ci-preflight-sync.mjs holds the two lanes disjoint and
+  // jointly complete. Run the breadth lane locally when touching a deferred
+  // family or a doctrine document.
   // Completeness in both directions: every reason code a refusal can carry has an IT
   // layer and an owner, and nothing is classified that nothing emits. A new family or
   // a new rule fails this until a human classifies it — which is also one more
@@ -160,66 +156,20 @@ const STEPS = [
   { name: "Proof: signalgrid-grid", cmd: ["pnpm", "run", "proof:signalgrid-grid"] },
   { name: "Proof: microsoft-graph-sandbox", cmd: ["pnpm", "run", "proof:microsoft-graph-sandbox"] },
   { name: "Proof: graph-connector (read-only, gated)", cmd: ["pnpm", "run", "proof:graph-connector"] },
-  { name: "Proof: carrier-reachability (post-exit, gated)", cmd: ["pnpm", "run", "proof:carrier-reachability"] },
   { name: "Proof: event-contract (validation + cross-domain detections)", cmd: ["pnpm", "run", "proof:event-contract"] },
-  { name: "Proof: location-services (geofence posture, gated)", cmd: ["pnpm", "run", "proof:location-services"] },
-  { name: "Proof: vuln-scan (device risk posture, gated)", cmd: ["pnpm", "run", "proof:vuln-scan"] },
-  { name: "Proof: network-nac (access posture, gated)", cmd: ["pnpm", "run", "proof:network-nac"] },
-  { name: "Proof: edr-threat (endpoint threat-state, gated)", cmd: ["pnpm", "run", "proof:edr-threat"] },
-  { name: "Proof: identity-risk (SSO sign-in risk, gated)", cmd: ["pnpm", "run", "proof:identity-risk"] },
-  { name: "Proof: rtls-custody (physical custody, gated)", cmd: ["pnpm", "run", "proof:rtls-custody"] },
-  { name: "Proof: peripheral-control (removable media, gated)", cmd: ["pnpm", "run", "proof:peripheral-control"] },
-  { name: "Proof: data-protection (DLP posture, gated)", cmd: ["pnpm", "run", "proof:data-protection"] },
-  { name: "Proof: credential-exposure (endpoint secrets, gated)", cmd: ["pnpm", "run", "proof:credential-exposure"] },
-  { name: "Proof: macos-posture (grid-collected Mac, gated)", cmd: ["pnpm", "run", "proof:macos-posture"] },
-  { name: "Proof: uem (read-only MDM/UEM dimension — gated, no actuators)", cmd: ["pnpm", "run", "proof:uem"] },
-  { name: "Proof: entitlement-binding (is the grant REVIEWABLE, not just correct)", cmd: ["pnpm", "run", "proof:entitlement-binding"] },
-  { name: "Proof: service-lifecycle (does the SERVICE plane still agree the principal is here)", cmd: ["pnpm", "run", "proof:service-lifecycle"] },
-  { name: "Proof: session-readiness (is the app this worker needs actually usable)", cmd: ["pnpm", "run", "proof:session-readiness"] },
-  { name: "Proof: credential-rotation (is the secret still inside its own policy)", cmd: ["pnpm", "run", "proof:credential-rotation"] },
-  { name: "Proof: observability-integrity (is that silence an observation or a gap)", cmd: ["pnpm", "run", "proof:observability-integrity"] },
   { name: "Proof: local-authority (may this device act on its own authority now)", cmd: ["pnpm", "run", "proof:local-authority"] },
   { name: "Proof: launch-profile (the declared Limited GA scope is coherent and its figures are published)", cmd: ["pnpm", "run", "proof:launch-profile"] },
   { name: "Proof: launch-seam (fixture connector → bridge → core decision → evidence, all 3 launch families, offline)", cmd: ["pnpm", "run", "proof:launch-seam"] },
   { name: "Proof: operating-method (the handbook is a gate — buckets, ladder, dispositions, links, roles)", cmd: ["pnpm", "run", "proof:operating-method"] },
   { name: "Proof: evidence-coverage (what can this estate actually answer)", cmd: ["pnpm", "run", "proof:evidence-coverage"] },
-  { name: "Proof: break-glass (was the emergency override accountable)", cmd: ["pnpm", "run", "proof:break-glass"] },
-  { name: "Proof: response-accountability (the watermelon — closed but unresolved)", cmd: ["pnpm", "run", "proof:response-accountability"] },
   { name: "Proof: device-resolver (read-only at the injection boundary)", cmd: ["pnpm", "run", "proof:device-resolver"] },
   { name: "Proof: config-scope (connector config keyed per tenant, never normalized)", cmd: ["pnpm", "run", "proof:config-scope"] },
   { name: "Proof: unsafe-claim (a disclaimer is not a claim)", cmd: ["pnpm", "run", "proof:unsafe-claim"] },
-  { name: "Proof: nac (read-only endpoint identity — gated, no actuators)", cmd: ["pnpm", "run", "proof:nac"] },
   { name: "Proof: macos-apple-schema (apple/device-management alignment)", cmd: ["pnpm", "run", "proof:macos-apple-schema"] },
-  { name: "Proof: ot-posture (grid-collected OT/IIoT edge, gated)", cmd: ["pnpm", "run", "proof:ot-posture"] },
-  { name: "Proof: access-governance (IAM/access-governance runtime, gated)", cmd: ["pnpm", "run", "proof:access-governance"] },
-  { name: "Proof: device-attestation (hardware-rooted attestation, gated)", cmd: ["pnpm", "run", "proof:device-attestation"] },
-  { name: "Proof: sso-session (SSO session-binding on shared devices, gated)", cmd: ["pnpm", "run", "proof:sso-session"] },
-  { name: "Proof: oauth-consent (OAuth/workload-identity consent governance, gated)", cmd: ["pnpm", "run", "proof:oauth-consent"] },
-  { name: "Proof: token-binding (DPoP/mTLS proof-of-possession vs replayable bearer, gated)", cmd: ["pnpm", "run", "proof:token-binding"] },
-  { name: "Proof: pacs-access (physical access-control / badge door authorization, gated)", cmd: ["pnpm", "run", "proof:pacs-access"] },
-  { name: "Proof: agent-identity (agentic / non-human-identity governance, gated)", cmd: ["pnpm", "run", "proof:agent-identity"] },
-  { name: "Proof: agent-behavior (action-judgment — the layer that questions the action, gated)", cmd: ["pnpm", "run", "proof:agent-behavior"] },
-  { name: "Proof: custody-beacon (asset recovery — offline beacon fused with reachability, gated)", cmd: ["pnpm", "run", "proof:custody-beacon"] },
-  { name: "Proof: app-update (host-app version currency — floors, forced updates, provenance)", cmd: ["pnpm", "run", "proof:app-update"] },
-  { name: "Proof: platform-sso (macOS platform credential — method, policy compatibility, lockout exposure)", cmd: ["pnpm", "run", "proof:platform-sso"] },
-  { name: "Proof: passkey-assurance (credential worth — attestation, custody, user verification)", cmd: ["pnpm", "run", "proof:passkey-assurance"] },
-  { name: "Proof: change-window (an approval is a claim about a specific time, actor and record)", cmd: ["pnpm", "run", "proof:change-window"] },
   { name: "Proof: mcp-answer-discipline (silence is not an affirmative, over the raw wire)", cmd: ["pnpm", "run", "proof:mcp-answer-discipline"] },
-  { name: "Proof: emitter-discipline (five outbound families gated, fixture never claims delivery)", cmd: ["pnpm", "run", "proof:emitter-discipline"] },
-  { name: "Proof: emit-gate (one shared tier gate for every in-adapter emitter route)", cmd: ["pnpm", "run", "proof:emit-gate"] },
   { name: "Proof: mdm-profile (the shipped profiles say what the product claims)", cmd: ["pnpm", "run", "proof:mdm-profile"] },
-  { name: "Proof: benchmark-selection (which CIS benchmark graded this device, from what content, covering how much)", cmd: ["pnpm", "run", "proof:benchmark-selection"] },
-  { name: "Proof: shift-context (is this the right time and site for this worker to be operating)", cmd: ["pnpm", "run", "proof:shift-context"] },
-  { name: "Proof: bootstrap-credential (a temporary pass reaches enrollment only)", cmd: ["pnpm", "run", "proof:bootstrap-credential"] },
-  { name: "Proof: challenge-capability (a step_up must be answerable, never a deny in disguise)", cmd: ["pnpm", "run", "proof:challenge-capability"] },
-  { name: "Proof: sse-egress (a mandated edge the traffic is not traversing is never protected)", cmd: ["pnpm", "run", "proof:sse-egress"] },
-  { name: "Proof: webhooks (outbound delivery gated; a withheld delivery says so)", cmd: ["pnpm", "run", "proof:webhooks"] },
-  { name: "Proof: caep-events (unsigned session signals, sixth emitter family)", cmd: ["pnpm", "run", "proof:caep-events"] },
   { name: "Proof: facility-trust-graph (canonical space model + location certainty vs required precision)", cmd: ["pnpm", "run", "proof:facility-trust-graph"] },
-  { name: "Proof: policy-binding (group-assignment correctness — membership IS the policy)", cmd: ["pnpm", "run", "proof:policy-binding"] },
   { name: "Proof: device-management-health (management-plane health / config drift, gated)", cmd: ["pnpm", "run", "proof:device-management-health"] },
-  { name: "Proof: link-usability (associated vs usable — the network link's expiry, gated)", cmd: ["pnpm", "run", "proof:link-usability"] },
-  { name: "Proof: task-exception (WMS/task-plane exceptions, gated)", cmd: ["pnpm", "run", "proof:task-exception"] },
   { name: "Proof: work-context (continuity carries work, trust re-earned per device)", cmd: ["pnpm", "run", "proof:work-context"] },
   { name: "Proof: handoff-sim (cross-device handoff + exception-release loop)", cmd: ["pnpm", "run", "proof:handoff-sim"] },
   { name: "Proof: adaptive-proposals (governed recommendation lifecycle, human-gated activation)", cmd: ["pnpm", "run", "proof:adaptive-proposals"] },
@@ -233,7 +183,6 @@ const STEPS = [
   { name: "Proof: posture-composition (unified signal fusion)", cmd: ["pnpm", "run", "proof:posture-composition"] },
   { name: "Proof: incident-playbook (decision → prioritized incident)", cmd: ["pnpm", "run", "proof:incident-playbook"] },
   { name: "Proof: fabric-evals (golden multi-signal decision quality)", cmd: ["pnpm", "run", "proof:fabric-evals"] },
-  { name: "Proof: fabric-scenario (end-to-end fusion → incident)", cmd: ["pnpm", "run", "proof:fabric-scenario"] },
   { name: "Proof: connector-emulator", cmd: ["pnpm", "run", "proof:connector-emulator"] },
   { name: "OpenAPI contract check (proof:api-contract)", cmd: ["pnpm", "run", "proof:api-contract"] },
   { name: "API integration test (boots the server)", cmd: ["pnpm", "run", "test:api"] },
@@ -258,8 +207,6 @@ const STEPS = [
   { name: "Proof: provisioning (zero-touch setup — record/validate/apply)", cmd: ["pnpm", "run", "proof:provisioning"] },
   { name: "Proof: provisioning-order (step order — the numbering is load-bearing)", cmd: ["pnpm", "run", "proof:provisioning-order"] },
   { name: "Proof: provisioning-teardown (prove the retreat before deploy)", cmd: ["pnpm", "run", "proof:provisioning-teardown"] },
-  { name: "Proof: factory-flows (manufacturing/OT workflows)", cmd: ["pnpm", "run", "proof:factory-flows"] },
-  { name: "Proof: grid-lifecycle (capstone — 6 models, provision→decommission)", cmd: ["pnpm", "run", "proof:grid-lifecycle"] },
   { name: "Proof: recommendations", cmd: ["pnpm", "run", "proof:recommendations"] },
   { name: "Proof: signal-discovery", cmd: ["pnpm", "run", "proof:signal-discovery"] },
   { name: "Proof: ddm-connector", cmd: ["pnpm", "run", "proof:ddm-connector"] },
@@ -268,7 +215,6 @@ const STEPS = [
   { name: "Proof: control-plane", cmd: ["pnpm", "run", "proof:control-plane"] },
   { name: "Proof: edge-sync", cmd: ["pnpm", "run", "proof:edge-sync"] },
   { name: "Proof: decision-continuity (which decision wins across a partition)", cmd: ["pnpm", "run", "proof:decision-continuity"] },
-  { name: "Proof: telemetry-up", cmd: ["pnpm", "run", "proof:telemetry-up"] },
   { name: "Safety gate (guardrails)", cmd: ["pnpm", "run", "safety:check"] },
   // Mirrors the CI "Postman collection is committed in sync" step: regenerate,
   // then fail if the committed collection drifted.

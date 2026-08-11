@@ -157,10 +157,25 @@ node scripts/preflight.mjs          # the whole gate suite; --quick skips the he
 ```
 
 `preflight.mjs` is the ordered mirror of every CI job that needs nothing but Node — well
-over a hundred gates, including the typecheck, the build, every `proof:*`, the
-unsafe-claim scan, and the drift ratchets. Its own header states honestly which three CI
-jobs it does *not* mirror (Postgres, the Docker-compose smoke, and gitleaks), so a green
-preflight means everything reproducible locally is green, not that CI cannot go red.
+over a hundred gates, including the typecheck, the build, the launch-surface `proof:*`
+suite, the unsafe-claim scan, and the drift ratchets. Its own header states honestly
+which three CI jobs it does *not* mirror (Postgres, the Docker-compose smoke, and
+gitleaks), so a green preflight means everything reproducible locally is green, not that
+CI cannot go red.
+
+**The breadth lane is separate since 2026-08-11.** The 47 deferred-family gates and the
+8 doctrine-document proofs run as their own required CI job (`Breadth lane`, in parallel
+with `validation`) via `pnpm run verify:breadth` — kept, still gating every pull
+request, no longer a serial per-push tax. Touch a deferred connector family or a
+doctrine document? Run the breadth lane locally too:
+
+```bash
+pnpm run verify:breadth             # deferred-family + doctrine-doc proofs
+```
+
+`check-ci-preflight-sync.mjs` holds the two lanes disjoint and jointly complete, and
+`verify-breadth.mjs` itself refuses to run if a deferred family's proof has left both
+lanes or a launch family's proof has drifted into it.
 
 **Run the whole thing, not a hand-picked subset.** This section used to list five proofs
 and a `git grep`, and that list was the defect it looked like a control against: it

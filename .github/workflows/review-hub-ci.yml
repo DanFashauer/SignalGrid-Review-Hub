@@ -82,62 +82,14 @@ jobs:
       - name: Read-only Microsoft Graph connector proof
         run: pnpm run proof:graph-connector
 
-      - name: Carrier / post-exit reachability proof
-        run: pnpm run proof:carrier-reachability
-
       - name: Canonical event-contract proof (validation + cross-domain detections)
         run: pnpm run proof:event-contract
 
-      - name: Location-services (geofence posture) proof
-        run: pnpm run proof:location-services
-
-      - name: Vulnerability-scan (device risk posture) proof
-        run: pnpm run proof:vuln-scan
-
-      - name: Network / NAC (access posture) proof
-        run: pnpm run proof:network-nac
-
-      - name: EDR / EPP (endpoint threat-state) proof
-        run: pnpm run proof:edr-threat
-
-      - name: Identity / SSO (sign-in risk) proof
-        run: pnpm run proof:identity-risk
-
-      - name: RTLS / badge-dwell (physical custody) proof
-        run: pnpm run proof:rtls-custody
-
-      - name: Removable-media / peripheral-control proof
-        run: pnpm run proof:peripheral-control
-
-      - name: Data-protection / DLP posture proof
-        run: pnpm run proof:data-protection
-
-      - name: Credential-exposure (endpoint secrets) proof
-        run: pnpm run proof:credential-exposure
-
-      - name: macOS endpoint-posture (grid-collected) proof
-        run: pnpm run proof:macos-posture
-      - name: "Proof: uem (read-only MDM/UEM, gated, no actuators)"
-        run: pnpm run proof:uem
-      - name: "Proof: entitlement-binding (grant reviewability)"
-        run: pnpm run proof:entitlement-binding
-      - name: "Proof: service-lifecycle (account plane vs service plane)"
-        run: pnpm run proof:service-lifecycle
-      - name: "Proof: session-readiness (is the app actually usable)"
-        run: pnpm run proof:session-readiness
-      - name: "Proof: credential-rotation (is the secret inside its own policy)"
-        run: pnpm run proof:credential-rotation
-      - name: "Proof: observability-integrity (is that silence an observation or a gap)"
-        run: pnpm run proof:observability-integrity
       - name: "Proof: local-authority (may this device act on its own authority now)"
         run: pnpm run proof:local-authority
 
       - name: "Proof: evidence-coverage (what can this estate answer)"
         run: pnpm run proof:evidence-coverage
-      - name: "Proof: break-glass (emergency override accountability)"
-        run: pnpm run proof:break-glass
-      - name: "Proof: response-accountability (watermelon detection)"
-        run: pnpm run proof:response-accountability
       - name: "Proof: device-resolver (read-only injection boundary)"
         run: pnpm run proof:device-resolver
       - name: "Proof: config-scope (per-tenant connector config keys)"
@@ -153,65 +105,22 @@ jobs:
         run: pnpm run proof:session-store
       - name: "Proof: provisioning-order (zero-touch step order)"
         run: pnpm run proof:provisioning-order
-      - name: "Proof: nac (read-only endpoint identity, gated, no actuators)"
-        run: pnpm run proof:nac
-
       - name: macOS posture ↔ apple/device-management schema alignment proof
         run: pnpm run proof:macos-apple-schema
-
-      - name: OT / IIoT edge-device posture (grid-collected) proof
-        run: pnpm run proof:ot-posture
-
-      - name: IAM / access-governance runtime posture proof
-        run: pnpm run proof:access-governance
-
-      - name: Hardware-rooted device-attestation proof
-        run: pnpm run proof:device-attestation
-
-      - name: SSO session-binding proof
-        run: pnpm run proof:sso-session
-
-      - name: OAuth-consent / workload-identity proof
-        run: pnpm run proof:oauth-consent
-
-      - name: Token-binding / proof-of-possession proof
-        run: pnpm run proof:token-binding
-
-      - name: Physical access-control (PACS) proof
-        run: pnpm run proof:pacs-access
-
-      - name: Agentic / non-human-identity (NHI) proof
-        run: pnpm run proof:agent-identity
 
       # Agent BEHAVIOR — the action-judgment layer. Access brokers (Okta AI Agent
       # Gateway, Entra Agent ID) answer WHO the agent is; this asks whether the ACTION
       # is in-pattern: a prompt that became 40k updates, a never-opened target, no
       # provenance, a broad blast radius, a superhuman cadence. Fail-closed; one combo
       # of 1,944 grants.
-      - name: Proof — agent-behavior (action-judgment, one grant of 1,944)
-        run: pnpm run proof:agent-behavior
-
       # Custody BEACON — the offline asset-recovery channel: an independent
       # case-embedded beacon fused with reachability tells "powered off in its bay"
       # (monitor) apart from "removed and dark" (escalate).
-      - name: Proof — custody-beacon (asset recovery, offline channel)
-        run: pnpm run proof:custody-beacon
-
       # App-update currency — min_version floors, force_update, install-channel
       # provenance as posture (an iOS app cannot install itself; distribution stays
       # with itms-services / MDM InstallApplication / ABM).
-      - name: Proof — app-update (host-app version currency)
-        run: pnpm run proof:app-update
-
       # Platform SSO — the METHOD decides the credential's worth; a login policy
       # claimed on a method that cannot enforce it is config drift.
-      - name: Proof — platform-sso (macOS platform credential)
-        run: pnpm run proof:platform-sso
-      - name: Proof — passkey-assurance (credential worth, not just "passkey")
-        run: pnpm run proof:passkey-assurance
-      - name: Proof — change-window (approved WHEN, by WHOM, on a current record)
-        run: pnpm run proof:change-window
-
       # MCP answer discipline — the SECOND of two MCP proofs, and deliberately so.
       # `proof:mcp-server` (further down, from the Mac lane) asks whether the published
       # plugin path boots and serves the tools the manifest declares. This asks whether
@@ -222,45 +131,18 @@ jobs:
 
       # Policy binding — membership IS the policy: unbound, too-wide (fail-open),
       # too-narrow, or mixed-membership group assignment.
-      - name: Proof — emitter-discipline (five outbound families gated, fixture never claims delivery)
-        run: pnpm run proof:emitter-discipline
-      - name: Proof — emit-gate (one shared tier gate for every in-adapter emitter route)
-        run: pnpm run proof:emit-gate
       - name: Proof — absent-collection (nothing observed is not nothing wrong)
         run: pnpm run proof:absent-collection
-      - name: Proof — caep-events (unsigned session signals, sixth emitter family)
-        run: pnpm run proof:caep-events
       - name: Proof — mdm-profile (the shipped profiles say what the product claims)
         run: pnpm run proof:mdm-profile
-      - name: Proof — benchmark-selection (which CIS benchmark graded this device, and from what content)
-        run: pnpm run proof:benchmark-selection
-      - name: Proof — shift-context (right time and site for this worker to be operating)
-        run: pnpm run proof:shift-context
-      - name: Proof — bootstrap-credential (a temporary pass reaches enrollment only)
-        run: pnpm run proof:bootstrap-credential
-      - name: Proof — challenge-capability (a step_up must be answerable, never a deny in disguise)
-        run: pnpm run proof:challenge-capability
-      - name: Proof — sse-egress (a mandated edge the traffic is not traversing is never protected)
-        run: pnpm run proof:sse-egress
-      - name: Proof — webhooks (outbound delivery gated; a withheld delivery says so)
-        run: pnpm run proof:webhooks
       - name: Proof — facility-trust-graph (canonical space model + location certainty)
         run: pnpm run proof:facility-trust-graph
-      - name: Proof — policy-binding (group-assignment correctness)
-        run: pnpm run proof:policy-binding
-
       - name: Device-management-health / config-drift proof
         run: pnpm run proof:device-management-health
-
-      - name: Proof — link usability (associated vs usable)
-        run: pnpm run proof:link-usability
 
       # The task plane joins the grid: WMS/task-system exceptions (short pick,
       # wrong-aisle bin, assignment mismatch) as decision signals. The WMS stays
       # system of record; SignalGrid consumes, decides, and routes.
-      - name: Proof — task exception (task-plane exceptions as grid signals)
-        run: pnpm run proof:task-exception
-
       # Issue #136's portable work context: the context carries the WORK (tasks,
       # exceptions, restrictions travel with the person); trust is re-earned per
       # device. Three monotone invariants proven over the full matrix.
@@ -338,14 +220,8 @@ jobs:
       # and a weekly cron — never on pull_request — and is framed as a rehearsal, not
       # evidence. So a break in cross-tenant scoping, or a renamed ASAM bundle id in a
       # .mobileconfig, passed preflight and every check on the way in.
-      - name: "Proof — emit-gate (no outbound family sends from a non-emitting tier)"
-        run: pnpm run proof:emit-gate
       - name: "Proof — isolation-scope (no tenant can read another's row)"
         run: pnpm run proof:isolation-scope
-      - name: "Proof — nac (read-only; no device action reachable, live path gated)"
-        run: pnpm run proof:nac
-      - name: "Proof — webhooks (outbound delivery gated, refusals explain themselves)"
-        run: pnpm run proof:webhooks
       - name: "Proof — mdm-profile (the shipped profiles say what the product claims)"
         run: pnpm run proof:mdm-profile
       - name: "Proof — graph-wire (throttling, 5xx, auth, malformed bodies fail closed)"
@@ -409,16 +285,6 @@ jobs:
         run: node scripts/check-pagination-truncation.mjs
       - name: "Absent-collection law (nothing observed ≠ nothing wrong)"
         run: pnpm run proof:absent-collection
-      - name: "Zero Trust principles (the doctrine holds against the shipped decision core)"
-        run: pnpm run proof:zero-trust-principles
-      - name: "Security Operations Evidence (doctrine holds against engine + crypto source)"
-        run: pnpm run proof:security-operations-evidence
-      - name: "KPI / KRI / KCI model (an indicator informs assurance, never creates a grant)"
-        run: pnpm run proof:kpi-kri-kci
-      - name: "Municipal resilience model (the proof chain doctrine holds against engine + source)"
-        run: pnpm run proof:municipal-resilience
-      - name: "ITOM / ITSM bridge (every refusal the engine emits has a real owner)"
-        run: pnpm run proof:itom-itsm-bridge
       - name: "IT-layer model (every refusal has an owner; nothing routes to a phantom)"
         run: node scripts/check-it-layer-model.mjs
       - name: "IT-layer model self-test (the gate can actually fail)"
@@ -480,9 +346,6 @@ jobs:
 
       - name: Fabric decision-evals (golden multi-signal decision quality) proof
         run: pnpm run proof:fabric-evals
-
-      - name: Signal-fabric capstone (end-to-end fusion to incident) proof
-        run: pnpm run proof:fabric-scenario
 
       - name: Connector emulator proof
         run: pnpm run proof:connector-emulator
@@ -557,12 +420,6 @@ jobs:
       - name: Provisioning teardown-proof (prove the retreat before deploy)
         run: pnpm run proof:provisioning-teardown
 
-      - name: Factory-floor workflows (manufacturing/OT) proof
-        run: pnpm run proof:factory-flows
-
-      - name: Grid-lifecycle (capstone — 6 models, provision→decommission) proof
-        run: pnpm run proof:grid-lifecycle
-
       - name: Recommendations (learned-habit proposals) proof
         run: pnpm run proof:recommendations
 
@@ -586,9 +443,6 @@ jobs:
 
       - name: Decision-continuity (which decision wins across a partition) proof
         run: pnpm run proof:decision-continuity
-
-      - name: Telemetry-up (decision plane → control plane) proof
-        run: pnpm run proof:telemetry-up
 
       - name: Safety gate (guardrails)
         run: pnpm run safety:check
@@ -625,6 +479,38 @@ jobs:
 
       - name: Decision-latency pilot gate
         run: pnpm run bench:decision-latency
+
+  # The deferred-family and doctrine-document proofs (plan §11.4 step 4). A
+  # required lane on every PR, run IN PARALLEL with `validation` so the wall
+  # clock drops rather than grows — moved out of the serial per-push preflight,
+  # never out of CI. Membership is enforced inside the script against the
+  # launch profile, and check-ci-preflight-sync.mjs keeps this lane and
+  # preflight disjoint and jointly complete.
+  breadth:
+    name: Breadth lane (deferred families + doctrine docs)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.28.1
+          run_install: false
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Breadth lane (47 deferred-family gates + 8 doctrine-doc proofs)
+        run: pnpm run verify:breadth
 
   docs-sanity:
     name: Required docs and unsafe-claim sanity

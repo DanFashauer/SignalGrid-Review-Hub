@@ -41,6 +41,14 @@ import { fileURLToPath } from "node:url";
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const workflowDir = join(repoRoot, ".github", "workflows");
 
+// `review-hub-ci.yml:breadth` (the verify:breadth lane, added 2026-08-11) is
+// deliberately NOT classified here. It is a real gate, but preflight does not
+// run it — that is the whole point of the lane — so it must keep appearing in
+// preflight's "not covered by this harness" footer, which is exactly what an
+// unclassified job does. Classifying it MIRRORED would claim coverage preflight
+// no longer has; NOT_A_GATE would be false. Run it locally with
+// `pnpm run verify:breadth` when touching a deferred family or a doctrine doc.
+
 /** Preflight runs these gates locally. Reason = what makes the local run equivalent. */
 export const MIRRORED = new Map([
   [

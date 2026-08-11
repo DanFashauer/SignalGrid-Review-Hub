@@ -192,6 +192,7 @@
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
     "typecheck:libs": "tsc --build",
     "verify:all": "node scripts/verify-all.mjs",
+    "verify:breadth": "node scripts/verify-breadth.mjs",
     "verify:docker": "node scripts/docker-verify.mjs",
     "verify:live": "./scripts/run-live-lanes.sh"
   },

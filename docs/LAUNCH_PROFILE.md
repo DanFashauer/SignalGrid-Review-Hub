@@ -69,11 +69,18 @@ connector surface not at all.
 **Signal kinds (3 of 41).** `device_posture`, `device_management_health`,
 `local_authority` — exactly what the three launch families produce.
 
-**Published API paths (7 of 54).** The Assist gate itself
-(`/v1/decisions/evaluate`), the three routes an operator console needs to see what
-it did, `/v1/decisions/{id}/evidence` — which is not garnish but the product's
-entire claim — plus `/v1/context`, `/v1/audit` and `/v1/metrics`. All seven sit
-below the auth guard in `routes/v1.ts`, checked rather than assumed.
+**Published API paths (13 of 54).** The Assist gate itself
+(`/v1/decisions/evaluate`), the routes an operator console needs to see what it
+did, `/v1/decisions/{id}/evidence` — which is not garnish but the product's
+entire claim — plus `/v1/context`, `/v1/audit` and `/v1/metrics`. The
+2026-08-10 wireframe-first pass added six read-side routes so the console's
+setup and policy screens read the served API rather than fixtures: the
+connector trio (`/v1/connectors`, `…/{id}/sync-runs`, and `…/{id}/sync`, whose
+handler runs only the core's fixture pipeline) and the policy read trio
+(`/v1/policies`, `…/{id}/versions`, `…/{id}/tests`). Draft creation and version
+activation stay off the fence — policy changes ride the repository at launch.
+All thirteen sit below the auth guard in `routes/v1.ts`, checked rather than
+assumed.
 
 Version 1 listed `/v1/keys` as an eighth, described as "API-key authentication for
 the above". That was reasoned, not read. The route is a demo credential dispenser

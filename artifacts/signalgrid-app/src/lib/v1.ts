@@ -214,6 +214,62 @@ export async function getMetricsV1(): Promise<V1Metrics> {
   return json.metrics;
 }
 
+// ── connectors: setup & health (launch wireframe screen 2) ────────────────────
+
+export interface V1Connector {
+  id: string;
+  tenantId: string;
+  kind: string;
+  mode: string;
+  ingestionMode?: string;
+  permissionScope: string;
+  credentialRef: string;
+  status: string;
+  lastSyncAt: string | null;
+}
+
+export interface V1SyncRun {
+  id: string;
+  tenantId: string;
+  connectorId: string;
+  startedAt: string;
+  completedAt: string;
+  status: string;
+  recordsProcessed: number;
+  signalsNormalized: number;
+  note: string;
+}
+
+export async function listConnectorsV1(): Promise<V1Connector[]> {
+  const json = await v1<{ connectors: V1Connector[] }>(`/api/v1/connectors`, { method: "GET" }, activeToken);
+  return json.connectors;
+}
+
+export async function listSyncRunsV1(connectorId: string): Promise<V1SyncRun[]> {
+  const json = await v1<{ syncRuns: V1SyncRun[] }>(
+    `/api/v1/connectors/${encodeURIComponent(connectorId)}/sync-runs`,
+    { method: "GET" },
+    activeToken,
+  );
+  return json.syncRuns;
+}
+
+// Triggering a sync requires `connector:sync`, which the operator role
+// DELIBERATELY lacks (owner/admin and the connector service role hold it).
+// The demo uses the public-safe owner key for this one action and says so in
+// the UI. The core refuses non-fixture connectors inside runFixtureSync, so
+// this route can never touch a source system.
+const DEMO_OWNER_TOKEN = "sgk_demo_northwind_owner";
+
+export async function triggerSyncV1(connectorId: string): Promise<V1SyncRun> {
+  const json = await v1<{ syncRun: V1SyncRun }>(
+    `/api/v1/connectors/${encodeURIComponent(connectorId)}/sync`,
+    { method: "POST" },
+    DEMO_OWNER_TOKEN,
+  );
+  return json.syncRun;
+}
+
 // ── app-workflows: gate the software people use, not just the doors ───────────
 
 export type AppVertical = "healthcare" | "warehouse" | "industrial" | "global_fleet" | "retail" | "data_center" | "government";

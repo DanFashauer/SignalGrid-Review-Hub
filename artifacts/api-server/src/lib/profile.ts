@@ -108,6 +108,12 @@ export const GA_ALLOWED_ROUTES: readonly { method: string; path: string }[] = [
   { method: "GET", path: "/v1/decisions/:id/evidence" },
   { method: "GET", path: "/v1/audit" },
   { method: "GET", path: "/v1/metrics" },
+  // Launch wireframe screen 2 (connector setup/health) — read + fixture-sync
+  // only. POST /sync runs the core's fixture pipeline; runFixtureSync throws on
+  // any non-fixture connector, so no route here can touch a source system.
+  { method: "GET", path: "/v1/connectors" },
+  { method: "GET", path: "/v1/connectors/:id/sync-runs" },
+  { method: "POST", path: "/v1/connectors/:id/sync" },
 ];
 
 /** `/v1/decisions/:id` → /^\/v1\/decisions\/[^/]+$/ — anchored at BOTH ends so

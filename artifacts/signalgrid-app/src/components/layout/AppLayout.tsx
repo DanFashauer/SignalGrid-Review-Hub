@@ -70,6 +70,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location.startsWith("/connectors")}>
+                  <Link href="/connectors/setup">
+                    <Network className="w-4 h-4 mr-2" />
+                    <span>Connector setup</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location.startsWith("/status")}>
                   <Link href="/status">
                     <Activity className="w-4 h-4 mr-2" />

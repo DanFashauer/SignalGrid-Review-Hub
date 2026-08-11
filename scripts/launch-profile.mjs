@@ -280,6 +280,23 @@ export const SURFACES = [
   { id: "/v1/context", reason: "Tenant context. \"Tenant-aware\" is in the criterion." },
   { id: "/v1/audit", reason: "The durable audit ledger a regulated pilot is bought on." },
   { id: "/v1/metrics", reason: "Operability. A service nobody can watch cannot be run." },
+  {
+    id: "/v1/connectors",
+    reason:
+      "Read-only connector inventory: the setup/health screen (launch wireframe 2) renders " +
+      "the MODE the gate actually resolved — 'bring your tenant' is not concrete without it.",
+  },
+  {
+    id: "/v1/connectors/{id}/sync-runs",
+    reason: "Read-only sync history: last sync, records processed, signals normalized.",
+  },
+  {
+    id: "/v1/connectors/{id}/sync",
+    reason:
+      "Trigger a FIXTURE sync (the core refuses non-fixture connectors by construction) — " +
+      "how the setup screen demonstrates the pipeline without a tenant. No write to any " +
+      "source system exists on this route.",
+  },
   ],
     demo_only: [
       {
@@ -300,9 +317,6 @@ export const SURFACES = [
       "/v1/policies/{id}/versions",
       "/v1/policies/{id}/versions/{versionId}/activate",
       "/v1/policies/{id}/tests",
-      "/v1/connectors",
-      "/v1/connectors/{id}/sync-runs",
-      "/v1/connectors/{id}/sync",
       "/v1/decisions/{id}/resolution",
       "/v1/decisions/{id}/resolve",
       "/v1/webhooks",

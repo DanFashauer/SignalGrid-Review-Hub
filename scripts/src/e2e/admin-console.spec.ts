@@ -130,6 +130,23 @@ test("assurance status page renders the server-derived posture", async ({ page }
   await expect(page.getByText("Declared divergence — a declaration, not a measurement")).toBeVisible();
 });
 
+test("connector setup renders the server-resolved mode and runs a fixture sync", async ({ page }) => {
+  await page.goto(`${BASE}/connectors/setup`, { waitUntil: "domcontentloaded" });
+
+  await expect(page.getByRole("heading", { name: "Microsoft connector" })).toBeVisible();
+  // The mode chip is the server's own resolution, not copy.
+  await expect(page.getByText("resolved mode: fixture")).toBeVisible();
+  await expect(page.getByText("microsoft-entra-intune").first()).toBeVisible();
+
+  // The sync button drives the real POST /v1/connectors/:id/sync — a fixture
+  // pipeline run whose result lands in the history list.
+  const synced = page.waitForResponse((r) => r.url().includes("/sync") && r.request().method() === "POST");
+  await page.getByRole("button", { name: /RUN FIXTURE SYNC/ }).click();
+  const res = await synced;
+  expect(res.status(), "POST /v1/connectors/:id/sync").toBe(200);
+  await expect(page.getByText(/records · \d+ signals/).first()).toBeVisible();
+});
+
 test("audit page verifies the tamper-evident chain from /v1", async ({ page }) => {
   await page.goto(`${BASE}/audit`, { waitUntil: "domcontentloaded" });
 

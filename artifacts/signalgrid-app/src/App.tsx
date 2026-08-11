@@ -16,6 +16,7 @@ const DecisionList = named(() => import("@/pages/decisions/DecisionList"), "Deci
 const DecisionDetail = named(() => import("@/pages/decisions/DecisionDetail"), "DecisionDetail");
 const Audit = named(() => import("@/pages/Audit"), "Audit");
 const Status = named(() => import("@/pages/Status"), "Status");
+const ConnectorSetup = named(() => import("@/pages/ConnectorSetup"), "ConnectorSetup");
 const IntegrationList = named(() => import("@/pages/integrations/IntegrationList"), "IntegrationList");
 const IntegrationDetail = named(() => import("@/pages/integrations/IntegrationDetail"), "IntegrationDetail");
 const PolicyList = named(() => import("@/pages/policies/PolicyList"), "PolicyList");
@@ -44,6 +45,7 @@ function Router() {
           <Route path="/decisions/:id" component={DecisionDetail} />
           <Route path="/audit" component={Audit} />
           <Route path="/status" component={Status} />
+          <Route path="/connectors/setup" component={ConnectorSetup} />
           <Route path="/integrations" component={IntegrationList} />
           <Route path="/integrations/:id" component={IntegrationDetail} />
           <Route path="/policies" component={PolicyList} />

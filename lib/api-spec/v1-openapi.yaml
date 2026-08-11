@@ -38,7 +38,25 @@ paths:
       tags: [context]
       summary: Resolve the caller's principal and tenant
       responses:
-        "200": { description: Tenant context }
+        "200":
+          description: Tenant context + assurance posture
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      principal:
+                        type: object
+                        description: The authenticated principal (role, permissions). Not rendered by the launch console.
+                        additionalProperties: true
+                      tenant:
+                        type: object
+                        description: The resolved tenant record. Not rendered by the launch console.
+                        additionalProperties: true
+                      assurance: { $ref: "#/components/schemas/Assurance" }
+                    required: [principal, tenant, assurance]
         "401": { $ref: "#/components/responses/Unauthorized" }
 
   /v1/decisions/evaluate:
@@ -74,7 +92,20 @@ paths:
       tags: [decisions]
       summary: List the tenant's decisions
       responses:
-        "200": { description: Decision list }
+        "200":
+          description: Decision list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      decisions:
+                        type: array
+                        items: { $ref: "#/components/schemas/DecisionRecord" }
+                      total: { type: integer }
+                    required: [decisions, total]
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
@@ -85,7 +116,17 @@ paths:
       parameters: [{ $ref: "#/components/parameters/Id" }]
       summary: Get a decision
       responses:
-        "200": { description: Decision }
+        "200":
+          description: Decision
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      decision: { $ref: "#/components/schemas/DecisionRecord" }
+                    required: [decision]
         "404": { $ref: "#/components/responses/NotFound" }
 
   /v1/decisions/{id}/evidence:
@@ -95,7 +136,20 @@ paths:
       parameters: [{ $ref: "#/components/parameters/Id" }]
       summary: Get a decision's immutable evidence snapshot and integrity check
       responses:
-        "200": { description: Evidence snapshot + verified flag }
+        "200":
+          description: Evidence snapshot + verified flag
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      evidence: { $ref: "#/components/schemas/EvidenceSnapshot" }
+                      verified:
+                        type: boolean
+                        description: Snapshot digest recomputed server-side on THIS request.
+                    required: [evidence, verified]
         "404": { $ref: "#/components/responses/NotFound" }
 
   # Reconciliation stores NOTHING. Every record is caller-supplied and the reduction is
@@ -939,3 +993,136 @@ components:
             which the core cannot import and whose output is never persisted.
       required:
         [decisionId, outcome, reasonCodes, policyVersionId, evidenceSnapshotId]
+
+    # The launch read surface, specified field-by-field (D2 straggler closed
+    # 2026-08-11): these three response shapes are what the operator console
+    # renders — the decision record, the evidence snapshot with per-signal
+    # freshness and provenance, and the assurance posture. They had
+    # description-only 200s, so a partner building from this spec would never
+    # have learned tenantId, assurance, or signalsUsed existed. The field lists
+    # mirror the served objects (core store records + routes/v1.ts envelopes);
+    # the browser E2E suite pins the same fields end to end.
+    MatchedRule:
+      type: object
+      properties:
+        ruleId: { type: string }
+        reasonCode: { type: string }
+        outcome:
+          type: string
+          enum: [allow, step_up, restrict, deny]
+        severity: { type: string }
+      required: [ruleId, reasonCode, outcome, severity]
+
+    DecisionRecord:
+      type: object
+      description: >-
+        The persisted decision (`GET /v1/decisions[/{id}]`) — a superset of
+        EvaluateResult: ids are `id` (not `decisionId`), and the record carries
+        subjects, review state and creation time.
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        identityId: { type: string }
+        deviceId: { type: string }
+        workflowId: { type: string }
+        outcome:
+          type: string
+          enum: [allow, step_up, restrict, deny]
+        policyId: { type: string }
+        policyVersionId: { type: string }
+        policyVersion: { type: integer }
+        matchedRules:
+          type: array
+          items: { $ref: "#/components/schemas/MatchedRule" }
+        reasonCodes:
+          type: array
+          items: { type: string }
+        signalIds:
+          type: array
+          items: { type: string }
+        evidenceSnapshotId: { type: string }
+        requestContext:
+          type: object
+          additionalProperties: { type: string }
+        latencyMs: { type: number }
+        createdAt: { type: string, format: date-time }
+        reviewStatus: { type: string }
+        reviewable: { type: boolean }
+        explanation: { type: string }
+        coreNormalizationVersion:
+          type: integer
+          description: See EvaluateResult.coreNormalizationVersion — absent means "unstamped", never version zero.
+      required:
+        [id, tenantId, identityId, deviceId, workflowId, outcome, policyId,
+         policyVersionId, policyVersion, matchedRules, reasonCodes,
+         evidenceSnapshotId, latencyMs, createdAt, reviewStatus, reviewable]
+
+    SignalUsed:
+      type: object
+      description: One normalized signal the engine read, with freshness and provenance.
+      properties:
+        id: { type: string }
+        category: { type: string }
+        value:
+          description: The normalized value — string, number, boolean, or null.
+          nullable: true
+        observedAt: { type: string, format: date-time }
+        freshness:
+          type: string
+          enum: [fresh, stale, expired, missing, unknown]
+        sourceReference:
+          type: string
+          description: >-
+            Provenance, by convention "fixture:<system>:<collection>#<subject>"
+            for fixture syncs or "<system>:<collection>#<subject>" for live
+            adapters. Opaque — display it, do not parse it for logic.
+      required: [id, category, observedAt, freshness, sourceReference]
+
+    EvidenceSnapshot:
+      type: object
+      description: >-
+        The tamper-evident evidence snapshot behind a decision. `evidence`,
+        `signalsUsed` and `sourceReferences` are inside the snapshot digest;
+        the serving route recomputes verification per request and returns it
+        beside the snapshot as `verified`.
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        decisionId: { type: string }
+        capturedAt: { type: string, format: date-time }
+        evidence:
+          type: object
+          description: The normalized facts the policy evaluated, key/value.
+          additionalProperties: true
+        signalsUsed:
+          type: array
+          items: { $ref: "#/components/schemas/SignalUsed" }
+        policyVersionId: { type: string }
+        policyVersion: { type: integer }
+        sourceReferences:
+          type: array
+          items: { type: string }
+          description: Sorted, deduplicated roll-up of signalsUsed[].sourceReference.
+        digest: { type: string }
+        coreNormalizationVersion: { type: integer }
+      required:
+        [id, tenantId, decisionId, capturedAt, evidence, signalsUsed,
+         policyVersionId, policyVersion, sourceReferences]
+
+    Assurance:
+      type: object
+      description: >-
+        What these verdicts ARE in this deployment — derived per request, never
+        cached copy. The console renders this beside every verdict.
+      properties:
+        profile: { type: string }
+        tier: { type: string }
+        signalSource:
+          type: string
+          enum: [live, fixtures]
+        verdictEffect:
+          type: string
+          enum: [advisory]
+          description: Always advisory at this tier — product law, not a default.
+        stepUpAnswerable: { type: boolean }
+      required: [profile, tier, signalSource, verdictEffect, stepUpAnswerable]

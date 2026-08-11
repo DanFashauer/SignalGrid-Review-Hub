@@ -149,6 +149,11 @@ test("connector setup renders the server-resolved mode and runs a fixture sync",
   // The mode chip is the server's own resolution, not copy.
   await expect(page.getByText("resolved mode: fixture")).toBeVisible();
   await expect(page.getByText("microsoft-entra-intune").first()).toBeVisible();
+  // The source-agnostic declaration (owner redirect): lab sources named, the
+  // enterprise connector named, and the equivalence-proof sentence present.
+  await expect(page.getByText("Evidence sources — one contract, engine can't tell them apart")).toBeVisible();
+  await expect(page.getByText("open-source lab", { exact: true })).toBeVisible();
+  await expect(page.getByText("enterprise connector", { exact: true })).toBeVisible();
 
   // The sync button drives the real POST /v1/connectors/:id/sync — a fixture
   // pipeline run whose result lands in the history list.

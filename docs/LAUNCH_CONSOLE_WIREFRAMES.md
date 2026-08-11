@@ -77,6 +77,13 @@ never a hopeful status.
   (`"GRAPH_ACCESS_TOKEN is not set"`) — setup instructions ARE the gate
   checklist; a partner flips the named env vars and the checks go green.
 - Never claims live when fixture; the mode chip is the assurance truth.
+- Addendum (2026-08-11, owner redirect): an **Evidence sources** block between
+  the gate checklist and the connector inventory — three declared rows (fleet ·
+  open-source lab; headwind · android lab fixture shape; intune · enterprise
+  connector) with one line each, closing on the contract sentence: same state,
+  any source, identical decision, provenance the only difference. Declared
+  facts about the shipped code; the resolved-mode card above remains the only
+  live/fixture runtime claim.
 
 ## 3. Decision detail — `/decisions/:id`  (BUILT in D2; ratified)
 

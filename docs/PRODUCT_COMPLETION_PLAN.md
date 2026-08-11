@@ -443,6 +443,37 @@ claims, no autonomous remediation, no customer data, no MDM-replacement
 claims, adapters supply evidence only, source systems remain systems of
 record.
 
+### 12.1 Design note: the local-network authority state (open, owner decision)
+
+The owner's redirect names four local-authority concepts. Three exist today
+under some name; **local-network** — "the device can reach local-network
+resources while the WAN / control plane is dark" — is genuinely unmodeled
+anywhere in `lib/`. This note is the wireframe-first step for it: the design
+argued before any code.
+
+**What it would answer.** Today the fabric can say a device is offline
+(carrier reachability), that its link is associated-but-unusable
+(link-usability's DHCP/DNS rungs), and whether its offline grant still stands
+(local-authority). None of those distinguish the warehouse case that matters:
+*the Wi-Fi and local servers are fine, only the internet/control plane is
+dark.* A worker mid-pick should keep working against local WMS in that state;
+today the evidence cannot express it.
+
+**Where it belongs, if built.** NOT a new connector family (the freeze) and
+NOT inside local-authority (that family deliberately owns no network axis —
+reachability is assigned to carrier/link-usability by its own header). The
+honest home is a **new rung on `link-usability`**: extend its
+association→usable ladder with a `local_only` reachability state (link usable,
+local resolution/services answering, WAN egress affirmatively failing), which
+`decision-continuity` can then weigh when deciding which decision wins across
+a partition. One family axis, no new family, no new API surface.
+
+**Why it is not built in this pass.** It changes what an offline verdict can
+mean — a worker-visible behavior — so it is an owner product decision, not a
+lane's initiative: should "local-only" soften an offline restriction for named
+workflows, or only annotate the evidence? Bucket: **owner decision required**
+(operating method §3), surfaced here once, with the recommendation above.
+
 With one addition: `docs/DEMO_SCRIPT_FOR_PARTNERS.md` already exists — the kit
 revises it rather than starting blank.
 

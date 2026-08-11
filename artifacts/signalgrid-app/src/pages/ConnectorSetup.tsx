@@ -85,6 +85,44 @@ export function ConnectorSetup() {
         </CardContent>
       </Card>
 
+      {/* The source-agnostic declaration (owner redirect 2026-08-11): which
+          sources feed the lab, and which is the enterprise connector. Declared
+          facts about the shipped code, not runtime state — the resolved-mode
+          card above stays the only place a live/fixture claim is made. */}
+      <Card className="border-border">
+        <CardHeader>
+          <CardTitle className="text-sm font-mono uppercase tracking-wider text-muted-foreground">
+            Evidence sources — one contract, engine can&apos;t tell them apart
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 font-mono text-sm">
+          <div className="border border-border rounded p-3 bg-card/50">
+            <span className="font-bold">fleet</span>
+            <Badge variant="outline" className="ml-2 font-mono uppercase text-[10px] bg-signal-nominal border-transparent">open-source lab</Badge>
+            <p className="text-xs text-muted-foreground mt-1">
+              Fleet (osquery) host posture through the proven @workspace/fleet-connector normalizer — enrollment, supervision, encryption, OS floor, screen lock, check-in freshness. Fixture lab today; self-hostable source later.
+            </p>
+          </div>
+          <div className="border border-border rounded p-3 bg-card/50">
+            <span className="font-bold">headwind</span>
+            <Badge variant="outline" className="ml-2 font-mono uppercase text-[10px] bg-signal-nominal border-transparent">android lab (fixture shape)</Badge>
+            <p className="text-xs text-muted-foreground mt-1">
+              Headwind-shaped shared rugged Android — scanners, kiosks, dedicated devices. A fixture shape, deliberately not a new connector family.
+            </p>
+          </div>
+          <div className="border border-border rounded p-3 bg-card/50">
+            <span className="font-bold">intune</span>
+            <Badge variant="outline" className="ml-2 font-mono uppercase text-[10px] bg-signal-unknown border-transparent">enterprise connector</Badge>
+            <p className="text-xs text-muted-foreground mt-1">
+              Microsoft Graph / Entra-Intune — the first enterprise production connector, read-only, off by default behind the gates above. Never required for the lab.
+            </p>
+          </div>
+          <p className="text-[10px] text-muted-foreground pt-1">
+            All three enter through the DeviceManagementEvidence contract; proof:evidence-adapter fails the build unless the same device state decides identically from every source — provenance is the only difference.
+          </p>
+        </CardContent>
+      </Card>
+
       <Card className="border-border">
         <CardHeader>
           <CardTitle className="text-sm font-mono uppercase tracking-wider text-muted-foreground">

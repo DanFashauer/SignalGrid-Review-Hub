@@ -143,6 +143,7 @@ function hasUnrecognizedKey(report: object, known: readonly string[]): boolean {
 const ASSOCIATION = ["associated", "not_associated", "unknown"] as const;
 const PROGRESS = [
   "carrying_traffic",
+  "local_only",
   "dns_failing",
   "dhcp_failing",
   "associated_only",

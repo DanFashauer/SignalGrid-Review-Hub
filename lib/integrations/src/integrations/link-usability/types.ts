@@ -62,6 +62,17 @@ export type AssociationState = "associated" | "not_associated" | "unknown";
  *  "authentication failed", report `unknown` here and let `network-nac` carry it. */
 export type LinkProgress =
   | "carrying_traffic"
+  /** Local traffic is affirmatively carrying — DHCP done, local resolution and local
+   *  services answering — while WAN egress is affirmatively FAILING. The warehouse
+   *  case the owner's §12.1 design note names: "the Wi-Fi and local servers are
+   *  fine, only the internet/control plane is dark." Before this rung existed a
+   *  bridge had to mis-file that state as `carrying_traffic` (over-claiming — the
+   *  cloud planes every freshness grant rides on are dark) or as `dns_failing`
+   *  (under-claiming — local work is fine). ANNOTATE-ONLY by owner direction: this
+   *  rung names the state and alerts exactly like the other confirmed
+   *  not-fully-usable rungs; whether it may ever SOFTEN an offline restriction for
+   *  named workflows is an owner decision deliberately not wired here. */
+  | "local_only"
   | "dns_failing"
   | "dhcp_failing"
   | "associated_only"
@@ -166,6 +177,10 @@ export type LinkUsabilityPosture =
   /** Associated, and the bridge affirmatively reports nothing got through. The
    *  false-confirmation state this dimension exists to name. */
   | "associated_not_usable"
+  /** Local traffic confirmed carrying while WAN egress is confirmed failing —
+   *  named so an operator (and, only if the owner later approves it,
+   *  decision-continuity) can tell this apart from a broken link. */
+  | "local_only_link"
   | "link_absent"
   | "roaming_unstable"
   | "degraded_link"
@@ -175,6 +190,8 @@ export type LinkUsabilityPosture =
 export type LinkUsabilityReasonCode =
   | "LINK_CARRYING_TRAFFIC"
   | "ASSOCIATED_BUT_NOT_CARRYING_TRAFFIC"
+  /** WAN egress affirmatively failing while local traffic is confirmed carrying. */
+  | "LINK_LOCAL_ONLY"
   | "DNS_FAILING"
   | "DHCP_FAILING"
   | "NOT_ASSOCIATED"

@@ -474,6 +474,22 @@ lane's initiative: should "local-only" soften an offline restriction for named
 workflows, or only annotate the evidence? Bucket: **owner decision required**
 (operating method §3), surfaced here once, with the recommendation above.
 
+**Addendum (2026-08-11) — the annotate-only half is BUILT.** The question
+above has two separable halves, and only one of them is a worker-visible
+behavior change. Under the owner's standing "go with your recommendations,"
+the *annotate* half now exists: `link-usability` carries the `local_only`
+rung (posture `local_only_link`, reason `LINK_LOCAL_ONLY`, critical finding
+`wan_egress_failing_local_traffic_confirmed`). It alerts at exactly the same
+severity as the other confirmed not-fully-usable rungs, never grants (the
+exhaustive sweep still admits exactly three granting shapes), and refuses the
+`not_associated`+`local_only` contradiction without citing either half —
+all pinned in `proof:link-usability` (167 checks; normalized state space
+grew 6480→7560, raw wire space 217728→241920). What remains **owner
+decision required** is only the *softening* half: whether `local_only` may
+ever soften an offline restriction for named workflows via
+`decision-continuity`. Nothing is wired toward that; the rung's doc comment
+in `types.ts` says so explicitly.
+
 With one addition: `docs/DEMO_SCRIPT_FOR_PARTNERS.md` already exists — the kit
 revises it rather than starting blank.
 

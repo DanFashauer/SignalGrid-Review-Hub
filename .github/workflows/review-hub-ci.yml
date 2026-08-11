@@ -243,6 +243,8 @@ jobs:
       # evidence carries the family facts — with fetch() disabled for the run.
       - name: Proof — launch seam (fixture connector → bridge → decision, offline)
         run: pnpm run proof:launch-seam
+      - name: Proof — evidence adapter (source-agnostic swap, fleet/headwind/intune)
+        run: pnpm run proof:evidence-adapter
       - name: Proof — operating method (the handbook is a gate, not a memory)
         run: pnpm run proof:operating-method
 

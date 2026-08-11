@@ -31,8 +31,17 @@ Breadth was never the defect on its own. **Breadth with no declared edge is.**
 Every `launch` entry has to survive this sentence, quoted from the plan and not
 softened:
 
-> one tenant-aware product, one host app, one read-only Entra/Intune connector, one
-> operator console, one design partner, one paid deployment
+> one tenant-aware product, one host app, one read-only device-management evidence
+> source (open-source lab first — Fleet; Microsoft Entra/Intune as the first
+> enterprise production connector), one operator console, one design partner, one
+> paid deployment
+
+The connector clause changed at profile v3 (2026-08-11, owner-directed): Microsoft
+moved from prerequisite to **commercial target**. The open-source lab (Fleet, plus a
+Headwind-shaped Android fixture) proves the same decision engine through the
+`DeviceManagementEvidence` adapter contract, and `proof:evidence-adapter` fails the
+build unless swapping the fleet/headwind/intune adapters leaves every decision
+identical — provenance is the only permitted difference.
 
 Most things do not survive it. That is the point.
 

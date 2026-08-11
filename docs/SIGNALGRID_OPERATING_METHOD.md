@@ -119,7 +119,10 @@ large document.
 
 The launch wedge is the Shared-Device Trust Gateway
 ([LAUNCH_PROFILE.md](LAUNCH_PROFILE.md)): three connector families, one
-console, one host-app reference, seven `/v1` routes. The launch profile gate
+console, one host-app reference, thirteen `/v1` routes — proven source-agnostic
+first on the open-source lab (Fleet; a Headwind-shaped Android fixture), with
+Microsoft Entra/Intune as the first enterprise production connector (profile
+v3, owner-directed 2026-08-11). The launch profile gate
 fails the build when reality and the declared edge diverge — in either
 direction. New scope enters through §2, never through momentum.
 

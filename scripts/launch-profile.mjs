@@ -66,11 +66,26 @@
 
 /** Bumped whenever a status changes. Not a semver — a serial number, so a doc or a
  *  review can name the exact revision of the scope it was written against. */
-export const LAUNCH_PROFILE_VERSION = 2;
+export const LAUNCH_PROFILE_VERSION = 3;
 
 // VERSION HISTORY, kept because a scope decision that changes silently is not a
 // decision anyone can hold you to.
 //
+//   3  THE SOURCE-AGNOSTIC REDIRECT (owner-directed, 2026-08-11 — intake ledger
+//      row 77). The criterion's "one read-only Entra/Intune connector" made
+//      Microsoft a PREREQUISITE; the owner reframed it as the COMMERCIAL TARGET:
+//      open-source MDM (Fleet; a Headwind-shaped Android lab fixture) is the
+//      low-cost engineering lab that proves the same decision engine first, and
+//      Microsoft Graph/Intune is the first supported enterprise production
+//      connector — swapped in later without changing the engine. The mechanical
+//      form of that claim is the DeviceManagementEvidence contract in
+//      lib/integration-bridge and `proof:evidence-adapter`, which drives the
+//      SAME device states through fleet/headwind/intune adapters and fails
+//      unless the decisions are identical. No membership change in this bump:
+//      the three launch families stand (graph stays launch AS the enterprise
+//      target; its fixture mode needs no tenant), and the lab adapters live in
+//      the bridge + lib/fleet-connector, which this profile's family surface
+//      does not classify. The criterion string changed, so the serial moves.
 //   2  `/v1/keys` moved launch → demo_only. Version 1 called it "API-key
 //      authentication for the above", which was reasoned rather than read: the
 //      route is a demo credential dispenser sitting ABOVE the auth guard, handing
@@ -85,10 +100,15 @@ export const LAUNCH_PROFILE_VERSION = 2;
 export const PRODUCT_NAME = "SignalGrid Shared-Device Trust Gateway";
 export const TARGET = "Limited GA, 2027-02-04";
 
-/** The criterion every `launch` entry is tested against, quoted verbatim. */
+/** The criterion every `launch` entry is tested against, quoted verbatim.
+ *  Amended at v3 by the owner's source-agnostic redirect: the connector clause
+ *  no longer names Microsoft as the prerequisite — it names the evidence-source
+ *  ROLE, with the open-source lab proving the engine and Entra/Intune as the
+ *  first enterprise production connector. */
 export const CRITERION =
-  "one tenant-aware product, one host app, one read-only Entra/Intune connector, " +
-  "one operator console, one design partner, one paid deployment";
+  "one tenant-aware product, one host app, one read-only device-management evidence " +
+  "source (open-source lab first — Fleet; Microsoft Entra/Intune as the first enterprise " +
+  "production connector), one operator console, one design partner, one paid deployment";
 
 /** Shared reason for every `deferred` item, written once rather than restated 134
  *  times. Deferred means: it exists, it is gated, it is proven, its proof runs in
@@ -112,9 +132,13 @@ export const SURFACES = [
   {
     id: "graph",
     reason:
-      "THE one read-only Entra/Intune connector. It is also the only family in the " +
-      "repository whose live transport actually addresses graph.microsoft.com — a fact " +
-      "worth stating plainly, because several families NAMED for Microsoft do not.",
+      "The one read-only Entra/Intune connector — since v3, the first ENTERPRISE " +
+      "production connector rather than the prerequisite: the open-source lab (Fleet, via " +
+      "the DeviceManagementEvidence contract) proves the same engine without a Microsoft " +
+      "tenant, and proof:evidence-adapter pins that the swap changes nothing but " +
+      "provenance. Still the only family in the repository whose live transport actually " +
+      "addresses graph.microsoft.com — a fact worth stating plainly, because several " +
+      "families NAMED for Microsoft do not.",
   },
   {
     id: "device-management-health",

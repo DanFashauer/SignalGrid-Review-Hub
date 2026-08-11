@@ -22,6 +22,10 @@ export interface PostureSignalDraft {
   observedAt: string;
 }
 
+// The source-agnostic DeviceManagementEvidence contract + its adapters
+// (Fleet, Headwind-shaped Android lab) — see ./evidence.ts.
+export * from "./evidence";
+
 const FRESH_HOURS = 24;
 const STALE_HOURS = 72;
 

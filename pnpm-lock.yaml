@@ -1493,6 +1493,9 @@ importers:
 
   lib/integration-bridge:
     dependencies:
+      '@workspace/fleet-connector':
+        specifier: workspace:*
+        version: link:../fleet-connector
       '@workspace/integrations':
         specifier: workspace:*
         version: link:../integrations

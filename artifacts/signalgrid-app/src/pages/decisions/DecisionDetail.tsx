@@ -161,6 +161,11 @@ export function DecisionDetail() {
                         <div key={s.id} className="flex items-center justify-between border border-border rounded p-2 bg-card/50 gap-3">
                           <span className="font-mono text-xs font-bold">{s.category}</span>
                           <span className="font-mono text-xs break-all">{String(s.value)}</span>
+                          {sourceSystemOf(s.sourceReference) && (
+                            <Badge variant="secondary" className="font-mono text-[10px] uppercase shrink-0" title={`source system: ${sourceSystemOf(s.sourceReference)}`}>
+                              {sourceSystemOf(s.sourceReference)}
+                            </Badge>
+                          )}
                           <Badge variant="outline" className="font-mono text-[10px] uppercase">{s.freshness}</Badge>
                           <span className="font-mono text-[10px] text-muted-foreground truncate max-w-[200px]" title={s.sourceReference}>
                             {s.sourceReference}
@@ -180,6 +185,18 @@ export function DecisionDetail() {
       </div>
     </div>
   );
+}
+
+/**
+ * Which SOURCE SYSTEM produced a signal, read from the sourceReference
+ * convention "fixture:<system>:<collection>#<subject>" (or a live adapter's
+ * "<system>:<collection>#<subject>"). Best-effort by design: an unparseable
+ * reference renders no chip rather than a wrong one — the full string is
+ * always shown beside it, so nothing is hidden by the failure to parse.
+ */
+function sourceSystemOf(ref: string): string | null {
+  const m = /^(?:fixture:)?([a-z0-9-]+)[:#]/.exec(ref);
+  return m?.[1] ?? null;
 }
 
 function Field({ label, value, accent }: { label: string; value: string; accent?: boolean }) {

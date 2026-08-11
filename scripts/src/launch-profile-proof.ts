@@ -38,11 +38,18 @@ const reasonOf = (e: Entry) => (typeof e === "string" ? null : (e.reason ?? null
 
 // ── Shape ─────────────────────────────────────────────────────────────────────
 
+// The criterion pin moved with the v3 amendment (owner-directed source-agnostic
+// redirect, 2026-08-11): the connector clause now names the evidence-source
+// ROLE — open-source lab first, Entra/Intune as the first enterprise production
+// connector. Both halves are pinned so neither the lab-first framing nor the
+// Microsoft commercial target can silently drop out of the criterion.
 check("the profile carries a version, a product name and the owner's criterion verbatim",
   Number.isInteger(LAUNCH_PROFILE_VERSION) &&
-    LAUNCH_PROFILE_VERSION >= 1 &&
+    LAUNCH_PROFILE_VERSION >= 3 &&
     PRODUCT_NAME.length > 0 &&
-    CRITERION.includes("one read-only Entra/Intune connector"));
+    CRITERION.includes("one read-only device-management evidence source") &&
+    CRITERION.includes("open-source lab first") &&
+    CRITERION.includes("Entra/Intune as the first enterprise production connector"));
 
 check("there are exactly four statuses, and they are the ones the gate enforces",
   STATUSES.length === 4 &&

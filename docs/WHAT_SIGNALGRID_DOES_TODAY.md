@@ -108,6 +108,19 @@ The website groups these into five **evaluated-today** dimensions:
   code. An earlier version of this line claimed no such call was made "anywhere
   in this repository", which a reader would reasonably have taken as a statement
   about the code rather than about the default configuration.
+- **Source-agnostic by construction (owner-directed, 2026-08-11).** SignalGrid
+  is not an MDM — it is the trust layer that reads MDM, identity, device,
+  workflow, and local-authority evidence to decide whether work should
+  continue. Device-management evidence enters through one adapter contract
+  (`DeviceManagementEvidence` in `lib/integration-bridge`), so the decision
+  engine never learns which vendor produced a reading: open-source MDM gives
+  SignalGrid a low-cost lab (Fleet today, plus a Headwind-shaped Android
+  fixture), and Microsoft Intune is the first enterprise production connector —
+  swapped in without changing the engine. `proof:evidence-adapter` enforces the
+  swap: the same device states through the fleet, headwind, and intune adapters
+  must produce identical decisions, with provenance the only difference. No
+  source system is replaced by any of this; each remains the system of record,
+  and adapters supply evidence only.
 - The core is isomorphic and deterministic (injectable clock; no `Date.now` /
   `Math.random`), so proofs and reviews reproduce the exact same decision,
   evidence snapshot, and audit chain every run.

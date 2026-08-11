@@ -23,9 +23,11 @@ Everything the product does must serve one question:
 > **Should this shared-device workflow continue right now, and why?**
 
 The first product is the **SignalGrid Shared-Device Trust Gateway**: one tenant,
-one shared-device workflow, one read-only Entra/Intune connector path, one
-deterministic allow / step-up / restrict / deny loop, one operator console, one
-host-app integration pattern, one evidence/audit story, one design partner.
+one shared-device workflow, one read-only device-management evidence source
+(open-source lab first — Fleet; Microsoft Entra/Intune as the first enterprise
+production connector — the §12 redirect), one deterministic allow / step-up /
+restrict / deny loop, one operator console, one host-app integration pattern,
+one evidence/audit story, one design partner.
 
 ## 2. The freeze, widened — this is the change
 
@@ -392,6 +394,54 @@ Order matters; each step names the gate that would otherwise fail:
    is its own reviewed change, not a side effect of a move.
 
 ### 11.5 D4 stands as written
+
+## 12. The source-agnostic redirect (owner-directed, 2026-08-11)
+
+Intake ledger row 77. The owner's correction, in their words: the build path had
+drifted **too enterprise-heavy too early**. Microsoft Intune / Entra is the
+*commercial target*; open-source MDM is the *low-cost engineering lab*; and
+SignalGrid must be source-agnostic so the same decision engine works with Fleet,
+Headwind, NanoMDM, Intune, Jamf, or Omnissa later. "The product should not care
+which source produced the evidence as long as the adapter emits the same
+normalized model."
+
+**What this changed, mechanically:**
+
+1. **The adapter contract** — `DeviceManagementEvidence`
+   (`lib/integration-bridge/src/evidence.ts`): tenant, source system, device,
+   platform, managed/compliance/policy states, ownership, freshness fields,
+   evidence quality, provenance. Its laws are the repo's standing laws restated
+   at the boundary: silence for the unanswered, quality lowers and never raises,
+   and the unearned *negative* refused (unknown management may not become an
+   "unmanaged" boolean).
+2. **The Fleet adapter** — `fleetHostToDeviceManagementEvidence`, through the
+   proven `@workspace/fleet-connector` normalizer. Fleet was already the chosen
+   MDM (CLAUDE.md, `fleet/`, `docs/FLEET_LIVE_INTEGRATION.md`); it is now the
+   named lab source on the launch path.
+3. **The Headwind-shaped Android lab** — a fixture shape + adapter for shared
+   rugged Android (scanners, kiosks), deliberately **not** a 52nd connector
+   family: the freeze stands, and the contract is the point.
+4. **The swap as a gate** — `proof:evidence-adapter` drives the same device
+   states through fleet / headwind / intune adapters and fails unless outcomes
+   and reason codes are identical, provenance excepted. Runs per-push.
+5. **The criterion amendment** — launch profile v3: the connector clause names
+   the evidence-source *role*, lab first, Entra/Intune as the first enterprise
+   production connector. Graph stays a launch family (fixture mode needs no
+   tenant); nothing was demoted, the prerequisite was.
+
+**Build order from here (the owner's sequence):** open-source MDM lab →
+normalized evidence adapter → shared-device decision experience → local/offline
+authority model (first-unlock and offline-grant exist in `local-authority`
+today; lost-device lives in `custody-beacon`/`location-services`, deferred;
+local-network is a genuinely open modeling question) → operator evidence UX →
+Microsoft Graph / Intune enterprise adapter → design partner / paid pilot.
+D4's partner kit is therefore written lab-first: the demo needs no Microsoft
+tenant; "bring your tenant" is the *enterprise* chapter, not the entry ticket.
+
+**Guardrails carried over verbatim:** no live credentials, no production
+claims, no autonomous remediation, no customer data, no MDM-replacement
+claims, adapters supply evidence only, source systems remain systems of
+record.
 
 With one addition: `docs/DEMO_SCRIPT_FOR_PARTNERS.md` already exists — the kit
 revises it rather than starting blank.

@@ -54,6 +54,7 @@ const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const POLICY = join(repo, "lib/signalgrid-core/src/policy.ts");
 const RESOLUTION = join(repo, "lib/signalgrid-core/src/resolution.ts");
 const FAMILY_DIR = join(repo, "lib/integrations/src/integrations");
+const CONSOLE_MIRROR = join(repo, "artifacts/signalgrid-app/src/lib/route-owner.ts");
 
 const failures = [];
 const fail = (message) => failures.push(message);
@@ -184,6 +185,67 @@ function deriveItsm(code, impact, itLayer, descriptor) {
   return { object: "incident", verification };
 }
 
+/**
+ * The console's route-owner mirror: reason code → owner, as the operator sees it.
+ *
+ * Owner routing is deliberately not on any /v1 wire (a named gap in the model), so
+ * the launch console carries a client-side copy of the code→owner table to render
+ * its "route owner" line. A copy is exactly the kind of second truth this gate
+ * exists to police — so the mirror is parsed here and held to the same bijection
+ * as everything else: every classified code mirrored, every mirrored code
+ * classified, and the owner identical. The owner-label map must also cover the
+ * declared roles exactly, or a role would render as its raw id (or worse, a label
+ * would outlive a deleted role).
+ */
+function readConsoleMirror(source) {
+  const owners = new Map();
+  const mirrorStart = source.indexOf("ROUTE_OWNER_BY_REASON_CODE");
+  if (mirrorStart !== -1) {
+    const body = source.slice(mirrorStart, source.indexOf("};", mirrorStart));
+    for (const m of body.matchAll(/^\s{2}([A-Z0-9_]+):\s*"([a-z_]+)",?$/gm)) {
+      owners.set(m[1], m[2]);
+    }
+  }
+  const labels = new Set();
+  const labelStart = source.indexOf("OWNER_ROLE_LABELS");
+  if (labelStart !== -1) {
+    const body = source.slice(labelStart, source.indexOf("};", labelStart));
+    for (const m of body.matchAll(/^\s{2}([a-z_]+):\s*\{\s*label:/gm)) {
+      labels.add(m[1]);
+    }
+  }
+  return { owners, labels };
+}
+
+function checkConsoleMirror(mirror) {
+  const { owners, labels } = mirror;
+  if (owners.size === 0) {
+    fail(`no route-owner entries parsed out of ${CONSOLE_MIRROR} — either the mirror is empty or its shape changed under the parser; both would let it drift silently`);
+    return;
+  }
+  const model = new Map(REASON_CODE_LAYERS.map((r) => [r.code, r.owner]));
+  for (const [code, owner] of model) {
+    const mirrored = owners.get(code);
+    if (mirrored === undefined) {
+      fail(`console mirror is missing ${code} — a refusal the operator would see with no route owner. Add it to ${CONSOLE_MIRROR}`);
+    } else if (mirrored !== owner) {
+      fail(`console mirror routes ${code} to "${mirrored}" but the model says "${owner}" — the operator would call the wrong desk. The model is the source of truth; fix ${CONSOLE_MIRROR}`);
+    }
+  }
+  for (const code of owners.keys()) {
+    if (!model.has(code)) {
+      fail(`console mirror carries ${code}, which the model does not classify — a stale row that renders routing for a code that cannot happen`);
+    }
+  }
+  const roleIds = new Set(OWNER_ROLES.map((o) => o.id));
+  for (const id of roleIds) {
+    if (!labels.has(id)) fail(`console mirror has no display label for owner role "${id}" — it would render as a raw id`);
+  }
+  for (const id of labels) {
+    if (!roleIds.has(id)) fail(`console mirror labels "${id}", which is not a declared owner role — a label outliving a deleted role`);
+  }
+}
+
 /** Families are directories containing an index.ts — the SAME derivation
  *  `launch-profile.mjs` documents, so the two artifacts cannot disagree by
  *  construction about what counts as a family. */
@@ -294,6 +356,10 @@ function main() {
     }
   }
 
+  // ── Console route-owner mirror stays true to the model ────────────────────
+  const mirror = readConsoleMirror(readFileSync(CONSOLE_MIRROR, "utf8"));
+  checkConsoleMirror(mirror);
+
   // ── Layer / domain / owner referential integrity ──────────────────────────
   const layerById = new Map(LAYERS.map((l) => [l.id, l]));
   const ownerIds = new Set(OWNER_ROLES.map((o) => o.id));
@@ -373,7 +439,7 @@ function main() {
 
   // ── Report ────────────────────────────────────────────────────────────────
   console.log(`IT-layer model v${IT_LAYER_MODEL_VERSION}`);
-  console.log(`  reason codes: ${emitted.size} emitted, ${classified.size} classified`);
+  console.log(`  reason codes: ${emitted.size} emitted, ${classified.size} classified, ${mirror.owners.size} mirrored in the console`);
   console.log(`  families:     ${onDisk.length} on disk, ${classifiedFamilies.size} classified, ${excluded.size} argued exclusion(s)`);
   console.log(`  owners:       ${ownerIds.size} roles across ${LAYERS.length} layers`);
   console.log(`\n  decision impact, READ from policy.ts (not declared in the model):`);
@@ -420,7 +486,8 @@ a layer, a system of record, an evidence type and an owner.
   NOT established by a green here:
     · that a classification is CORRECT. Completeness is mechanical; whether a code
       belongs to security operations rather than facilities is a review judgement.
-    · that owner routing reaches anyone. No /v1 response carries these fields yet —
+    · that owner routing is on the wire. The launch console renders it from a
+      drift-checked client-side mirror; no /v1 response carries these fields yet —
       see GAPS in scripts/it-layer-model.mjs.
     · that coverage is even. Every layer has a family; that is not the same as every
       layer being well served.`);
@@ -540,6 +607,27 @@ function selfTest() {
     {
       name: "an allow derives no ITSM object at all (nothing is ticketed that was not refused)",
       run: () => deriveItsm("TRUST_ESTABLISHED", "allow", "strategic_it_management", undefined).object === "none",
+    },
+    {
+      // The console mirror is a deliberate second copy; these three controls prove
+      // the drift check can actually see each way a copy rots.
+      name: "a model code missing from the console mirror is caught",
+      run: () => {
+        const mirrored = readConsoleMirror(`export const ROUTE_OWNER_BY_REASON_CODE: Record<string, string> = {\n  IDENTITY_DISABLED: "identity_platform_owner",\n};`).owners;
+        return REASON_CODE_LAYERS.some((r) => !mirrored.has(r.code));
+      },
+    },
+    {
+      name: "a console mirror entry with the WRONG owner is caught",
+      run: () => {
+        const mirrored = readConsoleMirror(`export const ROUTE_OWNER_BY_REASON_CODE: Record<string, string> = {\n  DEVICE_NONCOMPLIANT: "facilities_operations_owner",\n};`).owners;
+        const model = new Map(REASON_CODE_LAYERS.map((r) => [r.code, r.owner]));
+        return mirrored.get("DEVICE_NONCOMPLIANT") !== model.get("DEVICE_NONCOMPLIANT");
+      },
+    },
+    {
+      name: "the real console mirror parses to a non-empty table (an empty parse would pass the bijection vacuously)",
+      run: () => readConsoleMirror(readFileSync(CONSOLE_MIRROR, "utf8")).owners.size > 10,
     },
     {
       name: "the ITSM bridge is total over the seven IT layers",

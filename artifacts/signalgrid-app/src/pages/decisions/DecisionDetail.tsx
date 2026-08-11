@@ -7,6 +7,7 @@ import { AssuranceBadge } from "@/components/AssuranceBadge";
 import { formatDate } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { getDecisionV1, getEvidenceV1 } from "@/lib/v1";
+import { routeOwnersFor } from "@/lib/route-owner";
 
 /**
  * The product's trust moment: one decision, fully explained from the real /v1
@@ -29,6 +30,10 @@ export function DecisionDetail() {
   }
   const d = decisionQ.data;
   const ev = evidenceQ.data;
+  // Who picks this refusal up (wireframe screen 3's last gap). The owner comes
+  // from the IT-layer model's declared routing, mirrored client-side because
+  // owner routing is deliberately not on the wire yet — a named gap there.
+  const routing = d.outcome !== "allow" ? routeOwnersFor(d.reasonCodes) : null;
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
@@ -61,6 +66,26 @@ export function DecisionDetail() {
             <Field label="REVIEW STATUS" value={`${d.reviewStatus}${d.reviewable ? " · reviewable" : ""}`} />
             {d.coreNormalizationVersion !== undefined && (
               <Field label="CORE NORMALIZATION" value={`v${d.coreNormalizationVersion}`} />
+            )}
+            {routing && (routing.owners.length > 0 || routing.unclassified.length > 0) && (
+              <div>
+                <div className="text-xs text-muted-foreground font-mono mb-1">ROUTE OWNER</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {routing.owners.map((o) => (
+                    <Badge key={o.id} variant="outline" className="font-mono text-xs" title={o.covers}>
+                      {o.label}
+                    </Badge>
+                  ))}
+                  {routing.unclassified.map((c) => (
+                    <Badge key={c} variant="outline" className="font-mono text-xs bg-status-deny border-transparent" title="This reason code has no owner in the IT-layer model — extend scripts/it-layer-model.mjs.">
+                      {c}: UNCLASSIFIED
+                    </Badge>
+                  ))}
+                </div>
+                <p className="text-[10px] text-muted-foreground font-mono mt-1">
+                  who picks this up, per the declared IT-layer model
+                </p>
+              </div>
             )}
             <div>
               <div className="text-xs text-muted-foreground font-mono mb-1">AUDIT</div>

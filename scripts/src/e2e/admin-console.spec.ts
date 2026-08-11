@@ -68,6 +68,13 @@ test("dashboard renders the deterministic fixture telemetry", async ({ page }) =
   await expect(page.getByText("Total Decisions")).toBeVisible();
   await expect(page.getByText("18,432")).toBeVisible();
   await expect(page.getByText("82.0%")).toBeVisible();
+
+  // The connector-health card (wireframe screen 1's named gap, now built):
+  // launch families with the mode chip the SERVER resolved off /v1/context —
+  // fixture in this harness, and the card says so rather than hoping.
+  await expect(page.getByText("Connector health · launch families")).toBeVisible();
+  await expect(page.getByText("device-management-health", { exact: true })).toBeVisible();
+  await expect(page.getByText(/SIGNALGRID_TIER=\w+ — fixture-backed/)).toBeVisible();
 });
 
 test("live decision panel evaluates a RESTRICT through the real /v1 core", async ({ page }) => {
@@ -116,6 +123,11 @@ test("decision detail renders the trust moment from /v1 (reasons, rules, verifie
   await expect(page.getByText("DEVICE_NONCOMPLIANT").first()).toBeVisible();
   await expect(page.getByText("digest verified")).toBeVisible();
   await expect(page.getByText("Signals used")).toBeVisible();
+  // The route-owner line (wireframe screen 3's last gap, now built): a
+  // DEVICE_NONCOMPLIANT refusal routes to endpoint operations per the
+  // IT-layer model, mirrored client-side and drift-checked by its gate.
+  await expect(page.getByText("ROUTE OWNER")).toBeVisible();
+  await expect(page.getByText("Endpoint operations")).toBeVisible();
 });
 
 test("assurance status page renders the server-derived posture", async ({ page }) => {

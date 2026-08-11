@@ -7,7 +7,8 @@ import {
   useListLatestSignals
 } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
-import { listDecisionsV1 } from "@/lib/v1";
+import { getContextV1, listConnectorsV1, listDecisionsV1 } from "@/lib/v1";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { OutcomeBadge, IntegrationStatusBadge, SignalStatusBadge } from "@/components/StatusBadge";
@@ -22,6 +23,12 @@ export function Dashboard() {
   const { data: v1Decisions } = useQuery({ queryKey: ["v1-decisions"], queryFn: listDecisionsV1, refetchInterval: 15_000 });
   const { data: integrationsData } = useListIntegrations();
   const { data: signalsData } = useListLatestSignals({ limit: 10 });
+  // Screen 2's summary embed (wireframe screen 1's named gap): launch-family
+  // health from the same truth sources the setup page uses — the server's own
+  // mode resolution off /v1/context and the real connector records off
+  // /v1/connectors. Never a hopeful status.
+  const { data: ctx, error: ctxError } = useQuery({ queryKey: ["v1-context"], queryFn: getContextV1 });
+  const { data: v1Connectors } = useQuery({ queryKey: ["v1-connectors"], queryFn: listConnectorsV1 });
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8">
@@ -110,6 +117,12 @@ export function Dashboard() {
         </Card>
 
         <div className="space-y-8">
+          <ConnectorHealthCard
+            assurance={ctx?.assurance}
+            error={ctxError}
+            lastSync={v1Connectors?.find((c) => c.kind === "microsoft-entra-intune")?.lastSyncAt ?? null}
+          />
+
           <Card className="border-border">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-mono uppercase tracking-wider text-muted-foreground">Integration Health</CardTitle>
@@ -285,6 +298,58 @@ function ShiftHandoffPanel() {
             </tbody>
           </table>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// The three launch connector families, pinned by scripts/launch-profile.mjs.
+// A static list is correct here: family membership is a declared, gated fact,
+// not runtime data — the profile gate fails the build if this set changes.
+const LAUNCH_FAMILIES = [
+  { id: "graph", reads: "Entra/Intune identity + device posture" },
+  { id: "device-management-health", reads: "management-plane health rollup" },
+  { id: "local-authority", reads: "offline local-authority grant state" },
+];
+
+function ConnectorHealthCard({ assurance, error, lastSync }: {
+  assurance?: { tier: string; signalSource: "live" | "fixtures" };
+  error: unknown;
+  lastSync: string | null;
+}) {
+  const live = assurance?.signalSource === "live";
+  return (
+    <Card className="border-border">
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-sm font-mono uppercase tracking-wider text-muted-foreground">Connector health · launch families</CardTitle>
+        <Link href="/connectors/setup" className="text-xs text-primary hover:underline">Setup</Link>
+      </CardHeader>
+      <CardContent>
+        {error ? (
+          <div className="text-xs text-muted-foreground font-mono p-2">{String(error instanceof Error ? error.message : error)}</div>
+        ) : (
+          <div className="space-y-1.5">
+            {LAUNCH_FAMILIES.map((f) => (
+              <div key={f.id} className="flex items-center justify-between gap-3 p-2 border border-border rounded bg-card/50">
+                <div className="min-w-0">
+                  <span className="font-mono text-xs font-bold">{f.id}</span>
+                  <span className="text-[10px] text-muted-foreground font-mono block truncate">{f.reads}</span>
+                </div>
+                <Badge variant="outline" className={`font-mono uppercase text-[10px] border-transparent shrink-0 ${live ? "bg-signal-nominal" : "bg-signal-unknown"}`}>
+                  {assurance ? (live ? "live" : "fixture") : "…"}
+                </Badge>
+              </div>
+            ))}
+            <p className="text-[10px] text-muted-foreground font-mono pt-1">
+              {assurance
+                ? live
+                  ? "live read-only vendor reads — the connector refuses any non-GET by construction"
+                  : `SIGNALGRID_TIER=${assurance.tier} — fixture-backed, working connectors; nothing leaves this process`
+                : "resolving mode from /v1/context…"}
+              {lastSync ? ` · last sync ${formatTimeAgo(lastSync)}` : ""}
+            </p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

@@ -39,8 +39,10 @@ Conventions for every screen:
 
 - Data: `GET /api/v1/decisions` (recent 5), `POST /api/v1/decisions/evaluate`
   (panel), fixture metrics clearly labelled until a `/v1` series exists.
-- Gap: the connector-health card (right) does not exist yet — it is screen 2's
-  summary embed, one row per launch family: mode chip + one-line reason.
+- Gap CLOSED (2026-08-11): the connector-health card (right) is built — screen
+  2's summary embed, one row per launch family with the mode chip the server
+  resolved off `/v1/context`, the one-line reason, and the primary connector's
+  last sync off `/v1/connectors`.
 - Error state: each card fails alone with its message; the page never blanks.
 
 ## 2. Microsoft connector setup & health — `/connectors/setup`  (TO BUILD)
@@ -95,8 +97,11 @@ never a hopeful status.
 
 - Data: `GET /api/v1/decisions/:id` + `GET /api/v1/decisions/:id/evidence`
   (`verified` recomputed server-side per request).
-- Remaining gap: a "route owner" line (the refusal's owner role from the
-  IT-layer model) — the operator should see who picks this up.
+- Gap CLOSED (2026-08-11): the "route owner" line is built — the refusal's
+  owner role(s) from the IT-layer model, so the operator sees who picks this
+  up. Owner routing is deliberately not on the wire (a named gap in
+  `scripts/it-layer-model.mjs`), so the console carries a client-side mirror
+  that `check-it-layer-model.mjs` drift-checks against the model both ways.
 
 ## 4. Evidence / audit — `/audit`  (BUILT in D2; ratified)
 
@@ -171,4 +176,5 @@ detail → evidence → audit → route owner → verification. Screens 2 → 5 
    `GET /v1/connectors`, `GET /v1/connectors/:id/syncs`,
    `POST /v1/connectors/:id/sync`. YELLOW (fence change, owner-visible).
 3. Screen 5 rebind — `GET /v1/policies*` fence additions. YELLOW.
-4. Screen 1 connector-health card + screen 3 route-owner line. GREEN.
+4. Screen 1 connector-health card + screen 3 route-owner line. GREEN. — BUILT
+   2026-08-11; all six screens are now coherent and e2e-pinned.

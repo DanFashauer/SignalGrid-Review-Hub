@@ -176,6 +176,13 @@ Connector setup → connector health → policy (read) → **evaluate** → deci
 detail → evidence → audit → route owner → verification. Screens 2 → 5 → 1 →
 3 → 4 → 6 cover it end to end; nothing else is launch UI.
 
+"Nothing else is launch UI" is ENFORCED in the console since 2026-08-11
+(P0 #239): the sidebar carries three labelled groups (Launch console · /v1 /
+Fixture previews · not launch / Build the grid · demo), and every non-launch
+route renders a route-level PREVIEW banner a deep link cannot bypass —
+including `/policies/new`, because policy editing is off the launch fence.
+Both are pinned in the admin-console e2e suite.
+
 ## Build order and governance
 
 1. Screen 6 (`/status`) — smallest, closes the assurance P0 loop. GREEN.

@@ -164,6 +164,26 @@ test("connector setup renders the server-resolved mode and runs a fixture sync",
   await expect(page.getByText(/records · \d+ signals/).first()).toBeVisible();
 });
 
+test("console IA: nav separates launch surfaces from previews, and a deep link cannot dodge the label", async ({ page }) => {
+  await page.goto(BASE, { waitUntil: "domcontentloaded" });
+
+  // The sidebar states the IA law: three labelled groups, launch first.
+  await expect(page.getByText("Launch console · /v1")).toBeVisible();
+  await expect(page.getByText("Fixture previews · not launch")).toBeVisible();
+  await expect(page.getByText("Build the grid · demo")).toBeVisible();
+
+  // A non-launch page carries the preview banner even when reached directly —
+  // the banner is route-level, so a deep link cannot bypass the sidebar label.
+  await page.goto(`${BASE}/signals`, { waitUntil: "domcontentloaded" });
+  await expect(page.getByText(/PREVIEW — fixture-backed demo surface/)).toBeVisible();
+
+  // And a launch page does NOT carry it: the label means something because it
+  // is absent where it does not apply.
+  await page.goto(`${BASE}/decisions`, { waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("heading", { name: "Decisions" })).toBeVisible();
+  await expect(page.getByText(/PREVIEW — fixture-backed demo surface/)).toHaveCount(0);
+});
+
 test("audit page verifies the tamper-evident chain from /v1", async ({ page }) => {
   await page.goto(`${BASE}/audit`, { waitUntil: "domcontentloaded" });
 

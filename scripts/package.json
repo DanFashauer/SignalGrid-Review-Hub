@@ -98,6 +98,7 @@
     "proof:oauth-consent": "tsx ./src/oauth-consent-proof.ts",
     "proof:observability": "tsx ./src/observability-proof.ts",
     "proof:observability-integrity": "tsx ./src/observability-integrity-proof.ts",
+    "proof:operating-method": "tsx ./src/operating-method-proof.ts",
     "proof:orchestration": "tsx ./src/orchestration-proof.ts",
     "proof:ot-posture": "tsx ./src/ot-posture-proof.ts",
     "proof:pacs-access": "tsx ./src/pacs-access-proof.ts",

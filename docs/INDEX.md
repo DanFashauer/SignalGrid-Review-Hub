@@ -160,6 +160,8 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 
 ## Review workflow
 
+- [SIGNALGRID_OPERATING_METHOD.md](SIGNALGRID_OPERATING_METHOD.md) — the handbook: how SignalGrid is run (buckets, DRIs, wireframe-first, AI accountability ladder)
+
 - [Repository agent instructions](../AGENTS.md): defines automation-agent guardrails, public-safety rules, PR validation commands, and review guidelines.
 - [SignalGrid Autopilot Control Plane](SIGNALGRID_AUTOPILOT_CONTROL_PLANE.md): defines the one-input-to-one-phase automation model, bot roles, risk lanes, evidence requirements, and owner boundaries.
 - [Autopilot Intake Bot](AUTOPILOT_INTAKE_BOT.md): classifies screenshots, links, findings, PR summaries, and market notes into backlog-ready categories.

@@ -131,6 +131,7 @@
     "proof:oauth-consent": "pnpm --filter @workspace/scripts run proof:oauth-consent",
     "proof:observability": "pnpm --filter @workspace/scripts run proof:observability",
     "proof:observability-integrity": "pnpm --filter @workspace/scripts run proof:observability-integrity",
+    "proof:operating-method": "pnpm --filter @workspace/scripts run proof:operating-method",
     "proof:orchestration": "pnpm --filter @workspace/scripts run proof:orchestration",
     "proof:ot-posture": "pnpm --filter @workspace/scripts run proof:ot-posture",
     "proof:pacs-access": "pnpm --filter @workspace/scripts run proof:pacs-access",

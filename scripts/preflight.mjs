@@ -181,6 +181,7 @@ const STEPS = [
   { name: "Proof: local-authority (may this device act on its own authority now)", cmd: ["pnpm", "run", "proof:local-authority"] },
   { name: "Proof: launch-profile (the declared Limited GA scope is coherent and its figures are published)", cmd: ["pnpm", "run", "proof:launch-profile"] },
   { name: "Proof: launch-seam (fixture connector → bridge → core decision → evidence, all 3 launch families, offline)", cmd: ["pnpm", "run", "proof:launch-seam"] },
+  { name: "Proof: operating-method (the handbook is a gate — buckets, ladder, dispositions, links, roles)", cmd: ["pnpm", "run", "proof:operating-method"] },
   { name: "Proof: evidence-coverage (what can this estate actually answer)", cmd: ["pnpm", "run", "proof:evidence-coverage"] },
   { name: "Proof: break-glass (was the emergency override accountable)", cmd: ["pnpm", "run", "proof:break-glass"] },
   { name: "Proof: response-accountability (the watermelon — closed but unresolved)", cmd: ["pnpm", "run", "proof:response-accountability"] },

@@ -367,6 +367,8 @@ jobs:
       # evidence carries the family facts — with fetch() disabled for the run.
       - name: Proof — launch seam (fixture connector → bridge → decision, offline)
         run: pnpm run proof:launch-seam
+      - name: Proof — operating method (the handbook is a gate, not a memory)
+        run: pnpm run proof:operating-method
 
       # SEVEN gates lived in scripts/preflight.mjs and ran NOWHERE in CI — checked
       # against all 12 workflow files, not just this one. That made them local

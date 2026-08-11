@@ -1161,7 +1161,9 @@ async function run() {
       // by design — the allowlist is fail-closed, so a route absent from this list is
       // denied by construction rather than by having been remembered here.
       for (const p of [
-        "/v1/policies",
+        // /v1/policies moved to the launch fence (wireframe screen 5, read-only);
+        // the deferred simulate arm stands in as the policies-adjacent denial.
+        "/v1/decisions/dec_x/simulate",
         "/v1/webhooks",
         "/v1/remediation",
         "/v1/app-workflows/evaluate",

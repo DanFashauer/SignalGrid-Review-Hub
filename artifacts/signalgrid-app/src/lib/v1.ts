@@ -270,6 +270,74 @@ export async function triggerSyncV1(connectorId: string): Promise<V1SyncRun> {
   return json.syncRun;
 }
 
+// ── policies: the versioned "what decided this" surface (wireframe screen 5) ──
+
+export interface V1Policy {
+  id: string;
+  tenantId: string;
+  key: string;
+  name: string;
+  description: string;
+  workflowPattern: string;
+  activeVersionId: string;
+}
+
+export interface V1PolicyRule {
+  id: string;
+  description: string;
+  match: Array<Record<string, unknown>>;
+  outcome: V1Outcome;
+  reasonCode: string;
+  severity: string;
+}
+
+export interface V1PolicyVersion {
+  id: string;
+  tenantId: string;
+  policyId: string;
+  version: number;
+  status: string;
+  rules: V1PolicyRule[];
+  createdAt: string;
+  digest: string;
+}
+
+export interface V1PolicyTestResult {
+  testId: string;
+  name: string;
+  passed: boolean;
+  expectedOutcome: V1Outcome;
+  actualOutcome: V1Outcome;
+  expectedReasonCode?: string;
+  actualReasonCodes: string[];
+}
+
+export async function listPoliciesV1(): Promise<V1Policy[]> {
+  const json = await v1<{ policies: V1Policy[] }>(`/api/v1/policies`, { method: "GET" }, activeToken);
+  return json.policies;
+}
+
+export async function listPolicyVersionsV1(policyId: string): Promise<V1PolicyVersion[]> {
+  const json = await v1<{ versions: V1PolicyVersion[] }>(
+    `/api/v1/policies/${encodeURIComponent(policyId)}/versions`,
+    { method: "GET" },
+    activeToken,
+  );
+  return json.versions;
+}
+
+export async function runPolicyTestsV1(
+  policyId: string,
+  versionId?: string,
+): Promise<{ results: V1PolicyTestResult[]; passed: boolean }> {
+  const qs = versionId ? `?versionId=${encodeURIComponent(versionId)}` : "";
+  return v1<{ results: V1PolicyTestResult[]; passed: boolean }>(
+    `/api/v1/policies/${encodeURIComponent(policyId)}/tests${qs}`,
+    { method: "GET" },
+    activeToken,
+  );
+}
+
 // ── app-workflows: gate the software people use, not just the doors ───────────
 
 export type AppVertical = "healthcare" | "warehouse" | "industrial" | "global_fleet" | "retail" | "data_center" | "government";

@@ -291,6 +291,24 @@ export const SURFACES = [
     reason: "Read-only sync history: last sync, records processed, signals normalized.",
   },
   {
+    id: "/v1/policies",
+    reason:
+      "Read-only policy inventory: the 'what decided this' page (launch wireframe 5). An " +
+      "operator who cannot read the active policy cannot trust the verdicts it mints.",
+  },
+  {
+    id: "/v1/policies/{id}/versions",
+    reason:
+      "Read-only versioned rule sets with content digests — the versioned half of every " +
+      "decision's provenance (decisions carry policyVersionId).",
+  },
+  {
+    id: "/v1/policies/{id}/tests",
+    reason:
+      "Runs the pinned policy tests against a version and reports pass/fail — evidence the " +
+      "active rule set still behaves, on demand, read-only.",
+  },
+  {
     id: "/v1/connectors/{id}/sync",
     reason:
       "Trigger a FIXTURE sync (the core refuses non-fixture connectors by construction) — " +
@@ -313,10 +331,7 @@ export const SURFACES = [
     deferred: [
       "/v1/decisions/reconcile",
       "/v1/decisions/{id}/simulate",
-      "/v1/policies",
-      "/v1/policies/{id}/versions",
       "/v1/policies/{id}/versions/{versionId}/activate",
-      "/v1/policies/{id}/tests",
       "/v1/decisions/{id}/resolution",
       "/v1/decisions/{id}/resolve",
       "/v1/webhooks",

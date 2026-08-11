@@ -114,6 +114,12 @@ export const GA_ALLOWED_ROUTES: readonly { method: string; path: string }[] = [
   { method: "GET", path: "/v1/connectors" },
   { method: "GET", path: "/v1/connectors/:id/sync-runs" },
   { method: "POST", path: "/v1/connectors/:id/sync" },
+  // Launch wireframe screen 5 (policy version) — read + test-run only. Draft
+  // creation and version activation stay OFF the fence: policy changes ride
+  // the repository at launch, not a UI.
+  { method: "GET", path: "/v1/policies" },
+  { method: "GET", path: "/v1/policies/:id/versions" },
+  { method: "GET", path: "/v1/policies/:id/tests" },
 ];
 
 /** `/v1/decisions/:id` → /^\/v1\/decisions\/[^/]+$/ — anchored at BOTH ends so

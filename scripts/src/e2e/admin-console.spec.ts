@@ -154,9 +154,16 @@ test("audit page verifies the tamper-evident chain from /v1", async ({ page }) =
   await expect(page.getByText("chain verified")).toBeVisible();
 });
 
-test("policies page lists the seeded policy catalog", async ({ page }) => {
+test("policies page lists the core's versioned policies and the detail runs tests", async ({ page }) => {
   await page.goto(`${BASE}/policies`, { waitUntil: "domcontentloaded" });
 
-  await expect(page.getByText("Medication administration")).toBeVisible();
-  await expect(page.getByText("Shift handoff custody")).toBeVisible();
+  // The core's real policy inventory, read from /v1 — not the fixture catalog.
+  await expect(page.getByText("Shared-device baseline access policy")).toBeVisible();
+  await expect(page.getByText("READ-ONLY AT LAUNCH").first()).toBeVisible();
+
+  await page.getByText("Shared-device baseline access policy").click();
+  // The versioned rule set renders with its digest, and the pinned policy
+  // tests run server-side against the active version.
+  await expect(page.getByText(/digest [0-9a-f]+/).first()).toBeVisible();
+  await expect(page.getByText(/\d+\/\d+ passed/)).toBeVisible();
 });

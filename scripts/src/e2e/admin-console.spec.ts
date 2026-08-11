@@ -118,6 +118,18 @@ test("decision detail renders the trust moment from /v1 (reasons, rules, verifie
   await expect(page.getByText("Signals used")).toBeVisible();
 });
 
+test("assurance status page renders the server-derived posture", async ({ page }) => {
+  await page.goto(`${BASE}/status`, { waitUntil: "domcontentloaded" });
+
+  await expect(page.getByRole("heading", { name: "Deployment assurance" })).toBeVisible();
+  // Server-derived, not copy: the fixture posture and the advisory effect both
+  // come off /v1/context on this request.
+  await expect(page.getByText(/fixtures — no live vendor call/)).toBeVisible();
+  await expect(page.getByText(/advisory — the gate answers/)).toBeVisible();
+  // The declared-divergence block labels itself as a declaration.
+  await expect(page.getByText("Declared divergence — a declaration, not a measurement")).toBeVisible();
+});
+
 test("audit page verifies the tamper-evident chain from /v1", async ({ page }) => {
   await page.goto(`${BASE}/audit`, { waitUntil: "domcontentloaded" });
 

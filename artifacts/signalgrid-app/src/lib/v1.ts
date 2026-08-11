@@ -197,6 +197,23 @@ export async function getContextV1(): Promise<{ assurance: V1Assurance }> {
   return v1<{ assurance: V1Assurance }>(`/api/v1/context`, { method: "GET" }, activeToken);
 }
 
+export interface V1Metrics {
+  totalDecisions: number;
+  byOutcome: Record<V1Outcome, number>;
+  allowRate: number;
+  restrictDenyRate: number;
+  avgLatencyMs: number;
+  p95LatencyMs: number;
+  decisionsWithPolicyVersion: number;
+  decisionsWithEvidence: number;
+  pendingReview: number;
+}
+
+export async function getMetricsV1(): Promise<V1Metrics> {
+  const json = await v1<{ metrics: V1Metrics }>(`/api/v1/metrics`, { method: "GET" }, activeToken);
+  return json.metrics;
+}
+
 // ── app-workflows: gate the software people use, not just the doors ───────────
 
 export type AppVertical = "healthcare" | "warehouse" | "industrial" | "global_fleet" | "retail" | "data_center" | "government";

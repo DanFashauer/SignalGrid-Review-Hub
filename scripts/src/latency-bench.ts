@@ -8,22 +8,13 @@
  * instead. Public-safe: in-memory core, synthetic data, no I/O.
  */
 import { SignalGridCore } from "@workspace/signalgrid-core";
+import {
+  BENCH_OPERATOR as OPERATOR,
+  BENCH_SCENARIOS as scenarios,
+  percentile,
+} from "./bench-workload.js";
 
-const OPERATOR = "sgk_demo_northwind_operator";
 const PILOT_GATE_P95_MS = 750;
-
-const scenarios = [
-  { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" },
-  { identityRef: "nurse.noncompliant", deviceRef: "ipad-ward-02", workflowKey: "clinical-session" },
-  { identityRef: "nurse.stale", deviceRef: "ipad-ward-03", workflowKey: "clinical-session" },
-  { identityRef: "tech.unmanaged", deviceRef: "ipad-byod-01", workflowKey: "med-admin" },
-  { identityRef: "nurse.nosync", deviceRef: "ipad-ward-05", workflowKey: "clinical-session" },
-];
-
-function percentile(sortedAsc: number[], p: number): number {
-  const index = Math.ceil((p / 100) * sortedAsc.length) - 1;
-  return sortedAsc[Math.min(sortedAsc.length - 1, Math.max(0, index))];
-}
 
 function main(): void {
   const core = SignalGridCore.demo();

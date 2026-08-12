@@ -68,6 +68,9 @@ jobs:
       - name: Decision-latency pilot gate
         run: pnpm run bench:decision-latency
 
+      - name: Decision-throughput saturation gate
+        run: pnpm run bench:decision-throughput -- --seconds=2
+
       - name: Grid / simulator / emulator / posture proofs
         run: |
           pnpm run proof:signalgrid-grid

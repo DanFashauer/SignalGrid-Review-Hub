@@ -59,7 +59,7 @@ what one lane needs the other to know. If a message finds itself describing an
 operation to run, it should have been a request. This file keeps the standing
 protocol below; it is no longer the inbox.
 
-### State as of 41ce4d2
+### State as of 575d4a9
 
 - **PR #152, #202, #203, #204 and #205 are all MERGED.** Every branch they were
   on is auto-deleted. A local branch named after any of them is stale.
@@ -67,10 +67,19 @@ protocol below; it is no longer the inbox.
   `bench:decision-throughput` (in-process core) and the cloud lane's
   `test:load` / `test:stress` (the `/v1` HTTP surface). Neither number is the
   other; each header says so.
-- The simulation request loop is live. `artifacts/sim-requests/` holds three
-  queued requests; `node scripts/check-sim-requests.mjs` says what is still
-  owed at any moment. **That gate is the handoff for verification work** — it
-  needs no chat and no relay.
+- **The request loop has completed a full round-trip.** The Mac lane ran
+  `mac-capacity-baseline` and committed the result with its platform, commit and
+  clean-tree state attached; the cloud lane read it without anyone relaying
+  anything, and reshaped the capacity section of `PARTNER_ONBOARDING.md` around
+  it. **One of three requests is answered; two are still owed** — and
+  `node scripts/check-sim-requests.mjs` is the live answer to which, so do not
+  trust this bullet over that command. **That gate is the handoff for
+  verification work**; it needs no chat and no relay.
+- Capacity figures live in `artifacts/sim-results/`, not in prose. The
+  `PARTNER_ONBOARDING` capacity section deliberately quotes no throughput
+  number: `test:load`/`test:stress` REPORT throughput rather than gate it, so a
+  figure retyped into a document would be unowned by construction and would go
+  stale in silence. Cite the result file instead.
 
 ### If you are the Mac lane, your next actions
 
@@ -83,10 +92,12 @@ pnpm run sim:run-requests                 # run everything still owed
 git add artifacts/sim-results && git commit -m "sim results" && git push
 ```
 
-Two of the three queued requests can only be answered on a Mac, and one of
-them refreshes `artifacts/live-evidence/mac-run.json`, which `check-live-sync`
-still reports STALE against a pre-merge tree — no hardware run has yet
-validated the merged default branch.
+Both remaining requests can only be answered on a Mac, and one of them —
+`post-merge-baseline` — refreshes `artifacts/live-evidence/mac-run.json`, which
+`check-live-sync` still reports STALE against a pre-merge tree. **No hardware
+run has yet validated the merged default branch**, which makes it the largest
+unearned affirmative currently on the board and the one thing here only your
+machine can close.
 
 ### One open observation, offered not asserted
 

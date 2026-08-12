@@ -81,11 +81,22 @@ second one is the one that binds today.
 
 **The decision path is fast.** A verdict is computed in roughly **1.3 ms** (p95,
 `pnpm run bench:decision-latency`) against a 750 ms pilot gate. Under HTTP
-concurrency the single-process server sustains **several hundred requests per
-second**, and it *saturates* rather than failing: past the knee, throughput holds
-flat and additional clients become latency. Run `pnpm run test:stress` on your own
-hardware for your numbers — the ones above are from one container at one commit,
-and quoting somebody else's throughput as yours is not a measurement.
+concurrency the single-process server *saturates* rather than failing: past the
+knee, throughput holds flat and every additional client becomes latency, with no
+5xx and no transport errors anywhere on the ramp.
+
+**Throughput itself is a property of your machine, so this document does not
+quote one.** It has now been measured on two machines that differ by roughly six
+times in absolute throughput — a shared Linux CI container and the owner's Apple
+Silicon Mac — and what reproduced across both is the *shape*: correctness held
+identically at every concurrency step, and each machine showed the same flat
+throughput / climbing latency knee, at a concurrency the hardware chose rather
+than the software. That reproduction is the transferable finding. The numbers
+are not; they live in `artifacts/sim-results/`, each one carrying the platform,
+the commit and whether the tree was clean when it ran, because *"measured X, on
+this machine, at this commit"* is the only honest form of a capacity claim and a
+number retyped into prose stops being one. Run `pnpm run test:stress` on your own
+hardware for yours.
 
 **The rate limiter is the real ceiling, and the default is low on purpose.** Out
 of the box a single API key is capped at **240 requests per minute — four

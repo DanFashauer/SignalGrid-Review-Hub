@@ -47,6 +47,30 @@ const BASE = `http://localhost:${PORT}/api`;
 const here = dirname(fileURLToPath(import.meta.url));
 const serverEntry = resolve(here, "../dist/index.mjs");
 
+/** The child servers must be the in-memory, localhost-only thing this harness
+ *  claims they are.
+ *
+ *  They inherited the caller's whole environment, so a developer or CI worker
+ *  with DATABASE_URL set would have had every one of these hundreds of synthetic
+ *  evaluations persisted through PostgresDecisionStore — writing load-test noise
+ *  into a real database — and any inherited live-integration flag would have
+ *  quietly defeated the fixture boundary the header promises. Removed explicitly
+ *  rather than by allowlist, so a variable this repo adds later is inherited by
+ *  default and only the known-dangerous ones are stripped; the list is short
+ *  because the dangerous set is short. */
+const EXTERNAL_ENV_KEYS = [
+  "DATABASE_URL", "POSTGRES_URL", "REDIS_URL",
+  "SIGNALGRID_LIVE_INTEGRATIONS", "SIGNALGRID_TIER",
+  "GRAPH_ACCESS_TOKEN", "DEVICE_MANAGEMENT_HEALTH_TRANSPORT",
+  "FLEET_URL", "FLEET_TOKEN", "WAZUH_URL", "KEYCLOAK_URL", "TRACCAR_URL",
+  "LINK_USABILITY_ACCESS_TOKEN", "SIGNALGRID_ENROLLMENT_SECRET",
+];
+function sandboxEnv(extra) {
+  const env = { ...process.env, ...extra };
+  for (const k of EXTERNAL_ENV_KEYS) delete env[k];
+  return env;
+}
+
 const STRESS = process.argv.includes("--stress");
 const CONCURRENCY = Number(process.env.LOAD_CONCURRENCY ?? 32);
 const REQUESTS = Number(process.env.LOAD_REQUESTS ?? 600);
@@ -131,14 +155,13 @@ async function drive(total, concurrency) {
 // reports it as the decision path's ceiling. Raising it here isolates the engine;
 // the limiter's own correctness is asserted separately, at the default, below.
 const server = spawn("node", [serverEntry], {
-  env: {
-    ...process.env,
+  env: sandboxEnv({
     PORT: String(PORT),
     NODE_ENV: "production",
     LOG_LEVEL: "silent",
     SIGNALGRID_V1_RATE_LIMIT: "1000000",
     SIGNALGRID_GLOBAL_RATE_LIMIT: "1000000",
-  },
+  }),
   stdio: ["ignore", "ignore", "inherit"],
 });
 
@@ -157,19 +180,29 @@ const LIMIT_PORT = 5321;
 const LIMIT_BASE = `http://localhost:${LIMIT_PORT}/api`;
 const SHIPPED_V1_LIMIT = 240;
 const limitServer = spawn("node", [serverEntry], {
-  env: {
-    ...process.env,
+  env: sandboxEnv({
     PORT: String(LIMIT_PORT),
     NODE_ENV: "production",
     LOG_LEVEL: "silent",
     SIGNALGRID_V1_RATE_LIMIT: "0",
-  },
+  }),
   stdio: ["ignore", "ignore", "inherit"],
 });
+
+// A pre-existing listener on this port would answer /healthz and every request
+// after it, and the harness would happily report correctness and throughput FOR
+// SOMEBODY ELSE'S PROCESS while exiting green. So readiness is not "something
+// answers" — it is "the child WE started is still alive and something answers".
+let serverExited = null;
+server.on("exit", (code) => { serverExited = code ?? "signal"; });
 
 async function waitForReady(timeoutMs = 20000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
+    if (serverExited !== null) {
+      console.log(`  the spawned server exited (${serverExited}) before becoming ready — port ${PORT} is probably already in use`);
+      return false;
+    }
     try { if ((await fetch(`${BASE}/healthz`)).ok) return true; } catch { /* not up yet */ }
     await new Promise((r) => setTimeout(r, 250));
   }
@@ -201,10 +234,29 @@ try {
     "DETERMINISM THROUGH THE WIRE: concurrency never changes an outcome",
     load.results.every((r) => r.outcome === r.expect),
   );
-  // The cross-tenant assertion is only meaningful because both tenants were in
-  // flight together; `proof:isolation-scope` proves the same law in-process.
-  const leaked = load.results.filter((r) => r.tenant !== null && r.askedTenant !== null && !String(r.tenant).includes(r.askedTenant));
-  check(`no tenant sees another's answer while interleaved in flight (leaks=${leaked.length})`, leaked.length === 0);
+  // THIS CHECK WAS VACUOUS AND A REVIEWER CAUGHT IT. The evaluate response
+  // carries no tenantId anywhere — not on the decision, not on the envelope — so
+  // the old predicate filtered on a field that was always null, matched nothing,
+  // and could not have failed if every tenant had read every other tenant's data.
+  // A check that cannot fail is not a check; this repo gates that idea everywhere
+  // else and the load harness shipped a counterexample.
+  //
+  // The observable isolation signal is a CROSS-TENANT READ: the atlas key asking
+  // for a device that belongs to northwind. The resource exists — northwind's own
+  // key gets 200 for it in the baseline above — so a 404 is tenancy refusing,
+  // not a missing fixture. Driven concurrently with the load so it is answering
+  // the question the name promises: does isolation hold while the server is busy.
+  const crossTenantProbes = await Promise.all(Array.from({ length: 40 }, () =>
+    fetch(`${BASE}/v1/decisions/evaluate`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${KEYS.atlas}`, "content-type": "application/json" },
+      body: JSON.stringify(CASES[0].body),
+    }).then((r) => r.status).catch(() => 0)));
+  const leaked = crossTenantProbes.filter((s) => s === 200).length;
+  check(
+    `CROSS-TENANT READ REFUSED under load: atlas asking for northwind's device is never answered (leaks=${leaked}/${crossTenantProbes.length})`,
+    leaked === 0 && crossTenantProbes.every((s) => s === 404),
+  );
 
   // ── REPORTED: machine-dependent, deliberately not asserted ────────────────
   console.log(
@@ -237,8 +289,12 @@ try {
     check(`deliberate overload is THROTTLED, not dropped (429s=${throttled.length})`, throttled.length > 0);
     const allowed = settled.filter((r) => r.status === 200).length;
     check(
-      `A ZERO LIMIT DOES NOT OPEN THE DOOR: a malformed value falls back to the shipped ceiling (allowed=${allowed} ≤ ${SHIPPED_V1_LIMIT})`,
-      allowed <= SHIPPED_V1_LIMIT,
+      `A ZERO LIMIT DOES NOT OPEN THE DOOR: a malformed value falls back to EXACTLY the shipped ceiling (allowed=${allowed}, expected ${SHIPPED_V1_LIMIT})`,
+      // Exactly, not at-most. `<=` also passed if the fallback became 1, or if
+      // the limiter blocked everything — an API that is effectively unavailable
+      // satisfying a check named for the door staying shut. The burst starts from
+      // a fresh per-key window, so the number is deterministic.
+      allowed === SHIPPED_V1_LIMIT,
     );
     check(`overload never becomes a server error (5xx=${fived.length})`, fived.length === 0);
     check(
@@ -260,6 +316,15 @@ try {
     for (const c of [8, 16, 32, 64, 128, 256]) {
       const r = await drive(Math.max(200, c * 6), c);
       const bad = r.errors + r.server5xx;
+      // The ramp used to total errors for REPORTING only, so a race that appears
+      // only at concurrency 64+ left `test:stress` green — the exact regime the
+      // stress phase exists to explore was the one regime nothing asserted.
+      // Latency and throughput stay unasserted; correctness does not.
+      check(
+        `stress c=${c}: correctness holds — no 5xx, no transport errors, every outcome still the known answer`,
+        r.errors === 0 && r.server5xx === 0 && r.non200 === 0 &&
+          r.results.every((x) => x.enveloped && x.outcome === x.expect),
+      );
       console.log(
         `    c=${String(c).padStart(3)}  ${r.rps.toFixed(0).padStart(5)} req/s  p95 ${r.p95.toFixed(1).padStart(7)}ms  errors ${bad}`,
       );

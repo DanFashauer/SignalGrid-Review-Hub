@@ -26,7 +26,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { SIM_OPERATIONS, OPERATION_KEYS } from "../lib/sim-operations.mjs";
+import { SIM_OPERATIONS, OPERATION_KEYS, EXECUTED_STATUSES } from "../lib/sim-operations.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const REQ_DIR = join(repo, "artifacts/sim-requests");
@@ -37,6 +37,13 @@ const plan = argv.includes("--plan");
 const rerun = argv.includes("--rerun");
 const idFlag = argv.indexOf("--id");
 const onlyId = idFlag >= 0 ? argv[idFlag + 1] : null;
+// `--id` with no value silently disabled every filter and ran EVERYTHING —
+// including the container and credential-backed lanes. A typo must not widen
+// the blast radius of a command meant to narrow it.
+if (idFlag >= 0 && (onlyId === undefined || onlyId.startsWith("--"))) {
+  console.error("--id needs a request id, e.g. --id 2026-08-12-post-merge-baseline");
+  process.exit(2);
+}
 
 const readJson = (p) => JSON.parse(readFileSync(p, "utf8"));
 const listJson = (dir) =>
@@ -61,6 +68,26 @@ function provenance() {
     // cannot be reproduced from the commit it names — so it is recorded.
     workingTreeClean: git(["status", "--porcelain"]) === "",
   };
+}
+
+/** Strip anything machine- or credential-shaped from captured output BEFORE it is
+ *  written to a file the owner is told to commit to a PUBLIC repository.
+ *
+ *  The tail of a failing command is the most useful thing in a result and the most
+ *  dangerous: it carries home directories, usernames, configured endpoint URLs,
+ *  and occasionally a token a tool echoed back. AGENTS.md forbids exactly that
+ *  ("no secrets, credentials, tenant IDs, customer data, PHI, PII, or
+ *  environment-specific private values"), and a diagnostic tail is not an
+ *  exception to it. Redaction is deliberately BLUNT — over-redacting costs a
+ *  round trip, under-redacting is permanent once pushed. */
+function redactLine(line) {
+  return line
+    .replace(/\/(?:Users|home)\/[^/\s:]+/g, "/$&/".slice(1, 2) === "" ? "<HOME>" : "<HOME>")
+    .replace(/[a-z][a-z0-9+.-]*:\/\/[^\s"']+/gi, "<URL>")
+    .replace(/\b(?:sk|pk|ghp|gho|sgk|xox[abpr])[-_][A-Za-z0-9_-]{8,}/g, "<REDACTED-TOKEN>")
+    .replace(/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+/g, "<REDACTED-JWT>")
+    .replace(/\b(?:[A-Za-z0-9+/]{40,}={0,2})\b/g, "<REDACTED-BLOB>")
+    .replace(/\b(\w*(?:secret|password|token|api[_-]?key|credential)\w*)\s*[:=]\s*\S+/gi, "$1=<REDACTED>");
 }
 
 /** Run one allowlisted operation. Returns a result row; never throws. */
@@ -100,10 +127,16 @@ function runOperation(key) {
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
   // Keep the tail rather than the whole log: enough to diagnose, small enough to
   // commit. The summary lines every harness here prints live at the end.
-  const tail = out.trimEnd().split("\n").slice(-25);
+  const tail = out.trimEnd().split("\n").slice(-25).map(redactLine);
+  // Exit 3 is this repo's "nothing failed, but something did not run" code
+  // (scripts/run-live-lanes.sh). Mapping it to `failed` would cry wolf; mapping
+  // it to `passed` — which is what happened before — closes a request green over
+  // lanes that never started.
+  const status = r.status === 0 ? "passed" : r.status === 3 ? "refused_missing_prerequisite" : "failed";
   return {
     operation: key,
-    status: r.status === 0 ? "passed" : "failed",
+    status,
+    detail: r.status === 3 ? "the command reported SKIPPED lanes: nothing failed, but something did not run" : undefined,
     exitCode: r.status,
     durationMs,
     tail,
@@ -117,7 +150,25 @@ function main() {
     return 0;
   }
 
-  const doneIds = new Set(listJson(RES_DIR).map((f) => f.replace(/\.json$/, "")));
+  // "Has a result file" is NOT "is finished". A result whose rows are refusals or
+  // skips leaves the work owed — the gate says so on every run — so the runner
+  // must be willing to pick it up again, or the documented command can never
+  // complete work the checker keeps reporting as pending.
+  const settledIds = new Set();
+  for (const f of listJson(RES_DIR)) {
+    const id = f.replace(/\.json$/, "");
+    try {
+      const res = readJson(join(RES_DIR, f));
+      const req = readJson(join(REQ_DIR, f));
+      const answered = (req.runs ?? []).every((k) =>
+        (res.runs ?? []).some((r) => r.operation === k && EXECUTED_STATUSES.includes(r.status)));
+      if (answered) settledIds.add(id);
+    } catch {
+      // An unreadable or orphaned result is not evidence of anything; the gate
+      // reports it separately. Treat it as unsettled so the work can be redone.
+    }
+  }
+  const doneIds = settledIds;
   let ran = 0;
   let considered = 0;
   let anyFailed = false;

@@ -76,6 +76,19 @@ export function auditSimRequests(requests, results) {
         problems.push(`result ${res.__fileId}: reports "${row.operation}", which its request never asked for`);
       }
     }
+    // A macOS-only operation cannot have PASSED on something that is not a Mac.
+    // Without this, a corrupted or hand-authored result closes a hardware-bound
+    // request green — the one thing the whole loop exists to make impossible.
+    for (const row of res.runs ?? []) {
+      const op = SIM_OPERATIONS[row.operation];
+      if (!op || !GREEN_STATUSES.includes(row.status)) continue;
+      const platform = res.provenance?.platform;
+      if (op.platform === "macos" && platform !== "darwin") {
+        problems.push(
+          `result ${res.__fileId}: "${row.operation}" is macOS-only but is recorded as ${row.status} with provenance.platform="${platform ?? "absent"}"`,
+        );
+      }
+    }
     if (!res.provenance || !res.provenance.commit) {
       problems.push(`result ${res.__fileId}: no provenance.commit — a result that cannot name the code it ran against is not evidence`);
     }

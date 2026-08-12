@@ -49,6 +49,32 @@ proofs miss:
                                  # (--sim-only for just the scenarios)
 ```
 
+**`validate-sim-macos.sh` green is NARROWER than preflight green, and the
+difference is not small.** The harness enumerates every `proof:*` script, so a
+new proof joins it automatically — but roughly thirty-five preflight gates are
+not proofs and it never runs them: the docs↔proof figure guard, the launch
+profile, both preflight↔CI parity checks, the guard registries, the publication
+boundary, the simulation-request gate, `test:load`, the benches. A branch can
+therefore pass the harness and fail CI on a gate the harness has no concept of.
+Run BOTH before pushing anything that touches gates, docs figures, or the
+launch surface:
+
+```bash
+node scripts/preflight.mjs       # the per-push lane CI mirrors (~35 non-proof gates)
+pnpm run verify:breadth          # 47 deferred families + 8 doctrine proofs, its own CI job
+```
+
+### Commands worth knowing, and when
+
+| Command | When |
+| --- | --- |
+| `pnpm run sim:run-requests` | On the Mac: run the verification operations the cloud lane queued in `artifacts/sim-requests/`. `--plan` first to see what would run; `--id <id>` for one. Results land in `artifacts/sim-results/` with provenance and are COMMITTED — that is how the other lane learns the run happened. See `docs/LIVE_SYNC_LOOP.md`. |
+| `node scripts/check-sim-requests.mjs` | What is still owed. A refusal or a skip never closes a request; pending is reported on every run and never counts green. |
+| `pnpm run test:load` / `test:stress` | The `/v1` HTTP surface under concurrency. Correctness is GATED; throughput, percentiles and the saturation knee are REPORTED — a latency threshold on a shared runner is a flaky gate and a flaky gate gets switched off. |
+| `pnpm run bench:decision-latency` / `bench:decision-throughput` | The in-process decision core: one decision, then saturation across every core. **Not the same number as `test:load`** — no HTTP, no connector, no database. The gap between them is the transport. |
+| `SIGNALGRID_MCP_PATH=… pnpm run verify:all --require-mcp --emit-evidence` | The ONLY lane that can refresh `artifacts/live-evidence/mac-run.json`. macOS only, refuses on CI, refuses unless both halves are green. |
+| `node scripts/generate-sync-manifest.mjs` | After changing any cross-surface contract. Never hand-edit the manifest. |
+
 - **Added or changed a package's deps?** Regenerate the lockfile —
   `pnpm install --lockfile-only` — and commit `pnpm-lock.yaml`. CI runs
   `pnpm install --frozen-lockfile` (Node 22) and fails hard on drift.

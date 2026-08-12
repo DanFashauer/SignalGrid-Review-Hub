@@ -62,10 +62,11 @@ Two committed directories close it:
 | Mac → cloud | `artifacts/sim-results/<id>.json` | `pnpm run sim:run-requests` |
 
 **A request names KEYS, never commands.** `scripts/lib/sim-operations.mjs` is the
-allowlist — thirteen operations covering the deterministic suites, the running
-`/v1` API, the browser E2E layer, the turnkey Mac runs (proofs → API → MCP over
-real JSON-RPC → EnterpriseShell in the iOS simulator with mimicked hardware), the
-real-hardware evidence emission, the container stack, and the live vendor lanes.
+allowlist — fifteen operations covering the deterministic suites, the running
+`/v1` API (functionally and **under concurrency**, via `load` and `stress`), the
+browser E2E layer, the turnkey Mac runs (proofs → API → MCP over real JSON-RPC →
+EnterpriseShell in the iOS simulator with mimicked hardware), the real-hardware
+evidence emission, the container stack, and the live vendor lanes.
 The machine that executes decides what a key means. This is the security
 property, not a convenience: request files are authored by one lane and executed
 on another lane's machine, with that machine's filesystem and credentials, so a
@@ -73,6 +74,12 @@ request carrying a shell string would make *"please run a simulation"* and
 *"please run anything"* the same message. `proof:sim-requests` pins it over every
 call site — no spawn in the runner takes its program from a request field, and
 none opts into a shell.
+
+That count is deliberately spelled out and deliberately checkable: `node -e
+"import('./scripts/lib/sim-operations.mjs').then(m => console.log(m.OPERATION_KEYS.length))"`.
+The docs↔proof figure guard only reads comma-formatted numbers of `1,000` or more, so a
+written-out count like this one is exactly the kind of figure it cannot see —
+it went stale within an hour of being written, when `load` and `stress` landed.
 
 **An operation the machine cannot honestly run is REFUSED, never downgraded.** A
 macOS-only run on Linux records `refused_platform` and says so; it is never

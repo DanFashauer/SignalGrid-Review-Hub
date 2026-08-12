@@ -245,6 +245,8 @@ jobs:
         run: pnpm run proof:launch-seam
       - name: Proof — evidence adapter (source-agnostic swap, fleet/headwind/intune)
         run: pnpm run proof:evidence-adapter
+      - name: Proof — mobile-app-catalog scanner (hardening delta over the filed original)
+        run: pnpm run proof:mobile-app-catalog
       - name: Proof — operating method (the handbook is a gate, not a memory)
         run: pnpm run proof:operating-method
 

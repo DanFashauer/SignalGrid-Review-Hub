@@ -1,0 +1,4 @@
+{
+  "comment": "This file sits OUTSIDE the fixtures scan root. If any scan output ever contains the identifier below, the symlink escape is back.",
+  "leak": "com.leaked.through.symlink"
+}

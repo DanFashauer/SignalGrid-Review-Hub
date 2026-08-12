@@ -219,7 +219,31 @@ picking these up:
       the operator-console surface — showing the frontier, the reason codes and which
       records expired — which is UI work, tracked in the catalog's backlog table.
 
-- [ ] **Mobile-app-catalog scanner phase (intake row 33, owner-instructed YELLOW-lane build).**
+- [x] **Mobile-app-catalog scanner phase (intake row 33, owner-instructed YELLOW-lane build).
+      SCANNER HALF DONE** — hardened build at `scripts/mobile-app-catalog/scan.py`
+      (v2.0.0, each fix marked `HARDENED:` against the filed original), proven by
+      `proof:mobile-app-catalog` (19 checks) over a committed adversarial fixture
+      tree with byte-identical goldens. All five verified defects closed and each
+      asserted against the failure the audit reproduced, not the code's
+      description: the planted fake JWT under a non-secret key appears in neither
+      output while the legitimate bundle id on the same file still surfaces
+      (credential-shape filter, not a blanket); the file symlink to outside the
+      root is refused loudly with no content read and the directory symlink is
+      never traversed (`os.walk(followlinks=False)` + explicit pruning, closing
+      the 3.12/3.13 rglob divergence); two runs are byte-identical with no wall
+      clock and no absolute path anywhere (a clock exists only if the caller
+      passes `--generated-at`); markdown cells are escaped; the oversized fixture
+      is recorded `SizeCapExceeded` with content never read. Plus one hardening
+      beyond the audit list: a MISSING scan root exits 2 rather than producing an
+      empty green report. Registered atomically on all planned surfaces — root +
+      scripts package.json, preflight.mjs (its NOTHING-BUT-NODE header amended
+      honestly: the proof FAILS, never skips, when python3 is absent),
+      review-hub-ci.yml, check-proof-figures, and a `.gitleaks.toml` exact-value
+      allowlist for the planted JWT. Lane coordination checked first: no
+      mobile-app-catalog work on `SignalGrid_Alpha`, base fully merged.
+      **The Watchtower/PR-creating workflow half remains UNWRITTEN and
+      owner-gated, unchanged** — everything below stands as the record of what
+      that decision is about. ORIGINAL ENTRY:
       The owner's repository scanner is filed verbatim, UNHARDENED, in
       [inspiration/MOBILE_APP_CATALOG_AGENT.md](inspiration/MOBILE_APP_CATALOG_AGENT.md)
       with SHA-256 provenance; the adversarial intake audit VERIFIED (by

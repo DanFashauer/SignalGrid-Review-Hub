@@ -39,7 +39,7 @@
 `pnpm run verify:live` stands up what Docker allows, runs those lanes and removes what it started. A lane it cannot provision is reported SKIPPED with the reason — never counted as passed. Wazuh is never auto-started (~2GB image).
 
 ## Inventory
-- proof gates: **129** · live-vendor lanes: **4** · browser E2E specs: **10** · CI workflows: **15**
+- proof gates: **130** · live-vendor lanes: **4** · browser E2E specs: **10** · CI workflows: **15**
 
 ## Not verified by this run
 - Preflight (typecheck, build, all proofs, browser E2E) — heavy — re-run with --full

@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 29,
-  "fingerprint": "edb746ad4428015cdf024167a48eabdca05d180c1f70e2f30840224b0fbc579b",
+  "manifestVersion": 30,
+  "fingerprint": "ad48264c8790fb20bc104ac8e84309acaa08e464ea223a1182a63d9b8537bb51",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -130,6 +130,7 @@
       "macos-apple-schema": 53,
       "mcp-answer-discipline": 55,
       "mcp-server": 11,
+      "mobile-app-catalog": 19,
       "nac": 34,
       "network-nac": 42,
       "oauth-consent": 74,

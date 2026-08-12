@@ -1,0 +1,116 @@
+{
+  "findingCount": 6,
+  "findings": [
+    {
+      "artifact_type": "symlink_refused",
+      "config_keys": [],
+      "errors": [
+        "SymlinkRefused: symlinks are never followed"
+      ],
+      "identifiers": [],
+      "parser": "",
+      "path": "evil/app-escape-link.json",
+      "repository_root": "fixtures",
+      "secret_shaped_keys": [],
+      "source_hash": ""
+    },
+    {
+      "artifact_type": "appconfig_definition",
+      "config_keys": [],
+      "errors": [
+        "ValueError: DOCTYPE/external entity declarations are refused"
+      ],
+      "identifiers": [],
+      "parser": "",
+      "path": "evil/appconfig-doctype-refused.xml",
+      "repository_root": "fixtures",
+      "secret_shaped_keys": [],
+      "source_hash": "5e4e0db3847fe23bb4afabd84144ab7c5521b7b2df03137a8b3de77c15a6b89f"
+    },
+    {
+      "artifact_type": "documentation",
+      "config_keys": [],
+      "errors": [
+        "SizeCapExceeded: 11261 bytes > cap 8192; content not read"
+      ],
+      "identifiers": [],
+      "parser": "",
+      "path": "evil/oversized-app-notes.md",
+      "repository_root": "fixtures",
+      "secret_shaped_keys": [],
+      "source_hash": ""
+    },
+    {
+      "artifact_type": "android_build_manifest",
+      "config_keys": [
+        "com.signalgrid.fixture.android.HostApp",
+        "managed_config_channel"
+      ],
+      "errors": [],
+      "identifiers": [
+        "com.signalgrid.fixture.android",
+        "com.signalgrid.fixture.android.HostApp",
+        "schemas.android.com"
+      ],
+      "parser": "ElementTree-safe",
+      "path": "good/AndroidManifest.xml",
+      "repository_root": "fixtures",
+      "secret_shaped_keys": [],
+      "source_hash": "6dd9eb91c546b4dbc8bd6ee98f34c7b6b7d20daf007fa9016c94a77194d15b02"
+    },
+    {
+      "artifact_type": "ios_build_metadata",
+      "config_keys": [
+        "APIToken",
+        "CFBundleDisplayName",
+        "CFBundleIdentifier"
+      ],
+      "errors": [],
+      "identifiers": [
+        "com.signalgrid.fixture"
+      ],
+      "parser": "plistlib",
+      "path": "good/Info.plist",
+      "repository_root": "fixtures",
+      "secret_shaped_keys": [
+        "APIToken"
+      ],
+      "source_hash": "17d7d6d20e90552762ab64acb7d853e391d4a52dc38736253d5ab2a8e16c8a12"
+    },
+    {
+      "artifact_type": "json_manifest_or_config",
+      "config_keys": [
+        "api_key",
+        "bundleId",
+        "hostApp",
+        "session",
+        "wmsEndpoint"
+      ],
+      "errors": [],
+      "identifiers": [
+        "com.signalgrid.fixture"
+      ],
+      "parser": "json",
+      "path": "good/app.config.json",
+      "repository_root": "fixtures",
+      "secret_shaped_keys": [
+        "api_key"
+      ],
+      "source_hash": "fd01a05847bb1138a35c9cb4e2755a58f0f43187a9d5fbd2e359bea05c4e2e9f"
+    }
+  ],
+  "publicSafety": {
+    "deterministicOutput": true,
+    "identifiersCredentialFiltered": true,
+    "mutatesProductionPolicy": false,
+    "networkCalls": false,
+    "symlinksFollowed": false,
+    "valuesRedacted": true,
+    "xmlDoctypeRejected": true
+  },
+  "roots": [
+    "fixtures"
+  ],
+  "scannerVersion": "2.0.0",
+  "schemaVersion": 2
+}

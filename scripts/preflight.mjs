@@ -17,7 +17,11 @@ import { nativeBuildExclusion } from "./lib/platform-native-build.mjs";
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const quick = process.argv.includes("--quick");
 
-// Ordered gates — a complete mirror of the CI jobs that need NOTHING BUT NODE:
+// Ordered gates — a complete mirror of the CI jobs that need NOTHING BUT NODE
+// (one honest exception: `proof:mobile-app-catalog` shells to python3, which is
+// present on every CI image and every dev machine this repo targets; by design
+// that proof FAILS — never skips — when python3 is absent, so this list still
+// cannot silently pass a gate it could not run):
 // `validation` and `docs-sanity` from `.github/workflows/review-hub-ci.yml`, plus
 // the SBOM-drift gate from `supply-chain.yml`'s `sbom` job. Keep this list in
 // lockstep with those; a proof that runs in CI but not here would let a red build
@@ -161,6 +165,7 @@ const STEPS = [
   { name: "Proof: launch-profile (the declared Limited GA scope is coherent and its figures are published)", cmd: ["pnpm", "run", "proof:launch-profile"] },
   { name: "Proof: launch-seam (fixture connector → bridge → core decision → evidence, all 3 launch families, offline)", cmd: ["pnpm", "run", "proof:launch-seam"] },
   { name: "Proof: evidence-adapter (source-agnostic — swap fleet/headwind/intune, the decision must not change)", cmd: ["pnpm", "run", "proof:evidence-adapter"] },
+  { name: "Proof: mobile-app-catalog (hardened scanner — leak/symlink/determinism/cap; needs python3, FAILS without it)", cmd: ["pnpm", "run", "proof:mobile-app-catalog"] },
   { name: "Proof: operating-method (the handbook is a gate — buckets, ladder, dispositions, links, roles)", cmd: ["pnpm", "run", "proof:operating-method"] },
   { name: "Proof: evidence-coverage (what can this estate actually answer)", cmd: ["pnpm", "run", "proof:evidence-coverage"] },
   { name: "Proof: device-resolver (read-only at the injection boundary)", cmd: ["pnpm", "run", "proof:device-resolver"] },

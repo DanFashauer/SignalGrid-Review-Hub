@@ -1,0 +1,7 @@
+{
+  "bundleId": "com.signalgrid.fixture",
+  "hostApp": "fixture-host",
+  "session": "eyJhbGciOiJub25lIiwidHlwIjoiSldUIiwia2lkIjoiZml4dHVyZSJ9.eyJzdWIiOiJmaXh0dXJlLW9ubHkiLCJhdWQiOiJuZXZlci1yZWFsIn0.Zml4dHVyZS1zaWduYXR1cmUtbm90LXJlYWw",
+  "api_key": "this-value-must-read-as-redacted",
+  "wmsEndpoint": "local"
+}

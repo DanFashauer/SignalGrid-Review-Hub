@@ -59,6 +59,7 @@
     "proof:entitlement-binding": "tsx ./src/entitlement-binding-proof.ts",
     "proof:event-contract": "tsx ./src/event-contract-proof.ts",
     "proof:evidence-adapter": "tsx ./src/evidence-adapter-proof.ts",
+    "proof:mobile-app-catalog": "tsx ./src/mobile-app-catalog-proof.ts",
     "proof:evidence-coverage": "tsx ./src/evidence-coverage-proof.ts",
     "proof:fabric-evals": "tsx ./src/fabric-evals-proof.ts",
     "proof:fabric-scenario": "tsx ./src/fabric-scenario-proof.ts",

@@ -92,6 +92,7 @@
     "proof:entitlement-binding": "pnpm --filter @workspace/scripts run proof:entitlement-binding",
     "proof:event-contract": "pnpm --filter @workspace/scripts run proof:event-contract",
     "proof:evidence-adapter": "pnpm --filter @workspace/scripts run proof:evidence-adapter",
+    "proof:mobile-app-catalog": "pnpm --filter @workspace/scripts run proof:mobile-app-catalog",
     "proof:evidence-coverage": "pnpm --filter @workspace/scripts run proof:evidence-coverage",
     "proof:fabric-evals": "pnpm --filter @workspace/scripts run proof:fabric-evals",
     "proof:fabric-scenario": "pnpm --filter @workspace/scripts run proof:fabric-scenario",

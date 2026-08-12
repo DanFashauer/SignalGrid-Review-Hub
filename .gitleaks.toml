@@ -31,6 +31,15 @@ regexes = [
   # flagging it is the guard's own test material being read as the thing it guards
   # against. Allowlisted by exact value — a real `sk_live_` key is still caught.
   '''sk_live_51H8xample''',
+  # The planted FAKE JWT in the mobile-app-catalog scanner fixtures
+  # (scripts/mobile-app-catalog/fixtures + golden + scan.py selftest +
+  # scripts/src/mobile-app-catalog-proof.ts). It exists to PROVE the hardened
+  # scanner refuses to emit credential-shaped identifiers — alg is "none", the
+  # payload says "never-real", and the signature is the words
+  # "fixture-signature-not-real" in base64. Allowlisted by its exact header
+  # segment so a genuine JWT anywhere (including in those same files) is still
+  # caught.
+  '''eyJhbGciOiJub25lIiwidHlwIjoiSldUIiwia2lkIjoiZml4dHVyZSJ9''',
   # Placeholder credentials in the review console's INTEGRATION DOCUMENTATION
   # samples (artifacts/signalgrid-review/src/data/integrationData.ts). They are the
   # literal words a reader replaces, not secrets. Anchored to the auth-header shape

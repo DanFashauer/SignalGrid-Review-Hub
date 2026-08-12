@@ -485,6 +485,20 @@ export const SURFACES = [
     reason: "Evidence artifacts written by verification lanes. Not a product surface.",
   },
   {
+    id: "sim-requests",
+    reason:
+      "The cloud→Mac half of the simulation request loop: committed JSON asking the " +
+      "owner's machine to run named, allowlisted verification operations. Lane " +
+      "coordination plumbing, not a product surface — no tenant, no worker and no " +
+      "customer ever sees it. Its sibling `sim-results` carries the answers back.",
+  },
+  {
+    id: "sim-results",
+    reason:
+      "The Mac→cloud half: what actually executed, on which machine, at which commit. " +
+      "Verification evidence like `live-evidence` above, and equally not product.",
+  },
+  {
     id: "sbom",
     reason: "Supply-chain artifacts. Not a product surface.",
   },

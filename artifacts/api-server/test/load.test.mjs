@@ -142,12 +142,28 @@ const server = spawn("node", [serverEntry], {
   stdio: ["ignore", "ignore", "inherit"],
 });
 
-// A second server at the SHIPPED defaults, so the limiter is proven as it
-// actually deploys rather than as configured for convenience.
+// A second server carrying a DELIBERATELY MALFORMED limit, which proves two
+// things at once and is the reason it is malformed rather than merely unset.
+//
+// `SIGNALGRID_V1_RATE_LIMIT=0` is the dangerous input: a rate limit misread as
+// zero is an open door, and "0" is exactly what a careless deployment writes when
+// it means "no limit". The parser is documented to fall back to the shipped
+// default instead. Proving that on the PARSER would prove the wrong thing —
+// what matters is whether the deployed middleware still throttles, so it is
+// asserted through the running surface. If the fallback ever breaks, the burst
+// below sails through and this test goes red rather than the door opening
+// quietly in production.
 const LIMIT_PORT = 5321;
 const LIMIT_BASE = `http://localhost:${LIMIT_PORT}/api`;
+const SHIPPED_V1_LIMIT = 240;
 const limitServer = spawn("node", [serverEntry], {
-  env: { ...process.env, PORT: String(LIMIT_PORT), NODE_ENV: "production", LOG_LEVEL: "silent" },
+  env: {
+    ...process.env,
+    PORT: String(LIMIT_PORT),
+    NODE_ENV: "production",
+    LOG_LEVEL: "silent",
+    SIGNALGRID_V1_RATE_LIMIT: "0",
+  },
   stdio: ["ignore", "ignore", "inherit"],
 });
 
@@ -205,7 +221,7 @@ try {
       try { if ((await fetch(`${LIMIT_BASE}/healthz`)).ok) { limitReady = true; break; } } catch { /* not up */ }
       await new Promise((r) => setTimeout(r, 250));
     }
-    check("the default-configuration server boots", limitReady === true);
+    check("the malformed-limit server boots", limitReady === true);
 
     const burst = [];
     for (let i = 0; i < 300; i += 1) {
@@ -219,6 +235,11 @@ try {
     const throttled = settled.filter((r) => r.status === 429);
     const fived = settled.filter((r) => r.status >= 500);
     check(`deliberate overload is THROTTLED, not dropped (429s=${throttled.length})`, throttled.length > 0);
+    const allowed = settled.filter((r) => r.status === 200).length;
+    check(
+      `A ZERO LIMIT DOES NOT OPEN THE DOOR: a malformed value falls back to the shipped ceiling (allowed=${allowed} ≤ ${SHIPPED_V1_LIMIT})`,
+      allowed <= SHIPPED_V1_LIMIT,
+    );
     check(`overload never becomes a server error (5xx=${fived.length})`, fived.length === 0);
     check(
       "a throttled response carries the standard rate-limit headers a client can back off on",

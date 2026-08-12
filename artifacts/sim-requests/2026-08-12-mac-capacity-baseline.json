@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-08-12-mac-capacity-baseline",
+  "requestedBy": "cloud lane (session_01D3GJ2Fs8sVppPgzuJdnNLn)",
+  "reason": "Capture the owner's own /v1 throughput and saturation numbers as durable evidence rather than terminal scrollback. The capacity section added to PARTNER_ONBOARDING quotes figures measured in a Linux container (~740-800 req/s, saturating at concurrency 8, 240/min per-key ceiling); a partner conversation happens on the owner's hardware, and 'measured X on this machine at this commit' is the only honest form of a capacity claim. This request makes that record exist, with provenance, on a machine the owner actually demos from.",
+  "runs": [
+    "load",
+    "stress"
+  ],
+  "notes": [
+    "Fast — minutes, not the long haul the post-merge baseline is. Safe to run first if the iOS simulator phase is inconvenient right now.",
+    "`load` GATES correctness under concurrency (zero 5xx, zero transport errors, well-formed envelopes, outcomes identical to the single-request answer, no cross-tenant leak while interleaved) and REPORTS throughput and percentiles. It also asserts the rate limiter as a feature: 429 with back-off headers, never a 5xx, and a malformed SIGNALGRID_V1_RATE_LIMIT=0 falling back to the shipped ceiling rather than opening the door.",
+    "`stress` adds the concurrency ramp and reports where the server saturates. Expect throughput to go FLAT while p95 climbs — that is the knee, and it is reported rather than asserted because where it lands is a property of the machine.",
+    "Neither needs a Mac. They are queued here so the numbers land in artifacts/sim-results with commit, branch and machine attached."
+  ]
+}

@@ -177,6 +177,11 @@ dimensions above.
   dock/SmartDock hardware-state dimension, and untrusted-input hardening.
 - `pnpm run test:api` — the `/v1` HTTP surface end to end.
 - `pnpm run bench:decision-latency` — the decision-latency gate.
+- `pnpm run bench:decision-throughput` — sustained decisions/sec on one core and
+  under saturation (one worker per core). The rates are hardware-specific and
+  report-only; what it gates is a throughput floor derived from the latency gate,
+  no collapse when cores are added, and identical verdicts on every thread. It
+  measures the decision core alone — no HTTP, connector or database.
 
 ## Non-claims
 

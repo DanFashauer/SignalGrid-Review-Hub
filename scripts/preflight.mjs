@@ -251,6 +251,14 @@ const STEPS = [
   { name: "STATUS.md figures still describe the repo", cmd: ["node", "scripts/check-status-figures.mjs"] },
   { name: "STATUS.md figure gate self-test (the gate can actually fail)", cmd: ["node", "scripts/check-status-figures.mjs", "--self-test"] },
   { name: "Decision-latency pilot gate (bench)", cmd: ["pnpm", "run", "bench:decision-latency"] },
+  // The saturation companion. Its ops/sec figures are hardware-specific and
+  // report-only — what it can fail on any machine is a throughput floor derived
+  // from the latency gate above, a collapse when cores are added, and a verdict
+  // that changes with thread count. Two-second windows keep it ~5s serial.
+  {
+    name: "Decision-throughput saturation gate (bench)",
+    cmd: ["pnpm", "run", "bench:decision-throughput", "--", "--seconds=2"],
+  },
   // Mirrors the supply-chain job's "SBOM is committed and up to date" gate:
   // regenerate the CycloneDX SBOM and fail if it drifted (e.g. a new dependency
   // was added but the committed SBOM wasn't regenerated).

@@ -255,6 +255,12 @@ jobs:
         run: node scripts/check-sim-requests.mjs
       - name: Simulation request loop self-test (the gate can fail)
         run: node scripts/check-sim-requests.mjs --self-test
+      - name: Proof — lane messages (identity derived; no lane acknowledges its own mail)
+        run: pnpm run proof:lane-messages
+      - name: Lane messages (unread mail is named on every run, never silent)
+        run: node scripts/check-lane-messages.mjs
+      - name: Lane message self-test (the gate can fail)
+        run: node scripts/check-lane-messages.mjs --self-test
       - name: Proof — operating method (the handbook is a gate, not a memory)
         run: pnpm run proof:operating-method
 

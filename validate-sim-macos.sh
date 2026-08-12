@@ -213,7 +213,14 @@ if [ "$SIM_ONLY" != "--sim-only" ]; then
   gate "safety:check"         $PNPM run safety:check
   gate "docs:sanity"          $PNPM run docs:sanity
   gate "review:invariants"    $PNPM run review:invariants
+  gate "lane:messages"        node scripts/check-lane-messages.mjs
 fi
+
+# Mail, printed unconditionally — including on --sim-only, and including when a
+# gate above failed. This is the Mac lane's only inbox, and a message the other
+# lane needs read is not less urgent because a build went red.
+echo; echo "== lane inbox =="
+node scripts/lane-message.mjs inbox || true
 
 echo
 echo "== NOTE: the web build now RUNS here (it used to be skipped) =="

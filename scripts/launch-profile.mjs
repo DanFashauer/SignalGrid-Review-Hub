@@ -485,6 +485,15 @@ export const SURFACES = [
     reason: "Evidence artifacts written by verification lanes. Not a product surface.",
   },
   {
+    id: "lane-messages",
+    reason:
+      "The cloud↔Mac message channel: committed JSON carrying what one lane needs the " +
+      "other to know, plus the acknowledgements that prove it was read. Lane " +
+      "coordination plumbing, not a product surface — no tenant, no worker and no " +
+      "customer ever sees it. Its sibling `sim-requests` carries work; this carries " +
+      "knowledge.",
+  },
+  {
     id: "sim-requests",
     reason:
       "The cloud→Mac half of the simulation request loop: committed JSON asking the " +

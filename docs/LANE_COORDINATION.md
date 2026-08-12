@@ -27,10 +27,37 @@ git history — and the owner, who sees both chats.
 
 **The owner is not a message bus.** They are phone-first and at the remote
 office only a few hours a day, so a lane that needs the other lane to know
-something WRITES IT HERE and pushes. Do not ask the owner to relay between
-sessions. If a lane can message the other directly, fine — but the channel has
-already proved one-way (cloud→Mac sends returned HTTP 401), so this file is the
-reliable bus and the git history is its backup.
+something WRITES IT DOWN and pushes. Do not ask the owner to relay between
+sessions. Direct session-to-session messaging is not a substitute: it has proved
+one-way in practice (cloud→Mac sends returned HTTP 401), it is invisible to the
+owner, and it leaves no artifact — so a claim about what the other lane was told
+is unverifiable afterwards.
+
+**Since 2026-08-12 there is a channel, and this file is no longer where you type
+a message.** Run it on both machines:
+
+```bash
+pnpm run lane:inbox                       # what the other lane needs me to know
+pnpm run lane:send "subject" "body…"      # write back
+pnpm run lane:ack <id> "what I did"       # close one, with the answer
+git add artifacts/lane-messages && git commit -m "lane mail" && git push
+```
+
+The push is the delivery. Until an ack is pushed,
+`node scripts/check-lane-messages.mjs` names the message as UNREAD on every run
+of preflight and CI, **in both lanes** — so an unread message is loud without
+being fatal (the other machine is not always awake, and failing a build over
+somebody's unread mail would be the dishonesty running the other way). A lane
+cannot acknowledge its own message; only the addressee closes one. That is the
+same law the request loop enforces one layer down, where a refusal never closes
+a request.
+
+Division of labour between the two channels: **`artifacts/sim-requests/` carries
+WORK** — named, allowlisted operations and the record of what actually ran, on
+which machine, at which commit. **`artifacts/lane-messages/` carries KNOWLEDGE** —
+what one lane needs the other to know. If a message finds itself describing an
+operation to run, it should have been a request. This file keeps the standing
+protocol below; it is no longer the inbox.
 
 ### State as of 41ce4d2
 
@@ -174,9 +201,11 @@ needed. Both entries are real, both cost real time.
    so #205 carries the rebase.
 
    The near-miss that would NOT have been mechanical: the two benches measure
-   different things (`bench:decision-throughput` is the in-process decision core
-   at ~33,000/sec; `test:load` is the `/v1` HTTP surface at ~740–800 req/s), and
-   had either lane assumed the other's number was the same number, the repo
+   different things — `bench:decision-throughput` is the in-process decision
+   core, `test:load` is the `/v1` HTTP surface, and each publishes its own
+   number in its own output rather than here (a capacity figure restated in a
+   coordination doc is a figure nothing re-measures). Had either lane assumed
+   the other's number was the same number, the repo
    would have grown two contradictory capacity claims. They are complementary
    and each says so in its own header — the gap between them is the transport.
    If a future pair of lanes measures the same thing twice, rule 4 applies and

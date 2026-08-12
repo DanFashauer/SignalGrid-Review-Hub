@@ -68,8 +68,10 @@ pnpm run verify:breadth          # 47 deferred families + 8 doctrine proofs, its
 
 | Command | When |
 | --- | --- |
+| `pnpm run lane:inbox` | **Run this first, every session.** What the other lane needs you to know. `pnpm run lane:send "subject" "body…"` to write back, `pnpm run lane:ack <id> "what I did"` to close one — then commit and push `artifacts/lane-messages/`, because the push is the delivery. The owner is not a message bus; do not ask them to relay. |
 | `pnpm run sim:run-requests` | On the Mac: run the verification operations the cloud lane queued in `artifacts/sim-requests/`. `--plan` first to see what would run; `--id <id>` for one. Results land in `artifacts/sim-results/` with provenance and are COMMITTED — that is how the other lane learns the run happened. See `docs/LIVE_SYNC_LOOP.md`. |
 | `node scripts/check-sim-requests.mjs` | What is still owed. A refusal or a skip never closes a request; pending is reported on every run and never counts green. |
+| `node scripts/check-lane-messages.mjs` | What mail is still unread, in either direction. Unread is REPORTED, never fatal — the other machine is not always awake — but it is never silent, and only the addressee can close a message. |
 | `pnpm run test:load` / `test:stress` | The `/v1` HTTP surface under concurrency. Correctness is GATED; throughput, percentiles and the saturation knee are REPORTED — a latency threshold on a shared runner is a flaky gate and a flaky gate gets switched off. |
 | `pnpm run bench:decision-latency` / `bench:decision-throughput` | The in-process decision core: one decision, then saturation across every core. **Not the same number as `test:load`** — no HTTP, no connector, no database. The gap between them is the transport. |
 | `SIGNALGRID_MCP_PATH=… pnpm run verify:all --require-mcp --emit-evidence` | The ONLY lane that can refresh `artifacts/live-evidence/mac-run.json`. macOS only, refuses on CI, refuses unless both halves are green. |

@@ -44,6 +44,66 @@ hardware can produce fresh evidence.**
 - `generatedFrom` — outside the fingerprint; records `git rev-parse HEAD` only
   when `--stamp` is passed.
 
+## Asking the Mac to run something: the request/result loop
+
+The manifest below answers *"are the instructions current?"*. It does not answer
+the other half of the same problem: **the cloud lane cannot run anything on the
+owner's Mac, and the Mac cannot be reached by CI.** Until this loop existed, the
+bus between them was prose — a message saying "please run the harness", and a
+human remembering to. Prose leaves no artifact, so from the cloud side an unrun
+simulation and a passing one looked identical. That is the unearned affirmative,
+one layer out from the code where this repository usually finds it.
+
+Two committed directories close it:
+
+| Direction | Artifact | Written by |
+| --- | --- | --- |
+| cloud → Mac | `artifacts/sim-requests/<id>.json` | the cloud lane, in a commit |
+| Mac → cloud | `artifacts/sim-results/<id>.json` | `pnpm run sim:run-requests` |
+
+**A request names KEYS, never commands.** `scripts/lib/sim-operations.mjs` is the
+allowlist — thirteen operations covering the deterministic suites, the running
+`/v1` API, the browser E2E layer, the turnkey Mac runs (proofs → API → MCP over
+real JSON-RPC → EnterpriseShell in the iOS simulator with mimicked hardware), the
+real-hardware evidence emission, the container stack, and the live vendor lanes.
+The machine that executes decides what a key means. This is the security
+property, not a convenience: request files are authored by one lane and executed
+on another lane's machine, with that machine's filesystem and credentials, so a
+request carrying a shell string would make *"please run a simulation"* and
+*"please run anything"* the same message. `proof:sim-requests` pins it over every
+call site — no spawn in the runner takes its program from a request field, and
+none opts into a shell.
+
+**An operation the machine cannot honestly run is REFUSED, never downgraded.** A
+macOS-only run on Linux records `refused_platform` and says so; it is never
+quietly replaced by a weaker run reported under the stronger name. The proof
+verifies this live, because it runs on Linux where every macOS-only operation
+must refuse.
+
+**An unrun run is PENDING, and pending is loud.** `node
+scripts/check-sim-requests.mjs` names every asked-for operation with no result
+row on every invocation — including operations missing from a result that
+otherwise completed, which is the case most likely to be read as done. Pending
+never counts green and never fails the build: CI has no Mac, and blocking the
+build on hardware CI cannot reach would be the same dishonesty running the other
+way. Only *incoherence* fails — a result naming a request that does not exist, a
+green row for work nobody asked for, a status outside the closed set, or a result
+that cannot name the commit it ran against.
+
+```bash
+# On the Mac, from the repo root:
+pnpm run sim:run-requests            # run everything still pending
+pnpm run sim:run-requests --plan     # show what would run, run nothing
+pnpm run sim:run-requests --id <id>  # one request
+git add artifacts/sim-results && git commit -m "sim results" && git push
+```
+
+Results carry provenance — platform, arch, Node version, macOS version, commit,
+branch, and whether the working tree was clean — because "the proofs passed"
+means nothing without "on what, at which commit". A result minted from a dirty
+tree cannot be reproduced from the commit it names, so that is recorded rather
+than assumed away.
+
 ## The cycle, honestly bounded
 
 ### (i) Repo changes contracts → the gate hard-fails until the manifest is republished

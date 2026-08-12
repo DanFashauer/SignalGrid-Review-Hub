@@ -1,0 +1,177 @@
+// run-requests.mjs — execute the simulation runs the cloud lane asked for.
+//
+//   pnpm run sim:run-requests              # run every PENDING request
+//   pnpm run sim:run-requests --id <id>    # run one request by id
+//   pnpm run sim:run-requests --plan       # print what would run, run nothing
+//   pnpm run sim:run-requests --rerun      # include requests that already have a result
+//
+// THE LOOP THIS CLOSES. The cloud lane cannot execute anything on the owner's
+// Mac, and the Mac lane cannot be reached by CI. Before this, the coordination
+// bus was prose: a message saying "please run the harness", and a human
+// remembering to. Prose leaves no artifact, so an unrun simulation and a passing
+// one looked identical from the cloud side — the unearned affirmative, one layer
+// out from the code it usually describes.
+//
+// Now the cloud writes a REQUEST (artifacts/sim-requests/<id>.json) naming
+// operations from a fixed allowlist, and this runner writes a RESULT
+// (artifacts/sim-results/<id>.json) recording what actually executed, on what
+// machine, at what commit. A request with no result is PENDING and the gate says
+// so on every run; it never reads as green.
+//
+// SAFETY. A request names KEYS, never commands. `scripts/lib/sim-operations.mjs`
+// maps a key to argv, and nothing outside that map can be executed here. An
+// operation this machine cannot honestly run is REFUSED and recorded as refused
+// — never silently downgraded to a weaker run reported under the stronger name.
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { SIM_OPERATIONS, OPERATION_KEYS } from "../lib/sim-operations.mjs";
+
+const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const REQ_DIR = join(repo, "artifacts/sim-requests");
+const RES_DIR = join(repo, "artifacts/sim-results");
+
+const argv = process.argv.slice(2);
+const plan = argv.includes("--plan");
+const rerun = argv.includes("--rerun");
+const idFlag = argv.indexOf("--id");
+const onlyId = idFlag >= 0 ? argv[idFlag + 1] : null;
+
+const readJson = (p) => JSON.parse(readFileSync(p, "utf8"));
+const listJson = (dir) =>
+  existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".json")).sort() : [];
+
+/** Capture the machine this ran on. Provenance is the whole point of a result:
+ *  "the proofs passed" means nothing without "on what, at which commit". */
+function provenance() {
+  const git = (args) => {
+    const r = spawnSync("git", args, { cwd: repo, encoding: "utf8" });
+    return r.status === 0 ? r.stdout.trim() : null;
+  };
+  const sw = spawnSync("sw_vers", ["-productVersion"], { encoding: "utf8" });
+  return {
+    platform: process.platform,
+    arch: process.arch,
+    nodeVersion: process.version,
+    macosVersion: sw.status === 0 ? sw.stdout.trim() : null,
+    commit: git(["rev-parse", "HEAD"]),
+    branch: git(["rev-parse", "--abbrev-ref", "HEAD"]),
+    // A dirty tree is not a failure, but a result minted from uncommitted code
+    // cannot be reproduced from the commit it names — so it is recorded.
+    workingTreeClean: git(["status", "--porcelain"]) === "",
+  };
+}
+
+/** Run one allowlisted operation. Returns a result row; never throws. */
+function runOperation(key) {
+  const op = SIM_OPERATIONS[key];
+  if (!op) {
+    // Unreachable via a gated request, kept because the runner must not depend
+    // on the gate having run first.
+    return { operation: key, status: "refused_missing_prerequisite", detail: `unknown operation key (known: ${OPERATION_KEYS.join(", ")})` };
+  }
+  if (op.platform === "macos" && process.platform !== "darwin") {
+    return {
+      operation: key,
+      status: "refused_platform",
+      detail: `requires macOS; this machine is ${process.platform}. NOT substituted with a weaker run.`,
+    };
+  }
+  if (plan) return { operation: key, status: "skipped_by_operator", detail: "--plan: not executed" };
+
+  const started = Date.now();
+  const r = spawnSync(op.argv[0], op.argv.slice(1), {
+    cwd: repo,
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+    env: process.env,
+  });
+  const durationMs = Date.now() - started;
+
+  if (r.error) {
+    return {
+      operation: key,
+      status: "refused_missing_prerequisite",
+      detail: `could not launch: ${r.error.message}${op.needs ? ` (needs: ${op.needs})` : ""}`,
+      durationMs,
+    };
+  }
+  const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
+  // Keep the tail rather than the whole log: enough to diagnose, small enough to
+  // commit. The summary lines every harness here prints live at the end.
+  const tail = out.trimEnd().split("\n").slice(-25);
+  return {
+    operation: key,
+    status: r.status === 0 ? "passed" : "failed",
+    exitCode: r.status,
+    durationMs,
+    tail,
+  };
+}
+
+function main() {
+  const requestFiles = listJson(REQ_DIR);
+  if (requestFiles.length === 0) {
+    console.log("No requests in artifacts/sim-requests — nothing to run.");
+    return 0;
+  }
+
+  const doneIds = new Set(listJson(RES_DIR).map((f) => f.replace(/\.json$/, "")));
+  let ran = 0;
+  let anyFailed = false;
+
+  for (const file of requestFiles) {
+    const id = file.replace(/\.json$/, "");
+    if (onlyId && id !== onlyId) continue;
+    if (!rerun && !onlyId && doneIds.has(id)) continue;
+
+    const req = readJson(join(REQ_DIR, file));
+    console.log(`\n== request ${id} ==`);
+    console.log(`   ${req.reason ?? "(no reason recorded)"}`);
+    console.log(`   runs: ${req.runs.join(", ")}`);
+
+    const runs = [];
+    for (const key of req.runs) {
+      const op = SIM_OPERATIONS[key];
+      console.log(`\n-- ${key}${op ? ` — ${op.what}` : ""}`);
+      const row = runOperation(key);
+      const mark = row.status === "passed" ? "PASS" : row.status === "failed" ? "FAIL" : row.status.toUpperCase();
+      console.log(`   ${mark}${row.durationMs != null ? ` (${Math.round(row.durationMs / 1000)}s)` : ""}${row.detail ? ` — ${row.detail}` : ""}`);
+      if (row.status === "failed") anyFailed = true;
+      runs.push(row);
+    }
+
+    if (plan) {
+      console.log("\n--plan: no result written.");
+      continue;
+    }
+
+    mkdirSync(RES_DIR, { recursive: true });
+    const result = {
+      schemaVersion: 1,
+      requestId: id,
+      // Supplied by the RUNNER as data. Nothing in the gate or the proof reads a
+      // clock — the same rule the decision core lives under.
+      completedAt: new Date().toISOString(),
+      provenance: provenance(),
+      runs,
+    };
+    writeFileSync(join(RES_DIR, `${id}.json`), `${JSON.stringify(result, null, 2)}\n`, "utf8");
+    console.log(`\nwrote artifacts/sim-results/${id}.json`);
+    ran += 1;
+  }
+
+  if (ran === 0 && !plan) {
+    console.log("\nEvery request already has a result. Use --rerun to run them again.");
+  } else if (!plan) {
+    console.log(`\nRan ${ran} request(s). Commit artifacts/sim-results/ and push so the cloud lane can read them:`);
+    console.log("  git add artifacts/sim-results && git commit -m 'sim results' && git push");
+  }
+  // A failing simulation is a real signal, and this exits non-zero on it — but
+  // the RESULT is still written first, because a failure the cloud lane can read
+  // is worth more than a clean exit code.
+  return anyFailed ? 1 : 0;
+}
+
+process.exit(main());

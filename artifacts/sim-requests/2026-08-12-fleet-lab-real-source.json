@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-08-12-fleet-lab-real-source",
+  "requestedBy": "cloud lane (session_01D3GJ2Fs8sVppPgzuJdnNLn)",
+  "reason": "The owner's redirect made Fleet the low-cost engineering lab and the first real device-management evidence source. The adapter is proven against fixtures and was proven once against a real Fleet 4.89.2 (proof:live-fleet, 30 assertions) — but never since the DeviceManagementEvidence contract and the launch seam landed. This runs the live lane against a real Fleet so the source-agnostic claim is backed by a real source, not only by fixtures that agree with themselves.",
+  "runs": [
+    "live-lanes",
+    "docker"
+  ],
+  "notes": [
+    "`live-lanes` skips loudly by name for any lane whose credentials are unset — a skip is recorded as a skip, never as a pass. Fleet is the one that matters here; Wazuh/Keycloak/Traccar skipping is fine.",
+    "Fleet Free runs in Docker: docs/FLEET_LIVE_INTEGRATION.md has the compose path. The image is amd64-only and Docker Desktop emulates it on Apple Silicon.",
+    "`docker` verifies the production stack builds and smoke-tests on the Mac — the half CI cannot reach because it needs a container engine.",
+    "This is the request to run SECOND, after the post-merge baseline is green. A live-source failure is only interpretable against a known-good deterministic baseline."
+  ]
+}

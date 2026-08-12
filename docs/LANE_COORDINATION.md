@@ -23,6 +23,55 @@ Sessions cannot read or message each other (cross-session triggers are
 disabled for this organization). The coordination bus is THIS FILE plus the
 git history — and the owner, who sees both chats.
 
+## Current handoff — read this first (updated 2026-08-12)
+
+**The owner is not a message bus.** They are phone-first and at the remote
+office only a few hours a day, so a lane that needs the other lane to know
+something WRITES IT HERE and pushes. Do not ask the owner to relay between
+sessions. If a lane can message the other directly, fine — but the channel has
+already proved one-way (cloud→Mac sends returned HTTP 401), so this file is the
+reliable bus and the git history is its backup.
+
+### State as of 41ce4d2
+
+- **PR #152, #202, #203, #204 and #205 are all MERGED.** Every branch they were
+  on is auto-deleted. A local branch named after any of them is stale.
+- `SignalGrid_Alpha` carries both lanes' capacity work: the Mac lane's
+  `bench:decision-throughput` (in-process core) and the cloud lane's
+  `test:load` / `test:stress` (the `/v1` HTTP surface). Neither number is the
+  other; each header says so.
+- The simulation request loop is live. `artifacts/sim-requests/` holds three
+  queued requests; `node scripts/check-sim-requests.mjs` says what is still
+  owed at any moment. **That gate is the handoff for verification work** — it
+  needs no chat and no relay.
+
+### If you are the Mac lane, your next actions
+
+```bash
+git fetch origin --prune
+git checkout SignalGrid_Alpha && git reset --hard origin/SignalGrid_Alpha && pnpm install
+export SIGNALGRID_MCP_PATH=~/Public/Projects/SignalGrid/signalgrid-mcp
+pnpm run sim:run-requests --plan          # what is queued
+pnpm run sim:run-requests                 # run everything still owed
+git add artifacts/sim-results && git commit -m "sim results" && git push
+```
+
+Two of the three queued requests can only be answered on a Mac, and one of
+them refreshes `artifacts/live-evidence/mac-run.json`, which `check-live-sync`
+still reports STALE against a pre-merge tree — no hardware run has yet
+validated the merged default branch.
+
+### One open observation, offered not asserted
+
+`bench:decision-throughput` failed once inside a full preflight on a 4-core
+Linux container, passed on rerun, and passed under deliberate CPU contention
+(1.63–1.81x scaling against a 1.0x threshold). Which assertion failed is
+UNKNOWN — the cloud lane truncated preflight's diagnostic output and lost it,
+so there is no evidence and no conclusion, only a note to watch it. If it
+recurs on Mac hardware, the shape worth considering is making "no parallel
+collapse" a collapse detector (N cores not SLOWER than one) rather than a ratio
+target — the same reasoning behind that bench's own 6,000x floor headroom.
+
 ## The protocol
 
 1. **Check before touching a SHARED SURFACE.** These files serialize across

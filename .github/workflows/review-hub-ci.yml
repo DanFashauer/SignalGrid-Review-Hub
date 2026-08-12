@@ -247,6 +247,14 @@ jobs:
         run: pnpm run proof:evidence-adapter
       - name: Proof — mobile-app-catalog scanner (hardening delta over the filed original)
         run: pnpm run proof:mobile-app-catalog
+      - name: Proof — sim-request loop (cloud asks, only the Mac answers, unrun is never green)
+        run: pnpm run proof:sim-requests
+      - name: /v1 under concurrency (correctness gated; throughput reported)
+        run: pnpm run test:load
+      - name: Simulation request loop (results bind to requests; pending reported)
+        run: node scripts/check-sim-requests.mjs
+      - name: Simulation request loop self-test (the gate can fail)
+        run: node scripts/check-sim-requests.mjs --self-test
       - name: Proof — operating method (the handbook is a gate, not a memory)
         run: pnpm run proof:operating-method
 

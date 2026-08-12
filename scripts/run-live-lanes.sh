@@ -171,6 +171,12 @@ echo "== LIVE LANES: $pass passed, $fail failed, $skipped skipped =="
 if [ "$skipped" -ne 0 ]; then
   echo "   skipped (NOT verified by this run):$skipped_lanes"
   echo "✅ Nothing failed — but a skipped lane proved nothing."
-  exit 0
+  # EXIT 3, NOT 0. This script's own header has always said a skip is "never
+  # counted as passed, and the exit code is non-zero", and for as long as it
+  # exited 0 that sentence was false — any wrapper reading the exit code recorded
+  # a run where Fleet never started as a PASS. The simulation request loop was
+  # exactly such a wrapper. 3 rather than 1 keeps "something failed" and "nothing
+  # ran" distinguishable, which is the whole point.
+  exit 3
 fi
 echo "✅ Every live lane ran and passed."

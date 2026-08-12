@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-08-12-post-merge-baseline",
+  "requestedBy": "cloud lane",
+  "reason": "First run after the launch spine merged (PR #152, #202, #203). The default branch has never been exercised on real hardware: the committed live evidence still fingerprints against a pre-merge tree, and the iOS simulator + MCP phases have no post-merge run at all. This establishes the baseline every later request is compared against.",
+  "runs": [
+    "everything",
+    "evidence"
+  ],
+  "notes": [
+    "`everything` covers proofs -> API -> MCP over real JSON-RPC -> EnterpriseShell in the iOS simulator with mimicked hardware (badge reader, kiosk state, injected signals via DemoMode flags).",
+    "`evidence` needs SIGNALGRID_MCP_PATH=~/Public/Projects/SignalGrid/signalgrid-mcp and refreshes artifacts/live-evidence/mac-run.json, which check-live-sync currently reports STALE.",
+    "A simulator cannot be MDM-enrolled and no real reader is attached — that boundary is the platform-honesty law, not a gap in this run."
+  ]
+}

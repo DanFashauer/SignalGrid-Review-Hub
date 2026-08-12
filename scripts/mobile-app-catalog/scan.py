@@ -49,6 +49,24 @@ from xml.etree import ElementTree as ET
 
 VERSION = "2.0.0"
 
+# MINIMUM INTERPRETER, checked rather than assumed.
+#
+# This scanner runs wherever the harness runs, and on macOS `python3` is very
+# often Xcode's 3.9.x rather than a Homebrew build — the owner's Mac is exactly
+# that. Nothing here uses 3.10+ syntax (no match statements, and
+# `from __future__ import annotations` makes every hint a lazy string), so 3.9
+# is genuinely enough. The guard exists for the version BELOW that: without it a
+# 3.8 interpreter fails somewhere inside plistlib or a dict-ordering assumption
+# with a message nobody can act on, in the middle of a long harness run.
+if sys.version_info < (3, 9):
+    print(
+        f"scan.py needs Python 3.9 or newer; this interpreter is "
+        f"{sys.version_info.major}.{sys.version_info.minor}. "
+        "Install a newer python3 (brew install python@3.12) or point the harness at one.",
+        file=sys.stderr,
+    )
+    raise SystemExit(2)
+
 SECRET_RE = re.compile(
     r"(secret|password|passwd|token|api[_-]?key|private[_-]?key|certificate|"
     r"tenant[_-]?id|client[_-]?secret|access[_-]?key)",

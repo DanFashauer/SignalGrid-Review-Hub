@@ -38,6 +38,12 @@ const python = (args: string[]): ReturnType<typeof spawnSync> =>
 
 // ── the never-skip rule, first ────────────────────────────────────────────────
 const probe = python(["--version"]);
+// Report the interpreter, because when this fails on someone else's machine the
+// FIRST question is always which python3 the PATH resolved to — and on macOS
+// that is frequently Xcode's 3.9.x rather than the Homebrew build the developer
+// has in mind. A version in the log turns a confusing failure into a one-line
+// diagnosis.
+console.log(`  using: ${`${probe.stdout ?? ""}${probe.stderr ?? ""}`.trim() || "python3 (version unreported)"}`);
 check(
   "python3 is present — this proof FAILS rather than skips without it",
   probe.error === undefined && probe.status === 0,

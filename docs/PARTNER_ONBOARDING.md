@@ -74,6 +74,41 @@ judgment; verdicts stay advisory; you compare the decision ledger against what
 your team would have done. Wiring this is configuration, not code — the same
 contract, the same engine, new provenance strings.
 
+## Capacity: what it serves, and what actually limits it
+
+The honest answer to *"how many decisions per second?"* has two halves, and the
+second one is the one that binds today.
+
+**The decision path is fast.** A verdict is computed in roughly **1.3 ms** (p95,
+`pnpm run bench:decision-latency`) against a 750 ms pilot gate. Under HTTP
+concurrency the single-process server sustains **several hundred requests per
+second**, and it *saturates* rather than failing: past the knee, throughput holds
+flat and additional clients become latency. Run `pnpm run test:stress` on your own
+hardware for your numbers — the ones above are from one container at one commit,
+and quoting somebody else's throughput as yours is not a measurement.
+
+**The rate limiter is the real ceiling, and the default is low on purpose.** Out
+of the box a single API key is capped at **240 requests per minute — four
+decisions a second** — with a coarser 600/minute per address behind it. That is
+sized for a public demo surface, not a fleet: several hundred shared devices each
+re-checking a session on pickup will exhaust it. Raise it for your deployment:
+
+```bash
+SIGNALGRID_V1_RATE_LIMIT=6000      # per API key, per minute
+SIGNALGRID_GLOBAL_RATE_LIMIT=12000 # per client address, per minute
+```
+
+Both default to the shipped values when unset, and a malformed value falls back
+rather than disabling the limiter — a rate limit misread as zero is an open door.
+Throttled requests answer **429 with standard back-off headers**, never a 5xx, so
+a client can retry correctly; `pnpm run test:load` asserts exactly that.
+
+What is *not* claimed: no horizontal-scaling numbers, no multi-node figures, and
+no durability characteristics under load. The launch configuration is a single
+process with an in-memory core, and the honest statement of a capacity claim is
+always *"measured X, on this machine, at this commit"* — which is what the
+verification loop's result files carry.
+
 ## The feedback loop
 
 After any stage, we want three answers, in your words:

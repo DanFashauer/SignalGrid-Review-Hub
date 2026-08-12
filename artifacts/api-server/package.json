@@ -8,7 +8,9 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "test:api": "pnpm run build && node ./test/api.test.mjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:load": "pnpm run build && node ./test/load.test.mjs",
+    "test:stress": "pnpm run build && node ./test/load.test.mjs --stress"
   },
   "dependencies": {
     "@workspace/api-zod": "workspace:*",

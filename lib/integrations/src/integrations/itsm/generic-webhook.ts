@@ -222,8 +222,15 @@ export class GenericWebhookAdapter implements ITSMAdapter {
         method: 'HEAD',
         headers: { 'User-Agent': 'EnterpriseShell-ITSM/1.0' },
       });
-      // Accept any response (even 4xx) to confirm endpoint exists
-      return response.ok || response.status < 500;
+      if (response.ok) return true;
+      // An AUTH CHALLENGE proves the endpoint is there and simply refused this
+      // unauthenticated HEAD; so does "method not allowed". Those are evidence.
+      //
+      // 404 and 410 are the opposite: the server is telling us the resource is
+      // not there. The previous condition was `response.status < 500`, which
+      // reported a 404 — literally Not Found — as confirmation that the endpoint
+      // was found, so a webhook pointed at a dead URL health-checked green.
+      return response.status === 401 || response.status === 403 || response.status === 405;
     } catch {
       return false;
     }

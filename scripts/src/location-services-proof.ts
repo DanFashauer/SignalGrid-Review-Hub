@@ -19,6 +19,7 @@ import {
   type LocationVerdict,
   type NormalizedLocationSignal,
 } from "@workspace/integrations/location-services";
+import { checkLiveGateIsolated } from "./lib/live-gate.js";
 
 interface Expected {
   geofenceState: string; hasPreciseCoordinates: boolean;
@@ -96,6 +97,24 @@ check("a bad token surfaces a typed auth_failed error", authErr?.code === "auth_
 check("dev tier resolves to fixture mode", resolveLocationServicesConnector({ SIGNALGRID_TIER: "dev" }).mode === "fixture");
 check("prod WITHOUT live flag stays fixture", resolveLocationServicesConnector({ SIGNALGRID_TIER: "prod" }).mode === "fixture");
 check("prod + live + token resolves live", resolveLocationServicesConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", LOCATION_ACCESS_TOKEN: "t" }).mode === "live");
+
+
+// ── The live-call gate, each condition ISOLATED ──────────────────────────────
+//
+// Replaces / supplements a cumulative ladder in which each step added one variable, so
+// the conditions below the one under test were also failing and only the last was
+// genuinely exercised. See lib/live-gate.ts. The tier check is the control behind the
+// written claim that dev and alpha never make live vendor calls.
+checkLiveGateIsolated({
+  check,
+  family: "location-services",
+  resolve: (env) => resolveLocationServicesConnector(env),
+  full: {
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    LOCATION_ACCESS_TOKEN: "t",
+  },
+});
 
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);

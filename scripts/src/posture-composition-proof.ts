@@ -6,6 +6,7 @@
 // most-severe-first with stable ordering, and the per-dimension adapters map
 // onto the unified ladder correctly.
 import {
+  SIGNAL_KINDS,
   composeDeviceRisk,
   fromDetection,
   fromDevicePosture,
@@ -26,6 +27,9 @@ import type { CustodyVerdict } from "@workspace/integrations/rtls-custody";
 import type { PeripheralVerdict } from "@workspace/integrations/peripheral-control";
 import type { DlpVerdict } from "@workspace/integrations/data-protection";
 import type { CredentialExposureVerdict } from "@workspace/integrations/credential-exposure";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 let passed = 0;
 const failures: string[] = [];
@@ -287,6 +291,62 @@ const equalRank: ComposableSignal[] = [
 ];
 const stable = composeDeviceRisk(equalRank);
 check("equal-rank drivers keep input order (stable sort)", stable.drivers[0].reason === "R1" && stable.drivers[1].reason === "R2");
+
+// ── EVERY SIGNAL KIND HAS EXACTLY ONE PRODUCER ───────────────────────────────
+//
+// This is what protects `adapters.ts`, and it exists because the mutation guard could
+// NOT. Registering that file returned `mutations=0`: the adapters are pass-through
+// mapping (`action: v.recommendedAction as UnifiedAction`) with no branching to
+// falsify, so a sweep says nothing about them. The property that CAN be wrong is
+// structural, so it is asserted structurally.
+//
+// A kind declared in the union but emitted by no adapter is dead: `proof:incident-playbook`
+// checks routing across all SIGNAL_KINDS and would pass it happily, because a kind that
+// nothing produces still routes fine. It would look covered from both ends and reach the
+// composer never. The reverse — an adapter emitting a kind outside the union — is a
+// signal the incident playbook has no route for, which lands in the generic queue.
+{
+  const source = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), "../../lib/posture-composition/src/adapters.ts"),
+    "utf8",
+  );
+  const emitted = [...source.matchAll(/kind:\s*"([a-z_]+)"/g)].map((m) => m[1]);
+  const emittedSet = new Set(emitted);
+
+  const unproduced = SIGNAL_KINDS.filter((k) => !emittedSet.has(k));
+  check(
+    `every one of the ${SIGNAL_KINDS.length} signal kinds is emitted by an adapter${unproduced.length ? " — missing: " + unproduced.join(", ") : ""}`,
+    unproduced.length === 0,
+  );
+
+  const unknown = [...emittedSet].filter((k) => !(SIGNAL_KINDS as readonly string[]).includes(k));
+  check(
+    `no adapter emits a kind outside SIGNAL_KINDS${unknown.length ? " — stray: " + unknown.join(", ") : ""}`,
+    unknown.length === 0,
+  );
+
+  // MULTIPLE producers per kind is legitimate — one dimension can be answerable from
+  // more than one source plane, which is the point of a fabric. `device_posture` is
+  // genuinely produced twice: `fromMacosPosture` (endpoint hardening, via the MCP
+  // grid_collected path) and the Intune/Entra management-plane adapter.
+  //
+  // The first draft of this check asserted "no kind has two producers" and FAILED on
+  // exactly that pair. The rule was wrong, not the code — asserted over a premise that
+  // was never true. So the useful property is not uniqueness, it is that every
+  // multi-producer kind is DELIBERATE: pinned by name here, so a copy-pasted adapter
+  // that forgot to change its `kind` — silently merging two dimensions into one, where
+  // the stronger would mask the other in the composer — fails instead of shipping.
+  const multi = [...new Set(emitted.filter((k, i) => emitted.indexOf(k) !== i))].sort();
+  check(
+    `every kind with more than one producer is enumerated on purpose (${multi.length}: ${multi.join(", ") || "none"})`,
+    multi.length === 1 && multi[0] === "device_posture",
+  );
+
+  check(
+    "NON-VACUITY: the scan actually found adapters, so the three checks above are not passing over an empty set",
+    emittedSet.size > 30,
+  );
+}
 
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);

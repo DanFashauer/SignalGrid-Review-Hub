@@ -18,6 +18,7 @@ import {
   resolveVulnScanConnector,
   type VulnFindingRaw,
 } from "@workspace/integrations/vuln-scan";
+import { checkLiveGateIsolated } from "./lib/live-gate.js";
 
 interface Expected {
   posture: string; highestSeverity: string; reasonCode: string; recommendedAction: string; exploitableCount: number; findingCount: number;
@@ -104,6 +105,24 @@ check("a bad token surfaces a typed auth_failed error", authErr?.code === "auth_
 check("dev tier resolves to fixture mode", resolveVulnScanConnector({ SIGNALGRID_TIER: "dev" }).mode === "fixture");
 check("prod WITHOUT live flag stays fixture", resolveVulnScanConnector({ SIGNALGRID_TIER: "prod" }).mode === "fixture");
 check("prod + live + token resolves live", resolveVulnScanConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", VULN_SCAN_ACCESS_TOKEN: "t" }).mode === "live");
+
+
+// ── The live-call gate, each condition ISOLATED ──────────────────────────────
+//
+// Replaces / supplements a cumulative ladder in which each step added one variable, so
+// the conditions below the one under test were also failing and only the last was
+// genuinely exercised. See lib/live-gate.ts. The tier check is the control behind the
+// written claim that dev and alpha never make live vendor calls.
+checkLiveGateIsolated({
+  check,
+  family: "vuln-scan",
+  resolve: (env) => resolveVulnScanConnector(env),
+  full: {
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    VULN_SCAN_ACCESS_TOKEN: "t",
+  },
+});
 
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);

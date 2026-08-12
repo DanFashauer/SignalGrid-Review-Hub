@@ -30,7 +30,15 @@ COPY pnpm-workspace.yaml pnpm-lock.yaml package.json tsconfig.base.json ./
 # both of these. Dockerfile.api already carried this pair with the same comment;
 # this file was written without it. Copying a rule rather than sharing it is how
 # one copy silently falls behind, which is what happened.
-COPY scripts/package.json scripts/enforce-pnpm.cjs ./scripts/
+# AND the lifecycle-hook entrypoints, from the launch lane — a separate
+# requirement from tsconfig.base.json above, and both are load-bearing.
+# Same requirement as Dockerfile.api: the root `preinstall` and `prepare` hooks run
+# from here, so their entrypoints must exist in the image or `pnpm install` dies.
+# This image is NOT built by the prod-compose smoke, so the omission was latent —
+# `docker build -f Dockerfile.web .` has been failing on the preinstall hook for
+# anyone who tried it, with nothing in CI to say so. Found by deriving the required
+# list from package.json rather than by building it.
+COPY scripts/package.json scripts/enforce-pnpm.cjs scripts/install-git-hooks.mjs ./scripts/
 COPY lib/ ./lib/
 COPY artifacts/signalgrid-web/ ./artifacts/signalgrid-web/
 COPY artifacts/signalgrid-app/ ./artifacts/signalgrid-app/

@@ -118,12 +118,33 @@ const IN_FIELDS: Record<string, ReadonlySet<string>> = {
     "not_assessed",
     "unknown",
   ]),
+  benchmarkSelectionState: new Set([
+    "confirmed",
+    "misfit",
+    "unverified",
+  ]),
+  shiftContextState: new Set([
+    "confirmed",
+    "misfit",
+    "unverified",
+  ]),
   badgeState: new Set([
     "present",
     "removed",
     "forced",
     "absent",
     "unknown",
+  ]),
+  managementHealthState: new Set([
+    "healthy",
+    "degraded",
+    "broken",
+    "unknown",
+  ]),
+  localAuthorityState: new Set([
+    "verified",
+    "withheld",
+    "unverified",
   ]),
 };
 
@@ -352,8 +373,16 @@ function matches(condition: RuleCondition, evidence: DecisionEvidence): boolean 
       return condition.in.includes(evidence.dockState);
     case "baselineState":
       return condition.in.includes(evidence.baselineCompliance);
+    case "benchmarkSelectionState":
+      return condition.in.includes(evidence.benchmarkSelection);
+    case "shiftContextState":
+      return condition.in.includes(evidence.shiftContext);
     case "badgeState":
       return condition.in.includes(evidence.badgeBinding);
+    case "managementHealthState":
+      return condition.in.includes(evidence.managementHealthState);
+    case "localAuthorityState":
+      return condition.in.includes(evidence.localAuthorityState);
     default: {
       // Exhaustiveness guard at compile time; fail-closed at runtime so an
       // unknown/malformed condition (e.g. from an authored draft) never matches.
@@ -608,6 +637,56 @@ export const SHARED_DEVICE_RULES_V1: PolicyRuleSpec[] = [
     reasonCode: "BASELINE_DRIFTED",
     severity: "medium",
   },
+  // Matches ONLY the affirmative bad state. `unverified` is deliberately excluded
+  // from this ACTIVE rule: nothing emits the benchmark_selection signal until a
+  // connector is wired, so a rule matching the default value would step up the
+  // entire fleet on day one. The unverified arm ships in the v2 STRICT draft,
+  // where a tenant opts into demanding a positively-established selection.
+  {
+    id: "benchmark-selection-misfit",
+    description:
+      "The hardening result rests on the WRONG benchmark — another platform's document, an empty assessment, or one this workflow does not accept — so the baseline answer is unreliable whatever it says.",
+    match: [{ field: "benchmarkSelectionState", in: ["misfit"] }],
+    outcome: "step_up",
+    reasonCode: "BENCHMARK_SELECTION_MISFIT",
+    severity: "medium",
+  },
+  // Same day-one-quiet shape for the labor plane: the ACTIVE rule matches only the
+  // affirmative mismatch (scheduled-but-clocked-out, off-duty operation, wrong
+  // site). `unverified` — the default until a WFM connector emits the signal —
+  // stays quiet in v1 and ships as the v2 STRICT arm below.
+  {
+    id: "shift-context-misfit",
+    description:
+      "The labor plane disagrees with this moment — the worker is scheduled but clocked out, operating while off duty, or at a site their shift does not place them — so step up before the action proceeds.",
+    match: [{ field: "shiftContextState", in: ["misfit"] }],
+    outcome: "step_up",
+    reasonCode: "SHIFT_CONTEXT_MISFIT",
+    severity: "medium",
+  },
+  // Both launch-family rules follow the benchmark-selection day-one-quiet shape:
+  // the ACTIVE rule matches only the AFFIRMATIVE bad state the connector reported.
+  // "unknown"/"unverified" — the default until a connector emits the signal — stays
+  // quiet, so adding the category cannot change any existing decision, and the
+  // grant-safety enumeration is widened only by states a source positively asserted.
+  {
+    id: "management-health-broken",
+    description:
+      "The management plane affirmatively failed for this device (enrollment failed/retired or never checked in) — its posture answers cannot be trusted, so restrict until management is restored.",
+    match: [{ field: "managementHealthState", in: ["broken"] }],
+    outcome: "restrict",
+    reasonCode: "MANAGEMENT_HEALTH_BROKEN",
+    severity: "high",
+  },
+  {
+    id: "local-authority-withheld",
+    description:
+      "The control plane affirmatively withheld this device's authority to act locally (lease revoked or clock untrusted) — restrict autonomous operation until authority is re-verified.",
+    match: [{ field: "localAuthorityState", in: ["withheld"] }],
+    outcome: "restrict",
+    reasonCode: "LOCAL_AUTHORITY_WITHHELD",
+    severity: "high",
+  },
   {
     id: "healthy-allow",
     description:
@@ -627,12 +706,16 @@ export const SHARED_DEVICE_RULES_V1: PolicyRuleSpec[] = [
 ];
 
 /**
- * Stricter shared-device policy (v2 draft). Tightens three rules relative to v1
+ * Stricter shared-device policy (v2 draft). Tightens four rules relative to v1
  * so a decision replayed against v2 can diverge — useful for demonstrating
  * versioned-policy simulation:
  *  - stale/expired posture escalates to RESTRICT (v1: step-up)
  *  - unknown identity state escalates to DENY (v1: step-up)
  *  - security-baseline drift escalates to RESTRICT (v1: step-up)
+ *  - a wrong-benchmark (misfit) hardening result WIDENS to also match
+ *    `unverified` (v1: misfit only). This is the deferred arm: only a tenant
+ *    that has opted into the strict draft asks every device to positively
+ *    establish its benchmark selection — v1 never punishes the default.
  */
 export const SHARED_DEVICE_RULES_V2: PolicyRuleSpec[] = SHARED_DEVICE_RULES_V1.map(
   (rule) => {
@@ -657,6 +740,22 @@ export const SHARED_DEVICE_RULES_V2: PolicyRuleSpec[] = SHARED_DEVICE_RULES_V1.m
         ...rule,
         outcome: "restrict",
         reasonCode: "BASELINE_DRIFTED_STRICT",
+        severity: "high",
+      };
+    }
+    if (rule.id === "benchmark-selection-misfit") {
+      return {
+        ...rule,
+        match: [{ field: "benchmarkSelectionState", in: ["misfit", "unverified"] }],
+        reasonCode: "BENCHMARK_SELECTION_UNESTABLISHED_STRICT",
+        severity: "high",
+      };
+    }
+    if (rule.id === "shift-context-misfit") {
+      return {
+        ...rule,
+        match: [{ field: "shiftContextState", in: ["misfit", "unverified"] }],
+        reasonCode: "SHIFT_CONTEXT_UNESTABLISHED_STRICT",
         severity: "high",
       };
     }

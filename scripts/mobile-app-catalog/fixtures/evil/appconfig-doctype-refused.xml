@@ -1,0 +1,3 @@
+<?xml version="1.0"?>
+<!DOCTYPE appconfig [<!ENTITY leak SYSTEM "file:///etc/passwd">]>
+<appconfig><entry key="must_not_parse">&leak;</entry></appconfig>

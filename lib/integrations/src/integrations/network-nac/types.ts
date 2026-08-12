@@ -50,9 +50,57 @@ export interface NormalizedNetworkSignal {
   freshness: NacFreshness;
 }
 
-export type NetworkPosture = "on_trusted_segment" | "unauthenticated" | "quarantined" | "network_unknown";
+/**
+ * Which network segments this device is expected on. CALLER-SUPPLIED POLICY.
+ *
+ * WHY THIS IS A PARAMETER AND NOT A TAXONOMY. VLAN names and numbering are a local
+ * design decision — one site's "VLAN 10 / users" is another's "corp-wired" — so a
+ * built-in classification would be a guess applied to every tenant. The operator
+ * declares what is expected; the evaluator only compares. Same discipline as
+ * `lastCheckInAgeSeconds` and the entitlement nesting budget: the caller owns policy,
+ * the evaluator owns the comparison.
+ *
+ * Comparison is trimmed and case-insensitive, because vendors report the same VLAN as
+ * "VLAN10", "vlan10" and "  VLAN10 " across NAC, RADIUS and switch inventories.
+ */
+export interface SegmentPolicy {
+  /** Segments this device may legitimately be on. Empty = no policy expressed, and
+   *  the segment is then NOT graded — see AUTHENTICATED_SEGMENT_UNVERIFIED. */
+  readonly expected: readonly string[];
+  /** Segments that are high-consequence to land on unexpectedly — a management,
+   *  security or OT VLAN. Reaching one of these while not expected there is lateral
+   *  movement into the control plane, which is a different severity from merely
+   *  being on the wrong user VLAN. */
+  readonly restricted?: readonly string[];
+}
+
+export type NetworkPosture =
+  /** Authenticated, fresh, AND confirmed on an expected segment. */
+  | "on_trusted_segment"
+  /** Authenticated and fresh, but no segment policy was supplied, so the segment
+   *  was not checked. Deliberately distinct from `on_trusted_segment`: the old code
+   *  emitted "trusted" for any authenticated device on ANY VLAN, which asserted a
+   *  property nothing had verified. */
+  | "on_unverified_segment"
+  /** Authenticated, but on a segment the operator did not expect. */
+  | "on_unexpected_segment"
+  | "unauthenticated"
+  | "quarantined"
+  | "network_unknown";
 export type NetworkReasonCode =
   | "AUTHENTICATED_TRUSTED_SEGMENT"
+  /** Authenticated and fresh, segment NOT evaluated because no policy was supplied.
+   *  Grants — an operator who has expressed no segment policy has not asked for the
+   *  check — but says plainly that trust was not established, rather than claiming it. */
+  | "AUTHENTICATED_SEGMENT_UNVERIFIED"
+  /** On a segment outside the expected set. */
+  | "SEGMENT_UNEXPECTED"
+  /** On a segment the operator marked high-consequence (management / security / OT)
+   *  while not expected there. */
+  | "SEGMENT_RESTRICTED"
+  /** A policy exists but the source did not report which segment the device is on,
+   *  so the policy cannot be applied. Forecloses rather than assuming compliance. */
+  | "SEGMENT_UNREPORTED_UNDER_POLICY"
   | "UNAUTHENTICATED_AT_CONNECTION"
   | "QUARANTINED_SEGMENT"
   | "NAC_NONCOMPLIANT"

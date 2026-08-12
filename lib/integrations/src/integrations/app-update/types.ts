@@ -39,6 +39,20 @@ export type UpdateCurrency = "current" | "behind" | "below_floor" | "unknown";
  *  Absent is `unknown` — absence of the flag is not permission to lag. */
 export type ForcePolicy = "forced" | "not_forced" | "unknown";
 
+/**
+ * The app's runtime STABILITY on this device, DERIVED (intake ledger row 19,
+ * from the Omnissa Intelligence app-health material): the analytics plane
+ * (Omnissa Intelligence, Crashlytics-class SDKs and their peers) reports the
+ * crash count and the window it covers; the CALLER poses the bound. A crashing
+ * host app is operational risk for the workflow about to start in it.
+ *
+ * `unassessed` = no bound was posed — carried visibly, never a defaulted pass.
+ * `unknown` = the question WAS posed and the figures cannot answer it (count or
+ * window missing/unreadable) — and unknown raises. A count without its window
+ * is uninterpretable and never graded.
+ */
+export type StabilityStanding = "stable" | "unstable" | "unassessed" | "unknown";
+
 /** Present but unparseable = an assertion we could not read, distinct from silence. */
 export type ReportIntegrity = "clean" | "malformed";
 
@@ -52,6 +66,8 @@ export interface AppUpdateReportRaw {
   min_version?: unknown; // the enforced floor; absent → no floor enforced
   force_update?: unknown; // boolean
   channel?: unknown; // managed | unmanaged | unknown
+  crash_count?: unknown; // crashes the analytics plane counted in its window
+  stability_window_hours?: unknown; // the window those counts cover, source-reported
   [k: string]: unknown;
 }
 
@@ -61,6 +77,8 @@ export const APP_UPDATE_REPORT_KEYS = [
   "min_version",
   "force_update",
   "channel",
+  "crash_count",
+  "stability_window_hours",
 ] as const;
 
 export interface NormalizedAppUpdate {
@@ -70,6 +88,11 @@ export interface NormalizedAppUpdate {
   currency: UpdateCurrency;
   forcePolicy: ForcePolicy;
   channel: InstallChannel;
+  /** Source-reported stability figures, carried as validated evidence — the
+   *  STANDING is derived in the evaluator against the caller's posed bound.
+   *  Null when absent or unreadable, never a fabricated zero. */
+  crashCount: number | null;
+  stabilityWindowHours: number | null;
   reportIntegrity: ReportIntegrity;
   source: string;
 }
@@ -81,6 +104,7 @@ export type AppUpdatePosture =
   | "forced_update_pending" // behind latest and the manifest forces updates
   | "below_floor" // affirmatively below the enforced min_version
   | "unmanaged_install" // the app did not arrive via the managed channel
+  | "app_unstable" // the analytics plane counted more crashes than the caller's bound
   | "version_unknown" // currency could not be positively established
   | "unverified"; // malformed / unreadable report
 
@@ -94,6 +118,8 @@ export type AppUpdateReasonCode =
   | "BELOW_MIN_VERSION"
   | "UNMANAGED_INSTALL"
   | "CHANNEL_UNKNOWN"
+  | "APP_UNSTABLE"
+  | "STABILITY_UNKNOWN"
   | "VERSION_UNKNOWN"
   | "REPORT_MALFORMED"
   | "NOT_COVERED";
@@ -108,7 +134,10 @@ export interface AppUpdateVerdict {
   criticalFindings: string[];
   /** Inputs whose state could not be determined. Any of these forecloses the grant. */
   unknownSignals: string[];
-  /** True ONLY when currency is positively confirmed: current + managed + clean. */
+  /** The derived stability standing — `unassessed` when no bound was posed. */
+  stability: StabilityStanding;
+  /** True ONLY when currency is positively confirmed: current + managed + clean —
+   *  and the stability question, IF posed, answered `stable`. */
   currencyConfirmed: boolean;
 }
 

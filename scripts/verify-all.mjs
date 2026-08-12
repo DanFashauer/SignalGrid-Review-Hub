@@ -76,8 +76,11 @@ function run(label, cmd, args, opts = {}) {
   return r.status === 0;
 }
 
-// 1) Review-Hub gate (the full local preflight, mirroring CI).
+// 1) Review-Hub gate: the per-push preflight PLUS the breadth lane. Since the
+// 2026-08-11 lane split (plan §11.4 step 4) preflight alone is the launch
+// surface only; "verify:all" keeps meaning ALL, so it runs both.
 const rhOk = run("Review-Hub preflight", "pnpm", ["run", "preflight"], { cwd: repoRoot });
+const breadthOk = run("Review-Hub breadth lane (deferred families + doctrine docs)", "pnpm", ["run", "verify:breadth"], { cwd: repoRoot });
 
 // 2) Locate the signalgrid-mcp checkout (repos stay separate). An EXPLICIT
 // SIGNALGRID_MCP_PATH is AUTHORITATIVE: if it's set we use exactly that and fail if
@@ -227,9 +230,10 @@ if (mcpPath) {
 console.log("\n=== verify:all summary ===");
 console.log(`  mcp tool count:       ${toolCountStatus}`);
 console.log(`  Review-Hub preflight: ${rhOk ? "PASS" : "FAIL"}`);
+console.log(`  Review-Hub breadth:   ${breadthOk ? "PASS" : "FAIL"}`);
 console.log(`  signalgrid-mcp:       ${mcpRan ? (mcpOk ? "PASS" : "FAIL") : "SKIPPED (not found)"}`);
 console.log(`  shared contract:      ${contractPath}`);
-if (!rhOk || !mcpOk) process.exitCode = 1;
+if (!rhOk || !breadthOk || !mcpOk) process.exitCode = 1;
 
 // 4) Optional live-evidence emission (see header). Gated HARD on a fully-green
 // run of BOTH halves: reviewHubPass AND mcpCheckoutFound AND mcpPass — a skipped
@@ -237,7 +241,7 @@ if (!rhOk || !mcpOk) process.exitCode = 1;
 // fabricate a "real Mac run".
 if (emitEvidence) {
   const mcpCheckoutFound = Boolean(mcpPath);
-  const fullyGreen = rhOk && mcpCheckoutFound && mcpRan && mcpOk;
+  const fullyGreen = rhOk && breadthOk && mcpCheckoutFound && mcpRan && mcpOk;
   // GREEN-NESS IS NOT HARDWARE. The first dry run of the live-sync bot caught a
   // sandbox-minted evidence file claiming a "real Mac run": a Linux container
   // holding an MCP checkout passed both halves and emitted. Evidence exists to

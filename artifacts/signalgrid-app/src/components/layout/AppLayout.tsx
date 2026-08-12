@@ -5,7 +5,6 @@ import {
   ShieldAlert,
   Settings,
   Network,
-  Database,
   Server,
   Grid,
   AppWindow,
@@ -28,6 +27,76 @@ import {
 } from "@/components/ui/sidebar";
 import { useHealthCheck } from "@workspace/api-client-react";
 
+/**
+ * The console IA (P0 #239): the sidebar states which surfaces ARE the launch
+ * console and which are not, instead of presenting breadth as product. Three
+ * groups, matching the launch wireframes' closing line — "nothing else is
+ * launch UI":
+ *   · Launch console — the six wireframe screens, bound to the served /v1 API.
+ *   · Fixture previews — real pages on the in-browser fixtures client;
+ *     labelled so a partner can never mistake them for the shipped surface.
+ *   · Build the grid — capability demos for deferred families; same rule.
+ * Every non-launch route also renders the PreviewBanner (see App.tsx), so the
+ * label survives deep links that bypass this sidebar.
+ */
+
+type NavEntry = { href: string; label: string; icon: React.ComponentType<{ className?: string }>; match?: string };
+
+const LAUNCH_NAV: NavEntry[] = [
+  { href: "/", label: "Overview", icon: Activity },
+  { href: "/decisions", label: "Decisions", icon: ShieldAlert, match: "/decisions" },
+  { href: "/audit", label: "Audit", icon: ShieldAlert, match: "/audit" },
+  { href: "/connectors/setup", label: "Connector setup", icon: Network, match: "/connectors" },
+  { href: "/policies", label: "Policies", icon: Settings, match: "/policies" },
+  { href: "/status", label: "Assurance", icon: Activity, match: "/status" },
+];
+
+const PREVIEW_NAV: NavEntry[] = [
+  { href: "/signals", label: "Signals", icon: Activity, match: "/signals" },
+  { href: "/integrations", label: "Integrations", icon: Network, match: "/integrations" },
+  { href: "/fleet", label: "Fleet & tenants", icon: Server, match: "/fleet" },
+  { href: "/app-workflows", label: "App workflows", icon: AppWindow, match: "/app-workflows" },
+];
+
+const GRID_NAV: NavEntry[] = [
+  { href: "/grid", label: "Grid overview", icon: LayoutGrid },
+  { href: "/intelligence", label: "Grid intelligence", icon: Sparkles, match: "/intelligence" },
+  { href: "/provisioning", label: "Device recorder", icon: MonitorSmartphone, match: "/provisioning" },
+  { href: "/app-resilience", label: "App resilience", icon: HeartPulse, match: "/app-resilience" },
+  { href: "/signal-sourcing", label: "Signal sourcing", icon: Radio, match: "/signal-sourcing" },
+  { href: "/grid-config", label: "Grid config", icon: FileCode, match: "/grid-config" },
+  { href: "/system-health", label: "System health", icon: Activity, match: "/system-health" },
+];
+
+function NavSection({ entries, location }: { entries: NavEntry[]; location: string }) {
+  return (
+    <SidebarMenu className="px-2 gap-1">
+      {entries.map((e) => {
+        const Icon = e.icon;
+        const active = e.match ? location.startsWith(e.match) : location === e.href;
+        return (
+          <SidebarMenuItem key={e.href}>
+            <SidebarMenuButton asChild isActive={active}>
+              <Link href={e.href}>
+                <Icon className="w-4 h-4 mr-2" />
+                <span>{e.label}</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        );
+      })}
+    </SidebarMenu>
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="px-4 pt-4 pb-1 text-[10px] font-mono uppercase tracking-wider text-muted-foreground/70">
+      {children}
+    </div>
+  );
+}
+
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { data: health } = useHealthCheck();
@@ -44,123 +113,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-amber-400/30 bg-amber-400/5 text-amber-400/90 ml-auto">FIXTURE</span>
           </SidebarHeader>
           <SidebarContent>
-            <SidebarMenu className="px-2 gap-1">
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/"}>
-                  <Link href="/">
-                    <Activity className="w-4 h-4 mr-2" />
-                    <span>Overview</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location.startsWith("/decisions")}>
-                  <Link href="/decisions">
-                    <ShieldAlert className="w-4 h-4 mr-2" />
-                    <span>Decisions</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location.startsWith("/signals")}>
-                  <Link href="/signals">
-                    <Activity className="w-4 h-4 mr-2" />
-                    <span>Signals</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location.startsWith("/integrations")}>
-                  <Link href="/integrations">
-                    <Network className="w-4 h-4 mr-2" />
-                    <span>Integrations</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location.startsWith("/policies")}>
-                  <Link href="/policies">
-                    <Settings className="w-4 h-4 mr-2" />
-                    <span>Policies</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location.startsWith("/fleet")}>
-                  <Link href="/fleet">
-                    <Server className="w-4 h-4 mr-2" />
-                    <span>Fleet &amp; tenants</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location.startsWith("/app-workflows")}>
-                  <Link href="/app-workflows">
-                    <AppWindow className="w-4 h-4 mr-2" />
-                    <span>App workflows</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-            <div className="px-4 pt-4 pb-1 text-[10px] font-mono uppercase tracking-wider text-muted-foreground/70">Build the grid</div>
-            <SidebarMenu className="px-2 gap-1">
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/grid"}>
-                  <Link href="/grid">
-                    <LayoutGrid className="w-4 h-4 mr-2" />
-                    <span>Grid overview</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location.startsWith("/intelligence")}>
-                  <Link href="/intelligence">
-                    <Sparkles className="w-4 h-4 mr-2" />
-                    <span>Grid intelligence</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location.startsWith("/provisioning")}>
-                  <Link href="/provisioning">
-                    <MonitorSmartphone className="w-4 h-4 mr-2" />
-                    <span>Device recorder</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location.startsWith("/app-resilience")}>
-                  <Link href="/app-resilience">
-                    <HeartPulse className="w-4 h-4 mr-2" />
-                    <span>App resilience</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location.startsWith("/signal-sourcing")}>
-                  <Link href="/signal-sourcing">
-                    <Radio className="w-4 h-4 mr-2" />
-                    <span>Signal sourcing</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location.startsWith("/grid-config")}>
-                  <Link href="/grid-config">
-                    <FileCode className="w-4 h-4 mr-2" />
-                    <span>Grid config</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location.startsWith("/system-health")}>
-                  <Link href="/system-health">
-                    <Activity className="w-4 h-4 mr-2" />
-                    <span>System health</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
+            <SectionLabel>Launch console · /v1</SectionLabel>
+            <NavSection entries={LAUNCH_NAV} location={location} />
+            <SectionLabel>Fixture previews · not launch</SectionLabel>
+            <NavSection entries={PREVIEW_NAV} location={location} />
+            <SectionLabel>Build the grid · demo</SectionLabel>
+            <NavSection entries={GRID_NAV} location={location} />
           </SidebarContent>
           <SidebarFooter className="p-4 border-t border-border">
             <div className="flex items-center gap-2 text-xs font-mono">

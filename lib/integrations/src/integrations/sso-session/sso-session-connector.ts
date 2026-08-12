@@ -8,6 +8,7 @@
 
 import {
   SsoSessionConnectorError,
+  type AccountScope,
   type SsoSessionReportRaw,
   type SessionAssurance,
   type SessionBinding,
@@ -49,16 +50,36 @@ export function normalizeReport(
 ): NormalizedSsoSession {
   const subject = readableString(report.subject);
   const expectedSubject = readableString(report.expectedSubject);
+  const accountScope = oneOf<AccountScope>(report.accountScope, ["individual", "shared", "unknown"], "unknown");
+  const credentialHolder = readableString(report.credentialHolder);
   let binding = oneOf<SessionBinding>(report.binding, ["bound", "mismatched", "unbound", "unknown"], "unknown");
-  // The subject comparison is the ground-truth PROOF that the session belongs to the
-  // checked-out holder, so the binding is corroborated against it — fail closed:
-  //  - both subjects readable and DIFFER → `mismatched` (a mislabeled leftover);
-  //  - a `bound` label WITHOUT both subjects readable and equal is uncorroborated —
-  //    downgrade it to `unknown` so an evidence-free "bound" can never enable a grant
-  //    (a lookup failure or error string in either field must not produce an allow).
-  // This only ever makes the verdict more conservative; it never fabricates `bound`,
-  // and non-bound labels (already non-granting) pass through unchanged.
-  if (subject !== null && expectedSubject !== null) {
+  // The comparison that corroborates the binding depends on WHOSE name the subject
+  // carries. On an individual account the subject IS the person, so the subject
+  // comparison is ground truth. On a SHARED account the subject is the ACCOUNT by
+  // design — the subject comparison proves nothing either way, and attribution
+  // moves to the CREDENTIAL level (which registered authenticator opened it,
+  // DigitalPersona v4.4.0-class). Every rule below only ever makes the verdict
+  // more conservative; nothing here fabricates `bound`.
+  //
+  //  - the credential-holder comparison, when both sides are readable, applies on
+  //    EVERY scope and only downgrades: a session opened with someone else's
+  //    credential is `mismatched` no matter what the subject says;
+  //  - individual/unknown scope: subjects readable and DIFFER → `mismatched` (a
+  //    mislabeled leftover); a `bound` label without both subjects readable and
+  //    equal is uncorroborated → `unknown` (an unknown scope is deliberately
+  //    treated as individual — fail-safe: the subject rule stays authoritative);
+  //  - shared scope: subjects differing is EXPECTED and forces nothing; a `bound`
+  //    label is corroborated ONLY by a credential holder that matches the
+  //    checked-out badge-holder — without that, `bound` downgrades to `unknown`
+  //    ("the account authenticated" is not "this person is identified").
+  if (credentialHolder !== null && expectedSubject !== null && credentialHolder !== expectedSubject) {
+    binding = "mismatched";
+  }
+  if (accountScope === "shared") {
+    if (binding === "bound" && !(credentialHolder !== null && expectedSubject !== null && credentialHolder === expectedSubject)) {
+      binding = "unknown";
+    }
+  } else if (subject !== null && expectedSubject !== null) {
     if (subject !== expectedSubject) binding = "mismatched";
   } else if (binding === "bound") {
     binding = "unknown";
@@ -74,6 +95,8 @@ export function normalizeReport(
     idpReachable: typeof report.idpReachable === "boolean" ? report.idpReachable : null,
     subject,
     expectedSubject,
+    accountScope,
+    credentialHolder,
     source,
   };
 }
@@ -99,10 +122,26 @@ export class SsoSessionConnector {
     private readonly transport: SsoSessionTransport,
   ) {}
 
-  async healthCheck(deviceId: string): Promise<{ healthy: boolean; status: number }> {
+  /**
+   * NOTE ON `status: null`. The success path returns null, NOT 200.
+   *
+   * This connector is handed an INJECTED transport that resolves a payload — there is
+   * no HTTP response here and therefore no status code to read. The old `status: 200`
+   * was invented: a 201, 202 or 204 upstream reported as 200, and a reviewer reading
+   * the field believed a server had said it. `null` is the honest value — "the
+   * transport resolved; no status was observed" — and the type can now say it.
+   *
+   * The failure path keeps a real number because the error carries one.
+   *
+   * NOT FIXED HERE, and stated so the remaining gap is not mistaken for closed:
+   * `healthy: true` still means "the injected transport resolved", which in fixture
+   * mode is true without anything being contacted. That fix belongs at the resolution
+   * layer, which already reports `mode: "fixture"` with a reason — see the backlog.
+   */
+  async healthCheck(deviceId: string): Promise<{ healthy: boolean; status: number | null }> {
     try {
       await this.transport({ deviceId, token: this.config.accessToken });
-      return { healthy: true, status: 200 };
+      return { healthy: true, status: null };
     } catch (err) {
       const status = err instanceof SsoSessionConnectorError ? err.status : 0;
       return { healthy: false, status };

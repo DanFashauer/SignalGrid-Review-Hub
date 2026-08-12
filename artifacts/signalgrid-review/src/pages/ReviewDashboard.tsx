@@ -21,6 +21,7 @@ import CompetitiveSection from "@/components/sections/CompetitiveSection";
 import DemoScriptSection from "@/components/sections/DemoScriptSection";
 import SignalGridSimulatorSection from "@/components/sections/SignalGridSimulatorSection";
 import OperatorConsoleSection from "@/components/sections/OperatorConsoleSection";
+import EvidenceCoverageSection from "@/components/sections/EvidenceCoverageSection";
 import WorkerSelfServiceSection from "@/components/sections/WorkerSelfServiceSection";
 import ConnectorEmulatorDashboard from "@/components/connector-emulator/ConnectorEmulatorDashboard";
 import CredentialReaderDashboardSection from "@/components/sections/CredentialReaderDashboardSection";
@@ -44,6 +45,7 @@ const statusLabel = {
 const NAV_ITEMS = [
   { id: "operator-console", label: "Operator Console" },
   { id: "worker-self-service", label: "Worker Self-Service" },
+  { id: "evidence-coverage", label: "Evidence Coverage" },
   { id: "simulator", label: "Simulator" },
   { id: "app-suite", label: "App Suite" },
   { id: "connector-emulator", label: "Connector Emulator" },
@@ -444,6 +446,15 @@ export default function ReviewDashboard() {
             description="The frontline worker's view: one signal, one clear call, and one thing you can do to continue — in plain language, on the device. Safe cases resolve in place; only genuine security or compliance blocks route to an operator. The choice stays with the person. Public-safe synthetic data."
           />
           <WorkerSelfServiceSection />
+        </section>
+
+        {/* Evidence coverage — what a real estate can and cannot answer */}
+        <section id="evidence-coverage" className="space-y-6 scroll-mt-20">
+          <SectionHeader
+            label="Evidence Coverage — What Your Systems Can Actually Tell Us"
+            description="The first-conversation instrument: tick the source planes a deployment really has and see which of the engine's evidence axes it can answer, which are dark, and which are dark AND ungraded — where silence would read as health. Computes the report in-browser from the same function the control-plane route calls; it reads no customer data and calls no connector."
+          />
+          <EvidenceCoverageSection />
         </section>
 
         {/* Real-life simulator foundation */}

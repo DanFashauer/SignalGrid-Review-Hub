@@ -26,7 +26,10 @@ import {
   MemoryStore,
   RESOLUTION_DESCRIPTOR_SHAPES,
   seedDemoStore,
+  verifySnapshot,
+  CORE_NORMALIZATION_VERSION,
   SignalGridCore,
+  SHARED_DEVICE_RULES_V1,
   SHARED_DEVICE_RULES_V2,
   validatePolicyRules,
   type Decision,
@@ -36,6 +39,8 @@ import {
   type NormalizedSignal,
   type SignalCategory,
   type Workflow,
+  SIGNAL_CATEGORIES,
+  EVIDENCE_FIELDS,
 } from "@workspace/signalgrid-core";
 
 interface Assertion {
@@ -126,6 +131,55 @@ for (const scenario of scenarios) {
   );
   decisions.push(core.getDecision(T.operator, result.decisionId));
 }
+
+// ── 1b. Provenance stamping: the migration, proven rather than promised ───────
+//
+// `coreNormalizationVersion` records WHICH BUILD of the core decision path derived a
+// snapshot's facts (intake ledger row 27). Adding a field to a tamper-evident record
+// is the dangerous part: durable Postgres rows written before the field existed must
+// keep verifying, or the operator console renders them as "tampered" — and it has no
+// third state to render instead.
+//
+// The mechanism is a CONDITIONAL spread in the shared digest body: an unstamped
+// snapshot's canonical JSON is byte-identical to the pre-stamp one, so no
+// version-conditional branch and no precondition exists anywhere. These four checks
+// are what make that a fact rather than a claim.
+// Re-pinned 2026-08-10 (was 28d821302756a247): the evidence body gained the two
+// launch-family fields (managementHealthState, localAuthorityState), so the canonical
+// body of a FRESH unstamped snapshot moved. TRUE pre-change rows still verify — the
+// digest FUNCTION is unchanged and each row is verified against its own stored body —
+// this constant is the canary that makes an evidence-shape change loud instead of
+// silent, and the normalization-version bump records the same change as provenance.
+const LEGACY_SNAPSHOT_DIGEST = "b8d6988973734339";
+const freshSnapshot = core.getSnapshot(T.operator, decisions[0].evidenceSnapshotId);
+
+// The exact shape a pre-stamp row deserializes into: every field the same, no stamp.
+const { coreNormalizationVersion: _omitted, ...legacyFields } = freshSnapshot;
+const legacySnapshot = { ...legacyFields, digest: LEGACY_SNAPSHOT_DIGEST };
+
+check(
+  `MIGRATION: an UNSTAMPED snapshot still digests to the pinned legacy value (${LEGACY_SNAPSHOT_DIGEST}) and verifies — durable rows written before provenance existed are not accused of tampering`,
+  verifySnapshot(legacySnapshot) === true,
+  "the legacy body moved: every pre-stamp snapshot in Postgres would now read as tampered",
+);
+check(
+  "the stamp is INSIDE the tamper-evidence: deleting it from a stamped snapshot fails verification",
+  verifySnapshot({ ...legacyFields, digest: freshSnapshot.digest }) === false,
+);
+check(
+  "a stamp cannot be FORGED onto a legacy row: adding it fails verification",
+  verifySnapshot({
+    ...legacyFields,
+    coreNormalizationVersion: CORE_NORMALIZATION_VERSION,
+    digest: LEGACY_SNAPSHOT_DIGEST,
+  }) === false,
+);
+check(
+  `all three carriers report the version that was actually digested (v${CORE_NORMALIZATION_VERSION})`,
+  freshSnapshot.coreNormalizationVersion === CORE_NORMALIZATION_VERSION &&
+    decisions[0].coreNormalizationVersion === CORE_NORMALIZATION_VERSION,
+  `snapshot=${freshSnapshot.coreNormalizationVersion} decision=${decisions[0].coreNormalizationVersion} constant=${CORE_NORMALIZATION_VERSION}`,
+);
 
 // ── 2. Fail-closed invariant across every decision ────────────────────────────
 
@@ -368,6 +422,37 @@ if (v2) {
       "simulate: stored decision is unchanged after simulation",
       core.getDecision(T.operator, staleDecision.id).outcome === "step_up",
     );
+
+    // ── THE IDENTITY ROUND TRIP — replay against a decision's OWN version ──
+    //
+    // Everything this product says about being "explainable and replayable" rests on
+    // one property: the same immutable evidence, run against the same policy version,
+    // reproduces the same outcome. Until now NOTHING asserted it. The proofs covered
+    // cross-core determinism and CROSS-VERSION change (v1 → v2 above), which is a
+    // different claim entirely — a simulator that always returned `changed: true`
+    // would satisfy every one of them.
+    //
+    // Found by an adversarial review of a proposed customer-facing replay artifact:
+    // a repo-wide grep for `changed === false` and `storedOutcome ===` returned
+    // nothing. That made the central sales claim the one thing with no test behind it.
+    const identity = core.simulateDecision(T.operator, staleDecision.id, staleDecision.policyVersionId);
+    check(
+      "simulate: replaying a decision against its OWN policy version reproduces it exactly",
+      identity.simulatedOutcome === identity.storedOutcome && identity.changed === false,
+      `${identity.storedOutcome} → ${identity.simulatedOutcome}, changed=${identity.changed}`,
+    );
+    check(
+      "…and reproduces its reason codes, not merely its outcome — the explanation replays too",
+      JSON.stringify([...identity.simulatedReasonCodes].sort()) ===
+        JSON.stringify([...staleDecision.reasonCodes].sort()),
+      `${identity.simulatedReasonCodes.join(",")} vs ${staleDecision.reasonCodes.join(",")}`,
+    );
+    // NON-VACUITY: the v2 case above already shows `changed: true` is reachable, so
+    // this pair cannot be satisfied by a simulator hardwired to report no change.
+    check(
+      "NON-VACUITY: `changed` is genuinely bidirectional across the two replays",
+      identity.changed === false && sim.changed === true,
+    );
   }
 }
 
@@ -587,6 +672,148 @@ if (pending) {
       evaluatePolicy(activeV1, ev).outcome !== "allow",
     );
   }
+}
+
+// ── 11b. Benchmark-selection arm: honest default, misfit rule, strict widening ──
+//
+// The /v1 arm of the benchmark-selection dimension. Three properties, each of
+// which a negative control showed is NOT implied by the others:
+//  - an ABSENT benchmark_selection signal derives "unverified", never "confirmed"
+//    (the default was unfalsifiable until this block existed — flipping it to
+//    "confirmed" changed no seeded outcome, because every seeded evidence record
+//    was a LITERAL that never went through buildEvidence);
+//  - the ACTIVE v1 rule matches ONLY the affirmative bad state, so the absent
+//    default stays allow — a fleet that does not yet emit the signal is not
+//    stepped up on day one;
+//  - the v2 STRICT draft widens to "unverified", which makes the default itself
+//    policy-observable: with the default flipped, this replay stops stepping up.
+{
+  const identity: Identity = {
+    id: "id_bs",
+    tenantId: "tenant_northwind",
+    externalRef: "nurse.bs",
+    displayName: "Nurse",
+    state: "enabled",
+    assignedRole: "nurse",
+  };
+  const device: Device = {
+    id: "dev_bs",
+    tenantId: "tenant_northwind",
+    externalRef: "ipad-bs",
+    name: "Ward iPad",
+    osPlatform: "iPadOS",
+    osVersion: "18.5",
+    ownerType: "shared",
+    managementAgent: "intune",
+  };
+  const workflow: Workflow = {
+    id: "wf_bs",
+    tenantId: "tenant_northwind",
+    key: "clinical-session",
+    name: "Clinical session",
+    riskTier: "elevated",
+  };
+  const sig = (
+    category: SignalCategory,
+    value: NormalizedSignal["value"],
+  ): NormalizedSignal => ({
+    id: `sig_bs_${category}`,
+    tenantId: "tenant_northwind",
+    connectorId: "conn",
+    subjectType: "device",
+    subjectId: device.id,
+    category,
+    value,
+    observedAt: "2026-07-13T13:00:00.000Z",
+    freshness: "fresh",
+    sourceReference: "fixture:test",
+  });
+  const healthy = [
+    sig("device_compliance", "compliant"),
+    sig("device_management", true),
+    sig("device_encryption", true),
+    sig("os_support", true),
+    sig("posture_freshness", "fresh"),
+  ];
+  const version = (n: number, rules: typeof SHARED_DEVICE_RULES_V2) => ({
+    id: `pv_bs_${n}`,
+    tenantId: "tenant_northwind",
+    policyId: "pol_bs",
+    version: n,
+    status: "active" as const,
+    rules,
+    createdAt: "2026-07-13T13:00:00.000Z",
+    digest: "test",
+  });
+  const v1 = version(1, SHARED_DEVICE_RULES_V1);
+  const v2 = version(2, SHARED_DEVICE_RULES_V2);
+
+  const absent = buildEvidence(identity, device, workflow, healthy);
+  check(
+    "benchmark-selection: an ABSENT signal derives 'unverified' — silence is not a confirmation",
+    absent.benchmarkSelection === "unverified",
+  );
+  const junk = buildEvidence(identity, device, workflow, [...healthy, sig("benchmark_selection", "totally-fine")]);
+  check(
+    "benchmark-selection: an unrecognized signal value also derives 'unverified', never a guess",
+    junk.benchmarkSelection === "unverified",
+  );
+  const misfit = buildEvidence(identity, device, workflow, [...healthy, sig("benchmark_selection", "misfit")]);
+  check("benchmark-selection: a 'misfit' signal is read through", misfit.benchmarkSelection === "misfit");
+  check(
+    "benchmark-selection: v1 steps up on MISFIT with its own reason code — an 'aligned' answer from the wrong test is not assurance",
+    evaluatePolicy(v1, misfit).outcome === "step_up" &&
+      evaluatePolicy(v1, misfit).matchedRules.some((r) => r.reasonCode === "BENCHMARK_SELECTION_MISFIT"),
+  );
+  check(
+    "benchmark-selection: v1 does NOT step up on the absent default — the active rule matches only the affirmative bad state, so day one is quiet",
+    evaluatePolicy(v1, absent).outcome === "allow",
+  );
+  check(
+    "benchmark-selection: the v2 STRICT draft widens to 'unverified' — the same absent evidence diverges to step_up only for a tenant that opted in",
+    evaluatePolicy(v2, absent).outcome === "step_up" &&
+      evaluatePolicy(v2, absent).matchedRules.some((r) => r.reasonCode === "BENCHMARK_SELECTION_UNESTABLISHED_STRICT"),
+  );
+  check(
+    "benchmark-selection: the arm never lowers — 'confirmed' grants nothing a healthy device lacked, and a non-compliant device restricts alongside it",
+    evaluatePolicy(v1, { ...misfit, benchmarkSelection: "confirmed" }).outcome === "allow" &&
+      evaluatePolicy(v1, { ...misfit, benchmarkSelection: "confirmed", deviceCompliance: "non_compliant" }).outcome === "restrict",
+  );
+
+  // The /v1 arm of the shift-context dimension — same three properties, same
+  // buildEvidence-not-literals discipline (the derivation is what the negative
+  // control on the benchmark arm proved literals cannot falsify).
+  const shiftAbsent = buildEvidence(identity, device, workflow, healthy);
+  check(
+    "shift-context: an ABSENT signal derives 'unverified' — silence is not a confirmation of labor context",
+    shiftAbsent.shiftContext === "unverified",
+  );
+  const shiftJunk = buildEvidence(identity, device, workflow, [...healthy, sig("shift_context", "probably-working")]);
+  check(
+    "shift-context: an unrecognized signal value also derives 'unverified', never a guess",
+    shiftJunk.shiftContext === "unverified",
+  );
+  const shiftMisfit = buildEvidence(identity, device, workflow, [...healthy, sig("shift_context", "misfit")]);
+  check("shift-context: a 'misfit' signal is read through", shiftMisfit.shiftContext === "misfit");
+  check(
+    "shift-context: v1 steps up on MISFIT with its own reason code — off the clock, off duty, or the wrong site is not the right decision context",
+    evaluatePolicy(v1, shiftMisfit).outcome === "step_up" &&
+      evaluatePolicy(v1, shiftMisfit).matchedRules.some((r) => r.reasonCode === "SHIFT_CONTEXT_MISFIT"),
+  );
+  check(
+    "shift-context: v1 does NOT step up on the absent default — day one is quiet until a WFM connector emits the signal",
+    evaluatePolicy(v1, shiftAbsent).outcome === "allow",
+  );
+  check(
+    "shift-context: the v2 STRICT draft widens to 'unverified' — the same absent evidence diverges to step_up only for a tenant that opted in",
+    evaluatePolicy(v2, shiftAbsent).outcome === "step_up" &&
+      evaluatePolicy(v2, shiftAbsent).matchedRules.some((r) => r.reasonCode === "SHIFT_CONTEXT_UNESTABLISHED_STRICT"),
+  );
+  check(
+    "shift-context: the arm never lowers — 'confirmed' grants nothing a healthy device lacked, and a non-compliant device restricts alongside it",
+    evaluatePolicy(v1, { ...shiftMisfit, shiftContext: "confirmed" }).outcome === "allow" &&
+      evaluatePolicy(v1, { ...shiftMisfit, shiftContext: "confirmed", deviceCompliance: "non_compliant" }).outcome === "restrict",
+  );
 }
 
 // ── 12. Repeated evaluation does not overwrite (unique ids) ────────────────────
@@ -1404,3 +1631,21 @@ if (failed.length > 0) {
 }
 
 console.log("\nAll core invariants hold.");
+
+// ── figures= — the line `scripts/check-proof-figures.mjs` reads ────────────────
+//
+// WHY THIS EXISTS, and it is a defect that recurred rather than a nicety.
+//
+// This proof — the largest in the repo, and the one every product document cites —
+// was NOT in the figure guard's PROOFS registry and emitted no `figures=` line, so
+// nothing checked any number a document stated about it. `docs/WHAT_SIGNALGRID_DOES_TODAY.md`
+// drifted to "188 assertions", was hand-corrected to 206, and had drifted again to
+// 209 by the time an audit re-derived it. The same figure going stale twice is the
+// evidence that correcting the number is not the fix; making it checkable is.
+//
+// The counts are DERIVED here, never restated: `assertions.length` is the real total,
+// and the two enum sizes are read from the same `types.ts` the docs call ground truth.
+// A document that states a different value now fails the guard instead of aging quietly.
+console.log(
+  `\nfigures=assertions=${assertions.length},categories=${SIGNAL_CATEGORIES.length},evidenceFields=${EVIDENCE_FIELDS.length}`,
+);

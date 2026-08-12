@@ -32,11 +32,26 @@ export function evaluateReachability(
   const staleAfterMs = options.staleAfterMs ?? DEFAULT_STALE_AFTER_MS;
   const freshness = deriveFreshness(signal.lastSeenAt, nowMs, staleAfterMs);
 
-  // 1. No cellular backchannel at all — the founder's core blind spot. A Wi-Fi-
-  //    only device that has left coverage cannot be located out of band.
-  if (signal.wifiOnly) {
-    return verdict("wifi_only_blindspot", "WIFI_ONLY_NO_CELLULAR", "alert", false);
+  // 1. No cellular backchannel at all — the founder's core blind spot. A device
+  //    with no modem that has left coverage cannot be located out of band.
+  //
+  //    ONLY ON A POSITIVE STATEMENT from the device-inventory plane. This branch
+  //    used to fire on a value derived from carrier SILENCE, which meant a device
+  //    the carrier API simply could not see — a private-5G attachment, an eSIM on
+  //    another operator's platform, a paginated tail, the wrong account — was
+  //    reported as having no radio, and (because this branch short-circuits ahead
+  //    of provisioning and reachability) had `locatable: false` asserted about it.
+  //    That is the strongest claim in this file resting on the weakest evidence
+  //    there is: nothing.
+  if (signal.cellularBackchannel === "absent") {
+    return verdict("no_cellular_backchannel", "NO_CELLULAR_BACKCHANNEL", "alert", false);
   }
+
+  // 1b. We were never told. Distinct from `absent` and deliberately NOT a
+  //     short-circuit: the rest of the ladder still runs, because a carrier record
+  //     that reports an online data session tells us a backchannel exists no matter
+  //     what the inventory plane failed to say. Only when the ladder ALSO finds
+  //     nothing does the unposed axis become the finding — see step 7.
 
   // 2. Provisioning is off — the SIM is suspended/deactivated, so no channel exists.
   if (signal.provisioning === "suspended" || signal.provisioning === "deactivated") {
@@ -67,7 +82,18 @@ export function evaluateReachability(
     return verdict("unreachable", "FULLY_UNREACHABLE", "escalate", false, freshness);
   }
 
-  // 7. Anything else (unknown state) — resolve toward attention, not silence.
+  // 7. Anything else — resolve toward attention, not silence.
+  //
+  //    The unposed-backchannel case lands here and gets its OWN reason code rather
+  //    than being folded into the generic unknown, because the two send an operator
+  //    to different places: `REACHABILITY_UNKNOWN` means the carrier could not tell
+  //    us the session state, while `BACKCHANNEL_UNPOSED` means nobody told us
+  //    whether this device even has a radio — which is a coverage gap in the
+  //    deployment's own wiring, and is exactly what a device on a private network
+  //    looks like from here.
+  if (signal.cellularBackchannel === "unknown" && signal.cellularReachability === "unknown") {
+    return verdict("backchannel_unverified", "BACKCHANNEL_UNPOSED", "monitor", signal.smsReachable, freshness);
+  }
   return verdict("unknown", "REACHABILITY_UNKNOWN", "monitor", signal.smsReachable, freshness);
 }
 

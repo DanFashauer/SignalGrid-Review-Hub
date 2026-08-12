@@ -34,7 +34,11 @@ export const EVALUATED_CATEGORIES = [
   "tamper_state",
   "dock_state",
   "security_baseline",
+  "benchmark_selection",
+  "shift_context",
   "badge_binding",
+  "device_management_health",
+  "local_authority",
 ] as const;
 
 // Compile-time guard: EVALUATED_CATEGORIES must exactly equal SignalCategory.

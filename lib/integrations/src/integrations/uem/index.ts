@@ -13,8 +13,12 @@ import { normalizeWorkspaceOneDevice } from "./workspace-one";
 import type { NormalizedUemDeviceState, UemVendor, UemVerdict } from "./types";
 
 export * from "./types";
+// Mirrors `nac/index.ts`, which has always re-exported its store. The asymmetry was
+// not a decision — it just meant the uem config store had no import path at all
+// outside its own directory, which is part of why its unscoped key went unnoticed.
+export * from "./store";
 export { evaluateUem } from "./evaluate";
-export { normalizeIntuneDevice } from "./intune";
+export { normalizeIntuneDevice, cellularHardwareFrom } from "./intune";
 export { normalizeJamfDevice } from "./jamf";
 export { normalizeWorkspaceOneDevice, WORKSPACE_ONE_READ_CONTRACT } from "./workspace-one";
 
@@ -90,8 +94,10 @@ export function normalizeUemDevice(vendor: UemVendor, raw: unknown): NormalizedU
         enrollment: "unknown",
         compliance: "unknown",
         supervision: "unknown",
+        ownership: "unknown",
         osVersion: null,
         lastCheckInAgeSeconds: null,
+        cellularHardware: "unknown",
         reportIntegrity: "malformed",
       };
   }
@@ -108,8 +114,10 @@ export const UEM_FIXTURES: Readonly<Record<string, NormalizedUemDeviceState>> = 
     enrollment: "enrolled",
     compliance: "compliant",
     supervision: "supervised",
+    ownership: "corporate",
     osVersion: "17.5.1",
     lastCheckInAgeSeconds: 300,
+    cellularHardware: "unknown",
     reportIntegrity: "intact",
   },
   "intune-retiring": {
@@ -118,8 +126,10 @@ export const UEM_FIXTURES: Readonly<Record<string, NormalizedUemDeviceState>> = 
     enrollment: "retired",
     compliance: "compliant",
     supervision: "supervised",
+    ownership: "corporate",
     osVersion: "17.5.1",
     lastCheckInAgeSeconds: 900,
+    cellularHardware: "unknown",
     reportIntegrity: "intact",
   },
   "jamf-uneval": {
@@ -128,8 +138,11 @@ export const UEM_FIXTURES: Readonly<Record<string, NormalizedUemDeviceState>> = 
     enrollment: "enrolled",
     compliance: "not_evaluated",
     supervision: "supervised",
+    // Jamf reports no ownership field; see the note in jamf.ts.
+    ownership: "unknown",
     osVersion: "14.6",
     lastCheckInAgeSeconds: 120,
+    cellularHardware: "unknown",
     reportIntegrity: "intact",
   },
   "ws1-noncompliant": {
@@ -138,8 +151,42 @@ export const UEM_FIXTURES: Readonly<Record<string, NormalizedUemDeviceState>> = 
     enrollment: "enrolled",
     compliance: "non_compliant",
     supervision: "unsupervised",
+    // Workspace ONE `Ownership: "S"` — corporate-SHARED, this product's core case.
+    ownership: "corporate",
     osVersion: "17.4",
     lastCheckInAgeSeconds: 60,
+    cellularHardware: "unknown",
+    reportIntegrity: "intact",
+  },
+  // THE BYOD CASE, and the reason the ownership axis exists. Enrolled, compliant,
+  // and unsupervised — because an employee-owned device CANNOT be supervised. This
+  // fixture GRANTS. Before the ownership axis it stepped up, on every decision,
+  // forever, for a state with no remediation. If a future change makes this fixture
+  // step up again, that change is a regression and this is where it shows.
+  "intune-byod-personal": {
+    deviceId: "fixture-intune-3",
+    vendor: "intune",
+    enrollment: "enrolled",
+    compliance: "compliant",
+    supervision: "unsupervised",
+    ownership: "personal",
+    osVersion: "18.1",
+    lastCheckInAgeSeconds: 240,
+    cellularHardware: "unknown",
+    reportIntegrity: "intact",
+  },
+  // The same device with ownership unreadable — steps up, because we cannot tell
+  // whether the missing supervision is expected. The pair is the whole point.
+  "intune-unsupervised-owner-unknown": {
+    deviceId: "fixture-intune-4",
+    vendor: "intune",
+    enrollment: "enrolled",
+    compliance: "compliant",
+    supervision: "unsupervised",
+    ownership: "unknown",
+    osVersion: "18.1",
+    lastCheckInAgeSeconds: 240,
+    cellularHardware: "unknown",
     reportIntegrity: "intact",
   },
   unattributable: {
@@ -148,8 +195,10 @@ export const UEM_FIXTURES: Readonly<Record<string, NormalizedUemDeviceState>> = 
     enrollment: "unknown",
     compliance: "unknown",
     supervision: "unknown",
+    ownership: "unknown",
     osVersion: null,
     lastCheckInAgeSeconds: null,
+    cellularHardware: "unknown",
     reportIntegrity: "malformed",
   },
 });

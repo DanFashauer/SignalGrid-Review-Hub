@@ -49,22 +49,67 @@ const MUTATION_EXCLUDED = [
 /** `<name>-proof.ts` → `proof:<name>`, the script name the guards register. */
 const proofNameOf = (file) => `proof:${file.replace(/-proof\.ts$/, "")}`;
 
+// WHAT WE ARE DETECTING, stated precisely because getting it slightly wrong has
+// now cost this repo twice: `check-proof-figures.mjs` parses a stdout LINE THAT
+// STARTS WITH `figures=`. Statically, "start of a line" inside a string literal
+// is one of three things — the start of the literal, a `\n` ESCAPE inside it, or
+// a real newline inside a template literal. All three are permitted here.
+//
+// Two failures are recorded in this pattern, both the same root cause:
+//
+//   1. It was anchored to `console.log(` on ONE line, so a proof that wrapped its
+//      call read as "publishes no figures". `proof:iac` does exactly that, so it
+//      sat in the figure guard's PROOFS registry while this scanner reported it
+//      absent. The two printed totals disagreed (16 vs 17) and the check still
+//      exited 0, because nothing compared them. `\s*` and /s fixed that, and the
+//      reverse-direction check below was added so the totals could never disagree
+//      in silence again.
+//
+//   2. It required `figures=` to be the FIRST characters of the literal, so the
+//      extremely ordinary `` `\nfigures=…` `` — a blank line before the block —
+//      was invisible. FOUR proofs write it that way. Only one of them
+//      (`proof:signalgrid-core`) was caught, and only because the reverse check
+//      from failure 1 fired on it. The other three — credential-rotation,
+//      local-authority, observability-integrity — were undetected AND
+//      unregistered, and those two errors CANCEL: this scanner said nothing at
+//      all while three proofs published figures no guard was checking. A blind
+//      spot that lines up with a gap in the registry is silent by construction,
+//      which is why the controls below exist rather than another careful read.
+const FIGURES_EMISSION = /console\.log\(\s*[`"'](?:\\n|\s)*figures=/s;
+
+// Negative and positive controls for the detector itself. A regex nobody has
+// watched fail is indistinguishable from a comment — and this one has been wrong
+// twice while looking correct both times.
+const DETECTOR_CONTROLS = [
+  { expect: true, name: "single-line", src: "console.log(`figures=a=1`);" },
+  { expect: true, name: "wrapped call", src: "console.log(\n  `figures=a=1`,\n);" },
+  { expect: true, name: "leading \\n escape", src: "console.log(\n  `\\nfigures=a=1`,\n);" },
+  { expect: true, name: "real newline in template", src: "console.log(`\n\nfigures=a=1`);" },
+  { expect: true, name: "double-quoted", src: 'console.log("\\nfigures=a=1");' },
+  // The comment shape below is real: `webauthn-enrollment-race-proof.ts` explains
+  // in prose why it deliberately does NOT emit a figures= line. Detecting that as
+  // an emission would register a Redis-gated proof with the figure guard and turn
+  // a green sweep red on every machine without a Redis.
+  { expect: false, name: "prose mention", src: "// Deliberately NOT a `figures=` line." },
+  { expect: false, name: "mid-line, not line start", src: "console.log(`summary=figures=nope`);" },
+  { expect: false, name: "not a console.log", src: "const s = `figures=a=1`;" },
+];
+const controlFailures = DETECTOR_CONTROLS.filter((c) => FIGURES_EMISSION.test(c.src) !== c.expect);
+if (controlFailures.length > 0) {
+  console.error("✗ the figures= detector failed its own controls — it cannot be trusted to scan:");
+  for (const c of controlFailures) {
+    console.error(`    ${c.expect ? "missed" : "false-matched"}: ${c.name}`);
+  }
+  process.exit(1);
+}
+
 const files = readdirSync(proofDir).filter((f) => f.endsWith("-proof.ts"));
 const usesGrantSafety = [];
 const emitsFigures = [];
 for (const f of files) {
   const text = readFileSync(join(proofDir, f), "utf8");
   if (text.includes("enumerateGrantSafety")) usesGrantSafety.push(proofNameOf(f));
-  // `\s*` and the /s flag are load-bearing: this was anchored to `console.log(` on
-  // ONE line, so a proof that wraps its call —
-  //     console.log(
-  //       `figures=...`,
-  //     );
-  // — read as "publishes no figures". `proof:iac` does exactly that, so it sat in
-  // the figure guard's PROOFS registry while this scanner reported it absent. The
-  // two printed totals disagreed (16 vs 17) and the check still exited 0, because
-  // nothing compared them. Found by audit, not by the guard.
-  if (/console\.log\(\s*`figures=/s.test(text)) emitsFigures.push(proofNameOf(f));
+  if (FIGURES_EMISSION.test(text)) emitsFigures.push(proofNameOf(f));
 }
 
 const mutationCovered = new Set(TARGETS.map((t) => t.proof));

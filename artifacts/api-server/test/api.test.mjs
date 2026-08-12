@@ -227,7 +227,23 @@ async function run() {
 
   // ── Signal Radar: new-signal detection ───────────────────────────────────
   const catalog = await req("GET", "/signals/catalog");
-  check("signal catalog → 200 with 13 evaluated categories", catalog.status === 200 && catalog.json?.evaluated?.length === 13);
+  check("signal catalog → 200 with 17 evaluated categories (15 + the two launch families the 2026-08-10 scan found unrepresented)", catalog.status === 200 && catalog.json?.evaluated?.length === 17);
+  check(
+    "signal catalog → shift_context is evaluated, not novel (the category the /v1 misfit rule reads)",
+    (catalog.json?.evaluated ?? []).includes("shift_context"),
+  );
+  check(
+    "signal catalog → benchmark_selection is evaluated, not novel (the category the /v1 misfit rule reads)",
+    (catalog.json?.evaluated ?? []).includes("benchmark_selection"),
+  );
+
+  // ── /metrics: global aggregate, optionally bearer-gated, never tenant-labelled ──
+  const metricsRes = await fetch(`${BASE.replace(/\/api$/, "")}/metrics`);
+  const metricsText = await metricsRes.text();
+  check("/metrics → 200 with no METRICS_TOKEN set (Prometheus convention preserved)",
+    metricsRes.status === 200);
+  check("/metrics → carries NO tenant label — the aggregate can never become a cross-tenant side channel",
+    metricsText.length > 0 && !metricsText.includes("tenant"));
   check(
     "signal catalog → battery_health is evaluated, not novel",
     (catalog.json?.evaluated ?? []).includes("battery_health"),
@@ -296,6 +312,130 @@ async function run() {
     gateEmr.json?.plan?.actions?.find((a) => a.key === "order.place")?.disposition === "assist");
   const gateUnknown = await req("POST", "/v1/app-workflows/evaluate", { token: KEYS.operator, body: { integrationId: "nope", identityRef: "nurse.compliant", deviceRef: "ipad-ward-01" } });
   check("app-workflows unknown integration → 404", gateUnknown.status === 404);
+
+  // ── Reconciliation: which decision wins after a partition ──────────────────
+  //
+  // The wire arm of `reconcileDecisions`. The cases below are the ones a wire
+  // surface can get wrong that the library proof cannot see: a route that
+  // defaults the two provenance booleans, a route that truncates an oversized
+  // set, and a route that treats a posed bound with no stated ages as no bound.
+  const prov = (over = {}) => ({
+    policyVersion: 1,
+    evaluatedOffline: false,
+    policyKnownSuperseded: false,
+    ...over,
+  });
+
+  // The headline: an offline device holding the NEWER policy says allow; the
+  // connected control plane said deny. The deny stands.
+  const partitioned = await req("POST", "/v1/decisions/reconcile", {
+    token: KEYS.operator,
+    body: {
+      records: [
+        { id: "cloud", outcome: "deny", provenance: prov({ policyVersion: 7, coreNormalizationVersion: 2 }) },
+        { id: "device", outcome: "allow", provenance: prov({ policyVersion: 8, coreNormalizationVersion: 2, evaluatedOffline: true }) },
+      ],
+    },
+  });
+  check("reconcile: offline authority cannot relax a connected deny",
+    partitioned.status === 200 && partitioned.json?.reconciliation?.outcome === "deny");
+  check("reconcile: the veto is named in the response",
+    partitioned.json?.reconciliation?.reasonCodes?.includes("OFFLINE_AUTHORITY_CANNOT_RELAX") === true);
+  check("reconcile: the device is still reported as the provenance authority",
+    JSON.stringify(partitioned.json?.reconciliation?.authorityIds) === JSON.stringify(["device"]));
+
+  // The un-stick path — the same shape with the authority CONNECTED.
+  const unstuck = await req("POST", "/v1/decisions/reconcile", {
+    token: KEYS.operator,
+    body: {
+      records: [
+        { id: "stale-device", outcome: "deny", provenance: prov({ policyVersion: 7, coreNormalizationVersion: 2 }) },
+        { id: "cloud", outcome: "allow", provenance: prov({ policyVersion: 8, coreNormalizationVersion: 2 }) },
+      ],
+    },
+  });
+  check("reconcile: a connected newer policy DOES relax a stale deny",
+    unstuck.json?.reconciliation?.outcome === "allow" &&
+    unstuck.json?.reconciliation?.reasonCodes?.includes("NEWER_PROVENANCE_RELAXED_STALE_DECISION") === true);
+
+  // Order-independence, over the wire rather than in-process: the same set sent
+  // in the reverse order must produce the same answer.
+  const reversed = await req("POST", "/v1/decisions/reconcile", {
+    token: KEYS.operator,
+    body: {
+      records: [
+        { id: "device", outcome: "allow", provenance: prov({ policyVersion: 8, coreNormalizationVersion: 2, evaluatedOffline: true }) },
+        { id: "cloud", outcome: "deny", provenance: prov({ policyVersion: 7, coreNormalizationVersion: 2 }) },
+      ],
+    },
+  });
+  check("reconcile: reversing the record order does not move the answer",
+    JSON.stringify(reversed.json?.reconciliation) === JSON.stringify(partitioned.json?.reconciliation));
+
+  // THE ROUTE MUST NOT DEFAULT EITHER PROVENANCE BOOLEAN. A `?? false` in the
+  // parser would turn each of these into a 200, and the request that was
+  // silently completed would be indistinguishable from an honest one.
+  const noOffline = await req("POST", "/v1/decisions/reconcile", {
+    token: KEYS.operator,
+    body: { records: [{ id: "x", outcome: "allow", provenance: { policyVersion: 1, policyKnownSuperseded: false } }] },
+  });
+  check("reconcile: an omitted evaluatedOffline is a 400, not an 'online'", noOffline.status === 400);
+  const noSuperseded = await req("POST", "/v1/decisions/reconcile", {
+    token: KEYS.operator,
+    body: { records: [{ id: "x", outcome: "allow", provenance: { policyVersion: 1, evaluatedOffline: false } }] },
+  });
+  check("reconcile: an omitted policyKnownSuperseded is a 400, not a 'current'", noSuperseded.status === 400);
+
+  // A posed bound with NO stated ages expires every offline record — it does not
+  // quietly become "no bound".
+  const unstated = await req("POST", "/v1/decisions/reconcile", {
+    token: KEYS.operator,
+    body: {
+      records: [{ id: "device", outcome: "allow", provenance: prov({ policyVersion: 8, coreNormalizationVersion: 2, evaluatedOffline: true }) }],
+      standingBound: { maxStandingSeconds: 3600 },
+    },
+  });
+  check("reconcile: a bound with no stated ages expires the offline record",
+    unstated.json?.reconciliation?.outcome === "step_up" &&
+    unstated.json?.reconciliation?.reasonCodes?.includes("OFFLINE_STANDING_AGE_UNSTATED") === true);
+
+  // Refusals the route owns rather than the library.
+  const empty = await req("POST", "/v1/decisions/reconcile", { token: KEYS.operator, body: { records: [] } });
+  check("reconcile: an empty record set is refused, not defaulted", empty.status === 400);
+  const notArray = await req("POST", "/v1/decisions/reconcile", { token: KEYS.operator, body: { records: "two" } });
+  check("reconcile: a non-array records field is a 400", notArray.status === 400);
+  const oversized = await req("POST", "/v1/decisions/reconcile", {
+    token: KEYS.operator,
+    body: {
+      records: Array.from({ length: 65 }, (_, i) => ({
+        id: `r${i}`, outcome: "allow", provenance: prov({ policyVersion: 1, coreNormalizationVersion: 1 }),
+      })),
+    },
+  });
+  check("reconcile: an oversized set is REFUSED rather than truncated", oversized.status === 400);
+  const atCap = await req("POST", "/v1/decisions/reconcile", {
+    token: KEYS.operator,
+    body: {
+      records: Array.from({ length: 64 }, (_, i) => ({
+        id: `r${i}`, outcome: "allow", provenance: prov({ policyVersion: 1, coreNormalizationVersion: 1 }),
+      })),
+    },
+  });
+  check("reconcile: a set exactly at the cap is accepted (the bound is not off by one)",
+    atCap.status === 200 && atCap.json?.reconciliation?.considered === 64);
+
+  // Registration ORDER, not just registration: `/v1/keys` sits deliberately ABOVE
+  // the auth guard, so a new route added in the wrong place would be served
+  // unauthenticated and nothing else in this suite would notice.
+  const unauthed = await req("POST", "/v1/decisions/reconcile", {
+    body: { records: [{ id: "x", outcome: "allow", provenance: prov() }] },
+  });
+  check("reconcile: sits BELOW the auth guard (no token → 401)", unauthed.status === 401);
+
+  // Reconciliation stores nothing — the decision list is unchanged by all of the above.
+  const afterReconcile = await req("GET", "/v1/decisions", { token: KEYS.operator });
+  check("reconcile: minted no decision record (the route stores nothing)",
+    afterReconcile.status === 200 && Array.isArray(afterReconcile.json?.decisions));
 
   // A step_up keeps its high-assurance actions held — the product API never
   // releases them from a request-supplied signal (real completion requires a
@@ -590,6 +730,59 @@ async function run() {
   check("grid sourcing surfaces a gap (unavailable → not wireable, no fidelity)", gap?.wireable === false && gap?.fidelity === "none");
   check("grid sourcing marks vendor-integrated signals high fidelity + not grid-lifted", srcSignals.filter((r) => r.method === "api" || r.method === "native").every((r) => r.fidelity === "high" && r.wireable === true && r.gridLifted === false));
   check("grid sourcing marks grid-collected as the Grid doing the lifting", srcSignals.filter((r) => r.method === "grid_collected").every((r) => r.gridLifted === true && r.wireable === true));
+
+  // ── evidence-coverage: the design-partner artifact ──────────────────────────
+  const covEmpty = await req("GET", "/cp/v1/grid/evidence-coverage");
+  check("evidence-coverage responds 200 with no planes declared", covEmpty.status === 200);
+  check("evidence-coverage on an empty estate answers ZERO axes", covEmpty.json?.report?.answerable === 0);
+  check("evidence-coverage on an empty estate reports silent holes (silence looking like health)", covEmpty.json?.report?.silentHoles > 0);
+  check("evidence-coverage names the recognised planes so a 400 is actionable", Array.isArray(covEmpty.json?.knownPlanes) && covEmpty.json.knownPlanes.length > 0);
+
+  const covWedge = await req("GET", "/cp/v1/grid/evidence-coverage?planes=identity,device_management");
+  check("evidence-coverage with a declared estate answers MORE axes than the empty one", covWedge.json?.report?.answerable > covEmpty.json?.report?.answerable);
+  check("evidence-coverage with a declared estate has FEWER silent holes", covWedge.json?.report?.silentHoles < covEmpty.json?.report?.silentHoles);
+  check("evidence-coverage echoes the declared planes it actually used", Array.isArray(covWedge.json?.report?.declaredPlanes) && covWedge.json.report.declaredPlanes.length === 2);
+  check("evidence-coverage wedge responds 200", covWedge.status === 200);
+  // NOT `answerable < totalAxes` — that was a TAUTOLOGY. Two axes (workflowRiskTier,
+  // criticalSignalsPresent) have no source plane at all, so `answerable` can never
+  // reach 18 for ANY input; the assertion could not fail even if silentHoles were
+  // hardcoded to zero. Pin the real numbers against the engine instead.
+  check("evidence-coverage wedge pins the measured counts (10 answerable, 6 silent holes)", covWedge.json?.report?.answerable === 10 && covWedge.json?.report?.silentHoles === 6);
+  check("evidence-coverage empty estate pins the measured hole count (11)", covEmpty.json?.report?.silentHoles === 11);
+  // The `note` is prose the CLIENT receives, so a stale number in it is a published
+  // contradiction, not an internal comment. It said "18" as a literal beside a
+  // `totalAxes` that computes the same thing; a nineteenth axis would have shipped a
+  // response arguing with itself. Pinned to the payload rather than to a number here.
+  check(
+    "evidence-coverage note states the SAME axis count the payload reports",
+    String(covWedge.json?.note ?? "").includes(`${covWedge.json?.report?.totalAxes} decision evidence axes`),
+  );
+  // The three coverage buckets partition the axis table. Every surface leads with
+  // `silentHoles`, which is a SUBSET of `needsInstrumentation` — so a reader given all
+  // four numbers and no denominator cannot tell which ones are meant to add up.
+  check(
+    "evidence-coverage buckets partition the axis total, and silentHoles is a subset of the dark ones",
+    covWedge.json?.report?.answerable +
+      covWedge.json?.report?.needsInstrumentation +
+      covWedge.json?.report?.notSourced ===
+      covWedge.json?.report?.totalAxes &&
+      covWedge.json?.report?.silentHoles <= covWedge.json?.report?.needsInstrumentation,
+  );
+
+  // REPEATED PARAMS ARE THE OTHER STANDARD SERIALISATION AND MUST NOT BE DROPPED.
+  // Express hands these back as an array; the first draft coerced that to undefined
+  // and returned a full empty-estate report attributed to a two-plane estate.
+  const covRepeated = await req("GET", "/cp/v1/grid/evidence-coverage?planes=identity&planes=device_management");
+  check("evidence-coverage accepts repeated ?planes= params (200)", covRepeated.status === 200);
+  check("evidence-coverage repeated params match the comma form EXACTLY — no silent drop", covRepeated.json?.report?.answerable === covWedge.json?.report?.answerable && covRepeated.json?.report?.silentHoles === covWedge.json?.report?.silentHoles);
+  check("evidence-coverage repeated params are NOT read as an empty estate", covRepeated.json?.report?.answerable > covEmpty.json?.report?.answerable);
+
+  // AN UNRECOGNISED PLANE IS REFUSED, NOT DROPPED. Dropping it would understate what
+  // the estate can answer, and the prospect could never catch that error.
+  const covBad = await req("GET", "/cp/v1/grid/evidence-coverage?planes=identity,teleportation");
+  check("evidence-coverage REFUSES an unrecognised plane (400)", covBad.status === 400);
+  check("evidence-coverage names the offending plane rather than silently ignoring it", String(covBad.json?.message ?? "").includes("teleportation"));
+  check("evidence-coverage 400 still lists the valid planes", Array.isArray(covBad.json?.knownPlanes) && covBad.json.knownPlanes.length > 0);
 
   const gridConfig = await req("GET", "/cp/v1/grid/config");
   check("grid config validates clean", gridConfig.status === 200 && gridConfig.json?.valid === true);
@@ -968,7 +1161,9 @@ async function run() {
       // by design — the allowlist is fail-closed, so a route absent from this list is
       // denied by construction rather than by having been remembered here.
       for (const p of [
-        "/v1/policies",
+        // /v1/policies moved to the launch fence (wireframe screen 5, read-only);
+        // the deferred simulate arm stands in as the policies-adjacent denial.
+        "/v1/decisions/dec_x/simulate",
         "/v1/webhooks",
         "/v1/remediation",
         "/v1/app-workflows/evaluate",

@@ -108,7 +108,7 @@ shape is genuinely vendor-neutral:
 **Design insight taken from this research:** door-state detection depends on physical
 DPS/DPI hardware. Where no sensor exists, forced/held **cannot** be known — so
 `doorState: "unknown"` is a real-world state, not a defensive edge case. The evaluator
-treats it as `step_up` (never a grant), which the 8,100-combination brute-force proof
+treats it as `step_up` (never a grant), which the 97,200-combination brute-force proof
 enforces.
 
 ### HID Origo (mobile credential plane) — ✅ verified (auth + surface)

@@ -1,5 +1,37 @@
-import type { UEMAdapter } from './adapters/types';
-import type { NACEndpointInfo } from './adapters/types';
+import type { NACAdapter, NACEndpointInfo, UEMAdapter } from './adapters/types';
+
+/**
+ * Method names that would make an injected adapter an ACTUATOR rather than a reader.
+ *
+ * WHY A RUNTIME CHECK AND NOT JUST A TYPE. The NAC quarantine actuators were removed
+ * and `NACAdapter` narrowed to `lookupEndpoint` — but TypeScript is structurally
+ * typed, so an object carrying `lookupEndpoint` AND `quarantineEndpoint` still
+ * satisfies the interface. Excess-property checking only applies to object literals
+ * assigned directly, never to a value arriving through a variable, which is how every
+ * real adapter arrives. The narrowed interface therefore documents the contract
+ * without enforcing it at the one place an adapter actually enters the system.
+ *
+ * This closes that at the boundary: an adapter exposing a write method is REFUSED,
+ * loudly, at injection time — before it can be called. Fail-closed, and it fails
+ * where a human is looking rather than mid-decision.
+ */
+const ACTUATOR_METHODS = [
+  'quarantineEndpoint', 'unquarantineEndpoint', 'quarantine', 'unquarantine',
+  'lockDevice', 'remoteLock', 'wipeDevice', 'eraseDevice', 'disconnectEndpoint',
+  'setTag', 'sendCommand', 'applyPolicy',
+] as const;
+
+/** Names of any actuator methods this adapter exposes. Empty means read-only. */
+export function actuatorMethodsOn(adapter: unknown): string[] {
+  if (typeof adapter !== 'object' || adapter === null) return [];
+  return ACTUATOR_METHODS.filter(
+    (m) => typeof (adapter as Record<string, unknown>)[m] === 'function',
+  );
+}
+
+/** Reports a source fault. Defaults to a warning rather than silence — see the note
+ *  on resolveFromUEM. Mirrors the `onFault` reporter in `nac/store.ts`. */
+export type ResolverFaultReporter = (message: string) => void;
 
 /**
  * Device Identity Resolution
@@ -28,11 +60,27 @@ export interface DeviceIdentity {
  */
 export class DeviceIdentityResolver {
   private uemAdapter: UEMAdapter | null = null;
-  private nacAdapters: Map<string, any> = new Map();
+  // TYPED, not `any`. It was `Map<string, any>`, which meant the read-only NACAdapter
+  // interface was not enforced at the one call site that consumes it — the narrowing
+  // done when the quarantine actuators were removed had no effect here.
+  private nacAdapters: Map<string, NACAdapter> = new Map();
+  private onFault: ResolverFaultReporter;
 
-  constructor(options?: { uemAdapter?: UEMAdapter; nacAdapters?: Map<string, any> }) {
+  constructor(options?: {
+    uemAdapter?: UEMAdapter;
+    nacAdapters?: Map<string, NACAdapter>;
+    /** Where source faults are reported. Defaults to a console warning — never to
+     *  silence, which is what the previous bare `catch {}` amounted to. */
+    onFault?: ResolverFaultReporter;
+  }) {
     this.uemAdapter = options?.uemAdapter || null;
-    this.nacAdapters = options?.nacAdapters || new Map();
+    this.onFault = options?.onFault ?? ((m) => console.warn(`[deviceResolver] ${m}`));
+    this.nacAdapters = new Map();
+    for (const [name, adapter] of options?.nacAdapters ?? new Map()) {
+      // Constructor-injected adapters go through the SAME guard as addNACAdapter.
+      // A check only one of two entry points performs is a check with a door beside it.
+      this.addNACAdapter(name, adapter);
+    }
   }
 
   /**
@@ -45,7 +93,25 @@ export class DeviceIdentityResolver {
   /**
    * Add NAC adapter for identity lookups
    */
-  addNACAdapter(name: string, adapter: any): void {
+  addNACAdapter(name: string, adapter: NACAdapter): void {
+    const actuators = actuatorMethodsOn(adapter);
+    if (actuators.length > 0) {
+      // REFUSED, not warned-about-and-accepted. This resolver reads identity; an
+      // adapter that can also act on a device does not belong in it, and accepting
+      // one "just to look things up" is how the write path came back last time.
+      throw new Error(
+        `deviceResolver: refusing NAC adapter "${name}" — it exposes device-action ` +
+        `method(s): ${actuators.join(', ')}. This resolver is read-only; identity ` +
+        `lookup must not be handed an object that can act on a device.`,
+      );
+    }
+    if (typeof adapter?.lookupEndpoint !== 'function') {
+      throw new Error(
+        `deviceResolver: refusing NAC adapter "${name}" — no lookupEndpoint(). An ` +
+        `adapter that cannot answer the only question this resolver asks would fail ` +
+        `silently at decision time instead of loudly here.`,
+      );
+    }
     this.nacAdapters.set(name, adapter);
   }
 
@@ -127,7 +193,19 @@ export class DeviceIdentityResolver {
         platform: state.platform,
         source: 'uem',
       };
-    } catch {
+    } catch (err) {
+      // THE FAULT IS REPORTED, NOT SWALLOWED. This was a bare `catch { return null }`,
+      // and `null` from this method means "no such device" — so an unreachable UEM, an
+      // expired credential or a 500 all rendered as a confident "that device does not
+      // exist". That is the failure this repository forbids everywhere else: an
+      // unknown must never read as an answer.
+      //
+      // The return value stays `null` on purpose — resolution legitimately falls
+      // through to the next source, and throwing here would make one flaky vendor
+      // API break identity resolution entirely. What changes is that the fault is now
+      // AUDIBLE, so "we could not ask" is distinguishable from "we asked and it said
+      // no" by anyone reading the log or supplying an onFault reporter.
+      this.onFault(`UEM lookup failed for "${deviceId}": ${err instanceof Error ? err.message : String(err)}`);
       return null;
     }
   }
@@ -135,24 +213,29 @@ export class DeviceIdentityResolver {
   /**
    * Resolve from NAC adapter
    */
-  private async resolveFromNAC(adapter: any, identifier: string): Promise<DeviceIdentity | null> {
-    if (!adapter.lookupEndpoint) {
+  private async resolveFromNAC(adapter: NACAdapter, identifier: string): Promise<DeviceIdentity | null> {
+    // Fault handling now MATCHES resolveFromUEM. It did not: that path swallowed
+    // every error while this one let them propagate, so the same vendor outage either
+    // returned null or crashed the resolver depending purely on which source was
+    // tried first. Two sources, two behaviours, one caller — that is not a policy.
+    try {
+      // Try by MAC address
+      const byMac = await adapter.lookupEndpoint(identifier, 'mac');
+      if (byMac) {
+        return this.mapNACEndpoint(byMac);
+      }
+
+      // Try by serial number
+      const bySerial = await adapter.lookupEndpoint(identifier, 'serial');
+      if (bySerial) {
+        return this.mapNACEndpoint(bySerial);
+      }
+
+      return null;
+    } catch (err) {
+      this.onFault(`NAC lookup failed for "${identifier}": ${err instanceof Error ? err.message : String(err)}`);
       return null;
     }
-
-    // Try by MAC address
-    const byMac = await adapter.lookupEndpoint(identifier, 'mac');
-    if (byMac) {
-      return this.mapNACEndpoint(byMac);
-    }
-
-    // Try by serial number
-    const bySerial = await adapter.lookupEndpoint(identifier, 'serial');
-    if (bySerial) {
-      return this.mapNACEndpoint(bySerial);
-    }
-
-    return null;
   }
 
   /**

@@ -70,9 +70,9 @@ its confirmation invariant) and asserts each is *caught* — proving the enumera
 detects holes rather than always passing.
 
 Connectors whose full allow-path is currently constrained this way (mismatches=0
-over the full product): **oauth-consent** (6,480), **sso-session** (768),
-**access-governance** (4,500), **ot-posture** (324), **token-binding** (1,296),
-**pacs-access** (8,100), **agent-identity** (17,280 normalized + 870,912 raw + a parse-fidelity pass over the raw space),
+over the full product): **oauth-consent** (6,480), **sso-session** (4,608, widened from 768 by the shared-account attribution axis),
+**access-governance** (18,000, widened from 4,500 by the lifecycle axis), **ot-posture** (324), **token-binding** (1,296),
+**pacs-access** (97,200, in both the unposed and the posed-floor grading), **agent-identity** (17,280 normalized + 870,912 raw + a parse-fidelity pass over the raw space),
 **device-management-health** (21,600 normalized + 1,354,752 raw + a parse-fidelity pass),
 **link-usability** (6,480 normalized + 217,728 raw + a parse-fidelity pass). These are the enum-field
 "trust grant" dimensions where
@@ -316,6 +316,62 @@ If the MCP checkout isn't found it prints how to get it and continues with the
 Review-Hub side. Each repo's own CI still guards its half of the contract
 independently; `verify:all` is the local convenience that runs the pair together.
 
+#### The cumulative-ladder defect, and why the swept population is the thing to audit
+
+A worked example of how these gates fail, kept because the failure was invisible for
+twenty-one connector families at once and the shape recurs.
+
+Every gated connector answers the same question the same way: tier must be `beta`/`prod`,
+`SIGNALGRID_LIVE_INTEGRATIONS` must be `"true"`, and a family credential must be present.
+Most proofs tested it like this:
+
+```ts
+check("dev tier resolves to fixture mode",   resolveX({ SIGNALGRID_TIER: "dev" }).mode === "fixture");
+check("prod WITHOUT live flag stays fixture", resolveX({ SIGNALGRID_TIER: "prod" }).mode === "fixture");
+check("prod + live but NO token stays fixture", resolveX({ tier: "prod", live: "true" }).mode === "fixture");
+check("prod + live + token resolves live",   resolveX({ tier: "prod", live: "true", token }).mode === "live");
+```
+
+Four checks, one per condition, reading like complete coverage. It is not. Each rung adds
+one variable, so at every step the conditions *below* the one under test are also failing.
+Delete the tier check and case 1 still returns `fixture` — the flag is absent too. Only
+the last condition in the chain is genuinely exercised. **A ladder tests its top rung.**
+
+Nothing caught it because the gate files were not in the mutation guard's swept
+population. The registry's stated scope — "the normalizers and evaluators of the
+grant-emitting connectors" — was written when the gate lived in `<family>-connector.ts`;
+newer families put it in `index.ts`, and the older twenty-one had an `index.ts` nobody had
+ever mutated. Registering them and sweeping produced the same two survivors family after
+family:
+
+```
+if (tier !== "beta" && tier !== "prod")          → if (false)   SURVIVED
+if (env.SIGNALGRID_LIVE_INTEGRATIONS !== "true") → if (false)   SURVIVED
+```
+
+The first is the control behind a claim this repo makes in writing — that dev and alpha
+never make live vendor calls. It could be deleted outright with every gate green. Five
+families were worse still: their proofs never called the resolver at all.
+
+The fix is a shape, not a count (`scripts/src/lib/live-gate.ts`): start from an env where
+**every** gate passes, knock out exactly one variable, require a refusal, and assert
+separately that the full env does go live so the whole thing cannot pass vacuously. Same
+law as "a guard over N fields needs N controls", moved to the code that decides whether we
+touch a customer's network.
+
+Two lessons worth carrying:
+
+- **Audit the swept population, not just the sweep result.** A registry that returns zero
+  survivors over the wrong file set is a coverage claim, not coverage. This was the fourth
+  instance of the right rule attached to the wrong population.
+- **Injecting a transport means the default one is never executed.** The connector proofs
+  all inject, correctly — they test decision logic, not HTTP. The consequence was that
+  `makeDefaultXTransport` had never run in any test, and once it did, `ot-posture` turned
+  out to be the one family of twenty that reported a 403 as `upstream_error` (their
+  service) rather than `auth_failed` (our credential), and the only one with no
+  body-shape check at all — so a maintenance HTML page threw a raw `SyntaxError` past the
+  typed error surface, and a JSON array or a bare `null` was cast straight to a report.
+
 ### 2. Adversarial — the invariant reviewer + an agent read
 `pnpm run review:invariants` is a deterministic, dependency-free "second
 reviewer" that encodes the classes of defect this repo's reviews keep catching,
@@ -346,13 +402,46 @@ change as a skeptic trying to break it, with these questions:
   request-supplied signal.
 - **Proven?** Is there a passing proof/test that exercises the new behavior end
   to end — including the failure and fail-closed paths, not just the happy path?
+- **If the change IS a check — can it fail, and can it pass?** Both halves,
+  separately. See below; this one was learned the expensive way.
+
+### When the change is a gate, review the gate as well as its subject
+
+A gate has two failure modes and they are opposite, so a single green run
+proves neither:
+
+- **It can never fail.** The unfalsifiable guard — it compares a thing to
+  itself, or asserts the wording of a description rather than the state of the
+  world. Two live examples this repo has already paid for: a proof that checked
+  a declared launch gap's *text* still said "Graph transport" (green throughout
+  the period the transport existed), and a fabricated-status check that would
+  have been vacuous had it never been run against the pre-fix tree.
+  **Antidote:** a negative control. Reintroduce the exact defect, watch the gate
+  go red, restore. If you cannot make it fail on purpose, you have not got a gate.
+- **It can never pass.** Rarer, louder, and easy to ship because the subject of
+  the gate is real. `docs/STATUS.md` is generated, so a "regenerate and diff"
+  check looked right by analogy with the Postman collection, the
+  evidence-coverage page and the SBOM. But STATUS.md embeds the HEAD short sha
+  *by design* — that is its staleness tell — so the commit that adds the file
+  changes HEAD and it can never equal its own regeneration. Red on arrival, and
+  it took a CI run to notice because the drift it was catching was genuine.
+  **Antidote:** run the gate once *after* committing, in the state CI will see.
+
+The general form: verifying that a gate's SUBJECT is a real problem is not the
+same as verifying that the gate's MECHANISM works. Do both, and do the second
+one in the state the gate will actually run in.
 
 ## The checklist before opening a PR
 
 1. `pnpm run preflight` is green (or `--quick` during the loop, full before push).
+   Run **preflight itself**, not a hand-picked subset of its gates — a curated
+   list omits whatever you did not think of, which on one occasion was every
+   generated-artifact sync check and cost a red build.
 2. The change has a proof/test that covers its **failure** paths, not just success.
-3. An adversarial read of the diff against the questions above found nothing.
-4. Docs / comments / labels updated to stay true to the code.
-5. One reviewable concern per PR.
+3. If the change adds or edits a gate, it was negative-controlled — made to fail
+   on purpose and then restored — and run once after committing.
+4. An adversarial read of the diff against the questions above found nothing.
+5. Docs / comments / labels updated to stay true to the code.
+6. One reviewable concern per PR.
 
-When all five hold, push. Codex becomes a confirmation, not a rework loop.
+When all six hold, push. Codex becomes a confirmation, not a rework loop.

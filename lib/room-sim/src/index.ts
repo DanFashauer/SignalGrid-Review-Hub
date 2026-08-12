@@ -101,6 +101,14 @@ export const CLINICAL_SCENARIOS: Scenario[] = [
     room: { roomId: "MED-1", unit: "4 West · Medication", sensitivity: "controlled", workflowKey: "med-admin", workflowLabel: "Medication administration" },
   },
   {
+    id: "offclock-medroom",
+    title: "Off the clock · controlled med room",
+    description: "Everything else is green — but the WFM says this badge's owner is scheduled and NOT clocked in. Off-the-clock work or someone else's badge; the labor plane steps the entry up.",
+    identityRef: "nurse.offclock",
+    deviceRef: "ipad-ward-07",
+    room: { roomId: "MED-1", unit: "4 West · Medication", sensitivity: "controlled", workflowKey: "med-admin", workflowLabel: "Medication administration" },
+  },
+  {
     id: "device-tamper",
     title: "Device tamper flag · bedside",
     description: "The device's tamper channel is flagged; bedside clinical session requested.",

@@ -82,115 +82,67 @@ jobs:
       - name: Read-only Microsoft Graph connector proof
         run: pnpm run proof:graph-connector
 
-      - name: Carrier / post-exit reachability proof
-        run: pnpm run proof:carrier-reachability
-
       - name: Canonical event-contract proof (validation + cross-domain detections)
         run: pnpm run proof:event-contract
 
-      - name: Location-services (geofence posture) proof
-        run: pnpm run proof:location-services
+      - name: "Proof: local-authority (may this device act on its own authority now)"
+        run: pnpm run proof:local-authority
 
-      - name: Vulnerability-scan (device risk posture) proof
-        run: pnpm run proof:vuln-scan
-
-      - name: Network / NAC (access posture) proof
-        run: pnpm run proof:network-nac
-
-      - name: EDR / EPP (endpoint threat-state) proof
-        run: pnpm run proof:edr-threat
-
-      - name: Identity / SSO (sign-in risk) proof
-        run: pnpm run proof:identity-risk
-
-      - name: RTLS / badge-dwell (physical custody) proof
-        run: pnpm run proof:rtls-custody
-
-      - name: Removable-media / peripheral-control proof
-        run: pnpm run proof:peripheral-control
-
-      - name: Data-protection / DLP posture proof
-        run: pnpm run proof:data-protection
-
-      - name: Credential-exposure (endpoint secrets) proof
-        run: pnpm run proof:credential-exposure
-
-      - name: macOS endpoint-posture (grid-collected) proof
-        run: pnpm run proof:macos-posture
-      - name: "Proof: uem (read-only MDM/UEM, gated, no actuators)"
-        run: pnpm run proof:uem
-
+      - name: "Proof: evidence-coverage (what can this estate answer)"
+        run: pnpm run proof:evidence-coverage
+      - name: "Proof: device-resolver (read-only injection boundary)"
+        run: pnpm run proof:device-resolver
+      - name: "Proof: config-scope (per-tenant connector config keys)"
+        run: pnpm run proof:config-scope
+      - name: "Proof: unsafe-claim (negation-aware claim scan)"
+        run: pnpm run proof:unsafe-claim
+      # Both of these ran in preflight but in NO workflow — proven only on a developer
+      # machine while every status page said "CI runs the full gate suite".
+      # `check-ci-preflight-sync.mjs` now derives this list rather than trusting it.
+      - name: "Proof: dual-control (two-person integrity)"
+        run: pnpm run proof:dual-control
+      - name: "Proof: session-store (in-memory lifecycle)"
+        run: pnpm run proof:session-store
+      - name: "Proof: provisioning-order (zero-touch step order)"
+        run: pnpm run proof:provisioning-order
       - name: macOS posture ↔ apple/device-management schema alignment proof
         run: pnpm run proof:macos-apple-schema
-
-      - name: OT / IIoT edge-device posture (grid-collected) proof
-        run: pnpm run proof:ot-posture
-
-      - name: IAM / access-governance runtime posture proof
-        run: pnpm run proof:access-governance
-
-      - name: Hardware-rooted device-attestation proof
-        run: pnpm run proof:device-attestation
-
-      - name: SSO session-binding proof
-        run: pnpm run proof:sso-session
-
-      - name: OAuth-consent / workload-identity proof
-        run: pnpm run proof:oauth-consent
-
-      - name: Token-binding / proof-of-possession proof
-        run: pnpm run proof:token-binding
-
-      - name: Physical access-control (PACS) proof
-        run: pnpm run proof:pacs-access
-
-      - name: Agentic / non-human-identity (NHI) proof
-        run: pnpm run proof:agent-identity
 
       # Agent BEHAVIOR — the action-judgment layer. Access brokers (Okta AI Agent
       # Gateway, Entra Agent ID) answer WHO the agent is; this asks whether the ACTION
       # is in-pattern: a prompt that became 40k updates, a never-opened target, no
       # provenance, a broad blast radius, a superhuman cadence. Fail-closed; one combo
       # of 1,944 grants.
-      - name: Proof — agent-behavior (action-judgment, one grant of 1,944)
-        run: pnpm run proof:agent-behavior
-
       # Custody BEACON — the offline asset-recovery channel: an independent
       # case-embedded beacon fused with reachability tells "powered off in its bay"
       # (monitor) apart from "removed and dark" (escalate).
-      - name: Proof — custody-beacon (asset recovery, offline channel)
-        run: pnpm run proof:custody-beacon
-
       # App-update currency — min_version floors, force_update, install-channel
       # provenance as posture (an iOS app cannot install itself; distribution stays
       # with itms-services / MDM InstallApplication / ABM).
-      - name: Proof — app-update (host-app version currency)
-        run: pnpm run proof:app-update
-
       # Platform SSO — the METHOD decides the credential's worth; a login policy
       # claimed on a method that cannot enforce it is config drift.
-      - name: Proof — platform-sso (macOS platform credential)
-        run: pnpm run proof:platform-sso
-      - name: Proof — passkey-assurance (credential worth, not just "passkey")
-        run: pnpm run proof:passkey-assurance
+      # MCP answer discipline — the SECOND of two MCP proofs, and deliberately so.
+      # `proof:mcp-server` (further down, from the Mac lane) asks whether the published
+      # plugin path boots and serves the tools the manifest declares. This asks whether
+      # what it serves is EARNED: every optional input is a claim, and omitting one must
+      # not be answered as an affirmative. Different questions, both load-bearing.
+      - name: Proof — mcp-answer-discipline (silence is not an affirmative)
+        run: pnpm run proof:mcp-answer-discipline
 
       # Policy binding — membership IS the policy: unbound, too-wide (fail-open),
       # too-narrow, or mixed-membership group assignment.
-      - name: Proof — policy-binding (group-assignment correctness)
-        run: pnpm run proof:policy-binding
-
+      - name: Proof — absent-collection (nothing observed is not nothing wrong)
+        run: pnpm run proof:absent-collection
+      - name: Proof — mdm-profile (the shipped profiles say what the product claims)
+        run: pnpm run proof:mdm-profile
+      - name: Proof — facility-trust-graph (canonical space model + location certainty)
+        run: pnpm run proof:facility-trust-graph
       - name: Device-management-health / config-drift proof
         run: pnpm run proof:device-management-health
-
-      - name: Proof — link usability (associated vs usable)
-        run: pnpm run proof:link-usability
 
       # The task plane joins the grid: WMS/task-system exceptions (short pick,
       # wrong-aisle bin, assignment mismatch) as decision signals. The WMS stays
       # system of record; SignalGrid consumes, decides, and routes.
-      - name: Proof — task exception (task-plane exceptions as grid signals)
-        run: pnpm run proof:task-exception
-
       # Issue #136's portable work context: the context carries the WORK (tasks,
       # exceptions, restrictions travel with the person); trust is re-earned per
       # device. Three monotone invariants proven over the full matrix.
@@ -234,6 +186,11 @@ jobs:
 
       - name: Guard-registry drift check
         run: node scripts/check-guard-registries.mjs
+      # Runs in the fast source-reading job on purpose: it guards the Docker build
+      # without needing Docker, so a missing hook entrypoint fails here in seconds
+      # instead of in the compose smoke minutes later.
+      - name: "Docker carries every install-hook entrypoint"
+        run: node scripts/check-docker-lifecycle-copy.mjs
       # deploy-stack builds docker-compose.prod.yml, which contains only `db` and
       # `api` — so Dockerfile.web was never built by any job and had been
       # unbuildable (alpine is musl; only the -gnu native binaries survive the
@@ -246,6 +203,12 @@ jobs:
         run: node scripts/check-connector-discipline.mjs
       - name: "Ungated fetch (the live boundary covers every outbound path)"
         run: node scripts/check-ungated-fetch.mjs
+      # Sibling of the gate above: that one asks whether the call was allowed to happen,
+      # this one asks whether the result reported was one anybody observed.
+      - name: "Fabricated status (a connector may not report a status it never observed)"
+        run: node scripts/check-fabricated-status.mjs
+      - name: "Fabricated status self-test (the gate can actually fail)"
+        run: node scripts/check-fabricated-status.mjs --self-test
       # decision:read was enforced in memory and skipped on the durable path — the branch
       # returned before listDecisions/getDecision/getSnapshot ever authorized. The core proof
       # covers the new authorizedContext method; this covers the ROUTES calling it.
@@ -257,20 +220,35 @@ jobs:
       # and a weekly cron — never on pull_request — and is framed as a rehearsal, not
       # evidence. So a break in cross-tenant scoping, or a renamed ASAM bundle id in a
       # .mobileconfig, passed preflight and every check on the way in.
-      - name: "Proof — emit-gate (no outbound family sends from a non-emitting tier)"
-        run: pnpm run proof:emit-gate
       - name: "Proof — isolation-scope (no tenant can read another's row)"
         run: pnpm run proof:isolation-scope
-      - name: "Proof — nac (read-only; no device action reachable, live path gated)"
-        run: pnpm run proof:nac
-      - name: "Proof — webhooks (outbound delivery gated, refusals explain themselves)"
-        run: pnpm run proof:webhooks
       - name: "Proof — mdm-profile (the shipped profiles say what the product claims)"
         run: pnpm run proof:mdm-profile
       - name: "Proof — graph-wire (throttling, 5xx, auth, malformed bodies fail closed)"
         run: pnpm run proof:graph-wire
       - name: "Assessor package (links/commands an external reviewer follows)"
         run: node scripts/check-assessor-package.mjs
+
+      # The declared product edge must match the real one, in BOTH directions. The
+      # omission direction is the freeze: a new connector family, signal kind, API
+      # path or app surface fails this until a human classifies it, because
+      # "unexamined" is the door breadth walks back in through.
+      - name: "Launch profile (declared product edge == real one)"
+        run: node scripts/check-launch-profile.mjs
+      - name: Proof — launch profile (Limited GA scope is coherent; figures published)
+        run: pnpm run proof:launch-profile
+      # The connector→decision seam, closed and pinned: fixture-mode resolution
+      # hands back WORKING connectors for all three launch families, and their
+      # output flows through the integration bridge into a core decision whose
+      # evidence carries the family facts — with fetch() disabled for the run.
+      - name: Proof — launch seam (fixture connector → bridge → decision, offline)
+        run: pnpm run proof:launch-seam
+      - name: Proof — evidence adapter (source-agnostic swap, fleet/headwind/intune)
+        run: pnpm run proof:evidence-adapter
+      - name: Proof — mobile-app-catalog scanner (hardening delta over the filed original)
+        run: pnpm run proof:mobile-app-catalog
+      - name: Proof — operating method (the handbook is a gate, not a memory)
+        run: pnpm run proof:operating-method
 
       # SEVEN gates lived in scripts/preflight.mjs and ran NOWHERE in CI — checked
       # against all 12 workflow files, not just this one. That made them local
@@ -293,12 +271,28 @@ jobs:
       # All seven are pure Node and need no external service.
       - name: "Doc orphans (a new doc must be reachable from an index)"
         run: node scripts/check-doc-orphans.mjs
+      # The same shape one level down: doc-orphans asks whether a reader can reach a
+      # document, this asks whether a shipped artifact can reach a library. Both catch
+      # the failure mode that never announces itself — everything green, nothing
+      # arrives. Added after a design pass found `lib/dual-control` had zero shipped
+      # consumers AFTER the work to wire it had already been scoped.
+      - name: "Package reachability (a library nobody ships is a library nobody runs)"
+        run: node scripts/check-package-reachability.mjs
+      # The provenance stamp is GENERATED, so the gate is "regenerate and compare
+      # content" — deliberately not `git diff`, which is blind to untracked files and
+      # would have passed on the very commit that introduced the artifacts.
+      - name: "Core normalization-version (provenance stamp tracks the covered core source)"
+        run: node scripts/generate-core-normalization-version.mjs --check
       - name: "Proof — dual control"
         run: pnpm run proof:dual-control
       - name: "Pagination-truncation guard (a capped read must not look complete)"
         run: node scripts/check-pagination-truncation.mjs
       - name: "Absent-collection law (nothing observed ≠ nothing wrong)"
         run: pnpm run proof:absent-collection
+      - name: "IT-layer model (every refusal has an owner; nothing routes to a phantom)"
+        run: node scripts/check-it-layer-model.mjs
+      - name: "IT-layer model self-test (the gate can actually fail)"
+        run: node scripts/check-it-layer-model.mjs --self-test
       - name: "Port parity (DecisionEngine + AppWorkflows vs their TS originals)"
         run: node scripts/check-decision-port-parity.mjs
       - name: "Read-error swallowing (a failed lookup must not report nothing-found)"
@@ -331,6 +325,8 @@ jobs:
       # hardware can refresh that, so staleness never blocks a commit.
       - name: Live-sync manifest drift (Mac MCP + iOS instructions current)
         run: node scripts/check-live-sync.mjs
+      - name: MCP surface drift gate (server = docs = ready message = manifest)
+        run: node scripts/check-mcp-surface.mjs
 
       - name: Docs↔proof figure guard
         run: node scripts/check-proof-figures.mjs
@@ -354,9 +350,6 @@ jobs:
 
       - name: Fabric decision-evals (golden multi-signal decision quality) proof
         run: pnpm run proof:fabric-evals
-
-      - name: Signal-fabric capstone (end-to-end fusion to incident) proof
-        run: pnpm run proof:fabric-scenario
 
       - name: Connector emulator proof
         run: pnpm run proof:connector-emulator
@@ -416,7 +409,7 @@ jobs:
       - name: Flows (admin flow config + health) proof
         run: pnpm run proof:flows
 
-      - name: Grid-coverage (build the grid — situations handled) proof
+      - name: Grid-coverage (build the grid — the coverage ceiling and its basis) proof
         run: pnpm run proof:grid-coverage
 
       - name: Grid-config (workflows as code — CI validation) proof
@@ -430,12 +423,6 @@ jobs:
 
       - name: Provisioning teardown-proof (prove the retreat before deploy)
         run: pnpm run proof:provisioning-teardown
-
-      - name: Factory-floor workflows (manufacturing/OT) proof
-        run: pnpm run proof:factory-flows
-
-      - name: Grid-lifecycle (capstone — 6 models, provision→decommission) proof
-        run: pnpm run proof:grid-lifecycle
 
       - name: Recommendations (learned-habit proposals) proof
         run: pnpm run proof:recommendations
@@ -458,19 +445,76 @@ jobs:
       - name: Edge-sync (config-down integrity) proof
         run: pnpm run proof:edge-sync
 
-      - name: Telemetry-up (decision plane → control plane) proof
-        run: pnpm run proof:telemetry-up
+      - name: Decision-continuity (which decision wins across a partition) proof
+        run: pnpm run proof:decision-continuity
 
       - name: Safety gate (guardrails)
         run: pnpm run safety:check
 
       - name: Postman collection is committed in sync
         run: |
+          # ls-files first: `git diff` says nothing about an UNTRACKED path, so the
+          # diff alone passes for a file that was never committed or was deleted.
+          git ls-files --error-unmatch docs/postman > /dev/null || (echo "::error::docs/postman is not tracked." && exit 1)
           pnpm run build:postman
           git diff --exit-code docs/postman || (echo "::error::Postman collection out of date — run 'pnpm run build:postman' and commit." && exit 1)
 
+      - name: Shell lint (shellcheck)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          node scripts/check-shell.mjs
+
+      - name: Evidence Coverage page is committed in sync
+        run: |
+          git ls-files --error-unmatch docs/evidence-coverage.html > /dev/null || (echo "::error::docs/evidence-coverage.html is not tracked — generated pages must be committed." && exit 1)
+          pnpm run build:evidence-coverage
+          git diff --exit-code -- docs/evidence-coverage.html || (echo "::error::docs/evidence-coverage.html out of date — run 'pnpm run build:evidence-coverage' and commit." && exit 1)
+
+      # docs/STATUS.md is generated, but deliberately NOT gated by regenerate-and-diff
+      # like the three checks above: it embeds the HEAD sha as its own staleness tell,
+      # so it can never equal its own regeneration, and its generator is slow and hits
+      # the network. Gate the inventory counts instead — cheap, offline, and the part
+      # that had actually rotted (95 proof gates against a real 122, 8 E2E specs
+      # against 10, 12 CI workflows against 16).
+      - name: STATUS.md figures still describe the repo
+        run: node scripts/check-status-figures.mjs
+      - name: STATUS.md figure gate self-test (the gate can actually fail)
+        run: node scripts/check-status-figures.mjs --self-test
+
       - name: Decision-latency pilot gate
         run: pnpm run bench:decision-latency
+
+  # The deferred-family and doctrine-document proofs (plan §11.4 step 4). A
+  # required lane on every PR, run IN PARALLEL with `validation` so the wall
+  # clock drops rather than grows — moved out of the serial per-push preflight,
+  # never out of CI. Membership is enforced inside the script against the
+  # launch profile, and check-ci-preflight-sync.mjs keeps this lane and
+  # preflight disjoint and jointly complete.
+  breadth:
+    name: Breadth lane (deferred families + doctrine docs)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.28.1
+          run_install: false
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Breadth lane (47 deferred-family gates + 8 doctrine-doc proofs)
+        run: pnpm run verify:breadth
 
   docs-sanity:
     name: Required docs and unsafe-claim sanity
@@ -482,6 +526,9 @@ jobs:
       # Required docs exist + affirmative-unsafe-claim scan. Shared with
       # `pnpm run preflight` via scripts/docs-sanity.mjs so the check is the same
       # locally and in CI.
+      - name: CI↔preflight drift (every proof runs in both places)
+        run: node scripts/check-ci-preflight-sync.mjs
+
       - name: Docs sanity (required docs + unsafe-claim scan)
         run: node scripts/docs-sanity.mjs
 

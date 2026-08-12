@@ -27,6 +27,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as taskException from "@workspace/integrations/task-exception";
+import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
 import { SIGNAL_KINDS, composeDeviceRisk, fromTaskException } from "@workspace/posture-composition";
 import { mapPostureToIncident } from "@workspace/incident-playbook";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
@@ -625,12 +626,34 @@ let missingErr: InstanceType<typeof TaskExceptionConnectorError> | null = null;
 try { await connector.fetchTaskException("no-such-device"); } catch (err) { missingErr = err instanceof TaskExceptionConnectorError ? err : null; }
 check("an unknown device surfaces upstream_error, never an invented exception-free stream", missingErr?.code === "upstream_error");
 
-check("dev tier resolves to fixture mode", resolveTaskExceptionConnector({ SIGNALGRID_TIER: "dev" }).mode === "fixture");
-check("prod WITHOUT live flag stays fixture", resolveTaskExceptionConnector({ SIGNALGRID_TIER: "prod" }).mode === "fixture");
-check("prod + live but NO token stays fixture", resolveTaskExceptionConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" }).mode === "fixture");
-check("prod + live + token resolves live", resolveTaskExceptionConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", TASK_EXCEPTION_ACCESS_TOKEN: "t" }).mode === "live");
 
 console.log(`figures=normalized=${enumRes.combos},raw=${rawEnumRes.combos},grants=${enumRes.noneCount},rawGrants=${rawEnumRes.noneCount},lifecycleContradictory=${c1Count},applicabilityContradictory=${c2Count},phaseContradictory=${c3Count},stallContradictory=${c4Count}`);
+
+// ── The live-call gate and the default transport, each condition ISOLATED ────
+//
+// See `lib/live-gate.ts`. The four checks removed here were a cumulative ladder, so
+// only the last of them was falsifiable; the mutation guard could delete the tier
+// check — the control behind "dev and alpha never make live vendor calls" — with this
+// proof green. The default fetch transport was never executed by anything at all.
+checkLiveGateIsolated({
+  check,
+  family: "task-exception",
+  resolve: (env) => taskException.resolveTaskExceptionConnector(env),
+  full: {
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    TASK_EXCEPTION_ACCESS_TOKEN: "t",
+  },
+});
+
+await checkDefaultTransport({
+  check,
+  family: "task-exception",
+  transport: taskException.makeDefaultTaskExceptionTransport("https://vendor.invalid/task-exception") as (a: never) => Promise<unknown>,
+  arg: { deviceId: "deviceId-1", token: "t" },
+  codeOf: (err) => (err instanceof taskException.TaskExceptionConnectorError ? err.code : undefined),
+});
+
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

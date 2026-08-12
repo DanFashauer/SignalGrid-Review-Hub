@@ -38,7 +38,24 @@ COPY pnpm-workspace.yaml pnpm-lock.yaml package.json tsconfig.base.json ./
 # workspace package — copy its manifest + the guard so the install resolves the
 # workspace and the preinstall hook both succeed (its src isn't needed to build
 # the API).
-COPY scripts/package.json scripts/enforce-pnpm.cjs ./scripts/
+# AND the lifecycle-hook entrypoints, from the launch lane — a separate
+# requirement from tsconfig.base.json above, and both are load-bearing.
+# The root lifecycle hooks run from THIS directory, and `scripts` is a workspace
+# package — copy its manifest plus every hook entrypoint so the install resolves the
+# workspace and the hooks both succeed (their src isn't needed to build the API):
+#   preinstall -> scripts/enforce-pnpm.cjs
+#   prepare    -> scripts/install-git-hooks.mjs
+#
+# KEEP THIS LIST IN STEP WITH THE ROOT `scripts` BLOCK. `install-git-hooks.mjs` is
+# written to be non-fatal in every branch — it exits 0 on CI, on a missing `.git`,
+# on a missing hook file — and none of that care survives the file being ABSENT,
+# because `node <missing>` fails before the first line runs. A script's own defensive
+# handling cannot cover the case where the script is not there. `pnpm install` then
+# fails and the whole image build dies, which is exactly what happened the day the
+# `prepare` hook was added without this line.
+# `scripts/check-docker-lifecycle-copy.mjs` derives the required list from
+# package.json and fails locally rather than in a Docker build nobody runs locally.
+COPY scripts/package.json scripts/enforce-pnpm.cjs scripts/install-git-hooks.mjs ./scripts/
 COPY lib/ ./lib/
 COPY artifacts/api-server/ ./artifacts/api-server/
 
@@ -54,7 +71,7 @@ WORKDIR /app
 RUN corepack enable pnpm
 
 COPY --from=builder /app/pnpm-workspace.yaml /app/pnpm-lock.yaml /app/package.json ./
-COPY --from=builder /app/scripts/package.json /app/scripts/enforce-pnpm.cjs ./scripts/
+COPY --from=builder /app/scripts/package.json /app/scripts/enforce-pnpm.cjs /app/scripts/install-git-hooks.mjs ./scripts/
 COPY --from=builder /app/lib/ ./lib/
 COPY --from=builder /app/artifacts/api-server/package.json ./artifacts/api-server/
 COPY --from=builder /app/artifacts/api-server/dist/ ./artifacts/api-server/dist/

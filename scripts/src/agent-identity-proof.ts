@@ -16,6 +16,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  makeDefaultAgentIdentityTransport,
   AgentIdentityConnector,
   AgentIdentityConnectorError,
   createMockAgentIdentityTransport,
@@ -28,6 +29,7 @@ import {
 } from "@workspace/integrations/agent-identity";
 import { composeDeviceRisk, fromAgentIdentity } from "@workspace/posture-composition";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
+import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
 
 interface Expected {
   posture: string;
@@ -521,10 +523,33 @@ let missingErr: AgentIdentityConnectorError | null = null;
 try { await connector.fetchActor("no-such-device"); } catch (err) { missingErr = err instanceof AgentIdentityConnectorError ? err : null; }
 check("an unknown device surfaces upstream_error, never an invented governed actor", missingErr?.code === "upstream_error");
 
-check("dev tier resolves to fixture mode", resolveAgentIdentityConnector({ SIGNALGRID_TIER: "dev" }).mode === "fixture");
-check("prod WITHOUT live flag stays fixture", resolveAgentIdentityConnector({ SIGNALGRID_TIER: "prod" }).mode === "fixture");
-check("prod + live but NO token stays fixture", resolveAgentIdentityConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" }).mode === "fixture");
-check("prod + live + token resolves live", resolveAgentIdentityConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", AGENT_IDENTITY_ACCESS_TOKEN: "t" }).mode === "live");
+
+
+// ── The live-call gate and the default transport, each condition ISOLATED ────
+//
+// See `lib/live-gate.ts` for why this replaced what was here (or filled the hole where
+// nothing was). Short version: the gate was tested as a cumulative ladder, so only its
+// last condition was falsifiable, and the mutation guard could delete the tier check —
+// the control behind "dev and alpha never make live vendor calls" — with every proof
+// green. The default fetch transport was never executed by anything at all.
+checkLiveGateIsolated({
+  check,
+  family: "agent-identity",
+  resolve: (env) => resolveAgentIdentityConnector(env),
+  full: {
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    AGENT_IDENTITY_ACCESS_TOKEN: "t",
+  },
+});
+
+await checkDefaultTransport({
+  check,
+  family: "agent-identity",
+  transport: makeDefaultAgentIdentityTransport("https://vendor.invalid/agent-identity") as (a: never) => Promise<unknown>,
+  arg: { deviceId: "deviceId-1", token: "t" },
+  codeOf: (err) => (err instanceof AgentIdentityConnectorError ? err.code : undefined),
+});
 
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);

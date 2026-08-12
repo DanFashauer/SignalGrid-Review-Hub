@@ -98,9 +98,20 @@ export interface SelfAuditResp {
 // ── Build-the-grid surface (decision-fabric layer) ──────────────────────────────
 export interface SourcingSummary { total: number; api: number; native: number; gridCollected: number; unavailable: number; wireable: number; vendorIntegrated: number }
 export interface SituationCoverageRow { situationId: string; label: string; workflowId: string; status: "auto_handled" | "partial" | "blind_spot"; missingSignals: string[]; reason: string }
+/**
+ * What the coverage numbers were computed FROM. `/cp/v1/grid/coverage` serves
+ * `projected_from_sourcing`: the states are inferred from each signal's acquisition
+ * method, so nothing was observed and the figures are a CEILING — what the Grid would
+ * handle once every wireable signal is wired and healthy.
+ *
+ * Read it before rendering anything. The console used to title this panel "situations
+ * handled autonomously" and paint 100% emerald, which told an operator that work was
+ * being done that nothing had measured.
+ */
+export type CoverageBasis = "observed" | "projected_from_sourcing";
 export interface GridCoverageResp {
   sourcing: SourcingSummary;
-  coverage: { situations: SituationCoverageRow[]; handled: number; partial: number; blindSpots: number; total: number; coveragePct: number };
+  coverage: { situations: SituationCoverageRow[]; basis: CoverageBasis; handled: number; partial: number; blindSpots: number; total: number; coveragePct: number };
 }
 export type AcquisitionMethod = "api" | "native" | "grid_collected" | "unavailable";
 export type Fidelity = "high" | "medium" | "low" | "none";

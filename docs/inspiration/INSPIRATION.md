@@ -123,3 +123,105 @@ It also anchors the honest register: continuous *verification*, least privilege,
    and `docs/PUBLIC_MESSAGING_GUARDRAILS.md`: no replacement/partnership/
    certification claims, read-only signals, action plane simulated until an owner
    turns it on.
+
+---
+
+## Filed reference documents
+
+- [Spatial trust & session-control research report](SPATIAL_TRUST_RESEARCH_REPORT.md)
+  — the owner-supplied deep-research report behind intake ledger row 17
+  (external validation of the Facility Trust Graph architecture; source of the
+  zone-presence state machine built in `transition.ts`).
+- [Communications Systems & Mobile Apps API & GitHub catalog](COMMUNICATIONS_SYSTEMS_API_CATALOG.md)
+  — the owner-compiled 441-system inventory behind intake ledger row 47 (16
+  ecosystems from GSMA Open Gateway/CAMARA and CPaaS through mission-critical
+  PTT, clinical communications and mobile-OS push; 71 CAMARA API records, 97
+  mobile applications, 71 open-source resources, 66 standards; verified
+  2026-08-02, all five bundle hashes and every stated count re-derived at
+  intake). Its audit produced zero new verbs: the fabric already covers the
+  decision-relevant senses of presence, reachability, network quality,
+  authorized-region and dispatch ownership. Two boundaries are load-bearing —
+  CAMARA availability is commercial rather than technical, and **"verify
+  delivery" is a named refusal**: a platform receipt is dominated by a human
+  acknowledgement, and the only thing it would add is permission to stop
+  escalating.
+- [OT / ICS / SCADA & Industrial Control API & GitHub catalog](OT_ICS_SCADA_API_CATALOG.md)
+  — the 151-platform industrial inventory behind intake ledger row 45, and the
+  only catalog in this folder **compiled by this repository** rather than
+  supplied by the owner (verified 2026-08-02). Ten sections spanning OT asset
+  visibility and ICS network monitoring, SCADA/HMI/DCS, PLC/RTU/IED and safety
+  controllers, historians/gateways/protocol tooling, OT remote access, OT
+  segmentation, industrial SIEM, open-source ICS security tooling, digital twin,
+  and standards including ATT&CK for ICS. Because the repo authored it, the rows
+  carry the repo's own honesty bar: 120 verified documentation URLs, 76 verified
+  repositories, and 28 rows honestly recorded as "no detailed public contract
+  located". Paywalled bodies (IEC 62443, ISA-95/99, ISO) appear by title and
+  scope only. It carries the Purdue-level mapping against the fabric that
+  actually exists, the change-window gap, and the **safety-state refusal** —
+  SignalGrid gates who may attempt a bypass; the plant's safety system decides
+  whether the machine is safe to move.
+- [Asset Management & IT Governance API & GitHub catalog](ASSET_MANAGEMENT_IT_GOVERNANCE_API_CATALOG.md)
+  — the owner-compiled 330-product inventory behind intake ledger row 44
+  (16 ecosystems spanning ITAM/CMDB/SAM, SaaS management, cyber-asset
+  intelligence, EAM/CMMS, FinOps/TBM, enterprise architecture, PPM, GRC/IRM,
+  TPRM, data governance, policy-as-code, DAM and software supply-chain; 40
+  open-source resources; 28 standards; 10 repository mappings; verified
+  2026-08-02). The relevance score is the owner's internal sequencing model,
+  never an analyst ranking; source platforms remain systems of record; the
+  launch wedge stays Entra + Intune + one shared-device host app, with the
+  first authoritative-asset connector design-partner-sequenced at P1.
+- [ControlUp ONE / DEX / EUC & Digital Experience API Catalog](CONTROLUP_DEX_EUC_API_CATALOG.md)
+  — the owner-compiled 62-platform inventory behind intake ledger row 36
+  (direct DEX/EUC, VDI/DaaS-native, network/SASE DEM, observability, and
+  endpoint-automation adjacencies; per-row API access classes, GitHub coverage
+  honesty, 12 standards; verified 2026-08-01). The similarity model is the
+  owner's internal comparison, never an analyst ranking; DEX platforms remain
+  systems of record; sequencing preserved — the Entra+Intune wedge first, one
+  read-only DEX platform per design-partner demand, governed remediation only
+  after simulation/approval/rollback evidence.
+- [Mobile App & Managed Configuration Master Catalog](MOBILE_APP_CONFIGURATION_CATALOG.md)
+  — the owner-compiled mobile-application and managed-configuration inventory
+  behind intake ledger row 33 (760 master app/mobile-surface records spanning
+  confirmed Intune-protected apps, curated industry clients, candidate
+  ecosystem surfaces and repo-defined host-app workflow models; 101
+  managed-configuration keys; the build-metadata / AppConfig-declaration /
+  assigned-payload / App-Protection / post-configuration-recording
+  distinctions; verified 2026-08-01). Candidate rows are not claims;
+  "Intune protected partner app" means Microsoft's catalog, never a
+  SignalGrid partnership; companion scanner/recorder artifacts are
+  dispositioned in ledger row 33.
+- [Mobile-app catalog agent — unhardened reference source](MOBILE_APP_CATALOG_AGENT.md)
+  — the owner's repository-scanner source and catalog JSON Schema, preserved
+  verbatim with SHA-256 provenance and the intake audit's VERIFIED defect list
+  (secret-leak path, symlink escape, non-determinism). Reference only; the
+  hardened integration is the queued YELLOW-lane scanner phase in
+  `docs/BUILD_BACKLOG.md`, and the scheduled PR-creating workflow is
+  deliberately unwritten pending explicit owner approval.
+- [Mobile post-configuration recorder — reference contract](MOBILE_CONFIG_RECORDER_CONTRACT.md)
+  — the recorder JSON Schema + PostgreSQL model, preserved verbatim behind a
+  binding preamble: nothing in this repository consumes them, the tenant
+  recorder tables describe a private data plane that never enters this tree,
+  an unproven rollback never permits a deploy, and version stamping defers to
+  the queued normalization-version build.
+- [Technology Ecosystem Master Catalog](TECHNOLOGY_ECOSYSTEM_MASTER_CATALOG.md)
+  — the owner-compiled 21-sheet consolidation of the CIS, physical-access and
+  endpoint catalogs, expanded across sixteen ecosystem domains (423 master
+  entries with per-row source URLs and access classes; verified 2026-07-31).
+  Filed as the ecosystem STRATEGY map, explicitly not a build queue — the
+  launch path stays Entra+Intune → one shared-device workflow → one pilot →
+  demand-driven expansion. The partner/buyer sheet is deliberately omitted
+  from the public file (publication boundary).
+- [Endpoint Management API & SignalGrid repository catalog](ENDPOINT_MANAGEMENT_API_CATALOG.md)
+  — the owner-compiled ten-sheet inventory behind intake ledger row 27 (135
+  API/platform entries across MDM/UEM/EMM, RMM, DEX, security/telemetry and
+  platform standards; 45 open-source resources; 31 SignalGrid repository
+  mappings; launch sequencing and the canonical normalized endpoint signal
+  set; verified 2026-07-31). Reference material only — the adopted strategy is
+  its own: one Microsoft-backed shared-device workflow first, breadth from
+  design-partner demand.
+- [Physical Access Control API & GitHub catalog](PACS_VENDOR_API_CATALOG.md)
+  — the owner-compiled, source-linked inventory behind intake ledger row 26
+  (61 vendor/API entries, 24 open-source resources, 10 standards, and the
+  recommended SignalGrid integration sequencing with per-tier minimum signal
+  sets; verified 2026-07-31). Reference material only: no dependency taken,
+  and every future adapter stays behind connector discipline.

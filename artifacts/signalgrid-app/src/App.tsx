@@ -14,6 +14,9 @@ const named = (loader: () => Promise<Record<string, unknown>>, key: string) =>
 const Dashboard = named(() => import("@/pages/Dashboard"), "Dashboard");
 const DecisionList = named(() => import("@/pages/decisions/DecisionList"), "DecisionList");
 const DecisionDetail = named(() => import("@/pages/decisions/DecisionDetail"), "DecisionDetail");
+const Audit = named(() => import("@/pages/Audit"), "Audit");
+const Status = named(() => import("@/pages/Status"), "Status");
+const ConnectorSetup = named(() => import("@/pages/ConnectorSetup"), "ConnectorSetup");
 const IntegrationList = named(() => import("@/pages/integrations/IntegrationList"), "IntegrationList");
 const IntegrationDetail = named(() => import("@/pages/integrations/IntegrationDetail"), "IntegrationDetail");
 const PolicyList = named(() => import("@/pages/policies/PolicyList"), "PolicyList");
@@ -32,29 +35,83 @@ const SystemHealth = named(() => import("@/pages/SystemHealth"), "SystemHealth")
 
 const queryClient = new QueryClient();
 
+/**
+ * The console IA law (P0 #239), enforced at the route table: the launch
+ * wireframes end with "nothing else is launch UI", so every route OUTSIDE the
+ * six launch screens renders this banner above its page. The sidebar's section
+ * labels say the same thing, but a deep link bypasses the sidebar — the banner
+ * cannot be bypassed. Fixture-preview and demo pages stay fully usable; they
+ * just can never be mistaken for the shipped surface.
+ */
+function PreviewBanner() {
+  return (
+    <div className="px-8 pt-4">
+      <div className="border border-amber-400/30 bg-amber-400/5 rounded px-3 py-2 font-mono text-[11px] text-amber-400/90">
+        PREVIEW — fixture-backed demo surface, not part of the launch console.
+        The launch surfaces are Overview, Decisions, Audit, Connector setup,
+        Policies, and Assurance.
+      </div>
+    </div>
+  );
+}
+
+// Wrapped once at module level so route components keep a stable identity
+// across renders (an inline wrapper would remount the page on every render).
+const preview = (Page: ComponentType) => {
+  function PreviewPage() {
+    return (
+      <>
+        <PreviewBanner />
+        <Page />
+      </>
+    );
+  }
+  return PreviewPage;
+};
+const IntegrationListPreview = preview(IntegrationList);
+const IntegrationDetailPreview = preview(IntegrationDetail);
+const PolicyCreatePreview = preview(PolicyCreate);
+const SignalListPreview = preview(SignalList);
+const FleetPreview = preview(Fleet);
+const AppWorkflowsPreview = preview(AppWorkflows);
+const IntelligencePreview = preview(Intelligence);
+const ProvisioningPreview = preview(Provisioning);
+const AppResiliencePreview = preview(AppResilience);
+const SignalSourcingPreview = preview(SignalSourcing);
+const GridConfigPreview = preview(GridConfig);
+const GridOverviewPreview = preview(GridOverview);
+const SystemHealthPreview = preview(SystemHealth);
+
 function Router() {
   return (
     <AppLayout>
       <Suspense fallback={<div className="p-8 text-sm text-muted-foreground">Loading…</div>}>
         <Switch>
+          {/* ── Launch console — the six wireframe screens, bound to /v1 ── */}
           <Route path="/" component={Dashboard} />
           <Route path="/decisions" component={DecisionList} />
           <Route path="/decisions/:id" component={DecisionDetail} />
-          <Route path="/integrations" component={IntegrationList} />
-          <Route path="/integrations/:id" component={IntegrationDetail} />
+          <Route path="/audit" component={Audit} />
+          <Route path="/status" component={Status} />
+          <Route path="/connectors/setup" component={ConnectorSetup} />
           <Route path="/policies" component={PolicyList} />
-          <Route path="/policies/new" component={PolicyCreate} />
+          <Route path="/policies/new" component={PolicyCreatePreview} />
+          {/* /policies/new is preview: policy EDITING is off the launch fence —
+              changes ride the repository. The read pages above are launch. */}
           <Route path="/policies/:id" component={PolicyDetail} />
-          <Route path="/signals" component={SignalList} />
-          <Route path="/fleet" component={Fleet} />
-          <Route path="/app-workflows" component={AppWorkflows} />
-          <Route path="/intelligence" component={Intelligence} />
-          <Route path="/provisioning" component={Provisioning} />
-          <Route path="/app-resilience" component={AppResilience} />
-          <Route path="/signal-sourcing" component={SignalSourcing} />
-          <Route path="/grid-config" component={GridConfig} />
-          <Route path="/grid" component={GridOverview} />
-          <Route path="/system-health" component={SystemHealth} />
+          {/* ── Everything below is preview — labelled, never launch UI ── */}
+          <Route path="/integrations" component={IntegrationListPreview} />
+          <Route path="/integrations/:id" component={IntegrationDetailPreview} />
+          <Route path="/signals" component={SignalListPreview} />
+          <Route path="/fleet" component={FleetPreview} />
+          <Route path="/app-workflows" component={AppWorkflowsPreview} />
+          <Route path="/intelligence" component={IntelligencePreview} />
+          <Route path="/provisioning" component={ProvisioningPreview} />
+          <Route path="/app-resilience" component={AppResiliencePreview} />
+          <Route path="/signal-sourcing" component={SignalSourcingPreview} />
+          <Route path="/grid-config" component={GridConfigPreview} />
+          <Route path="/grid" component={GridOverviewPreview} />
+          <Route path="/system-health" component={SystemHealthPreview} />
           <Route component={NotFound} />
         </Switch>
       </Suspense>

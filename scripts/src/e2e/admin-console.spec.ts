@@ -68,6 +68,13 @@ test("dashboard renders the deterministic fixture telemetry", async ({ page }) =
   await expect(page.getByText("Total Decisions")).toBeVisible();
   await expect(page.getByText("18,432")).toBeVisible();
   await expect(page.getByText("82.0%")).toBeVisible();
+
+  // The connector-health card (wireframe screen 1's named gap, now built):
+  // launch families with the mode chip the SERVER resolved off /v1/context —
+  // fixture in this harness, and the card says so rather than hoping.
+  await expect(page.getByText("Connector health · launch families")).toBeVisible();
+  await expect(page.getByText("device-management-health", { exact: true })).toBeVisible();
+  await expect(page.getByText(/SIGNALGRID_TIER=\w+ — fixture-backed/)).toBeVisible();
 });
 
 test("live decision panel evaluates a RESTRICT through the real /v1 core", async ({ page }) => {
@@ -90,22 +97,110 @@ test("live decision panel evaluates a RESTRICT through the real /v1 core", async
   await expect(page.getByText(/policy pol_tenant_northwind_shared_device v1/)).toBeVisible();
 });
 
-test("decisions page lists the fixture decision stream", async ({ page }) => {
+test("decisions page lists the REAL /v1 decision ledger", async ({ page }) => {
   await page.goto(`${BASE}/decisions`, { waitUntil: "domcontentloaded" });
 
   await expect(page.getByRole("heading", { name: "Decisions" })).toBeVisible();
-  // The table shows identity/device/workflow, not raw decision ids. SG-0100
-  // is the first fixture device (unique on this page); SG-0105 is the row the
-  // fixture cycle marks "restrict" — pairing the device with its outcome
-  // badge proves rows render as coherent records, not shuffled cells.
-  await expect(page.getByText("SG-0100")).toBeVisible();
-  await expect(page.locator("tr").filter({ hasText: "SG-0105" })).toContainText("Restrict");
-  await expect(page.getByText("med-admin").first()).toBeVisible();
+  // The list is the core's own ledger now, seeded at api-server boot by
+  // running the real decision loop over the demo subjects. Pairing a device
+  // with its outcome badge proves rows render as coherent records: the
+  // non-compliant ward iPad restricts; the disabled account denies.
+  // `.first()` throughout: other specs in this suite evaluate the SAME demo
+  // subjects against the shared server, so a device can have several ledger
+  // rows by the time this test runs — every one of them carries the same
+  // deterministic outcome, so asserting the first is sufficient and stable.
+  await expect(page.getByText("nurse.compliant").first()).toBeVisible();
+  await expect(page.locator("tr").filter({ hasText: "ipad-ward-02" }).first()).toContainText("Restrict");
+  await expect(page.locator("tr").filter({ hasText: "nurse.disabled" }).first()).toContainText("Deny");
 });
 
-test("policies page lists the seeded policy catalog", async ({ page }) => {
+test("decision detail renders the trust moment from /v1 (reasons, rules, verified evidence)", async ({ page }) => {
+  await page.goto(`${BASE}/decisions`, { waitUntil: "domcontentloaded" });
+  await page.locator("tr").filter({ hasText: "ipad-ward-02" }).first().click();
+
+  // Reason codes + matched rules from the core, and the evidence snapshot's
+  // digest re-verified server-side on this request.
+  await expect(page.getByText("DEVICE_NONCOMPLIANT").first()).toBeVisible();
+  await expect(page.getByText("digest verified")).toBeVisible();
+  await expect(page.getByText("Signals used")).toBeVisible();
+  // The route-owner line (wireframe screen 3's last gap, now built): a
+  // DEVICE_NONCOMPLIANT refusal routes to endpoint operations per the
+  // IT-layer model, mirrored client-side and drift-checked by its gate.
+  await expect(page.getByText("ROUTE OWNER")).toBeVisible();
+  await expect(page.getByText("Endpoint operations")).toBeVisible();
+});
+
+test("assurance status page renders the server-derived posture", async ({ page }) => {
+  await page.goto(`${BASE}/status`, { waitUntil: "domcontentloaded" });
+
+  await expect(page.getByRole("heading", { name: "Deployment assurance" })).toBeVisible();
+  // Server-derived, not copy: the fixture posture and the advisory effect both
+  // come off /v1/context on this request.
+  await expect(page.getByText(/fixtures — no live vendor call/)).toBeVisible();
+  await expect(page.getByText(/advisory — the gate answers/)).toBeVisible();
+  // The declared-divergence block labels itself as a declaration.
+  await expect(page.getByText("Declared divergence — a declaration, not a measurement")).toBeVisible();
+});
+
+test("connector setup renders the server-resolved mode and runs a fixture sync", async ({ page }) => {
+  await page.goto(`${BASE}/connectors/setup`, { waitUntil: "domcontentloaded" });
+
+  await expect(page.getByRole("heading", { name: "Microsoft connector" })).toBeVisible();
+  // The mode chip is the server's own resolution, not copy.
+  await expect(page.getByText("resolved mode: fixture")).toBeVisible();
+  await expect(page.getByText("microsoft-entra-intune").first()).toBeVisible();
+  // The source-agnostic declaration (owner redirect): lab sources named, the
+  // enterprise connector named, and the equivalence-proof sentence present.
+  await expect(page.getByText("Evidence sources — one contract, engine can't tell them apart")).toBeVisible();
+  await expect(page.getByText("open-source lab", { exact: true })).toBeVisible();
+  await expect(page.getByText("enterprise connector", { exact: true })).toBeVisible();
+
+  // The sync button drives the real POST /v1/connectors/:id/sync — a fixture
+  // pipeline run whose result lands in the history list.
+  const synced = page.waitForResponse((r) => r.url().includes("/sync") && r.request().method() === "POST");
+  await page.getByRole("button", { name: /RUN FIXTURE SYNC/ }).click();
+  const res = await synced;
+  expect(res.status(), "POST /v1/connectors/:id/sync").toBe(200);
+  await expect(page.getByText(/records · \d+ signals/).first()).toBeVisible();
+});
+
+test("console IA: nav separates launch surfaces from previews, and a deep link cannot dodge the label", async ({ page }) => {
+  await page.goto(BASE, { waitUntil: "domcontentloaded" });
+
+  // The sidebar states the IA law: three labelled groups, launch first.
+  await expect(page.getByText("Launch console · /v1")).toBeVisible();
+  await expect(page.getByText("Fixture previews · not launch")).toBeVisible();
+  await expect(page.getByText("Build the grid · demo")).toBeVisible();
+
+  // A non-launch page carries the preview banner even when reached directly —
+  // the banner is route-level, so a deep link cannot bypass the sidebar label.
+  await page.goto(`${BASE}/signals`, { waitUntil: "domcontentloaded" });
+  await expect(page.getByText(/PREVIEW — fixture-backed demo surface/)).toBeVisible();
+
+  // And a launch page does NOT carry it: the label means something because it
+  // is absent where it does not apply.
+  await page.goto(`${BASE}/decisions`, { waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("heading", { name: "Decisions" })).toBeVisible();
+  await expect(page.getByText(/PREVIEW — fixture-backed demo surface/)).toHaveCount(0);
+});
+
+test("audit page verifies the tamper-evident chain from /v1", async ({ page }) => {
+  await page.goto(`${BASE}/audit`, { waitUntil: "domcontentloaded" });
+
+  await expect(page.getByRole("heading", { name: "Audit" })).toBeVisible();
+  await expect(page.getByText("chain verified")).toBeVisible();
+});
+
+test("policies page lists the core's versioned policies and the detail runs tests", async ({ page }) => {
   await page.goto(`${BASE}/policies`, { waitUntil: "domcontentloaded" });
 
-  await expect(page.getByText("Medication administration")).toBeVisible();
-  await expect(page.getByText("Shift handoff custody")).toBeVisible();
+  // The core's real policy inventory, read from /v1 — not the fixture catalog.
+  await expect(page.getByText("Shared-device baseline access policy")).toBeVisible();
+  await expect(page.getByText("READ-ONLY AT LAUNCH").first()).toBeVisible();
+
+  await page.getByText("Shared-device baseline access policy").click();
+  // The versioned rule set renders with its digest, and the pinned policy
+  // tests run server-side against the active version.
+  await expect(page.getByText(/digest [0-9a-f]+/).first()).toBeVisible();
+  await expect(page.getByText(/\d+\/\d+ passed/)).toBeVisible();
 });

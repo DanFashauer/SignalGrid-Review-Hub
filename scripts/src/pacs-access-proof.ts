@@ -22,12 +22,14 @@ import {
   evaluatePacsAccess,
   guardReadOnly,
   normalizeReport,
+  makeDefaultPacsAccessTransport,
   resolvePacsAccessConnector,
   type NormalizedPacsAccess,
   type PacsAccessReportRaw,
 } from "@workspace/integrations/pacs-access";
 import { composeDeviceRisk, fromPacsAccess } from "@workspace/posture-composition";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
+import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
 
 interface Expected {
   posture: string;
@@ -124,6 +126,68 @@ check("a contradictory false/equal-subjects entry → escalate, NEVER granted", 
 const corroborated = await connector.fetchAccess(fixture.entries["subjects-corroborate-clean"].deviceId);
 check("equal subjects with no explicit flag positively confirm the match (identityMatched=true)", corroborated.identityMatched === true);
 
+// ── the credential-technology (mixed-estate) axis ───────────────────────────────
+// A 125 kHz prox clone and a PKOC/Aliro credential both arrive as one "granted";
+// this axis grades what the reader actually VERIFIED, and only when the CALLER
+// poses a floor — the legacy estate is graded, never condemned.
+
+const cleanRaw = fixture.entries["clean-card-badge-in"].report;
+const staticRead = normalizeReport("est", { ...cleanRaw, credentialTechnology: "static_identifier" } as PacsAccessReportRaw);
+const cryptoRead = normalizeReport("est", { ...cleanRaw, credentialTechnology: "cryptographic" } as PacsAccessReportRaw);
+
+const belowFloor = evaluatePacsAccess(staticRead, { minimumCredentialTechnology: "cryptographic" });
+check("a static-identifier read below a posed cryptographic floor → credential_below_floor/step_up, assurance below_floor", belowFloor.posture === "credential_below_floor" && belowFloor.reasonCode === "CREDENTIAL_BELOW_FLOOR" && belowFloor.recommendedAction === "step_up" && belowFloor.credentialAssurance === "below_floor" && belowFloor.physicalAccessConfirmed === false);
+check("below-floor is a CHALLENGE, never a lockout — exactly step_up, not restrict/deny", belowFloor.recommendedAction === "step_up");
+
+const unposed = evaluatePacsAccess(staticRead);
+check("the SAME static read with NO floor posed still grants — unassessed never forecloses (readers don't all disappear overnight)", unposed.recommendedAction === "none" && unposed.physicalAccessConfirmed === true && unposed.credentialAssurance === "unassessed");
+
+const acceptedLegacy = evaluatePacsAccess(staticRead, { minimumCredentialTechnology: "static_identifier" });
+check("an operator who explicitly poses the static floor keeps the grant — the choice stays theirs, assurance meets_floor", acceptedLegacy.recommendedAction === "none" && acceptedLegacy.credentialAssurance === "meets_floor");
+
+const meets = evaluatePacsAccess(cryptoRead, { minimumCredentialTechnology: "cryptographic" });
+check("a cryptographic read meets the posed cryptographic floor and grants", meets.recommendedAction === "none" && meets.physicalAccessConfirmed === true && meets.credentialAssurance === "meets_floor");
+
+const posedSilent = evaluatePacsAccess(normalizeReport("est", cleanRaw), { minimumCredentialTechnology: "cryptographic" });
+check("a posed floor the PACS did not answer → step_up CREDENTIAL_TECHNOLOGY_UNKNOWN, assurance unknown (silence is not a cryptographic credential)", posedSilent.reasonCode === "CREDENTIAL_TECHNOLOGY_UNKNOWN" && posedSilent.recommendedAction === "step_up" && posedSilent.credentialAssurance === "unknown" && posedSilent.unknownSignals.includes("credential_technology"));
+
+check("a garbled technology value normalizes to unknown, never a fabricated class", normalizeReport("g", { ...cleanRaw, credentialTechnology: "DESFire EV3!!" } as PacsAccessReportRaw).credentialTechnology === "unknown");
+
+const deniedBelow = evaluatePacsAccess(normalizeReport("est", { ...cleanRaw, accessResult: "denied", credentialTechnology: "static_identifier" } as PacsAccessReportRaw), { minimumCredentialTechnology: "cryptographic" });
+check("worst-concern-wins: a denial still escalates past a below-floor read (the axis never dilutes a stronger negative)", deniedBelow.recommendedAction === "escalate" && deniedBelow.reasonCode === "ACCESS_DENIED" && deniedBelow.credentialAssurance === "below_floor");
+
+const uncoveredPosed = evaluatePacsAccess(normalizeReport("ghost", {} as PacsAccessReportRaw), { covered: false, minimumCredentialTechnology: "cryptographic" });
+check("an uncovered entry with a posed floor answers the axis honestly: assurance unknown, still NOT_COVERED", uncoveredPosed.reasonCode === "NOT_COVERED" && uncoveredPosed.credentialAssurance === "unknown");
+
+// ── the recency axis (row 26's "event timestamp") ───────────────────────────────
+// A confirmed badge-in does not stay evidence of a CURRENT entry forever. The
+// caller poses an age bound and a reference instant; freshness is DERIVED, no
+// clock in any decision path, and unposed forecloses nothing.
+
+const REF = "2026-07-31T12:00:00Z";
+const timedClean = normalizeReport("t", { ...cleanRaw, observedAt: "2026-07-31T11:00:00Z" } as PacsAccessReportRaw);
+
+const staleEntry = evaluatePacsAccess(timedClean, { maxEventAgeSeconds: 600, referenceTime: REF });
+check("an entry OLDER than the posed bound → stale_evidence/EVENT_STALE/step_up, never confirmed", staleEntry.posture === "stale_evidence" && staleEntry.reasonCode === "EVENT_STALE" && staleEntry.recommendedAction === "step_up" && staleEntry.physicalAccessConfirmed === false);
+const boundaryFresh = evaluatePacsAccess(timedClean, { maxEventAgeSeconds: 3600, referenceTime: REF });
+check("an entry EXACTLY at the posed bound is fresh (inclusive) and the grant stands", boundaryFresh.recommendedAction === "none" && boundaryFresh.physicalAccessConfirmed === true);
+check("UNPOSED, the same ancient entry still grants — unassessed never forecloses (bridges predating the axis keep their behavior)", evaluatePacsAccess(timedClean).physicalAccessConfirmed === true);
+const noTime = evaluatePacsAccess(normalizeReport("t", cleanRaw), { maxEventAgeSeconds: 600, referenceTime: REF });
+check("a posed bound with NO readable event time → EVENT_TIME_UNKNOWN/step_up (posed but unanswerable raises)", noTime.reasonCode === "EVENT_TIME_UNKNOWN" && noTime.recommendedAction === "step_up" && noTime.unknownSignals.includes("event_time"));
+check("a posed bound with a garbled REFERENCE instant is likewise unanswerable", evaluatePacsAccess(timedClean, { maxEventAgeSeconds: 600, referenceTime: "yesterday-ish" }).reasonCode === "EVENT_TIME_UNKNOWN");
+check("a FUTURE-DATED entry relative to the reference is a contradiction → unknown raises, never fresh", evaluatePacsAccess(normalizeReport("t", { ...cleanRaw, observedAt: "2026-07-31T13:00:00Z" } as PacsAccessReportRaw), { maxEventAgeSeconds: 7200, referenceTime: REF }).reasonCode === "EVENT_TIME_UNKNOWN");
+check("a garbled pose (zero / negative bound) is a question we cannot read → unknown raises", evaluatePacsAccess(timedClean, { maxEventAgeSeconds: 0, referenceTime: REF }).reasonCode === "EVENT_TIME_UNKNOWN" && evaluatePacsAccess(timedClean, { maxEventAgeSeconds: -5, referenceTime: REF }).reasonCode === "EVENT_TIME_UNKNOWN");
+check("a garbled observedAt on the wire normalizes to null, never a coerced date", normalizeReport("t", { ...cleanRaw, observedAt: "July 31st, noonish" } as PacsAccessReportRaw).observedAt === null);
+check("worst-concern-wins: a denial still escalates past a stale entry", evaluatePacsAccess(normalizeReport("t", { ...cleanRaw, accessResult: "denied", observedAt: "2026-07-31T02:00:00Z" } as PacsAccessReportRaw), { maxEventAgeSeconds: 600, referenceTime: REF }).recommendedAction === "escalate");
+
+// ── reader/controller health (row 26) — distinct from bridge reachability ───────
+const ctlOffline = evaluatePacsAccess(normalizeReport("c", { ...cleanRaw, controllerHealth: "offline" } as PacsAccessReportRaw));
+check("an OFFLINE controller behind a clean entry → controller_unhealthy/step_up (the evidence plane may be blind)", ctlOffline.posture === "controller_unhealthy" && ctlOffline.reasonCode === "CONTROLLER_OFFLINE" && ctlOffline.recommendedAction === "step_up" && ctlOffline.physicalAccessConfirmed === false);
+const ctlDegraded = evaluatePacsAccess(normalizeReport("c", { ...cleanRaw, controllerHealth: "degraded" } as PacsAccessReportRaw));
+check("a DEGRADED controller is a visible monitor, never silent and never a lockout", ctlDegraded.posture === "controller_unhealthy" && ctlDegraded.reasonCode === "CONTROLLER_DEGRADED" && ctlDegraded.recommendedAction === "monitor" && ctlDegraded.physicalAccessConfirmed === false);
+check("an UNREPORTED controller health forecloses nothing — the axis is affirmative-only, so pre-axis bridges keep their grants", evaluatePacsAccess(normalizeReport("c", cleanRaw)).physicalAccessConfirmed === true);
+check("a garbled controllerHealth value normalizes to unknown, never a fabricated 'online'", normalizeReport("c", { ...cleanRaw, controllerHealth: "mostly fine" } as PacsAccessReportRaw).controllerHealth === "unknown");
+
 // Exhaustive: brute-force the ENTIRE normalized input space (not fixture-bound), so
 // the proof genuinely CONSTRAINS the allow path. Action "none" is emitted for EXACTLY
 // a positively-confirmed authorized entry — granted, authorized, anti-passback-ok, a
@@ -132,37 +196,63 @@ check("equal subjects with no explicit flag positively confirm the match (identi
 const domains = {
   accessResult: ["granted", "denied", "unknown"],
   credentialType: ["biometric", "card", "mobile", "pin", "unknown"],
+  credentialTechnology: ["cryptographic", "static_identifier", "unknown"],
+  controllerHealth: ["online", "degraded", "offline", "unknown"],
   authorization: ["authorized", "out_of_schedule", "out_of_zone", "revoked", "unknown"],
   antipassback: ["ok", "violation", "unknown"],
   doorState: ["secured", "forced", "held_open", "unknown"],
   identityMatched: [true, false, null],
   bridgeReachable: [true, false, null],
 };
+const buildEnum = (c: Record<string, unknown>) =>
+  ({ sourceSystem: "pacs-access", deviceId: "enum", pacsSubject: null, expectedSubject: null, observedAt: null, source: "enum", ...c }) as NormalizedPacsAccess;
+const positivelyCleanBase = (c: Record<string, unknown>): boolean => {
+  const { accessResult, credentialType, authorization, antipassback, doorState, identityMatched, bridgeReachable, controllerHealth } = c;
+  return (
+    accessResult === "granted" &&
+    authorization === "authorized" &&
+    antipassback === "ok" &&
+    doorState === "secured" &&
+    identityMatched === true &&
+    bridgeReachable === true &&
+    // Controller health is AFFIRMATIVE-ONLY: an explicit offline/degraded falls
+    // out of the allow path, an unreported health does not.
+    (controllerHealth === "online" || controllerHealth === "unknown") &&
+    (credentialType === "biometric" || credentialType === "card" || credentialType === "mobile" || credentialType === "pin")
+  );
+};
 const enumRes = enumerateGrantSafety({
   domains,
-  build: (c) =>
-    ({ sourceSystem: "pacs-access", deviceId: "enum", pacsSubject: null, expectedSubject: null, source: "enum", ...c }) as NormalizedPacsAccess,
+  build: buildEnum,
   evaluate: evaluatePacsAccess,
   actionOf: (v) => v.recommendedAction,
   confirmedWhenNone: (v) => v.posture === "physical_access_ok" && v.physicalAccessConfirmed === true,
-  positivelyClean: (c) => {
-    const { accessResult, credentialType, authorization, antipassback, doorState, identityMatched, bridgeReachable } = c;
-    return (
-      accessResult === "granted" &&
-      authorization === "authorized" &&
-      antipassback === "ok" &&
-      doorState === "secured" &&
-      identityMatched === true &&
-      bridgeReachable === true &&
-      (credentialType === "biometric" || credentialType === "card" || credentialType === "mobile" || credentialType === "pin")
-    );
-  },
+  // UNPOSED: the technology axis must be invisible to the grant — any of its three
+  // values grants when the rest of the entry is positively clean.
+  positivelyClean: positivelyCleanBase,
 });
 check(
-  `exhaustive: over all ${enumRes.combos} input combinations, action 'none' is emitted for EXACTLY the positively-confirmed authorized entries (mismatches=${enumRes.mismatches}${enumRes.firstMismatch ? ", first=" + enumRes.firstMismatch : ""})`,
-  enumRes.mismatches === 0 && enumRes.combos === productOf(domains) && enumRes.combos === 8100,
+  `exhaustive (unposed): over all ${enumRes.combos} input combinations, action 'none' is emitted for EXACTLY the positively-confirmed authorized entries — the technology axis forecloses NOTHING unposed (mismatches=${enumRes.mismatches}${enumRes.firstMismatch ? ", first=" + enumRes.firstMismatch : ""})`,
+  enumRes.mismatches === 0 && enumRes.combos === productOf(domains) && enumRes.combos === 97200,
 );
-check("exhaustive: some clean states DO grant (the enumeration is not vacuous)", enumRes.noneCount > 0);
+check("exhaustive (unposed): some clean states DO grant (the enumeration is not vacuous)", enumRes.noneCount > 0);
+
+// POSED cryptographic floor: the SAME space, and now the grant additionally
+// requires the reader to have verified a cryptographic credential — a static or
+// unreported technology falls out of the allow path, and nothing else changes.
+const enumPosed = enumerateGrantSafety({
+  domains,
+  build: buildEnum,
+  evaluate: (n) => evaluatePacsAccess(n, { minimumCredentialTechnology: "cryptographic" }),
+  actionOf: (v) => v.recommendedAction,
+  confirmedWhenNone: (v) => v.posture === "physical_access_ok" && v.physicalAccessConfirmed === true,
+  positivelyClean: (c) => positivelyCleanBase(c) && c["credentialTechnology"] === "cryptographic",
+});
+check(
+  `exhaustive (posed cryptographic floor): over the same ${enumPosed.combos} combinations, the grant additionally demands a cryptographic read — static/unknown fall out, nothing else moves (mismatches=${enumPosed.mismatches}${enumPosed.firstMismatch ? ", first=" + enumPosed.firstMismatch : ""})`,
+  enumPosed.mismatches === 0 && enumPosed.combos === 97200,
+);
+check("exhaustive (posed): the cryptographic allow path is exactly one third of the unposed one (the two static/unknown thirds step up)", enumPosed.noneCount * 3 === enumRes.noneCount);
 
 // Unknown ≠ granted: an unrecognized enum value normalizes to the safe unknown.
 const norm = normalizeReport("n", { accessResult: "maybe", authorization: "sorta", doorState: "ajar" } as PacsAccessReportRaw);
@@ -202,10 +292,32 @@ let missingErr: PacsAccessConnectorError | null = null;
 try { await connector.fetchAccess("no-such-device"); } catch (err) { missingErr = err instanceof PacsAccessConnectorError ? err : null; }
 check("an unknown device surfaces upstream_error, never an invented granted entry", missingErr?.code === "upstream_error");
 
-check("dev tier resolves to fixture mode", resolvePacsAccessConnector({ SIGNALGRID_TIER: "dev" }).mode === "fixture");
-check("prod WITHOUT live flag stays fixture", resolvePacsAccessConnector({ SIGNALGRID_TIER: "prod" }).mode === "fixture");
-check("prod + live but NO token stays fixture", resolvePacsAccessConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" }).mode === "fixture");
-check("prod + live + token resolves live", resolvePacsAccessConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", PACS_ACCESS_ACCESS_TOKEN: "t" }).mode === "live");
+// The live-call gate, each condition ISOLATED.
+//
+// This replaces a four-step cumulative ladder (dev → prod → prod+flag → prod+flag+token)
+// that read like coverage and was not: at every rung the conditions below the one under
+// test were also failing, so only the last was genuinely exercised. The mutation guard
+// showed the consequence — `if (tier !== "beta" && tier !== "prod")` could be deleted
+// outright with this proof green, and that check is the control behind the claim that
+// dev and alpha never make live vendor calls. See `lib/live-gate.ts`.
+checkLiveGateIsolated({
+  check,
+  family: "pacs-access",
+  resolve: (env) => resolvePacsAccessConnector(env),
+  full: {
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    PACS_ACCESS_ACCESS_TOKEN: "t",
+  },
+});
+
+await checkDefaultTransport({
+  check,
+  family: "pacs-access",
+  transport: makeDefaultPacsAccessTransport("https://bridge.invalid/pacs") as (a: never) => Promise<unknown>,
+  arg: { deviceId: "dev-1", token: "t" },
+  codeOf: (err) => (err instanceof PacsAccessConnectorError ? err.code : undefined),
+});
 
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);

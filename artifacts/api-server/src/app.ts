@@ -89,10 +89,17 @@ if (demoSurfacesEnabled()) {
   });
 }
 
-// Prometheus scrape endpoint (operational metrics). Unauthenticated and outside
-// the /v1 contract surface, per Prometheus convention; contains only aggregate
-// counters/latencies, never request payloads.
-app.get("/metrics", (_req, res) => {
+// Prometheus scrape endpoint (operational metrics). Global AGGREGATE only —
+// counters/latencies with no tenant label and no request payloads, so the
+// endpoint can never become a cross-tenant side channel. Open by default per
+// Prometheus convention; setting METRICS_TOKEN requires scrapers to present it
+// as a bearer, without breaking deployments that never set it.
+app.get("/metrics", (req, res) => {
+  const required = process.env.METRICS_TOKEN?.trim();
+  if (required && req.headers.authorization !== `Bearer ${required}`) {
+    res.status(401).type("text/plain").send("metrics: bearer token required");
+    return;
+  }
   res.type("text/plain; version=0.0.4").send(renderMetrics(Date.now()));
 });
 

@@ -9,35 +9,50 @@ import {
 export * from "./types";
 export * from "./posture-connector";
 export { createMockGraphTransport, type MockGraphOptions } from "./mock-transport";
+export {
+  createFixtureGraphPostureConnector,
+  FIXTURE_GRAPH_TOKEN,
+  FIXTURE_GRAPH_USERS,
+  FIXTURE_GRAPH_DEVICES,
+} from "./fixtures";
+
+import { createFixtureGraphPostureConnector } from "./fixtures";
 
 /**
  * Gated resolution of the read-only Graph posture connector, mirroring the
  * product's live-integration policy exactly: dev and alpha NEVER make live
  * vendor calls; beta and prod may, but ONLY when SIGNALGRID_LIVE_INTEGRATIONS is
  * "true" AND a read-only access token is configured. In every other case this
- * returns `{ mode: "fixture" }` and the caller reads committed fixtures instead —
- * so CI and the lower tiers stay deterministic and offline, and no external call
- * is ever made without explicit opt-in.
+ * returns `{ mode: "fixture" }` — and, since the launch-seam work, a WORKING
+ * connector over the committed fixture dataset, so a fixture-mode caller runs
+ * the same sync → normalize → decide pipeline a live one does, deterministic and
+ * offline. `mode` remains the source of truth for what the data IS: a fixture
+ * connector serves synthetic posture, never a tenant's.
  */
 export type GraphConnectorResolution =
   | { mode: "live"; connector: GraphPostureConnector }
-  | { mode: "fixture"; reason: string };
+  | { mode: "fixture"; reason: string; connector: GraphPostureConnector };
 
 export function resolveGraphPostureConnector(
   env: NodeJS.ProcessEnv = process.env,
   transportOverride?: GraphTransport,
 ): GraphConnectorResolution {
+  const fixture = (reason: string): GraphConnectorResolution => ({
+    mode: "fixture",
+    reason,
+    connector: createFixtureGraphPostureConnector(),
+  });
   const tier = (env.SIGNALGRID_TIER ?? "dev").toLowerCase();
   const liveTier = tier === "beta" || tier === "prod";
   if (!liveTier) {
-    return { mode: "fixture", reason: `tier "${tier}" never makes live vendor calls` };
+    return fixture(`tier "${tier}" never makes live vendor calls`);
   }
   if (env.SIGNALGRID_LIVE_INTEGRATIONS !== "true") {
-    return { mode: "fixture", reason: "SIGNALGRID_LIVE_INTEGRATIONS is not 'true'" };
+    return fixture("SIGNALGRID_LIVE_INTEGRATIONS is not 'true'");
   }
   const accessToken = env.GRAPH_ACCESS_TOKEN?.trim();
   if (!accessToken) {
-    return { mode: "fixture", reason: "GRAPH_ACCESS_TOKEN is not set" };
+    return fixture("GRAPH_ACCESS_TOKEN is not set");
   }
   const config: GraphConnectorConfig = {
     accessToken,

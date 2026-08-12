@@ -1,0 +1,108 @@
+<title>SignalGrid — Evidence Coverage</title>
+<style>
+  :root{
+    --bg:#14171A;--panel:#191E22;--card:#1E2429;--ink:#F2F0EA;--soft:#C3C8C4;--faint:#9AA19B;
+    --line:#2A3137;--accent:#74ABA5;--ok:#6FA88C;--dark:#D6AE79;--hole:#D08A8A;--inert:#AEB4AF;
+    --mono:ui-monospace,"IBM Plex Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  }
+  @media (prefers-color-scheme:light){:root{
+    --bg:#F1EEE7;--panel:#FAF8F3;--card:#FFF;--ink:#1B1F21;--soft:#3D443F;--faint:#585E59;
+    --line:#E4DFD3;--accent:#2E635E;--ok:#3F6A4E;--dark:#7A5A2C;--hole:#7A3E3E;--inert:#585E59;
+  }}
+  :root[data-theme="dark"]{--bg:#14171A;--panel:#191E22;--card:#1E2429;--ink:#F2F0EA;--soft:#C3C8C4;--faint:#9AA19B;--line:#2A3137;--accent:#74ABA5;--ok:#6FA88C;--dark:#D6AE79;--hole:#D08A8A;--inert:#AEB4AF;}
+  :root[data-theme="light"]{--bg:#F1EEE7;--panel:#FAF8F3;--card:#FFF;--ink:#1B1F21;--soft:#3D443F;--faint:#585E59;--line:#E4DFD3;--accent:#2E635E;--ok:#3F6A4E;--dark:#7A5A2C;--hole:#7A3E3E;--inert:#585E59;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5;-webkit-text-size-adjust:100%}
+  .wrap{max-width:1060px;margin:0 auto;padding:clamp(1rem,3.5vw,2rem)}
+  header{display:flex;align-items:center;gap:.7rem;border-bottom:1px solid var(--line);padding-bottom:1.1rem;margin-bottom:1.3rem;flex-wrap:wrap}
+  .glyph{width:28px;height:28px;border-radius:7px;background:linear-gradient(150deg,var(--accent),color-mix(in srgb,var(--accent) 60%,#000));position:relative;flex:none}
+  .glyph::before,.glyph::after{content:"";position:absolute;background:var(--bg)}
+  .glyph::before{width:2px;height:58%;left:50%;top:21%;transform:translateX(-50%)}
+  .glyph::after{height:2px;width:58%;top:50%;left:21%;transform:translateY(-50%)}
+  .brand{font-family:var(--mono);font-weight:600}.brand span{color:var(--accent)}
+  .sub{margin-left:auto;font-family:var(--mono);font-size:.62rem;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);border:1px solid var(--line);padding:.28rem .55rem;border-radius:99px}
+  h1{font-size:1.14rem;margin:.1rem 0 .35rem}
+  .lead{color:var(--soft);font-size:.9rem;margin:0 0 1.4rem;max-width:72ch}
+  .lead strong{color:var(--ink)}
+  h2{font-family:var(--mono);font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin:0 0 .55rem}
+  .planes{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:.55rem;margin-bottom:1.5rem}
+  /* NO OPACITY ON THE UNPRESSED STATE. It used to be .62, which composited the prompt text
+     down to 2.3:1 in both themes — and five of seven toggles are unpressed on load, so the
+     questions this page exists to ask were the least readable thing on it. Hover restored
+     it; keyboard and touch users never hover. Pressed/unpressed is carried by border and
+     background instead, which costs no contrast. */
+  button.p{display:flex;gap:.6rem;align-items:flex-start;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:.6rem .7rem;color:var(--ink);cursor:pointer;font:inherit;transition:border-color .15s,background .15s}
+  button.p:hover{border-color:var(--accent)}
+  button.p:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  button.p[aria-pressed="true"]{border-color:color-mix(in srgb,var(--ok) 55%,transparent);background:color-mix(in srgb,var(--ok) 9%,var(--card))}
+  .tick{flex:none;width:16px;height:16px;margin-top:.15rem;border-radius:4px;border:1px solid var(--faint);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:transparent}
+  button.p[aria-pressed="true"] .tick{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 28%,transparent);color:var(--ok)}
+  button.p .n{font-weight:600;font-size:.86rem;display:block}
+  button.p .q{font-size:.76rem;color:var(--faint);margin-top:.15rem;display:block}
+  .headline{border:1px solid color-mix(in srgb,var(--hole) 45%,transparent);border-left:5px solid var(--hole);background:color-mix(in srgb,var(--hole) 10%,var(--card));border-radius:10px;padding:1rem 1.15rem;margin-bottom:.75rem}
+  .headline .n{font-size:2.3rem;font-weight:700;font-variant-numeric:tabular-nums;color:var(--hole);line-height:1}
+  .headline .cap{font-family:var(--mono);font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--hole)}
+  .headline .row{display:flex;align-items:baseline;gap:.7rem;flex-wrap:wrap}
+  .headline p{margin:.6rem 0 0;font-size:.83rem;color:var(--soft);max-width:74ch}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.6rem}
+  .stat{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.8rem .9rem}
+  .stat .n{font-size:1.6rem;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+  .stat .cap{font-family:var(--mono);font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-top:.25rem}
+  .stat .d{font-size:.74rem;color:var(--faint);margin-top:.45rem}
+  .stat.ok .n{color:var(--ok)}.stat.dark .n{color:var(--dark)}.stat.inert .n{color:var(--inert)}
+  .denom{font-family:var(--mono);font-size:.7rem;color:var(--faint);margin:.55rem 0 1.4rem}
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+  table{width:100%;min-width:660px;border-collapse:collapse;font-size:.86rem}
+  th{text-align:left;font-family:var(--mono);font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:600;padding:.7rem .85rem;background:var(--panel)}
+  td{padding:.7rem .85rem;border-top:1px solid var(--line);vertical-align:top}
+  tr[data-silent-hole="true"]{background:color-mix(in srgb,var(--hole) 7%,transparent)}
+  td .axis{font-family:var(--mono);font-size:.68rem;color:var(--faint);display:block;margin-top:.2rem}
+  .badge{display:inline-block;font-family:var(--mono);font-size:.6rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;padding:.22rem .5rem;border-radius:99px;border:1px solid}
+  .b-answerable{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,transparent);background:color-mix(in srgb,var(--ok) 12%,transparent)}
+  .b-needs_instrumentation{color:var(--dark);border-color:color-mix(in srgb,var(--dark) 45%,transparent);background:color-mix(in srgb,var(--dark) 12%,transparent)}
+  .b-not_sourced{color:var(--inert);border-color:var(--line);background:transparent}
+  .holenote{display:block;margin-top:.4rem;font-size:.7rem;font-weight:600;color:var(--hole)}
+  td.rem{font-size:.78rem;color:var(--faint)}
+  footer{margin-top:1.6rem;padding-top:1.1rem;border-top:1px solid var(--line);font-size:.78rem;color:var(--faint);max-width:78ch}
+  footer strong{color:var(--soft)}
+</style>
+<script>/*__BUNDLE__*/</script>
+<div class="wrap">
+  <header>
+    <div class="glyph"></div>
+    <div class="brand">Signal<span>Grid</span></div>
+    <div class="sub">Computed in this page · reads no customer data · calls no connector</div>
+  </header>
+
+  <h1>Evidence coverage — what can your systems actually tell us?</h1>
+  <p class="lead">
+    The decision engine reads a fixed set of evidence axes. Tick the source planes your
+    deployment really has, and this reports which of them you can answer, which are dark,
+    and — the row that matters — which are dark <em>and</em> ungraded, where the engine
+    returns a grant and nobody sees a finding.
+    <strong>This report is fail-closed by construction:</strong> an undeclared plane can
+    never make an axis answerable, so every number gets worse as the estate gets thinner.
+    The engine is the opposite on the ungraded axes, and that is exactly what the
+    silent-hole count measures.
+  </p>
+
+  <h2>Which of these do you have?</h2>
+  <div class="planes" id="planes"></div>
+
+  <div id="report"></div>
+
+  <footer>
+    <strong>Why this and not a replay of your history.</strong> A backtest of your existing
+    exports would leave every dark axis absent for every row by construction, and the engine —
+    deliberately quiet on those axes so a pending integration cannot block a fleet — would
+    emit clean grants at scale. Those grants would have come from absence of data, on the one
+    product whose claim is that it refuses to convert silence into a pass. This says the same
+    thing without the lie.
+    <br><br>
+    Nothing here reads customer data or calls a connector; the page holds no network code at
+    all. The <em>silent hole</em> markers come from a flag on the axis table that is verified
+    against the shipped rule set offline by <code>proof:evidence-coverage</code>, which runs
+    the real engine over each axis's ignorance member — this page does not evaluate policy.
+  </footer>
+</div>

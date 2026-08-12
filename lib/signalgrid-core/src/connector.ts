@@ -4,6 +4,8 @@ import { classifyFreshness, deterministicId } from "./util";
 import {
   CoreError,
   type BaselineState,
+  type LocalAuthorityGrantState,
+  type ManagementHealthState,
   type Connector,
   type ConnectorSyncRun,
   type NormalizedSignal,
@@ -38,6 +40,17 @@ export interface FixturePostureRecord {
    * assumed aligned).
    */
   baseline?: BaselineState;
+  /**
+   * Optional management-plane health rollup from the device-management-health
+   * family (enrollment + check-in freshness + drift). Absent = the source
+   * reported nothing, which normalizes to "unknown" — never assumed healthy.
+   */
+  managementHealth?: ManagementHealthState;
+  /**
+   * Optional local-authority grant rollup. Absent = "unverified" (day-one-quiet);
+   * only an affirmative "withheld" restricts.
+   */
+  localAuthority?: LocalAuthorityGrantState;
   sourceReference: string;
 }
 
@@ -99,6 +112,22 @@ export function runFixtureSync(
       deviceSignals.push({
         category: "security_baseline",
         value: record.baseline,
+      });
+    }
+
+    // The two other launch families, when the source reports them. Absence emits
+    // nothing — the evidence readers turn silence into "unknown"/"unverified",
+    // never into a healthy plane or a live grant.
+    if (record.managementHealth !== undefined) {
+      deviceSignals.push({
+        category: "device_management_health",
+        value: record.managementHealth,
+      });
+    }
+    if (record.localAuthority !== undefined) {
+      deviceSignals.push({
+        category: "local_authority",
+        value: record.localAuthority,
       });
     }
 

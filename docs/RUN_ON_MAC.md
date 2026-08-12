@@ -23,6 +23,88 @@ system. Everything is **synthetic and public-safe** — fixture identities, room
 and assignments. SignalGrid is a *planner*: it computes decisions and an
 orchestration plan; it never actuates a real device.
 
+## Option D — Everything, one command (recommended on a Mac)
+
+```bash
+./scripts/mac/run-everything.sh
+```
+
+Five phases, each reporting PASS / FAIL / SKIPPED with a reason, non-zero exit
+if anything that ran failed:
+
+1. **prereqs** — checks node + pnpm; missing Xcode only skips the iOS phase.
+2. **proofs** — the full deterministic suite CI runs (`validate-sim-macos.sh`),
+   natively. The `== SUMMARY: N passed, M failed ==` line is the verdict.
+3. **api** — builds the real api-server and exercises the whole `/v1` decision
+   surface end to end (`test:api`, prints its N/N assertion count).
+4. **mcp** — builds the MCP server and speaks real JSON-RPC to it over stdio
+   (initialize → tools/list → a live `signal_catalog` call), exactly the
+   handshake Claude Desktop performs. It then prints the config snippet to wire
+   SignalGrid into Claude on your Mac, so you can drive the fabric
+   conversationally: *"evaluate the med-room entry scenario"*, *"scan these
+   signals"*, *"what's in the signal catalog?"*.
+5. **ios** — builds EnterpriseShell, boots the iPhone simulator, installs, and
+   launches with **mimicked hardware**: `-DemoMode YES -SimulateBadge 04A3F291`
+   injects a badge scan with no physical reader attached. More mimicry flags in
+   `DemoMode.swift`: `-DemoUnenrolled`, `-DemoAssist`, `-DemoAssistAuto`,
+   `-DemoIdleLock`, `-DemoBackendURL http://localhost:8080` (points the app at
+   the live local API from phase 3).
+
+Useful variants: `--fast` (sim scenarios only in the proof phase), `--no-ios`,
+`--keep-up` (leave the API running for interactive use), `--plan` (print the
+plan, run nothing).
+
+**The honesty boundary, stated up front:** a simulator cannot be MDM-enrolled
+and no real reader case or SmartDock is attached. Badge, kiosk, dock, tamper
+and custody hardware are *mimicked* — DemoMode injection in the iOS phase,
+deterministic fixtures in the proofs phase. That is everything except the
+physical hardware itself, which is exactly the boundary
+[CLAUDE.md](../CLAUDE.md) requires this repo to state rather than blur.
+
+### Claude Desktop as your test console (MCP)
+
+After phase 4 prints its snippet, add it to
+`~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{ "mcpServers": { "signalgrid": {
+    "command": "/bin/bash",
+    "args": ["<repo>/scripts/mac/mcp-up.sh"] } } }
+```
+
+Point it at `mcp-up.sh` (not `dist/index.mjs` directly) and **the connection
+never drifts**: every time Claude Desktop starts, the launcher fast-forwards
+the branch, reinstalls if the lockfile moved, rebuilds the server if its
+sources moved, and only then serves — failing open to the existing build (with
+a stderr warning) when offline or when your tree has local edits, never to a
+broken one. To pin a version instead, use the direct `node dist/index.mjs`
+form:
+
+```json
+{ "mcpServers": { "signalgrid": {
+    "command": "node",
+    "args": ["<repo>/artifacts/mcp-server/dist/index.mjs"] } } }
+```
+
+Restart Claude Desktop. Claude now has the fabric's tools —
+`list_room_scenarios`, `evaluate_room_entry`, `signal_catalog`, `scan_signals`,
+`evaluate_decision`, `facility_graph`, `evaluate_location_certainty`, and
+`fabric_status` (ask it: *"a Wi-Fi room fix in Room 312 for a med-admin
+workflow — allow it?"* and watch the multi-bed rule step it up) — and every call
+runs your local, fixture-backed decision core. No cloud, no vendor, nothing
+leaves the machine.
+
+**Ask `fabric_status` first if you have been away.** It answers "what does
+SignalGrid model *today*" — the composable signal kinds and categories the grid
+fuses, the registered tool surface, proof counts, the shared posture-report
+contract hash, the filed reference catalogs, and the intake ledger's tally of
+what was assessed and how each input was dispositioned. Every figure is derived
+at call time from the generated live-sync manifest and the repository's own
+documents, so it stays true as the fabric grows instead of drifting the way a
+curated summary would. If a source cannot be read it says so rather than
+reporting zeros — an empty answer that looked like an answer is precisely the
+defect class this repository exists to refuse.
+
 ## Option A — Open it in a browser (zero setup — works on iPhone/iPad)
 
 The whole decision core + orchestration is bundled into **one self-contained HTML
@@ -105,7 +187,8 @@ truth for real evaluations).
 
 - **Try every scenario.** They span the full decision range: a clean allow, a
   bedside session, a controlled med room, a non-compliant device, security-
-  baseline drift, a withdrawn badge (custody lost), a tamper flag, and a disabled
+  baseline drift, a withdrawn badge (custody lost), a tamper flag, an off-the-clock
+  badge-in (the labor plane disagrees with the moment), and a disabled
   account — each producing a real allow / step-up / restrict / deny and a matching
   orchestration plan.
 - **Confirm an assist action.** On an allow, sensitive steps show a **Confirm**

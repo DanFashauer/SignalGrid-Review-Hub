@@ -1,7 +1,10 @@
+import { CORE_NORMALIZATION_VERSION } from "./core-normalization-version";
 import { canonicalJson, deterministicId, digest } from "./util";
 import type {
   BadgeBindingState,
   BaselineState,
+  BenchmarkSelectionState,
+  ShiftContextState,
   BatteryHealthState,
   ChargeState,
   ComplianceState,
@@ -12,6 +15,8 @@ import type {
   EvidenceSnapshot,
   Freshness,
   Identity,
+  LocalAuthorityGrantState,
+  ManagementHealthState,
   NormalizedSignal,
   PolicyVersion,
   TamperState,
@@ -64,7 +69,11 @@ export function buildEvidence(
     tamperState: readTamper(latestByCategory),
     dockState: readDock(latestByCategory),
     baselineCompliance: readBaseline(latestByCategory),
+    benchmarkSelection: readBenchmarkSelection(latestByCategory),
+    shiftContext: readShiftContext(latestByCategory),
     badgeBinding: readBadge(latestByCategory),
+    managementHealthState: readManagementHealth(latestByCategory),
+    localAuthorityState: readLocalAuthority(latestByCategory),
   };
 
   return {
@@ -91,6 +100,56 @@ export function deriveCriticalSignalsPresent(
   );
 }
 
+/**
+ * The EXACT set of fields the snapshot digest covers, in one place.
+ *
+ * WHY THIS EXISTS. `buildSnapshot` and `verifySnapshot` each hand-wrote the same
+ * eight-key literal. Two hand-maintained copies of a definition that must agree is
+ * the shape this repository keeps finding defects in — and here the failure would
+ * have been maximally quiet: add a field to the minting body and forget the
+ * verifying one, and every freshly-minted snapshot verifies FALSE, which the
+ * operator console renders as "tampered". Drop a field from the verifying body only,
+ * and tampering in that field stops being detected at all. One function, two callers,
+ * no way to disagree.
+ *
+ * The parameter is typed as the snapshot's own field set so a future field added to
+ * `EvidenceSnapshot` cannot silently miss the digest: it must be added here, or it is
+ * deliberately outside the tamper-evidence and that is a visible decision.
+ */
+type SnapshotDigestFields = Pick<
+  EvidenceSnapshot,
+  | "tenantId"
+  | "decisionId"
+  | "capturedAt"
+  | "evidence"
+  | "signalsUsed"
+  | "policyVersionId"
+  | "policyVersion"
+  | "sourceReferences"
+> & Pick<EvidenceSnapshot, "coreNormalizationVersion">;
+
+function snapshotDigestBody(fields: SnapshotDigestFields): string {
+  return canonicalJson({
+    tenantId: fields.tenantId,
+    decisionId: fields.decisionId,
+    capturedAt: fields.capturedAt,
+    evidence: fields.evidence,
+    signalsUsed: fields.signalsUsed,
+    policyVersionId: fields.policyVersionId,
+    policyVersion: fields.policyVersion,
+    sourceReferences: fields.sourceReferences,
+    // CONDITIONAL, and this single spread is the entire migration story: an unstamped
+    // snapshot's canonical body is byte-identical to the pre-stamp one, so durable rows
+    // written before this field existed keep verifying `true` with no version-conditional
+    // branch and no precondition anywhere. Both tamper directions still fail — delete the
+    // key from a stamped row and it recomputes to the legacy body; add it to a legacy row
+    // and it recomputes to a stamped body. Proven by the pinned legacy digest above.
+    ...(fields.coreNormalizationVersion === undefined
+      ? {}
+      : { coreNormalizationVersion: fields.coreNormalizationVersion }),
+  });
+}
+
 export function buildSnapshot(
   tenantId: string,
   decisionId: string,
@@ -103,7 +162,7 @@ export function buildSnapshot(
     ...new Set(signalsUsed.map((signal) => signal.sourceReference)),
   ].sort();
   const id = deterministicId("evid", tenantId, decisionId);
-  const body = canonicalJson({
+  const fields: SnapshotDigestFields = {
     tenantId,
     decisionId,
     capturedAt,
@@ -112,34 +171,18 @@ export function buildSnapshot(
     policyVersionId: version.id,
     policyVersion: version.version,
     sourceReferences,
-  });
+    coreNormalizationVersion: CORE_NORMALIZATION_VERSION,
+  };
   return {
     id,
-    tenantId,
-    decisionId,
-    capturedAt,
-    evidence,
-    signalsUsed,
-    policyVersionId: version.id,
-    policyVersion: version.version,
-    sourceReferences,
-    digest: digest(body),
+    ...fields,
+    digest: digest(snapshotDigestBody(fields)),
   };
 }
 
 /** Recompute a snapshot digest to confirm it has not been altered. */
 export function verifySnapshot(snapshot: EvidenceSnapshot): boolean {
-  const body = canonicalJson({
-    tenantId: snapshot.tenantId,
-    decisionId: snapshot.decisionId,
-    capturedAt: snapshot.capturedAt,
-    evidence: snapshot.evidence,
-    signalsUsed: snapshot.signalsUsed,
-    policyVersionId: snapshot.policyVersionId,
-    policyVersion: snapshot.policyVersion,
-    sourceReferences: snapshot.sourceReferences,
-  });
-  return digest(body) === snapshot.digest;
+  return digest(snapshotDigestBody(snapshot)) === snapshot.digest;
 }
 
 type LatestByCategory = Map<NormalizedSignal["category"], NormalizedSignal>;
@@ -199,6 +242,15 @@ const TAMPER_STATES = ["none", "suspected", "confirmed", "sensor_unavailable"] a
 const DOCK_STATES = ["occupied", "empty", "reserved", "faulted", "offline"] as const;
 const BATTERY_HEALTH_STATES = ["healthy", "degraded", "failing"] as const;
 const BASELINE_STATES = ["aligned", "partial", "drifted", "not_assessed"] as const;
+// Only the two AFFIRMATIVE values are readable from a signal. Absent or
+// unrecognized falls back to "unverified" — the same silence-is-not-an-answer
+// rule as every other read here, and the value the active v1 rule deliberately
+// does not match.
+const BENCHMARK_SELECTION_STATES = ["confirmed", "misfit"] as const;
+// Same rule for the labor plane: only the two AFFIRMATIVE values are readable;
+// absent or unrecognized falls back to "unverified", which the active v1 rule
+// deliberately does not match.
+const SHIFT_CONTEXT_STATES = ["confirmed", "misfit"] as const;
 const BADGE_STATES = ["present", "removed", "forced", "absent"] as const;
 
 function readCustody(latestByCategory: LatestByCategory): CustodyState {
@@ -209,8 +261,34 @@ function readBaseline(latestByCategory: LatestByCategory): BaselineState {
   return readEnum(latestByCategory, "security_baseline", BASELINE_STATES) ?? "unknown";
 }
 
+function readBenchmarkSelection(latestByCategory: LatestByCategory): BenchmarkSelectionState {
+  return readEnum(latestByCategory, "benchmark_selection", BENCHMARK_SELECTION_STATES) ?? "unverified";
+}
+
+function readShiftContext(latestByCategory: LatestByCategory): ShiftContextState {
+  return readEnum(latestByCategory, "shift_context", SHIFT_CONTEXT_STATES) ?? "unverified";
+}
+
 function readBadge(latestByCategory: LatestByCategory): BadgeBindingState {
   return readEnum(latestByCategory, "badge_binding", BADGE_STATES) ?? "unknown";
+}
+
+// Rollup of the device-management-health family. All three values are readable —
+// the family computes them from enrollment, check-in freshness and policy drift —
+// but SILENCE reads as "unknown", never as a healthy management plane.
+const MANAGEMENT_HEALTH_STATES = ["healthy", "degraded", "broken"] as const;
+// Only the two AFFIRMATIVE values are readable for local authority; absent or
+// unrecognized falls back to "unverified" — the same day-one-quiet rule as
+// benchmark_selection and shift_context, so nothing fires until a connector
+// actually emits the signal.
+const LOCAL_AUTHORITY_STATES = ["verified", "withheld"] as const;
+
+function readManagementHealth(latestByCategory: LatestByCategory): ManagementHealthState {
+  return readEnum(latestByCategory, "device_management_health", MANAGEMENT_HEALTH_STATES) ?? "unknown";
+}
+
+function readLocalAuthority(latestByCategory: LatestByCategory): LocalAuthorityGrantState {
+  return readEnum(latestByCategory, "local_authority", LOCAL_AUTHORITY_STATES) ?? "unverified";
 }
 
 function readCharge(latestByCategory: LatestByCategory): ChargeState {

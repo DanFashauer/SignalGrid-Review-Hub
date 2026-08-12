@@ -14,6 +14,311 @@ picking these up:
 
 ## Now (next up)
 
+- [x] **27a — Normalization-version stamping on evidence (intake row 27). BUILT.**
+      An adversarially-verified audit of the owner's canonical endpoint signal set found
+      that nothing in the fabric recorded which version of the code produced a normalized
+      record: `EvidenceSnapshot`/`Decision`/the /v1 `EvaluateResult` stamped only
+      `policyVersion`, and the near-misses (`APPLE_DEVICE_MANAGEMENT_SCHEMA_VERSION`, the
+      unconsumed posture-report.contract.json `schemaVersion`, work-context's
+      `contextVersion`, the facility graph's `mapVersionMatch`) each version something
+      else. `coreNormalizationVersion` now rides all three carriers and the /v1 response,
+      inside the tamper-evident digest.
+      **It is GENERATED, not a constant somebody bumps** — three designs went through four
+      refute-by-default critics each, and the hand-set-constant-plus-pin design was killed
+      by a specific attack: its pin is a committed file and a text editor is a second
+      writer, so a human who edits the source and pastes the printed digest under an
+      unchanged version satisfies every conjunct. `scripts/generate-core-normalization-version.mjs`
+      recomputes the digest FROM SOURCE (a mechanical import closure over 12 core files)
+      and derives the integer from the comparison, so there is no consistent pair a human
+      can write that it will reproduce. Ten in-process negative controls (six on the digest,
+      four on the version rule) and floors F1–F8 run on every invocation; `--check` is wired
+      into preflight and CI.
+      The version rule itself is hardened against the one direction it must never fail in:
+      a bare `catch { /* genesis *\/ }` used to swallow EVERY read failure, so deleting or
+      corrupting the artifact silently restarted the counter at 1 and re-minted a number
+      that already meant something else. Now only `ENOENT` is genesis, genesis is refused
+      outright when the artifact has git history, and a hand-edited version or digest is
+      rejected rather than propagated (`"3" + 1 === "31"`).
+      Migration is a single conditional spread in the digest body: an unstamped snapshot's
+      canonical body stays byte-identical to the pre-stamp one, so rows written before the
+      field existed keep verifying with no version-conditional branch anywhere. Pinned by
+      the legacy digest in `proof:signalgrid-core`.
+
+- [ ] **27b — Per-connector normalizer versioning. REFUSED, with reasons — this is a
+      decision, not unbuilt scope.** The original row also asked for a version on the ~47
+      `normalize*` functions under `lib/integrations`. It is not being built, and the
+      refusal is recorded here so no future lane reads it as a gap:
+      `lib/signalgrid-core/package.json` declares ZERO dependencies, so the core
+      structurally cannot import them; nothing they produce is persisted or digested; and
+      a version on them would therefore appear in no durable artifact where anything could
+      ever detect that it was wrong. Unfalsifiable ceremony is precisely the defect the
+      stamp exists to close, pointed backwards.
+      **The refusal is self-invalidating rather than permanent.** Floors F7 and F8 in the
+      generator fail the day it stops being true: F7 fails if `putSignal` is ever called
+      from outside the core, and F8 fails if `lib/persistence` ever gains a signals table.
+      Either would mean a signal could be normalized by one build and evaluated by another,
+      at which point reopen this.
+
+- [ ] **A REACHABLE dual-control surface — OWNER-GATED, and NOT the defect the
+      row-45 audit first described.** A three-seam design pass with adversarial
+      critique (and independent re-verification by hand) established facts that
+      correct the original framing, and they are recorded here because the
+      original framing overstated the risk:
+      1. `planFlowActions` has **zero shipped consumers**. `ActionPlan` and
+         `requiresApprovals` occur repo-wide only in `lib/flows/src/index.ts` and
+         `scripts/src/flows-proof.ts`; the sole other mention is a *comment* in
+         `grid-config.ts`. `artifacts/api-server` imports eleven symbols from
+         `@workspace/flows` and `planFlowActions` is not among them. So its
+         `dual_approval` disposition is unreachable from any product path, and
+         wiring the evaluator into it would be a decorative wire into dead code —
+         all three critiques reached `closesDefect: false` for exactly this reason.
+      2. The surface that DOES ship — `lib/app-workflows` via
+         `POST /v1/app-workflows/evaluate` — is rigorous, not lax. The route
+         deliberately does not read `confirmedActionKeys` from the request body
+         ("This route NEVER releases held actions on a request-supplied signal");
+         the one release path is `POST /v1/app-workflows/complete-step-up`, a real
+         WebAuthn ceremony with user-verification required, an action-bound
+         single-use challenge, tenant-scoped credential storage, and the release
+         flag derived server-side from the verified assertion.
+      **Therefore there is no live "two clicks instead of two people" defect on any
+      shipped path.** `@workspace/dual-control` is an unwired primitive whose
+      absence costs nothing today, because nothing today reaches a state it would
+      have gated. What remains is a genuine PRODUCT question rather than a repair:
+      should a two-person ceremony exist on a reachable surface at all — and if so,
+      on which action class? That is the owner's call, not an agent's, because it
+      adds a runtime obligation to the launch path rather than fixing something
+      broken. If taken, the design pass's own conclusions bind: evidence must cross
+      the seam (a raw `DualControlRequestRaw` normalized by the primitive's own
+      normalizer), never a caller-supplied verdict; a ceremony must bind to one
+      action id and not be replayable across actions; and every new guard must be
+      expressed in a shape `scripts/mutation-guard.mjs` can actually mutate — a
+      `switch` arm is invisible to it and would pass vacuously over the release
+      decision itself.
+      **The generalizable lesson is now a gate.** The expensive part of this episode
+      was not the wrong conclusion, it was that "does anything ship this?" took a
+      full design pass to answer when it is derivable in a second.
+      `scripts/check-package-reachability.mjs` computes the transitive closure from
+      `artifacts/*` and reports every `lib/*` package no shipped artifact can reach —
+      eight of thirty-five today, `dual-control` among them, and it prints WHY (no
+      importers at all, versus imported only by the proof harness). It is a ratchet
+      pinned at the current count, not a hard gate: unreachable is a requirement to
+      look before building, not a verdict to delete. It also corrected a hand count
+      made during that pass — `lib/db` is untracked build residue (`dist/` and
+      `node_modules/` with no manifest and no source), not a thirty-sixth package,
+      which is the ordinary reason a derived figure beats a remembered one.
+- [x] **Change-window currency as a decision fact (intake row 45, the audit's one
+      genuine near-term gap).** DONE — the `change-window` family
+      (`@workspace/integrations/change-window`), `proof:change-window` (76 checks),
+      fused as the `change_window` signal kind via `fromChangeWindow`.
+      `change_window` had existed only as a declared flow signal id carrying a
+      HEALTH status (`lib/flows/src/factory.ts:26,:94`) — "is the ITSM reachable",
+      never "are we inside the approved window right now".
+      Four axes, following the shift-context template (derived / trusted / posed)
+      plus the caller-posed recency shape: window standing DERIVED from the record's
+      bounds at a caller-supplied reference instant, the ITSM's approval state as the
+      one trusted allowlisted enum, the named implementer compared only when the
+      caller poses the operating actor, and record currency against a caller-supplied
+      maximum age. Rejected/cancelled restricts; everything else that fails steps up.
+      **The design decision worth recording is the one that was refused.** Change
+      integrations conventionally RELAX controls inside a window, and that is a grant
+      manufactured from an ITSM row. This family can only raise: the proof asserts it
+      by composition, fusing all 576 reachable verdicts alongside an
+      already-stepping-up device and confirming none of them lowers the outcome. For
+      the same reason `change_class: "emergency"` is carried as evidence for the human
+      answering the step-up and never read by the gate — otherwise anyone who can write
+      that field can write themselves a pass.
+      Placement was checked before building, using the new reachability ratchet:
+      `pim-activation` (where the backlog's own text pointed) is proof-only, so the
+      work went to `lib/integrations` + `posture-composition`, both of which ship.
+- [ ] **`ReleaseLedger.holds` loses the second hold on the same task (found by the row-48
+      second-pass audit; LATENT, not live — record the distinction).** `holds` is
+      `Readonly<Record<string, string>>` (`lib/handoff-sim/src/types.ts:137`) — one
+      exception per task — and `lib/handoff-sim/src/simulate.ts:134` assigns
+      `holdsMap[step.taskRef] = carriedEntry`, which OVERWRITES the entry when a second
+      hold-grade exception fires on the same task. A release naming the surviving
+      exception then succeeds while the overwritten one is still in
+      `unresolvedExceptionRefs`, moving the task held → active with an unresolved hold
+      outstanding.
+      The type's own comment is what makes this worth recording: `holds` was added
+      *after* adversarial review demonstrated the CROSS-task version of exactly this
+      hole ("a resolved+verified exception could free ANY held task, including one whose
+      own blocker was still open"). The same-task twin was left behind by the fix.
+      **Why it is latent rather than live, stated so nobody over-reacts to it:**
+      `@workspace/handoff-sim` is not reachable from any shipped artifact — verified with
+      `node scripts/check-package-reachability.mjs --why @workspace/handoff-sim`, which
+      reports it imported only by the proof harness. The shipped decision plane does not
+      consult this ledger; it ANDs over its whole condition set structurally every call.
+      And the trace still carries the overwritten entry, so the evidence is not lost even
+      in the simulation. Fix shape: `holds` becomes `Record<string, string[]>` (or the
+      release check asserts every unresolved entry naming the task, not just the recorded
+      one), plus the proof case that reproduces the overwrite. Bundle it with any future
+      work that makes handoff-sim reachable rather than shipping a lone repair into a
+      package nothing calls.
+
+- [ ] **Mirror `coreNormalizationVersion` into the Swift models (row 27a follow-through).**
+      The stamp now rides three TypeScript carriers (`EvidenceSnapshot`, `Decision`,
+      `EvaluateResult`) and the `/v1` OpenAPI response, all as an OPTIONAL field. The iOS
+      mirror in `native/ios/.../Models.swift` has not been updated: the three structs need
+      an `Int?`, with four construction sites in `MockSignalGridAPI.swift` (lines 86, 406,
+      478, 515). **Not attempted blind.** No Swift toolchain exists in the cloud lane, so
+      an edit here could not be compiled, and `native/ios` is the one tree where an
+      uncompiled change is invisible until a human opens Xcode. Left as a recorded gap for
+      the Mac lane rather than a plausible-looking patch. It is not urgent: the field is
+      optional on every carrier and Swift's decoder ignores unknown keys, so the current
+      apps decode the new payload correctly today — they simply cannot yet SHOW the stamp.
+
+- [ ] **A webhook WRITE route and its validation are one change, not two.**
+      Opened as "should `CreateWebhookSchema`/`UpdateWebhookSchema` be `.strict()`?" and
+      deferred once as "a breaking client contract change". **Both halves of that framing
+      were wrong, and measuring settled it.** There is no client contract to break:
+      `artifacts/api-server` exposes only `GET /v1/webhooks` and
+      `GET /v1/webhooks/deliveries`, and `createWebhook`/`updateWebhook` have ZERO callers
+      anywhere in the repository. And `.strict()` on its own would be decorative, because
+      nothing calls `.parse()` on either schema — they are type sources, and a schema
+      nobody parses cannot reject anything.
+      The live finding underneath is different and worse: both write functions accept a
+      typed argument and never validate it, so `url: z.string().url()` is a URL in the
+      type system and an arbitrary string at runtime. Nothing untrusted can reach them
+      today because the route does not exist; the day it does, whatever the handler passes
+      lands in Redis and the delivery path POSTs to the stored `url`. That is the SSRF
+      shape, latent behind a missing route rather than behind a check.
+      Fix shape, in this order: (1) `CreateWebhookSchema.parse` / `UpdateWebhookSchema.parse`
+      at the top of each function — the boundary belongs on the exported function, not in
+      one handler; (2) THEN `.strict()` on both, which is load-bearing only once a parse
+      exists, and closes the same asymmetry the `uem`/`nac` config schemas were tightened
+      for (`secrets` for `secret` → an unsigned webhook; `state` for `status` → a webhook
+      that stays enabled; a misspelled `rotateSecret` → a compromised secret still live).
+      NOT pre-fixed, on the `lib/dual-control` precedent recorded in
+      `check-package-reachability.mjs`: a repair shipped into a path nothing calls is
+      proven by a proof and reachable by nothing, and it leaves the next reader believing
+      a boundary is defended when the boundary does not exist yet. The trap is marked at
+      both call sites and on both schemas instead.
+
+- [ ] **Mirror `reconcileDecisions` into Swift (intake row 51 follow-through).**
+      `lib/signalgrid-core/src/continuity.ts` answers which decision wins when a device
+      has been deciding offline, and the device is where an offline decision is actually
+      minted — so `EnterpriseShell` should reconcile on reconnect rather than leave it to
+      the server alone. Blocked in the cloud lane for the same reason as the
+      `coreNormalizationVersion` mirror above: no Swift toolchain, and `native/ios` is the
+      one tree where an uncompiled change stays invisible until a human opens Xcode.
+      **Golden rule 1 applies:** this goes AROUND `DecisionEngine.swift` in a new file, in
+      the `SignalContext.swift` pattern — the port stays byte-faithful, and reconciliation
+      is not part of what was ported. Nothing is broken meanwhile: the TS side reconciles
+      whatever the device uploads, so the gap is that the device cannot decide locally
+      *whether its own held decision still stands* before it reconnects.
+
+- [x] **`/v1` arm for decision reconciliation (intake row 51 follow-through). BUILT.**
+      `POST /v1/decisions/reconcile` — OpenAPI entry, Postman sample, and API integration
+      coverage. The route stores nothing and reads nothing: every record is
+      caller-supplied and the reduction is pure, so there is no decision to mint. Two
+      properties are the wire layer's own rather than the library's, and both are tested:
+      the parser fills NOTHING in (an omitted `evaluatedOffline` is a 400, not an
+      "online" — a `?? false` here would be the MCP adapter's defect one layer out), and
+      an oversized set is REFUSED rather than truncated, because a dropped record can only
+      remove a restriction. See `docs/OFFLINE_FIRST_SYNC_CATALOG.md` §2a. What remains is
+      the operator-console surface — showing the frontier, the reason codes and which
+      records expired — which is UI work, tracked in the catalog's backlog table.
+
+- [x] **Mobile-app-catalog scanner phase (intake row 33, owner-instructed YELLOW-lane build).
+      SCANNER HALF DONE** — hardened build at `scripts/mobile-app-catalog/scan.py`
+      (v2.0.0, each fix marked `HARDENED:` against the filed original), proven by
+      `proof:mobile-app-catalog` (19 checks) over a committed adversarial fixture
+      tree with byte-identical goldens. All five verified defects closed and each
+      asserted against the failure the audit reproduced, not the code's
+      description: the planted fake JWT under a non-secret key appears in neither
+      output while the legitimate bundle id on the same file still surfaces
+      (credential-shape filter, not a blanket); the file symlink to outside the
+      root is refused loudly with no content read and the directory symlink is
+      never traversed (`os.walk(followlinks=False)` + explicit pruning, closing
+      the 3.12/3.13 rglob divergence); two runs are byte-identical with no wall
+      clock and no absolute path anywhere (a clock exists only if the caller
+      passes `--generated-at`); markdown cells are escaped; the oversized fixture
+      is recorded `SizeCapExceeded` with content never read. Plus one hardening
+      beyond the audit list: a MISSING scan root exits 2 rather than producing an
+      empty green report. Registered atomically on all planned surfaces — root +
+      scripts package.json, preflight.mjs (its NOTHING-BUT-NODE header amended
+      honestly: the proof FAILS, never skips, when python3 is absent),
+      review-hub-ci.yml, check-proof-figures, and a `.gitleaks.toml` exact-value
+      allowlist for the planted JWT. Lane coordination checked first: no
+      mobile-app-catalog work on `SignalGrid_Alpha`, base fully merged.
+      **The Watchtower/PR-creating workflow half remains UNWRITTEN and
+      owner-gated, unchanged** — everything below stands as the record of what
+      that decision is about. ORIGINAL ENTRY:
+      The owner's repository scanner is filed verbatim, UNHARDENED, in
+      [inspiration/MOBILE_APP_CATALOG_AGENT.md](inspiration/MOBILE_APP_CATALOG_AGENT.md)
+      with SHA-256 provenance; the adversarial intake audit VERIFIED (by
+      execution) defects the build must fix before any committed run: the
+      `BUNDLE_RE` JWT/dotted-secret leak into `identifiers` (which makes the
+      emitted `publicSafety.valuesRedacted: true` an overclaim), the
+      file-symlink escape, wall-clock + absolute-path non-determinism (two runs
+      must become byte-identical), unescaped markdown table cells, and
+      unbounded per-file reads. Build content: hardened scanner under
+      `scripts/mobile-app-catalog/`, an adversarial fixture tree (DOCTYPE xml
+      refused, planted fake JWT never emitted, symlink never followed) with a
+      committed golden scoped to the fixtures (never docs/inspiration),
+      `proof:mobile-app-catalog` that shells to python3 and FAILS (never
+      skips) when python3 is missing, atomic four-surface registration (root +
+      scripts package.json, preflight.mjs — amending its Node-only
+      self-description honestly — and review-hub-ci.yml) plus `.gitleaks.toml`
+      allowlisting for the planted fixture, with Mac-lane coordination first
+      (proof registration is a LANE_COORDINATION shared surface). The
+      owner-referenced scheduled PR-creating workflow stays UNWRITTEN — it
+      would be the repo's first autonomous contents-write surface — unless the
+      owner approves it as its own future phase. Online/store/vendor adapters,
+      the recorder implementation, and any Postgres deployment stay spec-only.
+      Intake row 46 (the Crucix reference) did NOT change that gate, but it did
+      specify the design the gate is holding, so the owner's decision is now a
+      yes/no on something concrete rather than on a blank: the agent the owner
+      calls **Watchtower / Catalog Sentinel** would watch vendor API docs,
+      GitHub repositories, OpenAPI specs, platform documentation, AppConfig
+      schemas and standards bodies, and its loop is fixed by the owner as
+      watch → fetch/parse/hash → compare prior version → classify change →
+      score impact → generate an evidence artifact → **open a PR or issue** →
+      require review → update the catalog only after merge. Two properties of
+      that loop are the whole reason it could ever be safe and must survive
+      into any implementation: it never mutates a catalog directly, and it
+      never changes product behaviour — a proposal cannot activate itself, the
+      same law `@workspace/adaptive-proposals` already enforces. The verified
+      caveat from row 46: the referenced architecture (AGPL-3.0, so a
+      reference only — never a source to copy, and reciprocity against a
+      private core is a human legal question) is prior art for the sweep,
+      delta, severity and evidence half ONLY. It opens no pull requests and
+      writes to no repository, persisting to a local run directory instead. So
+      the contents-write half still has no precedent to point at, and the
+      first write surface would be exactly that: first. Sequencing is the
+      owner's own — P2/P3, explicitly after the launch wedge.
+- [ ] **Per-app managed-configuration RECEIPT as a decision dimension (intake
+      row 33, verified candidate gap).** Nothing today can represent "the host
+      app actually RECEIVED its managed-configuration payload, current
+      version": device-management-health `policyDrift` is device-baseline
+      scope, app-update grades the BINARY's channel/version, policy-binding
+      grades assignment-and-enforcement — each compression was adversarially
+      shown to distort (the checkInFreshness-collapse precedent). A session
+      can earn managed_healthy + current_managed + bound_correctly while the
+      host app runs on a default or stale AppConfig dictionary. Wire facts
+      exist today (Intune Graph mobileAppConfigurations deviceStatuses; Apple
+      managed-app config/feedback). Future family rules pinned by the
+      verifier: read-only, fixture-first, its own family (never folded into
+      the three neighbors), management-plane status anchors the affirmative
+      (app self-attestation corroborates or downgrades only), first scope =
+      Entra + Intune + the one launch host app. Reference contract shape:
+      [inspiration/MOBILE_CONFIG_RECORDER_CONTRACT.md](inspiration/MOBILE_CONFIG_RECORDER_CONTRACT.md)
+      — sequenced AFTER normalization-version stamping, and its recorder
+      write-plane stays out of the public tree.
+- [ ] **App Protection / MAM state as a decision dimension (intake row 33,
+      verified candidate gap; SIGNAL_SOURCE_CATALOG's own
+      "documentation-only roadmap" row).** No lib family models MAM
+      (repo-wide grep: zero matches); device-management-health's header
+      explicitly scopes the APP channel out; the connector emulator already
+      scripts MISSING_MAM_POLICY_SENSITIVE_APP → restrict as an expectation no
+      dimension can produce. Wire facts exist (Graph managedAppRegistrations
+      appliedPolicies/flaggedReasons per user+device+app). Verifier-pinned
+      rules: its own read-only fixture-first family; selective wipe NEVER
+      enters the tree (the uem actuator-deletion precedent); unknown/stale
+      raises; MAM non-applicability is an asserted positive; the emulator
+      expectation and the SIGNAL_SOURCE_CATALOG row status reconcile in the
+      same change; Intune App Protection first, other MAM vendors deferred.
+
 _Derived from repo data, not memory: `check-connector-discipline` reports 36/36
 families with KNOWN_GAPS empty, and `check-live-sync` reports `liveEvidence=fresh`
 (`artifacts/live-evidence/mac-run.json`, minted on a real Mac 2026-08-07).
@@ -108,6 +413,65 @@ and pim-activation have NO permanent free path (Entra P2 / Governance trial wind
 only), and the DDM rig is gated on an APNs push certificate.
 
 ## Next
+
+- [x] **Both findings from the "status reported rather than measured" sweep — FIXED.**
+      The sweep that produced the `itsm` tri-state health fix turned up two more instances of the
+      same class. Both are now closed and both are pinned.
+
+      1. ~~**Twelve connectors fabricate an HTTP status they never observed.**~~ **FIXED, and gated
+         so it cannot come back.** Every `*-connector.ts` with the shape `async healthCheck(...)`
+         returned `{ healthy: true, status: 200 }` after awaiting an INJECTED transport. There is no
+         HTTP response on that path, so a 201, 202 or 204 upstream was reported as 200 and a reviewer
+         reading the field believed a server had said it. All twelve now return `status: null` on the
+         success path — a value the type can hold and which means exactly what happened: the
+         transport resolved, no status was observed. Sites fixed: `access-governance`,
+         `agent-identity`, `device-attestation`, `device-management-health`, `link-usability`,
+         `macos-posture`, `oauth-consent`, `ot-posture`, `pacs-access`, `sso-session`,
+         `task-exception`, `token-binding`.
+
+         `scripts/check-fabricated-status.mjs` enforces it in preflight and CI. The gate is built on
+         a distinction rather than a blanket ban: eleven families (`graph`, `carrier`,
+         `credential-exposure`, `data-protection`, `edr-threat`, `identity-risk`,
+         `location-services`, `network-nac`, `peripheral-control`, `rtls-custody`, `vuln-scan`) hold
+         a real `Response` and `return { healthy: res.ok, status: res.status }` — a reading, not a
+         claim, which must keep passing. Those 22 files are a positive control with a floor, so a
+         green cannot be reached by making the honest connectors stop measuring. Verified against
+         the pre-fix tree: 12/12 would have failed.
+
+         **What this did NOT fix**, stated so the green is not read as more than it is: `healthy:
+         true` still means "the injected transport resolved", which in fixture mode is true without
+         anything being contacted. The connector cannot know which transport it was handed, so that
+         belongs at the resolution layer — which already reports `mode: "fixture"` with a reason —
+         rather than in twelve constructors. Still open, deliberately not closed with the status fix.
+
+      2. ~~**`sourcingToSignalStates` labels a CAPABILITY with the HEALTH vocabulary.**~~ **FIXED —
+         and it was worse than this entry said.** `lib/flows/src/signal-sourcing.ts` emitted
+         `{ id, status: "healthy" }` for every source whose acquisition method is *wireable* —
+         meaning it COULD be connected, not that it is delivering. This entry concluded "its only
+         consumers are coverage evaluations, so nothing today reads it as a live health claim."
+         **That was wrong, and re-reading the consumer rather than the producer is what found it.**
+         `evaluateGridCoverage` took those states and returned `reason: "<flow> is active and fully
+         fed — the Grid runs its response by itself"` with a `coveragePct` documented as what the
+         Grid handles "right now" — present-tense operational claims assembled from a configuration
+         fact nobody had measured. `GET /cp/v1/grid/coverage` served exactly that.
+
+         The fix was NOT the one this entry proposed. Changing the `SignalStatus` vocabulary would
+         have been wrong: `evaluateFlowHealth` would then have to decide what a "wireable" signal
+         does to flow health, re-conflating the two axes. Instead the projection carries its own
+         basis: `projectSourcingAsSignalStates` returns a tagged `SourcingProjection`, and
+         `evaluateGridCoverage` **derives** `coverage.basis` (`observed` | `projected_from_sourcing`)
+         from the argument's shape. There is no flag to pass, so none to set wrongly and none to
+         forget. Under a projection every reason string is reworded — "every signal it requires has
+         a wireable source … nothing here was observed", never "fully fed" — because a reader skims
+         the reason, and a tag alone would have fixed nothing.
+
+         Coverage MATH is untouched; only the claim changed. That is asserted, not asserted-about:
+         `proof:grid-coverage` (45 assertions) pins both bases, that the basis is derived rather
+         than passed (same inputs, opposite bases), the wording on each side, and that the count is
+         identical across them. `summarizeGridConfig` had already reached this conclusion alone —
+         it named its field `coveragePctAtFullHealth` — and that judgement now lives in the type
+         instead of in one caller's care. Documented in `docs/SIGNAL_SOURCING.md` §"Wireable ≠
+         wired ≠ delivering ≠ healthy".
 
 - [x] **In-app step-up completion (real WebAuthn, possession + user-verification)** — the SERVER control
       is real: `/v1/step-up/enroll/{options,verify}` + `/v1/step-up/challenge` +

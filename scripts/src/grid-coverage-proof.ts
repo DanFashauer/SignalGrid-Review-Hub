@@ -16,7 +16,7 @@ import {
   fidelityOf,
   gridDoesLifting,
   isWireable,
-  sourcingToSignalStates,
+  projectSourcingAsSignalStates,
   summarizeSourcing,
   type Flow,
   type GridSituation,
@@ -163,17 +163,17 @@ check("only a grid-collected signal means the grid does the lifting", gridDoesLi
 // must be treated as ungettable — no wired state, not wireable, no fidelity —
 // never wired as a present signal of unknown provenance.
 const unknownSources = [src("custody", "collector" as never), src("id2", undefined as never)];
-check("an unknown/undefined method yields no wired signal (fail-safe)", sourcingToSignalStates(unknownSources).length === 0);
+check("an unknown/undefined method yields no wired signal (fail-safe)", projectSourcingAsSignalStates(unknownSources).states.length === 0);
 check("an unknown/undefined method is not wireable", !isWireable("collector" as never) && !isWireable(undefined as never));
 check("an unknown method has no fidelity (never undefined)", fidelityOf(src("z", "collector" as never)) === "none");
 // Strongest single oracle: the wired count must equal the summary's wireable
 // count for the SAME sources — catches any allowlist/denylist drift between them.
 const agreeMix = [src("a", "api"), src("b", "unavailable"), src("c", "collector" as never), src("d", "grid_collected")];
-check("wired signal count === summary.wireable (functions agree on the same input)", sourcingToSignalStates(agreeMix).length === summarizeSourcing(agreeMix).wireable);
+check("wired signal count === summary.wireable (functions agree on the same input)", projectSourcingAsSignalStates(agreeMix).states.length === summarizeSourcing(agreeMix).wireable);
 
 // An unavailable source yields NO signal state (fail-safe — never pretend to have it).
 const someUnavail = [src("identity", "api"), src("custody", "unavailable"), src("baseline", "grid_collected")];
-const derivedStates = sourcingToSignalStates(someUnavail);
+const derivedStates = projectSourcingAsSignalStates(someUnavail).states;
 check("an unavailable source produces no wired signal (fail-safe)", !derivedStates.some((s) => s.id === "custody"));
 check("api and grid-collected sources are wired healthy", derivedStates.find((s) => s.id === "identity")?.status === "healthy" && derivedStates.find((s) => s.id === "baseline")?.status === "healthy");
 
@@ -185,17 +185,52 @@ check("wireable = api+native+grid-collected; vendorIntegrated = api+native", sum
 // End-to-end: how the systems are configured dictates coverage.
 // (a) Every required signal available via API → the grid handles everything.
 const allApi: SignalSource[] = ALL_SIGNAL_IDS.map((id) => src(id, "api"));
-const covApi = evaluateGridCoverage(DEMO_FLOWS, GRID_SITUATIONS, sourcingToSignalStates(allApi));
+const covApi = evaluateGridCoverage(DEMO_FLOWS, GRID_SITUATIONS, projectSourcingAsSignalStates(allApi));
 check("all signals API-sourced → full coverage", covApi.coveragePct === 100);
 // (b) The grid does the lifting for one required signal → still wired → still handled.
 const withLift: SignalSource[] = ALL_SIGNAL_IDS.map((id) => src(id, id === "custody" ? "grid_collected" : "api"));
-const covLift = evaluateGridCoverage(DEMO_FLOWS, GRID_SITUATIONS, sourcingToSignalStates(withLift));
+const covLift = evaluateGridCoverage(DEMO_FLOWS, GRID_SITUATIONS, projectSourcingAsSignalStates(withLift));
 check("a grid-collected required signal still yields full coverage (grid does the lifting)", covLift.coveragePct === 100 && summarizeSourcing(withLift).gridCollected === 1);
 // (c) A required signal is unavailable → its situation drops (a real gap, fail-safe).
 const withGap: SignalSource[] = ALL_SIGNAL_IDS.map((id) => src(id, id === "custody" ? "unavailable" : "api"));
-const covGap = evaluateGridCoverage(DEMO_FLOWS, GRID_SITUATIONS, sourcingToSignalStates(withGap));
+const covGap = evaluateGridCoverage(DEMO_FLOWS, GRID_SITUATIONS, projectSourcingAsSignalStates(withGap));
 const gapSit = covGap.situations.find((s) => s.workflowId === "flow_controlled_area")!;
 check("an unavailable required signal drops its situation (never a false green)", gapSit.status === "partial" && gapSit.missingSignals.includes("custody") && covGap.coveragePct < 100);
+
+// ── basis: a projection must never be reported as a measurement ──────────────
+// `projectSourcingAsSignalStates` turns "this source has a wireable acquisition
+// method" into `status: "healthy"`. That is a CONFIGURATION fact wearing a HEALTH
+// vocabulary, and before this the coverage result assembled from it said situations
+// were "active and fully fed" with a percentage documented as what the Grid handles
+// "right now" — present-tense claims about signals nothing had contacted.
+// These pin the correction. Note what is NOT asserted: that the projection is
+// pessimistic. It is not; it is the ceiling, and the point is that it says so.
+const observedBasis = evaluateGridCoverage(DEMO_FLOWS, GRID_SITUATIONS, missingCustody);
+check("real signal states are reported as observed", observedBasis.basis === "observed");
+check("a sourcing projection is reported as projected, not observed", covApi.basis === "projected_from_sourcing");
+// The basis is DERIVED from the argument shape, so there is no flag a caller can set
+// wrongly — and no flag a caller can forget. Both halves are worth pinning.
+check(
+  "…and the basis is derived from the argument, not passed in (same inputs, opposite bases)",
+  evaluateGridCoverage(DEMO_FLOWS, GRID_SITUATIONS, projectSourcingAsSignalStates(allApi)).basis !==
+    evaluateGridCoverage(DEMO_FLOWS, GRID_SITUATIONS, projectSourcingAsSignalStates(allApi).states).basis,
+);
+// The wording, not just the tag. A reader skims the reason string; if that still
+// claims a present fact, the tag alone has not fixed anything.
+const projectedHandled = covApi.situations.find((s) => s.status === "auto_handled")!;
+const observedHandled = evaluateGridCoverage(
+  DEMO_FLOWS, GRID_SITUATIONS, projectSourcingAsSignalStates(allApi).states,
+).situations.find((s) => s.status === "auto_handled")!;
+check("a projected 'handled' says nothing was observed", /nothing here was observed/i.test(projectedHandled.reason));
+check("…and does NOT claim the workflow is currently fed", !/fully fed/i.test(projectedHandled.reason));
+check("an observed 'handled' still states the present fact plainly", /fully fed/i.test(observedHandled.reason));
+// Same signals, same verdict — only the claim differs. This is what makes the change
+// a truthfulness fix rather than a behavior change: coverage MATH is untouched.
+check(
+  "the basis changes the claim, never the count",
+  covApi.coveragePct === 100 &&
+    evaluateGridCoverage(DEMO_FLOWS, GRID_SITUATIONS, projectSourcingAsSignalStates(allApi).states).coveragePct === 100,
+);
 
 // ── determinism ──────────────────────────────────────────────────────────────
 const a = evaluateGridCoverage(DEMO_FLOWS, GRID_SITUATIONS, missingCustody);

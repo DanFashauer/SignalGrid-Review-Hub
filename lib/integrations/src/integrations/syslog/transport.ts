@@ -97,7 +97,11 @@ export class SyslogAdapter implements SIEMAdapter {
    * Send a single event to syslog
    */
   async sendEvent(event: SIEMEventRequest): Promise<SIEMEventResponse> {
-    // Gate first: dev/alpha never emit. See ../adapters/emit-gate.ts.
+    // GATE FIRST — the shared emit gate (../adapters/emit-gate.ts) the other
+    // emitter families route through. When policy says nothing may be sent
+    // (dev/alpha, or the live flag unset), nothing was promised and nothing is
+    // lost: report the honest `suppressed` status WITH the reason, exactly like
+    // siem/telemetry/itsm do.
     const emission = resolveEmission();
     if (emission.mode === 'suppressed') {
       return {
@@ -107,21 +111,46 @@ export class SyslogAdapter implements SIEMAdapter {
       };
     }
 
-    // Formatting is real and unit-testable; the WIRE is not implemented.
+    // FORMATTING IS REAL AND IS KEPT. `formatEvent` and `buildPriority` implement RFC
+    // 5424 / CEF / LEEF correctly and are worth having when a transport is chosen.
     const message = this.formatEvent(event);
+    const priority = this.buildPriority(event.severity);
     void message;
-    void this.buildPriority(event.severity);
+    void priority;
 
-    // HONESTY FIX. This previously returned status 'sent' having sent nothing —
-    // no UDP, TCP or TLS socket is opened anywhere in this file. A compliance
-    // reader treats a forwarded audit event as delivered, so claiming 'sent'
-    // for a no-op is the most damaging thing this adapter could report. Until a
-    // real transport exists it reports `not_implemented`, which is true.
-    return {
-      eventId: `syslog-${event.type}-${Date.now()}`,
-      status: 'not_implemented',
-      receivedAt: new Date().toISOString(),
-    };
+    // THERE IS NO TRANSPORT, AND THIS NO LONGER CLAIMS OTHERWISE.
+    //
+    // Past the gate the caller has EXPLICITLY configured live delivery
+    // (beta/prod tier and SIGNALGRID_LIVE_INTEGRATIONS exactly "true") — this
+    // is where a quiet honest status is at its most dangerous, because a
+    // caller that ignores a status string is the normal case and here they are
+    // actively expecting delivery. So the live path REFUSES LOUDLY.
+    //
+    // This returned a `sent` status with a fresh receivedAt above a comment reading "In
+    // a real implementation, this would send via UDP/TCP/TLS. For now, we return a mock
+    // response." Nothing ever left the process — no socket is opened anywhere in this
+    // family — and the caller was told the security event had been SENT and RECEIVED.
+    //
+    // That is the fourth instance of one defect in this repository: Jamf's hardcoded
+    // `compliant: true`, ISE's hardcoded `status: "registered"`, the response-verdict
+    // fold seeded with RESPONSE_VERIFIED_RESOLVED, and this. An affirmative asserted
+    // because nothing contradicted it. It is the worst-placed of the four: a SIEM
+    // forwarder that reports success while dropping every event silently defeats the
+    // audit trail it exists to produce, and does so most convincingly during an
+    // incident, when someone is looking for the events that never arrived.
+    //
+    // REFUSING RATHER THAN RETURNING AN HONEST-BUT-QUIET STATUS, because a caller that
+    // ignores a status string is the normal case, and this must be impossible to miss.
+    // The once-open question — tier-gated vs fixture-backed — is now decided: this
+    // family is tier-gated (the shared gate above, plus `resolveSyslogEmitter`'s
+    // four-clause gate at the family boundary). The gate stands beside this refusal;
+    // it does not soften it. A real implementation replaces this throw, nothing else.
+    throw new Error(
+      "syslog: no transport is implemented — this adapter formats events but opens no " +
+        "socket. It previously reported a 'sent' status for events that were never " +
+        "transmitted. Wire a UDP/TCP/TLS transport behind a tier gate, or consume the " +
+        "formatter directly, but do not treat a returned value here as delivery.",
+    );
   }
 
   /**

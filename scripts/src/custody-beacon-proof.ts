@@ -8,6 +8,8 @@
 // dark is high-confidence removal. The grant (`none`) requires POSITIVE CONFIRMATION on
 // every axis — in zone, reachable, fresh reading, clean parse.
 import {
+  resolveCustodyBeaconConnector,
+  makeDefaultCustodyBeaconTransport,
   CustodyBeaconConnector,
   CustodyBeaconConnectorError,
   createMockCustodyBeaconTransport,
@@ -18,6 +20,7 @@ import {
   type NormalizedCustodyBeacon,
 } from "@workspace/integrations/custody-beacon";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
+import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
 
 let passed = 0;
 const failures: string[] = [];
@@ -206,6 +209,33 @@ check("a report behind a 100-deep prototype chain is malformed (bounded walk)",
 // Determinism.
 const d1 = normalizeReport("det", { zone: "off_premises", reachability: "unreachable" });
 check("evaluator is deterministic", JSON.stringify(evaluateCustodyBeacon(d1)) === JSON.stringify(evaluateCustodyBeacon(d1)));
+
+
+// ── The live-call gate and the default transport, each condition ISOLATED ────
+//
+// See `lib/live-gate.ts` for why this replaced what was here (or filled the hole where
+// nothing was). Short version: the gate was tested as a cumulative ladder, so only its
+// last condition was falsifiable, and the mutation guard could delete the tier check —
+// the control behind "dev and alpha never make live vendor calls" — with every proof
+// green. The default fetch transport was never executed by anything at all.
+checkLiveGateIsolated({
+  check,
+  family: "custody-beacon",
+  resolve: (env) => resolveCustodyBeaconConnector(env),
+  full: {
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    CUSTODY_BEACON_ACCESS_TOKEN: "t",
+  },
+});
+
+await checkDefaultTransport({
+  check,
+  family: "custody-beacon",
+  transport: makeDefaultCustodyBeaconTransport("https://vendor.invalid/custody-beacon") as (a: never) => Promise<unknown>,
+  arg: { deviceRef: "deviceRef-1", token: "t" },
+  codeOf: (err) => (err instanceof CustodyBeaconConnectorError ? err.code : undefined),
+});
 
 const total = passed + failures.length;
 console.log(`figures=normalizedCombos=${normRes.combos},rawCombos=${rawRes.combos},grantingCombos=${normRes.noneCount},zones=4,ladderRungs=6`);

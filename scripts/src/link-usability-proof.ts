@@ -25,6 +25,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  makeDefaultLinkUsabilityTransport,
   LINK_USABILITY_REPORT_KEYS,
   LinkUsabilityConnector,
   LinkUsabilityConnectorError,
@@ -38,6 +39,7 @@ import {
 } from "@workspace/integrations/link-usability";
 import { composeDeviceRisk, fromLinkUsability } from "@workspace/posture-composition";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
+import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
 
 interface Expected {
   posture: string;
@@ -138,6 +140,34 @@ const dhcp = evaluateLinkUsability(await connector.fetchLink(fixture.devices["dh
 const dns = evaluateLinkUsability(await connector.fetchLink(fixture.devices["dns-failing"].deviceId));
 check("a link failing at DHCP names the rung it failed at", dhcp.reasonCode === "DHCP_FAILING" && dhcp.recommendedAction === "alert");
 check("a link failing at DNS names the rung it failed at", dns.reasonCode === "DNS_FAILING" && dns.recommendedAction === "alert");
+
+// ── the §12.1 local-only rung (owner-directed, ANNOTATE-ONLY) ─────────────────
+//
+// "The Wi-Fi and local servers are fine, only the internet/control plane is
+// dark." The rung NAMES that state; it must not soften it. Pinned three ways:
+// it alerts at EXACTLY dns_failing's severity (so a future quiet relaxation is
+// a test failure, not a drift), it never grants, and its contradiction with an
+// asserted not_associated is refused like every other progress claim.
+const localOnly = evaluateLinkUsability({
+  sourceSystem: "link-usability", deviceId: "lo", source: "test", reportIntegrity: "clean",
+  associationState: "associated", linkProgress: "local_only", roamCapability: "basic",
+  roamHealth: "stable", linkLatencyClass: "nominal", controllerReachable: true,
+});
+check("local_only names the state: posture local_only_link, reason LINK_LOCAL_ONLY, finding recorded",
+  localOnly.posture === "local_only_link" && localOnly.reasonCode === "LINK_LOCAL_ONLY" &&
+  localOnly.criticalFindings.includes("wan_egress_failing_local_traffic_confirmed"));
+check("ANNOTATE-ONLY: local_only alerts at exactly dns_failing's severity — a dark WAN is a confirmed known-bad fact for the cloud planes freshness rides on",
+  localOnly.recommendedAction === "alert" && localOnly.recommendedAction === dns.recommendedAction);
+check("local_only never grants — the withheld softening decision is the owner's, not this evaluator's",
+  localOnly.linkUsable === false);
+const localOnlyContradiction = evaluateLinkUsability({
+  sourceSystem: "link-usability", deviceId: "loc", source: "test", reportIntegrity: "clean",
+  associationState: "not_associated", linkProgress: "local_only", roamCapability: "basic",
+  roamHealth: "stable", linkLatencyClass: "nominal", controllerReachable: true,
+});
+check("not_associated + local_only is a self-contradictory report, refused without citing the disbelieved half",
+  localOnlyContradiction.reasonCode === "LINK_REPORT_INCONSISTENT" &&
+  localOnlyContradiction.criticalFindings.length === 0);
 
 // ── roaming behaviour: works now, predicts it will not ────────────────────────
 const sticky = evaluateLinkUsability(await connector.fetchLink(fixture.devices["roam-sticky"].deviceId));
@@ -311,7 +341,7 @@ const linkClean = (c: Record<string, unknown>): boolean =>
 /** The full contradiction relation, stated independently of the evaluator's guard. */
 const linkContradictory = (assoc: unknown, progress: unknown): boolean =>
   (assoc === "not_associated" &&
-    (progress === "carrying_traffic" || progress === "dns_failing" || progress === "dhcp_failing" || progress === "associated_only")) ||
+    (progress === "carrying_traffic" || progress === "local_only" || progress === "dns_failing" || progress === "dhcp_failing" || progress === "associated_only")) ||
   (assoc === "associated" && progress === "not_associated");
 
 /** The roam contradiction relation, stated independently of the evaluator's guard. */
@@ -322,7 +352,7 @@ const roamContradictory = (cap: unknown, health: unknown): boolean =>
 // Pass 1 — the NORMALIZED space (including reportIntegrity) against the evaluator alone.
 const domains = {
   associationState: ["associated", "not_associated", "unknown"],
-  linkProgress: ["carrying_traffic", "dns_failing", "dhcp_failing", "associated_only", "not_associated", "unknown"],
+  linkProgress: ["carrying_traffic", "local_only", "dns_failing", "dhcp_failing", "associated_only", "not_associated", "unknown"],
   roamCapability: ["fast_transition", "basic", "not_applicable", "unknown"],
   roamHealth: ["stable", "sticky", "excessive", "not_applicable", "unknown"],
   linkLatencyClass: ["nominal", "degraded", "unknown"],
@@ -343,7 +373,7 @@ const enumRes = enumerateGrantSafety({
 });
 check(
   `exhaustive (normalized): over all ${enumRes.combos} normalized states, action 'none' requires ALL SIX positively confirmed and a clean report (mismatches=${enumRes.mismatches}${enumRes.firstMismatch ? ", first=" + enumRes.firstMismatch : ""})`,
-  enumRes.mismatches === 0 && enumRes.combos === productOf(domains) && enumRes.combos === 6480,
+  enumRes.mismatches === 0 && enumRes.combos === productOf(domains) && enumRes.combos === 7560,
 );
 check("exhaustive (normalized): some clean states DO grant (the enumeration is not vacuous)", enumRes.noneCount > 0);
 // Six: three roam capabilities × two roam-health shapes (stable, or no roaming domain).
@@ -380,7 +410,7 @@ check(`exhaustive (normalized): only none/step_up/alert are reachable — the wi
 // JSON null, and a junk value — so no `PARSEABLE_RAW` entry below is ever unproduced.
 const rawDomains = {
   associationState: ["associated", "not_associated", "unknown", undefined, null, "connected"],
-  linkProgress: ["carrying_traffic", "dns_failing", "dhcp_failing", "associated_only", "not_associated", "unknown", undefined, null, ["dns_failing"]],
+  linkProgress: ["carrying_traffic", "local_only", "dns_failing", "dhcp_failing", "associated_only", "not_associated", "unknown", undefined, null, ["dns_failing"]],
   roamCapability: ["fast_transition", "basic", "not_applicable", "unknown", undefined, null, 11],
   roamHealth: ["stable", "sticky", "excessive", "not_applicable", "unknown", undefined, null, "flappy"],
   linkLatencyClass: ["nominal", "degraded", "unknown", undefined, null, {}],
@@ -399,8 +429,8 @@ const evaluateAndAudit = (n: NormalizedLinkUsability): ReturnType<typeof evaluat
   if (linkContradictory(n.associationState, n.linkProgress)) {
     contradictoryCount += 1;
     if (v.criticalFindings.length > 0 || v.reasonCode === "NOT_ASSOCIATED" ||
-        v.reasonCode === "ASSOCIATED_BUT_NOT_CARRYING_TRAFFIC" || v.reasonCode === "DNS_FAILING" ||
-        v.reasonCode === "DHCP_FAILING") {
+        v.reasonCode === "ASSOCIATED_BUT_NOT_CARRYING_TRAFFIC" || v.reasonCode === "LINK_LOCAL_ONLY" ||
+        v.reasonCode === "DNS_FAILING" || v.reasonCode === "DHCP_FAILING") {
       citedWhileContradictory += 1;
     }
   }
@@ -429,7 +459,7 @@ const rawEnumRes = enumerateGrantSafety({
 });
 check(
   `exhaustive (raw wire): over all ${rawEnumRes.combos} raw reports — including junk enum spellings, JSON nulls, string-quoted booleans, numbers, arrays, objects and an aliased extra key — normalizeReport + evaluate grant ONLY the six-way confirmation (mismatches=${rawEnumRes.mismatches}${rawEnumRes.firstMismatch ? ", first=" + rawEnumRes.firstMismatch : ""})`,
-  rawEnumRes.mismatches === 0 && rawEnumRes.combos === productOf(rawDomains) && rawEnumRes.combos === 217728,
+  rawEnumRes.mismatches === 0 && rawEnumRes.combos === productOf(rawDomains) && rawEnumRes.combos === 241920,
 );
 check("exhaustive (raw wire): some raw reports DO grant (the enumeration is not vacuous)", rawEnumRes.noneCount > 0);
 check("exhaustive (raw wire): exactly THREE raw reports grant — one per coherent roam pair", rawEnumRes.noneCount === 3);
@@ -457,7 +487,7 @@ check(
 // pass closes it by asserting the integrity flag against an independent allowlist.
 const PARSEABLE_RAW: Record<string, readonly unknown[]> = {
   associationState: [undefined, null, "associated", "not_associated", "unknown"],
-  linkProgress: [undefined, null, "carrying_traffic", "dns_failing", "dhcp_failing", "associated_only", "not_associated", "unknown"],
+  linkProgress: [undefined, null, "carrying_traffic", "local_only", "dns_failing", "dhcp_failing", "associated_only", "not_associated", "unknown"],
   roamCapability: [undefined, null, "fast_transition", "basic", "not_applicable", "unknown"],
   roamHealth: [undefined, null, "stable", "sticky", "excessive", "not_applicable", "unknown"],
   linkLatencyClass: [undefined, null, "nominal", "degraded", "unknown"],
@@ -518,12 +548,35 @@ let missingErr: LinkUsabilityConnectorError | null = null;
 try { await connector.fetchLink("no-such-device"); } catch (err) { missingErr = err instanceof LinkUsabilityConnectorError ? err : null; }
 check("an unknown device surfaces upstream_error, never an invented healthy link", missingErr?.code === "upstream_error");
 
-check("dev tier resolves to fixture mode", resolveLinkUsabilityConnector({ SIGNALGRID_TIER: "dev" }).mode === "fixture");
-check("prod WITHOUT live flag stays fixture", resolveLinkUsabilityConnector({ SIGNALGRID_TIER: "prod" }).mode === "fixture");
-check("prod + live but NO token stays fixture", resolveLinkUsabilityConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" }).mode === "fixture");
-check("prod + live + token resolves live", resolveLinkUsabilityConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", LINK_USABILITY_ACCESS_TOKEN: "t" }).mode === "live");
 
 console.log(`figures=normalized=${enumRes.combos},raw=${rawEnumRes.combos},grants=${rawEnumRes.noneCount},contradictory=${contradictoryCount},roamContradictory=${roamContradictoryCount}`);
+
+// ── The live-call gate and the default transport, each condition ISOLATED ────
+//
+// See `lib/live-gate.ts` for why this replaced what was here (or filled the hole where
+// nothing was). Short version: the gate was tested as a cumulative ladder, so only its
+// last condition was falsifiable, and the mutation guard could delete the tier check —
+// the control behind "dev and alpha never make live vendor calls" — with every proof
+// green. The default fetch transport was never executed by anything at all.
+checkLiveGateIsolated({
+  check,
+  family: "link-usability",
+  resolve: (env) => resolveLinkUsabilityConnector(env),
+  full: {
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    LINK_USABILITY_ACCESS_TOKEN: "t",
+  },
+});
+
+await checkDefaultTransport({
+  check,
+  family: "link-usability",
+  transport: makeDefaultLinkUsabilityTransport("https://vendor.invalid/link-usability") as (a: never) => Promise<unknown>,
+  arg: { deviceId: "deviceId-1", token: "t" },
+  codeOf: (err) => (err instanceof LinkUsabilityConnectorError ? err.code : undefined),
+});
+
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

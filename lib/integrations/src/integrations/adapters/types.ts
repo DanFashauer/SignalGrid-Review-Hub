@@ -42,6 +42,23 @@ export interface ITSMAdapter {
   healthCheck?(): Promise<boolean>;
 }
 
+/**
+ * What an aggregate health sweep can honestly say about ONE vendor.
+ *
+ * `unchecked` is the reason this type exists. `healthCheck` is optional on
+ * `ITSMAdapter`, so an adapter may expose none — and an adapter that was never
+ * asked has not been found healthy. The aggregate previously returned a plain
+ * boolean and recorded `true` for exactly that case, which made "we did not
+ * look" render identically to "we looked and it is fine" on any surface reading
+ * the result.
+ *
+ * That is the unearned affirmative this repository keeps finding, in the same
+ * family whose watermelon note already warns about it: a green state reported
+ * without the thing that would establish it. A boolean cannot express the third
+ * outcome, so the boolean had to go.
+ */
+export type ITSMAdapterHealth = "healthy" | "unhealthy" | "unchecked";
+
 // ============================================================================
 // SIEM Types
 // ============================================================================
@@ -156,6 +173,20 @@ export interface UEMAdapter {
 // NAC Types - Network Access Control
 // ============================================================================
 
+/**
+ * An endpoint record from a NAC, used for DEVICE IDENTITY RESOLUTION — mapping a
+ * MAC / serial / certificate subject to the device the fabric is deciding about.
+ *
+ * Note what this is NOT: it is not the network-posture decision input. That is
+ * `../network-nac`, which owns a richer, already-proven model
+ * (`NetworkAuthState` including `quarantined`, `NetworkVerdict`, reason codes).
+ * Two sources of truth for one question would be a regression, so this shape stays
+ * deliberately narrow and serves `deviceResolver` only.
+ *
+ * `lastSeen` is the vendor timestamp verbatim. Deliberately not converted to an age
+ * here — that needs a clock, and a clock read in a decision path is forbidden by
+ * golden rule 2.
+ */
 export interface NACEndpointInfo {
   endpointId: string;
   macAddress?: string;
@@ -167,66 +198,63 @@ export interface NACEndpointInfo {
   lastSeen?: string;
 }
 
-export interface NACQuarantineRequest {
-  deviceId: string;
-  action: 'quarantine' | 'unquarantine' | 'reauthenticate' | 'notify';
-  reason?: string;
-  duration?: number;
-  vlan?: string;
-  networkProfile?: string;
-  correlationId?: string;
-  caseId?: string;
-}
-
-export interface NACQuarantineResponse {
-  requestId: string;
-  status: 'pending' | 'applied' | 'failed' | 'revoked';
-  appliedAt?: string;
-  message?: string;
-}
-
-// WRITE METHODS REMOVED: `quarantineEndpoint`, `clearQuarantine` and the
-// `quarantineDevice` alias. They cut a device off the network through Cisco ISE
-// ANC / ClearPass enforcement — a DEVICE ACTION, the class removed from uem/ in
-// #150. Declaring them here made the actuator a REQUIRED part of the contract,
-// so any new NAC vendor had to implement one; the interface is now read-only and
-// a vendor adapter cannot satisfy it by acting on a device.
+/**
+ * The NAC read surface.
+ *
+ * WRITE METHODS REMOVED: `quarantineEndpoint`, `clearQuarantine`, `quarantineDevice`,
+ * and the `NACQuarantineRequest` / `NACQuarantineResponse` types that served them.
+ * Their implementations called the Cisco ISE ANC and Aruba ClearPass APIs to
+ * quarantine an endpoint — a device action over the network, ungated and unproven,
+ * against AGENTS.md:19 ("Keep high-risk actions simulated and approval-required").
+ *
+ * Cutting a device off the network is, if anything, a more severe action than
+ * locking one: on a shared clinical cart mid-shift it removes the worker's ability
+ * to reach the systems the patient in front of them depends on. Exactly the class of
+ * action that must route through an approval-gated request rather than fire from a
+ * decision path.
+ *
+ * Deleted rather than gated, for the same reason as the `uem/` actuators in #150:
+ * connector discipline here is a READ-ONLY discipline, so there is no disciplined
+ * form of a quarantine actuator to convert these into. Nothing outside `nac/` called
+ * them — `deviceResolver`, the only consumer, uses `lookupEndpoint`.
+ */
 export interface NACAdapter {
   readonly name: string;
   readonly vendor: string;
-
-  // Universal NAC surface — read-only.
   lookupEndpoint(identifier: string, type: 'mac' | 'serial' | 'cert'): Promise<NACEndpointInfo | null>;
   healthCheck?(): Promise<boolean>;
 }
 
 // ============================================================================
-// Notify Types
+// Notify Types — DELETED, deliberately (intake ledger row 47)
 // ============================================================================
-
-export interface NotifyRequest {
-  channel: 'email' | 'sms' | 'slack' | 'teams' | 'webhook' | 'push';
-  recipients: string[];
-  subject?: string;
-  message: string;
-  priority?: 'urgent' | 'high' | 'normal' | 'low';
-  correlationId?: string;
-  caseId?: string;
-}
-
-export interface NotifyResponse {
-  notificationId: string;
-  status: 'sent' | 'queued' | 'failed';
-  channel: string;
-  sentAt?: string;
-}
-
-export interface NotifyAdapter {
-  readonly name: string;
-  readonly vendor: string;
-  notify(request: NotifyRequest): Promise<NotifyResponse>;
-  healthCheck?(): Promise<boolean>;
-}
+//
+// A `NotifyAdapter` / `NotifyRequest` / `NotifyResponse` trio used to live here
+// with zero implementations and zero callers. It was removed because dead code
+// is not neutral when it contradicts a law the rest of the repository enforces:
+//
+//   1. `NotifyResponse.status` included the literal `'sent'`. That is exactly
+//      the claim this codebase eradicated — a `sent` status reported for an
+//      event that never left the process was a REAL defect found in our own
+//      syslog adapter, and it is why every outbound family now records a
+//      literal `delivered: false` in fixture mode. A type declaring `'sent'`
+//      is that defect kept alive in the type system, waiting for an
+//      implementer.
+//   2. `NotifyRequest` carried `recipients: string[]` and `message: string` —
+//      the ONLY place in the tree where a recipient address or message body
+//      could be held. The embedded-UX law says the worker uses their own host
+//      app and the fabric composes no user-facing content; the audit's
+//      strongest evidence for that law was structural ("there is nowhere to
+//      put a recipient"), and this type was the one exception that made the
+//      claim nearly-true instead of true.
+//
+// What the fabric does instead is unchanged and is the honest half: it decides
+// whether an action may proceed, names the owning queue via `routeConcern`
+// (with an explicit unrouted hole rather than a silent default), grades whether
+// a response was acknowledged and whether the underlying concern actually
+// cleared, and emits governed events through the six gated outbound families —
+// none of which claims a message reached a person. Delivery to a human is the
+// host system's to perform and to attest.
 
 // ============================================================================
 // Adapter Registry
@@ -237,7 +265,6 @@ export interface AdapterRegistry {
   siem: SIEMAdapter | null;
   uem: UEMAdapter | null;
   nac: NACAdapter | null;
-  notify: NotifyAdapter | null;
 }
 
 export interface AdapterConfig {
@@ -257,8 +284,8 @@ export interface AdapterConfig {
     provider: 'ise' | 'clearpass' | 'webhook' | 'none';
     config?: Record<string, unknown>;
   };
-  notify?: {
-    provider: 'smtp' | 'slack' | 'teams' | 'webhook' | 'none';
-    config?: Record<string, unknown>;
-  };
+  // No `notify` provider slot: see the deleted Notify Types block above. A
+  // configurable smtp/slack/teams sender is the surface that would have made
+  // the fabric a message deliverer, and there is deliberately nowhere to
+  // configure one.
 }

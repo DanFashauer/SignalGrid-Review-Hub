@@ -2,6 +2,7 @@ import {
   CarrierConnectorError,
   type CarrierCollection,
   type CarrierSessionRaw,
+  type CellularBackchannel,
   type CellularReachability,
   type ProvisioningState,
   type ReachabilitySignal,
@@ -84,9 +85,31 @@ export class CarrierReachabilityConnector {
    * Read sessions and emit one normalized reachability signal per device.
    * `observedAt` is injected so the emitted provenance is deterministic in tests.
    */
-  async fetchReachability(observedAt: string): Promise<ReachabilitySignal[]> {
+  /**
+   * Read every session and normalize it.
+   *
+   * `cellularBackchannel` is `unknown` on EVERY signal this method returns, and
+   * that is not an omission to be tidied up later — it is the honest ceiling of a
+   * carrier-only read. This connector talks to one plane; whether a device has a
+   * radio is a fact from another. A caller that knows the answer supplies it via
+   * `backchannelByDevice`; a caller that does not gets `unknown` and the evaluator
+   * says so out loud rather than guessing.
+   */
+  async fetchReachability(
+    observedAt: string,
+    backchannelByDevice: Readonly<Record<string, CellularBackchannel>> = {},
+  ): Promise<ReachabilitySignal[]> {
     const sessions = await this.listSessions();
-    return sessions.map((s) => normalizeSession(s, observedAt));
+    return sessions.map((s) =>
+      normalizeSession(
+        s,
+        observedAt,
+        // Own-property lookup only: an inherited `Object.prototype` key must not
+        // become a posed answer. Same hole the sibling families' fixture lookups
+        // were repaired for.
+        Object.hasOwn(backchannelByDevice, s.deviceId) ? backchannelByDevice[s.deviceId] : "unknown",
+      ),
+    );
   }
 
   // ── internals ────────────────────────────────────────────────────────────────
@@ -146,9 +169,45 @@ function errorFor(status: number): CarrierConnectorError {
   return new CarrierConnectorError("upstream_error", `Carrier returned HTTP ${status}.`, status);
 }
 
-export function normalizeSession(session: CarrierSessionRaw, observedAt: string): ReachabilitySignal {
-  // A SIM with no ICCID and no SMS capability has no cellular backchannel at all.
-  const wifiOnly = !session.iccid && session.smsCapable !== true && session.dataConnected !== true;
+/**
+ * Normalize one carrier session record.
+ *
+ * `cellularBackchannel` IS NOT DERIVED HERE, and the previous version's attempt to
+ * derive it is the reason this comment is long.
+ *
+ * It read:
+ *
+ *     const wifiOnly = !session.iccid && session.smsCapable !== true && session.dataConnected !== true;
+ *
+ * Three ABSENCES, combined into one positive assertion: "this device has no
+ * cellular backchannel at all." That is the absent-collection law broken in its
+ * plainest form — NOTHING OBSERVED IS NOT THE SAME AS NOTHING WRONG — and the
+ * fabric then short-circuited on it before every other check and reported
+ * `locatable: false`, telling a recovery playbook that no out-of-band channel
+ * exists for a device that might have a perfectly good one.
+ *
+ * The deeper point, and the reason the fix is not "add a fourth condition":
+ * **a carrier API cannot prove the absence of a radio.** It can only report SIMs
+ * on the account it was asked about. Silence there covers a partial record, a
+ * paginated tail, an eSIM profile living on a different operator's platform, a
+ * device that was never provisioned on this account — and, the case that surfaced
+ * this (intake ledger row 55), a device attached to a PRIVATE 5G network, which no
+ * public carrier API has ever heard of and which is emphatically not Wi-Fi-only.
+ * No amount of carrier-side evidence distinguishes those from "this hardware has
+ * no modem".
+ *
+ * Whether the device HAS a cellular radio is a fact from the device-inventory
+ * plane (`uem`/Intune knows the model, the IMEI, the modem), so it is POSED by the
+ * caller from that plane — the same discipline `sse-egress` uses for its mandate
+ * and `challenge-capability` for its accepted methods. Unposed, this axis is
+ * `unknown`, forecloses the clean read, and asserts nothing.
+ */
+export function normalizeSession(
+  session: CarrierSessionRaw,
+  observedAt: string,
+  /** POSED from the device-inventory plane. Omitted = `unknown`, never `absent`. */
+  cellularBackchannel: CellularBackchannel = "unknown",
+): ReachabilitySignal {
   return {
     sourceSystem: "carrier",
     correlationId: `${session.deviceId}:${session.iccid ?? "no-sim"}`,
@@ -160,7 +219,7 @@ export function normalizeSession(session: CarrierSessionRaw, observedAt: string)
     freshness: "unknown", // freshness is a function of nowMs; the evaluator derives it.
     roaming: session.roaming === true,
     provisioning: normalizeProvisioning(session.billingState),
-    wifiOnly,
+    cellularBackchannel,
   };
 }
 

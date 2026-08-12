@@ -327,7 +327,54 @@ exactly what the engine saw.
 | `policyVersionId` | `string` | Policy version applied. |
 | `policyVersion` | `number` | Version number (denormalized). |
 | `sourceReferences` | `string[]` | Source references for the signals. |
+| `coreNormalizationVersion` | `number?` | Which build of the core decision path derived the evidence. Optional — see below. |
 | `digest` | `string` | Deterministic content digest making the snapshot tamper-evident. |
+
+### `coreNormalizationVersion` — what it claims, and what it does not
+
+`policyVersion` records the RULES that were applied. It says nothing about the code
+that derived the facts those rules were applied to, so a decision could be replayed
+against a pinned policy while the derivation beneath it had silently changed.
+`coreNormalizationVersion` closes that, and it rides three carriers plus the wire:
+`EvidenceSnapshot`, `Decision`, the `/v1` `EvaluateResult`, and the OpenAPI response
+schema. It is inside the snapshot digest, so it is tamper-evident rather than
+advisory.
+
+The claim is deliberately **one-directional**:
+
+| | |
+| --- | --- |
+| same value | the covered core source was byte-identical |
+| different value | *something* in the core decision path changed — not necessarily normalization itself |
+
+The covered set is a mechanical import closure from the mint sites, so it includes
+files that cannot change a snapshot's bytes. Over-inclusion makes the version churn
+slightly more than it strictly must; it never makes the true direction false. That
+trade was chosen because every hand-carved boundary proposed during the design pass
+was demonstrably blind — each one missed `store.ts` and `decision.ts`, the two files
+that actually fix the digested array order.
+
+**It is optional on every carrier, and that is load-bearing rather than lazy.**
+Durable rows written before the field existed have no value to report, and
+`decision-store.ts` casts JSONB with an unchecked `as EvidenceSnapshot`, so a required
+field would be a lie the type system could not catch. The digest body spreads the key
+CONDITIONALLY: an unstamped snapshot's canonical body is byte-identical to the
+pre-stamp one, so legacy rows keep verifying `true` with no version-conditional branch
+and no migration anywhere. Both tamper directions still fail — delete the key from a
+stamped row and it recomputes to the legacy body; add it to a legacy row and it
+recomputes to a stamped one. `proof:signalgrid-core` pins the legacy digest to hold
+that property still.
+
+Consumers must therefore treat `undefined` as a real third state, not as a default.
+The operator console renders it as *"unstamped (pre-provenance)"* — deliberately
+distinct from both a version and the `verified`/`tampered` verdict, because "we do not
+know which build derived this" is not the same claim as either.
+
+The value is **generated, never typed by hand**:
+`node scripts/generate-core-normalization-version.mjs` recomputes the digest from
+source and derives the integer from the comparison, and `--check` runs in preflight
+and CI. See [BUILD_BACKLOG.md](BUILD_BACKLOG.md) row 27a for why a hand-set constant
+was rejected, and 27b for the per-connector version that was refused with reasons.
 
 **AuditEvent** — an append-only, per-tenant, digest-chained ledger entry.
 

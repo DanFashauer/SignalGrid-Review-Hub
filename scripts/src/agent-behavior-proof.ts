@@ -13,6 +13,7 @@
 // individual ladder rungs; the enumeration guarantees there is no unnamed hole.
 
 import {
+  makeDefaultAgentBehaviorTransport,
   evaluateAgentBehavior,
   guardReadOnly,
   normalizeReport,
@@ -29,6 +30,7 @@ import {
 } from "@workspace/integrations/agent-behavior";
 import { composeDeviceRisk, fromAgentBehavior } from "@workspace/posture-composition";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety";
+import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
 
 let passed = 0;
 const failures: string[] = [];
@@ -194,10 +196,6 @@ check("a bad token surfaces a typed auth_failed error", authErr?.code === "auth_
 let missErr: AgentBehaviorConnectorError | null = null;
 try { await connector.fetchNormalized("no-such"); } catch (e) { missErr = e instanceof AgentBehaviorConnectorError ? e : null; }
 check("an unknown device surfaces upstream_error, never an invented in-pattern action", missErr?.code === "upstream_error");
-check("dev tier resolves to fixture mode", resolveAgentBehaviorConnector({ SIGNALGRID_TIER: "dev" }).mode === "fixture");
-check("prod WITHOUT live flag stays fixture", resolveAgentBehaviorConnector({ SIGNALGRID_TIER: "prod" }).mode === "fixture");
-check("prod + live but NO token stays fixture", resolveAgentBehaviorConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" }).mode === "fixture");
-check("prod + live + token resolves live", resolveAgentBehaviorConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", AGENT_BEHAVIOR_ACCESS_TOKEN: "t" }).mode === "live");
 
 // ── connector surface (mutation-guard coverage: every guard falsifiable) ────────
 let abReadOnly = false;
@@ -212,6 +210,33 @@ check("a report behind a 100-deep prototype chain is malformed (bounded walk)",
 
 // ── report ─────────────────────────────────────────────────────────────────────
 console.log(`figures=combos=${combosExpected},grantingCombos=${enumResult.noneCount},signals=5,ladderRungs=5`);
+
+// ── The live-call gate and the default transport, each condition ISOLATED ────
+//
+// See `lib/live-gate.ts` for why this replaced what was here (or filled the hole where
+// nothing was). Short version: the gate was tested as a cumulative ladder, so only its
+// last condition was falsifiable, and the mutation guard could delete the tier check —
+// the control behind "dev and alpha never make live vendor calls" — with every proof
+// green. The default fetch transport was never executed by anything at all.
+checkLiveGateIsolated({
+  check,
+  family: "agent-behavior",
+  resolve: (env) => resolveAgentBehaviorConnector(env),
+  full: {
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    AGENT_BEHAVIOR_ACCESS_TOKEN: "t",
+  },
+});
+
+await checkDefaultTransport({
+  check,
+  family: "agent-behavior",
+  transport: makeDefaultAgentBehaviorTransport("https://vendor.invalid/agent-behavior") as (a: never) => Promise<unknown>,
+  arg: { deviceId: "deviceId-1", token: "t" },
+  codeOf: (err) => (err instanceof AgentBehaviorConnectorError ? err.code : undefined),
+});
+
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

@@ -14,6 +14,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  makeDefaultMacosTransport,
   MacosPostureConnector,
   MacosPostureConnectorError,
   createMockMacosTransport,
@@ -24,6 +25,7 @@ import {
   type MacosPostureReportRaw,
 } from "@workspace/integrations/macos-posture";
 import { composeDeviceRisk, fromMacosPosture } from "@workspace/posture-composition";
+import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
 
 interface Expected {
   posture: string;
@@ -296,6 +298,36 @@ const realDefs = normalizeReport("r", {
   xprotect: { xprotect_definitions: "2170" },
 } as MacosPostureReportRaw);
 check("a genuine XProtect definitions value is still 'present'", realDefs.malwareDefs === "present");
+
+
+// ── The live-call gate, each condition ISOLATED ──────────────────────────────
+//
+// Replaces / supplements a cumulative ladder in which each step added one variable, so
+// the conditions below the one under test were also failing and only the last was
+// genuinely exercised. See lib/live-gate.ts. The tier check is the control behind the
+// written claim that dev and alpha never make live vendor calls.
+checkLiveGateIsolated({
+  check,
+  family: "macos-posture",
+  resolve: (env) => resolveMacosPostureConnector(env),
+  full: {
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    MACOS_POSTURE_ACCESS_TOKEN: "t",
+  },
+});
+
+
+// The DEFAULT transport, which injecting one everywhere meant nothing ever executed.
+// Its two guards survived every sweep: without `!res.ok` a vendor's 500 body is parsed
+// as a report, and without the body-shape check an array or a bare `null` becomes one.
+await checkDefaultTransport({
+  check,
+  family: "macos-posture",
+  transport: makeDefaultMacosTransport("https://vendor.invalid/macos-posture") as (a: never) => Promise<unknown>,
+  arg: { deviceId: "d-1", token: "t" },
+  codeOf: (err) => (err instanceof MacosPostureConnectorError ? err.code : undefined),
+});
 
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);

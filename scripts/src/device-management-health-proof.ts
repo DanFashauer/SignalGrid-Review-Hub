@@ -26,6 +26,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  makeDefaultDeviceManagementHealthTransport,
   DEVICE_MANAGEMENT_HEALTH_REPORT_KEYS,
   DeviceManagementHealthConnector,
   GRAPH_MANAGED_DEVICE_SELECT,
@@ -46,6 +47,7 @@ import {
 } from "@workspace/integrations/device-management-health";
 import { composeDeviceRisk, fromDeviceManagementHealth } from "@workspace/posture-composition";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
+import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
 
 interface Expected {
   posture: string;
@@ -591,10 +593,6 @@ let missingErr: DeviceManagementHealthConnectorError | null = null;
 try { await connector.fetchHealth("no-such-device"); } catch (err) { missingErr = err instanceof DeviceManagementHealthConnectorError ? err : null; }
 check("an unknown device surfaces upstream_error, never an invented healthy device", missingErr?.code === "upstream_error");
 
-check("dev tier resolves to fixture mode", resolveDeviceManagementHealthConnector({ SIGNALGRID_TIER: "dev" }).mode === "fixture");
-check("prod WITHOUT live flag stays fixture", resolveDeviceManagementHealthConnector({ SIGNALGRID_TIER: "prod" }).mode === "fixture");
-check("prod + live but NO token stays fixture", resolveDeviceManagementHealthConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" }).mode === "fixture");
-check("prod + live + token resolves live", resolveDeviceManagementHealthConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", DEVICE_MANAGEMENT_HEALTH_ACCESS_TOKEN: "t" }).mode === "live");
 
 // ── GRAPH TRANSPORT (launch Blocker 5): tenant-ready, and honest about its reach ──
 //
@@ -699,6 +697,74 @@ check("an unparseable rootCauseEvidence is MALFORMED, not silently read as avail
 // One machine-readable line, derived from the SAME variables the checks above asserted
 // on — not restated by hand, which is the mistake this feeds a guard against.
 console.log(`figures=normalized=${enumRes.combos},raw=${rawEnumRes.combos},grants=${rawEnumRes.noneCount},contradictory=${contradictoryCount},driftedGeneric=${driftedGeneric},unreachableHeadline=${unreachableHeadline},explicitUnreachable=${explicitUnreachable}`);
+
+// ── The live-call gate and the default transport, each condition ISOLATED ────
+//
+// See `lib/live-gate.ts` for why this replaced what was here (or filled the hole where
+// nothing was). Short version: the gate was tested as a cumulative ladder, so only its
+// last condition was falsifiable, and the mutation guard could delete the tier check —
+// the control behind "dev and alpha never make live vendor calls" — with every proof
+// green. The default fetch transport was never executed by anything at all.
+checkLiveGateIsolated({
+  check,
+  family: "device-management-health",
+  resolve: (env) => resolveDeviceManagementHealthConnector(env),
+  full: {
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    DEVICE_MANAGEMENT_HEALTH_ACCESS_TOKEN: "t",
+  },
+});
+
+// A configured endpoint that is silently ignored is worse than one that fails: the
+// connector reports healthy against the wrong host. Nothing asserted that
+// `DEVICE_MANAGEMENT_HEALTH_BASE_URL` was actually honoured, and the mutation guard
+// proved it — replacing the env lookup with `false` made every deployment fall back to
+// the hardcoded `.local` default with the whole suite green.
+//
+// Observed end to end rather than by reading config back: resolve with NO transport
+// override so the default transport is built from the resolved baseUrl, then stub
+// fetch and read the URL it actually requested. That covers env → config → transport →
+// wire, which is the chain that matters. (The same expression in the sibling families
+// sits mid-line, so the line-oriented mutator never reaches it there — this control is
+// the one that pins the behaviour for all of them.)
+{
+  const CUSTOM = "https://dmh.example.test/bridge";
+  const resolved = resolveDeviceManagementHealthConnector({
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    DEVICE_MANAGEMENT_HEALTH_ACCESS_TOKEN: "t",
+    DEVICE_MANAGEMENT_HEALTH_BASE_URL: CUSTOM,
+  });
+  let requested = "";
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (url: unknown) => {
+    requested = String(url);
+    return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+  }) as typeof globalThis.fetch;
+  try {
+    if (resolved.mode === "live") await resolved.connector.fetchHealth("d-1").catch(() => undefined);
+  } finally {
+    globalThis.fetch = original;
+  }
+  check(
+    "a configured BASE_URL is HONOURED — the live call goes to the operator's endpoint, not the built-in default",
+    requested.startsWith(CUSTOM),
+  );
+  check(
+    "…and it is not the hardcoded fallback, so the check above cannot pass by coincidence",
+    requested !== "" && !requested.includes("device-management-bridge.local"),
+  );
+}
+
+await checkDefaultTransport({
+  check,
+  family: "device-management-health",
+  transport: makeDefaultDeviceManagementHealthTransport("https://vendor.invalid/device-management-health") as (a: never) => Promise<unknown>,
+  arg: { deviceId: "deviceId-1", token: "t" },
+  codeOf: (err) => (err instanceof DeviceManagementHealthConnectorError ? err.code : undefined),
+});
+
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

@@ -385,6 +385,7 @@ export * from "./grid-coverage";
 // / unavailable) and what that costs. The outcome depends on how the source
 // systems are configured.
 export * from "./signal-sourcing";
+export * from "./evidence-coverage";
 
 // Grid config — workflows as code: a declarative grid (signals + workflows +
 // situations) that the CI/CD pipeline validates before the Grid runs it (GitOps).
@@ -399,6 +400,7 @@ export * from "./app-resilience";
 // validated in CI, and replayed by the Grid on serial/network join. Simulated by
 // default; real enforcement only when an owner turns it on.
 export * from "./provisioning";
+export * from "./provisioning-order";
 export * from "./provisioning-teardown";
 
 export function listFlows(): Flow[] {

@@ -19,7 +19,7 @@ import {
   lintGridConfig,
   summarizeGridConfig,
   governanceScorecard,
-  sourcingToSignalStates,
+  projectSourcingAsSignalStates,
   summarizeSourcing,
   type GridConfig,
   type SignalSource,
@@ -53,7 +53,7 @@ check("every factory workflow has an owner AND an accountable role", gov.owned =
 check("no auto-acting factory workflow lacks an accountable owner", gov.autoActingUnaccountable === 0);
 
 // ── coverage composes; a sourcing gap fails safe ──────────────────────────────
-const wired = sourcingToSignalStates(FACTORY_SIGNAL_SOURCES);
+const wired = projectSourcingAsSignalStates(FACTORY_SIGNAL_SOURCES);
 const coverage = evaluateGridCoverage(FACTORY_FLOWS, FACTORY_SITUATIONS, wired);
 check("with every factory signal sourced, the Grid handles every factory situation", coverage.coveragePct === 100 && coverage.handled === FACTORY_SITUATIONS.length);
 
@@ -63,7 +63,7 @@ check("OT posture is grid-collected (the Grid reads the device via the edge gate
 // Fail-safe: make the OT signal ungettable → every OT-dependent situation drops out
 // of autonomous coverage (a truthful gap, never a false green).
 const gapSources: SignalSource[] = FACTORY_SIGNAL_SOURCES.map((s) => (s.id === "ot" ? { ...s, method: "unavailable" } : s));
-const gapCoverage = evaluateGridCoverage(FACTORY_FLOWS, FACTORY_SITUATIONS, sourcingToSignalStates(gapSources));
+const gapCoverage = evaluateGridCoverage(FACTORY_FLOWS, FACTORY_SITUATIONS, projectSourcingAsSignalStates(gapSources));
 check("an unavailable OT signal propagates to a coverage gap (not a green)", gapCoverage.coveragePct < 100 && gapCoverage.handled < FACTORY_SITUATIONS.length);
 check("the config lint surfaces the OT gap as required-but-unavailable", lintGridConfig({ ...config, signals: gapSources }).some((i) => i.code === "required_signal_unavailable"));
 

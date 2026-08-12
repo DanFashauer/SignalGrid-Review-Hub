@@ -120,15 +120,45 @@ const truncate = (s) => (s.length > 58 ? `${s.slice(0, 55)}...` : s);
 
 // ── registry ──────────────────────────────────────────────────────────────────
 //
-// Scoped on purpose to the files whose correctness is the allow-path: the normalizers
-// and evaluators of the grant-emitting connectors. Widening this is cheap; widening it
-// without meaning to would make the gate slow and its output unreadable.
+// Scoped on purpose to the files whose correctness is the allow-path: the normalizers,
+// evaluators AND LIVE-CALL GATES of the grant-emitting connectors. Widening this is
+// cheap; widening it without meaning to would make the gate slow and its output
+// unreadable.
+//
+// THE GATES WERE ADDED LATE, AND THE REASON IS THE WARNING. This comment previously said
+// "normalizers and evaluators", which was accurate when the gate lived in
+// `<family>-connector.ts` alongside the normalizer. Newer families put it in `index.ts`,
+// and twenty-one older families therefore had an `index.ts` that had never been mutated
+// — sitting inside a registry that read as complete. Registering them returned the same
+// survivors family after family, including `if (tier !== "beta" && tier !== "prod")`,
+// the control behind the claim that dev and alpha never make live vendor calls. Five of
+// those families' proofs never called their resolver at all.
+//
+// A registry is a coverage CLAIM. Zero survivors over the wrong population is not
+// coverage, and this was the fourth time the right rule was found attached to the wrong
+// set. When a family moves code between files, re-check what this list still reaches.
 export const TARGETS = [
+  // `posture-composition` was registered here and REMOVED in the same session. The sweep
+  // returned `mutations=0`: `compose.ts` is a sort plus a table lookup and `adapters.ts`
+  // is pass-through mapping (`action: v.recommendedAction as UnifiedAction`), so there is
+  // no branching to falsify. Registering it bought nothing while making the registry read
+  // as if the fusion were covered. What protects those files instead is a COMPLETENESS
+  // check in `proof:posture-composition` — every SIGNAL_KIND emitted by exactly one
+  // adapter, no adapter emitting a kind outside the union — which is the property that
+  // can actually be wrong. The zero-mutation failure below now makes this mistake
+  // impossible to repeat quietly.
+  {
+    // Routing decides which humans see a finding. A finding sent to the wrong queue is
+    // functionally a finding nobody got.
+    proof: "proof:incident-playbook",
+    files: ["lib/incident-playbook/src/map.ts"],
+  },
   {
     proof: "proof:device-management-health",
     files: [
       "lib/integrations/src/integrations/device-management-health/evaluate.ts",
       "lib/integrations/src/integrations/device-management-health/device-management-health-connector.ts",
+      "lib/integrations/src/integrations/device-management-health/index.ts",
     ],
   },
   {
@@ -136,6 +166,7 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/link-usability/evaluate.ts",
       "lib/integrations/src/integrations/link-usability/link-usability-connector.ts",
+      "lib/integrations/src/integrations/link-usability/index.ts",
     ],
   },
   {
@@ -143,6 +174,7 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/task-exception/evaluate.ts",
       "lib/integrations/src/integrations/task-exception/task-exception-connector.ts",
+      "lib/integrations/src/integrations/task-exception/index.ts",
     ],
   },
   {
@@ -150,10 +182,29 @@ export const TARGETS = [
     files: ["lib/verdict-attestation/src/attest.ts", "lib/verdict-attestation/src/canonical.ts"],
   },
   {
+    // NOT a connector, and registered anyway. `check-guard-registries.mjs` derives its
+    // mutation-coverage requirement from `enumerateGrantSafety`, which is the connector
+    // allow-path harness — so this file legitimately passed that gate while being exactly
+    // the population the gate exists for. `reconcileDecisions` can return `allow`, and a
+    // weakened branch in it would let a stale or offline record produce one. The
+    // registry guard's scoping is right for what it was written to cover; the honest
+    // response is to register this by hand rather than widen a rule until it fits.
+    proof: "proof:decision-continuity",
+    files: ["lib/signalgrid-core/src/continuity.ts"],
+  },
+  {
+    proof: "proof:service-lifecycle",
+    files: [
+      "lib/integrations/src/integrations/service-lifecycle/evaluate.ts",
+      "lib/integrations/src/integrations/service-lifecycle/index.ts",
+    ],
+  },
+  {
     proof: "proof:custody-beacon",
     files: [
       "lib/integrations/src/integrations/custody-beacon/evaluate.ts",
       "lib/integrations/src/integrations/custody-beacon/custody-beacon-connector.ts",
+      "lib/integrations/src/integrations/custody-beacon/index.ts",
     ],
   },
   {
@@ -161,6 +212,7 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/app-update/evaluate.ts",
       "lib/integrations/src/integrations/app-update/app-update-connector.ts",
+      "lib/integrations/src/integrations/app-update/index.ts",
     ],
   },
   {
@@ -168,6 +220,7 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/platform-sso/evaluate.ts",
       "lib/integrations/src/integrations/platform-sso/platform-sso-connector.ts",
+      "lib/integrations/src/integrations/platform-sso/index.ts",
     ],
   },
   {
@@ -183,13 +236,119 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/passkey-assurance/evaluate.ts",
       "lib/integrations/src/integrations/passkey-assurance/passkey-assurance-connector.ts",
+      "lib/integrations/src/integrations/passkey-assurance/index.ts",
     ],
   },
+  {
+    proof: "proof:change-window",
+    files: [
+      "lib/integrations/src/integrations/change-window/evaluate.ts",
+      "lib/integrations/src/integrations/change-window/change-window-connector.ts",
+      "lib/integrations/src/integrations/change-window/index.ts",
+    ],
+  },
+  {
+    proof: "proof:emitter-discipline",
+    files: [
+      "lib/integrations/src/integrations/itsm/resolve.ts",
+      "lib/integrations/src/integrations/siem/resolve.ts",
+      "lib/integrations/src/integrations/syslog/resolve.ts",
+      "lib/integrations/src/integrations/telemetry/resolve.ts",
+      "lib/integrations/src/integrations/webhooks/resolve.ts",
+    ],
+  },
+
+  {
+    proof: "proof:facility-trust-graph",
+    files: [
+      "lib/facility-trust-graph/src/evaluate.ts",
+      "lib/facility-trust-graph/src/graph.ts",
+      "lib/facility-trust-graph/src/correlate.ts",
+      "lib/facility-trust-graph/src/clinical.ts",
+      "lib/facility-trust-graph/src/transition.ts",
+      "lib/facility-trust-graph/src/gateway.ts",
+    ],
+  },
+
+  {
+    proof: "proof:shift-context",
+    files: [
+      "lib/integrations/src/integrations/shift-context/evaluate.ts",
+      "lib/integrations/src/integrations/shift-context/shift-context-connector.ts",
+      "lib/integrations/src/integrations/shift-context/index.ts",
+    ],
+  },
+  {
+    proof: "proof:caep-events",
+    files: [
+      "lib/integrations/src/integrations/caep-events/format.ts",
+      "lib/integrations/src/integrations/caep-events/resolve.ts",
+    ],
+  },
+  {
+    proof: "proof:credential-rotation",
+    files: [
+      "lib/integrations/src/integrations/credential-rotation/evaluate.ts",
+      "lib/integrations/src/integrations/credential-rotation/normalize.ts",
+    ],
+  },
+  {
+    proof: "proof:observability-integrity",
+    files: [
+      "lib/integrations/src/integrations/observability-integrity/evaluate.ts",
+      "lib/integrations/src/integrations/observability-integrity/normalize.ts",
+    ],
+  },
+  {
+    proof: "proof:local-authority",
+    files: [
+      "lib/integrations/src/integrations/local-authority/evaluate.ts",
+      "lib/integrations/src/integrations/local-authority/normalize.ts",
+    ],
+  },
+  {
+    proof: "proof:bootstrap-credential",
+    files: [
+      "lib/integrations/src/integrations/bootstrap-credential/evaluate.ts",
+      "lib/integrations/src/integrations/bootstrap-credential/bootstrap-credential-connector.ts",
+      "lib/integrations/src/integrations/bootstrap-credential/index.ts",
+    ],
+  },
+
+  {
+    proof: "proof:challenge-capability",
+    files: [
+      "lib/integrations/src/integrations/challenge-capability/index.ts",
+      "lib/integrations/src/integrations/challenge-capability/evaluate.ts",
+      "lib/integrations/src/integrations/challenge-capability/challenge-capability-connector.ts",
+    ],
+  },
+
+  {
+    proof: "proof:sse-egress",
+    files: [
+      "lib/integrations/src/integrations/sse-egress/index.ts",
+      "lib/integrations/src/integrations/sse-egress/evaluate.ts",
+      "lib/integrations/src/integrations/sse-egress/sse-egress-connector.ts",
+    ],
+  },
+
+  {
+    proof: "proof:benchmark-selection",
+    files: [
+      "lib/integrations/src/integrations/benchmark-selection/evaluate.ts",
+      "lib/integrations/src/integrations/benchmark-selection/benchmark-selection-connector.ts",
+      "lib/integrations/src/integrations/benchmark-selection/index.ts",
+      "lib/integrations/src/integrations/benchmark-selection/catalog.ts",
+    ],
+  },
+
   {
     proof: "proof:policy-binding",
     files: [
       "lib/integrations/src/integrations/policy-binding/evaluate.ts",
       "lib/integrations/src/integrations/policy-binding/policy-binding-connector.ts",
+      "lib/integrations/src/integrations/policy-binding/index.ts",
     ],
   },
 
@@ -198,6 +357,7 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/agent-behavior/evaluate.ts",
       "lib/integrations/src/integrations/agent-behavior/agent-behavior-connector.ts",
+      "lib/integrations/src/integrations/agent-behavior/index.ts",
     ],
   },
   {
@@ -205,6 +365,7 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/agent-identity/evaluate.ts",
       "lib/integrations/src/integrations/agent-identity/agent-identity-connector.ts",
+      "lib/integrations/src/integrations/agent-identity/index.ts",
     ],
   },
   {
@@ -212,6 +373,7 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/oauth-consent/evaluate.ts",
       "lib/integrations/src/integrations/oauth-consent/oauth-consent-connector.ts",
+      "lib/integrations/src/integrations/oauth-consent/index.ts",
     ],
   },
   {
@@ -219,6 +381,7 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/sso-session/evaluate.ts",
       "lib/integrations/src/integrations/sso-session/sso-session-connector.ts",
+      "lib/integrations/src/integrations/sso-session/index.ts",
     ],
   },
   {
@@ -226,6 +389,35 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/access-governance/evaluate.ts",
       "lib/integrations/src/integrations/access-governance/access-governance-connector.ts",
+      "lib/integrations/src/integrations/access-governance/index.ts",
+    ],
+  },
+  {
+    proof: "proof:break-glass",
+    files: [
+      "lib/integrations/src/integrations/break-glass/evaluate.ts",
+      "lib/integrations/src/integrations/break-glass/index.ts",
+    ],
+  },
+  {
+    proof: "proof:session-readiness",
+    files: [
+      "lib/integrations/src/integrations/session-readiness/evaluate.ts",
+      "lib/integrations/src/integrations/session-readiness/index.ts",
+    ],
+  },
+  {
+    // `uem` was absent from this registry despite meeting its own stated scope rule —
+    // it is a grant-emitting connector (its evaluator returns `none` on exactly nine
+    // fully-confirmed states, which proof:uem pins). Third instance of the same class
+    // this session: the right rule attached to the wrong population. Registries are
+    // themselves claims about coverage, and go stale exactly the way the guards they
+    // hold exist to prevent.
+    proof: "proof:uem",
+    files: [
+      "lib/integrations/src/integrations/uem/evaluate.ts",
+      "lib/integrations/src/integrations/uem/intune.ts",
+      "lib/integrations/src/integrations/uem/index.ts",
     ],
   },
   {
@@ -233,11 +425,13 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/ot-posture/evaluate.ts",
       "lib/integrations/src/integrations/ot-posture/ot-connector.ts",
+      "lib/integrations/src/integrations/ot-posture/index.ts",
     ],
   },
   {
     proof: "proof:token-binding",
     files: [
+      "lib/integrations/src/integrations/token-binding/index.ts",
       "lib/integrations/src/integrations/token-binding/evaluate.ts",
       "lib/integrations/src/integrations/token-binding/token-binding-connector.ts",
     ],
@@ -247,6 +441,7 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/pacs-access/evaluate.ts",
       "lib/integrations/src/integrations/pacs-access/pacs-access-connector.ts",
+      "lib/integrations/src/integrations/pacs-access/index.ts",
     ],
   },
   {
@@ -256,6 +451,80 @@ export const TARGETS = [
       "lib/dual-control/src/normalize.ts",
     ],
   },
+  // ── The remaining live-call gates ───────────────────────────────────────────
+  //
+  // Sixteen more gated connectors whose `index.ts` had never been mutated. The
+  // twenty-one-family pass was scoped to the grant-safety population and these are not
+  // in it — a population defined for one purpose reused for another, which is the same
+  // error one layer up. `graph` mattered most: it is the read-only Microsoft connector a
+  // design partner points at their own tenant first.
+  //
+  // Three — entitlement-binding, nac, response-accountability — already tested their
+  // gate in isolation. Built after the lesson, they needed registering, not fixing.
+  {
+    proof: "proof:graph-connector",
+    files: ["lib/integrations/src/integrations/graph/index.ts"],
+  },
+  {
+    proof: "proof:carrier-reachability",
+    files: ["lib/integrations/src/integrations/carrier/index.ts"],
+  },
+  {
+    proof: "proof:credential-exposure",
+    files: ["lib/integrations/src/integrations/credential-exposure/index.ts"],
+  },
+  {
+    proof: "proof:data-protection",
+    files: ["lib/integrations/src/integrations/data-protection/index.ts"],
+  },
+  {
+    proof: "proof:device-attestation",
+    files: ["lib/integrations/src/integrations/device-attestation/index.ts"],
+  },
+  {
+    proof: "proof:edr-threat",
+    files: ["lib/integrations/src/integrations/edr-threat/index.ts"],
+  },
+  {
+    proof: "proof:entitlement-binding",
+    files: ["lib/integrations/src/integrations/entitlement-binding/index.ts"],
+  },
+  {
+    proof: "proof:identity-risk",
+    files: ["lib/integrations/src/integrations/identity-risk/index.ts"],
+  },
+  {
+    proof: "proof:location-services",
+    files: ["lib/integrations/src/integrations/location-services/index.ts"],
+  },
+  {
+    proof: "proof:macos-posture",
+    files: ["lib/integrations/src/integrations/macos-posture/index.ts"],
+  },
+  {
+    proof: "proof:nac",
+    files: ["lib/integrations/src/integrations/nac/index.ts"],
+  },
+  {
+    proof: "proof:network-nac",
+    files: ["lib/integrations/src/integrations/network-nac/index.ts"],
+  },
+  {
+    proof: "proof:peripheral-control",
+    files: ["lib/integrations/src/integrations/peripheral-control/index.ts"],
+  },
+  {
+    proof: "proof:response-accountability",
+    files: ["lib/integrations/src/integrations/response-accountability/index.ts"],
+  },
+  {
+    proof: "proof:rtls-custody",
+    files: ["lib/integrations/src/integrations/rtls-custody/index.ts"],
+  },
+  {
+    proof: "proof:vuln-scan",
+    files: ["lib/integrations/src/integrations/vuln-scan/index.ts"],
+  },
 ];
 
 // ── known-inert survivors ─────────────────────────────────────────────────────
@@ -264,6 +533,33 @@ export const TARGETS = [
 // fine" is not one. An entry whose `line` no longer matches fails the gate: the code
 // moved and nobody re-derived whether the justification still holds.
 const ALLOWED = [
+  {
+    file: "lib/integrations/src/integrations/nac/index.ts",
+    line: "unreachable-by-type, fail-closed default",
+    reason:
+      "The `default:` arm of a switch over `NacIdentifierType`, a closed union of " +
+      "mac|serial|cert whose three members are all handled above it. No input can reach " +
+      "this line, so flipping it to `return true` cannot change any outcome and no test " +
+      "can falsify it. Kept because it is the fail-closed default: a FOURTH identifier " +
+      "type added tomorrow matches nothing until someone writes its comparison, instead " +
+      "of falling through to a truthy accident — at which point this line becomes " +
+      "load-bearing and this exemption should be deleted. Note the SIBLING `return false` " +
+      "in the `cert` arm is NOT exempt: it is real behaviour (a subject DN is not a " +
+      "serial) and is pinned by `proof:nac`. The two lines were textually identical, " +
+      "which is why the inert one now says so.",
+  },
+  {
+    file: "lib/integrations/src/integrations/session-readiness/evaluate.ts",
+    line: "state.elapsedToUsableSeconds !== null &&",
+    reason:
+      "Genuinely inert by JS coercion, and checkable in one line: the surrounding branch is " +
+      "`budget !== null && elapsed !== null && elapsed > budget.thresholdSeconds`, and " +
+      "`null > 30` evaluates to false because null coerces to 0 — so removing the explicit " +
+      "null check cannot change any outcome. It is kept because it states what the branch " +
+      "MEANS (compare two numbers) rather than relying on a coercion subtlety a later reader " +
+      "would have to know, and it becomes load-bearing the moment the comparison changes " +
+      "shape — e.g. to a `>=`-style staleness test where null would coerce the wrong way.",
+  },
   // The four entries below were classified by BEHAVIOURAL DIFF, not by reading. For each,
   // the mutation was applied and the full output — not just grant-ness — was compared
   // across the connector's whole input space. That is what separates "genuinely inert"
@@ -287,6 +583,36 @@ const ALLOWED = [
     line: "readThrew ||",
     reason:
       "Genuinely inert, verified by the same 239-shape diff with the term mutated to `false`: ZERO outputs changed. A throwing accessor forces every field to undefined in the catch block, and the per-field checks below already mark the report malformed on that alone. Kept for the same reason as the !plain term beside it — a read that THREW is a distinct fact from a read that returned nothing, and stating it here keeps the integrity flag honest if the field checks ever stop covering undefined.",
+  },
+  {
+    file: 'lib/integrations/src/integrations/change-window/evaluate.ts',
+    line: 'report.reportIntegrity === "clean" &&',
+    reason:
+      'Defence-in-depth backstop that CANNOT fire today, verified rather than asserted: the whole block was removed and all 1,656 shapes the proof enumerates (576 normalized states x covered/uncovered, plus 504 raw wire records) were diffed — ZERO outputs changed. Every non-confirmed state already pushes a raising candidate above it, so the candidate list is never empty when positivelyAuthorizedChange is false. Kept as the last thing standing between a weakened branch and a surviving seed grant; it pushes its own GRANT_BACKSTOP reason so a firing is visible in the record. Same shape as the passkey-assurance, platform-sso and policy-binding backstops.',
+  },
+  {
+    file: 'lib/integrations/src/integrations/change-window/evaluate.ts',
+    line: 'report.approvalState === "approved" &&',
+    reason:
+      'Defence-in-depth backstop that CANNOT fire today, verified rather than asserted: the whole block was removed and all 1,656 shapes the proof enumerates (576 normalized states x covered/uncovered, plus 504 raw wire records) were diffed — ZERO outputs changed. Every non-confirmed state already pushes a raising candidate above it, so the candidate list is never empty when positivelyAuthorizedChange is false. Kept as the last thing standing between a weakened branch and a surviving seed grant; it pushes its own GRANT_BACKSTOP reason so a firing is visible in the record. Same shape as the passkey-assurance, platform-sso and policy-binding backstops.',
+  },
+  {
+    file: 'lib/integrations/src/integrations/change-window/evaluate.ts',
+    line: 'report.windowStanding === "inside" &&',
+    reason:
+      'Defence-in-depth backstop that CANNOT fire today, verified rather than asserted: the whole block was removed and all 1,656 shapes the proof enumerates (576 normalized states x covered/uncovered, plus 504 raw wire records) were diffed — ZERO outputs changed. Every non-confirmed state already pushes a raising candidate above it, so the candidate list is never empty when positivelyAuthorizedChange is false. Kept as the last thing standing between a weakened branch and a surviving seed grant; it pushes its own GRANT_BACKSTOP reason so a firing is visible in the record. Same shape as the passkey-assurance, platform-sso and policy-binding backstops.',
+  },
+  {
+    file: 'lib/integrations/src/integrations/change-window/evaluate.ts',
+    line: '(report.actorAuthorization === "authorized" || report.actorAuthorization === "unassessed") &&',
+    reason:
+      'Defence-in-depth backstop that CANNOT fire today, verified rather than asserted: the whole block was removed and all 1,656 shapes the proof enumerates (576 normalized states x covered/uncovered, plus 504 raw wire records) were diffed — ZERO outputs changed. Every non-confirmed state already pushes a raising candidate above it, so the candidate list is never empty when positivelyAuthorizedChange is false. Kept as the last thing standing between a weakened branch and a surviving seed grant; it pushes its own GRANT_BACKSTOP reason so a firing is visible in the record. Same shape as the passkey-assurance, platform-sso and policy-binding backstops.',
+  },
+  {
+    file: 'lib/integrations/src/integrations/change-window/evaluate.ts',
+    line: 'if (!positivelyAuthorizedChange && candidates.length === 0) {',
+    reason:
+      'Defence-in-depth backstop that CANNOT fire today, verified rather than asserted: the whole block was removed and all 1,656 shapes the proof enumerates (576 normalized states x covered/uncovered, plus 504 raw wire records) were diffed — ZERO outputs changed. Every non-confirmed state already pushes a raising candidate above it, so the candidate list is never empty when positivelyAuthorizedChange is false. Kept as the last thing standing between a weakened branch and a surviving seed grant; it pushes its own GRANT_BACKSTOP reason so a firing is visible in the record. Same shape as the passkey-assurance, platform-sso and policy-binding backstops.',
   },
   {
     file: 'lib/integrations/src/integrations/passkey-assurance/evaluate.ts',
@@ -468,6 +794,12 @@ const ALLOWED = [
   },
   {
     file: "lib/integrations/src/integrations/app-update/evaluate.ts",
+    line: 'report.channel === "managed" &&',
+    reason:
+      "Backstop-predicate conjunct — same reasoning. The channel branches are covered by the unmanaged-restrict and channel-unknown controls, which outrank anything the skipped backstop would have added.",
+  },
+  {
+    file: "lib/integrations/src/integrations/app-update/evaluate.ts",
     line: "if (!positivelyCurrent && candidates.length === 0) {",
     reason:
       "The grant backstop itself — deliberately redundant defence-in-depth, documented in the source as never firing today; exists to catch a FUTURE weakening.",
@@ -495,6 +827,169 @@ const ALLOWED = [
       "The grant backstop itself — deliberately redundant defence-in-depth, documented in the source as never firing today; exists to catch a FUTURE weakening.",
   },
   {
+    file: "lib/facility-trust-graph/src/evaluate.ts",
+    line: 'obs.reportIntegrity === "clean" &&',
+    reason:
+      "A conjunct of the grant backstop's predicate — the backstop never fires today, as its own comment states; the predicate is unobservable until a branch weakens. Same shape as the shift-context and benchmark-selection backstops below.",
+  },
+  {
+    file: "lib/facility-trust-graph/src/evaluate.ts",
+    line: 'obs.spaceInGraph === "known" &&',
+    reason: "Backstop-predicate conjunct — same reasoning. The space branches are covered by the unmapped, unstated-ordering, and grant controls.",
+  },
+  {
+    file: "lib/facility-trust-graph/src/evaluate.ts",
+    line: '(obs.mapVersionMatch === "matched" || obs.mapVersionMatch === "unassessed") &&',
+    reason: "Backstop-predicate conjunct — same reasoning. The map-version branch is covered by the wrong-map restrict control.",
+  },
+  {
+    file: "lib/facility-trust-graph/src/evaluate.ts",
+    line: 'obs.sourceHealth === "healthy" &&',
+    reason: "Backstop-predicate conjunct — same reasoning. The health branches are covered by the unavailable, degraded, and absent-health-ordering controls.",
+  },
+  {
+    file: "lib/facility-trust-graph/src/evaluate.ts",
+    line: '(obs.recency === "current" || obs.recency === "unbounded") &&',
+    reason: "Backstop-predicate conjunct — same reasoning. The recency branches are covered by the stale, unbounded-grant, and absent-time-ordering controls.",
+  },
+  {
+    file: "lib/facility-trust-graph/src/evaluate.ts",
+    line: '(obs.confidenceFit === "met" || obs.confidenceFit === "unbounded") &&',
+    reason: "Backstop-predicate conjunct — same reasoning. The confidence branches are covered by the unmet and posed-but-unanswerable controls.",
+  },
+  {
+    file: "lib/facility-trust-graph/src/evaluate.ts",
+    line: 'if (!positivelyCertain && candidates.length === 0) {',
+    reason:
+      "The grant backstop itself — deliberately redundant defence-in-depth, documented in the source as never firing today; it exists to catch a FUTURE weakening. Same shape and justification as the sibling backstops.",
+  },
+  {
+    file: "lib/facility-trust-graph/src/clinical.ts",
+    line: "assignment.targetSpaceId !== null &&",
+    reason:
+      "Type-guard conjunct of spatiallyConsistent, labeled inert in the source: pathsConsistent over a missing/null id is false for any graph (path() of an unknown id is empty), so mutating it to true changes no observable output. Kept for the types.",
+  },
+  {
+    file: "lib/facility-trust-graph/src/clinical.ts",
+    line: "gradedObs.spaceId !== null &&",
+    reason:
+      "Type-guard conjunct of spatiallyConsistent — same inert reasoning as the targetSpaceId guard above.",
+  },
+  {
+    file: "lib/facility-trust-graph/src/clinical.ts",
+    line: 'gradedObs.spaceInGraph === "known" &&',
+    reason:
+      "Masked by ordering that is itself pinned: an unmapped observation drives a SPACE_UNMAPPED alert, and alert-class location verdicts block before spatial consistency is consulted (the wrong-map-not-steppable control), so this conjunct cannot change an outcome today. Labeled inert in the source.",
+  },
+  {
+    file: "lib/facility-trust-graph/src/clinical.ts",
+    line: 'capability.grading === "within_capability" &&',
+    reason:
+      "Grant-conjunct defence-in-depth, labeled in the source: exceeds_capability is blocked before the grant (pinned by the wifi-lie control) and unstated/unrecognized force the effective class to unknown, which certaintyConfirmed already refuses (pinned by the generic-rtls control). Exists to catch a FUTURE weakening, per the affirmative-on-every-axis doctrine.",
+  },
+  {
+    file: "lib/integrations/src/integrations/bootstrap-credential/evaluate.ts",
+    line: 'report.reportIntegrity === "clean" &&',
+    reason:
+      "Coherent-bootstrap rung conjunct, labeled inert in the source: every failure state of the conjunct already pushed a raising candidate (REPORT_MALFORMED step_up, pinned) that outranks this monitor rung, so weakening it adds only a losing candidate. Same shape for the four siblings below.",
+  },
+  {
+    file: "lib/integrations/src/integrations/bootstrap-credential/evaluate.ts",
+    line: 'workflowFit === "enrollment_recovery" &&',
+    reason:
+      "Coherent-bootstrap rung conjunct — operational pushes a pinned restrict and unposed a pinned step_up, both outranking monitor.",
+  },
+  {
+    file: "lib/integrations/src/integrations/bootstrap-credential/evaluate.ts",
+    line: 'report.lifetime === "within_lifetime" &&',
+    reason:
+      "Coherent-bootstrap rung conjunct — expired restricts, unbounded and unknown step up, all pinned and all outranking monitor.",
+  },
+  {
+    file: "lib/integrations/src/integrations/bootstrap-credential/evaluate.ts",
+    line: 'report.scope === "enrollment_only" &&',
+    reason:
+      "Coherent-bootstrap rung conjunct — broad alerts and unknown steps up, both pinned and outranking monitor.",
+  },
+  {
+    file: "lib/integrations/src/integrations/bootstrap-credential/evaluate.ts",
+    line: 'report.oneTime === "one_time" &&',
+    reason:
+      "Coherent-bootstrap rung conjunct — reusable and unknown both step up, pinned, outranking monitor.",
+  },
+  {
+    file: "lib/integrations/src/integrations/bootstrap-credential/evaluate.ts",
+    line: "if (candidates.length === 0) {",
+    reason:
+      "The bootstrap backstop itself — deliberately redundant defence-in-depth with its OWN reason (BOOTSTRAP_UNGRADED), documented in the source as never firing today; it exists so a FUTURE weakened branch surfaces as ungraded instead of impersonating the branch it replaced.",
+  },
+  {
+    file: "lib/integrations/src/integrations/shift-context/evaluate.ts",
+    line: 'report.reportIntegrity === "clean" &&',
+    reason:
+      "A conjunct of the grant backstop's predicate — the backstop never fires today, as its own comment states; the predicate is unobservable until a branch weakens. Same shape as the benchmark-selection and policy-binding backstops below.",
+  },
+  {
+    file: "lib/integrations/src/integrations/shift-context/evaluate.ts",
+    line: 'report.scheduleStanding === "on_shift" &&',
+    reason:
+      "Backstop-predicate conjunct — same reasoning. The schedule branch itself is NOT exempt: the unknown-standing rung is pinned to lead over a site mismatch, so deleting the branch changes a pinned reason.",
+  },
+  {
+    file: "lib/integrations/src/integrations/shift-context/evaluate.ts",
+    line: 'report.punchStatus === "clocked_in" &&',
+    reason:
+      "Backstop-predicate conjunct — same reasoning. The punch branches are covered by the off-clock, off-duty, deviation, on-break and absent-punch controls.",
+  },
+  {
+    file: "lib/integrations/src/integrations/shift-context/evaluate.ts",
+    line: 'if (!positivelyOnDuty && candidates.length === 0) {',
+    reason:
+      "The grant backstop itself — deliberately redundant defence-in-depth, documented in the source as never firing today; it exists to catch a FUTURE weakening. Same shape and justification as the benchmark-selection backstop.",
+  },
+  {
+    file: "lib/integrations/src/integrations/benchmark-selection/evaluate.ts",
+    line: 'report.reportIntegrity === "clean" &&',
+    reason:
+      "A conjunct of the grant backstop's predicate — the backstop never fires today, as its own comment states; the predicate is unobservable until a branch weakens. Same shape as the policy-binding backstop below.",
+  },
+  {
+    file: "lib/integrations/src/integrations/benchmark-selection/evaluate.ts",
+    line: 'report.recognition === "recognized" &&',
+    reason:
+      "Backstop-predicate conjunct — same reasoning as the reportIntegrity conjunct above. The recognition BRANCH itself is not exempt: four negative controls cover it (superseded, unlisted, not-in-catalog, and the pinned BENCHMARK_UNKNOWN reason).",
+  },
+  {
+    file: "lib/integrations/src/integrations/benchmark-selection/evaluate.ts",
+    line: 'report.provenance === "cis_published" &&',
+    reason:
+      "Backstop-predicate conjunct — same reasoning. The provenance branch is covered by three controls (independent implementation, tool-declared, and the absent-key default).",
+  },
+  {
+    file: "lib/integrations/src/integrations/benchmark-selection/evaluate.ts",
+    line: 'report.platformMatch === "matched" &&',
+    reason:
+      "Backstop-predicate conjunct — same reasoning. The platform branch is covered by the mismatch control and the absent-string control.",
+  },
+  {
+    file: "lib/integrations/src/integrations/benchmark-selection/evaluate.ts",
+    line: 'report.coverage === "complete" &&',
+    reason:
+      "Backstop-predicate conjunct — same reasoning. The coverage branch is covered by five controls (unreconciled counts, empty run, partial run, one absent count, and non-integer counts).",
+  },
+  {
+    file: "lib/integrations/src/integrations/benchmark-selection/evaluate.ts",
+    line: 'report.requirementFit === "on_requirement" &&',
+    reason:
+      "Backstop-predicate conjunct — same reasoning. It was the conjunction's FINAL clause (no trailing &&, so the mutator never touched it) until the recency clause was appended after it; nothing about its inertness changed. The requirement branch is covered by four controls (off-requirement, absent requirement, empty list, and the two-workflows divergence).",
+  },
+  {
+    file: "lib/integrations/src/integrations/benchmark-selection/evaluate.ts",
+    line: 'if (!positivelySelected && candidates.length === 0) {',
+    reason:
+      "The grant backstop itself — deliberately redundant defence-in-depth, documented in the source as never firing today; it exists to catch a FUTURE weakening. Same shape and justification as the policy-binding backstop.",
+  },
+  {
     file: "lib/integrations/src/integrations/policy-binding/evaluate.ts",
     line: 'report.reportIntegrity === "clean" &&',
     reason:
@@ -509,6 +1004,12 @@ const ALLOWED = [
     file: "lib/integrations/src/integrations/policy-binding/evaluate.ts",
     line: 'report.profileMatch === "matched" &&',
     reason: "Backstop-predicate conjunct — same reasoning as the reportIntegrity conjunct above.",
+  },
+  {
+    file: "lib/integrations/src/integrations/policy-binding/evaluate.ts",
+    line: 'report.enforcement === "enforcing" &&',
+    reason:
+      "Backstop-predicate conjunct — same reasoning as the reportIntegrity conjunct above. Deleting it lets a report-only or disabled binding satisfy positivelyBound, but those states already push their own raising candidate, so the backstop still cannot fire. The ENFORCEMENT BRANCH itself is not exempt and is covered by four negative controls (report_only → none, disabled → monitor, absent-key default, and dropping the wire key), each of which fails the proof.",
   },
   {
     file: "lib/integrations/src/integrations/policy-binding/evaluate.ts",
@@ -611,12 +1112,26 @@ function main() {
   let hung = 0;
   let allowed = 0;
   const survivors = [];
+  const zeroMutation = [];
 
   for (const target of targets) {
     console.log(`── ${target.proof}`);
     for (const file of target.files) {
       const mutations = mutationsFor(file);
       console.log(`   ${file} — ${mutations.length} mutations`);
+      // A registered file the mutators cannot touch is a FALSE COVERAGE CLAIM, and a
+      // quiet one: the run says "every registered guard is falsifiable", which is
+      // vacuously true of a file with no guards in it. Someone reading TARGETS sees the
+      // entry and concludes the file is swept.
+      //
+      // Found by registering `posture-composition` and getting `mutations=0`. Those
+      // adapters are pass-through mapping — `action: v.recommendedAction as
+      // UnifiedAction` — with no branching to falsify, so the entry bought nothing while
+      // looking like coverage. The entry was removed; this makes the next one impossible
+      // rather than a thing someone has to notice.
+      if (mutations.length === 0) {
+        zeroMutation.push(`${target.proof} → ${file}`);
+      }
       for (const mutation of mutations) {
         total += 1;
         writeFileSync(mutation.abs, mutation.content);
@@ -669,6 +1184,20 @@ function main() {
     process.exit(1);
   }
 
+  if (zeroMutation.length > 0) {
+    console.error("\nMutation guard FAILED — registered, but NOTHING IN IT CAN BE MUTATED:\n");
+    for (const entry of zeroMutation) console.error(`  ✗ ${entry}`);
+    console.error(
+      "\nThis is a false coverage claim, and a quiet one: the summary above would have read\n" +
+        "\"every registered guard is falsifiable\", which is vacuously true of a file containing\n" +
+        "no guards. A reader of TARGETS sees the entry and concludes the file is swept.\n\n" +
+        "Either the file has no falsifiable logic — in which case remove the entry and protect it\n" +
+        "some other way (a completeness check, a shape pin) — or it has logic this line-oriented\n" +
+        "mutator cannot reach, in which case add a mutator for that shape.",
+    );
+    process.exitCode = 1;
+    return;
+  }
   console.log("\nMutation guard passed — every registered guard is falsifiable, or documented as inert.");
 
 }

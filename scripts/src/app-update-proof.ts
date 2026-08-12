@@ -11,6 +11,8 @@
 // current — a forced update to a version already running is satisfied by
 // construction; the enumeration pins exactly that set of granting states).
 import {
+  resolveAppUpdateConnector,
+  makeDefaultAppUpdateTransport,
   AppUpdateConnector,
   AppUpdateConnectorError,
   createMockAppUpdateTransport,
@@ -24,6 +26,7 @@ import {
 } from "@workspace/integrations/app-update";
 import { SIGNAL_KINDS, composeDeviceRisk, fromAppUpdate } from "@workspace/posture-composition";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
+import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
 
 let passed = 0;
 const failures: string[] = [];
@@ -156,12 +159,43 @@ check("Object.prototype itself as the report is malformed (polluted-prototype fi
 check("channel case and whitespace are canonicalized, not rejected",
   normalizeReport("cw", "a", { channel: " MANAGED " } as AppUpdateReportRaw).channel === "managed");
 
-// ── exhaustive (normalized): the grant is current + managed + clean ─────────────
+// ── the stability axis (intake ledger row 19) ───────────────────────────────────
+// The analytics plane reports the figures; the caller poses the bound.
+const stable = (over: AppUpdateReportRaw = {}): AppUpdateReportRaw => ({
+  installed_version: "2.4.0", latest_version: "2.4.0", channel: "managed", force_update: false,
+  crash_count: 0, stability_window_hours: 24, ...over,
+});
+const evStab = (r: AppUpdateReportRaw, maxCrashesInWindow?: number) =>
+  evaluateAppUpdate(normalizeReport("d", "a", r), maxCrashesInWindow === undefined ? {} : { maxCrashesInWindow });
+check("STABILITY HEADLINE: more crashes than the caller's bound → step_up APP_UNSTABLE — a crashing host app is operational risk, and the fix is a challenge and a device swap, never a block",
+  evStab(stable({ crash_count: 4 }), 1).recommendedAction === "step_up" &&
+  evStab(stable({ crash_count: 4 }), 1).reasonCode === "APP_UNSTABLE" &&
+  evStab(stable({ crash_count: 4 }), 1).criticalFindings.includes("app_unstable"));
+check("the bound is INCLUSIVE: exactly at the bound is stable, and a stable current managed app still grants",
+  evStab(stable({ crash_count: 1 }), 1).stability === "stable" &&
+  evStab(stable({ crash_count: 1 }), 1).recommendedAction === "none");
+check("UNPOSED is unassessed — carried visibly, never foreclosing the grant even with crashy figures on the wire",
+  evStab(stable({ crash_count: 9 })).stability === "unassessed" &&
+  evStab(stable({ crash_count: 9 })).recommendedAction === "none");
+check("POSED but unanswerable raises: figures absent → STABILITY_UNKNOWN; a nonsense bound (negative) → unknown too",
+  evStab(stable({ crash_count: undefined, stability_window_hours: undefined }), 1).reasonCode === "STABILITY_UNKNOWN" &&
+  evStab(stable(), -1).stability === "unknown");
+check("a count WITHOUT its window is uninterpretable (unknown when posed); a garbled count, a garbled window, and a ZERO-hour window are all malformed",
+  evStab(stable({ stability_window_hours: undefined }), 1).reasonCode === "STABILITY_UNKNOWN" &&
+  normalizeReport("d", "a", stable({ crash_count: "many" })).reportIntegrity === "malformed" &&
+  normalizeReport("d", "a", stable({ stability_window_hours: -2 })).reportIntegrity === "malformed" &&
+  normalizeReport("d", "a", stable({ stability_window_hours: 0 })).reportIntegrity === "malformed");
+
+// ── exhaustive (normalized): the grant is current + managed + clean + stable ────
 const normDomains = {
   currency: ["current", "behind", "below_floor", "unknown"],
   forcePolicy: ["forced", "not_forced", "unknown"],
   channel: ["managed", "unmanaged", "unknown"],
   reportIntegrity: ["clean", "malformed"],
+  figures: ["ok", "crashy", "absent"],
+};
+const FIGURES: Record<string, { c: number | null; w: number | null }> = {
+  ok: { c: 0, w: 24 }, crashy: { c: 5, w: 24 }, absent: { c: null, w: null },
 };
 const buildNorm = (c: Record<string, unknown>): NormalizedAppUpdate => ({
   sourceSystem: "app-update", deviceRef: "enum", appRef: "enum", source: "enum",
@@ -169,21 +203,23 @@ const buildNorm = (c: Record<string, unknown>): NormalizedAppUpdate => ({
   forcePolicy: c.forcePolicy as NormalizedAppUpdate["forcePolicy"],
   channel: c.channel as NormalizedAppUpdate["channel"],
   reportIntegrity: c.reportIntegrity as NormalizedAppUpdate["reportIntegrity"],
+  crashCount: FIGURES[c.figures as string].c,
+  stabilityWindowHours: FIGURES[c.figures as string].w,
 });
 const normRes = enumerateGrantSafety({
   domains: normDomains,
   build: buildNorm,
-  evaluate: evaluateAppUpdate,
+  evaluate: (r) => evaluateAppUpdate(r, { maxCrashesInWindow: 1 }),
   actionOf: (v) => (v.recommendedAction === "none" ? "none" : v.recommendedAction),
   confirmedWhenNone: (v) => v.currencyConfirmed === true && v.criticalFindings.length === 0 && v.unknownSignals.length === 0,
   positivelyClean: (c) =>
-    c.currency === "current" && c.channel === "managed" && c.reportIntegrity === "clean",
+    c.currency === "current" && c.channel === "managed" && c.reportIntegrity === "clean" && c.figures === "ok",
 });
 check(
-  `exhaustive (normalized): over all ${normRes.combos} states, currency is confirmed ONLY when current + managed + clean (mismatches=${normRes.mismatches}${normRes.firstMismatch ? ", first=" + normRes.firstMismatch : ""})`,
-  normRes.mismatches === 0 && normRes.combos === productOf(normDomains) && normRes.combos === 72,
+  `exhaustive (normalized, stability bound POSED): over all ${normRes.combos} states, currency is confirmed ONLY when current + managed + clean + stable (mismatches=${normRes.mismatches}${normRes.firstMismatch ? ", first=" + normRes.firstMismatch : ""})`,
+  normRes.mismatches === 0 && normRes.combos === productOf(normDomains) && normRes.combos === 216,
 );
-check("exhaustive (normalized): exactly the THREE current+managed+clean states grant (one per force-flag value — the pinned doctrine)",
+check("exhaustive (normalized): exactly the THREE current+managed+clean+stable states grant (one per force-flag value — the pinned doctrine); crashy and absent figures never grant under a posed bound",
   normRes.noneCount === 3);
 
 // ── exhaustive (raw wire): the normalizer + evaluator on hostile input ───────────
@@ -271,6 +307,33 @@ check("...and a confirmed-current app contributes none — the dimension never l
 // Determinism.
 const d1 = normalizeReport("det", "a", { installed_version: "2.1.0", latest_version: "2.4.0", force_update: true, channel: "managed" });
 check("evaluator is deterministic", JSON.stringify(evaluateAppUpdate(d1)) === JSON.stringify(evaluateAppUpdate(d1)));
+
+
+// ── The live-call gate and the default transport, each condition ISOLATED ────
+//
+// See `lib/live-gate.ts` for why this replaced what was here (or filled the hole where
+// nothing was). Short version: the gate was tested as a cumulative ladder, so only its
+// last condition was falsifiable, and the mutation guard could delete the tier check —
+// the control behind "dev and alpha never make live vendor calls" — with every proof
+// green. The default fetch transport was never executed by anything at all.
+checkLiveGateIsolated({
+  check,
+  family: "app-update",
+  resolve: (env) => resolveAppUpdateConnector(env),
+  full: {
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    APP_UPDATE_ACCESS_TOKEN: "t",
+  },
+});
+
+await checkDefaultTransport({
+  check,
+  family: "app-update",
+  transport: makeDefaultAppUpdateTransport("https://vendor.invalid/app-update") as (a: never) => Promise<unknown>,
+  arg: { deviceRef: "deviceRef-1", appRef: "appRef-1", token: "t" },
+  codeOf: (err) => (err instanceof AppUpdateConnectorError ? err.code : undefined),
+});
 
 const total = passed + failures.length;
 console.log(`figures=normalizedCombos=${normRes.combos},rawCombos=${rawRes.combos},grantingCombos=${normRes.noneCount},rawGrantingCombos=${rawRes.noneCount},ladderRungs=6`);

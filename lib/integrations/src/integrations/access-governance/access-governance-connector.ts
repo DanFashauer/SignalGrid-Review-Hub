@@ -9,6 +9,7 @@
 import {
   AccessGovernanceConnectorError,
   type AccessAccountStatus,
+  type AccessLifecycleStage,
   type AccessCertificationState,
   type AccessEntitlementScope,
   type AccessGovernanceReportRaw,
@@ -31,6 +32,15 @@ function oneOf<T extends string>(v: unknown, allowed: readonly T[], fallback: T)
   return (allowed as readonly string[]).includes(s) ? (s as T) : fallback;
 }
 
+/** A strict ISO-8601 UTC (Zulu) instant, or null. Anything unreadable is null —
+ *  a garbled timestamp is unknown, never an invented recency. */
+function instantStringOf(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const s = v.trim();
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(s)) return null;
+  return Number.isFinite(Date.parse(s)) ? s : null;
+}
+
 /** Normalize an IGA/PAM-bridge report. Defensive throughout: a missing/errored
  *  field yields the fail-safe unknown/null, never a fabricated "authorized". */
 export function normalizeReport(
@@ -39,6 +49,7 @@ export function normalizeReport(
   source = "iga-bridge",
 ): NormalizedAccessGovernancePosture {
   const account = report.account ?? {};
+  const lifecycle = report.lifecycle ?? {};
   const entitlement = report.entitlement ?? {};
   const certification = report.certification ?? {};
   const sod = report.sod ?? {};
@@ -49,6 +60,11 @@ export function normalizeReport(
     accountStatus: oneOf<AccessAccountStatus>(
       account.status,
       ["active", "disabled", "orphaned", "leaver_pending", "unknown"],
+      "unknown",
+    ),
+    lifecycleStage: oneOf<AccessLifecycleStage>(
+      lifecycle.stage,
+      ["new_hire", "established", "recent_transfer", "unknown"],
       "unknown",
     ),
     entitlementScope: oneOf<AccessEntitlementScope>(
@@ -68,6 +84,7 @@ export function normalizeReport(
       "unknown",
     ),
     privilegedSessionMonitored: typeof privilege.sessionMonitored === "boolean" ? privilege.sessionMonitored : null,
+    observedAt: instantStringOf(report.observedAt),
     source,
   };
 }
@@ -96,10 +113,26 @@ export class AccessGovernanceConnector {
     private readonly transport: AccessGovernanceReportTransport,
   ) {}
 
-  async healthCheck(principalId: string): Promise<{ healthy: boolean; status: number }> {
+  /**
+   * NOTE ON `status: null`. The success path returns null, NOT 200.
+   *
+   * This connector is handed an INJECTED transport that resolves a payload — there is
+   * no HTTP response here and therefore no status code to read. The old `status: 200`
+   * was invented: a 201, 202 or 204 upstream reported as 200, and a reviewer reading
+   * the field believed a server had said it. `null` is the honest value — "the
+   * transport resolved; no status was observed" — and the type can now say it.
+   *
+   * The failure path keeps a real number because the error carries one.
+   *
+   * NOT FIXED HERE, and stated so the remaining gap is not mistaken for closed:
+   * `healthy: true` still means "the injected transport resolved", which in fixture
+   * mode is true without anything being contacted. That fix belongs at the resolution
+   * layer, which already reports `mode: "fixture"` with a reason — see the backlog.
+   */
+  async healthCheck(principalId: string): Promise<{ healthy: boolean; status: number | null }> {
     try {
       await this.transport({ principalId, token: this.config.accessToken });
-      return { healthy: true, status: 200 };
+      return { healthy: true, status: null };
     } catch (err) {
       const status = err instanceof AccessGovernanceConnectorError ? err.status : 0;
       return { healthy: false, status };

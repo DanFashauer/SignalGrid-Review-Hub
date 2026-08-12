@@ -165,11 +165,33 @@ function categoryForKind(kind: string, reason?: string): IncidentCategory {
     // direct sibling of `device_management_health`.
     case "policy_binding":
       return "security_compliance";
+    // `benchmark_selection` is the hardening plane's equivalent: the device was
+    // graded against the wrong benchmark document, a superseded version, content
+    // that is not CIS's own, or a run that evaluated almost nothing. A measurement
+    // failure about the compliance evidence itself, owned by the same queue.
+    // `credential_rotation` is secrets hygiene: a static secret past the maximum age
+    // its own policy declares, or one with no rotation policy at all. A governance
+    // state about the credential rather than a live compromise — the leaked-secret
+    // case is `credential_exposure`, which routes to SecOps below. Owned by the same
+    // compliance queue that owns the other "configured wrong, quietly" dimensions.
+    case "credential_rotation":
+    case "benchmark_selection":
+      return "security_compliance";
     // `app_update` is the per-app sibling of `device_management_health`: a host app
     // below its version floor, lagging a forced update, or installed outside the
     // managed channel is a software-compliance state on the device, owned by the same
     // compliance queue — not a live incident and not the generic Service Desk.
     case "app_update":
+      return "security_compliance";
+    // `change_window` is the change plane's governance reading: an operation running
+    // outside the window its own approval authorizes, under a record nobody approved,
+    // by an implementer the record does not name, or on a record too old to be
+    // evidence about now. All four are change-governance states owned by the same
+    // compliance queue that already holds `policy_binding` and `benchmark_selection`
+    // — never the generic Service Desk, and never SecOps: a change worked against a
+    // rejected record is a governance breach to reconcile with the CAB, not an
+    // intrusion to investigate.
+    case "change_window":
       return "security_compliance";
     // Identity, authorization & data-governance signals. `platform_sso` belongs
     // here rather than with the device kinds: its findings — a policy claimed on a
@@ -184,6 +206,51 @@ function categoryForKind(kind: string, reason?: string): IncidentCategory {
     case "oauth_consent":
     case "token_binding":
     case "pacs_access":
+    // `shift_context` is the labor plane's sibling of `pacs_access`: scheduled-but-
+    // clocked-out, off-duty operation and a site mismatch are either a workforce
+    // schedule/policy question or a borrowed badge — both owned by the Identity &
+    // Access queue that already handles badge and session concerns, never the
+    // generic Service Desk. Never SecOps: the dimension deliberately step-ups
+    // rather than restricts, and its findings are policy states, not live threats.
+    case "shift_context":
+    // `location_certainty` is the spatial sibling: a wrong-map fix, an unmapped
+    // space, or precision below a workflow's floor is a facility-context /
+    // measurement state owned by the same queue — not a live threat, and never
+    // the generic Service Desk.
+    case "location_certainty":
+    // `bootstrap_credential` is the auth plane's provenance reading: a temporary
+    // pass beyond enrollment scope, expired-in-use, minted broad, or issued on
+    // location alone is a credential-lifecycle concern owned by the same
+    // Identity & Access queue as `sso_session` and `pim_activation` — never the
+    // generic Service Desk, and not SecOps: its findings are issuance/policy
+    // states, not live threats.
+    case "bootstrap_credential":
+    // `challenge_capability` findings are enrollment/provisioning states — a
+    // worker with no enrolled method, a device missing its authenticator or
+    // agent — owned by the same Identity & Access queue: the fix is enroll or
+    // re-provision, not a SecOps investigation and not a generic ticket.
+    case "challenge_capability":
+    // `service_lifecycle` is the joiner-mover-leaver plane read from the SERVICE
+    // side: entitlements stripped with no departure recorded, entitlements
+    // outliving one, or a service plan assigned AFTER a departure no rehire
+    // explains. Same queue as `access_governance`, and deliberately so — these are
+    // the two witnesses whose DISAGREEMENT is the finding, so splitting them across
+    // queues would hand each half to someone who cannot see the other.
+    //
+    // Never SecOps: a half-finished offboarding is a governance failure to complete,
+    // not an intrusion to investigate — and the most common cause of the stripped
+    // reading is an automated licence-reclamation sweep, which is finance's
+    // housekeeping rather than anybody's attack. Never the generic Service Desk: the
+    // fix is an entitlement decision, not a ticket.
+    // `break_glass` is the governance record of an emergency clinical override —
+    // unjustified, unbounded, never-reviewed, or invoked by someone who did not need
+    // it. An ACCESS-GOVERNANCE question, owned by the same queue as
+    // `access_governance` and `service_lifecycle`. Never SecOps: a clinician reaching
+    // past a gate to reach a patient is not an intrusion, and treating it as one is
+    // how a hospital learns to stop reporting. Never the generic Service Desk: the
+    // fix is a policy and review-loop decision, not a ticket.
+    case "break_glass":
+    case "service_lifecycle":
     case "agent_identity":
     case "data_protection":
       return "security_compliance";
@@ -196,6 +263,12 @@ function categoryForKind(kind: string, reason?: string): IncidentCategory {
     // routing by "the fix is a WLAN change" — which is true of the remedy and not of the
     // owner this actually reaches.
     case "link_usability":
+    // `sse_egress` is the network plane's egress reading — a mandated edge the
+    // device's traffic is not traversing. Its findings (client disabled, never
+    // installed, bypassed, an uncorroborated tunnel claim) are provisioning and
+    // policy states on the same plane as `network`/`link_usability`, so they
+    // route the same way; they are not live threats for SecOps.
+    case "sse_egress":
       return "security_compliance";
     case "vulnerability":
       return "security_vulnerability";
@@ -214,6 +287,31 @@ function categoryForKind(kind: string, reason?: string): IncidentCategory {
     // device-custody event, and routes to the same Endpoint / Mobility owner that handles
     // device loss/recovery, not the generic Service Desk.
     case "custody_beacon":
+    // `session_readiness` is the DEX plane's reading — an app that never came up, a
+    // posed tap-to-app budget exceeded, an endpoint nobody instrumented, a DEX plane
+    // that cannot be read. These are END-USER-COMPUTING problems and they route to the
+    // Endpoint / Mobility owner who actually operates the endpoint, VDI broker and DEX
+    // agent.
+    //
+    // Deliberately NOT `security_compliance`, even though the sibling this dimension is
+    // most often paired with (`sso_session`) lives there: a slow VDI reconnect is a
+    // performance owner's work, and routing it to Identity & Access would hand it to a
+    // team who cannot fix it. Deliberately NOT SecOps either — paging a security analyst
+    // for a broker delay trains everyone to ignore the channel. And never the generic
+    // Service Desk: the fix is an endpoint/broker change, not a ticket.
+    // `observability_integrity` is the evidence plane grading itself — an exporter that
+    // stopped, a stream sampled or dropped or cost-capped. The fix is an instrumentation
+    // or pipeline change, so it reaches the same endpoint/platform owner as the readiness
+    // dimension above. Deliberately NOT SecOps: a sample rate is not an intrusion, and
+    // paging an analyst for one trains everybody to ignore the channel.
+    case "observability_integrity":
+    // `local_authority` is most often a device that restarted and has not been unlocked,
+    // so its vault, network credential and offline grant are unreadable. That is an
+    // ERRAND — somebody walks over and types a passcode — which is precisely the asset /
+    // device-support queue. Routing it to a security queue would describe a locked iPad
+    // as an incident.
+    case "local_authority":
+    case "session_readiness":
     case "peripheral":
       return "asset_device";
     // Active security incidents — live threats, exposed credentials, detections.

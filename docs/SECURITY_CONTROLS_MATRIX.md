@@ -74,7 +74,7 @@ role. A real authentication provider is a private-core concern.
 | Fail-closed token resolution (unknown/empty token → `unauthorized`, HTTP 401) | ASVS 5.0; 800-207 | Implemented (public core) | `lib/signalgrid-core/src/auth.ts` (`authenticate`) |
 | No default tenant/role fallback on auth failure | ASVS 5.0; API Top 10 | Implemented (public core) | `lib/signalgrid-core/src/auth.ts` (throws before principal construction) |
 | Non-secret key reference only (no real credential stored) | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/types.ts` (`ApiKeyRecord.token` is a synthetic demo token; `keyReference`) |
-| Real authentication provider, sessions, MFA/step-up assurance | ASVS 5.0; 800-207 | Private-core (planned) | Private production repo (`packages/auth`); see `docs/REALISTIC_LAUNCH_PLAN.md` (phase B) |
+| Real authentication provider, sessions, MFA/step-up assurance | ASVS 5.0; 800-207 | **Implemented in THIS repo** | `lib/enterprise-auth` verifies RS256 OIDC JWTs against a live IdP JWKS endpoint, wired in `artifacts/api-server/src/middlewares/context.ts`; WebAuthn step-up in `lib/webauthn`. Previously marked private-core-planned, which understated what this public repo contains |
 | Service-to-service auth (client-credentials, certificate / workload-identity federation) | ASVS 5.0; 800-207 | Private-core (planned) | Private production repo (connector worker); `docs/REALISTIC_LAUNCH_PLAN.md` (connector auth model) |
 
 ---
@@ -94,7 +94,7 @@ cryptographic construction is a private-core concern.
 | Decision records store policy version, matched rules, reason codes, signal ids, evidence id | CSF 2.0 (ID/DE); ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/decision.ts`; `types.ts` (`Decision`) |
 | Audit chains never cross tenants | API Top 10 (API1); 800-207 | Implemented (public core) | `proof:signalgrid-core` (isolation invariant) |
 | Keyed / cryptographically signed audit + snapshot integrity | ASVS 5.0 | Private-core (planned) | Private production repo (`packages/audit-ledger`); see `docs/PRODUCT_CORE_FOUNDATION.md` (digest note) |
-| Durable, retained audit storage and log retention policy | CSF 2.0 (PR.PS); ASVS 5.0 | Private-core (planned) | Private production repo (durable persistence) |
+| Durable, retained audit storage and log retention policy | CSF 2.0 (PR.PS); ASVS 5.0 | **Implemented in THIS repo** (retention policy still to define) | `lib/persistence` PostgresDecisionStore/PostgresSessionStore and `lib/audit` PostgresAuditBackend, with committed SQL migrations. Retention/deletion policy is genuinely unwritten — that part remains planned |
 
 ---
 
@@ -139,7 +139,7 @@ level (some via GitHub default setup, so they have no in-repo workflow file).
 | Deterministic proof + typecheck/build gates on every PR | CSF 2.0 (ID.RA); ASVS 5.0 | Automated (CI bot) | `.github/workflows/review-hub-ci.yml` (validation job) |
 | Unsafe-claim / public-safety denylist scan on docs and app copy | CSF 2.0 (GV); ASVS 5.0 | Automated (CI bot) | `.github/workflows/review-hub-ci.yml` (docs-sanity job) |
 | Dependency vulnerability + update automation (Dependabot) | CSF 2.0 (ID.RA); ASVS 5.0 | Automated (CI bot) | GitHub-native dependency scanning (repo/org settings); `docs/REALISTIC_LAUNCH_PLAN.md` (security baselines) |
-| Static code scanning (CodeQL) | ASVS 5.0; CSF 2.0 (DE.CM) | Automated (CI bot) | GitHub-native code scanning (default setup at repo level) |
+| Static code scanning (CodeQL) | ASVS 5.0; CSF 2.0 (DE.CM) | Automated (CI bot) | `.github/workflows/codeql.yml` — ADVANCED setup (`github/codeql-action/init@v4` with `./.github/codeql/codeql-config.yml`). Not GitHub default setup; the two are mutually exclusive |
 | Secret scanning (gitleaks) | ASVS 5.0; CSF 2.0 (PR.DS) | Automated (CI bot) | GitHub-native / CI secret scanning at repo level |
 | CycloneDX SBOM for release artifacts | CSF 2.0 (ID.AM); ASVS 5.0 | Automated (CI bot) | Release CI (SBOM generation step); `docs/REALISTIC_LAUNCH_PLAN.md` |
 | Dependency cooldown (`pnpm` `minimumReleaseAge`) | CSF 2.0 (ID.RA) | Automated (CI bot) | `pnpm` config surface (`.npmrc` / `pnpm-workspace.yaml`) |

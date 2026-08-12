@@ -16,6 +16,8 @@
 //
 // Pure and deterministic. No device is contacted here.
 
+import { lintSetupOrder } from "./provisioning-order";
+
 /** When a recording is eligible to fire for a device. */
 export type SetupTrigger = "first_boot" | "network_join" | "serial_match";
 
@@ -41,6 +43,35 @@ export interface SetupStep {
   sensitive?: boolean;
   /** The Grid performs this itself because the target system exposes no way to (grid does the lifting). */
   gridLifted?: boolean;
+  /**
+   * Keys of steps that MUST already have run. The array order is the execution
+   * order, so every key here has to name a step EARLIER in `steps` — see
+   * `provisioning-order.ts`, which rejects a forward reference rather than
+   * quietly reordering.
+   *
+   * Optional: most ordering is carried by the intrinsic rule (management before
+   * anything that needs management). This is for the deployment-specific edges
+   * that rule cannot know — a VPN profile that must precede the line-of-business
+   * app which talks through it, for instance.
+   */
+  requires?: string[];
+  /**
+   * This step is what puts the device under management (MDM enrollment, directory
+   * join, EMM provisioning).
+   *
+   * WHY THIS EXISTS. The ordering rule infers management from `kind` — `profile` or
+   * `account`. Adversarial review showed that inference is too coarse: `profile`
+   * covers an MDM enrollment profile AND a VPN, PPPC or OneDrive-KFM profile, so a
+   * recording that put a VPN profile before an app_install silenced the ordering
+   * error entirely, and the error message then named a config profile as
+   * "management".
+   *
+   * When ANY step in a recording sets this flag, ONLY flagged steps establish
+   * management and the kind heuristic is switched off. When no step sets it, the
+   * heuristic still applies — so existing recordings keep working — but it is
+   * exactly as coarse as it was, and `provisioning-order.ts` says so.
+   */
+  establishesManagement?: boolean;
 }
 
 /** Which devices a recording applies to. At least one selector must be present. */
@@ -79,9 +110,16 @@ const VALID_TRIGGERS: readonly SetupTrigger[] = ["first_boot", "network_join", "
 /**
  * Validate a setup recording. Fail-safe: a recording that couldn't run correctly
  * (no steps, an unknown step kind, no trigger, no device selector, duplicate step
- * keys, a missing id) is an ERROR; a sensitive step is surfaced as a WARNING (it
- * will require approval at apply time, not blocked at authoring). Errors block a
- * merge; warnings inform. Deterministic order (errors first, then warnings).
+ * keys, a missing id, or an IMPOSSIBLE STEP ORDER) is an ERROR; a sensitive step is
+ * surfaced as a WARNING (it will require approval at apply time, not blocked at
+ * authoring). Errors block a merge; warnings inform. Deterministic order (errors
+ * first, then warnings).
+ *
+ * Ordering lives in `provisioning-order.ts` and is folded in here on purpose rather
+ * than offered as a separate opt-in check: `planZeroTouchSetup` refuses an invalid
+ * recording, so routing order errors through validity is what stops a setup that
+ * cannot work from ever reaching a device. A check nobody is obliged to call would
+ * have left the original failure mode intact.
  */
 export function lintSetupRecording(rec: DeviceSetupRecording): SetupRecordingIssue[] {
   const errors: SetupRecordingIssue[] = [];
@@ -131,6 +169,12 @@ export function lintSetupRecording(rec: DeviceSetupRecording): SetupRecordingIss
       warnings.push({ severity: "warning", code: "sensitive_step", subject: rec.id, message: `Recording "${rec.id}" step "${s.key}" is sensitive — it will require approval before any real apply.` });
     }
   }
+  // Ordering, folded in so an impossible sequence makes the recording INVALID.
+  const order = lintSetupOrder(rec);
+  for (const issue of order) {
+    (issue.severity === "error" ? errors : warnings).push(issue);
+  }
+
   return [...errors, ...warnings];
 }
 
@@ -238,4 +282,115 @@ export function planZeroTouchSetup(
     ? `Enforced: ${steps.filter((s) => s.disposition === "auto_apply").length} auto, ${requiresApproval} awaiting approval.`
     : `Matched — ${steps.length} steps planned, all simulated (enforcement off).`;
   return { ...base, matched: true, steps, requiresApproval, willApplyAnything, reason };
+}
+
+// ── setup completion — was the device RELEASED before day-zero finished? ────────
+// (Intake ledger row 18, from the Jamf Setup Manager guide.) Guided-setup tools
+// exist to hold a device in Setup Assistant until required day-zero items are
+// installed — and their documented failure mode is the race that releases the
+// device anyway (policies triggered by enrollmentComplete arriving late, a
+// skipped screen, an aborted run). The fabric could PLAN zero-touch setup but
+// nothing graded the release: a device could be enrolled, compliant-looking,
+// and in a user's hands with required payloads missing, and that state was
+// unrepresentable. This grader makes it a first-class answer.
+//
+// NO CLOCK: the first-user-session instant is SUPPLIED evidence. Its presence
+// means the device was released; grading never asks what time it is now.
+
+export const SETUP_STEP_RESULTS = ["succeeded", "failed", "skipped", "pending"] as const;
+export type SetupStepResult = (typeof SETUP_STEP_RESULTS)[number];
+
+export type SetupCompletion =
+  | "released_complete" // every required step succeeded before the first user session
+  | "released_incomplete" // a user session exists while a required step is failed/skipped/pending/unreported
+  | "in_setup" // no user session yet — the guided flow is still holding the device
+  | "setup_bypassed" // a user session exists and NOTHING was ever reported — no evidence guided setup ran
+  | "unknown"; // unreadable, or the plan poses no runtime requirement
+
+export type SetupCompletionReason =
+  | "ALL_REQUIRED_STEPS_SUCCEEDED"
+  | "RELEASED_WITH_STEPS_OUTSTANDING"
+  | "STILL_IN_GUIDED_SETUP"
+  | "NO_SETUP_EVIDENCE_AT_RELEASE"
+  | "PLAN_NOT_ENFORCED"
+  | "PLAN_UNMATCHED"
+  | "SESSION_INSTANT_UNREADABLE"
+  | "RESULTS_UNREADABLE";
+
+export interface SetupCompletionVerdict {
+  completion: SetupCompletion;
+  reasonCode: SetupCompletionReason;
+  recommendedAction: "none" | "monitor" | "step_up" | "alert";
+  /** Required step keys that did not report `succeeded`, for evidence. */
+  outstandingSteps: string[];
+}
+
+/**
+ * Grade one device's day-zero release against its enforced plan.
+ *
+ * - The REQUIRED set is the plan's `auto_apply` + `approval_required` steps —
+ *   a simulated plan required nothing on-device, so grading one is `unknown`
+ *   (PLAN_NOT_ENFORCED), never a hollow green.
+ * - Results are a trusted allowlist per step key; an unrecognized value or an
+ *   absent entry is OUTSTANDING, not succeeded — absence of a report is never
+ *   evidence of success.
+ * - `firstUserSessionAt` present ⇒ the device was released: all-succeeded is
+ *   the only complete; zero reports at release is `setup_bypassed` (alert —
+ *   in use with no evidence guided setup ever ran); anything else is
+ *   `released_incomplete` (step_up — the enrollmentComplete race made
+ *   visible). Absent ⇒ still `in_setup` (monitor), whatever the step states —
+ *   failing DURING guided setup is the tool's retry loop, not a release.
+ */
+export function gradeSetupCompletion(
+  plan: ProvisioningPlan,
+  results: Record<string, unknown> | null | undefined,
+  firstUserSessionAt?: unknown,
+): SetupCompletionVerdict {
+  if (!plan.matched) {
+    return { completion: "unknown", reasonCode: "PLAN_UNMATCHED", recommendedAction: "step_up", outstandingSteps: [] };
+  }
+  const required = plan.steps.filter((s) => s.disposition === "auto_apply" || s.disposition === "approval_required");
+  if (required.length === 0) {
+    return { completion: "unknown", reasonCode: "PLAN_NOT_ENFORCED", recommendedAction: "step_up", outstandingSteps: [] };
+  }
+
+  let released: boolean;
+  if (firstUserSessionAt === undefined || firstUserSessionAt === null) {
+    released = false;
+  } else if (
+    typeof firstUserSessionAt === "string" &&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(firstUserSessionAt.trim()) &&
+    Number.isFinite(Date.parse(firstUserSessionAt.trim()))
+  ) {
+    released = true;
+  } else {
+    return { completion: "unknown", reasonCode: "SESSION_INSTANT_UNREADABLE", recommendedAction: "step_up", outstandingSteps: [] };
+  }
+
+  let reportedCount = 0;
+  const outstanding: string[] = [];
+  for (const step of required) {
+    let raw: unknown;
+    try {
+      raw = results === null || results === undefined || typeof results !== "object" || Array.isArray(results)
+        ? undefined
+        : (results as Record<string, unknown>)[step.key];
+    } catch {
+      return { completion: "unknown", reasonCode: "RESULTS_UNREADABLE", recommendedAction: "step_up", outstandingSteps: [] };
+    }
+    const value = typeof raw === "string" ? raw.trim().toLowerCase() : null;
+    if (value !== null && (SETUP_STEP_RESULTS as readonly string[]).includes(value)) reportedCount += 1;
+    if (value !== "succeeded") outstanding.push(step.key);
+  }
+
+  if (!released) {
+    return { completion: "in_setup", reasonCode: "STILL_IN_GUIDED_SETUP", recommendedAction: "monitor", outstandingSteps: outstanding };
+  }
+  if (outstanding.length === 0) {
+    return { completion: "released_complete", reasonCode: "ALL_REQUIRED_STEPS_SUCCEEDED", recommendedAction: "none", outstandingSteps: [] };
+  }
+  if (reportedCount === 0) {
+    return { completion: "setup_bypassed", reasonCode: "NO_SETUP_EVIDENCE_AT_RELEASE", recommendedAction: "alert", outstandingSteps: outstanding };
+  }
+  return { completion: "released_incomplete", reasonCode: "RELEASED_WITH_STEPS_OUTSTANDING", recommendedAction: "step_up", outstandingSteps: outstanding };
 }

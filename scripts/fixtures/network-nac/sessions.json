@@ -8,7 +8,7 @@
     {
       "deviceId": "dev-trusted", "authState": "authenticated", "segment": "clinical-vlan-20", "switchPort": "sw3/gi1/0/12",
       "nacCompliant": true, "lastAuthAt": "2026-07-20T11:55:00Z",
-      "expected": { "authState": "authenticated", "posture": "on_trusted_segment", "reasonCode": "AUTHENTICATED_TRUSTED_SEGMENT", "recommendedAction": "none" }
+      "expected": { "authState": "authenticated", "posture": "on_unverified_segment", "reasonCode": "AUTHENTICATED_SEGMENT_UNVERIFIED", "recommendedAction": "none" }
     },
     {
       "deviceId": "dev-unauth", "authState": "rejected", "segment": "guest-vlan-99", "accessPoint": "ap-lobby-2",

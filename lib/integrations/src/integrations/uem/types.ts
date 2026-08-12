@@ -56,6 +56,28 @@ export type UemCompliance =
  *  one — see the platform-honesty rule in CLAUDE.md. */
 export type UemSupervision = "supervised" | "unsupervised" | "unknown";
 
+/** Who owns the device.
+ *
+ *  WHY THIS EXISTS, and it is a defect report on the first version of this file.
+ *  The evaluator graded `supervision === "unsupervised"` as `step_up`
+ *  unconditionally. On a corporate device that is a real finding. On a
+ *  personally-owned BYOD device it is the EXPECTED and PERMANENT state — Apple
+ *  supervision requires the organisation to own the device (Apple Business Manager
+ *  / Configurator), so an employee-owned iPhone can never be supervised.
+ *
+ *  A gate that fires on every single decision forever carries no information. Worse,
+ *  it is the shape that trains an operator to ignore the signal, so the one time it
+ *  means something they have already learned to scroll past it. Interpreting
+ *  supervision without knowing ownership is reading half a sentence.
+ *
+ *  - `corporate` — organisation-owned (including corporate-SHARED, which is this
+ *                  product's central case: a checked-out frontline device)
+ *  - `personal`  — employee-owned / BYOD
+ *  - `unknown`   — could not be determined. NOT the same as `personal`; assuming
+ *                  BYOD would silently excuse an unsupervised corporate device,
+ *                  which is the finding this dimension most needs to keep. */
+export type UemOwnership = "corporate" | "personal" | "unknown";
+
 /** Whether the normalized report itself parsed cleanly. Tracked SEPARATELY from
  *  the states above, because a malformed report can normalize every field to a
  *  denying sentinel and thereby *look* like a decisive answer. Integrity says
@@ -64,6 +86,31 @@ export type UemReportIntegrity = "intact" | "malformed";
 
 /** The vendor-neutral device state the evaluator grades. Deliberately small: it
  *  carries only what a decision needs, and every field can say `unknown`. */
+/**
+ * Whether this device HAS a cellular radio, as read from the device-inventory plane.
+ *
+ * DELIBERATELY TWO STATES, NOT THREE — and the missing third is the whole point.
+ *
+ * `carrier`'s `cellularBackchannel` axis has three (`present` | `absent` | `unknown`),
+ * and this type is assignable to it precisely BECAUSE it omits `absent`. That is a
+ * type-level statement of a fact this plane cannot know: a UEM reports the identifiers
+ * a device volunteered at enrollment, and a MISSING `imei`/`meid`/`iccid` is a missing
+ * identifier, not a missing modem. It covers a Wi-Fi-only tablet, yes — but equally an
+ * eSIM never activated, a payload the tenant restricted by scope, a partial sync, and a
+ * device whose cellular details Intune simply does not populate for that platform.
+ *
+ * This is the SAME defect the `carrier` connector carried until intake ledger row 55:
+ * three absences combined into the positive assertion "this hardware has no modem".
+ * Deriving `absent` here from a missing identifier would reintroduce it one layer up,
+ * which is exactly the mistake a later reader "completing the mapping" would make. The
+ * type makes that unrepresentable rather than merely discouraged.
+ *
+ * A true `absent` needs an authoritative hardware fact — an administrative declaration,
+ * or a model catalog stating the SKU ships without a modem. Neither is a UEM read, and
+ * neither is in this repository.
+ */
+export type UemCellularHardware = "present" | "unknown";
+
 export interface NormalizedUemDeviceState {
   /** Opaque device identifier as reported by the vendor. Never a serial. */
   readonly deviceId: string;
@@ -71,6 +118,8 @@ export interface NormalizedUemDeviceState {
   readonly enrollment: UemEnrollment;
   readonly compliance: UemCompliance;
   readonly supervision: UemSupervision;
+  /** Ownership, which is what makes `supervision` interpretable. See UemOwnership. */
+  readonly ownership: UemOwnership;
   /** Vendor-reported OS version, or null when absent/unparseable. Informational —
    *  currency is graded by the `app-update` dimension, not here. */
   readonly osVersion: string | null;
@@ -83,6 +132,11 @@ export interface NormalizedUemDeviceState {
    *  golden rule 2, and the reason this dimension could never have been replayed
    *  deterministically. Freshness policy belongs to the caller that owns the clock. */
   readonly lastCheckInAgeSeconds: number | null;
+  /** AFFIRMATIVE-ONLY radio reading — `present` when the vendor volunteered a cellular
+   *  identifier, `unknown` otherwise. Never `absent`; see UemCellularHardware. It is
+   *  directly assignable to `carrier`'s posed `cellularBackchannel` axis, so a caller
+   *  bridging the two planes cannot accidentally widen it. */
+  readonly cellularHardware: UemCellularHardware;
   readonly reportIntegrity: UemReportIntegrity;
 }
 
@@ -122,11 +176,20 @@ export type UemReasonCode =
   | "DEVICE_NON_COMPLIANT"
   | "COMPLIANCE_IN_GRACE_PERIOD"
   | "COMPLIANCE_NOT_EVALUATED"
+  /** A CORPORATE device that is not supervised. Scoped to corporate deliberately:
+   *  see UemOwnership for why the unscoped version of this code was a defect. */
   | "DEVICE_UNSUPERVISED"
+  /** Employee-owned and unsupervised — the expected state, surfaced at `monitor`
+   *  rather than silenced, because most vendors report personal ownership as a
+   *  DEFAULT rather than as a positive confirmation. */
+  | "BYOD_UNSUPERVISED_EXPECTED"
   // Unconfirmed inputs — foreclose the grant, never deny.
   | "ENROLLMENT_STATE_UNKNOWN"
   | "COMPLIANCE_STATE_UNKNOWN"
   | "SUPERVISION_STATE_UNKNOWN"
+  /** Unsupervised, and ownership could not be established — so it is impossible to
+   *  say whether that is an expected BYOD state or an unsupervised corporate device. */
+  | "UNSUPERVISED_OWNERSHIP_UNKNOWN"
   | "VENDOR_UNKNOWN"
   // The report itself could not be trusted.
   | "REPORT_MALFORMED";

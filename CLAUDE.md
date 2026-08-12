@@ -99,6 +99,14 @@ proofs miss:
   — badge, location/zone, injected signals, screen-capture, seeded control-plane
   refs, etc. Pass via `xcrun simctl launch booted com.enterprise.shell -Flag ...`.
 
+## Multiple Claude lanes
+
+Parallel Claude sessions work this repo (cloud + Mac). Before touching a
+shared surface (discipline gate, mutation guard, sync manifest, proof
+registration, connector families the other lane's commits name), read
+`docs/LANE_COORDINATION.md` and follow its protocol — the nac/webhooks
+eight-file collision is why it exists.
+
 ## Ask before
 
 Destructive git (force-push, history rewrite, branch deletion), anything that

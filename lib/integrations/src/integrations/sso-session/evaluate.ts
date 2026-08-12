@@ -92,6 +92,20 @@ export function evaluateSsoSession(
     return { ...base, posture: "no_session", reasonCode: "NO_ACTIVE_SESSION", recommendedAction: "none", subjectBound: false };
   }
 
+  // A live SHARED-account session with no credential-level attribution is its own
+  // visible state, not a generic unknown: "the account authenticated" is true and
+  // "this person is identified" is not, and on a shared account the subject can
+  // never close that gap — only the authenticating credential's registered holder
+  // can (DigitalPersona v4.4.0-class multiple device-bound passkeys). Checked
+  // WITHOUT trusting the binding label, so an evidence-free `bound` on a
+  // holderless shared session can never grant even if it reaches this evaluator
+  // unnormalized. step_up — re-authenticate as yourself — never a lockout: the
+  // shared-account pattern is legitimate; its anonymity is the defect.
+  if (session.accountScope === "shared" && session.credentialHolder === null) {
+    unknownSignals.push("credential_holder");
+    return { ...base, posture: "unattributed_shared", reasonCode: "SHARED_SESSION_UNATTRIBUTED", recommendedAction: "step_up", subjectBound: false };
+  }
+
   // Anything not POSITIVELY bound to the current holder cannot grant — an unknown
   // binding, or a non-active unbound session (active-unbound handled above). Raise
   // the bar. This guarantees the branch below is a genuinely bound session.

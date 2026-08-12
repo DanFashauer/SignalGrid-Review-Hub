@@ -1,0 +1,235 @@
+// The FACILITY TRUST GRAPH — a canonical, versioned model of physical space.
+//
+// docs/FACILITY_TRUST_GRAPH.md records the design this implements (intake row
+// 16). The rule that shapes everything here: SignalGrid's `spaceId` is the
+// permanent identity of a space, and every vendor identifier — Cisco
+// campus/building/floor/map/zone ids, access-control area/door/reader ids, EHR
+// facility/unit/room/bed codes, RTLS sensor/anchor ids — is an ATTACHMENT to a
+// space, never its key. A floor-plan replacement, location-vendor migration,
+// badge-system swap, or EHR location-code change re-points mappings; it cannot
+// break policy, because policy only ever names spaceIds.
+//
+// PURE DATA + VALIDATION. No vendor is called, no map is fetched, no coordinate
+// is computed. The graph is caller-supplied (an operator authored it, or an
+// import pipeline produced it) and the loader's job is to REFUSE a graph that
+// could not be what it claims — the same self-checking discipline as the CIS
+// catalog snapshot loader.
+
+export type SpaceKind =
+  | "organization"
+  | "campus"
+  | "building"
+  | "floor"
+  | "security_zone"
+  | "unit"
+  | "room"
+  | "bed"
+  | "equipment_zone"
+  | "door";
+
+/** Which kinds may sit directly under which. The hierarchy is the owner's:
+ *  Organization → Campus → Building → Floor → Security Zone → Unit → Room →
+ *  Bed / Equipment Zone / Door. Zones and units are optional layers, so a
+ *  child may attach at the nearest present ancestor level — but never UPWARD
+ *  (a building under a room is unrepresentable). */
+const ALLOWED_PARENTS: Record<SpaceKind, readonly SpaceKind[]> = {
+  organization: [],
+  campus: ["organization"],
+  building: ["campus", "organization"],
+  floor: ["building"],
+  security_zone: ["floor", "building"],
+  unit: ["security_zone", "floor"],
+  room: ["unit", "security_zone", "floor"],
+  bed: ["room"],
+  equipment_zone: ["room", "unit", "floor"],
+  door: ["room", "unit", "security_zone", "floor", "building"],
+};
+
+export interface SpaceNode {
+  /** Permanent SignalGrid identity. Policy names THIS and nothing else. */
+  readonly spaceId: string;
+  readonly kind: SpaceKind;
+  readonly name: string;
+  /** Null only for the single organization root. */
+  readonly parentId: string | null;
+  /** Carried classification label (e.g. "controlled", "restricted") — the
+   *  graph carries it as fact; grading it is the policy layer's job. */
+  readonly securityClassification?: string;
+  /** Vendor identifiers, namespaced (e.g. cisco.zone_id, physical_access.door_id,
+   *  ehr.bed, rtls.room_zone_id). ATTACHMENTS, never keys. */
+  readonly vendorRefs?: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  /** DOORS ONLY: the space(s) this door opens to, besides its parent. A door is
+   *  a PORTAL — its parent is the containing space and `connects` lists the
+   *  other side(s). Validated: targets must exist, must not be the door itself,
+   *  and must not be doors (a door opens into a space, not into a door). */
+  readonly connects?: readonly string[];
+}
+
+export interface FacilityGraphDoc {
+  /** The floor-plan/model revision this graph was authored against. An
+   *  observation carrying a DIFFERENT map version is graded as a conflict by
+   *  the certainty dimension — the wrong-map case. */
+  readonly mapVersion: string;
+  readonly spaces: readonly SpaceNode[];
+}
+
+export class FacilityGraphError extends Error {
+  constructor(
+    public readonly code: "bad_graph",
+    message: string,
+  ) {
+    super(message);
+    this.name = "FacilityGraphError";
+  }
+}
+
+export interface FacilityGraph {
+  readonly mapVersion: string;
+  readonly spaces: readonly SpaceNode[];
+  /** Derived figures, recomputed on every build — a hand-edited count cannot load. */
+  readonly derived: { total: number; byKind: Readonly<Record<SpaceKind, number>> };
+  get(spaceId: string): SpaceNode | null;
+  /** Root-first ancestor path INCLUDING the space itself. */
+  path(spaceId: string): SpaceNode[];
+  /** The nearest ancestor (or self) of the given kind, or null. */
+  containing(spaceId: string, kind: SpaceKind): SpaceNode | null;
+  /** Vendor lookup: namespace + key + vendor id → the space it is attached to.
+   *  Null, never a guess, when unmapped or ambiguous. */
+  resolveVendorRef(namespace: string, key: string, id: string): SpaceNode | null;
+  /** All spaces a door touches: its parent plus its `connects` targets. Null
+   *  for a spaceId that is not a door. */
+  doorSides(doorId: string): string[] | null;
+}
+
+const MAX_DEPTH = 32;
+
+function fail(message: string): never {
+  throw new FacilityGraphError("bad_graph", message);
+}
+
+/**
+ * Build and validate a facility graph. Refusals, each proven:
+ *  - empty graph, missing/blank mapVersion, blank ids or names
+ *  - duplicate spaceId (identity must be unambiguous)
+ *  - a parent that does not exist, more than one root, a non-organization root
+ *  - a kind under a parent kind the hierarchy does not allow (a building under
+ *    a room is unrepresentable)
+ *  - a cycle (bounded walk — a graph deeper than MAX_DEPTH is refused, so a
+ *    hostile parent chain cannot spin the walker)
+ *  - a vendor ref that is AMBIGUOUS (the same namespace/key/id attached to two
+ *    spaces) — an ambiguous mapping silently resolving to one of them is how a
+ *    wrong-room observation becomes a confident one
+ */
+export function buildFacilityGraph(doc: FacilityGraphDoc): FacilityGraph {
+  if (typeof doc !== "object" || doc === null) fail("graph document must be an object");
+  if (typeof doc.mapVersion !== "string" || doc.mapVersion.trim().length === 0) fail("mapVersion is required");
+  // Stored as a boolean on purpose: testing Array.isArray(doc.spaces) inline
+  // would narrow the readonly array to any[] for the rest of this function.
+  const spacesIsArray: boolean = Array.isArray(doc.spaces);
+  if (!spacesIsArray || doc.spaces.length === 0) fail("a graph with no spaces cannot answer anything");
+
+  const byId = new Map<string, SpaceNode>();
+  for (const node of doc.spaces) {
+    if (typeof node.spaceId !== "string" || node.spaceId.trim().length === 0) fail("a space with a blank spaceId");
+    if (typeof node.name !== "string" || node.name.trim().length === 0) fail(`space ${node.spaceId}: blank name`);
+    if (!(node.kind in ALLOWED_PARENTS)) fail(`space ${node.spaceId}: unknown kind "${String(node.kind)}"`);
+    if (byId.has(node.spaceId)) fail(`duplicate spaceId ${node.spaceId} — identity must be unambiguous`);
+    byId.set(node.spaceId, node);
+  }
+
+  let root: SpaceNode | null = null;
+  for (const node of doc.spaces) {
+    if (node.parentId === null) {
+      if (node.kind !== "organization") fail(`root ${node.spaceId} must be an organization`);
+      if (root !== null) fail(`two roots (${root.spaceId}, ${node.spaceId}) — one organization per graph`);
+      root = node;
+      continue;
+    }
+    const parent = byId.get(node.parentId);
+    if (parent === undefined) {
+      fail(`space ${node.spaceId}: parent ${node.parentId} does not exist`);
+    }
+    const legalParents: readonly SpaceKind[] = ALLOWED_PARENTS[node.kind];
+    if (!legalParents.includes(parent.kind)) {
+      fail(`space ${node.spaceId}: a ${node.kind} cannot sit under a ${parent.kind}`);
+    }
+  }
+  if (root === null) fail("no organization root");
+
+  // Portal adjacency. `connects` is meaningful only on doors, and only to real,
+  // non-door spaces — an edge into nowhere would let a crossing "corroborate"
+  // against a space that does not exist.
+  for (const node of doc.spaces) {
+    if (node.connects === undefined) continue;
+    if (node.kind !== "door") fail(`space ${node.spaceId}: only a door may declare connects`);
+    if (!Array.isArray(node.connects) || node.connects.length === 0) fail(`door ${node.spaceId}: connects must be a non-empty list`);
+    for (const target of node.connects) {
+      if (target === node.spaceId) fail(`door ${node.spaceId}: connects to itself`);
+      const t = byId.get(target);
+      if (!t) fail(`door ${node.spaceId}: connects to ${target}, which does not exist`);
+      if (t.kind === "door") fail(`door ${node.spaceId}: connects to door ${target} — a door opens into a space, not into a door`);
+    }
+  }
+
+  // Bounded ancestor walk — also proves acyclicity for every node.
+  for (const node of doc.spaces) {
+    let cur: SpaceNode | null = node;
+    for (let depth = 0; cur !== null; depth += 1) {
+      if (depth >= MAX_DEPTH) fail(`space ${node.spaceId}: ancestor chain exceeds ${MAX_DEPTH} (cycle or hostile depth)`);
+      cur = cur.parentId === null ? null : (byId.get(cur.parentId) ?? null);
+    }
+  }
+
+  // Vendor index. Ambiguity is refused, not resolved.
+  const vendorIndex = new Map<string, SpaceNode>();
+  for (const node of doc.spaces) {
+    for (const [ns, refs] of Object.entries((node.vendorRefs ?? {}) as Record<string, Record<string, string>>)) {
+      for (const [key, id] of Object.entries(refs)) {
+        if (typeof id !== "string" || id.trim().length === 0) fail(`space ${node.spaceId}: blank vendor ref ${ns}.${key}`);
+        const indexKey = JSON.stringify([ns, key, id]);
+        const existing = vendorIndex.get(indexKey);
+        if (existing && existing.spaceId !== node.spaceId) {
+          fail(`vendor ref ${ns}.${key}=${id} attached to both ${existing.spaceId} and ${node.spaceId} — ambiguous mappings do not resolve, they refuse`);
+        }
+        vendorIndex.set(indexKey, node);
+      }
+    }
+  }
+
+  const byKind = Object.fromEntries(
+    (Object.keys(ALLOWED_PARENTS) as SpaceKind[]).map((k) => [k, doc.spaces.filter((s) => s.kind === k).length]),
+  ) as Record<SpaceKind, number>;
+
+  return {
+    mapVersion: doc.mapVersion,
+    spaces: doc.spaces,
+    derived: { total: doc.spaces.length, byKind },
+    get: (spaceId) => byId.get(spaceId) ?? null,
+    path(spaceId) {
+      const out: SpaceNode[] = [];
+      let cur = byId.get(spaceId) ?? null;
+      while (cur !== null) {
+        out.unshift(cur);
+        cur = cur.parentId === null ? null : (byId.get(cur.parentId) ?? null);
+      }
+      return out;
+    },
+    containing(spaceId, kind) {
+      let cur = byId.get(spaceId) ?? null;
+      while (cur !== null) {
+        if (cur.kind === kind) return cur;
+        cur = cur.parentId === null ? null : (byId.get(cur.parentId) ?? null);
+      }
+      return null;
+    },
+    resolveVendorRef: (ns, key, id) => vendorIndex.get(JSON.stringify([ns, key, id])) ?? null,
+    doorSides(doorId) {
+      const door = byId.get(doorId);
+      if (!door || door.kind !== "door") return null;
+      const sides = new Set<string>();
+      if (door.parentId !== null) sides.add(door.parentId);
+      for (const c of door.connects ?? []) sides.add(c);
+      return [...sides];
+    },
+  };
+}

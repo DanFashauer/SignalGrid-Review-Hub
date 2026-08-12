@@ -153,3 +153,195 @@ test("audit chain and operations panels render verified, non-empty state", async
   // The remediation queue keeps its safety promise on-screen.
   await expect(c.getByText("SignalGrid never executes a change.")).toBeVisible();
 });
+
+test("the continuity panel shows the offline device LOSING to the connected deny", async ({ page }) => {
+  // The panel runs the real reconciler in the browser, so this asserts the thing a
+  // reviewer would otherwise have to take on faith: that the case which distinguishes
+  // this from last-write-wins actually resolves the way the docs say. Written as a
+  // browser assertion for the same reason the Battery health row was — the core can be
+  // right while nothing on screen says so.
+  const c = console_(page);
+  await expect(
+    c.getByText("Decision continuity — which decision wins after a partition"),
+  ).toBeVisible();
+
+  const offlineCase = c
+    .locator("div")
+    .filter({ hasText: /^Offline device holds the NEWER policy and says allow/ })
+    .first();
+  await expect(offlineCase).toBeVisible();
+  // Both sides are shown with their provenance, so the reader can see that the losing
+  // record is the NEWER one — which is the whole point of the case.
+  await expect(offlineCase).toContainText("p8/c2 said ALLOW");
+  await expect(offlineCase).toContainText("p7/c2 said DENY");
+  await expect(offlineCase).toContainText("OFFLINE_AUTHORITY_CANNOT_RELAX");
+
+  // And the un-stick path is on screen too, so the panel cannot be read as
+  // "restriction always wins" — a lattice that could only tighten would be useless.
+  await expect(c.getByText("NEWER_PROVENANCE_RELAXED_STALE_DECISION")).toBeVisible();
+
+  // Silence about an offline decision's age expires it rather than granting it standing.
+  await expect(c.getByText("OFFLINE_STANDING_AGE_UNSTATED")).toBeVisible();
+});
+
+// ── Evidence coverage ────────────────────────────────────────────────────────
+//
+// This section runs `buildCoverageReport` from @workspace/flows in the browser, so
+// what a browser must pin is not the arithmetic (the proof does that) but that the
+// page RESPONDS to the estate the reader describes. A coverage report that renders a
+// constant would look identical to a correct one in every screenshot — and a constant
+// dressed as a measurement is the exact defect this section was built to expose.
+
+function coverage(page: Page): Locator {
+  return page.locator("#evidence-coverage");
+}
+
+function planeToggle(page: Page, name: string): Locator {
+  return coverage(page).getByRole("button", { name: new RegExp(`^${name}`) });
+}
+
+// Each KPI figure carries its own test id. The first version located a card by its
+// Tailwind classes plus a text filter, which is a strict-mode trap waiting to happen:
+// Playwright's `hasText` is a case-insensitive substring, and the silent-hole card's
+// prose contains the word "Dark", so filtering on the Dark card would have matched two.
+async function stat(page: Page, testId: string): Promise<number> {
+  return Number((await coverage(page).getByTestId(testId).innerText()).trim());
+}
+
+test("evidence coverage opens on the Entra + Intune wedge and names its silent holes", async ({
+  page,
+}) => {
+  const c = coverage(page);
+  await expect(c.getByText("Evidence Coverage — what can your systems actually tell us?")).toBeVisible();
+
+  // The default estate is the wedge. Its figures — 10 answerable, 6 silent holes — are
+  // pinned by equality in TWO other places (`proof:evidence-coverage` and
+  // `api.test.mjs`), so this assertion is not the only thing standing between a table
+  // edit and a changed sales number. (It used to cite the proof alone, which at the time
+  // asserted only `> 0`: dropping a plane from one axis moved the wedge to 9/7 and left
+  // the proof green. The citation is the claim; an uncheckable one is the defect this
+  // whole section is about.)
+  expect(await stat(page, "stat-answerable")).toBe(10);
+  expect(await stat(page, "stat-silent-holes")).toBe(6);
+
+  // A silent hole must SAY it is one on screen. The count alone would let a reader
+  // conclude the product is 10-for-18 and move on.
+  await expect(
+    c.locator('tr[data-silent-hole="true"]').first(),
+  ).toContainText("the active rules grant when this is unknown");
+
+  const holes = c.locator('tr[data-silent-hole="true"]');
+  await expect(holes).toHaveCount(6);
+
+  // Every silent-hole row must NAME what would answer it. Asserted, not asserted-in-a-
+  // comment: blanking that column left the count assertion above perfectly green, and a
+  // gap with no remedy beside it is a complaint rather than an agenda item.
+  for (const axis of ["shiftContext", "badgeBinding", "dockState"]) {
+    await expect(c.locator(`tr[data-axis="${axis}"] td:last-child`)).not.toBeEmpty();
+  }
+  await expect(c.locator('tr[data-axis="shiftContext"] td:last-child')).toContainText(
+    "Workforce Management",
+  );
+
+  // The ranking is load-bearing — a prospect reads the top of a table — so the order is
+  // asserted positionally. Every other assertion here is keyed on data attributes and
+  // would survive replacing the comparator with a constant.
+  await expect(c.locator("tbody tr").first()).toHaveAttribute("data-silent-hole", "true");
+  await expect(c.locator("tbody tr").last()).toHaveAttribute("data-coverage", "not_sourced");
+
+  // The three buckets partition the axis table; the headline is a SUBSET of the dark
+  // ones. Rendered as four peer figures they summed to 24 across 18 axes.
+  await expect(c.getByTestId("coverage-denominator")).toContainText(
+    "10 + 6 + 2 = 18 evidence axes",
+  );
+});
+
+test("declaring a plane converts its dark axes, and undeclaring every plane exposes eleven holes", async ({
+  page,
+}) => {
+  const c = coverage(page);
+
+  // Shift context is dark on the wedge and answerable once WFM is declared. Pinning
+  // one NAMED axis moving proves the toggle reaches the engine — a page that ignored
+  // the toggles would still pass a bare count assertion after a lucky re-render.
+  const shift = c.locator('tr[data-axis="shiftContext"]');
+  await expect(shift).toHaveAttribute("data-coverage", "needs_instrumentation");
+  await expect(shift).toHaveAttribute("data-silent-hole", "true");
+
+  // The CONTROL must agree with the report. Inverting `on` — ticking every plane the
+  // estate does NOT have — changed nothing either test could see, leaving a page where
+  // Identity reads as unticked while the report is computed for it.
+  await expect(planeToggle(page, "Identity")).toHaveAttribute("aria-pressed", "true");
+  await expect(planeToggle(page, "Workforce Management")).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+
+  await planeToggle(page, "Workforce Management").click();
+  await expect(planeToggle(page, "Workforce Management")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(shift).toHaveAttribute("data-coverage", "answerable");
+  await expect(shift).toHaveAttribute("data-silent-hole", "false");
+  expect(await stat(page, "stat-silent-holes")).toBe(5);
+
+  // Now strip the estate to nothing. The honest opening position: eleven axes dark
+  // AND ungraded. The report gets WORSE as the estate thins — it cannot flatter.
+  for (const plane of ["Workforce Management", "Identity", "Device Management"]) {
+    await planeToggle(page, plane).click();
+  }
+  expect(await stat(page, "stat-answerable")).toBe(0);
+  expect(await stat(page, "stat-silent-holes")).toBe(11);
+
+  // `workflowRiskTier` is posed by the calling app. It must stay NOT SOURCED in the
+  // empty estate rather than being counted as a gap — an inflated finding count is as
+  // dishonest as a suppressed one.
+  await expect(c.locator('tr[data-axis="workflowRiskTier"]')).toHaveAttribute(
+    "data-coverage",
+    "not_sourced",
+  );
+  await expect(c.locator('tr[data-axis="workflowRiskTier"]')).toHaveAttribute(
+    "data-silent-hole",
+    "false",
+  );
+});
+
+test("the rendered report and the control-plane route agree, number for number", async ({
+  page,
+}) => {
+  // The section's docstring says the page and `GET /cp/v1/grid/evidence-coverage` call
+  // the same function. That sentence was written before anything checked it — and the
+  // two are separately built artifacts (a static Vite bundle that inlines `lib/flows`,
+  // and a Node server), so "same source" does not by itself mean "same numbers". This
+  // is the check that earns the claim for the pair under test.
+  //
+  // `page.request` is not subject to the page's route interception, so the localhost-only
+  // block in beforeEach does not apply; the api-server is a webServer of this config.
+  // Every route is mounted under `/api` — the same prefix `api.test.mjs` uses.
+  const apiPort = Number(process.env.E2E_API_PORT ?? 4613);
+  const res = await page.request.get(
+    `http://localhost:${apiPort}/api/cp/v1/grid/evidence-coverage?planes=identity,device_management`,
+  );
+  expect(res.status()).toBe(200);
+  const { report } = await res.json();
+
+  expect(await stat(page, "stat-answerable")).toBe(report.answerable);
+  expect(await stat(page, "stat-silent-holes")).toBe(report.silentHoles);
+  await expect(coverage(page).getByTestId("coverage-denominator")).toContainText(
+    `${report.answerable} + ${report.needsInstrumentation} + ${report.notSourced} = ${report.totalAxes}`,
+  );
+
+  // NON-VACUITY: the route must actually be reporting something, or the three
+  // comparisons above would hold for a server that returned zeros.
+  expect(report.answerable).toBeGreaterThan(0);
+  expect(report.silentHoles).toBeGreaterThan(0);
+
+  // Per-axis, not just the totals: the counts could agree while the two surfaces
+  // disagreed about WHICH axes are dark, which is the part a prospect traces.
+  for (const finding of report.findings) {
+    await expect(
+      coverage(page).locator(`tr[data-axis="${finding.axis.id}"]`),
+    ).toHaveAttribute("data-coverage", finding.coverage);
+  }
+});

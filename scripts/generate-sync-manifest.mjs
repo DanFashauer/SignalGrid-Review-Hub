@@ -106,7 +106,8 @@ function extractProofCounts() {
   const PATTERN = /proof:([a-z0-9-]+)`?\s*\((\d+)\s+checks/g;
   const docsDir = join(repoRoot, "docs");
   const counts = {};
-  for (const file of readdirSync(docsDir).filter((f) => f.endsWith(".md")).sort()) {
+  // RECURSIVE on purpose (D3): moved docs stay inside manifest scope.
+  for (const file of readdirSync(docsDir, { recursive: true }).map(String).filter((f) => f.endsWith(".md")).sort()) {
     const text = readFileSync(join(docsDir, file), "utf8");
     for (const m of text.matchAll(PATTERN)) {
       const [, name, count] = m;
@@ -152,7 +153,12 @@ export function computeBody() {
       sha256: createHash("sha256").update(contractBytes).digest("hex"),
     },
     signalKinds: extractConstArray(SOURCES.signalKinds, "SIGNAL_KINDS"),
-    signalCategories: extractTypeUnion(SOURCES.signalCategories, "SignalCategory"),
+    // `SignalCategory` used to be a hand-written union and is now derived from the
+    // `SIGNAL_CATEGORIES` const array — the same correction `SIGNAL_KINDS` already
+    // carries, made so the count is readable at runtime instead of existing only in the
+    // type system. The extractor follows the value, not the type: a bare union has
+    // nothing to publish from once the members move.
+    signalCategories: extractConstArray(SOURCES.signalCategories, "SIGNAL_CATEGORIES"),
     taskExceptionReasonCodes: extractTypeUnion(SOURCES.taskException, "TaskExceptionReasonCode"),
     workContextTrustCeilings: extractConstArray(SOURCES.workContext, "CONTEXT_TRUST_CEILINGS"),
     handoffSimRefusalCodes: extractTypeUnion(SOURCES.handoffSim, "HandoffSimErrorCode"),

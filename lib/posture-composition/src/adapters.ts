@@ -22,6 +22,19 @@ import type { CustodyBeaconVerdict } from "@workspace/integrations/custody-beaco
 import type { AppUpdateVerdict } from "@workspace/integrations/app-update";
 import type { PlatformSsoVerdict } from "@workspace/integrations/platform-sso";
 import type { PolicyBindingVerdict } from "@workspace/integrations/policy-binding";
+import type { BenchmarkSelectionVerdict } from "@workspace/integrations/benchmark-selection";
+import type { ShiftContextVerdict } from "@workspace/integrations/shift-context";
+import type { ChangeWindowVerdict } from "@workspace/integrations/change-window";
+import type { BootstrapCredentialVerdict } from "@workspace/integrations/bootstrap-credential";
+import type { ChallengeCapabilityVerdict } from "@workspace/integrations/challenge-capability";
+import type { SseEgressVerdict } from "@workspace/integrations/sse-egress";
+import type { ServiceLifecycleVerdict } from "@workspace/integrations/service-lifecycle";
+import type { SessionReadinessVerdict } from "@workspace/integrations/session-readiness";
+import type { BreakGlassVerdict } from "@workspace/integrations/break-glass";
+import type { CredentialRotationVerdict } from "@workspace/integrations/credential-rotation";
+import type { ObservabilityIntegrityVerdict } from "@workspace/integrations/observability-integrity";
+import type { LocalAuthorityVerdict } from "@workspace/integrations/local-authority";
+import type { LocationCertaintyVerdict } from "@workspace/facility-trust-graph";
 import type { DeviceManagementHealthVerdict } from "@workspace/integrations/device-management-health";
 import type { LinkUsabilityVerdict } from "@workspace/integrations/link-usability";
 // Type-only, via the "./task-exception" subpath export (wired in the same change
@@ -238,10 +251,210 @@ export function fromPolicyBinding(v: PolicyBindingVerdict): ComposableSignal {
   // access levels — docs/POLICY_BINDING.md maps them), so a wrong binding applies
   // the wrong policies silently: unbound is ungoverned (restrict), a too-wide
   // binding is fail-open (restrict), too-narrow is a fail-closed nuisance
-  // (monitor), mixed membership breaks targeting at group scale (alert). Its
-  // actions are already on the unified ladder; it never lowers what any other
-  // dimension says.
+  // (monitor), mixed membership breaks targeting at group scale (alert). A correct
+  // binding to a policy in REPORT-ONLY mode is `monitor`, not a grant — the device
+  // is governed on paper and gated by nothing — and a disabled policy is `restrict`,
+  // since it is `unbound` in effect. Its actions are already on the unified ladder;
+  // it never lowers what any other dimension says.
   return { kind: "policy_binding", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromBenchmarkSelection(v: BenchmarkSelectionVerdict): ComposableSignal {
+  // Benchmark selection — was this device graded against the RIGHT hardening
+  // benchmark, from CIS's own published content, on the platform the document
+  // targets, covering enough rules to mean anything? The baseline dimension records
+  // the ANSWER (`aligned`/`drifted`); this one records whether the QUESTION was
+  // sound. A device scored against a superseded or wrong-platform document reports
+  // "aligned" and is not hardened — so this dimension raises where the answer alone
+  // would have granted. It never lowers what any other dimension says, and it never
+  // asserts the device passed: that stays with `baselineCompliance`.
+  return { kind: "benchmark_selection", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromLocationCertainty(v: LocationCertaintyVerdict): ComposableSignal {
+  // Location certainty — is the fix precise, fresh, healthy, on the CURRENT
+  // map, and inside the graph, to the floor the workflow demands? A room-level
+  // candidate against a bed-confirmed requirement steps up (scan the wristband)
+  // rather than automating — the multi-bed rule. Never lowers what any other
+  // dimension says, and never claims WHO or WHAT is at the location — identity,
+  // custody, and the labor plane stay with their own dimensions.
+  return { kind: "location_certainty", posture: v.state, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromShiftContext(v: ShiftContextVerdict): ComposableSignal {
+  // Labor context — is this the right TIME and SITE for this worker to be
+  // operating? Custody says which badge holds the device; access-governance says
+  // the account is alive; this says the workforce-management plane agrees the
+  // worker is scheduled now, on the clock, and where the shift places them.
+  // Off-the-clock work on a scheduled shift and off-duty operation both step up
+  // (a challenge resolves a borrowed badge without stranding an emergency
+  // call-in); an unscheduled clock-in is visible, not blocked. Never lowers what
+  // any other dimension says, and never grades WHO holds the badge — that stays
+  // with custody.
+  return { kind: "shift_context", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromChangeWindow(v: ChangeWindowVerdict): ComposableSignal {
+  // Change governance — is this change-class operation running under a record the
+  // organization approved, inside the window that record authorizes, by the
+  // implementer it names, on a read current enough to be evidence about now? A
+  // rejected or cancelled record restricts (the organization holds an explicit
+  // denial, the access-governance-decertified class); everything else that fails
+  // steps up, because windows slip and emergency work overruns, and stranding an
+  // operator mid-change is the worst possible moment to block.
+  //
+  // NOTE THE ASYMMETRY, which is the whole design: this adapter can only RAISE.
+  // There is no "we are in the maintenance window, so relax" rung — that is how
+  // change integrations usually work elsewhere, and it would let anyone who can
+  // write an ITSM row write themselves a grant. `changeClass` (emergency/standard)
+  // is carried as evidence for the human answering the step-up and is never read
+  // by the gate.
+  return { kind: "change_window", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromBootstrapCredential(v: BootstrapCredentialVerdict): ComposableSignal {
+  // Credential provenance — did a TEMPORARY bootstrap pass open this session,
+  // and is it being used the only way a bootstrap pass may be used
+  // (enrollment/recovery, alive, one-time, narrowly scoped, verified issuance)?
+  // A bootstrap session beyond enrollment scope restricts — the hard TAP rule —
+  // and even a perfectly-used pass reads monitor, because a temporary
+  // credential is an elevated state, not a clean one. Never grades the
+  // STRENGTH of a standing method (passkey-assurance / platform-sso own that),
+  // and never lowers what any other dimension says.
+  return { kind: "bootstrap_credential", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromChallengeCapability(v: ChallengeCapabilityVerdict): ComposableSignal {
+  // The answerable step-up — could this device+worker pair actually ANSWER the
+  // challenge a workflow's step_up would pose? READY contributes nothing;
+  // UNANSWERABLE alerts (an operator-scale provisioning defect: the remedy
+  // path is a dead end, so fix enrollment or swap the device before a doomed
+  // challenge); a blind spot monitors. Deliberately NEVER a step_up of its
+  // own — a dimension about challenge efficacy must not prescribe the very
+  // challenge it just reported impossible — and never lowers what any other
+  // dimension says: it grades the REMEDY, not the trust.
+  return { kind: "challenge_capability", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromSseEgress(v: SseEgressVerdict): ComposableSignal {
+  // The mandated edge path — is this device's traffic actually traversing the
+  // deployment's SSE, or egressing raw while every console reads "protected"?
+  // network-nac owns LAN admission and edr-threat owns the endpoint agent;
+  // this is the same blind-spot doctrine on the egress plane. Protected
+  // contributes nothing; disabled/never-installed alert (operator-scale
+  // provisioning defects); a bypass or an uncorroborated tunnel claim steps
+  // up; unposed mandates stay silent. Never lowers what any other dimension
+  // says.
+  return { kind: "sse_egress", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromBreakGlass(v: BreakGlassVerdict): ComposableSignal {
+  // Was this emergency override ACCOUNTABLE? Not whether it should have been allowed
+  // — it already happened, and the host application granted it.
+  //
+  // ITS CEILING IS `alert`, LOWER THAN EVERY OTHER DIMENSION HERE, and that is the
+  // point rather than a limitation. Every other family can at least step up. This one
+  // cannot, because stepping up on an emergency override means inserting friction
+  // between a clinician and a patient, and no governance value justifies that. The
+  // override is graded after the fact, for the compliance owner, never against the
+  // person at the bedside.
+  //
+  // The posture rides along because `accountable` and `unassessed` both look calm
+  // from the action alone: one is a reviewed, justified, time-boxed override, the
+  // other is a deployment whose break-glass programme reported nothing at all.
+  return { kind: "break_glass", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromSessionReadiness(v: SessionReadinessVerdict): ComposableSignal {
+  // Is the app this worker needs actually USABLE right now — the tap-to-app question,
+  // consumed as an input rather than reproduced. `app-update` grades a version's
+  // currency and stability; `link-usability` asks whether the network link carries
+  // traffic; this asks the only question the worker cares about, which is whether the
+  // thing they tapped for is working.
+  //
+  // Its actions are already on the unified ladder and its ceiling is `restrict` —
+  // never escalate, never deny. A slow or unmeasured app is an operational fact, not
+  // evidence of an intrusion, and this dimension has no standing to end a shift over a
+  // broker delay.
+  //
+  // THE POSTURE MATTERS MORE THAN THE ACTION HERE, which is why it rides along.
+  // `unassessed` is a deployment whose endpoints nobody instrumented or whose DEX plane
+  // is down — no bad news and no news — while `ready` is a corroborated measurement.
+  // A consumer reading only the action would report both as fine, which is exactly the
+  // green-dashboard failure this dimension exists to prevent.
+  return { kind: "session_readiness", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromCredentialRotation(v: CredentialRotationVerdict): ComposableSignal {
+  // Is the secret this actor is presenting still inside its OWN rotation policy?
+  // `credential-exposure` sees a secret that LEAKED, `token-binding` sees one that is
+  // replayable, `bootstrap-credential` sees a temporary pass being used as a pass.
+  // A four-hundred-day-old service secret that has never leaked is invisible to all
+  // three, which is the whole reason this dimension exists.
+  //
+  // Its actions are already on the unified ladder and its ceiling is `restrict`, never
+  // escalate: an overdue key is a hygiene fact about the credential, not evidence of an
+  // intrusion, and a dimension that could escalate on date arithmetic alone would be a
+  // blunt instrument wired to a clock.
+  //
+  // THE POSTURE RIDES ALONG because the action alone cannot distinguish the two clean
+  // states. `rotation_not_applicable` (a correctly-classified short-lived credential)
+  // and `rotation_current` (a static secret genuinely inside its window) both emit
+  // `none`, and they are different facts about how much was actually established.
+  return { kind: "credential_rotation", posture: v.posture, action: v.action as UnifiedAction, reason: v.reasonCodes[0] ?? "CREDENTIAL_ROTATION" };
+}
+
+export function fromObservabilityIntegrity(v: ObservabilityIntegrityVerdict): ComposableSignal {
+  // When a decision is about to rest on the ABSENCE of a reported problem, is that
+  // absence an observation or a gap? `session-readiness` already covers a telemetry
+  // plane that goes SILENT; this covers the one that is reachable, current and
+  // healthy-looking while carrying one record in a hundred.
+  //
+  // Its actions are already on the unified ladder and its ceiling is `restrict`, never
+  // escalate: a sampled stream is a limit on what silence can support, not an intrusion.
+  //
+  // THE POSTURE RIDES ALONG for the reason this dimension exists at all. `evidence_sound`
+  // and `evidence_reduced` are both "no bad news", and a consumer reading only the
+  // action would treat a 1%-sampled stream and a full-fidelity one as the same evidence.
+  // They are not: one supports "that did not happen" and the other does not.
+  return { kind: "observability_integrity", posture: v.posture, action: v.action as UnifiedAction, reason: v.reasonCodes[0] ?? "OBSERVABILITY_INTEGRITY" };
+}
+
+export function fromLocalAuthority(v: LocalAuthorityVerdict): ComposableSignal {
+  // May this device act on its OWN authority right now, and did it ever establish that
+  // authority since it last booted? `signalgrid-core/continuity.ts` reconciles offline
+  // decisions after they exist; this is the gate in front of them.
+  //
+  // Its actions are already on the unified ladder and its ceiling is `restrict`, never
+  // escalate and never deny: a device that cannot act alone is narrowed to recovery,
+  // because the worker standing at it may be the person who can unlock it.
+  //
+  // THE POSTURE RIDES ALONG because `awaiting_unlock` is operationally different from
+  // every other restrict in the fabric. It is fixed by a human walking over and typing a
+  // passcode — an errand, not an investigation — and a consumer reading only `restrict`
+  // would route it like a compromise.
+  return { kind: "local_authority", posture: v.posture, action: v.action as UnifiedAction, reason: v.reasonCodes[0] ?? "LOCAL_AUTHORITY" };
+}
+
+export function fromServiceLifecycle(v: ServiceLifecycleVerdict): ComposableSignal {
+  // Does the SERVICE plane still agree with the ACCOUNT plane that this principal is
+  // here? `access-governance` grades accountStatus and `active` is its clean state —
+  // but a tenant reclaims the licence first (it bills monthly) and disables the account
+  // second (it costs nothing), so a functional leaver reads `active` until a
+  // cadence-based IGA sync catches up. This is the second witness that contradicts it.
+  //
+  // Its actions are already on the unified ladder and its ceiling is `restrict`, never
+  // escalate: it RELAYS a lifecycle fact and access-governance OWNS lifecycle authority,
+  // so a relayed fact must not outrank its owner. A service plan assigned after an
+  // unsuperseded departure restricts; entitlements outliving a recorded closure, and a
+  // stripped principal with no closure recorded anywhere, step up.
+  //
+  // TWO OUTCOMES CARRY ACTION `none` AND MEAN DIFFERENT THINGS, which is exactly why
+  // the posture rides along here rather than the action alone: `consistent` is
+  // corroboration, `unassessed` is a deployment with no licensing bridge, and
+  // `deferred` is this dimension standing down because access-governance already
+  // carries the concern. A consumer reading only the action would call all three fine.
+  return { kind: "service_lifecycle", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromDeviceManagementHealth(v: DeviceManagementHealthVerdict): ComposableSignal {

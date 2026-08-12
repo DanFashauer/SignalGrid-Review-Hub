@@ -101,6 +101,7 @@ export function evaluateLinkUsability(
   const linkReportInconsistent =
     (link.associationState === "not_associated" &&
       (link.linkProgress === "carrying_traffic" ||
+        link.linkProgress === "local_only" ||
         link.linkProgress === "dns_failing" ||
         link.linkProgress === "dhcp_failing" ||
         link.linkProgress === "associated_only")) ||
@@ -163,6 +164,17 @@ export function evaluateLinkUsability(
         action: "alert",
         reason: "ASSOCIATED_BUT_NOT_CARRYING_TRAFFIC",
       });
+    } else if (link.linkProgress === "local_only") {
+      // The §12.1 rung, ANNOTATE-ONLY by owner direction. For the fabric's standing
+      // question — is this link fully usable, including for the cloud planes every
+      // other dimension's freshness grant rides on? — a dark WAN is a confirmed
+      // known-bad fact, so it alerts at exactly the severity dns_failing does. What
+      // this rung ADDS is the honest name: local traffic is affirmatively carrying,
+      // which an operator needs to see and which the WITHHELD softening decision
+      // (may local-only relax an offline restriction for named workflows?) would
+      // need as its input. That wiring is deliberately absent until the owner says.
+      criticalFindings.push("wan_egress_failing_local_traffic_confirmed");
+      candidates.push({ posture: "local_only_link", action: "alert", reason: "LINK_LOCAL_ONLY" });
     } else if (link.linkProgress === "dns_failing") {
       criticalFindings.push("dns_failing");
       candidates.push({ posture: "associated_not_usable", action: "alert", reason: "DNS_FAILING" });

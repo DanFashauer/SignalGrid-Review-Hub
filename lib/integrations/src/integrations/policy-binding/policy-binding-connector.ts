@@ -4,7 +4,8 @@
 // binding: whether it is bound at all, whether its current binding matches what
 // the plane's OWN rules derive from the device's observed properties (this
 // connector never re-implements a vendor's grouping engine), the mismatch
-// direction, and the group's membership hygiene. Every operation is a read;
+// direction, the group's membership hygiene, and whether the policy behind the
+// binding actually enforces or merely reports. Every operation is a read;
 // there is no write path — moving a device between groups stays with the
 // management plane.
 // Defensive normalization is ported from the custody-beacon connector: inventories
@@ -20,6 +21,7 @@ import {
   type MismatchDirection,
   type NormalizedPolicyBinding,
   type PolicyBindingReportRaw,
+  type PolicyEnforcement,
   type ProfileMatch,
   type ReportIntegrity,
 } from "./types";
@@ -93,6 +95,7 @@ const BINDINGS = ["bound", "unbound", "unknown"] as const;
 const MATCHES = ["matched", "mismatched", "unknown"] as const;
 const DIRECTIONS = ["wider", "narrower", "unknown"] as const;
 const HYGIENES = ["clean", "mixed", "unknown"] as const;
+const ENFORCEMENTS = ["enforcing", "report_only", "disabled", "unknown"] as const;
 
 /** Normalize one policy-binding report. Defensive throughout: a missing/errored
  *  field yields the fail-safe unknown, never a fabricated "matched". */
@@ -106,21 +109,28 @@ export function normalizeReport(
   let rawMatch: unknown;
   let rawDirection: unknown;
   let rawHygiene: unknown;
+  let rawEnforcement: unknown;
   let readThrew = false;
   try {
     rawBinding = plain ? ownValue(report, "binding") : undefined;
     rawMatch = plain ? ownValue(report, "profile_match") : undefined;
     rawDirection = plain ? ownValue(report, "mismatch_direction") : undefined;
     rawHygiene = plain ? ownValue(report, "membership_hygiene") : undefined;
+    rawEnforcement = plain ? ownValue(report, "enforcement") : undefined;
   } catch {
     readThrew = true;
-    rawBinding = rawMatch = rawDirection = rawHygiene = undefined;
+    rawBinding = rawMatch = rawDirection = rawHygiene = rawEnforcement = undefined;
   }
 
   const binding = oneOf<BindingState>(rawBinding, BINDINGS, "unknown");
   const profileMatch = oneOf<ProfileMatch>(rawMatch, MATCHES, "unknown");
   const mismatchDirection = oneOf<MismatchDirection>(rawDirection, DIRECTIONS, "unknown");
   const membershipHygiene = oneOf<MembershipHygiene>(rawHygiene, HYGIENES, "unknown");
+  // An ABSENT enforcement key normalizes to `unknown`, not to `enforcing`. A plane
+  // that has never been asked the question has not answered it, and defaulting the
+  // silence to "enforcing" would reinstate exactly the affirmative this axis exists
+  // to withdraw.
+  const enforcement = oneOf<PolicyEnforcement>(rawEnforcement, ENFORCEMENTS, "unknown");
 
   // A report asserting a concrete mismatch DIRECTION alongside "matched"
   // contradicts itself — the direction exists only in service of a mismatch
@@ -137,7 +147,8 @@ export function normalizeReport(
     enumMalformed(rawBinding, BINDINGS) ||
     enumMalformed(rawMatch, MATCHES) ||
     enumMalformed(rawDirection, DIRECTIONS) ||
-    enumMalformed(rawHygiene, HYGIENES);
+    enumMalformed(rawHygiene, HYGIENES) ||
+    enumMalformed(rawEnforcement, ENFORCEMENTS);
   const reportIntegrity: ReportIntegrity = malformed ? "malformed" : "clean";
 
   return {
@@ -147,6 +158,7 @@ export function normalizeReport(
     profileMatch,
     mismatchDirection,
     membershipHygiene,
+    enforcement,
     reportIntegrity,
     source,
   };

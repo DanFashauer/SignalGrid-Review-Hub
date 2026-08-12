@@ -6,9 +6,10 @@ import {
   listFlows, evaluateFlowHealth, resolveFlowBreak, gridIntelligence, type SignalState,
   DEMO_FLOWS, GRID_SITUATIONS, evaluateGridCoverage,
   lintGridConfig, gridConfigValid, summarizeGridConfig, governanceScorecard, type GridConfig,
-  sourcingToSignalStates, summarizeSourcing, fidelityOf, isWireable, gridDoesLifting, type SignalSource,
+  projectSourcingAsSignalStates, summarizeSourcing, fidelityOf, isWireable, gridDoesLifting, type SignalSource,
   planZeroTouchSetup, lintSetupRecording, setupRecordingValid, type DeviceSetupRecording,
   fleetResilience, type AppService,
+  buildCoverageReport, isKnownPlane, KNOWN_SOURCE_PLANES, EVIDENCE_AXES,
 } from "@workspace/flows";
 import { recommend, DEMO_USAGE } from "@workspace/recommendations";
 import { discover, planOnboarding, discoverySummary, DEMO_SOURCES, DEMO_OBSERVED } from "@workspace/signal-discovery";
@@ -316,11 +317,17 @@ const GRID_SIGNAL_SOURCES: SignalSource[] = [
 const GRID_CONFIG: GridConfig = { signals: GRID_SIGNAL_SOURCES, workflows: [...DEMO_FLOWS], situations: [...GRID_SITUATIONS] };
 
 router.get("/cp/v1/grid/coverage", (_req, res) => {
-  const wired = sourcingToSignalStates(GRID_SIGNAL_SOURCES);
+  // A CEILING, not a reading. Nothing here observed a signal: the states are
+  // projected from each source's acquisition method, so the coverage below is what
+  // this sourcing posture would allow once every wireable signal is actually wired
+  // and healthy. `coverage.basis` says so in the payload — it is derived by
+  // evaluateGridCoverage from the projection wrapper, not asserted here, so this
+  // route cannot drift into claiming a measurement it never took.
+  const projection = projectSourcingAsSignalStates(GRID_SIGNAL_SOURCES);
   res.json({
-    note: "Which situations the Grid handles on its own, given the active workflows + the signals it can source. Fixture data — read-only.",
+    note: "The CEILING this sourcing posture allows: which situations the Grid would handle on its own once every wireable signal is wired and healthy, given the active workflows. Nothing was observed or contacted — see coverage.basis. Fixture data, read-only.",
     sourcing: summarizeSourcing(GRID_SIGNAL_SOURCES),
-    coverage: evaluateGridCoverage(DEMO_FLOWS, GRID_SITUATIONS, wired),
+    coverage: evaluateGridCoverage(DEMO_FLOWS, GRID_SITUATIONS, projection),
   });
 });
 
@@ -341,6 +348,77 @@ router.get("/cp/v1/grid/sourcing", (_req, res) => {
     note: "How each signal is obtained — vendor-integrated (api/native), grid-collected (the Grid does the lifting), or a gap (unavailable). Read-only.",
     summary: summarizeSourcing(GRID_SIGNAL_SOURCES),
     signals,
+  });
+});
+
+router.get("/cp/v1/grid/evidence-coverage", (req, res) => {
+  // WHAT A PROSPECT'S ESTATE CAN HONESTLY ANSWER — the design-partner artifact.
+  //
+  // Unlike the two arms above, this one is PARAMETERISED by the estate the caller
+  // declares, because that is the entire point: "your Intune + Entra can honestly
+  // answer N of the 18 evidence axes; here are the ones they cannot, and what you
+  // would have to instrument." It needs no customer data — no export, no CSV, no
+  // PII — so it needs no NDA and no security review to produce.
+  //
+  // It replaces a replay backtest that was designed and then abandoned: the active
+  // rule set is deliberately day-one-quiet on ELEVEN of the eighteen axes — measured
+  // by running the engine, not counted by hand; an earlier comment said eight and the
+  // axis table said seven — so a CSV
+  // replay would have emitted allow at scale from ABSENCE of data, on the one
+  // product whose differentiator is refusing exactly that. This reports the holes
+  // instead of averaging over them.
+  // BOTH SERIALISATIONS, because dropping one is the failure this route claims to
+  // prevent — and the first draft did exactly that. `?planes=a,b` and the repeated
+  // `?planes=a&planes=b` are both standard; Express hands the second back as an ARRAY,
+  // which the `str()` helper turned into `undefined`, which produced a full
+  // empty-estate report — answerable 0, every hole present — ATTRIBUTED TO AN ESTATE
+  // THAT DECLARED TWO PLANES. That is worse than the unrecognised-plane case the code
+  // below guards: it silently drops RECOGNISED planes, and the resulting alarming
+  // report is the one most flattering to a sales narrative. Anything that is neither
+  // a string nor an array of strings is refused rather than coerced.
+  const rawParam = req.query.planes;
+  let requested: string[];
+  if (rawParam === undefined) {
+    requested = [];
+  } else if (typeof rawParam === "string") {
+    requested = rawParam.split(",");
+  } else if (Array.isArray(rawParam) && rawParam.every((v) => typeof v === "string")) {
+    requested = (rawParam as string[]).flatMap((v) => v.split(","));
+  } else {
+    res.status(400).json({
+      error: "validation",
+      message: "planes must be a comma-separated string or repeated string parameters",
+      knownPlanes: KNOWN_SOURCE_PLANES,
+    });
+    return;
+  }
+  requested = requested.map((p) => p.trim()).filter((p) => p.length > 0);
+
+  // AN UNRECOGNISED PLANE IS REFUSED, NEVER DROPPED. Silently ignoring one would
+  // make the report understate what the estate can answer — an error the prospect
+  // cannot catch, because they would assume we know our own axis list. Fail loud
+  // and name the offender.
+  const unknown = requested.filter((p) => !isKnownPlane(p));
+  if (unknown.length > 0) {
+    res.status(400).json({
+      error: "validation",
+      message: `unrecognised source plane(s): ${unknown.join(", ")}`,
+      knownPlanes: KNOWN_SOURCE_PLANES,
+    });
+    return;
+  }
+
+  const planes = requested.filter(isKnownPlane);
+  res.json({
+    // The axis count is DERIVED. It was hardcoded as "18" in prose the client actually
+    // receives, next to a `report.totalAxes` that computes it — so a nineteenth axis
+    // would have shipped a response whose own note contradicted its own payload.
+    note:
+      `Which of the ${EVIDENCE_AXES.length} decision evidence axes a declared estate can honestly answer. ` +
+      "Parameterise with ?planes=identity,device_management. No customer data is read or required. " +
+      "`silentHoles` is the headline: axes that are dark AND ungraded, where silence would otherwise look like health.",
+    knownPlanes: KNOWN_SOURCE_PLANES,
+    report: buildCoverageReport(planes),
   });
 });
 

@@ -1,239 +1,117 @@
 /**
- * NAC (Network Access Control) Store
- * 
- * Manages NAC adapter configurations for Cisco ISE and Aruba ClearPass.
- * Provides unified interface for endpoint lookup and quarantine actions.
+ * NAC configuration store — which NAC a deployment has selected.
+ *
+ * WHAT THIS NO LONGER DOES:
+ *
+ *  - `applyQuarantine()` / `clearQuarantine()` — called `adapter.quarantineEndpoint()`,
+ *    which POSTed to the Cisco ISE ANC API or ClearPass to cut an endpoint off the
+ *    network. No tier gate, no `SIGNALGRID_LIVE_INTEGRATIONS` check, no approval.
+ *    They DID append an audit record, which is more than the `uem/` actuators managed
+ *    — but auditing an ungated action makes it traceable, not permitted.
+ *
+ *  - `getNACAdapter()` read `CISCO_ISE_PASSWORD` / `CLEARPASS_CLIENT_SECRET` from the
+ *    environment and constructed a live vendor client in any tier. The gate now lives
+ *    in `resolveNacConnector`.
+ *
+ *  - `lookupEndpoint()` swallowed every error into `null`, so a NAC outage and a
+ *    genuinely-unknown endpoint were indistinguishable to `deviceResolver` — which
+ *    then treated both as "no identity from NAC" and moved on.
+ *
+ * What remains is configuration storage. The endpoint read lives in `./index`.
+ *
+ * NETWORK POSTURE AS A DECISION INPUT IS NOT HERE, deliberately. That is
+ * `../network-nac`, which already owns a richer proven model (`NetworkAuthState`
+ * including `quarantined`, `NetworkVerdict`, reason codes, and a
+ * `read_only_violation` error code). This family exists only to resolve an endpoint
+ * identity for `deviceResolver`; two sources of truth for one question would be a
+ * regression, not extra coverage.
  */
 
-import { z } from 'zod';
-import { CiscoISEAdapter, CiscoISEConfig } from './cisco-ise';
-import { ArubaClearPassAdapter, ArubaClearPassConfig } from './aruba-clearpass';
-import type { NACAdapter, NACEndpointInfo } from '../adapters/types';
-import { appendAuditRecord } from '@workspace/audit';
-import { resolveEmission } from '../adapters/emit-gate';
+import { z } from "zod";
 
-// ============================================================================
-// Types
-// ============================================================================
+import { scopedConfigKey } from "../store-scope";
 
-export const NACProviderSchema = z.enum(['ise', 'clearpass']);
+export const NACProviderSchema = z.enum(["ise", "clearpass"]);
 export type NACProvider = z.infer<typeof NACProviderSchema>;
 
-export const NACConfigSchema = z.object({
-  provider: NACProviderSchema,
-  enabled: z.boolean().default(true),
-});
+/** STRICT for the same reason as `UEMConfigSchema` — see the note there. `enabled`
+ *  defaults to true, so a misspelled key was dropped and the connector came back ON
+ *  while the operator believed they had switched it off. Write and read both go through
+ *  this schema, so tightening it cannot reject a record this code wrote. */
+export const NACConfigSchema = z
+  .object({
+    provider: NACProviderSchema,
+    enabled: z.boolean().default(true),
+  })
+  .strict();
 export type NACConfig = z.infer<typeof NACConfigSchema>;
 
-// ============================================================================
-// Store
-// ============================================================================
+/** Key PREFIX, not a key. The tenant id is appended by `scopedConfigKey`; this was a
+ *  flat `"nac:config"` shared by every tenant until the scoping was added. */
+const NAC_KEY_PREFIX = "nac:config";
 
-const NAC_KEY = 'nac:config';
-
-let inMemoryConfig: NACConfig | null = null;
-
-function getRedisUrl(): string | undefined {
-  return process.env.REDIS_URL;
-}
+/** Process-local fallback when no Redis is configured — SCOPED BY TENANT, because a
+ *  scoped Redis key with an unscoped process-local singleton behind it leaks in exactly
+ *  the deployments the scoping was added for: the fallback is what runs when REDIS_URL
+ *  is unset, which is every fixture build and every single-node dev run. */
+const inMemoryConfig = new Map<string, NACConfig>();
 
 async function getRedisClient() {
-  const { Redis } = await import('ioredis');
-  const url = getRedisUrl();
+  const url = process.env["REDIS_URL"];
   if (!url) return null;
-  return new Redis(url, {
-    maxRetriesPerRequest: 1,
-    lazyConnect: true,
-  });
+  const { Redis } = await import("ioredis");
+  return new Redis(url, { maxRetriesPerRequest: 1, lazyConnect: true });
 }
 
-export async function getNACConfig(): Promise<NACConfig | null> {
+/** Read the stored config. A Redis fault is reported rather than silently absorbed —
+ *  falling back to the process-local value is right for configuration, but it should
+ *  be audible. */
+export async function getNACConfig(
+  tenantId: string,
+  onFault: (message: string) => void = (m) => console.warn(`[nac-store] ${m}`),
+): Promise<NACConfig | null> {
+  // Validate BEFORE touching Redis, so a malformed id can never reach a key builder
+  // on some later code path and so the refusal does not depend on network state.
+  const key = scopedConfigKey(NAC_KEY_PREFIX, tenantId);
   const redis = await getRedisClient();
-  
   if (redis) {
     try {
       await redis.connect();
-      const data = await redis.get(NAC_KEY);
-      if (data) {
-        return JSON.parse(data);
-      }
-    } catch {
-      // Fall through to in-memory
+      const data = await redis.get(key);
+      if (data) return NACConfigSchema.parse(JSON.parse(data));
+    } catch (err) {
+      onFault(`read failed, using in-memory config: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
-      await redis.quit();
+      await redis.quit().catch(() => undefined);
     }
   }
-  
-  return inMemoryConfig;
+  return inMemoryConfig.get(key) ?? null;
 }
 
-export async function setNACConfig(config: NACConfig): Promise<void> {
+export async function setNACConfig(
+  tenantId: string,
+  config: NACConfig,
+  onFault: (message: string) => void = (m) => console.warn(`[nac-store] ${m}`),
+): Promise<void> {
+  const key = scopedConfigKey(NAC_KEY_PREFIX, tenantId);
+  const parsed = NACConfigSchema.parse(config);
   const redis = await getRedisClient();
-  
   if (redis) {
     try {
       await redis.connect();
-      await redis.set(NAC_KEY, JSON.stringify(config), 'EX', 86400);
-    } catch {
-      // Fall through to in-memory
+      await redis.set(key, JSON.stringify(parsed), "EX", 86400);
+    } catch (err) {
+      onFault(`write failed, kept in memory only: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
-      await redis.quit();
+      await redis.quit().catch(() => undefined);
     }
   }
-  
-  inMemoryConfig = { ...config };
+  inMemoryConfig.set(key, { ...parsed });
 }
 
-// ============================================================================
-// Adapter Factory
-// ============================================================================
-
-let cachedAdapter: NACAdapter | null = null;
-
-export async function getNACAdapter(): Promise<NACAdapter | null> {
-  if (cachedAdapter) {
-    return cachedAdapter;
-  }
-  
-  const config = await getNACConfig();
-  
-  if (!config?.enabled || !config.provider) {
-    return null;
-  }
-  
-  const provider = config.provider;
-  
-  switch (provider) {
-    case 'ise': {
-      const baseUrl = process.env.CISCO_ISE_BASE_URL;
-      const username = process.env.CISCO_ISE_USERNAME;
-      const password = process.env.CISCO_ISE_PASSWORD;
-      
-      if (!baseUrl || !username || !password) {
-        console.warn('[NACStore] Cisco ISE credentials not configured');
-        return null;
-      }
-      
-      cachedAdapter = new CiscoISEAdapter({
-        baseUrl,
-        username,
-        password,
-      });
-      break;
-    }
-    
-    case 'clearpass': {
-      const baseUrl = process.env.CLEARPASS_BASE_URL;
-      const clientId = process.env.CLEARPASS_CLIENT_ID;
-      const clientSecret = process.env.CLEARPASS_CLIENT_SECRET;
-      
-      if (!baseUrl || !clientId || !clientSecret) {
-        console.warn('[NACStore] Aruba ClearPass credentials not configured');
-        return null;
-      }
-      
-      cachedAdapter = new ArubaClearPassAdapter({
-        baseUrl,
-        clientId,
-        clientSecret,
-      });
-      break;
-    }
-    
-    default:
-      console.warn(`[NACStore] Unknown provider: ${provider}`);
-      return null;
-  }
-  
-  return cachedAdapter;
-}
-
-export async function clearNACAdapterCache(): Promise<void> {
-  cachedAdapter = null;
-}
-
-// ============================================================================
-// NAC Actions
-// ============================================================================
-
-/**
- * Look up an endpoint by identifier
- */
-export async function lookupEndpoint(
-  identifier: string,
-  type: 'mac' | 'serial' | 'cert' = 'mac'
-): Promise<NACEndpointInfo | null> {
-  // GATED. This function is the package's public NAC surface — `lib/integrations`
-  // re-exports this whole module as `nac`, so `nac.lookupEndpoint(...)` was callable
-  // from anywhere and reached Cisco ISE / Aruba ClearPass at ANY tier, with no
-  // SIGNALGRID_LIVE_INTEGRATIONS check. The quarantine ACTUATORS were correctly deleted
-  // in #150 (see the note below); the read path they sat beside was left behind, which
-  // is the more common shape — the dangerous-looking code gets removed and the merely
-  // live-calling code inherits the clean bill of health.
-  //
-  // null is already this function's answer for "cannot tell you" (unconfigured, or a
-  // failed lookup), and null is the fail-CLOSED value downstream: an absent NAC reading
-  // raises assurance rather than granting anything.
-  const emission = resolveEmission();
-  if (emission.mode !== 'live') {
-    return null;
-  }
-
-  const adapter = await getNACAdapter();
-
-  if (!adapter) {
-    console.warn('[NACStore] NAC not configured');
-    return null;
-  }
-
-  try {
-    return await adapter.lookupEndpoint(identifier, type);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[NACStore] Lookup failed:', message);
-    return null;
-  }
-}
-
-// WHAT WAS REMOVED. `applyQuarantine` and `clearQuarantine` forwarded to the
-// vendor adapters' quarantine actuators — a DEVICE ACTION over the network,
-// the class deleted from uem/ in #150 and now gone from the adapters and the
-// NACAdapter contract too. This store reads NAC state; it does not change it.
-
-/**
- * Health check for NAC
- */
-export async function getNACHealthStatus(): Promise<{ provider: string | null; healthy: boolean; message: string }> {
-  const config = await getNACConfig();
-  
-  if (!config?.enabled) {
-    return { provider: null, healthy: false, message: 'NAC not enabled' };
-  }
-  
-  // Same gate, same reason: a health check resolves the configured ISE/ClearPass
-  // hostname and opens a connection. "not live" is reported as not-healthy with the
-  // reason stated, rather than as a failure — the caller learns why, and nothing
-  // reads it as a working connection.
-  const emission = resolveEmission();
-  if (emission.mode !== 'live') {
-    return { provider: config.provider, healthy: false, message: `Not checked: ${emission.reason ?? 'live integrations are gated off'}` };
-  }
-
-  const adapter = await getNACAdapter();
-
-  if (!adapter) {
-    return { provider: config.provider, healthy: false, message: 'Adapter not initialized' };
-  }
-
-  try {
-    const healthy = await adapter.healthCheck?.() ?? false;
-    return { 
-      provider: config.provider, 
-      healthy, 
-      message: healthy ? 'Connected' : 'Connection failed' 
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    return { provider: config.provider, healthy: false, message };
-  }
+/** Test seam — clears the process-local fallback for EVERY tenant. Deliberately not
+ *  per-tenant: a reset that left other tenants' entries behind would let one proof's
+ *  writes survive into the next and be read as that test's own. */
+export function __resetNacConfigForTests(): void {
+  inMemoryConfig.clear();
 }

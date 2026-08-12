@@ -1,4 +1,4 @@
-import type { NacFreshness, NetworkVerdict, NormalizedNetworkSignal } from "./types";
+import type { NacFreshness, NetworkVerdict, NormalizedNetworkSignal, SegmentPolicy } from "./types";
 
 /**
  * Pure, deterministic network / NAC posture evaluator. Turns a normalized network
@@ -13,7 +13,25 @@ const DEFAULT_STALE_AFTER_MS = 30 * 60 * 1000;
 
 export interface EvaluateNetworkOptions {
   staleAfterMs?: number;
+  /** Which segments this device is expected on. Omit to leave the segment ungraded
+   *  — see the note on the authenticated branch below. */
+  segmentPolicy?: SegmentPolicy;
 }
+
+/** Trimmed, case-insensitive membership. Vendors report the same VLAN as "VLAN10",
+ *  "vlan10" and "  VLAN10 " across NAC, RADIUS and switch inventories, and a policy
+ *  that misses because of a space is a policy that silently stops working. */
+/** NULL-SAFE ON PURPOSE. A negative control removed the `segment === null` guard
+ *  above and this function threw a TypeError, crashing the evaluator rather than
+ *  returning a verdict. An evaluator whose PURITY depends on the statement order of
+ *  its caller is one refactor away from throwing inside a decision path, and a
+ *  decision path that throws produces no verdict at all — strictly worse than a
+ *  fail-closed one. A null segment simply matches nothing. */
+const includesSegment = (list: readonly string[], segment: string | null): boolean => {
+  if (segment === null) return false;
+  const needle = segment.trim().toLowerCase();
+  return list.some((s) => s.trim().toLowerCase() === needle);
+};
 
 export function evaluateNetwork(
   signal: NormalizedNetworkSignal,
@@ -43,6 +61,47 @@ export function evaluateNetwork(
   if (signal.authState === "authenticated") {
     if (freshness === "stale") {
       return v("network_unknown", "STALE_NETWORK_STATE", "step_up", loc);
+    }
+    // ── THE SEGMENT IS NOW ACTUALLY EVALUATED ────────────────────────────────
+    //
+    // It was not before, and the posture name claimed otherwise. `segment` was read
+    // by the connector, normalized, and carried into evidence — and then the word
+    // appeared exactly ONCE in this file, inside the string literal
+    // "on_trusted_segment". A device that authenticated onto the GUEST VLAN, or the
+    // MANAGEMENT VLAN, returned a verdict byte-identical to one on the corporate
+    // user VLAN: posture on_trusted_segment, action `none`. "Trusted" was an
+    // unearned claim attached to a grant.
+    //
+    // That defeats the entire point of segmentation. VLANs exist to isolate systems
+    // and limit lateral movement; a fabric that grants regardless of which segment a
+    // device landed on cannot see that isolation being violated — and the case it
+    // most needs to catch, a frontline device answering on the management VLAN, was
+    // exactly the one it graded clean.
+    const policy = options.segmentPolicy;
+    if (!policy || policy.expected.length === 0) {
+      // NO POLICY EXPRESSED — the segment is not graded, and the verdict says so.
+      //
+      // Deliberately still `none`. Forcing every deployment without a segment policy
+      // to step up would be a control that fires on every decision forever, which is
+      // the failure mode this repo has already been bitten by twice (the BYOD
+      // supervision gate, the always-on unsupervised check). The honest fix is to
+      // stop CLAIMING trust, not to invent a concern nobody asked for.
+      return v("on_unverified_segment", "AUTHENTICATED_SEGMENT_UNVERIFIED", "none", loc);
+    }
+    if (signal.segment === null) {
+      // A policy exists but the source did not say where the device is. Foreclose:
+      // an unreported segment is not evidence of an expected one.
+      return v("network_unknown", "SEGMENT_UNREPORTED_UNDER_POLICY", "step_up", loc);
+    }
+    const expected = includesSegment(policy.expected, signal.segment);
+    if (!expected && includesSegment(policy.restricted ?? [], signal.segment)) {
+      // Reached a management / security / OT segment it has no business on. This is
+      // lateral movement into the control plane, not a misconfiguration, so it
+      // outranks an ordinary unexpected segment.
+      return v("on_unexpected_segment", "SEGMENT_RESTRICTED", "restrict", loc);
+    }
+    if (!expected) {
+      return v("on_unexpected_segment", "SEGMENT_UNEXPECTED", "step_up", loc);
     }
     return v("on_trusted_segment", "AUTHENTICATED_TRUSTED_SEGMENT", "none", loc);
   }

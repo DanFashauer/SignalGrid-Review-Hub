@@ -24,7 +24,12 @@ concurrency:
 
 jobs:
   verify:
-    name: Full gate suite
+    # KEPT deliberately (plan §11.4 step 5, decided 2026-08-11): report-only rot
+    # detection on the default branch between PRs is exactly the failure mode the
+    # breadth lane's daily cadence should cover, so the lane runs here too. The
+    # job was previously named "Full gate suite" while running ~10 launch gates —
+    # renamed to what it actually runs.
+    name: Daily verification (launch gates + breadth lane)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -70,6 +75,9 @@ jobs:
           pnpm run proof:connector-emulator
           pnpm run proof:microsoft-graph-sandbox
           pnpm run proof:intune-entra-posture
+
+      - name: Breadth lane (deferred families + doctrine docs — daily rot check)
+        run: pnpm run verify:breadth
 
       - name: Open or refresh the regression tracking issue on failure
         if: failure()

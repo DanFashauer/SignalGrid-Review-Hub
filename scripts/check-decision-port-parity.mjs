@@ -245,6 +245,44 @@ for (const fn of ["planAppSession", "gateAppAction", "confirmAppActions", "compl
 
 say(`app-workflows parity: 3 enums + 4 operations compared`);
 
+// ── Declared core-only categories: the divergence must be LOUD, both ways ─────
+//
+// The 2026-08-10 second scan found the gap this section pins: the product core
+// (`lib/signalgrid-core`) gained `device_management_health` and `local_authority`
+// with active restrict rules, while the simulator and its Swift port have no
+// vocabulary for either. This gate compares simulator↔Swift only — both sides
+// equally blind — so nothing could notice that /v1 restricts a device the phone
+// would allow. Day-one-quiet bounds the harm (a fleet not emitting the signals
+// sees no divergence), but an undeclared gap is exactly the class of silent
+// disagreement this repo refuses.
+//
+// So the gap is DECLARED, and the declaration is checked in both directions:
+//   · each declared category must exist in the core (else the entry is stale);
+//   · neither engine file may mention it (else the port started landing and the
+//     declaration is now hiding finished work — remove the entry and let the
+//     normal parity sections take over).
+// Porting them belongs to the Mac lane via the SignalContext pattern, never by
+// editing the ported engines' behaviour (CLAUDE.md golden rule 1).
+const CORE_ONLY_CATEGORIES = ["device_management_health", "local_authority"];
+const coreTypesSrc = code(readFileSync(resolve(repo, "lib/signalgrid-core/src/types.ts"), "utf8"));
+for (const cat of CORE_ONLY_CATEGORIES) {
+  if (!coreTypesSrc.includes(`"${cat}"`)) {
+    console.error(`  ✗ ${cat}: declared core-only but ABSENT from the core's SIGNAL_CATEGORIES — stale declaration, delete it`);
+    problems += 1;
+  }
+  const camel = cat.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+  for (const [label, src] of [["simulator", tsSrc], ["Swift port", swiftSrc]]) {
+    if (src.includes(cat) || src.includes(camel)) {
+      console.error(
+        `  ✗ ${cat}: declared core-only but the ${label} now mentions it — ` +
+          `the port has begun; remove it from CORE_ONLY_CATEGORIES so the parity sections govern it`,
+      );
+      problems += 1;
+    }
+  }
+}
+say(`declared core-only categories: ${CORE_ONLY_CATEGORIES.length} pinned (core has them, neither engine does)`);
+
 if (problems > 0) {
   console.error(
     `\nDecision-port parity FAILED.\n` +

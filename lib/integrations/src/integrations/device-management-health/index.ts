@@ -13,8 +13,14 @@ export {
   type MockDeviceManagementHealthOptions,
 } from "./mock-transport";
 export * from "./graph-transport";
+export {
+  createFixtureDeviceManagementHealthConnector,
+  FIXTURE_DEVICE_MANAGEMENT_HEALTH_REPORTS,
+  FIXTURE_DEVICE_MANAGEMENT_HEALTH_TOKEN,
+} from "./fixtures";
 
 import { GRAPH_V1_ROOT, makeGraphDeviceManagementHealthTransport } from "./graph-transport";
+import { createFixtureDeviceManagementHealthConnector } from "./fixtures";
 
 /**
  * Gated resolution, mirroring the product's live-integration policy: dev/alpha never
@@ -29,22 +35,31 @@ import { GRAPH_V1_ROOT, makeGraphDeviceManagementHealthTransport } from "./graph
  */
 export type DeviceManagementHealthConnectorResolution =
   | { mode: "live"; connector: DeviceManagementHealthConnector }
-  | { mode: "fixture"; reason: string };
+  | { mode: "fixture"; reason: string; connector: DeviceManagementHealthConnector };
 
 export function resolveDeviceManagementHealthConnector(
   env: NodeJS.ProcessEnv = process.env,
   transportOverride?: DeviceManagementHealthTransport,
 ): DeviceManagementHealthConnectorResolution {
+  // Fixture mode now carries a WORKING connector over the committed fixture
+  // reports, so a fixture-mode caller runs the same fetch → normalize → evaluate
+  // pipeline a live one does — deterministic, offline, synthetic data only.
+  // `mode` remains the source of truth for what the data IS.
+  const fixture = (reason: string): DeviceManagementHealthConnectorResolution => ({
+    mode: "fixture",
+    reason,
+    connector: createFixtureDeviceManagementHealthConnector(),
+  });
   const tier = (env.SIGNALGRID_TIER ?? "dev").toLowerCase();
   if (tier !== "beta" && tier !== "prod") {
-    return { mode: "fixture", reason: `tier "${tier}" never makes live vendor calls` };
+    return fixture(`tier "${tier}" never makes live vendor calls`);
   }
   if (env.SIGNALGRID_LIVE_INTEGRATIONS !== "true") {
-    return { mode: "fixture", reason: "SIGNALGRID_LIVE_INTEGRATIONS is not 'true'" };
+    return fixture("SIGNALGRID_LIVE_INTEGRATIONS is not 'true'");
   }
   const accessToken = env.DEVICE_MANAGEMENT_HEALTH_ACCESS_TOKEN?.trim();
   if (!accessToken) {
-    return { mode: "fixture", reason: "DEVICE_MANAGEMENT_HEALTH_ACCESS_TOKEN is not set" };
+    return fixture("DEVICE_MANAGEMENT_HEALTH_ACCESS_TOKEN is not set");
   }
   // TRANSPORT SELECTION IS EXPLICIT, and the default is unchanged on purpose.
   //
@@ -58,7 +73,7 @@ export function resolveDeviceManagementHealthConnector(
     | "bridge"
     | "graph";
   if (transportKind !== "bridge" && transportKind !== "graph") {
-    return { mode: "fixture", reason: `unrecognized DEVICE_MANAGEMENT_HEALTH_TRANSPORT "${transportKind}"` };
+    return fixture(`unrecognized DEVICE_MANAGEMENT_HEALTH_TRANSPORT "${transportKind}"`);
   }
 
   const config: DeviceManagementHealthConnectorConfig = {

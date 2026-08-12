@@ -14,6 +14,8 @@ import {
   type AccessAuthorization,
   type AccessResult,
   type AntipassbackState,
+  type ControllerHealth,
+  type CredentialTechnology,
   type CredentialType,
   type DoorState,
   type NormalizedPacsAccess,
@@ -37,6 +39,14 @@ function oneOf<T extends string>(v: unknown, allowed: readonly T[], fallback: T)
 /** Only an explicit boolean is trusted; anything else is null (not reported). */
 function boolOrNull(v: unknown): boolean | null {
   return typeof v === "boolean" ? v : null;
+}
+
+/** A strict ISO-8601 UTC (Zulu) instant, verbatim, or null. Never a coerced date. */
+function instantStringOf(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const s = v.trim();
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(s)) return null;
+  return Number.isFinite(Date.parse(s)) ? s : null;
 }
 
 function readableString(v: unknown): string | null {
@@ -79,9 +89,12 @@ export function normalizeReport(
     deviceId,
     accessResult: oneOf<AccessResult>(report.accessResult, ["granted", "denied", "unknown"], "unknown"),
     credentialType: oneOf<CredentialType>(report.credentialType, ["biometric", "card", "mobile", "pin", "unknown"], "unknown"),
+    credentialTechnology: oneOf<CredentialTechnology>(report.credentialTechnology, ["cryptographic", "static_identifier", "unknown"], "unknown"),
     authorization: oneOf<AccessAuthorization>(report.authorization, ["authorized", "out_of_schedule", "out_of_zone", "revoked", "unknown"], "unknown"),
     antipassback: oneOf<AntipassbackState>(report.antipassback, ["ok", "violation", "unknown"], "unknown"),
     doorState: oneOf<DoorState>(report.doorState, ["secured", "forced", "held_open", "unknown"], "unknown"),
+    observedAt: instantStringOf(report.observedAt),
+    controllerHealth: oneOf<ControllerHealth>(report.controllerHealth, ["online", "degraded", "offline", "unknown"], "unknown"),
     identityMatched,
     pacsSubject,
     expectedSubject,
@@ -111,10 +124,26 @@ export class PacsAccessConnector {
     private readonly transport: PacsAccessTransport,
   ) {}
 
-  async healthCheck(deviceId: string): Promise<{ healthy: boolean; status: number }> {
+  /**
+   * NOTE ON `status: null`. The success path returns null, NOT 200.
+   *
+   * This connector is handed an INJECTED transport that resolves a payload — there is
+   * no HTTP response here and therefore no status code to read. The old `status: 200`
+   * was invented: a 201, 202 or 204 upstream reported as 200, and a reviewer reading
+   * the field believed a server had said it. `null` is the honest value — "the
+   * transport resolved; no status was observed" — and the type can now say it.
+   *
+   * The failure path keeps a real number because the error carries one.
+   *
+   * NOT FIXED HERE, and stated so the remaining gap is not mistaken for closed:
+   * `healthy: true` still means "the injected transport resolved", which in fixture
+   * mode is true without anything being contacted. That fix belongs at the resolution
+   * layer, which already reports `mode: "fixture"` with a reason — see the backlog.
+   */
+  async healthCheck(deviceId: string): Promise<{ healthy: boolean; status: number | null }> {
     try {
       await this.transport({ deviceId, token: this.config.accessToken });
-      return { healthy: true, status: 200 };
+      return { healthy: true, status: null };
     } catch (err) {
       const status = err instanceof PacsAccessConnectorError ? err.status : 0;
       return { healthy: false, status };

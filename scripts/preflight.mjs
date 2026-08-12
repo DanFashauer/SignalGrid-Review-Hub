@@ -11,12 +11,17 @@
 import { spawnSync } from "node:child_process";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { uncoveredLines } from "./lib/ci-jobs.mjs";
 import { nativeBuildExclusion } from "./lib/platform-native-build.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const quick = process.argv.includes("--quick");
 
-// Ordered gates — a complete mirror of the CI jobs that need NOTHING BUT NODE:
+// Ordered gates — a complete mirror of the CI jobs that need NOTHING BUT NODE
+// (one honest exception: `proof:mobile-app-catalog` shells to python3, which is
+// present on every CI image and every dev machine this repo targets; by design
+// that proof FAILS — never skips — when python3 is absent, so this list still
+// cannot silently pass a gate it could not run):
 // `validation` and `docs-sanity` from `.github/workflows/review-hub-ci.yml`, plus
 // the SBOM-drift gate from `supply-chain.yml`'s `sbom` job. Keep this list in
 // lockstep with those; a proof that runs in CI but not here would let a red build
@@ -53,10 +58,24 @@ const STEPS = [
   // `--lockfile-only` resolves without fetching tarballs: exit 0 when consistent
   // even with an unwarmed store, exit 1 on a real mismatch. Both verified.
   { name: "Lockfile matches manifests (what CI installs with)", cmd: ["pnpm", "install", "--frozen-lockfile", "--lockfile-only"] },
+  // Immediately after the lockfile gate, and for the same reason: the Docker-compose
+  // smoke is one of the three CI jobs this file does NOT mirror, so anything only a
+  // `docker build` can see is invisible here by construction. A root lifecycle hook
+  // whose entrypoint the Dockerfile does not COPY is exactly that — every source-reading
+  // gate stays green and the image build dies on `pnpm install`. Reads two text files.
+  { name: "Docker carries every install-hook entrypoint", cmd: ["node", "scripts/check-docker-lifecycle-copy.mjs"] },
   { name: "Invariant review (fail-closed / determinism / Assist / truth)", cmd: ["node", "scripts/review-invariants.mjs"] },
+  // Shell was the only language here with no static analysis: CodeQL takes JS/TS,
+  // tsc takes types, gitleaks takes secrets, the proofs take behaviour. See
+  // scripts/check-shell.mjs for why the floor is `warning` and why the Mac lane's
+  // validate-sim-macos.sh is DEFERRED rather than excluded.
+  { name: "Shell lint (the one language with no static analysis)", cmd: ["node", "scripts/check-shell.mjs"] },
   { name: "Docs sanity (required docs + unsafe-claim scan)", cmd: ["node", "scripts/docs-sanity.mjs"] },
   { name: "Doc orphans (a new doc must be reachable from an index)", cmd: ["node", "scripts/check-doc-orphans.mjs"] },
+  { name: "Package reachability (a library nobody ships is a library nobody runs)", cmd: ["node", "scripts/check-package-reachability.mjs"] },
+  { name: "Core normalization-version (the provenance stamp must track the code it names)", cmd: ["node", "scripts/generate-core-normalization-version.mjs", "--check"] },
   { name: "Guard-registry drift (coverage lists derived, not trusted)", cmd: ["node", "scripts/check-guard-registries.mjs"] },
+  { name: "CI\u2194preflight drift (every proof runs in both places)", cmd: ["node", "scripts/check-ci-preflight-sync.mjs"] },
   // Pure static analysis of the Dockerfiles against pnpm-workspace.yaml — no
   // daemon needed, which is the point: the web image was unbuildable for months
   // because no gate ever built it.
@@ -64,6 +83,21 @@ const STEPS = [
   { name: "Publication boundary (nothing reaches a public repo unclassified)", cmd: ["node", "scripts/check-publication-boundary.mjs"] },
   { name: "Pagination-truncation guard (a capped read must not look complete)", cmd: ["node", "scripts/check-pagination-truncation.mjs"] },
   { name: "Absent-collection law (nothing observed ≠ nothing wrong)", cmd: ["pnpm", "run", "proof:absent-collection"] },
+  // The doctrine-document proofs (zero-trust, security-operations-evidence,
+  // kpi-kri-kci, municipal-resilience, itom-itsm-bridge, grid-lifecycle,
+  // factory-flows, fabric-scenario) and the 47 deferred-family gates moved to
+  // the BREADTH LANE on 2026-08-11 — `pnpm run verify:breadth`
+  // (scripts/verify-breadth.mjs), a parallel required CI job on every PR. They
+  // are kept and still gate every pull request; they no longer tax every local
+  // per-push run. check-ci-preflight-sync.mjs holds the two lanes disjoint and
+  // jointly complete. Run the breadth lane locally when touching a deferred
+  // family or a doctrine document.
+  // Completeness in both directions: every reason code a refusal can carry has an IT
+  // layer and an owner, and nothing is classified that nothing emits. A new family or
+  // a new rule fails this until a human classifies it — which is also one more
+  // mechanical guard on the breadth freeze.
+  { name: "IT-layer model (every refusal has an owner; nothing routes to a phantom)", cmd: ["node", "scripts/check-it-layer-model.mjs"] },
+  { name: "IT-layer model self-test (the gate can actually fail)", cmd: ["node", "scripts/check-it-layer-model.mjs", "--self-test"] },
   { name: "Port parity (DecisionEngine + AppWorkflows must not drift from their TS originals)", cmd: ["node", "scripts/check-decision-port-parity.mjs"] },
   // Sibling of the gate above, one level down. That one keeps the Swift port faithful
   // to the TypeScript reference; this one keeps the two BUILD SYSTEMS that compile the
@@ -89,7 +123,14 @@ const STEPS = [
   { name: "Preflight↔CI parity (a gate that runs only locally is not a gate)", cmd: ["node", "scripts/check-preflight-ci-parity.mjs"] },
   { name: "Assessor package (every link, command and path in it resolves)", cmd: ["node", "scripts/check-assessor-package.mjs"] },
   { name: "Connector discipline (every family gated + proven, none acting on a device)", cmd: ["node", "scripts/check-connector-discipline.mjs"] },
+  { name: "Launch profile (the declared product edge matches the real one)", cmd: ["node", "scripts/check-launch-profile.mjs"] },
   { name: "Ungated fetch (a health check is still a live call)", cmd: ["node", "scripts/check-ungated-fetch.mjs"] },
+  // Sibling of the ungated-fetch gate. That one asks whether a call was allowed to happen;
+  // this one asks whether the RESULT reported was one anybody observed. Twelve connectors
+  // returned `status: 200` after awaiting an injected transport that resolves a payload —
+  // there was no response, so there was no status.
+  { name: "Fabricated status (a connector may not report a status it never observed)", cmd: ["node", "scripts/check-fabricated-status.mjs"] },
+  { name: "Fabricated status self-test (the gate can actually fail)", cmd: ["node", "scripts/check-fabricated-status.mjs", "--self-test"] },
   // A core proof can show authorizedContext refuses the wrong role; only this shows the
   // ROUTES still call it. Without it a handler could regress to context() and stay green.
   { name: "Durable-path authorization (a durable read must authorize, not just authenticate)", cmd: ["node", "scripts/check-durable-path-authorization.mjs"] },
@@ -99,15 +140,12 @@ const STEPS = [
   // wiring them up. proof:isolation-scope is the one that stings: it asserts no tenant
   // can read another tenant's row, across every scoped reader, and a break in that
   // would have passed preflight and every PR check.
-  { name: "Proof: emit-gate (no outbound family sends from a non-emitting tier)", cmd: ["pnpm", "run", "proof:emit-gate"] },
   { name: "Proof: isolation-scope (no tenant can read another's row)", cmd: ["pnpm", "run", "proof:isolation-scope"] },
-  { name: "Proof: nac (read-only, no device action reachable, live path gated)", cmd: ["pnpm", "run", "proof:nac"] },
-  { name: "Proof: webhooks (outbound delivery gated; refusals explain themselves)", cmd: ["pnpm", "run", "proof:webhooks"] },
-  { name: "Proof: mdm-profile (the shipped profiles say what the product claims)", cmd: ["pnpm", "run", "proof:mdm-profile"] },
   { name: "Proof: graph-wire (throttling, 5xx, auth and malformed bodies fail closed)", cmd: ["pnpm", "run", "proof:graph-wire"] },
   { name: "Docs\u2194proof FIGURE guard (a measured number must still be one)", cmd: ["node", "scripts/check-proof-figures.mjs"] },
   { name: "Proof-count sync (documented check counts match their proofs)", cmd: ["node", "scripts/check-proof-counts.mjs"] },
   { name: "Live-sync manifest (external builders see current contracts)", cmd: ["node", "scripts/check-live-sync.mjs"] },
+  { name: "MCP surface (chat connection must match the fabric)", cmd: ["node", "scripts/check-mcp-surface.mjs"] },
   { name: "Typecheck (all packages)", cmd: ["pnpm", "run", "typecheck"] },
   // needsNativeBuild: rollup/esbuild/lightningcss/oxide platform binaries. The
   // workspace strips every triple but linux-x64, so on other platforms this step
@@ -122,37 +160,22 @@ const STEPS = [
   { name: "Proof: signalgrid-grid", cmd: ["pnpm", "run", "proof:signalgrid-grid"] },
   { name: "Proof: microsoft-graph-sandbox", cmd: ["pnpm", "run", "proof:microsoft-graph-sandbox"] },
   { name: "Proof: graph-connector (read-only, gated)", cmd: ["pnpm", "run", "proof:graph-connector"] },
-  { name: "Proof: carrier-reachability (post-exit, gated)", cmd: ["pnpm", "run", "proof:carrier-reachability"] },
   { name: "Proof: event-contract (validation + cross-domain detections)", cmd: ["pnpm", "run", "proof:event-contract"] },
-  { name: "Proof: location-services (geofence posture, gated)", cmd: ["pnpm", "run", "proof:location-services"] },
-  { name: "Proof: vuln-scan (device risk posture, gated)", cmd: ["pnpm", "run", "proof:vuln-scan"] },
-  { name: "Proof: network-nac (access posture, gated)", cmd: ["pnpm", "run", "proof:network-nac"] },
-  { name: "Proof: edr-threat (endpoint threat-state, gated)", cmd: ["pnpm", "run", "proof:edr-threat"] },
-  { name: "Proof: identity-risk (SSO sign-in risk, gated)", cmd: ["pnpm", "run", "proof:identity-risk"] },
-  { name: "Proof: rtls-custody (physical custody, gated)", cmd: ["pnpm", "run", "proof:rtls-custody"] },
-  { name: "Proof: peripheral-control (removable media, gated)", cmd: ["pnpm", "run", "proof:peripheral-control"] },
-  { name: "Proof: data-protection (DLP posture, gated)", cmd: ["pnpm", "run", "proof:data-protection"] },
-  { name: "Proof: credential-exposure (endpoint secrets, gated)", cmd: ["pnpm", "run", "proof:credential-exposure"] },
-  { name: "Proof: macos-posture (grid-collected Mac, gated)", cmd: ["pnpm", "run", "proof:macos-posture"] },
-  { name: "Proof: uem (read-only MDM/UEM dimension — gated, no actuators)", cmd: ["pnpm", "run", "proof:uem"] },
+  { name: "Proof: local-authority (may this device act on its own authority now)", cmd: ["pnpm", "run", "proof:local-authority"] },
+  { name: "Proof: launch-profile (the declared Limited GA scope is coherent and its figures are published)", cmd: ["pnpm", "run", "proof:launch-profile"] },
+  { name: "Proof: launch-seam (fixture connector → bridge → core decision → evidence, all 3 launch families, offline)", cmd: ["pnpm", "run", "proof:launch-seam"] },
+  { name: "Proof: evidence-adapter (source-agnostic — swap fleet/headwind/intune, the decision must not change)", cmd: ["pnpm", "run", "proof:evidence-adapter"] },
+  { name: "Proof: mobile-app-catalog (hardened scanner — leak/symlink/determinism/cap; needs python3, FAILS without it)", cmd: ["pnpm", "run", "proof:mobile-app-catalog"] },
+  { name: "Proof: operating-method (the handbook is a gate — buckets, ladder, dispositions, links, roles)", cmd: ["pnpm", "run", "proof:operating-method"] },
+  { name: "Proof: evidence-coverage (what can this estate actually answer)", cmd: ["pnpm", "run", "proof:evidence-coverage"] },
+  { name: "Proof: device-resolver (read-only at the injection boundary)", cmd: ["pnpm", "run", "proof:device-resolver"] },
+  { name: "Proof: config-scope (connector config keyed per tenant, never normalized)", cmd: ["pnpm", "run", "proof:config-scope"] },
+  { name: "Proof: unsafe-claim (a disclaimer is not a claim)", cmd: ["pnpm", "run", "proof:unsafe-claim"] },
   { name: "Proof: macos-apple-schema (apple/device-management alignment)", cmd: ["pnpm", "run", "proof:macos-apple-schema"] },
-  { name: "Proof: ot-posture (grid-collected OT/IIoT edge, gated)", cmd: ["pnpm", "run", "proof:ot-posture"] },
-  { name: "Proof: access-governance (IAM/access-governance runtime, gated)", cmd: ["pnpm", "run", "proof:access-governance"] },
-  { name: "Proof: device-attestation (hardware-rooted attestation, gated)", cmd: ["pnpm", "run", "proof:device-attestation"] },
-  { name: "Proof: sso-session (SSO session-binding on shared devices, gated)", cmd: ["pnpm", "run", "proof:sso-session"] },
-  { name: "Proof: oauth-consent (OAuth/workload-identity consent governance, gated)", cmd: ["pnpm", "run", "proof:oauth-consent"] },
-  { name: "Proof: token-binding (DPoP/mTLS proof-of-possession vs replayable bearer, gated)", cmd: ["pnpm", "run", "proof:token-binding"] },
-  { name: "Proof: pacs-access (physical access-control / badge door authorization, gated)", cmd: ["pnpm", "run", "proof:pacs-access"] },
-  { name: "Proof: agent-identity (agentic / non-human-identity governance, gated)", cmd: ["pnpm", "run", "proof:agent-identity"] },
-  { name: "Proof: agent-behavior (action-judgment — the layer that questions the action, gated)", cmd: ["pnpm", "run", "proof:agent-behavior"] },
-  { name: "Proof: custody-beacon (asset recovery — offline beacon fused with reachability, gated)", cmd: ["pnpm", "run", "proof:custody-beacon"] },
-  { name: "Proof: app-update (host-app version currency — floors, forced updates, provenance)", cmd: ["pnpm", "run", "proof:app-update"] },
-  { name: "Proof: platform-sso (macOS platform credential — method, policy compatibility, lockout exposure)", cmd: ["pnpm", "run", "proof:platform-sso"] },
-  { name: "Proof: passkey-assurance (credential worth — attestation, custody, user verification)", cmd: ["pnpm", "run", "proof:passkey-assurance"] },
-  { name: "Proof: policy-binding (group-assignment correctness — membership IS the policy)", cmd: ["pnpm", "run", "proof:policy-binding"] },
+  { name: "Proof: mcp-answer-discipline (silence is not an affirmative, over the raw wire)", cmd: ["pnpm", "run", "proof:mcp-answer-discipline"] },
+  { name: "Proof: mdm-profile (the shipped profiles say what the product claims)", cmd: ["pnpm", "run", "proof:mdm-profile"] },
+  { name: "Proof: facility-trust-graph (canonical space model + location certainty vs required precision)", cmd: ["pnpm", "run", "proof:facility-trust-graph"] },
   { name: "Proof: device-management-health (management-plane health / config drift, gated)", cmd: ["pnpm", "run", "proof:device-management-health"] },
-  { name: "Proof: link-usability (associated vs usable — the network link's expiry, gated)", cmd: ["pnpm", "run", "proof:link-usability"] },
-  { name: "Proof: task-exception (WMS/task-plane exceptions, gated)", cmd: ["pnpm", "run", "proof:task-exception"] },
   { name: "Proof: work-context (continuity carries work, trust re-earned per device)", cmd: ["pnpm", "run", "proof:work-context"] },
   { name: "Proof: handoff-sim (cross-device handoff + exception-release loop)", cmd: ["pnpm", "run", "proof:handoff-sim"] },
   { name: "Proof: adaptive-proposals (governed recommendation lifecycle, human-gated activation)", cmd: ["pnpm", "run", "proof:adaptive-proposals"] },
@@ -166,13 +189,17 @@ const STEPS = [
   { name: "Proof: posture-composition (unified signal fusion)", cmd: ["pnpm", "run", "proof:posture-composition"] },
   { name: "Proof: incident-playbook (decision → prioritized incident)", cmd: ["pnpm", "run", "proof:incident-playbook"] },
   { name: "Proof: fabric-evals (golden multi-signal decision quality)", cmd: ["pnpm", "run", "proof:fabric-evals"] },
-  { name: "Proof: fabric-scenario (end-to-end fusion → incident)", cmd: ["pnpm", "run", "proof:fabric-scenario"] },
   { name: "Proof: connector-emulator", cmd: ["pnpm", "run", "proof:connector-emulator"] },
   { name: "OpenAPI contract check (proof:api-contract)", cmd: ["pnpm", "run", "proof:api-contract"] },
   { name: "API integration test (boots the server)", cmd: ["pnpm", "run", "test:api"] },
   { name: "Proof: observability (metrics endpoint)", cmd: ["pnpm", "run", "proof:observability"] },
   { name: "Proof: enterprise-auth (OIDC/JWT)", cmd: ["pnpm", "run", "proof:enterprise-auth"] },
   { name: "Proof: webauthn-verify", cmd: ["pnpm", "run", "proof:webauthn-verify"] },
+  // Absorbed from the base lane. It SELF-SKIPS when DATABASE_URL is unset, which is
+  // exactly why it belongs here rather than on the CI-only exempt list: preflight
+  // stays deterministic and needs no Postgres, and an operator who HAS a database
+  // gets the restore path exercised locally.
+  { name: "Proof: backup-restore (the restore path, exercised not assumed)", cmd: ["pnpm", "run", "proof:backup-restore"] },
   { name: "Proof: audit-ledger", cmd: ["pnpm", "run", "proof:audit-ledger"] },
   { name: "Proof: session-store", cmd: ["pnpm", "run", "proof:session-store"] },
   { name: "Proof: orchestration", cmd: ["pnpm", "run", "proof:orchestration"] },
@@ -180,13 +207,12 @@ const STEPS = [
   { name: "Proof: app-workflows", cmd: ["pnpm", "run", "proof:app-workflows"] },
   { name: "Proof: app-workflow-templates", cmd: ["pnpm", "run", "proof:app-workflow-templates"] },
   { name: "Proof: flows", cmd: ["pnpm", "run", "proof:flows"] },
-  { name: "Proof: grid-coverage (build the grid — situations handled)", cmd: ["pnpm", "run", "proof:grid-coverage"] },
+  { name: "Proof: grid-coverage (build the grid — the coverage ceiling and its basis)", cmd: ["pnpm", "run", "proof:grid-coverage"] },
   { name: "Proof: grid-config (workflows as code — CI validation)", cmd: ["pnpm", "run", "proof:grid-config"] },
   { name: "Proof: app-resilience (cloud-app downtime, PHI-safe fallback)", cmd: ["pnpm", "run", "proof:app-resilience"] },
   { name: "Proof: provisioning (zero-touch setup — record/validate/apply)", cmd: ["pnpm", "run", "proof:provisioning"] },
+  { name: "Proof: provisioning-order (step order — the numbering is load-bearing)", cmd: ["pnpm", "run", "proof:provisioning-order"] },
   { name: "Proof: provisioning-teardown (prove the retreat before deploy)", cmd: ["pnpm", "run", "proof:provisioning-teardown"] },
-  { name: "Proof: factory-flows (manufacturing/OT workflows)", cmd: ["pnpm", "run", "proof:factory-flows"] },
-  { name: "Proof: grid-lifecycle (capstone — 6 models, provision→decommission)", cmd: ["pnpm", "run", "proof:grid-lifecycle"] },
   { name: "Proof: recommendations", cmd: ["pnpm", "run", "proof:recommendations"] },
   { name: "Proof: signal-discovery", cmd: ["pnpm", "run", "proof:signal-discovery"] },
   { name: "Proof: ddm-connector", cmd: ["pnpm", "run", "proof:ddm-connector"] },
@@ -194,11 +220,32 @@ const STEPS = [
   { name: "Proof: signal-radar", cmd: ["pnpm", "run", "proof:signal-radar"] },
   { name: "Proof: control-plane", cmd: ["pnpm", "run", "proof:control-plane"] },
   { name: "Proof: edge-sync", cmd: ["pnpm", "run", "proof:edge-sync"] },
-  { name: "Proof: telemetry-up", cmd: ["pnpm", "run", "proof:telemetry-up"] },
+  { name: "Proof: decision-continuity (which decision wins across a partition)", cmd: ["pnpm", "run", "proof:decision-continuity"] },
   { name: "Safety gate (guardrails)", cmd: ["pnpm", "run", "safety:check"] },
   // Mirrors the CI "Postman collection is committed in sync" step: regenerate,
   // then fail if the committed collection drifted.
-  { name: "Postman collection committed in sync", cmd: ["bash", "-c", "pnpm run build:postman && git diff --exit-code docs/postman"] },
+  // `git ls-files --error-unmatch` FIRST. `git diff --exit-code <path>` reports nothing at
+  // all for an UNTRACKED path, so on its own this gate passes whether the file is correct,
+  // corrupt, forgotten at `git add`, deleted, or gitignored. Demonstrated, not theorised: a
+  // review replaced a generated file's entire contents with garbage and the diff-only form
+  // exited 0.
+  { name: "Postman collection committed in sync", cmd: ["bash", "-c", "git ls-files --error-unmatch docs/postman >/dev/null && pnpm run build:postman && git diff --exit-code docs/postman"] },
+  // Mirrors the CI "Evidence Coverage page is committed in sync" step. The page is a
+  // GENERATED artifact with the real coverage model bundled into it, and its browser
+  // E2E loads the COMMITTED file — so a stale commit would be tested instead of the
+  // current model, and would keep passing for every model change that did not happen to
+  // move one of the pinned figures. esbuild's output is byte-stable for a given input,
+  // which is what makes the diff a usable gate rather than a flake.
+  { name: "Evidence Coverage page committed in sync", cmd: ["bash", "-c", "git ls-files --error-unmatch docs/evidence-coverage.html >/dev/null && pnpm run build:evidence-coverage && git diff --exit-code -- docs/evidence-coverage.html"] },
+  // NOT a regenerate-and-diff gate, unlike the three above, and the difference is
+  // load-bearing: docs/STATUS.md embeds the HEAD sha by design (its own staleness
+  // tell), so the commit that adds it changes HEAD and it can never equal its own
+  // regeneration. Its generator is also slow and hits the network. So gate the part
+  // that actually rots — the inventory counts, which are cheap and offline. They had
+  // drifted to 95 proof gates against a real 122, 8 E2E specs against 10, and 12 CI
+  // workflows against 16.
+  { name: "STATUS.md figures still describe the repo", cmd: ["node", "scripts/check-status-figures.mjs"] },
+  { name: "STATUS.md figure gate self-test (the gate can actually fail)", cmd: ["node", "scripts/check-status-figures.mjs", "--self-test"] },
   { name: "Decision-latency pilot gate (bench)", cmd: ["pnpm", "run", "bench:decision-latency"] },
   // Mirrors the supply-chain job's "SBOM is committed and up to date" gate:
   // regenerate the CycloneDX SBOM and fail if it drifted (e.g. a new dependency
@@ -268,11 +315,14 @@ if (failed) {
 // caveat, so it now prints WITH the verdict rather than being documented above it.
 //
 // Same rule the status file follows: never claim more than the run verified.
-const UNCOVERED = [
-  "deploy-stack        (Docker image + compose smoke)",
-  "durable-persistence (Postgres audit ledger)",
-  "secret-scan         (gitleaks)",
-];
+// DERIVED from .github/workflows/, not hand-listed. It used to be three strings while
+// the repo ran nineteen CI jobs, so CodeQL, the level-10 audit, the emulator smoke,
+// phase-pr-evidence and the whole iOS suite were missing from the one list whose job is
+// to say what is missing. See scripts/lib/ci-jobs.mjs.
+const UNCOVERED = uncoveredLines();
+// Kept from the base lane and complementary to the line above: a step the platform
+// could not run is UNAVAILABLE, never passed. Two different honesty problems — what CI
+// covers that preflight does not, and what preflight could not execute here.
 const unavailable = results.filter((r) => r.status === "unavailable");
 console.log(`\nPreflight PASSED${quick ? " (quick — heavy builds skipped)" : ""} — everything it runs is green.`);
 if (unavailable.length > 0) {

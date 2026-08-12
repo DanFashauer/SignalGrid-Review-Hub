@@ -4,6 +4,7 @@ import {
   type AppUpdateReasonCode,
   type AppUpdateVerdict,
   type NormalizedAppUpdate,
+  type StabilityStanding,
 } from "./types";
 
 /**
@@ -47,6 +48,16 @@ const ACTION_SEVERITY: Record<AppUpdateAction, number> = {
 export interface EvaluateAppUpdateOptions {
   /** False when no inventory row was returned for this app. Default true. */
   covered?: boolean;
+  /**
+   * The STABILITY bound (intake ledger row 19): the most crashes the caller
+   * will accept inside the window the analytics plane reported, before the
+   * workflow steps up. POSED by the caller — omitted means the stability
+   * question is `unassessed` (carried visibly, never foreclosing the grant),
+   * exactly like shift-context's unposed site question. The figures come from
+   * the analytics plane (Omnissa Intelligence, Crashlytics-class SDKs and
+   * peers); the bound is operator policy — nothing here is tuned.
+   */
+  maxCrashesInWindow?: number;
 }
 
 interface Candidate {
@@ -64,6 +75,22 @@ export function evaluateAppUpdate(
   const criticalFindings: string[] = [];
   const unknownSignals: string[] = [];
 
+  // ── stability (derived): the caller's bound against the source's figures ────────
+  // Unposed → unassessed. Posed with a nonsense bound, or posed and the figures
+  // cannot answer (count or window missing — a count without its window is
+  // uninterpretable) → unknown, raises. Posed and answerable → stable/unstable.
+  const bound = opts.maxCrashesInWindow;
+  let stability: StabilityStanding;
+  if (bound === undefined) {
+    stability = "unassessed";
+  } else if (typeof bound !== "number" || !Number.isFinite(bound) || bound < 0) {
+    stability = "unknown";
+  } else if (report.crashCount === null || report.stabilityWindowHours === null) {
+    stability = "unknown";
+  } else {
+    stability = report.crashCount <= bound ? "stable" : "unstable";
+  }
+
   if (!covered) {
     return {
       ...base,
@@ -72,6 +99,7 @@ export function evaluateAppUpdate(
       recommendedAction: "step_up",
       criticalFindings,
       unknownSignals: ["coverage"],
+      stability,
       currencyConfirmed: false,
     };
   }
@@ -108,6 +136,19 @@ export function evaluateAppUpdate(
   }
   // currency === "current": no candidate — the seed grant may survive.
 
+  // ── stability rung (row 19): a crashing host app is operational risk ────────────
+  // Deliberately step_up, never restrict: the fix is a challenge and a device
+  // swap, and blocking a clinical workflow over crashes could cost more than
+  // the crashes. The analytics plane counted; the caller bounded; the fabric
+  // grades — no threshold is tuned here.
+  if (stability === "unstable") {
+    criticalFindings.push("app_unstable");
+    candidates.push({ posture: "app_unstable", action: "step_up", reason: "APP_UNSTABLE" });
+  } else if (stability === "unknown") {
+    unknownSignals.push("stability");
+    candidates.push({ posture: "unverified", action: "step_up", reason: "STABILITY_UNKNOWN" });
+  }
+
   // ── provenance ──────────────────────────────────────────────────────────────────
   if (report.channel === "unmanaged") {
     criticalFindings.push("unmanaged_install");
@@ -128,7 +169,8 @@ export function evaluateAppUpdate(
   const positivelyCurrent =
     report.reportIntegrity === "clean" &&
     report.currency === "current" &&
-    report.channel === "managed";
+    report.channel === "managed" &&
+    (stability === "stable" || stability === "unassessed");
   if (!positivelyCurrent && candidates.length === 0) {
     candidates.push({ posture: "version_unknown", action: "step_up", reason: "VERSION_UNKNOWN" });
   }
@@ -148,6 +190,7 @@ export function evaluateAppUpdate(
     recommendedAction: winner.action,
     criticalFindings,
     unknownSignals,
+    stability,
     currencyConfirmed: winner.action === "none",
   };
 }

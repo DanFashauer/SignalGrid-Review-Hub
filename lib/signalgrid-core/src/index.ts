@@ -1,3 +1,4 @@
+export { CORE_NORMALIZATION_VERSION } from "./core-normalization-version";
 export * from "./types";
 export * from "./util";
 export * from "./store";
@@ -13,5 +14,6 @@ export * from "./webhooks";
 export * from "./remediation";
 export * from "./resolution";
 export * from "./decision";
+export * from "./continuity";
 export * from "./seed";
 export * from "./engine";

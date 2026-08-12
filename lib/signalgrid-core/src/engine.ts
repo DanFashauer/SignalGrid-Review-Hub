@@ -1,6 +1,7 @@
 import { assertSameTenant, authenticate, authorize } from "./auth";
 import { runFixtureSync, type FixturePostureRecord } from "./connector";
 import { runDockSync, type DockCustodyRecord } from "./dock";
+import { runShiftSync, type ShiftContextRecord } from "./shift";
 import { evaluateDecision } from "./decision";
 import { verifySnapshot } from "./evidence";
 import { verifyAuditChain, type ChainVerification } from "./audit";
@@ -67,6 +68,7 @@ export class SignalGridCore {
   private readonly clock: Clock;
   private readonly fixtureRecords: Record<string, FixturePostureRecord[]>;
   private readonly dockRecords: Record<string, DockCustodyRecord[]>;
+  private readonly shiftRecords: Record<string, ShiftContextRecord[]>;
   /** True only for a core built via `demo()`; gates the public-safe demo-key accessor. */
   private readonly demoMode: boolean;
 
@@ -75,12 +77,14 @@ export class SignalGridCore {
     clock: Clock,
     fixtureRecords: Record<string, FixturePostureRecord[]>,
     dockRecords: Record<string, DockCustodyRecord[]>,
+    shiftRecords: Record<string, ShiftContextRecord[]>,
     demoMode: boolean,
   ) {
     this.store = store;
     this.clock = clock;
     this.fixtureRecords = fixtureRecords;
     this.dockRecords = dockRecords;
+    this.shiftRecords = shiftRecords;
     this.demoMode = demoMode;
   }
 
@@ -92,6 +96,7 @@ export class SignalGridCore {
       seeded.clock,
       seeded.fixtureRecords,
       seeded.dockRecords,
+      seeded.shiftRecords,
       true,
     );
   }
@@ -254,6 +259,10 @@ export class SignalGridCore {
     if (connector.kind === "dockbridge-custody") {
       const dock = this.dockRecords[connector.id] ?? [];
       return runDockSync(this.store, this.clock, connector, dock);
+    }
+    if (connector.kind === "wfm-shift") {
+      const shift = this.shiftRecords[connector.id] ?? [];
+      return runShiftSync(this.store, this.clock, connector, shift);
     }
     const records = this.fixtureRecords[connector.id] ?? [];
     return runFixtureSync(this.store, this.clock, connector, records);

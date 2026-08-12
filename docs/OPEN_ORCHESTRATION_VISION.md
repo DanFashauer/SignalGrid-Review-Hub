@@ -40,7 +40,7 @@ reads as an over-claim.
 |---|---|
 | Signal fusion → one verdict + one incident | Built (`lib/posture-composition`, `lib/incident-playbook`) |
 | Configurable workflows + health/self-heal/approvals | Built (`lib/flows`) |
-| Grid coverage — what the Grid handles on its own | Built (`lib/flows` grid-coverage, proof) |
+| Grid coverage — what the Grid handles on its own, or *would* at full health | Built (`lib/flows` grid-coverage, proof). The result carries `basis`: `observed` from real signal states, `projected_from_sourcing` when inferred from acquisition method alone. The served `/cp/v1` arm is the projection — a ceiling, not a reading. |
 | Signal sourcing — API / native / grid-collected / gap | Built (`lib/flows` signal-sourcing, proof, operator view) |
 | **Workflows as code** — declarative config, CI-validated | Built (`lib/flows` grid-config, proof, operator view) |
 | Zero-touch provisioning · Designer · Device Action Recorder | Built, simulated (`lib/flows` provisioning, proof, Device Recorder operator view); real apply stays owner-gated |

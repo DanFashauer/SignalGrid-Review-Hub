@@ -44,6 +44,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { MIRRORED, NOT_A_GATE, classifyCiJobs } from "./lib/ci-jobs.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const WORKFLOW_DIR = join(repo, ".github/workflows");
@@ -80,15 +81,28 @@ for (const [name, cmd] of Object.entries(pkgScripts)) {
 
 // Each STEPS entry is `cmd: ["node", "scripts/x.mjs"]` or `["pnpm", "run", "x"]`.
 // Reduce both to the identifying token a workflow would have to mention.
-const gates = [];
-for (const m of preflight.matchAll(/cmd:\s*\[([^\]]+)\]/g)) {
-  const parts = m[1].replace(/["']/g, "").split(",").map((s) => s.trim());
-  if (parts[0] === "node" && parts[1]) gates.push(parts[1]);
-  else if (parts[0] === "pnpm" && parts[1] === "run" && parts[2]) gates.push(parts[2]);
-  // `bash -c "..."` steps embed their own commands; the tokens inside them are
-  // matched by the workflow scan below via the script names they invoke, so they
-  // are deliberately not reduced to a single key here.
+function gatesIn(source) {
+  const out = [];
+  for (const m of source.matchAll(/cmd:\s*\[([^\]]+)\]/g)) {
+    const parts = m[1].replace(/["']/g, "").split(",").map((s) => s.trim());
+    if (parts[0] === "node" && parts[1]) out.push(parts[1]);
+    else if (parts[0] === "pnpm" && parts[1] === "run" && parts[2]) out.push(parts[2]);
+    // `bash -c "..."` steps embed their own commands; the tokens inside them are
+    // matched by the workflow scan below via the script names they invoke, so they
+    // are deliberately not reduced to a single key here.
+  }
+  return out;
 }
+const gates = gatesIn(preflight);
+
+// The breadth lane's gates (scripts/verify-breadth.mjs) are held to the SAME
+// rule — a proof that runs only on a developer's machine is not a gate — but
+// CI invokes the lane as one step (`pnpm run verify:breadth`), so each of its
+// gates is wired exactly when the RUNNER is. Checked, not assumed: if no
+// workflow references the runner, every breadth gate reports unwired below.
+const breadthSource = readFileSync(join(repo, "scripts/verify-breadth.mjs"), "utf8");
+const breadthGates = new Set(gatesIn(breadthSource));
+gates.push(...breadthGates);
 
 const workflows = readdirSync(WORKFLOW_DIR).filter((f) => /\.ya?ml$/.test(f));
 const blob = workflows.map((f) => readFileSync(join(WORKFLOW_DIR, f), "utf8")).join("\n");
@@ -104,8 +118,11 @@ if (gates.length === 0) {
 let problems = 0;
 const localOnlyHit = [];
 
-/** True when a workflow invokes this gate by path OR by any npm-script alias. */
+/** True when a workflow invokes this gate by path OR by any npm-script alias —
+ *  or, for a breadth-lane gate, when the lane runner itself is wired. */
+const breadthRunnerWired = blob.includes("verify:breadth") || blob.includes("verify-breadth.mjs");
 function wired(gate) {
+  if (breadthGates.has(gate) && breadthRunnerWired) return true;
   if (blob.includes(gate)) return true;
   const file = gate.split("/").pop();
   return (aliasesFor.get(file) ?? []).some((alias) => blob.includes(alias));
@@ -135,6 +152,27 @@ for (const [gate, reason] of LOCAL_ONLY) {
     problems += 1;
   }
 }
+
+// ── The other direction: preflight's own "not covered" disclaimer ────────────
+//
+// That footer is the most load-bearing line the harness prints — it is read at the
+// moment someone decides to push. It is now DERIVED (scripts/lib/ci-jobs.mjs) rather
+// than a hardcoded three, but a derived list still depends on a hand-written
+// classification, and a classification that outlives its job silently shrinks the
+// disclaimer. Same rule as LOCAL_ONLY above: a stale exemption re-permits the gap it
+// was granted for and reads as intentional ever after.
+const { jobs: ciJobs, uncovered: ciUncovered, stale: ciStale } = classifyCiJobs();
+for (const id of ciStale) {
+  console.error(
+    `  ✗ ${id}: classified in scripts/lib/ci-jobs.mjs but NO workflow defines it any more — ` +
+      `delete the entry. Leaving it silently shortens preflight's "not covered" list.`,
+  );
+  problems += 1;
+}
+console.log(
+  `CI job coverage: ${ciJobs.length} jobs, ${MIRRORED.size} mirrored by preflight, ` +
+    `${NOT_A_GATE.size} not a gate, ${ciUncovered.length} reported as uncovered`,
+);
 
 console.log(
   `preflight↔CI parity: ${gates.length} preflight gates, ${workflows.length} workflow files, ` +

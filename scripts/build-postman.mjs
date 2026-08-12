@@ -105,6 +105,20 @@ const v1Requests = [
   item("Approve a remediation", "POST", "/v1/remediation/{{remediationId}}/approve", { body: {} }),
   item("List app-workflow integrations", "GET", "/v1/app-workflows/integrations"),
   item("Gate an app workflow (EMR)", "POST", "/v1/app-workflows/evaluate", { body: { integrationId: "emr-chart", identityRef: "nurse.compliant", deviceRef: "ipad-ward-01" } }),
+  // The offline/online conflict, as the reconciler actually meets it: the device
+  // holds the NEWER policy and says allow, the connected control plane said deny,
+  // and the deny stands. Both provenance booleans are present on every record
+  // because omitting either is a 400 — a sample that omitted them would teach the
+  // wrong contract.
+  item("Reconcile decisions across a partition", "POST", "/v1/decisions/reconcile", {
+    body: {
+      records: [
+        { id: "cloud", outcome: "deny", provenance: { policyVersion: 7, coreNormalizationVersion: 2, evaluatedOffline: false, policyKnownSuperseded: false } },
+        { id: "device", outcome: "allow", provenance: { policyVersion: 8, coreNormalizationVersion: 2, evaluatedOffline: true, policyKnownSuperseded: false } },
+      ],
+      standingBound: { maxStandingSeconds: 3600, elapsedSecondsById: { device: 600 } },
+    },
+  }),
   // Step-up completion is a real WebAuthn ceremony; the assertion fields below are
   // placeholders a browser's navigator.credentials fills in — Postman can exercise
   // the fail-closed paths (403/409), not mint a genuine release.
@@ -136,9 +150,17 @@ const cpRequests = [
   item("Signal discovery + auto-onboard", "GET", "/cp/v1/signal-discovery", { auth: NOAUTH }),
   item("DDM / device-health signals (macOS 27)", "GET", "/cp/v1/ddm", { auth: NOAUTH }),
   item("Fleet MDM host posture (osquery, fixtures)", "GET", "/cp/v1/fleet-mdm", { auth: NOAUTH }),
-  item("Grid coverage (situations handled)", "GET", "/cp/v1/grid/coverage", { auth: NOAUTH }),
+  // NOT "situations handled". This arm serves a projection: the signal states are
+  // inferred from each source's acquisition method, so nothing was contacted and the
+  // figures are a ceiling. The response says so in `coverage.basis`, and the name a
+  // partner reads in their client should agree with the payload rather than promise
+  // more than it.
+  item("Grid coverage (CEILING at full health — see coverage.basis)", "GET", "/cp/v1/grid/coverage", { auth: NOAUTH }),
   item("Signal sourcing (api / native / grid-collected / gap)", "GET", "/cp/v1/grid/sourcing", { auth: NOAUTH }),
   item("Grid config (workflows as code — validation)", "GET", "/cp/v1/grid/config", { auth: NOAUTH }),
+  // Query string carried on the URL so the collection demonstrates the parameterised
+  // form — a partner-facing call whose whole point is the estate you declare.
+  item("Evidence coverage (what YOUR estate can answer)", "GET", "/cp/v1/grid/evidence-coverage?planes=identity,device_management", { auth: NOAUTH }),
   item("Zero-touch provisioning plan (simulated)", "GET", "/cp/v1/grid/provisioning", { auth: NOAUTH }),
   item("App resilience (downtime, PHI-safe)", "GET", "/cp/v1/apps/resilience", { auth: NOAUTH }),
 ];

@@ -1,190 +1,116 @@
-// Cisco ISE → endpoint lookup. READ-ONLY. See the removal note below.
-import { resolveEmission } from '../adapters/emit-gate';
-import type {
-  NACAdapter,
-  NACEndpointInfo
-} from '../adapters/types';
+// Cisco ISE → normalized NAC endpoint record. READ-ONLY and PURE.
+//
+// WHAT WAS REMOVED. `quarantineEndpoint` POSTed to the ISE **ANC (Adaptive Network
+// Control)** API at `/api/v1/anc/apply` to put an endpoint into a quarantine policy,
+// and `clearQuarantine` reversed it. Both fired at a real ISE deployment with no
+// tier gate, no `SIGNALGRID_LIVE_INTEGRATIONS` check and no approval step, against
+// AGENTS.md:19 ("Keep high-risk actions simulated and approval-required").
+//
+// Cutting a device off the network is if anything more severe than locking it: on a
+// shared clinical cart mid-shift it removes the worker's access to the systems the
+// patient in front of them depends on. Deleted rather than gated, for the same reason
+// as the `uem/` actuators — connector discipline here is a READ-ONLY discipline, so
+// there is no disciplined form of a quarantine actuator to convert this into.
+//
+// WHAT ALSO CHANGED. The read built its filter as
+// `` `MacAddress eq '${identifier}'` `` — caller-supplied input interpolated straight
+// into an ISE filter expression. See ./identifier for why that is now allowlisted
+// rather than escaped.
+//
+// The status mapping is corrected too. The old normalizer returned a hardcoded
+// `status: 'registered'` for every endpoint it found, which asserted a NAC state it
+// had not read — the same class of defect as Jamf's hardcoded `compliant: true`. ISE
+// endpoint search does not report authentication state, so the honest answer is
+// `unknown` unless the payload actually carries it.
+
+import type { NACEndpointInfo } from "../adapters/types";
+import { validateNacIdentifier, type NacIdentifierType } from "./identifier";
+
+/** The subset of an ISE endpoint-search response this reads. All optional. */
+export interface IseEndpointSearchPayload {
+  readonly SearchResult?: {
+    readonly resources?: ReadonlyArray<{
+      readonly id?: unknown;
+      readonly name?: unknown;
+      /** ISE's own MAC for the endpoint. Read when present; never inferred. */
+      readonly mac?: unknown;
+    }>;
+  };
+}
+
+const asString = (v: unknown): string | undefined =>
+  typeof v === "string" && v.trim() !== "" ? v.trim() : undefined;
 
 /**
- * Cisco ISE (Identity Services Engine) NAC Adapter Configuration
- * 
- * Uses the Cisco ISE REST API
+ * Build the ISE filter expression for a lookup.
+ *
+ * Returns null when the identifier is refused, so a caller cannot accidentally
+ * proceed with an unvalidated value — the failure is a missing filter, not a
+ * best-effort one.
  */
-export interface CiscoISEConfig {
-  /** Cisco ISE PAN (Policy Administration Node) address */
-  baseUrl: string;
-  /** REST API username */
-  username: string;
-  /** REST API password */
-  password: string;
-  /** Use X.509 certificate for authentication */
-  certPath?: string;
-  /** Default network profile to apply for quarantine */
-  defaultQuarantineProfile?: string;
-  /** Default ACL name for quarantine */
-  defaultQuarantineACL?: string;
-  /** Timeout for requests in ms */
-  timeout?: number;
+export function iseFilterFor(identifier: unknown, type: NacIdentifierType): string | null {
+  const v = validateNacIdentifier(identifier, type);
+  if (!v.ok) return null;
+  const field =
+    type === "mac" ? "MacAddress" : type === "serial" ? "DeviceId" : "CertificateSerialNumber";
+  return `${field} eq '${v.normalized}'`;
 }
 
 /**
- * Cisco ISE NAC Adapter
- * 
- * Manages network access control via Cisco ISE
+ * Normalize an ISE endpoint-search response. Pure — no clock, no I/O, no throwing.
+ *
+ * Returns null for "no such endpoint", which is a real answer distinct from a fault.
  */
-export class CiscoISEAdapter implements NACAdapter {
-  readonly name = 'ise';
-  readonly vendor = 'Cisco';
-  readonly config: Required<CiscoISEConfig>;
+export function normalizeIseEndpoint(
+  raw: IseEndpointSearchPayload,
+): NACEndpointInfo | null {
+  const first = raw?.SearchResult?.resources?.[0];
+  const endpointId = asString(first?.id);
+  if (!first || endpointId === undefined) return null;
 
-  private accessToken: string | null = null;
-  private tokenExpiry: number = 0;
-
-  constructor(config: CiscoISEConfig) {
-    this.config = {
-      baseUrl: config.baseUrl.replace(/\/$/, ''),
-      username: config.username,
-      password: config.password,
-      certPath: config.certPath || '',
-      defaultQuarantineProfile: config.defaultQuarantineProfile || 'Quarantine',
-      defaultQuarantineACL: config.defaultQuarantineACL || 'ACL_QUARANTINE',
-      timeout: config.timeout || 30000,
-    };
-  }
-
-  /**
-   * Look up an endpoint by MAC, serial, or certificate
-   */
-  async lookupEndpoint(identifier: string, type: 'mac' | 'serial' | 'cert'): Promise<NACEndpointInfo | null> {
-    await this.ensureAuthenticated();
-
-    let filter = '';
-    switch (type) {
-      case 'mac':
-        filter = `MacAddress eq '${identifier}'`;
-        break;
-      case 'serial':
-        filter = `DeviceId eq '${identifier}'`;
-        break;
-      case 'cert':
-        filter = `CertificateSerialNumber eq '${identifier}'`;
-        break;
-    }
-
-    const url = `${this.config.baseUrl}/api/v1/endpoint?filter=${encodeURIComponent(filter)}`;
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${this.accessToken}`,
-        'Accept': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        return null;
-      }
-      const error = await response.text();
-      throw new Error(`Cisco ISE API error: ${response.status} - ${error}`);
-    }
-
-    const data = await response.json() as {
-      SearchResult?: {
-        resources?: Array<{
-          id: string;
-          name: string;
-          description: string;
-        }>;
-      };
-    };
-
-    if (!data.SearchResult?.resources || data.SearchResult.resources.length === 0) {
-      return null;
-    }
-
-    const endpoint = data.SearchResult.resources[0];
-
-    return {
-      endpointId: endpoint.id,
-      macAddress: type === 'mac' ? identifier : undefined,
-      serialNumber: type === 'serial' ? identifier : undefined,
-      certSubject: type === 'cert' ? identifier : undefined,
-      name: endpoint.name,
-      status: 'registered',
-    };
-  }
-
-  // WHAT WAS REMOVED. `quarantineEndpoint` (POST /api/v1/anc/apply),
-  // `clearQuarantine` (POST /api/v1/anc/clear) and the `quarantineDevice` alias
-  // drove Cisco ISE's Adaptive Network Control to cut a device off the network —
-  // a DEVICE ACTION over the network, the same class deleted from uem/ in #150.
-  // There is no read-only-disciplined form of "quarantine this endpoint", and
-  // AGENTS.md requires high-risk actions to be simulated and approval-required,
-  // so the actuators are gone rather than gated. What remains is read-only:
-  // look an endpoint up, and check connectivity.
-
-  /**
-   * Health check - verify Cisco ISE connectivity
-   */
-  async healthCheck(): Promise<boolean> {
-    // GATED. A health check is still a live call — see check-ungated-fetch.mjs.
-    const emission = resolveEmission();
-    if (emission.mode !== "live") return false;
-
-    try {
-      await this.ensureAuthenticated();
-      
-      const url = `${this.config.baseUrl}/api/v1/anc/policy`;
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
-      });
-      
-      return response.ok;
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * Ensure we have a valid access token (ISE uses Basic Auth for ERS API)
-   */
-  private async ensureAuthenticated(): Promise<void> {
-    if (this.accessToken && Date.now() < this.tokenExpiry) {
-      return;
-    }
-
-    // Cisco ISE uses basic auth for ERS API
-    // Get a session token first
-    const authUrl = `${this.config.baseUrl}/api/v1/ers-sdk/session`;
-    
-    const response = await fetch(authUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${Buffer.from(`${this.config.username}:${this.config.password}`).toString('base64')}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Cisco ISE auth error: ${response.status} - ${error}`);
-    }
-
-    // Extract session token from cookies or headers
-    const cookies = response.headers.get('Set-Cookie');
-    if (cookies) {
-      this.accessToken = cookies;
-      this.tokenExpiry = Date.now() + 1800000; // 30 minutes (typical ISE session)
-    } else {
-      // Fallback: use basic auth for each request
-      this.accessToken = `Basic ${Buffer.from(`${this.config.username}:${this.config.password}`).toString('base64')}`;
-      this.tokenExpiry = Date.now() + 1800000;
-    }
-  }
-
+  // IDENTITY FIELDS COME FROM THE RESPONSE, NEVER FROM THE REQUEST.
+  //
+  // FOUND BY ADVERSARIAL REVIEW, and it is the same defect this file's header claims
+  // to have fixed for `status` — I fixed the unearned `registered` and then left the
+  // identity fields fabricating. The previous version did:
+  //
+  //     macAddress:   type === "mac"    ? normalized : undefined,
+  //     serialNumber: type === "serial" ? normalized : undefined,
+  //     certSubject:  type === "cert"   ? normalized : undefined,
+  //
+  // where `normalized` is the CALLER'S QUERY. So the returned record asserted "ISE
+  // says this endpoint's MAC is X" when ISE had said no such thing — it was echoing
+  // the question back as an answer. If the search matched a different endpoint than
+  // the caller assumed, the record confidently mislabelled it.
+  //
+  // Worse for `cert`: it wrote a certificate SERIAL into `certSubject`, which is a
+  // subject-DN field. A serial is not a subject; that is a type confusion a consumer
+  // would have no way to detect.
+  //
+  // ISE's endpoint search returns `mac` on the resource, so that one is READ. It
+  // reports neither a device serial nor a certificate subject, so those are simply
+  // ABSENT — an omitted field is honest, an echoed one is not.
+  //
+  // THE QUERY PARAMETERS ARE GONE FROM THE SIGNATURE, not merely unused. Removing the
+  // fabrication left `identifier` and `type` sitting in the parameter list, ignored by
+  // the body and dutifully passed by every caller — the exact ingredients of the defect,
+  // kept within reach. With `noUnusedParameters` off, nothing flagged them. A function
+  // that cannot see the caller's query cannot echo it back, so the defect is now
+  // unrepresentable rather than merely absent. Same reasoning as the missing cycle
+  // detector in `provisioning-order`: prefer a shape that cannot express the bug.
+  return {
+    endpointId,
+    macAddress: asString(first.mac),
+    name: asString(first.name),
+    // ISE endpoint search returns identity and description, NOT session
+    // authentication state. `registered` would be an unearned claim.
+    status: "unknown",
+  };
 }
+
+/** Canonical read contract, exported so the gate and any future live transport share
+ *  ONE definition. Nothing here performs a request. */
+export const ISE_READ_CONTRACT = {
+  endpointSearchPath: "/api/v1/endpoint",
+  filterParam: "filter",
+} as const;

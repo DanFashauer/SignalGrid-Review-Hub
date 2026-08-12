@@ -1,5 +1,6 @@
 import { runFixtureSync, type FixturePostureRecord } from "./connector";
 import { runDockSync, type DockCustodyRecord } from "./dock";
+import { runShiftSync, type ShiftContextRecord } from "./shift";
 import { appendAudit } from "./audit";
 import {
   ruleSetDigest,
@@ -59,6 +60,8 @@ export interface SeededDemo {
   fixtureRecords: Record<string, FixturePostureRecord[]>;
   /** Per-connector fixture dock/custody records, so a sync can be replayed. */
   dockRecords: Record<string, DockCustodyRecord[]>;
+  /** Per-connector fixture WFM shift-context records, so a sync can be replayed. */
+  shiftRecords: Record<string, ShiftContextRecord[]>;
 }
 
 const NORTHWIND = "tenant_northwind";
@@ -231,6 +234,37 @@ export function seedDemoStore(clock: Clock): SeededDemo {
     "smartdock",
   );
 
+  // WFM shift-context connector (labor plane), Northwind only for now: two
+  // summaries — the compliant ward iPad's holder is confirmed on shift and on
+  // the clock; ipad-ward-07's holder is scheduled but NOT clocked in (the
+  // off-the-clock scenario). Every other device has no record, so its evidence
+  // reads "unverified" — which the active v1 rule deliberately does not match.
+  const northwindShiftRecords: ShiftContextRecord[] = [
+    { deviceRef: "ipad-ward-01", state: "confirmed", observedAt: CUSTODY_OBSERVED_AT, sourceReference: "fixture:wfm:laborSummary#ipad-ward-01" },
+    { deviceRef: "ipad-ward-07", state: "misfit", observedAt: CUSTODY_OBSERVED_AT, sourceReference: "fixture:wfm:laborSummary#ipad-ward-07" },
+  ];
+  const northwindWfm: Connector = {
+    id: `conn_${NORTHWIND}_wfm_shift`,
+    tenantId: NORTHWIND,
+    kind: "wfm-shift",
+    mode: "fixture",
+    permissionScope: "Read-only WFM labor summaries (fixture; no punch, schedule, or pay touched)",
+    credentialRef: `keyvault-placeholder://${NORTHWIND}/wfm-shift-readonly (non-secret placeholder)`,
+    status: "never_synced",
+    lastSyncAt: null,
+  };
+  store.putConnector(northwindWfm);
+  const northwindShiftRun = runShiftSync(store, clock, northwindWfm, northwindShiftRecords);
+  appendAudit(store, {
+    tenantId: NORTHWIND,
+    type: "connector.synced",
+    actor: "seed",
+    subject: northwindWfm.id,
+    summary: `WFM fixture sync normalized ${northwindShiftRun.signalsNormalized} labor-context signals from ${northwindShiftRun.recordsProcessed} summaries.`,
+    references: [northwindWfm.id, northwindShiftRun.id],
+    recordedAt: northwindShiftRun.completedAt,
+  });
+
   seedWebhookEndpoints(store, NORTHWIND);
   seedWebhookEndpoints(store, ATLAS);
   seedWebhookEndpoints(store, MERIDIAN);
@@ -304,6 +338,9 @@ export function seedDemoStore(clock: Clock): SeededDemo {
       [forgeDockId]: forgeDockRecords,
       [orionDockId]: orionDockRecords,
       [northwindSmartDockId]: northwindSmartDockRecords,
+    },
+    shiftRecords: {
+      [northwindWfm.id]: northwindShiftRecords,
     },
   };
 }
@@ -413,7 +450,11 @@ function seedPolicyTests(
     tamperState: "none",
     dockState: "occupied",
     baselineCompliance: "aligned",
+    benchmarkSelection: "confirmed",
+    shiftContext: "confirmed",
     badgeBinding: "present",
+    managementHealthState: "healthy",
+    localAuthorityState: "verified",
     criticalSignalsPresent: true,
   };
   const cases: Array<Omit<PolicyTest, "id" | "tenantId" | "policyId">> = [
@@ -424,7 +465,15 @@ function seedPolicyTests(
     { name: "missing posture → restrict", evidence: { ...base, postureFreshness: "missing", criticalSignalsPresent: false }, expectedOutcome: "restrict", expectedReasonCode: "POSTURE_MISSING" },
     { name: "baseline drift → step-up", evidence: { ...base, baselineCompliance: "drifted" }, expectedOutcome: "step_up", expectedReasonCode: "BASELINE_DRIFTED" },
     { name: "baseline unknown → still allow (no fabricated block)", evidence: { ...base, baselineCompliance: "unknown" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
+    { name: "benchmark misfit → step-up (an 'aligned' answer from the wrong test is not assurance)", evidence: { ...base, benchmarkSelection: "misfit" }, expectedOutcome: "step_up", expectedReasonCode: "BENCHMARK_SELECTION_MISFIT" },
+    { name: "benchmark selection unverified → still allow (the v1 rule matches ONLY the affirmative bad state, so a fleet not yet emitting the signal is not stepped up)", evidence: { ...base, benchmarkSelection: "unverified" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
+    { name: "shift-context misfit → step-up (the labor plane disagrees with this moment: off the clock, off duty, or the wrong site)", evidence: { ...base, shiftContext: "misfit" }, expectedOutcome: "step_up", expectedReasonCode: "SHIFT_CONTEXT_MISFIT" },
+    { name: "shift-context unverified → still allow (same day-one-quiet rule: the v1 rule matches ONLY the affirmative mismatch)", evidence: { ...base, shiftContext: "unverified" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
     { name: "badge removed → restrict", evidence: { ...base, badgeBinding: "removed" }, expectedOutcome: "restrict", expectedReasonCode: "BADGE_REMOVED" },
+    { name: "management plane broken → restrict (a failed management plane cannot vouch for posture)", evidence: { ...base, managementHealthState: "broken" }, expectedOutcome: "restrict", expectedReasonCode: "MANAGEMENT_HEALTH_BROKEN" },
+    { name: "management health unknown → still allow (day-one-quiet: the v1 rule matches ONLY the affirmative broken state)", evidence: { ...base, managementHealthState: "unknown" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
+    { name: "local authority withheld → restrict (the control plane revoked this device's authority to act locally)", evidence: { ...base, localAuthorityState: "withheld" }, expectedOutcome: "restrict", expectedReasonCode: "LOCAL_AUTHORITY_WITHHELD" },
+    { name: "local authority unverified → still allow (day-one-quiet: only the affirmative withhold fires)", evidence: { ...base, localAuthorityState: "unverified" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
     { name: "badge forced removal → deny", evidence: { ...base, badgeBinding: "forced" }, expectedOutcome: "deny", expectedReasonCode: "BADGE_FORCED_REMOVAL" },
     { name: "badge absent/unknown → no fabricated block (allow)", evidence: { ...base, badgeBinding: "unknown" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
     { name: "custody maintenance → restrict", evidence: { ...base, custodyState: "maintenance" }, expectedOutcome: "restrict", expectedReasonCode: "CUSTODY_MAINTENANCE" },
@@ -519,6 +568,13 @@ function seedNorthwindSubjects(store: MemoryStore): FixturePostureRecord[] {
       identity: { externalRef: "nurse.baseline_drift", displayName: "Nurse (baseline drift)", state: "enabled", assignedRole: "nurse" },
       device: { externalRef: "ipad-ward-06", name: "Ward iPad 06", osPlatform: "iPadOS", osVersion: "18.5", ownerType: "shared", managementAgent: "intune" },
       posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, baseline: "drifted", sourceReference: "fixture:intune:managedDevices#ipad-ward-06" },
+    },
+    // Labor-plane scenario: identity, posture, and custody are all healthy — the
+    // WFM's verdict (scheduled but not on the clock) is the decisive signal.
+    {
+      identity: { externalRef: "nurse.offclock", displayName: "Nurse (off the clock)", state: "enabled", assignedRole: "nurse" },
+      device: { externalRef: "ipad-ward-07", name: "Ward iPad 07", osPlatform: "iPadOS", osVersion: "18.5", ownerType: "shared", managementAgent: "intune" },
+      posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, baseline: "aligned", sourceReference: "fixture:intune:managedDevices#ipad-ward-07" },
     },
     // Badge-reader-case scenarios: posture is healthy so the badge read decides.
     {

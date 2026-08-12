@@ -19,6 +19,7 @@ import {
   type NormalizedNetworkSignal,
 } from "@workspace/integrations/network-nac";
 import { composeDeviceRisk, fromNetwork } from "@workspace/posture-composition";
+import { checkLiveGateIsolated } from "./lib/live-gate.js";
 
 interface Expected { authState: string; posture: string; reasonCode: string; recommendedAction: string; }
 interface FixtureRow extends NetworkPostureRaw { expected: Expected; }
@@ -67,7 +68,83 @@ for (const s of fixture.sessions) {
 }
 
 // A once-trusted device with a stale auth is no longer proof of current state.
-check("a fresh authenticated+compliant device is trusted", evaluateNetwork(byDevice.get("dev-trusted")!, NOW_MS).posture === "on_trusted_segment");
+// ── SEGMENT APPROPRIATENESS ──────────────────────────────────────────────────
+//
+// THE DEFECT THIS REPLACES. The single assertion that used to live here read
+//
+//     check("a fresh authenticated+compliant device is trusted",
+//       evaluateNetwork(signal, NOW_MS).posture === "on_trusted_segment");
+//
+// and it passed for a device on ANY VLAN, because the evaluator never looked at the
+// segment. The connector read it, normalized it, carried it into evidence — and the
+// word "segment" appeared exactly once in the evaluator, inside that posture string.
+// A device authenticated onto the guest or management VLAN graded identically to one
+// on the corporate user VLAN, with action `none`. The proof asserted the name, not
+// the property.
+{
+  const base = byDevice.get("dev-trusted")!;
+  const on = (segment: string | null) => ({ ...base, segment });
+
+  // With NO policy, the segment is not graded — and the verdict no longer claims it is.
+  const unverified = evaluateNetwork(base, NOW_MS);
+  check("with no segment policy the verdict does NOT claim trust",
+    unverified.posture === "on_unverified_segment" &&
+    unverified.reasonCode === "AUTHENTICATED_SEGMENT_UNVERIFIED");
+  check("...and it still grants — an operator who expressed no policy did not ask for the check",
+    unverified.recommendedAction === "none");
+
+  const POLICY = { expected: ["VLAN10", "corp-wired"], restricted: ["VLAN60", "VLAN70"] };
+
+  // Non-vacuity: the expected segment must still clear, or every refusal below is trivial.
+  const good = evaluateNetwork(on("VLAN10"), NOW_MS, { segmentPolicy: POLICY });
+  check("an EXPECTED segment is trusted, and now genuinely verified",
+    good.posture === "on_trusted_segment" && good.reasonCode === "AUTHENTICATED_TRUSTED_SEGMENT" &&
+    good.recommendedAction === "none");
+
+  // THE CASE THAT USED TO GRANT: the guest VLAN.
+  const guest = evaluateNetwork(on("VLAN40"), NOW_MS, { segmentPolicy: POLICY });
+  check("an UNEXPECTED segment steps up — this is the case that used to grant",
+    guest.posture === "on_unexpected_segment" && guest.reasonCode === "SEGMENT_UNEXPECTED" &&
+    guest.recommendedAction === "step_up");
+
+  // The management VLAN outranks it: lateral movement into the control plane.
+  const mgmt = evaluateNetwork(on("VLAN60"), NOW_MS, { segmentPolicy: POLICY });
+  check("a RESTRICTED segment restricts — reaching the management VLAN is not a misconfiguration",
+    mgmt.reasonCode === "SEGMENT_RESTRICTED" && mgmt.recommendedAction === "restrict");
+  check("...and restricted OUTRANKS merely-unexpected, so the worse finding wins",
+    mgmt.recommendedAction === "restrict" && guest.recommendedAction === "step_up");
+
+  // A segment listed as BOTH expected and restricted is expected — an explicit
+  // allowance beats a general caution, which is what lets a management workstation
+  // legitimately sit on the management VLAN.
+  check("expected wins over restricted when a segment is in both lists",
+    evaluateNetwork(on("VLAN60"), NOW_MS,
+      { segmentPolicy: { expected: ["VLAN60"], restricted: ["VLAN60"] } }).recommendedAction === "none");
+
+  // A policy that cannot be applied must foreclose, not assume compliance.
+  check("a policy with NO reported segment forecloses rather than assuming it is fine",
+    evaluateNetwork(on(null), NOW_MS, { segmentPolicy: POLICY }).reasonCode ===
+      "SEGMENT_UNREPORTED_UNDER_POLICY");
+  check("...and an EMPTY expected list is treated as no policy, not as 'nothing is allowed'",
+    evaluateNetwork(on("VLAN40"), NOW_MS, { segmentPolicy: { expected: [] } }).reasonCode ===
+      "AUTHENTICATED_SEGMENT_UNVERIFIED");
+
+  // Real-world spelling drift: the same VLAN arrives differently from NAC, RADIUS
+  // and switch inventories. A policy that misses on whitespace silently stops working.
+  check("segment matching is trimmed and case-insensitive across vendor spellings",
+    ["  VLAN10", "vlan10", "VLAN10  ", "Vlan10"].every(
+      (sp) => evaluateNetwork(on(sp), NOW_MS, { segmentPolicy: POLICY }).recommendedAction === "none"));
+  check("...but it is not merely a substring match — VLAN100 is not VLAN10",
+    evaluateNetwork(on("VLAN100"), NOW_MS, { segmentPolicy: POLICY }).reasonCode === "SEGMENT_UNEXPECTED");
+
+  // Segment grading must not override the stronger concerns that precede it.
+  check("an unauthenticated device still restricts regardless of segment policy",
+    evaluateNetwork({ ...base, authState: "unauthenticated", segment: "VLAN10" }, NOW_MS,
+      { segmentPolicy: POLICY }).recommendedAction === "restrict");
+  check("a NAC-noncompliant device still steps up even on an expected segment",
+    evaluateNetwork({ ...base, nacCompliant: false, segment: "VLAN10" }, NOW_MS,
+      { segmentPolicy: POLICY }).reasonCode === "NAC_NONCOMPLIANT");
+}
 check("far-future makes the trusted device stale → step_up", evaluateNetwork(byDevice.get("dev-trusted")!, NOW_MS + 60 * 60 * 1000).reasonCode === "STALE_NETWORK_STATE");
 
 // ── fuses into the unified composer via the new `network` adapter ─────────────
@@ -93,6 +170,24 @@ check("a bad token surfaces a typed auth_failed error", authErr?.code === "auth_
 check("dev tier resolves to fixture mode", resolveNetworkNacConnector({ SIGNALGRID_TIER: "dev" }).mode === "fixture");
 check("prod WITHOUT live flag stays fixture", resolveNetworkNacConnector({ SIGNALGRID_TIER: "prod" }).mode === "fixture");
 check("prod + live + token resolves live", resolveNetworkNacConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", NAC_ACCESS_TOKEN: "t" }).mode === "live");
+
+
+// ── The live-call gate, each condition ISOLATED ──────────────────────────────
+//
+// Replaces / supplements a cumulative ladder in which each step added one variable, so
+// the conditions below the one under test were also failing and only the last was
+// genuinely exercised. See lib/live-gate.ts. The tier check is the control behind the
+// written claim that dev and alpha never make live vendor calls.
+checkLiveGateIsolated({
+  check,
+  family: "network-nac",
+  resolve: (env) => resolveNetworkNacConnector(env),
+  full: {
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    NAC_ACCESS_TOKEN: "t",
+  },
+});
 
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);

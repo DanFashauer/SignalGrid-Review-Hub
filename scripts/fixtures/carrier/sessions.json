@@ -6,58 +6,212 @@
   "observedAt": "2026-07-20T12:00:00.000Z",
   "sessions": [
     {
-      "deviceId": "dev-online", "iccid": "SIM-0001", "sessionState": "active", "dataConnected": true,
-      "smsCapable": true, "lastConnectedAt": "2026-07-20T11:55:00Z", "roaming": false, "billingState": "active",
-      "expected": { "cellularReachability": "online", "smsReachable": true, "wifiOnly": false, "provisioning": "active",
-        "posture": "reachable", "reasonCode": "CELLULAR_ONLINE", "recommendedAction": "monitor", "locatable": true }
+      "deviceId": "dev-online",
+      "iccid": "SIM-0001",
+      "sessionState": "active",
+      "dataConnected": true,
+      "smsCapable": true,
+      "lastConnectedAt": "2026-07-20T11:55:00Z",
+      "roaming": false,
+      "billingState": "active",
+      "expected": {
+        "cellularReachability": "online",
+        "smsReachable": true,
+        "provisioning": "active",
+        "posture": "reachable",
+        "reasonCode": "CELLULAR_ONLINE",
+        "recommendedAction": "monitor",
+        "locatable": true,
+        "cellularBackchannel": "present"
+      },
+      "cellularBackchannel": "present"
     },
     {
-      "deviceId": "dev-roaming", "iccid": "SIM-0002", "sessionState": "active", "dataConnected": true,
-      "smsCapable": true, "lastConnectedAt": "2026-07-20T11:58:00Z", "roaming": true, "billingState": "active",
-      "expected": { "cellularReachability": "online", "smsReachable": true, "wifiOnly": false, "provisioning": "active",
-        "posture": "degraded", "reasonCode": "CELLULAR_ONLINE_ROAMING", "recommendedAction": "monitor", "locatable": true }
+      "deviceId": "dev-roaming",
+      "iccid": "SIM-0002",
+      "sessionState": "active",
+      "dataConnected": true,
+      "smsCapable": true,
+      "lastConnectedAt": "2026-07-20T11:58:00Z",
+      "roaming": true,
+      "billingState": "active",
+      "expected": {
+        "cellularReachability": "online",
+        "smsReachable": true,
+        "provisioning": "active",
+        "posture": "degraded",
+        "reasonCode": "CELLULAR_ONLINE_ROAMING",
+        "recommendedAction": "monitor",
+        "locatable": true,
+        "cellularBackchannel": "present"
+      },
+      "cellularBackchannel": "present"
     },
     {
-      "deviceId": "dev-idle-sms", "iccid": "SIM-0003", "sessionState": "idle", "dataConnected": false,
-      "smsCapable": true, "lastConnectedAt": "2026-07-20T11:50:00Z", "roaming": false, "billingState": "active",
-      "expected": { "cellularReachability": "idle", "smsReachable": true, "wifiOnly": false, "provisioning": "active",
-        "posture": "degraded", "reasonCode": "CELLULAR_IDLE_SMS_OK", "recommendedAction": "locate", "locatable": true }
+      "deviceId": "dev-idle-sms",
+      "iccid": "SIM-0003",
+      "sessionState": "idle",
+      "dataConnected": false,
+      "smsCapable": true,
+      "lastConnectedAt": "2026-07-20T11:50:00Z",
+      "roaming": false,
+      "billingState": "active",
+      "expected": {
+        "cellularReachability": "idle",
+        "smsReachable": true,
+        "provisioning": "active",
+        "posture": "degraded",
+        "reasonCode": "CELLULAR_IDLE_SMS_OK",
+        "recommendedAction": "locate",
+        "locatable": true,
+        "cellularBackchannel": "present"
+      },
+      "cellularBackchannel": "present"
     },
     {
-      "deviceId": "dev-offline-sms", "iccid": "SIM-0004", "sessionState": "offline", "dataConnected": false,
-      "smsCapable": true, "lastConnectedAt": "2026-07-20T11:45:00Z", "roaming": false, "billingState": "active",
-      "expected": { "cellularReachability": "offline", "smsReachable": true, "wifiOnly": false, "provisioning": "active",
-        "posture": "degraded", "reasonCode": "OFFLINE_SMS_ONLY", "recommendedAction": "locate", "locatable": true }
+      "deviceId": "dev-offline-sms",
+      "iccid": "SIM-0004",
+      "sessionState": "offline",
+      "dataConnected": false,
+      "smsCapable": true,
+      "lastConnectedAt": "2026-07-20T11:45:00Z",
+      "roaming": false,
+      "billingState": "active",
+      "expected": {
+        "cellularReachability": "offline",
+        "smsReachable": true,
+        "provisioning": "active",
+        "posture": "degraded",
+        "reasonCode": "OFFLINE_SMS_ONLY",
+        "recommendedAction": "locate",
+        "locatable": true,
+        "cellularBackchannel": "present"
+      },
+      "cellularBackchannel": "present"
     },
     {
-      "deviceId": "dev-offline-dark", "iccid": "SIM-0005", "sessionState": "offline", "dataConnected": false,
-      "smsCapable": false, "lastConnectedAt": "2026-07-20T11:40:00Z", "roaming": false, "billingState": "active",
-      "expected": { "cellularReachability": "offline", "smsReachable": false, "wifiOnly": false, "provisioning": "active",
-        "posture": "unreachable", "reasonCode": "FULLY_UNREACHABLE", "recommendedAction": "escalate", "locatable": false }
+      "deviceId": "dev-offline-dark",
+      "iccid": "SIM-0005",
+      "sessionState": "offline",
+      "dataConnected": false,
+      "smsCapable": false,
+      "lastConnectedAt": "2026-07-20T11:40:00Z",
+      "roaming": false,
+      "billingState": "active",
+      "expected": {
+        "cellularReachability": "offline",
+        "smsReachable": false,
+        "provisioning": "active",
+        "posture": "unreachable",
+        "reasonCode": "FULLY_UNREACHABLE",
+        "recommendedAction": "escalate",
+        "locatable": false,
+        "cellularBackchannel": "present"
+      },
+      "cellularBackchannel": "present"
     },
     {
-      "deviceId": "dev-wifi-only", "sessionState": "", "dataConnected": false,
-      "smsCapable": false, "lastConnectedAt": null, "roaming": false, "billingState": "active",
-      "expected": { "cellularReachability": "unknown", "smsReachable": false, "wifiOnly": true, "provisioning": "active",
-        "posture": "wifi_only_blindspot", "reasonCode": "WIFI_ONLY_NO_CELLULAR", "recommendedAction": "alert", "locatable": false }
+      "deviceId": "dev-no-modem",
+      "sessionState": "",
+      "dataConnected": false,
+      "smsCapable": false,
+      "lastConnectedAt": null,
+      "roaming": false,
+      "billingState": "active",
+      "expected": {
+        "cellularReachability": "unknown",
+        "smsReachable": false,
+        "provisioning": "active",
+        "posture": "no_cellular_backchannel",
+        "reasonCode": "NO_CELLULAR_BACKCHANNEL",
+        "recommendedAction": "alert",
+        "locatable": false,
+        "cellularBackchannel": "absent"
+      },
+      "cellularBackchannel": "absent"
     },
     {
-      "deviceId": "dev-suspended", "iccid": "SIM-0007", "sessionState": "idle", "dataConnected": false,
-      "smsCapable": true, "lastConnectedAt": "2026-07-20T11:52:00Z", "roaming": false, "billingState": "suspended",
-      "expected": { "cellularReachability": "idle", "smsReachable": true, "wifiOnly": false, "provisioning": "suspended",
-        "posture": "unreachable", "reasonCode": "PROVISIONING_SUSPENDED", "recommendedAction": "escalate", "locatable": false }
+      "deviceId": "dev-suspended",
+      "iccid": "SIM-0007",
+      "sessionState": "idle",
+      "dataConnected": false,
+      "smsCapable": true,
+      "lastConnectedAt": "2026-07-20T11:52:00Z",
+      "roaming": false,
+      "billingState": "suspended",
+      "expected": {
+        "cellularReachability": "idle",
+        "smsReachable": true,
+        "provisioning": "suspended",
+        "posture": "unreachable",
+        "reasonCode": "PROVISIONING_SUSPENDED",
+        "recommendedAction": "escalate",
+        "locatable": false,
+        "cellularBackchannel": "present"
+      },
+      "cellularBackchannel": "present"
     },
     {
-      "deviceId": "dev-stale-online", "iccid": "SIM-0008", "sessionState": "active", "dataConnected": true,
-      "smsCapable": true, "lastConnectedAt": "2026-07-20T10:00:00Z", "roaming": false, "billingState": "active",
-      "expected": { "cellularReachability": "online", "smsReachable": true, "wifiOnly": false, "provisioning": "active",
-        "posture": "degraded", "reasonCode": "STALE_LAST_SEEN", "recommendedAction": "locate", "locatable": true }
+      "deviceId": "dev-stale-online",
+      "iccid": "SIM-0008",
+      "sessionState": "active",
+      "dataConnected": true,
+      "smsCapable": true,
+      "lastConnectedAt": "2026-07-20T10:00:00Z",
+      "roaming": false,
+      "billingState": "active",
+      "expected": {
+        "cellularReachability": "online",
+        "smsReachable": true,
+        "provisioning": "active",
+        "posture": "degraded",
+        "reasonCode": "STALE_LAST_SEEN",
+        "recommendedAction": "locate",
+        "locatable": true,
+        "cellularBackchannel": "present"
+      },
+      "cellularBackchannel": "present"
     },
     {
-      "deviceId": "dev-unknown", "iccid": "SIM-0009", "sessionState": "", "dataConnected": false,
-      "smsCapable": false, "lastConnectedAt": "2026-07-20T11:59:00Z", "roaming": false, "billingState": "activated",
-      "expected": { "cellularReachability": "unknown", "smsReachable": false, "wifiOnly": false, "provisioning": "active",
-        "posture": "unknown", "reasonCode": "REACHABILITY_UNKNOWN", "recommendedAction": "monitor", "locatable": false }
+      "deviceId": "dev-unknown",
+      "iccid": "SIM-0009",
+      "sessionState": "",
+      "dataConnected": false,
+      "smsCapable": false,
+      "lastConnectedAt": "2026-07-20T11:59:00Z",
+      "roaming": false,
+      "billingState": "activated",
+      "expected": {
+        "cellularReachability": "unknown",
+        "smsReachable": false,
+        "provisioning": "active",
+        "posture": "unknown",
+        "reasonCode": "REACHABILITY_UNKNOWN",
+        "recommendedAction": "monitor",
+        "locatable": false,
+        "cellularBackchannel": "present"
+      },
+      "cellularBackchannel": "present"
+    },
+    {
+      "deviceId": "dev-private-5g",
+      "_why": "A device attached to a PRIVATE 5G network. The public carrier API has never heard of it, so every field is silent \u2014 the exact wire shape that used to be reported as 'no cellular radio'. With nothing posed from the device-inventory plane, the honest answer is that we cannot tell.",
+      "sessionState": "",
+      "dataConnected": false,
+      "smsCapable": false,
+      "lastConnectedAt": null,
+      "roaming": false,
+      "billingState": "active",
+      "expected": {
+        "cellularReachability": "unknown",
+        "smsReachable": false,
+        "cellularBackchannel": "unknown",
+        "provisioning": "active",
+        "posture": "backchannel_unverified",
+        "reasonCode": "BACKCHANNEL_UNPOSED",
+        "recommendedAction": "monitor",
+        "locatable": false
+      }
     }
   ]
 }

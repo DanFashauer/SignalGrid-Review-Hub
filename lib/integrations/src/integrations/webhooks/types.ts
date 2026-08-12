@@ -43,7 +43,19 @@ export const DeliveryStatusSchema = z.enum([
 ]);
 export type DeliveryStatus = z.infer<typeof DeliveryStatusSchema>;
 
-/** Create webhook request */
+/**
+ * Create webhook request.
+ *
+ * NOT `.strict()`, and that is a decision rather than an omission. The question was
+ * raised because the strip default has the familiar asymmetry — a caller writing
+ * `secrets` for `secret` gets an UNSIGNED webhook — and it was refused on a measurement:
+ * nothing in the repository calls `.parse()` on this schema. It is a type source, and a
+ * schema nobody parses cannot reject anything, so `.strict()` here would change no
+ * behaviour while making the next reader believe the boundary is defended.
+ *
+ * It becomes correct — and required — the moment `createWebhook` parses its input. See
+ * the note on that function in `./store`.
+ */
 export const CreateWebhookSchema = z.object({
   name: z.string().min(1).max(100),
   url: z.string().url(),
@@ -54,7 +66,10 @@ export const CreateWebhookSchema = z.object({
 
 export type CreateWebhookRequest = z.infer<typeof CreateWebhookSchema>;
 
-/** Update webhook request */
+/** Update webhook request. Not `.strict()` for the same measured reason as
+ *  `CreateWebhookSchema` above — and with a sharper field at stake: a misspelled
+ *  `rotateSecret` is dropped, the update succeeds, and the secret the operator believes
+ *  they just retired is still live. */
 export const UpdateWebhookSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   url: z.string().url().optional(),

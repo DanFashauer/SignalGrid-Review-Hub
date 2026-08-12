@@ -24,6 +24,16 @@ export type AccessResult = "granted" | "denied" | "unknown";
 /** How the holder authenticated at the reader. */
 export type CredentialType = "biometric" | "card" | "mobile" | "pin" | "unknown";
 
+/** What the reader actually VERIFIED — the mixed-estate axis the modality hides.
+ *  A 125 kHz prox clone and a PKOC/Aliro credential both arrive as one "granted",
+ *  yet one proved itself cryptographically and the other replayed an identifier
+ *  anyone could have skimmed. The PACS reports which its reader performed:
+ *  `cryptographic` = challenge–response / mutual auth (PKOC, Aliro, DESFire-class,
+ *  a verified biometric template); `static_identifier` = a replayable identifier
+ *  read (125 kHz prox, CSN-only, magstripe) — serviceable, and clonable. This
+ *  dimension GRADES the difference; it never condemns the legacy estate. */
+export type CredentialTechnology = "cryptographic" | "static_identifier" | "unknown";
+
 /** Is the holder authorized for THIS door/zone right now, per the PACS access
  *  rules + time zones? `out_of_schedule` = outside their permitted hours;
  *  `out_of_zone` = not authorized for this area; `revoked` = the credential/grant
@@ -38,14 +48,29 @@ export type AntipassbackState = "ok" | "violation" | "unknown";
  *  grant (door-forced alarm); `held_open` = propped/held past its relock timer. */
 export type DoorState = "secured" | "forced" | "held_open" | "unknown";
 
+/** Health of the reader/controller that produced this entry's evidence — DISTINCT
+ *  from `bridgeReachable` (the BRIDGE can answer perfectly while the door
+ *  hardware it reports on is offline, which means the entry data may be blind).
+ *  Intake ledger row 26: the owner's prescribed minimum signal set names
+ *  "reader/controller health" and nothing carried it. An AFFIRMATIVE-ONLY axis:
+ *  explicit `offline`/`degraded` grades; `unknown` (unreported) forecloses
+ *  nothing, so every bridge deployed before this axis keeps its behavior. */
+export type ControllerHealth = "online" | "degraded" | "offline" | "unknown";
+
 /** Raw PACS report about one controlled entry / holder (loosely typed — any field
  *  may degrade to null / an error string). */
 export interface PacsAccessReportRaw {
   accessResult?: unknown; // granted | denied | unknown
   credentialType?: unknown; // biometric | card | mobile | pin | unknown
+  credentialTechnology?: unknown; // cryptographic | static_identifier | unknown
   authorization?: unknown; // authorized | out_of_schedule | out_of_zone | revoked | unknown
   antipassback?: unknown; // ok | violation | unknown
   doorState?: unknown; // secured | forced | held_open | unknown
+  /** When the graded entry event occurred — a strict ISO-8601 UTC (Zulu)
+   *  instant. Row 26's "event timestamp": without it a stale badge-in grades
+   *  exactly like a current one. */
+  observedAt?: unknown;
+  controllerHealth?: unknown; // online | degraded | offline | unknown
   /** Does the PACS badge-holder match the checked-out device holder? */
   identityMatched?: boolean | null;
   /** The PACS-attested holder and the expected checked-out badge-holder, when present. */
@@ -62,9 +87,15 @@ export interface NormalizedPacsAccess {
   deviceId: string;
   accessResult: AccessResult;
   credentialType: CredentialType;
+  credentialTechnology: CredentialTechnology;
   authorization: AccessAuthorization;
   antipassback: AntipassbackState;
   doorState: DoorState;
+  /** The entry event's instant, when readably reported (strict Zulu); null
+   *  otherwise. Freshness is derived at EVALUATE time against a caller-posed
+   *  age bound and reference instant — no clock in any decision path. */
+  observedAt: string | null;
+  controllerHealth: ControllerHealth;
   /** true = PACS holder confirmed == checked-out holder; false = a mismatch;
    *  null = not reported. */
   identityMatched: boolean | null;
@@ -83,6 +114,9 @@ export type PacsAccessPosture =
   | "door_forced"
   | "out_of_bounds"
   | "door_held"
+  | "credential_below_floor"
+  | "stale_evidence"
+  | "controller_unhealthy"
   | "unverified"
   | "unknown";
 
@@ -96,12 +130,25 @@ export type PacsAccessReasonCode =
   | "OUT_OF_SCHEDULE"
   | "OUT_OF_ZONE"
   | "DOOR_HELD_OPEN"
+  | "CREDENTIAL_BELOW_FLOOR"
+  | "CREDENTIAL_TECHNOLOGY_UNKNOWN"
+  | "EVENT_STALE"
+  | "EVENT_TIME_UNKNOWN"
+  | "CONTROLLER_OFFLINE"
+  | "CONTROLLER_DEGRADED"
   | "PACS_STATE_UNKNOWN"
   | "BRIDGE_UNREACHABLE"
   | "NOT_COVERED";
 
 /** All members are on the unified action ladder used by posture-composition. */
 export type PacsAccessAction = "none" | "monitor" | "step_up" | "alert" | "restrict" | "escalate";
+
+/** The credential-technology grade, present on every verdict.
+ *  `unassessed` = the caller posed no floor — the axis never forecloses a grant a
+ *  deployment has not asked it to police (a mixed estate modernizes at its own
+ *  pace); `unknown` = the floor was posed but the PACS did not say what the reader
+ *  verified. Only a POSED floor is ever graded. */
+export type CredentialAssurance = "meets_floor" | "below_floor" | "unassessed" | "unknown";
 
 export interface PacsAccessVerdict {
   posture: PacsAccessPosture;
@@ -111,6 +158,9 @@ export interface PacsAccessVerdict {
   criticalFindings: string[];
   /** PACS facts whose state could NOT be determined (raise the bar). */
   unknownSignals: string[];
+  /** How the presented credential's TECHNOLOGY grades against the caller-posed
+   *  floor (see CredentialAssurance). */
+  credentialAssurance: CredentialAssurance;
   /** True only when the holder is confirmed to have a legitimate, authorized,
    *  in-bounds physical entry at a secure door AND their PACS identity matches the
    *  checked-out device holder (never true for a denied/revoked/mismatched/forced/

@@ -6,10 +6,14 @@
 // affirmatively ungoverned (restrict); a binding WIDER than the device's observed
 // properties warrant is the fail-open case (restrict); NARROWER is a fail-closed
 // nuisance (monitor); an unreadable direction cannot be confirmed benign (step_up);
-// users inside a device group break policy targeting at group scale (alert); and
-// unknown anything raises, never grants. The grant requires bound + matched +
-// clean hygiene + clean parse, with the mismatch direction pinned moot-when-matched.
+// users inside a device group break policy targeting at group scale (alert); a
+// correct binding to a policy that only REPORTS is not protection (monitor) and one
+// to a DISABLED policy is no binding at all (restrict); and unknown anything raises,
+// never grants. The grant requires bound + matched + clean hygiene + enforcing +
+// clean parse, with the mismatch direction pinned moot-when-matched.
 import {
+  resolvePolicyBindingConnector,
+  makeDefaultPolicyBindingTransport,
   PolicyBindingConnector,
   PolicyBindingConnectorError,
   createMockPolicyBindingTransport,
@@ -21,6 +25,7 @@ import {
 } from "@workspace/integrations/policy-binding";
 import { SIGNAL_KINDS, composeDeviceRisk, fromPolicyBinding } from "@workspace/posture-composition";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
+import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
 
 let passed = 0;
 const failures: string[] = [];
@@ -34,60 +39,77 @@ console.log("Policy-binding decision proof");
 const ev = (r: PolicyBindingReportRaw, id = "dev-1") => evaluatePolicyBinding(normalizeReport(id, r));
 
 // ── the grant ───────────────────────────────────────────────────────────────────
-const correct = ev({ binding: "bound", profile_match: "matched", membership_hygiene: "clean" });
-check("bound + matched + clean hygiene → the grant (binding confirmed)",
+const correct = ev({ binding: "bound", profile_match: "matched", membership_hygiene: "clean", enforcement: "enforcing" });
+check("bound + matched + clean hygiene + ENFORCING → the grant (binding confirmed)",
   correct.recommendedAction === "none" && correct.reasonCode === "BOUND_CORRECTLY" && correct.bindingConfirmed === true);
 check("...with no critical findings and no unknowns", correct.criticalFindings.length === 0 && correct.unknownSignals.length === 0);
+// The whole reason the enforcement axis exists: a PERFECT binding whose policy does
+// not act. Same report as the grant above, one field different.
+const reportOnly = ev({ binding: "bound", profile_match: "matched", membership_hygiene: "clean", enforcement: "report_only" });
+check("bound + matched + clean hygiene + REPORT-ONLY → monitor, never the grant (governed on paper, gated by nothing)",
+  reportOnly.recommendedAction === "monitor" && reportOnly.reasonCode === "BINDING_REPORT_ONLY" &&
+  reportOnly.bindingConfirmed === false && reportOnly.criticalFindings.includes("binding_report_only"));
+const disabled = ev({ binding: "bound", profile_match: "matched", membership_hygiene: "clean", enforcement: "disabled" });
+check("bound + matched + clean hygiene + DISABLED → restrict (neither acting nor observing is, in effect, no binding at all)",
+  disabled.recommendedAction === "restrict" && disabled.reasonCode === "BINDING_DISABLED" && disabled.criticalFindings.includes("binding_disabled"));
+// The absent key is the case that matters in practice: a plane wired before this
+// axis existed says nothing about enforcement, and silence must not read as "yes".
+const enforcementAbsent = ev({ binding: "bound", profile_match: "matched", membership_hygiene: "clean" });
+check("an otherwise-perfect report that says NOTHING about enforcement → step_up, not the grant (silence is not an affirmative)",
+  enforcementAbsent.recommendedAction === "step_up" && enforcementAbsent.reasonCode === "ENFORCEMENT_UNKNOWN" &&
+  enforcementAbsent.unknownSignals.includes("enforcement"));
+check("junk enforcement alone → malformed",
+  normalizeReport("j5", { binding: "bound", profile_match: "matched", membership_hygiene: "clean", enforcement: "sort-of" }).reportIntegrity === "malformed");
 // A report asserting a concrete direction ALONGSIDE "matched" contradicts itself
 // (review finding — the same self-contradiction rule as a manifest whose floor
 // exceeds its own latest): the wire-level assertion is malformed. At the
 // NORMALIZED layer the direction stays moot-when-matched (the enumeration below
 // pins that), but no self-contradictory wire report ever grants.
-const contradictoryDirection = ev({ binding: "bound", profile_match: "matched", mismatch_direction: "wider", membership_hygiene: "clean" });
+const contradictoryDirection = ev({ binding: "bound", profile_match: "matched", mismatch_direction: "wider", membership_hygiene: "clean", enforcement: "enforcing" });
 check("'matched' + an asserted concrete direction is a self-contradicting report → malformed, never a grant",
   contradictoryDirection.recommendedAction !== "none" &&
-  normalizeReport("cd", { binding: "bound", profile_match: "matched", mismatch_direction: "wider", membership_hygiene: "clean" }).reportIntegrity === "malformed");
+  normalizeReport("cd", { binding: "bound", profile_match: "matched", mismatch_direction: "wider", membership_hygiene: "clean", enforcement: "enforcing" }).reportIntegrity === "malformed");
 
 // ── the failure modes, each with its own reason ─────────────────────────────────
-const unbound = ev({ binding: "unbound", profile_match: "matched", membership_hygiene: "clean" });
+const unbound = ev({ binding: "unbound", profile_match: "matched", membership_hygiene: "clean", enforcement: "enforcing" });
 check("UNBOUND → restrict (an enrolled device outside every policy group receives NO policy — affirmatively ungoverned)",
   unbound.recommendedAction === "restrict" && unbound.reasonCode === "UNBOUND_UNGOVERNED" && unbound.criticalFindings.includes("unbound_ungoverned"));
-const tooWide = ev({ binding: "bound", profile_match: "mismatched", mismatch_direction: "wider", membership_hygiene: "clean" });
+const tooWide = ev({ binding: "bound", profile_match: "mismatched", mismatch_direction: "wider", membership_hygiene: "clean", enforcement: "enforcing" });
 check("mismatched + WIDER → restrict (fail-open: the corporate device in the BYOD group, 'compliant' against the wrong bar)",
   tooWide.recommendedAction === "restrict" && tooWide.reasonCode === "BINDING_TOO_WIDE" && tooWide.criticalFindings.includes("binding_too_wide"));
-const tooNarrow = ev({ binding: "bound", profile_match: "mismatched", mismatch_direction: "narrower", membership_hygiene: "clean" });
+const tooNarrow = ev({ binding: "bound", profile_match: "mismatched", mismatch_direction: "narrower", membership_hygiene: "clean", enforcement: "enforcing" });
 check("mismatched + NARROWER → monitor (a fail-closed mistake: an ops nuisance, not a trust hole)",
   tooNarrow.recommendedAction === "monitor" && tooNarrow.reasonCode === "BINDING_TOO_NARROW");
-const dirUnknown = ev({ binding: "bound", profile_match: "mismatched", membership_hygiene: "clean" });
+const dirUnknown = ev({ binding: "bound", profile_match: "mismatched", membership_hygiene: "clean", enforcement: "enforcing" });
 check("mismatched + direction UNREADABLE → step_up (cannot confirm it is not the fail-open case)",
   dirUnknown.recommendedAction === "step_up" && dirUnknown.reasonCode === "MISMATCH_DIRECTION_UNKNOWN" && dirUnknown.unknownSignals.includes("mismatch_direction"));
-const mixed = ev({ binding: "bound", profile_match: "matched", membership_hygiene: "mixed" });
+const mixed = ev({ binding: "bound", profile_match: "matched", membership_hygiene: "mixed", enforcement: "enforcing" });
 check("users inside the device group → alert (policy targeting broken at GROUP scale, not one device)",
   mixed.recommendedAction === "alert" && mixed.reasonCode === "MIXED_MEMBERSHIP" && mixed.criticalFindings.includes("mixed_membership"));
 
 // ── unknowns raise, never grant ─────────────────────────────────────────────────
-const matchUnknown = ev({ binding: "bound", membership_hygiene: "clean" });
+const matchUnknown = ev({ binding: "bound", membership_hygiene: "clean", enforcement: "enforcing" });
 check("match state unreadable → step_up (MATCH_UNKNOWN)",
   matchUnknown.recommendedAction === "step_up" && matchUnknown.reasonCode === "MATCH_UNKNOWN");
-const hygieneUnknown = ev({ binding: "bound", profile_match: "matched" });
+const hygieneUnknown = ev({ binding: "bound", profile_match: "matched", enforcement: "enforcing" });
 check("hygiene state unreadable → step_up (HYGIENE_UNKNOWN)",
   hygieneUnknown.recommendedAction === "step_up" && hygieneUnknown.reasonCode === "HYGIENE_UNKNOWN");
-const bindingUnknown = ev({ profile_match: "matched", membership_hygiene: "clean" });
+const bindingUnknown = ev({ profile_match: "matched", membership_hygiene: "clean", enforcement: "enforcing" });
 check("binding state unreadable → step_up AS binding-unknown, never a confirmation",
   bindingUnknown.recommendedAction === "step_up" && bindingUnknown.reasonCode === "BINDING_UNKNOWN" && bindingUnknown.unknownSignals.includes("binding"));
 // With binding AND hygiene both unknown, the binding reason still leads (pins the
 // binding branch as load-bearing — the backstop alone would surface HYGIENE_UNKNOWN).
-const pbBothUnknown = ev({ profile_match: "matched" });
+const pbBothUnknown = ev({ profile_match: "matched", enforcement: "enforcing" });
 check("binding unknown + hygiene unknown → the BINDING_UNKNOWN reason leads",
   pbBothUnknown.recommendedAction === "step_up" && pbBothUnknown.reasonCode === "BINDING_UNKNOWN");
 const uncovered = evaluatePolicyBinding(
-  normalizeReport("d", { binding: "bound", profile_match: "matched", membership_hygiene: "clean" }),
+  normalizeReport("d", { binding: "bound", profile_match: "matched", membership_hygiene: "clean", enforcement: "enforcing" }),
   { covered: false });
 check("no binding report returned (covered=false) → step_up",
   uncovered.recommendedAction === "step_up" && uncovered.reasonCode === "NOT_COVERED");
 
 // ── malformed / hostile report shapes ───────────────────────────────────────────
-const extraKey = normalizeReport("x", { binding: "bound", profile_match: "matched", membership_hygiene: "clean", group_name: "SG-DEV-WIN-CORP" } as PolicyBindingReportRaw);
+const extraKey = normalizeReport("x", { binding: "bound", profile_match: "matched", membership_hygiene: "clean", enforcement: "enforcing", group_name: "SG-DEV-WIN-CORP" } as PolicyBindingReportRaw);
 // The refusal must come from the INTEGRITY branch itself (REPORT_MALFORMED), not
 // merely from the grant backstop — a malformed report whose fields all parse valid
 // is exactly the state only the integrity branch can name.
@@ -97,21 +119,21 @@ check("an unrecognized key refuses AS malformed (not via the backstop)",
 // MALFORMED on its own (one junk field per report — several at once would let one
 // integrity term hide behind another).
 check("junk binding alone → malformed",
-  normalizeReport("j1", { binding: "sorta", profile_match: "matched", membership_hygiene: "clean" }).reportIntegrity === "malformed");
+  normalizeReport("j1", { binding: "sorta", profile_match: "matched", membership_hygiene: "clean", enforcement: "enforcing" }).reportIntegrity === "malformed");
 check("junk profile_match alone → malformed",
-  normalizeReport("j2", { binding: "bound", profile_match: "close-enough", membership_hygiene: "clean" }).reportIntegrity === "malformed");
+  normalizeReport("j2", { binding: "bound", profile_match: "close-enough", membership_hygiene: "clean", enforcement: "enforcing" }).reportIntegrity === "malformed");
 check("junk mismatch_direction alone → malformed",
-  normalizeReport("j3", { binding: "bound", profile_match: "mismatched", mismatch_direction: "sideways", membership_hygiene: "clean" }).reportIntegrity === "malformed");
+  normalizeReport("j3", { binding: "bound", profile_match: "mismatched", mismatch_direction: "sideways", membership_hygiene: "clean", enforcement: "enforcing" }).reportIntegrity === "malformed");
 check("junk membership_hygiene alone → malformed",
-  normalizeReport("j4", { binding: "bound", profile_match: "matched", membership_hygiene: "mostly" }).reportIntegrity === "malformed");
-const inherited = evaluatePolicyBinding(normalizeReport("i", Object.create({ binding: "bound", profile_match: "matched", membership_hygiene: "clean" }) as PolicyBindingReportRaw));
+  normalizeReport("j4", { binding: "bound", profile_match: "matched", membership_hygiene: "mostly", enforcement: "enforcing" }).reportIntegrity === "malformed");
+const inherited = evaluatePolicyBinding(normalizeReport("i", Object.create({ binding: "bound", profile_match: "matched", membership_hygiene: "clean", enforcement: "enforcing" }) as PolicyBindingReportRaw));
 check("a report with ZERO own keys asserts nothing and cannot grant", inherited.recommendedAction !== "none");
-const hidden = new Proxy({ binding: "bound", profile_match: "matched", membership_hygiene: "clean" }, { ownKeys: () => [], getOwnPropertyDescriptor: () => undefined }) as PolicyBindingReportRaw;
+const hidden = new Proxy({ binding: "bound", profile_match: "matched", membership_hygiene: "clean", enforcement: "enforcing" }, { ownKeys: () => [], getOwnPropertyDescriptor: () => undefined }) as PolicyBindingReportRaw;
 check("a Proxy hiding its own descriptors reads as absent and cannot grant",
   evaluatePolicyBinding(normalizeReport("px", hidden)).recommendedAction !== "none");
-const throwingKeys = new Proxy({ binding: "bound", profile_match: "matched", membership_hygiene: "clean" }, { ownKeys: () => { throw new Error("hostile"); } }) as PolicyBindingReportRaw;
+const throwingKeys = new Proxy({ binding: "bound", profile_match: "matched", membership_hygiene: "clean", enforcement: "enforcing" }, { ownKeys: () => { throw new Error("hostile"); } }) as PolicyBindingReportRaw;
 check("a Proxy that THROWS from ownKeys fails closed", evaluatePolicyBinding(normalizeReport("tk", throwingKeys)).recommendedAction !== "none");
-const throwingAccessor = { profile_match: "matched", membership_hygiene: "clean" } as PolicyBindingReportRaw;
+const throwingAccessor = { profile_match: "matched", membership_hygiene: "clean", enforcement: "enforcing" } as PolicyBindingReportRaw;
 Object.defineProperty(throwingAccessor, "binding", { enumerable: true, get() { throw new Error("boom"); } });
 let accessorThrew = false;
 try {
@@ -134,7 +156,7 @@ try { guardReadOnly("POST"); } catch (err) { pbReadOnly = err instanceof PolicyB
 check("a non-GET request is refused by the read-only guard", pbReadOnly);
 const pbConn = new PolicyBindingConnector(
   { accessToken: "t", baseUrl: "https://plane.example" },
-  createMockPolicyBindingTransport({ reports: { "dev-9": { binding: "bound", profile_match: "matched", membership_hygiene: "clean" } } }),
+  createMockPolicyBindingTransport({ reports: { "dev-9": { binding: "bound", profile_match: "matched", membership_hygiene: "clean", enforcement: "enforcing" } } }),
 );
 check("the connector round-trip normalizes a clean report end to end (grantable)",
   evaluatePolicyBinding(await pbConn.fetchNormalized("dev-9")).recommendedAction === "none");
@@ -142,19 +164,20 @@ check("an unknown device yields an all-unknown report that cannot grant",
   evaluatePolicyBinding(await pbConn.fetchNormalized("dev-unknown")).recommendedAction !== "none");
 let pbDeepProto: object = {};
 for (let i = 0; i < 100; i += 1) pbDeepProto = Object.create(pbDeepProto);
-const pbDeepReport = Object.assign(Object.create(pbDeepProto), { binding: "bound", profile_match: "matched", membership_hygiene: "clean" });
+const pbDeepReport = Object.assign(Object.create(pbDeepProto), { binding: "bound", profile_match: "matched", membership_hygiene: "clean", enforcement: "enforcing" });
 check("a report behind a 100-deep prototype chain is malformed (bounded walk)",
   normalizeReport("deep", pbDeepReport as PolicyBindingReportRaw).reportIntegrity === "malformed");
-const pbProtoAlias = Object.assign(Object.create({ profile_match: "mismatched" }), { binding: "bound", profile_match: "matched", membership_hygiene: "clean" });
+const pbProtoAlias = Object.assign(Object.create({ profile_match: "mismatched" }), { binding: "bound", profile_match: "matched", membership_hygiene: "clean", enforcement: "enforcing" });
 check("a recognized key inherited from the prototype marks the report malformed",
   normalizeReport("pa", pbProtoAlias as PolicyBindingReportRaw).reportIntegrity === "malformed");
 
-// ── exhaustive (normalized): the grant is bound + matched + clean hygiene + clean ──
+// ── exhaustive (normalized): the grant is bound + matched + clean + enforcing ─────
 const normDomains = {
   binding: ["bound", "unbound", "unknown"],
   profileMatch: ["matched", "mismatched", "unknown"],
   mismatchDirection: ["wider", "narrower", "unknown"],
   membershipHygiene: ["clean", "mixed", "unknown"],
+  enforcement: ["enforcing", "report_only", "disabled", "unknown"],
   reportIntegrity: ["clean", "malformed"],
 };
 const buildNorm = (c: Record<string, unknown>): NormalizedPolicyBinding => ({
@@ -163,6 +186,7 @@ const buildNorm = (c: Record<string, unknown>): NormalizedPolicyBinding => ({
   profileMatch: c.profileMatch as NormalizedPolicyBinding["profileMatch"],
   mismatchDirection: c.mismatchDirection as NormalizedPolicyBinding["mismatchDirection"],
   membershipHygiene: c.membershipHygiene as NormalizedPolicyBinding["membershipHygiene"],
+  enforcement: c.enforcement as NormalizedPolicyBinding["enforcement"],
   reportIntegrity: c.reportIntegrity as NormalizedPolicyBinding["reportIntegrity"],
 });
 const normRes = enumerateGrantSafety({
@@ -175,13 +199,14 @@ const normRes = enumerateGrantSafety({
     c.reportIntegrity === "clean" &&
     c.binding === "bound" &&
     c.profileMatch === "matched" &&
-    c.membershipHygiene === "clean",
+    c.membershipHygiene === "clean" &&
+    c.enforcement === "enforcing",
 });
 check(
-  `exhaustive (normalized): over all ${normRes.combos} states, the binding is confirmed ONLY when bound + matched + clean hygiene + clean parse (mismatches=${normRes.mismatches}${normRes.firstMismatch ? ", first=" + normRes.firstMismatch : ""})`,
-  normRes.mismatches === 0 && normRes.combos === productOf(normDomains) && normRes.combos === 162,
+  `exhaustive (normalized): over all ${normRes.combos} states, the binding is confirmed ONLY when bound + matched + clean hygiene + ENFORCING + clean parse (mismatches=${normRes.mismatches}${normRes.firstMismatch ? ", first=" + normRes.firstMismatch : ""})`,
+  normRes.mismatches === 0 && normRes.combos === productOf(normDomains) && normRes.combos === 648,
 );
-check("exhaustive (normalized): exactly 3 states grant (one per direction value — moot when matched, the pinned doctrine)",
+check("exhaustive (normalized): exactly 3 states grant (one per direction value — moot when matched, the pinned doctrine; the other 3 enforcement values grant nothing)",
   normRes.noneCount === 3);
 
 // ── exhaustive (raw wire): the normalizer + evaluator on hostile input ───────────
@@ -190,6 +215,7 @@ const rawDomains = {
   profile_match: ["matched", "mismatched", undefined],
   mismatch_direction: ["wider", "narrower", undefined],
   membership_hygiene: ["clean", "mixed", undefined, 7],
+  enforcement: ["enforcing", "report_only", "disabled", undefined, "audit"],
   __alias: ["absent", "present"],
 };
 const buildRaw = (c: Record<string, unknown>): NormalizedPolicyBinding => {
@@ -210,19 +236,20 @@ const rawRes = enumerateGrantSafety({
     c.binding === "bound" &&
     c.profile_match === "matched" &&
     c.mismatch_direction === undefined && // asserted direction + matched = self-contradiction
-    c.membership_hygiene === "clean",
+    c.membership_hygiene === "clean" &&
+    c.enforcement === "enforcing", // "audit" is the vendor's own word for report-only; the allowlist refuses it rather than guessing
 });
 check(
-  `exhaustive (raw wire): over all ${rawRes.combos} raw reports — junk enums, a number, an aliased group_name key — the binding is confirmed only on fully-clean bound+matched+clean reports (mismatches=${rawRes.mismatches}${rawRes.firstMismatch ? ", first=" + rawRes.firstMismatch : ""})`,
-  rawRes.mismatches === 0 && rawRes.combos === productOf(rawDomains) && rawRes.combos === 288,
+  `exhaustive (raw wire): over all ${rawRes.combos} raw reports — junk enums, a number, the plausible-but-unlisted spelling "audit", an aliased group_name key — the binding is confirmed only on fully-clean bound+matched+clean+enforcing reports (mismatches=${rawRes.mismatches}${rawRes.firstMismatch ? ", first=" + rawRes.firstMismatch : ""})`,
+  rawRes.mismatches === 0 && rawRes.combos === productOf(rawDomains) && rawRes.combos === 1440,
 );
-check("exhaustive (raw wire): exactly ONE raw report grants (bound+matched+clean with NO direction asserted — a direction alongside 'matched' self-contradicts)",
+check("exhaustive (raw wire): exactly ONE raw report grants (bound+matched+clean+enforcing with NO direction asserted — a direction alongside 'matched' self-contradicts)",
   rawRes.noneCount === 1);
 
 // ── fusion into the fabric (posture-composition + incident routing) ─────────────
 check("policy_binding is a member of the runtime SIGNAL_KINDS array — the union is derived, so the playbook proof covers it automatically",
   (SIGNAL_KINDS as readonly string[]).includes("policy_binding"));
-const fusedWide = fromPolicyBinding(ev({ binding: "bound", profile_match: "mismatched", mismatch_direction: "wider", membership_hygiene: "clean" }));
+const fusedWide = fromPolicyBinding(ev({ binding: "bound", profile_match: "mismatched", mismatch_direction: "wider", membership_hygiene: "clean", enforcement: "enforcing" }));
 check("fromPolicyBinding maps the fail-open (too-wide) verdict onto the unified ladder as restrict",
   fusedWide.kind === "policy_binding" && fusedWide.action === "restrict" && fusedWide.reason === "BINDING_TOO_WIDE");
 const fused = composeDeviceRisk([
@@ -237,10 +264,46 @@ const fusedClean = composeDeviceRisk([
 ]);
 check("...and a confirmed-correct binding contributes none — the dimension never lowers, only raises",
   fusedClean.strongestAction === "none");
+// The composed consequence of the new axis: an otherwise-healthy device bound to a
+// report-only policy no longer composes to a clean `none`. This is the check that
+// would have gone missing before the axis existed.
+const fusedReportOnly = composeDeviceRisk([
+  { kind: "device_posture", posture: "healthy", action: "none", reason: "OK" },
+  fromPolicyBinding(reportOnly),
+]);
+check("a healthy device bound to a REPORT-ONLY policy composes to monitor, not none — the fabric stops reporting protection the device does not have",
+  fusedReportOnly.strongestAction === "monitor" && fusedReportOnly.drivers[0]?.reason === "BINDING_REPORT_ONLY");
 
 // Determinism.
-const d1 = normalizeReport("det", { binding: "bound", profile_match: "mismatched", mismatch_direction: "wider", membership_hygiene: "clean" });
+const d1 = normalizeReport("det", { binding: "bound", profile_match: "mismatched", mismatch_direction: "wider", membership_hygiene: "clean", enforcement: "enforcing" });
 check("evaluator is deterministic", JSON.stringify(evaluatePolicyBinding(d1)) === JSON.stringify(evaluatePolicyBinding(d1)));
+
+
+// ── The live-call gate and the default transport, each condition ISOLATED ────
+//
+// See `lib/live-gate.ts` for why this replaced what was here (or filled the hole where
+// nothing was). Short version: the gate was tested as a cumulative ladder, so only its
+// last condition was falsifiable, and the mutation guard could delete the tier check —
+// the control behind "dev and alpha never make live vendor calls" — with every proof
+// green. The default fetch transport was never executed by anything at all.
+checkLiveGateIsolated({
+  check,
+  family: "policy-binding",
+  resolve: (env) => resolvePolicyBindingConnector(env),
+  full: {
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    POLICY_BINDING_ACCESS_TOKEN: "t",
+  },
+});
+
+await checkDefaultTransport({
+  check,
+  family: "policy-binding",
+  transport: makeDefaultPolicyBindingTransport("https://vendor.invalid/policy-binding") as (a: never) => Promise<unknown>,
+  arg: { deviceRef: "deviceRef-1", token: "t" },
+  codeOf: (err) => (err instanceof PolicyBindingConnectorError ? err.code : undefined),
+});
 
 const total = passed + failures.length;
 console.log(`figures=normalizedCombos=${normRes.combos},rawCombos=${rawRes.combos},grantingCombos=${normRes.noneCount},rawGrantingCombos=${rawRes.noneCount},ladderRungs=6`);

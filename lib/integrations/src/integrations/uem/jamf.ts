@@ -74,8 +74,10 @@ export function normalizeJamfDevice(raw: JamfComputerPayload): NormalizedUemDevi
       enrollment: "unknown",
       compliance: "unknown",
       supervision: "unknown",
+      ownership: "unknown",
       osVersion: null,
       lastCheckInAgeSeconds: null,
+      cellularHardware: "unknown",
       reportIntegrity: "malformed",
     };
   }
@@ -94,17 +96,39 @@ export function normalizeJamfDevice(raw: JamfComputerPayload): NormalizedUemDevi
   const supervision: UemSupervision =
     supervisedRaw === true ? "supervised" : supervisedRaw === false ? "unsupervised" : "unknown";
 
+  // Jamf Pro's computer record carries no ownership field — there is no
+  // `managedDeviceOwnerType` equivalent in `/JSSResource/computers`, and ownership in
+  // Jamf is expressed (when at all) through site or department assignment, which this
+  // read does not fetch and which sites are not obliged to use for that purpose.
+  //
+  // So this is `unknown`, and it is deliberate. It contributes an
+  // UNSUPERVISED_OWNERSHIP_UNKNOWN candidate rather than excusing the device as BYOD
+  // or accusing it of being an unsupervised corporate device.
+  //
+  // BUT NOTE WHAT THE VERDICT ACTUALLY SAYS, because an earlier version of this
+  // comment claimed the reason code would be REPORTED and adversarial review showed
+  // it cannot be. Jamf's compliance is hardcoded `not_evaluated`, which pushes an
+  // equal-rank `step_up` candidate FIRST, and the winner-selection reduce keeps the
+  // earliest of equals (strict `>`). So a Jamf device always reports
+  // COMPLIANCE_NOT_EVALUATED. The action is identical either way; only the label
+  // differs. Do NOT "improve" this by
+  // defaulting to `corporate` on the grounds that Jamf is usually corporate. Usually
+  // is not a reading.
+  const ownership = "unknown" as const;
+
   return {
     deviceId,
     vendor: "jamf",
     enrollment,
     compliance,
     supervision,
+    ownership,
     osVersion: asString(raw.computer?.hardware?.os_version),
     // Jamf reports a timestamp; converting it to an age needs a clock, and a clock
     // read here would make this dimension non-replayable. The caller that owns the
     // clock supplies the age. See the note on `lastCheckInAgeSeconds` in types.ts.
     lastCheckInAgeSeconds: null,
+    cellularHardware: "unknown",
     reportIntegrity: "intact",
   };
 }

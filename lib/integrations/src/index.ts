@@ -6,18 +6,27 @@
 // in-memory when REDIS_URL is unset.
 //
 // Namespaced exports avoid cross-category name collisions.
-export * as types from "./integrations/types";
+// `types`, `dispatcher` and `sign` were exported here. Removed with the files: they
+// were an ungated `fetch(url, { method: "POST" })` that shipped the whole event body to
+// an arbitrary target list, plus its HMAC helper and its event type — a second,
+// undisciplined implementation of what the gated, signed, proven `webhooks/` family
+// already does. `TARGETS` was an empty array with a TODO to populate it, so the code
+// was inert AND an invitation. Zero callers anywhere in the repo.
 export * as adapterTypes from "./integrations/adapters/types";
-export * as dispatcher from "./integrations/dispatcher";
 export * as deviceResolver from "./integrations/deviceResolver";
-export * as sign from "./integrations/sign";
-export * as itsm from "./integrations/itsm/adapter";
+// Tenant scoping for the connector CONFIGURATION stores. Exported so the scoping rule
+// has one definition and one proof rather than a copy per store.
+export * as storeScope from "./integrations/store-scope";
+export * as itsm from "./integrations/itsm/index";
+export * as entitlementBinding from "./integrations/entitlement-binding/index";
+export * as serviceLifecycle from "./integrations/service-lifecycle/index";
+export * as responseAccountability from "./integrations/response-accountability/index";
 export * as uem from "./integrations/uem/index";
-export * as nac from "./integrations/nac/store";
-export * as siem from "./integrations/siem/webhook";
-export * as telemetry from "./integrations/telemetry/fleetdm";
+export * as nac from "./integrations/nac/index";
+export * as siem from "./integrations/siem/index";
+export * as telemetry from "./integrations/telemetry/index";
 export * as telemetryTypes from "./integrations/telemetry/types";
-export * as webhooks from "./integrations/webhooks/dispatch";
+export * as webhooks from "./integrations/webhooks/index";
 export * as graph from "./integrations/graph";
 // Namespaced (not a bare `export *`) like every other entry here, so its
 // `normalizeReport`/`guardReadOnly` cannot collide with a sibling connector's. The

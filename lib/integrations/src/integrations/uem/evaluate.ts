@@ -87,11 +87,55 @@ export function evaluateUem(state: NormalizedUemDeviceState): UemVerdict {
     // pass, and saying so is the whole point of this dimension existing.
     candidates.push({ action: "step_up", reason: "COMPLIANCE_NOT_EVALUATED" });
   }
+  // ── Supervision, READ THROUGH OWNERSHIP ─────────────────────────────────────
+  //
+  // Supervision is what makes MDM enforcement possible on Apple platforms, so an
+  // unsupervised device is a materially weaker management story. But whether that
+  // is a FINDING depends entirely on who owns the device, and the first version of
+  // this evaluator ignored that:
+  //
+  //     if (state.supervision === "unsupervised") step_up   // unconditionally
+  //
+  // Apple supervision requires organisational ownership (Business Manager /
+  // Configurator), so an employee-owned device can NEVER be supervised. That code
+  // therefore fired on every BYOD decision, forever, for a state that cannot be
+  // remediated. A control that always fires carries no information — and it teaches
+  // an operator to scroll past the signal, so the one time it means something they
+  // have already learned to ignore it. Filed as my own defect; see UemOwnership.
   if (state.supervision === "unsupervised") {
-    // Supervision is what makes MDM enforcement possible on Apple platforms. An
-    // unsupervised device is a materially weaker management story, but it is a
-    // legitimate deployment choice, so it raises the bar rather than blocking.
-    candidates.push({ action: "step_up", reason: "DEVICE_UNSUPERVISED" });
+    if (state.ownership === "corporate") {
+      // A device the organisation owns and could have supervised, but did not.
+      // Actionable, and the finding worth keeping.
+      candidates.push({ action: "step_up", reason: "DEVICE_UNSUPERVISED" });
+    } else if (state.ownership === "unknown") {
+      // Cannot tell whether this is expected BYOD or an unsupervised corporate
+      // device. Defaulting to `personal` here would silently excuse the corporate
+      // case, which is the fail-open direction, so this forecloses instead.
+      candidates.push({ action: "step_up", reason: "UNSUPERVISED_OWNERSHIP_UNKNOWN" });
+    } else {
+      // `personal` — MONITOR, not silence, and the difference was found by
+      // adversarial review.
+      //
+      // The first version of this fix contributed NOTHING here, so a personally-owned
+      // unsupervised device produced a verdict BYTE-IDENTICAL to a supervised
+      // company-owned one. That over-corrected. Intune's `managedDeviceOwnerType`
+      // reports `personal` as its residual bucket — a device that was not matched to
+      // a corporate identifier, ADE, or a device-enrollment manager lands there by
+      // DEFAULT. So `personal` frequently means "no corporate marker was seen", not
+      // "employee ownership was confirmed", and this file's own header forbids
+      // exactly that inference: "a grant requires POSITIVE CONFIRMATION OF EVERY
+      // INPUT. Not 'no bad value was seen'."
+      //
+      // `monitor` is the honest rung. It does not fire a step-up at a worker who has
+      // no way to remediate — which was the original defect — and it does not claim a
+      // confirmation the vendor field cannot carry. The state stays visible in the
+      // verdict instead of vanishing.
+      candidates.push({ action: "monitor", reason: "BYOD_UNSUPERVISED_EXPECTED" });
+    }
+    // What this still does NOT say: that a BYOD device is as trustworthy as a
+    // corporate one. It says supervision is the wrong instrument for that question.
+    // Whether BYOD may reach a given resource is a POLICY decision for the host app
+    // and the policy layer, not something smuggled in via a supervision concern.
   }
 
   // ── Unconfirmed inputs ──────────────────────────────────────────────────────
@@ -104,8 +148,26 @@ export function evaluateUem(state: NormalizedUemDeviceState): UemVerdict {
     candidates.push({ action: "step_up", reason: "COMPLIANCE_STATE_UNKNOWN" });
   }
   if (state.supervision === "unknown") {
+    // Note this does NOT consult ownership. Supervision unknown is unconfirmed
+    // whoever owns the device, so the concern stands on its own.
     candidates.push({ action: "step_up", reason: "SUPERVISION_STATE_UNKNOWN" });
   }
+  // OWNERSHIP IS DELIBERATELY ABSENT FROM THIS LIST, and that is the one judgement
+  // call in this file worth arguing with.
+  //
+  // Every other `unknown` here forecloses the grant on its own. Ownership does not,
+  // because ownership carries no decision weight EXCEPT as the interpreter of
+  // supervision — and where supervision is confirmed (either value), knowing the
+  // owner changes no outcome. Making an unknown ownership foreclose regardless would
+  // re-create the exact defect this change fixes, one layer up: a second control
+  // that fires on every decision from any caller that has not yet plumbed the field
+  // through, including on devices whose management story is fully confirmed.
+  //
+  // So it is handled where it matters (unsupervised, above) and nowhere else. The
+  // proof pins this both ways — confirmed-supervised + unknown ownership still
+  // grants, and unsupervised + unknown ownership steps up — so if a future reader
+  // decides this call was wrong, the assertion that has to change is explicit rather
+  // than a silent gap.
   if (state.vendor === "unknown") {
     // An unattributable report. The values may be fine, but nothing establishes
     // who said them, and provenance is part of what makes a signal usable.
@@ -136,10 +198,15 @@ function postureFor(winner: Candidate): UemPosture {
   // Anything driven by an unconfirmed input is INDETERMINATE, not degraded: we do
   // not know that the device is in a worse state, only that we cannot say it is in
   // a good one. Reporting "degraded" there would assert a fact not in evidence.
+  // BYOD-unsupervised is not degraded and not indeterminate — the management story
+  // is exactly what it should be for the ownership. It is reported as compliant with
+  // a monitor-level note attached, so an operator sees it without being alarmed.
+  if (winner.reason === "BYOD_UNSUPERVISED_EXPECTED") return "managed_compliant";
   if (
     winner.reason === "ENROLLMENT_STATE_UNKNOWN" ||
     winner.reason === "COMPLIANCE_STATE_UNKNOWN" ||
     winner.reason === "SUPERVISION_STATE_UNKNOWN" ||
+    winner.reason === "UNSUPERVISED_OWNERSHIP_UNKNOWN" ||
     winner.reason === "VENDOR_UNKNOWN" ||
     winner.reason === "COMPLIANCE_NOT_EVALUATED"
   ) {

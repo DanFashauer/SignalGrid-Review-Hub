@@ -16,7 +16,7 @@
 //
 // Pure and offline: the gate is a function of the environment.
 
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveEmission, EMIT_SUPPRESSED } from "@workspace/integrations/emit-gate";
@@ -105,11 +105,15 @@ for (const [label, rel] of ROUTED) {
 // ── 6. syslog no longer claims to have sent what it never sent ──────────────
 // It opens no UDP, TCP or TLS socket anywhere; it previously returned
 // status 'sent' regardless. That is the single most misleading thing an audit
-// forwarder can report.
+// forwarder can report. The composed design (both lanes' protections, merged):
+// suppressed → the honest `suppressed` status like every other emitter; LIVE —
+// where the caller explicitly configured delivery and a quiet status is at its
+// most dangerous — the adapter THROWS rather than reporting any status at all.
+// proof:emitter-discipline holds the behavioral pin for that throw.
 const syslogSrc = readFileSync(resolve(repo, "lib/integrations/src/integrations/syslog/transport.ts"), "utf8");
 check("syslog opens no socket (still unimplemented)", !/dgram|net\.Socket|tls\.connect/.test(syslogSrc));
 check("syslog does not report status 'sent'", !/status:\s*'sent'/.test(syslogSrc));
-check("syslog reports not_implemented instead", /not_implemented/.test(syslogSrc));
+check("syslog refuses loudly when live: throws rather than reporting a status", /throw new Error\(\s*\n?\s*["']syslog: no transport is implemented/.test(syslogSrc));
 
 // itsm gates at the FACTORY, which every one of its eight vendor adapters passes
 // through. Assert the gate runs BEFORE the pre-existing "no credentials" branch:
@@ -181,15 +185,50 @@ gateBeforeFirstCall(
   /async sendEvents\s*\(/,
   "sentinel.sendEvents()",
 );
-gateBeforeFirstCall(
-  "lib/integrations/src/integrations/nac/store.ts",
-  /export async function lookupEndpoint\s*\(/,
-  "nac.lookupEndpoint()",
-  // This one delegates: it builds a Cisco ISE / Aruba ClearPass adapter and calls
-  // through it, so getNACAdapter() IS the outbound step. Gating after it would
-  // construct an authenticated vendor client before deciding whether to be live.
-  /getNACAdapter\s*\(/,
-);
+// ── nac: a STRONGER claim than "gated before the call" ─────────────────────
+//
+// This assertion used to be `gateBeforeFirstCall(nac/store.ts, lookupEndpoint, …,
+// getNACAdapter)` — correct for a design where the family owned an HTTP adapter and
+// had to decide to be live before constructing it. The launch lane rebuilt nac
+// around an INJECTED transport instead, so that assertion no longer describes the
+// code: there is no `lookupEndpoint` in the store and no adapter to build.
+//
+// Rewritten rather than deleted, and rewritten UP. The property now true of nac is
+// the one uem already has and the one worth having: the family makes no outbound
+// call at all, so there is nothing to gate. Its failure mode is "there is no code",
+// which is stronger than "a correctly-ordered flag check".
+//
+// Kept falsifiable in both directions — a family that reaches the network would
+// fail the first check, and a `resolveNacConnector` that stopped refusing an absent
+// transport would fail the second.
+{
+  const NAC_DIR = "lib/integrations/src/integrations/nac";
+  const nacFiles = readdirSync(resolve(repo, NAC_DIR)).filter((f) => f.endsWith(".ts"));
+  check("nac: the family has source files to check (assertion is not vacuous)", nacFiles.length >= 4);
+  const reaching = nacFiles.filter((f) =>
+    OUTBOUND_CALL.test(stripComments(readFileSync(resolve(repo, NAC_DIR, f), "utf8"))),
+  );
+  check(
+    `nac: NO file in the family makes an outbound call — nothing to gate (${nacFiles.length} files checked)`,
+    reaching.length === 0,
+  );
+  if (reaching.length) console.error(`    reaching the network: ${reaching.join(", ")}`);
+
+  // And the live path stays unreachable: every condition must hold AND a transport
+  // must be injected, which this repository does not ship.
+  const idx = stripComments(readFileSync(resolve(repo, NAC_DIR, "index.ts"), "utf8"));
+  check(
+    "nac: resolveNacConnector refuses live mode without an injected transport",
+    /if \(!transportOverride\)/.test(idx) && /mode:\s*"fixture"/.test(idx),
+  );
+  check(
+    "nac: the live path also requires tier + live flag + vendor + token (unanimous, fail-closed)",
+    /SIGNALGRID_TIER/.test(idx) &&
+      /SIGNALGRID_LIVE_INTEGRATIONS/.test(idx) &&
+      /NAC_VENDOR/.test(idx) &&
+      /NAC_ACCESS_TOKEN/.test(idx),
+  );
+}
 
 // mde gates at its single `isEnabled()` choke point, which all five of its outbound
 // methods already guard on — so assert the choke point itself, not each caller.

@@ -29,6 +29,18 @@ export type SsoSessionState = "active" | "expired" | "none" | "unknown";
  *  holder; `bound` = the current holder's own session. */
 export type SessionBinding = "bound" | "mismatched" | "unbound" | "unknown";
 
+/** Whose account is this session's subject — one person's, or a SHARED account
+ *  (a nurse-station or line-terminal principal several workers legitimately
+ *  use)? Modern IdPs make the shared pattern attributable: DigitalPersona
+ *  v4.4.0-class multiple device-bound passkeys let each worker open the shared
+ *  account with their OWN credential, so the IdP knows which person's
+ *  authenticator signed in even though the subject names the account. On a
+ *  shared account the subject comparison is meaningless BY DESIGN (the subject
+ *  IS the account, never the holder) — attribution moves to the CREDENTIAL
+ *  level (`credentialHolder`). `unknown` is treated like `individual`
+ *  (fail-safe: the subject comparison stays authoritative). */
+export type AccountScope = "individual" | "shared" | "unknown";
+
 /** Authenticator assurance backing the session. `phishing_resistant` (e.g.
  *  passkey / FIDO2 / platform), `mfa` (any second factor), `single_factor`
  *  (password only), `unknown`.
@@ -63,6 +75,11 @@ export interface SsoSessionReportRaw {
   idpReachable?: boolean | null;
   subject?: unknown; // the session's principal (attested by the IdP)
   expectedSubject?: unknown; // the checked-out badge-holder
+  accountScope?: unknown; // individual | shared | unknown
+  /** The registered owner of the CREDENTIAL that authenticated this session (a
+   *  pseudonymous worker ref, like the subjects) — the person-level attribution
+   *  a shared account's subject cannot carry. */
+  credentialHolder?: unknown;
   [k: string]: unknown;
 }
 
@@ -79,6 +96,9 @@ export interface NormalizedSsoSession {
   /** The session's principal and the expected badge-holder, when present. */
   subject: string | null;
   expectedSubject: string | null;
+  accountScope: AccountScope;
+  /** Registered owner of the authenticating credential, when reported. */
+  credentialHolder: string | null;
   source: string;
 }
 
@@ -87,6 +107,7 @@ export type SsoSessionPosture =
   | "bound_weak"
   | "leftover_session"
   | "unbound_session"
+  | "unattributed_shared"
   | "no_session"
   | "unverified"
   | "unknown";
@@ -96,6 +117,7 @@ export type SsoSessionReasonCode =
   | "NO_ACTIVE_SESSION"
   | "SESSION_SUBJECT_MISMATCH"
   | "UNBOUND_ACTIVE_SESSION"
+  | "SHARED_SESSION_UNATTRIBUTED"
   | "SESSION_NO_MFA"
   | "SESSION_NEAR_EXPIRY"
   | "SESSION_EXPIRED"

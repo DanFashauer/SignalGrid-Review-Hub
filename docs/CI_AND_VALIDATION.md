@@ -149,22 +149,281 @@ wrong in every client at once, and consistently.
 
 ## Required local checks
 
-Before opening or updating a pull request, run these commands from the repository root:
+Before opening or updating a pull request, run **one command** from the repository root:
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm run typecheck
-PORT=3000 BASE_PATH=/ pnpm run build
-pnpm run proof:intune-entra-posture
-pnpm run proof:signalgrid-simulator
-pnpm run proof:signalgrid-grid
-pnpm run proof:microsoft-graph-sandbox
-pnpm run proof:connector-emulator
-git grep -nE "SignalGrid is production-ready|SignalGrid replaces|SignalGrid is an Imprivata partner|SignalGrid is MFi certified|autonomous production remediation|replaces ServiceNow|replaces PagerDuty|replaces CrowdStrike|replaces Defender|replaces ControlUp|Imprivata partner|MFi certified|replaces Jamf|replaces Intune|replaces Apple Configurator|replaces GroundControl" -- README.md docs artifacts/signalgrid-review/src || true
-git diff --check
+node scripts/preflight.mjs          # the whole gate suite; --quick skips the heavy web/app builds
 ```
 
-`PORT` and `BASE_PATH` are required because several Vite review surfaces read those environment variables during production builds.
+`preflight.mjs` is the ordered mirror of every CI job that needs nothing but Node — well
+over a hundred gates, including the typecheck, the build, the launch-surface `proof:*`
+suite, the unsafe-claim scan, and the drift ratchets. Its own header states honestly
+which three CI jobs it does *not* mirror (Postgres, the Docker-compose smoke, and
+gitleaks), so a green preflight means everything reproducible locally is green, not that
+CI cannot go red.
+
+**The breadth lane is separate since 2026-08-11.** The 47 deferred-family gates and the
+8 doctrine-document proofs run as their own required CI job (`Breadth lane`, in parallel
+with `validation`) via `pnpm run verify:breadth` — kept, still gating every pull
+request, no longer a serial per-push tax. Touch a deferred connector family or a
+doctrine document? Run the breadth lane locally too:
+
+```bash
+pnpm run verify:breadth             # deferred-family + doctrine-doc proofs
+```
+
+`check-ci-preflight-sync.mjs` holds the two lanes disjoint and jointly complete, and
+`verify-breadth.mjs` itself refuses to run if a deferred family's proof has left both
+lanes or a launch family's proof has drifted into it.
+
+**Run the whole thing, not a hand-picked subset.** This section used to list five proofs
+and a `git grep`, and that list was the defect it looked like a control against: it
+omitted `proof:incident-playbook`, so a change that added a new composable signal kind
+without an owning incident queue passed every check a contributor was told to run and
+went red in CI. Picking the gates that "obviously relate" to a change is exactly how the
+derived ones — the gates that exist because the relationship is *not* obvious — get
+skipped.
+
+`PORT` and `BASE_PATH` are required by several Vite review surfaces during production
+builds; preflight sets them for the build step itself.
+
+### Two consequences worth knowing before you push
+
+- **A new composable signal kind needs an owning queue.** `proof:incident-playbook`
+  enumerates the runtime `SIGNAL_KINDS` union and asserts that no kind falls through to
+  the generic Service Desk, so adding one to `lib/posture-composition/src/types.ts`
+  requires a matching `categoryForKind` case in `lib/incident-playbook/src/map.ts`.
+- **Never run `scripts/mutation-guard.mjs` concurrently with anything else, and never
+  under a timeout that may kill it.** It mutates source files in place and restores them
+  afterwards; a sweep killed part-way leaves the tree mutated, which then surfaces as
+  unrelated phantom failures elsewhere (a "stale allowlist entry" for code that had not
+  moved, and a failing facility-trust-graph proof whose guard clause had been silently
+  rewritten to `true`).
+
+### A name-drift gate is not a behaviour gate
+
+`scripts/check-mcp-surface.mjs` asserts the MCP server, its ready message,
+`docs/RUN_ON_MAC.md` and the live-sync manifest all list the same eight tool names.
+That is worth having and it is not coverage: a tool can pass it while returning a
+confidently wrong answer, and one did. `evaluate_location_certainty` defaulted two
+optional inputs — `source_health ?? "healthy"` and `map_version ?? <the graph's own
+version>` — before handing them to the decision library. The caller of an MCP tool is
+an assistant in a chat that cannot know an RTLS source's health, so omitting the field
+is the normal case, and every one of those calls was answered as though the source had
+been confirmed healthy. Two calls in opposite epistemic states returned byte-identical
+verdicts of `SUFFICIENT_CERTAINTY / none / known` with `unknownSignals` empty.
+
+`pnpm run proof:mcp-answer-discipline` (55 checks) closes it by driving the real server
+over its real newline-delimited JSON-RPC stdio wire — no MCP SDK dependency, because
+testing through the vendor's client object would prove the client agrees with the server
+rather than that the server is right. Its negative control is recorded: reintroducing the
+two `??` defaults drops it from 55/55 to 48/55.
+
+**The same class, found again one layer up — an advertised contract that was not
+enforced.** Every tool published `additionalProperties: false` and enforced none of it:
+the SDK wraps a raw shape with `z.object(shape)`, and zod's default for an object is
+STRIP, so an unknown key was silently dropped and the call proceeded. This is worse than
+the `??` defaults, because there the caller said nothing, whereas here the caller *did*
+pose a bound and spelled it in the other convention the same tool uses. Measured on the
+wire against an observation dated 2020 with the caller's own 2026 reference instant:
+
+```
+max_observation_age_seconds: 60   ->  DROPPED. recency "unbounded", SUFFICIENT_CERTAINTY, none
+maxObservationAgeSeconds:    60   ->  recency "stale", LOCATION_STALE, step_up
+```
+
+A 6.5-year-stale fix graded as sufficient certainty because a key fell on the floor. Every
+droppable field is one that would *tighten* the verdict, so the loss is one-directional.
+The core already applies this law one layer down (`hasUnrecognizedKey` → `malformed`); the
+adapter applied it to the observation and not to the requirement. Fixed by publishing
+`z.object({...}).strict()`. Removing `.strict()` drops the proof to 43/55.
+
+**Two naming conventions in that tool are deliberate, and pinned so nobody tidies them.**
+snake_case inputs mirror `LocationObservationRaw` (what the source reported); camelCase
+mirror `LocationRequirement` (what the caller poses). An adversarial pass over this
+surface proposed "assert one casing convention" as a fix — that would have been a
+regression, silently reclassifying a policy field as an observation field. The pin derives
+the partition from the library's own `LOCATION_OBSERVATION_KEYS` rather than from
+spelling, because spelling is not the discriminator: `confidence` has no underscore and is
+an observation field. The first draft of that check classified by underscore and failed on
+exactly that case.
+
+**Where a surface's omission semantics actually live.** `evaluate_room_entry` takes two
+inputs that RELEASE held actions, and omission is normalized three times on the way down
+— in the MCP adapter (`stepUpSatisfied ?? false`), again in `lib/room-sim`, and again by
+`lib/orchestration`'s strict `=== true`. Only the OUTERMOST one is falsifiable from the
+chat surface: flipping either inner default leaves the proof at full marks because the
+layer above has already turned `undefined` into `false`, while flipping the adapter's
+default drops it to 53/55. That was measured rather than assumed, and it is recorded in
+the proof itself so a future lane hardening the library comparison knows its change is
+unobservable from here. `stepUpSatisfied` is also a caller-*asserted* simulation input
+rather than a ceremony the tool performs — the shipped path
+(`/v1/app-workflows/complete-step-up`, verified WebAuthn) is deliberately stricter, and
+the tool description now says so, because an assistant reads it to decide how to report
+the answer.
+
+**There are two MCP proofs and neither is redundant.** `pnpm run proof:mcp-server`
+(11 checks) came from the Mac lane on the same day — both lanes noticed the same hole
+independently, which is the second entry in `LANE_COORDINATION.md`'s collision log. It
+boots the PUBLISHED plugin path through the vendor's own SDK client and asserts the
+served surface equals the surface the live-sync manifest declares to external builders;
+it catches a server that will not start, a handler that throws, a manifest that has
+drifted. `proof:mcp-answer-discipline` asks the other half: given that it serves, is the
+answer EARNED. A server passes either while failing the other, so they were kept as a
+pair rather than one being discarded to resolve a filename collision.
+
+**The general rule this leaves behind: on any surface that answers a caller, every
+optional input is a CLAIM, and omitting it is a non-claim rather than a pass.** Hand
+the caller's value through and let the normalizer decide what silence means — the
+libraries in `lib/` already grade absence fail-closed, and a `??` in the adapter is
+how that grading gets bypassed.
+
+### Proving a merge rule, not just a merge
+
+`proof:decision-continuity` (65 checks) guards `lib/signalgrid-core/src/continuity.ts`,
+which answers "which decision wins" when a device has been deciding offline. It is worth
+noting here because of *how* it is guarded rather than what it guards.
+
+Five laws are **measured over exhaustive sweeps** rather than asserted on examples:
+order-independence over 9,216 ordered pairs and 13,824 three-record sets in all six
+permutations; idempotence over the same pair space; monotonicity over 55,296 additions
+(no non-dominating record ever relaxed the outcome); the offline veto over 3,744
+compromised-frontier pairs; and the un-stick path over 288 clean-authority pairs. Two of
+those sweeps carry an explicit **non-vacuity check** — a sweep that finds zero
+counterexamples because it found zero *opportunities* proves nothing, and that failure
+mode is invisible unless you look for it.
+
+The negative controls did real work rather than confirming the design. The proof header
+records five mutations with their measured scores, and one of them **changed the code**:
+the first draft predicted that reading an absent `coreNormalizationVersion` as zero would
+break the offline-veto law, and measuring showed it did not. The design choice was still
+right — reading absence as zero lets a stamped record dominate on an axis where nothing
+is known about its opponent, converting a legacy `deny` into an `allow` — so the proof
+now pins it as an **outcome** as well as an ordering. A prediction that survives being
+measured is evidence; a prediction that is never measured is a comment.
+
+The one duplication in the file is pinned rather than tolerated: `continuity.ts` keeps its
+own `OUTCOME_RANK` because `policy.ts` is inside the core-normalization import closure and
+this file deliberately is not, so sharing the constant would drag a reconciliation edit
+into the stamp on every decision record. The proof reads both literals as text and fails
+if they diverge.
+
+### A coverage rule that is right for what it covers can still leave a hole
+
+`scripts/check-guard-registries.mjs` derives its mutation-coverage requirement from proofs
+importing `enumerateGrantSafety` — the connector allow-path harness — because that is
+"the population where an unfalsifiable guard is most dangerous". `continuity.ts` is not a
+connector, so `proof:decision-continuity` passed that gate legitimately while being
+exactly the population the gate exists for: `reconcileDecisions` can return `allow`, and a
+weakened branch would let a stale or offline record produce one.
+
+The response was to register the file by hand rather than widen the rule until it fit. The
+rule is correct for what it was written to cover; stretching it to catch one more case
+would have made it harder to reason about and no more complete.
+
+**The same shape turned up again in a different guard** (intake ledger row 55).
+`proof:absent-collection` pins one law — *nothing observed is not the same as nothing
+wrong* — at every site that grades a collection, and it named seven. The `carrier`
+dimension was not among them, and it held the plainest violation in the repository:
+`wifiOnly` was derived from three absences (no ICCID, no SMS capability, no data
+session) and asserted the positive fact "this device has no cellular backchannel at
+all", which the evaluator short-circuited on ahead of every other check while
+reporting `locatable: false`.
+
+What made it invisible is that no amount of carrier-side evidence can settle the
+question. A carrier API reports SIMs on the account it was asked about; silence covers
+a partial read, a paginated tail, an eSIM on another operator's platform, and a device
+attached to a private 5G network it has never heard of. So the fix is not a fourth
+condition but a change of plane: the axis is posed from device inventory, a
+carrier-only read now asserts its own ceiling (`unknown` on every signal, pinned by the
+proof), and *no radio* and *nobody told us* resolve to different postures so no
+consumer can conflate them. Five assertions were added to the law's proof and
+negative-controlled — restoring the old default fails three of them.
+
+Both cases share a lesson worth stating once: a guard's registry is itself a claim
+about coverage, and it goes stale in exactly the way the guard exists to prevent.
+
+**The sweep immediately earned it.** 22 mutations, 18 killed, **four survivors** — all
+four shape-checks that the proof's `refuses()` helper structurally could not distinguish,
+because it asserts only that a `CoreError` with code `validation` came back and each shape
+throws *something* either way. Remove the null-record guard and `record.id` throws a
+**TypeError**; remove the `elapsedSecondsById` guard and `Object.entries(undefined)` does
+the same. At the wire that is the difference between a 400 and an unmapped 500, and
+`refuses()` asserting `err instanceof CoreError` is the discriminator — which is why the
+new cases had to be written separately rather than folded into existing ones.
+
+The empty-set guard was the instructive one: with it removed, `reconcileDecisions([])`
+still throws a validation `CoreError`, just from `mostRestrictiveOutcome` deeper in, so
+every code-only assertion passed straight over the hole. What that guard buys is a
+caller-accurate message rather than an internal one, so it needed a **message** pin. Five
+assertions (60 → 65 checks) took the sweep to 22/22 killed, 0 survivors.
+
+### A scope that cannot express the document is not a scope
+
+`check-proof-figures.mjs` scopes by `##`/`###` **section** — deliberately, because
+paragraph scope was tried first and missed the drift that actually happened. But
+`docs/INTAKE_LEDGER.md` is one `## Ledger` section holding fifty-plus rows about
+fifty-plus unrelated inputs, so under pure section scope every comma-formatted number
+anywhere in that table was checked against every proof named anywhere in that table. A
+row stating its *own* proof's live figures failed against five other proofs it merely
+shares a table with.
+
+The rule now: **a table row that names a proof is self-scoping; a row that names none
+inherits its section's scope.** That keeps the coverage that matters — a laws table whose
+figures sit under a heading paragraph naming the proof is still checked against it,
+because those rows name no proof of their own — while stopping one row from being judged
+against another row's proof. Both directions were verified by negative control: a wrong
+number inside a self-scoped ledger row is caught (against exactly one proof, not six),
+and a wrong number in a table row naming no proof is still caught through its section.
+
+Measured coverage went **up**, not down: 27 → 31 distinct figures checked, because four
+figures that could not previously live in the ledger at all now do and are guarded.
+
+The same pass fixed a latent defect in the guard's own coverage line. `checked` counted
+(proof, figure) *pairs*, and one figure can pair with several proofs sharing a scope — so
+subtracting it from the document total understated the gap, and with enough multi-proof
+sections would have gone negative. Distinct figures are now counted separately from
+pairs. A guard that announces its own partial coverage has to measure that number as
+carefully as the ones it polices.
+
+**The right rule was attached to the wrong syntax.** `INTEGRATION_CATALOG`'s
+endpoint-management/NAC/entitlement proofs section is a bulleted list of one entry per
+proof — the ledger table's structure written with `-` instead of `|`. It behaved
+correctly only because none of the proofs it named were registered with the figure guard.
+Registering one (`proof:service-lifecycle`) immediately made every *other* bullet's
+figures — entitlement-binding's sweep size, uem's, response-accountability's two — read
+as claims about the one registered proof, and the guard failed on numbers that were
+perfectly accurate about their own subject. So a top-level list item that names a proof
+is now self-scoping too, reconstructed as the `-` line plus its indented continuations,
+because a multi-line bullet is one bullet.
+
+Narrowing a guard needs evidence rather than an argument, so the pair sets were computed
+under both scopings and differenced: exactly five pairs lost, none gained, and every lost
+pair is the newly-registered proof against a number belonging to a different bullet (one
+of which was never a figure at all — it is a character-length allowlist bound). No proof
+loses a pair of its own. That is the same safety property the table-row rule claims, this
+time measured rather than reasoned about.
+
+### Where new work is allowed to land
+
+`node scripts/check-package-reachability.mjs` computes the transitive closure from the
+shipped artifacts and reports every `lib/*` package none of them can reach. Eight of
+thirty-five are unreachable today — one with no importers at all, the rest imported only
+by the proof harness — and the check is a ratchet pinned at that count rather than a hard
+gate, because unreachable is a requirement to *look*, not a verdict to delete.
+
+Before building into a library, ask it how that library ships:
+
+```bash
+node scripts/check-package-reachability.mjs --why @workspace/<package>
+```
+
+It prints the shortest artifact→package path, or says plainly that the package is
+unreachable and that work landed there is work nothing can call. It exists because a
+design pass once scoped a repair into `lib/dual-control` before establishing that
+`planFlowActions` has zero shipped consumers — the wiring would have been proven by a
+proof and reachable by nothing.
 
 ## Branch protection
 
@@ -198,6 +457,69 @@ This keeps Review Hub independent from `/DEV` and makes the public validation su
   gate could: a decision-evidence row the core carried and no console scenario
   ever rendered.
 
+## CI ↔ preflight drift (`pnpm run guard:ci-sync`)
+
+`scripts/preflight.mjs` calls itself a mirror of the CI jobs that need nothing but Node,
+and asked a human to *"keep this list in lockstep"*. Two hand-maintained lists that must
+agree is a promise, not a mechanism, and it fails silently in **both** directions: a proof
+in CI but not preflight means a red build passes `Safe to push`; a proof in preflight but
+not CI means it is verified only on a developer's machine while every status surface says
+CI runs the full suite.
+
+**Both had already drifted.** `proof:dual-control` and `proof:session-store` ran in
+preflight and in **no workflow at all**. They are in CI now, and
+`scripts/check-ci-preflight-sync.mjs` derives both lists from source so the next omission
+is caught by a machine rather than by an audit that happened to look.
+
+Three Postgres proofs (`audit-ledger-pg`, `decision-store-pg`, `session-store-pg`) are
+exempt **by name with a reason**, not by a `/-pg$/` pattern that would quietly absorb the
+next unrelated omission — and a stale exemption is itself reported, since silencing a
+check for something now covered is its own drift. The gate also refuses to pass on an
+implausibly small scan: both sides are read with a regex, and if either stops matching the
+sets go empty and every comparison trivially succeeds. A drift checker that reports "no
+drift" because its parser broke is the exact failure this repository keeps finding, so the
+gate that hunts it carries a floor against having it.
+
 ## Unsafe-claim scan scope
 
 The CI denylist is intentionally narrow and direct. It checks for production-ready, replacement, partnership, MFi certification, autonomous-remediation, and specific replacement phrases such as `replaces Jamf`, `replaces Intune`, `replaces Apple Configurator`, and `replaces GroundControl`, while allowing explicit disclaimers, guardrail wording, and validation-command lines that document the scanner itself.
+
+**`scripts/docs-sanity.mjs` implemented that allowance; `phase-gate.ts` did not.** The two
+scanners share a denylist and disagreed about how to read it. `docs-sanity` is
+negation-aware and has been for some time — its `hasBareClaim` requires a negator to
+appear *before* the phrase, and its comment records why a line-wide search is wrong. The
+phase gate just ran the grep. A substring match cannot distinguish a partnership claim
+from its own denial, and since this project's doctrine is platform honesty, its docs are
+overwhelmingly the denials. Measured at the time of the fix: **64 hits, of which zero were
+affirmative.** `unsafeClaims=found` had therefore printed on every run the gate had ever
+made, and would have printed identically on a repository that *did* carry a real claim. A
+signal that cannot vary carries no information, and the incentive ran backwards — writing
+an honest disclaimer cost you a lane escalation.
+
+`scripts/src/unsafe-claim-classifier.ts` now sorts each hit into `affirmative`,
+`disclaimed`, `self_referential` or `registry`, and **only `affirmative` moves the lane**.
+The two marker families are scoped differently on purpose:
+
+- **Negation is positional** — counted only in the text *before* the match, within the
+  same clause (`.`, `;` and `|` are boundaries, because these docs use markdown tables and
+  a negation in one cell must not reach into the next). Words like "not" and "no" are
+  ordinary prose, so a line-wide search would let a production-readiness assertion launder
+  itself on a trailing "no" elsewhere in the sentence. This matches `docs-sanity`'s
+  `hasBareClaim`, which reached the same conclusion first; the phase gate additionally
+  narrows the window from the whole line to the clause.
+- **Prohibition is lexical** — "avoid", "denylist", "guardrail", "disclaimer" and friends
+  count anywhere in the clause, because they cannot plausibly co-occur with a sincere
+  claim.
+
+Anything not positively identified as disclaimed is affirmative: fail-closed, as
+everywhere else here. The gate prints the full breakdown (`unsafeClaimMentions=total:…
+affirmative:… disclaimed:… selfReferential:… registry:…`) so a collapse in the disclaimer
+count is visible too.
+
+**Known limitation, stated rather than implied by silence:** the registry exemption is
+per-file, so a sincere claim written *inside* `docs/PUBLIC_MESSAGING_GUARDRAILS.md` — the
+document whose purpose is to enumerate forbidden wording — is exempt. The `registry:`
+count moves when that happens, but the lane does not. Closing it would require shape
+heuristics about how that one document may be written, and a guard that fails on
+legitimate edits gets switched off. `pnpm run proof:unsafe-claim` (40 checks) pins all of
+the above, including that limitation and the adversarial trailing-negation case.

@@ -3,10 +3,15 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "dependencies": {
+    "@workspace/fleet-connector": "workspace:*",
     "@workspace/integrations": "workspace:*",
     "@workspace/signalgrid-core": "workspace:*"
   },
-  "devDependencies": { "@types/node": "catalog:" }
+  "devDependencies": {
+    "@types/node": "catalog:"
+  }
 }

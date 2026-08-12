@@ -108,7 +108,7 @@ export interface Workflow {
 
 // ── Connector (fixture-only, read-only) ──────────────────────────────────────
 
-export type ConnectorKind = "microsoft-entra-intune" | "dockbridge-custody";
+export type ConnectorKind = "microsoft-entra-intune" | "dockbridge-custody" | "wfm-shift";
 export type ConnectorMode = "fixture";
 export type ConnectorStatus = "healthy" | "degraded" | "never_synced";
 
@@ -188,6 +188,44 @@ export type BaselineState =
   | "unknown";
 
 /**
+ * Was the baseline answer above produced by the RIGHT test? Summarized from the
+ * benchmark-selection dimension (docs/BENCHMARK_SELECTION.md), which grades the
+ * QUESTION the way `BaselineState` records the ANSWER: which benchmark document
+ * graded this device, at what version, from whose content, on what platform,
+ * covering how many rules, and whether it is the one this workflow requires.
+ *  - confirmed:  the assessment was the right document, honestly sourced,
+ *                adequately covered, and the one this work requires,
+ *  - misfit:     an AFFIRMATIVE selection failure — a document for another
+ *                platform, an empty assessment, a benchmark off this workflow's
+ *                requirement, or one the published catalog does not carry. The
+ *                alignment answer is unreliable no matter what it says,
+ *  - unverified: not established either way (no signal, axes unknown).
+ *                Fail-safe: never read as confirmed — and, deliberately, never
+ *                matched by the ACTIVE v1 rule either, so a fleet that does not
+ *                yet emit this signal is not stepped up on day one.
+ */
+export type BenchmarkSelectionState = "confirmed" | "misfit" | "unverified";
+
+/**
+ * The labor plane's summary for the worker acting on this device, from the
+ * shift-context dimension (docs/SHIFT_CONTEXT.md): is this the right TIME and
+ * SITE for this worker to be operating? Custody says which badge holds the
+ * device; this says whether the workforce-management plane agrees with the
+ * moment.
+ *  - confirmed:  scheduled now, on the clock, and the site question (if posed)
+ *                answered matched,
+ *  - misfit:     an AFFIRMATIVE labor mismatch — scheduled-but-clocked-out
+ *                (off-the-clock work, or someone else's badge), operating while
+ *                neither scheduled nor punched in, or a shift that places the
+ *                worker at a different site,
+ *  - unverified: not established either way (no signal, axes unknown).
+ *                Fail-safe: never read as confirmed — and, deliberately, never
+ *                matched by the ACTIVE v1 rule either, so a fleet that does not
+ *                yet emit this signal is not stepped up on day one.
+ */
+export type ShiftContextState = "confirmed" | "misfit" | "unverified";
+
+/**
  * Badge-binding state from the RFID/prox/NFC badge-reader case — whether the
  * assigned worker's credential is physically bound to this shared device at the
  * moment a workflow fires. This is the signal that ties a human to a shared
@@ -263,20 +301,58 @@ export type DockState =
  */
 export type BatteryHealthState = "healthy" | "degraded" | "failing" | "unknown";
 
-export type SignalCategory =
-  | "identity_state"
-  | "device_compliance"
-  | "device_management"
-  | "device_encryption"
-  | "os_support"
-  | "posture_freshness"
-  | "custody_state"
-  | "charge_state"
-  | "battery_health"
-  | "tamper_state"
-  | "dock_state"
-  | "security_baseline"
-  | "badge_binding";
+/** Every normalized signal category the core evaluates.
+ *
+ *  Declared as a const ARRAY with the union derived from it, rather than as a bare
+ *  union — the same correction `SIGNAL_KINDS` in @workspace/posture-composition
+ *  already carries, and for the same reason, now demonstrated twice.
+ *
+ *  A bare union is invisible at runtime, so nothing can COUNT it. Every document
+ *  that wanted to state how many categories exist had to restate the list by hand,
+ *  and `docs/WHAT_SIGNALGRID_DOES_TODAY.md` duly drifted: it claimed 13 while the
+ *  union held 15, having already been hand-corrected once from an earlier wrong
+ *  figure. Deriving the union from the array makes the list enumerable, so
+ *  `signalgrid-core-proof.ts` can emit a real count and the figure guard can hold
+ *  every document to it. The failure mode is designed out rather than watched for. */
+export const SIGNAL_CATEGORIES = [
+  "identity_state",
+  "device_compliance",
+  "device_management",
+  "device_encryption",
+  "os_support",
+  "posture_freshness",
+  "custody_state",
+  "charge_state",
+  "battery_health",
+  "tamper_state",
+  "dock_state",
+  "security_baseline",
+  "benchmark_selection",
+  "shift_context",
+  "badge_binding",
+  // The two launch families the core could not previously represent — found by the
+  // 2026-08-10 full-repo scan (PRODUCT_COMPLETION_PLAN §9): device-management-health
+  // and local-authority shipped as connectors, proofs and doctrine while the engine
+  // had no vocabulary for either. Coarse rollups by design, like security_baseline
+  // rolling up the whole CIS engine: the family computes, the core reads the verdict.
+  "device_management_health",
+  "local_authority",
+] as const;
+
+export type SignalCategory = (typeof SIGNAL_CATEGORIES)[number];
+
+/** Rollup of the device-management-health family: is the MANAGEMENT PLANE itself
+ *  trustworthy for this device — enrollment live, check-ins fresh, policy on
+ *  baseline. `broken` is affirmative (enrollment failed/retired, never checked in);
+ *  silence reads as `unknown`, never as healthy. */
+export type ManagementHealthState = "healthy" | "degraded" | "broken" | "unknown";
+
+/** Rollup of the local-authority family: may this shared device act on its own
+ *  authority right now (offline lease live, clock trusted). Only the two
+ *  AFFIRMATIVE values are readable from a signal — `verified` and `withheld` —
+ *  absent or unrecognized falls back to `unverified`, the same
+ *  silence-is-not-an-answer rule as benchmark_selection and shift_context. */
+export type LocalAuthorityGrantState = "verified" | "withheld" | "unverified";
 
 export interface NormalizedSignal {
   id: string;
@@ -297,23 +373,35 @@ export type DecisionOutcome = "allow" | "step_up" | "restrict" | "deny";
 export type Severity = "low" | "medium" | "high" | "critical";
 
 /** Fields of the normalized decision-evidence context a rule can test. */
-export type EvidenceField =
-  | "identityEnabled"
-  | "deviceManaged"
-  | "deviceCompliance"
-  | "deviceEncrypted"
-  | "osSupported"
-  | "ownerType"
-  | "postureFreshness"
-  | "workflowRiskTier"
-  | "criticalSignalsPresent"
-  | "custodyState"
-  | "chargeState"
-  | "batteryHealth"
-  | "tamperState"
-  | "dockState"
-  | "baselineState"
-  | "badgeState";
+/** Every evidence field a policy rule can test. Const array for the same reason
+ *  `SIGNAL_CATEGORIES` above is one: the controls documentation claimed "these —
+ *  and only these — are the dimensions a policy rule can test today" over a list
+ *  of 15 while the union held 18, and no gate could see the difference because a
+ *  union cannot be counted. */
+export const EVIDENCE_FIELDS = [
+  "identityEnabled",
+  "deviceManaged",
+  "deviceCompliance",
+  "deviceEncrypted",
+  "osSupported",
+  "ownerType",
+  "postureFreshness",
+  "workflowRiskTier",
+  "criticalSignalsPresent",
+  "custodyState",
+  "chargeState",
+  "batteryHealth",
+  "tamperState",
+  "dockState",
+  "baselineState",
+  "benchmarkSelectionState",
+  "shiftContextState",
+  "badgeState",
+  "managementHealthState",
+  "localAuthorityState",
+] as const;
+
+export type EvidenceField = (typeof EVIDENCE_FIELDS)[number];
 
 export type RuleCondition =
   | { field: "identityEnabled"; equals: boolean | "unknown" }
@@ -331,7 +419,11 @@ export type RuleCondition =
   | { field: "tamperState"; in: TamperState[] }
   | { field: "dockState"; in: DockState[] }
   | { field: "baselineState"; in: BaselineState[] }
-  | { field: "badgeState"; in: BadgeBindingState[] };
+  | { field: "benchmarkSelectionState"; in: BenchmarkSelectionState[] }
+  | { field: "shiftContextState"; in: ShiftContextState[] }
+  | { field: "badgeState"; in: BadgeBindingState[] }
+  | { field: "managementHealthState"; in: ManagementHealthState[] }
+  | { field: "localAuthorityState"; in: LocalAuthorityGrantState[] };
 
 export interface PolicyRuleSpec {
   id: string;
@@ -395,8 +487,22 @@ export interface DecisionEvidence {
   dockState: DockState;
   /** Security-baseline (CIS/hardening) alignment for the device (default "unknown"). */
   baselineCompliance: BaselineState;
+  /** Whether the baseline answer above came from the RIGHT test (default
+   *  "unverified") — see BenchmarkSelectionState. `aligned` + `misfit` means the
+   *  device passed a test that does not apply to it. */
+  benchmarkSelection: BenchmarkSelectionState;
+  /** Labor-plane summary from the shift-context dimension (default "unverified") —
+   *  see ShiftContextState. The badge says WHO; this says whether the WFM agrees
+   *  it is the right TIME and SITE for them to be operating. */
+  shiftContext: ShiftContextState;
   /** Badge-binding state from the RFID/prox badge-reader case (default "unknown"). */
   badgeBinding: BadgeBindingState;
+  /** Management-plane health rollup from the device-management-health family
+   *  (default "unknown" — silence is not a healthy management plane). */
+  managementHealthState: ManagementHealthState;
+  /** Local-authority grant rollup (default "unverified" — day-one-quiet until the
+   *  connector emits it, like benchmarkSelection and shiftContext). */
+  localAuthorityState: LocalAuthorityGrantState;
   /** True only when every critical input is present and not degraded. */
   criticalSignalsPresent: boolean;
 }
@@ -420,6 +526,20 @@ export interface EvidenceSnapshot {
   policyVersionId: string;
   policyVersion: number;
   sourceReferences: string[];
+  /**
+   * Which build of the core decision path derived these facts.
+   *
+   * OPTIONAL, and that is load-bearing rather than lazy: durable rows written before
+   * this field existed deserialize without it (`decision-store.ts` casts JSONB with an
+   * unchecked `as EvidenceSnapshot`), so a required field would make the type lie about
+   * what is actually in the database. Absence means "minted before provenance was
+   * stamped" and is surfaced as exactly that — never coerced to 0, never back-dated.
+   *
+   * Generated by `scripts/generate-core-normalization-version.mjs`; it claims ONE
+   * direction only — the same value means the covered core source was byte-identical,
+   * a different value means something in the core decision path changed.
+   */
+  coreNormalizationVersion?: number;
   /** Deterministic content digest making the snapshot tamper-evident. */
   digest: string;
 }
@@ -444,6 +564,9 @@ export interface Decision {
   reviewStatus: ReviewStatus;
   reviewable: boolean;
   explanation: string;
+  /** Copied from the evidence snapshot this decision was minted with — never re-read
+   *  from the constant, so all carriers report the value that was actually digested. */
+  coreNormalizationVersion?: number;
 }
 
 // ── Policy tests (fixtures that pin a version's behaviour) ───────────────────
@@ -688,6 +811,9 @@ export interface EvaluateResult {
   reviewable: boolean;
   latencyMs: number;
   explanation: string;
+  /** Copied through from the snapshot. Absent on a decision minted before the stamp
+   *  existed — surfaced as "unstamped", never coerced to a number. */
+  coreNormalizationVersion?: number;
 }
 
 // ── Errors ───────────────────────────────────────────────────────────────────

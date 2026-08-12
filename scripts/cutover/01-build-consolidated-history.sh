@@ -30,7 +30,7 @@ EOF
   exit 0
 fi
 
-cd "$MONO"
+cd "$MONO" || die "cannot enter $MONO"
 git checkout "$CONSOLIDATION_REF"
 CONSOLIDATION_TREE="$(git rev-parse "$CONSOLIDATION_REF^{tree}")"
 
@@ -47,7 +47,7 @@ attaches the SignalGrid (old home) and DEV histories as ancestry so git log
 retains every source commit and author."
 
 git branch -f dev
-DEV_TREE="$(git rev-parse dev^{tree})"
+DEV_TREE="$(git rev-parse "dev^{tree}")"
 
 echo ""
 git log --oneline --graph -4 dev || true

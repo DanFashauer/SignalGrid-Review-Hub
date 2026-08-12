@@ -21,6 +21,7 @@ import {
   resolveIdentityRiskConnector,
   type PrincipalRiskRaw,
 } from "@workspace/integrations/identity-risk";
+import { checkLiveGateIsolated } from "./lib/live-gate.js";
 
 interface Expected {
   posture: string;
@@ -147,6 +148,24 @@ check("dev tier resolves to fixture mode", resolveIdentityRiskConnector({ SIGNAL
 check("prod WITHOUT live flag stays fixture", resolveIdentityRiskConnector({ SIGNALGRID_TIER: "prod" }).mode === "fixture");
 check("prod + live but NO token stays fixture", resolveIdentityRiskConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" }).mode === "fixture");
 check("prod + live + token resolves live", resolveIdentityRiskConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", IDENTITY_RISK_ACCESS_TOKEN: "t" }).mode === "live");
+
+
+// ── The live-call gate, each condition ISOLATED ──────────────────────────────
+//
+// Replaces / supplements a cumulative ladder in which each step added one variable, so
+// the conditions below the one under test were also failing and only the last was
+// genuinely exercised. See lib/live-gate.ts. The tier check is the control behind the
+// written claim that dev and alpha never make live vendor calls.
+checkLiveGateIsolated({
+  check,
+  family: "identity-risk",
+  resolve: (env) => resolveIdentityRiskConnector(env),
+  full: {
+    SIGNALGRID_TIER: "prod",
+    SIGNALGRID_LIVE_INTEGRATIONS: "true",
+    IDENTITY_RISK_ACCESS_TOKEN: "t",
+  },
+});
 
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);

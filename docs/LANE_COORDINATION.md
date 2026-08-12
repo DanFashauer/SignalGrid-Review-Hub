@@ -11,8 +11,13 @@ lane loads it; CLAUDE.md points here.
 
 | Lane | Session | Branch | Scope |
 | --- | --- | --- | --- |
-| Cloud (this file's author) | `session_01D3GJ2Fs8sVppPgzuJdnNLn` | `claude/signalgrid-launch-plan-emxm01` (PR #152) | Decision fabric: connector families, core /v1, proofs/gates, MCP server, docs, intake ledger |
-| Mac | `session_01N7uHGuc22upGPW3AZvHLAn` | pushes to `SignalGrid_Alpha` | iOS/EnterpriseShell, local harness (`validate-sim-macos.sh`), Mac-side verification |
+| Cloud (this file's author) | `session_01D3GJ2Fs8sVppPgzuJdnNLn` | `claude/signalgrid-launch-plan-emxm01`, restarted from the default branch after each merge | Decision fabric: connector families, core /v1, proofs/gates, MCP server, docs, intake ledger, the simulation request loop |
+| Mac | `session_01N7uHGuc22upGPW3AZvHLAn` | topic branches off `SignalGrid_Alpha`, merged by PR | iOS/EnterpriseShell, local harness (`validate-sim-macos.sh`), benches, Mac-side verification and the only lane that can run the hardware operations |
+
+PR #152 — the launch spine — merged on 2026-08-12, along with #202, #203 and
+#204. The cloud lane's branch name is reused rather than retired: it is
+restarted from the default branch after every merge, so a branch that appears
+in an old PR link is not the branch that exists now.
 
 Sessions cannot read or message each other (cross-session triggers are
 disabled for this organization). The coordination bus is THIS FILE plus the
@@ -104,3 +109,27 @@ needed. Both entries are real, both cost real time.
   concurrently with anything else in the same checkout.
 - The sync manifest is generated (`node scripts/generate-sync-manifest.mjs`);
   a hand-edit or a stale copy fails `check:live-sync` on the next push.
+
+3. **Both lanes appended gate steps on the same day** (2026-08-12; cloud #204,
+   Mac #205). The cloud lane added `proof:sim-requests`, the sim-request gate
+   and `test:load`; the Mac lane added `bench:decision-throughput`. Both edited
+   `scripts/preflight.mjs`, `.github/workflows/review-hub-ci.yml` and both
+   `package.json` files — the shared surfaces rule 1 names — within hours of
+   each other, neither having read the other's commits first.
+
+   **Recorded because it did NOT become the eight-file conflict, and the reason
+   is worth generalising: both changes were APPENDS to a list.** Two lanes
+   adding steps to the same gate suite do not disagree; two lanes rewriting the
+   same gate do. Whoever merges second rebases and keeps BOTH sets of steps, and
+   the resolution is mechanical rather than a judgement call. #204 landed first,
+   so #205 carries the rebase.
+
+   The near-miss that would NOT have been mechanical: the two benches measure
+   different things (`bench:decision-throughput` is the in-process decision core
+   at ~33,000/sec; `test:load` is the `/v1` HTTP surface at ~740–800 req/s), and
+   had either lane assumed the other's number was the same number, the repo
+   would have grown two contradictory capacity claims. They are complementary
+   and each says so in its own header — the gap between them is the transport.
+   If a future pair of lanes measures the same thing twice, rule 4 applies and
+   one of them is redundant; if they measure different things, both stay AND
+   each must name what it is not.

@@ -68,10 +68,12 @@ export type LinkProgress =
    *  fine, only the internet/control plane is dark." Before this rung existed a
    *  bridge had to mis-file that state as `carrying_traffic` (over-claiming — the
    *  cloud planes every freshness grant rides on are dark) or as `dns_failing`
-   *  (under-claiming — local work is fine). ANNOTATE-ONLY by owner direction: this
-   *  rung names the state and alerts exactly like the other confirmed
-   *  not-fully-usable rungs; whether it may ever SOFTEN an offline restriction for
-   *  named workflows is an owner decision deliberately not wired here. */
+   *  (under-claiming — local work is fine). ANNOTATE-ONLY by owner DECISION
+   *  (2026-08-12, closing completion-plan §12.1): this rung names the state and
+   *  alerts exactly like the other confirmed not-fully-usable rungs; it never
+   *  softens an offline restriction. The softening question was posed to the
+   *  owner and answered — annotate-only is the product behavior, not a
+   *  placeholder for it. */
   | "local_only"
   | "dns_failing"
   | "dhcp_failing"
@@ -178,8 +180,8 @@ export type LinkUsabilityPosture =
    *  false-confirmation state this dimension exists to name. */
   | "associated_not_usable"
   /** Local traffic confirmed carrying while WAN egress is confirmed failing —
-   *  named so an operator (and, only if the owner later approves it,
-   *  decision-continuity) can tell this apart from a broken link. */
+   *  named so an operator can tell this apart from a broken link. Annotate-only
+   *  by owner decision (§12.1, closed 2026-08-12): it informs, never softens. */
   | "local_only_link"
   | "link_absent"
   | "roaming_unstable"

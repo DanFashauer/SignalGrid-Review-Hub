@@ -484,11 +484,17 @@ severity as the other confirmed not-fully-usable rungs, never grants (the
 exhaustive sweep still admits exactly three granting shapes), and refuses the
 `not_associated`+`local_only` contradiction without citing either half —
 all pinned in `proof:link-usability` (167 checks; normalized state space
-grew 6480→7560, raw wire space 217728→241920). What remains **owner
-decision required** is only the *softening* half: whether `local_only` may
+grew 6480→7560, raw wire space 217728→241920). What remained **owner
+decision required** was only the *softening* half: whether `local_only` may
 ever soften an offline restriction for named workflows via
-`decision-continuity`. Nothing is wired toward that; the rung's doc comment
-in `types.ts` says so explicitly.
+`decision-continuity`.
+
+**DECIDED (owner, 2026-08-12): annotate-only IS the answer — this question
+is CLOSED.** `local_only` names the state for operators and decision
+evidence; it never softens an offline restriction. Nothing is wired toward
+softening, deliberately and now permanently absent a new owner directive —
+this is a decision, not unbuilt scope. The rung's doc comment in `types.ts`
+records the same.
 
 With one addition: `docs/DEMO_SCRIPT_FOR_PARTNERS.md` already exists — the kit
 revises it rather than starting blank.

@@ -26,7 +26,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { SIM_OPERATIONS, OPERATION_KEYS, RUN_STATUSES, GREEN_STATUSES } from "./lib/sim-operations.mjs";
+import { SIM_OPERATIONS, OPERATION_KEYS, RUN_STATUSES, GREEN_STATUSES, EXECUTED_STATUSES } from "./lib/sim-operations.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const REQ_DIR = join(repo, "artifacts/sim-requests");
@@ -79,12 +79,25 @@ export function auditSimRequests(requests, results) {
     if (!res.provenance || !res.provenance.commit) {
       problems.push(`result ${res.__fileId}: no provenance.commit — a result that cannot name the code it ran against is not evidence`);
     }
-    // Every asked-for operation missing from the rows is UNRUN, and an unrun
-    // operation inside a completed result is the case most likely to be read as
-    // done. Named individually rather than counted.
+    // An operation is ANSWERED only when it actually executed — `passed` or
+    // `failed`. Everything else is still owed.
+    //
+    // THIS CLAUSE WAS THE LOOP'S OWN HOLE, and it was found by using it. A stray
+    // run on Linux wrote a result whose every row was `refused_platform`. The
+    // earlier version asked only "is there a row for this operation?", so that
+    // result closed the request out: no problems, nothing pending, a request the
+    // Mac had never touched reading as done. That is precisely the unearned
+    // affirmative this loop was built to prevent, arriving through the back door
+    // of the loop itself — a refusal is an honest record of an ATTEMPT, never
+    // evidence that the work happened.
     for (const key of req.runs) {
-      if (!(res.runs ?? []).some((r) => r.operation === key)) {
+      const row = (res.runs ?? []).find((r) => r.operation === key);
+      if (!row) {
         pending.push(`${res.requestId} → ${key} (result exists but this operation has no row: NOT run)`);
+      } else if (!EXECUTED_STATUSES.includes(row.status)) {
+        pending.push(
+          `${res.requestId} → ${key} (${row.status} on ${res.provenance?.platform ?? "unknown platform"}: attempted, NOT run — still needs a machine that can)`,
+        );
       }
     }
   }
@@ -134,6 +147,16 @@ function selfTest() {
 
   a = auditSimRequests([req("r1", ["preflight"])], []);
   checks.push(["a request with no result at all is pending, not a failure", a.pending.length === 1 && a.problems.length === 0]);
+
+  // The hole this gate shipped with, now a permanent control.
+  a = auditSimRequests(
+    [req("r1", ["everything"])],
+    [{ requestId: "r1", __fileId: "r1", runs: [{ operation: "everything", status: "refused_platform" }], provenance: { commit: "abc", platform: "linux" } }],
+  );
+  checks.push([
+    "A REFUSAL DOES NOT CLOSE A REQUEST: an all-refused result stays pending, never answered",
+    a.pending.some((p) => p.includes("attempted, NOT run")) && a.problems.length === 0,
+  ]);
 
   a = auditSimRequests([req("r1", ["preflight"])], [{ requestId: "r1", __fileId: "r1", runs: [], provenance: {} }]);
   checks.push(["a result with no provenance commit is caught", a.problems.some((p) => p.includes("provenance.commit"))]);

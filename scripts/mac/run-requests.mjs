@@ -119,6 +119,7 @@ function main() {
 
   const doneIds = new Set(listJson(RES_DIR).map((f) => f.replace(/\.json$/, "")));
   let ran = 0;
+  let considered = 0;
   let anyFailed = false;
 
   for (const file of requestFiles) {
@@ -126,6 +127,7 @@ function main() {
     if (onlyId && id !== onlyId) continue;
     if (!rerun && !onlyId && doneIds.has(id)) continue;
 
+    considered += 1;
     const req = readJson(join(REQ_DIR, file));
     console.log(`\n== request ${id} ==`);
     console.log(`   ${req.reason ?? "(no reason recorded)"}`);
@@ -162,7 +164,16 @@ function main() {
     ran += 1;
   }
 
-  if (ran === 0 && !plan) {
+  if (considered === 0) {
+    // Never exit silently. The first version printed nothing at all when every
+    // request already had a result AND --plan was set, so a caller capturing the
+    // output could not tell "nothing to do" from "the runner never started".
+    console.log(
+      `\nNothing to do: ${requestFiles.length} request(s), all already have a result.` +
+      "\n  --rerun    run them again" +
+      "\n  --id <id>  run one regardless",
+    );
+  } else if (ran === 0 && !plan) {
     console.log("\nEvery request already has a result. Use --rerun to run them again.");
   } else if (!plan) {
     console.log(`\nRan ${ran} request(s). Commit artifacts/sim-results/ and push so the cloud lane can read them:`);
@@ -174,4 +185,10 @@ function main() {
   return anyFailed ? 1 : 0;
 }
 
-process.exit(main());
+// `process.exitCode`, NOT `process.exit()`. Node's stdout is asynchronous when it
+// is a pipe rather than a TTY, and `process.exit()` tears the process down before
+// the buffer drains — so running this by hand printed a full report while any
+// caller that CAPTURED its output got silence. Every refusal this runner exists to
+// announce was in that dropped buffer. Setting the code and returning lets Node
+// flush and exit on its own.
+process.exitCode = main();

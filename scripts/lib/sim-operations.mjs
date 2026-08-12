@@ -119,3 +119,11 @@ export const RUN_STATUSES = Object.freeze([
 /** Statuses that mean the operation ACTUALLY EXECUTED and succeeded. Only this
  *  set may ever be read as evidence that a simulation ran clean. */
 export const GREEN_STATUSES = Object.freeze(["passed"]);
+
+/** Statuses that mean the operation ACTUALLY EXECUTED, whatever the outcome.
+ *
+ *  A refusal or a skip is an honest record that something was ATTEMPTED and could
+ *  not be done here — it closes nothing out. The gate treats every other status as
+ *  still-owed, which is what stops a machine that cannot do the work from
+ *  answering the request by declining it. */
+export const EXECUTED_STATUSES = Object.freeze(["passed", "failed"]);

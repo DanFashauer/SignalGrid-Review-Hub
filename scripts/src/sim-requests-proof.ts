@@ -135,6 +135,19 @@ check(
   })(),
 );
 
+// The defect the loop shipped with, found by using it: a stray Linux run wrote a
+// result whose every row was `refused_platform`, and the gate read "has a row" as
+// "answered" — closing out a request the Mac had never touched. A refusal is an
+// honest record of an ATTEMPT; it is never evidence the work happened.
+const refusedOnly = auditSimRequests(
+  [req("r", ["everything"])],
+  [{ requestId: "r", __fileId: "r", runs: [{ operation: "everything", status: "refused_platform" }], provenance: { commit: "abc", platform: "linux" } }],
+);
+check(
+  "A REFUSAL NEVER CLOSES A REQUEST — an all-refused result stays pending, and says which machine could not run it",
+  refusedOnly.pending.some((p: string) => p.includes("attempted, NOT run")) && refusedOnly.problems.length === 0,
+);
+
 const ghost = auditSimRequests([], [res("ghost", [{ operation: "preflight", status: "passed" }])]);
 check("a result naming no existing request is refused", ghost.problems.some((p: string) => p.includes("does not exist")));
 

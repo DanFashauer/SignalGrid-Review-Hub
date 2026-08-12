@@ -492,6 +492,13 @@ jobs:
       - name: Decision-latency pilot gate
         run: pnpm run bench:decision-latency
 
+      # Saturation companion to the gate above. The decisions/sec it prints are a
+      # property of the runner and are reported, not asserted; what fails a PR is
+      # a throughput floor derived from the 750 ms p95 gate, no gain from adding
+      # cores, or a verdict that changes under concurrency.
+      - name: Decision-throughput saturation gate
+        run: pnpm run bench:decision-throughput -- --seconds=2
+
   # The deferred-family and doctrine-document proofs (plan §11.4 step 4). A
   # required lane on every PR, run IN PARALLEL with `validation` so the wall
   # clock drops rather than grows — moved out of the serial per-push preflight,

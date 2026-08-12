@@ -55,6 +55,16 @@ export const SIM_OPERATIONS = {
     platform: "any",
     what: "the /v1 decision API exercised end to end, every assertion",
   },
+  load: {
+    argv: ["pnpm", "--filter", "@workspace/api-server", "run", "test:load"],
+    platform: "any",
+    what: "the /v1 decision API under concurrency — correctness gated, throughput and latency reported",
+  },
+  stress: {
+    argv: ["pnpm", "--filter", "@workspace/api-server", "run", "test:stress"],
+    platform: "any",
+    what: "the same, plus a concurrency ramp that reports where the server saturates",
+  },
   e2e: {
     argv: ["pnpm", "--filter", "@workspace/scripts", "run", "test:e2e"],
     platform: "any",

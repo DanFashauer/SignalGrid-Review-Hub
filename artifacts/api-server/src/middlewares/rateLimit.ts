@@ -12,9 +12,33 @@ import type { Request } from "express";
  * every demo key from that address. Unauthenticated requests fall back to the
  * client address.
  */
+/**
+ * Read a positive-integer limit from the environment, falling back to the
+ * shipped default.
+ *
+ * WHY THIS KNOB EXISTS. The load harness (`test/load.test.mjs`) measured the
+ * real ceiling for the first time and found the LIMITER, not the decision path,
+ * defines capacity: the core answers in ~1.3 ms while a single key is capped at
+ * 240 requests per minute — four decisions a second. That default is right for a
+ * public demo surface and far too low for a real fleet, where several hundred
+ * shared devices each re-check a session on pickup. Before this, an operator
+ * hitting the ceiling had no lever short of editing source.
+ *
+ * The DEFAULTS ARE UNCHANGED, deliberately: a deployment that sets nothing
+ * behaves exactly as before, so this adds a control without moving anyone's
+ * ground. A malformed or non-positive value falls back rather than disabling the
+ * limiter — the failure mode of a rate limit misread as "0" is an open door.
+ */
+function limitFromEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined) return fallback;
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : fallback;
+}
+
 export const v1RateLimiter: RateLimitRequestHandler = rateLimit({
   windowMs: 60_000,
-  limit: 240,
+  limit: limitFromEnv("SIGNALGRID_V1_RATE_LIMIT", 240),
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req: Request): string => {
@@ -39,7 +63,7 @@ export const v1RateLimiter: RateLimitRequestHandler = rateLimit({
  */
 export const globalRateLimiter: RateLimitRequestHandler = rateLimit({
   windowMs: 60_000,
-  limit: 600,
+  limit: limitFromEnv("SIGNALGRID_GLOBAL_RATE_LIMIT", 600),
   standardHeaders: true,
   legacyHeaders: false,
   message: {

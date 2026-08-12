@@ -249,6 +249,8 @@ jobs:
         run: pnpm run proof:mobile-app-catalog
       - name: Proof — sim-request loop (cloud asks, only the Mac answers, unrun is never green)
         run: pnpm run proof:sim-requests
+      - name: /v1 under concurrency (correctness gated; throughput reported)
+        run: pnpm run test:load
       - name: Simulation request loop (results bind to requests; pending reported)
         run: node scripts/check-sim-requests.mjs
       - name: Simulation request loop self-test (the gate can fail)

@@ -194,6 +194,8 @@
     "sync:manifest": "node scripts/generate-sync-manifest.mjs",
     "test:api": "pnpm --filter @workspace/api-server run test:api",
     "test:e2e": "pnpm --filter @workspace/scripts run test:e2e",
+    "test:load": "pnpm --filter @workspace/api-server run test:load",
+    "test:stress": "pnpm --filter @workspace/api-server run test:stress",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
     "typecheck:libs": "tsc --build",
     "verify:all": "node scripts/verify-all.mjs",

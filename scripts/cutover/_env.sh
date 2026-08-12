@@ -7,7 +7,9 @@ set -euo pipefail
 HOME_REPO="${HOME_REPO:-DanFashauer/SignalGrid}"
 REVIEWHUB_REPO="${REVIEWHUB_REPO:-DanFashauer/SignalGrid-Review-Hub}"
 DEV_REPO="${DEV_REPO:-DanFashauer/DEV}"
-CONSOLIDATION_REF="${CONSOLIDATION_REF:-claude/signalgrid-launch-plan-emxm01}"
+# The launch spine merged (PR #152, #202) and GitHub deleted the feature branch
+# this used to name, so the default branch is now the consolidation ref. Overridable.
+CONSOLIDATION_REF="${CONSOLIDATION_REF:-SignalGrid_Alpha}"
 OLD_SIGNALGRID_MAIN="${OLD_SIGNALGRID_MAIN:-main}"
 DEV_MAIN="${DEV_MAIN:-main}"
 

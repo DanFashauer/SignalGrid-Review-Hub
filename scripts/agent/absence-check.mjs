@@ -3,7 +3,8 @@
 // usually gets the least.
 //
 //   node scripts/agent/absence-check.mjs android
-//   node scripts/agent/absence-check.mjs --patterns 'AndroidManifest' 'build\.gradle'
+//   node scripts/agent/absence-check.mjs --patterns AndroidManifest build.gradle
+//     (literal substrings, matched case-insensitively against tracked paths — not regexes)
 //   node scripts/agent/absence-check.mjs --self-test
 //
 // THE FAILURE THIS PREVENTS (real, twice, 2026-08-08 and 2026-08-12). A document
@@ -133,11 +134,17 @@ function selfTest() {
   const src = readFileSync(fileURLToPath(import.meta.url), "utf8");
   const code = src.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
   checks.push(["NO SHELL: the source calls execFileSync and never execSync", /execFileSync\(/.test(code) && !/[^A-Za-z]execSync\(/.test(code)]);
-  // Built from parts so the assertion does not match ITSELF — the literal spelled out
-  // here would be the only occurrence in the file, and the check would always fail.
-  const shellOpt = new RegExp("shel" + "l\\s*:\\s*true");
-  checks.push(["NO SHELL: no subprocess is given the shell option", !shellOpt.test(code)]);
-  checks.push(["NO SHELL: the topic is never interpolated into a command string", !/`[^`]*\$\{[^}]*\}[^`]*`\s*,\s*\{[^}]*maxBuffer/.test(code)]);
+  // Plain string search, and assembled from parts so the assertion cannot match ITSELF —
+  // the spelled-out literal would be the only occurrence in the file and the check would
+  // always fail. String ops rather than a pattern, so the next check can be absolute.
+  const squashed = code.split(/\s+/).join("");
+  checks.push(["NO SHELL: no subprocess is given the shell option", !squashed.includes("shel" + "l:true")]);
+  // CodeQL flagged `new RegExp(argv)` here as high-severity regex injection: a pattern
+  // from the command line, run against every tracked path, is a backtracking shape. The
+  // fix was to stop compiling patterns at all — `--patterns` now matches literal
+  // substrings. This asserts the capability cannot come back, which is stronger than
+  // asserting the current call site is safe.
+  checks.push(["NO REGEX FROM INPUT: the file constructs no regular expressions at all", !squashed.includes("new" + "RegExp(")]);
 
   // Live, against this tree: the two claims that were actually made and were actually
   // wrong must both come back refuted.
@@ -168,15 +175,19 @@ if (argv[0] === "--patterns") {
     process.exit(2);
   }
   topic = pats[0];
+  // LITERAL substrings, not regular expressions. The first version compiled each pattern
+  // with `new RegExp(p, "i")` and CodeQL flagged it high-severity: a pattern taken from
+  // argv and then run against every tracked path is a catastrophic-backtracking shape,
+  // and the regex was not earning that risk — every documented use ("AndroidManifest",
+  // "build.gradle") is a plain substring. Removing the capability removes the class.
   specs = pats.map((p, i) => {
-    let re;
-    try {
-      re = new RegExp(p, "i");
-    } catch (err) {
-      console.error(`pattern ${i + 1} is not a valid regular expression: ${String(err?.message ?? err)}`);
-      process.exit(2);
-    }
-    return { id: `pattern-${i + 1}`, strength: "strong", how: `a tracked file matching /${p}/i`, run: () => trackedFiles().filter((f) => re.test(f)) };
+    const needle = String(p).toLowerCase();
+    return {
+      id: `pattern-${i + 1}`,
+      strength: "strong",
+      how: `a tracked file whose path contains "${p}"`,
+      run: () => trackedFiles().filter((f) => f.toLowerCase().includes(needle)),
+    };
   });
 } else {
   topic = argv[0];

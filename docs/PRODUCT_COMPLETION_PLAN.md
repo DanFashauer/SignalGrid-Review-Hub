@@ -373,10 +373,11 @@ after the declaration, not before.
 
 Order matters; each step names the gate that would otherwise fail:
 
-1. **Quick wins, zero risk:** delete the four duplicate preflight gates;
+1. **Quick wins, zero risk. DONE.** Delete the four duplicate preflight gates;
    delete `level-10-audit.yml` (uncovered by the parity maps — breaks nothing);
-   retire `docs/CONSOLIDATION_HARVEST.md` (already an orphan; ratchet the
-   orphan pin 10 → 9).
+   retire the CONSOLIDATION_HARVEST merge-inventory doc (already an orphan;
+   ratchet the orphan pin 10 → 9). All three landed together; the harvest doc
+   no longer exists, so it is named here rather than linked.
 2. **Make the three doc scanners recursive first**
    (`check-proof-figures.mjs`, `check-proof-counts.mjs`,
    `generate-sync-manifest.mjs`), so moved docs stay inside guard scope.

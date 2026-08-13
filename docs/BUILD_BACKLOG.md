@@ -592,7 +592,7 @@ only), and the DDM rig is gated on an APNs push certificate.
       2. *signalgrid-mcp half* — its `pyproject.toml` pinned `mcp>=1.9.0` with no
          upper bound. The MCP Python SDK released **2.0.0**, which removes
          `mcp.server.fastmcp` outright (it moved under `mcp/server/mcpserver/`) and
-         turns `mcp/types.py` into a package. `src/signalgrid_mcp/app.py` imports
+         turns `mcp/types.py` into a package. `signalgrid-mcp/src/signalgrid_mcp/app.py` imports
          both, so the server raises `ModuleNotFoundError` at import and a client sees
          only `-32000: Connection closed`; pytest fails at COLLECTION with 4 errors
          and 0 tests run. It reads as a broken repo but is a moved API. **MERGED as
@@ -751,8 +751,8 @@ _These need the owner's call — an agent should not act on them unsupervised._
       is private (or a private location is chosen): draft an invention-disclosure
       document from the architecture, add copyright/CONFIDENTIAL headers, and
       write a tiered-disclosure kit (public one-pager vs. NDA-gated technical
-      brief) + `docs/IP_AND_DISCLOSURE.md`. Do NOT commit a detailed provisional
-      spec into a public repo.
+      brief) + an IP-and-disclosure posture document (planned, not yet written).
+      Do NOT commit a detailed provisional spec into a public repo.
 
 ## Later / vision
 

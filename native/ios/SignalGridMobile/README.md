@@ -148,4 +148,4 @@ This is a **native comparison build**, not a production client.
 - No autonomous remediation
 - Systems of record remain external
 
-See [`docs/REPO_ALIGNMENT.md`](docs/REPO_ALIGNMENT.md) for the detailed mapping between this app and the source repository.
+See [`docs/REPO_LAYOUT.md`](../../../docs/REPO_LAYOUT.md) for the detailed mapping between this app and the source repository. (This previously pointed at `REPO_ALIGNMENT.md`, which does not exist — and pointed at it relatively, so the link resolved under this directory rather than the repo root.)

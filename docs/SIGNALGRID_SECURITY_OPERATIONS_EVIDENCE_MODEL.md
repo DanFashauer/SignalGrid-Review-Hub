@@ -17,7 +17,8 @@ proposed for a later phase, deliberately not on the wire), or **DOCTRINE** (a de
 principle, not yet mechanically checked). The tag is the honesty contract: read it
 before you read the sentence.
 
-Enforced by `scripts/check-security-operations-evidence.mjs`.
+Enforced by `scripts/src/security-operations-evidence-proof.ts` (`pnpm run
+proof:security-operations-evidence`).
 Companions: `SIGNALGRID_ZERO_TRUST_DECISION_PRINCIPLES.md`,
 `SIGNALGRID_ENTERPRISE_IT_LAYER_MODEL.md`, `SIGNALGRID_ENTERPRISE_ITSM_LAYER_MODEL.md`,
 `SIGNALGRID_SSO_EVIDENCE_FIRST_TROUBLESHOOTING.md`.

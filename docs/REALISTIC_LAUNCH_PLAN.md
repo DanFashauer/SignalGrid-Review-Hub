@@ -100,7 +100,7 @@ The `signalgrid-complete.zip` package is a meaningful next step. It contains:
 - 11 passing engine / store tests
 - API route rewrites
 - simulator UI changes
-- `scripts/bootstrap.sh`
+- a bootstrap script (`bootstrap.sh`), not present in this repo
 - run and go-live documentation
 
 That package can make the public demo demo-complete, but it is **not** yet the
@@ -678,7 +678,7 @@ Build this while the pilot is underway.
 1. Fix and merge PR #36.
 2. Integrate `signalgrid-complete.zip`.
 3. Add the in-memory store and test suite.
-4. Run `bash scripts/bootstrap.sh` in your local environment.
+4. Run the bootstrap script the package ships with, in your local environment.
 5. Boot API and web.
 6. Verify all listed endpoints.
 7. Deploy a live public-safe demo.

@@ -119,10 +119,10 @@ anything.
 
 ## Known orphan: `codex/add-signalgrid-autopilot-evidence-bot`
 
-The only branch carrying work that is **not** present on the default branch:
-`scripts/check-text-safety.cjs` and `scripts/signalgrid-autopilot-evidence.cjs`
-(768 lines, last touched 2026-07-08). Reviewed and **not** landed, for reasons that
-are about the code rather than its age:
+The only branch carrying work that is **not** present on the default branch: two
+scripts that exist only on that branch — check-text-safety.cjs and
+signalgrid-autopilot-evidence.cjs (768 lines, last touched 2026-07-08). Reviewed and
+**not** landed, for reasons that are about the code rather than its age:
 
 - `signalgrid-autopilot-evidence.cjs` runs a **hardcoded list of nine commands**.
   `scripts/preflight.mjs` supersedes it and derives its gate list instead. Landing a

@@ -289,6 +289,15 @@ jobs:
       # All seven are pure Node and need no external service.
       - name: "Doc orphans (a new doc must be reachable from an index)"
         run: node scripts/check-doc-orphans.mjs
+      # Orphans ask whether a reader can REACH a doc; this asks whether the doc points
+      # anywhere real once reached. Added after two separate analyses cited files that
+      # did not exist and were read as evidence by everyone downstream.
+      - name: "Cited paths (a doc may not cite a file that does not exist)"
+        run: node scripts/check-cited-paths.mjs
+      - name: "Cited-path self-test (the gate can actually fail)"
+        run: node scripts/check-cited-paths.mjs --self-test
+      - name: "Absence-check self-test (a word in a disclaimer is not the thing existing)"
+        run: node scripts/agent/absence-check.mjs --self-test
       # The same shape one level down: doc-orphans asks whether a reader can reach a
       # document, this asks whether a shipped artifact can reach a library. Both catch
       # the failure mode that never announces itself — everything green, nothing

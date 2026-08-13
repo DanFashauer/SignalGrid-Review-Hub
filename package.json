@@ -190,6 +190,7 @@
     "lane:inbox": "node scripts/lane-message.mjs inbox",
     "lane:messages": "node scripts/check-lane-messages.mjs",
     "lane:send": "node scripts/lane-message.mjs send",
+    "check:surface-claims": "node scripts/check-surface-claims.mjs",
     "sim:requests": "node scripts/check-sim-requests.mjs",
     "sim:run-requests": "node scripts/mac/run-requests.mjs",
     "sim:signalgrid": "pnpm run proof:signalgrid-simulator",

@@ -170,6 +170,8 @@ const STEPS = [
   { name: "/v1 under concurrency (correctness gated; throughput and saturation reported, never asserted)", cmd: ["pnpm", "run", "test:load"], heavy: true },
   { name: "Simulation request loop (every result binds to a request; pending is reported, never silent)", cmd: ["node", "scripts/check-sim-requests.mjs"] },
   { name: "Simulation request loop self-test (the gate can actually fail)", cmd: ["node", "scripts/check-sim-requests.mjs", "--self-test"] },
+  { name: "Surface claims (no doc may deny a platform the tree contains)", cmd: ["node", "scripts/check-surface-claims.mjs"] },
+  { name: "Surface-claim self-test (the gate can actually fail, and a retraction may quote the old claim)", cmd: ["node", "scripts/check-surface-claims.mjs", "--self-test"] },
   { name: "Proof: lane-messages (the cloud↔Mac channel — identity is derived, and no lane acknowledges its own mail)", cmd: ["pnpm", "run", "proof:lane-messages"] },
   { name: "Lane messages (unread mail is named on every run; only the addressee can close one)", cmd: ["node", "scripts/check-lane-messages.mjs"] },
   { name: "Lane message self-test (the gate can actually fail)", cmd: ["node", "scripts/check-lane-messages.mjs", "--self-test"] },

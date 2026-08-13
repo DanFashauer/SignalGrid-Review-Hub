@@ -59,14 +59,24 @@ Afterwards it compares the restored audit head against the manifest. If they dif
 **exits non-zero and says so** — the rows restored, but that is not the chain the backup
 recorded, and that is a fact you need immediately rather than at the next audit.
 
-Then re-verify the whole chain, not just its head:
+A matching head hash means the same last record. It does **not** mean every record
+between them is intact.
 
-```bash
-DATABASE_URL=... pnpm run proof:audit-ledger-pg
-```
+> **DO NOT run `proof:audit-ledger-pg` against a restored database.** An earlier
+> revision of this page told you to, and doing so destroys the ledger you just
+> restored: the proof's first statement is `DROP TABLE IF EXISTS audit_ledger`
+> (`scripts/src/audit-ledger-pg-proof.ts:46`). It is a CI proof that builds and tears
+> down its own table on a throwaway database. It is not an operator tool, and it was
+> never safe to point at real data.
 
-A matching head hash means the same last record. Verifying the chain means every record
-between.
+**There is no non-destructive whole-chain verifier in this repository yet, and that is
+a gap rather than an omission from this page.** `verifyLedger()` in `@workspace/audit`
+reads only the first `limit` records — default 10,000 — and returns `ok: true` after
+verifying that prefix, so on a ledger larger than the cap it reports a clean chain it
+has not read to the end of. Until a paginating verifier exists, what you can honestly
+establish after a restore is: the row counts match, and the head hash matches the
+manifest. Treat that as *"the same first and last record"*, not as *"the chain is
+intact"*.
 
 ## What the CI proof actually establishes
 

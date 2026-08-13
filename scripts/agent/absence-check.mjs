@@ -3,16 +3,15 @@
 // usually gets the least.
 //
 //   node scripts/agent/absence-check.mjs android
-//   node scripts/agent/absence-check.mjs --patterns 'AndroidManifest' 'build.gradle'
+//   node scripts/agent/absence-check.mjs --patterns 'AndroidManifest' 'build\.gradle'
 //   node scripts/agent/absence-check.mjs --self-test
 //
 // THE FAILURE THIS PREVENTS (real, twice, 2026-08-08 and 2026-08-12). A document
 // asserted "Android does not exist in any form." A native Android app was sitting in
 // `native/android/`. The search that produced the claim used ONE pattern shape. A
 // second document asserted the dock firmware was absent on the strength of a search for
-// `.ino`/`.c`/`.cpp`/`.h` — the firmware is Rust, so that search could not have found
-// it whether or not it existed. Both claims then propagated into planning documents and
-// cost real time.
+// `.ino`/`.c`/`.cpp`/`.h` — the firmware is Rust, so that search could not have found it
+// whether or not it existed. Both claims propagated into planning documents.
 //
 // THE RULE: presence needs one hit; absence needs exhaustion. One empty grep is
 // evidence about that grep.
@@ -21,49 +20,93 @@
 // that finds a FILE is strong: the thing is here. A probe that finds the WORD is weak —
 // this repository is full of sentences naming things precisely to disclaim them, and a
 // catalogue of compliance frameworks mentions FedRAMP without a FedRAMP artifact
-// existing anywhere. The first version of this tool treated those alike and reported
-// "ABSENCE CLAIM IS FALSE" for `fedramp`, which would have blocked a true statement.
-// So content-only hits are INCONCLUSIVE, printed with their matching lines, and the
-// caller reads them. A tool that cries wolf on true claims gets ignored on false ones.
+// existing anywhere. An earlier version treated those alike and reported "ABSENCE CLAIM
+// IS FALSE" for `fedramp`, which would have blocked a true statement. Content-only hits
+// are INCONCLUSIVE, printed with their matches, and the caller reads them. A tool that
+// cries wolf on true claims gets ignored on false ones.
+//
+// NO SHELL, BY CONSTRUCTION. The first version built shell strings and hand-escaped the
+// user's topic into them; CodeQL flagged it as an indirect uncontrolled command line and
+// was right to. Hand-rolled quoting in a security-reviewed repository is a thing a
+// reviewer has to take on trust. Every subprocess here is `execFileSync` with an argv
+// array — no shell parses anything — and the matching happens in JavaScript. The
+// self-test asserts this structurally, so the property cannot quietly regress.
 //
 // EXIT CODES:  0 = absence corroborated   1 = refuted (a file exists)   2 = inconclusive
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
+const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const G = "\x1b[32m", R = "\x1b[31m", Y = "\x1b[33m", B = "\x1b[1m", D = "\x1b[2m", X = "\x1b[0m";
 
-const sh = (c) => {
+/** Every subprocess: argv array, never a command string. No shell is ever spawned. */
+function gitLines(args) {
   try {
-    return execSync(c, { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
+    const out = execFileSync("git", args, { cwd: REPO, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+    return out ? out.trim().split("\n").filter(Boolean) : [];
   } catch {
-    return "";
+    return [];
   }
-};
-// Single-quoted for the shell so a pattern beginning with '-' is never read as a flag.
-const q = (v) => `'${String(v).replace(/'/g, `'\\''`)}'`;
-const lines = (s) => (s ? s.trim().split("\n").filter(Boolean) : []);
+}
+
+const trackedFiles = () => gitLines(["ls-files"]);
+
+function workflowFilesMentioning(needle) {
+  const dir = join(REPO, ".github/workflows");
+  if (!existsSync(dir)) return [];
+  const hits = [];
+  for (const f of readdirSync(dir)) {
+    if (!/\.ya?ml$/.test(f)) continue;
+    try {
+      if (readFileSync(join(dir, f), "utf8").toLowerCase().includes(needle)) hits.push(`.github/workflows/${f}`);
+    } catch {
+      /* unreadable file is not evidence either way */
+    }
+  }
+  return hits;
+}
 
 /**
- * Genuinely different SHAPES, not narrowings of one pattern. The tool this replaces
- * derived [t, \.t$, t/, "t", t_, -t] — every one of which is a subset of the first, so
- * six probes could only ever agree with each other. These four look in different places.
- *
- * Pure and exported so the self-test drives the same construction the tool does.
+ * Genuinely different SHAPES, not narrowings of one pattern. An earlier version derived
+ * [t, \.t$, t/, "t", t_, -t] — every one a subset of the first, so six probes could only
+ * ever agree with each other. These four look in different places.
  */
 export function probeSpecs(topic) {
-  const t = String(topic);
+  const t = String(topic).toLowerCase();
   return [
-    { id: "filename", strength: "strong", how: `a tracked FILE OR DIRECTORY named for it`, cmd: `git ls-files | grep -iE -e ${q(t)}` },
-    { id: "extension", strength: "strong", how: `a tracked file whose EXTENSION is it (.${t})`, cmd: `git ls-files | grep -iE -e ${q(`\\.${t}$`)}` },
-    { id: "ci", strength: "strong", how: `a CI WORKFLOW that builds or tests it`, cmd: `grep -rli -e ${q(t)} .github/workflows 2>/dev/null` },
-    { id: "content", strength: "weak", how: `the WORD appears in tracked source`, cmd: `git grep -lIi -e ${q(t)} -- ':!*lock*' ':!*dist*' ':!*.map' ':!docs/*'` },
+    {
+      id: "filename",
+      strength: "strong",
+      how: "a tracked FILE OR DIRECTORY named for it",
+      run: () => trackedFiles().filter((f) => f.toLowerCase().includes(t)),
+    },
+    {
+      id: "extension",
+      strength: "strong",
+      how: `a tracked file whose EXTENSION is it (.${t})`,
+      run: () => trackedFiles().filter((f) => f.toLowerCase().endsWith(`.${t}`)),
+    },
+    {
+      id: "ci",
+      strength: "strong",
+      how: "a CI WORKFLOW that builds or tests it",
+      run: () => workflowFilesMentioning(t),
+    },
+    {
+      id: "content",
+      strength: "weak",
+      how: "the WORD appears in tracked source",
+      // `-e` makes the next argv element a pattern, so a leading '-' is data, not a flag.
+      run: () => gitLines(["grep", "-lIi", "-e", String(topic), "--", ":!*lock*", ":!*dist*", ":!*.map", ":!docs/*"]),
+    },
   ];
 }
 
 export function classify(results) {
-  const strongHits = results.filter((r) => r.strength === "strong" && r.hits.length > 0);
-  const weakHits = results.filter((r) => r.strength === "weak" && r.hits.length > 0);
-  if (strongHits.length > 0) return "refuted";
-  if (weakHits.length > 0) return "inconclusive";
+  if (results.some((r) => r.strength === "strong" && r.hits.length > 0)) return "refuted";
+  if (results.some((r) => r.strength === "weak" && r.hits.length > 0)) return "inconclusive";
   return "corroborated";
 }
 
@@ -71,8 +114,8 @@ function selfTest() {
   const checks = [];
   const spec = probeSpecs("android");
 
-  checks.push(["probes are differently shaped — no two share a command", new Set(spec.map((s) => s.cmd)).size === spec.length]);
-  checks.push(["at least one probe looks at filenames and one at content", spec.some((s) => s.id === "filename") && spec.some((s) => s.id === "content")]);
+  checks.push(["four differently-shaped probes, no two the same id", new Set(spec.map((s) => s.id)).size === 4]);
+  checks.push(["one probe looks at filenames and one at content", spec.some((s) => s.id === "filename") && spec.some((s) => s.id === "content")]);
   checks.push(["content evidence is classified WEAK, never strong", spec.find((s) => s.id === "content").strength === "weak"]);
 
   const strong = (hits) => ({ strength: "strong", hits });
@@ -83,17 +126,29 @@ function selfTest() {
     classify([strong([]), weak(["docs/COMPLIANCE.md"])]) === "inconclusive",
   ]);
   checks.push(["all probes empty CORROBORATES absence", classify([strong([]), weak([])]) === "corroborated"]);
-  checks.push([
-    "a pattern beginning with '-' is quoted, not read as a flag",
-    probeSpecs("-rf").every((s) => !/\s-rf\b/.test(s.cmd.replace(/'-rf'/g, ""))),
-  ]);
 
-  // Live end-to-end, against this tree: the two claims that were actually made and
-  // were actually wrong must both come back refuted.
+  // Structural, so the shell cannot creep back in. CodeQL flagged the shell version of
+  // this file as an indirect uncontrolled command line; the fix was to stop building
+  // command strings at all, and that property is worth asserting rather than trusting.
+  const src = readFileSync(fileURLToPath(import.meta.url), "utf8");
+  const code = src.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+  checks.push(["NO SHELL: the source calls execFileSync and never execSync", /execFileSync\(/.test(code) && !/[^A-Za-z]execSync\(/.test(code)]);
+  // Built from parts so the assertion does not match ITSELF — the literal spelled out
+  // here would be the only occurrence in the file, and the check would always fail.
+  const shellOpt = new RegExp("shel" + "l\\s*:\\s*true");
+  checks.push(["NO SHELL: no subprocess is given the shell option", !shellOpt.test(code)]);
+  checks.push(["NO SHELL: the topic is never interpolated into a command string", !/`[^`]*\$\{[^}]*\}[^`]*`\s*,\s*\{[^}]*maxBuffer/.test(code)]);
+
+  // Live, against this tree: the two claims that were actually made and were actually
+  // wrong must both come back refuted.
   for (const topic of ["android", "tauri"]) {
-    const res = probeSpecs(topic).map((s) => ({ ...s, hits: lines(sh(s.cmd)) }));
+    const res = probeSpecs(topic).map((s) => ({ ...s, hits: s.run() }));
     checks.push([`LIVE: "${topic} does not exist" is refuted by this tree`, classify(res) === "refuted"]);
   }
+  // …and a topic with no artifact must NOT come back refuted, or the tool is a rubber
+  // stamp that says "false" to everything.
+  const fed = probeSpecs("fedramp").map((s) => ({ ...s, hits: s.run() }));
+  checks.push(['LIVE: "fedramp" is NOT refuted — mentions exist, artifacts do not', classify(fed) !== "refuted"]);
 
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
@@ -113,16 +168,20 @@ if (argv[0] === "--patterns") {
     process.exit(2);
   }
   topic = pats[0];
-  specs = pats.map((p, i) => ({
-    id: `pattern-${i + 1}`,
-    strength: "strong",
-    how: `a tracked file matching /${p}/i`,
-    cmd: `git ls-files | grep -iE -e ${q(p)}`,
-  }));
+  specs = pats.map((p, i) => {
+    let re;
+    try {
+      re = new RegExp(p, "i");
+    } catch (err) {
+      console.error(`pattern ${i + 1} is not a valid regular expression: ${String(err?.message ?? err)}`);
+      process.exit(2);
+    }
+    return { id: `pattern-${i + 1}`, strength: "strong", how: `a tracked file matching /${p}/i`, run: () => trackedFiles().filter((f) => re.test(f)) };
+  });
 } else {
   topic = argv[0];
   if (!topic) {
-    console.error('usage: absence-check.mjs <topic> | --patterns <p>... | --self-test');
+    console.error("usage: absence-check.mjs <topic> | --patterns <p>... | --self-test");
     process.exit(2);
   }
   specs = probeSpecs(topic);
@@ -130,7 +189,7 @@ if (argv[0] === "--patterns") {
 
 console.log(`\n${B}Absence check${X} — "${topic}" — presence needs one hit, absence needs exhaustion\n`);
 
-const results = specs.map((s) => ({ ...s, hits: lines(sh(s.cmd)) }));
+const results = specs.map((s) => ({ ...s, hits: s.run() }));
 for (const r of results) {
   const tag = r.hits.length === 0 ? `${G}empty${X}` : r.strength === "strong" ? `${R}FOUND${X}` : `${Y}mentions${X}`;
   console.log(`  ${tag}  ${r.how}${r.hits.length ? `  ${B}${r.hits.length}${X}` : ""}`);

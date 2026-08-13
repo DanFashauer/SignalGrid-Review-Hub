@@ -115,7 +115,17 @@ export function scanRepo(root) {
   const pattern = buildPattern(roots);
   const exempt = CROSS_REPO[name] ?? {};
   const docs = lines(git("ls-files -- '*.md' '*.markdown'", root));
-  const exists = (p) => existsSync(join(root, p));
+
+  // A citation resolves if EITHER reading of it lands on a real file: from the
+  // repository root (the convention for a backticked path in prose) or relative to the
+  // citing document (the convention for a markdown link target). Accepting only the
+  // first is not a stricter gate, it is a WRONG one — it reported
+  // `native/ios/SignalGridMobile/README.md → docs/REPO_ALIGNMENT.md` as broken when that
+  // file sits right beside the README, and the "fix" repointed a correct document at one
+  // that says nothing about its subject. A gate that manufactures findings is worse than
+  // no gate: someone acts on them.
+  const exists = (p, docRel) =>
+    existsSync(join(root, p)) || existsSync(join(root, dirname(docRel), p));
 
   const missing = [];
   const exempted = [];
@@ -135,7 +145,7 @@ export function scanRepo(root) {
     }
     const cites = citationsIn(text, pattern);
     checked += cites.length;
-    const bad = cites.filter((p) => !exists(p));
+    const bad = cites.filter((p) => !exists(p, rel));
     if (bad.length === 0) continue;
     if (exempt[rel]) exempted.push({ doc: rel, count: bad.length, reason: exempt[rel] });
     else for (const p of bad) missing.push({ doc: rel, path: p });
@@ -161,6 +171,21 @@ function selfTest() {
   checks.push(["unbackticked prose is NOT a citation", citationsIn("the file lib/foo/src/index.ts is interesting", pattern).length === 0]);
   checks.push(["a path outside the derived roots is NOT a citation", citationsIn("`nowhere/thing/file.ts`", pattern).length === 0]);
   checks.push(["a bare directory is NOT a citation", citationsIn("`lib/signalgrid-core/src/`", pattern).length === 0]);
+
+  // The regression this gate caused before it caught anything. A nested README linked
+  // `docs/REPO_ALIGNMENT.md`, which sits beside it; root-only resolution called that
+  // broken, and the "fix" repointed a correct document at an unrelated one. Pinned
+  // against the real files so it fails if either the resolution or the tree changes.
+  const nested = "native/ios/SignalGridMobile/README.md";
+  const beside = "docs/REPO_ALIGNMENT.md";
+  checks.push([
+    "A CITATION RELATIVE TO ITS OWN DOCUMENT RESOLVES — root-only resolution manufactured a false finding here",
+    existsSync(join(SELF_ROOT, dirname(nested), beside)) && !existsSync(join(SELF_ROOT, beside)),
+  ]);
+  checks.push([
+    "…and the live scan no longer reports it",
+    !scanRepo(SELF_ROOT).missing.some((m) => m.doc === nested && m.path === beside),
+  ]);
   checks.push(["the ALLOW list actually allows — a dist path is skipped", citationsIn("`artifacts/api-server/dist/index.mjs`", pattern).length === 0]);
   checks.push(["…and ALLOW is not a blanket pass — a non-dist sibling is still checked", citationsIn("`artifacts/api-server/src/index.ts`", pattern).length === 1]);
 

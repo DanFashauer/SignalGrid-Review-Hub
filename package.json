@@ -193,7 +193,7 @@
     "lane:send": "node scripts/lane-message.mjs send",
     "check:absence": "node scripts/agent/absence-check.mjs",
     "check:cited-paths": "node scripts/check-cited-paths.mjs",
-    "check:surface-claims": "node scripts/check-surface-claims.mjs",
+    "check:false-claims": "node scripts/check-known-false-claims.mjs",
     "sim:requests": "node scripts/check-sim-requests.mjs",
     "sim:run-requests": "node scripts/mac/run-requests.mjs",
     "sim:signalgrid": "pnpm run proof:signalgrid-simulator",

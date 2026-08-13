@@ -103,11 +103,21 @@ each `package.json`:
 | `signalgrid-mobile-pwa` — "SignalGrid Mobile (PWA)" | Vite web | **BUILT as a PWA**, not a native app |
 | `native/ios` — EnterpriseShell + SignalGridMobile | Swift, 109 files, real `xcodebuild` in CI | **BUILT** |
 | **Android** | `native/android/` Kotlin app + `core` module | **BUILT (corrected 2026-08-12)** — `MainActivity.kt`, 4 test classes, CI runs `gradle test` + `assembleDebug`. The original ABSENT finding was overtaken by PR #196 the same day. |
-| ~~**Native Windows / macOS desktop**~~ | `native/desktop/` Tauri shell (Rust) | **BUILT (corrected 2026-08-13)** — ~~zero Electron, Tauri, `.csproj`, `.sln` files~~. `native/desktop/app/` carries `tauri.conf.json`, a Rust `main.rs` and Cargo manifest; CI builds runnable executables on Linux and Windows. Landed 2026-08-08 in PR #199, the same day this row was written. Caught by `scripts/check-surface-claims.mjs`, not by a human re-reading the table. |
+| ~~**Native Windows / macOS desktop**~~ | `native/desktop/` Tauri shell (Rust) | **BUILT (corrected 2026-08-13)** — ~~zero Electron, Tauri, `.csproj`, `.sln` files~~. `native/desktop/app/` carries `tauri.conf.json`, a Rust `main.rs` and Cargo manifest; CI builds runnable executables on Linux and Windows. Landed 2026-08-08 in PR #199, the same day this row was written. Caught by `scripts/check-known-false-claims.mjs`, not by a human re-reading the table. |
 
-**What this means in plain terms:** there is one genuinely native platform (iOS). The
-"desktop app" is a web page named Desktop. The "mobile app" for non-Apple platforms is
-a PWA. ~~Android does not exist in any form.~~ **CORRECTED 2026-08-12: a native Android app exists** (`native/android/`), plus Rust dock firmware — so there are three native platforms, not one.
+**What this means in plain terms:** ~~there is one genuinely native platform (iOS).~~
+~~Android does not exist in any form.~~ **CORRECTED 2026-08-13: there are FOUR native
+surfaces** — iOS (Swift), Android (`native/android/`, Kotlin), a Tauri desktop shell
+(`native/desktop/`, Rust) and the dock firmware (`firmware/dock/`, `no_std` Rust). What
+remains true is the naming: the `artifacts/signalgrid-desktop` *package* is a web page
+called Desktop, and the non-Apple "mobile app" in `artifacts/` is a PWA.
+
+> The struck sentence above survived the first two rounds of corrections to this file —
+> the Android clause beside it was struck and it was not, because a human re-reading the
+> paragraph fixed what the correction was *about* and left the summary. It was caught by
+> `scripts/check-known-false-claims.mjs`, which scans every tracked document for
+> re-assertions of anything in `docs/agent/FALSE_CLAIMS.json`. That is the argument for
+> the registry in one line: the same claim gets made again, by whoever reads next.
 
 A PWA is a legitimate answer for Android and desktop — but it must be *called* one.
 Naming a web artifact `signalgrid-desktop` is the same class of defect this repo has

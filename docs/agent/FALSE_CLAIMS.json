@@ -4,7 +4,7 @@
   "claims": [
     {
       "id": "android-absent",
-      "claimed": "Android does not exist in any form — zero .kt, .gradle or android files",
+      "claimed": "Android does not exist in any form \u2014 zero .kt, .gradle or android files",
       "assertedBy": "docs/DELIVERY_GAP_ANALYSIS.md, then repeated by two external analyses",
       "assertedOn": "2026-08-08",
       "whyItHappened": "The document was measured correctly and then overtaken the same morning by PR #196. Everyone downstream quoted the document instead of the tree.",
@@ -24,27 +24,39 @@
     },
     {
       "id": "tauri-desktop-absent",
-      "claimed": "No Electron, Tauri, .csproj or .sln files exist — there is no native desktop shell",
+      "claimed": "No Electron, Tauri, .csproj or .sln files exist \u2014 there is no native desktop shell",
       "assertedBy": "docs/DELIVERY_GAP_ANALYSIS.md",
       "assertedOn": "2026-08-08",
       "whyItHappened": "Same stale-document error; native/desktop landed in PR #199 hours later.",
       "refutation": {
         "kind": "path_exists",
-        "paths": ["native/desktop/app/tauri.conf.json", "native/desktop/app/src/main.rs"]
+        "paths": [
+          "native/desktop/app/tauri.conf.json",
+          "native/desktop/app/src/main.rs"
+        ]
       },
-      "denials": ["no electron, tauri", "zero electron", "native (windows ?/ ?macos )?desktop[^.\\n]{0,30}\\babsent\\b"]
+      "denials": [
+        "no electron, tauri",
+        "zero electron",
+        "native (windows ?/ ?macos )?desktop[^.\\n]{0,30}\\babsent\\b"
+      ]
     },
     {
       "id": "dock-firmware-absent",
-      "claimed": "Embedded firmware is ABSENT — zero .ino, .c, .cpp or .h files in the entire repository",
+      "claimed": "Embedded firmware is ABSENT \u2014 zero .ino, .c, .cpp or .h files in the entire repository",
       "assertedBy": "docs/DELIVERY_GAP_ANALYSIS.md",
       "assertedOn": "2026-08-08",
-      "whyItHappened": "THE SEARCH WAS THE ERROR, not the tree. It enumerated C-family extensions only, so it could not have found the firmware whether or not it existed — the firmware is Rust. This is the exact failure absence-check.mjs exists to prevent: one pattern shape is not exhaustion.",
+      "whyItHappened": "THE SEARCH WAS THE ERROR, not the tree. It enumerated C-family extensions only, so it could not have found the firmware whether or not it existed \u2014 the firmware is Rust. This is the exact failure absence-check.mjs exists to prevent: one pattern shape is not exhaustion.",
       "refutation": {
         "kind": "path_exists",
-        "paths": ["firmware/dock/core/src/lib.rs"]
+        "paths": [
+          "firmware/dock/core/src/lib.rs"
+        ]
       },
-      "denials": ["embedded firmware[^.\\n]{0,40}\\babsent\\b", "zero `?\\.ino`?[^.\\n]{0,60}files in the entire repository"]
+      "denials": [
+        "embedded firmware[^.\\n]{0,40}\\babsent\\b",
+        "zero `?\\.ino`?[^.\\n]{0,60}files in the entire repository"
+      ]
     },
     {
       "id": "only-one-native-platform",
@@ -54,37 +66,64 @@
       "whyItHappened": "Inherited from the three absence errors above rather than measured on its own.",
       "refutation": {
         "kind": "path_exists",
-        "paths": ["native/android", "native/desktop", "firmware/dock/core/src/lib.rs", "native/ios"]
+        "paths": [
+          "native/android",
+          "native/desktop",
+          "firmware/dock/core/src/lib.rs",
+          "native/ios"
+        ]
       },
-      "denials": ["one genuinely native platform", "only ios is (genuinely )?native"]
+      "denials": [
+        "one genuinely native platform",
+        "only ios is (genuinely )?native"
+      ]
     },
     {
       "id": "launch-profile-stranded",
-      "claimed": "The launch-profile scope decision is stranded on an unmerged branch — variously '7 files versus 2' and 'the branch is 220 commits ahead' — and merging it blocks everything else",
+      "claimed": "The launch-profile scope decision is stranded on an unmerged branch \u2014 variously '7 files versus 2' and 'the branch is 220 commits ahead' \u2014 and merging it blocks everything else",
       "assertedBy": "docs/DELIVERY_GAP_ANALYSIS.md, then two external analyses independently, as their #1 finding",
       "assertedOn": "2026-08-08",
-      "whyItHappened": "PR #152 merged on 2026-08-12 (e11f2cc) and the document was never restamped. The numbers were never file counts: 7 was a commits-ahead count, 2 was a modified-file count, and 220 was invented outright — the branch was 8 ahead and 0 behind when it was written. THIS IS THE MOST EXPENSIVE ENTRY HERE: it survived two independent reviews because it was already shaped like a measurement.",
+      "whyItHappened": "PR #152 merged on 2026-08-12 (e11f2cc) and the document was never restamped. The numbers were never file counts: 7 was a commits-ahead count, 2 was a modified-file count, and 220 was invented outright \u2014 the branch was 8 ahead and 0 behind when it was written. THIS IS THE MOST EXPENSIVE ENTRY HERE: it survived two independent reviews because it was already shaped like a measurement.",
       "refutation": {
         "kind": "file_contains",
         "file": "scripts/preflight.mjs",
         "contains": "check-launch-profile.mjs",
-        "paths": ["scripts/launch-profile.mjs", "docs/LAUNCH_PROFILE.md", "scripts/check-launch-profile.mjs", "scripts/src/launch-profile-proof.ts"]
+        "paths": [
+          "scripts/launch-profile.mjs",
+          "docs/LAUNCH_PROFILE.md",
+          "scripts/check-launch-profile.mjs",
+          "scripts/src/launch-profile-proof.ts"
+        ]
       },
-      "denials": ["launch profile[^.\\n]{0,60}stranded", "scope decision[^.\\n]{0,40}stranded", "220 commits ahead"]
+      "denials": [
+        "launch profile[^.\\n]{0,60}stranded",
+        "scope decision[^.\\n]{0,40}stranded",
+        "220 commits ahead"
+      ]
     },
     {
       "id": "proof-gate-count",
       "claimed": "This repository has roughly 180 proof gates (elsewhere: 122)",
       "assertedBy": "two external analyses, one high and one low",
       "assertedOn": "2026-08-12",
-      "whyItHappened": "Neither counted. The repo publishes the real figure in docs/STATUS.md and binds it with a docs-to-proof figure guard; both analyses quoted a remembered number instead, in documents whose whole argument was that this repo's discipline is measured figures.",
+      "whyItHappened": "Neither analysis counted. The repo publishes the real figure in docs/STATUS.md and binds it with two gates (check-status-figures, check-proof-counts); both analyses quoted a remembered number instead, in documents whose whole argument was that this repo's discipline is measured figures. NOTE 2026-08-15: this entry originally pinned the literal count (132) as its refutation evidence, and broke the first time a proof was ADDED \u2014 the count is owned by the gates, so the registry now pins the MECHANISM (a gate-bound published figure exists) rather than any value of it.",
       "refutation": {
         "kind": "file_contains",
         "file": "docs/STATUS.md",
-        "contains": "proof gates: **132**",
-        "paths": ["docs/STATUS.md", "scripts/check-proof-counts.mjs"]
+        "contains": "proof gates: **",
+        "paths": [
+          "docs/STATUS.md",
+          "scripts/check-proof-counts.mjs",
+          "scripts/check-status-figures.mjs"
+        ]
       },
-      "denials": ["~?180 proof gates", "roughly 180 proof", "122 proof:? gates", "122 `?proof:\\*`? gates"]
+      "denials": [
+        "~?180 proof gates",
+        "roughly 180 proof",
+        "122 proof:? gates",
+        "122 `?proof:\\*`? gates",
+        "proof gates: \\*\\*(180|122)\\*\\*"
+      ]
     }
   ]
 }

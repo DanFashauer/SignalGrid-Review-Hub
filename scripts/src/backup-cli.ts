@@ -110,13 +110,15 @@ chain the backup recorded. Do not treat this ledger as continuous until it is ex
     console.log(`  audit head matches the manifest: ${after.auditHeadHash ?? "(no ledger)"}`);
     // This used to tell the operator to run `proof:audit-ledger-pg` here. That proof
     // DROPS the audit_ledger table as its first statement — following the advice
-    // destroyed the ledger the restore had just brought back. A CI proof that builds
-    // and tears down its own table is not an operator tool.
+    // destroyed the ledger the restore had just brought back. The non-destructive
+    // whole-chain verifier that advice was reaching for now exists; point at it.
     console.log(`
-A matching head hash means the same last record. It does NOT mean every record between
-is intact, and there is no non-destructive whole-chain verifier here yet: verifyLedger()
-reads only its first \`limit\` records (default 10,000) and reports ok after that prefix.
-See docs/BACKUP_AND_RESTORE.md. Do not run proof:audit-ledger-pg against real data.`);
+A matching head hash means the same last record. To verify every record between —
+the whole chain, paginated, read-only — run:
+
+  DATABASE_URL=... pnpm run db:verify-ledger
+
+Do NOT run proof:audit-ledger-pg against real data; it drops the table it tests.`);
     return;
   }
 

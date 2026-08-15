@@ -21,6 +21,7 @@ import {
   appendAuditRecord,
   getAuditRecords,
   verifyLedger,
+  verifyLedgerFull,
   setAuditBackend,
   PostgresAuditBackend,
 } from "@workspace/audit";
@@ -87,6 +88,30 @@ async function main() {
   );
   const conc = await verifyLedger();
   check(`concurrency: ${N} parallel appends produce an intact, fork-free chain`, conc.ok === true && conc.count === N);
+
+  // ── 6. PAGINATING VERIFIER on the real database ────────────────────────────
+  // The capped verifier's false all-clear was worst HERE: only Postgres ledgers
+  // ever grow past the cap. Reuse the 25-row chain: paginate in batches of 10,
+  // then plant a tamper in the THIRD batch via direct UPDATE (row 21 → global
+  // index 20, the first record of batch 3) so detection requires the linking
+  // hash to survive the page turn on the SQL OFFSET/LIMIT path specifically.
+  const fullClean = await verifyLedgerFull({ batchSize: 10 });
+  check("verifyLedgerFull pages the persisted chain end to end (3 batches of 10)",
+    fullClean.ok === true && fullClean.count === N && fullClean.batches === 3);
+
+  const cappedHonest = await verifyLedger(10);
+  check("the capped verifier over a longer persisted ledger says truncated:true",
+    cappedHonest.ok === true && cappedHonest.truncated === true);
+
+  await admin.query(
+    "UPDATE audit_ledger SET meta = '{\"i\":999}'::jsonb WHERE seq = (SELECT seq FROM audit_ledger ORDER BY seq ASC OFFSET 20 LIMIT 1)",
+  );
+  const beyond = await verifyLedgerFull({ batchSize: 10 });
+  check("verifyLedgerFull DETECTS a direct-UPDATE tamper planted beyond the first batch", beyond.ok === false);
+  check("…localized to the correct global index across SQL pagination", beyond.brokenAtIndex === 20);
+  const blindPrefix = await verifyLedger(10);
+  check("the capped verifier still passes its clean 10-row prefix over the same tampered ledger",
+    blindPrefix.ok === true && blindPrefix.truncated === true);
 
   await admin.query("DROP TABLE IF EXISTS audit_ledger");
   await admin.end();

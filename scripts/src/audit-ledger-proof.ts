@@ -16,6 +16,7 @@ import {
   appendAuditRecord,
   getAuditRecords,
   verifyLedger,
+  verifyLedgerFull,
   setAuditBackend,
   InMemoryAuditBackend,
 } from "@workspace/audit";
@@ -107,6 +108,63 @@ async function main() {
   check("the reordered record's prevHash diverges from the true predecessor's hash",
     midBroken.expectedHash === chain[0].hash && midBroken.actualHash === chain[2].prevHash &&
     midBroken.expectedHash !== midBroken.actualHash);
+
+  // ── 5. The paginating verifier reads the WHOLE chain, not a prefix ─────────
+  // verifyLedger(limit) used to return a bare `ok: true` after reading `limit`
+  // records of an arbitrarily long chain — a false all-clear in the one
+  // component whose entire value is tamper-evidence. Two things are pinned
+  // here: the capped verifier is now HONEST about its cap (`truncated`), and
+  // verifyLedgerFull pages to the true end in bounded batches.
+  setAuditBackend(new InMemoryAuditBackend());
+  for (let i = 0; i < 25; i++) {
+    await appendAuditRecord("session.poll", { type: "user", id: `page-${i}` }, { meta: { step: i } });
+  }
+
+  const fullClean = await verifyLedgerFull({ batchSize: 10 });
+  check("verifyLedgerFull verifies a 25-record chain across 3 batches of 10",
+    fullClean.ok === true && fullClean.count === 25 && fullClean.batches === 3);
+  check("a full verification is never truncated, by construction", fullClean.truncated === false);
+
+  const capped = await verifyLedger(10);
+  check("verifyLedger with a cap below the ledger length says truncated — a prefix pass is not a chain pass",
+    capped.ok === true && capped.truncated === true && capped.count === 10);
+  const underCap = await verifyLedger();
+  check("verifyLedger under its cap says truncated:false — it provably reached the end",
+    underCap.ok === true && underCap.truncated === false && underCap.count === 25);
+  const exactCap = await verifyLedger(25);
+  check("a read returning EXACTLY its cap is truncated — the verifier cannot know nothing follows",
+    exactCap.truncated === true);
+
+  // ── 6. Corruption planted BEYOND the first batch is caught, globally indexed ─
+  // This is the exact blindness the old cap created: a clean first batch and a
+  // tampered seventeenth record. The capped verifier at limit=10 still passes
+  // its prefix — which is precisely why `truncated` has to be loud — and the
+  // paginating verifier must localize the break at the GLOBAL index.
+  const pages = await getAuditRecords(1000, 0);
+  (pages[17].meta as Record<string, unknown>).step = 999;
+
+  const beyond = await verifyLedgerFull({ batchSize: 10 });
+  check("verifyLedgerFull DETECTS corruption planted beyond the first batch", beyond.ok === false);
+  check("…localized to the correct GLOBAL index (17), not a batch-local one", beyond.brokenAtIndex === 17);
+  const blindPrefix = await verifyLedger(10);
+  check("the capped verifier still passes its clean prefix over the same tampered ledger — truncated:true is what stops that reading as green",
+    blindPrefix.ok === true && blindPrefix.truncated === true);
+  (pages[17].meta as Record<string, unknown>).step = 17; // restore
+
+  // ── 7. A break exactly AT a batch boundary — the linking hash must survive
+  // the page turn. Record 20 is the FIRST record of batch 3 (batchSize=10);
+  // tampering its prevHash can only be caught if the verifier carried the
+  // previous batch's head hash across the boundary.
+  const trueLink = pages[20].prevHash;
+  pages[20].prevHash = "0".repeat(64);
+  const boundary = await verifyLedgerFull({ batchSize: 10 });
+  check("verifyLedgerFull DETECTS a linkage break at the first record of a batch", boundary.ok === false && boundary.brokenAtIndex === 20);
+  check("…because the linking hash was carried across the batch boundary",
+    boundary.expectedHash === pages[19].hash && boundary.actualHash === "0".repeat(64));
+  pages[20].prevHash = trueLink; // restore
+
+  const oneBatch = await verifyLedgerFull({ batchSize: 1000 });
+  check("a batch size larger than the chain degenerates to one clean batch", oneBatch.ok === true && oneBatch.batches === 1 && oneBatch.count === 25);
 
   const total = passed + failures.length;
   console.log(`Audit-ledger proof: ${passed}/${total} assertions passed`);

@@ -302,7 +302,15 @@ export const SURFACES = [
       "explainable and reproducible, so this route is not optional garnish — it is the claim.",
   },
   { id: "/v1/context", reason: "Tenant context. \"Tenant-aware\" is in the criterion." },
-  { id: "/v1/audit", reason: "The durable audit ledger a regulated pilot is bought on." },
+  {
+    id: "/v1/audit",
+    reason:
+      "The per-tenant audit chain a reviewer reads. Honestly: this route serves the core's " +
+      "in-process digest chain, which does not survive a restart; the DURABLE hash-chain " +
+      "ledger (@workspace/audit, Postgres-backed) has no route yet. Two chains, one launch " +
+      "surface — docs/BACKUP_AND_RESTORE.md names both. Calling this one 'durable' was a " +
+      "false claim and is the kind this file exists to prevent.",
+  },
   { id: "/v1/metrics", reason: "Operability. A service nobody can watch cannot be run." },
   {
     id: "/v1/connectors",

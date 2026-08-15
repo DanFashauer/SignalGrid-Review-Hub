@@ -59,24 +59,42 @@ Afterwards it compares the restored audit head against the manifest. If they dif
 **exits non-zero and says so** — the rows restored, but that is not the chain the backup
 recorded, and that is a fact you need immediately rather than at the next audit.
 
-A matching head hash means the same last record. It does **not** mean every record
-between them is intact.
+A matching head hash means the same last record. To establish that every record
+between them is intact, verify the whole chain — read-only, paginated, any length:
+
+```bash
+DATABASE_URL=... pnpm run db:verify-ledger
+```
+
+It recomputes every hash and every link from the first record to the head, in bounded
+batches, and exits non-zero at the first break with the exact record index. It never
+writes. (`verifyLedgerFull` in `@workspace/audit` is the library form; the capped
+`verifyLedger()` still exists for quick checks and now reports `truncated: true`
+whenever its 10,000-record cap may have cut the read short — a truncated `ok` is a
+statement about a prefix, never about the chain.)
 
 > **DO NOT run `proof:audit-ledger-pg` against a restored database.** An earlier
 > revision of this page told you to, and doing so destroys the ledger you just
 > restored: the proof's first statement is `DROP TABLE IF EXISTS audit_ledger`
 > (`scripts/src/audit-ledger-pg-proof.ts:46`). It is a CI proof that builds and tears
-> down its own table on a throwaway database. It is not an operator tool, and it was
-> never safe to point at real data.
+> down its own table on a throwaway database. `db:verify-ledger` is the operator tool.
 
-**There is no non-destructive whole-chain verifier in this repository yet, and that is
-a gap rather than an omission from this page.** `verifyLedger()` in `@workspace/audit`
-reads only the first `limit` records — default 10,000 — and returns `ok: true` after
-verifying that prefix, so on a ledger larger than the cap it reports a clean chain it
-has not read to the end of. Until a paginating verifier exists, what you can honestly
-establish after a restore is: the row counts match, and the head hash matches the
-manifest. Treat that as *"the same first and last record"*, not as *"the chain is
-intact"*.
+## Two ledgers, honestly
+
+This repository carries **two audit chains**, and they are not the same thing:
+
+- **`@workspace/audit`** — the durable SHA-256 hash chain this page is about.
+  Postgres-backed when `DATABASE_URL` is set, concurrency-safe under an advisory
+  lock, backed up and restored by the commands above, verified end to end by
+  `db:verify-ledger`. It has **no HTTP route yet**; its consumers are in-process.
+- **The core's per-tenant digest chain** (`lib/signalgrid-core`) — what
+  `GET /v1/audit` and the console's Audit page actually serve. It lives in process
+  memory and **does not survive a restart**. It is the reviewer-facing surface at
+  launch, and calling it "durable" was a false claim this repository has corrected.
+
+Bridging the two (anchoring the core chain's digests into the durable ledger) is a
+deliberate open decision, not an accident — until it is made, any statement about
+"the audit ledger" should say which one it means.
 
 ## What the CI proof actually establishes
 

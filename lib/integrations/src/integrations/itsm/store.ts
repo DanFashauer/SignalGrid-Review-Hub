@@ -820,18 +820,35 @@ export async function seedTicketTemplates(): Promise<void> {
 // ============================================================================
 
 /**
- * Substitute variables in template strings
+ * Substitute {{key}} variables in template strings.
+ *
+ * Two injection surfaces are closed here, both inherited byte-identical from
+ * the legacy DEV repo (its REMEDIATION_ROADMAP called this out and the fix was
+ * never written there either):
+ *
+ * 1. The replacement is a FUNCTION, never a string. `String.replace` treats a
+ *    string replacement as a pattern language — a variable VALUE containing
+ *    `$&`, `$'`, `` $` `` or `$1` is expanded against the match instead of
+ *    inserted verbatim, so ticket text built from signal evidence (which the
+ *    caller does not control) could be silently rewritten. A function's return
+ *    value is inserted literally, with no expansion.
+ * 2. The KEY is regex-escaped before it is compiled. Keys are internal names
+ *    today, but "internal today" is not a property the compiler enforces, and
+ *    an unescaped `(` in a key is a crash while an unescaped `.` is a silent
+ *    wrong match.
  */
 export function substituteTemplate(
   template: string,
   variables: Record<string, string>
 ): string {
   let result = template;
-  
+
   for (const [key, value] of Object.entries(variables)) {
-    const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
-    result = result.replace(regex, value || `[${key} missing]`);
+    const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(`\\{\\{${escapedKey}\\}\\}`, "g");
+    const replacement = value || `[${key} missing]`;
+    result = result.replace(regex, () => replacement);
   }
-  
+
   return result;
 }

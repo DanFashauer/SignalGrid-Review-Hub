@@ -1205,7 +1205,7 @@ async function run() {
       //
       // "Answers" means "is not 404". A 401 from `/v1/context` is the route working:
       // it is reachable and demanding a credential, which is exactly right.
-      for (const p of ["/healthz", "/v1/context", "/v1/decisions", "/v1/audit", "/v1/metrics"]) {
+      for (const p of ["/healthz", "/readyz", "/v1/context", "/v1/decisions", "/v1/audit", "/v1/metrics"]) {
         const r = await fetch(`${BASE4}${p}`);
         check(`gateway ALLOWS the launch path ${p} (${r.status}, not 404)`, r.status !== 404);
       }
@@ -1269,6 +1269,65 @@ async function run() {
         gwHealth.status === 200);
     } finally {
       server4.kill("SIGTERM");
+    }
+  }
+
+  // ── readiness vs liveness: the DB-loss distinction, exercised live ────────
+  // /healthz is pure liveness by contract (eleven callers treat it as
+  // is-the-port-open); /readyz answers "should this instance take traffic?".
+  // The two diverge in exactly one state — durable store CONFIGURED and
+  // UNREACHABLE — and that divergence is the whole reason /readyz exists, so
+  // it is the state this section manufactures.
+  {
+    // The MAIN server runs with no DATABASE_URL: durable persistence is off BY
+    // DESIGN (fixture-safe default, the core is in-memory), so it is ready —
+    // and the body says durableStore:"none" so this green can never be quoted
+    // as evidence that persistence is up.
+    const readyNone = await fetch(`${BASE}/readyz`);
+    const readyNoneBody = await readyNone.json().catch(() => null);
+    check("readyz: no durable store configured → ready, and honest about there being none",
+      readyNone.status === 200 && readyNoneBody?.status === "ready" && readyNoneBody?.durableStore === "none");
+
+    // Fifth short-lived server: DATABASE_URL configured and pointing at a port
+    // that answers nothing. The process must still boot (nothing constructs a
+    // store until a request needs one) and liveness must stay green — a DB
+    // outage reported as a dead process would restart-loop a working server.
+    // Readiness must go 503, in the same flat envelope as every other error:
+    // fail-closed, not fail-quiet.
+    const PORT5 = 5314;
+    const BASE5 = `http://localhost:${PORT5}/api`;
+    const server5 = spawn("node", [serverEntry], {
+      env: {
+        ...process.env,
+        PORT: String(PORT5),
+        NODE_ENV: "production",
+        LOG_LEVEL: "silent",
+        DATABASE_URL: "postgres://nobody:nothing@127.0.0.1:1/absent",
+      },
+      stdio: ["ignore", "ignore", "inherit"],
+    });
+    try {
+      let ready5 = false;
+      const start5 = Date.now();
+      while (Date.now() - start5 < 15000) {
+        try { if ((await fetch(`${BASE5}/healthz`)).ok) { ready5 = true; break; } } catch { /* not up yet */ }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      check("DB-loss: the process boots and LIVENESS stays green — an outage is not a dead process", ready5 === true);
+
+      const notReady = await fetch(`${BASE5}/readyz`);
+      const notReadyBody = await notReady.json().catch(() => null);
+      check("DB-loss: READINESS answers 503 — configured-but-unreachable takes no traffic",
+        notReady.status === 503);
+      check("DB-loss: the 503 speaks the flat {requestId,error,message} envelope",
+        notReadyBody !== null && isEnvelope(notReadyBody) && notReadyBody.error === "not_ready");
+
+      // Non-vacuity for the 503: the same server still answers liveness AFTER
+      // the failed readiness probe — the 503 was a verdict, not a crash.
+      const stillAlive = await fetch(`${BASE5}/healthz`);
+      check("DB-loss: liveness still green after the failed readiness probe", stillAlive.status === 200);
+    } finally {
+      server5.kill("SIGTERM");
     }
   }
 

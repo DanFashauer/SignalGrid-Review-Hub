@@ -79,11 +79,15 @@ dev-only preview tooling and is not deployed.
 
 These are tracked work, not discoveries a scanner should have to make:
 
-- No JSON 404 catch-all yet (unknown paths return the framework default), the
-  GA-fence 404 uses a non-canonical envelope shape, and a global-limit 429 currently
-  carries no request id — all queued as `/v1` contract work.
-- No `/readyz` readiness probe and no runtime database-loss test yet; the code path
-  fails closed by construction but nothing pins it.
+- ~~No JSON 404 catch-all, non-canonical GA-fence 404, request-id-less 429~~ —
+  closed 2026-08-16: every error class now speaks the flat
+  `{requestId, error, message}` envelope, asserted on bodies in
+  `artifacts/api-server/test/api.test.mjs`.
+- ~~No `/readyz` probe, no runtime database-loss test~~ — closed 2026-08-16:
+  `/readyz` probes a configured durable store with a real round-trip and answers
+  503 fail-closed when it is unreachable, while `/healthz` stays pure liveness;
+  the test suite boots a server against an unreachable `DATABASE_URL` and pins
+  the divergence live.
 - The reviewer-facing `/v1/audit` chain is in-memory at launch (see Assets).
 - Credential lifecycle (user store, rotation, revocation) is future work and is
   booked as such — the current bearer keys are fixture-grade by design.

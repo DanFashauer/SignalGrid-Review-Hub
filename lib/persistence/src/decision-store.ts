@@ -23,6 +23,12 @@ export interface DecisionStore {
   listDecisions(tenantId: string, limit?: number): Promise<Decision[]>;
   /** An evidence snapshot by id, ONLY if it belongs to the tenant (else null). */
   getSnapshot(tenantId: string, id: string): Promise<EvidenceSnapshot | null>;
+  /**
+   * Round-trip the backing store (a real query, not a cached answer). Rejects
+   * when the store is configured but unreachable — which is exactly the state
+   * `/readyz` exists to expose, so this must never swallow the failure.
+   */
+  ping?(): Promise<void>;
   close?(): Promise<void>;
 }
 
@@ -109,6 +115,11 @@ export class PostgresDecisionStore implements DecisionStore {
       [id, tenantId],
     );
     return res.rows[0] ? (res.rows[0].data as EvidenceSnapshot) : null;
+  }
+
+  async ping(): Promise<void> {
+    await this.ready;
+    await this.pool.query("SELECT 1");
   }
 
   async close(): Promise<void> {

@@ -101,6 +101,11 @@ export function demoSurfacesEnabled(profile: ProductProfile = resolveProfile()):
 // into agreeing with itself.
 export const GA_ALLOWED_ROUTES: readonly { method: string; path: string }[] = [
   { method: "GET", path: "/healthz" },
+  // Readiness beside liveness — infra probes, like /healthz deliberately outside
+  // the published OpenAPI contract. A gateway deployment whose orchestrator
+  // cannot ask "should this instance take traffic?" would treat a fenced 404 as
+  // a dead instance and restart a working server.
+  { method: "GET", path: "/readyz" },
   { method: "GET", path: "/v1/context" },
   { method: "POST", path: "/v1/decisions/evaluate" },
   { method: "GET", path: "/v1/decisions" },

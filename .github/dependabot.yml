@@ -41,8 +41,11 @@ updates:
           - patch
     commit-message:
       prefix: "deps"
-    labels:
-      - dependencies
+    # No `labels:` on purpose. The config used to ask for a `dependencies` label
+    # that does not exist in this repository, and Dependabot answered every PR
+    # with a complaint asking someone to create it — noise on all eight open
+    # update PRs. The triage bot already labels every PR by area and size, so
+    # the fix is removing the phantom ask, not minting a redundant label.
 
   - package-ecosystem: github-actions
     directory: "/"
@@ -57,6 +60,4 @@ updates:
           - patch
     commit-message:
       prefix: "ci"
-    labels:
-      - dependencies
-      - github-actions
+    # Same as above — both labels this stanza named were phantoms.

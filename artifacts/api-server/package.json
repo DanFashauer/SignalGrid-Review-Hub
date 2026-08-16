@@ -19,6 +19,7 @@
     "@workspace/flows": "workspace:*",
     "@workspace/recommendations": "workspace:*",
     "@workspace/signalgrid-core": "workspace:*",
+    "@workspace/audit": "workspace:*",
     "@workspace/persistence": "workspace:*",
     "@workspace/enterprise-auth": "workspace:*",
     "pg": "^8.13.1",

@@ -1509,6 +1509,30 @@ async function run() {
   const sessionNoAuth = await req("POST", "/v1/sessions/start", { body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" } });
   check("session start without a token → 401", sessionNoAuth.status === 401);
 
+  // ── admin actions leave an audit trail, witnessed at /metrics ─────────────
+  // The durable ledger has no HTTP route (docs/BACKUP_AND_RESTORE.md, on
+  // purpose), so route-level emission is witnessed by the counter incremented
+  // BESIDE each appendAuditRecord call. The ledger's own correctness —
+  // chaining, redaction, tamper-evidence — is proof:audit-ledger's job; what
+  // this pins is the wiring: the lifecycle exercised above must have fired
+  // exactly these event types. A connector sync trigger is exercised here so
+  // its event joins the assertion.
+  {
+    const syncTrigger = await req("POST", "/v1/connectors/conn_tenant_northwind_entra_intune/sync", { token: KEYS.owner });
+    check("connector sync trigger → 200 (fixture pipeline)", syncTrigger.status === 200);
+
+    const metricsText = await (await fetch(`${BASE.replace(/\/api$/, "")}/metrics`)).text();
+    const counted = (eventType) => {
+      const m = metricsText.match(new RegExp(`signalgrid_audit_events_total\\{event_type="${eventType}"\\} (\\d+)`));
+      return m ? Number(m[1]) : 0;
+    };
+    check("audit trail: session.start events were appended for the sessions started above", counted("session.start") >= 1);
+    check("audit trail: session.refresh appended", counted("session.refresh") >= 1);
+    check("audit trail: session.end appended", counted("session.end") >= 1);
+    check("audit trail: policy.draft.created appended for the accepted draft above", counted("policy.draft.created") >= 1);
+    check("audit trail: connector.sync.triggered appended", counted("connector.sync.triggered") >= 1);
+  }
+
   // ── transport hygiene ───────────────────────────────────────────────────
   check("rate-limit headers present", allow.headers.get("ratelimit-limit") !== null);
   check("security header x-content-type-options set", allow.headers.get("x-content-type-options") === "nosniff");

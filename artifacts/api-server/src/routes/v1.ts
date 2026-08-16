@@ -10,10 +10,11 @@ import {
   type StandingBound,
 } from "@workspace/signalgrid-core";
 import { getDecisionStore, getSessionStore, type Session } from "@workspace/persistence";
+import { appendAuditRecord, type Target as AuditTarget } from "@workspace/audit";
 import { listAppIntegrations, findAppIntegration, planAppSession } from "@workspace/app-workflows";
 import { webauthn, webauthnStore } from "@workspace/webauthn";
 import { core, DEMO_KEYS } from "../lib/core";
-import { decisionsTotal } from "../lib/metrics";
+import { decisionsTotal, auditEventsTotal } from "../lib/metrics";
 import { requireTenantContext } from "../middlewares/context";
 import { v1RateLimiter } from "../middlewares/rateLimit";
 import { idempotencyReplay } from "../middlewares/idempotency";
@@ -226,6 +227,8 @@ router.post("/v1/sessions/start", async (req: Request, res: Response, next: Next
       expiresAt: new Date(now + ttlSeconds * 1000).toISOString(),
     };
     await getSessionStore().start(session);
+    await audit(req, "session.start", startCtx.principal.subjectId, { type: "session", id: session.id },
+      { workflowKey: body.workflowKey, deviceRef: body.deviceRef, outcome: result.outcome });
     res.json(envelope(req, { session, decision: result }));
   } catch (err) {
     next(err);
@@ -253,6 +256,8 @@ router.post("/v1/sessions/:id/refresh", async (req: Request, res: Response, next
     const ttlSeconds = clampTtl((req.body as Record<string, unknown>)?.["ttlSeconds"]);
     const session = await getSessionStore().refresh(tenantId, param(req, "id"), ttlSeconds, Date.now());
     if (!session) throw new CoreError("not_found", `Session "${param(req, "id")}" not found.`, 404);
+    await audit(req, "session.refresh", refreshCtx.principal.subjectId, { type: "session", id: session.id },
+      { ttlSeconds });
     res.json(envelope(req, { session }));
   } catch (err) {
     next(err);
@@ -266,6 +271,7 @@ router.post("/v1/sessions/:id/end", async (req: Request, res: Response, next: Ne
     const tenantId = endCtx.tenant.id;
     const session = await getSessionStore().end(tenantId, param(req, "id"));
     if (!session) throw new CoreError("not_found", `Session "${param(req, "id")}" not found.`, 404);
+    await audit(req, "session.end", endCtx.principal.subjectId, { type: "session", id: session.id });
     res.json(envelope(req, { session }));
   } catch (err) {
     next(err);
@@ -311,13 +317,19 @@ router.get("/v1/policies/:id/versions", (req: Request, res: Response) => {
   res.json(envelope(req, { versions }));
 });
 
-router.post("/v1/policies/:id/versions", (req: Request, res: Response) => {
-  // The core fully validates the untrusted rule set (structure, field domains,
-  // count/depth caps) and rejects malformed input with a 400, so a bad rule can
-  // never be persisted and can never crash a later evaluation.
-  const body = (req.body ?? {}) as Record<string, unknown>;
-  const version = core.createPolicyDraft(token(req), param(req, "id"), body["rules"]);
-  res.status(201).json(envelope(req, { version }));
+router.post("/v1/policies/:id/versions", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // The core fully validates the untrusted rule set (structure, field domains,
+    // count/depth caps) and rejects malformed input with a 400, so a bad rule can
+    // never be persisted and can never crash a later evaluation.
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const version = core.createPolicyDraft(token(req), param(req, "id"), body["rules"]);
+    await audit(req, "policy.draft.created", core.context(token(req)).principal.subjectId,
+      { type: "policy", id: param(req, "id") }, { versionId: version.id });
+    res.status(201).json(envelope(req, { version }));
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.post(
@@ -352,9 +364,15 @@ router.get("/v1/connectors/:id/sync-runs", (req: Request, res: Response) => {
   res.json(envelope(req, { syncRuns: runs }));
 });
 
-router.post("/v1/connectors/:id/sync", (req: Request, res: Response) => {
-  const run = core.syncConnector(token(req), param(req, "id"));
-  res.json(envelope(req, { syncRun: run }));
+router.post("/v1/connectors/:id/sync", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const run = core.syncConnector(token(req), param(req, "id"));
+    await audit(req, "connector.sync.triggered", core.context(token(req)).principal.subjectId,
+      { type: "connector", id: param(req, "id") }, { syncRunId: run.id, status: run.status });
+    res.json(envelope(req, { syncRun: run }));
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.get("/v1/audit", (req: Request, res: Response) => {
@@ -723,6 +741,25 @@ router.post("/v1/app-workflows/complete-step-up", async (req: Request, res: Resp
 });
 
 export default router;
+
+/** Append a route-level audit event through the real redacting ledger path and
+ *  witness it at /metrics. AWAITED, not fire-and-forget: an admin action whose
+ *  audit record silently failed to persist is the unearned affirmative with a
+ *  paper trail missing, so the failure surfaces as the request's error. */
+async function audit(
+  req: Request,
+  eventType: Parameters<typeof appendAuditRecord>[0],
+  subjectId: string | undefined,
+  target: AuditTarget,
+  meta?: Record<string, unknown>,
+): Promise<void> {
+  await appendAuditRecord(eventType, { type: "user", id: subjectId }, {
+    requestId: req.requestId,
+    target,
+    meta,
+  });
+  auditEventsTotal.inc({ event_type: eventType });
+}
 
 function token(req: Request): string {
   // requireTenantContext guarantees this is set.

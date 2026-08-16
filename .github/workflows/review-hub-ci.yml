@@ -606,6 +606,27 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Migrations run FIRST, so every durable proof below exercises a schema
+      # the migration path produced — the upgrade path is tested on every PR
+      # instead of being discovered at the first real upgrade. The psql
+      # assertion pins that the runner actually RECORDED a version: a runner
+      # that silently did nothing would leave the proofs green against
+      # store-created tables, which is exactly the unearned affirmative this
+      # job exists to refuse. The second run pins idempotency.
+      - name: Schema migrations + version assertion (idempotent on re-run)
+        env:
+          DATABASE_URL: postgres://sg:sg@localhost:5432/signalgrid
+          PGPASSWORD: sg
+        run: |
+          pnpm run db:migrate
+          V=$(psql -h localhost -U sg -d signalgrid -tAc "SELECT COALESCE(MAX(version),0) FROM schema_version")
+          echo "schema_version records: $V"
+          if [ "$V" -lt 1 ]; then
+            echo "::error::db:migrate ran but schema_version records nothing"
+            exit 1
+          fi
+          pnpm run db:migrate
+
       # Exercises the REAL durable path: writes/reads the tamper-evident audit
       # ledger against a live Postgres, proving durability, redaction, tamper
       # detection, and fork-free concurrency. The default (DATABASE_URL unset)

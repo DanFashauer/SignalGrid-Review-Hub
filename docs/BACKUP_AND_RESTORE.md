@@ -157,6 +157,14 @@ assertions:
 
 ## Upgrades
 
-There is no upgrade tooling in this repository yet. Until there is, the honest
-procedure is: take a backup, verify it, deploy, and keep the archive until you are
-satisfied. `db:verify-backup` is what makes "keep the archive" mean something.
+The schema is versioned: `pnpm run db:migrate` applies the append-only migration
+list (`lib/persistence/src/migrations.ts`) and records each step in a
+`schema_version` table, so a running database can answer which revision it is.
+The runner is idempotent (a second run applies nothing), refuses a database whose
+recorded version is NEWER than the code driving it (old code must never drive a
+newer schema), and is exercised in CI's durable-persistence job on every PR — the
+upgrade path is tested continuously, not discovered at the first real upgrade.
+
+The honest procedure is still: take a backup, verify it, run `db:migrate`, deploy,
+and keep the archive until you are satisfied. `db:verify-backup` is what makes
+"keep the archive" mean something.

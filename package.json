@@ -28,6 +28,8 @@
     "db:restore": "pnpm --filter @workspace/scripts run db:restore",
     "db:verify-backup": "pnpm --filter @workspace/scripts run db:verify-backup",
     "db:verify-ledger": "pnpm --filter @workspace/scripts run db:verify-ledger",
+    "db:export-ledger": "pnpm --filter @workspace/scripts run db:export-ledger",
+    "verify:ledger-export": "pnpm --filter @workspace/scripts run verify:ledger-export",
     "demo": "pnpm run build:room-console && node -e \"console.log('\\nDemo ready (no tenant, no network, no database):\\n  1. Open docs/room-entry-console.html in ANY browser \u2014 fully offline, 20 scenarios, allow/step-up/restrict/deny with reasons.\\n  2. Full console: docker compose -f docker-compose.sim.yml up --build  ->  http://localhost:8080/console\\n')\"",
     "dev:simulator": "node scripts/dev-simulator.cjs",
     "dispatch": "node scripts/dev-dispatch.mjs",

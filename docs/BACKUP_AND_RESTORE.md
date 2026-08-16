@@ -79,6 +79,35 @@ statement about a prefix, never about the chain.)
 > (`scripts/src/audit-ledger-pg-proof.ts:46`). It is a CI proof that builds and tears
 > down its own table on a throwaway database. `db:verify-ledger` is the operator tool.
 
+## Export the chain out of custody
+
+Tamper-evidence checked only by the machine that holds the data is weaker than it
+sounds: whoever can rewrite the table can also run that machine's verifier. The
+export is the chain **leaving custody** — a file an assessor, a cold-storage vault,
+or the owner's laptop can re-verify with no database at all:
+
+```bash
+DATABASE_URL=... pnpm run db:export-ledger -- --out ledger.ndjson
+pnpm run verify:ledger-export -- ledger.ndjson        # anywhere, no DATABASE_URL
+```
+
+The export writes one canonical record per line plus a manifest
+(`ledger.ndjson.manifest.json`): record count, head hash, first/last timestamps, and
+the SHA-256 of the file bytes. **The manifest is what makes truncation detectable** —
+a hash chain alone cannot see records missing from its end, because a shorter chain
+is also a valid chain; only the manifest knows how long this one must be. Write the
+head hash and file digest down *outside* the exporting machine (or countersign
+them): the manifest proves the file, something else must prove the manifest.
+
+Refusals are deliberate, and match `db:verify-ledger`'s posture: no `DATABASE_URL`
+(exporting a fresh in-memory void is not an export), a broken chain (an export would
+launder the break into archival-looking provenance — investigate first), and an
+empty ledger. The offline verifier likewise refuses a missing manifest and an empty
+file, and exits non-zero with the exact record index on a break. The round trip —
+export, verify offline, byte-flip caught at two layers, truncation caught by the
+manifest, mid-file deletion localized — is pinned by `proof:audit-ledger`
+(`scripts/src/audit-ledger-proof.ts`), which drives the same code these commands run.
+
 ## Two ledgers, honestly
 
 This repository carries **two audit chains**, and they are not the same thing:

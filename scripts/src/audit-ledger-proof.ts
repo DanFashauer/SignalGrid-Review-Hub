@@ -20,6 +20,7 @@ import {
   setAuditBackend,
   InMemoryAuditBackend,
 } from "@workspace/audit";
+import { exportLedger, verifyExportContent, verifyExportLines } from "./ledger-export";
 
 let passed = 0;
 const failures: string[] = [];
@@ -165,6 +166,74 @@ async function main() {
 
   const oneBatch = await verifyLedgerFull({ batchSize: 1000 });
   check("a batch size larger than the chain degenerates to one clean batch", oneBatch.ok === true && oneBatch.batches === 1 && oneBatch.count === 25);
+
+  // ── 8. Export round-trip: the chain leaves custody and still proves itself ──
+  // These drive the REAL export/verify core (`./ledger-export`) — the same code
+  // `db:export-ledger` and `verify:ledger-export` run — over the same 25-record
+  // in-memory chain, so what is proven here is what an operator gets. Not a
+  // re-implementation: the round trip below is the product path.
+  const lines: string[] = [];
+  const exported = await exportLedger((line) => lines.push(line), { batchSize: 10 });
+  check("export of a clean 25-record chain succeeds, verified as it streams",
+    exported.ok === true && exported.manifest.recordCount === 25 && exported.batches === 3);
+  const manifest = exported.ok ? exported.manifest : (undefined as never);
+  check("the export manifest's head hash IS the live chain's head",
+    exported.ok === true && manifest.headHash === pages[24].hash);
+
+  // The round trip: bytes → verdict, digest checked first, no database consulted.
+  const content = lines.map((l) => l + "\n").join("");
+  const roundTrip = verifyExportContent(content, manifest);
+  check("the exported file verifies offline — digest, chain, count and head all hold",
+    roundTrip.verdict === "verified" && roundTrip.recordCount === 25 && roundTrip.headHash === manifest.headHash);
+
+  // A single flipped byte dies twice, at two independent layers. First the file
+  // digest (the CLI's first check) — and then, even if an attacker regenerates
+  // no digest, the chain itself, localized to the exact record.
+  const flipped = lines.slice();
+  flipped[17] = flipped[17].replace('"step":17', '"step":18');
+  check("the flip actually changed line 17 — this probe is live, not vacuous", flipped[17] !== lines[17]);
+  const flippedContent = flipped.map((l) => l + "\n").join("");
+  const digestCaught = verifyExportContent(flippedContent, manifest);
+  check("a one-byte flip is caught by the file digest before any chain math runs",
+    digestCaught.verdict === "broken" && digestCaught.reason.startsWith("file digest mismatch"));
+  const chainCaught = verifyExportLines(flipped, manifest, { batchSize: 10 });
+  check("…and by the hash chain itself, localized to record 17, if the digest were bypassed",
+    chainCaught.verdict === "broken" && chainCaught.brokenAtIndex === 17);
+
+  // TRUNCATION is the attack a hash chain alone cannot see: a shorter chain is
+  // still a valid chain. Only the manifest knows how long this one must be.
+  const truncated = verifyExportLines(lines.slice(0, 22), manifest, { batchSize: 10 });
+  check("a truncated export is refused by the manifest count — a valid shorter chain is still tampering",
+    truncated.verdict === "broken" && truncated.reason.includes("count mismatch"));
+
+  // DELETION mid-file breaks linkage at exactly the seam it created.
+  const holed = lines.slice(0, 10).concat(lines.slice(11));
+  const holeCaught = verifyExportLines(holed, manifest, { batchSize: 10 });
+  check("deleting one mid-file record breaks the chain at the deletion index",
+    holeCaught.verdict === "broken" && holeCaught.brokenAtIndex === 10);
+
+  // A manifest whose head was rewritten to bless different content is caught.
+  const reheaded = { ...manifest, headHash: "f".repeat(64) };
+  const headCaught = verifyExportLines(lines, reheaded, { batchSize: 10 });
+  check("a manifest head-hash rewrite is caught against the recomputed chain head",
+    headCaught.verdict === "broken" && headCaught.reason.includes("head hash mismatch"));
+
+  check("an empty export is REFUSED, never verified — nothing verifying clean is not verified history",
+    verifyExportLines([], manifest).verdict === "refused");
+
+  // The exporter REFUSES a broken chain rather than laundering it into an
+  // archival-looking file. Same tamper as section 6, same index expected back.
+  (pages[17].meta as Record<string, unknown>).step = -17;
+  const refusedExport = await exportLedger(() => {}, { batchSize: 10 });
+  check("export of a tampered chain is refused with the break's exact index",
+    refusedExport.ok === false && refusedExport.reason === "chain-broken" && refusedExport.brokenAtIndex === 17);
+  (pages[17].meta as Record<string, unknown>).step = 17; // restore
+
+  // And exporting the VOID is a refusal, not an empty file that verifies.
+  setAuditBackend(new InMemoryAuditBackend());
+  const emptyExport = await exportLedger(() => {}, { batchSize: 10 });
+  check("export of an empty ledger is refused — nothing to export is not an export",
+    emptyExport.ok === false && emptyExport.reason === "empty-ledger");
 
   const total = passed + failures.length;
   console.log(`Audit-ledger proof: ${passed}/${total} assertions passed`);

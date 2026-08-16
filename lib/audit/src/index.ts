@@ -140,8 +140,14 @@ export interface LedgerVerification {
  * the true start of the ledger). Returns the failure (global index) or the new
  * head hash. Shared by the capped and the paginating verifiers so there is
  * exactly one implementation of "what intact means".
+ *
+ * EXPORTED so the offline export verifier (`scripts/src/ledger-export.ts`) runs
+ * THIS implementation over records parsed back from an NDJSON export, rather
+ * than growing a second, slightly different definition of "intact" that would
+ * drift from this one. Anything a segment passes here, the live verifiers would
+ * also pass — that equivalence is the whole point of exporting it.
  */
-function verifySegment(
+export function verifySegment(
   records: AuditRecord[],
   startIndex: number,
   prevHash: string,

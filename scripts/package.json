@@ -12,6 +12,8 @@
     "db:restore": "tsx ./src/backup-cli.ts restore",
     "db:verify-backup": "tsx ./src/backup-cli.ts verify",
     "db:verify-ledger": "tsx ./src/verify-ledger-cli.ts",
+    "db:export-ledger": "tsx ./src/export-ledger-cli.ts",
+    "verify:ledger-export": "tsx ./src/verify-ledger-export-cli.ts",
     "hello": "tsx ./src/hello.ts",
     "level10:audit": "tsx ./src/level-10-audit.ts",
     "phase:gate": "tsx ./src/phase-gate.ts",

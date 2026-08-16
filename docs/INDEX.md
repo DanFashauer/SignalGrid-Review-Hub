@@ -151,7 +151,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 ## v0.2 investor / design-partner product foundation
 
 - [SignalGrid v0.2 Readiness Plan](research/SIGNALGRID_V0_2_READINESS_PLAN.md): defines the product reality statement, staged readiness model, target architecture, guardrails, and next recommended engineering phase.
-- [v0.2 Epic Backlog](V0_2_EPIC_BACKLOG.md): converts the readiness plan into scoped future engineering epics with acceptance criteria, risk lanes, sequences, and dependencies.
+- [v0.2 Epic Backlog](V0_2_EPIC_BACKLOG.md): **ARCHIVED** — the v0.2-era epic plan, frozen as a record; most epics were since built or superseded. The live queue is [Build Backlog](BUILD_BACKLOG.md).
 - [Microsoft Connector First Path](MICROSOFT_CONNECTOR_FIRST_PATH.md): documents the read-only, sandbox/mock-first Entra ID and Intune connector path with normalized posture signals and non-goals.
 - [Secure Tenancy Foundation Plan](SECURE_TENANCY_FOUNDATION_PLAN.md): defines tenant-aware data access, authorization, RBAC, audit, rate limiting, validation, and PII-safe logging requirements.
 - [Pilot Readiness Criteria](PILOT_READINESS_CRITERIA.md): lists paid-pilot prerequisites, private-context controls, and customer success criteria.
@@ -171,7 +171,8 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Autopilot Command Guide](AUTOPILOT_COMMAND_GUIDE.md): defines short future user commands such as `@GitHub PR #__`, workflow run inspection, new input classification, pitch-pack refresh, and smoke-test review.
 
 - [Phase Automation Orchestrator](PHASE_AUTOMATION_ORCHESTRATOR.md): defines the input → classify → backlog → scoped PR → validation → review → merge-lane loop.
-- [Phase Backlog](PHASE_BACKLOG.md): tracks seeded and future scoped phases, classifications, risk lanes, dependencies, and validation.
+- [Phase Backlog](PHASE_BACKLOG.md): **ARCHIVED** — the Autopilot-era phase table, frozen as a record; its statuses stopped updating at the root commit. The live queue is [Build Backlog](BUILD_BACKLOG.md).
+- [Build Backlog](BUILD_BACKLOG.md): **the live work queue** — actively maintained, self-correcting (superseded rows kept beside their replacements), and the only backlog a session should read for what to build next.
 - [Intake Classification Guide](INTAKE_CLASSIFICATION_GUIDE.md): classifies new inputs into product, signal, connector, UI, proof, automation, platform, maintenance, blocked, or parking-lot categories.
 - [Green / Yellow / Red Merge Policy](GREEN_YELLOW_RED_MERGE_POLICY.md): defines green, yellow, and red merge lanes and approval expectations.
 - [Automation Phase Template](AUTOMATION_PHASE_TEMPLATE.md): provides the reusable automation prompt for one scoped phase at a time.

@@ -47,11 +47,16 @@ Notes:
   PWA today. The mobile surfaces are delivered as a PWA (installable on iOS and
   Android home screens); the desktop surface is a desktop-chromed web app for the
   macOS/Windows operator.
-- **Native is the documented next step, not a present claim.** True native shells
-  (React Native / Expo for iOS-Android, Tauri / Electron for macOS-Windows) are
-  described in [Mobile & Platform Strategy](MOBILE_AND_PLATFORM_STRATEGY.md) as
-  the path taken only after the workflows are validated. Nothing in this repo
-  ships a native binary, and none is claimed.
+- **Native code exists; SHIPPING a native product is not claimed.** ~~Nothing in
+  this repo ships a native binary, and none is claimed.~~ That sentence outlived
+  the tree: `native/ios` (Swift), `native/android` (Kotlin), `native/desktop`
+  (Tauri/Rust) and `firmware/dock` (Rust) all build in CI today — the exact
+  artifact each build produces, and what it is NOT (no signing, no store, no
+  installer), is the table below in this document. The honest distinction is
+  build-vs-ship: CI proves the native code compiles and passes its tests; no
+  signed, distributable native product is claimed. [Mobile & Platform
+  Strategy](MOBILE_AND_PLATFORM_STRATEGY.md) still governs when shipping becomes
+  the goal.
 - **Admin actions stay constrained.** Administrative surfaces expose read/monitor
   plus explicitly approval-gated actions (e.g. remediation approval, ITSM
   hand-off). High-risk actions are simulated and logged, never autonomous.

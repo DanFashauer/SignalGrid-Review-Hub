@@ -4,7 +4,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "autopilot:backlog-check": "tsx ./src/autopilot-backlog-check.ts",
     "bench:decision-latency": "tsx ./src/latency-bench.ts",
     "bench:decision-throughput": "tsx ./src/throughput-bench.ts",
     "build:evidence-coverage": "node ./build-evidence-coverage.mjs",

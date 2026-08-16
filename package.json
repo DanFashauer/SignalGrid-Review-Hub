@@ -7,7 +7,6 @@
     "node": ">=22"
   },
   "scripts": {
-    "autopilot:backlog-check": "pnpm --filter @workspace/scripts run autopilot:backlog-check",
     "bench:decision-latency": "pnpm --filter @workspace/scripts run bench:decision-latency",
     "bench:decision-throughput": "pnpm --filter @workspace/scripts run bench:decision-throughput",
     "branches:clean": "bash scripts/cleanup-merged-branches.sh --apply",

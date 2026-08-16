@@ -1,5 +1,15 @@
 # Phase Backlog
 
+> ## ⛔ ARCHIVED 2026-08-15 — frozen record, not a queue
+>
+> This table has not been edited since the repository's root commit (~692 commits).
+> Its statuses froze mid-process ("Complete in this PR"), it carries duplicate rows
+> its own ID-based checker could not see, and the process that fed it (the Autopilot
+> phase loop) is retired. **The live work queue is [BUILD_BACKLOG](BUILD_BACKLOG.md);
+> the live scope authority is [LAUNCH_PROFILE](LAUNCH_PROFILE.md) and its breadth
+> freeze.** Nothing below is an instruction to build anything. Kept as the record of
+> how the early phases were scoped.
+
 This backlog tracks scoped automation phases created from user input, screenshots, findings, automation summaries, GitHub validation results, and vendor observations.
 
 | Phase ID  | Input source                                                    | Classification            | Proposed deliverable                                                                                 | Risk lane | Current status    | Depends on                                        | Validation required                                                | Notes                                                                                                   |

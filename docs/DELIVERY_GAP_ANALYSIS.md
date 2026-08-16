@@ -1,6 +1,18 @@
 # Delivery gap analysis — every surface, measured against the tree
 
-> ## ⚠️ SUPERSEDED IN PART — VERIFY BEFORE ACTING
+> ## ⛔ ARCHIVED 2026-08-15 — kept as the false-claims exhibit, not as a map
+>
+> This document is the estate's most instructive fossil: measured correctly on
+> 2026-08-08 and overtaken the same morning, it then seeded the same false findings
+> into two independent external analyses. It is retained, corrections inline, as the
+> worked example of why documents are never quoted as the state of the tree. It will
+> NOT be re-measured in place — a regenerated copy restarts the same decay clock.
+> What replaced it is not a document but the live gates: `pnpm run check:false-claims`
+> (proven-false claims cannot be re-asserted), `pnpm run check:cited-paths` (citations
+> must resolve), `pnpm run check:absence` (absence needs exhaustion, not one grep),
+> and the launch profile + STATUS figures for what exists right now.
+>
+> ## ⚠️ Original correction banner (2026-08-12) — SUPERSEDED IN PART, VERIFY BEFORE ACTING
 >
 > **Re-measured 2026-08-12 against the tree.** This document was accurate when
 > written (2026-08-08, PR #188), but the repository moved the same day and has

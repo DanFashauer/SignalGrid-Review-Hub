@@ -21,7 +21,7 @@ Input
 
 1. **Input**: the user provides a screenshot, link, finding, automation summary, GitHub Actions result, vendor observation, or manual QA note.
 2. **Classify**: the automation agent maps the input to the intake classes in `docs/INTAKE_CLASSIFICATION_GUIDE.md` and records the proposed risk lane.
-3. **Phase backlog**: the automation agent updates `docs/PHASE_BACKLOG.md` with the proposed deliverable, dependencies, validation, and notes.
+3. **Phase backlog**: ~~the automation agent updates `docs/PHASE_BACKLOG.md`~~ **(ARCHIVED 2026-08-15 — that table is a frozen record; the live queue is `docs/BUILD_BACKLOG.md` and intake goes to `docs/INTAKE_LEDGER.md`.)**
 4. **Scoped task**: the automation agent chooses one narrow phase and avoids bundling unrelated work.
 5. **Implementation PR**: the automation agent implements only that phase with public-safe fixtures and documentation unless explicitly approved otherwise.
 6. **CI validation**: GitHub Actions and local commands validate typecheck, build, proof harnesses, unsafe-claim scans, and diff hygiene.

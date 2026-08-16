@@ -51,16 +51,16 @@ Every figure in this section is published by `proof:launch-profile` and checked 
 docs↔proof figure guard on each run — stated here, beside the numbers, because scope
 is per-section and a proof named three sections away checks nothing.
 
-`scripts/launch-profile.mjs` classifies **167 classified items** across **4 profile
+`scripts/launch-profile.mjs` classifies **171 classified items** across **4 profile
 surfaces** — connector families, signal kinds, published API paths, and client/app
 surfaces. Every item carries exactly one status:
 
 | Status | Count | Meaning |
 |---|---|---|
 | `launch` | **22 launch items** | In the Limited GA surface. |
-| `deferred` | **128 deferred items** | Real, gated, proven, staying in the repository — not Limited GA. |
+| `deferred` | **131 deferred items** | Real, gated, proven, staying in the repository — not Limited GA. |
 | `demo_only` | **9 demo only items** | Exists to demonstrate or explain. Must never be presented as shipping product. |
-| `internal` | **8 internal items** | Harness, generator or evidence plumbing. Not a product surface at all. |
+| `internal` | **9 internal items** | Harness, generator or evidence plumbing. Not a product surface at all. |
 
 `deferred` is not a demotion. It is the freeze working.
 
@@ -98,7 +98,7 @@ to anonymous callers — and `demoSurfacesEnabled()` had already been refusing t
 register it outside the review demo. The runtime fence was right and the declared
 scope was wrong. It is `demo_only` in version 2.
 
-**App surfaces (3 of 18).** `api-server` (the product), `signalgrid-app` (the one
+**App surfaces (3 of 25).** `api-server` (the product), `signalgrid-app` (the one
 operator console — bound to the served `/v1` surface: decisions list, decision
 detail, digest-verified evidence, audit ledger, assurance labels), and
 `ios:EnterpriseShell` (the one host app, shipping as the integration reference a
@@ -107,6 +107,19 @@ on 2026-08-10 when signalgrid-app bound to `/v1`: a console that runs an
 in-browser copy of the core cannot be THE console, because it never exercises
 the API a customer would. `signalgrid-review` remains the zero-network review
 deck — reclassified `demo_only`, not diminished.
+
+This denominator has moved twice, and both moves are worth stating. An earlier
+revision of this page said "3 of 18" after three lane-coordination surfaces had
+already joined the tree (real total then: 21) — the fraction sits in prose no
+figure guard can see, which is exactly how it went stale. Profile **v4**
+(2026-08-16) then widened the *derivation*: the gate had only ever read
+`artifacts/`, `tools/` and the two iOS project files, so an entire Android port
+(`native:android`), a desktop port (`native:desktop`), the cross-port wire
+conformance fixture (`native:shared`) and the SmartDock firmware core
+(`firmware:dock`) sat outside the freeze — real, tracked, and unexamined. The
+derivation now reads `native/*` and `firmware/*` too; the four arrivals are
+classified three `deferred` + one `internal`, the launch set is unchanged, and
+the classifications await owner ratification like every status here.
 
 ## The gaps — read these before reading the launch set as readiness
 

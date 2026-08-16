@@ -10,9 +10,12 @@
 //              what is SIMULATED is not consistently stated.
 //
 // All three are downstream of one missing artifact: nothing in this repository
-// says which of the 51 connector families, 41 signal kinds, 54 API paths and 17
-// client surfaces are the PRODUCT, and which are proven work that is not shipping
-// yet. Without that, every surface reads as equally load-bearing, and a reviewer
+// says which of the connector families, signal kinds, API paths and client
+// surfaces are the PRODUCT, and which are proven work that is not shipping yet.
+// (Deliberately no counts in this sentence — the first version said "17 client
+// surfaces" and the real number was already 18; the live totals are derived by
+// the gate and published by proof:launch-profile, never restated here.)
+// Without that, every surface reads as equally load-bearing, and a reviewer
 // has no way to tell a launch-critical file from a deferred one. Breadth was never
 // the defect on its own — breadth with no declared edge is.
 //
@@ -34,7 +37,7 @@
 //              shipping product.
 //   internal   harness, generator or evidence plumbing. Not a product surface at all.
 //
-// WHY EVERY ITEM IS LISTED, including the 134 that are merely deferred. A profile
+// WHY EVERY ITEM IS LISTED, including the deferred majority. A profile
 // that named only the launch set would let a 52nd connector family appear tomorrow
 // and be silently deferred by default — which is exactly the breadth the freeze
 // forbids, arriving through the door marked "not in scope". Because every derived
@@ -66,11 +69,26 @@
 
 /** Bumped whenever a status changes. Not a semver — a serial number, so a doc or a
  *  review can name the exact revision of the scope it was written against. */
-export const LAUNCH_PROFILE_VERSION = 3;
+export const LAUNCH_PROFILE_VERSION = 4;
 
 // VERSION HISTORY, kept because a scope decision that changes silently is not a
 // decision anyone can hold you to.
 //
+//   4  THE FREEZE EXTENSION (2026-08-16). The app-surfaces derivation read
+//      artifacts/, tools/ and the two iOS project files — and nothing else. An
+//      ENTIRE ANDROID PORT (native/android: Compose shell + :assist-core, unit-
+//      tested without an emulator), a Tauri desktop port (native/desktop), the
+//      cross-port wire-conformance fixture (native/shared) and the SmartDock
+//      firmware core (firmware/dock: no_std Rust, CI-compiled for
+//      thumbv7em-none-eabihf) all sat outside the bijection. The freeze's whole
+//      argument is that a new surface cannot arrive unexamined; these four were
+//      real, tracked, and unexamined, because the gate only looked where
+//      surfaces had appeared before. The derivation now reads native/* (iOS
+//      still at target granularity) and firmware/* too. Classifications in this
+//      bump: three deferred (android, desktop, dock — real, proven in CI, not
+//      Limited GA; nothing about the criterion's "one host app" moves), one
+//      internal (the conformance fixture). No launch-set change. Like every
+//      status here these are a PROPOSAL — owner ratification queued.
 //   3  THE SOURCE-AGNOSTIC REDIRECT (owner-directed, 2026-08-11 — intake ledger
 //      row 77). The criterion's "one read-only Entra/Intune connector" made
 //      Microsoft a PREREQUISITE; the owner reframed it as the COMMERCIAL TARGET:
@@ -110,8 +128,8 @@ export const CRITERION =
   "source (open-source lab first — Fleet; Microsoft Entra/Intune as the first enterprise " +
   "production connector), one operator console, one design partner, one paid deployment";
 
-/** Shared reason for every `deferred` item, written once rather than restated 134
- *  times. Deferred means: it exists, it is gated, it is proven, its proof runs in
+/** Shared reason for every `deferred` item, written once rather than restated a
+ *  hundred-plus times. Deferred means: it exists, it is gated, it is proven, its proof runs in
  *  CI — and it is not part of Limited GA. Nothing here is deleted or doubted. */
 export const DEFERRED_RATIONALE =
   "Real, gated and proven, and outside Limited GA: the criterion says ONE of most things, " +
@@ -406,9 +424,10 @@ export const SURFACES = [
   {
     key: "app-surfaces",
     derivedFrom:
-      "every git-TRACKED directory under artifacts/ and tools/ (gitignored build output such "+
-      "as artifacts/level-10 and artifacts/proof is not a surface, and reading the filesystem "+
-      "instead made this gate answer differently on a machine that had run the harness), plus "+
+      "every git-TRACKED directory under artifacts/, tools/, native/ and firmware/ (gitignored "+
+      "build output such as artifacts/level-10 and artifacts/proof is not a surface, and reading "+
+      "the filesystem instead made this gate answer differently on a machine that had run the "+
+      "harness; native/ios is read at finer grain instead of as a directory), plus "+
       "every `type: application` target in BOTH " +
       "native/ios/project.yml and native/ios/SignalGridMobile/project.yml, prefixed `ios:` " +
       "(test targets and the SignalGridMobileCore framework are excluded — neither is a " +
@@ -520,6 +539,13 @@ export const SURFACES = [
     reason: "Supply-chain artifacts. Not a product surface.",
   },
   {
+    id: "native:shared",
+    reason:
+      "One JSON file: the assist-wire conformance fixture every native port (iOS, Android, " +
+      "desktop) must parse identically, so the ports cannot drift apart on the wire. A " +
+      "contract fixture between surfaces, not a surface — no person opens it.",
+  },
+  {
     id: "tools:evidence-coverage",
     reason: "Generated evidence-coverage output. Plumbing behind a proof, not a surface.",
   },
@@ -533,6 +559,14 @@ export const SURFACES = [
     deferred: [
       "mcp-server",
       "ios:SignalGridOperator",
+      // The v4 additions. Each is real and proven where it can be (Android core
+      // unit-tested without an emulator; dock firmware CI-compiled for its real
+      // Cortex-M target) — and none survives the criterion's "ONE host app",
+      // which is ios:EnterpriseShell. The dock firmware additionally claims
+      // nothing about hardware: no real dock has run it (docs/SIGNALGRID_SMARTDOCK.md).
+      "native:android",
+      "native:desktop",
+      "firmware:dock",
     ],
   },
 ];

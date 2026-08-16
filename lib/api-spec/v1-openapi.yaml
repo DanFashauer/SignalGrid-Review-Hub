@@ -8,6 +8,14 @@ info:
     is tenant-scoped: the tenant is derived from the authenticated bearer token,
     never from a client-supplied id. This is a review surface, not a production
     system — no real credentials, tenant data, PHI/PII, or live vendor calls.
+
+    RATE LIMITING (applies to every path in this document): requests are limited
+    per API key and, more coarsely, per client address. Exceeding either bound
+    answers 429 with the standard Error schema body ({requestId, error:
+    "rate_limited", message}) plus RateLimit-* and Retry-After headers a client
+    can back off on — never a 5xx. Unknown paths under /api answer 404 with the
+    same Error schema, never an HTML page. Errors of every class share that one
+    flat envelope.
 servers:
   - url: /api
     description: Base API path

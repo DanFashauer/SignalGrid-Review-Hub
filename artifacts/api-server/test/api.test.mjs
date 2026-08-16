@@ -159,6 +159,51 @@ async function run() {
   const health = await req("GET", "/healthz");
   check("healthz returns 200 ok", health.status === 200 && health.json?.status === "ok");
 
+  // ── error envelope: ONE flat shape for every error class ────────────────
+  // {requestId, error, message} — the spec's own Error schema, asserted on the
+  // BODY. Until now this suite checked `.status` ~20 times and never once what
+  // a client actually parses, which is how a nested fence 404, a shape-less
+  // 429 and an HTML unknown-route page all shipped unnoticed. Status-only
+  // coverage is envelope-shaped nothing.
+  const isEnvelope = (j) =>
+    j !== null &&
+    (typeof j.requestId === "string" || j.requestId === null) &&
+    typeof j.error === "string" &&
+    typeof j.message === "string";
+
+  // Unknown path OUTSIDE any guarded prefix: the JSON catch-all answers.
+  const unknownPath = await req("GET", "/zzz-definitely-not-a-route");
+  check("unknown /api path → 404 JSON envelope, not framework HTML",
+    unknownPath.status === 404 && isEnvelope(unknownPath.json) && unknownPath.json.error === "not_found");
+  check("…and the 404 carries x-request-id for correlation",
+    typeof unknownPath.headers.get("x-request-id") === "string");
+
+  // Unknown path UNDER /v1, anonymous: auth answers FIRST, deliberately — a
+  // 404-vs-401 difference would let an unauthenticated prober enumerate which
+  // routes exist. Same envelope either way.
+  const unknownV1Anon = await req("GET", "/v1/zzz-definitely-not-a-route");
+  check("unknown /v1 path without a bearer → 401 (no route enumeration), same envelope",
+    unknownV1Anon.status === 401 && isEnvelope(unknownV1Anon.json));
+
+  // …and AUTHENTICATED, the same unknown path falls through to the catch-all.
+  const unknownV1Auth = await req("GET", "/v1/zzz-definitely-not-a-route", { token: KEYS.operator });
+  check("unknown /v1 path with a valid bearer → 404 JSON envelope via the catch-all",
+    unknownV1Auth.status === 404 && isEnvelope(unknownV1Auth.json) && unknownV1Auth.json.error === "not_found");
+
+  const noBearer = await req("GET", "/v1/decisions");
+  check("missing bearer → 401 in the same envelope",
+    noBearer.status === 401 && isEnvelope(noBearer.json) && noBearer.json.error === "unauthorized");
+
+  const badJsonRes = await fetch(`${BASE}/v1/decisions/evaluate`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${KEYS.operator}`, "content-type": "application/json" },
+    body: "{this is not json",
+  });
+  requested.add("POST /v1/decisions/evaluate");
+  const badJsonBody = await badJsonRes.json().catch(() => null);
+  check("malformed JSON body → 400 in the same envelope (never a leaky 500)",
+    badJsonRes.status === 400 && isEnvelope(badJsonBody) && badJsonBody.error === "bad_request");
+
   const keys = await req("GET", "/v1/keys");
   check("keys discovery is public (200)", keys.status === 200);
   check("keys lists the nine demo keys (incl. the government/civic tenant)", Array.isArray(keys.json?.keys) && keys.json.keys.length === 9);
@@ -1131,6 +1176,14 @@ async function run() {
       // is the difference between refusing to answer and declining to acknowledge.
       const gwKeys = await fetch(`${BASE4}/v1/keys`);
       check("gateway: /v1/keys is not acknowledged at all (404, was 401)", gwKeys.status === 404);
+      // The fence 404 must speak the SAME flat envelope as every other error —
+      // it answered {error:{code,message}} (nested, violating the spec's own
+      // Error schema) until 2026-08-16, on exactly the path an integrator who
+      // misread the GA allowlist hits first.
+      const gwKeysBody = await gwKeys.json().catch(() => null);
+      check("gateway: the fence 404 uses the flat {requestId,error,message} envelope",
+        gwKeysBody !== null && typeof gwKeysBody.error === "string" && gwKeysBody.error === "not_found" &&
+        typeof gwKeysBody.message === "string" && "requestId" in gwKeysBody);
 
       const gwSim = await fetch(`${BASE4}/sim/room-entry`, {
         method: "POST",

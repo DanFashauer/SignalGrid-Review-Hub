@@ -163,10 +163,24 @@ for (const file of files) {
     const gated = GATE_TOKENS.some((t) => body.includes(t));
     if (gated) continue;
 
+    // THE CHOKEPOINT PATTERN, verified rather than trusted. mde.ts and
+    // fleetdm.ts gate every live path through one `isEnabled()` whose body
+    // wraps resolveEmission() — a deliberate single point "that cannot be
+    // bypassed by adding a new method". A method guarding on this.isEnabled()
+    // is gated ONLY IF this file's isEnabled() itself carries a gate token:
+    // mde once had an isEnabled() lookalike that checked config.enabled alone
+    // (an operator preference, not a safety control), and accepting the NAME
+    // would re-open exactly that hole.
+    if (/\bthis\.isEnabled\s*\(\)/.test(body)) {
+      const impl = text.match(/isEnabled\s*\(\)\s*:\s*boolean\s*\{[\s\S]*?\n  \}/);
+      if (impl !== null && GATE_TOKENS.some((t) => impl[0].includes(t))) continue;
+    }
+
     // ENFORCED SCOPE, widened 2026-08-16 after the audit it was waiting for:
     //
     //   · `healthCheck()` everywhere — the original class, found and fixed seven-up.
-    //   · EVERY outbound method under itsm/ and siem/ — audited: those adapters ARE
+    //   · EVERY outbound method under itsm/, siem/ and telemetry/ — audited: the
+    //     itsm/siem adapters ARE
     //     the live transport (nothing constructs them in fixture mode; no proof and
     //     no artifact references the classes), so an ungated method there is a
     //     boundary hole with no caller above it to close it. All seventeen are now
@@ -179,7 +193,7 @@ for (const file of files) {
     // boundary open), so an in-method mode!=live throw would break the fixture
     // path it legitimately serves. Their gate belongs where the live transport is
     // selected; until each is verified site by site, they stay visible here.
-    const enforcedDir = /\/(itsm|siem)\//.test(file);
+    const enforcedDir = /\/(itsm|siem|telemetry)\//.test(file);
     if (enforcedDir || /\bhealthCheck\s*\(/.test(lines[start])) {
       findings.push({ file, line: i + 1, fn: lines[start].trim().slice(0, 72) });
     } else {
@@ -221,11 +235,15 @@ console.log(`  network helpers under utils/:     all named so the scan can see t
 if (unaudited.length > 0) {
   console.log(
     `\n  ⚠ ${unaudited.length} other outbound class method(s) NOT covered by this gate.\n` +
-      "    These are the MODE-POLYMORPHIC methods (telemetry/, passkey-assurance): the\n" +
-      "    same method legitimately serves fixture transports in proofs, so an in-method\n" +
-      "    mode!=live throw would break the fixture path. Enforced scope is healthCheck()\n" +
-      "    everywhere plus EVERY outbound method under itsm/ and siem/ (audited 2026-08-16:\n" +
-      "    those adapters are the live transport itself, with no fixture-mode caller).",
+      "    Audited 2026-08-16, one survivor: passkey-assurance fetchNormalizedSet is\n" +
+      "    TRANSPORT-POLYMORPHIC — its live/fixture split is decided by the resolver in\n" +
+      "    its index.ts (fixture unless tier + SIGNALGRID_LIVE_INTEGRATIONS + credential),\n" +
+      "    which this per-function scan cannot follow across files. Verified by reading;\n" +
+      "    kept visible here because verified-by-reading is not verified-by-gate.\n" +
+      "    Everything else is enforced: healthCheck() everywhere, and every outbound\n" +
+      "    method under itsm/, siem/ and telemetry/ — where the isEnabled() chokepoint\n" +
+      "    counts only if its own implementation carries a gate token (the lookalike\n" +
+      "    that checks config.enabled alone FAILS the build, tested by mutation).",
   );
   for (const u of unaudited) console.log(`      ${u}`);
 }

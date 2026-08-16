@@ -161,6 +161,12 @@ export class FleetDMAdapter {
   private async fetchHostWithPolicies(
     hostUuid: string,
   ): Promise<{ host: FleetDMHost; policies: FleetDMPolicyResult[] } | null> {
+    // Reached only via isEnabled()-gated methods today — but "today" is a
+    // circumstance. The chokepoint holds here too, so a future direct caller
+    // cannot reach the live Fleet API around it.
+    if (!this.isEnabled()) {
+      throw new Error('refused: host fetch with the fixture/live boundary closed.');
+    }
     const response = await fetchWithTimeout(
       `${this.getBaseUrl()}/api/v1/fleet/hosts/identifier/${encodeURIComponent(hostUuid)}?populate_policies=true`,
       {

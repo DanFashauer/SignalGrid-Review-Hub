@@ -15,7 +15,7 @@
 //     not laundered into an archival-looking artifact.
 //   · Empty ledger → exit 2. Nothing to export is not an export.
 
-import { writeFileSync, unlinkSync, existsSync, openSync, writeSync, closeSync } from "node:fs";
+import { writeFileSync, rmSync, openSync, writeSync, closeSync } from "node:fs";
 import { getAuditBackend } from "@workspace/audit";
 import { exportLedger, lineToBytes } from "./ledger-export";
 
@@ -45,25 +45,30 @@ async function main() {
     );
     process.exit(2);
   }
-  if (existsSync(out)) {
-    console.error(`${out} already exists — refusing to overwrite an existing export.`);
-    process.exit(2);
+  // "wx" IS the exists-check, atomically: exclusive create fails on a file that
+  // already exists, with no separate stat racing against the open (CodeQL
+  // flagged the check-then-open version of this as a TOCTOU — correctly).
+  let fd: number;
+  try {
+    fd = openSync(out, "wx");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "EEXIST") {
+      console.error(`${out} already exists — refusing to overwrite an existing export.`);
+      process.exit(2);
+    }
+    throw err;
   }
-
-  const fd = openSync(out, "wx");
-  let wrote = false;
   try {
     const result = await exportLedger(
       (line) => {
         writeSync(fd, lineToBytes(line));
-        wrote = true;
       },
       { batchSize },
     );
 
     if (!result.ok) {
       closeSync(fd);
-      if (wrote || existsSync(out)) unlinkSync(out); // no partial export survives a refusal
+      rmSync(out, { force: true }); // no partial export survives a refusal; force = no racy exists-check
       if (result.reason === "empty-ledger") {
         console.error("The ledger is EMPTY. Nothing to export is not an export. Refusing.");
         process.exit(2);

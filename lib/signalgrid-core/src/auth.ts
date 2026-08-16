@@ -18,6 +18,8 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "connector:sync",
     "audit:read",
     "remediation:approve",
+    "session:read",
+    "session:write",
     "tenant:admin",
   ],
   admin: [
@@ -29,9 +31,15 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "connector:sync",
     "audit:read",
     "remediation:approve",
+    "session:read",
+    "session:write",
   ],
-  operator: ["decision:evaluate", "decision:read", "policy:read", "connector:read"],
-  auditor: ["decision:read", "policy:read", "connector:read", "audit:read"],
+  // session:* on operator is load-bearing: the operator key is what a host app
+  // presents, and the session lifecycle (start/refresh/end) IS the host-app
+  // flow. auditor reads sessions but can never move one — read-only means
+  // read-only. connector gets neither; a connector has no business in sessions.
+  operator: ["decision:evaluate", "decision:read", "policy:read", "connector:read", "session:read", "session:write"],
+  auditor: ["decision:read", "policy:read", "connector:read", "audit:read", "session:read"],
   connector: ["connector:read", "connector:sync"],
 };
 

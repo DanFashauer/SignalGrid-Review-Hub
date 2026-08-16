@@ -2,6 +2,7 @@ import { Router, type IRouter, type Request, type Response, type NextFunction } 
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import {
   CoreError,
+  authorize,
   reconcileDecisions,
   verifySnapshot,
   type EvaluateRequest,
@@ -203,7 +204,12 @@ router.post("/v1/sessions/start", async (req: Request, res: Response, next: Next
     const body = parseEvaluate(req.body);
     const result = core.evaluate(token(req), body);
     decisionsTotal.inc({ outcome: result.outcome });
-    const tenantId = core.context(token(req)).tenant.id;
+    const startCtx = core.context(token(req));
+    // A session is a durable write in the caller's tenant; evaluate alone must
+    // not imply it. session:* closed the gate's last exemption — see
+    // scripts/check-durable-path-authorization.mjs.
+    authorize(startCtx.principal, "session:write");
+    const tenantId = startCtx.tenant.id;
     const ttlSeconds = clampTtl((req.body as Record<string, unknown>)?.["ttlSeconds"]);
     const now = Date.now();
     const session: Session = {
@@ -228,7 +234,9 @@ router.post("/v1/sessions/start", async (req: Request, res: Response, next: Next
 
 router.get("/v1/sessions/:id", async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const tenantId = core.context(token(req)).tenant.id;
+    const readCtx = core.context(token(req));
+    authorize(readCtx.principal, "session:read");
+    const tenantId = readCtx.tenant.id;
     const session = await getSessionStore().get(tenantId, param(req, "id"), Date.now());
     if (!session) throw new CoreError("not_found", `Session "${param(req, "id")}" not found.`, 404);
     res.json(envelope(req, { session }));
@@ -239,7 +247,9 @@ router.get("/v1/sessions/:id", async (req: Request, res: Response, next: NextFun
 
 router.post("/v1/sessions/:id/refresh", async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const tenantId = core.context(token(req)).tenant.id;
+    const refreshCtx = core.context(token(req));
+    authorize(refreshCtx.principal, "session:write");
+    const tenantId = refreshCtx.tenant.id;
     const ttlSeconds = clampTtl((req.body as Record<string, unknown>)?.["ttlSeconds"]);
     const session = await getSessionStore().refresh(tenantId, param(req, "id"), ttlSeconds, Date.now());
     if (!session) throw new CoreError("not_found", `Session "${param(req, "id")}" not found.`, 404);
@@ -251,7 +261,9 @@ router.post("/v1/sessions/:id/refresh", async (req: Request, res: Response, next
 
 router.post("/v1/sessions/:id/end", async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const tenantId = core.context(token(req)).tenant.id;
+    const endCtx = core.context(token(req));
+    authorize(endCtx.principal, "session:write");
+    const tenantId = endCtx.tenant.id;
     const session = await getSessionStore().end(tenantId, param(req, "id"));
     if (!session) throw new CoreError("not_found", `Session "${param(req, "id")}" not found.`, 404);
     res.json(envelope(req, { session }));

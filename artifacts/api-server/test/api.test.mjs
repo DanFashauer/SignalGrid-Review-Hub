@@ -1464,6 +1464,31 @@ async function run() {
   const otherTenant = await req("GET", `/v1/sessions/${sessionId}`, { token: KEYS.atlas });
   check("session read from ANOTHER tenant → 404, never the session", otherTenant.status === 404 && otherTenant.json?.session === undefined);
 
+  // session:read vs session:write, pinned with ONE principal so the pair cannot
+  // pass vacuously: the auditor role holds session:read and not session:write,
+  // so the same token that reads a session at 200 must be refused a refresh at
+  // 403. These routes were the durable-path authorization gate's last
+  // exemption — authenticated-only until session:* joined the Permission union.
+  const auditorRead = await req("GET", `/v1/sessions/${sessionId}`, { token: KEYS.auditor });
+  check("session read as auditor → 200 (session:read granted to the read-only role)",
+    auditorRead.status === 200 && auditorRead.json?.session?.id === sessionId);
+  const auditorRefresh = await req("POST", `/v1/sessions/${sessionId}/refresh`, { token: KEYS.auditor, body: { ttlSeconds: 900 } });
+  check("session refresh as auditor → 403 (read-only means the session cannot be moved)",
+    auditorRefresh.status === 403 && auditorRefresh.json?.error === "forbidden");
+  const auditorEnd = await req("POST", `/v1/sessions/${sessionId}/end`, { token: KEYS.auditor });
+  check("session end as auditor → 403", auditorEnd.status === 403);
+  const auditorStart = await req("POST", "/v1/sessions/start", {
+    token: KEYS.auditor,
+    body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" },
+  });
+  // Honest scope: for the auditor this 403 comes from decision:evaluate, which
+  // runs first in the start route — no demo role holds evaluate without
+  // session:write, so the pure session:write start-denial has no live probe.
+  // What IS pinned: a read-only principal cannot open a session by any path,
+  // and no durable write happens on the way to the refusal.
+  check("session start as auditor → 403 (refused before any durable write, via the evaluate gate)",
+    auditorStart.status === 403 && auditorStart.json?.session === undefined);
+
   const refreshed = await req("POST", `/v1/sessions/${sessionId}/refresh`, { token: KEYS.operator, body: { ttlSeconds: 900 } });
   check("session refresh → 200 and extends the expiry", refreshed.status === 200 && Date.parse(refreshed.json?.session?.expiresAt) > Date.parse(started.json?.session?.expiresAt));
   const refreshOther = await req("POST", `/v1/sessions/${sessionId}/refresh`, { token: KEYS.atlas, body: {} });

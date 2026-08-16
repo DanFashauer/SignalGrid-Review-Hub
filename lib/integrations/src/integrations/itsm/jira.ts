@@ -65,6 +65,16 @@ export class JiraAdapter implements ITSMAdapter {
    * Create JSM request
    */
   private async createJSMRequest(request: ITSMTicketRequest): Promise<ITSMTicketResponse> {
+    // GATED like healthCheck() above: this method reaches the network, and the
+    // fixture/live boundary either covers every outbound path or it is not a
+    // boundary. Nothing constructs this adapter in fixture mode today; the gate
+    // makes that a property instead of a circumstance.
+    {
+      const emission = resolveEmission();
+      if (emission.mode !== "live") {
+        throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
+      }
+    }
     const url = `${this.config.baseUrl}/rest/servicedesk/1/servicedesk/${this.config.serviceDeskId}/request`;
 
     const payload = {
@@ -117,6 +127,16 @@ export class JiraAdapter implements ITSMAdapter {
    * Create Jira Core issue
    */
   private async createJiraIssue(request: ITSMTicketRequest): Promise<ITSMTicketResponse> {
+    // GATED like healthCheck() above: this method reaches the network, and the
+    // fixture/live boundary either covers every outbound path or it is not a
+    // boundary. Nothing constructs this adapter in fixture mode today; the gate
+    // makes that a property instead of a circumstance.
+    {
+      const emission = resolveEmission();
+      if (emission.mode !== "live") {
+        throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
+      }
+    }
     const url = `${this.config.baseUrl}/rest/api/3/issue`;
 
     const payload = {

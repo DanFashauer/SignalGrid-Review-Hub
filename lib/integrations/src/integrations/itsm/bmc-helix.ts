@@ -56,6 +56,16 @@ export class BMCHelixAdapter implements ITSMAdapter {
    * Create a new incident in BMC Helix ITSM
    */
   async createTicket(request: ITSMTicketRequest): Promise<ITSMTicketResponse> {
+    // GATED like healthCheck() above: this method reaches the network, and the
+    // fixture/live boundary either covers every outbound path or it is not a
+    // boundary. Nothing constructs this adapter in fixture mode today; the gate
+    // makes that a property instead of a circumstance.
+    {
+      const emission = resolveEmission();
+      if (emission.mode !== "live") {
+        throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
+      }
+    }
     await this.ensureAuthenticated();
 
     const incident = this.buildIncidentPayload(request);
@@ -148,6 +158,16 @@ export class BMCHelixAdapter implements ITSMAdapter {
    * Authenticate using OAuth client credentials
    */
   private async authenticateOAuth(): Promise<void> {
+    // GATED like healthCheck() above: this method reaches the network, and the
+    // fixture/live boundary either covers every outbound path or it is not a
+    // boundary. Nothing constructs this adapter in fixture mode today; the gate
+    // makes that a property instead of a circumstance.
+    {
+      const emission = resolveEmission();
+      if (emission.mode !== "live") {
+        throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
+      }
+    }
     const tokenUrl = this.config.auth.tokenUrl || `${this.config.instanceUrl}/api/v3/auth/oauth2/token`;
     
     const params = new URLSearchParams({

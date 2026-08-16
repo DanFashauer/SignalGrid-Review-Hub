@@ -163,20 +163,24 @@ for (const file of files) {
     const gated = GATE_TOKENS.some((t) => body.includes(t));
     if (gated) continue;
 
-    // ENFORCED SCOPE: `healthCheck()`. That is the class of defect an automated
-    // review actually found and that I verified site by site and fixed — seven of
-    // them. It is also the sharpest case: a health check LOOKS inert (returns a
-    // boolean, sends nothing) while opening a real connection, so it is the one most
-    // likely to be re-added by someone acting in good faith.
+    // ENFORCED SCOPE, widened 2026-08-16 after the audit it was waiting for:
     //
-    // NOT ENFORCED, and counted out loud instead: every other outbound class method
-    // (createTicket, lookupEndpoint, token fetches, retry helpers). Whether those are
-    // gated at the adapter or by a caller one level up is a real audit, and a real
-    // audit is not something to sweep through at speed on the back of a different
-    // finding. Failing the build on them right now would either be wrong (if callers
-    // do gate) or would push someone to bulk-silence the gate. Counting them keeps the
-    // gap visible until it is done properly.
-    if (/\bhealthCheck\s*\(/.test(lines[start])) {
+    //   · `healthCheck()` everywhere — the original class, found and fixed seven-up.
+    //   · EVERY outbound method under itsm/ and siem/ — audited: those adapters ARE
+    //     the live transport (nothing constructs them in fixture mode; no proof and
+    //     no artifact references the classes), so an ungated method there is a
+    //     boundary hole with no caller above it to close it. All seventeen are now
+    //     gated in-method, the same shape as the healthCheck fix.
+    //
+    // STILL NOT ENFORCED, counted out loud, and now with the audit's reason: the
+    // telemetry/ and passkey-assurance methods are MODE-POLYMORPHIC — the same
+    // method serves fixture transports in proofs (proof:passkey-assurance drives
+    // fetchNormalizedSet with fixtures; the live lanes drive fleetdm/mde with the
+    // boundary open), so an in-method mode!=live throw would break the fixture
+    // path it legitimately serves. Their gate belongs where the live transport is
+    // selected; until each is verified site by site, they stay visible here.
+    const enforcedDir = /\/(itsm|siem)\//.test(file);
+    if (enforcedDir || /\bhealthCheck\s*\(/.test(lines[start])) {
       findings.push({ file, line: i + 1, fn: lines[start].trim().slice(0, 72) });
     } else {
       unaudited.push(`${file}:${i + 1}  ${lines[start].trim().slice(0, 64)}`);
@@ -217,9 +221,11 @@ console.log(`  network helpers under utils/:     all named so the scan can see t
 if (unaudited.length > 0) {
   console.log(
     `\n  ⚠ ${unaudited.length} other outbound class method(s) NOT covered by this gate.\n` +
-      "    Whether each is gated by a caller one level up is an open audit, deliberately\n" +
-      "    not answered by a fast sweep attached to a different finding. Enforced scope\n" +
-      "    here is healthCheck() only — the class that was found, verified and fixed.",
+      "    These are the MODE-POLYMORPHIC methods (telemetry/, passkey-assurance): the\n" +
+      "    same method legitimately serves fixture transports in proofs, so an in-method\n" +
+      "    mode!=live throw would break the fixture path. Enforced scope is healthCheck()\n" +
+      "    everywhere plus EVERY outbound method under itsm/ and siem/ (audited 2026-08-16:\n" +
+      "    those adapters are the live transport itself, with no fixture-mode caller).",
   );
   for (const u of unaudited) console.log(`      ${u}`);
 }

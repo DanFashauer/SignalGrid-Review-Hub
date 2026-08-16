@@ -218,6 +218,8 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Demo Script for Partners](DEMO_SCRIPT_FOR_PARTNERS.md): the lab-first public-safe walkthrough — the launch console on the open-source-MDM lab path (no Microsoft tenant required), the source-agnostic swap proof, and "bring your tenant" as the enterprise chapter.
 - [Partner Onboarding](PARTNER_ONBOARDING.md): the staged evaluation path — fixture demo (zero install) → self-hosted Fleet lab (open source, no Microsoft) → the enterprise chapter (Entra/Intune behind three independent gates), plus the partner feedback loop into the intake ledger.
 - [Diligence Checklist](research/DILIGENCE_CHECKLIST.md): lists proof assets, docs to send, questions to ask, technical validation next steps, business/control terms, and guardrails.
+- [Security Questionnaire Pack](SECURITY_QUESTIONNAIRE_PACK.md): DRAFT — pre-answered assessor questions, each grounded in a file or gate in the tree, with "not built, not claimed" stated wherever it is the honest answer.
+- [Pilot Scope Skeleton](PILOT_SCOPE_SKELETON.md): DRAFT — the one-design-partner pilot document with every owner decision left as a named blank rather than an invented default.
 - [Social Media Pre-Announcement Packet](research/SOCIAL_MEDIA_PREANNOUNCEMENT_PACKET.md): packages founder-led pre-announcement/category-building copy and sequencing.
 - [LinkedIn Post Drafts](research/LINKEDIN_POST_DRAFTS.md): provides LinkedIn-ready founder, problem, shared-device, frontline, architecture, partner, proof, and soft-CTA drafts.
 - [Social Platform Message Variants](research/SOCIAL_PLATFORM_MESSAGE_VARIANTS.md): provides shorter X/Twitter-style, email, partner DM, website hero, and pinned-profile variants.

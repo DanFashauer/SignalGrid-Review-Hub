@@ -17,6 +17,15 @@ info:
     same Error schema, never an HTML page. Errors of every class share that one
     flat envelope.
 
+    IDEMPOTENCY (opt-in, POST routes under /v1): send an Idempotency-Key header
+    (any client-chosen string up to 256 chars) and a retry of the same key on
+    the same route by the same caller replays the stored first response instead
+    of executing again, marked with an Idempotency-Replay: true header. Keys
+    are caller-scoped — one tenant's key can never replay another's response.
+    Only 2xx outcomes are stored; the store is per-instance memory, so a
+    multi-instance deployment needs a shared store before this is a
+    cross-instance guarantee.
+
     VERSIONING (docs/API_VERSIONING_POLICY.md is the authority): the /v1 prefix
     is the contract. Additive change — new routes, new response fields, new
     optional inputs — may land without notice, and clients must ignore fields

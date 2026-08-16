@@ -15,6 +15,7 @@ import { core, DEMO_KEYS } from "../lib/core";
 import { decisionsTotal } from "../lib/metrics";
 import { requireTenantContext } from "../middlewares/context";
 import { v1RateLimiter } from "../middlewares/rateLimit";
+import { idempotencyReplay } from "../middlewares/idempotency";
 import { demoSurfacesEnabled } from "../lib/profile";
 import { resolveAssurancePosture } from "../lib/assurance";
 
@@ -45,8 +46,11 @@ router.get("/v1/keys", (req: Request, res: Response) => {
 });
 }
 
-// Everything below requires a tenant context and is rate-limited.
-router.use("/v1", v1RateLimiter, requireTenantContext);
+// Everything below requires a tenant context and is rate-limited. Idempotency
+// replay sits AFTER the tenant guard on purpose: the replay key is scoped by
+// the authenticated bearer, so an anonymous caller can neither seed nor read
+// the replay cache.
+router.use("/v1", v1RateLimiter, requireTenantContext, idempotencyReplay);
 
 // `assurance` is derived on every call rather than cached: a deployment that is
 // promoted, or has live integrations switched on, must not keep reporting the

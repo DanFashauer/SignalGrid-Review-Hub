@@ -1391,6 +1391,56 @@ async function run() {
     }
   }
 
+  // ── idempotency replay: the retry that must not double ───────────────────
+  // A frontline device re-sends after connectivity drops mid-response. With
+  // Idempotency-Key set, the repeat must replay the FIRST outcome — same
+  // decision id, marked as a replay — not mint a second decision. Scoping is
+  // asserted from three sides: same key + same caller replays, a different
+  // key executes fresh, and the same key under a DIFFERENT bearer executes
+  // fresh (one tenant's key must never serve another tenant's response).
+  {
+    const evalBody = { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" };
+    const post = (token, key) => fetch(`${BASE}/v1/decisions/evaluate`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${token}`,
+        ...(key ? { "idempotency-key": key } : {}),
+      },
+      body: JSON.stringify(evalBody),
+    });
+
+    const first = await post(KEYS.operator, "retry-abc");
+    const firstJson = await first.json();
+    const replay = await post(KEYS.operator, "retry-abc");
+    const replayJson = await replay.json();
+    check("idempotency: the same key replays the same decision, not a second one",
+      first.status === 200 && replay.status === 200 &&
+      typeof firstJson?.decision?.decisionId === "string" &&
+      firstJson.decision.decisionId === replayJson?.decision?.decisionId);
+    check("idempotency: a replay says it is one (Idempotency-Replay: true), a fresh execution does not",
+      first.headers.get("idempotency-replay") === null &&
+      replay.headers.get("idempotency-replay") === "true");
+
+    const otherKey = await post(KEYS.operator, "retry-def");
+    const otherKeyJson = await otherKey.json();
+    check("idempotency: a different key executes fresh",
+      otherKeyJson?.decision?.decisionId !== firstJson?.decision?.decisionId &&
+      otherKey.headers.get("idempotency-replay") === null);
+
+    const noKey = await post(KEYS.operator);
+    const noKeyJson = await noKey.json();
+    check("idempotency: no key means no replay semantics — every send executes",
+      noKeyJson?.decision?.decisionId !== firstJson?.decision?.decisionId);
+
+    const crossTenant = await post(KEYS.owner, "retry-abc");
+    const crossTenantJson = await crossTenant.json();
+    check("idempotency: the same key under a different bearer executes fresh — keys are caller-scoped",
+      crossTenant.status === 200 &&
+      crossTenantJson?.decision?.decisionId !== firstJson?.decision?.decisionId &&
+      crossTenant.headers.get("idempotency-replay") === null);
+  }
+
   // ── session lifecycle ───────────────────────────────────────────────────
   // These four routes are documented in the OpenAPI spec and registered in the
   // server, and the string "/v1/sessions" appeared ZERO times in this file: the

@@ -128,8 +128,10 @@ export const GA_ALLOWED_ROUTES: readonly { method: string; path: string }[] = [
 ];
 
 /** `/v1/decisions/:id` → /^\/v1\/decisions\/[^/]+$/ — anchored at BOTH ends so
- *  `/v1/decisions/abc/resolution` cannot ride in on a prefix match. */
-function pathMatcher(pattern: string): RegExp {
+ *  `/v1/decisions/abc/resolution` cannot ride in on a prefix match.
+ *  Exported so the deprecation middleware matches routes with THIS
+ *  implementation rather than a second one that would drift from the fence's. */
+export function pathMatcher(pattern: string): RegExp {
   const source = pattern
     .split("/")
     .map((seg) => (seg.startsWith(":") ? "[^/]+" : seg.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))

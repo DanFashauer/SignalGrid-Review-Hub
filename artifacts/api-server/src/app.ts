@@ -8,6 +8,7 @@ import { requestContext } from "./middlewares/context";
 import { demoSurfacesEnabled } from "./lib/profile";
 import { errorHandler } from "./middlewares/errors";
 import { globalRateLimiter } from "./middlewares/rateLimit";
+import { deprecationHeaders } from "./middlewares/deprecation";
 import { metricsMiddleware } from "./middlewares/metrics";
 import { renderMetrics } from "./lib/metrics";
 
@@ -78,6 +79,11 @@ app.use(metricsMiddleware);
 // header-only and does no auth, so running it for to-be-throttled requests
 // costs nothing.
 app.use(requestContext);
+// Deprecation/Sunset announcements (docs/API_VERSIONING_POLICY.md). Beside the
+// other header-only middleware, before the limiter for the same reason as
+// requestContext: a throttled caller on a deprecated route still deserves the
+// warning headers. The registry is EMPTY today and the tests assert that.
+app.use(deprecationHeaders);
 // Coarse limiter next, so unauthenticated public routes are covered; the
 // per-key /v1 limiter still applies its tighter bound downstream.
 app.use(globalRateLimiter);

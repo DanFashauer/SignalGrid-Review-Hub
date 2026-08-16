@@ -16,6 +16,16 @@ info:
     can back off on — never a 5xx. Unknown paths under /api answer 404 with the
     same Error schema, never an HTML page. Errors of every class share that one
     flat envelope.
+
+    VERSIONING (docs/API_VERSIONING_POLICY.md is the authority): the /v1 prefix
+    is the contract. Additive change — new routes, new response fields, new
+    optional inputs — may land without notice, and clients must ignore fields
+    they do not recognize. Removing or renaming anything a client could already
+    receive, changing a field's type or the error envelope, is breaking and
+    requires /v2. A route is never removed without a warning period announced
+    in machine-readable headers: Deprecation (RFC 9745, "@" + unix seconds)
+    and Sunset (RFC 8594, HTTP-date). info.version tracks this document, not
+    the contract.
 servers:
   - url: /api
     description: Base API path

@@ -1331,6 +1331,66 @@ async function run() {
     }
   }
 
+  // ── Deprecation/Sunset: the mechanism is served, the registry is empty ────
+  // docs/API_VERSIONING_POLICY.md promises machine-readable warning headers
+  // before any route is removed. Both halves of that promise are asserted:
+  // nothing is deprecated TODAY (an empty registry that nobody checks could
+  // grow an entry silently), and the mechanism actually SERVES the documented
+  // wire format when an entry exists (a policy naming headers nothing can
+  // serve is a promise with no delivery path).
+  {
+    const undeprecated = await fetch(`${BASE}/v1/context`, { headers: { authorization: `Bearer ${KEYS.operator}` } });
+    check("deprecation: no route is deprecated today — /v1/context carries no Deprecation header",
+      undeprecated.status === 200 && undeprecated.headers.get("deprecation") === null &&
+      undeprecated.headers.get("sunset") === null);
+
+    // Sixth short-lived server with a registry entry injected through the
+    // operator env lever — deprecating GET /v1/audit for this process only,
+    // nothing in source. The dates are fixed so the wire assertions are exact.
+    const PORT6 = 5315;
+    const BASE6 = `http://localhost:${PORT6}/api`;
+    const server6 = spawn("node", [serverEntry], {
+      env: {
+        ...process.env,
+        PORT: String(PORT6),
+        NODE_ENV: "production",
+        LOG_LEVEL: "silent",
+        SIGNALGRID_DEPRECATED_ROUTES: JSON.stringify([
+          { method: "GET", path: "/v1/audit", since: "2026-08-16T00:00:00Z", sunset: "2027-02-04T00:00:00Z", link: "https://example.invalid/deprecation" },
+        ]),
+      },
+      stdio: ["ignore", "ignore", "inherit"],
+    });
+    try {
+      let ready6 = false;
+      const start6 = Date.now();
+      while (Date.now() - start6 < 15000) {
+        try { if ((await fetch(`${BASE6}/healthz`)).ok) { ready6 = true; break; } } catch { /* not up yet */ }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      check("deprecation: server with an injected registry entry boots", ready6 === true);
+
+      // The deprecated route serves the documented wire formats: RFC 9745
+      // Deprecation ("@" + unix seconds) and RFC 8594 Sunset (HTTP-date).
+      // Headers arrive even on the 401 this anonymous request earns — a
+      // throttled or unauthenticated caller still deserves the warning.
+      const dep = await fetch(`${BASE6}/v1/audit`);
+      check("deprecation: the deprecated route carries Deprecation as @unix-seconds (RFC 9745)",
+        dep.headers.get("deprecation") === `@${Math.floor(Date.parse("2026-08-16T00:00:00Z") / 1000)}`);
+      check("deprecation: …and Sunset as an HTTP-date (RFC 8594)",
+        dep.headers.get("sunset") === new Date("2027-02-04T00:00:00Z").toUTCString());
+      check("deprecation: …and a Link rel=\"deprecation\" pointer",
+        (dep.headers.get("link") ?? "").includes('rel="deprecation"'));
+
+      // Scoped to the entry: the sibling route on the same server is untouched.
+      const sibling = await fetch(`${BASE6}/v1/context`);
+      check("deprecation: the injected entry deprecates ONLY its route — /v1/context stays clean",
+        sibling.headers.get("deprecation") === null && sibling.headers.get("sunset") === null);
+    } finally {
+      server6.kill("SIGTERM");
+    }
+  }
+
   // ── session lifecycle ───────────────────────────────────────────────────
   // These four routes are documented in the OpenAPI spec and registered in the
   // server, and the string "/v1/sessions" appeared ZERO times in this file: the

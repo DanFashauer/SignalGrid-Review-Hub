@@ -135,5 +135,5 @@ After any stage, we want three answers, in your words:
 File it as a GitHub issue with the **Partner feedback** template
 (`.github/ISSUE_TEMPLATE/partner-feedback.md`) so it lands in the intake
 ledger with a recorded disposition — every submission gets an answer with a
-reason, per the operating method — or send it directly to the owner if it
-should stay private.
+reason, per the operating method — or send it directly to **hello@signalgrid.app**
+if it should stay private.

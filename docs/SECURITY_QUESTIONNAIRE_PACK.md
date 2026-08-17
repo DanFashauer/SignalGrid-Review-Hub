@@ -90,3 +90,5 @@ against the repository). Answers use three statuses:
 2. `docs/LAUNCH_PROFILE.md` — what is in scope and what is deferred, with the gate that keeps it true.
 3. `docs/CI_AND_VALIDATION.md` — how to run the full validation harness themselves.
 4. This pack, so the answers and their evidence arrive together.
+
+Security questions and follow-ups go to **hello@signalgrid.app** (Dan Fashauer, Founder) — the single point of contact for assessor conversations.

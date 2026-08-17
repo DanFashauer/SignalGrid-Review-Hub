@@ -1,5 +1,7 @@
 # Executive One-Pager
 
+**Contact:** Dan Fashauer, Founder — hello@signalgrid.app · signalgrid.app
+
 SignalGrid is an operational trust orchestration layer for shared, mobile, and frontline environments. It connects identity, device posture, credential-reader events, custody, network context, workflow ownership, routing, audit evidence, and verification expectations into approval-gated trust decisions while existing enterprise systems remain systems of record.
 
 ## Who SignalGrid helps

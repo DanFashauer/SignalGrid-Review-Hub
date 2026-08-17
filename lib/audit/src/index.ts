@@ -49,7 +49,27 @@ function redactSecrets<T extends Record<string, unknown>>(meta: T): T {
   return redacted as T;
 }
 
-// Canonical JSON stringify (stable key ordering)
+// Canonical JSON stringify (stable key ordering, AT EVERY DEPTH).
+//
+// The "every depth" clause is a review finding with teeth: this function sorted
+// object keys everywhere EXCEPT inside arrays, where elements went through
+// plain JSON.stringify — insertion-order-sensitive. Postgres stores meta/actor/
+// target as JSONB, and JSONB re-orders object keys, so the first record whose
+// meta carried an object inside an array (exactly the shape redactValue
+// advertises support for) would hash one way at append and another after the
+// database round-trip: a FALSE TAMPER ALARM in verifyLedgerFull, and an export
+// refusal, in the component whose entire value is telling true alarms from
+// noise. No caller had passed that shape yet, so the fix lands before the trap
+// springs — primitives inside arrays keep their exact prior serialization
+// (JSON.stringify), so every already-possible hash is unchanged.
+function canonicalValue(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalValue).join(",")}]`;
+  if (value !== null && typeof value === "object") return canonicalize(value as Record<string, unknown>);
+  // Primitives serialize exactly as before; a bare undefined inside an array
+  // becomes null — which is also what a JSON round-trip makes of it.
+  return JSON.stringify(value) ?? "null";
+}
+
 function canonicalize(obj: Record<string, unknown>): string {
   const keys = Object.keys(obj).sort();
   const parts: string[] = [];
@@ -62,7 +82,7 @@ function canonicalize(obj: Record<string, unknown>): string {
     } else if (typeof value === "number" || typeof value === "boolean") {
       parts.push(`"${key}":${value}`);
     } else if (Array.isArray(value)) {
-      parts.push(`"${key}":[${value.map((v) => JSON.stringify(v)).join(",")}]`);
+      parts.push(`"${key}":${canonicalValue(value)}`);
     } else if (typeof value === "object") {
       parts.push(`"${key}":${canonicalize(value as Record<string, unknown>)}`);
     }

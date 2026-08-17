@@ -235,6 +235,54 @@ async function main() {
   check("export of an empty ledger is refused — nothing to export is not an export",
     emptyExport.ok === false && emptyExport.reason === "empty-ledger");
 
+  // ── 9. The JSONB round-trip: key order is storage's whim, not evidence ─────
+  // Postgres re-orders JSONB object keys, including objects INSIDE arrays. The
+  // canonicalizer used to sort keys everywhere EXCEPT inside arrays, so the
+  // first record with array-of-object meta (the exact shape the redaction
+  // section above exercises) would verify at append and read back BROKEN — a
+  // false tamper alarm in the tamper-evidence component. These pin the fix:
+  // the same records, served with every object's keys reordered the way a
+  // database might, must still verify as the SAME chain.
+  setAuditBackend(new InMemoryAuditBackend());
+  await appendAuditRecord("admin.access", { type: "admin", id: "jsonb-1" }, {
+    meta: {
+      action: "sync",
+      headers: [{ zebra: 1, alpha: 2 }, { name: "content-type", value: "application/json" }],
+      nested: [{ outer: [{ delta: 4, bravo: 3 }] }],
+    },
+  });
+  await appendAuditRecord("session.start", { type: "user", id: "jsonb-2" }, { meta: { step: 1 } });
+  const jsonbClean = await verifyLedger();
+  check("a chain carrying array-of-object meta verifies at append time", jsonbClean.ok === true && jsonbClean.count === 2);
+
+  // Simulate the JSONB read path: deep-copy every record and REVERSE the key
+  // order of every object at every depth (top level, in arrays, in nested
+  // arrays). Real JSONB uses its own order; any consistent reordering proves
+  // the same property — the hash must not depend on it.
+  const reorderKeys = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(reorderKeys);
+    if (v !== null && typeof v === "object") {
+      const out: Record<string, unknown> = {};
+      for (const k of Object.keys(v as Record<string, unknown>).reverse()) out[k] = reorderKeys((v as Record<string, unknown>)[k]);
+      return out;
+    }
+    return v;
+  };
+  const originals = await getAuditRecords();
+  const reorderedRecords = originals.map((r) => reorderKeys(JSON.parse(JSON.stringify(r)))) as typeof originals;
+  setAuditBackend({
+    appendWithChain: async () => { throw new Error("frozen ledger"); },
+    getRecords: async (limit: number, offset: number) => reorderedRecords.slice(offset, offset + limit),
+  });
+  const jsonbRoundTrip = await verifyLedger();
+  check("the SAME chain verifies after a storage-style key reorder at every depth — key order is not evidence",
+    jsonbRoundTrip.ok === true && jsonbRoundTrip.count === 2 && jsonbRoundTrip.headHash === jsonbClean.headHash);
+
+  // Non-vacuity: the reorder actually changed serialization order somewhere —
+  // otherwise the assertion above proves nothing about order-independence.
+  check("…and the reorder was real, not a no-op (raw JSON differs, hashes agree)",
+    JSON.stringify(reorderedRecords[0]) !== JSON.stringify(originals[0]));
+
   const total = passed + failures.length;
   console.log(`Audit-ledger proof: ${passed}/${total} assertions passed`);
   if (failures.length) {

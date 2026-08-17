@@ -59,6 +59,14 @@ const WINDOW = 14;
 // not a silent skip.
 const EXEMPT = new Map([]);
 
+/** Comments must not clear a gate (review finding): a body containing
+ *  "// resolveEmission is deliberately not called here" beside an ungated call
+ *  read as GATED. Tokens are matched against comment-stripped text; the "//"
+ *  strip spares protocol separators (https://...) so a URL cannot eat a real
+ *  token that follows it on the same line. */
+const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/[^\n]*/gm, "$1");
+
+
 const files = execFileSync("git", ["ls-files", ROUTE_ROOT], { cwd: repo, encoding: "utf8" })
   .split("\n")
   .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"));
@@ -101,7 +109,8 @@ for (const file of files) {
     // in the window, not order: this gate already states it proves the check
     // EXISTS, not that it is the right one or runs first — that is what the
     // 403 assertions in test/api.test.mjs are for.
-    if (/\bauthorizedContext\s*\(/.test(window) || /\bauthorize\s*\(/.test(window)) {
+    const codeWindow = stripComments(window);
+    if (/\bauthorizedContext\s*\(/.test(codeWindow) || /\bauthorize\s*\(/.test(codeWindow)) {
       authorizedReads += 1;
       continue;
     }

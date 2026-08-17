@@ -2,6 +2,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { HealthCheckResponse } from "@workspace/api-zod";
 import { getDecisionStore } from "@workspace/persistence";
 import { resolveTier, isLiveIntegrationsEnabled } from "../lib/tier";
+import { demoSurfacesEnabled } from "../lib/profile";
 
 const router: IRouter = Router();
 
@@ -33,28 +34,33 @@ router.get("/healthz", (_req, res) => {
 // ready — and the body says `durableStore: "none"` so a green readyz can never
 // be read as evidence that persistence is up.
 router.get("/readyz", async (req: Request, res: Response) => {
-  const store = getDecisionStore();
-  if (store === null) {
-    res.json({ status: "ready", durableStore: "none" });
-    return;
-  }
-  if (typeof store.ping !== "function") {
+  // Body DETAIL is profile-gated (review finding): under the review-demo
+  // profile the durableStore field and failure messages are diagnostic gold;
+  // on a gateway deployment they announce persistence topology and live DB
+  // outages to anonymous callers. The STATUS CODE — the thing an orchestrator
+  // keys on — is identical in both profiles; only the prose narrows.
+  const verbose = demoSurfacesEnabled();
+  const notReady = (message: string) => {
     res.status(503).json({
       requestId: req.requestId ?? null,
       error: "not_ready",
-      message: "A durable store is configured but offers no probe; unverifiable is not ready.",
+      message: verbose ? message : "Not ready.",
     });
+  };
+  const store = getDecisionStore();
+  if (store === null) {
+    res.json(verbose ? { status: "ready", durableStore: "none" } : { status: "ready" });
+    return;
+  }
+  if (typeof store.ping !== "function") {
+    notReady("A durable store is configured but offers no probe; unverifiable is not ready.");
     return;
   }
   try {
     await store.ping();
-    res.json({ status: "ready", durableStore: "postgres" });
+    res.json(verbose ? { status: "ready", durableStore: "postgres" } : { status: "ready" });
   } catch {
-    res.status(503).json({
-      requestId: req.requestId ?? null,
-      error: "not_ready",
-      message: "The durable store is configured but unreachable. Not taking traffic.",
-    });
+    notReady("The durable store is configured but unreachable. Not taking traffic.");
   }
 });
 

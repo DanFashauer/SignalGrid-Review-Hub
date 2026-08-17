@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
 
 /**
@@ -35,20 +36,43 @@ interface StoredResponse {
 }
 
 const MAX_ENTRIES = 10_000;
-const TTL_MS = 24 * 60 * 60 * 1000;
+// FIVE MINUTES, down from 24 hours — a review finding, and the reasoning is
+// worth keeping: this window exists for TRANSPORT retries (a response lost in
+// flight, a crash-recovering host app re-sending), which live on the scale of
+// seconds. A 24h window quietly converted retry safety into POSTURE PINNING:
+// a decision-bearing 2xx (an allow verdict, a step-up release) could be
+// replayed a working day after the posture it graded had degraded to deny —
+// defeating the freshness the decision paths are built on. Five minutes keeps
+// every legitimate retry and none of the pinning.
+const TTL_MS = 5 * 60 * 1000;
 const cache = new Map<string, StoredResponse>();
 
 function cacheKey(req: Request): string | null {
   if (req.method !== "POST") return null;
   const key = req.headers["idempotency-key"];
   if (typeof key !== "string" || key.length === 0 || key.length > 256) return null;
-  // Caller-scoped: the bearer (set by requireTenantContext upstream) is part of
-  // the key, so one tenant's key can never replay another tenant's response.
+  // Caller-scoped by the VERIFIED PRINCIPAL (tenant + subject), not the raw
+  // bearer — a review finding, and the distinction is the whole feature: under
+  // enterprise OIDC the context middleware deliberately mints a fresh opaque
+  // server credential per request, so a bearer-keyed cache could NEVER hit in
+  // exactly the production mode, silently minting the double the header
+  // comment promises cannot happen (and evicting demo-mode entries while at
+  // it). The principal is stable across a caller's requests in both auth
+  // modes; the bearer remains only as a fail-closed fallback that scopes at
+  // least as narrowly.
+  const p = req.principal as { tenantId?: string; subjectId?: string } | undefined;
+  const caller = p?.tenantId && p?.subjectId ? `${p.tenantId}\n${p.subjectId}` : `tok:${req.bearerToken}`;
   // originalUrl, not req.path — this runs under a mounted router, where
   // req.path is relative to the mount and two different absolute routes could
   // collide. (The deprecation middleware hit the mirror image of this.)
   const path = (req.originalUrl.split("?")[0] ?? "").replace(/\/+$/, "");
-  return `${req.bearerToken}\n${req.method}\n${path}\n${key}`;
+  // The BODY is part of the key (review finding): the same key with a
+  // different payload must execute fresh, never serve another request's
+  // response as a 200 the client has no way to distinguish. Keying (rather
+  // than rejecting) the mismatch keeps the middleware honest without
+  // inventing a new error class on a surface whose envelope is contractual.
+  const bodyDigest = createHash("sha256").update(JSON.stringify(req.body ?? null)).digest("hex");
+  return `${caller}\n${req.method}\n${path}\n${key}\n${bodyDigest}`;
 }
 
 export function idempotencyReplay(req: Request, res: Response, next: NextFunction): void {

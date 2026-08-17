@@ -58,6 +58,13 @@ import { fileURLToPath } from "node:url";
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SCAN_ROOT = "lib/integrations/src/integrations";
 const UTIL_ROOT = "lib/integrations/src/utils";
+/** Comments must not clear a gate (review finding): a body containing
+ *  "// resolveEmission is deliberately not called here" beside an ungated call
+ *  read as GATED. Tokens are matched against comment-stripped text; the "//"
+ *  strip spares protocol separators (https://...) so a URL cannot eat a real
+ *  token that follows it on the same line. */
+const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/[^\n]*/gm, "$1");
+
 const GATE_TOKENS = ["resolveEmission", "SIGNALGRID_LIVE_INTEGRATIONS", "resolveLive", "mode !== \"live\"", "mode === \"live\""];
 
 // Any callee whose identifier contains "fetch" — the builtin AND every wrapper around
@@ -159,7 +166,7 @@ for (const file of files) {
       if (methodDecl) { start = j; isClassMethod = true; break; }
     }
     if (start === -1 || !isClassMethod) continue;
-    const body = lines.slice(start, i + 1).join("\n");
+    const body = stripComments(lines.slice(start, i + 1).join("\n"));
     const gated = GATE_TOKENS.some((t) => body.includes(t));
     if (gated) continue;
 
@@ -173,7 +180,7 @@ for (const file of files) {
     // would re-open exactly that hole.
     if (/\bthis\.isEnabled\s*\(\)/.test(body)) {
       const impl = text.match(/isEnabled\s*\(\)\s*:\s*boolean\s*\{[\s\S]*?\n  \}/);
-      if (impl !== null && GATE_TOKENS.some((t) => impl[0].includes(t))) continue;
+      if (impl !== null && GATE_TOKENS.some((t) => stripComments(impl[0]).includes(t))) continue;
     }
 
     // ENFORCED SCOPE, widened 2026-08-16 after the audit it was waiting for:

@@ -1433,6 +1433,21 @@ async function run() {
     check("idempotency: no key means no replay semantics — every send executes",
       noKeyJson?.decision?.decisionId !== firstJson?.decision?.decisionId);
 
+    // Review finding: a key must be BOUND to its payload. The same key with a
+    // DIFFERENT body must execute fresh — replaying request A's response to
+    // request B as a 200 would hand the caller the wrong session/decision with
+    // no way to tell. (The key now includes a body digest; different payload =
+    // different cache entry, so the mismatch can never serve a stale answer.)
+    const differentBody = await fetch(`${BASE}/v1/decisions/evaluate`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${KEYS.operator}`, "idempotency-key": "retry-abc" },
+      body: JSON.stringify({ ...evalBody, identityRef: "nurse.expired-training" }),
+    });
+    const differentBodyJson = await differentBody.json();
+    check("idempotency: the same key with a DIFFERENT body executes fresh — never the wrong cached response",
+      differentBodyJson?.decision?.decisionId !== firstJson?.decision?.decisionId &&
+      differentBody.headers.get("idempotency-replay") === null);
+
     const crossTenant = await post(KEYS.owner, "retry-abc");
     const crossTenantJson = await crossTenant.json();
     check("idempotency: the same key under a different bearer executes fresh — keys are caller-scoped",

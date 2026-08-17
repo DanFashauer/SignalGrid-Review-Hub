@@ -55,6 +55,35 @@ Enforcement on a real device still additionally requires a **supervised** iPhone
 (Apple Business Manager + APNs) — see `native/ios/FLEET_MDM.md`. Fleet Premium (teams)
 is the control-plane prerequisite; a supervised device is the on-device prerequisite.
 
+## Premium trial available (owner-held, out-of-tree) — and what it does NOT change
+
+A **Fleet Premium trial** license now exists (10 devices, issued to signalgrid.app,
+expires 2026-09-16). It is a credential and lives **only** on the owner's Fleet lab
+server — it is never committed here, per `AGENTS.md`. Two secrets are involved and
+they are DIFFERENT things:
+
+| Secret | Where it lives | What it does |
+| --- | --- | --- |
+| `FLEET_LICENSE_KEY` (the JWT) | the Fleet **server** config/env | unlocks Premium (teams) on that server |
+| `FLEET_TOKEN` (an API token) | passed to `proof:live-fleet` | how the SignalGrid connector **reads** Fleet's REST API — created as an API-only user inside Fleet (`fleetctl` / UI), NOT the license |
+
+What Premium changes for SignalGrid is **evidence, not enforcement**. Teams unlock
+the team-scoped policy branch of `getPolicies()`, so the read path can be exercised
+against team-scoped policies that free Fleet cannot represent. It does **not** change
+the posture: SignalGrid supplies evidence and never actuates, so `applyDecision()`'s
+transfer/enforcement path stays refused by design. That actually makes the trial a
+STRONGER test of the boundary — on free Fleet the enforcement endpoint 422s and the
+connector fails closed because Fleet said no; under Premium the endpoint would
+SUCCEED, so a run confirms the connector still refuses to actuate because that is the
+product's choice, not because the source blocked it. Enforcement on a real device
+still additionally needs a supervised device (`native/ios/FLEET_MDM.md`); the license
+is only the control-plane half.
+
+This is a **Mac-lane** exercise (sim-request `2026-08-12-fleet-lab-real-source`): the
+Fleet server, MySQL/Redis, and the license run on the owner's machine, and
+`proof:live-fleet` runs there against it. The cloud lane and CI stay fixture-only by
+rule and cannot bring up a live Fleet.
+
 ## Validating privately (optional, out-of-tree)
 
 If you want to repeat the exercise in a PRIVATE test environment of your own,

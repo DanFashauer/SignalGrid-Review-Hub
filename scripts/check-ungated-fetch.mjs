@@ -69,8 +69,11 @@ const GATE_TOKENS = ["resolveEmission", "SIGNALGRID_LIVE_INTEGRATIONS", "resolve
 
 // Any callee whose identifier contains "fetch" — the builtin AND every wrapper around
 // it. The negative lookbehind keeps `obj.fetch(` and `this.doFetch(` in scope while
-// excluding nothing that matters; breadth is the point.
-const FETCH_CALL = /(?<![\w$])[\w$]*[Ff]etch[\w$]*\s*\(/;
+// excluding nothing that matters; breadth is the point. `new WebSocket…(` joined the
+// pattern when the Fleet live-query collector landed: a websocket connect is an
+// outbound call that never says "fetch", and an unscanned transport is exactly the
+// hole this gate exists to close.
+const FETCH_CALL = /(?<![\w$])(?:[\w$]*[Ff]etch[\w$]*|new\s+WebSocket[\w$]*)\s*\(/;
 
 /**
  * The gate's own blind-spot detector.

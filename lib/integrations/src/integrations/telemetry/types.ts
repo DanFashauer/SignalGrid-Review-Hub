@@ -58,6 +58,19 @@ export interface FleetDMQueryResult {
   error: string | null;
 }
 
+// The collected outcome of ONE live-query campaign. `partial` is load-bearing:
+// rows stream back host-by-host over Fleet's results websocket, and a collection
+// window that closes early yields SOME hosts' rows — returning those without the
+// flag would present a partial measurement as a complete one, which is the same
+// defect as reporting a measurement never taken.
+export interface FleetDMLiveQueryReport {
+  campaignId: number;
+  hostsTargeted: number;
+  hostsResponded: number;
+  results: FleetDMQueryResult[];
+  partial: boolean;
+}
+
 export interface FleetDMPostureSignal {
   hostUuid: string;
   platform: string;

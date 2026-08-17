@@ -143,20 +143,36 @@ confidence. This is the same defect class as syslog reporting `sent` for a no-op
 required at least one policy AND all of them passing. A broken read never became a
 cheerful verdict — so this was a availability bug, not a safety bug.
 
-## `runQuery` refuses instead of being repaired
+## `runQuery`: refused first, then armed properly — collector plus a three-gate stack
 
 Correcting the request body alone would have been the wrong fix. A Fleet live query
 is **asynchronous**: a successful POST returns `{ campaign: ... }` and rows stream
 back over a **websocket**. There is no results array — the old `data.results` was
 `undefined` despite its `Record<string, unknown>[]` type, so any caller reaching for
-`.length` or `.map` would have thrown.
+`.length` or `.map` would have thrown. "Fixing" the body alone would have armed the
+single most dangerous call in the package — it POSTs arbitrary osquery SQL to real
+production hosts — while still returning nothing usable. So it refused outright,
+until the collector existed.
 
-So "fixing" the body would have armed the single most dangerous call in the package
-— it POSTs arbitrary osquery SQL to real production hosts — while still returning
-nothing usable. Full blast radius, zero value. It now throws `not implemented` and
-sends nothing, the way syslog now reports `not_implemented`. Implementing the
-campaign/websocket collector is tracked as a feature in
-[BUILD_BACKLOG.md](BUILD_BACKLOG.md).
+The collector now exists (2026-08-17, verified live in the cloud-lane run below):
+`runQuery()` POSTs the correct campaign body, then collects the per-host rows over
+`/api/v1/fleet/results/websocket` (Node's built-in WebSocket client — no new
+dependency) with a bounded window; a window that closes before every targeted host
+reports returns what arrived flagged `partial: true`, never presented as complete.
+Because the blast radius did not shrink, the method sits behind **three independent
+refusals**, each pinned from its own side in `proof:live-fleet`:
+
+1. the `isEnabled()` tier-and-flag chokepoint (approval does not bypass it —
+   asserted with the approval env set and the tier at dev);
+2. `SIGNALGRID_ALLOW_LIVE_QUERY=true` — an explicit approval no read path needs,
+   so enabling live *reads* never arms live *queries* (asserted: prod tier + flag
+   + no approval → refuses naming the env);
+3. an explicit, non-empty host list — a fleet-wide broadcast is refused, never
+   implied by an omitted argument.
+
+The ungated-fetch gate was widened in the same change: `new WebSocket…(` now counts
+as an outbound call site (`scripts/check-ungated-fetch.mjs`), verified by mutation —
+removing the collector's chokepoint guard turns the gate red.
 
 ## Reproducing it (amd64 under emulation — no Go toolchain needed)
 
@@ -230,3 +246,11 @@ policies, which means:
 All lab credentials in that run (admin password, MySQL passwords, the
 self-signed key, API tokens, enroll secret) are ephemeral in-container values,
 discarded with the container and never committed.
+
+Re-run note, learned the honest way: with a LIVE agent answering policies every
+cycle, the fail-closed assertions ("an unreported policy is graded `unknown`")
+need at least one not-yet-answered policy to exist at proof time. Add a fresh
+global policy immediately before each `proof:live-fleet` run; within one policy
+cycle the agent will answer it and a re-run will need another. A lab where every
+policy is answered is not a failing lab — it is one whose unknown-state evidence
+has expired.

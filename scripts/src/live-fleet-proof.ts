@@ -200,12 +200,13 @@ async function main(): Promise<void> {
   const ghost = await fleet.getPostureForHost("00000000-0000-0000-0000-000000000000");
   check("an unknown host returns null rather than an empty-but-compliant posture", ghost === null);
 
-  // ── 9. runQuery: why it refuses instead of being "fixed" ──────────────────
+  // ── 9. runQuery: the campaign collector and its three-gate stack ──────────
   // This is the one method that POSTs arbitrary osquery SQL to real production
-  // hosts, so the standard of evidence for arming it is high — and the live
-  // server says it cannot be met. Both facts are measured at the wire, then the
-  // adapter's refusal is asserted through the adapter itself, so reverting the
-  // refusal fails this proof rather than quietly passing.
+  // hosts, so the standard of evidence for arming it is high. The wire facts
+  // that killed the old implementation are still measured first (the old body
+  // is still 400; the accepted body still answers with a campaign, not rows),
+  // then the gates are asserted one at a time, then a real campaign is
+  // collected over the websocket from the live agent.
   const oldBody = await raw("/api/v1/fleet/queries/run", {
     method: "POST",
     body: JSON.stringify({ query: "SELECT 1;", host_ids: [target.id] }),
@@ -225,17 +226,61 @@ async function main(): Promise<void> {
     "campaign" in acceptedJson && acceptedJson.results === undefined,
     `keys=${Object.keys(acceptedJson).join(",")}`);
 
-  let liveQueryThrew = false;
-  let liveQueryMsg = "";
+  // The collector exists now, so what is pinned is the GATE STACK around it —
+  // three independent refusals, each asserted from the side that must hold —
+  // and then, with every gate deliberately opened, a REAL collection from the
+  // live enrolled osqueryd. Each refusal is checked with the OTHER gates open,
+  // so a pass proves that gate alone did the refusing.
+  delete process.env.SIGNALGRID_ALLOW_LIVE_QUERY;
+  let noApprovalMsg = "";
   try {
     await fleet.runQuery("SELECT 1;", [target.id]);
   } catch (e) {
-    liveQueryThrew = true;
-    liveQueryMsg = e instanceof Error ? e.message : String(e);
+    noApprovalMsg = e instanceof Error ? e.message : String(e);
   }
-  check("runQuery refuses in a LIVE tier rather than shipping SQL it cannot collect", liveQueryThrew);
-  check("…and the refusal explains itself (not implemented, websocket campaign)",
-    /not implemented/i.test(liveQueryMsg) && /websocket/i.test(liveQueryMsg), liveQueryMsg.slice(0, 80));
+  check("live tier + flag alone do NOT arm runQuery: it refuses without the explicit approval env",
+    /SIGNALGRID_ALLOW_LIVE_QUERY/.test(noApprovalMsg), noApprovalMsg.slice(0, 80));
+
+  process.env.SIGNALGRID_ALLOW_LIVE_QUERY = "true";
+  process.env.SIGNALGRID_TIER = "dev";
+  let devApprovedMsg = "";
+  try {
+    await fleet.runQuery("SELECT 1;", [target.id]);
+  } catch (e) {
+    devApprovedMsg = e instanceof Error ? e.message : String(e);
+  }
+  check("…and approval does NOT bypass the tier chokepoint: dev tier still refuses with approval set",
+    /not enabled/i.test(devApprovedMsg), devApprovedMsg.slice(0, 80));
+  process.env.SIGNALGRID_TIER = "prod";
+
+  let noHostsMsg = "";
+  try {
+    await fleet.runQuery("SELECT 1;", []);
+  } catch (e) {
+    noHostsMsg = e instanceof Error ? e.message : String(e);
+  }
+  check("an empty host list is refused — a fleet-wide broadcast is never implied",
+    /no target hosts/i.test(noHostsMsg), noHostsMsg.slice(0, 80));
+
+  // Every gate open, one named host: rows must come back over the websocket
+  // from the real agent, attributed to that host, with partial=false. The
+  // window is generous because the agent polls distributed queries on its own
+  // interval — the collection is asynchronous end to end.
+  const report = await fleet.runQuery("SELECT version FROM osquery_info;", [target.id], { timeoutMs: 45000 });
+  check("the campaign is collected: a real campaign id and the targeted host responded",
+    typeof report.campaignId === "number" && report.hostsTargeted === 1 && report.hostsResponded === 1,
+    `campaign=${report.campaignId} responded=${report.hostsResponded}/${report.hostsTargeted}`);
+  check("…the rows are REAL agent output (osquery_info.version is a non-empty string)",
+    report.results.length > 0 &&
+      report.results[0].rows.length > 0 &&
+      typeof report.results[0].rows[0].version === "string" &&
+      (report.results[0].rows[0].version as string).length > 0,
+    `rows=${JSON.stringify(report.results[0]?.rows ?? []).slice(0, 80)}`);
+  check("…attributed to the host that ran them, with no per-host error",
+    report.results[0].host_id === target.id && report.results[0].error === null,
+    `host_id=${report.results[0]?.host_id} error=${String(report.results[0]?.error)}`);
+  check("…and a fully-answered window is NOT flagged partial", report.partial === false);
+  delete process.env.SIGNALGRID_ALLOW_LIVE_QUERY;
 
   // ── 10. The operator flag is still a real off switch ──────────────────────
   await setFleetDMConfig({ enabled: false, baseUrl: FLEET_BASE, apiToken: TOKEN, syncIntervalMs: 300000 });
@@ -250,7 +295,7 @@ async function main(): Promise<void> {
     for (const f of failures) console.error(`  - ${f}`);
     process.exit(1);
   }
-  console.log("telemetry/fleetdm verified against a live Fleet 4.89.2: routes corrected, unanswered policies fail closed.");
+  console.log("telemetry/fleetdm verified against a live Fleet: routes corrected, unanswered policies fail closed, live-query campaign collected over websocket behind its three-gate stack.");
 }
 
 main().catch((err) => {

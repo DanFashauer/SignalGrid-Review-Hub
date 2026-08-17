@@ -379,15 +379,25 @@ already has a fixture proof; these add a real vendor behind it._
       Note the image is amd64-only; Docker Desktop emulates it on Apple Silicon, so
       the earlier from-source arm64 build is no longer needed.
 
-- [ ] **Fleet live-query results (websocket campaign collector).** `runQuery()` now
-      THROWS `not implemented` and sends nothing. Fixing its request body alone would
-      have armed the most dangerous call in the package — arbitrary osquery SQL to
-      real production hosts — while still returning nothing usable, because a Fleet
-      live query is asynchronous: the POST returns `{campaign}` and rows stream over a
-      websocket, so the old `data.results` was always `undefined` despite its array
-      type. Doing this properly means a websocket client plus a result-collection
-      policy (timeout, partial results, per-host errors) — and, given the blast
-      radius, an explicit approval gate rather than only the tier gate.
+- [x] **Fleet live-query results (websocket campaign collector). BUILT** — and verified
+      against a REAL Fleet with a real enrolled `osqueryd`, in the cloud lane's own
+      container (see `docs/FLEET_LIVE_INTEGRATION.md`, "Cloud-lane run, 2026-08-17").
+      `runQuery()` POSTs the correct campaign body and collects per-host rows over
+      `/api/v1/fleet/results/websocket` using Node's built-in WebSocket client (no new
+      dependency, no lockfile change), with the result-collection policy this row asked
+      for: bounded window (`opts.timeoutMs`, default 15s), per-host errors carried, and
+      an early close returning what arrived flagged `partial: true` — a partial
+      measurement reported as partial, never as the whole. The approval gate this row
+      required exists and is its own refusal, not a synonym for the tier gate:
+      `SIGNALGRID_ALLOW_LIVE_QUERY=true` is demanded IN ADDITION to the `isEnabled()`
+      chokepoint and an explicit non-empty host list (a fleet-wide broadcast is refused,
+      never implied). `proof:live-fleet` pins each gate from its own side — approval
+      absent in a fully live tier refuses; approval present in dev tier still refuses;
+      empty host list refuses — and then collects a real campaign end-to-end (rows from
+      the live agent's `osquery_info`, attributed to the right host, `partial: false`).
+      `scripts/check-ungated-fetch.mjs` was widened in the same change so `new
+      WebSocket…(` counts as an outbound call site, mutation-tested by removing the
+      collector's guard and watching the gate go red.
 - [x] **Traccar → location-services.** DONE — `proof:live-location` (22 assertions)
       against a real Traccar 6.14.5, positions ingested over its genuine OsmAnd
       protocol. This connector has no hardcoded paths, so the lane found something

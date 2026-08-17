@@ -280,6 +280,15 @@ async function main(): Promise<void> {
     report.results[0].host_id === target.id && report.results[0].error === null,
     `host_id=${report.results[0]?.host_id} error=${String(report.results[0]?.error)}`);
   check("…and a fully-answered window is NOT flagged partial", report.partial === false);
+
+  // The partial flag is asserted from ITS side too: a window too short for any
+  // agent to answer must come back partial with zero hosts responded and zero
+  // invented rows — truncation reported as truncation, never as an empty-but-
+  // complete answer.
+  const truncated = await fleet.runQuery("SELECT version FROM osquery_info;", [target.id], { timeoutMs: 1 });
+  check("a window that closes early is flagged partial, with nothing invented",
+    truncated.partial === true && truncated.hostsResponded === 0 && truncated.results.length === 0,
+    `partial=${truncated.partial} responded=${truncated.hostsResponded} results=${truncated.results.length}`);
   delete process.env.SIGNALGRID_ALLOW_LIVE_QUERY;
 
   // ── 10. The operator flag is still a real off switch ──────────────────────

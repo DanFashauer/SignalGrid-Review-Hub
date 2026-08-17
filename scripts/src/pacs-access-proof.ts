@@ -156,6 +156,23 @@ check("a garbled technology value normalizes to unknown, never a fabricated clas
 const deniedBelow = evaluatePacsAccess(normalizeReport("est", { ...cleanRaw, accessResult: "denied", credentialTechnology: "static_identifier" } as PacsAccessReportRaw), { minimumCredentialTechnology: "cryptographic" });
 check("worst-concern-wins: a denial still escalates past a below-floor read (the axis never dilutes a stronger negative)", deniedBelow.recommendedAction === "escalate" && deniedBelow.reasonCode === "ACCESS_DENIED" && deniedBelow.credentialAssurance === "below_floor");
 
+// ── the mimic is byte-identical, and the model says so (owner-directed, 2026-08-16) ──
+// "Systems that can mimic a tap or badge scan": a skimmed 125 kHz identifier
+// replayed by a cloning tool produces THE SAME BYTES as the legitimate card. At
+// static_identifier grade no system can tell them apart, and pretending
+// otherwise would be the unearned affirmative wearing a security feature's
+// name. So the honesty is pinned BOTH ways: the clone grades exactly like the
+// legitimate read under every pose (nothing here claims detection), and no
+// verdict field even offers a clone judgement to overclaim with. The defenses
+// are the ones asserted elsewhere in this file: the posed credential floor
+// (above), event freshness (replay-in-time), and anti-passback (tailgating).
+const clonedRead = normalizeReport("est", JSON.parse(JSON.stringify({ ...cleanRaw, credentialTechnology: "static_identifier" })) as PacsAccessReportRaw);
+check("a mimicked tap (byte-identical replay) grades EXACTLY like the legitimate static read — the model never claims clone detection",
+  JSON.stringify(evaluatePacsAccess(clonedRead, { minimumCredentialTechnology: "cryptographic" })) === JSON.stringify(belowFloor) &&
+  JSON.stringify(evaluatePacsAccess(clonedRead)) === JSON.stringify(unposed));
+check("…and no verdict field offers a clone/mimic/spoof judgement to overclaim with",
+  Object.keys(belowFloor).every((k) => !/clone|mimic|spoof|counterfeit/i.test(k)));
+
 const uncoveredPosed = evaluatePacsAccess(normalizeReport("ghost", {} as PacsAccessReportRaw), { covered: false, minimumCredentialTechnology: "cryptographic" });
 check("an uncovered entry with a posed floor answers the axis honestly: assurance unknown, still NOT_COVERED", uncoveredPosed.reasonCode === "NOT_COVERED" && uncoveredPosed.credentialAssurance === "unknown");
 

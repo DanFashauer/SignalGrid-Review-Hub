@@ -79,10 +79,12 @@ product's choice, not because the source blocked it. Enforcement on a real devic
 still additionally needs a supervised device (`native/ios/FLEET_MDM.md`); the license
 is only the control-plane half.
 
-This is a **Mac-lane** exercise (sim-request `2026-08-12-fleet-lab-real-source`): the
-Fleet server, MySQL/Redis, and the license run on the owner's machine, and
-`proof:live-fleet` runs there against it. The cloud lane and CI stay fixture-only by
-rule and cannot bring up a live Fleet.
+The **license half** of this is a Mac-lane exercise (sim-request
+`2026-08-12-fleet-lab-real-source`): the Premium license is a credential the owner
+holds, so the Premium-enabled Fleet server runs on the owner's machine and
+`proof:live-fleet` runs there against it. The free-Fleet half is NOT Mac-only —
+the cloud lane's container can run Docker and has brought up a full live Fleet
+(see the cloud-lane run below). **CI stays fixture-only by rule** either way.
 
 ## Validating privately (optional, out-of-tree)
 
@@ -112,7 +114,8 @@ separately, and only one of them was ever pointed at a real server.
 
 `proof:live-fleet` is a committed, opt-in live proof (the `proof:live-edr` pattern:
 it REFUSES without `FLEET_URL`/`FLEET_TOKEN` and the macOS harness skips it BY NAME,
-never silently). 30 assertions, all green after the fixes below.
+never silently). All assertions green after the fixes below — the proof's own
+printed summary is the count of record; this document does not pin a total.
 
 ## What a real Fleet 4.89.2 said
 
@@ -192,10 +195,38 @@ TLS is off here deliberately: this is a disposable local server on the loopback
 interface holding no real data. Point the same proof at a Fleet holding anything real
 only over TLS, with `NODE_EXTRA_CA_CERTS` as in the section above.
 
-Two limits this lane cannot cross, stated so they are not mistaken for coverage:
-**teams are Fleet Premium** (so the team-policy branch of `getPolicies()` is
-UNVERIFIED and was deliberately left untouched — changing an unverified path because
-its sibling was wrong is a guess wearing a fix's clothes), and the enrolled host has
-no live `osqueryd`, so every policy comes back `unknown` rather than `pass`/`fail`.
-That absence is what proves the fail-closed path, but it does mean a genuine `pass`
-has not been observed end-to-end.
+One limit remains, stated so it is not mistaken for coverage: **teams are Fleet
+Premium**, so the team-policy branch of `getPolicies()` is UNVERIFIED and was
+deliberately left untouched — changing an unverified path because its sibling was
+wrong is a guess wearing a fix's clothes. Verifying it needs the owner's
+Premium-licensed lab (the Mac-lane exercise above).
+
+## Cloud-lane run, 2026-08-17: real `osqueryd`, TLS, and the first genuine `pass`
+
+The protocol-only limitation above ("the enrolled host has no live `osqueryd`,
+so every policy comes back `unknown`") is now CLOSED. The cloud lane brought up
+the full stack in its own container — `mysql:8.0` + `redis:7` +
+`fleetdm/fleet:latest` behind TLS (self-signed lab cert, trusted explicitly via
+`NODE_EXTRA_CA_CERTS`, verification never disabled) — and enrolled a **real
+`osqueryd` container** (`osquery/osquery:latest`) over the genuine TLS
+enroll/config/logger/distributed protocol. With
+`FLEET_OSQUERY_POLICY_UPDATE_INTERVAL=30s` the live agent actually ANSWERED its
+policies, which means:
+
+- `proof:live-fleet` passed **every assertion** against a real server with a real
+  enrolled host — both the fail-closed half (a freshly added, not-yet-answered
+  policy still grades `unknown` and holds the host non-compliant) and, for the
+  first time anywhere, the **affirmative half**: an all-passing live host graded
+  `compliant: true` through `getPostureForHost()` and mapped to `compliant` by
+  the bridge. Until this run that path had only ever been exercised by fixtures.
+- One assertion was strengthened by what the container taught us: a
+  containerized/virtual host legitimately reports an **empty** hardware serial,
+  so "serial is non-empty" was the wrong claim — it also never actually checked
+  sourcing (any non-empty string passed). The assertion now pins
+  `rawSignals.serial_number` EQUAL to the raw wire envelope's `hardware_serial`,
+  which proves the mapping on bare metal and in a lab container alike, and still
+  fails on the original `host.serial_number` → `undefined` bug.
+
+All lab credentials in that run (admin password, MySQL passwords, the
+self-signed key, API tokens, enroll secret) are ephemeral in-container values,
+discarded with the container and never committed.

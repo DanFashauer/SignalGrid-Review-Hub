@@ -176,9 +176,20 @@ async function main(): Promise<void> {
   check("a posture signal is produced from live data", posture !== null);
   check("the host is NOT compliant when its policies are unanswered (fail closed)", posture?.compliant === false);
   check("the platform comes from the live host", posture?.platform === host?.platform, `posture=${posture?.platform}`);
+  // Anchored to Fleet's WIRE value (the raw /hosts/{id} envelope fetched above),
+  // not to the adapter's own host object — comparing the adapter to itself would
+  // pass even if both mapped the wrong field. Equality with the wire value plus
+  // the string type-check is what proves sourcing: the old `host.serial_number`
+  // bug yielded undefined, which fails the type-check. Non-emptiness is NOT
+  // required, because a containerized/virtual lab host legitimately reports an
+  // empty hardware serial — an empty string that MATCHES the wire is honest;
+  // a non-empty string that doesn't match it would be the actual bug.
+  const wireSerial = (byIdJson.host as Record<string, unknown>).hardware_serial;
   check("rawSignals.serial_number is sourced from Fleet's real hardware_serial",
-    typeof posture?.rawSignals?.serial_number === "string" && (posture.rawSignals.serial_number as string).length > 0,
-    `serial=${String(posture?.rawSignals?.serial_number)}`);
+    typeof wireSerial === "string" &&
+      typeof posture?.rawSignals?.serial_number === "string" &&
+      posture.rawSignals.serial_number === wireSerial,
+    `serial=${String(posture?.rawSignals?.serial_number)} wire=${String(wireSerial)}`);
 
   // ── 7. The bridge that consumes it ────────────────────────────────────────
   const drafts = fleetDMToPostureDrafts(posture!);

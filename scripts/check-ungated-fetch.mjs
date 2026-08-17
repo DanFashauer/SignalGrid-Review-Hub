@@ -183,6 +183,23 @@ for (const file of files) {
       if (impl !== null && GATE_TOKENS.some((t) => stripComments(impl[0]).includes(t))) continue;
     }
 
+    // THE TRANSPORT-INJECTION PATTERN, verified rather than trusted — the last
+    // survivor of the 2026-08-16 audit becomes gate-checked. passkey-assurance's
+    // connector reaches the network ONLY through a constructor-injected
+    // `this.transport`, and the sole site that constructs it live is the
+    // family's index.ts resolver, behind the full three-condition gate. So: a
+    // flagged method in a file whose class takes an injected transport counts
+    // as gated ONLY IF that family's own index.ts carries a gate token in
+    // comment-stripped source — the resolver IS the gate, and if someone strips
+    // the gate from the resolver, every method here goes red at once.
+    if (/private readonly transport/.test(text)) {
+      const idx = resolve(repoRoot, file, "..", "index.mjs").replace(/index\.mjs$/, "index.ts");
+      try {
+        const resolver = stripComments(readFileSync(idx, "utf8"));
+        if (GATE_TOKENS.some((t) => resolver.includes(t))) continue;
+      } catch { /* no index.ts — fall through to the report */ }
+    }
+
     // ENFORCED SCOPE, widened 2026-08-16 after the audit it was waiting for:
     //
     //   · `healthCheck()` everywhere — the original class, found and fixed seven-up.
@@ -200,7 +217,7 @@ for (const file of files) {
     // boundary open), so an in-method mode!=live throw would break the fixture
     // path it legitimately serves. Their gate belongs where the live transport is
     // selected; until each is verified site by site, they stay visible here.
-    const enforcedDir = /\/(itsm|siem|telemetry)\//.test(file);
+    const enforcedDir = /\/(itsm|siem|telemetry|passkey-assurance)\//.test(file);
     if (enforcedDir || /\bhealthCheck\s*\(/.test(lines[start])) {
       findings.push({ file, line: i + 1, fn: lines[start].trim().slice(0, 72) });
     } else {
@@ -242,15 +259,14 @@ console.log(`  network helpers under utils/:     all named so the scan can see t
 if (unaudited.length > 0) {
   console.log(
     `\n  ⚠ ${unaudited.length} other outbound class method(s) NOT covered by this gate.\n` +
-      "    Audited 2026-08-16, one survivor: passkey-assurance fetchNormalizedSet is\n" +
-      "    TRANSPORT-POLYMORPHIC — its live/fixture split is decided by the resolver in\n" +
-      "    its index.ts (fixture unless tier + SIGNALGRID_LIVE_INTEGRATIONS + credential),\n" +
-      "    which this per-function scan cannot follow across files. Verified by reading;\n" +
-      "    kept visible here because verified-by-reading is not verified-by-gate.\n" +
-      "    Everything else is enforced: healthCheck() everywhere, and every outbound\n" +
-      "    method under itsm/, siem/ and telemetry/ — where the isEnabled() chokepoint\n" +
-      "    counts only if its own implementation carries a gate token (the lookalike\n" +
-      "    that checks config.enabled alone FAILS the build, tested by mutation).",
+      "    The 2026-08-16 audit closed every prior member of this list; anything printed\n" +
+      "    here is NEW since then and needs the same treatment. The clearing rules the\n" +
+      "    gate now verifies: an in-method gate token; an isEnabled() chokepoint whose\n" +
+      "    OWN implementation carries a token (a config.enabled lookalike fails); or a\n" +
+      "    constructor-injected transport whose family index.ts resolver carries the\n" +
+      "    token (strip the resolver's gate and every method in the family goes red).\n" +
+      "    Enforced dirs (a finding FAILS the build): itsm/, siem/, telemetry/,\n" +
+      "    passkey-assurance/, plus healthCheck() everywhere.",
   );
   for (const u of unaudited) console.log(`      ${u}`);
 }

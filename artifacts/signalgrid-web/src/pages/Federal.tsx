@@ -7,7 +7,7 @@ import Footer from "@/components/layout/Footer";
 // framework in its decision model, not certifications held or product
 // availability. Everything here is modeled on public-safe fixtures.
 const COMPLIANCE_STATUS = [
-  { framework: "DISA STIG", status: "available", detail: "STIG-oriented base image · SCAP/XCCDF benchmark mapping · CAT I/II/III decision mapping", badge: "SIGNAL MAPPING" },
+  { framework: "DISA STIG", status: "in-progress", detail: "STIG-oriented base image · SCAP/XCCDF benchmark mapping · CAT I/II/III decision mapping", badge: "SIGNAL MAPPING" },
   { framework: "DoD IL2 – IL5", status: "in-progress", detail: "Air-gap-oriented architecture · no external data transmission by design · offline license model", badge: "DESIGN TARGET" },
   { framework: "CMMC 2.0 Level 3", status: "in-progress", detail: "NIST SP 800-171 controls mapped into the policy model across the practice domains", badge: "CONTROL MAPPING" },
   { framework: "FedRAMP Moderate", status: "planned", detail: "Authorization is a roadmap target that would require a separate, formal process — not claimed today", badge: "ROADMAP" },
@@ -24,9 +24,9 @@ const STATUS_META: Record<string, { color: string; icon: React.ComponentType<{cl
 };
 
 const VEHICLES = [
-  { name: "GSA Schedule 70", desc: "IT Products and Services · In progress", status: "in-progress" },
-  { name: "SEWP V", desc: "NASA SEWP · On-ramping", status: "in-progress" },
-  { name: "CIO-SP3", desc: "NIH GWAC · Evaluation underway", status: "planned" },
+  { name: "GSA Schedule 70", desc: "IT Products and Services · Not pursued yet — under consideration", status: "planned" },
+  { name: "SEWP V", desc: "NASA SEWP · Not pursued yet — under consideration", status: "planned" },
+  { name: "CIO-SP3", desc: "NIH GWAC · Not pursued yet — under consideration", status: "planned" },
   { name: "Direct Contract", desc: "Exploring direct-contract paths for design-partner engagements", status: "planned" },
 ];
 
@@ -36,8 +36,8 @@ const DEPLOYMENT_FEATURES = [
   "DISA STIG-oriented Ubuntu or RHEL base image",
   "SCAP 1.3 / XCCDF / OVAL benchmark mapping",
   "FIPS 140-2-oriented cryptographic module design",
-  "Air-gap software update via signed bundle transfer",
-  "Immutable audit log with WORM-style storage option",
+  "Air-gap software update via signed bundle transfer (design intent)",
+  "Tamper-evident hash-chained audit ledger with an independent paginating verifier and signed export",
   "CAC / PIV credential support (candidate PACS signal category)",
   "Design path for ATO support packages",
   "Classified-network (SIPRNet / JWICS) architecture design",
@@ -70,7 +70,7 @@ export default function Federal() {
                 ))}
               </div>
               <div className="flex gap-3">
-                <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub" target="_blank" rel="noopener noreferrer" className="px-5 py-2.5 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors">Request a conversation</a>
+                <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/blob/main/docs/PARTNER_ONBOARDING.md" target="_blank" rel="noopener noreferrer" className="px-5 py-2.5 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors">Start with the fixture demo — zero install, zero accounts</a>
                 <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/tree/main/docs" target="_blank" rel="noopener noreferrer" className="px-5 py-2.5 border border-border rounded-md text-sm font-medium hover:border-primary/50 transition-colors">Read the approach</a>
               </div>
             </div>
@@ -131,11 +131,11 @@ export default function Federal() {
                 <div className="bg-card border border-border rounded-xl p-6 font-mono text-xs space-y-3">
                   <div className="text-muted-foreground uppercase tracking-wide mb-4">Deployment Architecture</div>
                   {[
-                    { label: "Network Boundary", value: "Air-gap / JWICS / SIPRNet", color: "text-green-400" },
-                    { label: "Data Sovereignty", value: "100% on-premise", color: "text-green-400" },
-                    { label: "License Validation", value: "Offline · Signed bundle", color: "text-green-400" },
-                    { label: "Update Path", value: "Signed air-gap transfer", color: "text-green-400" },
-                    { label: "Audit Storage", value: "WORM-style on-site", color: "text-green-400" },
+                    { label: "Network Boundary", value: "Air-gap / JWICS / SIPRNet (design)", color: "text-primary" },
+                    { label: "Data Sovereignty", value: "On-premise (design intent)", color: "text-primary" },
+                    { label: "License Validation", value: "Offline · Signed bundle (design intent)", color: "text-primary" },
+                    { label: "Update Path", value: "Signed air-gap transfer (design intent)", color: "text-primary" },
+                    { label: "Audit Storage", value: "Hash-chained ledger · verified + signed export", color: "text-green-400" },
                     { label: "Crypto Module", value: "FIPS 140-2-oriented", color: "text-primary" },
                     { label: "OS Baseline", value: "DISA STIG-oriented", color: "text-primary" },
                     { label: "Container", value: "Podman rootless", color: "text-primary" },
@@ -156,7 +156,7 @@ export default function Federal() {
         <section className="py-20 bg-zinc-950">
           <div className="container mx-auto px-4 md:px-8 max-w-screen-xl">
             <h2 className="text-2xl font-bold tracking-tight mb-3">Contracting Vehicles</h2>
-            <p className="text-muted-foreground mb-8">For procurement officers — current and planned acquisition paths.</p>
+            <p className="text-muted-foreground mb-8">No contract vehicle is held or in progress today — these are the paths under consideration.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {VEHICLES.map(v => {
                 const meta = STATUS_META[v.status];
@@ -175,10 +175,10 @@ export default function Federal() {
             <div className="mt-8 p-6 bg-card border border-border rounded-xl">
               <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
                 <div className="flex-1">
-                  <div className="text-sm font-semibold mb-1">Need a CAGE Code or DUNS?</div>
-                  <div className="text-sm text-muted-foreground">Contact our Federal team for SAM.gov registration details, sole-source justification support, and IDIQ on-ramp information.</div>
+                  <div className="text-sm font-semibold mb-1">Procurement questions?</div>
+                  <div className="text-sm text-muted-foreground">There is no federal contracting entity today. If the design is interesting for your mission, reach out via the repository to discuss it.</div>
                 </div>
-                <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub" target="_blank" rel="noopener noreferrer" className="px-5 py-2.5 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors shrink-0">Contact Federal Team</a>
+                <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub" target="_blank" rel="noopener noreferrer" className="px-5 py-2.5 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors shrink-0">Discuss via the repo</a>
               </div>
             </div>
           </div>

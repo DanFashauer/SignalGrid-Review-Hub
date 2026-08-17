@@ -15,14 +15,14 @@ const PILLARS = [
   { name: "Identity", body: "Tie access decisions to real users and roles." },
   { name: "Trust", body: "Evaluate device and session trust continuously, not by assumption." },
   { name: "Context", body: "Include posture, location, and operational state in decisions." },
-  { name: "Enforcement", body: "Trigger deterministic actions across integrated systems." },
+  { name: "Outcome", body: "Produce a deterministic allow / step-up / restrict / deny with evidence attached; approved actions are routed to the systems of record, never executed by SignalGrid." },
   { name: "Governance", body: "Keep decisions auditable, explainable, and reviewable." },
 ];
 
 const IS = [
   "A trust-orchestration layer for access decisions on shared and mobile devices.",
   "A session decision platform combining identity, device posture, and context.",
-  "An enforcement and governance orchestrator for connected systems (NAC, SIEM, ITSM).",
+  "An evidence and governance layer for connected systems (NAC, SIEM, ITSM) — each remains the system of record.",
 ];
 const IS_NOT = [
   "A replacement for your identity provider.",
@@ -136,8 +136,7 @@ export default function About() {
               <p className="text-muted-foreground leading-relaxed mb-6">
                 Founder and builder of SignalGrid — bringing runtime trust decisioning to shared and
                 mobile frontline environments, where authentication alone doesn&apos;t guarantee a
-                session is safe to start. (Bio to expand — this section is a placeholder for your
-                own words.)
+                session is safe to start.
               </p>
               <div className="flex gap-3">
                 <a

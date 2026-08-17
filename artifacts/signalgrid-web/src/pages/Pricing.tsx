@@ -8,22 +8,20 @@ const TIERS = [
     name: "Starter",
     price: "$8",
     unit: "per device / month",
-    desc: "For teams piloting Zero Trust on shared devices. Up to 250 managed devices.",
+    desc: "For teams piloting Zero Trust on shared devices.",
     highlight: false,
     cta: "Request a walkthrough",
     features: [
-      { text: "Up to 250 managed devices", ok: true },
-      { text: "5 evaluated-today signal dimensions", ok: true },
+      { text: "Device counts indicative — the measured constraint is the per-key rate limit (240 requests/minute default, operator-tunable)", ok: true },
+      { text: "6 evaluated-today signal dimensions", ok: true },
       { text: "Decision engine + policy editor", ok: true },
       { text: "Operator dashboard", ok: true },
       { text: "Mobile PWA (worker + operator)", ok: true },
-      { text: "7-day audit log retention", ok: true },
-      { text: "Email support", ok: true },
+      { text: "Tamper-evident audit ledger — hash-chained, independently verifiable (retention: owner decision pending)", ok: true },
       { text: "Shift Handoff Intelligence", ok: false },
       { text: "Compliance reporting export", ok: false },
       { text: "Custom alert routing", ok: false },
       { text: "Air-gap / on-premise deploy", ok: false },
-      { text: "Availability targets", ok: false },
     ],
   },
   {
@@ -34,18 +32,16 @@ const TIERS = [
     highlight: true,
     cta: "Request a walkthrough",
     features: [
-      { text: "Unlimited managed devices", ok: true },
+      { text: "Device counts indicative — the measured constraint is the per-key rate limit (240 requests/minute default, operator-tunable)", ok: true },
       { text: "16 candidate source categories", ok: true },
       { text: "Decision engine + policy editor", ok: true },
       { text: "Operator dashboard + Desktop client", ok: true },
       { text: "Mobile PWA (operator + access-support triage)", ok: true },
-      { text: "1-year immutable audit log", ok: true },
-      { text: "Priority support (design target)", ok: true },
+      { text: "Tamper-evident audit ledger — hash-chained, independently verifiable (retention: owner decision pending)", ok: true },
       { text: "Shift Handoff Intelligence", ok: true },
       { text: "Compliance reporting export", ok: true },
       { text: "Ownership-aware alert routing", ok: true },
       { text: "Cloud or self-hosted VPC", ok: true },
-      { text: "High-availability design target", ok: true },
     ],
   },
   {
@@ -56,7 +52,6 @@ const TIERS = [
     highlight: false,
     cta: "Request a conversation",
     features: [
-      { text: "Unlimited managed devices", ok: true },
       { text: "Air-gap-oriented deployment", ok: true },
       { text: "DISA STIG-oriented base image", ok: true },
       { text: "FedRAMP-path (roadmap)", ok: true },
@@ -79,11 +74,11 @@ const FAQ = [
   },
   {
     q: "Is the badge reader case included in the price?",
-    a: "Hardware is priced separately. Device-as-a-Service (DaaS) leasing options are available for enterprise customers. Contact sales for hardware bundling.",
+    a: "The dock and reader case are a pre-production design concept; no hardware is for sale or lease today. Any future hardware would be priced separately from the software.",
   },
   {
     q: "Can we start with cloud and move to self-hosted?",
-    a: "Yes. Your policies, audit logs, and integration configurations are portable. Migration tooling is included for enterprise customers.",
+    a: "That is the design: policies and audit exports are portable by design, so nothing about the model locks you into one deployment. Migration tooling is not built yet.",
   },
   {
     q: "What does the FedRAMP path mean?",
@@ -122,11 +117,6 @@ export default function Pricing() {
                       : "border-border bg-card"
                   }`}
                 >
-                  {tier.highlight && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-primary text-primary-foreground text-xs font-bold tracking-wider rounded-full uppercase">
-                      Most Popular
-                    </div>
-                  )}
                   <div className="mb-6">
                     <div className="text-xs font-mono text-muted-foreground mb-2 uppercase tracking-wide">{tier.name}</div>
                     <div className="flex items-baseline gap-1 mb-1">

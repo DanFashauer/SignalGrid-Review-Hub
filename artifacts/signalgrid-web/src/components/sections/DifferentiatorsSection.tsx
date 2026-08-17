@@ -6,21 +6,21 @@ const DIFFERENTIATORS = [
     icon: Link2,
     title: "Physical Custody Binding",
     description:
-      "The employee badge mechanically locks into the device case. The device cannot be fully used without the badge present. The badge cannot be removed without triggering an alert. Identity and custody are physically inseparable.",
+      "The employee badge mechanically locks into the device case, and badge state from the reader case is a first-class decision signal: a withdrawn badge restricts the session at the next workflow evaluation, and a forced removal denies. Identity and custody are evaluated together, every time.",
     before: "Badge system: separate",
-    after: "Badge = device key",
+    after: "Badge = first-class signal",
   },
   {
     icon: MapPinned,
     title: "Contextual Physical Access",
     description:
-      "Floor access, elevator permissions, ICU access, pharmacy, lab, and server room authorizations are granted dynamically based on current assignment, current device, current shift, and live posture — not a static role list.",
+      "Floor access, elevator permissions, ICU access, pharmacy, lab, and server room authorizations are evaluated at runtime against current assignment, current device, current shift, and live posture — not a static role list. The PACS remains the system that grants.",
     before: "Static RBAC list",
     after: "Runtime zone authorization",
   },
   {
     icon: ClipboardList,
-    title: "Chain of Custody Enforcement",
+    title: "Chain of Custody, Audited",
     description:
       "Every device has a timestamped owner at every moment of the shift. Dock-out, zone transitions, workflow access, and dock-in are all audited as a continuous custody chain. Compliance is a byproduct, not a reporting task.",
     before: "Asset spreadsheet",
@@ -30,7 +30,7 @@ const DIFFERENTIATORS = [
     icon: Radio,
     title: "Pre-Exit Prevention + Post-Exit Recovery",
     description:
-      "BLE proximity, badge checkout state, and door events prevent unauthorized exits before they happen. When a Wi-Fi-only device goes dark, cellular/eSIM APIs (Twilio, Soracom, Hologram) maintain a recovery channel.",
+      "BLE proximity, badge checkout state, and door events surface an unauthorized exit before it completes. Cellular/eSIM reachability is a candidate signal category for the post-exit story; no carrier integration exists today.",
     before: "Gone = lost",
     after: "Pre-exit + post-exit coverage",
   },
@@ -38,8 +38,8 @@ const DIFFERENTIATORS = [
     icon: Layers,
     title: "Additive — Nothing Replaced",
     description:
-      "SignalGrid sits above your existing Intune, Okta, HID, Imprivata, CrowdStrike, and ServiceNow investments. It doesn't replace any of them — it fuses their signals into one runtime context that none of them can produce alone.",
-    before: "122+ siloed vendors",
+      "SignalGrid is designed to read from tools like Intune, Okta, HID, and ServiceNow — as candidate sources — and to replace none of them. Each stays the system of record; SignalGrid fuses their signals into one runtime context that none of them can produce alone.",
+    before: "~149 candidate sources, ~16 categories",
     after: "One decision layer",
   },
 ];
@@ -98,6 +98,12 @@ export default function DifferentiatorsSection() {
             </motion.div>
           ))}
         </div>
+
+        <p className="mx-auto mt-16 max-w-2xl text-center text-sm text-muted-foreground/70">
+          Deterministic and fixture-backed today. SignalGrid recommends and records; the systems
+          named here stay the systems of record, and every high-risk action stays approval-gated
+          and simulated.
+        </p>
       </div>
     </section>
   );

@@ -50,9 +50,33 @@ const ADVISORY_LOCK_KEY = 0x516e414c; // "sgAL" — stable per-ledger lock id
 export class PostgresAuditBackend implements AuditBackend {
   private pool: any;
   private ready: Promise<void>;
+  private readonly connectionString: string;
 
   constructor(connectionString: string) {
+    this.connectionString = connectionString;
     this.ready = this.init(connectionString);
+  }
+
+  /**
+   * A REJECTED first init must not poison this class forever (the same review
+   * finding fixed in PostgresDecisionStore): boot before the database, the
+   * first query rejects, and `this.ready` is a permanently cached rejection —
+   * every later call replays the stale failure while the recovered database
+   * sits reachable, healed only by a process restart that liveness-keyed
+   * orchestration never triggers. A failed init is RETRIED on next use, after
+   * tearing down any half-built pool.
+   */
+  private async ensureReady(): Promise<void> {
+    try {
+      await this.ready;
+    } catch {
+      if (this.pool) {
+        try { await this.pool.end(); } catch { /* the old pool may already be dead */ }
+        this.pool = undefined;
+      }
+      this.ready = this.init(this.connectionString);
+      await this.ready;
+    }
   }
 
   private async init(connectionString: string): Promise<void> {
@@ -77,7 +101,7 @@ export class PostgresAuditBackend implements AuditBackend {
   }
 
   async appendWithChain(build: (prevHash: string) => AuditRecord): Promise<AuditRecord> {
-    await this.ready;
+    await this.ensureReady();
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
@@ -115,7 +139,7 @@ export class PostgresAuditBackend implements AuditBackend {
   }
 
   async getRecords(limit: number, offset: number): Promise<AuditRecord[]> {
-    await this.ready;
+    await this.ensureReady();
     const res = await this.pool.query(
       `SELECT id, ts, request_id, actor, event_type, target, meta, prev_hash, hash
          FROM audit_ledger ORDER BY seq ASC OFFSET $1 LIMIT $2`,

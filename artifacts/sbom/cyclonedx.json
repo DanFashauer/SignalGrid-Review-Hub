@@ -2834,9 +2834,9 @@
     {
       "type": "library",
       "name": "pino-http",
-      "version": "10.5.0",
-      "bom-ref": "pkg:npm/pino-http@10.5.0",
-      "purl": "pkg:npm/pino-http@10.5.0"
+      "version": "11.0.0",
+      "bom-ref": "pkg:npm/pino-http@11.0.0",
+      "purl": "pkg:npm/pino-http@11.0.0"
     },
     {
       "type": "library",
@@ -2851,6 +2851,13 @@
       "version": "7.1.0",
       "bom-ref": "pkg:npm/pino-std-serializers@7.1.0",
       "purl": "pkg:npm/pino-std-serializers@7.1.0"
+    },
+    {
+      "type": "library",
+      "name": "pino",
+      "version": "10.3.1",
+      "bom-ref": "pkg:npm/pino@10.3.1",
+      "purl": "pkg:npm/pino@10.3.1"
     },
     {
       "type": "library",
@@ -2942,6 +2949,13 @@
       "version": "5.0.0",
       "bom-ref": "pkg:npm/process-warning@5.0.0",
       "purl": "pkg:npm/process-warning@5.0.0"
+    },
+    {
+      "type": "library",
+      "name": "process-warning",
+      "version": "5.1.0",
+      "bom-ref": "pkg:npm/process-warning@5.1.0",
+      "purl": "pkg:npm/process-warning@5.1.0"
     },
     {
       "type": "library",
@@ -3110,6 +3124,13 @@
       "version": "0.2.0",
       "bom-ref": "pkg:npm/real-require@0.2.0",
       "purl": "pkg:npm/real-require@0.2.0"
+    },
+    {
+      "type": "library",
+      "name": "real-require",
+      "version": "1.0.0",
+      "bom-ref": "pkg:npm/real-require@1.0.0",
+      "purl": "pkg:npm/real-require@1.0.0"
     },
     {
       "type": "library",
@@ -3404,6 +3425,13 @@
       "version": "3.1.0",
       "bom-ref": "pkg:npm/thread-stream@3.1.0",
       "purl": "pkg:npm/thread-stream@3.1.0"
+    },
+    {
+      "type": "library",
+      "name": "thread-stream",
+      "version": "4.2.0",
+      "bom-ref": "pkg:npm/thread-stream@4.2.0",
+      "purl": "pkg:npm/thread-stream@4.2.0"
     },
     {
       "type": "library",

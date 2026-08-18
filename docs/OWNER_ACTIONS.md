@@ -93,10 +93,9 @@ already run advisory into blocking.
 
 ## Waiting on you as of 2026-08-17 (phone-sized, newest first)
 
-1. **Merge PR #206** when its checks are green — it now carries the Fleet
-   live-lab verification (real server, real enrolled agent, every assertion
-   green), the live-query collector behind its three-gate stack, the website
-   truth pass (38 corrections, 5 upgrades), and intake rows 82–87.
+1. ~~Merge PR #206~~ **DONE 2026-08-18** — merged as `5301efa` with all 13
+   checks green; the day's work (Fleet live end-to-end, the collector, the
+   website truth pass, intake rows 81–91) is on the default branch.
 2. **Comment `@dependabot rebase` on PR #163** — Dependabot ignores the agent's
    comments; it needs a human account.
    **The six major-version PRs behind it are now triaged and all six are

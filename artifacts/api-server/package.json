@@ -28,7 +28,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^7.4.0",
     "pino": "^9.14.0",
-    "pino-http": "^10.5.0",
+    "pino-http": "^11.0.0",
     "@workspace/room-sim": "workspace:*",
     "@workspace/signal-radar": "workspace:*",
     "@workspace/self-audit": "workspace:*",

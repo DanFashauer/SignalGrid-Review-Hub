@@ -2,6 +2,38 @@
 
 SignalGrid is a runtime decision layer and Operational Trust Orchestration platform for shared, mobile, and frontline environments. At the moment a workflow fires it fuses the evidence the deterministic core evaluates today — identity state, device posture, physical custody (DockBridge), security-baseline (CIS) alignment, device owner type, and workflow risk — into a single allow / step-up / restrict / deny decision. Broader signal-source categories (network/cellular, session/shift, and operational SIEM/ITSM signals) are candidate/roadmap, not decision inputs today. See [What SignalGrid Does Today](docs/WHAT_SIGNALGRID_DOES_TODAY.md) for the exact implemented-vs-candidate boundary.
 
+## Quick start — three rungs, easiest first
+
+Every rung runs the same deterministic decision engine on public-safe fixtures;
+pick the lightest one that answers your question. There is deliberately nothing
+heavier on this ladder — Kubernetes/Helm is a bounded packaging task the day a
+partner requires it, and not before (the reasoning is recorded in
+[`docs/INTAKE_LEDGER.md`](docs/INTAKE_LEDGER.md), row 87).
+
+1. **Open a file — zero install.**
+   [`docs/room-entry-console.html`](docs/room-entry-console.html) and
+   [`docs/fabric-console.html`](docs/fabric-console.html) are self-contained
+   pages that run fully offline in any browser, phone included: scenarios in,
+   allow / step-up / restrict / deny out, with the evidence behind each call.
+   Nothing to install, nothing leaves the page.
+
+2. **One process — Node only.**
+   ```bash
+   pnpm install && PORT=8080 pnpm --filter @workspace/api-server run dev
+   ```
+   Builds and serves the real `/v1` decision API plus the console at
+   `http://localhost:8080/console` — fixture-backed, no database, no external
+   calls. (`PORT` is required on purpose: the server refuses to guess.)
+
+3. **One command — production-shaped.**
+   ```bash
+   docker compose -f docker-compose.prod.yml up -d --build --wait
+   ```
+   The API plus a durable Postgres audit ledger, health-gated, fixture-safe by
+   default — no live vendor call unless `SIGNALGRID_LIVE_INTEGRATIONS=true` is
+   set explicitly. This exact stack is smoke-tested in CI on both Docker and
+   Podman on every push.
+
 ## The operating model: managed as code (GitOps)
 
 SignalGrid is driven the way modern platform teams run everything else —

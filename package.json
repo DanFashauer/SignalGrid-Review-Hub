@@ -124,6 +124,7 @@
     "proof:link-usability": "pnpm --filter @workspace/scripts run proof:link-usability",
     "proof:live-edr": "pnpm --filter @workspace/scripts run proof:live-edr",
     "proof:live-fleet": "pnpm --filter @workspace/scripts run proof:live-fleet",
+    "proof:live-fleet-workflow": "pnpm --filter @workspace/scripts run proof:live-fleet-workflow",
     "proof:live-idp": "pnpm --filter @workspace/scripts run proof:live-idp",
     "proof:live-keycloak": "pnpm --filter @workspace/scripts run proof:live-keycloak",
     "proof:live-location": "pnpm --filter @workspace/scripts run proof:live-location",

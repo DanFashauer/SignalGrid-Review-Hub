@@ -191,6 +191,13 @@ if [ "$SIM_ONLY" != "--sim-only" ]; then
       skip "$p" "needs a live Fleet (FLEET_URL + FLEET_TOKEN); see docs/FLEET_LIVE_INTEGRATION.md"
       continue
     fi
+    # proof:live-fleet-workflow drives the DECISION workflow from a live Fleet
+    # host, and its flip section (FLEET_LAB_WRITE_OK=true) writes to that Fleet
+    # — lab only. Same skip law: named, with the docs pointer, never silent.
+    if [ "$p" = "proof:live-fleet-workflow" ] && [ -z "${FLEET_URL:-}" ]; then
+      skip "$p" "needs a live Fleet (FLEET_URL + FLEET_TOKEN + FLEET_HOST_UUID); see docs/FLEET_LIVE_INTEGRATION.md"
+      continue
+    fi
     # proof:live-location reads a REAL Traccar and INGESTS positions into it, so it
     # mutates that server's data — never point it at anything but a disposable one.
     if [ "$p" = "proof:live-location" ] && [ -z "${TRACCAR_URL:-}" ]; then

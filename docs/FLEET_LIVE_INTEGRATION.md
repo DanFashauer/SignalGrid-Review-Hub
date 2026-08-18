@@ -247,6 +247,24 @@ All lab credentials in that run (admin password, MySQL passwords, the
 self-signed key, API tokens, enroll secret) are ephemeral in-container values,
 discarded with the container and never committed.
 
+## proof:live-fleet-workflow — the live host reaches a real verdict (2026-08-18)
+
+A second opt-in live proof closes the seam the first one and `proof:launch-seam`
+leave between them: the live host's wire JSON travels the deployment path all
+the way to a decision — `toHostReport` → `normalizeFleetReport` →
+`fleetOutcome` → the `DeviceManagementEvidence` contract → fixture record →
+`runFixtureSync` → `evaluateDecision`. The container lab host is honestly
+UNMANAGED, so every layer must grade it fail-safe, and the final verdict is
+**restrict / DEVICE_UNMANAGED** — a real host the real workflow correctly
+refuses. A synthetic control (same record, management fields flipped healthy)
+loses the restriction, proving the live fields were load-bearing. Its flip
+section then adds a deliberately failing policy on the lab server, waits for
+the REAL agent to answer it `fail`, and watches the telemetry posture and the
+bridge draft flip to non-compliant on live evidence — then deletes the policy.
+The flip section WRITES to the target Fleet, so it demands
+`FLEET_LAB_WRITE_OK=true` on top of the usual env — point it only at a
+disposable lab. The macOS harness skips both live Fleet proofs by name.
+
 Re-run note, learned the honest way: with a LIVE agent answering policies every
 cycle, the fail-closed assertions ("an unreported policy is graded `unknown`")
 need at least one not-yet-answered policy to exist at proof time. Add a fresh

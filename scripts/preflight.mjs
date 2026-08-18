@@ -72,6 +72,12 @@ const STEPS = [
   { name: "Shell lint (the one language with no static analysis)", cmd: ["node", "scripts/check-shell.mjs"] },
   { name: "Docs sanity (required docs + unsafe-claim scan)", cmd: ["node", "scripts/docs-sanity.mjs"] },
   { name: "Doc orphans (a new doc must be reachable from an index)", cmd: ["node", "scripts/check-doc-orphans.mjs"] },
+  // Sibling of the gate above, one question further in: orphans ask whether a reader
+  // can REACH a document, this asks whether the document points anywhere real. A
+  // citation that resolves to nothing reads as evidence and is not.
+  { name: "Cited paths (a doc may not cite a file that does not exist)", cmd: ["node", "scripts/check-cited-paths.mjs"] },
+  { name: "Cited-path self-test (the gate can actually fail)", cmd: ["node", "scripts/check-cited-paths.mjs", "--self-test"] },
+  { name: "Absence-check self-test (a word in a disclaimer is not the thing existing)", cmd: ["node", "scripts/agent/absence-check.mjs", "--self-test"] },
   { name: "Package reachability (a library nobody ships is a library nobody runs)", cmd: ["node", "scripts/check-package-reachability.mjs"] },
   { name: "Core normalization-version (the provenance stamp must track the code it names)", cmd: ["node", "scripts/generate-core-normalization-version.mjs", "--check"] },
   { name: "Guard-registry drift (coverage lists derived, not trusted)", cmd: ["node", "scripts/check-guard-registries.mjs"] },
@@ -170,6 +176,11 @@ const STEPS = [
   { name: "/v1 under concurrency (correctness gated; throughput and saturation reported, never asserted)", cmd: ["pnpm", "run", "test:load"], heavy: true },
   { name: "Simulation request loop (every result binds to a request; pending is reported, never silent)", cmd: ["node", "scripts/check-sim-requests.mjs"] },
   { name: "Simulation request loop self-test (the gate can actually fail)", cmd: ["node", "scripts/check-sim-requests.mjs", "--self-test"] },
+  { name: "Known-false claims (a claim proven false once is not made twice)", cmd: ["node", "scripts/check-known-false-claims.mjs"] },
+  { name: "Known-false-claim self-test (the gate can actually fail)", cmd: ["node", "scripts/check-known-false-claims.mjs", "--self-test"] },
+  { name: "Proof: lane-messages (the cloud↔Mac channel — identity is derived, and no lane acknowledges its own mail)", cmd: ["pnpm", "run", "proof:lane-messages"] },
+  { name: "Lane messages (unread mail is named on every run; only the addressee can close one)", cmd: ["node", "scripts/check-lane-messages.mjs"] },
+  { name: "Lane message self-test (the gate can actually fail)", cmd: ["node", "scripts/check-lane-messages.mjs", "--self-test"] },
   { name: "Proof: operating-method (the handbook is a gate — buckets, ladder, dispositions, links, roles)", cmd: ["pnpm", "run", "proof:operating-method"] },
   { name: "Proof: evidence-coverage (what can this estate actually answer)", cmd: ["pnpm", "run", "proof:evidence-coverage"] },
   { name: "Proof: device-resolver (read-only at the injection boundary)", cmd: ["pnpm", "run", "proof:device-resolver"] },
@@ -205,6 +216,7 @@ const STEPS = [
   // gets the restore path exercised locally.
   { name: "Proof: backup-restore (the restore path, exercised not assumed)", cmd: ["pnpm", "run", "proof:backup-restore"] },
   { name: "Proof: audit-ledger", cmd: ["pnpm", "run", "proof:audit-ledger"] },
+  { name: "Proof: itsm-template (evidence text cannot rewrite itself on the way into a ticket)", cmd: ["pnpm", "run", "proof:itsm-template"] },
   { name: "Proof: session-store", cmd: ["pnpm", "run", "proof:session-store"] },
   { name: "Proof: orchestration", cmd: ["pnpm", "run", "proof:orchestration"] },
   { name: "Proof: room-sim", cmd: ["pnpm", "run", "proof:room-sim"] },

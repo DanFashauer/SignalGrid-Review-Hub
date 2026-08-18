@@ -6,11 +6,11 @@ import Footer from "@/components/layout/Footer";
 const REPO = "https://github.com/DanFashauer/SignalGrid-Review-Hub";
 
 // The dedicated SmartDock: an OPTIONAL embedded smart-charging dock. Power +
-// network in; every decision runs in the SaaS cloud or on-site. Design concept.
+// network in; every decision runs in your own deployment. Design concept.
 const SMARTDOCK = [
   {
     title: "Power + network in, nothing else required",
-    body: "The dock takes power and a network uplink. The embedded SignalGrid agent streams normalized custody/charge/tamper/dock/badge signals — every ALLOW / STEP-UP / RESTRICT / DENY decision runs in the SaaS cloud or on-site, not on the dock.",
+    body: "The dock takes power and a network uplink. The embedded SignalGrid agent streams normalized custody/charge/tamper/dock/badge signals — every ALLOW / STEP-UP / RESTRICT / DENY decision runs in your own deployment. The dock supplies signals and never decides.",
     icon: Wifi,
     color: "text-teal-400",
   },
@@ -87,15 +87,15 @@ const DETECTION_PHASES = [
     title: "Custody Violation",
     color: "text-red-400 border-red-400/20 bg-red-400/5",
     signals: ["Badge physically removed from case", "BLE beacon gap > 30 seconds", "Door exit event without checkout", "Session still active post-boundary"],
-    outcome: "DENY — session revoked + MDM Lost Mode",
+    outcome: "DENY — decision + evidence recorded; lost-mode stays an approval-gated MDM action",
     outcomeColor: "text-red-400",
   },
   {
     phase: "04",
     title: "Post-Exit Recovery",
     color: "text-purple-400 border-purple-400/20 bg-purple-400/5",
-    signals: ["eSIM cellular keepalive active", "Carrier API GPS/cell tower fix", "Last known BLE zone logged", "Remote wipe pre-staged"],
-    outcome: "RECOVER — escalation + asset trace",
+    signals: ["eSIM cellular keepalive active", "Carrier location fix (candidate signal — no carrier integration)", "Last known BLE zone logged", "Wipe recommendation — approval-gated, executed by your MDM"],
+    outcome: "RECOVER — escalation recommended + asset trace evidence",
     outcomeColor: "text-purple-400",
   },
 ];
@@ -137,7 +137,7 @@ export default function Hardware() {
               {/* Device diagram */}
               <div className="lg:w-96 shrink-0">
                 <div className="relative bg-card border border-border rounded-2xl p-8 font-mono text-xs">
-                  <div className="text-xs text-muted-foreground mb-6 uppercase tracking-wide">SG-CASE-02 · Isometric View</div>
+                  <div className="text-xs text-muted-foreground mb-6 uppercase tracking-wide">Badge-Locking Case · Design Concept</div>
                   <div className="space-y-2.5">
                     {[
                       { icon: Shield, label: "BADGE SLOT", desc: "ISO 7816 + NFC", color: "text-primary" },
@@ -167,7 +167,8 @@ export default function Hardware() {
           <div className="container mx-auto px-4 md:px-8 max-w-screen-xl">
             <div className="mb-12">
               <h2 className="text-2xl font-bold tracking-tight mb-3">4-Phase Custody Detection</h2>
-              <p className="text-muted-foreground">From nominal operation to post-exit recovery — every signal fused in real time.</p>
+              <p className="text-muted-foreground">From nominal operation to post-exit recovery — one deterministic model of the whole custody arc.</p>
+              <p className="mt-2 text-sm text-muted-foreground/70">Modeled deterministically on public-safe fixtures; UWB, PACS door events, and carrier location are candidate signals, not evaluated today.</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               {DETECTION_PHASES.map((phase, idx) => (
@@ -205,7 +206,7 @@ export default function Hardware() {
               </div>
               <h2 className="text-2xl font-bold tracking-tight mb-3">A dedicated smart-charging dock, with SignalGrid embedded.</h2>
               <p className="text-muted-foreground leading-relaxed">
-                SmartDock is the optional hardware layer for teams that want more control of the grid and their signals — a sophisticated phone dock and smart-charging station running the SignalGrid agent in firmware. It complements existing shared-device and mobile-access platforms rather than replacing them, and it's a candidate we'd build directly or as a partnership. The product runs software-only today; the dock is additive.
+                SmartDock is the optional hardware layer for teams that want more control of the grid and their signals — a sophisticated phone dock and smart-charging station that would run the SignalGrid agent in firmware — the firmware core is CI-compiled for its Cortex-M target and has never run on real hardware. It complements existing shared-device and mobile-access platforms rather than replacing them, and it's a candidate we'd build directly or as a partnership. The product runs software-only today; the dock is additive.
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -233,7 +234,12 @@ export default function Hardware() {
         {/* Specs */}
         <section className="py-20">
           <div className="container mx-auto px-4 md:px-8 max-w-screen-xl">
-            <h2 className="text-2xl font-bold tracking-tight mb-10">Technical Specifications</h2>
+            <h2 className="text-2xl font-bold tracking-tight mb-3">Technical Specifications</h2>
+            <p className="text-sm text-muted-foreground/70 mb-10 max-w-2xl">
+              Every figure below is a design target — nothing here has been built or measured, and
+              no SKU exists. This is the specification we are designing toward, published so it can
+              be challenged.
+            </p>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
               {SPECS.map(cat => (
                 <div key={cat.category} className="space-y-3">

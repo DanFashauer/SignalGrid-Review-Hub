@@ -9,7 +9,6 @@ const DEPLOYMENT_OPTIONS = [
     desc: "A managed, auto-scaling design with regional processing targets — EU, US, APAC. Availability and operational targets are design goals, not a live service offering.",
     features: [
       "Zero maintenance, auto-scaling design",
-      "SOC 2 controls as a design target",
       "PHI-access controls by design",
       "High-availability design target",
       "Regional data residency",
@@ -22,10 +21,10 @@ const DEPLOYMENT_OPTIONS = [
     title: "Self-Hosted",
     icon: Server,
     type: "VPC / On-Premise",
-    desc: "Run in your own VPC or on-premise using Docker Compose or Kubernetes Helm charts. Full data sovereignty — telemetry never leaves your environment.",
+    desc: "Run in your own VPC or on-premise using Docker Compose today; Helm packaging is a documented next step. Full data sovereignty — telemetry never leaves your environment.",
     features: [
       "Full data sovereignty",
-      "Docker Compose + Helm charts",
+      "Docker Compose today (Helm: documented next step)",
       "Custom scaling and HA config",
       "FIPS 140-2-oriented crypto design",
       "Bring your own PKI",
@@ -52,13 +51,13 @@ const DEPLOYMENT_OPTIONS = [
   },
 ];
 
-const DR_CAPABILITIES = [
-  { label: "RTO Target", value: "< 4 hours", desc: "Decision engine full restoration" },
-  { label: "RPO Target", value: "< 15 min", desc: "Policy and audit data recovery point" },
-  { label: "HA Config", value: "Active-Active", desc: "Multi-region or multi-node cluster" },
-  { label: "Backup", value: "Encrypted", desc: "AES-256 at rest, TLS 1.3 in transit" },
-  { label: "Failover", value: "Automated", desc: "Health-check triggered, no manual step" },
-  { label: "Audit Log", value: "Immutable", desc: "WORM-style, tamper-evident trail" },
+const RESILIENCE_PROOFS = [
+  { label: "5xx Under Overload", value: "0", desc: "Deliberate concurrency and overload — zero server errors" },
+  { label: "Transport Errors", value: "0", desc: "Every request answered, none dropped" },
+  { label: "Determinism", value: "Identical", desc: "Every concurrent outcome matches the single-request answer" },
+  { label: "Throttling", value: "429", desc: "Standard back-off headers on every throttled response" },
+  { label: "Rate Limit", value: "240/min", desc: "Per-key default — operator-tunable" },
+  { label: "Gated In CI", value: "test:load", desc: "Correctness gated on every push; test:stress runs on demand" },
 ];
 
 export default function DeploymentSection() {
@@ -88,11 +87,6 @@ export default function DeploymentSection() {
                   : "border-border/50 bg-card"
               }`}
             >
-              {opt.highlight && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-primary text-primary-foreground text-xs font-bold tracking-wider rounded-full uppercase">
-                  Most Popular
-                </div>
-              )}
               <opt.icon className={`w-7 h-7 mb-5 ${opt.highlight ? "text-primary" : "text-muted-foreground"}`} />
               <div className="text-xs font-mono text-muted-foreground mb-1.5">{opt.type}</div>
               <h3 className="text-lg font-semibold mb-3">{opt.title}</h3>
@@ -156,14 +150,14 @@ export default function DeploymentSection() {
         >
           <div className="flex flex-col md:flex-row md:items-start gap-8">
             <div className="md:w-72 shrink-0">
-              <div className="text-xs font-mono text-muted-foreground mb-2">BUILT-IN RESILIENCE</div>
-              <h3 className="text-lg font-semibold mb-3">Disaster Recovery Architecture</h3>
+              <div className="text-xs font-mono text-muted-foreground mb-2">MEASURED RESILIENCE</div>
+              <h3 className="text-lg font-semibold mb-3">Proven Under Load, Not Promised</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                The SignalGrid decision engine is the access control plane for sensitive workflows — it must be more resilient than the systems it protects. Built-in HA, automated failover, and immutable audit logging are not optional features.
+                Under deliberate concurrency and overload, the decision API returns zero 5xx and zero transport errors, every outcome identical to the single-request answer, and throttled requests get a clean 429 with standard back-off headers — gated in CI on every run. No availability target is offered and no failover machinery ships today; what we claim is what the gates measure.
               </p>
             </div>
             <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {DR_CAPABILITIES.map((cap) => (
+              {RESILIENCE_PROOFS.map((cap) => (
                 <div key={cap.label} className="rounded-lg border border-border/60 bg-background/50 p-4">
                   <div className="text-xs font-mono text-muted-foreground mb-1">{cap.label}</div>
                   <div className="text-base font-bold font-mono text-primary mb-1">{cap.value}</div>
@@ -174,7 +168,7 @@ export default function DeploymentSection() {
           </div>
 
           <div className="mt-6 pt-6 border-t border-border/40">
-            <div className="text-xs font-mono text-muted-foreground mb-3">DR INTEGRATION ECOSYSTEM — connects to your existing backup and recovery stack</div>
+            <div className="text-xs font-mono text-muted-foreground mb-3">CANDIDATE DR SIGNAL SOURCES — none is a live integration</div>
             <div className="flex flex-wrap gap-2">
               {["Veeam", "Zerto", "Rubrik", "Cohesity", "Commvault", "AWS Elastic DR", "Azure Site Recovery", "Veritas NetBackup", "Acronis Cyber Protect"].map((tool) => (
                 <span

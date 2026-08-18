@@ -74,6 +74,12 @@ export class MDEAdapter {
   }
 
   private async getAccessToken(): Promise<string> {
+    // Reached only via isEnabled()-gated methods today — but "today" is a
+    // circumstance, and a token fetch is a live call in its own right. The same
+    // chokepoint holds here so a future direct caller cannot bypass it.
+    if (!this.isEnabled()) {
+      throw new Error('refused: token fetch with the fixture/live boundary closed.');
+    }
     if (!this.config) {
       throw new Error('MDE not configured');
     }

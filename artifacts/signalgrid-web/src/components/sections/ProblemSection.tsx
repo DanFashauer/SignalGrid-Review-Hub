@@ -43,7 +43,7 @@ export default function ProblemSection() {
               <div>
                 <h4 className="font-semibold text-foreground">SignalGrid: One Control Plane</h4>
                 <p className="text-sm text-muted-foreground mt-1">
-                  All seven signal sources stream into a single runtime decision layer. Badge state, device posture, zone presence, shift authorization, and cellular reachability are evaluated together — at the moment the workflow fires.
+                  All seven signal sources stream into a single runtime decision layer. Badge state, device posture, zone presence, and shift authorization are evaluated together — at the moment the workflow fires.
                 </p>
               </div>
             </div>

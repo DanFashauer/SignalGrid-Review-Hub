@@ -10,8 +10,8 @@ const FRAMEWORKS = [
   { name: "CMMC 2.0 L2/L3", level: "DoD", desc: "Cybersecurity Maturity Model Certification for defense contractors", color: "text-purple-400 border-purple-400/20 bg-purple-400/5" },
   { name: "NIST SP 800-53", level: "NIST", desc: "Security and privacy controls — full Rev 5 control mapping", color: "text-purple-400 border-purple-400/20 bg-purple-400/5" },
   { name: "NIST SP 800-171", level: "NIST", desc: "Protecting CUI in non-federal systems — 110-control baseline", color: "text-purple-400 border-purple-400/20 bg-purple-400/5" },
-  { name: "SOC 2 Type II", level: "AICPA", desc: "Trust Services Criteria — continuous control evidence collection", color: "text-green-400 border-green-400/20 bg-green-400/5" },
-  { name: "HIPAA / HITECH", level: "HHS", desc: "PHI access controls, audit trails, and breach notification support", color: "text-green-400 border-green-400/20 bg-green-400/5" },
+  { name: "SOC 2 Type II", level: "AICPA", desc: "Access-control and audit-trail signals map into the decision evidence; no attestation is held", color: "text-green-400 border-green-400/20 bg-green-400/5" },
+  { name: "HIPAA / HITECH", level: "HHS", desc: "Access-control and audit-trail signal mapping — no PHI is processed and no attestation is held", color: "text-green-400 border-green-400/20 bg-green-400/5" },
   { name: "PCI DSS 4.0", level: "PCI SSC", desc: "Cardholder data environment access control and audit logging", color: "text-green-400 border-green-400/20 bg-green-400/5" },
   { name: "ISO 27001:2022", level: "ISO", desc: "Information security management system — Annex A control mapping", color: "text-amber-400 border-amber-400/20 bg-amber-400/5" },
   { name: "ITAR / EAR", level: "US Gov", desc: "Export control compliance for defense and dual-use technology", color: "text-amber-400 border-amber-400/20 bg-amber-400/5" },
@@ -57,13 +57,13 @@ const TEAM_ROUTING = [
   {
     team: "GRC",
     owns: ["GRC / Compliance"],
-    alerts: "STIG finding severity, vulnerability SLA breach, control test failure, audit evidence gap",
+    alerts: "STIG finding severity, vulnerability remediation-deadline breach, control test failure, audit evidence gap",
     color: "text-amber-400 bg-amber-400/10 border-amber-400/20",
   },
   {
     team: "IT Service Desk",
     owns: ["ITSM"],
-    alerts: "Open incident escalation, change window conflicts, SLA breach, on-call schedule gaps",
+    alerts: "Open incident escalation, change window conflicts, ticket response-time breach, on-call schedule gaps",
     color: "text-slate-400 bg-slate-400/10 border-slate-400/20",
   },
 ];
@@ -149,7 +149,7 @@ export default function ComplianceSection() {
             <div>
               <h3 className="text-xl font-bold tracking-tight">Ownership-Aware Alert Routing</h3>
               <p className="text-muted-foreground text-sm mt-1">
-                Every signal source belongs to a team. When SignalGrid detects an anomaly, the right team is alerted — not a generic security inbox. Routing is policy-driven and configurable per organization.
+                Signal ownership is modeled per team, so an outcome can name the owning group — not a generic security inbox. Routing itself is a design, and no alerting is wired to external systems today.
               </p>
             </div>
           </div>
@@ -193,7 +193,7 @@ export default function ComplianceSection() {
           >
             <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 shrink-0" />
             <p className="text-sm text-muted-foreground">
-              Routing policies are defined in SignalGrid Policies and fully auditable. Each routing rule specifies the owning team, escalation path, SLA, and whether the signal constitutes a compliance-reportable event — ensuring the right engineers see the right alerts without alert fatigue.
+              Routing policies are defined in SignalGrid Policies and fully auditable. Each routing rule names the owning team and escalation path so the right engineers would see the right alerts without alert fatigue — the routing design is modeled today, and no alerting is wired to external systems.
             </p>
           </motion.div>
         </div>

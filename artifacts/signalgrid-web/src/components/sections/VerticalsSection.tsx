@@ -7,7 +7,7 @@ const VERTICALS = [
     badgeColor: "text-teal-400 bg-teal-400/10 border-teal-400/20",
     useCase: "Medication cart iPads, EHR/MAR workflow access",
     detail:
-      "Badge-locked devices prevent unauthorized MAR access. Managed Lost Mode activates if a cart leaves the floor without checkout. Shift-scoped app credentials rotate automatically between nurses.",
+      "Badge state gates MAR workflow access at evaluation time. If a cart leaves the floor without checkout, the decision recommends restrict with the evidence attached — the MDM remains the system that activates Lost Mode, and credential rotation stays with your identity stack.",
   },
   {
     name: "Warehousing & Logistics",
@@ -45,7 +45,7 @@ const VERTICALS = [
     name: "Clinical Labs & Pharma",
     badge: "STRONG FIT",
     badgeColor: "text-purple-400 bg-purple-400/10 border-purple-400/20",
-    useCase: "Controlled substance access, chain-of-custody enforcement",
+    useCase: "Controlled substance access, chain-of-custody evidence",
     detail:
       "Pharmacy and controlled substance room access provisioned dynamically based on current shift assignment and current device posture — not a static role.",
   },
@@ -53,9 +53,9 @@ const VERTICALS = [
     name: "Retail & POS",
     badge: "EMERGING",
     badgeColor: "text-amber-400 bg-amber-400/10 border-amber-400/20",
-    useCase: "Shared POS terminals, kiosk mode enforcement",
+    useCase: "Shared POS terminals, register workflow gating",
     detail:
-      "Inventory write workflows gated by posture. Kiosk mode enforced at the decision layer — not just MDM configuration. Shift-scoped credentials prevent unauthorized register access.",
+      "Inventory write workflows gated by posture. Posture and shift evidence gate the register workflow; kiosk mode itself stays an MDM/supervised-device control. Shift-scoped credentials prevent unauthorized register access.",
   },
   {
     name: "Government & Defense",
@@ -82,7 +82,7 @@ export default function VerticalsSection() {
         <div className="mb-16">
           <h2 className="text-3xl font-bold tracking-tight mb-4">Built for Every Frontline Environment</h2>
           <p className="text-muted-foreground text-lg max-w-2xl">
-            Anywhere workers share devices across shifts — and accountability matters — SignalGrid closes the gap between physical access control and digital identity. Thirty million frontline workers. One control plane.
+            Anywhere workers share devices across shifts — and accountability matters — SignalGrid closes the gap between physical access control and digital identity. One decision layer for every frontline shift.
           </p>
         </div>
 
@@ -107,6 +107,12 @@ export default function VerticalsSection() {
             </motion.div>
           ))}
         </div>
+
+        <p className="mx-auto mt-16 max-w-2xl text-center text-sm text-muted-foreground/70">
+          Deterministic and fixture-backed today. Every high-risk action stays approval-gated and
+          simulated — SignalGrid recommends and records; the PACS, MDM, and identity stack remain
+          the systems that act.
+        </p>
       </div>
     </section>
   );

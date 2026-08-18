@@ -210,6 +210,16 @@ export class SentinelAdapter implements SIEMAdapter {
    * Get token using managed identity
    */
   private async getManagedIdentityToken(): Promise<string> {
+    // GATED like healthCheck() above: this method reaches the network, and the
+    // fixture/live boundary either covers every outbound path or it is not a
+    // boundary. Nothing constructs this adapter in fixture mode today; the gate
+    // makes that a property instead of a circumstance.
+    {
+      const emission = resolveEmission();
+      if (emission.mode !== "live") {
+        throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
+      }
+    }
     const msiEndpoint = process.env.MSI_ENDPOINT;
     const msiSecret = process.env.MSI_SECRET;
 
@@ -235,6 +245,16 @@ export class SentinelAdapter implements SIEMAdapter {
    * Get token using client credentials
    */
   private async getClientCredentialsToken(): Promise<string> {
+    // GATED like healthCheck() above: this method reaches the network, and the
+    // fixture/live boundary either covers every outbound path or it is not a
+    // boundary. Nothing constructs this adapter in fixture mode today; the gate
+    // makes that a property instead of a circumstance.
+    {
+      const emission = resolveEmission();
+      if (emission.mode !== "live") {
+        throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
+      }
+    }
     const tokenUrl = `https://login.microsoftonline.com/${this.config.tenantId}/oauth2/v2.0/token`;
     
     const params = new URLSearchParams({

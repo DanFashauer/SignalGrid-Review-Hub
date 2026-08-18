@@ -159,6 +159,51 @@ async function run() {
   const health = await req("GET", "/healthz");
   check("healthz returns 200 ok", health.status === 200 && health.json?.status === "ok");
 
+  // ── error envelope: ONE flat shape for every error class ────────────────
+  // {requestId, error, message} — the spec's own Error schema, asserted on the
+  // BODY. Until now this suite checked `.status` ~20 times and never once what
+  // a client actually parses, which is how a nested fence 404, a shape-less
+  // 429 and an HTML unknown-route page all shipped unnoticed. Status-only
+  // coverage is envelope-shaped nothing.
+  const isEnvelope = (j) =>
+    j !== null &&
+    (typeof j.requestId === "string" || j.requestId === null) &&
+    typeof j.error === "string" &&
+    typeof j.message === "string";
+
+  // Unknown path OUTSIDE any guarded prefix: the JSON catch-all answers.
+  const unknownPath = await req("GET", "/zzz-definitely-not-a-route");
+  check("unknown /api path → 404 JSON envelope, not framework HTML",
+    unknownPath.status === 404 && isEnvelope(unknownPath.json) && unknownPath.json.error === "not_found");
+  check("…and the 404 carries x-request-id for correlation",
+    typeof unknownPath.headers.get("x-request-id") === "string");
+
+  // Unknown path UNDER /v1, anonymous: auth answers FIRST, deliberately — a
+  // 404-vs-401 difference would let an unauthenticated prober enumerate which
+  // routes exist. Same envelope either way.
+  const unknownV1Anon = await req("GET", "/v1/zzz-definitely-not-a-route");
+  check("unknown /v1 path without a bearer → 401 (no route enumeration), same envelope",
+    unknownV1Anon.status === 401 && isEnvelope(unknownV1Anon.json));
+
+  // …and AUTHENTICATED, the same unknown path falls through to the catch-all.
+  const unknownV1Auth = await req("GET", "/v1/zzz-definitely-not-a-route", { token: KEYS.operator });
+  check("unknown /v1 path with a valid bearer → 404 JSON envelope via the catch-all",
+    unknownV1Auth.status === 404 && isEnvelope(unknownV1Auth.json) && unknownV1Auth.json.error === "not_found");
+
+  const noBearer = await req("GET", "/v1/decisions");
+  check("missing bearer → 401 in the same envelope",
+    noBearer.status === 401 && isEnvelope(noBearer.json) && noBearer.json.error === "unauthorized");
+
+  const badJsonRes = await fetch(`${BASE}/v1/decisions/evaluate`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${KEYS.operator}`, "content-type": "application/json" },
+    body: "{this is not json",
+  });
+  requested.add("POST /v1/decisions/evaluate");
+  const badJsonBody = await badJsonRes.json().catch(() => null);
+  check("malformed JSON body → 400 in the same envelope (never a leaky 500)",
+    badJsonRes.status === 400 && isEnvelope(badJsonBody) && badJsonBody.error === "bad_request");
+
   const keys = await req("GET", "/v1/keys");
   check("keys discovery is public (200)", keys.status === 200);
   check("keys lists the nine demo keys (incl. the government/civic tenant)", Array.isArray(keys.json?.keys) && keys.json.keys.length === 9);
@@ -1131,6 +1176,14 @@ async function run() {
       // is the difference between refusing to answer and declining to acknowledge.
       const gwKeys = await fetch(`${BASE4}/v1/keys`);
       check("gateway: /v1/keys is not acknowledged at all (404, was 401)", gwKeys.status === 404);
+      // The fence 404 must speak the SAME flat envelope as every other error —
+      // it answered {error:{code,message}} (nested, violating the spec's own
+      // Error schema) until 2026-08-16, on exactly the path an integrator who
+      // misread the GA allowlist hits first.
+      const gwKeysBody = await gwKeys.json().catch(() => null);
+      check("gateway: the fence 404 uses the flat {requestId,error,message} envelope",
+        gwKeysBody !== null && typeof gwKeysBody.error === "string" && gwKeysBody.error === "not_found" &&
+        typeof gwKeysBody.message === "string" && "requestId" in gwKeysBody);
 
       const gwSim = await fetch(`${BASE4}/sim/room-entry`, {
         method: "POST",
@@ -1152,7 +1205,7 @@ async function run() {
       //
       // "Answers" means "is not 404". A 401 from `/v1/context` is the route working:
       // it is reachable and demanding a credential, which is exactly right.
-      for (const p of ["/healthz", "/v1/context", "/v1/decisions", "/v1/audit", "/v1/metrics"]) {
+      for (const p of ["/healthz", "/readyz", "/v1/context", "/v1/decisions", "/v1/audit", "/v1/metrics"]) {
         const r = await fetch(`${BASE4}${p}`);
         check(`gateway ALLOWS the launch path ${p} (${r.status}, not 404)`, r.status !== 404);
       }
@@ -1219,6 +1272,190 @@ async function run() {
     }
   }
 
+  // ── readiness vs liveness: the DB-loss distinction, exercised live ────────
+  // /healthz is pure liveness by contract (eleven callers treat it as
+  // is-the-port-open); /readyz answers "should this instance take traffic?".
+  // The two diverge in exactly one state — durable store CONFIGURED and
+  // UNREACHABLE — and that divergence is the whole reason /readyz exists, so
+  // it is the state this section manufactures.
+  {
+    // The MAIN server runs with no DATABASE_URL: durable persistence is off BY
+    // DESIGN (fixture-safe default, the core is in-memory), so it is ready —
+    // and the body says durableStore:"none" so this green can never be quoted
+    // as evidence that persistence is up.
+    const readyNone = await fetch(`${BASE}/readyz`);
+    const readyNoneBody = await readyNone.json().catch(() => null);
+    check("readyz: no durable store configured → ready, and honest about there being none",
+      readyNone.status === 200 && readyNoneBody?.status === "ready" && readyNoneBody?.durableStore === "none");
+
+    // Fifth short-lived server: DATABASE_URL configured and pointing at a port
+    // that answers nothing. The process must still boot (nothing constructs a
+    // store until a request needs one) and liveness must stay green — a DB
+    // outage reported as a dead process would restart-loop a working server.
+    // Readiness must go 503, in the same flat envelope as every other error:
+    // fail-closed, not fail-quiet.
+    const PORT5 = 5314;
+    const BASE5 = `http://localhost:${PORT5}/api`;
+    const server5 = spawn("node", [serverEntry], {
+      env: {
+        ...process.env,
+        PORT: String(PORT5),
+        NODE_ENV: "production",
+        LOG_LEVEL: "silent",
+        DATABASE_URL: "postgres://nobody:nothing@127.0.0.1:1/absent",
+      },
+      stdio: ["ignore", "ignore", "inherit"],
+    });
+    try {
+      let ready5 = false;
+      const start5 = Date.now();
+      while (Date.now() - start5 < 15000) {
+        try { if ((await fetch(`${BASE5}/healthz`)).ok) { ready5 = true; break; } } catch { /* not up yet */ }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      check("DB-loss: the process boots and LIVENESS stays green — an outage is not a dead process", ready5 === true);
+
+      const notReady = await fetch(`${BASE5}/readyz`);
+      const notReadyBody = await notReady.json().catch(() => null);
+      check("DB-loss: READINESS answers 503 — configured-but-unreachable takes no traffic",
+        notReady.status === 503);
+      check("DB-loss: the 503 speaks the flat {requestId,error,message} envelope",
+        notReadyBody !== null && isEnvelope(notReadyBody) && notReadyBody.error === "not_ready");
+
+      // Non-vacuity for the 503: the same server still answers liveness AFTER
+      // the failed readiness probe — the 503 was a verdict, not a crash.
+      const stillAlive = await fetch(`${BASE5}/healthz`);
+      check("DB-loss: liveness still green after the failed readiness probe", stillAlive.status === 200);
+    } finally {
+      server5.kill("SIGTERM");
+    }
+  }
+
+  // ── Deprecation/Sunset: the mechanism is served, the registry is empty ────
+  // docs/API_VERSIONING_POLICY.md promises machine-readable warning headers
+  // before any route is removed. Both halves of that promise are asserted:
+  // nothing is deprecated TODAY (an empty registry that nobody checks could
+  // grow an entry silently), and the mechanism actually SERVES the documented
+  // wire format when an entry exists (a policy naming headers nothing can
+  // serve is a promise with no delivery path).
+  {
+    const undeprecated = await fetch(`${BASE}/v1/context`, { headers: { authorization: `Bearer ${KEYS.operator}` } });
+    check("deprecation: no route is deprecated today — /v1/context carries no Deprecation header",
+      undeprecated.status === 200 && undeprecated.headers.get("deprecation") === null &&
+      undeprecated.headers.get("sunset") === null);
+
+    // Sixth short-lived server with a registry entry injected through the
+    // operator env lever — deprecating GET /v1/audit for this process only,
+    // nothing in source. The dates are fixed so the wire assertions are exact.
+    const PORT6 = 5315;
+    const BASE6 = `http://localhost:${PORT6}/api`;
+    const server6 = spawn("node", [serverEntry], {
+      env: {
+        ...process.env,
+        PORT: String(PORT6),
+        NODE_ENV: "production",
+        LOG_LEVEL: "silent",
+        SIGNALGRID_DEPRECATED_ROUTES: JSON.stringify([
+          { method: "GET", path: "/v1/audit", since: "2026-08-16T00:00:00Z", sunset: "2027-02-04T00:00:00Z", link: "https://example.invalid/deprecation" },
+        ]),
+      },
+      stdio: ["ignore", "ignore", "inherit"],
+    });
+    try {
+      let ready6 = false;
+      const start6 = Date.now();
+      while (Date.now() - start6 < 15000) {
+        try { if ((await fetch(`${BASE6}/healthz`)).ok) { ready6 = true; break; } } catch { /* not up yet */ }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      check("deprecation: server with an injected registry entry boots", ready6 === true);
+
+      // The deprecated route serves the documented wire formats: RFC 9745
+      // Deprecation ("@" + unix seconds) and RFC 8594 Sunset (HTTP-date).
+      // Headers arrive even on the 401 this anonymous request earns — a
+      // throttled or unauthenticated caller still deserves the warning.
+      const dep = await fetch(`${BASE6}/v1/audit`);
+      check("deprecation: the deprecated route carries Deprecation as @unix-seconds (RFC 9745)",
+        dep.headers.get("deprecation") === `@${Math.floor(Date.parse("2026-08-16T00:00:00Z") / 1000)}`);
+      check("deprecation: …and Sunset as an HTTP-date (RFC 8594)",
+        dep.headers.get("sunset") === new Date("2027-02-04T00:00:00Z").toUTCString());
+      check("deprecation: …and a Link rel=\"deprecation\" pointer",
+        (dep.headers.get("link") ?? "").includes('rel="deprecation"'));
+
+      // Scoped to the entry: the sibling route on the same server is untouched.
+      const sibling = await fetch(`${BASE6}/v1/context`);
+      check("deprecation: the injected entry deprecates ONLY its route — /v1/context stays clean",
+        sibling.headers.get("deprecation") === null && sibling.headers.get("sunset") === null);
+    } finally {
+      server6.kill("SIGTERM");
+    }
+  }
+
+  // ── idempotency replay: the retry that must not double ───────────────────
+  // A frontline device re-sends after connectivity drops mid-response. With
+  // Idempotency-Key set, the repeat must replay the FIRST outcome — same
+  // decision id, marked as a replay — not mint a second decision. Scoping is
+  // asserted from three sides: same key + same caller replays, a different
+  // key executes fresh, and the same key under a DIFFERENT bearer executes
+  // fresh (one tenant's key must never serve another tenant's response).
+  {
+    const evalBody = { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" };
+    const post = (token, key) => fetch(`${BASE}/v1/decisions/evaluate`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${token}`,
+        ...(key ? { "idempotency-key": key } : {}),
+      },
+      body: JSON.stringify(evalBody),
+    });
+
+    const first = await post(KEYS.operator, "retry-abc");
+    const firstJson = await first.json();
+    const replay = await post(KEYS.operator, "retry-abc");
+    const replayJson = await replay.json();
+    check("idempotency: the same key replays the same decision, not a second one",
+      first.status === 200 && replay.status === 200 &&
+      typeof firstJson?.decision?.decisionId === "string" &&
+      firstJson.decision.decisionId === replayJson?.decision?.decisionId);
+    check("idempotency: a replay says it is one (Idempotency-Replay: true), a fresh execution does not",
+      first.headers.get("idempotency-replay") === null &&
+      replay.headers.get("idempotency-replay") === "true");
+
+    const otherKey = await post(KEYS.operator, "retry-def");
+    const otherKeyJson = await otherKey.json();
+    check("idempotency: a different key executes fresh",
+      otherKeyJson?.decision?.decisionId !== firstJson?.decision?.decisionId &&
+      otherKey.headers.get("idempotency-replay") === null);
+
+    const noKey = await post(KEYS.operator);
+    const noKeyJson = await noKey.json();
+    check("idempotency: no key means no replay semantics — every send executes",
+      noKeyJson?.decision?.decisionId !== firstJson?.decision?.decisionId);
+
+    // Review finding: a key must be BOUND to its payload. The same key with a
+    // DIFFERENT body must execute fresh — replaying request A's response to
+    // request B as a 200 would hand the caller the wrong session/decision with
+    // no way to tell. (The key now includes a body digest; different payload =
+    // different cache entry, so the mismatch can never serve a stale answer.)
+    const differentBody = await fetch(`${BASE}/v1/decisions/evaluate`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${KEYS.operator}`, "idempotency-key": "retry-abc" },
+      body: JSON.stringify({ ...evalBody, identityRef: "nurse.expired-training" }),
+    });
+    const differentBodyJson = await differentBody.json();
+    check("idempotency: the same key with a DIFFERENT body executes fresh — never the wrong cached response",
+      differentBodyJson?.decision?.decisionId !== firstJson?.decision?.decisionId &&
+      differentBody.headers.get("idempotency-replay") === null);
+
+    const crossTenant = await post(KEYS.owner, "retry-abc");
+    const crossTenantJson = await crossTenant.json();
+    check("idempotency: the same key under a different bearer executes fresh — keys are caller-scoped",
+      crossTenant.status === 200 &&
+      crossTenantJson?.decision?.decisionId !== firstJson?.decision?.decisionId &&
+      crossTenant.headers.get("idempotency-replay") === null);
+  }
+
   // ── session lifecycle ───────────────────────────────────────────────────
   // These four routes are documented in the OpenAPI spec and registered in the
   // server, and the string "/v1/sessions" appeared ZERO times in this file: the
@@ -1242,6 +1479,31 @@ async function run() {
   const otherTenant = await req("GET", `/v1/sessions/${sessionId}`, { token: KEYS.atlas });
   check("session read from ANOTHER tenant → 404, never the session", otherTenant.status === 404 && otherTenant.json?.session === undefined);
 
+  // session:read vs session:write, pinned with ONE principal so the pair cannot
+  // pass vacuously: the auditor role holds session:read and not session:write,
+  // so the same token that reads a session at 200 must be refused a refresh at
+  // 403. These routes were the durable-path authorization gate's last
+  // exemption — authenticated-only until session:* joined the Permission union.
+  const auditorRead = await req("GET", `/v1/sessions/${sessionId}`, { token: KEYS.auditor });
+  check("session read as auditor → 200 (session:read granted to the read-only role)",
+    auditorRead.status === 200 && auditorRead.json?.session?.id === sessionId);
+  const auditorRefresh = await req("POST", `/v1/sessions/${sessionId}/refresh`, { token: KEYS.auditor, body: { ttlSeconds: 900 } });
+  check("session refresh as auditor → 403 (read-only means the session cannot be moved)",
+    auditorRefresh.status === 403 && auditorRefresh.json?.error === "forbidden");
+  const auditorEnd = await req("POST", `/v1/sessions/${sessionId}/end`, { token: KEYS.auditor });
+  check("session end as auditor → 403", auditorEnd.status === 403);
+  const auditorStart = await req("POST", "/v1/sessions/start", {
+    token: KEYS.auditor,
+    body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" },
+  });
+  // Honest scope: for the auditor this 403 comes from decision:evaluate, which
+  // runs first in the start route — no demo role holds evaluate without
+  // session:write, so the pure session:write start-denial has no live probe.
+  // What IS pinned: a read-only principal cannot open a session by any path,
+  // and no durable write happens on the way to the refusal.
+  check("session start as auditor → 403 (refused before any durable write, via the evaluate gate)",
+    auditorStart.status === 403 && auditorStart.json?.session === undefined);
+
   const refreshed = await req("POST", `/v1/sessions/${sessionId}/refresh`, { token: KEYS.operator, body: { ttlSeconds: 900 } });
   check("session refresh → 200 and extends the expiry", refreshed.status === 200 && Date.parse(refreshed.json?.session?.expiresAt) > Date.parse(started.json?.session?.expiresAt));
   const refreshOther = await req("POST", `/v1/sessions/${sessionId}/refresh`, { token: KEYS.atlas, body: {} });
@@ -1261,6 +1523,30 @@ async function run() {
 
   const sessionNoAuth = await req("POST", "/v1/sessions/start", { body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" } });
   check("session start without a token → 401", sessionNoAuth.status === 401);
+
+  // ── admin actions leave an audit trail, witnessed at /metrics ─────────────
+  // The durable ledger has no HTTP route (docs/BACKUP_AND_RESTORE.md, on
+  // purpose), so route-level emission is witnessed by the counter incremented
+  // BESIDE each appendAuditRecord call. The ledger's own correctness —
+  // chaining, redaction, tamper-evidence — is proof:audit-ledger's job; what
+  // this pins is the wiring: the lifecycle exercised above must have fired
+  // exactly these event types. A connector sync trigger is exercised here so
+  // its event joins the assertion.
+  {
+    const syncTrigger = await req("POST", "/v1/connectors/conn_tenant_northwind_entra_intune/sync", { token: KEYS.owner });
+    check("connector sync trigger → 200 (fixture pipeline)", syncTrigger.status === 200);
+
+    const metricsText = await (await fetch(`${BASE.replace(/\/api$/, "")}/metrics`)).text();
+    const counted = (eventType) => {
+      const m = metricsText.match(new RegExp(`signalgrid_audit_events_total\\{event_type="${eventType}"\\} (\\d+)`));
+      return m ? Number(m[1]) : 0;
+    };
+    check("audit trail: session.start events were appended for the sessions started above", counted("session.start") >= 1);
+    check("audit trail: session.refresh appended", counted("session.refresh") >= 1);
+    check("audit trail: session.end appended", counted("session.end") >= 1);
+    check("audit trail: policy.draft.created appended for the accepted draft above", counted("policy.draft.created") >= 1);
+    check("audit trail: connector.sync.triggered appended", counted("connector.sync.triggered") >= 1);
+  }
 
   // ── transport hygiene ───────────────────────────────────────────────────
   check("rate-limit headers present", allow.headers.get("ratelimit-limit") !== null);

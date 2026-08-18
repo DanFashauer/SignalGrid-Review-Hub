@@ -11,11 +11,11 @@ const PHASES = [
     bg: "bg-teal-400/10",
     steps: [
       "Employee taps badge at smart dock",
-      "SignalGrid validates schedule, role, training, and location permissions",
-      "Dock unlocks assigned device",
-      "Badge mechanically locks into device case",
-      "Session activates with shift-scoped app credentials",
-      "Floor, elevator, and specialty area access provisioned",
+      "SignalGrid evaluates schedule, role, training, and location signals",
+      "ALLOW recorded with evidence — the dock releases the assigned device",
+      "Badge locks into the reader case; custody binding recorded",
+      "Session evidence issued — the host app scopes its own credentials",
+      "Floor and specialty-area recommendations routed to the PACS",
     ],
   },
   {
@@ -29,9 +29,9 @@ const PHASES = [
       "Badge presence confirmed in case",
       "BLE/UWB proximity — device in authorized zone",
       "Device posture re-evaluated at each workflow trigger",
-      "Specialty access dynamically granted (ICU, pharmacy, lab)",
-      "Idle timeout and tamper alerts monitored in real time",
-      "Cellular/eSIM reachability confirmed for off-network resilience",
+      "Step-up or restrict recommended for specialty-area workflows (ICU, pharmacy, lab) — the PACS grants or revokes",
+      "Idle and tamper signals fold into the next evaluation",
+      "Cellular/eSIM reachability — a candidate resilience signal",
     ],
   },
   {
@@ -42,12 +42,12 @@ const PHASES = [
     border: "border-orange-400/20",
     bg: "bg-orange-400/10",
     steps: [
-      "Device docked — integrity check runs automatically",
-      "Sessions ended, credentials revoked",
-      "Audit log synced to ServiceNow / Splunk",
-      "Badge released from mechanical lock",
-      "Device queued for compliance re-baseline and charging",
-      "If not returned: PagerDuty alert + MDM Lost Mode + location escalation",
+      "Device docked — dock signals feed a closing evaluation",
+      "Session close recorded — credential revocation stays with your identity stack",
+      "Decision evidence exportable to your ITSM / SIEM (candidate integrations)",
+      "Badge released from the reader case",
+      "Re-baseline and charging recommended before next checkout",
+      "If not returned: DENY recorded with evidence — alerting and lost-mode stay approval-gated in your paging tool and MDM",
     ],
   },
 ];
@@ -60,7 +60,7 @@ export default function OutcomesSection() {
         <div className="mb-16 max-w-3xl">
           <h2 className="text-3xl font-bold tracking-tight mb-4">The Complete Shift Lifecycle</h2>
           <p className="text-muted-foreground text-lg leading-relaxed">
-            SignalGrid orchestrates device custody from dock-out to dock-in. The smart dock becomes the identity broker, the physical lock creates accountability, and the decision engine maintains trust state continuously across the entire shift.
+            SignalGrid follows device custody from dock-out to dock-in. The smart dock becomes the identity broker, the physical lock creates accountability, and the decision engine maintains trust state continuously across the entire shift.
           </p>
         </div>
 
@@ -111,11 +111,11 @@ export default function OutcomesSection() {
             </div>
             <div className="md:ml-auto flex flex-wrap gap-2">
               {[
-                "PagerDuty incident created",
-                "Supervisor notified",
-                "MDM Lost Mode triggered",
-                "Cellular tracking escalated",
-                "Badge access suspended",
+                "DENY + evidence recorded",
+                "Supervisor notification recommended",
+                "MDM Lost Mode recommended (approval-gated)",
+                "Location escalation recommended",
+                "Badge suspension routed to the PACS",
               ].map((action) => (
                 <span key={action} className="inline-flex items-center rounded-md border border-destructive/20 bg-destructive/10 px-2.5 py-1 text-xs font-mono text-destructive">
                   {action}
@@ -124,6 +124,12 @@ export default function OutcomesSection() {
             </div>
           </div>
         </motion.div>
+
+        <p className="mx-auto mt-16 max-w-2xl text-center text-sm text-muted-foreground/70">
+          Deterministic and fixture-backed today. The decision and its evidence are recorded;
+          ticket, lost-mode, and suspension actions stay approval-gated and simulated — executed
+          by the source system, never by SignalGrid.
+        </p>
       </div>
     </section>
   );

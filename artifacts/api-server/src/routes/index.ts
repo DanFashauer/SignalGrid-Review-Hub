@@ -22,7 +22,11 @@ const router: IRouter = Router();
 // break the thing it is meant to protect.
 router.use((req, res, next) => {
   if (demoSurfacesEnabled() || routeServedByGateway(req.method, req.path)) return next();
-  res.status(404).json({ error: { code: "not_found", message: "Not found" } });
+  // The SAME flat envelope as every other error ({requestId, error, message}).
+  // This used to answer with a NESTED {error:{code,message}} shape — the only
+  // response on the surface that violated the spec's own Error schema, on
+  // exactly the path a confused integrator hits first.
+  res.status(404).json({ requestId: req.requestId ?? null, error: "not_found", message: "Not found" });
 });
 
 router.use(healthRouter);
@@ -58,5 +62,19 @@ if (demoSurfacesEnabled()) {
 // The /v1 product surface is backed by the deterministic in-memory core and
 // needs no database — it is the single source of truth for the product.
 router.use(v1Router);
+
+// JSON 404 catch-all — LAST, so it answers only what no router above claimed.
+// Without it an unknown /api path fell through to Express's HTML error page:
+// the one place an integrator is most lost (a typo'd path) answered in a
+// different content type and a shape no client parses. Same flat envelope as
+// every other error. Scoped to this router (mounted at /api) on purpose — the
+// root serves human surfaces (demo console, /metrics) whose defaults stand.
+router.use((req, res) => {
+  res.status(404).json({
+    requestId: req.requestId ?? null,
+    error: "not_found",
+    message: "No such API route.",
+  });
+});
 
 export default router;

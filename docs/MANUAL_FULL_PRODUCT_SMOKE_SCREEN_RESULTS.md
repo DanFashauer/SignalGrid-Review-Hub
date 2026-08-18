@@ -85,7 +85,7 @@ pnpm run proof:connector-emulator
 pnpm run phase:gate
 pnpm run phase:summary-check
 pnpm run phase:pr-report
-pnpm run autopilot:backlog-check
+pnpm run autopilot:backlog-check   # (historical: this script was retired 2026-08-15)
 git grep -nE "SignalGrid is production-ready|SignalGrid replaces|SignalGrid is an Imprivata partner|SignalGrid is MFi certified|autonomous production remediation|replaces ServiceNow|replaces PagerDuty|replaces CrowdStrike|replaces Defender|replaces ControlUp|Imprivata partner|MFi certified|replaces Jamf|replaces Intune|replaces Apple Configurator|replaces GroundControl" -- README.md docs artifacts/signalgrid-review/src || true
 git diff --check
 ```

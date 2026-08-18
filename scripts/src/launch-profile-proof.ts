@@ -79,9 +79,9 @@ for (const surface of SURFACES as ProfileSurface[]) {
       if (seen.has(id)) duplicateWithinSurface += 1;
       seen.add(id);
       counts[status] += 1;
-      // `deferred` shares DEFERRED_RATIONALE by design — 134 copies of one sentence
-      // would be volume, not rigor. Every other status is an arguable decision and
-      // has to carry the argument next to it.
+      // `deferred` shares DEFERRED_RATIONALE by design — a hundred-plus copies of one
+      // sentence would be volume, not rigor. Every other status is an arguable decision
+      // and has to carry the argument next to it.
       if (status !== "deferred") {
         const r = reasonOf(entry);
         if (r === null || r.trim().length < 20) unreasoned += 1;

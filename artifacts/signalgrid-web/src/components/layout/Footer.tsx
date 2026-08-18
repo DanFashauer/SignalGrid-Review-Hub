@@ -44,13 +44,11 @@ export default function Footer() {
               <span className="font-bold tracking-tight text-foreground">SIGNALGRID</span>
             </Link>
             <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-              The runtime decision layer for Zero Trust enforcement in shared-device frontline environments.
+              The runtime decision layer for shared-device frontline environments — evidence in, one deterministic call out.
             </p>
-            <div className="flex flex-wrap gap-1.5">
-              {["FIPS 140-2", "CMMC L3", "DISA STIG"].map(b => (
-                <span key={b} className="text-xs font-mono px-1.5 py-0.5 rounded border border-primary/20 bg-primary/5 text-primary/70">{b}</span>
-              ))}
-            </div>
+            <p className="text-xs font-mono text-muted-foreground/70">
+              Mapped to: FIPS 140-2 · CMMC L3 · DISA STIG (design targets, not certifications held)
+            </p>
           </div>
 
           {Object.entries(FOOTER_LINKS).map(([category, links]) => (
@@ -74,11 +72,9 @@ export default function Footer() {
         </div>
 
         <div className="pt-8 border-t border-border/40 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
-          <div>&copy; {new Date().getFullYear()} SignalGrid, Inc. All rights reserved.</div>
+          <div>&copy; {new Date().getFullYear()} Daniel Fashauer. All rights reserved.</div>
           <div className="flex gap-6">
-            <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Privacy Policy</a>
-            <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Terms of Service</a>
-            <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">System Status</a>
+            <a href={`${REPO}/blob/main/docs/CI_AND_VALIDATION.md`} target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Validation &amp; proofs</a>
             <a href="/federal" className="hover:text-foreground transition-colors">FedRAMP</a>
           </div>
         </div>

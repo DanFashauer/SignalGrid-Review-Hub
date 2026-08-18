@@ -4,9 +4,11 @@
 import {
   FleetDMConfig,
   FleetDMHost,
+  FleetDMLiveQueryReport,
   FleetDMPolicy,
   FleetDMPolicyResult,
   FleetDMPostureSignal,
+  FleetDMQueryResult,
 } from './types';
 import { resolveEmission } from '../adapters/emit-gate';
 import { getFleetDMConfig, setPostureForHost } from './store';
@@ -161,6 +163,12 @@ export class FleetDMAdapter {
   private async fetchHostWithPolicies(
     hostUuid: string,
   ): Promise<{ host: FleetDMHost; policies: FleetDMPolicyResult[] } | null> {
+    // Reached only via isEnabled()-gated methods today — but "today" is a
+    // circumstance. The chokepoint holds here too, so a future direct caller
+    // cannot reach the live Fleet API around it.
+    if (!this.isEnabled()) {
+      throw new Error('refused: host fetch with the fixture/live boundary closed.');
+    }
     const response = await fetchWithTimeout(
       `${this.getBaseUrl()}/api/v1/fleet/hosts/identifier/${encodeURIComponent(hostUuid)}?populate_policies=true`,
       {
@@ -308,40 +316,214 @@ export class FleetDMAdapter {
   }
 
   /**
-   * Run a live query against FleetDM (for additional telemetry).
+   * Run a live osquery campaign against EXPLICITLY NAMED hosts and collect the
+   * rows that stream back over Fleet's results websocket.
    *
-   * REFUSES, and sends nothing. Measured against Fleet 4.89.2 by
-   * `proof:live-fleet`, this method could not work as written and could not be
-   * made to work by fixing its request:
+   * History matters here: this method used to refuse outright, because its old
+   * body (`{ query, host_ids }`) was rejected 400 by every real Fleet — it had
+   * never once executed — and because a Fleet live query is ASYNCHRONOUS: the
+   * POST answers `{ campaign }` and the per-host rows arrive over a WEBSOCKET,
+   * so the old `data.results` was `undefined` while typed as an array. Fixing
+   * only the body would have armed the most dangerous call in this package
+   * while still returning nothing usable. The collector now exists (verified
+   * against a live Fleet with a real enrolled osqueryd in `proof:live-fleet`),
+   * so the refusal narrows to the gates below.
    *
-   *   1. Its body was `{ query, host_ids }`, which Fleet rejects 400 "no hosts
-   *      targeted" — it wants `{ query, selected: { hosts: [...] } }`. So this
-   *      has never once executed.
-   *   2. More fundamentally, a Fleet live query is ASYNCHRONOUS. A successful
-   *      POST returns `{ campaign: ... }` and the per-host rows stream back over
-   *      a WEBSOCKET; there is no results array in the response. The old
-   *      `data.results` was therefore `undefined` while typed as an array — any
-   *      caller reaching for `.length` or `.map` would have thrown.
+   * This is the one method that sends arbitrary osquery SQL to real hosts, so
+   * it sits behind THREE independent refusals, not just the tier chokepoint:
    *
-   * Correcting only the body would ARM the single most dangerous call in this
-   * package — it POSTs arbitrary osquery SQL to real production hosts — while
-   * still returning nothing usable, because collecting the results needs a
-   * websocket client that does not exist here. Full blast radius, zero value.
+   *   1. `isEnabled()` — tier AND operator flag, the same chokepoint as every
+   *      read path in this file;
+   *   2. `SIGNALGRID_ALLOW_LIVE_QUERY=true` — an explicit approval that no
+   *      read path requires, so enabling live READS never arms live queries;
+   *   3. a non-empty host list — a fleet-wide broadcast is refused outright,
+   *      never implied by an omitted argument.
    *
-   * So it refuses in the open, the way syslog now reports `not_implemented`
-   * rather than a comforting 'sent'. Implementing the campaign/websocket
-   * collector is a feature, tracked in docs/BUILD_BACKLOG.md — not something to
-   * fake with a request that merely stops erroring.
+   * The collection window is bounded (`opts.timeoutMs`, default 15s). A window
+   * that closes before every targeted host reports returns what arrived with
+   * `partial: true` — a partial measurement is reported as partial, never
+   * presented as the whole.
    */
-  async runQuery(_sql: string, _hostIds?: number[]): Promise<Record<string, unknown>[]> {
-    throw new Error(
-      'FleetDM runQuery is not implemented: Fleet live queries are asynchronous ' +
-        'campaigns whose results arrive over a websocket, so no synchronous result ' +
-        'set exists to return. Refusing rather than sending osquery SQL whose output ' +
-        'this adapter cannot collect. See docs/BUILD_BACKLOG.md.',
-    );
+  async runQuery(
+    sql: string,
+    hostIds?: number[],
+    opts?: { timeoutMs?: number },
+  ): Promise<FleetDMLiveQueryReport> {
+    if (!this.isEnabled()) {
+      throw new Error(
+        'FleetDM live query refused: adapter is not enabled — the deployment tier gate ' +
+          'and the operator flag are both required, and neither is bypassed by approval.',
+      );
+    }
+    if (process.env.SIGNALGRID_ALLOW_LIVE_QUERY !== 'true') {
+      throw new Error(
+        'FleetDM live query refused: SIGNALGRID_ALLOW_LIVE_QUERY is not "true". Live ' +
+          'queries send arbitrary osquery SQL to real hosts, so they require this ' +
+          'explicit approval in addition to the tier gate — enabling live reads must ' +
+          'never arm live queries.',
+      );
+    }
+    if (!hostIds || hostIds.length === 0) {
+      throw new Error(
+        'FleetDM live query refused: no target hosts named. A fleet-wide broadcast is ' +
+          'never implied by an omitted host list.',
+      );
+    }
+
+    // The collector must be POSSIBLE before the SQL is sent. Checking after the
+    // POST would execute the query fleet-wide and then throw with zero results
+    // collected — the exact "full blast radius, zero value" this method's own
+    // contract forbids (review finding, 2026-08-18).
+    const WebSocketImpl = this.resolveWebSocketImpl();
+
+    // Completion is judged against THIS set, never against a count of whatever
+    // ids the server happens to stream back: a frame for an untargeted host must
+    // not mark the campaign complete, and a duplicated id in the caller's list
+    // must not make completion unreachable.
+    const targets = new Set(hostIds);
+
+    const response = await fetchWithTimeout(`${this.getBaseUrl()}/api/v1/fleet/queries/run`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ query: sql, selected: { hosts: hostIds } }),
+      timeoutMs: TIMEOUT_PRESETS.normal,
+    });
+    if (!response.ok) {
+      throw new Error(`FleetDM live query POST failed: ${response.status}`);
+    }
+    const data = (await response.json()) as { campaign?: { id?: number } };
+    const campaignId = data.campaign?.id;
+    if (typeof campaignId !== 'number') {
+      throw new Error('FleetDM live query: no campaign id in the response — nothing to collect');
+    }
+    return this.collectCampaignResults(WebSocketImpl, campaignId, targets, opts?.timeoutMs ?? 15000);
+  }
+
+  // Node's built-in WebSocket client is reached via globalThis so this module
+  // keeps typechecking against the node lib alone (the same constraint
+  // getHeaders() documents for HeadersInit). Resolved BEFORE any SQL is sent.
+  private resolveWebSocketImpl(): new (url: string) => MinimalWebSocket {
+    const impl = (globalThis as Record<string, unknown>).WebSocket as
+      | (new (url: string) => MinimalWebSocket)
+      | undefined;
+    if (impl === undefined) {
+      throw new Error(
+        'FleetDM live query refused: no WebSocket client available in this runtime, so campaign ' +
+          'results could not be collected. No SQL was sent.',
+      );
+    }
+    return impl;
+  }
+
+  // Rows for a campaign stream over Fleet's results websocket; there is no REST
+  // endpoint to poll for them.
+  private collectCampaignResults(
+    WebSocketImpl: new (url: string) => MinimalWebSocket,
+    campaignId: number,
+    targets: Set<number>,
+    timeoutMs: number,
+  ): Promise<FleetDMLiveQueryReport> {
+    if (!this.isEnabled()) {
+      throw new Error('FleetDM live query refused: adapter disabled before collection began');
+    }
+    const hostsTargeted = targets.size;
+    const wsUrl = `${this.getBaseUrl().replace(/^http/, 'ws')}/api/v1/fleet/results/websocket`;
+    const token = this.config?.apiToken ?? '';
+
+    return new Promise((resolveReport, rejectReport) => {
+      const results: FleetDMQueryResult[] = [];
+      const responded = new Set<number>();
+      // Distinguishes "the campaign answered and then the window closed" from
+      // "the socket closed before the campaign ever answered" — the latter is a
+      // credential/selection failure and must REJECT, never resolve as an
+      // empty-but-plausible partial measurement (review finding, 2026-08-18).
+      let frameSeen = false;
+      let settled = false;
+      const ws = new WebSocketImpl(wsUrl);
+      const settle = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        try {
+          ws.close();
+        } catch {
+          // already closed
+        }
+        fn();
+      };
+      const finish = (partial: boolean) =>
+        settle(() =>
+          resolveReport({ campaignId, hostsTargeted, hostsResponded: responded.size, results, partial }),
+        );
+      const fail = (message: string) => settle(() => rejectReport(new Error(message)));
+      const timer = setTimeout(() => finish(responded.size < hostsTargeted), timeoutMs);
+
+      ws.addEventListener('open', () => {
+        ws.send(JSON.stringify({ type: 'auth', data: { token } }));
+        ws.send(JSON.stringify({ type: 'select_campaign', data: { campaign_id: campaignId } }));
+      });
+      ws.addEventListener('error', () =>
+        fail('FleetDM live query: websocket failed before the campaign finished'),
+      );
+      ws.addEventListener('close', () => {
+        if (!frameSeen) {
+          fail(
+            'FleetDM live query: the websocket closed before the campaign answered a single frame — ' +
+              'authentication or campaign selection failed; nothing was collected.',
+          );
+          return;
+        }
+        // A close after frames is a truncated window, not a clean answer:
+        // report whatever arrived as partial rather than inventing completeness.
+        finish(responded.size < hostsTargeted);
+      });
+      ws.addEventListener('message', (ev) => {
+        let msg: { type?: string; data?: Record<string, unknown> };
+        try {
+          msg = JSON.parse(String(ev.data)) as { type?: string; data?: Record<string, unknown> };
+        } catch {
+          return; // a non-JSON frame is not a result; ignoring it beats guessing
+        }
+        if (msg.type === 'result' && msg.data !== undefined) {
+          frameSeen = true;
+          const host = msg.data.host as { id?: number } | undefined;
+          const hostId = typeof host?.id === 'number' ? host.id : -1;
+          // A frame for a host this campaign never targeted is not evidence
+          // about the targets — counting it (or carrying its rows) would let
+          // the server's stream, rather than the caller's request, define what
+          // "complete" means. Dropped entirely.
+          if (hostId === -1 || !targets.has(hostId)) {
+            return;
+          }
+          responded.add(hostId);
+          const rows = Array.isArray(msg.data.rows) ? (msg.data.rows as Record<string, unknown>[]) : [];
+          const error =
+            typeof msg.data.error === 'string' && msg.data.error.length > 0 ? msg.data.error : null;
+          results.push({ host_id: hostId, rows, error });
+          if (responded.size >= hostsTargeted) {
+            finish(false);
+          }
+        } else if (msg.type === 'status' && msg.data !== undefined) {
+          frameSeen = true;
+          if (msg.data.status === 'finished') {
+            finish(responded.size < hostsTargeted);
+          }
+        } else if (msg.type === 'error') {
+          const detail = typeof msg.data === 'object' ? JSON.stringify(msg.data).slice(0, 200) : '';
+          fail(`FleetDM live query: the server reported an error frame — ${detail}`);
+        }
+      });
+    });
   }
 }
+
+// The structural slice of a WebSocket this module needs — declared locally so
+// the package stays typecheckable against the node lib alone.
+type MinimalWebSocket = {
+  addEventListener(type: string, listener: (ev: { data?: unknown }) => void): void;
+  send(data: string): void;
+  close(): void;
+};
 
 // Singleton instance
 let fleetDMAdapter: FleetDMAdapter | null = null;

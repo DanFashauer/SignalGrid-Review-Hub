@@ -59,14 +59,71 @@ Afterwards it compares the restored audit head against the manifest. If they dif
 **exits non-zero and says so** — the rows restored, but that is not the chain the backup
 recorded, and that is a fact you need immediately rather than at the next audit.
 
-Then re-verify the whole chain, not just its head:
+A matching head hash means the same last record. To establish that every record
+between them is intact, verify the whole chain — read-only, paginated, any length:
 
 ```bash
-DATABASE_URL=... pnpm run proof:audit-ledger-pg
+DATABASE_URL=... pnpm run db:verify-ledger
 ```
 
-A matching head hash means the same last record. Verifying the chain means every record
-between.
+It recomputes every hash and every link from the first record to the head, in bounded
+batches, and exits non-zero at the first break with the exact record index. It never
+writes. (`verifyLedgerFull` in `@workspace/audit` is the library form; the capped
+`verifyLedger()` still exists for quick checks and now reports `truncated: true`
+whenever its 10,000-record cap may have cut the read short — a truncated `ok` is a
+statement about a prefix, never about the chain.)
+
+> **DO NOT run `proof:audit-ledger-pg` against a restored database.** An earlier
+> revision of this page told you to, and doing so destroys the ledger you just
+> restored: the proof's first statement is `DROP TABLE IF EXISTS audit_ledger`
+> (`scripts/src/audit-ledger-pg-proof.ts:46`). It is a CI proof that builds and tears
+> down its own table on a throwaway database. `db:verify-ledger` is the operator tool.
+
+## Export the chain out of custody
+
+Tamper-evidence checked only by the machine that holds the data is weaker than it
+sounds: whoever can rewrite the table can also run that machine's verifier. The
+export is the chain **leaving custody** — a file an assessor, a cold-storage vault,
+or the owner's laptop can re-verify with no database at all:
+
+```bash
+DATABASE_URL=... pnpm run db:export-ledger -- --out ledger.ndjson
+pnpm run verify:ledger-export -- ledger.ndjson        # anywhere, no DATABASE_URL
+```
+
+The export writes one canonical record per line plus a manifest
+(`ledger.ndjson.manifest.json`): record count, head hash, first/last timestamps, and
+the SHA-256 of the file bytes. **The manifest is what makes truncation detectable** —
+a hash chain alone cannot see records missing from its end, because a shorter chain
+is also a valid chain; only the manifest knows how long this one must be. Write the
+head hash and file digest down *outside* the exporting machine (or countersign
+them): the manifest proves the file, something else must prove the manifest.
+
+Refusals are deliberate, and match `db:verify-ledger`'s posture: no `DATABASE_URL`
+(exporting a fresh in-memory void is not an export), a broken chain (an export would
+launder the break into archival-looking provenance — investigate first), and an
+empty ledger. The offline verifier likewise refuses a missing manifest and an empty
+file, and exits non-zero with the exact record index on a break. The round trip —
+export, verify offline, byte-flip caught at two layers, truncation caught by the
+manifest, mid-file deletion localized — is pinned by `proof:audit-ledger`
+(`scripts/src/audit-ledger-proof.ts`), which drives the same code these commands run.
+
+## Two ledgers, honestly
+
+This repository carries **two audit chains**, and they are not the same thing:
+
+- **`@workspace/audit`** — the durable SHA-256 hash chain this page is about.
+  Postgres-backed when `DATABASE_URL` is set, concurrency-safe under an advisory
+  lock, backed up and restored by the commands above, verified end to end by
+  `db:verify-ledger`. It has **no HTTP route yet**; its consumers are in-process.
+- **The core's per-tenant digest chain** (`lib/signalgrid-core`) — what
+  `GET /v1/audit` and the console's Audit page actually serve. It lives in process
+  memory and **does not survive a restart**. It is the reviewer-facing surface at
+  launch, and calling it "durable" was a false claim this repository has corrected.
+
+Bridging the two (anchoring the core chain's digests into the durable ledger) is a
+deliberate open decision, not an accident — until it is made, any statement about
+"the audit ledger" should say which one it means.
 
 ## What the CI proof actually establishes
 
@@ -100,6 +157,14 @@ assertions:
 
 ## Upgrades
 
-There is no upgrade tooling in this repository yet. Until there is, the honest
-procedure is: take a backup, verify it, deploy, and keep the archive until you are
-satisfied. `db:verify-backup` is what makes "keep the archive" mean something.
+The schema is versioned: `pnpm run db:migrate` applies the append-only migration
+list (`lib/persistence/src/migrations.ts`) and records each step in a
+`schema_version` table, so a running database can answer which revision it is.
+The runner is idempotent (a second run applies nothing), refuses a database whose
+recorded version is NEWER than the code driving it (old code must never drive a
+newer schema), and is exercised in CI's durable-persistence job on every PR — the
+upgrade path is tested continuously, not discovered at the first real upgrade.
+
+The honest procedure is still: take a backup, verify it, run `db:migrate`, deploy,
+and keep the archive until you are satisfied. `db:verify-backup` is what makes
+"keep the archive" mean something.

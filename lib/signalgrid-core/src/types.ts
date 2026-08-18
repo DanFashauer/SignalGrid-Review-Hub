@@ -21,6 +21,8 @@ export type Permission =
   | "connector:sync"
   | "audit:read"
   | "remediation:approve"
+  | "session:read"
+  | "session:write"
   | "tenant:admin";
 
 export type PrincipalType = "user" | "service";

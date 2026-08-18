@@ -156,6 +156,36 @@ check("a garbled technology value normalizes to unknown, never a fabricated clas
 const deniedBelow = evaluatePacsAccess(normalizeReport("est", { ...cleanRaw, accessResult: "denied", credentialTechnology: "static_identifier" } as PacsAccessReportRaw), { minimumCredentialTechnology: "cryptographic" });
 check("worst-concern-wins: a denial still escalates past a below-floor read (the axis never dilutes a stronger negative)", deniedBelow.recommendedAction === "escalate" && deniedBelow.reasonCode === "ACCESS_DENIED" && deniedBelow.credentialAssurance === "below_floor");
 
+// ── the mimic is byte-identical, and the model says so (owner-directed, 2026-08-16) ──
+// "Systems that can mimic a tap or badge scan": a skimmed 125 kHz identifier
+// replayed by a cloning tool produces THE SAME BYTES as the legitimate card —
+// there is no distinguishing input for an evaluator to see, so honesty demands
+// the model NEVER claim clone detection. A first version of this pin compared
+// the clone's verdict to the legitimate read's, which review showed to be
+// unfalsifiable: both derive from identical bytes, so ANY pure evaluator
+// passes — including one that emits a clone verdict. Review also showed a
+// key-NAME scan of one verdict instance misses values (a reasonCode string),
+// optional fields, and nesting. So the pin is enforced where it can actually
+// bite, twice:
+//   1. SOURCE-ANCHORED: the evaluator and its types, comment-stripped, carry
+//      no clone/mimic/spoof/counterfeit identifier or string literal — a
+//      CLONE_SUSPECTED reasonCode or a cloneLikelihood field cannot land
+//      without failing this, wherever in the verdict it would surface.
+//   2. VALUE-DEEP: the serialized verdicts across the poses this file
+//      exercises carry no such token in any key or value at any depth.
+// The DEFENSES stay what the rest of this file asserts: the posed credential
+// floor, event freshness (replay-in-time), and anti-passback (tailgating).
+const CLONE_TOKENS = /clone|mimic|spoof|counterfeit/i;
+const stripTs = (src: string) =>
+  src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
+const pacsDir = resolve(dirname(fileURLToPath(import.meta.url)), "../../lib/integrations/src/integrations/pacs-access");
+const evaluatorSrc = stripTs(await readFile(resolve(pacsDir, "evaluate.ts"), "utf8")) +
+  stripTs(await readFile(resolve(pacsDir, "types.ts"), "utf8"));
+check("the evaluator and its types offer NO clone-detection surface — no clone/mimic/spoof/counterfeit identifier or literal survives comment-stripping",
+  !CLONE_TOKENS.test(evaluatorSrc));
+check("no verdict across the exercised poses carries a clone judgement in any key or value, at any depth",
+  [belowFloor, unposed, acceptedLegacy, meets, posedSilent, deniedBelow].every((v) => !CLONE_TOKENS.test(JSON.stringify(v))));
+
 const uncoveredPosed = evaluatePacsAccess(normalizeReport("ghost", {} as PacsAccessReportRaw), { covered: false, minimumCredentialTechnology: "cryptographic" });
 check("an uncovered entry with a posed floor answers the axis honestly: assurance unknown, still NOT_COVERED", uncoveredPosed.reasonCode === "NOT_COVERED" && uncoveredPosed.credentialAssurance === "unknown");
 

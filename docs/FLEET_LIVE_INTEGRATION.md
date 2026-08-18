@@ -55,6 +55,37 @@ Enforcement on a real device still additionally requires a **supervised** iPhone
 (Apple Business Manager + APNs) — see `native/ios/FLEET_MDM.md`. Fleet Premium (teams)
 is the control-plane prerequisite; a supervised device is the on-device prerequisite.
 
+## Premium trial available (owner-held, out-of-tree) — and what it does NOT change
+
+A **Fleet Premium trial** license now exists (10 devices, issued to signalgrid.app,
+expires 2026-09-16). It is a credential and lives **only** on the owner's Fleet lab
+server — it is never committed here, per `AGENTS.md`. Two secrets are involved and
+they are DIFFERENT things:
+
+| Secret | Where it lives | What it does |
+| --- | --- | --- |
+| `FLEET_LICENSE_KEY` (the JWT) | the Fleet **server** config/env | unlocks Premium (teams) on that server |
+| `FLEET_TOKEN` (an API token) | passed to `proof:live-fleet` | how the SignalGrid connector **reads** Fleet's REST API — created as an API-only user inside Fleet (`fleetctl` / UI), NOT the license |
+
+What Premium changes for SignalGrid is **evidence, not enforcement**. Teams unlock
+the team-scoped policy branch of `getPolicies()`, so the read path can be exercised
+against team-scoped policies that free Fleet cannot represent. It does **not** change
+the posture: SignalGrid supplies evidence and never actuates, so `applyDecision()`'s
+transfer/enforcement path stays refused by design. That actually makes the trial a
+STRONGER test of the boundary — on free Fleet the enforcement endpoint 422s and the
+connector fails closed because Fleet said no; under Premium the endpoint would
+SUCCEED, so a run confirms the connector still refuses to actuate because that is the
+product's choice, not because the source blocked it. Enforcement on a real device
+still additionally needs a supervised device (`native/ios/FLEET_MDM.md`); the license
+is only the control-plane half.
+
+The **license half** of this is a Mac-lane exercise (sim-request
+`2026-08-12-fleet-lab-real-source`): the Premium license is a credential the owner
+holds, so the Premium-enabled Fleet server runs on the owner's machine and
+`proof:live-fleet` runs there against it. The free-Fleet half is NOT Mac-only —
+the cloud lane's container can run Docker and has brought up a full live Fleet
+(see the cloud-lane run below). **CI stays fixture-only by rule** either way.
+
 ## Validating privately (optional, out-of-tree)
 
 If you want to repeat the exercise in a PRIVATE test environment of your own,
@@ -83,7 +114,8 @@ separately, and only one of them was ever pointed at a real server.
 
 `proof:live-fleet` is a committed, opt-in live proof (the `proof:live-edr` pattern:
 it REFUSES without `FLEET_URL`/`FLEET_TOKEN` and the macOS harness skips it BY NAME,
-never silently). 30 assertions, all green after the fixes below.
+never silently). All assertions green after the fixes below — the proof's own
+printed summary is the count of record; this document does not pin a total.
 
 ## What a real Fleet 4.89.2 said
 
@@ -111,20 +143,36 @@ confidence. This is the same defect class as syslog reporting `sent` for a no-op
 required at least one policy AND all of them passing. A broken read never became a
 cheerful verdict — so this was a availability bug, not a safety bug.
 
-## `runQuery` refuses instead of being repaired
+## `runQuery`: refused first, then armed properly — collector plus a three-gate stack
 
 Correcting the request body alone would have been the wrong fix. A Fleet live query
 is **asynchronous**: a successful POST returns `{ campaign: ... }` and rows stream
 back over a **websocket**. There is no results array — the old `data.results` was
 `undefined` despite its `Record<string, unknown>[]` type, so any caller reaching for
-`.length` or `.map` would have thrown.
+`.length` or `.map` would have thrown. "Fixing" the body alone would have armed the
+single most dangerous call in the package — it POSTs arbitrary osquery SQL to real
+production hosts — while still returning nothing usable. So it refused outright,
+until the collector existed.
 
-So "fixing" the body would have armed the single most dangerous call in the package
-— it POSTs arbitrary osquery SQL to real production hosts — while still returning
-nothing usable. Full blast radius, zero value. It now throws `not implemented` and
-sends nothing, the way syslog now reports `not_implemented`. Implementing the
-campaign/websocket collector is tracked as a feature in
-[BUILD_BACKLOG.md](BUILD_BACKLOG.md).
+The collector now exists (2026-08-17, verified live in the cloud-lane run below):
+`runQuery()` POSTs the correct campaign body, then collects the per-host rows over
+`/api/v1/fleet/results/websocket` (Node's built-in WebSocket client — no new
+dependency) with a bounded window; a window that closes before every targeted host
+reports returns what arrived flagged `partial: true`, never presented as complete.
+Because the blast radius did not shrink, the method sits behind **three independent
+refusals**, each pinned from its own side in `proof:live-fleet`:
+
+1. the `isEnabled()` tier-and-flag chokepoint (approval does not bypass it —
+   asserted with the approval env set and the tier at dev);
+2. `SIGNALGRID_ALLOW_LIVE_QUERY=true` — an explicit approval no read path needs,
+   so enabling live *reads* never arms live *queries* (asserted: prod tier + flag
+   + no approval → refuses naming the env);
+3. an explicit, non-empty host list — a fleet-wide broadcast is refused, never
+   implied by an omitted argument.
+
+The ungated-fetch gate was widened in the same change: `new WebSocket…(` now counts
+as an outbound call site (`scripts/check-ungated-fetch.mjs`), verified by mutation —
+removing the collector's chokepoint guard turns the gate red.
 
 ## Reproducing it (amd64 under emulation — no Go toolchain needed)
 
@@ -163,10 +211,64 @@ TLS is off here deliberately: this is a disposable local server on the loopback
 interface holding no real data. Point the same proof at a Fleet holding anything real
 only over TLS, with `NODE_EXTRA_CA_CERTS` as in the section above.
 
-Two limits this lane cannot cross, stated so they are not mistaken for coverage:
-**teams are Fleet Premium** (so the team-policy branch of `getPolicies()` is
-UNVERIFIED and was deliberately left untouched — changing an unverified path because
-its sibling was wrong is a guess wearing a fix's clothes), and the enrolled host has
-no live `osqueryd`, so every policy comes back `unknown` rather than `pass`/`fail`.
-That absence is what proves the fail-closed path, but it does mean a genuine `pass`
-has not been observed end-to-end.
+One limit remains, stated so it is not mistaken for coverage: **teams are Fleet
+Premium**, so the team-policy branch of `getPolicies()` is UNVERIFIED and was
+deliberately left untouched — changing an unverified path because its sibling was
+wrong is a guess wearing a fix's clothes. Verifying it needs the owner's
+Premium-licensed lab (the Mac-lane exercise above).
+
+## Cloud-lane run, 2026-08-17: real `osqueryd`, TLS, and the first genuine `pass`
+
+The protocol-only limitation above ("the enrolled host has no live `osqueryd`,
+so every policy comes back `unknown`") is now CLOSED. The cloud lane brought up
+the full stack in its own container — `mysql:8.0` + `redis:7` +
+`fleetdm/fleet:latest` behind TLS (self-signed lab cert, trusted explicitly via
+`NODE_EXTRA_CA_CERTS`, verification never disabled) — and enrolled a **real
+`osqueryd` container** (`osquery/osquery:latest`) over the genuine TLS
+enroll/config/logger/distributed protocol. With
+`FLEET_OSQUERY_POLICY_UPDATE_INTERVAL=30s` the live agent actually ANSWERED its
+policies, which means:
+
+- `proof:live-fleet` passed **every assertion** against a real server with a real
+  enrolled host — both the fail-closed half (a freshly added, not-yet-answered
+  policy still grades `unknown` and holds the host non-compliant) and, for the
+  first time anywhere, the **affirmative half**: an all-passing live host graded
+  `compliant: true` through `getPostureForHost()` and mapped to `compliant` by
+  the bridge. Until this run that path had only ever been exercised by fixtures.
+- One assertion was strengthened by what the container taught us: a
+  containerized/virtual host legitimately reports an **empty** hardware serial,
+  so "serial is non-empty" was the wrong claim — it also never actually checked
+  sourcing (any non-empty string passed). The assertion now pins
+  `rawSignals.serial_number` EQUAL to the raw wire envelope's `hardware_serial`,
+  which proves the mapping on bare metal and in a lab container alike, and still
+  fails on the original `host.serial_number` → `undefined` bug.
+
+All lab credentials in that run (admin password, MySQL passwords, the
+self-signed key, API tokens, enroll secret) are ephemeral in-container values,
+discarded with the container and never committed.
+
+## proof:live-fleet-workflow — the live host reaches a real verdict (2026-08-18)
+
+A second opt-in live proof closes the seam the first one and `proof:launch-seam`
+leave between them: the live host's wire JSON travels the deployment path all
+the way to a decision — `toHostReport` → `normalizeFleetReport` →
+`fleetOutcome` → the `DeviceManagementEvidence` contract → fixture record →
+`runFixtureSync` → `evaluateDecision`. The container lab host is honestly
+UNMANAGED, so every layer must grade it fail-safe, and the final verdict is
+**restrict / DEVICE_UNMANAGED** — a real host the real workflow correctly
+refuses. A synthetic control (same record, management fields flipped healthy)
+loses the restriction, proving the live fields were load-bearing. Its flip
+section then adds a deliberately failing policy on the lab server, waits for
+the REAL agent to answer it `fail`, and watches the telemetry posture and the
+bridge draft flip to non-compliant on live evidence — then deletes the policy.
+The flip section WRITES to the target Fleet, so it demands
+`FLEET_LAB_WRITE_OK=true` on top of the usual env — point it only at a
+disposable lab. The macOS harness skips both live Fleet proofs by name.
+
+Re-run note, learned the honest way: with a LIVE agent answering policies every
+cycle, the fail-closed assertions ("an unreported policy is graded `unknown`")
+need at least one not-yet-answered policy to exist at proof time. Add a fresh
+global policy immediately before each `proof:live-fleet` run; within one policy
+cycle the agent will answer it and a re-run will need another. A lab where every
+policy is answered is not a failing lab — it is one whose unknown-state evidence
+has expired.

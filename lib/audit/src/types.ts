@@ -8,10 +8,13 @@ export type AuditEventType =
   | "device.update"
   | "session.start"
   | "session.poll"
+  | "session.refresh"
   | "session.end"
   | "auth.failure"
   | "asset.location.observed"
   | "admin.access"
+  | "connector.sync.triggered"
+  | "policy.draft.created"
   | "policy.matched"
   | "policy.action.executed"
   // Phase 4: Telemetry + Security events
@@ -46,7 +49,7 @@ export type Actor = {
 };
 
 export type Target = {
-  type: "badge" | "session" | "device";
+  type: "badge" | "session" | "device" | "policy" | "connector";
   id?: string;
 };
 

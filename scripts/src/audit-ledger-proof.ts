@@ -16,9 +16,11 @@ import {
   appendAuditRecord,
   getAuditRecords,
   verifyLedger,
+  verifyLedgerFull,
   setAuditBackend,
   InMemoryAuditBackend,
 } from "@workspace/audit";
+import { exportLedger, verifyExportContent, verifyExportLines } from "./ledger-export";
 
 let passed = 0;
 const failures: string[] = [];
@@ -107,6 +109,179 @@ async function main() {
   check("the reordered record's prevHash diverges from the true predecessor's hash",
     midBroken.expectedHash === chain[0].hash && midBroken.actualHash === chain[2].prevHash &&
     midBroken.expectedHash !== midBroken.actualHash);
+
+  // ── 5. The paginating verifier reads the WHOLE chain, not a prefix ─────────
+  // verifyLedger(limit) used to return a bare `ok: true` after reading `limit`
+  // records of an arbitrarily long chain — a false all-clear in the one
+  // component whose entire value is tamper-evidence. Two things are pinned
+  // here: the capped verifier is now HONEST about its cap (`truncated`), and
+  // verifyLedgerFull pages to the true end in bounded batches.
+  setAuditBackend(new InMemoryAuditBackend());
+  for (let i = 0; i < 25; i++) {
+    await appendAuditRecord("session.poll", { type: "user", id: `page-${i}` }, { meta: { step: i } });
+  }
+
+  const fullClean = await verifyLedgerFull({ batchSize: 10 });
+  check("verifyLedgerFull verifies a 25-record chain across 3 batches of 10",
+    fullClean.ok === true && fullClean.count === 25 && fullClean.batches === 3);
+  check("a full verification is never truncated, by construction", fullClean.truncated === false);
+
+  const capped = await verifyLedger(10);
+  check("verifyLedger with a cap below the ledger length says truncated — a prefix pass is not a chain pass",
+    capped.ok === true && capped.truncated === true && capped.count === 10);
+  const underCap = await verifyLedger();
+  check("verifyLedger under its cap says truncated:false — it provably reached the end",
+    underCap.ok === true && underCap.truncated === false && underCap.count === 25);
+  const exactCap = await verifyLedger(25);
+  check("a read returning EXACTLY its cap is truncated — the verifier cannot know nothing follows",
+    exactCap.truncated === true);
+
+  // ── 6. Corruption planted BEYOND the first batch is caught, globally indexed ─
+  // This is the exact blindness the old cap created: a clean first batch and a
+  // tampered seventeenth record. The capped verifier at limit=10 still passes
+  // its prefix — which is precisely why `truncated` has to be loud — and the
+  // paginating verifier must localize the break at the GLOBAL index.
+  const pages = await getAuditRecords(1000, 0);
+  (pages[17].meta as Record<string, unknown>).step = 999;
+
+  const beyond = await verifyLedgerFull({ batchSize: 10 });
+  check("verifyLedgerFull DETECTS corruption planted beyond the first batch", beyond.ok === false);
+  check("…localized to the correct GLOBAL index (17), not a batch-local one", beyond.brokenAtIndex === 17);
+  const blindPrefix = await verifyLedger(10);
+  check("the capped verifier still passes its clean prefix over the same tampered ledger — truncated:true is what stops that reading as green",
+    blindPrefix.ok === true && blindPrefix.truncated === true);
+  (pages[17].meta as Record<string, unknown>).step = 17; // restore
+
+  // ── 7. A break exactly AT a batch boundary — the linking hash must survive
+  // the page turn. Record 20 is the FIRST record of batch 3 (batchSize=10);
+  // tampering its prevHash can only be caught if the verifier carried the
+  // previous batch's head hash across the boundary.
+  const trueLink = pages[20].prevHash;
+  pages[20].prevHash = "0".repeat(64);
+  const boundary = await verifyLedgerFull({ batchSize: 10 });
+  check("verifyLedgerFull DETECTS a linkage break at the first record of a batch", boundary.ok === false && boundary.brokenAtIndex === 20);
+  check("…because the linking hash was carried across the batch boundary",
+    boundary.expectedHash === pages[19].hash && boundary.actualHash === "0".repeat(64));
+  pages[20].prevHash = trueLink; // restore
+
+  const oneBatch = await verifyLedgerFull({ batchSize: 1000 });
+  check("a batch size larger than the chain degenerates to one clean batch", oneBatch.ok === true && oneBatch.batches === 1 && oneBatch.count === 25);
+
+  // ── 8. Export round-trip: the chain leaves custody and still proves itself ──
+  // These drive the REAL export/verify core (`./ledger-export`) — the same code
+  // `db:export-ledger` and `verify:ledger-export` run — over the same 25-record
+  // in-memory chain, so what is proven here is what an operator gets. Not a
+  // re-implementation: the round trip below is the product path.
+  const lines: string[] = [];
+  const exported = await exportLedger((line) => lines.push(line), { batchSize: 10 });
+  check("export of a clean 25-record chain succeeds, verified as it streams",
+    exported.ok === true && exported.manifest.recordCount === 25 && exported.batches === 3);
+  const manifest = exported.ok ? exported.manifest : (undefined as never);
+  check("the export manifest's head hash IS the live chain's head",
+    exported.ok === true && manifest.headHash === pages[24].hash);
+
+  // The round trip: bytes → verdict, digest checked first, no database consulted.
+  const content = lines.map((l) => l + "\n").join("");
+  const roundTrip = verifyExportContent(content, manifest);
+  check("the exported file verifies offline — digest, chain, count and head all hold",
+    roundTrip.verdict === "verified" && roundTrip.recordCount === 25 && roundTrip.headHash === manifest.headHash);
+
+  // A single flipped byte dies twice, at two independent layers. First the file
+  // digest (the CLI's first check) — and then, even if an attacker regenerates
+  // no digest, the chain itself, localized to the exact record.
+  const flipped = lines.slice();
+  flipped[17] = flipped[17].replace('"step":17', '"step":18');
+  check("the flip actually changed line 17 — this probe is live, not vacuous", flipped[17] !== lines[17]);
+  const flippedContent = flipped.map((l) => l + "\n").join("");
+  const digestCaught = verifyExportContent(flippedContent, manifest);
+  check("a one-byte flip is caught by the file digest before any chain math runs",
+    digestCaught.verdict === "broken" && digestCaught.reason.startsWith("file digest mismatch"));
+  const chainCaught = verifyExportLines(flipped, manifest, { batchSize: 10 });
+  check("…and by the hash chain itself, localized to record 17, if the digest were bypassed",
+    chainCaught.verdict === "broken" && chainCaught.brokenAtIndex === 17);
+
+  // TRUNCATION is the attack a hash chain alone cannot see: a shorter chain is
+  // still a valid chain. Only the manifest knows how long this one must be.
+  const truncated = verifyExportLines(lines.slice(0, 22), manifest, { batchSize: 10 });
+  check("a truncated export is refused by the manifest count — a valid shorter chain is still tampering",
+    truncated.verdict === "broken" && truncated.reason.includes("count mismatch"));
+
+  // DELETION mid-file breaks linkage at exactly the seam it created.
+  const holed = lines.slice(0, 10).concat(lines.slice(11));
+  const holeCaught = verifyExportLines(holed, manifest, { batchSize: 10 });
+  check("deleting one mid-file record breaks the chain at the deletion index",
+    holeCaught.verdict === "broken" && holeCaught.brokenAtIndex === 10);
+
+  // A manifest whose head was rewritten to bless different content is caught.
+  const reheaded = { ...manifest, headHash: "f".repeat(64) };
+  const headCaught = verifyExportLines(lines, reheaded, { batchSize: 10 });
+  check("a manifest head-hash rewrite is caught against the recomputed chain head",
+    headCaught.verdict === "broken" && headCaught.reason.includes("head hash mismatch"));
+
+  check("an empty export is REFUSED, never verified — nothing verifying clean is not verified history",
+    verifyExportLines([], manifest).verdict === "refused");
+
+  // The exporter REFUSES a broken chain rather than laundering it into an
+  // archival-looking file. Same tamper as section 6, same index expected back.
+  (pages[17].meta as Record<string, unknown>).step = -17;
+  const refusedExport = await exportLedger(() => {}, { batchSize: 10 });
+  check("export of a tampered chain is refused with the break's exact index",
+    refusedExport.ok === false && refusedExport.reason === "chain-broken" && refusedExport.brokenAtIndex === 17);
+  (pages[17].meta as Record<string, unknown>).step = 17; // restore
+
+  // And exporting the VOID is a refusal, not an empty file that verifies.
+  setAuditBackend(new InMemoryAuditBackend());
+  const emptyExport = await exportLedger(() => {}, { batchSize: 10 });
+  check("export of an empty ledger is refused — nothing to export is not an export",
+    emptyExport.ok === false && emptyExport.reason === "empty-ledger");
+
+  // ── 9. The JSONB round-trip: key order is storage's whim, not evidence ─────
+  // Postgres re-orders JSONB object keys, including objects INSIDE arrays. The
+  // canonicalizer used to sort keys everywhere EXCEPT inside arrays, so the
+  // first record with array-of-object meta (the exact shape the redaction
+  // section above exercises) would verify at append and read back BROKEN — a
+  // false tamper alarm in the tamper-evidence component. These pin the fix:
+  // the same records, served with every object's keys reordered the way a
+  // database might, must still verify as the SAME chain.
+  setAuditBackend(new InMemoryAuditBackend());
+  await appendAuditRecord("admin.access", { type: "admin", id: "jsonb-1" }, {
+    meta: {
+      action: "sync",
+      headers: [{ zebra: 1, alpha: 2 }, { name: "content-type", value: "application/json" }],
+      nested: [{ outer: [{ delta: 4, bravo: 3 }] }],
+    },
+  });
+  await appendAuditRecord("session.start", { type: "user", id: "jsonb-2" }, { meta: { step: 1 } });
+  const jsonbClean = await verifyLedger();
+  check("a chain carrying array-of-object meta verifies at append time", jsonbClean.ok === true && jsonbClean.count === 2);
+
+  // Simulate the JSONB read path: deep-copy every record and REVERSE the key
+  // order of every object at every depth (top level, in arrays, in nested
+  // arrays). Real JSONB uses its own order; any consistent reordering proves
+  // the same property — the hash must not depend on it.
+  const reorderKeys = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(reorderKeys);
+    if (v !== null && typeof v === "object") {
+      const out: Record<string, unknown> = {};
+      for (const k of Object.keys(v as Record<string, unknown>).reverse()) out[k] = reorderKeys((v as Record<string, unknown>)[k]);
+      return out;
+    }
+    return v;
+  };
+  const originals = await getAuditRecords();
+  const reorderedRecords = originals.map((r) => reorderKeys(JSON.parse(JSON.stringify(r)))) as typeof originals;
+  setAuditBackend({
+    appendWithChain: async () => { throw new Error("frozen ledger"); },
+    getRecords: async (limit: number, offset: number) => reorderedRecords.slice(offset, offset + limit),
+  });
+  const jsonbRoundTrip = await verifyLedger();
+  check("the SAME chain verifies after a storage-style key reorder at every depth — key order is not evidence",
+    jsonbRoundTrip.ok === true && jsonbRoundTrip.count === 2 && jsonbRoundTrip.headHash === jsonbClean.headHash);
+
+  // Non-vacuity: the reorder actually changed serialization order somewhere —
+  // otherwise the assertion above proves nothing about order-independence.
+  check("…and the reorder was real, not a no-op (raw JSON differs, hashes agree)",
+    JSON.stringify(reorderedRecords[0]) !== JSON.stringify(originals[0]));
 
   const total = passed + failures.length;
   console.log(`Audit-ledger proof: ${passed}/${total} assertions passed`);

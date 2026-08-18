@@ -58,12 +58,22 @@ import { fileURLToPath } from "node:url";
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SCAN_ROOT = "lib/integrations/src/integrations";
 const UTIL_ROOT = "lib/integrations/src/utils";
+/** Comments must not clear a gate (review finding): a body containing
+ *  "// resolveEmission is deliberately not called here" beside an ungated call
+ *  read as GATED. Tokens are matched against comment-stripped text; the "//"
+ *  strip spares protocol separators (https://...) so a URL cannot eat a real
+ *  token that follows it on the same line. */
+const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/[^\n]*/gm, "$1");
+
 const GATE_TOKENS = ["resolveEmission", "SIGNALGRID_LIVE_INTEGRATIONS", "resolveLive", "mode !== \"live\"", "mode === \"live\""];
 
 // Any callee whose identifier contains "fetch" — the builtin AND every wrapper around
 // it. The negative lookbehind keeps `obj.fetch(` and `this.doFetch(` in scope while
-// excluding nothing that matters; breadth is the point.
-const FETCH_CALL = /(?<![\w$])[\w$]*[Ff]etch[\w$]*\s*\(/;
+// excluding nothing that matters; breadth is the point. `new WebSocket…(` joined the
+// pattern when the Fleet live-query collector landed: a websocket connect is an
+// outbound call that never says "fetch", and an unscanned transport is exactly the
+// hole this gate exists to close.
+const FETCH_CALL = /(?<![\w$])(?:[\w$]*[Ff]etch[\w$]*|new\s+[\w$]*WebSocket[\w$]*)\s*\(/;
 
 /**
  * The gate's own blind-spot detector.
@@ -82,8 +92,13 @@ function assertNoUnseenWrapper() {
   const unseen = [];
   for (const file of utilFiles) {
     const text = readFileSync(resolve(repoRoot, file), "utf8");
-    // Does this helper reach the real network primitive?
-    if (!/(?<![\w$.])fetch\s*\(/.test(text)) continue;
+    // Does this helper reach a real network primitive? `fetch(` AND WebSocket
+    // construction both count — a utils helper wrapping `new WebSocket` would
+    // otherwise recreate the exact fetchWithTimeout blind spot this function
+    // exists to close, with a transport that never says "fetch" (review
+    // finding, 2026-08-18).
+    const reachesNetwork = /(?<![\w$.])fetch\s*\(/.test(text) || /\bWebSocket\b/.test(stripComments(text));
+    if (!reachesNetwork) continue;
     for (const m of text.matchAll(/^export\s+(?:async\s+)?function\s+([\w$]+)/gm)) {
       const name = m[1];
       if (!FETCH_CALL.test(`${name}(`)) unseen.push(`${file} → ${name}()`);
@@ -159,24 +174,59 @@ for (const file of files) {
       if (methodDecl) { start = j; isClassMethod = true; break; }
     }
     if (start === -1 || !isClassMethod) continue;
-    const body = lines.slice(start, i + 1).join("\n");
+    const body = stripComments(lines.slice(start, i + 1).join("\n"));
     const gated = GATE_TOKENS.some((t) => body.includes(t));
     if (gated) continue;
 
-    // ENFORCED SCOPE: `healthCheck()`. That is the class of defect an automated
-    // review actually found and that I verified site by site and fixed — seven of
-    // them. It is also the sharpest case: a health check LOOKS inert (returns a
-    // boolean, sends nothing) while opening a real connection, so it is the one most
-    // likely to be re-added by someone acting in good faith.
+    // THE CHOKEPOINT PATTERN, verified rather than trusted. mde.ts and
+    // fleetdm.ts gate every live path through one `isEnabled()` whose body
+    // wraps resolveEmission() — a deliberate single point "that cannot be
+    // bypassed by adding a new method". A method guarding on this.isEnabled()
+    // is gated ONLY IF this file's isEnabled() itself carries a gate token:
+    // mde once had an isEnabled() lookalike that checked config.enabled alone
+    // (an operator preference, not a safety control), and accepting the NAME
+    // would re-open exactly that hole.
+    if (/\bthis\.isEnabled\s*\(\)/.test(body)) {
+      const impl = text.match(/isEnabled\s*\(\)\s*:\s*boolean\s*\{[\s\S]*?\n  \}/);
+      if (impl !== null && GATE_TOKENS.some((t) => stripComments(impl[0]).includes(t))) continue;
+    }
+
+    // THE TRANSPORT-INJECTION PATTERN, verified rather than trusted — the last
+    // survivor of the 2026-08-16 audit becomes gate-checked. passkey-assurance's
+    // connector reaches the network ONLY through a constructor-injected
+    // `this.transport`, and the sole site that constructs it live is the
+    // family's index.ts resolver, behind the full three-condition gate. So: a
+    // flagged method in a file whose class takes an injected transport counts
+    // as gated ONLY IF that family's own index.ts carries a gate token in
+    // comment-stripped source — the resolver IS the gate, and if someone strips
+    // the gate from the resolver, every method here goes red at once.
+    if (/private readonly transport/.test(text)) {
+      const idx = resolve(repoRoot, file, "..", "index.mjs").replace(/index\.mjs$/, "index.ts");
+      try {
+        const resolver = stripComments(readFileSync(idx, "utf8"));
+        if (GATE_TOKENS.some((t) => resolver.includes(t))) continue;
+      } catch { /* no index.ts — fall through to the report */ }
+    }
+
+    // ENFORCED SCOPE, widened 2026-08-16 after the audit it was waiting for:
     //
-    // NOT ENFORCED, and counted out loud instead: every other outbound class method
-    // (createTicket, lookupEndpoint, token fetches, retry helpers). Whether those are
-    // gated at the adapter or by a caller one level up is a real audit, and a real
-    // audit is not something to sweep through at speed on the back of a different
-    // finding. Failing the build on them right now would either be wrong (if callers
-    // do gate) or would push someone to bulk-silence the gate. Counting them keeps the
-    // gap visible until it is done properly.
-    if (/\bhealthCheck\s*\(/.test(lines[start])) {
+    //   · `healthCheck()` everywhere — the original class, found and fixed seven-up.
+    //   · EVERY outbound method under itsm/, siem/ and telemetry/ — audited: the
+    //     itsm/siem adapters ARE
+    //     the live transport (nothing constructs them in fixture mode; no proof and
+    //     no artifact references the classes), so an ungated method there is a
+    //     boundary hole with no caller above it to close it. All seventeen are now
+    //     gated in-method, the same shape as the healthCheck fix.
+    //
+    // STILL NOT ENFORCED, counted out loud, and now with the audit's reason: the
+    // telemetry/ and passkey-assurance methods are MODE-POLYMORPHIC — the same
+    // method serves fixture transports in proofs (proof:passkey-assurance drives
+    // fetchNormalizedSet with fixtures; the live lanes drive fleetdm/mde with the
+    // boundary open), so an in-method mode!=live throw would break the fixture
+    // path it legitimately serves. Their gate belongs where the live transport is
+    // selected; until each is verified site by site, they stay visible here.
+    const enforcedDir = /\/(itsm|siem|telemetry|passkey-assurance)\//.test(file);
+    if (enforcedDir || /\bhealthCheck\s*\(/.test(lines[start])) {
       findings.push({ file, line: i + 1, fn: lines[start].trim().slice(0, 72) });
     } else {
       unaudited.push(`${file}:${i + 1}  ${lines[start].trim().slice(0, 64)}`);
@@ -217,9 +267,14 @@ console.log(`  network helpers under utils/:     all named so the scan can see t
 if (unaudited.length > 0) {
   console.log(
     `\n  ⚠ ${unaudited.length} other outbound class method(s) NOT covered by this gate.\n` +
-      "    Whether each is gated by a caller one level up is an open audit, deliberately\n" +
-      "    not answered by a fast sweep attached to a different finding. Enforced scope\n" +
-      "    here is healthCheck() only — the class that was found, verified and fixed.",
+      "    The 2026-08-16 audit closed every prior member of this list; anything printed\n" +
+      "    here is NEW since then and needs the same treatment. The clearing rules the\n" +
+      "    gate now verifies: an in-method gate token; an isEnabled() chokepoint whose\n" +
+      "    OWN implementation carries a token (a config.enabled lookalike fails); or a\n" +
+      "    constructor-injected transport whose family index.ts resolver carries the\n" +
+      "    token (strip the resolver's gate and every method in the family goes red).\n" +
+      "    Enforced dirs (a finding FAILS the build): itsm/, siem/, telemetry/,\n" +
+      "    passkey-assurance/, plus healthCheck() everywhere.",
   );
   for (const u of unaudited) console.log(`      ${u}`);
 }

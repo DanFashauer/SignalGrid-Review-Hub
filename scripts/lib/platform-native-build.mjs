@@ -45,10 +45,11 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-// The four native families the workspace strips. Each entry maps the override
+// The five native families the workspace strips. Each entry maps the override
 // prefix used in pnpm-workspace.yaml to the package name pattern.
 const NATIVE_FAMILIES = [
   { parent: "rollup", pkg: (t) => `@rollup/rollup-${t}` },
+  { parent: "rolldown", pkg: (t) => `@rolldown/binding-${t}` },
   { parent: "esbuild", pkg: (t) => `@esbuild/${t}` },
   { parent: "lightningcss", pkg: (t) => `lightningcss-${t}` },
   { parent: "@tailwindcss/oxide", pkg: (t) => `@tailwindcss/oxide-${t}` },

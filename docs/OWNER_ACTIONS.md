@@ -96,8 +96,16 @@ already run advisory into blocking.
 1. ~~Merge PR #206~~ **DONE 2026-08-18** — merged as `5301efa` with all 13
    checks green; the day's work (Fleet live end-to-end, the collector, the
    website truth pass, intake rows 81–91) is on the default branch.
-2. ~~Comment `@dependabot rebase` on PR #163~~ **DONE 2026-08-18** — Dependabot
-   superseded #163 with **#211** (51 updates), and the agent unblocked its SBOM:
+2. ~~The Dependabot queue~~ **CLEARED 2026-08-18** — all nine dependency PRs
+   merged the same afternoon your rebase comment fired: #211 (the 51-update
+   group superseding #163), the three CI-action bumps (#208-#210), and the five
+   npm majors — express-rate-limit 8, chokidar 5, uuid 14, the pino 10 +
+   pino-http 11 pair (CI proved those two are only type-compatible together,
+   so one PR carried both and #160 closed superseded), and vite 8 with the
+   Rolldown native-binary policy (three Codex findings confirmed and fixed
+   in-branch: a stale-catalog rollback, missing Rolldown guardrails, and a
+   win32-binding regression the desktop lane's windows CI depends on).
+   One durable item remains from the episode — the agent unblocked the SBOMs:
    the supply-chain workflow's self-heal step regenerated the SBOM but was
    REJECTED pushing it — a repository ruleset protects `dependabot/*` refs from
    the Actions token (GH013 "Cannot update this protected ref"), which is why

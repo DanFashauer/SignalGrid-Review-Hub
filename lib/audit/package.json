@@ -4,6 +4,6 @@
   "private": true,
   "type": "module",
   "exports": { ".": "./src/index.ts" },
-  "dependencies": { "uuid": "^11.0.3", "pg": "^8.23.0" },
+  "dependencies": { "uuid": "^14.0.1", "pg": "^8.23.0" },
   "devDependencies": { "@types/node": "catalog:", "@types/uuid": "^10.0.0", "@types/pg": "^8.21.0" }
 }

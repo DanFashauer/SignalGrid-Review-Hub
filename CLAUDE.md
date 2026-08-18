@@ -103,7 +103,8 @@ pnpm run verify:breadth          # 47 deferred families + 8 doctrine proofs, its
 ## Toolchain wrinkle (macOS/arm64)
 
 `pnpm-workspace.yaml` `overrides` strip every native binary except
-**linux-x64-gnu** (rollup/esbuild/lightningcss/oxide), so:
+**linux-x64-gnu** (rollup/rolldown/esbuild/lightningcss/oxide — rolldown is
+Vite 8's bundler, win32 bindings deliberately kept for the windows desktop CI), so:
 
 - Proofs/sim/`test:api` run natively once tsx's esbuild binary for this arch is
   present and the api-server is built (both handled by `validate-sim-macos.sh`).

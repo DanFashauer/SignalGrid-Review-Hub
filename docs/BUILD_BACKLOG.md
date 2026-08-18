@@ -509,7 +509,14 @@ only), and the DDM rig is gated on an APNs push certificate.
       should a two-person ceremony exist on a reachable surface at all — and if so,
       on which action class? That is the owner's call, not an agent's, because it
       adds a runtime obligation to the launch path rather than fixing something
-      broken. If taken, the design pass's own conclusions bind: evidence must cross
+      broken. **A field-tested reference design now exists for the "if yes, how?"
+      half**: docs/research/SMPLIFY_DESIGN_STUDY.md records Smplify's shipped
+      approval-gate lifecycle (five risk tiers, gate-after-RBAC placement,
+      STRICT/DEFAULT self-approval modes pinned by compliance regime, idempotent
+      request creation, 24h TTL, replay-under-service-authority on quorum,
+      inbox/outbox, dry-run preview, loud break-glass refused for self) — the
+      owner's decision stays the owner's, with a concrete design to say yes to.
+      If taken, the design pass's own conclusions bind: evidence must cross
       the seam (a raw `DualControlRequestRaw` normalized by the primitive's own
       normalizer), never a caller-supplied verdict; a ceremony must bind to one
       action id and not be replayable across actions; and every new guard must be

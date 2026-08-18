@@ -78,6 +78,8 @@ const read = (f) => readFileSync(resolve(repo, f), "utf8");
 // alike, which is why the strip list has no musl entries for it.
 const FAMILIES = [
   { parent: "rollup", name: (os, arch, libc) => (os === "linux" ? `@rollup/rollup-linux-${arch}-${libc}` : `@rollup/rollup-${os}-${arch}`) },
+  // Vite 8 executes Rolldown, not Rollup — same platform-binding shape, msvc-suffixed on win32.
+  { parent: "rolldown", name: (os, arch, libc) => (os === "linux" ? `@rolldown/binding-linux-${arch}-${libc}` : os === "win32" ? `@rolldown/binding-win32-${arch}-msvc` : `@rolldown/binding-${os}-${arch}`) },
   { parent: "esbuild", name: (os, arch) => `@esbuild/${os}-${arch}` },
   { parent: "lightningcss", name: (os, arch, libc) => (os === "linux" ? `lightningcss-linux-${arch}-${libc}` : `lightningcss-${os}-${arch}`) },
   { parent: "@tailwindcss/oxide", name: (os, arch, libc) => (os === "linux" ? `@tailwindcss/oxide-linux-${arch}-${libc}` : `@tailwindcss/oxide-${os}-${arch}`) },

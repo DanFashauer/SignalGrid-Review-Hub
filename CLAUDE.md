@@ -79,6 +79,21 @@ proofs miss:
   present and the api-server is built (both handled by `validate-sim-macos.sh`).
 - `pnpm run build` (the vite web build) only runs on linux-x64 / in CI. Don't try
   to "fix" a web-build failure here — it's expected off linux-x64.
+- **Shell scripts run under bash 3.2** — the only `bash` on a stock Mac, and 20
+  years behind the one on your Linux CI box. Under `set -u` it treats an EMPTY
+  array's `"${a[@]}"` as *unbound* and aborts (bash 4.4+ expands it to nothing).
+  Always write the guarded form:
+
+  ```bash
+  cmd ${ARGS+"${ARGS[@]}"}      # not: cmd "${ARGS[@]}"
+  ```
+
+  This is here because a comment explaining it in ONE script did not generalize:
+  `cleanup-merged-branches.sh` documented the idiom, and `run-everything.sh` was
+  written without it anyway. A plain `./scripts/mac/run-everything.sh` then died
+  at line 108 in 387ms, before a single proof ran — while `--fast` worked, which
+  is exactly why it survived unnoticed. The one mode meant to run EVERYTHING was
+  the one mode that could never run.
 
 ## iOS specifics
 
@@ -98,6 +113,49 @@ proofs miss:
 - **Demo flags** (simulator-only) live in `EnterpriseShell/Services/DemoMode.swift`
   — badge, location/zone, injected signals, screen-capture, seeded control-plane
   refs, etc. Pass via `xcrun simctl launch booted com.enterprise.shell -Flag ...`.
+- **The shell must look like the OS, not like a foreign app.** EnterpriseShell is
+  a mix by design: most screens use semantic system colors (`.systemBackground`,
+  `.label`), while the SignalGrid-branded surfaces use the `SG` tokens in
+  `Services/DesignSystem.swift`. Both must follow the device. Concretely:
+  - **Never pin `UIUserInterfaceStyle` in `Info.plist`.** It was pinned to
+    `Light` while the SG palette was hardcoded dark, so the system-colored
+    screens rendered white and the branded ones charcoal — the app contradicted
+    itself screen to screen, and system UI (alerts, keyboards) never matched.
+  - **Never call `UIFont.systemFont` / `monospacedSystemFont` directly.** Use
+    `SG.sans` / `SG.mono` / `SG.monoDigits`, which scale via `UIFontMetrics`, and
+    set `adjustsFontForContentSizeCategory = true`. 29 raw calls had already
+    drifted in; the drift is the default unless this is written down.
+  - **Scaling text needs somewhere to go.** A label that scales must be allowed
+    to wrap (`numberOfLines = 0`, or `2` plus `minimumScaleFactor` in a narrow
+    button), and any row holding it needs a `greaterThanOrEqualToConstant`
+    height, never `equalToConstant`. Enabling Dynamic Type against fixed 44pt and
+    80pt rows produced truncation, then overlap, then mid-word breaks — each one
+    only visible at an accessibility text size.
+  - **Verify at `accessibility-extra-large`, not just at the default.** Every one
+    of those defects was invisible at normal size:
+    `xcrun simctl ui booted content_size accessibility-extra-large`.
+  - Decision colors (`allow`/`review`/`deny`) must clear **WCAG AA (4.5:1)**
+    against both `SG.background` and `SG.card` in both appearances. `deny` once
+    sat at 3.18:1 on card — the weakest contrast in the system on its most
+    safety-critical state.
+  - `SignalGridMobile` is pure SwiftUI with semantic colors and needs none of
+    this; it is already adaptive. Do not "fix" it into a UIKit shape.
+
+## Simulation results — provenance is the product
+
+`artifacts/sim-results/*.json` are records of an execution, and their
+`provenance.workingTreeClean` comes from `git status --porcelain` being empty —
+**untracked files included**. Two rules follow, both learned the hard way:
+
+- **Build output must be gitignored.** `native/ios/build/` was not, so a single
+  `everything` run left ~97MB of untracked products and stamped every subsequent
+  result as minted from a dirty tree. `native/android/**/build/` was already
+  ignored; the iOS twin simply had not been.
+- **Provenance is sampled BEFORE the runs**, in `scripts/mac/run-requests.mjs`.
+  Operations are *expected* to write into the tree (`evidence` mints
+  `artifacts/live-evidence/mac-run.json`), so sampling afterwards measured the
+  runner's own output. The field answers "what code produced this result" — the
+  state at launch. Do not move it back after the loop.
 
 ## Multiple Claude lanes
 

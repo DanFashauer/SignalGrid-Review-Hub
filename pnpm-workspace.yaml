@@ -51,7 +51,7 @@ catalog:
   tailwind-merge: ^3.6.0
   tailwindcss: ^4.3.3
   tsx: ^4.23.12
-  vite: ^7.3.2
+  vite: ^8.2.0
   wouter: ^3.10.0
   zod: ^3.25.76
 
@@ -103,6 +103,20 @@ overrides:
   "@tailwindcss/oxide>@tailwindcss/oxide-linux-arm64-gnu": "-"
   "@tailwindcss/oxide>@tailwindcss/oxide-linux-arm64-musl": "-"
   "@tailwindcss/oxide>@tailwindcss/oxide-linux-x64-musl": "-"
+  # Vite 8 bundles via Rolldown; mirror the rollup policy below EXACTLY:
+  # linux-x64-gnu kept for CI/deploy, win32 bindings kept because the desktop
+  # shell's windows-latest CI builds with vite, everything else stripped.
+  "rolldown>@rolldown/binding-android-arm64": "-"
+  "rolldown>@rolldown/binding-darwin-arm64": "-"
+  "rolldown>@rolldown/binding-darwin-x64": "-"
+  "rolldown>@rolldown/binding-freebsd-x64": "-"
+  "rolldown>@rolldown/binding-linux-arm-gnueabihf": "-"
+  "rolldown>@rolldown/binding-linux-arm64-gnu": "-"
+  "rolldown>@rolldown/binding-linux-arm64-musl": "-"
+  "rolldown>@rolldown/binding-linux-ppc64-gnu": "-"
+  "rolldown>@rolldown/binding-linux-s390x-gnu": "-"
+  "rolldown>@rolldown/binding-linux-x64-musl": "-"
+  "rolldown>@rolldown/binding-openharmony-arm64": "-"
   "rollup>@rollup/rollup-android-arm-eabi": "-"
   "rollup>@rollup/rollup-android-arm64": "-"
   "rollup>@rollup/rollup-darwin-arm64": "-"

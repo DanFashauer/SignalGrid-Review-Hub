@@ -109,6 +109,24 @@ export const SIM_OPERATIONS = {
     needs: "the live-lane credentials; skips loudly by name when unset",
     what: "the real-vendor lanes (Wazuh, Keycloak, Fleet, Traccar) where configured",
   },
+  // A request that needs ONE vendor should be able to say so. `live-lanes` is
+  // all-or-nothing: it exits 3 if ANY lane skipped, so a run where Fleet passed
+  // against a real Fleet still recorded refused_missing_prerequisite because
+  // proof:live-edr skipped — and run-live-lanes.sh never starts Wazuh for you
+  // (~2GB image, minutes of boot). That made 2026-08-12-fleet-lab-real-source
+  // permanently unresolvable on this Mac, even though its own notes said "Fleet
+  // is the one that matters here; Wazuh/Keycloak/Traccar skipping is fine".
+  //
+  // The coarse status was not wrong — an unrun lane is genuinely not green. The
+  // request simply had no way to name the lane it cared about. This is that way.
+  // Fleet needs no credentials: the script stands mysql + redis + fleet up in
+  // Docker itself (amd64 under emulation on Apple Silicon) and tears them down.
+  "live-fleet": {
+    argv: ["./scripts/run-live-lanes.sh", "--only", "fleet"],
+    platform: "any",
+    needs: "a running container engine; the script stands Fleet up itself",
+    what: "the Fleet device-management lane alone, against a real Fleet in Docker",
+  },
 };
 
 export const OPERATION_KEYS = Object.freeze(Object.keys(SIM_OPERATIONS).sort());

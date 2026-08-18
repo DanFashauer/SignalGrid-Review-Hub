@@ -105,7 +105,11 @@ if [ "$PREREQ_OK" = "1" ]; then record prereqs PASS "node + pnpm ready"; else re
 say "2/5 proofs (the suite CI runs, natively)"
 if [ "$PREREQ_OK" = "1" ]; then
   if [ "$FAST" = "1" ]; then PROOF_ARGS=(--sim-only); else PROOF_ARGS=(); fi
-  if ./validate-sim-macos.sh "${PROOF_ARGS[@]}"; then
+  # Guarded expansion: under `set -u`, bash 3.2 (the only bash on a stock Mac)
+  # treats an EMPTY array's "${a[@]}" as unbound and aborts. Without --fast
+  # PROOF_ARGS is empty, so a plain full run died here before any proof ran.
+  # Same ${var+...} form used in scripts/cleanup-merged-branches.sh.
+  if ./validate-sim-macos.sh ${PROOF_ARGS+"${PROOF_ARGS[@]}"}; then
     record proofs PASS "validate-sim-macos.sh${FAST:+ }$([ "$FAST" = "1" ] && echo '(--sim-only)') green"
   else
     record proofs FAIL "validate-sim-macos.sh reported failures — its SUMMARY line above names them"

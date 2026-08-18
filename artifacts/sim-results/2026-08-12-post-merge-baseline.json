@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "requestId": "2026-08-12-post-merge-baseline",
+  "completedAt": "2026-08-12T18:17:16.964Z",
+  "provenance": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "nodeVersion": "v24.18.0",
+    "macosVersion": "26.6",
+    "commit": "575d4a9d331223d44f1892e7ef5b13f87a54ef1c",
+    "branch": "SignalGrid_Alpha",
+    "workingTreeClean": false
+  },
+  "runs": [
+    {
+      "operation": "everything",
+      "status": "failed",
+      "exitCode": 1,
+      "durationMs": 387,
+      "tail": [
+        "",
+        "\u001b[1m== 1/5 prereqs ==\u001b[0m",
+        "   node v24.18.0",
+        "   pnpm 10.28.1",
+        "   Xcode tooling present (xcodebuild + xcodegen)",
+        "",
+        "\u001b[1m== 2/5 proofs (the suite CI runs, natively) ==\u001b[0m",
+        "./scripts/mac/run-everything.sh: line 108: PROOF_ARGS[@]: unbound variable"
+      ]
+    },
+    {
+      "operation": "evidence",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 145950,
+      "tail": [
+        "This says NOTHING about the launch surface — that is preflight's job.",
+        "",
+        "signalgrid-mcp found at <HOME>/Public/Projects/SignalGrid/signalgrid-mcp (python: <HOME>/Public/Projects/SignalGrid/signalgrid-mcp/.venv/bin/python)",
+        "",
+        "=== signalgrid-mcp pytest (+ posture-report contract) ===",
+        "$ <HOME>/Public/Projects/SignalGrid/signalgrid-mcp/.venv/bin/python -m pytest -q",
+        "........................................................................ [ 72%]",
+        "...........................                                              [100%]",
+        "=============================== warnings summary ===============================",
+        ".venv/lib/python3.12/site-packages/pydantic_settings/sources/utils.py:47",
+        "  <HOME>/Public/Projects/SignalGrid/signalgrid-mcp/.venv/lib/python3.12/site-packages/pydantic_settings/sources/utils.py:47: IncompleteFieldDefinitionWarning: Field 'lifespan' has an incomplete definition: its annotation contains an unresolved forward reference, so settings sources may fail to correctly resolve its value. Call `model_rebuild()` on the model where the field is defined, once all the referenced types are defined.",
+        "    warnings.warn(",
+        "",
+        "-- Docs: <URL>",
+        "99 passed, 1 warning in 1.74s",
+        "",
+        "=== verify:all summary ===",
+        "  mcp tool count:       PASS (22 tools, derived and matching the doc)",
+        "  Review-Hub preflight: PASS",
+        "  Review-Hub breadth:   PASS",
+        "  signalgrid-mcp:       PASS",
+        "  shared contract:      <HOME>/Public/Projects/SignalGrid/SignalGrid-Review-<REDACTED-BLOB>-posture/contract/posture-report.contract.json",
+        "",
+        "--emit-evidence: wrote <HOME>/Public/Projects/SignalGrid/SignalGrid-Review-Hub/artifacts/live-evidence/mac-run.json (manifestFingerprint=ad48264c8790…).",
+        "  Commit artifacts/live-evidence/ to publish the run as repo evidence."
+      ]
+    }
+  ]
+}

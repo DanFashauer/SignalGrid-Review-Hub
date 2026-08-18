@@ -1,7 +1,7 @@
 {
   "schema": "signalgrid-live-evidence/v1",
-  "manifestFingerprint": "0caa6d7a8e9275545b4eab50febfbd7d5f3ff7f2a4a711ffdd76de87c0625987",
-  "manifestVersion": 24,
+  "manifestFingerprint": "ad48264c8790fb20bc104ac8e84309acaa08e464ea223a1182a63d9b8537bb51",
+  "manifestVersion": 30,
   "platform": "darwin",
   "preflightCoverage": {
     "nativeBuildExcluded": true,
@@ -10,7 +10,7 @@
       "Build (all packages)",
       "Browser E2E (review console, website, admin)"
     ],
-    "reason": "pnpm-workspace.yaml strips 4 native binaries for darwin-arm64 (@rollup/rollup-darwin-arm64, @esbuild/darwin-arm64, lightningcss-darwin-arm64, @tailwindcss/oxide-darwin-arm64), and they are not installed. The repo pins the web build to linux-x64 on purpose, so this step cannot run here — it is not failing, it is absent. Install the binaries to run it for real."
+    "reason": "pnpm-workspace.yaml strips 1 native binary for darwin-arm64 (@esbuild/darwin-arm64), and it is not installed. The repo pins the web build to linux-x64 on purpose, so this step cannot run here — it is not failing, it is absent. Install the binaries to run it for real."
   },
   "reviewHubPass": true,
   "mcpPass": true,
@@ -21,11 +21,11 @@
   "mcpUntrackedSource": 0,
   "contractSha": "ba32d196e154173d21f246b19364fd4b8f6a1d0f7d79db8082f195ac011d9e81",
   "summary": {
-    "signalKinds": 28,
-    "signalCategories": 13,
+    "signalKinds": 41,
+    "signalCategories": 17,
     "taskExceptionReasonCodes": 13,
     "handoffSimRefusalCodes": 8,
-    "mcpTools": 5,
-    "proofsDocumented": 31
+    "mcpTools": 8,
+    "proofsDocumented": 56
   }
 }

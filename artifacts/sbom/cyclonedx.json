@@ -2806,13 +2806,6 @@
     {
       "type": "library",
       "name": "pino-abstract-transport",
-      "version": "2.0.0",
-      "bom-ref": "pkg:npm/pino-abstract-transport@2.0.0",
-      "purl": "pkg:npm/pino-abstract-transport@2.0.0"
-    },
-    {
-      "type": "library",
-      "name": "pino-abstract-transport",
       "version": "3.0.0",
       "bom-ref": "pkg:npm/pino-abstract-transport@3.0.0",
       "purl": "pkg:npm/pino-abstract-transport@3.0.0"
@@ -2820,9 +2813,9 @@
     {
       "type": "library",
       "name": "pino-http",
-      "version": "10.5.0",
-      "bom-ref": "pkg:npm/pino-http@10.5.0",
-      "purl": "pkg:npm/pino-http@10.5.0"
+      "version": "11.0.0",
+      "bom-ref": "pkg:npm/pino-http@11.0.0",
+      "purl": "pkg:npm/pino-http@11.0.0"
     },
     {
       "type": "library",
@@ -2844,13 +2837,6 @@
       "version": "10.3.1",
       "bom-ref": "pkg:npm/pino@10.3.1",
       "purl": "pkg:npm/pino@10.3.1"
-    },
-    {
-      "type": "library",
-      "name": "pino",
-      "version": "9.14.0",
-      "bom-ref": "pkg:npm/pino@9.14.0",
-      "purl": "pkg:npm/pino@9.14.0"
     },
     {
       "type": "library",
@@ -2928,13 +2914,6 @@
       "version": "9.3.0",
       "bom-ref": "pkg:npm/pretty-ms@9.3.0",
       "purl": "pkg:npm/pretty-ms@9.3.0"
-    },
-    {
-      "type": "library",
-      "name": "process-warning",
-      "version": "5.0.0",
-      "bom-ref": "pkg:npm/process-warning@5.0.0",
-      "purl": "pkg:npm/process-warning@5.0.0"
     },
     {
       "type": "library",

@@ -1,5 +1,7 @@
 # Company-building vs product-building — the boundary, drawn where it already is
 
+**RATIFIED by the owner, 2026-08-18: one repository, explicit boundary.**
+
 The owner asked whether company-building and product-building need separating.
 The honest answer: **the separation already exists inside this repository, and
 making it physical (two repos) today would weaken the product's strongest

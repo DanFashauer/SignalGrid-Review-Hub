@@ -1875,13 +1875,6 @@
     {
       "type": "library",
       "name": "express-rate-limit",
-      "version": "7.5.1",
-      "bom-ref": "pkg:npm/express-rate-limit@7.5.1",
-      "purl": "pkg:npm/express-rate-limit@7.5.1"
-    },
-    {
-      "type": "library",
-      "name": "express-rate-limit",
       "version": "8.6.2",
       "bom-ref": "pkg:npm/express-rate-limit@8.6.2",
       "purl": "pkg:npm/express-rate-limit@8.6.2"

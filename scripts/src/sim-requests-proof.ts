@@ -20,8 +20,9 @@
 //   3. An asked-for run with no result row is PENDING and reported — never
 //      counted green, and never silently dropped.
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error — plain .mjs modules, no types by design (same as the other gates)
 import { SIM_OPERATIONS, OPERATION_KEYS, RUN_STATUSES, GREEN_STATUSES } from "../lib/sim-operations.mjs";
@@ -89,9 +90,31 @@ check("the runner never enables a shell", !runnerSrc.includes("shell: true"));
 // because the platform check runs BEFORE the plan short-circuit. That ordering
 // is the property: a machine that cannot run something says so before it says
 // anything else.
+//
+// The refusal is observed against a SYNTHETIC request, not the live queue.
+// This assertion originally planned the real artifacts/sim-requests — and went
+// red the day the Mac completed the last pending request that contained a
+// macOS-only operation (2026-08-18): nothing was left to refuse, so a healthy
+// runner failed the proof. The property under test is the RUNNER's behavior;
+// tying it to the queue's current contents made the assertion's subject
+// disappear out from under it. The runner's SIGNALGRID_SIM_REQUEST_DIR
+// override exists for exactly this.
+const synthDir = mkdtempSync(join(tmpdir(), "sim-req-proof-"));
+writeFileSync(
+  join(synthDir, "synthetic-platform-refusal.json"),
+  JSON.stringify({
+    schemaVersion: 1,
+    id: "synthetic-platform-refusal",
+    requestedBy: "proof:sim-requests",
+    reason: "synthetic fixture: observe the macOS-only platform refusal on a non-Mac",
+    runs: ["proofs-full"],
+  }),
+);
 const planRun = spawnSync("node", ["scripts/mac/run-requests.mjs", "--plan"], {
   cwd: repo, encoding: "utf8", maxBuffer: 16 * 1024 * 1024,
+  env: { ...process.env, SIGNALGRID_SIM_REQUEST_DIR: synthDir },
 });
+rmSync(synthDir, { recursive: true, force: true });
 const planOut = `${planRun.stdout ?? ""}${planRun.stderr ?? ""}`;
 if (process.platform !== "darwin") {
   check(

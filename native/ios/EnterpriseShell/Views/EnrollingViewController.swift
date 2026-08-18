@@ -28,7 +28,9 @@ final class EnrollingViewController: UIViewController {
     private lazy var titleLabel: UILabel = {
         let label = UILabel()
         label.text = "Badge Not Enrolled"
-        label.font = UIFont.systemFont(ofSize: 28, weight: .bold)
+        label.font = SG.sans(28, .bold)
+        label.adjustsFontForContentSizeCategory = true
+        label.numberOfLines = 0
         label.textAlignment = .center
         label.textColor = .label
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -38,7 +40,8 @@ final class EnrollingViewController: UIViewController {
     private lazy var messageLabel: UILabel = {
         let label = UILabel()
         label.text = "Your badge is not registered in the system. Please contact your administrator to enroll your badge, or use a different badge that is already enrolled."
-        label.font = UIFont.systemFont(ofSize: 16, weight: .regular)
+        label.font = SG.sans(16, .regular)
+        label.adjustsFontForContentSizeCategory = true
         label.textAlignment = .center
         label.textColor = .secondaryLabel
         label.numberOfLines = 0
@@ -56,7 +59,9 @@ final class EnrollingViewController: UIViewController {
     
     private lazy var badgeIdLabel: UILabel = {
         let label = UILabel()
-        label.font = UIFont.monospacedSystemFont(ofSize: 14, weight: .medium)
+        label.font = SG.mono(14, .medium)
+        label.adjustsFontForContentSizeCategory = true
+        label.numberOfLines = 0
         label.textColor = .label
         label.textAlignment = .center
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -66,7 +71,10 @@ final class EnrollingViewController: UIViewController {
     private lazy var retryButton: UIButton = {
         let button = UIButton(type: .system)
         button.setTitle("Try Another Badge", for: .normal)
-        button.titleLabel?.font = UIFont.systemFont(ofSize: 18, weight: .semibold)
+        button.titleLabel?.font = SG.sans(18, .semibold)
+        button.titleLabel?.adjustsFontForContentSizeCategory = true
+        button.titleLabel?.numberOfLines = 0
+        button.titleLabel?.lineBreakMode = .byWordWrapping
         button.backgroundColor = .systemBlue
         button.setTitleColor(.white, for: .normal)
         button.layer.cornerRadius = 12
@@ -78,7 +86,10 @@ final class EnrollingViewController: UIViewController {
     private lazy var helpButton: UIButton = {
         let button = UIButton(type: .system)
         button.setTitle("Contact Administrator", for: .normal)
-        button.titleLabel?.font = UIFont.systemFont(ofSize: 16, weight: .medium)
+        button.titleLabel?.font = SG.sans(16, .medium)
+        button.titleLabel?.adjustsFontForContentSizeCategory = true
+        button.titleLabel?.numberOfLines = 0
+        button.titleLabel?.lineBreakMode = .byWordWrapping
         button.setTitleColor(.systemBlue, for: .normal)
         button.translatesAutoresizingMaskIntoConstraints = false
         button.addTarget(self, action: #selector(helpTapped), for: .touchUpInside)

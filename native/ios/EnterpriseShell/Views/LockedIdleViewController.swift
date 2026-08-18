@@ -25,6 +25,8 @@ final class LockedIdleViewController: UIViewController {
         let label = UILabel()
         label.text = "Enterprise Device"
         label.font = SG.sans(28, .bold)
+        label.adjustsFontForContentSizeCategory = true
+        label.numberOfLines = 0
         label.textAlignment = .center
         label.textColor = SG.foreground
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -35,6 +37,8 @@ final class LockedIdleViewController: UIViewController {
         let label = UILabel()
         label.text = "Tap your badge to begin session"
         label.font = SG.sans(18, .medium)
+        label.adjustsFontForContentSizeCategory = true
+        label.numberOfLines = 0
         label.textAlignment = .center
         label.textColor = SG.mutedFg
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -53,6 +57,8 @@ final class LockedIdleViewController: UIViewController {
     private lazy var statusLabel: UILabel = {
         let label = UILabel()
         label.font = SG.sans(14, .regular)
+        label.adjustsFontForContentSizeCategory = true
+        label.numberOfLines = 0
         label.textAlignment = .center
         label.textColor = SG.mutedFg
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -70,6 +76,7 @@ final class LockedIdleViewController: UIViewController {
     private lazy var errorLabel: UILabel = {
         let label = UILabel()
         label.font = SG.sans(14, .medium)
+        label.adjustsFontForContentSizeCategory = true
         label.textAlignment = .center
         label.textColor = SG.deny
         label.numberOfLines = 0
@@ -85,6 +92,9 @@ final class LockedIdleViewController: UIViewController {
         button.setTitle("Manual login", for: .normal)
         button.setTitleColor(SG.mutedFg.withAlphaComponent(0.6), for: .normal)
         button.titleLabel?.font = SG.sans(12, .regular)
+        button.titleLabel?.adjustsFontForContentSizeCategory = true
+        button.titleLabel?.numberOfLines = 0
+        button.titleLabel?.lineBreakMode = .byWordWrapping
         button.addTarget(self, action: #selector(recoveryTapped), for: .touchUpInside)
         button.translatesAutoresizingMaskIntoConstraints = false
         button.isHidden = true
@@ -168,6 +178,24 @@ final class LockedIdleViewController: UIViewController {
         view.addSubview(recoveryButton)
         recoveryButton.isHidden = !KioskConfig.allowManualOverride
 
+        // The badge icon sits at the optical center at normal text sizes, but that
+        // center is pinned to the VIEW, not to the text above it — so once the
+        // instruction label wraps under Dynamic Type it grew straight into the icon.
+        // Dropping the priority lets the >= constraint below win exactly when it has
+        // to, leaving the designed layout untouched at normal sizes.
+        let badgeCenterY = badgeIconView.centerYAnchor.constraint(
+            equalTo: view.centerYAnchor, constant: 40)
+        // 500, deliberately BELOW a label's default vertical compression resistance
+        // (750). At .defaultHigh the two tied and Auto Layout satisfied the centering
+        // by squashing the instruction label back down to one truncated line — the
+        // overlap became an ellipsis, which is not a fix. Ranking the text above the
+        // centering makes the icon move and the words stay whole.
+        badgeCenterY.priority = UILayoutPriority(500)
+
+        // The text must never be the thing that gives.
+        titleLabel.setContentCompressionResistancePriority(.required, for: .vertical)
+        instructionLabel.setContentCompressionResistancePriority(.required, for: .vertical)
+
         NSLayoutConstraint.activate([
             recoveryButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             recoveryButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
@@ -195,7 +223,10 @@ final class LockedIdleViewController: UIViewController {
             
             // Badge Icon
             badgeIconView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            badgeIconView.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: 40),
+            badgeCenterY,
+            // Never overlap the instruction text, whatever size the user picked.
+            badgeIconView.topAnchor.constraint(
+                greaterThanOrEqualTo: instructionLabel.bottomAnchor, constant: 24),
             badgeIconView.widthAnchor.constraint(equalToConstant: 80),
             badgeIconView.heightAnchor.constraint(equalToConstant: 60),
             

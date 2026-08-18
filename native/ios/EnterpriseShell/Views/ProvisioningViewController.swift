@@ -15,7 +15,9 @@ final class ProvisioningViewController: UIViewController {
     private lazy var titleLabel: UILabel = {
         let label = UILabel()
         label.text = "Setting Up Workspace"
-        label.font = UIFont.systemFont(ofSize: 28, weight: .bold)
+        label.font = SG.sans(28, .bold)
+        label.adjustsFontForContentSizeCategory = true
+        label.numberOfLines = 0
         label.textAlignment = .center
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
@@ -24,7 +26,9 @@ final class ProvisioningViewController: UIViewController {
     private lazy var statusLabel: UILabel = {
         let label = UILabel()
         label.text = "Preparing your session..."
-        label.font = UIFont.systemFont(ofSize: 18, weight: .medium)
+        label.font = SG.sans(18, .medium)
+        label.adjustsFontForContentSizeCategory = true
+        label.numberOfLines = 0
         label.textAlignment = .center
         label.textColor = .secondaryLabel
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -104,7 +108,9 @@ final class ProvisioningViewController: UIViewController {
         
         let label = UILabel()
         label.text = step
-        label.font = UIFont.systemFont(ofSize: 16, weight: .regular)
+        label.font = SG.sans(16, .regular)
+        label.adjustsFontForContentSizeCategory = true
+        label.numberOfLines = 0
         label.textColor = .label
         label.translatesAutoresizingMaskIntoConstraints = false
         

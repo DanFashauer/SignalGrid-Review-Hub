@@ -21,7 +21,9 @@ final class AuthenticatingViewController: UIViewController {
     private lazy var titleLabel: UILabel = {
         let label = UILabel()
         label.text = "Authenticating"
-        label.font = UIFont.systemFont(ofSize: 28, weight: .bold)
+        label.font = SG.sans(28, .bold)
+        label.adjustsFontForContentSizeCategory = true
+        label.numberOfLines = 0
         label.textAlignment = .center
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
@@ -30,7 +32,9 @@ final class AuthenticatingViewController: UIViewController {
     private lazy var statusLabel: UILabel = {
         let label = UILabel()
         label.text = "Verifying your identity..."
-        label.font = UIFont.systemFont(ofSize: 18, weight: .medium)
+        label.font = SG.sans(18, .medium)
+        label.adjustsFontForContentSizeCategory = true
+        label.numberOfLines = 0
         label.textAlignment = .center
         label.textColor = .secondaryLabel
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -47,7 +51,9 @@ final class AuthenticatingViewController: UIViewController {
     
     private lazy var stepLabel: UILabel = {
         let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 14, weight: .regular)
+        label.font = SG.sans(14, .regular)
+        label.adjustsFontForContentSizeCategory = true
+        label.numberOfLines = 0
         label.textAlignment = .center
         label.textColor = .tertiaryLabel
         label.translatesAutoresizingMaskIntoConstraints = false

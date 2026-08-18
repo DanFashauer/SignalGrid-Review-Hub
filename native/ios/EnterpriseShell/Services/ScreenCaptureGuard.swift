@@ -64,6 +64,7 @@ final class ScreenCaptureGuard {
         label.text = "Screen capture is not permitted during this session."
         label.textColor = SG.mutedFg
         label.font = SG.sans(16, .semibold)
+        label.adjustsFontForContentSizeCategory = true
         label.textAlignment = .center
         label.numberOfLines = 0
         label.translatesAutoresizingMaskIntoConstraints = false

@@ -36,7 +36,9 @@ final class BadgeCapturedViewController: UIViewController {
     private lazy var titleLabel: UILabel = {
         let label = UILabel()
         label.text = "Badge Recognized"
-        label.font = UIFont.systemFont(ofSize: 24, weight: .bold)
+        label.font = SG.sans(24, .bold)
+        label.adjustsFontForContentSizeCategory = true
+        label.numberOfLines = 0
         label.textAlignment = .center
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
@@ -44,7 +46,9 @@ final class BadgeCapturedViewController: UIViewController {
     
     private lazy var badgeLabel: UILabel = {
         let label = UILabel()
-        label.font = UIFont.monospacedSystemFont(ofSize: 16, weight: .regular)
+        label.font = SG.mono(16, .regular)
+        label.adjustsFontForContentSizeCategory = true
+        label.numberOfLines = 0
         label.textAlignment = .center
         label.textColor = .secondaryLabel
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -54,7 +58,9 @@ final class BadgeCapturedViewController: UIViewController {
     private lazy var statusLabel: UILabel = {
         let label = UILabel()
         label.text = "Authenticating..."
-        label.font = UIFont.systemFont(ofSize: 18, weight: .medium)
+        label.font = SG.sans(18, .medium)
+        label.adjustsFontForContentSizeCategory = true
+        label.numberOfLines = 0
         label.textAlignment = .center
         label.textColor = .secondaryLabel
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -64,7 +70,10 @@ final class BadgeCapturedViewController: UIViewController {
     private lazy var cancelButton: UIButton = {
         let button = UIButton(type: .system)
         button.setTitle("Cancel", for: .normal)
-        button.titleLabel?.font = UIFont.systemFont(ofSize: 16, weight: .medium)
+        button.titleLabel?.font = SG.sans(16, .medium)
+        button.titleLabel?.adjustsFontForContentSizeCategory = true
+        button.titleLabel?.numberOfLines = 0
+        button.titleLabel?.lineBreakMode = .byWordWrapping
         button.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
         button.translatesAutoresizingMaskIntoConstraints = false
         return button

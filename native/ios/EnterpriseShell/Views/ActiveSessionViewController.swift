@@ -57,7 +57,9 @@ final class ActiveSessionViewController: UIViewController {
     
     private lazy var avatarLabel: UILabel = {
         let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 28, weight: .bold)
+        label.font = SG.sans(28, .bold)
+        label.adjustsFontForContentSizeCategory = true
+        label.numberOfLines = 0
         label.textColor = .white
         label.textAlignment = .center
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -66,7 +68,9 @@ final class ActiveSessionViewController: UIViewController {
     
     private lazy var userNameLabel: UILabel = {
         let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 22, weight: .bold)
+        label.font = SG.sans(22, .bold)
+        label.adjustsFontForContentSizeCategory = true
+        label.numberOfLines = 0
         label.textColor = .white
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
@@ -74,7 +78,9 @@ final class ActiveSessionViewController: UIViewController {
     
     private lazy var userRoleLabel: UILabel = {
         let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 16, weight: .medium)
+        label.font = SG.sans(16, .medium)
+        label.adjustsFontForContentSizeCategory = true
+        label.numberOfLines = 0
         label.textColor = .white.withAlphaComponent(0.9)
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
@@ -82,7 +88,9 @@ final class ActiveSessionViewController: UIViewController {
     
     private lazy var departmentLabel: UILabel = {
         let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 14, weight: .regular)
+        label.font = SG.sans(14, .regular)
+        label.adjustsFontForContentSizeCategory = true
+        label.numberOfLines = 0
         label.textColor = .white.withAlphaComponent(0.8)
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
@@ -108,7 +116,9 @@ final class ActiveSessionViewController: UIViewController {
     
     private lazy var sessionStatusLabel: UILabel = {
         let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 14, weight: .medium)
+        label.font = SG.sans(14, .medium)
+        label.adjustsFontForContentSizeCategory = true
+        label.numberOfLines = 0
         label.textColor = SG.foreground
         label.text = "Session Active"
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -117,7 +127,9 @@ final class ActiveSessionViewController: UIViewController {
     
     private lazy var sessionTimerLabel: UILabel = {
         let label = UILabel()
-        label.font = UIFont.monospacedDigitSystemFont(ofSize: 14, weight: .semibold)
+        label.font = SG.monoDigits(14, .semibold)
+        label.adjustsFontForContentSizeCategory = true
+        label.numberOfLines = 0
         label.textColor = SG.accent
         label.textAlignment = .right
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -128,7 +140,10 @@ final class ActiveSessionViewController: UIViewController {
         let button = UIButton(type: .system)
         button.setTitle("End Session", for: .normal)
         button.setTitleColor(.white, for: .normal)
-        button.titleLabel?.font = UIFont.systemFont(ofSize: 14, weight: .semibold)
+        button.titleLabel?.font = SG.sans(14, .semibold)
+        button.titleLabel?.adjustsFontForContentSizeCategory = true
+        button.titleLabel?.numberOfLines = 0
+        button.titleLabel?.lineBreakMode = .byWordWrapping
         button.backgroundColor = SG.deny
         button.layer.cornerRadius = 8
         button.addTarget(self, action: #selector(endSessionTapped), for: .touchUpInside)
@@ -141,6 +156,8 @@ final class ActiveSessionViewController: UIViewController {
     private lazy var requiredAppsHeader: UILabel = {
         let label = UILabel()
         label.font = SG.sans(18, .bold)
+        label.adjustsFontForContentSizeCategory = true
+        label.numberOfLines = 0
         label.textColor = SG.foreground
         label.text = "Required Apps"
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -164,6 +181,8 @@ final class ActiveSessionViewController: UIViewController {
     private lazy var optionalAppsHeader: UILabel = {
         let label = UILabel()
         label.font = SG.sans(18, .bold)
+        label.adjustsFontForContentSizeCategory = true
+        label.numberOfLines = 0
         label.textColor = SG.foreground
         label.text = "Available Apps"
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -189,6 +208,8 @@ final class ActiveSessionViewController: UIViewController {
     private lazy var quickActionsHeader: UILabel = {
         let label = UILabel()
         label.font = SG.sans(18, .bold)
+        label.adjustsFontForContentSizeCategory = true
+        label.numberOfLines = 0
         label.textColor = SG.foreground
         label.text = "Quick Actions"
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -209,6 +230,8 @@ final class ActiveSessionViewController: UIViewController {
     private lazy var restrictionsHeader: UILabel = {
         let label = UILabel()
         label.font = SG.sans(18, .bold)
+        label.adjustsFontForContentSizeCategory = true
+        label.numberOfLines = 0
         label.textColor = SG.foreground
         label.text = "Session Restrictions"
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -435,7 +458,10 @@ final class ActiveSessionViewController: UIViewController {
             quickActionsStack.topAnchor.constraint(equalTo: quickActionsHeader.bottomAnchor, constant: 12),
             quickActionsStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             quickActionsStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            quickActionsStack.heightAnchor.constraint(equalToConstant: 80),
+            // MINIMUM, not fixed — same reason as the restriction row. At a fixed 80pt
+            // the buttons could not grow, so their captions truncated ("Refre…")
+            // instead of wrapping once the text scaled.
+            quickActionsStack.heightAnchor.constraint(greaterThanOrEqualToConstant: 80),
             
             // Restrictions header
             restrictionsHeader.topAnchor.constraint(equalTo: quickActionsStack.bottomAnchor, constant: 24),
@@ -530,7 +556,16 @@ final class ActiveSessionViewController: UIViewController {
         
         let label = UILabel()
         label.text = title
-        label.font = UIFont.systemFont(ofSize: 12, weight: .medium)
+        label.font = SG.sans(12, .medium)
+        label.adjustsFontForContentSizeCategory = true
+        // Two lines plus a shrink floor, rather than unlimited lines. A quarter-width
+        // button cannot fit "Refresh" as one word at accessibility sizes, and pure
+        // word-wrapping broke it mid-word ("Refres / h"). Shrinking to at worst 70%
+        // keeps the word whole; it still scales with the user's setting, just bounded
+        // by the button it has to live in.
+        label.numberOfLines = 2
+        label.adjustsFontSizeToFitWidth = true
+        label.minimumScaleFactor = 0.7
         label.textColor = color
         label.textAlignment = .center
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -545,7 +580,14 @@ final class ActiveSessionViewController: UIViewController {
             imageView.heightAnchor.constraint(equalToConstant: 24),
             
             label.topAnchor.constraint(equalTo: imageView.bottomAnchor, constant: 8),
-            label.centerXAnchor.constraint(equalTo: button.centerXAnchor)
+            label.centerXAnchor.constraint(equalTo: button.centerXAnchor),
+            // Bound to the button, not just centered in it. With centerX alone the
+            // title had no width limit, so at large text sizes a long caption grew
+            // straight out of its button and into the neighbouring one — the row
+            // read as "Host App Refresh". Pinning both edges makes it wrap inside.
+            label.leadingAnchor.constraint(equalTo: button.leadingAnchor, constant: 4),
+            label.trailingAnchor.constraint(equalTo: button.trailingAnchor, constant: -4),
+            label.bottomAnchor.constraint(lessThanOrEqualTo: button.bottomAnchor, constant: -8)
         ])
         
         return button
@@ -611,13 +653,17 @@ final class ActiveSessionViewController: UIViewController {
         
         let titleLabel = UILabel()
         titleLabel.text = title
-        titleLabel.font = UIFont.systemFont(ofSize: 14, weight: .medium)
+        titleLabel.font = SG.sans(14, .medium)
+        titleLabel.adjustsFontForContentSizeCategory = true
+        titleLabel.numberOfLines = 0
         titleLabel.textColor = SG.foreground
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         
         let valueLabel = UILabel()
         valueLabel.text = value
-        valueLabel.font = UIFont.systemFont(ofSize: 14, weight: .regular)
+        valueLabel.font = SG.sans(14, .regular)
+        valueLabel.adjustsFontForContentSizeCategory = true
+        valueLabel.numberOfLines = 0
         valueLabel.textColor = SG.mutedFg
         valueLabel.textAlignment = .right
         valueLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -626,8 +672,16 @@ final class ActiveSessionViewController: UIViewController {
         container.addSubview(titleLabel)
         container.addSubview(valueLabel)
         
+        // The value is sized to its own content; the title takes what is left and
+        // wraps. Without this the two labels had no horizontal relationship at all
+        // and simply overlapped in the middle of the row once either grew.
+        valueLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        valueLabel.setContentHuggingPriority(.required, for: .horizontal)
+
         NSLayoutConstraint.activate([
-            container.heightAnchor.constraint(equalToConstant: 44),
+            // A MINIMUM, not a fixed height: 44pt still holds a single line at normal
+            // text sizes, but the row now grows instead of clipping wrapped text.
+            container.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
             
             iconView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
             iconView.centerYAnchor.constraint(equalTo: container.centerYAnchor),
@@ -636,9 +690,15 @@ final class ActiveSessionViewController: UIViewController {
             
             titleLabel.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 12),
             titleLabel.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            titleLabel.topAnchor.constraint(greaterThanOrEqualTo: container.topAnchor, constant: 10),
+            titleLabel.bottomAnchor.constraint(lessThanOrEqualTo: container.bottomAnchor, constant: -10),
             
             valueLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
-            valueLabel.centerYAnchor.constraint(equalTo: container.centerYAnchor)
+            valueLabel.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            valueLabel.topAnchor.constraint(greaterThanOrEqualTo: container.topAnchor, constant: 10),
+            valueLabel.bottomAnchor.constraint(lessThanOrEqualTo: container.bottomAnchor, constant: -10),
+            valueLabel.leadingAnchor.constraint(
+                greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 12)
         ])
         
         restrictionsStack.addArrangedSubview(container)
@@ -764,7 +824,9 @@ final class ActiveSessionViewController: UIViewController {
         toast.textColor = .white
         toast.backgroundColor = SG.allow
         toast.textAlignment = .center
-        toast.font = UIFont.systemFont(ofSize: 14, weight: .medium)
+        toast.font = SG.sans(14, .medium)
+        toast.adjustsFontForContentSizeCategory = true
+        toast.numberOfLines = 0
         toast.layer.cornerRadius = 8
         toast.clipsToBounds = true
         toast.alpha = 0
@@ -928,6 +990,7 @@ final class HomeScreenAppCell: UICollectionViewCell {
     private lazy var titleLabel: UILabel = {
         let label = UILabel()
         label.font = SG.sans(12, .medium)
+        label.adjustsFontForContentSizeCategory = true
         label.textColor = SG.foreground
         label.textAlignment = .center
         label.numberOfLines = 2

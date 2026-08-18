@@ -109,6 +109,8 @@ export const SIM_OPERATIONS = {
     needs: "the live-lane credentials; skips loudly by name when unset",
     what: "the real-vendor lanes (Wazuh, Keycloak, Fleet, Traccar) where configured",
   },
+  // ── one key per live lane ─────────────────────────────────────────────────
+  //
   // A request that needs ONE vendor should be able to say so. `live-lanes` is
   // all-or-nothing: it exits 3 if ANY lane skipped, so a run where Fleet passed
   // against a real Fleet still recorded refused_missing_prerequisite because
@@ -118,14 +120,40 @@ export const SIM_OPERATIONS = {
   // is the one that matters here; Wazuh/Keycloak/Traccar skipping is fine".
   //
   // The coarse status was not wrong — an unrun lane is genuinely not green. The
-  // request simply had no way to name the lane it cared about. This is that way.
-  // Fleet needs no credentials: the script stands mysql + redis + fleet up in
-  // Docker itself (amd64 under emulation on Apple Silicon) and tears them down.
+  // request simply had no way to name the lane it cared about. These are that way.
+  // Each maps to the `--only` filter run-live-lanes.sh already supported: with the
+  // other lanes filtered out nothing is skipped, so a lane that passes exits 0 and
+  // records `passed` rather than being dragged to refused by an unrelated lane.
+  //
+  // THEY ARE NOT INTERCHANGEABLE. Fleet, Keycloak and Traccar stand their own
+  // stacks up in Docker and tear them down. Wazuh does not — the script refuses to
+  // pull a ~2GB image for you — so `live-edr` still records
+  // refused_missing_prerequisite unless WAZUH_URL points at a real server. That is
+  // the honest answer for it, not a gap to paper over with a self-provisioning
+  // claim it cannot keep.
   "live-fleet": {
     argv: ["./scripts/run-live-lanes.sh", "--only", "fleet"],
     platform: "any",
     needs: "a running container engine; the script stands Fleet up itself",
     what: "the Fleet device-management lane alone, against a real Fleet in Docker",
+  },
+  "live-keycloak": {
+    argv: ["./scripts/run-live-lanes.sh", "--only", "keycloak"],
+    platform: "any",
+    needs: "a running container engine; the script stands Keycloak up itself",
+    what: "the Keycloak identity lane alone (DPoP feature), against a real Keycloak",
+  },
+  "live-location": {
+    argv: ["./scripts/run-live-lanes.sh", "--only", "location"],
+    platform: "any",
+    needs: "a running container engine; the script stands Traccar up itself",
+    what: "the Traccar location lane alone, against a real Traccar",
+  },
+  "live-edr": {
+    argv: ["./scripts/run-live-lanes.sh", "--only", "edr"],
+    platform: "any",
+    needs: "WAZUH_URL pointing at a real Wazuh — this lane is NOT self-provisioning",
+    what: "the Wazuh EDR lane alone; refuses (never passes) when WAZUH_URL is unset",
   },
 };
 

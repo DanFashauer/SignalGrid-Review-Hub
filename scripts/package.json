@@ -162,7 +162,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.page.json --noEmit"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@workspace/adaptive-proposals": "workspace:*",
     "@workspace/app-workflows": "workspace:*",
     "@workspace/audit": "workspace:*",
@@ -194,14 +194,14 @@
     "@workspace/verdict-attestation": "workspace:*",
     "@workspace/webauthn": "workspace:*",
     "@workspace/work-context": "workspace:*",
-    "pg": "^8.13.1"
+    "pg": "^8.23.0"
   },
   "devDependencies": {
-    "@playwright/test": "1.62.0",
+    "@playwright/test": "1.62.1",
     "@types/node": "catalog:",
-    "@types/pg": "^8.11.10",
-    "esbuild": "0.27.3",
-    "oidc-provider": "9.10.0",
+    "@types/pg": "^8.21.0",
+    "esbuild": "0.28.2",
+    "oidc-provider": "9.11.3",
     "tsx": "catalog:"
   }
 }

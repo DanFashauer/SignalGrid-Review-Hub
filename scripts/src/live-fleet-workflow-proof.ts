@@ -81,8 +81,19 @@ async function main(): Promise<void> {
   // ── 1. The live wire, through the connector's own normalization ────────────
   const wire = await raw(`/api/v1/fleet/hosts/identifier/${encodeURIComponent(HOST_UUID)}`);
   check("the live host answers on the wire", wire.status === 200, `status=${wire.status}`);
-  const wireHost = (JSON.parse(wire.body) as { host?: Record<string, unknown> }).host;
+  let wireHost: Record<string, unknown> | undefined;
+  try {
+    wireHost = (JSON.parse(wire.body) as { host?: Record<string, unknown> }).host;
+  } catch {
+    wireHost = undefined; // a non-JSON body (401 page, proxy error) is the same failure as no envelope
+  }
   check("…as a { host } envelope", wireHost !== undefined);
+  if (wire.status !== 200 || wireHost === undefined) {
+    // Every later section derives from this document; continuing would crash on
+    // undefined and bury the two named failures above under a raw parse error.
+    console.error(`\nsummary=FAIL (${passed}/${passed + failures.length}) — the wire fetch failed; nothing downstream is meaningful.`);
+    process.exit(1);
+  }
 
   const nowIso = new Date().toISOString(); // a live proof runs on live time by nature
   const report = toHostReport(wireHost);
@@ -195,27 +206,33 @@ async function main(): Promise<void> {
     check("a deliberately failing policy is accepted by the lab", mk.status === 200, `status=${mk.status}`);
     const policyId = (JSON.parse(mk.body) as { policy?: { id?: number } }).policy?.id;
 
-    let flipped = false;
-    let after: Awaited<ReturnType<typeof fleet.getPostureForHost>> = null;
-    for (let i = 0; i < 24 && !flipped; i += 1) {
-      await sleep(5000);
-      after = await fleet.getPostureForHost(HOST_UUID);
-      const answered = after?.policies.find((p) => p.id === policyId);
-      if (answered && answered.response === "fail") flipped = true;
-    }
-    check("THE LIVE FLIP: the real agent answered the new policy FAIL within the window", flipped);
-    check("…and the live posture verdict flipped to non-compliant on real evidence",
-      after?.compliant === false, `compliant=${String(after?.compliant)}`);
-    const drafts = after ? fleetDMToPostureDrafts(after) : [];
-    check("…and the bridge carries the flip: device_compliance draft is non_compliant",
-      drafts.find((d) => d.category === "device_compliance")?.value === "non_compliant");
-
-    if (typeof policyId === "number") {
-      const del = await raw("/api/v1/fleet/global/policies/delete", {
-        method: "POST",
-        body: JSON.stringify({ ids: [policyId] }),
-      });
-      check("lab hygiene: the failing policy is deleted after the flip", del.status === 200, `status=${del.status}`);
+    // The deletion is a FINALLY, not a happy-path step: a transient error inside
+    // the poll loop must not leak the unsatisfiable policy, or every later
+    // proof:live-fleet run inherits a permanently failing host with no obvious
+    // cause — "lab hygiene" that only runs on success is not hygiene.
+    try {
+      let flipped = false;
+      let after: Awaited<ReturnType<typeof fleet.getPostureForHost>> = null;
+      for (let i = 0; i < 24 && !flipped; i += 1) {
+        await sleep(5000);
+        after = await fleet.getPostureForHost(HOST_UUID);
+        const answered = after?.policies.find((p) => p.id === policyId);
+        if (answered && answered.response === "fail") flipped = true;
+      }
+      check("THE LIVE FLIP: the real agent answered the new policy FAIL within the window", flipped);
+      check("…and the live posture verdict flipped to non-compliant on real evidence",
+        after?.compliant === false, `compliant=${String(after?.compliant)}`);
+      const drafts = after ? fleetDMToPostureDrafts(after) : [];
+      check("…and the bridge carries the flip: device_compliance draft is non_compliant",
+        drafts.find((d) => d.category === "device_compliance")?.value === "non_compliant");
+    } finally {
+      if (typeof policyId === "number") {
+        const del = await raw("/api/v1/fleet/global/policies/delete", {
+          method: "POST",
+          body: JSON.stringify({ ids: [policyId] }),
+        });
+        check("lab hygiene: the failing policy is deleted after the flip", del.status === 200, `status=${del.status}`);
+      }
     }
   }
 

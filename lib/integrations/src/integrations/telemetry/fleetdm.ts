@@ -370,6 +370,18 @@ export class FleetDMAdapter {
       );
     }
 
+    // The collector must be POSSIBLE before the SQL is sent. Checking after the
+    // POST would execute the query fleet-wide and then throw with zero results
+    // collected — the exact "full blast radius, zero value" this method's own
+    // contract forbids (review finding, 2026-08-18).
+    const WebSocketImpl = this.resolveWebSocketImpl();
+
+    // Completion is judged against THIS set, never against a count of whatever
+    // ids the server happens to stream back: a frame for an untargeted host must
+    // not mark the campaign complete, and a duplicated id in the caller's list
+    // must not make completion unreachable.
+    const targets = new Set(hostIds);
+
     const response = await fetchWithTimeout(`${this.getBaseUrl()}/api/v1/fleet/queries/run`, {
       method: 'POST',
       headers: this.getHeaders(),
@@ -384,37 +396,48 @@ export class FleetDMAdapter {
     if (typeof campaignId !== 'number') {
       throw new Error('FleetDM live query: no campaign id in the response — nothing to collect');
     }
-    return this.collectCampaignResults(campaignId, hostIds.length, opts?.timeoutMs ?? 15000);
+    return this.collectCampaignResults(WebSocketImpl, campaignId, targets, opts?.timeoutMs ?? 15000);
+  }
+
+  // Node's built-in WebSocket client is reached via globalThis so this module
+  // keeps typechecking against the node lib alone (the same constraint
+  // getHeaders() documents for HeadersInit). Resolved BEFORE any SQL is sent.
+  private resolveWebSocketImpl(): new (url: string) => MinimalWebSocket {
+    const impl = (globalThis as Record<string, unknown>).WebSocket as
+      | (new (url: string) => MinimalWebSocket)
+      | undefined;
+    if (impl === undefined) {
+      throw new Error(
+        'FleetDM live query refused: no WebSocket client available in this runtime, so campaign ' +
+          'results could not be collected. No SQL was sent.',
+      );
+    }
+    return impl;
   }
 
   // Rows for a campaign stream over Fleet's results websocket; there is no REST
-  // endpoint to poll for them. Node's built-in WebSocket client is reached via
-  // globalThis so this module keeps typechecking against the node lib alone
-  // (the same constraint getHeaders() documents for HeadersInit).
+  // endpoint to poll for them.
   private collectCampaignResults(
+    WebSocketImpl: new (url: string) => MinimalWebSocket,
     campaignId: number,
-    hostsTargeted: number,
+    targets: Set<number>,
     timeoutMs: number,
   ): Promise<FleetDMLiveQueryReport> {
     if (!this.isEnabled()) {
       throw new Error('FleetDM live query refused: adapter disabled before collection began');
     }
-    const WebSocketImpl = (globalThis as Record<string, unknown>).WebSocket as
-      | (new (url: string) => {
-          addEventListener(type: string, listener: (ev: { data?: unknown }) => void): void;
-          send(data: string): void;
-          close(): void;
-        })
-      | undefined;
-    if (WebSocketImpl === undefined) {
-      throw new Error('FleetDM live query: no WebSocket client available in this runtime');
-    }
+    const hostsTargeted = targets.size;
     const wsUrl = `${this.getBaseUrl().replace(/^http/, 'ws')}/api/v1/fleet/results/websocket`;
     const token = this.config?.apiToken ?? '';
 
     return new Promise((resolveReport, rejectReport) => {
       const results: FleetDMQueryResult[] = [];
       const responded = new Set<number>();
+      // Distinguishes "the campaign answered and then the window closed" from
+      // "the socket closed before the campaign ever answered" — the latter is a
+      // credential/selection failure and must REJECT, never resolve as an
+      // empty-but-plausible partial measurement (review finding, 2026-08-18).
+      let frameSeen = false;
       let settled = false;
       const ws = new WebSocketImpl(wsUrl);
       const settle = (fn: () => void) => {
@@ -432,6 +455,7 @@ export class FleetDMAdapter {
         settle(() =>
           resolveReport({ campaignId, hostsTargeted, hostsResponded: responded.size, results, partial }),
         );
+      const fail = (message: string) => settle(() => rejectReport(new Error(message)));
       const timer = setTimeout(() => finish(responded.size < hostsTargeted), timeoutMs);
 
       ws.addEventListener('open', () => {
@@ -439,13 +463,20 @@ export class FleetDMAdapter {
         ws.send(JSON.stringify({ type: 'select_campaign', data: { campaign_id: campaignId } }));
       });
       ws.addEventListener('error', () =>
-        settle(() =>
-          rejectReport(new Error('FleetDM live query: websocket failed before the campaign finished')),
-        ),
+        fail('FleetDM live query: websocket failed before the campaign finished'),
       );
-      // A close before finish is a truncated window, not a clean answer: report
-      // whatever arrived as partial rather than inventing completeness.
-      ws.addEventListener('close', () => finish(responded.size < hostsTargeted));
+      ws.addEventListener('close', () => {
+        if (!frameSeen) {
+          fail(
+            'FleetDM live query: the websocket closed before the campaign answered a single frame — ' +
+              'authentication or campaign selection failed; nothing was collected.',
+          );
+          return;
+        }
+        // A close after frames is a truncated window, not a clean answer:
+        // report whatever arrived as partial rather than inventing completeness.
+        finish(responded.size < hostsTargeted);
+      });
       ws.addEventListener('message', (ev) => {
         let msg: { type?: string; data?: Record<string, unknown> };
         try {
@@ -454,11 +485,17 @@ export class FleetDMAdapter {
           return; // a non-JSON frame is not a result; ignoring it beats guessing
         }
         if (msg.type === 'result' && msg.data !== undefined) {
+          frameSeen = true;
           const host = msg.data.host as { id?: number } | undefined;
           const hostId = typeof host?.id === 'number' ? host.id : -1;
-          if (hostId !== -1) {
-            responded.add(hostId);
+          // A frame for a host this campaign never targeted is not evidence
+          // about the targets — counting it (or carrying its rows) would let
+          // the server's stream, rather than the caller's request, define what
+          // "complete" means. Dropped entirely.
+          if (hostId === -1 || !targets.has(hostId)) {
+            return;
           }
+          responded.add(hostId);
           const rows = Array.isArray(msg.data.rows) ? (msg.data.rows as Record<string, unknown>[]) : [];
           const error =
             typeof msg.data.error === 'string' && msg.data.error.length > 0 ? msg.data.error : null;
@@ -466,13 +503,27 @@ export class FleetDMAdapter {
           if (responded.size >= hostsTargeted) {
             finish(false);
           }
-        } else if (msg.type === 'status' && msg.data !== undefined && msg.data.status === 'finished') {
-          finish(responded.size < hostsTargeted);
+        } else if (msg.type === 'status' && msg.data !== undefined) {
+          frameSeen = true;
+          if (msg.data.status === 'finished') {
+            finish(responded.size < hostsTargeted);
+          }
+        } else if (msg.type === 'error') {
+          const detail = typeof msg.data === 'object' ? JSON.stringify(msg.data).slice(0, 200) : '';
+          fail(`FleetDM live query: the server reported an error frame — ${detail}`);
         }
       });
     });
   }
 }
+
+// The structural slice of a WebSocket this module needs — declared locally so
+// the package stays typecheckable against the node lib alone.
+type MinimalWebSocket = {
+  addEventListener(type: string, listener: (ev: { data?: unknown }) => void): void;
+  send(data: string): void;
+  close(): void;
+};
 
 // Singleton instance
 let fleetDMAdapter: FleetDMAdapter | null = null;

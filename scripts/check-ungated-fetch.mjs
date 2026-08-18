@@ -73,7 +73,7 @@ const GATE_TOKENS = ["resolveEmission", "SIGNALGRID_LIVE_INTEGRATIONS", "resolve
 // pattern when the Fleet live-query collector landed: a websocket connect is an
 // outbound call that never says "fetch", and an unscanned transport is exactly the
 // hole this gate exists to close.
-const FETCH_CALL = /(?<![\w$])(?:[\w$]*[Ff]etch[\w$]*|new\s+WebSocket[\w$]*)\s*\(/;
+const FETCH_CALL = /(?<![\w$])(?:[\w$]*[Ff]etch[\w$]*|new\s+[\w$]*WebSocket[\w$]*)\s*\(/;
 
 /**
  * The gate's own blind-spot detector.
@@ -92,8 +92,13 @@ function assertNoUnseenWrapper() {
   const unseen = [];
   for (const file of utilFiles) {
     const text = readFileSync(resolve(repoRoot, file), "utf8");
-    // Does this helper reach the real network primitive?
-    if (!/(?<![\w$.])fetch\s*\(/.test(text)) continue;
+    // Does this helper reach a real network primitive? `fetch(` AND WebSocket
+    // construction both count — a utils helper wrapping `new WebSocket` would
+    // otherwise recreate the exact fetchWithTimeout blind spot this function
+    // exists to close, with a transport that never says "fetch" (review
+    // finding, 2026-08-18).
+    const reachesNetwork = /(?<![\w$.])fetch\s*\(/.test(text) || /\bWebSocket\b/.test(stripComments(text));
+    if (!reachesNetwork) continue;
     for (const m of text.matchAll(/^export\s+(?:async\s+)?function\s+([\w$]+)/gm)) {
       const name = m[1];
       if (!FETCH_CALL.test(`${name}(`)) unseen.push(`${file} → ${name}()`);

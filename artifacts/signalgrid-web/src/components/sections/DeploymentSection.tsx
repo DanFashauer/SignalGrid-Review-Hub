@@ -57,7 +57,7 @@ const RESILIENCE_PROOFS = [
   { label: "Determinism", value: "Identical", desc: "Every concurrent outcome matches the single-request answer" },
   { label: "Throttling", value: "429", desc: "Standard back-off headers on every throttled response" },
   { label: "Rate Limit", value: "240/min", desc: "Per-key default — operator-tunable" },
-  { label: "Gated In CI", value: "test:load", desc: "Plus test:stress — correctness gated on every run" },
+  { label: "Gated In CI", value: "test:load", desc: "Correctness gated on every push; test:stress runs on demand" },
 ];
 
 export default function DeploymentSection() {

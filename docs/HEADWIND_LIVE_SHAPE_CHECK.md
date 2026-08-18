@@ -87,19 +87,29 @@ This is the fixture's *healthy kiosk scanner* state (`hw-scanner-01`:
 | `model` | `info.model` — **nested** in the launcher-reported `info` blob, not top-level | ✅ exists; a real adapter must read it from `info` |
 | `enrolled` | derivable: `enrollTime` present / `lastUpdate > 0`; absent both before first sync | ✅ both states observed live |
 | `kioskLocked` | `kioskMode` (mirrored top-level and in `info`) | ✅ exists — but note it is **launcher-reported**, not server-verified; the positive-assertion law in `headwindLabToDeviceManagementEvidence` is the right posture |
-| `configApplied` | `statusCode` (`"red"` → `"green"` observed) — a **derived tri-state+** combining config match and freshness | ⚠️ simplification: Headwind also documents `yellow` (config mismatch), **not observed in this run**; red conflates "config failed" with "not seen lately" |
+| `configApplied` | **no single server field.** `statusCode` is NOT it (see below); the panel derives app-install state by comparing the configuration's required `applications` against the device-reported `info.applications` — both are on the wire, so an adapter derives `configApplied` the same way | ⚠️ derivation, not a field — verified by negative control: giving config 1 a required app the device does not report left `statusCode` at `green` |
 | `lastSeenAt` | `lastUpdate` — **epoch milliseconds**, `0` meaning never | ✅ exists; adapter must convert epoch-ms→ISO and map `0`→`null` |
+
+**`statusCode` is a freshness clock, nothing more.** A first draft of this
+document guessed it combined config match and freshness — wrong, and corrected
+here with both kinds of evidence. Source (`DeviceMapper.xml`, upstream): a SQL
+`CASE` on `now() - lastupdate` — `green` under 2h, `yellow` 2–4h, `red`
+beyond (or never). Verified against the deployed 5.30.3 build by aging the
+lab device's `lastupdate` directly: fresh → `green`, 3h → `yellow`, 5h →
+`red`; and the unmet-required-app control above proves config state plays no
+part. Consequence for the fixture: `statusCode` carries no information the
+fixture's `lastSeenAt` doesn't already carry — the fixture needs no extra
+field, and the "dark device raises assurance" rule already covers what
+Headwind's colors express.
 
 **Net verdict: the fixture shape is honest.** Every field corresponds to a real
 server field or a one-step derivation; the two divergences (nesting of `model`,
 epoch-ms `lastUpdate`) are wire-format details a future adapter normalizes, and
-the one semantic simplification (`configApplied` vs the derived `statusCode`)
-is now recorded rather than assumed.
+`configApplied` is now known to be an adapter-side derivation from two wire
+fields rather than a server field — recorded, not assumed.
 
 ## What was NOT verified (stated, not smoothed)
 
-- **`yellow` statusCode** (config mismatch) — documented by Headwind, not
-  produced in this run.
 - **QR provisioning and a real Android launcher** — the wire protocol was
   driven by hand (which is what proves the shape); no Android device or
   emulator was enrolled.

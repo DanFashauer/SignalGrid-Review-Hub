@@ -74,3 +74,11 @@ artifacts/build-loop/
 native/android/**/build/
 native/android/**/.gradle/
 .gradle/
+
+# xcodebuild output (native/ios). The android equivalent above was ignored and
+# this one was not, so a `run-everything.sh` iOS phase left ~97MB of untracked
+# products in the tree. That is not just clutter: run-requests.mjs derives
+# provenance.workingTreeClean from `git status --porcelain`, which counts
+# untracked files, so the leftovers stamped every LATER sim result as minted
+# from a dirty tree.
+native/ios/build/

@@ -184,6 +184,15 @@ function main() {
     console.log(`   ${req.reason ?? "(no reason recorded)"}`);
     console.log(`   runs: ${req.runs.join(", ")}`);
 
+    // Sampled BEFORE the first operation runs, and deliberately so. An operation
+    // is EXPECTED to write into the tree — the iOS phase of `everything` drops
+    // native/ios/build/, `evidence` mints artifacts/live-evidence/mac-run.json —
+    // so sampling afterwards measured the runner's own output and stamped
+    // workingTreeClean:false on a tree that was clean when the work started.
+    // The field answers "what code produced this result", which is the state at
+    // launch; reading it after the runs answered a question nobody asked.
+    const prov = provenance();
+
     const runs = [];
     for (const key of req.runs) {
       const op = SIM_OPERATIONS[key];
@@ -207,7 +216,7 @@ function main() {
       // Supplied by the RUNNER as data. Nothing in the gate or the proof reads a
       // clock — the same rule the decision core lives under.
       completedAt: new Date().toISOString(),
-      provenance: provenance(),
+      provenance: prov,
       runs,
     };
     writeFileSync(join(RES_DIR, `${id}.json`), `${JSON.stringify(result, null, 2)}\n`, "utf8");

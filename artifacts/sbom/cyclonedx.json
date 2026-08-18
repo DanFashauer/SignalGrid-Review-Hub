@@ -1399,13 +1399,6 @@
     {
       "type": "library",
       "name": "chokidar",
-      "version": "4.0.3",
-      "bom-ref": "pkg:npm/chokidar@4.0.3",
-      "purl": "pkg:npm/chokidar@4.0.3"
-    },
-    {
-      "type": "library",
-      "name": "chokidar",
       "version": "5.0.0",
       "bom-ref": "pkg:npm/chokidar@5.0.0",
       "purl": "pkg:npm/chokidar@5.0.0"
@@ -3089,13 +3082,6 @@
       "version": "19.2.8",
       "bom-ref": "pkg:npm/react@19.2.8",
       "purl": "pkg:npm/react@19.2.8"
-    },
-    {
-      "type": "library",
-      "name": "readdirp",
-      "version": "4.1.2",
-      "bom-ref": "pkg:npm/readdirp@4.1.2",
-      "purl": "pkg:npm/readdirp@4.1.2"
     },
     {
       "type": "library",

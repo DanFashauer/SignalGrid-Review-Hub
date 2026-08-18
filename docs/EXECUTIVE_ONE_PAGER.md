@@ -18,6 +18,8 @@ Shared, mobile, and frontline workflows often fail because no single source syst
 
 SignalGrid frames the missing layer as operational trust orchestration: normalize signals, decide outcomes, route approved actions, audit events, and verify expected results without claiming ownership of the source systems.
 
+The founder's framing of the wedge: today's products make simple processes more complex — every tool answers with another console to check. SignalGrid answers with a decision: one word (allow, step-up, restrict, deny) with the evidence attached, consumable by any host app in any industry that has this flow, regardless of company size or which source tools are in place. The architecture is deliberately industry-agnostic — a committed proof fails the build unless differently-sourced evidence decides identically — while the *claims* stay pinned to what each integration has actually proven.
+
 ## Why shared/mobile/frontline environments need it
 
 Shared and mobile environments create fast context changes:

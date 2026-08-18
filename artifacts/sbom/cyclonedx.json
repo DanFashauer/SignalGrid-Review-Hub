@@ -2792,13 +2792,6 @@
     {
       "type": "library",
       "name": "picomatch",
-      "version": "4.0.4",
-      "bom-ref": "pkg:npm/picomatch@4.0.4",
-      "purl": "pkg:npm/picomatch@4.0.4"
-    },
-    {
-      "type": "library",
-      "name": "picomatch",
       "version": "4.0.5",
       "bom-ref": "pkg:npm/picomatch@4.0.5",
       "purl": "pkg:npm/picomatch@4.0.5"
@@ -3397,13 +3390,6 @@
       "version": "1.3.3",
       "bom-ref": "pkg:npm/tiny-invariant@1.3.3",
       "purl": "pkg:npm/tiny-invariant@1.3.3"
-    },
-    {
-      "type": "library",
-      "name": "tinyglobby",
-      "version": "0.2.16",
-      "bom-ref": "pkg:npm/tinyglobby@0.2.16",
-      "purl": "pkg:npm/tinyglobby@0.2.16"
     },
     {
       "type": "library",

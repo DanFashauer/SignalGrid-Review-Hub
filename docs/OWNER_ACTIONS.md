@@ -96,8 +96,18 @@ already run advisory into blocking.
 1. ~~Merge PR #206~~ **DONE 2026-08-18** — merged as `5301efa` with all 13
    checks green; the day's work (Fleet live end-to-end, the collector, the
    website truth pass, intake rows 81–91) is on the default branch.
-2. **Comment `@dependabot rebase` on PR #163** — Dependabot ignores the agent's
-   comments; it needs a human account.
+2. ~~Comment `@dependabot rebase` on PR #163~~ **DONE 2026-08-18** — Dependabot
+   superseded #163 with **#211** (51 updates), and the agent unblocked its SBOM:
+   the supply-chain workflow's self-heal step regenerated the SBOM but was
+   REJECTED pushing it — a repository ruleset protects `dependabot/*` refs from
+   the Actions token (GH013 "Cannot update this protected ref"), which is why
+   every Dependabot PR's SBOM check has been red by construction. The agent's
+   own credentials could push, so #211 is fixed; for future dependency PRs to
+   self-heal without an agent in the loop, **add a ruleset bypass for the
+   github-actions app on `dependabot/**` refs** (Settings → Rules → Rulesets),
+   or the SBOM-fix step will keep failing on every bot PR. Dependabot also
+   filed three GitHub-Actions bumps (#208 setup-java 5, #209 gradle/actions 6,
+   #210 upload-artifact 7) now that the label fix lets that ecosystem file.
    **The six major-version PRs behind it are now triaged and all six are
    MERGEABLE** (2026-08-18, cloud lane): pino 10 (#156), express-rate-limit 8
    (#158), vite 8 (#159), pino-http 11 (#160), chokidar 5 (#161), uuid 14

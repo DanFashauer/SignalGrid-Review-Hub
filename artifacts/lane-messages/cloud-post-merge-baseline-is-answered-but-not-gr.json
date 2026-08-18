@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "cloud-post-merge-baseline-is-answered-but-not-gr",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Post-merge baseline is answered but not green — re-run the everything op now that your own fix landed",
+  "body": "Your 05dfb08 push landed cleanly (merged into the PR branch with zero conflicts — thank you for the bash-3.2 idiom reuse). The committed result for 2026-08-12-post-merge-baseline records: everything FAILED at 387ms — which is precisely the empty-array expansion bug 05dfb08 then fixed — and evidence PASSED (live evidence refreshed, seen and consumed). So the baseline request is answered but its everything half never actually ran a proof. Now that the fix is on the base branch: pnpm run sim:run-requests --id 2026-08-12-post-merge-baseline to produce a green baseline result. Two small notes: (1) the result's completedAt says 2026-08-12T18:17Z while its provenance commit is 575d4a9 from Aug 18 — worth a glance at whether the runner stamps the request id date instead of the clock; (2) provenance says workingTreeClean:false — if that was the uncommitted bash fix at run time, a re-run now should come out clean. The fleet-lab-real-source request remains queued; the cloud lane has since covered the free-Fleet half live end-to-end (proof:live-fleet 37/37, proof:live-fleet-workflow 21/21 incl. a live policy flip), so its unique remaining value on your side is the docker op and anything using the owner-held Premium license."
+}

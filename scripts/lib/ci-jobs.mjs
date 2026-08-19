@@ -70,6 +70,10 @@ export const NOT_A_GATE = new Map([
   ["pages.yml:build", "builds the GitHub Pages site; a publish step, not a correctness gate"],
   ["pages.yml:deploy", "publishes to GitHub Pages"],
   ["pr-triage.yml:triage", "labels and summarises the PR; advisory, never blocking"],
+  [
+    "supply-chain.yml:sbom-sync",
+    "commits a regenerated SBOM back to a dependabot branch; bot plumbing, and the drift it fixes is gated by supply-chain.yml:sbom",
+  ],
   ["promote.yml:open-promotion-pr", "opens a promotion PR between tiers; release automation"],
   [
     "scheduled-verification.yml:verify",

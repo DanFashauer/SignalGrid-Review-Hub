@@ -27,22 +27,39 @@ enum SG {
     static let foreground = dynamic(light: "15181B", dark: "F3F1EC") // off-white 100 / charcoal
     static let mutedFg    = dynamic(light: "55606B", dark: "D8D4CC") // off-white 300 / warm gray
     static let border     = dynamic(light: "DDD8D0", dark: "2A3136") // border neutral
-    static let primary    = dynamic(light: "3A6E6A", dark: "53938D") // muted teal 500
-    static let accent     = dynamic(light: "2F5C58", dark: "6FA7A1") // muted teal 400
+    static let primary    = dynamic(light: "3A6E6A", dark: "4F8C87") // Muted Teal 500 (canonical)
+    static let accent     = dynamic(light: "2F5C58", dark: "6FA7A1") // Muted Teal 400 (canonical)
 
     // MARK: - Decision states — allow / step-up (review) / deny ONLY.
     //
-    // Contrast is a correctness property here, not a preference: these three colors
-    // are how a denied or stepped-up decision is communicated, so a worker who
-    // cannot distinguish them cannot read the gate's answer. Every value below
-    // clears WCAG AA (>= 4.5:1) against BOTH `background` and `card` in its own
-    // appearance. The dark `deny` previously scored 3.18:1 on card — the weakest
-    // contrast in the system belonged to its most safety-critical state. The fix
-    // raises HSV *value* only: hue and saturation are unchanged, so these are the
-    // same brand colors, not new ones.
-    static let allow  = dynamic(light: "3F6B52", dark: "609376") // dark was 5E8F73
-    static let review = dynamic(light: "7A5B2E", dark: "B08B57") // dark unchanged — already AA
-    static let deny   = dynamic(light: "8A3F3F", dark: "C67070") // dark was A15B5B (3.18:1 on card)
+    // The DARK values are canonical and must not be "improved" here. They are
+    // specified in DEV/docs/BRAND_SYSTEM.md ("Functional State Palette") — the
+    // repo where the company and product were invented — and the web tokens in
+    // artifacts/signalgrid-web/src/index.css carry the same hexes. All three
+    // agree; an edit in this file alone forks the platform, and a `deny` that is
+    // one red in the console and another on the device is a worse failure than
+    // the one it would be fixing.
+    //
+    // OPEN FINDING, deliberately NOT fixed here: measured against these two
+    // surfaces in dark, several fall short of WCAG AA (4.5:1) for body text —
+    // `deny` worst at 3.53:1 on background and 3.18:1 on card, which is the
+    // weakest contrast in the system sitting on its most safety-critical state.
+    //
+    //     deny    3.53 on background   3.18 on card    <- fails AA both
+    //     primary 4.61                 4.15            <- card fails AA
+    //     allow   4.80                 4.32            <- card fails AA
+    //     review  5.67                 5.10            <- passes
+    //
+    // BRAND_SYSTEM.md is dark-only and adopts no accessibility standard, so
+    // whether AA applies is an owner/brand decision, not a lane one. Raised in
+    // docs/BRAND_CONTRAST_FINDING.md. If it is ratified, the fix belongs in
+    // BRAND_SYSTEM.md first and lands here and in the web tokens together.
+    //
+    // The LIGHT values are NOT canonical — BRAND_SYSTEM.md defines no light mode.
+    // They are derived counterparts, and are equally subject to that ratification.
+    static let allow  = dynamic(light: "3F6B52", dark: "5E8F73") // canonical dark
+    static let review = dynamic(light: "7A5B2E", dark: "B08B57") // canonical dark
+    static let deny   = dynamic(light: "8A3F3F", dark: "A15B5B") // canonical dark
 
     static let radius: CGFloat = 6
 

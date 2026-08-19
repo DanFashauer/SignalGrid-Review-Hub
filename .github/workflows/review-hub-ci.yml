@@ -275,6 +275,10 @@ jobs:
         run: node scripts/check-cited-commands.mjs
       - name: Cited-command self-test (the gate can fail)
         run: node scripts/check-cited-commands.mjs --self-test
+      - name: Review coverage (printed beside every green suite)
+        run: node scripts/check-review-coverage.mjs
+      - name: Review-coverage self-test (the gate can fail)
+        run: node scripts/check-review-coverage.mjs --self-test
       # MOVED HERE 2026-08-19 because it was path-filtered away from half its own
       # subject. This gate asserts that EVERY Assist client consumes the shared
       # wire vectors, and it discovers two — native/android/core (Kotlin) and

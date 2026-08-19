@@ -285,3 +285,4 @@ records rather than current guidance.
 **Preview assets.**
 
 - [Pre-announcement assets](preview/README.md): public-safe, self-contained visual assets framed as pre-launch — no production, compliance, or partnership claims.
+- [Review coverage](agent/review-coverage.json) and its gate `scripts/check-review-coverage.mjs`: what has actually been READ by a named role, as against what a gate asserts. Prints the percentage on every run beside every green suite, because a green gate suite is not a reviewed codebase — a gate checks an invariant, and an invariant holds perfectly well over code nobody has opened. Fatal only on incoherence: a claim naming a path that does not exist, or one with no reviewer, date or depth.

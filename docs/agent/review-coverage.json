@@ -1,0 +1,90 @@
+{
+  "$comment": "What has actually been READ by a named role, as opposed to what a gate asserts. scripts/check-review-coverage.mjs prints the percentage on every run and fails only on incoherence — a claim naming a path that does not exist, or a claim with no reviewer, date or depth. Seeded honestly on 2026-08-19: the number is small on purpose, because the alternative was leaving it invisible. depth: read = opened and understood; audited = read adversarially against a specific question; verified-live = checked against a real running system.",
+  "version": 1,
+  "reviews": [
+    {
+      "path": "lib/integrations/src/integrations/telemetry/fleetdm.ts",
+      "reviewedBy": "qa-engineer",
+      "date": "2026-08-19",
+      "depth": "audited",
+      "note": "WebSocket campaign collector — found the resolved report still being mutated by late frames, and duplicate host frames double-counting rows."
+    },
+    {
+      "path": "lib/integrations/src/integrations/network-nac/types.ts",
+      "reviewedBy": "network-domain",
+      "date": "2026-08-19",
+      "depth": "verified-live",
+      "note": "Checked field by field against real FreeRADIUS. quarantined is never a wire fact; lastAuthAt is not an authentication fact."
+    },
+    {
+      "path": "lib/integrations/src/integrations/link-usability/types.ts",
+      "reviewedBy": "network-domain",
+      "date": "2026-08-19",
+      "depth": "verified-live",
+      "note": "Ladder rungs driven individually; an egress proxy collapses dns_failing."
+    },
+    {
+      "path": "lib/integrations/src/integrations/sse-egress/types.ts",
+      "reviewedBy": "network-domain",
+      "date": "2026-08-19",
+      "depth": "verified-live",
+      "note": "Against a real TLS-intercepting gateway; interception is observable via the certificate issuer, so service_observing_traffic need not be a self-report."
+    },
+    {
+      "path": "lib/integrations/src/integrations/nac/cisco-ise.ts",
+      "reviewedBy": "network-domain",
+      "date": "2026-08-19",
+      "depth": "read",
+      "note": "Vendor documentation confirms its refusal to infer auth state from the endpoint resource. NOT verified against an instance."
+    },
+    {
+      "path": "lib/integration-bridge/src/evidence.ts",
+      "reviewedBy": "endpoint-uem-domain",
+      "date": "2026-08-19",
+      "depth": "verified-live",
+      "note": "HeadwindLabDevice checked against a real Headwind CE 5.30.3 over the launcher wire protocol."
+    },
+    {
+      "path": "lib/signalgrid-core/src/auth.ts",
+      "reviewedBy": "principal-engineer",
+      "date": "2026-08-19",
+      "depth": "audited",
+      "note": "Role/permission table — found tenant:admin granted and required by nothing."
+    },
+    {
+      "path": "artifacts/api-server/src/middlewares/rateLimit.ts",
+      "reviewedBy": "qa-engineer",
+      "date": "2026-08-19",
+      "depth": "audited",
+      "note": "IPv6 fallback keyed raw addresses; now subnet-bucketed via the library key generator."
+    },
+    {
+      "path": "artifacts/signalgrid-web/src",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-19",
+      "depth": "audited",
+      "note": "Full site sweep: 14 findings, 8 applied — router-base 404s, invisible signal dots, contrast, reduced motion, worker-PWA claims."
+    },
+    {
+      "path": ".github/workflows",
+      "reviewedBy": "security-engineer",
+      "date": "2026-08-19",
+      "depth": "audited",
+      "note": "All 15 workflows: permissions, injection, action pinning, timeouts, concurrency, and the SBOM token split."
+    },
+    {
+      "path": "scripts/check-assist-conformance.mjs",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-19",
+      "depth": "audited",
+      "note": "Found it path-filtered away from the Kotlin client it exists to bind."
+    },
+    {
+      "path": "docs/SECURITY_QUESTIONNAIRE_PACK.md",
+      "reviewedBy": "compliance-analyst",
+      "date": "2026-08-19",
+      "depth": "audited",
+      "note": "Every cited file and command resolved; both load-bearing claims checked against the code. Accurate."
+    }
+  ]
+}

@@ -141,6 +141,53 @@ arrive with an auth result.
   `carrier`, and the `nac` console adapters — remain **live-unverified**. This
   shift closes one of six.
 
+## Addendum — the console adapters, **verified by documentation, not live**
+
+`nac/cisco-ise.ts` and `nac/aruba-clearpass.ts` target licensed appliances that
+cannot be stood up here, so they were checked against each vendor's published
+API documentation. **That is a weaker claim than everything above** and is
+labelled as such deliberately: it establishes what the vendor says its API
+returns, not what an instance actually returned.
+
+**Both vendors split identity from session, and they split it the same way:**
+
+| | "who is this device" | "is it authenticated right now" |
+| --- | --- | --- |
+| **Cisco ISE** | ERS / endpoint resource — administrative CRUD over endpoint objects and custom attributes (HTTPS **:9060**) | **MnT** monitoring API — real-time session state, queried by MAC/IP/user, and explicitly *"not to be confused with the ERS API"*: a different permission grant |
+| **Aruba ClearPass** | Insight **endpoint** API — endpoint attributes | Insight **session** API — records describing an active or recent authentication session |
+
+**This confirms the honesty claim `cisco-ise.ts` already carries in its own
+header.** That file records a prior defect — an earlier version reported
+`status: 'registered'` for every endpoint it found, asserting a NAC state ISE
+had never given it — and concluded that "the endpoint search does not report
+authentication state, so the honest answer is" to refuse the inference. Cisco's
+documentation says exactly that. The adapter was right, and it is now right on
+the record rather than on instinct.
+
+**The generalisation is the valuable part, and three independent lines of
+evidence converge on it:** the RADIUS protocol (session timing lives in
+accounting, not authentication — Finding 4 above), Cisco ISE (endpoint ≠ MnT),
+and Aruba ClearPass (endpoint ≠ session). In NAC, **"who is this device" and
+"is it authenticated right now" are always two different data sources** — often
+different ports, different credentials, different retention.
+
+`NetworkPostureRaw` models both planes in one flat record — `deviceId`,
+`segment`, `vlan`, `switchPort`, `accessPoint`, `ssid` from the endpoint plane
+alongside `authState` and `lastAuthAt` from the session plane — which implies
+they arrive together. From every real source examined, they do not. A future
+adapter must fetch two APIs and reconcile them, and the two halves can be stale
+independently of one another.
+
+**Deployment consequence, for whoever writes the ISE runbook:** read access to
+the endpoint API alone is *not sufficient* to populate this dimension. MnT (or
+pxGrid) access is a separate grant, and asking a customer's network team for
+only one of them yields a connector that can name devices but never say whether
+they are on the network.
+
+**Not verified even at documentation level:** the exact field names and
+pagination semantics of either session API, and whether our adapters' assumed
+response shapes match them. Those need an instance.
+
 ## Reproduction
 
 Run `freeradius/freeradius-server:latest` with a `clients.conf` NAS entry and

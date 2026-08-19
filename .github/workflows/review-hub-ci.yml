@@ -267,6 +267,10 @@ jobs:
         run: node scripts/check-action-pinning.mjs
       - name: Action pinning self-test (the gate can fail)
         run: node scripts/check-action-pinning.mjs --self-test
+      - name: Org roster (unactivated roles are named, never silent)
+        run: node scripts/check-org-roster.mjs
+      - name: Org roster self-test (the gate can fail)
+        run: node scripts/check-org-roster.mjs --self-test
       - name: Proof — lane messages (identity derived; no lane acknowledges its own mail)
         run: pnpm run proof:lane-messages
       - name: Lane messages (unread mail is named on every run, never silent)

@@ -182,6 +182,8 @@ const STEPS = [
   { name: "Memory freshness self-test (the gate can actually fail)", cmd: ["node", "scripts/check-memory-freshness.mjs", "--self-test"] },
   { name: "Action pinning (a third-party action on a mutable tag is somebody else's write access to CI)", cmd: ["node", "scripts/check-action-pinning.mjs"] },
   { name: "Action pinning self-test (the gate can actually fail)", cmd: ["node", "scripts/check-action-pinning.mjs", "--self-test"] },
+  { name: "Org roster (a role nobody has ever run is named on every run)", cmd: ["node", "scripts/check-org-roster.mjs"] },
+  { name: "Org roster self-test (the gate can actually fail)", cmd: ["node", "scripts/check-org-roster.mjs", "--self-test"] },
   { name: "Proof: lane-messages (the cloud↔Mac channel — identity is derived, and no lane acknowledges its own mail)", cmd: ["pnpm", "run", "proof:lane-messages"] },
   { name: "Lane messages (unread mail is named on every run; only the addressee can close one)", cmd: ["node", "scripts/check-lane-messages.mjs"] },
   { name: "Lane message self-test (the gate can actually fail)", cmd: ["node", "scripts/check-lane-messages.mjs", "--self-test"] },

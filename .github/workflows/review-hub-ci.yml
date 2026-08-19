@@ -421,8 +421,31 @@ jobs:
       # this suite uses locally is a property of the dev sandbox, not of CI. The
       # maiden CI run proved it: all 15 tests failed browser LAUNCH in <11ms
       # while the same suite passed 15/15 locally. Install before running.
+      # BOUNDED AND RETRIED, because this step hung for 16 minutes on 2026-08-19
+      # and consumed the whole job. `--with-deps` shells out to apt to install
+      # Chromium's system libraries; that run found `azure.archive.ubuntu.com`
+      # unreachable (repeated `Ign:`), fell back to `archive.ubuntu.com`, and then
+      # stalled with no timeout of its own. Everything before it had already
+      # passed — every gate and all 31 assertions of proof:live-idp — so the job
+      # reported `cancelled` for a reason that had nothing to do with the branch.
+      #
+      # A mirror flake is transient, so retry; but an unbounded step that eats a
+      # 20-minute budget and reports an ambiguous status is the same defect this
+      # workflow's concurrency comment already complains about — a result nobody
+      # can tell apart from a real regression. The step timeout makes it fail
+      # FAST and legibly instead.
       - name: Install Playwright Chromium for the E2E suite
-        run: pnpm --filter @workspace/scripts exec playwright install --with-deps chromium
+        timeout-minutes: 6
+        run: |
+          for attempt in 1 2 3; do
+            if pnpm --filter @workspace/scripts exec playwright install --with-deps chromium; then
+              exit 0
+            fi
+            echo "::warning::Playwright browser install failed (attempt ${attempt}/3) — retrying"
+            sleep $((attempt * 10))
+          done
+          echo "::error::Playwright Chromium install failed three times; the E2E suite cannot run."
+          exit 1
 
       - name: Browser E2E (review console, website, admin console)
         run: pnpm run test:e2e

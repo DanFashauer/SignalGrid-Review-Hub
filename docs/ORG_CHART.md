@@ -27,9 +27,11 @@ So this chart is **enforced, not asserted**:
 - So nobody can say "we have a compliance analyst" without "who has never run"
   being printed beside it.
 
-**Today that number is: 6 activated, 25 never yet run.** That is the honest
-state of this company on the day the chart was drawn, and it is printed by a
-gate rather than buried in prose.
+**The current split is printed by the gate, deliberately not repeated here.**
+An earlier draft of this document pinned the number in prose; that is the exact
+staleness shape `check-memory-freshness.mjs` exists to catch, and it would have
+been wrong within the hour — `network-domain` activated the same afternoon. Run
+`node scripts/check-org-roster.mjs` for the live count.
 
 ## Division 1 — Engineering (function: *how* work is done)
 
@@ -70,15 +72,22 @@ live-verified — is in `docs/SIGNAL_DOMAIN_TEAM.md`.
 | `iam-domain` | Identity & Access | 15 | Keycloak 26.4 |
 | `endpoint-uem-domain` | Endpoint / UEM | 9 | Fleet 4.89.2, Headwind CE 5.30.3 |
 | `secops-domain` | Security operations | 10 | Wazuh |
-| `network-domain` | Network & connectivity | 6 | **nothing — the largest unverified cluster** |
+| `network-domain` | Network & connectivity | 6 | **FreeRADIUS** (`docs/RADIUS_NAC_LIVE_SHAPE_CHECK.md`) — 1 of 6 dimensions closed |
 | `physical-ot-domain` | Physical, facilities & OT | 5 | Traccar 6.14.5 |
 | `itsm-ops-domain` | ITSM & operations | 6 | osquery (via the Fleet lab) |
 
-Every one of these is currently **unactivated as a role**, and the distinction
-matters: the live verifications listed above happened before the roles existed,
-done by the coordinating session. The department now owns that work going
-forward. `network-domain` is the priority — six dimensions, no live source ever
-driven against any of them.
+The distinction between a department's *dimensions* being live-verified and the
+*role* being activated matters: the Keycloak, Fleet, Headwind, Wazuh and Traccar
+verifications happened before these roles existed, done by the coordinating
+session. The department owns that work going forward.
+
+`network-domain` was the priority — six dimensions with no live source ever
+driven against any of them — and it is the first domain role activated. Its
+shift stood up real RADIUS, the protocol every NAC product speaks beneath its
+console, and found that a **quarantined device receives an `Access-Accept`**:
+there is no quarantine packet or attribute in the protocol, so `quarantined` is
+always a derivation from a customer-chosen VLAN or filter name, never something
+a source reports. Five of its six dimensions remain live-unverified.
 
 ## Division 3 — Company (*the business around the product*)
 

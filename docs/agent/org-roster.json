@@ -187,9 +187,9 @@
       "division": "signal-domain",
       "title": "Network & connectivity domain lead",
       "charter": "Cisco ISE, ClearPass, Zscaler, Netskope, carrier/private-5G. Owns 6 dimensions and the admission/carriage/egress/reachability ladder.",
-      "trigger": "PRIORITY: this department owns the largest cluster with NO live source ever driven against it.",
-      "activated": null,
-      "produced": null
+      "trigger": "Five of its six dimensions remain live-unverified; RADIUS/NAC is now done.",
+      "activated": "2026-08-19",
+      "produced": "docs/RADIUS_NAC_LIVE_SHAPE_CHECK.md — live FreeRADIUS wire check of network-nac; found quarantine is an Access-ACCEPT, rejections carry no reason, SSID is glued to the AP MAC, and nacCompliant/lastAuthAt are not authentication facts"
     },
     {
       "id": "physical-ot-domain",

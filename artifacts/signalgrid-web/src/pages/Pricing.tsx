@@ -129,7 +129,7 @@ export default function Pricing() {
 
                   <ul className="space-y-2.5 mb-8 flex-1">
                     {tier.features.map(f => (
-                      <li key={f.text} className={`flex items-start gap-2.5 text-sm ${f.ok ? "text-foreground/80" : "text-muted-foreground/40"}`}>
+                      <li key={f.text} className={`flex items-start gap-2.5 text-sm ${f.ok ? "text-foreground/80" : "text-muted-foreground/70 line-through decoration-muted-foreground/40"}`}>
                         {f.ok
                           ? <CheckCircle2 className="w-4 h-4 text-primary shrink-0 mt-0.5" />
                           : <X className="w-4 h-4 shrink-0 mt-0.5" />

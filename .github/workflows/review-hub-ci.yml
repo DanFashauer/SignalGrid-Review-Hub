@@ -275,6 +275,20 @@ jobs:
         run: node scripts/check-cited-commands.mjs
       - name: Cited-command self-test (the gate can fail)
         run: node scripts/check-cited-commands.mjs --self-test
+      # MOVED HERE 2026-08-19 because it was path-filtered away from half its own
+      # subject. This gate asserts that EVERY Assist client consumes the shared
+      # wire vectors, and it discovers two — native/android/core (Kotlin) and
+      # native/desktop/core (Rust). It ran only in desktop.yml, whose filter is
+      # native/desktop/** and native/shared/**, so a change to the KOTLIN client
+      # never triggered it: the precise failure it exists to catch ("a client
+      # quietly stops reading the file, keeps its own tests, keeps passing"), in
+      # the client where it already caught two real defects, was invisible. It is
+      # a pure Node file-read with no platform dependency, so gating every PR
+      # costs nothing and removes the whole class.
+      - name: Assist conformance (every client bound to the shared wire vectors)
+        run: node scripts/check-assist-conformance.mjs
+      - name: Assist-conformance self-test (the gate can fail)
+        run: node scripts/check-assist-conformance.mjs --self-test
       - name: Proof — lane messages (identity derived; no lane acknowledges its own mail)
         run: pnpm run proof:lane-messages
       - name: Lane messages (unread mail is named on every run, never silent)

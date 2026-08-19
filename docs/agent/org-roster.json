@@ -115,9 +115,9 @@
       "division": "engineering",
       "title": "DevEx / tooling engineer",
       "charter": "The gate fabric itself — preflight, the proof harness, mutation guard, parity checks. Guards the guards.",
-      "trigger": "A gate is added or changed, or a gate is suspected of passing vacuously.",
-      "activated": null,
-      "produced": null
+      "trigger": "A gate is added or changed, or a gate is suspected of passing vacuously. Standing question: is any gate path-filtered away from part of its own subject?",
+      "activated": "2026-08-19",
+      "produced": "Audited whether any preflight gate is referenced only by a workflow that does not gate every PR — the weakness check-preflight-ci-parity.mjs admits in its own header. Found and fixed one real hole: check-assist-conformance.mjs discovers TWO Assist clients (native/android/core Kotlin, native/desktop/core Rust) but ran only in desktop.yml, filtered to native/desktop/** and native/shared/**, so a change to the KOTLIN client never triggered the gate that binds it — the exact failure it exists to catch, in the client where it had already caught two real defects. Now runs in review-hub-ci.yml on every PR. Two other candidates were the false positive the parity gate already documents (npm alias vs script path), and check-ios-port-sources is correctly scoped since its subject lives entirely inside its filter"
     },
     {
       "id": "docs-writer",

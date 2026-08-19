@@ -72,10 +72,24 @@ export function auditMemoryFreshness(files, todayIso) {
       continue;
     }
     for (const d of dates) {
+      // A dated claim that cannot be dated is registry-grade incoherence, not
+      // a clock question — the string is wrong on ANY date, so it is FATAL.
+      // Round-tripping catches both NaN dates ("2026-18-08") and V8's silent
+      // day rollover ("2026-02-30" parses as Mar 2 — a different claim than
+      // the one written). Found by the QA shift on this gate's first day:
+      // without this, an unparseable date compared as NaN, both branches
+      // below were false, and the claim read as fresh FOREVER.
+      const parsed = Date.parse(d);
+      if (Number.isNaN(parsed) || new Date(parsed).toISOString().slice(0, 10) !== d) {
+        problems.push(`${f.path}: "as of ${d}" is not a real calendar date — an undatable claim would otherwise read as fresh forever`);
+        continue;
+      }
       const age = daysBetween(d, todayIso);
       if (age > FRESHNESS_BUDGET_DAYS) due.push(`${f.path}: "as of ${d}" is ${age} days old (budget ${FRESHNESS_BUDGET_DAYS}) — re-verify or re-date`);
-      else if (age < 0) due.push(`${f.path}: "as of ${d}" is ${-age} day(s) in the FUTURE — a record of a verification that has not happened`);
-      else fresh.push(`${f.path}: as of ${d} (${age}d)`);
+      // age === -1 is tolerated as calendar skew, not a future claim: the
+      // writer's local date can be one day ahead of this gate's UTC date.
+      else if (age < -1) due.push(`${f.path}: "as of ${d}" is ${-age} day(s) in the FUTURE — a record of a verification that has not happened`);
+      else fresh.push(`${f.path}: as of ${d} (${Math.max(age, 0)}d)`);
     }
   }
   return { problems, due, fresh };
@@ -103,14 +117,30 @@ function selfTest() {
   a = auditMemoryFreshness([{ path: "m.md", text: "done 2026-07-01, merged 2026-07-02" }], t);
   checks.push(["historical dates WITHOUT 'as of' are not claims and stay exempt", a.problems.length === 1 && a.due.length === 0]);
 
+  a = auditMemoryFreshness([{ path: "m.md", text: "as of 2026-18-08 all was well" }], t);
+  checks.push(["an UNPARSEABLE date is FATAL — it would otherwise read as fresh forever", a.problems.some((p) => p.includes("not a real calendar date")) && a.fresh.length === 0]);
+
+  a = auditMemoryFreshness([{ path: "m.md", text: "as of 2026-02-30 all was well" }], t);
+  checks.push(["a ROLLOVER date (Feb 30) is FATAL — it would silently audit as a different date", a.problems.some((p) => p.includes("not a real calendar date"))]);
+
+  a = auditMemoryFreshness([{ path: "m.md", text: "as of 2026-08-19 verified" }], t);
+  checks.push(["one day ahead is calendar skew (writer's local vs gate's UTC), fresh not FUTURE", a.due.length === 0 && a.fresh.length === 1]);
+
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
   return failed.length === 0 ? 0 : 1;
 }
 
-if (process.argv.includes("--self-test")) process.exit(selfTest());
+// Run the gate only when executed directly — importing this module for the
+// pure audit function must never read files, print, or process.exit (the QA
+// shift demonstrated an import running the whole gate; same hazard exists in
+// check-sim-requests.mjs and is worth the same guard there).
+const runAsCli = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (runAsCli && process.argv.includes("--self-test")) process.exit(selfTest());
+if (runAsCli) runGate();
 
+function runGate() {
 const files = WATCHED_MEMORY_FILES.map(({ path }) => {
   const abs = join(repo, path);
   return { path, text: existsSync(abs) ? readFileSync(abs, "utf8") : null };
@@ -130,3 +160,4 @@ if (problems.length > 0) {
   process.exit(1);
 }
 console.log("\nMemory freshness check passed — every watched memory file exists and carries the dated claims it is watched for.");
+}

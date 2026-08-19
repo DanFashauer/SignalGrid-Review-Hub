@@ -1,4 +1,4 @@
-import rateLimit, { type RateLimitRequestHandler } from "express-rate-limit";
+import rateLimit, { ipKeyGenerator, type RateLimitRequestHandler } from "express-rate-limit";
 import type { Request, Response } from "express";
 
 /**
@@ -58,10 +58,15 @@ export const v1RateLimiter: RateLimitRequestHandler = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req: Request): string => {
     const token = bearerToken(req);
-    return token ? `tok:${token}` : `ip:${req.ip ?? "unknown"}`;
+    // The unauthenticated fallback goes through the library's ipKeyGenerator,
+    // which buckets IPv6 callers by /56 subnet: keying raw IPv6 addresses
+    // per-address would let one caller rotate through a subnet's worth of
+    // addresses and dodge the limit (the library's ERR_ERL_KEY_GEN_IPV6
+    // validation exists to catch exactly this, and fired on the old code).
+    return token ? `tok:${token}` : req.ip ? `ip:${ipKeyGenerator(req.ip)}` : "ip:unknown";
   },
-  // Key-generator IP validation is not relevant here — we key by token first
-  // and only fall back to the address for unauthenticated requests.
+  // Address validation is not relevant on the primary path — we key by token
+  // first and only fall back to the (subnet-bucketed) address without one.
   validate: { ip: false },
   handler: rateLimitHandler,
 });

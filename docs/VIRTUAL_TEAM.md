@@ -69,6 +69,9 @@ From any Claude session in this repo:
   there, and its results come back as committed artifacts.
 
 Shift outcomes are recorded in `docs/INTAKE_LEDGER.md` when they disposition
-an input, and in the PR/backlog otherwise. The first full shift launched
-2026-08-19; its outcome gets a ledger row when the shift closes, not before —
-a shift that has not reported is pending, never presumed green.
+an input, and in the PR/backlog otherwise. A shift that has not reported is
+pending, never presumed green. The first full shift ran and closed
+2026-08-19 — thirteen agents, eight verified findings applied, the rest
+queued with named owners; ledger row 95 is its record, including the QA
+engineer finding a real bug in a gate shipped hours earlier — the shift
+paying for itself on day one.

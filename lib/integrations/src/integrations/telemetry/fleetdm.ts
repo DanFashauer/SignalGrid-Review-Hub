@@ -478,6 +478,9 @@ export class FleetDMAdapter {
         finish(responded.size < hostsTargeted);
       });
       ws.addEventListener('message', (ev) => {
+        // The report resolves exactly once; a frame arriving after finish()
+        // must not keep mutating the results array the caller already holds.
+        if (settled) return;
         let msg: { type?: string; data?: Record<string, unknown> };
         try {
           msg = JSON.parse(String(ev.data)) as { type?: string; data?: Record<string, unknown> };
@@ -491,8 +494,11 @@ export class FleetDMAdapter {
           // A frame for a host this campaign never targeted is not evidence
           // about the targets — counting it (or carrying its rows) would let
           // the server's stream, rather than the caller's request, define what
-          // "complete" means. Dropped entirely.
-          if (hostId === -1 || !targets.has(hostId)) {
+          // "complete" means. Dropped entirely. A DUPLICATE frame for a host
+          // already counted is dropped the same way: hostsResponded is a Set,
+          // and letting a re-sent frame append rows twice would make the
+          // results disagree with the count beside them.
+          if (hostId === -1 || !targets.has(hostId) || responded.has(hostId)) {
             return;
           }
           responded.add(hostId);

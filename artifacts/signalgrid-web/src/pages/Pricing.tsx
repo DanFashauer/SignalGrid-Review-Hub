@@ -16,7 +16,7 @@ const TIERS = [
       { text: "6 evaluated-today signal dimensions", ok: true },
       { text: "Decision engine + policy editor", ok: true },
       { text: "Operator dashboard", ok: true },
-      { text: "Mobile PWA (worker + operator)", ok: true },
+      { text: "Mobile PWA (operator + access-support triage)", ok: true },
       { text: "Tamper-evident audit ledger — hash-chained, independently verifiable (retention: owner decision pending)", ok: true },
       { text: "Shift Handoff Intelligence", ok: false },
       { text: "Compliance reporting export", ok: false },

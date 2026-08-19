@@ -31,6 +31,7 @@ jobs:
     # renamed to what it actually runs.
     name: Daily verification (launch gates + breadth lane)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v7

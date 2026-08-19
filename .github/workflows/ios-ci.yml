@@ -20,6 +20,11 @@
 
 name: Apple CI (iOS / iPadOS / macOS)
 
+# The one workflow that had no permissions block — the token fell back to the
+# repository default instead of the least privilege every sibling declares.
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main, SignalGrid_Alpha]
@@ -43,6 +48,7 @@ jobs:
   build-and-test:
     name: EnterpriseShell (${{ matrix.family }} simulator)
     runs-on: macos-latest
+    timeout-minutes: 45
     strategy:
       # Both device families run even if one fails, so a green iPhone never hides
       # a red iPad — the whole reason the matrix is here.
@@ -121,6 +127,7 @@ jobs:
   macos-native:
     name: macOS native (SwiftPM, no simulator)
     runs-on: macos-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -154,6 +161,7 @@ jobs:
   signalgrid-mobile:
     name: SignalGridMobile (Operator + Wardlink)
     runs-on: macos-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -176,6 +184,7 @@ jobs:
   lint-and-security:
     name: Lint & Security
     runs-on: macos-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v7

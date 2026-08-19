@@ -577,6 +577,7 @@ jobs:
   durable-persistence:
     name: Durable persistence (Postgres audit ledger)
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:16
@@ -689,6 +690,7 @@ jobs:
   podman-stack:
     name: Prod stack (Podman)
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     env:
       CONTAINER_ENGINE: podman
     steps:
@@ -760,6 +762,7 @@ jobs:
   deploy-stack:
     name: Prod stack (Docker compose smoke)
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v7

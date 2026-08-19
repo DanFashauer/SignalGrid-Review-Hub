@@ -271,6 +271,10 @@ jobs:
         run: node scripts/check-org-roster.mjs
       - name: Org roster self-test (the gate can fail)
         run: node scripts/check-org-roster.mjs --self-test
+      - name: Cited commands (documents may not promise a command that is gone)
+        run: node scripts/check-cited-commands.mjs
+      - name: Cited-command self-test (the gate can fail)
+        run: node scripts/check-cited-commands.mjs --self-test
       - name: Proof — lane messages (identity derived; no lane acknowledges its own mail)
         run: pnpm run proof:lane-messages
       - name: Lane messages (unread mail is named on every run, never silent)

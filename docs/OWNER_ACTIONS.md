@@ -153,6 +153,22 @@ Four items moved to the team under the delegated authority now recorded in
   the **sign-off** is yours, and that stays yours — Claude Code does not
   guarantee HIPAA/SOC 2, and a human compliance review is required, not
   optional.
+  **DONE 2026-08-19 — the questionnaire pack is accurate.** Every one of its 12
+  cited files and 3 cited commands resolves, and the two claims an assessor
+  would probe hardest were checked against the code rather than taken on trust:
+  `docs-sanity.mjs` really does carry a denylist of would-be certification
+  boasts (the SOC 2, FedRAMP, CMMC and Common Criteria phrasings all sit in it,
+  quoted at `scripts/docs-sanity.mjs:75-94`), and the API suite really does
+  assert 401-before-404 from *both* sides, so an unauthenticated prober cannot
+  enumerate routes. That first claim then proved itself the hard way: an earlier
+  draft of this very paragraph quoted the denylisted phrases verbatim, and the
+  gate failed the build on it. The control is real enough to bite the person
+  documenting it. Nothing overstated, and the "Not built, not
+  claimed" rows are honest. **It is ready for you to read and sign.** The shift
+  also closed a gap it found on the way: cited *paths* were gated but cited
+  *commands* were not, so a renamed script could silently falsify the document
+  a security assessor reads — `scripts/check-cited-commands.mjs` now gates all
+  130 of them.
 
 Two of the four standing decisions — the **graph-default flip** and
 **shadow-mode step-up** — are recorded as still open in `DECISION_RECORDS.md`,

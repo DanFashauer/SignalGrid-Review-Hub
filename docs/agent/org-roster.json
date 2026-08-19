@@ -71,8 +71,8 @@
       "title": "Compliance analyst",
       "charter": "Reads partner-facing drafts against what the tree can evidence; maps controls to proofs. CANNOT sign off.",
       "trigger": "A partner/assessor document is drafted or a control claim changes.",
-      "activated": null,
-      "produced": null
+      "activated": "2026-08-19",
+      "produced": "Verified SECURITY_QUESTIONNAIRE_PACK.md end to end — all 12 cited files and 3 cited commands resolve, and both load-bearing claims hold in the code (docs-sanity really does denylist certification claims; the API really asserts 401-before-404 from both sides). Verdict: accurate, ready for a human reviewer; sign-off remains the owner's. Structural gap found and closed — nothing kept command citations resolving, so scripts/check-cited-commands.mjs now gates all 130 across 272 docs"
     },
     {
       "id": "performance-engineer",

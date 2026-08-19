@@ -79,9 +79,9 @@
       "division": "engineering",
       "title": "Performance engineer",
       "charter": "Owns the bench and load numbers and the honest in-process vs over-HTTP gap.",
-      "trigger": "A performance figure is quoted, or the decision path changes.",
-      "activated": null,
-      "produced": null
+      "trigger": "A performance figure is quoted, or the decision path changes. Standing duty: re-measure the baseline table, because no gate covers those figures.",
+      "activated": "2026-08-19",
+      "produced": "Re-measured every quoted performance figure and recorded the dated baseline in docs/RELIABILITY_SLO.md. p95 1.2671 ms against the quoted 1.3 ms; 5,128 decisions/sec aggregate at 3.38x scaling (85% of linear) with identical verdicts on every worker; the 240 req/min default confirmed in rateLimit.ts. Recorded the judgement NOT to gate absolute values — a latency threshold on a shared runner is a flaky gate — and named the consequence: check-proof-figures.mjs does not cover these, so keeping them true is this role's standing duty"
     },
     {
       "id": "release-engineer",

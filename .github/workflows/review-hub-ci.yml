@@ -435,17 +435,39 @@ jobs:
       # can tell apart from a real regression. The step timeout makes it fail
       # FAST and legibly instead.
       - name: Install Playwright Chromium for the E2E suite
-        timeout-minutes: 6
+        timeout-minutes: 10
         run: |
+          # SPLIT ON PURPOSE. `--with-deps` does two things: download the browser
+          # (from Playwright's CDN) and apt-install system libraries. Only the
+          # second touches a distro mirror, and that is the half that failed twice
+          # on 2026-08-19 — first hanging 16 minutes until the job timeout, then
+          # again at the step timeout added in response.
+          #
+          # Each ATTEMPT is bounded with `timeout`, not just the step: a retry loop
+          # around an unbounded command is dead code, because one hung attempt eats
+          # the whole budget before the second ever starts. That was the flaw in
+          # the first fix, and it is exactly the shape this repo keeps finding — a
+          # guard that looks like protection and never runs.
+          ok=
           for attempt in 1 2 3; do
-            if pnpm --filter @workspace/scripts exec playwright install --with-deps chromium; then
-              exit 0
+            if timeout 180 pnpm --filter @workspace/scripts exec playwright install chromium; then
+              ok=1; break
             fi
-            echo "::warning::Playwright browser install failed (attempt ${attempt}/3) — retrying"
+            echo "::warning::Chromium download failed (attempt ${attempt}/3) — retrying"
             sleep $((attempt * 10))
           done
-          echo "::error::Playwright Chromium install failed three times; the E2E suite cannot run."
-          exit 1
+          if [ -z "$ok" ]; then
+            echo "::error::Playwright Chromium download failed three times; the E2E suite cannot run."
+            exit 1
+          fi
+
+          # System libraries are BEST EFFORT. ubuntu-latest already ships nearly
+          # all of Chromium's, so a mirror outage must not fail a build whose
+          # browser is already in place. If a library really is missing, the E2E
+          # suite fails on launch with a message that names it — a better signal
+          # than an apt stall, and it fails in the step that actually needs it.
+          timeout 240 pnpm --filter @workspace/scripts exec playwright install-deps chromium \
+            || echo "::warning::playwright install-deps did not complete (distro mirror?); relying on the runner's preinstalled libraries."
 
       - name: Browser E2E (review console, website, admin console)
         run: pnpm run test:e2e

@@ -127,8 +127,16 @@ SignalGrid entirely from the device in your hand.
 Requires **Docker Desktop for Mac** (Apple Silicon or Intel).
 
 ```bash
-git clone https://github.com/DanFashauer/SignalGrid.git   # or your fork/branch
-cd SignalGrid
+# The MAINTAINED tree. `DanFashauer/SignalGrid` is the LEGACY repo (retirement
+# pending on the owner board) — cloning it gets a pre-dev concept, not this build.
+git clone https://github.com/DanFashauer/SignalGrid-Review-Hub.git
+cd SignalGrid-Review-Hub
+
+# On the owner's Mac the working copy already lives at
+#   /Users/danfashauer/Public/Projects/SignalGrid
+# so there is nothing to clone — `cd` there instead. If that folder turns out to
+# be a clone of the legacy `SignalGrid` repo rather than this one, `git remote -v`
+# says so, and it should be re-pointed before any Mac-lane run.
 docker compose -f docker-compose.sim.yml up --build
 ```
 
@@ -144,7 +152,7 @@ confirmation. Stop with `Ctrl-C`.
 Requires **Node 22+** and **pnpm 10+** (`corepack enable` gives you pnpm).
 
 ```bash
-cd SignalGrid
+cd /Users/danfashauer/Public/Projects/SignalGrid   # the owner's working copy
 pnpm install
 pnpm --filter @workspace/api-server run build
 PORT=8080 node artifacts/api-server/dist/index.mjs

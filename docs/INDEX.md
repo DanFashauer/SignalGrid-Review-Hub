@@ -210,7 +210,7 @@ This documentation set explains SignalGrid's public pre-production and post-laun
 - [Deployment — durable stack](DEPLOYMENT.md): the environment variables a real deployment must set, including `SIGNALGRID_ENROLLMENT_SECRET` (required for any non-demo deployment, because the demo core publishes operator/owner tokens via `/v1/keys`).
 - [Backup and restore](BACKUP_AND_RESTORE.md): how a self-hosted operator takes, verifies and restores a backup — and what the CI proof establishes by destroying a real database and restoring it with the audit chain still verifying.
 - [Domain setup](DOMAIN_SETUP.md): signalgrid.app on GitHub Pages.
-- [Phase 6 cutover runbook](PHASE6_CUTOVER_RUNBOOK.md) and [PIM activation live runbook](PIM_ACTIVATION_LIVE_RUNBOOK.md): the staged operational procedures.
+- [Phase 6 cutover runbook](PHASE6_CUTOVER_RUNBOOK.md) — **⛔ SUPERSEDED 2026-08-19, do not execute**: it would migrate the live build INTO `DanFashauer/SignalGrid`, the repo the owner board has queued for archiving. Kept for its reasoning, not as guidance. [PIM activation live runbook](PIM_ACTIVATION_LIVE_RUNBOOK.md) remains a live staged procedure.
 - [Zero-cost live-test matrix](ZERO_COST_LIVE_TEST_MATRIX.md): what can be validated against real systems without spend.
 - [Simulation validation evidence](VALIDATION_EVIDENCE.md): what the simulations have actually demonstrated.
 - [Review checklist](REVIEW_CHECKLIST.md): questions for reviewers, design partners, and advisors.

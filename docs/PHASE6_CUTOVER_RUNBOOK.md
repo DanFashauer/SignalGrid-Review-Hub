@@ -1,6 +1,25 @@
 # Phase 6 — Consolidation Cutover Runbook
 
-**Goal:** make `DanFashauer/SignalGrid` the single Production home for SignalGrid —
+> ## ⛔ SUPERSEDED 2026-08-19 — do not execute
+>
+> **This runbook plans the opposite of the current decision.** It moves everything
+> INTO `DanFashauer/SignalGrid` and makes that repo the production home. The live
+> plan does the reverse: `SignalGrid-Review-Hub` is the maintained tree, and
+> `DanFashauer/SignalGrid` is **legacy, retirement-pending** — `docs/OWNER_ACTIONS.md`
+> §2 and `docs/BUSINESS_PACKAGE.md` both say archive it, and its retirement PR (#1)
+> is open for exactly that.
+>
+> Running this would migrate the live build into a repository queued for archiving.
+>
+> It is kept, not deleted, because it records the reasoning of a plan that was real
+> when written — the same reason this repo keeps "original entry" records beside
+> their corrections. Nothing below is current guidance.
+>
+> Two contradictory plans were both presented as live until this marker was added;
+> the contradiction was found while making the Mac-lane instructions concrete, and
+> `docs/RUN_ON_MAC.md` was still telling readers to clone the legacy repo.
+
+**Original goal (superseded):** make `DanFashauer/SignalGrid` the single Production home for SignalGrid —
 carrying the validated monorepo (this repo's baseline + the DEV harvest), the
 four-tier `dev → alpha → beta → prod` promotion pipeline, and preserved git
 history from all three source repos — then archive the sources.

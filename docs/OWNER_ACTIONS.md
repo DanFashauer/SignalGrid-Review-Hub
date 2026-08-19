@@ -123,25 +123,48 @@ already run advisory into blocking.
 3. ~~Company vs product separation~~ **RATIFIED 2026-08-18** — one repository
    with the explicit boundary (`docs/COMPANY_VS_PRODUCT.md`); the split
    triggers stay recorded there for the day one fires.
-4. **Ratify the launch-profile v4 classification** (or say what to change).
-5. **Review two drafts:** `SECURITY_QUESTIONNAIRE_PACK.md` and
-   `PILOT_SCOPE_SKELETON.md`.
-6. **Four standing decisions:** tenant:admin scope, graph-default flip,
-   shadow-mode step-up, and **retention** — retention now also shows on the
-   pricing page as "owner decision pending", so it is customer-visible.
-7. **Classify five candidate connector families** the freeze is holding —
-   each is assessed and ready to start from its written record: facilities/CMMS
-   (intake row 86), OT/MQTT warehouse telemetry (row 85), managed-config
-   receipt and MAM/App-Protection state (both from row 33, sitting in the
-   backlog's Now section), and Apple software-update currency / SOFA (row 81 —
-   with Smplify's update-eligibility contract recorded as prior art in
-   `docs/research/SMPLIFY_DESIGN_STUDY.md`). Say "build", "defer", or "drop"
-   per family.
-8. **At the Mac:** `pnpm run sim:run-requests` — two requests are queued
+4. **At the Mac:** `pnpm run sim:run-requests` — two requests are queued
    (post-merge baseline, then the Fleet lab). The cloud lane already covered
    the free-Fleet half live; what only your machine can add is the Docker-on-Mac
    op and anything using your Premium license (the team-policy branch is the
    one unverified path). The license never leaves your machine.
+
+## What came OFF this list on 2026-08-19, and why
+
+You said: *"explain exactly what I need to decide on and why fight me in that
+when I know you will make the right call."* That was a fair challenge, and
+re-reading this board against it, most of what sat here was not a decision only
+you could make — it was reversible technical work wearing a governance label.
+Four items moved to the team under the delegated authority now recorded in
+`docs/VIRTUAL_TEAM.md`:
+
+- **Launch-profile v4 classification, the connector-family classifications,
+  and the standing decisions** → `docs/DECISION_RECORDS.md`. The families all
+  resolved to DEFER on evidence, and the strongest reason is that **you had
+  already decided this**: intake row 55 records your own sequencing boundary
+  ("the launch path remains Entra + Intune → one shared-device workflow → one
+  customer-approved sandbox → one live decision loop"). Asking you to classify
+  five expansion families one at a time was asking you to re-answer a policy
+  you had set. `tenant:admin` and the retention default are decided there too,
+  each with its reversal path.
+- **The technical review of `SECURITY_QUESTIONNAIRE_PACK.md` and
+  `PILOT_SCOPE_SKELETON.md`** → the compliance-analyst role. Checking whether
+  those drafts overstate what the tree can evidence is engineering work. Only
+  the **sign-off** is yours, and that stays yours — Claude Code does not
+  guarantee HIPAA/SOC 2, and a human compliance review is required, not
+  optional.
+
+Two of the four standing decisions — the **graph-default flip** and
+**shadow-mode step-up** — are recorded as still open in `DECISION_RECORDS.md`,
+because the records behind those board labels were not located in that pass
+and deciding them from the label alone would be inventing an answer. They are
+team work, not yours.
+
+**Everything left on this list needs your hands, not your judgement**: a
+setting only a repo admin can change, a repository only you can archive, or
+your physical Mac. Where a choice is involved (the default branch), the
+recommendation is written next to it — you are approving a call, not making
+one from scratch.
 
 ## Not needed yet (future, when you go past the demo)
 

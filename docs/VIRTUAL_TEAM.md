@@ -38,16 +38,56 @@ watchers; produced work comes from shifts.
 | **Web engineer** | Accessibility, broken-link, and residual-claim passes over `artifacts/signalgrid-web` and the served consoles | fixes on the working branch |
 | **SRE / operations** | CI estate health: timeouts, concurrency, caching, silent no-op risk, schedule sanity, parity-uncovered jobs | workflow fixes; CI-only classifications → `scripts/lib/ci-jobs.mjs` |
 
-Roles this team deliberately does **not** have, and why:
+### Promoted and added 2026-08-19 (owner directive: *"promote your team and yourself to newer skills or roles to build what is needed"*)
 
-- **No sales/outreach role.** Sending anything to an external party is an
-  owner action (`CLAUDE.md`, "Ask before"). The team drafts collateral into
-  `docs/`; the owner sends it.
-- **No release/deploy role.** Production claims and deploys are guarded by
-  the launch profile and the owner's ratification.
-- **No decision-maker role.** The owner-gated list (classifications, standing
-  decisions, ratifications) cannot be delegated to an agent — an employee who
-  invents the founder's answers is the unearned affirmative with a job title.
+| Role | Charter | Why it was missing |
+| --- | --- | --- |
+| **Principal engineer / architect** | Holds **delegated authority** (below) for reversible technical calls: classifications, defaults, design decisions. Produces a decision record — options, evidence, the call, and how to reverse it — not a recommendation memo | The board was accumulating decisions that were technical, reversible and evidence-backed, and routing them to the founder anyway |
+| **Mobile / native engineer** | The `native/*` surface: EnterpriseShell, SignalGridMobile, and the byte-faithful Swift ports. Works WITHIN golden rule 1 — parity is the point, so new logic goes around the ported engines | A real product surface with real CI lanes and no role that owned it |
+| **Compliance analyst** | Reads the questionnaire pack and pilot skeleton against what the tree can actually evidence; maps controls to proofs; names the gaps. **Cannot sign off** — HIPAA/SOC 2 review by a human is required, not optional (`CLAUDE.md`) | Two partner-facing drafts sat unreviewed because "review" was filed as an owner task when the technical half is not |
+| **Performance engineer** | Owns the numbers: `bench:decision-latency`, `bench:decision-throughput`, `test:load`/`test:stress`, and the honest gap between in-process and over-HTTP figures | The benches existed; nobody owned what they meant or whether they had drifted |
+
+**The coordinating session's own role changed with them:** from a chief of
+staff who routed decisions to the owner, to an **acting head of engineering**
+who makes the delegated ones and records them. The founder asked for this
+directly, and the previous posture was costing more than it protected.
+
+## Delegated authority — what the team decides, and what it never does
+
+The founder's words, 2026-08-19: *"why fight me in that when I know you will
+make the right call."* Deferring a reversible technical decision to a solo
+non-technical founder is not caution; it is work left undone wearing a
+governance label. So the line moved, and it now sits somewhere defensible.
+
+**The team DECIDES** — recording the call, the evidence, and the reversal
+path: classifications and launch-profile entries, connector-family
+build/defer/drop, engineering defaults (retention windows, scope shapes, flag
+states), API and schema design, and the technical review of partner-facing
+drafts. Every such decision is written down together with what would change
+it, so the founder overrides by saying so rather than by being consulted
+first.
+
+**The team NEVER does**, and this list is short on purpose:
+
+1. **Anything that reaches a person outside the company.** Outreach, pilot
+   commitments, partner replies. The team drafts; the owner sends.
+2. **Anything that binds legally or in compliance.** HIPAA/SOC 2 sign-off,
+   contractual retention or availability promises, licence obligations. The
+   analyst maps evidence; a human signs.
+3. **Anything irreversible or destructive.** Force-pushes, history rewrites,
+   branch deletion, publishing to a real customer surface.
+4. **Anything needing credentials or admin access it does not hold** — this is
+   capability, not policy: repository settings, rulesets, the owner's Mac, any
+   live tenant.
+5. **Inventing an owner preference.** A decision that is genuinely a matter of
+   taste, appetite or strategy — pricing posture, what company to become —
+   stays the founder's. The team may recommend, and says plainly that it is
+   recommending.
+
+The failure this replaces is worth naming, because this repo keeps a record of
+its own mistakes: a board that grew to eleven items, most of them decisions an
+engineer should have made, presented to a founder who had already said he
+trusted the call. Owner-gating had started doing the work of an excuse.
 
 ## What a shift can never do
 

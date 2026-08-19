@@ -1,5 +1,20 @@
 import rateLimit, { type RateLimitRequestHandler } from "express-rate-limit";
-import type { Request } from "express";
+import type { Request, Response } from "express";
+
+/**
+ * 429 body in the SAME flat envelope every other error uses ({requestId, error,
+ * message}). This was a static `message` object before, which meant two things a
+ * client could not rely on: no requestId to correlate a throttle against server
+ * logs, and a different shape from every other error class. express-rate-limit
+ * sets the RateLimit and Retry-After headers before invoking the handler.
+ */
+function rateLimitHandler(req: Request, res: Response): void {
+  res.status(429).json({
+    requestId: req.requestId ?? null,
+    error: "rate_limited",
+    message: "Rate limit exceeded. Slow down and retry shortly.",
+  });
+}
 
 /**
  * Fixed-window rate limiter for the /v1 product surface. Uses the standard
@@ -48,10 +63,7 @@ export const v1RateLimiter: RateLimitRequestHandler = rateLimit({
   // Key-generator IP validation is not relevant here — we key by token first
   // and only fall back to the address for unauthenticated requests.
   validate: { ip: false },
-  message: {
-    error: "rate_limited",
-    message: "Rate limit exceeded. Slow down and retry shortly.",
-  },
+  handler: rateLimitHandler,
 });
 
 /**
@@ -66,10 +78,7 @@ export const globalRateLimiter: RateLimitRequestHandler = rateLimit({
   limit: limitFromEnv("SIGNALGRID_GLOBAL_RATE_LIMIT", 600),
   standardHeaders: true,
   legacyHeaders: false,
-  message: {
-    error: "rate_limited",
-    message: "Rate limit exceeded. Slow down and retry shortly.",
-  },
+  handler: rateLimitHandler,
 });
 
 function bearerToken(req: Request): string | null {

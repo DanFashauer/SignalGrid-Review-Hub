@@ -16,14 +16,14 @@ Use this checklist for strategic partner, design partner, investor, or potential
 ## Docs to send
 
 - `docs/EXECUTIVE_ONE_PAGER.md`.
-- `docs/PITCH_EXECUTION_PACK.md`.
-- `docs/OUTREACH_EMAIL_TEMPLATES.md` if outreach drafts are relevant.
-- `docs/FIRST_CALL_TALK_TRACK.md` for call preparation.
+- `docs/research/PITCH_EXECUTION_PACK.md`.
+- `docs/research/OUTREACH_EMAIL_TEMPLATES.md` if outreach drafts are relevant.
+- `docs/research/FIRST_CALL_TALK_TRACK.md` for call preparation.
 - `docs/DEMO_SCRIPT_FOR_PARTNERS.md` for demo alignment.
-- `docs/STRATEGIC_BUYER_PARTNER_PITCH_PACK.md`.
-- `docs/BUYER_PARTNER_READINESS_PACK.md`.
-- `docs/FOUNDER_CONTROL_REQUIREMENTS.md` when founder-control expectations are relevant.
-- `docs/REAL_WORLD_TESTING_READINESS_PLAN.md` when staged validation is relevant.
+- `docs/research/STRATEGIC_BUYER_PARTNER_PITCH_PACK.md`.
+- `docs/research/BUYER_PARTNER_READINESS_PACK.md`.
+- `docs/research/FOUNDER_CONTROL_REQUIREMENTS.md` when founder-control expectations are relevant.
+- `docs/research/REAL_WORLD_TESTING_READINESS_PLAN.md` when staged validation is relevant.
 
 ## Questions to ask partner/acquirer
 

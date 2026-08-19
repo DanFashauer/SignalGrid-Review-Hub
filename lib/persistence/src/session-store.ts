@@ -92,9 +92,33 @@ export class InMemorySessionStore implements SessionStore {
 export class PostgresSessionStore implements SessionStore {
   private pool: any;
   private ready: Promise<void>;
+  private readonly connectionString: string;
 
   constructor(connectionString: string) {
+    this.connectionString = connectionString;
     this.ready = this.init(connectionString);
+  }
+
+  /**
+   * A REJECTED first init must not poison this class forever (the same review
+   * finding fixed in PostgresDecisionStore): boot before the database, the
+   * first query rejects, and `this.ready` is a permanently cached rejection —
+   * every later call replays the stale failure while the recovered database
+   * sits reachable, healed only by a process restart that liveness-keyed
+   * orchestration never triggers. A failed init is RETRIED on next use, after
+   * tearing down any half-built pool.
+   */
+  private async ensureReady(): Promise<void> {
+    try {
+      await this.ready;
+    } catch {
+      if (this.pool) {
+        try { await this.pool.end(); } catch { /* the old pool may already be dead */ }
+        this.pool = undefined;
+      }
+      this.ready = this.init(this.connectionString);
+      await this.ready;
+    }
   }
 
   private async init(connectionString: string): Promise<void> {
@@ -137,7 +161,7 @@ export class PostgresSessionStore implements SessionStore {
   }
 
   async start(s: Session): Promise<void> {
-    await this.ready;
+    await this.ensureReady();
     await this.pool.query(
       `INSERT INTO sessions
          (id, tenant_id, identity_ref, device_ref, workflow_key, status, outcome, decision_id, created_at, last_seen_at, expires_at)
@@ -148,7 +172,7 @@ export class PostgresSessionStore implements SessionStore {
   }
 
   async get(tenantId: string, id: string, nowMs: number): Promise<Session | null> {
-    await this.ready;
+    await this.ensureReady();
     const res = await this.pool.query(
       "SELECT * FROM sessions WHERE id = $1 AND tenant_id = $2",
       [id, tenantId],
@@ -163,7 +187,7 @@ export class PostgresSessionStore implements SessionStore {
   }
 
   async refresh(tenantId: string, id: string, ttlSeconds: number, nowMs: number): Promise<Session | null> {
-    await this.ready;
+    await this.ensureReady();
     const current = await this.get(tenantId, id, nowMs);
     if (!current || current.status !== "active") return current;
     const lastSeenAt = new Date(nowMs).toISOString();
@@ -176,7 +200,7 @@ export class PostgresSessionStore implements SessionStore {
   }
 
   async end(tenantId: string, id: string): Promise<Session | null> {
-    await this.ready;
+    await this.ensureReady();
     const res = await this.pool.query(
       "UPDATE sessions SET status = 'ended' WHERE id = $1 AND tenant_id = $2 RETURNING *",
       [id, tenantId],

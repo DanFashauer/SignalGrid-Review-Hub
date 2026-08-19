@@ -29,6 +29,7 @@
     "./graph": "./src/integrations/graph/index.ts",
     "./identity-risk": "./src/integrations/identity-risk/index.ts",
     "./itsm": "./src/integrations/itsm/index.ts",
+    "./itsm/store": "./src/integrations/itsm/store.ts",
     "./link-usability": "./src/integrations/link-usability/index.ts",
     "./local-authority": "./src/integrations/local-authority/index.ts",
     "./location-services": "./src/integrations/location-services/index.ts",
@@ -61,7 +62,7 @@
   },
   "dependencies": {
     "ioredis": "^5.4.1",
-    "uuid": "^11.0.3",
+    "uuid": "^14.0.1",
     "zod": "catalog:",
     "@workspace/audit": "workspace:*"
   },

@@ -23,15 +23,47 @@ export interface DecisionStore {
   listDecisions(tenantId: string, limit?: number): Promise<Decision[]>;
   /** An evidence snapshot by id, ONLY if it belongs to the tenant (else null). */
   getSnapshot(tenantId: string, id: string): Promise<EvidenceSnapshot | null>;
+  /**
+   * Round-trip the backing store (a real query, not a cached answer). Rejects
+   * when the store is configured but unreachable — which is exactly the state
+   * `/readyz` exists to expose, so this must never swallow the failure.
+   */
+  ping?(): Promise<void>;
   close?(): Promise<void>;
 }
 
 export class PostgresDecisionStore implements DecisionStore {
   private pool: any;
   private ready: Promise<void>;
+  private readonly connectionString: string;
 
   constructor(connectionString: string) {
+    this.connectionString = connectionString;
     this.ready = this.init(connectionString);
+  }
+
+  /**
+   * A REJECTED first init must not poison the store forever — a review finding,
+   * and the scenario is mundane: the pod boots before the database, the first
+   * request's CREATE TABLE rejects, and `this.ready` becomes a permanently
+   * cached rejection. Every later call — including /readyz's "probe" — then
+   * awaits the same stale failure while the recovered database sits reachable,
+   * and only a process restart heals it (which liveness-keyed orchestration
+   * never triggers, because /healthz stays green). So: a failed init is
+   * RETRIED on next use, after tearing down any half-built pool. A probe is
+   * only a probe if it can change its answer.
+   */
+  private async ensureReady(): Promise<void> {
+    try {
+      await this.ready;
+    } catch {
+      if (this.pool) {
+        try { await this.pool.end(); } catch { /* the old pool may already be dead */ }
+        this.pool = undefined;
+      }
+      this.ready = this.init(this.connectionString);
+      await this.ready;
+    }
   }
 
   private async init(connectionString: string): Promise<void> {
@@ -58,7 +90,7 @@ export class PostgresDecisionStore implements DecisionStore {
   }
 
   async saveDecision(decision: Decision, snapshot: EvidenceSnapshot): Promise<void> {
-    await this.ready;
+    await this.ensureReady();
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
@@ -84,7 +116,7 @@ export class PostgresDecisionStore implements DecisionStore {
   }
 
   async getDecision(tenantId: string, id: string): Promise<Decision | null> {
-    await this.ready;
+    await this.ensureReady();
     // Keyed on (id, tenant_id): a cross-tenant id returns nothing.
     const res = await this.pool.query(
       "SELECT data FROM decisions WHERE id = $1 AND tenant_id = $2",
@@ -94,7 +126,7 @@ export class PostgresDecisionStore implements DecisionStore {
   }
 
   async listDecisions(tenantId: string, limit = 100): Promise<Decision[]> {
-    await this.ready;
+    await this.ensureReady();
     const res = await this.pool.query(
       "SELECT data FROM decisions WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2",
       [tenantId, limit],
@@ -103,12 +135,17 @@ export class PostgresDecisionStore implements DecisionStore {
   }
 
   async getSnapshot(tenantId: string, id: string): Promise<EvidenceSnapshot | null> {
-    await this.ready;
+    await this.ensureReady();
     const res = await this.pool.query(
       "SELECT data FROM evidence_snapshots WHERE id = $1 AND tenant_id = $2",
       [id, tenantId],
     );
     return res.rows[0] ? (res.rows[0].data as EvidenceSnapshot) : null;
+  }
+
+  async ping(): Promise<void> {
+    await this.ensureReady();
+    await this.pool.query("SELECT 1");
   }
 
   async close(): Promise<void> {

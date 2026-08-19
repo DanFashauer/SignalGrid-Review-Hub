@@ -1,5 +1,13 @@
 # SignalGrid v0.2 Epic Backlog
 
+> ## ⛔ ARCHIVED 2026-08-15 — frozen record, not a queue
+>
+> Untouched since the repository's root commit. Most of these epics were since built
+> (under different names) or deliberately superseded; none of the statuses here can be
+> trusted as current. **The live work queue is [BUILD_BACKLOG](BUILD_BACKLOG.md); the
+> live scope authority is [LAUNCH_PROFILE](LAUNCH_PROFILE.md).** Nothing below is an
+> instruction to build anything. Kept as the record of the v0.2-era plan.
+
 This backlog converts the v0.2 readiness plan into scoped future PRs. It is roadmap/control-plan only and does not implement the epics.
 
 | Epic | Goal | Acceptance criteria | Risk lane | Likely PR sequence | Dependencies |

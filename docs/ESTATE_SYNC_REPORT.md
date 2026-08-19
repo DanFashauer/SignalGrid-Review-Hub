@@ -72,9 +72,29 @@ branch. Owner action required.
 `signalgrid.app` resolves to `192.64.119.253` — a registrar park page, not GitHub
 Pages. The domain is registered but not pointed.
 
+**Addendum, 2026-08-12 — the site is live, and the merge surfaced a second
+builder nobody had accounted for.** PR #152 merged, which satisfied the
+`github-pages` environment's default-branch rule without any settings change,
+and the dispatched `pages.yml` run deployed the real site (HTTP 200, marketing
+site rather than the Jekyll README render). But the same push also woke
+GitHub's **legacy Jekyll builder**, which follows symlinks and died on a
+scanner test fixture — a deliberately circular directory symlink proving the
+scanner never traverses one. Two builders, one repository, and only one of them
+was in anybody's model. Fixed in #202 by pointing the fixture's symlink outside
+the scan root without making it a cycle; the fixture still proves what it
+proved. **The durable fix is still an owner click: Settings → Pages →
+Source = "GitHub Actions"**, which retires the legacy builder entirely so it
+cannot trip over a future fixture.
+
 ## 3. Branch sprawl — the estate's biggest hygiene problem
 
-**124 branches across four repositories**, the overwhelming majority stale:
+**124 branches across four repositories** at audit time, the overwhelming
+majority stale. **Review-Hub is now at 11** (2026-08-12): four merges — #152,
+#202, #203, #204 — auto-deleted their branches, and the count below is the
+audit-time figure kept for comparison rather than a current reading. DEV's 99
+are untouched and remain the estate's loudest artifact.
+
+Original audit-time counts:
 
 - **DEV — 99 branches.** Roughly 70 `codex/*`, several `chatgpt/*`, a dozen
   `feat*`/`fix/*`, two Dependabot. This is a public repository whose description
@@ -123,7 +143,7 @@ Recorded so the report is not a list of only bad news:
 | # | Item | Owner | Blocker |
 |---|---|---|---|
 | 1 | Grant App access to the 2 private repos | owner | settings |
-| 2 | Allow the launch branch in the `github-pages` environment (or merge #152) | owner | settings |
+| 2 | ~~Allow the launch branch in the `github-pages` environment (or merge #152)~~ **CLOSED 2026-08-12** — #152 merged, so the default branch satisfies the environment and the real site deployed. See §2.2 addendum. | — | — |
 | 3 | Point `signalgrid.app` DNS at GitHub Pages | owner | registrar |
 | 4 | Create `DanFashauer/DanFashauer` profile README | owner | App cannot create repos |
 | 5 | Rewrite repo descriptions/topics; drop Replit homepages | owner | App cannot edit repo metadata |

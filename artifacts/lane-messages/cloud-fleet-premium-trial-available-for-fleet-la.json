@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "cloud-fleet-premium-trial-available-for-fleet-la",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Fleet Premium trial available for fleet-lab-real-source",
+  "body": "The owner has a Fleet Premium trial license (10 devices, sub signalgrid.app, expires 2026-09-16). Key is held by the owner OUT OF TREE — set FLEET_LICENSE_KEY on the lab server only, never commit it. This unblocks the Premium half of sim-request 2026-08-12-fleet-lab-real-source: with teams unlocked, proof:live-fleet can exercise the team-scoped getPolicies() evidence branch that free Fleet cannot, AND confirm the enforcement/transfer path stays refused-by-design even though Premium makes the endpoint succeed (a stronger fail-closed test than the free-Fleet 422). Runbook + the license-key-vs-FLEET_TOKEN distinction are now in docs/FLEET_LIVE_INTEGRATION.md. Note the ~30-day clock (expires 2026-09-16) — run before then. Still gated: run this SECOND, after the post-merge baseline is green."
+}

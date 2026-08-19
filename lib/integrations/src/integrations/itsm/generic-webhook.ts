@@ -150,6 +150,16 @@ export class GenericWebhookAdapter implements ITSMAdapter {
     options: { method: string; headers: Record<string, string>; body: string },
     attempt: number = 1
   ): Promise<{ success: boolean; ticketId?: string; ticketUrl?: string; error?: string }> {
+    // GATED like healthCheck() above: this method reaches the network, and the
+    // fixture/live boundary either covers every outbound path or it is not a
+    // boundary. Nothing constructs this adapter in fixture mode today; the gate
+    // makes that a property instead of a circumstance.
+    {
+      const emission = resolveEmission();
+      if (emission.mode !== "live") {
+        throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
+      }
+    }
     try {
       const response = await fetch(url, {
         method: options.method,

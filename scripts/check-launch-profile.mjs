@@ -65,10 +65,11 @@ function deriveApiPaths() {
   return paths;
 }
 
-/** Directories under artifacts/ AND under tools/, plus every `type: application`
- *  target in each iOS project.yml, prefixed `ios:`.
+/** Directories under artifacts/, tools/, native/ (except native/ios, derived at
+ *  target granularity) and firmware/, plus every `type: application` target in
+ *  each iOS project.yml, prefixed `ios:`.
  *
- *  THREE ROOTS, AND EACH ONE WAS LEARNED THE HARD WAY:
+ *  THE ROOTS WERE LEARNED THE HARD WAY, ONE BLIND SPOT AT A TIME:
  *
  *  · BOTH iOS project files. `native/ios/project.yml` declares only EnterpriseShell;
  *    SignalGridOperator and WardlinkDemo live in
@@ -122,6 +123,19 @@ function deriveAppSurfaces() {
   const artifacts = trackedDirs("artifacts/");
   const tools = trackedDirs("tools/").map((d) => `tools:${d}`);
 
+  // The v4 extension, and the blind spot it closes: an ENTIRE ANDROID PORT, a
+  // desktop port and dock firmware sat under roots this derivation never read.
+  // The freeze's whole argument is that a new surface cannot arrive unexamined —
+  // and these three arrived, were real, and were unexamined, because the gate
+  // only looked where surfaces had appeared before. `native/ios` is skipped HERE
+  // but not exempt: it is derived below at finer grain (every `type: application`
+  // target in both project.yml files), so the directory-level id would be a
+  // coarser duplicate of surfaces this profile already classifies one by one.
+  const native = trackedDirs("native/")
+    .filter((d) => d !== "ios")
+    .map((d) => `native:${d}`);
+  const firmware = trackedDirs("firmware/").map((d) => `firmware:${d}`);
+
   const projects = ["native/ios/project.yml", "native/ios/SignalGridMobile/project.yml"];
   const ios = [];
   for (const rel of projects) {
@@ -138,7 +152,7 @@ function deriveAppSurfaces() {
     }
   }
   if (ios.length === 0) die("parsed zero iOS application targets across both project.yml files.");
-  return [...artifacts, ...tools, ...ios];
+  return [...artifacts, ...tools, ...native, ...firmware, ...ios];
 }
 
 const DERIVE = {
@@ -185,8 +199,8 @@ for (const surface of SURFACES) {
       }
       declared.set(id, { status, reason });
       // A `deferred` entry may be a bare string: they share DEFERRED_RATIONALE, so
-      // 134 copies of one sentence would be noise, not rigor. Every OTHER status is
-      // a deliberate, arguable decision and has to carry its own argument.
+      // a hundred-plus copies of one sentence would be noise, not rigor. Every OTHER
+      // status is a deliberate, arguable decision and has to carry its own argument.
       if (status !== "deferred" && (reason === null || reason.trim().length === 0)) {
         console.error(`\n✗ ${surface.key}: "${id}" is ${status} with no reason.`);
         console.error("  launch / demo_only / internal are decisions someone must be able to argue with.");

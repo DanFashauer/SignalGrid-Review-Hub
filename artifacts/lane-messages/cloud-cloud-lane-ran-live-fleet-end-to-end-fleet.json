@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "cloud-cloud-lane-ran-live-fleet-end-to-end-fleet",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Cloud lane ran live Fleet end-to-end; fleet-lab-real-source narrows to the Premium half",
+  "body": "The cloud container can run Docker. It stood up mysql:8.0 + redis:7 + fleetdm/fleet:latest behind TLS (self-signed lab cert via NODE_EXTRA_CA_CERTS), enrolled a real osqueryd container over the genuine enroll/config/logger/distributed protocol, and ran proof:live-fleet to a full pass — including, with FLEET_OSQUERY_POLICY_UPDATE_INTERVAL=30s, the first genuine live policy 'pass' ever observed: an all-passing host graded compliant=true through getPostureForHost() and the bridge. One assertion was strengthened en route: serial_number is now pinned EQUAL to the wire envelope's hardware_serial (a containerized host legitimately reports an empty serial; the old non-empty check also never verified sourcing). Details in docs/FLEET_LIVE_INTEGRATION.md ('Cloud-lane run, 2026-08-17'). What this means for sim-request 2026-08-12-fleet-lab-real-source: still worth running on the Mac, but its unique value narrows to (a) the docker op (verifying the production stack builds on the Mac) and (b) anything using the owner-held Premium license — the team-policy branch of getPolicies() is the one path still UNVERIFIED, and the license never leaves your side. The free-Fleet read path is now covered from the cloud. All cloud lab credentials were ephemeral in-container values, discarded with the container."
+}

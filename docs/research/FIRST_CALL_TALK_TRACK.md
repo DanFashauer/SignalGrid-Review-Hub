@@ -41,3 +41,5 @@ Ask for one concrete next step:
 - Agreement on a public-safe diligence packet to review.
 - Definition of a private sandbox validation boundary, if appropriate.
 - Clarification of partnership, investment, or founder-control terms that would need to be resolved before deeper diligence.
+
+Leave them with the address: **hello@signalgrid.app** — the SignalGrid contact of record for follow-up, the diligence packet, and any sandbox-scope conversation.

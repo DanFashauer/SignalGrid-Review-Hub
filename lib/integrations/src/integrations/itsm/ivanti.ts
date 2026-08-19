@@ -52,6 +52,16 @@ export class IvantiAdapter implements ITSMAdapter {
    * Create a new incident in Ivanti
    */
   async createTicket(request: ITSMTicketRequest): Promise<ITSMTicketResponse> {
+    // GATED like healthCheck() above: this method reaches the network, and the
+    // fixture/live boundary either covers every outbound path or it is not a
+    // boundary. Nothing constructs this adapter in fixture mode today; the gate
+    // makes that a property instead of a circumstance.
+    {
+      const emission = resolveEmission();
+      if (emission.mode !== "live") {
+        throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
+      }
+    }
     await this.ensureAuthenticated();
 
     const incident = this.buildIncidentPayload(request);
@@ -125,6 +135,16 @@ export class IvantiAdapter implements ITSMAdapter {
    * Ensure we have a valid access token
    */
   private async ensureAuthenticated(): Promise<void> {
+    // GATED like healthCheck() above: this method reaches the network, and the
+    // fixture/live boundary either covers every outbound path or it is not a
+    // boundary. Nothing constructs this adapter in fixture mode today; the gate
+    // makes that a property instead of a circumstance.
+    {
+      const emission = resolveEmission();
+      if (emission.mode !== "live") {
+        throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
+      }
+    }
     if (this.accessToken && Date.now() < this.tokenExpiry) {
       return;
     }

@@ -46,6 +46,16 @@ export class ZendeskAdapter implements ITSMAdapter {
    * Create a new ticket in Zendesk
    */
   async createTicket(request: ITSMTicketRequest): Promise<ITSMTicketResponse> {
+    // GATED like healthCheck() above: this method reaches the network, and the
+    // fixture/live boundary either covers every outbound path or it is not a
+    // boundary. Nothing constructs this adapter in fixture mode today; the gate
+    // makes that a property instead of a circumstance.
+    {
+      const emission = resolveEmission();
+      if (emission.mode !== "live") {
+        throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
+      }
+    }
     const ticket = this.buildTicketPayload(request);
     
     const url = `${this.config.instanceUrl}/api/v2/tickets.json`;

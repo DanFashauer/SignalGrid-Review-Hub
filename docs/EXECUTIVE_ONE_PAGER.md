@@ -1,5 +1,7 @@
 # Executive One-Pager
 
+**Contact:** Dan Fashauer, Founder — hello@signalgrid.app · signalgrid.app
+
 SignalGrid is an operational trust orchestration layer for shared, mobile, and frontline environments. It connects identity, device posture, credential-reader events, custody, network context, workflow ownership, routing, audit evidence, and verification expectations into approval-gated trust decisions while existing enterprise systems remain systems of record.
 
 ## Who SignalGrid helps
@@ -15,6 +17,8 @@ SignalGrid is intended for teams evaluating shared-device, mobile, custody, fron
 Shared, mobile, and frontline workflows often fail because no single source system sees the full context. IAM may know the user, MDM/UEM may know the device posture, credential readers may know badge events, lockers may know custody, network tools may know access path, ITSM/SOAR may know ownership, and audit systems may know evidence.
 
 SignalGrid frames the missing layer as operational trust orchestration: normalize signals, decide outcomes, route approved actions, audit events, and verify expected results without claiming ownership of the source systems.
+
+The founder's framing of the wedge: today's products make simple processes more complex — every tool answers with another console to check. SignalGrid answers with a decision: one word (allow, step-up, restrict, deny) with the evidence attached, consumable by any host app in any industry that has this flow, regardless of company size or which source tools are in place. The architecture is deliberately industry-agnostic — a committed proof fails the build unless differently-sourced evidence decides identically — while the *claims* stay pinned to what each integration has actually proven.
 
 ## Why shared/mobile/frontline environments need it
 

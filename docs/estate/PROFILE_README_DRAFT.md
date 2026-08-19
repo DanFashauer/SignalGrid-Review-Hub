@@ -37,12 +37,15 @@ A few things I hold the project to:
 - **Honest status.** Fixture-backed today, built lab-first on open-source MDM
   (Fleet), with Microsoft Intune/Entra as the enterprise target. No production
   deployments yet — I'm looking for design partners.
+- **Measured, not asserted.** Capacity claims name the machine and the commit
+  they were measured on, and the numbers that are hardware-dependent are
+  reported rather than gated.
 
 ## Where the work lives
 
 | Repository | What it is |
 |---|---|
-| [SignalGrid-Review-Hub](https://github.com/DanFashauer/SignalGrid-Review-Hub) | The public review surface — decision core, read-only connector families, `/v1` API, operator console, and the proof harness |
+| [SignalGrid-Review-Hub](https://github.com/DanFashauer/SignalGrid-Review-Hub) | The public review surface — decision core, read-only connector families, `/v1` API, operator console, and the proof harness that gates every claim |
 | [signalgrid-mcp](https://github.com/DanFashauer/signalgrid-mcp) | Read-only macOS posture MCP server (Python) — a signal source for the grid |
 | [VaultLens](https://github.com/DanFashauer/VaultLens) | Collector intelligence app — a separate project |
 

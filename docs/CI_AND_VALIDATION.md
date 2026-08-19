@@ -31,7 +31,7 @@ The docs sanity job verifies that required public-review docs exist and checks f
 | `EnterpriseShell (iPhone simulator)` | the app target builds and its unit tests pass on iPhone |
 | `EnterpriseShell (iPad simulator)` | the same, on iPad |
 | `macOS native (SwiftPM, no simulator)` | the decision port and `SignalGridMobileCore` build and test as native macOS binaries |
-| `SignalGridMobile` / `Lint & Security` | `scripts/verify.sh`, SwiftLint, and the credential/insecure-URL scan |
+| `SignalGridMobile` / `Lint & Security` | `native/ios/SignalGridMobile/scripts/verify.sh`, SwiftLint, and the credential/insecure-URL scan |
 
 **Why iPad is its own job.** Every app target in `native/ios/project.yml` sets
 `TARGETED_DEVICE_FAMILY: "1,2"` — a claim that the app supports iPad. Before this

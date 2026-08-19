@@ -14,6 +14,15 @@ picking these up:
 
 ## Now (next up)
 
+Re-triaged 2026-08-17 against the owner's "now vs backlog" directive: the Fleet
+websocket collector moved to done (built and live-verified the same day); the
+dual-control product question moved to **Owner-gated** where decisions live —
+it was a decision wearing a task's clothes; the two Swift mirrors stay here but
+are **Mac-lane only** (no Swift toolchain in the cloud lane, and an uncompiled
+Swift edit is invisible until a human opens Xcode); `ReleaseLedger.holds` and
+the webhook write-route stay recorded-not-fixed by their own stated rule (no
+lone repairs into unreachable code).
+
 - [x] **27a — Normalization-version stamping on evidence (intake row 27). BUILT.**
       An adversarially-verified audit of the owner's canonical endpoint signal set found
       that nothing in the fabric recorded which version of the code produced a normalized
@@ -59,53 +68,6 @@ picking these up:
       Either would mean a signal could be normalized by one build and evaluated by another,
       at which point reopen this.
 
-- [ ] **A REACHABLE dual-control surface — OWNER-GATED, and NOT the defect the
-      row-45 audit first described.** A three-seam design pass with adversarial
-      critique (and independent re-verification by hand) established facts that
-      correct the original framing, and they are recorded here because the
-      original framing overstated the risk:
-      1. `planFlowActions` has **zero shipped consumers**. `ActionPlan` and
-         `requiresApprovals` occur repo-wide only in `lib/flows/src/index.ts` and
-         `scripts/src/flows-proof.ts`; the sole other mention is a *comment* in
-         `grid-config.ts`. `artifacts/api-server` imports eleven symbols from
-         `@workspace/flows` and `planFlowActions` is not among them. So its
-         `dual_approval` disposition is unreachable from any product path, and
-         wiring the evaluator into it would be a decorative wire into dead code —
-         all three critiques reached `closesDefect: false` for exactly this reason.
-      2. The surface that DOES ship — `lib/app-workflows` via
-         `POST /v1/app-workflows/evaluate` — is rigorous, not lax. The route
-         deliberately does not read `confirmedActionKeys` from the request body
-         ("This route NEVER releases held actions on a request-supplied signal");
-         the one release path is `POST /v1/app-workflows/complete-step-up`, a real
-         WebAuthn ceremony with user-verification required, an action-bound
-         single-use challenge, tenant-scoped credential storage, and the release
-         flag derived server-side from the verified assertion.
-      **Therefore there is no live "two clicks instead of two people" defect on any
-      shipped path.** `@workspace/dual-control` is an unwired primitive whose
-      absence costs nothing today, because nothing today reaches a state it would
-      have gated. What remains is a genuine PRODUCT question rather than a repair:
-      should a two-person ceremony exist on a reachable surface at all — and if so,
-      on which action class? That is the owner's call, not an agent's, because it
-      adds a runtime obligation to the launch path rather than fixing something
-      broken. If taken, the design pass's own conclusions bind: evidence must cross
-      the seam (a raw `DualControlRequestRaw` normalized by the primitive's own
-      normalizer), never a caller-supplied verdict; a ceremony must bind to one
-      action id and not be replayable across actions; and every new guard must be
-      expressed in a shape `scripts/mutation-guard.mjs` can actually mutate — a
-      `switch` arm is invisible to it and would pass vacuously over the release
-      decision itself.
-      **The generalizable lesson is now a gate.** The expensive part of this episode
-      was not the wrong conclusion, it was that "does anything ship this?" took a
-      full design pass to answer when it is derivable in a second.
-      `scripts/check-package-reachability.mjs` computes the transitive closure from
-      `artifacts/*` and reports every `lib/*` package no shipped artifact can reach —
-      eight of thirty-five today, `dual-control` among them, and it prints WHY (no
-      importers at all, versus imported only by the proof harness). It is a ratchet
-      pinned at the current count, not a hard gate: unreachable is a requirement to
-      look before building, not a verdict to delete. It also corrected a hand count
-      made during that pass — `lib/db` is untracked build residue (`dist/` and
-      `node_modules/` with no manifest and no source), not a thirty-sixth package,
-      which is the ordinary reason a derived figure beats a remembered one.
 - [x] **Change-window currency as a decision fact (intake row 45, the audit's one
       genuine near-term gap).** DONE — the `change-window` family
       (`@workspace/integrations/change-window`), `proof:change-window` (76 checks),
@@ -379,15 +341,25 @@ already has a fixture proof; these add a real vendor behind it._
       Note the image is amd64-only; Docker Desktop emulates it on Apple Silicon, so
       the earlier from-source arm64 build is no longer needed.
 
-- [ ] **Fleet live-query results (websocket campaign collector).** `runQuery()` now
-      THROWS `not implemented` and sends nothing. Fixing its request body alone would
-      have armed the most dangerous call in the package — arbitrary osquery SQL to
-      real production hosts — while still returning nothing usable, because a Fleet
-      live query is asynchronous: the POST returns `{campaign}` and rows stream over a
-      websocket, so the old `data.results` was always `undefined` despite its array
-      type. Doing this properly means a websocket client plus a result-collection
-      policy (timeout, partial results, per-host errors) — and, given the blast
-      radius, an explicit approval gate rather than only the tier gate.
+- [x] **Fleet live-query results (websocket campaign collector). BUILT** — and verified
+      against a REAL Fleet with a real enrolled `osqueryd`, in the cloud lane's own
+      container (see `docs/FLEET_LIVE_INTEGRATION.md`, "Cloud-lane run, 2026-08-17").
+      `runQuery()` POSTs the correct campaign body and collects per-host rows over
+      `/api/v1/fleet/results/websocket` using Node's built-in WebSocket client (no new
+      dependency, no lockfile change), with the result-collection policy this row asked
+      for: bounded window (`opts.timeoutMs`, default 15s), per-host errors carried, and
+      an early close returning what arrived flagged `partial: true` — a partial
+      measurement reported as partial, never as the whole. The approval gate this row
+      required exists and is its own refusal, not a synonym for the tier gate:
+      `SIGNALGRID_ALLOW_LIVE_QUERY=true` is demanded IN ADDITION to the `isEnabled()`
+      chokepoint and an explicit non-empty host list (a fleet-wide broadcast is refused,
+      never implied). `proof:live-fleet` pins each gate from its own side — approval
+      absent in a fully live tier refuses; approval present in dev tier still refuses;
+      empty host list refuses — and then collects a real campaign end-to-end (rows from
+      the live agent's `osquery_info`, attributed to the right host, `partial: false`).
+      `scripts/check-ungated-fetch.mjs` was widened in the same change so `new
+      WebSocket…(` counts as an outbound call site, mutation-tested by removing the
+      collector's guard and watching the gate go red.
 - [x] **Traccar → location-services.** DONE — `proof:live-location` (22 assertions)
       against a real Traccar 6.14.5, positions ingested over its genuine OsmAnd
       protocol. This connector has no hardcoded paths, so the lane found something
@@ -509,6 +481,60 @@ only), and the DDM rig is gated on an APNs push certificate.
 
 ## Owner-gated (needs a decision before an agent builds it)
 
+- [ ] **A REACHABLE dual-control surface — OWNER-GATED, and NOT the defect the
+      row-45 audit first described.** A three-seam design pass with adversarial
+      critique (and independent re-verification by hand) established facts that
+      correct the original framing, and they are recorded here because the
+      original framing overstated the risk:
+      1. `planFlowActions` has **zero shipped consumers**. `ActionPlan` and
+         `requiresApprovals` occur repo-wide only in `lib/flows/src/index.ts` and
+         `scripts/src/flows-proof.ts`; the sole other mention is a *comment* in
+         `grid-config.ts`. `artifacts/api-server` imports eleven symbols from
+         `@workspace/flows` and `planFlowActions` is not among them. So its
+         `dual_approval` disposition is unreachable from any product path, and
+         wiring the evaluator into it would be a decorative wire into dead code —
+         all three critiques reached `closesDefect: false` for exactly this reason.
+      2. The surface that DOES ship — `lib/app-workflows` via
+         `POST /v1/app-workflows/evaluate` — is rigorous, not lax. The route
+         deliberately does not read `confirmedActionKeys` from the request body
+         ("This route NEVER releases held actions on a request-supplied signal");
+         the one release path is `POST /v1/app-workflows/complete-step-up`, a real
+         WebAuthn ceremony with user-verification required, an action-bound
+         single-use challenge, tenant-scoped credential storage, and the release
+         flag derived server-side from the verified assertion.
+      **Therefore there is no live "two clicks instead of two people" defect on any
+      shipped path.** `@workspace/dual-control` is an unwired primitive whose
+      absence costs nothing today, because nothing today reaches a state it would
+      have gated. What remains is a genuine PRODUCT question rather than a repair:
+      should a two-person ceremony exist on a reachable surface at all — and if so,
+      on which action class? That is the owner's call, not an agent's, because it
+      adds a runtime obligation to the launch path rather than fixing something
+      broken. **A field-tested reference design now exists for the "if yes, how?"
+      half**: docs/research/SMPLIFY_DESIGN_STUDY.md records Smplify's shipped
+      approval-gate lifecycle (five risk tiers, gate-after-RBAC placement,
+      STRICT/DEFAULT self-approval modes pinned by compliance regime, idempotent
+      request creation, 24h TTL, replay-under-service-authority on quorum,
+      inbox/outbox, dry-run preview, loud break-glass refused for self) — the
+      owner's decision stays the owner's, with a concrete design to say yes to.
+      If taken, the design pass's own conclusions bind: evidence must cross
+      the seam (a raw `DualControlRequestRaw` normalized by the primitive's own
+      normalizer), never a caller-supplied verdict; a ceremony must bind to one
+      action id and not be replayable across actions; and every new guard must be
+      expressed in a shape `scripts/mutation-guard.mjs` can actually mutate — a
+      `switch` arm is invisible to it and would pass vacuously over the release
+      decision itself.
+      **The generalizable lesson is now a gate.** The expensive part of this episode
+      was not the wrong conclusion, it was that "does anything ship this?" took a
+      full design pass to answer when it is derivable in a second.
+      `scripts/check-package-reachability.mjs` computes the transitive closure from
+      `artifacts/*` and reports every `lib/*` package no shipped artifact can reach —
+      eight of thirty-five today, `dual-control` among them, and it prints WHY (no
+      importers at all, versus imported only by the proof harness). It is a ratchet
+      pinned at the current count, not a hard gate: unreachable is a requirement to
+      look before building, not a verdict to delete. It also corrected a hand count
+      made during that pass — `lib/db` is untracked build residue (`dist/` and
+      `node_modules/` with no manifest and no source), not a thirty-sixth package,
+      which is the ordinary reason a derived figure beats a remembered one.
 - [ ] **186 vendored shadcn components are unreferenced, holding 21 packages alive.**
       ⚠️ **Owner decision: is this dead code, or an installed component library?**
       Measured, not estimated — same conservative check that justified deleting
@@ -592,7 +618,7 @@ only), and the DDM rig is gated on an APNs push certificate.
       2. *signalgrid-mcp half* — its `pyproject.toml` pinned `mcp>=1.9.0` with no
          upper bound. The MCP Python SDK released **2.0.0**, which removes
          `mcp.server.fastmcp` outright (it moved under `mcp/server/mcpserver/`) and
-         turns `mcp/types.py` into a package. `src/signalgrid_mcp/app.py` imports
+         turns `mcp/types.py` into a package. `signalgrid-mcp/src/signalgrid_mcp/app.py` imports
          both, so the server raises `ModuleNotFoundError` at import and a client sees
          only `-32000: Connection closed`; pytest fails at COLLECTION with 4 errors
          and 0 tests run. It reads as a broken repo but is a moved API. **MERGED as
@@ -751,8 +777,8 @@ _These need the owner's call — an agent should not act on them unsupervised._
       is private (or a private location is chosen): draft an invention-disclosure
       document from the architecture, add copyright/CONFIDENTIAL headers, and
       write a tiered-disclosure kit (public one-pager vs. NDA-gated technical
-      brief) + `docs/IP_AND_DISCLOSURE.md`. Do NOT commit a detailed provisional
-      spec into a public repo.
+      brief) + an IP-and-disclosure posture document (planned, not yet written).
+      Do NOT commit a detailed provisional spec into a public repo.
 
 ## Later / vision
 

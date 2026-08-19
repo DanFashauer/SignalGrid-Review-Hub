@@ -301,6 +301,25 @@ try {
       "a throttled response carries the standard rate-limit headers a client can back off on",
       throttled.length === 0 || (throttled[0].headers.get("ratelimit-limit") !== null || throttled[0].headers.get("retry-after") !== null),
     );
+    // The 429 BODY speaks the same flat envelope as every other error, and
+    // carries the request id + security headers. Before 2026-08-16 a
+    // global-limit 429 had NEITHER — the limiter ran ahead of requestContext,
+    // so the one response an operator most needs to correlate against server
+    // logs was the one response that could not be.
+    if (throttled.length > 0) {
+      const body = await throttled[0].json().catch(() => null);
+      check(
+        "a throttled response body is the flat {requestId,error,message} envelope",
+        body !== null && body.error === "rate_limited" && typeof body.message === "string" && "requestId" in body,
+      );
+      check(
+        "a throttled response carries x-request-id (context now runs before the limiter)",
+        typeof throttled[0].headers.get("x-request-id") === "string",
+      );
+    } else {
+      check("a throttled response body is the flat {requestId,error,message} envelope", false);
+      check("a throttled response carries x-request-id (context now runs before the limiter)", false);
+    }
     console.log(
       `\n  MEASURED CEILING (shipped default): a single key is capped at 240 requests/minute —\n` +
       `    four decisions a second. ${throttled.length} of 300 burst requests were throttled.\n` +

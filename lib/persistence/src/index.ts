@@ -13,3 +13,4 @@ export {
   getSessionStore,
   setSessionStore,
 } from "./session-store";
+export { MIGRATIONS, runMigrations, type Migration, type MigrationResult } from "./migrations";

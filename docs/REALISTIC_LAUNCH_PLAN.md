@@ -100,7 +100,7 @@ The `signalgrid-complete.zip` package is a meaningful next step. It contains:
 - 11 passing engine / store tests
 - API route rewrites
 - simulator UI changes
-- `scripts/bootstrap.sh`
+- a bootstrap script (`bootstrap.sh`), not present in this repo
 - run and go-live documentation
 
 That package can make the public demo demo-complete, but it is **not** yet the
@@ -114,7 +114,7 @@ production tenant / auth / connector core.
 | Public proof and simulator          | 8/10                                 |
 | Pitch and founder materials         | 8/10                                 |
 | Demo application                    | 6/10 until zip is integrated + hosted |
-| Automation and evidence             | 7/10 pending PR #36 fixes            |
+| Automation and evidence             | 7/10 (~~pending PR #36 fixes~~ — PR #36 closed unmerged 2026-07-15; see §5 correction) |
 | Tenant isolation and authentication | 1–2/10                               |
 | Real Microsoft connector            | 1/10                                 |
 | Versioned policy engine             | 2–3/10                               |
@@ -675,10 +675,10 @@ Build this while the pilot is underway.
 
 ### Phase A — Finish the public demo (2–4 weeks)
 
-1. Fix and merge PR #36.
+1. ~~Fix and merge PR #36.~~ (Closed unmerged 2026-07-15 — see the §5 correction; this step is retired, not pending.)
 2. Integrate `signalgrid-complete.zip`.
 3. Add the in-memory store and test suite.
-4. Run `bash scripts/bootstrap.sh` in your local environment.
+4. Run the bootstrap script the package ships with, in your local environment.
 5. Boot API and web.
 6. Verify all listed endpoints.
 7. Deploy a live public-safe demo.
@@ -821,7 +821,7 @@ they are distractions.
 
 ### Week 1
 
-- clear PR #36
+- ~~clear PR #36~~ (closed unmerged 2026-07-15 — see §5; retired)
 - integrate demo-complete zip
 - run full bootstrap
 - deploy public alpha

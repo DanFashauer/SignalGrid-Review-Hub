@@ -1,5 +1,43 @@
 # Delivery gap analysis — every surface, measured against the tree
 
+> ## ⛔ ARCHIVED 2026-08-15 — kept as the false-claims exhibit, not as a map
+>
+> This document is the estate's most instructive fossil: measured correctly on
+> 2026-08-08 and overtaken the same morning, it then seeded the same false findings
+> into two independent external analyses. It is retained, corrections inline, as the
+> worked example of why documents are never quoted as the state of the tree. It will
+> NOT be re-measured in place — a regenerated copy restarts the same decay clock.
+> What replaced it is not a document but the live gates: `pnpm run check:false-claims`
+> (proven-false claims cannot be re-asserted), `pnpm run check:cited-paths` (citations
+> must resolve), `pnpm run check:absence` (absence needs exhaustion, not one grep),
+> and the launch profile + STATUS figures for what exists right now.
+>
+> ## ⚠️ Original correction banner (2026-08-12) — SUPERSEDED IN PART, VERIFY BEFORE ACTING
+>
+> **Re-measured 2026-08-12 against the tree.** This document was accurate when
+> written (2026-08-08, PR #188), but the repository moved the same day and has
+> taken **77+ commits since**. At least one headline finding is now false:
+>
+> | Claim below | Status on 2026-08-12 | Evidence |
+> | --- | --- | --- |
+> | "Android — **ABSENT** — zero `.kt`/`.gradle`/android files" | **FALSE — Android exists** | `native/android/` : Kotlin `MainActivity.kt`, `core` module (`AssistOutcome`, `AssistWire`, `GateEndpoint`), 4 test classes incl. `SharedConformanceTest`, CI `.github/workflows/android.yml` runs `gradle test` + `assembleDebug`. Landed 2026-08-08 in PR #196 — hours after this document. |
+> | "one genuinely native platform (iOS)" | **FALSE — three** | iOS (68 Swift files), Android (Kotlin), and Rust dock firmware (`firmware/dock/core`: `custody.rs`, `state.rs`, `wire.rs`). |
+>
+> | "no Electron, Tauri, `.csproj`, `.sln` files" | **FALSE — a Tauri desktop app exists** | `native/desktop/app/tauri.conf.json` and supporting files. |
+>
+> **Confirmed still true:** the `artifacts/signalgrid-desktop` *package* is a Vite
+> web app despite its name (the real desktop shell lives at `native/desktop/`);
+> `signalgrid-mobile-pwa` is a PWA, not native; no FedRAMP/air-gap artifacts exist.
+>
+> **Verified green 2026-08-12** (executed, not read): `pnpm install
+> --frozen-lockfile`, `pnpm run typecheck`, `pnpm -r run build`, **122 `proof:*`
+> gates pass with 0 failures**, `scripts/check-proof-counts.mjs` reports all 56
+> documented counts matching, and the core proof reports
+> `assertions=213, categories=17, evidenceFields=20`.
+>
+> **Do not treat any row in this file as current without re-running its named
+> search.** Regenerate with a fresh measurement pass before using it to plan work.
+
 What exists, what partly exists, and what does not exist at all. **Derived by reading
 the repository**, not from the task list or from memory — several entries below
 contradict a task marked "completed", and where they do, the tree wins.
@@ -19,10 +57,34 @@ surface expanding faster than the evidence.
 So this is a map, not a plan. **Nothing here should be built without first deciding
 whether it is inside or outside the launch line.**
 
-A second, structural problem sits underneath: **the launch profile itself is mostly
+~~A second, structural problem sits underneath: **the launch profile itself is mostly
 not on the default branch.** Files matching the profile: **7** on
 `claude/signalgrid-launch-plan-emxm01` (PR #152) versus **2** on `SignalGrid_Alpha`.
-The scope decision that should govern all of this is stranded in an unmerged branch.
+The scope decision that should govern all of this is stranded in an unmerged branch.~~
+
+> **CORRECTED 2026-08-13 — THIS PARAGRAPH WAS THE MOST DAMAGING THING IN THIS FILE.**
+> PR #152 merged to `SignalGrid_Alpha` on 2026-08-12 (merge commit `e11f2cc`,
+> "SignalGrid Shared-Device Trust Gateway — the launch spine"). The launch profile
+> has governed the default branch ever since, enforced in three places:
+> `scripts/preflight.mjs` (the gate and its proof), `.github/workflows/review-hub-ci.yml`
+> (both run on every pull request), and `package.json`. Measured today:
+> `git ls-tree -r --name-only origin/SignalGrid_Alpha | grep -icE 'launch.profile'`
+> returns **5**, and the same command on the launch branch returns **5** — the same
+> files, not 7 versus 2.
+>
+> **The "7 versus 2" was never a file count.** The 7 was
+> `git rev-list --left-right --count` — the branch's *commits ahead*. The 2 was
+> `git diff --name-only` — the number of profile files that branch *modifies*. Two
+> unrelated measurements, printed as though they were one.
+>
+> This is recorded at length because the sentence outlived its accuracy and kept
+> working: **two separate external analyses have since opened with it as their
+> headline finding** — one repeating "7 files versus 2" verbatim, the other
+> restating it as "220 commits ahead" (the real figure is 8, and 0 behind). Both
+> then ranked "merge the stranded launch profile" as the task blocking all others.
+> Neither ran a command. A wrong number in a document that reads as measured is not
+> a stale fact; it is a fact-shaped object that keeps being cited, and it costs more
+> than the omission would have.
 
 ## 1. Deployment models
 
@@ -52,12 +114,22 @@ each `package.json`:
 | `signalgrid-desktop` — "SignalGrid Desktop" | Vite web | **MISLEADING NAME** — not a desktop app |
 | `signalgrid-mobile-pwa` — "SignalGrid Mobile (PWA)" | Vite web | **BUILT as a PWA**, not a native app |
 | `native/ios` — EnterpriseShell + SignalGridMobile | Swift, 109 files, real `xcodebuild` in CI | **BUILT** |
-| **Android** | — | **ABSENT** — zero `.kt`/`.gradle`/android files |
-| **Native Windows / macOS desktop** | — | **ABSENT** — zero Electron, Tauri, `.csproj`, `.sln` files |
+| **Android** | `native/android/` Kotlin app + `core` module | **BUILT (corrected 2026-08-12)** — `MainActivity.kt`, 4 test classes, CI runs `gradle test` + `assembleDebug`. The original ABSENT finding was overtaken by PR #196 the same day. |
+| ~~**Native Windows / macOS desktop**~~ | `native/desktop/` Tauri shell (Rust) | **BUILT (corrected 2026-08-13)** — ~~zero Electron, Tauri, `.csproj`, `.sln` files~~. `native/desktop/app/` carries `tauri.conf.json`, a Rust `main.rs` and Cargo manifest; CI builds runnable executables on Linux and Windows. Landed 2026-08-08 in PR #199, the same day this row was written. Caught by `scripts/check-known-false-claims.mjs`, not by a human re-reading the table. |
 
-**What this means in plain terms:** there is one genuinely native platform (iOS). The
-"desktop app" is a web page named Desktop. The "mobile app" for non-Apple platforms is
-a PWA. Android does not exist in any form.
+**What this means in plain terms:** ~~there is one genuinely native platform (iOS).~~
+~~Android does not exist in any form.~~ **CORRECTED 2026-08-13: there are FOUR native
+surfaces** — iOS (Swift), Android (`native/android/`, Kotlin), a Tauri desktop shell
+(`native/desktop/`, Rust) and the dock firmware (`firmware/dock/`, `no_std` Rust). What
+remains true is the naming: the `artifacts/signalgrid-desktop` *package* is a web page
+called Desktop, and the non-Apple "mobile app" in `artifacts/` is a PWA.
+
+> The struck sentence above survived the first two rounds of corrections to this file —
+> the Android clause beside it was struck and it was not, because a human re-reading the
+> paragraph fixed what the correction was *about* and left the summary. It was caught by
+> `scripts/check-known-false-claims.mjs`, which scans every tracked document for
+> re-assertions of anything in `docs/agent/FALSE_CLAIMS.json`. That is the argument for
+> the registry in one line: the same claim gets made again, by whoever reads next.
 
 A PWA is a legitimate answer for Android and desktop — but it must be *called* one.
 Naming a web artifact `signalgrid-desktop` is the same class of defect this repo has
@@ -69,7 +141,7 @@ spent its history removing: a label asserting more than the thing does.
 | ----- | ----- | -------- |
 | Dock as a decision signal | **BUILT** | `lib/signalgrid-core/src/dock.ts`, DockBridge connector, proofs |
 | Product/strategy documents | **BUILT** | `docs/DOCKBRIDGE_PRODUCT_CONNECTOR.md`, `DOCKBRIDGE_STRATEGY.md`, `SIGNALGRID_SMARTDOCK.md` |
-| **Embedded firmware / controller software** | **ABSENT** | Zero `.ino`, `.c`, `.cpp`, `.h` files in the entire repository |
+| ~~**Embedded firmware / controller software**~~ | **BUILT (corrected 2026-08-13)** | ~~Zero `.ino`, `.c`, `.cpp`, `.h` files in the entire repository~~ — the search was the error: it enumerated C-family extensions only, so it *could not* have found the firmware, which is Rust. `firmware/dock/` is a `no_std` Cortex-M4F crate with `unsafe_code = "forbid"` and its own CI workflow. It landed on 2026-08-08, hours after this row was written, and the row's own "genuinely blocked on the physical thing" conclusion was falsified the same day. |
 
 SignalGrid currently *consumes* dock state as a signal. It does not *control* a dock.
 Writing embedded code to drive charging hardware without a terminal is a different
@@ -98,8 +170,11 @@ Ordered by *ratio of honesty gained to effort*, not by ambition:
 
 1. **Rename `signalgrid-desktop`** or relabel it as the PWA/web surface it is. Hours,
    and it removes a false claim from the tree.
-2. **Land #152**, so the launch profile that governs scope is actually on the default
-   branch. Nothing below should be decided while the scope decision is stranded.
+2. ~~**Land #152**, so the launch profile that governs scope is actually on the default
+   branch. Nothing below should be decided while the scope decision is stranded.~~
+   **DONE 2026-08-12** — merged as `e11f2cc`. See the correction at the top of this
+   file; do not re-open this as a task, and treat any plan that opens with it as
+   having been written from this document rather than from the repository.
 3. **README rewrite for an operator audience** — what it is, how to run it, what it
    does not do. Small, high leverage, it is the front page.
 4. **Self-host hardening** — upgrade path, backup/restore, supported configurations.

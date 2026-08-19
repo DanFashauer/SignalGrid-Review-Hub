@@ -8,6 +8,33 @@ info:
     is tenant-scoped: the tenant is derived from the authenticated bearer token,
     never from a client-supplied id. This is a review surface, not a production
     system — no real credentials, tenant data, PHI/PII, or live vendor calls.
+
+    RATE LIMITING (applies to every path in this document): requests are limited
+    per API key and, more coarsely, per client address. Exceeding either bound
+    answers 429 with the standard Error schema body ({requestId, error:
+    "rate_limited", message}) plus RateLimit-* and Retry-After headers a client
+    can back off on — never a 5xx. Unknown paths under /api answer 404 with the
+    same Error schema, never an HTML page. Errors of every class share that one
+    flat envelope.
+
+    IDEMPOTENCY (opt-in, POST routes under /v1): send an Idempotency-Key header
+    (any client-chosen string up to 256 chars) and a retry of the same key on
+    the same route by the same caller replays the stored first response instead
+    of executing again, marked with an Idempotency-Replay: true header. Keys
+    are caller-scoped — one tenant's key can never replay another's response.
+    Only 2xx outcomes are stored; the store is per-instance memory, so a
+    multi-instance deployment needs a shared store before this is a
+    cross-instance guarantee.
+
+    VERSIONING (docs/API_VERSIONING_POLICY.md is the authority): the /v1 prefix
+    is the contract. Additive change — new routes, new response fields, new
+    optional inputs — may land without notice, and clients must ignore fields
+    they do not recognize. Removing or renaming anything a client could already
+    receive, changing a field's type or the error envelope, is breaking and
+    requires /v2. A route is never removed without a warning period announced
+    in machine-readable headers: Deprecation (RFC 9745, "@" + unix seconds)
+    and Sunset (RFC 8594, HTTP-date). info.version tracks this document, not
+    the contract.
 servers:
   - url: /api
     description: Base API path

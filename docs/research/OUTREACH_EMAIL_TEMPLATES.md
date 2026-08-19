@@ -2,6 +2,8 @@
 
 These drafts are short editable starting points. Keep claims factual, public-safe, and tied to current synthetic Review Hub proof.
 
+**Contact of record:** all outreach is sent from and replies go to **hello@signalgrid.app** — the primary SignalGrid address (owner-directed, 2026-08-17). The `[Name]` in each greeting is the *recipient*; the signature is Dan Fashauer, founder, at that address. Keep the real address in this partner/outreach surface only — never seed it into a connector, fixture, or test (AGENTS.md: no environment-specific real values in the product tree).
+
 ## Strategic partner
 
 Subject: SignalGrid operational trust orchestration discussion
@@ -13,7 +15,8 @@ I am building SignalGrid, an operational trust orchestration layer for shared, m
 Would you be open to a short walkthrough to discuss whether this could complement your category in a future private sandbox path?
 
 Best,
-[Name]
+Dan Fashauer
+Founder, SignalGrid — hello@signalgrid.app
 
 ## Design partner
 
@@ -26,7 +29,8 @@ I am looking for design feedback on SignalGrid, a public-safe Review Hub for sha
 Would you be willing to review the workflow narrative and identify which signals would matter most in a later private sandbox validation?
 
 Best,
-[Name]
+Dan Fashauer
+Founder, SignalGrid — hello@signalgrid.app
 
 ## Investor/acquirer conversation
 
@@ -41,7 +45,8 @@ I am most interested in paths that preserve founder/product leadership while acc
 Would a concise Review Hub walkthrough be useful?
 
 Best,
-[Name]
+Dan Fashauer
+Founder, SignalGrid — hello@signalgrid.app
 
 ## Healthcare/shared-device workflow company
 
@@ -56,7 +61,8 @@ I would value your feedback on whether the workflow framing matches real shared-
 Would you be open to a short design review?
 
 Best,
-[Name]
+Dan Fashauer
+Founder, SignalGrid — hello@signalgrid.app
 
 ## Credential reader / locker / custody hardware company
 
@@ -71,7 +77,8 @@ I am not claiming a current integration or partnership. I would like to explore 
 Would a brief walkthrough be worthwhile?
 
 Best,
-[Name]
+Dan Fashauer
+Founder, SignalGrid — hello@signalgrid.app
 
 ## Identity / MDM / UEM company
 
@@ -84,4 +91,5 @@ SignalGrid frames identity and device posture as key signals in operational trus
 Would you be open to a short discussion on whether this framing complements identity, MDM, or UEM workflows in a future private sandbox path?
 
 Best,
-[Name]
+Dan Fashauer
+Founder, SignalGrid — hello@signalgrid.app

@@ -50,6 +50,16 @@ export class ServiceNowAdapter implements ITSMAdapter {
    * Create a new incident in ServiceNow
    */
   async createTicket(request: ITSMTicketRequest): Promise<ITSMTicketResponse> {
+    // GATED like healthCheck() above: this method reaches the network, and the
+    // fixture/live boundary either covers every outbound path or it is not a
+    // boundary. Nothing constructs this adapter in fixture mode today; the gate
+    // makes that a property instead of a circumstance.
+    {
+      const emission = resolveEmission();
+      if (emission.mode !== "live") {
+        throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
+      }
+    }
     await this.ensureAuthenticated();
 
     const incident = this.buildIncidentPayload(request);
@@ -95,6 +105,16 @@ export class ServiceNowAdapter implements ITSMAdapter {
    * Update an existing incident
    */
   async updateTicket(ticketId: string, updates: Partial<ITSMTicketRequest>): Promise<ITSMTicketResponse> {
+    // GATED like healthCheck() above: this method reaches the network, and the
+    // fixture/live boundary either covers every outbound path or it is not a
+    // boundary. Nothing constructs this adapter in fixture mode today; the gate
+    // makes that a property instead of a circumstance.
+    {
+      const emission = resolveEmission();
+      if (emission.mode !== "live") {
+        throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
+      }
+    }
     await this.ensureAuthenticated();
 
     // First, get the sys_id from the ticket number
@@ -197,6 +217,16 @@ export class ServiceNowAdapter implements ITSMAdapter {
    * Authenticate using OAuth client credentials
    */
   private async authenticateOAuth(): Promise<void> {
+    // GATED like healthCheck() above: this method reaches the network, and the
+    // fixture/live boundary either covers every outbound path or it is not a
+    // boundary. Nothing constructs this adapter in fixture mode today; the gate
+    // makes that a property instead of a circumstance.
+    {
+      const emission = resolveEmission();
+      if (emission.mode !== "live") {
+        throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
+      }
+    }
     const tokenUrl = `${this.config.instanceUrl}/oauth_token.do`;
     
     const params = new URLSearchParams({
@@ -233,6 +263,16 @@ export class ServiceNowAdapter implements ITSMAdapter {
    * Get sys_id from ticket number
    */
   private async getSysIdByNumber(ticketNumber: string): Promise<string | null> {
+    // GATED like healthCheck() above: this method reaches the network, and the
+    // fixture/live boundary either covers every outbound path or it is not a
+    // boundary. Nothing constructs this adapter in fixture mode today; the gate
+    // makes that a property instead of a circumstance.
+    {
+      const emission = resolveEmission();
+      if (emission.mode !== "live") {
+        throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
+      }
+    }
     const url = `${this.config.instanceUrl}/api/now/table/${this.config.table}?sysparm_query=number=${ticketNumber}&sysparm_fields=sys_id`;
 
     const response = await fetchWithTimeout(url, {

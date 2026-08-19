@@ -1,5 +1,11 @@
 import { motion } from "framer-motion";
 
+// Exercised against a REAL server, over the vendor's genuine protocol, by a
+// committed proof lane. Fixture proofs remain the committed evidence:
+//   Fleet   — real Fleet server + a real enrolled osqueryd agent over TLS (proof:live-fleet)
+//   Traccar — real Traccar server over its genuine OsmAnd device protocol (proof:live-location)
+const LIVE_VERIFIED = new Set(["Fleet", "Traccar"]);
+
 const CATEGORY_GROUPS = [
   {
     label: "Identity & Access",
@@ -13,7 +19,7 @@ const CATEGORY_GROUPS = [
   },
   {
     label: "Physical Access, Custody & Cellular",
-    items: ["DockBridge (custody)", "HID Global", "LenelS2", "Genetec", "RF IDeas", "Verkada", "Honeywell Pro-Watch", "Twilio Super SIM", "Soracom", "C•CURE 9000"],
+    items: ["DockBridge (custody)", "Traccar", "HID Global", "LenelS2", "Genetec", "RF IDeas", "Verkada", "Honeywell Pro-Watch", "Twilio Super SIM", "Soracom", "C•CURE 9000"],
     owner: "Physical Security / NetOps",
   },
   {
@@ -36,7 +42,7 @@ export default function IntegrationsSection() {
           <div className="max-w-2xl">
             <h2 className="text-3xl font-bold tracking-tight mb-4">16 Candidate Source Categories Across Your Stack.</h2>
             <p className="text-muted-foreground text-lg">
-              SignalGrid is designed to consume signals from across your security stack — identity, endpoint, physical access &amp; custody, SIEM, SOAR, DR, and GRC — and route every alert to the team that owns that signal source. These are the candidate source-category taxonomy (the core normalizes 13 signal categories today; see <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/blob/main/docs/WHAT_SIGNALGRID_DOES_TODAY.md" className="text-primary underline">what's evaluated today</a>). The vendors below are candidate categories, not live integrations; systems of record remain external.
+              SignalGrid is designed to consume signals from across your security stack — identity, endpoint, physical access &amp; custody, SIEM, SOAR, DR, and GRC — and route every alert to the team that owns that signal source. These are the candidate source-category taxonomy (the core normalizes 17 signal categories today; see <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/blob/main/docs/WHAT_SIGNALGRID_DOES_TODAY.md" className="text-primary underline">what's evaluated today</a>). The vendors below are candidate categories, not live integrations; systems of record remain external.
             </p>
           </div>
           <div className="font-mono text-sm px-4 py-2 rounded border border-border bg-card inline-flex self-start md:self-end gap-2">
@@ -68,9 +74,16 @@ export default function IntegrationsSection() {
                 {group.items.map((item) => (
                   <span
                     key={item}
-                    className="px-3 py-1.5 rounded-md border border-border bg-background text-sm font-medium text-foreground/80 hover:text-foreground hover:border-primary/50 transition-colors"
+                    className={
+                      LIVE_VERIFIED.has(item)
+                        ? "px-3 py-1.5 rounded-md border border-emerald-400/40 bg-emerald-400/5 text-sm font-medium text-foreground inline-flex items-center gap-2"
+                        : "px-3 py-1.5 rounded-md border border-border bg-background text-sm font-medium text-foreground/80 hover:text-foreground hover:border-primary/50 transition-colors"
+                    }
                   >
                     {item}
+                    {LIVE_VERIFIED.has(item) && (
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400">Live-verified</span>
+                    )}
                   </span>
                 ))}
                 <span className="px-3 py-1.5 rounded-md border border-border/40 bg-background/50 text-sm font-mono text-muted-foreground/60">
@@ -81,6 +94,15 @@ export default function IntegrationsSection() {
           ))}
         </div>
 
+        <p className="mt-6 text-sm text-muted-foreground/70">
+          <span className="font-mono text-xs uppercase tracking-wider text-emerald-400">Live-verified</span>{" "}
+          means exercised against a real server by a committed proof lane — Fleet against a real
+          Fleet server with a real enrolled osquery agent over TLS (<span className="font-mono">proof:live-fleet</span>),
+          Traccar against a real Traccar server over its genuine device protocol
+          (<span className="font-mono">proof:live-location</span>). Fixture proofs remain the
+          committed evidence; every other chip is a candidate category, not an integration.
+        </p>
+
         <motion.div
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
@@ -89,7 +111,7 @@ export default function IntegrationsSection() {
           className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4"
         >
           {[
-            { value: "12", label: "Core signal categories" },
+            { value: "17", label: "Core signal categories" },
             { value: "16", label: "Candidate source categories (taxonomy)" },
             { value: String(new Set(CATEGORY_GROUPS.map(g => g.owner)).size), label: "Owning teams shown" },
             { value: "12+", label: "Frameworks mapped" },

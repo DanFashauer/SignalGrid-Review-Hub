@@ -18,12 +18,12 @@ Share by tier: **Public** = fine to send anyone; **Feedback** = warm contacts;
 | Tailored one-pager (per contact) | private file, founder-sent | Feedback | ✅ built (Claire version) |
 | Pitch deck | `docs/pitch-deck.html` (shareable) | Public | ✅ built |
 | Live demos | signalgrid.app/{embedded,desktop,console}.html | Public | ✅ built |
-| Fundraising map + IP checklist | `docs/FUNDRAISING_OPTIONS.md` | Public | ✅ built |
+| Fundraising map + IP checklist | `docs/research/FUNDRAISING_OPTIONS.md` | Public | ✅ built |
 | Executive one-pager (narrative) | `docs/EXECUTIVE_ONE_PAGER.md` | Public | ✅ exists |
-| Honest readiness / stage | `docs/INVESTOR_DESIGN_PARTNER_READINESS.md`, `docs/LEVEL_10_COMPLETION_MATRIX.md` | Feedback | ✅ exists |
-| Competitive positioning | `docs/COMPETITIVE_BATTLECARD.md` (+ .html) | Feedback | ✅ exists |
-| Target buyers / partners | `docs/TARGET_BUYER_PARTNER_MATRIX.md` | Feedback | ✅ exists |
-| Partnership / acquisition paths | `docs/PARTNERSHIP_AND_ACQUISITION_PATHS.md` | Feedback | ✅ exists |
+| Honest readiness / stage | `docs/research/INVESTOR_DESIGN_PARTNER_READINESS.md`, `docs/LEVEL_10_COMPLETION_MATRIX.md` | Feedback | ✅ exists |
+| Competitive positioning | `docs/research/COMPETITIVE_BATTLECARD.md` (+ `docs/competitive-battlecard.html`) | Feedback | ✅ exists |
+| Target buyers / partners | `docs/research/TARGET_BUYER_PARTNER_MATRIX.md` | Feedback | ✅ exists |
+| Partnership / acquisition paths | `docs/research/PARTNERSHIP_AND_ACQUISITION_PATHS.md` | Feedback | ✅ exists |
 | Hardware partner landscape | `docs/HARDWARE_PARTNER_MATRIX.md` | Feedback | ✅ exists |
 | "What needs Dan" live dashboard | `docs/WHAT_NEEDS_DAN.md` | Internal | ✅ built |
 | Architecture / core method / code | private core | **NDA only** | — hold |
@@ -58,7 +58,7 @@ Sequenced so each step unlocks the next. Rough order, not rigid.
 - [ ] **Get a startup lawyer** — even a fixed-fee formation package. Needed for the
       SAFE/priced round paperwork later.
 
-### 🥉 Fund it (see `docs/FUNDRAISING_OPTIONS.md` for the full map)
+### 🥉 Fund it (see `docs/research/FUNDRAISING_OPTIONS.md` for the full map)
 - [ ] **Decide the ask** — how much, for what (pilot + IP + first hardware proto).
       A pre-seed SAFE is the usual instrument.
 - [ ] **Apply to 1–2 accelerators** — Y Combinator / Techstars (+ a health or

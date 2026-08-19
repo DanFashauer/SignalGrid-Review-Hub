@@ -29,7 +29,17 @@ import { fileURLToPath } from "node:url";
 import { SIM_OPERATIONS, OPERATION_KEYS, EXECUTED_STATUSES } from "../lib/sim-operations.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const REQ_DIR = join(repo, "artifacts/sim-requests");
+// SIGNALGRID_SIM_REQUEST_DIR: proof-harness override so the platform-refusal
+// property can be observed against a SYNTHETIC request. proof:sim-requests
+// used to assert refusals against whatever real requests happened to be
+// pending — which went vacuous-then-red the moment the Mac completed the last
+// pending request that contained a macOS-only operation (2026-08-18). The
+// property under test is the runner's behavior, not the queue's contents, so
+// the proof supplies its own fixture queue. Results still land in the real
+// RES_DIR only on a real run; --plan writes nothing either way.
+const REQ_DIR = process.env.SIGNALGRID_SIM_REQUEST_DIR
+  ? resolve(process.env.SIGNALGRID_SIM_REQUEST_DIR)
+  : join(repo, "artifacts/sim-requests");
 const RES_DIR = join(repo, "artifacts/sim-results");
 
 const argv = process.argv.slice(2);

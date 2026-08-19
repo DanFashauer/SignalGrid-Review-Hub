@@ -49,15 +49,23 @@ const WINDOW = 14;
 // Routes that legitimately take a tenantId from `context()` and touch a store, because
 // NO permission in the union covers them. Each needs a reason a reader can check — an
 // unexplained entry is how a gate quietly stops gating.
-const EXEMPT = new Map([
-  [
-    "/v1/sessions",
-    "The Permission union (lib/signalgrid-core/src/types.ts) has no session:* member, so " +
-      "these routes are authenticated-only by design or by omission — a product question, " +
-      "not a typo. Inventing a permission for them here could break the host-app session " +
-      "flow. Recorded as an OPEN QUESTION, printed every run, not a clearance.",
-  ],
-]);
+// EMPTY, and getting here took the whole arc this gate exists for. The one
+// entry this map ever held was /v1/sessions, excused as "the Permission union
+// has no session:* member — a product question, not a typo". The product
+// question got answered on 2026-08-16: session:read / session:write joined the
+// union, every session route now calls authorize() beside its store access, and
+// the exemption came out. The map STAYS, empty, because the next surface that
+// legitimately cannot be covered by the union deserves a stated reason here —
+// not a silent skip.
+const EXEMPT = new Map([]);
+
+/** Comments must not clear a gate (review finding): a body containing
+ *  "// resolveEmission is deliberately not called here" beside an ungated call
+ *  read as GATED. Tokens are matched against comment-stripped text; the "//"
+ *  strip spares protocol separators (https://...) so a URL cannot eat a real
+ *  token that follows it on the same line. */
+const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/[^\n]*/gm, "$1");
+
 
 const files = execFileSync("git", ["ls-files", ROUTE_ROOT], { cwd: repo, encoding: "utf8" })
   .split("\n")
@@ -67,6 +75,7 @@ const findings = [];
 const exempted = [];
 let contextSites = 0;
 let durableReads = 0;
+let authorizedReads = 0;
 
 for (const file of files) {
   const lines = readFileSync(resolve(repo, file), "utf8").split("\n");
@@ -94,6 +103,18 @@ for (const file of files) {
     if (!boundStoreRead && !inlineStoreRead) continue;
     durableReads += 1;
 
+    // What clears a finding: an explicit authorization in the same window —
+    // either the core's authorizedContext() (context + permission in one call)
+    // or a bare authorize(principal, "...") beside a plain context(). Presence
+    // in the window, not order: this gate already states it proves the check
+    // EXISTS, not that it is the right one or runs first — that is what the
+    // 403 assertions in test/api.test.mjs are for.
+    const codeWindow = stripComments(window);
+    if (/\bauthorizedContext\s*\(/.test(codeWindow) || /\bauthorize\s*\(/.test(codeWindow)) {
+      authorizedReads += 1;
+      continue;
+    }
+
     const exemptKey = [...EXEMPT.keys()].find((k) => currentRoute.startsWith(k));
     if (exemptKey) {
       exempted.push(`${currentRoute} (${file}:${i + 1})`);
@@ -107,6 +128,7 @@ console.log("Durable-path authorization — a durable read must authorize, not j
 console.log(`  route files scanned:            ${files.length}`);
 console.log(`  core.context() sites:           ${contextSites}`);
 console.log(`  ...of those, feeding a store read: ${durableReads}`);
+console.log(`  ...cleared by an authorize() beside the read: ${authorizedReads}`);
 console.log(`  exempt (with a stated reason):  ${EXEMPT.size}`);
 for (const [route, reason] of EXEMPT) console.log(`\n  ⚠ EXEMPT — ${route}\n      ${reason}`);
 if (exempted.length > 0) for (const e of exempted) console.log(`      matched: ${e}`);

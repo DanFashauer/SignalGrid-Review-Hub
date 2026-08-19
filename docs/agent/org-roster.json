@@ -63,7 +63,9 @@
       "charter": "native/* — EnterpriseShell, SignalGridMobile, the byte-faithful Swift ports. New logic goes AROUND the ported engines.",
       "trigger": "Native surfaces change, or port parity needs checking.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 2,
+      "nextAction": "The backlog names a pending Swift mirror of reconcileDecisions. Assess it against golden rule 1 — it must go AROUND the ported engines, never through them — and say whether it is cloud-lane work or Mac-only."
     },
     {
       "id": "compliance-analyst",
@@ -90,7 +92,9 @@
       "charter": "The launch profile, promotion tiers, packaging and version discipline.",
       "trigger": "A surface is added to or reclassified in the launch profile.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 2,
+      "nextAction": "The launch profile classifies every surface and a bijection gate holds it honest, but v4 was never ratified and DR-001 defers five families against it. Establish what v5 would have to say before the freeze lifts."
     },
     {
       "id": "data-persistence-engineer",
@@ -99,7 +103,9 @@
       "charter": "The Postgres audit ledger: chain integrity, migrations, export, pagination.",
       "trigger": "Ledger, migration or export code changes.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 1,
+      "nextAction": "Exercise the durable ledger end to end on a real Postgres: write, break a link, verify db:verify-ledger localises it to the exact index, then restore and re-verify per BACKUP_AND_RESTORE.md. The chain is gated; the RESTORE path is only described."
     },
     {
       "id": "api-contract-architect",
@@ -108,7 +114,9 @@
       "charter": "/v1 contract: OpenAPI fidelity, envelope shape, idempotency, versioning and deprecation.",
       "trigger": "A route is added or an existing contract changes.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 1,
+      "nextAction": "Read lib/api-spec/v1-openapi.yaml against the routes as served: every path, every envelope, every status. proof:api-contract gates the shape; nobody has asked whether the DOCUMENT still describes the product."
     },
     {
       "id": "devex-tooling-engineer",
@@ -126,7 +134,9 @@
       "charter": "The docs ARE the PRD here: index reachability, cited paths, figure truth, doc-to-code agreement.",
       "trigger": "A doc is added, or a claim in docs outlives what it described.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 2,
+      "nextAction": "272 markdown files, 618 cited paths, 130 cited commands — all gated. Nothing gates whether a document is still ABOUT something current. Sweep for documents describing surfaces that have since changed shape."
     },
     {
       "id": "accessibility-specialist",
@@ -135,7 +145,9 @@
       "charter": "WCAG conformance across the site and the served consoles; keyboard, contrast, live regions, reduced motion.",
       "trigger": "Any user-facing surface changes.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 3,
+      "nextAction": "Waits for a user-facing surface change. The web shift already fixed viewport, contrast, live regions and reduced motion; the next trigger is new UI, not a re-sweep."
     },
     {
       "id": "desktop-engineer",
@@ -144,7 +156,9 @@
       "charter": "The Tauri desktop lane and its cross-platform parity claims.",
       "trigger": "Desktop code or its CI lane changes.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 3,
+      "nextAction": "Waits for desktop code or its CI lane to change. Note check-assist-conformance moved to every-PR on 2026-08-19, so the Rust client's binding is now continuously enforced."
     },
     {
       "id": "firmware-hardware-engineer",
@@ -153,7 +167,9 @@
       "charter": "firmware/ and the dock surfaces; keeps hardware claims inside what a pre-production concept can assert.",
       "trigger": "Firmware or dock/hardware claims change.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 3,
+      "nextAction": "Waits for a firmware or dock claim to change. The hardware is a pre-production concept and platform honesty already bounds what may be said about it."
     },
     {
       "id": "iam-domain",
@@ -162,7 +178,9 @@
       "charter": "Entra, Okta, Keycloak, Ping, FIDO2. Owns 15 identity dimensions.",
       "trigger": "An identity dimension changes, or its wire truth is unverified.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 1,
+      "nextAction": "Drive the live Keycloak 26.4 lab against the 15 identity dimensions the way network-domain drove FreeRADIUS — the lab already exists (proof:live-keycloak) and nothing has checked the other 14 dimensions' wire truth against it."
     },
     {
       "id": "endpoint-uem-domain",
@@ -171,7 +189,9 @@
       "charter": "Intune+Graph, Jamf, Fleet, Headwind, Omnissa, SOTI. Owns 9 device dimensions and the platform-honesty line.",
       "trigger": "A device-management dimension changes, or a vendor's wire shape needs verifying.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 1,
+      "nextAction": "Fleet and Headwind are both stood up and verified; take the remaining 7 device dimensions (policy-binding, data-protection, peripheral-control, service-lifecycle, app-update, macos-posture, device-management-health) and check each against what those servers actually emit."
     },
     {
       "id": "secops-domain",
@@ -180,7 +200,9 @@
       "charter": "Wazuh, CrowdStrike, Defender, Splunk, Sentinel. Owns 10 threat/vuln/telemetry-integrity dimensions.",
       "trigger": "A SecOps dimension changes, or a threat-vs-vulnerability conflation is suspected.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 2,
+      "nextAction": "Wazuh is stood up (proof:live-edr). Check the remaining 9 SecOps dimensions against what a real SIEM/EDR exports rather than what a console displays — especially the threat-vs-vulnerability boundary vuln-scan already reasons about."
     },
     {
       "id": "network-domain",
@@ -198,7 +220,9 @@
       "charter": "PACS, RTLS/BLE/UWB, Traccar, CMMS, OT historians. Owns 5 dimensions and the safety-independence boundary.",
       "trigger": "A location/custody/OT dimension changes.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 2,
+      "nextAction": "Traccar is verified. The other 4 dimensions (rtls-custody, custody-beacon, pacs-access, ot-posture) have no live source; say which of them a free/open instance could ever verify and which are structurally documentation-only."
     },
     {
       "id": "itsm-ops-domain",
@@ -207,7 +231,9 @@
       "charter": "ServiceNow, Jira SM, WMS, osquery. Owns 6 operational-context dimensions and the systems-of-record boundary.",
       "trigger": "An operational-context dimension changes.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 2,
+      "nextAction": "osquery is verified via the Fleet lab. Check change-window, shift-context and task-exception against what a real ITSM (a self-hosted GLPI or Zammad) actually exports for approval windows and assignment state."
     },
     {
       "id": "solutions-architect",
@@ -216,7 +242,9 @@
       "charter": "How this actually deploys at a customer site: pilot scope, reference architecture, the admin's setup path.",
       "trigger": "A pilot is scoped, or a deployment question needs a defensible answer.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 2,
+      "nextAction": "Turn PILOT_SCOPE_SKELETON.md into a concrete first-pilot reference architecture: which grants a customer's IT team must issue, in what order, and what SignalGrid can answer before each one lands."
     },
     {
       "id": "threat-modeler",
@@ -225,7 +253,9 @@
       "charter": "Attack surface and abuse cases against the decision fabric itself — including the agent lanes.",
       "trigger": "A trust boundary moves, or a new surface is exposed.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 2,
+      "nextAction": "Re-read threat_model.md against the trust boundaries that moved on 2026-08-19: delegated agent authority, a write-scoped CI job that commits to branches, and two agent lanes exchanging work through committed artifacts. None of those existed when it was written."
     },
     {
       "id": "competitive-analyst",
@@ -234,7 +264,9 @@
       "charter": "Landscape briefs and design studies from primary sources; never restates a number it cannot re-derive.",
       "trigger": "A competitor, category or adjacent product needs assessing.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 3,
+      "nextAction": "Waits for a competitor or category to need assessing. The Smplify study is the current reference; re-open when a new actuator or decision-layer product surfaces."
     },
     {
       "id": "partner-alliances-analyst",
@@ -243,7 +275,9 @@
       "charter": "The MDM/UEM and actuator ecosystem; drafts partner materials. The owner sends; the analyst never does.",
       "trigger": "A partnership candidate surfaces.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 3,
+      "nextAction": "Waits for a partnership candidate. Drafting is in scope; sending is the owner's, always."
     },
     {
       "id": "pricing-packaging-analyst",
@@ -252,7 +286,9 @@
       "charter": "Tier shape and the honesty of every customer-visible figure. Recommends posture; never commits contractually.",
       "trigger": "A pricing or packaging claim changes.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 3,
+      "nextAction": "Waits for a pricing claim to change. The retention default was set by DR-003 and is now customer-visible; the next trigger is a tier or figure moving."
     },
     {
       "id": "brand-design",
@@ -261,7 +297,9 @@
       "charter": "Visual identity and the site's design system; keeps the brand palette actually applied.",
       "trigger": "A user-facing surface's look changes.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 3,
+      "nextAction": "Waits for a look change. The off-brand blue was purged on 2026-08-19 and the teal primary is applied consistently."
     },
     {
       "id": "program-manager",
@@ -269,8 +307,8 @@
       "title": "Program manager",
       "charter": "Runs the shift cadence, the lane loops, and this org itself — including calling roles that have never run.",
       "trigger": "A shift is planned, or the roster reports stale/unactivated roles.",
-      "activated": null,
-      "produced": null
+      "activated": "2026-08-19",
+      "produced": "Converted the cold roster from a census into a QUEUE: every one of the 21 cold roles now carries a priority and a concrete nextAction, and check-org-roster.mjs was upgraded to REFUSE a cold role that cannot say what would activate it (self-test 10/10) and to print the priority-1 set with its actions, so the top of the list is the next thing to do rather than a number to feel bad about. Also queued the Mac lane's post-merge verification as sim-request 2026-08-19-post-merge-verification and sent the lane message that carries its context"
     },
     {
       "id": "records-archivist",
@@ -279,7 +317,9 @@
       "charter": "The intake ledger, decision records and provenance discipline — every input dispositioned, every claim traceable.",
       "trigger": "An owner input arrives, or a decision is made.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 3,
+      "nextAction": "Effectively continuous and performed by the coordinating session — every owner input has a ledger row and every delegated call a decision record. Activate as a distinct role only if intake volume outgrows one session."
     }
   ]
 }

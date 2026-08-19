@@ -72,7 +72,7 @@ live-verified — is in `docs/SIGNAL_DOMAIN_TEAM.md`.
 | `iam-domain` | Identity & Access | 15 | Keycloak 26.4 |
 | `endpoint-uem-domain` | Endpoint / UEM | 9 | Fleet 4.89.2, Headwind CE 5.30.3 |
 | `secops-domain` | Security operations | 10 | Wazuh |
-| `network-domain` | Network & connectivity | 6 | **FreeRADIUS** (`docs/RADIUS_NAC_LIVE_SHAPE_CHECK.md`) — 1 of 6 dimensions closed |
+| `network-domain` | Network & connectivity | 6 | FreeRADIUS + a real intercepting egress proxy — **3 of 6** dimensions have had live contact |
 | `physical-ot-domain` | Physical, facilities & OT | 5 | Traccar 6.14.5 |
 | `itsm-ops-domain` | ITSM & operations | 6 | osquery (via the Fleet lab) |
 

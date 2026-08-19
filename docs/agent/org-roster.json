@@ -187,9 +187,9 @@
       "division": "signal-domain",
       "title": "Network & connectivity domain lead",
       "charter": "Cisco ISE, ClearPass, Zscaler, Netskope, carrier/private-5G. Owns 6 dimensions and the admission/carriage/egress/reachability ladder.",
-      "trigger": "Five of its six dimensions remain live-unverified; RADIUS/NAC is now done.",
+      "trigger": "Three of its six dimensions remain live-unverified (carrier, and the two NAC console REST adapters).",
       "activated": "2026-08-19",
-      "produced": "docs/RADIUS_NAC_LIVE_SHAPE_CHECK.md — live FreeRADIUS wire check of network-nac; found quarantine is an Access-ACCEPT, rejections carry no reason, SSID is glued to the AP MAC, and nacCompliant/lastAuthAt are not authentication facts"
+      "produced": "docs/RADIUS_NAC_LIVE_SHAPE_CHECK.md (quarantine is an Access-ACCEPT; rejections carry no reason; SSID glued to the AP MAC; nacCompliant/lastAuthAt are not auth facts) and docs/NETWORK_EGRESS_LIVE_SHAPE_CHECK.md (an egress proxy collapses the dns_failing rung; TLS interception is independently observable via the certificate ISSUER, so service_observing_traffic need not stay a self-report)"
     },
     {
       "id": "physical-ot-domain",

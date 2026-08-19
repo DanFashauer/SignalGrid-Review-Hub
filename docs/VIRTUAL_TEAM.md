@@ -6,6 +6,22 @@ org chart. It exists so the team persists: any future session (cloud lane, Mac
 lane, or a scheduled run) can put a role back to work by reading its charter
 here, and the owner can ask for "a QA shift" or "a PM shift" in plain words.
 
+## Two axes: function and domain
+
+This file staffs **engineering functions** — how work gets done. It is only
+half the org. The other half, added 2026-08-19 on the owner's question *"where
+are my other employees that are IT professionals in every department that
+represents a signal"*, is **`docs/SIGNAL_DOMAIN_TEAM.md`**: six departments
+(IAM, endpoint/UEM, security operations, network, physical/facilities/OT, and
+ITSM/operations) staffed by people who have actually run the products each
+signal dimension represents.
+
+The difference is not cosmetic. A function role reviews our code; a domain role
+answers the question our code cannot ask itself — *what does the real product
+actually emit, and does what we consume match it?* Every time that question has
+been asked live (Fleet, Traccar, Keycloak, Wazuh, Headwind) it found something
+the fixture had wrong.
+
 ## How this relates to the watch fabric
 
 `docs/COMPANY_VS_PRODUCT.md` lists the **watchers** — CI, the scheduled

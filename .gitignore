@@ -82,3 +82,13 @@ native/android/**/.gradle/
 # untracked files, so the leftovers stamped every LATER sim result as minted
 # from a dirty tree.
 native/ios/build/
+
+# Obsidian vault config, if anyone opens this repo as a vault.
+#
+# NOT cosmetic: artifacts/sim-results/*.json derive `provenance.workingTreeClean`
+# from `git status --porcelain` being empty — UNTRACKED FILES INCLUDED. An
+# unignored .obsidian/ would therefore stamp every subsequent Mac-lane result as
+# minted from a dirty tree, which is precisely the defect native/ios/build/ caused
+# once already (~97MB untracked, every result mis-stamped). Ignored ahead of the
+# first vault rather than after the first bad provenance stamp.
+.obsidian/

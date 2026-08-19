@@ -41,7 +41,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 10.28.1
           run_install: false
@@ -263,6 +263,10 @@ jobs:
         run: node scripts/check-memory-freshness.mjs
       - name: Memory freshness self-test (the gate can fail)
         run: node scripts/check-memory-freshness.mjs --self-test
+      - name: Action pinning (third-party actions must be immutable commits)
+        run: node scripts/check-action-pinning.mjs
+      - name: Action pinning self-test (the gate can fail)
+        run: node scripts/check-action-pinning.mjs --self-test
       - name: Proof — lane messages (identity derived; no lane acknowledges its own mail)
         run: pnpm run proof:lane-messages
       - name: Lane messages (unread mail is named on every run, never silent)
@@ -541,7 +545,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 10.28.1
           run_install: false
@@ -597,7 +601,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 10.28.1
           run_install: false

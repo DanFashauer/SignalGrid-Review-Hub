@@ -76,3 +76,37 @@ cd scripts && npx tsx ./src/reliability-proof.ts    # proof:reliability (28 chec
   this module takes.
 - The error budget can be spent on latency and availability; it can **never** be
   spent on fail-closed integrity.
+
+## Measured performance baseline — and why it is REPORTED, not gated
+
+Owned by the `performance-engineer` role (`docs/ORG_CHART.md`). The figures the
+documentation quotes were re-measured on **2026-08-19** and both still hold:
+
+| Quoted claim | Where | Re-measured |
+| --- | --- | --- |
+| decision core **p95 1.3 ms** | intake ledger row 80, `rateLimit.ts` header | **p95 1.2671 ms** (mean 0.6786, p99 1.6222, 5,000 iterations after 200 warmup) |
+| **750 ms** pilot gate | `bench:decision-latency` | asserted and passing with three orders of magnitude of margin |
+| **240 requests/min** per key | pricing page, intake row 80 | confirmed as the shipped default in `artifacts/api-server/src/middlewares/rateLimit.ts` |
+| parallel scaling | `bench:decision-throughput` | 5,128 decisions/sec aggregate on 4 workers, **3.38× (85% of linear)**, identical verdicts on every worker |
+
+**These numbers are deliberately NOT gated on their absolute values, and that is
+a decision rather than an omission.** A latency threshold asserted on a shared
+CI runner is a flaky gate, and this repository's standing position is that a
+flaky gate gets switched off — which would cost more than the threshold ever
+bought. So the benches gate only what is machine-independent (a throughput
+floor derived from the pilot gate, no parallel collapse, determinism under
+concurrency) and report the rest.
+
+The consequence, stated so it is not discovered later: **`check-proof-figures.mjs`
+does not cover these.** That guard catches comma-formatted numbers of 1000 or
+more inside a section naming a proof; `1.3 ms` is neither. Nothing mechanical
+keeps the latency figure true, so keeping it true is a standing duty of the
+performance-engineer role — re-measure when the decision path changes, and
+re-date this table.
+
+**The distinction that matters most here is already honest elsewhere and is
+repeated because it is the easiest one to lose:** every figure above is the
+decision core **in-process** — no HTTP, no connector, no database. The `/v1`
+surface under concurrent traffic is a different measurement (`test:load` /
+`test:stress`), and quoting an in-process number as an API number would be
+exactly the unearned affirmative this estate exists to refuse.

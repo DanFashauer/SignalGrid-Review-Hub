@@ -164,7 +164,7 @@ export default function SignalTypesSection() {
               <ul className="space-y-2.5">
                 {signal.items.map((item, i) => (
                   <li key={i} className="flex items-start text-sm text-muted-foreground">
-                    <span className={`w-1.5 h-1.5 rounded-full ${signal.color} mr-2 mt-1.5 shrink-0 opacity-70`}></span>
+                    <span className={`w-1.5 h-1.5 rounded-full bg-current ${signal.color} mr-2 mt-1.5 shrink-0 opacity-70`}></span>
                     {item}
                   </li>
                 ))}

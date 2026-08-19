@@ -1,0 +1,285 @@
+{
+  "$comment": "The machine-readable org roster. docs/ORG_CHART.md is the human half; scripts/check-org-roster.mjs fails if the two drift apart, and REPORTS every role that has never been activated. A role declared here and never run is the same defect as a permission declared and never required.",
+  "version": 1,
+  "roles": [
+    {
+      "id": "principal-engineer",
+      "division": "engineering",
+      "title": "Principal engineer / architect",
+      "charter": "Holds delegated authority for reversible technical calls; produces decision records with evidence and a reversal path.",
+      "trigger": "A decision is pending that is technical and reversible.",
+      "activated": "2026-08-19",
+      "produced": "docs/DECISION_RECORDS.md DR-001..DR-003"
+    },
+    {
+      "id": "qa-engineer",
+      "division": "engineering",
+      "title": "QA engineer",
+      "charter": "Adversarial correctness review of the newest, least-soaked surfaces; only findings with a concrete failure scenario.",
+      "trigger": "Code has shipped that no skeptic has read yet.",
+      "activated": "2026-08-19",
+      "produced": "5 confirmed defects incl. the freshness gate's NaN-date silent pass"
+    },
+    {
+      "id": "security-engineer",
+      "division": "engineering",
+      "title": "Security engineer",
+      "charter": "Workflow permissions and injection, script hygiene, auth/authz seams, supply chain.",
+      "trigger": "CI, scripts, or auth surfaces change; or on a scheduled sweep.",
+      "activated": "2026-08-19",
+      "produced": "SBOM token split; third-party actions pinned + check-action-pinning.mjs"
+    },
+    {
+      "id": "product-manager",
+      "division": "engineering",
+      "title": "Product manager",
+      "charter": "Grooms the build queue; names stale entries and backlog/ledger contradictions.",
+      "trigger": "The queue has drifted, or a shift needs its next targets ranked.",
+      "activated": "2026-08-19",
+      "produced": "backlog re-file; three owner-board contradictions corrected"
+    },
+    {
+      "id": "web-engineer",
+      "division": "engineering",
+      "title": "Frontend engineer",
+      "charter": "The marketing site and served consoles: correctness, links, residual claims.",
+      "trigger": "Web artifacts change, or a truth sweep runs.",
+      "activated": "2026-08-19",
+      "produced": "14 findings; 8 applied incl. router-base 404s and invisible signal dots"
+    },
+    {
+      "id": "sre",
+      "division": "engineering",
+      "title": "SRE / operations engineer",
+      "charter": "CI estate health: timeouts, concurrency, caching, silent no-op risk, schedule sanity.",
+      "trigger": "Workflows change, or CI cost/duration drifts.",
+      "activated": "2026-08-19",
+      "produced": "timeouts on unbounded jobs; concurrency groups on three workflows"
+    },
+    {
+      "id": "mobile-native-engineer",
+      "division": "engineering",
+      "title": "Mobile / native engineer",
+      "charter": "native/* — EnterpriseShell, SignalGridMobile, the byte-faithful Swift ports. New logic goes AROUND the ported engines.",
+      "trigger": "Native surfaces change, or port parity needs checking.",
+      "activated": null,
+      "produced": null
+    },
+    {
+      "id": "compliance-analyst",
+      "division": "engineering",
+      "title": "Compliance analyst",
+      "charter": "Reads partner-facing drafts against what the tree can evidence; maps controls to proofs. CANNOT sign off.",
+      "trigger": "A partner/assessor document is drafted or a control claim changes.",
+      "activated": "2026-08-19",
+      "produced": "Verified SECURITY_QUESTIONNAIRE_PACK.md end to end — all 12 cited files and 3 cited commands resolve, and both load-bearing claims hold in the code (docs-sanity really does denylist certification claims; the API really asserts 401-before-404 from both sides). Verdict: accurate, ready for a human reviewer; sign-off remains the owner's. Structural gap found and closed — nothing kept command citations resolving, so scripts/check-cited-commands.mjs now gates all 130 across 272 docs"
+    },
+    {
+      "id": "performance-engineer",
+      "division": "engineering",
+      "title": "Performance engineer",
+      "charter": "Owns the bench and load numbers and the honest in-process vs over-HTTP gap.",
+      "trigger": "A performance figure is quoted, or the decision path changes. Standing duty: re-measure the baseline table, because no gate covers those figures.",
+      "activated": "2026-08-19",
+      "produced": "Re-measured every quoted performance figure and recorded the dated baseline in docs/RELIABILITY_SLO.md. p95 1.2671 ms against the quoted 1.3 ms; 5,128 decisions/sec aggregate at 3.38x scaling (85% of linear) with identical verdicts on every worker; the 240 req/min default confirmed in rateLimit.ts. Recorded the judgement NOT to gate absolute values — a latency threshold on a shared runner is a flaky gate — and named the consequence: check-proof-figures.mjs does not cover these, so keeping them true is this role's standing duty"
+    },
+    {
+      "id": "release-engineer",
+      "division": "engineering",
+      "title": "Release engineer",
+      "charter": "The launch profile, promotion tiers, packaging and version discipline.",
+      "trigger": "A surface is added to or reclassified in the launch profile.",
+      "activated": null,
+      "produced": null
+    },
+    {
+      "id": "data-persistence-engineer",
+      "division": "engineering",
+      "title": "Data / persistence engineer",
+      "charter": "The Postgres audit ledger: chain integrity, migrations, export, pagination.",
+      "trigger": "Ledger, migration or export code changes.",
+      "activated": null,
+      "produced": null
+    },
+    {
+      "id": "api-contract-architect",
+      "division": "engineering",
+      "title": "API contract architect",
+      "charter": "/v1 contract: OpenAPI fidelity, envelope shape, idempotency, versioning and deprecation.",
+      "trigger": "A route is added or an existing contract changes.",
+      "activated": null,
+      "produced": null
+    },
+    {
+      "id": "devex-tooling-engineer",
+      "division": "engineering",
+      "title": "DevEx / tooling engineer",
+      "charter": "The gate fabric itself — preflight, the proof harness, mutation guard, parity checks. Guards the guards.",
+      "trigger": "A gate is added or changed, or a gate is suspected of passing vacuously. Standing question: is any gate path-filtered away from part of its own subject?",
+      "activated": "2026-08-19",
+      "produced": "Audited whether any preflight gate is referenced only by a workflow that does not gate every PR — the weakness check-preflight-ci-parity.mjs admits in its own header. Found and fixed one real hole: check-assist-conformance.mjs discovers TWO Assist clients (native/android/core Kotlin, native/desktop/core Rust) but ran only in desktop.yml, filtered to native/desktop/** and native/shared/**, so a change to the KOTLIN client never triggered the gate that binds it — the exact failure it exists to catch, in the client where it had already caught two real defects. Now runs in review-hub-ci.yml on every PR. Two other candidates were the false positive the parity gate already documents (npm alias vs script path), and check-ios-port-sources is correctly scoped since its subject lives entirely inside its filter"
+    },
+    {
+      "id": "docs-writer",
+      "division": "engineering",
+      "title": "Documentation engineer",
+      "charter": "The docs ARE the PRD here: index reachability, cited paths, figure truth, doc-to-code agreement.",
+      "trigger": "A doc is added, or a claim in docs outlives what it described.",
+      "activated": null,
+      "produced": null
+    },
+    {
+      "id": "accessibility-specialist",
+      "division": "engineering",
+      "title": "Accessibility specialist",
+      "charter": "WCAG conformance across the site and the served consoles; keyboard, contrast, live regions, reduced motion.",
+      "trigger": "Any user-facing surface changes.",
+      "activated": null,
+      "produced": null
+    },
+    {
+      "id": "desktop-engineer",
+      "division": "engineering",
+      "title": "Desktop engineer",
+      "charter": "The Tauri desktop lane and its cross-platform parity claims.",
+      "trigger": "Desktop code or its CI lane changes.",
+      "activated": null,
+      "produced": null
+    },
+    {
+      "id": "firmware-hardware-engineer",
+      "division": "engineering",
+      "title": "Firmware / hardware engineer",
+      "charter": "firmware/ and the dock surfaces; keeps hardware claims inside what a pre-production concept can assert.",
+      "trigger": "Firmware or dock/hardware claims change.",
+      "activated": null,
+      "produced": null
+    },
+    {
+      "id": "iam-domain",
+      "division": "signal-domain",
+      "title": "Identity & Access domain lead",
+      "charter": "Entra, Okta, Keycloak, Ping, FIDO2. Owns 15 identity dimensions.",
+      "trigger": "An identity dimension changes, or its wire truth is unverified.",
+      "activated": null,
+      "produced": null
+    },
+    {
+      "id": "endpoint-uem-domain",
+      "division": "signal-domain",
+      "title": "Endpoint / UEM domain lead",
+      "charter": "Intune+Graph, Jamf, Fleet, Headwind, Omnissa, SOTI. Owns 9 device dimensions and the platform-honesty line.",
+      "trigger": "A device-management dimension changes, or a vendor's wire shape needs verifying.",
+      "activated": null,
+      "produced": null
+    },
+    {
+      "id": "secops-domain",
+      "division": "signal-domain",
+      "title": "Security operations domain lead",
+      "charter": "Wazuh, CrowdStrike, Defender, Splunk, Sentinel. Owns 10 threat/vuln/telemetry-integrity dimensions.",
+      "trigger": "A SecOps dimension changes, or a threat-vs-vulnerability conflation is suspected.",
+      "activated": null,
+      "produced": null
+    },
+    {
+      "id": "network-domain",
+      "division": "signal-domain",
+      "title": "Network & connectivity domain lead",
+      "charter": "Cisco ISE, ClearPass, Zscaler, Netskope, carrier/private-5G. Owns 6 dimensions and the admission/carriage/egress/reachability ladder.",
+      "trigger": "carrier remains entirely unverified (no free API); the two NAC console adapters are documentation-verified only and still need an instance.",
+      "activated": "2026-08-19",
+      "produced": "docs/RADIUS_NAC_LIVE_SHAPE_CHECK.md (quarantine is an Access-ACCEPT; rejections carry no reason; SSID glued to the AP MAC; nacCompliant/lastAuthAt are not auth facts) and docs/NETWORK_EGRESS_LIVE_SHAPE_CHECK.md (an egress proxy collapses the dns_failing rung; TLS interception is independently observable via the certificate ISSUER, so service_observing_traffic need not stay a self-report); plus a documentation-verified addendum showing Cisco ISE and Aruba ClearPass both split identity from session, confirming the cisco-ise.ts refusal to infer auth state"
+    },
+    {
+      "id": "physical-ot-domain",
+      "division": "signal-domain",
+      "title": "Physical, facilities & OT domain lead",
+      "charter": "PACS, RTLS/BLE/UWB, Traccar, CMMS, OT historians. Owns 5 dimensions and the safety-independence boundary.",
+      "trigger": "A location/custody/OT dimension changes.",
+      "activated": null,
+      "produced": null
+    },
+    {
+      "id": "itsm-ops-domain",
+      "division": "signal-domain",
+      "title": "ITSM & operations domain lead",
+      "charter": "ServiceNow, Jira SM, WMS, osquery. Owns 6 operational-context dimensions and the systems-of-record boundary.",
+      "trigger": "An operational-context dimension changes.",
+      "activated": null,
+      "produced": null
+    },
+    {
+      "id": "solutions-architect",
+      "division": "company",
+      "title": "Solutions architect",
+      "charter": "How this actually deploys at a customer site: pilot scope, reference architecture, the admin's setup path.",
+      "trigger": "A pilot is scoped, or a deployment question needs a defensible answer.",
+      "activated": null,
+      "produced": null
+    },
+    {
+      "id": "threat-modeler",
+      "division": "company",
+      "title": "Threat modeler",
+      "charter": "Attack surface and abuse cases against the decision fabric itself — including the agent lanes.",
+      "trigger": "A trust boundary moves, or a new surface is exposed.",
+      "activated": null,
+      "produced": null
+    },
+    {
+      "id": "competitive-analyst",
+      "division": "company",
+      "title": "Competitive / market analyst",
+      "charter": "Landscape briefs and design studies from primary sources; never restates a number it cannot re-derive.",
+      "trigger": "A competitor, category or adjacent product needs assessing.",
+      "activated": null,
+      "produced": null
+    },
+    {
+      "id": "partner-alliances-analyst",
+      "division": "company",
+      "title": "Partner & alliances analyst",
+      "charter": "The MDM/UEM and actuator ecosystem; drafts partner materials. The owner sends; the analyst never does.",
+      "trigger": "A partnership candidate surfaces.",
+      "activated": null,
+      "produced": null
+    },
+    {
+      "id": "pricing-packaging-analyst",
+      "division": "company",
+      "title": "Pricing & packaging analyst",
+      "charter": "Tier shape and the honesty of every customer-visible figure. Recommends posture; never commits contractually.",
+      "trigger": "A pricing or packaging claim changes.",
+      "activated": null,
+      "produced": null
+    },
+    {
+      "id": "brand-design",
+      "division": "company",
+      "title": "Brand & design lead",
+      "charter": "Visual identity and the site's design system; keeps the brand palette actually applied.",
+      "trigger": "A user-facing surface's look changes.",
+      "activated": null,
+      "produced": null
+    },
+    {
+      "id": "program-manager",
+      "division": "company",
+      "title": "Program manager",
+      "charter": "Runs the shift cadence, the lane loops, and this org itself — including calling roles that have never run.",
+      "trigger": "A shift is planned, or the roster reports stale/unactivated roles.",
+      "activated": null,
+      "produced": null
+    },
+    {
+      "id": "records-archivist",
+      "division": "company",
+      "title": "Records archivist",
+      "charter": "The intake ledger, decision records and provenance discipline — every input dispositioned, every claim traceable.",
+      "trigger": "An owner input arrives, or a decision is made.",
+      "activated": null,
+      "produced": null
+    }
+  ]
+}

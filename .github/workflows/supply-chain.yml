@@ -17,39 +17,50 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   secret-scan:
     name: Secret scan (gitleaks)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: gitleaks
-        uses: gitleaks/gitleaks-action@v3
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   sbom:
     name: CycloneDX SBOM
     runs-on: ubuntu-latest
-    # Write scope is needed ONLY to push a regenerated SBOM back to a dependabot
-    # branch (see the step below). The workflow default stays read-only, so this is
-    # the single job that can write, and it can only write to dependabot PRs.
+    timeout-minutes: 20
+    # READ-ONLY, deliberately. This job runs `pnpm install`, which executes the
+    # lifecycle scripts of every third-party package in the tree. Those scripts
+    # must never see a token that can push. Before this split, ONE job both
+    # installed dependencies AND held `contents: write` for the dependabot SBOM
+    # refresh below — so a malicious postinstall in any transitive dependency had
+    # a push-capable GITHUB_TOKEN in its environment on every PR and push. The
+    # write scope now lives in `sbom-sync`, which installs nothing.
     permissions:
-      contents: write
+      contents: read
+    outputs:
+      drifted: ${{ steps.verify.outputs.drifted }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
           # On a pull_request event, checkout defaults to a MERGE commit in detached
-          # HEAD — pushing that back would send the merge, not the branch. Check out
-          # the PR's actual head branch so the SBOM commit below lands on it, and so
-          # the SBOM is generated from what the branch really contains.
+          # HEAD. Check out the PR's actual head branch so the SBOM is generated from
+          # what the branch really contains — and so `sbom-sync` commits that same file.
           ref: ${{ github.event.pull_request.head.ref || github.ref }}
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 10.28.1
           run_install: false
@@ -63,36 +74,82 @@ jobs:
       - name: Generate SBOM
         run: pnpm run sbom
 
-      # The committed SBOM must match the lockfile — that is the whole point of the
-      # verify step below, and it is a good invariant.
+      # Uploaded BEFORE verification so the artifact exists even when the SBOM has
+      # drifted: `sbom-sync` consumes exactly this file rather than regenerating it,
+      # which is what keeps dependency installation out of the write-scoped job.
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v7
+        with:
+          name: cyclonedx-sbom
+          path: artifacts/sbom/cyclonedx.json
+          if-no-files-found: error
+
+      # The committed SBOM must match the lockfile — that is the invariant.
       #
       # But it made EVERY dependency update red by construction. Dependabot changes
       # the lockfile and cannot regenerate the SBOM, so the verify step failed on all
       # eight of its pull requests — including four whose only failure was this one.
       # A guard that no automated update can ever satisfy does not enforce the
       # invariant, it just guarantees a permanently red bot and trains reviewers to
-      # merge past it.
-      #
-      # So for dependabot's own branches, regenerate and commit rather than fail. The
-      # invariant is kept true instead of merely asserted, and the human review is
-      # about the dependency change rather than about a mechanical file.
-      #
-      # Tightly gated: dependabot only, same-repo branches only (never a fork), and
-      # only when the SBOM actually changed. A GITHUB_TOKEN push does not retrigger
-      # workflows, so this cannot loop.
-      - name: Commit refreshed SBOM (dependabot only)
-        # Gate on the PR's AUTHOR, not `github.actor`. `actor` is whoever triggered
-        # the run, so the moment a human clicks "re-run jobs" it becomes that human
-        # and this step silently skips — which is precisely the case most likely to
-        # be used to test whether this works. The PR author does not change on a
-        # re-run, so it is the property actually being asked about.
-        if: >-
-          github.event_name == 'pull_request' &&
-          github.event.pull_request.user.login == 'dependabot[bot]' &&
-          github.event.pull_request.head.repo.full_name == github.repository
+      # merge past it. So on dependabot's own branches the drift is REPORTED and
+      # handed to `sbom-sync`; everywhere else it still fails the build.
+      - name: Verify SBOM is committed and up to date
+        id: verify
+        env:
+          # Computed in the workflow context and read as an ENV VAR — never
+          # interpolated into the script body. A login is attacker-influenced text,
+          # and `${{ }}` inside `run:` is exactly how that becomes shell injection.
+          IS_DEPENDABOT_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository }}
         run: |
           if git diff --quiet -- artifacts/sbom/cyclonedx.json; then
-            echo "SBOM already in sync — nothing to commit."
+            echo "drifted=false" >> "$GITHUB_OUTPUT"
+            echo "SBOM is in sync with the lockfile."
+            exit 0
+          fi
+          echo "drifted=true" >> "$GITHUB_OUTPUT"
+          if [ "$IS_DEPENDABOT_PR" = "true" ]; then
+            echo "::notice::SBOM drift on a Dependabot branch - the sbom-sync job commits the refreshed file."
+            exit 0
+          fi
+          echo "::error::artifacts/sbom/cyclonedx.json is out of date. Run 'pnpm run sbom' and commit the result."
+          git --no-pager diff --stat -- artifacts/sbom/cyclonedx.json
+          exit 1
+
+  # The ONLY job here with write scope - and deliberately the one that installs
+  # NOTHING and runs no third-party code. It downloads the SBOM the read-only job
+  # produced and commits it. Tightly gated: dependabot-authored PRs only, same-repo
+  # branches only (never a fork), and only when the SBOM actually drifted. A
+  # GITHUB_TOKEN push does not retrigger workflows, so this cannot loop.
+  sbom-sync:
+    name: CycloneDX SBOM sync (dependabot)
+    needs: sbom
+    # Gate on the PR's AUTHOR, not `github.actor`. `actor` is whoever triggered the
+    # run, so the moment a human clicks "re-run jobs" it becomes that human and this
+    # silently skips - precisely the case most likely to be used to test whether it
+    # works. The PR author does not change on a re-run.
+    if: >-
+      needs.sbom.outputs.drifted == 'true' &&
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout the PR branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+      - name: Download the SBOM the read-only job generated
+        uses: actions/download-artifact@v7
+        with:
+          name: cyclonedx-sbom
+          path: artifacts/sbom
+      - name: Commit the refreshed SBOM
+        run: |
+          if git diff --quiet -- artifacts/sbom/cyclonedx.json; then
+            echo "SBOM already in sync - nothing to commit."
             exit 0
           fi
           git config user.name  "github-actions[bot]"
@@ -100,23 +157,14 @@ jobs:
           git add artifacts/sbom/cyclonedx.json
           git commit -m "deps: regenerate CycloneDX SBOM for the updated lockfile"
           # A Dependabot-triggered run gets a READ-ONLY GITHUB_TOKEN by default; the
-          # job-scoped `permissions: contents: write` above is what elevates it. If
-          # that is ever not in effect, the push fails with a bare git error that
-          # looks like this whole approach is broken. Say what it actually means.
+          # job-scoped `contents: write` above is what elevates it. A repository
+          # RULESET protecting dependabot/* refs also blocks this push (GH013)
+          # regardless of token scope - see docs/OWNER_ACTIONS.md item 2.
           if ! git push origin "HEAD:${GITHUB_HEAD_REF}"; then
             echo "::error::Could not push the refreshed SBOM to ${GITHUB_HEAD_REF}."
-            echo "::error::Most likely the token is read-only for this run. Check that"
-            echo "::error::Settings → Actions → Workflow permissions allows write, and"
-            echo "::error::that this job's contents:write permission is in effect."
+            echo "::error::Either the token is read-only for this run (Settings ->"
+            echo "::error::Actions -> Workflow permissions), or a ruleset protects"
+            echo "::error::dependabot/** refs from the github-actions app."
             exit 1
           fi
           echo "Committed a refreshed SBOM to ${GITHUB_HEAD_REF}."
-
-      - name: Verify SBOM is committed and up to date
-        run: git diff --exit-code -- artifacts/sbom/cyclonedx.json
-      - name: Upload SBOM
-        uses: actions/upload-artifact@v7
-        with:
-          name: cyclonedx-sbom
-          path: artifacts/sbom/cyclonedx.json
-          if-no-files-found: error

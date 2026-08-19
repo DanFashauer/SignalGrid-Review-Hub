@@ -32,7 +32,7 @@ export default function Navbar() {
         <nav className="hidden md:flex items-center gap-1 text-sm flex-1">
           {/* Platform dropdown anchor */}
           <a
-            href="/#platform"
+            href={`${import.meta.env.BASE_URL}#platform`}
             className="px-3 py-1.5 text-foreground/60 hover:text-foreground rounded transition-colors"
           >
             Platform
@@ -83,7 +83,7 @@ export default function Navbar() {
       {/* Mobile menu */}
       {mobileOpen && (
         <div id="mobile-nav" className="md:hidden border-t border-border/40 bg-background px-4 py-4 space-y-1">
-          <a href="/#platform" className="block px-3 py-2 text-sm rounded hover:bg-muted text-foreground/70" onClick={() => setMobileOpen(false)}>Platform</a>
+          <a href={`${import.meta.env.BASE_URL}#platform`} className="block px-3 py-2 text-sm rounded hover:bg-muted text-foreground/70" onClick={() => setMobileOpen(false)}>Platform</a>
           {NAV_LINKS.map(({ href, label }) => (
             <Link key={href} href={href} className="block px-3 py-2 text-sm rounded hover:bg-muted text-foreground/70" onClick={() => setMobileOpen(false)}>{label}</Link>
           ))}

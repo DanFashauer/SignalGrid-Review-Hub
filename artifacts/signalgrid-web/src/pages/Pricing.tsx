@@ -113,7 +113,7 @@ export default function Pricing() {
                   transition={{ delay: idx * 0.1 }}
                   className={`relative rounded-xl border p-8 flex flex-col ${
                     tier.highlight
-                      ? "border-primary shadow-[0_0_40px_-10px_rgba(59,130,246,0.3)] bg-primary/5"
+                      ? "border-primary shadow-[0_0_40px_-10px_rgba(79,140,135,0.35)] bg-primary/5"
                       : "border-border bg-card"
                   }`}
                 >

@@ -120,16 +120,6 @@
   }
 }
 
-.glow-line {
-  box-shadow: 0 0 15px 2px rgba(59, 130, 246, 0.3);
-}
-
-.text-gradient {
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
 /* CSS-driven motion (Tailwind's animate-* utilities, transitions, smooth
    scrolling) is outside framer-motion's reach, so `MotionConfig
    reducedMotion="user"` in App.tsx does not cover it. This does — the two

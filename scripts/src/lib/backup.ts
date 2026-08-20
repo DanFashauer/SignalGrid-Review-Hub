@@ -209,6 +209,23 @@ export async function verifyBackup(archivePath: string): Promise<BackupManifest>
  */
 export async function restoreBackup(url: string, archivePath: string): Promise<BackupManifest> {
   const manifest = await verifyBackup(archivePath);
+
+  // Refuse BEFORE pg_restore replaces the database if the post-restore role
+  // re-provisioning would fail (role missing + credential lacks CREATEROLE).
+  // Failing AFTER the restore has run leaves a replaced database with no
+  // privilege posture — the exact half-done state this module exists to avoid.
+  {
+    const pg = await import("pg");
+    const Pool = (pg as any).default?.Pool ?? (pg as any).Pool;
+    const { assertRoleSplitProvisionable } = await import("@workspace/persistence");
+    const pool = new Pool({ connectionString: url, max: 1 });
+    try {
+      await assertRoleSplitProvisionable((sql: string) => pool.query(sql));
+    } finally {
+      await pool.end();
+    }
+  }
+
   try {
     await run(
       "pg_restore",

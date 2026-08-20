@@ -242,9 +242,37 @@ DATABASE_URL=postgres://signalgrid_runtime:…@host:5432/signalgrid  # the app
 The stores' bootstrap DDL degrades honestly under this role: if migrations
 already built the schema they proceed; if the schema is missing they refuse with
 the exact remedy ("run `db:migrate` with the admin credential") instead of a
-bare permission error. `proof:db-role-split` proves both directions on a real
-Postgres in CI — every legitimate runtime write works, every destructive
-statement is denied with `insufficient_privilege`, the admin can still do what
-the runtime cannot (so the denial is the role, not the table), and a backup →
-restore round trip recreates the same posture without ever making the runtime
-an owner.
+bare permission error. And existence is not usability — after the missing-schema
+check, each store verifies the exact table privileges its statements need (the
+ledger appender additionally checks sequence `USAGE`), and the decision store's
+`ping()` re-verifies them on every probe, so `/readyz` goes unready when the
+posture regresses instead of reporting a health the first real write would
+disprove. `proof:db-role-split` proves both directions on a real Postgres in
+CI — every legitimate runtime write works, every destructive statement is
+denied with `insufficient_privilege`, the admin can still do what the runtime
+cannot (so the denial is the role, not the table), and a backup → restore round
+trip recreates the same posture without ever making the runtime an owner.
+
+**Provisioning is prechecked, fail-closed.** Creating `signalgrid_runtime`
+needs cluster-wide `CREATEROLE` (or `SUPERUSER`) — an attribute many
+least-privilege migration credentials deliberately lack. Both `db:migrate` and
+`db:restore` check this **before doing any work**: if the role is missing and
+the credential cannot create it, they refuse with the remedy (`CREATE ROLE
+signalgrid_runtime LOGIN;` run by a cluster administrator) instead of dying
+mid-migration or — worse — after `pg_restore` has already replaced the
+database. The split also refuses to **adopt** a preexisting `signalgrid_runtime`
+that is anything more than a plain LOGIN role: elevated attributes
+(`SUPERUSER`, `CREATEROLE`, `BYPASSRLS`, …), object ownership, or role
+memberships are all grounds for refusal, because `REVOKE` cannot demote any of
+them and the append-only claim would be false. Each refusal names its one
+remedy.
+
+**The real-Postgres proofs demand a disposable cluster.** Every `proof:*-pg`
+and `proof:backup-restore`/`proof:db-role-split` run DROPs the tables it tests,
+and the role-split proof re-passwords the cluster-wide `signalgrid_runtime`
+role. Setting `DATABASE_URL` is therefore not consent: the proofs refuse
+(loudly, exit 1 — never a silent skip) unless `SIGNALGRID_DB_DISPOSABLE=1`
+declares the **entire target cluster** — data, schema, and roles; roles are
+cluster-wide, so a throwaway *database* on a shared server is not isolation —
+safe to destroy. CI's service container sets it; never set it against anything
+persistent.

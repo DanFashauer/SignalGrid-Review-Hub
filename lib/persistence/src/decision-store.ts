@@ -103,6 +103,35 @@ export class PostgresDecisionStore implements DecisionStore {
             "run `pnpm run db:migrate` with the admin credential first (the runtime role owns no schema).",
         );
       }
+      // The tables existing is NOT the same as this credential being able to
+      // use them. Without this, a runtime role with missing grants initializes
+      // "healthy", /readyz returns 200, and the first real read or write dies
+      // with insufficient_privilege in front of a user instead of here.
+      await this.assertPrivileges();
+    }
+  }
+
+  /**
+   * The exact per-table privileges the store's statements need (the upsert is
+   * INSERT … ON CONFLICT DO UPDATE, hence UPDATE). Cheap catalog reads — also
+   * run on every ping() so /readyz flips if the posture regresses underneath a
+   * running process instead of reporting a health it no longer has.
+   */
+  private async assertPrivileges(): Promise<void> {
+    const priv = await this.pool.query(`
+      SELECT has_table_privilege('decisions', 'SELECT')
+         AND has_table_privilege('decisions', 'INSERT')
+         AND has_table_privilege('decisions', 'UPDATE')
+         AND has_table_privilege('evidence_snapshots', 'SELECT')
+         AND has_table_privilege('evidence_snapshots', 'INSERT')
+         AND has_table_privilege('evidence_snapshots', 'UPDATE') AS ok
+    `);
+    if (!priv.rows[0]?.ok) {
+      throw new Error(
+        "this credential is missing table privileges on decisions/evidence_snapshots — " +
+          "re-apply the role split with the admin credential (`pnpm run db:migrate`); " +
+          "refusing to report ready for work that would fail.",
+      );
     }
   }
 
@@ -162,7 +191,11 @@ export class PostgresDecisionStore implements DecisionStore {
 
   async ping(): Promise<void> {
     await this.ensureReady();
+    // Liveness AND fitness: `SELECT 1` proves the connection; the privilege
+    // probe proves the next real statement can succeed. A /readyz that stays
+    // 200 while every write would 42501 is a health report about nothing.
     await this.pool.query("SELECT 1");
+    await this.assertPrivileges();
   }
 
   async close(): Promise<void> {

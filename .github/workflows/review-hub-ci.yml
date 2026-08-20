@@ -714,6 +714,10 @@ jobs:
       - name: Durable audit-ledger proof on Postgres
         env:
           DATABASE_URL: postgres://sg:sg@localhost:5432/signalgrid
+          # The proofs DROP the tables they test (and the role-split proof alters the
+          # cluster-wide runtime role). They refuse to run without this declaration —
+          # the service container above is exactly the throwaway cluster it names.
+          SIGNALGRID_DB_DISPOSABLE: "1"
         run: pnpm run proof:audit-ledger-pg
 
       # Durable decision + evidence store: save/get/list, tenant isolation,
@@ -721,12 +725,20 @@ jobs:
       - name: Durable decision-store proof on Postgres
         env:
           DATABASE_URL: postgres://sg:sg@localhost:5432/signalgrid
+          # The proofs DROP the tables they test (and the role-split proof alters the
+          # cluster-wide runtime role). They refuse to run without this declaration —
+          # the service container above is exactly the throwaway cluster it names.
+          SIGNALGRID_DB_DISPOSABLE: "1"
         run: pnpm run proof:decision-store-pg
 
       # Durable session lifecycle: start/refresh/expire/end, isolation, durability.
       - name: Durable session-store proof on Postgres
         env:
           DATABASE_URL: postgres://sg:sg@localhost:5432/signalgrid
+          # The proofs DROP the tables they test (and the role-split proof alters the
+          # cluster-wide runtime role). They refuse to run without this declaration —
+          # the service container above is exactly the throwaway cluster it names.
+          SIGNALGRID_DB_DISPOSABLE: "1"
         run: pnpm run proof:session-store-pg
 
       # Backup and restore, END TO END. Seeds the tamper-evident ledger, backs it up,
@@ -750,6 +762,10 @@ jobs:
       - name: Backup/restore proof on Postgres
         env:
           DATABASE_URL: postgres://sg:sg@localhost:5432/signalgrid
+          # The proofs DROP the tables they test (and the role-split proof alters the
+          # cluster-wide runtime role). They refuse to run without this declaration —
+          # the service container above is exactly the throwaway cluster it names.
+          SIGNALGRID_DB_DISPOSABLE: "1"
         run: pnpm run proof:backup-restore
 
       # The DATABASE ROLE SPLIT, both directions (owner-ordered shift 2): as
@@ -764,6 +780,10 @@ jobs:
       - name: Database role-split proof on Postgres (append-only by privilege)
         env:
           DATABASE_URL: postgres://sg:sg@localhost:5432/signalgrid
+          # The proofs DROP the tables they test (and the role-split proof alters the
+          # cluster-wide runtime role). They refuse to run without this declaration —
+          # the service container above is exactly the throwaway cluster it names.
+          SIGNALGRID_DB_DISPOSABLE: "1"
         run: pnpm run proof:db-role-split
 
   # Podman is the repo's chosen runtime (scripts/lib/container-engine.mjs). It was

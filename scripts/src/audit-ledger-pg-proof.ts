@@ -26,12 +26,14 @@ import {
   setAuditBackend,
   PostgresAuditBackend,
 } from "@workspace/audit";
+import { requireDisposableCluster } from "./lib/db-guard";
 
 const url = process.env.DATABASE_URL;
 if (!url) {
   console.log("Audit-ledger PG proof: SKIPPED (DATABASE_URL unset — in-memory default is covered by proof:audit-ledger).");
   process.exit(0);
 }
+requireDisposableCluster("Audit-ledger PG proof");
 
 let passed = 0;
 const failures: string[] = [];

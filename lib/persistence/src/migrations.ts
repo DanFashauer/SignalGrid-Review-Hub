@@ -25,7 +25,7 @@
 // keep their inline DDL for the no-migration fixture path; this is the
 // authority an operator runs BEFORE pointing a new revision at a database.
 
-import { ROLE_SPLIT_SQL } from "./role-split";
+import { ROLE_SPLIT_SQL, assertRoleSplitProvisionable } from "./role-split";
 
 const MIGRATION_LOCK_KEY = 0x5194_a11d;
 
@@ -127,9 +127,16 @@ export async function runMigrations(connectionString: string): Promise<Migration
             "A database AHEAD of its code is refused, not driven — run newer code instead.",
         );
       }
+      const pending = MIGRATIONS.filter((m) => m.version > recorded);
+      // The role-split migration needs cluster-wide CREATEROLE the first time.
+      // Check BEFORE applying anything: the transaction makes a mid-v2 failure
+      // atomic, but "your credential cannot do this, here is the remedy" beats
+      // a raw 42501 after v1's DDL has already run and rolled back.
+      if (pending.some((m) => m.version === 2)) {
+        await assertRoleSplitProvisionable((sql) => client.query(sql));
+      }
       const applied: number[] = [];
-      for (const m of MIGRATIONS) {
-        if (m.version <= recorded) continue;
+      for (const m of pending) {
         await client.query(m.statements);
         await client.query("INSERT INTO schema_version (version, name) VALUES ($1, $2)", [m.version, m.name]);
         applied.push(m.version);

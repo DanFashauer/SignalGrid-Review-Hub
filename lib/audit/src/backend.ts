@@ -114,6 +114,23 @@ export class PostgresAuditBackend implements AuditBackend {
             "run `pnpm run db:migrate` with the admin credential first (the runtime role owns no schema).",
         );
       }
+      // Existence is not usability: the appender needs SELECT (chain head) +
+      // INSERT + USAGE on the seq sequence, and nothing else. Verify exactly
+      // that, so missing grants read as "not ready" here instead of a 42501
+      // on the first append — which for the LEDGER would mean decisions
+      // happening without their audit trail.
+      const priv = await this.pool.query(`
+        SELECT has_table_privilege('audit_ledger', 'SELECT')
+           AND has_table_privilege('audit_ledger', 'INSERT')
+           AND has_sequence_privilege(pg_get_serial_sequence('audit_ledger', 'seq'), 'USAGE') AS ok
+      `);
+      if (!priv.rows[0]?.ok) {
+        throw new Error(
+          "this credential is missing privileges on audit_ledger (or its sequence) — re-apply the " +
+            "role split with the admin credential (`pnpm run db:migrate`); refusing to report ready " +
+            "for appends that would fail.",
+        );
+      }
     }
   }
 

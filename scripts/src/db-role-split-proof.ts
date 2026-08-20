@@ -24,6 +24,13 @@
 //      privilege posture is back (restoreBackup re-applies the split because
 //      pg_restore --no-owner --no-privileges strips every grant): the runtime
 //      writes again, still cannot update, and does NOT own the table.
+//   0. PROVISIONING GUARDS (run first, from a bare cluster) — migrations REFUSE
+//      up front when the role is missing and the credential lacks CREATEROLE
+//      (nothing half-applied); the split REFUSES to adopt a preexisting role
+//      that is SUPERUSER, owns objects, or holds memberships; a store facing
+//      missing grants refuses readiness instead of reporting healthy; and a
+//      restore that could not re-provision refuses BEFORE pg_restore replaces
+//      anything.
 
 import {
   appendAuditRecord,
@@ -34,6 +41,7 @@ import {
 import {
   PostgresDecisionStore,
   PostgresSessionStore,
+  applyRoleSplit,
   runMigrations,
   RUNTIME_ROLE,
 } from "@workspace/persistence";
@@ -42,12 +50,14 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createBackup, restoreBackup } from "./lib/backup";
+import { requireDisposableCluster } from "./lib/db-guard";
 
 const url = process.env.DATABASE_URL;
 if (!url) {
   console.log("DB role-split proof: SKIPPED (DATABASE_URL unset — this proof needs a real Postgres).");
   process.exit(0);
 }
+requireDisposableCluster("DB role-split proof");
 
 let passed = 0;
 const failures: string[] = [];
@@ -69,6 +79,28 @@ function withLogin(base: string, user: string, password: string): string {
   return u.toString();
 }
 
+/**
+ * Remove the runtime role entirely (grants first — a role holding privileges
+ * cannot be dropped). Used to reach a bare cluster and to stage the
+ * role-loss/restore-refusal scenarios.
+ */
+function dropRoleSql(role: string): string {
+  return `
+    DO $$ BEGIN
+      IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${role}') THEN
+        EXECUTE 'DROP OWNED BY ${role}';
+        EXECUTE 'DROP ROLE ${role}';
+      END IF;
+    END $$;
+  `;
+}
+const dropRuntimeRoleSql = (): string => dropRoleSql(RUNTIME_ROLE);
+
+/** The error message a call fails with — "" when it (wrongly) succeeds. */
+async function failureOf(fn: () => Promise<unknown>): Promise<string> {
+  try { await fn(); return ""; } catch (e) { return (e as Error).message; }
+}
+
 /** Run a statement expecting insufficient_privilege; returns the SQLSTATE seen. */
 async function deniedCode(pool: any, sql: string): Promise<string | null> {
   try {
@@ -86,8 +118,59 @@ async function main() {
   const workdir = await mkdtemp(join(tmpdir(), "sg-role-split-"));
 
   try {
-    // ── Clean slate, then the REAL provisioning path: migrations v1 + v2 ─────
+    // ── 0. BARE CLUSTER: tables and the runtime role itself both gone ────────
     await admin.query("DROP TABLE IF EXISTS audit_ledger, decisions, evidence_snapshots, sessions, schema_version CASCADE");
+    await admin.query(dropRuntimeRoleSql());
+
+    // 0a. A migration credential that owns the schema but lacks CREATEROLE —
+    // the common least-privilege deployment — must be refused UP FRONT with the
+    // remedy named, not fail raw inside migration v2.
+    await admin.query(dropRoleSql("sg_limited_admin"));
+    // Ephemeral throwaway-cluster credential, same standing as RUNTIME_PASSWORD
+    // above. Not a credential. gitleaks:allow
+    await admin.query("CREATE ROLE sg_limited_admin LOGIN PASSWORD 'sg-limited-proof'"); // gitleaks:allow
+    // USAGE as well as CREATE: a prior run's pg_restore --no-privileges leaves
+    // schema public without its default PUBLIC grants, and without USAGE the
+    // schema is skipped as a creation target ("no schema has been selected")
+    // before the precheck this test exists to reach.
+    await admin.query("GRANT USAGE, CREATE ON SCHEMA public TO sg_limited_admin");
+    const limitedUrl = withLogin(url!, "sg_limited_admin", "sg-limited-proof");
+    let refusedMigrate = "";
+    try { await runMigrations(limitedUrl); } catch (e) { refusedMigrate = (e as Error).message; }
+    check("migrations REFUSE up front when the role is missing and the credential lacks CREATEROLE",
+      refusedMigrate.includes("CREATEROLE"));
+    const untouched = await admin.query(
+      "SELECT to_regclass('public.audit_ledger') IS NULL AND to_regclass('public.schema_version') IS NULL AS clean",
+    );
+    check("…and refused BEFORE any DDL survived (no tables exist afterwards)", untouched.rows[0]?.clean === true);
+
+    // 0b. A preexisting `signalgrid_runtime` that is anything more than a plain
+    // LOGIN role is REFUSED, not adopted — REVOKE cannot demote SUPERUSER,
+    // cannot strip ownership, cannot undo memberships. One counterexample per
+    // refusal path.
+    await admin.query(`CREATE ROLE ${RUNTIME_ROLE} LOGIN SUPERUSER`);
+    check("role split REFUSES a preexisting SUPERUSER role (elevated attributes cannot be demoted by grants)",
+      /elevated attributes/.test(await failureOf(() => applyRoleSplit(url!))));
+    await admin.query(dropRuntimeRoleSql());
+
+    await admin.query(`CREATE ROLE ${RUNTIME_ROLE} LOGIN`);
+    await admin.query("CREATE TABLE sg_owned_probe (x INT)");
+    await admin.query(`ALTER TABLE sg_owned_probe OWNER TO ${RUNTIME_ROLE}`);
+    check("role split REFUSES a preexisting role that OWNS objects (an owner can always rewrite its tables)",
+      /OWNS database objects/.test(await failureOf(() => applyRoleSplit(url!))));
+    await admin.query("DROP TABLE sg_owned_probe");
+    await admin.query(dropRuntimeRoleSql());
+
+    await admin.query("DROP ROLE IF EXISTS sg_probe_group");
+    await admin.query("CREATE ROLE sg_probe_group");
+    await admin.query(`CREATE ROLE ${RUNTIME_ROLE} LOGIN`);
+    await admin.query(`GRANT sg_probe_group TO ${RUNTIME_ROLE}`);
+    check("role split REFUSES a preexisting role with MEMBERSHIPS (inherited privileges cannot be revoked here)",
+      /MEMBER of other roles/.test(await failureOf(() => applyRoleSplit(url!))));
+    await admin.query(dropRuntimeRoleSql());
+    await admin.query("DROP ROLE sg_probe_group");
+
+    // ── Then the REAL provisioning path: migrations v1 + v2 from nothing ─────
     const migrated = await runMigrations(url!);
     check(`migrations run to current (v${migrated.current}, role split included)`, migrated.current >= 2);
     // The role exists and can now be given its deploy-time password.
@@ -176,6 +259,15 @@ async function main() {
     check("posture destroyed: the runtime's ledger INSERT is now DENIED (the re-application below is not a no-op)",
       (await deniedCode(runtime, "INSERT INTO audit_ledger (id, ts, actor, event_type, prev_hash, hash) VALUES ('x', now(), '{}', 'probe', '', 'h')")) === "42501");
 
+    // A store built over missing grants must refuse READINESS, not initialize
+    // "healthy" and let /readyz send traffic at writes that will 42501. The
+    // tables all exist here — only the privileges are gone — which is exactly
+    // the case an existence-only probe gets wrong.
+    const degraded = new PostgresDecisionStore(runtimeUrl);
+    check("a store facing missing grants REFUSES readiness (ping fails naming privileges — /readyz cannot lie)",
+      /privilege/i.test(await failureOf(() => degraded.ping())));
+    await degraded.close();
+
     await restoreBackup(url!, archive);
 
     // The same records came back…
@@ -196,8 +288,45 @@ async function main() {
     );
     check("after restore: the runtime is STILL not the owner (--no-owner cannot be smuggled around)",
       ownerAfter.rows[0]?.tableowner !== RUNTIME_ROLE);
+    // …and a fresh store passes the privilege-probing readiness check — the
+    // counterpart of the degraded refusal above, so the probe is proven able to
+    // say yes as well as no.
+    const healthy = new PostgresDecisionStore(runtimeUrl);
+    check("after restore: a fresh store's readiness probe passes (the probe can say yes, not only no)",
+      (await failureOf(() => healthy.ping())) === "");
+    await healthy.close();
 
     await runtime.end();
+
+    // ── 5. RESTORE REFUSES BEFORE pg_restore when re-provisioning would fail ─
+    // Stage the disaster: the runtime role is gone entirely, and the credential
+    // attempting the restore cannot create roles. pg_restore --clean would
+    // REPLACE the database and only then die in post-restore re-provisioning —
+    // the precheck must refuse first, with the database untouched as the proof.
+    await admin.query(dropRuntimeRoleSql());
+    const beforeRefusal = await admin.query("SELECT count(*)::int AS n FROM audit_ledger");
+    const refusedRestore = await failureOf(() => restoreBackup(limitedUrl, archive));
+    check("restore REFUSES up front when the role is gone and the credential lacks CREATEROLE",
+      refusedRestore.includes("CREATEROLE"));
+    const afterRefusal = await admin.query("SELECT count(*)::int AS n FROM audit_ledger");
+    check("…and refused BEFORE pg_restore replaced anything (ledger row count untouched)",
+      afterRefusal.rows[0]?.n === beforeRefusal.rows[0]?.n && beforeRefusal.rows[0]?.n === 4);
+
+    // Role loss RECOVERS: the admin re-applies the split, resets the deploy
+    // password, and the system converges back to the same posture — working
+    // writes, denied destruction.
+    await applyRoleSplit(url!);
+    await admin.query(`ALTER ROLE ${RUNTIME_ROLE} PASSWORD '${RUNTIME_PASSWORD}'`);
+    const recoveredRuntime = new Pool({ connectionString: runtimeUrl });
+    setAuditBackend(new PostgresAuditBackend(runtimeUrl));
+    await appendAuditRecord("decision.allow", { type: "system" }, { meta: { after: "role-loss recovery" } });
+    const recovered = await verifyLedger();
+    check("role loss recovers: applyRoleSplit + password reset and the runtime appends again (chain verifies at 5)",
+      recovered.ok === true && recovered.count === 5);
+    check("…and the recovered role STILL cannot UPDATE the ledger (recovery converges to the same posture)",
+      (await deniedCode(recoveredRuntime, "UPDATE audit_ledger SET hash = 'forged' WHERE seq = 1")) === "42501");
+    await recoveredRuntime.end();
+    await admin.query(dropRoleSql("sg_limited_admin"));
   } finally {
     await admin.end();
     await rm(workdir, { recursive: true, force: true });

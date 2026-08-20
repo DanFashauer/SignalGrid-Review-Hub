@@ -252,14 +252,21 @@
       "reviewedBy": "data-persistence-engineer",
       "date": "2026-08-20",
       "depth": "verified-live",
-      "note": "Shift-2 role split, proven on real Postgres 16: runtime holds SELECT+INSERT on the ledger (append-only by privilege), SELECT+INSERT+UPDATE on upserting stores, no DDL/DELETE/TRUNCATE; SQL is idempotent and doubles as the post-restore re-provisioning step because pg_restore --no-privileges strips every grant."
+      "note": "Shift-2 role split, proven on real Postgres 16: runtime holds SELECT+INSERT on the ledger (append-only by privilege), SELECT+INSERT+UPDATE on upserting stores, no DDL/DELETE/TRUNCATE; SQL is idempotent and doubles as the post-restore re-provisioning step. Fail-closed after Codex review: refuses to ADOPT a preexisting elevated/owning/member role, and assertRoleSplitProvisionable refuses migrations/restores up front when the role is missing and the credential lacks CREATEROLE."
     },
     {
       "path": "scripts/src/db-role-split-proof.ts",
       "reviewedBy": "data-persistence-engineer",
       "date": "2026-08-20",
       "depth": "verified-live",
-      "note": "Executed against a local PostgreSQL 16 before CI: 19/19 — positive direction, seven denial classes (all 42501), admin non-vacuity inside a rolled-back transaction, and the backup → posture-destroyed → restore round trip. Running it caught the real integration gap that CREATE TABLE IF NOT EXISTS needs schema CREATE even when the table exists, which produced the stores' graceful degraded-bootstrap path."
+      "note": "Executed against a local PostgreSQL 16 before CI: 30/30, three consecutive runs (idempotent from a used cluster). Positive direction, seven denial classes (all 42501), admin non-vacuity, the backup → posture-destroyed → restore round trip, and the Codex-review guard set: migrations/restore refuse UP FRONT without CREATEROLE (database untouched, proven by row counts), the split refuses to adopt a preexisting SUPERUSER/owning/member role, a store with missing grants refuses readiness, and role loss recovers to the same posture. Destructive runs are gated behind SIGNALGRID_DB_DISPOSABLE=1 (loud refusal, never a silent skip)."
+    },
+    {
+      "path": "scripts/src/lib/db-guard.ts",
+      "reviewedBy": "data-persistence-engineer",
+      "date": "2026-08-20",
+      "depth": "verified-live",
+      "note": "The disposable-cluster declaration (SIGNALGRID_DB_DISPOSABLE=1) every destructive Postgres proof now requires. DATABASE_URL alone is not consent: the proofs DROP the tables they test and the role-split proof re-passwords the cluster-wide runtime role. Refusal is exit 1 and loud — a silent skip in CI would leave the gate green while testing nothing. Refusal path executed locally."
     }
   ]
 }

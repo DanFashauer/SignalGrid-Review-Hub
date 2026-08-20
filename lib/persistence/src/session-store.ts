@@ -155,6 +155,20 @@ export class PostgresSessionStore implements SessionStore {
             "run `pnpm run db:migrate` with the admin credential first (the runtime role owns no schema).",
         );
       }
+      // Existence is not usability: verify the exact privileges the store's
+      // statements need (lifecycle transitions are UPDATEs), so missing grants
+      // surface here as "not ready" instead of as a 42501 mid-request.
+      const priv = await this.pool.query(`
+        SELECT has_table_privilege('sessions', 'SELECT')
+           AND has_table_privilege('sessions', 'INSERT')
+           AND has_table_privilege('sessions', 'UPDATE') AS ok
+      `);
+      if (!priv.rows[0]?.ok) {
+        throw new Error(
+          "this credential is missing table privileges on sessions — re-apply the role split " +
+            "with the admin credential (`pnpm run db:migrate`); refusing to report ready for work that would fail.",
+        );
+      }
     }
   }
 

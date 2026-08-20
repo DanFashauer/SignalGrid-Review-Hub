@@ -33,10 +33,39 @@ export const RUNTIME_ROLE = "signalgrid_runtime";
 
 export const ROLE_SPLIT_SQL = `
   DO $$
+  DECLARE
+    attrs RECORD;
   BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'signalgrid_runtime') THEN
+    SELECT rolsuper, rolcreaterole, rolcreatedb, rolreplication, rolbypassrls
+      INTO attrs FROM pg_roles WHERE rolname = 'signalgrid_runtime';
+    IF NOT FOUND THEN
       -- LOGIN but no password yet: unusable until the deploy sets one.
       CREATE ROLE signalgrid_runtime LOGIN;
+      RETURN;
+    END IF;
+    -- The role already exists: FAIL CLOSED unless it is the plain LOGIN role
+    -- this split defines. The REVOKEs below cannot demote SUPERUSER or
+    -- BYPASSRLS, cannot take ownership away, and cannot strip privileges that
+    -- arrive through role memberships — adopting such a role would leave the
+    -- ledger rewritable while this file claims append-only. Each refusal names
+    -- the one remedy that makes re-running converge.
+    IF attrs.rolsuper OR attrs.rolcreaterole OR attrs.rolcreatedb
+       OR attrs.rolreplication OR attrs.rolbypassrls THEN
+      RAISE EXCEPTION 'signalgrid_runtime already exists with elevated attributes '
+        '(superuser=% createrole=% createdb=% replication=% bypassrls=%) — the grants below '
+        'cannot demote these, so the append-only claim would be false. ALTER the role down to '
+        'a plain LOGIN role (or drop it) first.',
+        attrs.rolsuper, attrs.rolcreaterole, attrs.rolcreatedb, attrs.rolreplication, attrs.rolbypassrls;
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_class c JOIN pg_roles o ON o.oid = c.relowner
+               WHERE o.rolname = 'signalgrid_runtime') THEN
+      RAISE EXCEPTION 'signalgrid_runtime already OWNS database objects — an owner can always '
+        'rewrite its own tables regardless of grants. REASSIGN OWNED BY signalgrid_runtime first.';
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_auth_members m
+               WHERE m.member = (SELECT oid FROM pg_roles WHERE rolname = 'signalgrid_runtime')) THEN
+      RAISE EXCEPTION 'signalgrid_runtime is a MEMBER of other roles — privileges inherited '
+        'through membership cannot be revoked here. REVOKE those memberships first.';
     END IF;
   END $$;
 
@@ -79,6 +108,38 @@ export const ROLE_SPLIT_SQL = `
     END IF;
   END $$;
 `;
+
+/**
+ * Refuse BEFORE any work when this credential cannot provision the role split.
+ *
+ * `CREATE ROLE` needs cluster-wide CREATEROLE (or SUPERUSER) — a common
+ * least-privilege deployment gives the migration credential ownership of the
+ * database and schema but NOT of the cluster, and without this check that
+ * deployment fails midway: the migration dies inside v2, or worse, a restore
+ * dies in post-restore re-provisioning AFTER pg_restore has already replaced
+ * the database. Failing up front with the named remedy is the only shape that
+ * leaves nothing half-done.
+ *
+ * Reading the caller's own pg_roles row is exact here: role ATTRIBUTES
+ * (SUPERUSER, CREATEROLE) are never inherited through memberships, so there is
+ * no inherited-CREATEROLE case this check would miss.
+ */
+export async function assertRoleSplitProvisionable(
+  query: (sql: string) => Promise<{ rows: any[] }>,
+): Promise<void> {
+  const { rows } = await query(`
+    SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${RUNTIME_ROLE}') AS role_exists,
+           (SELECT rolsuper OR rolcreaterole FROM pg_roles WHERE rolname = current_user) AS can_create_role
+  `);
+  const r = rows[0] ?? {};
+  if (!r.role_exists && !r.can_create_role) {
+    throw new Error(
+      `the '${RUNTIME_ROLE}' role does not exist and this credential lacks CREATEROLE, so the role ` +
+        `split cannot be provisioned — refusing BEFORE any schema change or restore so nothing is left ` +
+        `half-applied. Have a cluster administrator run: CREATE ROLE ${RUNTIME_ROLE} LOGIN;  then re-run.`,
+    );
+  }
+}
 
 /**
  * Apply (or re-apply) the role split. Requires an ADMIN connection — the same

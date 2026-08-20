@@ -19,6 +19,7 @@ import {
   type VulnFindingRaw,
 } from "@workspace/integrations/vuln-scan";
 import { checkLiveGateIsolated } from "./lib/live-gate.js";
+import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 
 interface Expected {
   posture: string; highestSeverity: string; reasonCode: string; recommendedAction: string; exploitableCount: number; findingCount: number;
@@ -106,6 +107,76 @@ check("dev tier resolves to fixture mode", resolveVulnScanConnector({ SIGNALGRID
 check("prod WITHOUT live flag stays fixture", resolveVulnScanConnector({ SIGNALGRID_TIER: "prod" }).mode === "fixture");
 check("prod + live + token resolves live", resolveVulnScanConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", VULN_SCAN_ACCESS_TOKEN: "t" }).mode === "live");
 
+
+// Fail-safe (wedge #14, caught by the shift-1 sweep): a finding whose severity
+// could NOT be read used to fall to the low/info residual and grade
+// low_risk/LOW_SEVERITY_ONLY — "low" asserted over evidence that says nothing
+// about severity. A critical CVE whose severity failed to parse read as low.
+const unverifiedSev = evaluateVulnPosture([normalizeFinding({ deviceId: "d", severity: "weird-value" })], { scanned: true });
+check("an unreadable severity → unknown/SEVERITY_UNVERIFIED, never 'low_risk' (wedge #14)",
+  unverifiedSev.posture === "unknown" && unverifiedSev.reasonCode === "SEVERITY_UNVERIFIED" && unverifiedSev.recommendedAction === "monitor");
+const unverifiedPlusMedium = evaluateVulnPosture([normalizeFinding({ deviceId: "d", severity: "weird-value" }), normalizeFinding({ deviceId: "d", severity: "medium" })], { scanned: true });
+check("…but a co-present REPORTED severity still drives the verdict (worst-concern-wins)",
+  unverifiedPlusMedium.reasonCode === "MEDIUM_SEVERITY_PRESENT");
+
+// ── GRANT SAFETY, QUANTIFIED — the whole input space, not chosen fixtures ─────
+//
+// Owner-sequenced shift 1: a grant must be UNREACHABLE by any unknown, missing,
+// stale, or contradictory input. Every combination of scan attestation × finding
+// shape is executed through the REAL normalizer + evaluator and the granting set
+// is pinned by equality.
+{
+  const EMPTY: VulnFindingRaw[] = [];
+  const CRIT = [{ cveId: "CVE-1", severity: "critical" }];
+  const HIGH_EXPLOIT = [{ cveId: "CVE-2", severity: "high", exploitAvailable: true }];
+  const HIGH = [{ cveId: "CVE-3", severity: "high" }];
+  const MED = [{ cveId: "CVE-4", severity: "medium" }];
+  const LOW = [{ cveId: "CVE-5", severity: "low" }];
+  const UNKNOWN_SEV = [{ cveId: "CVE-6", severity: "weird-value" }];
+  const MIXED = [{ cveId: "CVE-6", severity: "weird-value" }, { cveId: "CVE-4", severity: "medium" }];
+  const domains = {
+    // "derived" = the caller passed no flag; the evaluator must derive caution
+    // from the data (an empty set without attestation is NOT clean).
+    scanned: [true, false, "derived"],
+    findings: [EMPTY, CRIT, HIGH_EXPLOIT, HIGH, MED, LOW, UNKNOWN_SEV, MIXED],
+  } as const;
+
+  type Enum = { findings: ReturnType<typeof normalizeFinding>[]; scanned: boolean | undefined };
+  const build = (c: Record<string, unknown>): Enum => ({
+    findings: (c.findings as VulnFindingRaw[]).map(normalizeFinding),
+    scanned: c.scanned === "derived" ? undefined : (c.scanned as boolean),
+  });
+
+  const swept = enumerateGrantSafety<Enum, ReturnType<typeof evaluateVulnPosture>>({
+    domains,
+    build,
+    evaluate: (s) => evaluateVulnPosture(s.findings, s.scanned === undefined ? {} : { scanned: s.scanned }),
+    actionOf: (v) => v.recommendedAction,
+    // The ONLY clean state: an ATTESTED scan (explicit scanned:true) that found
+    // nothing. An empty set without the attestation is ambiguous and must not
+    // grant; no finding shape ever grants.
+    positivelyClean: (c) => c.scanned === true && c.findings === domains.findings[0],
+    confirmedWhenNone: (v) => v.reasonCode === "NO_FINDINGS" && v.posture === "clean",
+  });
+  check(`ENUMERATION: all ${swept.combos} combinations swept (= product of domains)`,
+    swept.combos === productOf(domains) && swept.combos === 3 * 8);
+  check("ENUMERATION: a grant is reachable ONLY by the attested-empty scan — zero mismatches",
+    swept.mismatches === 0);
+  check("ENUMERATION: exactly ONE granting state (non-vacuous)", swept.noneCount === 1);
+
+  // NEGATIVE CONTROL — the enumeration can fail: declare every empty finding set
+  // clean (ignoring the scan attestation) and the harness must object, because
+  // the evaluator (correctly) fails closed to NOT_SCANNED without it.
+  const wrongPredicate = enumerateGrantSafety<Enum, ReturnType<typeof evaluateVulnPosture>>({
+    domains,
+    build,
+    evaluate: (s) => evaluateVulnPosture(s.findings, s.scanned === undefined ? {} : { scanned: s.scanned }),
+    actionOf: (v) => v.recommendedAction,
+    positivelyClean: (c) => c.findings === domains.findings[0],
+  });
+  check("NEGATIVE CONTROL: declaring every empty set clean is CAUGHT (mismatches > 0)",
+    wrongPredicate.mismatches > 0 && typeof wrongPredicate.firstMismatch === "string");
+}
 
 // ── The live-call gate, each condition ISOLATED ──────────────────────────────
 //

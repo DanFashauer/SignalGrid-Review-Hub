@@ -66,7 +66,15 @@ export function evaluateVulnPosture(
   if (findings.some((f) => f.severity === "medium")) {
     return verdict("low_risk", "MEDIUM_SEVERITY_PRESENT", "patch", highestSeverity, findingCount, exploitableCount);
   }
-  // Only low/info/unknown severities remain.
+  // A finding whose severity could NOT be read is not a low finding (wedge #14,
+  // caught by the shift-1 sweep): "low_risk" used to be asserted over evidence
+  // that says nothing about severity — a critical CVE whose severity failed to
+  // parse read as low. The posture stops claiming "low"; the action stays
+  // monitor (an unreadable severity forecloses the calm claim but never denies).
+  if (findings.some((f) => f.severity === "unknown")) {
+    return verdict("unknown", "SEVERITY_UNVERIFIED", "monitor", highestSeverity, findingCount, exploitableCount);
+  }
+  // Only low/info severities remain.
   return verdict("low_risk", "LOW_SEVERITY_ONLY", "monitor", highestSeverity, findingCount, exploitableCount);
 }
 

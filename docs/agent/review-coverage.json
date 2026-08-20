@@ -225,6 +225,27 @@
       "date": "2026-08-20",
       "depth": "audited",
       "note": "Already fully enumerated by hand (360 combinations, granting set pinned by equality) — the symbol-grep coverage count under-reported it. The launch family is covered."
+    },
+    {
+      "path": "lib/integrations/src/integrations/vuln-scan/evaluate.ts",
+      "reviewedBy": "security-engineer",
+      "date": "2026-08-20",
+      "depth": "audited",
+      "note": "Shift-1 sweep: found wedge #14 — a finding whose severity failed to parse fell to the low/info residual and graded low_risk/LOW_SEVERITY_ONLY. Now unknown/SEVERITY_UNVERIFIED/monitor; grant pinned by enumeration to the attested-empty scan only."
+    },
+    {
+      "path": "scripts/src/uem-proof.ts",
+      "reviewedBy": "security-engineer",
+      "date": "2026-08-20",
+      "depth": "audited",
+      "note": "Coverage audit: already fully enumerated by hand (2160 states, granting set pinned exactly, ZERO unjustified grants). Counted toward the shift-1 covered tier without modification — symbol-grep undercounts hand-rolled sweeps."
+    },
+    {
+      "path": "lib/integrations/src/integrations/location-services/evaluate.ts",
+      "reviewedBy": "security-engineer",
+      "date": "2026-08-20",
+      "depth": "audited",
+      "note": "Shift-1 sweep: wedges #12/#13 — unknown freshness (null/unparseable capturedAt) skipped the stale guard and granted on_premises; a future-dated capture read as fresh. Both now UNVERIFIED_LOCATION_FRESHNESS/monitor; enumeration pins the single granting state."
     }
   ]
 }

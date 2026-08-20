@@ -84,9 +84,23 @@ export function evaluateIdentityRisk(
   if (principal.riskState === "remediated" || principal.riskState === "dismissed" || principal.riskState === "confirmed_safe") {
     // The risk was handled/accepted by the IdP or an admin; a new detection
     // would flip the state back to at_risk, so this is genuinely contained.
-    return detectionCount > 0
-      ? { ...base, posture: "low_risk", reasonCode: "RISK_REMEDIATED", recommendedAction: "monitor" }
-      : { ...base, posture: "trusted", reasonCode: "NO_RISK", recommendedAction: "none" };
+    if (detectionCount > 0) {
+      return { ...base, posture: "low_risk", reasonCode: "RISK_REMEDIATED", recommendedAction: "monitor" };
+    }
+    // The terminal grant is EARNED only when every other axis is positively
+    // clean: the detection feed was actually observed (empty, not unread) and
+    // the residual level affirmatively reads "none". Executed counterexamples
+    // before this guard (2026-08-20): remediated + detections:null graded
+    // trusted/none, bypassing the RISK_FEED_UNOBSERVED floor entirely; and
+    // confirmed_safe + riskLevel "high" graded trusted/none — a contradictory
+    // input (Entra zeroes the level on confirmedSafe, so a residual high is
+    // the vendor and the admin disagreeing) resolving to the FRIENDLIER
+    // reading. Anything less than fully-verified falls through to the ladder,
+    // which grades the level at face value, floors the unobserved feed at
+    // monitor, and lets the strongest concern win.
+    if (detectionsObserved && principal.riskLevel === "none") {
+      return { ...base, posture: "trusted", reasonCode: "NO_RISK", recommendedAction: "none" };
+    }
   }
 
   // at_risk, none, or unknown state: collect every applicable risk factor as a
@@ -102,6 +116,13 @@ export function evaluateIdentityRisk(
   if (principal.riskState === "unknown") {
     candidates.push({ posture: "unknown", action: "monitor", reason: "RISK_STATE_UNVERIFIED" });
   }
+  // Third field, same law. An unparseable riskLevel graded exactly like "none"
+  // until 2026-08-20 — state none + level "unknown" + zero detections was an
+  // executed trusted/none counterexample. A vendor renaming a level value must
+  // never convert parse failure into a clean bill.
+  if (principal.riskLevel === "unknown") {
+    candidates.push({ posture: "unknown", action: "monitor", reason: "RISK_LEVEL_UNVERIFIED" });
+  }
   if (!detectionsObserved) {
     // Never read the feed, so "nothing found" is not a reading we are entitled to.
     // `monitor` — a blind spot to investigate, not an alarm. Beats the `none`
@@ -109,12 +130,16 @@ export function evaluateIdentityRisk(
     // precedence: a real finding outranks "we could not see".
     candidates.push({ posture: "unknown", action: "monitor", reason: "RISK_FEED_UNOBSERVED" });
   }
-  // FAIL-SAFE floor: the IdP explicitly flags this principal at_risk but gives us
-  // no usable level (e.g. Entra reports riskLevel "hidden" without a P2 license)
-  // and no detections — an unquantified-but-active risk must still warrant a
-  // step-up, never resolve to "trusted". Quantified levels/detections below
-  // override this upward via strongest-wins.
-  if (principal.riskState === "at_risk" && principal.riskLevel === "unknown") {
+  // FAIL-SAFE floor: the IdP explicitly flags this principal at_risk but the
+  // level carries no quantified concern — "unknown" (e.g. Entra's "hidden"
+  // without a P2 license) or, the case the enumeration caught on 2026-08-20,
+  // "none": at_risk + riskLevel none + zero detections graded trusted/NO_RISK,
+  // because this floor only fired on "unknown". A state flag and a level that
+  // contradict each other must resolve to the flag, never to the friendlier
+  // half. Quantified levels (low/medium/high) and detections below still
+  // override via strongest-wins, which is why "low" is deliberately absent
+  // here: at_risk + low is QUANTIFIED mild risk and grades as such (monitor).
+  if (principal.riskState === "at_risk" && (principal.riskLevel === "unknown" || principal.riskLevel === "none")) {
     candidates.push({ posture: "at_risk", action: "step_up", reason: "RISK_STATE_AT_RISK" });
   }
   if (hasCompromiseGrade) {

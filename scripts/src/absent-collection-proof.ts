@@ -262,7 +262,11 @@ for (const [label, unreported, reportedNone] of [
     // normalizer collapsed absent state into "unknown" and the evaluator graded
     // "unknown" as trusted — the exact fail-open fixed on 2026-08-20. An empty
     // detections list is a reading; an absent risk state never was one.
-    identityRisk.evaluateIdentityRisk(identityRisk.normalizePrincipal({ principalId: "p", source: "s", riskState: "none", detections: [] } as never), {}),
+    // riskLevel "none" joined riskState "none" here on 2026-08-20 for the same
+    // reason riskState did: this row isolates the DETECTIONS axis, so every
+    // other axis must be REPORTED-clean — an omitted level now (correctly)
+    // grades as unverified rather than as clean.
+    identityRisk.evaluateIdentityRisk(identityRisk.normalizePrincipal({ principalId: "p", source: "s", riskState: "none", riskLevel: "none", detections: [] } as never), {}),
   ],
   [
     "peripheral-control",

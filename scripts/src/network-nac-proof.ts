@@ -16,9 +16,11 @@ import {
   guardReadOnly,
   resolveNetworkNacConnector,
   type NetworkPostureRaw,
+  type NetworkAuthState,
   type NormalizedNetworkSignal,
 } from "@workspace/integrations/network-nac";
 import { composeDeviceRisk, fromNetwork } from "@workspace/posture-composition";
+import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 import { checkLiveGateIsolated } from "./lib/live-gate.js";
 
 interface Expected { authState: string; posture: string; reasonCode: string; recommendedAction: string; }
@@ -196,6 +198,103 @@ for (const s of fixture.sessions) {
   }
 }
 check("far-future makes the trusted device stale → step_up", evaluateNetwork(byDevice.get("dev-trusted")!, NOW_MS + 60 * 60 * 1000).reasonCode === "STALE_NETWORK_STATE");
+
+// ── GRANT SAFETY, QUANTIFIED — the whole input space, not chosen fixtures ─────
+//
+// Owner-sequenced shift 1 (DR-005 era): a grant must be UNREACHABLE by any
+// unknown, missing, stale, or contradictory input. The two defects this family
+// shipped — the segment never evaluated, then the session-plane grant issued on
+// unreported compliance/freshness — were both invisible to fixture-driven
+// checks, because fixtures exercise the states someone thought of. This block
+// enumerates every combination of every axis and pins the granting set by
+// equality, so the NEXT such defect fails the proof instead of shipping.
+{
+  const NOW = Date.parse("2026-07-20T12:00:00Z");
+  const FRESH_ISO = "2026-07-20T11:55:00Z";   // 5 min old — fresh
+  const STALE_ISO = "2026-07-20T10:00:00Z";   // 2 h old — stale
+  const AUTH = ["authenticated", "unauthenticated", "quarantined", "unknown"] as const;
+  const COMPLIANT = [true, false, null] as const;
+  // lastAuthAt drives freshness INSIDE the evaluator: fresh, stale, unreported,
+  // and unparseable (NaN → freshness unknown, same as unreported — asserted below).
+  const LAST_AUTH = [FRESH_ISO, STALE_ISO, null, "not-a-date"] as const;
+  // Against a fixed policy {expected:[VLAN10], restricted:[VLAN60]}: an expected
+  // segment, a restricted one, an unlisted one, and unreported.
+  const SEGMENT = ["VLAN10", "VLAN60", "VLAN40", null] as const;
+  const POLICY = { expected: ["VLAN10"], restricted: ["VLAN60"] };
+
+  const domains = {
+    authState: AUTH, nacCompliant: COMPLIANT, lastAuthAt: LAST_AUTH, segment: SEGMENT,
+  };
+  const buildSignal = (c: Record<string, unknown>): NormalizedNetworkSignal => ({
+    sourceSystem: "network-nac", observedAt: "2026-07-20T11:59:00Z", deviceId: "dev.enum",
+    correlationId: "corr.enum",
+    authState: c.authState as NetworkAuthState,
+    segment: c.segment as string | null,
+    accessLocation: null,
+    nacCompliant: c.nacCompliant as boolean | null,
+    lastAuthAt: c.lastAuthAt as string | null,
+    freshness: "unknown", // recomputed by evaluateNetwork from lastAuthAt + nowMs
+  });
+
+  // WITH a segment policy: the ONLY clean state is every axis positively good.
+  const withPolicy = enumerateGrantSafety<NormalizedNetworkSignal, ReturnType<typeof evaluateNetwork>>({
+    domains,
+    build: buildSignal,
+    evaluate: (n) => evaluateNetwork(n, NOW, { segmentPolicy: POLICY }),
+    actionOf: (v) => v.recommendedAction,
+    positivelyClean: (c) =>
+      c.authState === "authenticated" && c.nacCompliant === true &&
+      c.lastAuthAt === FRESH_ISO && c.segment === "VLAN10",
+    // The grant must be the EARNED reason — the unverified-posture monitor path
+    // must never leak through as action none.
+    confirmedWhenNone: (v) => v.reasonCode === "AUTHENTICATED_TRUSTED_SEGMENT",
+  });
+  check(`ENUMERATION under policy: all ${withPolicy.combos} combinations swept (= product of domains)`,
+    withPolicy.combos === productOf(domains) && withPolicy.combos === 4 * 3 * 4 * 4);
+  check("ENUMERATION under policy: a grant is reachable ONLY by the fully-verified state — zero mismatches",
+    withPolicy.mismatches === 0);
+  check("ENUMERATION under policy: exactly ONE granting state (non-vacuous)",
+    withPolicy.noneCount === 1);
+
+  // WITHOUT a policy: the segment is ungraded by operator choice, so clean is the
+  // session plane alone — but still every session-plane axis positively good.
+  const noPolicy = enumerateGrantSafety<NormalizedNetworkSignal, ReturnType<typeof evaluateNetwork>>({
+    domains,
+    build: buildSignal,
+    evaluate: (n) => evaluateNetwork(n, NOW),
+    actionOf: (v) => v.recommendedAction,
+    positivelyClean: (c) =>
+      c.authState === "authenticated" && c.nacCompliant === true && c.lastAuthAt === FRESH_ISO,
+    confirmedWhenNone: (v) => v.reasonCode === "AUTHENTICATED_SEGMENT_UNVERIFIED",
+  });
+  check("ENUMERATION without policy: zero mismatches, and the grant honestly says the segment was not graded",
+    noPolicy.mismatches === 0);
+  check("ENUMERATION without policy: the granting set is the 4 segment values × one clean session plane",
+    noPolicy.noneCount === 4);
+
+  // NEGATIVE CONTROL — the enumeration can fail: declare the unreported-compliance
+  // state clean and the harness must object, because the evaluator (correctly)
+  // refuses to grant it. A harness that cannot fail proves nothing.
+  const wrongPredicate = enumerateGrantSafety<NormalizedNetworkSignal, ReturnType<typeof evaluateNetwork>>({
+    domains,
+    build: buildSignal,
+    evaluate: (n) => evaluateNetwork(n, NOW, { segmentPolicy: POLICY }),
+    actionOf: (v) => v.recommendedAction,
+    positivelyClean: (c) => c.authState === "authenticated" && c.lastAuthAt === FRESH_ISO && c.segment === "VLAN10",
+  });
+  check("NEGATIVE CONTROL: declaring unreported compliance clean is CAUGHT (mismatches > 0)",
+    wrongPredicate.mismatches > 0 && typeof wrongPredicate.firstMismatch === "string");
+
+  // The unparseable-date sentinel behaves exactly like unreported — pinned so a
+  // future NaN path cannot quietly become fresh.
+  check("an unparseable lastAuthAt grades identically to an unreported one, on every axis combination",
+    ["authenticated", "unauthenticated", "quarantined", "unknown"].every((a) =>
+      COMPLIANT.every((nc) => SEGMENT.every((seg) => {
+        const va = evaluateNetwork(buildSignal({ authState: a, nacCompliant: nc, lastAuthAt: "not-a-date", segment: seg }), NOW, { segmentPolicy: POLICY });
+        const vb = evaluateNetwork(buildSignal({ authState: a, nacCompliant: nc, lastAuthAt: null, segment: seg }), NOW, { segmentPolicy: POLICY });
+        return va.reasonCode === vb.reasonCode && va.recommendedAction === vb.recommendedAction;
+      }))));
+}
 
 // ── fuses into the unified composer via the new `network` adapter ─────────────
 const unauthVerdict = evaluateNetwork(byDevice.get("dev-unauth")!, NOW_MS);

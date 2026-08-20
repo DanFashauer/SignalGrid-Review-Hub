@@ -27,7 +27,8 @@
       "charter": "Workflow permissions and injection, script hygiene, auth/authz seams, supply chain.",
       "trigger": "CI, scripts, or auth surfaces change; or on a scheduled sweep.",
       "activated": "2026-08-19",
-      "produced": "SBOM token split; third-party actions pinned + check-action-pinning.mjs"
+      "produced": "SBOM token split; third-party actions pinned + check-action-pinning.mjs",
+      "nextAction": "SHIFT 1 (owner-sequenced, acceptance bar in the owner's words): extend adversarial trust testing across the uncovered connector tier, grant-producing or assurance-lowering paths first. The bar is stronger than \"tests added\": every unknown/missing/stale/contradictory input that could previously produce an affirmative needs an explicit counterexample, and the harness itself needs a mutation/self-test proving it can fail. Does NOT reopen launch scope — no deferred family activates, no surface is added."
     },
     {
       "id": "product-manager",
@@ -104,7 +105,7 @@
       "trigger": "Ledger, migration or export code changes.",
       "activated": "2026-08-20",
       "produced": "docs/LEDGER_TRUNCATION_FINDING.md. This role was queued on a claim that turned out to be FALSE — \"the RESTORE path is only described\" — when proof:backup-restore has been exercising it on real Postgres in CI all along (16/16 live, including a flipped byte, a truncated archive and a missing manifest all REFUSED). The real gap was next to it: a hash chain detects EDITS, not deletions of its own tail. 40 records seeded on a live Postgres, the last 10 deleted with a plain DELETE, and db:verify-ledger printed \"Chain intact\" and exited 0. Pinned as an explicit assertion in proof:audit-ledger-pg (14/14), named in the threat model as its own Tampering row, documented in BACKUP_AND_RESTORE.md, and answered operationally with db:verify-ledger --min-records N — because the command already REFUSED a missing DATABASE_URL on the grounds that a verifier which green-lights the void is worse than none, and then exited 0 on an empty table.",
-      "nextAction": "Append-only at the DATABASE grant level: the application role holds DELETE on audit_ledger, and nothing needs it. Revoking it turns the truncation finding from a detection problem into a permissions one. Check what the migration grants and whether the prod compose role is separable."
+      "nextAction": "SHIFT 2 (owner-sequenced, spec in the owner's words): build the database role split — the runtime role non-owner and minimally privileged (ledger: SELECT+INSERT only), schema/admin operations separate, and BOTH directions proven: legitimate ledger writes still work while destructive operations fail. The backup/restore proof must recreate the same privilege posture rather than accidentally restoring ownership (pg_restore --clean drops table-level grants with the objects). Does NOT reopen launch scope."
     },
     {
       "id": "api-contract-architect",
@@ -296,7 +297,7 @@
       "activated": "2026-08-20",
       "produced": "The deny re-tone, applied under DR-005: dark #C67070 / light #8A3F3F across web index.css and iOS DesignSystem.swift in one commit (a fork between them was why the first attempt was reverted), re-measured before applying — 5.05:1/4.55:1 dark, 6.50:1/7.33:1 light, against the old 3.18:1 on card. BRAND_CONTRAST_FINDING.md resolved for deny; canonical decision-state palette now lives in this repository.",
       "priority": 3,
-      "nextAction": "allow measures 4.32:1 on the dark card — under the WCAG AA floor DR-005 ratified for decision-state colors. The owner ratified VALUES for deny only, so prepare an owner PROPOSAL for an AA-passing allow tone (same hue family, both grounds, both appearances), mentioning primary (4.15:1 on card, brand accent, not bound by the floor) in passing. One screen, three options, like the deny decision came."
+      "nextAction": "Prepare the allow re-tone proposal under the owner's stated evaluation rule: canonical token first, all rendered surfaces together, text/icon redundancy preserved, and contrast mechanically proved against every background on which the state actually appears. allow is 4.32:1 on the dark card today; mention primary (4.15:1 on card, brand accent, unbound by the floor) in passing. One screen, three options."
     },
     {
       "id": "program-manager",

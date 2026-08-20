@@ -1,6 +1,6 @@
 # Skill-collection intake — nine repositories, what was taken, and what was not
 
-**Date:** 2026-08-20. **Requested by the owner**, who supplied nine repositories and
+**Date:** 2026-08-20. **Requested by the owner**, who supplied ten repositories (nine skill collections plus two tools) and
 asked that their capabilities "become an employee for the company and do what they
 do for my company."
 
@@ -26,6 +26,7 @@ work from a public repository."*
 | `affaan-m/ECC` | MIT © 2026 Affaan Mustafa | read for capability mapping; not vendored |
 | `ericbuess/claude-code-docs` | MIT | a docs mirror, not a capability |
 | `yamadashy/repomix` | MIT © 2024 Kazuki Yamada | a tool; would be a dependency, not a role |
+| `microsoft/markitdown` | MIT © Microsoft | a tool — converts PDF/Office/audio/images to Markdown; a dependency for document intake, not a role |
 | `eyaltoledano/claude-task-master` | custom **"Task Master License"** | **UNREAD — do not use until a human reads it** |
 | `ComposioHQ/awesome-claude-skills` | **NONE** | **REFUSED** |
 | `travisvn/awesome-claude-skills` | **NONE** | **REFUSED** |

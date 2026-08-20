@@ -93,6 +93,13 @@ export const AREAS = [
   // says is that the GitHub mobile app cannot open repository settings, which is a
   // fact about GitHub, not about this company.
   { path: ".claude", class: "tooling", reason: "Slash commands for prompt authoring, and the note describing them. Generic authoring aids carrying no product, tenant or customer specifics — see .claude/COMMANDS.md." },
+  // A NESTED, more specific area — the gate resolves longest-prefix-wins, so these
+  // files take this class and not the `.claude` one above. Split out because they are
+  // somebody else's work: MIT, and MIT is a grant with conditions, not a free-for-all.
+  // The LICENSE and copyright notice travel WITH the copy, and .claude/skills/VENDORED.md
+  // records the upstream commit plus the licence survey that rejected five other
+  // collections — three of which carry no licence at all.
+  { path: ".claude/skills", class: "third_party_intake", reason: "obra/superpowers, 14 skills vendored unmodified under MIT © 2025 Jesse Vincent. Licence basis, upstream commit and the rejected alternatives are stated in .claude/skills/VENDORED.md." },
   { path: "docker", class: "tooling", reason: "Container assets." },
   { path: "Dockerfile.api", class: "tooling", reason: "API image build." },
   { path: "Dockerfile.web", class: "tooling", reason: "Web image build." },

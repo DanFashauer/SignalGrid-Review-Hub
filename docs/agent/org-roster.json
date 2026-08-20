@@ -317,6 +317,105 @@
       "produced": null,
       "priority": 3,
       "nextAction": "Effectively continuous and performed by the coordinating session — every owner input has a ledger row and every delegated call a decision record. Activate as a distinct role only if intake volume outgrows one session."
+    },
+    {
+      "id": "positioning-messaging",
+      "division": "go-to-market",
+      "title": "Positioning & messaging lead",
+      "charter": "Owns the sentence a buyer would use for SignalGrid, and the boundary between what it does and what the host app / MDM / IdP does. Every claim traceable to something the repository can demonstrate.",
+      "trigger": "The product's scope changes, or a document makes a claim a buyer would not recognise — in either direction, including understatement.",
+      "activated": null,
+      "produced": null,
+      "priority": 1,
+      "nextAction": "The docs are engineer-truthful and buyer-illegible. There is no one-sentence answer to \"what is it\" that a hospital IT director would repeat back. Write it from what the proofs actually establish — an Assist gate returning allow/step_up/restrict/deny on signal and location, fail-closed — and check it against the launch profile so it never describes deferred surface."
+    },
+    {
+      "id": "icp-customer-research",
+      "division": "go-to-market",
+      "title": "ICP & customer research lead",
+      "charter": "Who actually buys this, what they already run, and which of their failures SignalGrid removes. Evidence about real buyers, never invented personas.",
+      "trigger": "A positioning, pricing or roadmap decision is about to be made on an assumption about buyers that nobody has checked.",
+      "activated": null,
+      "produced": null,
+      "priority": 1,
+      "nextAction": "Every buyer claim in the docs is currently inferred from the product rather than from anyone who buys. Establish what a shared-device frontline estate actually runs today (Imprivata, Epic, Intune/Jamf, badge readers) and where the handoffs break, from public evidence — vendor docs, published case studies, job postings naming the stack. Mark each finding with its source tier; a vendor's own marketing is the weakest."
+    },
+    {
+      "id": "proof-led-content",
+      "division": "go-to-market",
+      "title": "Proof-led content lead",
+      "charter": "Turns what this repository actually measured into published material. Publishes findings, including unflattering ones, because that is the differentiator no competitor will copy.",
+      "trigger": "A live shape-check, benchmark or gate finding lands that a practitioner outside the company would want to read.",
+      "activated": null,
+      "produced": null,
+      "priority": 2,
+      "nextAction": "Four findings are already sitting unpublished and each is genuinely useful to strangers: a quarantined NAC device receives an Access-ACCEPT; an egress proxy collapses the dns_failing rung; a hash-chained audit ledger cannot see deletion of its own tail; Keycloak emits no amr on any surface. Draft the first as a standalone piece. Nothing publishes without owner approval — it reaches people outside the company."
+    },
+    {
+      "id": "design-partner-outreach",
+      "division": "go-to-market",
+      "title": "Design-partner outreach lead",
+      "charter": "Getting the first real deployments. Prepares target lists, sequences and materials. PREPARES ONLY — every send is the owner's, without exception.",
+      "trigger": "The product can be demonstrated end to end and the positioning is settled enough to describe in a paragraph.",
+      "activated": null,
+      "produced": null,
+      "priority": 2,
+      "nextAction": "BLOCKED, and honestly so: outreach before positioning-messaging and icp-customer-research have run would be guessing at both the words and the audience. Do those first. When unblocked, note that this role can never send anything itself — contacting a person outside the company is one of the owner's five reserved actions."
+    },
+    {
+      "id": "launch-manager",
+      "division": "go-to-market",
+      "title": "Launch manager",
+      "charter": "Sequences the launch: what ships, in what order, to whom, and what must be true before each step.",
+      "trigger": "The launch profile's `launch` class stops changing and the deferred set stops growing.",
+      "activated": null,
+      "produced": null,
+      "priority": 3,
+      "nextAction": "PREMATURE and recorded as such rather than started. The launch profile currently classifies 22 items launch against 134 deferred; a launch plan written against a surface still moving weekly would be fiction. Revisit when that ratio settles."
+    },
+    {
+      "id": "lifecycle-activation",
+      "division": "go-to-market",
+      "title": "Lifecycle & activation lead",
+      "charter": "What happens after someone says yes — onboarding, first value, and the reasons they would leave.",
+      "trigger": "A first design partner is live.",
+      "activated": null,
+      "produced": null,
+      "priority": 3,
+      "nextAction": "PREMATURE. There are no customers, so every retention artifact would describe an imagined journey. Named here so the gap is visible rather than forgotten, not so it gets worked."
+    },
+    {
+      "id": "finance-fundraising",
+      "division": "company",
+      "title": "Finance & fundraising lead",
+      "charter": "Runway, unit economics, market sizing, and the materials an investor or acquirer reads. Every figure traceable to a real input.",
+      "trigger": "A pricing, hiring or spend decision needs a number, or an outside party asks for financials.",
+      "activated": null,
+      "produced": null,
+      "priority": 2,
+      "nextAction": "There is no cost model for SignalGrid at all — not for infrastructure, not for the agent lanes, not for the founder's time. Build the smallest honest one: what a single tenant costs to serve at the deferred architecture, and what the current burn actually is. Any figure that is an estimate must be labelled an estimate; the docs-figure guard already fails a measured number that has stopped being one."
+    },
+    {
+      "id": "commercial-counsel",
+      "division": "company",
+      "title": "Commercial counsel liaison",
+      "charter": "The paperwork of selling: MSA, DPA, BAA, security questionnaires, and what SignalGrid may and may not commit to in writing. Distinct from `compliance-analyst`, which owns whether a CONTROL claim is true; this owns whether a CONTRACT claim is safe to sign.",
+      "trigger": "A counterparty sends paperwork, or a document starts making a commitment rather than a description.",
+      "activated": null,
+      "produced": null,
+      "priority": 2,
+      "nextAction": "Selling into healthcare requires a BAA, and this repository states plainly that Claude Code does not guarantee HIPAA or SOC 2 and that a human compliance review is required. Those two facts have never been reconciled in writing. Draft the gap analysis: what a hospital's standard paperwork asks for, what SignalGrid can honestly answer today, and which answers need a human lawyer. NEVER signs anything — a signature is one of the owner's five reserved actions."
+    },
+    {
+      "id": "agent-ops-economics",
+      "division": "company",
+      "title": "Agent operations & economics lead",
+      "charter": "What the agent organisation costs to run and whether it is producing proportional value. Owns the honest ratio between spend and shipped, verified work.",
+      "trigger": "The agent lanes change shape — a new division, a new lane, a new always-on loop — or spend moves without a matching change in output.",
+      "activated": null,
+      "produced": null,
+      "priority": 2,
+      "nextAction": "Nothing in this repository measures what the agent org costs, and it now spans 40 roles across four divisions and two machines. Review coverage measures what was READ but not what it cost to read it. Establish the baseline: tokens and wall-clock per shift against what each shift actually landed and verified. Expect the answer to be unflattering — the point is that it becomes a number rather than a feeling."
     }
   ]
 }

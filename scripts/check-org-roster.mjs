@@ -33,7 +33,11 @@ const ROSTER = "docs/agent/org-roster.json";
 const CHART = "docs/ORG_CHART.md";
 
 const REQUIRED = ["id", "division", "title", "charter", "trigger"];
-const DIVISIONS = new Set(["engineering", "signal-domain", "company"]);
+// NOTE: the self-test below uses "marketing" as its example of an UNKNOWN division.
+// A go-to-market division must therefore never be named `marketing` — doing so would
+// quietly convert that negative control into a passing case, and the gate would stop
+// proving it can fail. Named `go-to-market` for exactly that reason.
+const DIVISIONS = new Set(["engineering", "signal-domain", "company", "go-to-market"]);
 
 /**
  * Pure audit so the verdict is testable without a filesystem.

@@ -101,9 +101,39 @@ a source reports. Five of its six dimensions remain live-unverified.
 | `brand-design` | Brand & design lead | A user-facing surface's look changes |
 | `program-manager` | Program manager | A shift is planned, or the roster reports stale roles |
 | `records-archivist` | Records archivist | An owner input arrives, or a decision is made |
+| `finance-fundraising` | Finance & fundraising lead | A spend or pricing decision needs a number, or an outside party asks for financials |
+| `commercial-counsel` | Commercial counsel liaison | A counterparty sends paperwork, or a document starts committing rather than describing |
+| `agent-ops-economics` | Agent operations & economics lead | The agent lanes change shape, or spend moves without matching output |
 
 `program-manager` is the role that reads this gate's output and calls the ones
 that have gone cold — the org watching itself.
+
+## Division 4 — Go-to-market (*getting it in front of someone*)
+
+| Role id | Title | Activates when |
+| --- | --- | --- |
+| `positioning-messaging` | Positioning & messaging lead | Scope changes, or a document makes a claim a buyer would not recognise |
+| `icp-customer-research` | ICP & customer research lead | A decision is about to rest on an unchecked assumption about buyers |
+| `proof-led-content` | Proof-led content lead | A live shape-check or gate finding lands that a practitioner would want to read |
+| `design-partner-outreach` | Design-partner outreach lead | The product demos end to end and the positioning is settled |
+| `launch-manager` | Launch manager | The launch profile stops moving |
+| `lifecycle-activation` | Lifecycle & activation lead | A first design partner is live |
+
+This division was missing entirely until 2026-08-20, and its absence was the
+loudest gap in the chart: seventeen engineering roles, six signal domains, eight
+business-analysis roles — and nobody whose job was to get the thing in front of a
+buyer.
+
+Two of its six are marked PREMATURE in the roster rather than started.
+`launch-manager` would be writing fiction against a launch profile still moving
+weekly (22 items classified launch against 134 deferred), and
+`lifecycle-activation` would be describing a customer journey nobody has taken.
+Naming a gap is not the same as working it, and a role invented to look complete is
+the same unearned affirmative this repository exists to refuse.
+
+`design-partner-outreach` **prepares only**. Contacting a person outside the company
+is one of the owner's five reserved actions, so that role can never send anything
+itself.
 
 ## What no role in this chart may do
 

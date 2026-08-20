@@ -102,10 +102,9 @@
       "title": "Data / persistence engineer",
       "charter": "The Postgres audit ledger: chain integrity, migrations, export, pagination.",
       "trigger": "Ledger, migration or export code changes.",
-      "activated": null,
-      "produced": null,
-      "priority": 1,
-      "nextAction": "Exercise the durable ledger end to end on a real Postgres: write, break a link, verify db:verify-ledger localises it to the exact index, then restore and re-verify per BACKUP_AND_RESTORE.md. The chain is gated; the RESTORE path is only described."
+      "activated": "2026-08-20",
+      "produced": "docs/LEDGER_TRUNCATION_FINDING.md. This role was queued on a claim that turned out to be FALSE — \"the RESTORE path is only described\" — when proof:backup-restore has been exercising it on real Postgres in CI all along (16/16 live, including a flipped byte, a truncated archive and a missing manifest all REFUSED). The real gap was next to it: a hash chain detects EDITS, not deletions of its own tail. 40 records seeded on a live Postgres, the last 10 deleted with a plain DELETE, and db:verify-ledger printed \"Chain intact\" and exited 0. Pinned as an explicit assertion in proof:audit-ledger-pg (14/14), named in the threat model as its own Tampering row, documented in BACKUP_AND_RESTORE.md, and answered operationally with db:verify-ledger --min-records N — because the command already REFUSED a missing DATABASE_URL on the grounds that a verifier which green-lights the void is worse than none, and then exited 0 on an empty table.",
+      "nextAction": "Append-only at the DATABASE grant level: the application role holds DELETE on audit_ledger, and nothing needs it. Revoking it turns the truncation finding from a detection problem into a permissions one. Check what the migration grants and whether the prod compose role is separable."
     },
     {
       "id": "api-contract-architect",

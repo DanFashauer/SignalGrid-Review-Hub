@@ -120,6 +120,41 @@
       "date": "2026-08-20",
       "depth": "read",
       "note": "The collection is hand-authored and checked against the spec, not generated from it — so a new spec path needs a matching item added by hand."
+    },
+    {
+      "path": "scripts/src/verify-ledger-cli.ts",
+      "reviewedBy": "data-persistence-engineer",
+      "date": "2026-08-20",
+      "depth": "verified-live",
+      "note": "Driven against a real Postgres ledger: clean, mid-chain tamper (localised to the exact index, exit 1), and end-truncation (Chain intact, exit 0). Refused a missing DATABASE_URL as an unearned affirmative while exiting 0 on an empty table; --min-records added."
+    },
+    {
+      "path": "scripts/src/audit-ledger-pg-proof.ts",
+      "reviewedBy": "data-persistence-engineer",
+      "date": "2026-08-20",
+      "depth": "verified-live",
+      "note": "14/14 on real Postgres. Added the end-truncation limit as a passing assertion so it fails the day an anchor is added; both new assertions confirmed to fail when the deletion is removed."
+    },
+    {
+      "path": "scripts/src/backup-restore-proof.ts",
+      "reviewedBy": "data-persistence-engineer",
+      "date": "2026-08-20",
+      "depth": "verified-live",
+      "note": "16/16 on real Postgres. Refutes the roster claim that the restore path was only described — flipped byte, truncated archive and missing manifest all refused, and a good archive accepted as the negative control."
+    },
+    {
+      "path": "docs/BACKUP_AND_RESTORE.md",
+      "reviewedBy": "data-persistence-engineer",
+      "date": "2026-08-20",
+      "depth": "audited",
+      "note": "Accurate on backup/restore/refusals. Said nothing about deletion from the end leaving verification clean; that section added."
+    },
+    {
+      "path": "lib/audit/src/index.ts",
+      "reviewedBy": "data-persistence-engineer",
+      "date": "2026-08-20",
+      "depth": "audited",
+      "note": "verifySegment recomputes body-plus-prevHash per record and checks the prevHash link separately, so an edit is caught two ways. Neither way can see a missing tail."
     }
   ]
 }

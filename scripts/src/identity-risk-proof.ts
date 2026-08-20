@@ -7,6 +7,7 @@
 // sign-in-risk posture and the action it warrants (confirmed-compromised /
 // leaked-creds ⇒ escalate; risky sign-in without MFA ⇒ restrict; no IdP coverage
 // ⇒ unknown, never trusted). No network, no real identity data.
+import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -117,8 +118,20 @@ const mcas = normalizeDetection({ detectionType: "mcasImpossibleTravel" });
 check("mcasImpossibleTravel normalizes to impossible_travel and grades 'high'", mcas.detectionType === "impossible_travel" && mcas.grade === "high");
 
 // confirmed_safe with no residual detections is trusted.
-const safe = evaluateIdentityRisk(normalizePrincipal({ principalId: "p-safe", riskState: "confirmedSafe", detections: [] }));
-check("confirmed_safe with no detections is trusted/none", safe.posture === "trusted" && safe.recommendedAction === "none");
+// riskLevel "none" is REPORTED here deliberately: Entra zeroes the level on
+// confirmedSafe, and since the 2026-08-20 tightening the terminal grant requires
+// every axis positively clean — an omitted level is an unverified one.
+const safe = evaluateIdentityRisk(normalizePrincipal({ principalId: "p-safe", riskState: "confirmedSafe", riskLevel: "none", detections: [] }));
+check("confirmed_safe with an affirmatively-clean level and observed-empty detections is trusted/none", safe.posture === "trusted" && safe.recommendedAction === "none");
+const safeUnread = evaluateIdentityRisk(normalizePrincipal({ principalId: "p-safe2", riskState: "confirmedSafe", riskLevel: "none" }));
+check("confirmed_safe with the detection feed NEVER OBSERVED is monitor, not a grant — the terminal state does not bypass the feed floor",
+  safeUnread.recommendedAction === "monitor" && safeUnread.reasonCode === "RISK_FEED_UNOBSERVED");
+const safeContradicted = evaluateIdentityRisk(normalizePrincipal({ principalId: "p-safe3", riskState: "confirmedSafe", riskLevel: "high", detections: [] }));
+check("confirmed_safe CONTRADICTED by a residual high level resolves to the worse reading — restrict, never trusted",
+  safeContradicted.recommendedAction === "restrict" && safeContradicted.reasonCode === "HIGH_RISK_SIGNIN");
+const levelUnparseable = evaluateIdentityRisk(normalizePrincipal({ principalId: "p-lvl", riskState: "none", riskLevel: "ultraviolet", detections: [] }));
+check("an unparseable riskLevel is a blind spot: monitor / RISK_LEVEL_UNVERIFIED — the third field under the same law",
+  levelUnparseable.recommendedAction === "monitor" && levelUnparseable.reasonCode === "RISK_LEVEL_UNVERIFIED");
 
 // ── riskState "none" vs "unknown": a reading vs a blind spot ──────────────────
 //
@@ -197,6 +210,78 @@ checkLiveGateIsolated({
   },
 });
 
-const total = passed + failures.length;
-console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
+// ── GRANT SAFETY, QUANTIFIED — the whole input lattice, 840 combinations ──────
+//
+// Owner-sequenced shift 1: a grant must be unreachable by any unknown, missing,
+// stale, or contradictory input. THREE executed counterexamples predate this
+// block (2026-08-20): remediated + detections:null graded trusted (the terminal
+// state bypassed the unobserved-feed floor); confirmed_safe + level high graded
+// trusted (a contradiction resolving to the friendlier reading); state none +
+// level unparseable graded trusted (parse failure as a clean bill). The
+// enumeration pins the granting set by predicate so the next wedge of this
+// class fails the proof instead of shipping.
+{
+  const MED_DET = [{ detectionType: "unfamiliarFeatures", riskLevel: "medium" }];
+  const COMP_DET = [{ detectionType: "leakedCredentials", riskLevel: "high" }];
+  const domains: Record<string, readonly unknown[]> = {
+    riskState: ["none", "atRisk", "confirmedCompromised", "remediated", "dismissed", "confirmedSafe", "someFutureState"],
+    riskLevel: ["none", "low", "medium", "high", "someFutureLevel"],
+    detections: [null, [], MED_DET, COMP_DET],
+    mfaSatisfied: [true, false, null],
+    covered: [true, false],
+  };
+  const evalCombo = (c: Record<string, unknown>) =>
+    evaluateIdentityRisk(
+      normalizePrincipal({
+        principalId: "p-enum",
+        riskState: c.riskState,
+        riskLevel: c.riskLevel,
+        detections: c.detections,
+        mfaSatisfied: c.mfaSatisfied,
+        source: "entra",
+      } as never),
+      { covered: c.covered as boolean },
+    );
+  const grid = enumerateGrantSafety({
+    domains,
+    build: (c) => c,
+    evaluate: evalCombo,
+    actionOf: (v) => v.recommendedAction,
+    // The ONLY granting states: covered, the feed observed and empty, the level
+    // affirmatively "none", and a state the IdP or an admin affirmatively
+    // cleared. mfaSatisfied is deliberately unconstrained: it is an AGGRAVATOR
+    // for risky sign-ins by design (session assurance belongs to sso-session),
+    // and absence of MFA on a no-risk principal is not a risk signal here.
+    positivelyClean: (c) =>
+      c.covered === true &&
+      Array.isArray(c.detections) && (c.detections as unknown[]).length === 0 &&
+      c.riskLevel === "none" &&
+      ["none", "remediated", "dismissed", "confirmedSafe"].includes(c.riskState as string),
+    confirmedWhenNone: (v) => v.reasonCode === "NO_RISK" && v.posture === "trusted",
+  });
+  check(`ENUMERATION: all ${grid.combos} combinations swept (7 states x 5 levels x 4 feeds x 3 mfa x covered/not)`,
+    grid.combos === productOf(domains) && grid.combos === 840);
+  check("ENUMERATION: zero mismatches — no unknown/missing/contradictory input reaches a grant",
+    grid.mismatches === 0);
+  check("ENUMERATION: the granting set is exactly 4 states x 3 mfa values = 12 (non-vacuous)",
+    grid.noneCount === 12);
+
+  // NEGATIVE CONTROL — declare the never-observed feed clean; the harness must
+  // object, because the evaluator (correctly) refuses to grant it.
+  const wrong = enumerateGrantSafety({
+    domains,
+    build: (c) => c,
+    evaluate: evalCombo,
+    actionOf: (v) => v.recommendedAction,
+    positivelyClean: (c) =>
+      c.covered === true &&
+      (c.detections === null || (Array.isArray(c.detections) && (c.detections as unknown[]).length === 0)) &&
+      c.riskLevel === "none" &&
+      ["none", "remediated", "dismissed", "confirmedSafe"].includes(c.riskState as string),
+  });
+  check("NEGATIVE CONTROL: declaring the never-observed feed clean is CAUGHT (mismatches > 0)",
+    wrong.mismatches > 0 && typeof wrong.firstMismatch === "string");
+}
+
+console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${passed + failures.length})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

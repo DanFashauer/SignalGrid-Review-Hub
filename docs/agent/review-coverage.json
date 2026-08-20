@@ -211,6 +211,20 @@
       "date": "2026-08-20",
       "depth": "audited",
       "note": "normalizeRiskState default arm swallowed the most common healthy-tenant value. Vendor 'none' now maps to riskState 'none'; unmapped values still fall to 'unknown', which no longer earns trust."
+    },
+    {
+      "path": "scripts/src/lib/grant-safety.ts",
+      "reviewedBy": "security-engineer",
+      "date": "2026-08-20",
+      "depth": "audited",
+      "note": "The shared enumeration harness read end to end before extending its reach — self-proof carries both too-strict and too-loose negative controls, so a predicate error in either direction is caught."
+    },
+    {
+      "path": "scripts/src/local-authority-proof.ts",
+      "reviewedBy": "security-engineer",
+      "date": "2026-08-20",
+      "depth": "audited",
+      "note": "Already fully enumerated by hand (360 combinations, granting set pinned by equality) — the symbol-grep coverage count under-reported it. The launch family is covered."
     }
   ]
 }

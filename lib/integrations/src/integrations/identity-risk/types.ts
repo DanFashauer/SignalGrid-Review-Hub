@@ -115,6 +115,10 @@ export type IdentityReasonCode =
    *  could not map. Grades `monitor`: a blind spot to investigate, never `trusted`.
    *  Mirrors RISK_FEED_UNOBSERVED, one field over. */
   | "RISK_STATE_UNVERIFIED"
+  /** riskLevel is `unknown` — absent, or a value the normalizer could not map.
+   *  Same law, third field: a grant requires positive confirmation of EVERY
+   *  input, and an unparseable level is a blind spot, not a clean bill. */
+  | "RISK_LEVEL_UNVERIFIED"
   | "NOT_COVERED"
   | "RISK_REMEDIATED"
   | "RISK_STATE_AT_RISK"

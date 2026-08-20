@@ -85,6 +85,14 @@ export const AREAS = [
   { path: ".github", class: "tooling", reason: "CI workflows and repository automation." },
   { path: ".githooks", class: "tooling", reason: "The pre-push lockfile hook." },
   { path: ".agents", class: "tooling", reason: "Agent-lane coordination material." },
+  // Classified deliberately rather than waved through. This repository is PUBLIC,
+  // so a prompt committed here is a prompt published — and prompts are exactly the
+  // kind of file that accumulates working context (a customer name in an example, a
+  // real hostname in a "for instance") without anyone thinking of it as content. The
+  // nine commands are generic authoring aids; the one repo-specific thing any of them
+  // says is that the GitHub mobile app cannot open repository settings, which is a
+  // fact about GitHub, not about this company.
+  { path: ".claude", class: "tooling", reason: "Slash commands for prompt authoring, and the note describing them. Generic authoring aids carrying no product, tenant or customer specifics — see .claude/COMMANDS.md." },
   { path: "docker", class: "tooling", reason: "Container assets." },
   { path: "Dockerfile.api", class: "tooling", reason: "API image build." },
   { path: "Dockerfile.web", class: "tooling", reason: "Web image build." },

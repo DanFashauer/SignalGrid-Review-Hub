@@ -1,5 +1,13 @@
 # Slash commands
 
+> Kept at `.claude/COMMANDS.md`, deliberately NOT inside `.claude/commands/`.
+> Every `.md` file in that directory is registered as an invokable command, so a
+> `README.md` there becomes a `/README` command that does nothing — which is
+> exactly what happened on the first version of this file, and it showed up in the
+> command list as `README: Slash commands`. Documentation about a directory does
+> not belong inside a directory whose contents are executable.
+
+
 Nine commands, chained the way the work actually flows: a messy idea goes in one
 end, a usable prompt comes out the other. Each is also fine on its own.
 

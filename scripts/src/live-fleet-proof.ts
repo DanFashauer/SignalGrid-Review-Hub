@@ -276,8 +276,14 @@ async function main(): Promise<void> {
       typeof report.results[0].rows[0].version === "string" &&
       (report.results[0].rows[0].version as string).length > 0,
     `rows=${JSON.stringify(report.results[0]?.rows ?? []).slice(0, 80)}`);
+  // `?.` on both reads, matching the detail string below, which already had it.
+  // Without it an empty `results` (no agent answered the campaign) throws inside
+  // the argument list and CRASHES the proof instead of failing this assertion —
+  // taking with it the partial-window check below and the whole operator
+  // off-switch section after it. A proof that aborts on a failing assertion has
+  // stopped being able to report, which is the one thing it exists to do.
   check("…attributed to the host that ran them, with no per-host error",
-    report.results[0].host_id === target.id && report.results[0].error === null,
+    report.results[0]?.host_id === target.id && report.results[0]?.error === null,
     `host_id=${report.results[0]?.host_id} error=${String(report.results[0]?.error)}`);
   check("…and a fully-answered window is NOT flagged partial", report.partial === false);
 

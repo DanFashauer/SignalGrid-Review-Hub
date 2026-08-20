@@ -128,6 +128,33 @@ export const ROLE_SPLIT_VALIDATE_SQL = `
         'cluster — owner-level powers and grants this connection cannot see or revoke. Clean those up in '
         'the databases that hold them (REASSIGN OWNED / REVOKE there), or use a dedicated cluster.';
     END IF;
+    -- Grants INSIDE this database are checked against an exact allowlist: the
+    -- four managed tables, the ledger sequence, and USAGE on public are the
+    -- canonical set the apply step resets; a grant on ANY other object here
+    -- (another schema, someone else's table, a function) would survive that
+    -- reset untouched — the role would hold more than the documented posture
+    -- while the migration reported a converged split.
+    IF EXISTS (
+      SELECT 1 FROM pg_shdepend d
+      WHERE d.refclassid = 'pg_authid'::regclass
+        AND d.refobjid = (SELECT oid FROM pg_roles WHERE rolname = 'signalgrid_runtime')
+        AND d.deptype = 'a'
+        AND d.dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
+        AND NOT (d.classid = 'pg_class'::regclass AND d.objid IN (
+          SELECT c FROM unnest(ARRAY[
+            to_regclass('public.audit_ledger'), to_regclass('public.decisions'),
+            to_regclass('public.evidence_snapshots'), to_regclass('public.sessions'),
+            CASE WHEN to_regclass('public.audit_ledger') IS NOT NULL
+                 THEN to_regclass(pg_get_serial_sequence('public.audit_ledger', 'seq')) END
+          ]::oid[]) AS t(c) WHERE c IS NOT NULL))
+        AND NOT (d.classid = 'pg_namespace'::regclass
+                 AND d.objid = (SELECT oid FROM pg_namespace WHERE nspname = 'public'))
+    ) THEN
+      RAISE EXCEPTION 'signalgrid_runtime holds grants on objects in this database OUTSIDE the canonical '
+        'set (the four managed tables, the ledger sequence, schema public) — the split''s reset would '
+        'leave them standing, so the role would hold more than the documented posture. REVOKE those '
+        'grants first, then re-run.';
+    END IF;
   END $$;
 `;
 
@@ -223,6 +250,30 @@ export const ROLE_SPLIT_SQL = `
       EXECUTE format('REVOKE ALL ON SEQUENCE %s FROM signalgrid_runtime, PUBLIC', seqname);
       EXECUTE format('GRANT USAGE ON SEQUENCE %s TO signalgrid_runtime', seqname);
     END IF;
+  END $$;
+
+  -- SECURITY DEFINER routines run with their OWNER's privileges, and
+  -- PostgreSQL grants EXECUTE to PUBLIC by default on every new routine — so
+  -- an admin-owned definer function that writes the ledger would hand the
+  -- runtime a write path no table grant can close. Ambient execution of every
+  -- non-system definer routine is therefore RESET on each apply; a role that
+  -- genuinely needs one gets an explicit grant, which is the standard posture
+  -- for SECURITY DEFINER. System schemas are left alone.
+  DO $$
+  DECLARE
+    fn RECORD;
+  BEGIN
+    FOR fn IN
+      SELECT p.oid, p.prokind
+      FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE p.prosecdef
+        AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+        AND n.nspname NOT LIKE 'pg\\_%'
+    LOOP
+      EXECUTE format('REVOKE EXECUTE ON %s %s FROM signalgrid_runtime, PUBLIC',
+                     CASE fn.prokind WHEN 'p' THEN 'PROCEDURE' ELSE 'FUNCTION' END,
+                     fn.oid::regprocedure);
+    END LOOP;
   END $$;
 `;
 

@@ -35,6 +35,7 @@ export interface DecisionStore {
 export class PostgresDecisionStore implements DecisionStore {
   private pool: any;
   private ready: Promise<void>;
+  private retry: Promise<void> | null = null;
   private readonly connectionString: string;
 
   constructor(connectionString: string) {
@@ -62,14 +63,28 @@ export class PostgresDecisionStore implements DecisionStore {
   private async ensureReady(): Promise<void> {
     try {
       await this.ready;
+      return;
     } catch {
-      if (this.pool) {
-        try { await this.pool.end(); } catch { /* the old pool may already be dead */ }
-        this.pool = undefined;
-      }
-      this.ready = this.init(this.connectionString);
-      await this.ready;
+      // fall through to the single-flight rebuild below
     }
+    // SINGLE-FLIGHT: a recovery burst after an outage must not have every
+    // caller independently tear down and rebuild the pool — overlapping
+    // retries overwrite each other's pool reference, leak the orphaned pools'
+    // connections, and can exhaust the server. The first caller performs the
+    // rebuild; every concurrent caller awaits that same attempt.
+    if (!this.retry) {
+      this.retry = (async () => {
+        if (this.pool) {
+          try { await this.pool.end(); } catch { /* the old pool may already be dead */ }
+          this.pool = undefined;
+        }
+        await this.init(this.connectionString);
+      })();
+      this.ready = this.retry;
+      this.ready.catch(() => {});
+      this.retry.finally(() => { this.retry = null; }).catch(() => {});
+    }
+    await this.ready;
   }
 
   private async init(connectionString: string): Promise<void> {

@@ -320,6 +320,37 @@ async function main() {
     check("…and the runtime's CREATE TABLE is STILL denied after the staged direct schema grant (no-DDL holds)",
       (await deniedCode(runtime, "CREATE TABLE runtime_probe_2 (x INT)")) === "42501");
 
+    // A grant on an object OUTSIDE the canonical set cannot be reset by the
+    // apply step (it only manages the four tables + sequence + public), so
+    // the validation must refuse it rather than let the role keep it.
+    await admin.query("CREATE SCHEMA IF NOT EXISTS sg_probe_schema");
+    await admin.query(`GRANT CREATE ON SCHEMA sg_probe_schema TO ${RUNTIME_ROLE}`);
+    check("role split REFUSES a role holding grants outside the canonical set (CREATE on a foreign schema)",
+      /OUTSIDE the canonical/.test(await failureOf(() => applyRoleSplit(url!))));
+    await admin.query(`REVOKE ALL ON SCHEMA sg_probe_schema FROM ${RUNTIME_ROLE}`);
+    await admin.query("DROP SCHEMA sg_probe_schema");
+    await applyRoleSplit(url!); // clean again — later sections assume a valid posture
+
+    // SECURITY DEFINER: an admin-owned definer function that writes the
+    // ledger, executable by PUBLIC (PostgreSQL's default), is a write path no
+    // table grant closes. The apply resets ambient execution.
+    await admin.query(
+      "CREATE OR REPLACE FUNCTION public.sg_backdoor_probe() RETURNS void LANGUAGE sql SECURITY DEFINER AS " +
+        "'UPDATE public.audit_ledger SET request_id = request_id'",
+    );
+    const fnBefore = await admin.query(
+      `SELECT has_function_privilege('${RUNTIME_ROLE}', 'public.sg_backdoor_probe()', 'EXECUTE') AS ok`);
+    check("wedge staged: the runtime can execute an admin-owned SECURITY DEFINER ledger-writer (PUBLIC default)",
+      fnBefore.rows[0]?.ok === true);
+    await applyRoleSplit(url!);
+    const fnAfter = await admin.query(
+      `SELECT has_function_privilege('${RUNTIME_ROLE}', 'public.sg_backdoor_probe()', 'EXECUTE') AS ok`);
+    check("re-apply resets ambient definer execution (has_function_privilege now false)",
+      fnAfter.rows[0]?.ok === false);
+    check("…and the runtime's call is DENIED (42501) — the definer write path is closed",
+      (await deniedCode(runtime, "SELECT public.sg_backdoor_probe()")) === "42501");
+    await admin.query("DROP FUNCTION public.sg_backdoor_probe()");
+
     // ── 3. NON-VACUITY: the ADMIN can do what the runtime cannot ─────────────
     // Inside a rolled-back transaction so the genuine chain is untouched: the
     // point is that the denial above is the ROLE, not the table.
@@ -423,6 +454,9 @@ async function main() {
     // Ephemeral throwaway-cluster credential, same standing as the others. gitleaks:allow
     await admin.query("CREATE ROLE sg_dbless_admin LOGIN PASSWORD 'sg-dbless-proof'"); // gitleaks:allow
     await admin.query(`GRANT CONNECT ON DATABASE "${dbname}" TO sg_dbless_admin`);
+    // USAGE so the precheck's catalog helpers work — the point of this
+    // credential is that it can SEE everything and still may not GRANT.
+    await admin.query("GRANT USAGE ON SCHEMA public TO sg_dbless_admin");
     const dblessUrl = withLogin(url!, "sg_dbless_admin", "sg-dbless-proof");
     const beforeAuthority = await admin.query("SELECT count(*)::int AS n FROM audit_ledger");
     const refusedAuthority = await failureOf(() => restoreBackup(dblessUrl, archive));

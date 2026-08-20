@@ -327,7 +327,7 @@
       "activated": null,
       "produced": null,
       "priority": 1,
-      "nextAction": "The one-sentence, 100-word and boundary drafts EXIST — docs/COMPANY_BUILD_PLAN.md, \"Drafts produced by this sweep\", every claim traced to the launch class. Next: land as docs/POSITIONING.md, reconcile EXECUTIVE_ONE_PAGER.md and ECOSYSTEM_POSITIONING.md to it, and rewrite the four site sections that present deferred signals in the present tense. Blocked only on the owner ratifying launch-profile v4."
+      "nextAction": "UNBLOCKED by DR-004: the owner ratified the category label (Shared-Device Trust Gateway) and directed the site be locked to launch truth. Land docs/POSITIONING.md from the draft in COMPANY_BUILD_PLAN.md, reconcile EXECUTIVE_ONE_PAGER.md and ECOSYSTEM_POSITIONING.md to the one label, and rewrite the four site sections that present deferred signals in the present tense. The launch-claims gate follows so it cannot recur."
     },
     {
       "id": "icp-customer-research",

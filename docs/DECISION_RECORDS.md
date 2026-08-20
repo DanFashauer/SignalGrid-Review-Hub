@@ -128,6 +128,41 @@ the founder should override it freely if he has a market reason.
 
 ---
 
+## DR-004 — Execution order ratified; the category label is "Shared-Device Trust Gateway"
+
+**Date:** August 20, 2026. **Decided by:** the owner, in his own words, in the
+message that verified PR #215 and opened PR #216.
+
+**Decision 1 — the execution order.** The company works the build plan in this
+sequence, quoted in substance from the owner: (1) protect the trust engine —
+extend adversarial grant-safety testing across the uncovered connector families;
+(2) finish the production data boundary — the Postgres runtime/admin role split,
+with backup/restore preserving it; (3) close the actual product journey — the iOS
+badge/session API mismatch, then one complete shared-device flow end to end;
+(4) make the public product tell only the launch truth, with a gate so marketing
+cannot drift again; (5) use the low-cost lab (Fleet Community, Headwind, Keycloak,
+Wazuh, FreeRADIUS) as the engineering engine, with Entra/Intune the enterprise
+target but no longer a blocker; (6) move from engineering proof to buyer proof —
+and "do not activate customer-success machinery before a real customer exists."
+
+**Decision 2 — the category label.** The owner's step 4 directs the site be
+locked to "the ratified Shared-Device Trust Gateway scope." That settles the
+five-labels-in-circulation defect the sweep found: **Shared-Device Trust
+Gateway** — already `PRODUCT_NAME` in `scripts/launch-profile.mjs` — is the
+category label. The other four labels get reconciled out, not kept as synonyms.
+
+**Still open, deliberately:** this ratifies the order and the label, not the
+174 item-level classifications in launch-profile v4. Those stay marked
+"proposal" until the owner reviews them item by item or explicitly ratifies
+them wholesale — reading blanket approval into a sentence about the site would
+be the unearned affirmative again.
+
+**Consequence for the roster:** `positioning-messaging` is unblocked for the
+site rewrite and POSITIONING.md; `design-partner-outreach` stays blocked behind
+positioning and ICP research per the owner's own step 6.
+
+---
+
 ## Still open, and honestly so
 
 Two of the four "standing decisions" are **not** decided here, because the

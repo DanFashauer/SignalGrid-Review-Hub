@@ -147,13 +147,13 @@ export class PostgresDecisionStore implements DecisionStore {
     try {
       await client.query("BEGIN");
       await client.query(
-        `INSERT INTO decisions (id, tenant_id, created_at, outcome, data)
+        `INSERT INTO public.decisions (id, tenant_id, created_at, outcome, data)
          VALUES ($1,$2,$3,$4,$5)
          ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, outcome = EXCLUDED.outcome`,
         [decision.id, decision.tenantId, decision.createdAt, decision.outcome, JSON.stringify(decision)],
       );
       await client.query(
-        `INSERT INTO evidence_snapshots (id, tenant_id, decision_id, data)
+        `INSERT INTO public.evidence_snapshots (id, tenant_id, decision_id, data)
          VALUES ($1,$2,$3,$4)
          ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`,
         [snapshot.id, snapshot.tenantId, snapshot.decisionId, JSON.stringify(snapshot)],
@@ -171,7 +171,7 @@ export class PostgresDecisionStore implements DecisionStore {
     await this.ensureReady();
     // Keyed on (id, tenant_id): a cross-tenant id returns nothing.
     const res = await this.pool.query(
-      "SELECT data FROM decisions WHERE id = $1 AND tenant_id = $2",
+      "SELECT data FROM public.decisions WHERE id = $1 AND tenant_id = $2",
       [id, tenantId],
     );
     return res.rows[0] ? (res.rows[0].data as Decision) : null;
@@ -180,7 +180,7 @@ export class PostgresDecisionStore implements DecisionStore {
   async listDecisions(tenantId: string, limit = 100): Promise<Decision[]> {
     await this.ensureReady();
     const res = await this.pool.query(
-      "SELECT data FROM decisions WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2",
+      "SELECT data FROM public.decisions WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2",
       [tenantId, limit],
     );
     return res.rows.map((r: any) => r.data as Decision);
@@ -189,7 +189,7 @@ export class PostgresDecisionStore implements DecisionStore {
   async getSnapshot(tenantId: string, id: string): Promise<EvidenceSnapshot | null> {
     await this.ensureReady();
     const res = await this.pool.query(
-      "SELECT data FROM evidence_snapshots WHERE id = $1 AND tenant_id = $2",
+      "SELECT data FROM public.evidence_snapshots WHERE id = $1 AND tenant_id = $2",
       [id, tenantId],
     );
     return res.rows[0] ? (res.rows[0].data as EvidenceSnapshot) : null;

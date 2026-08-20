@@ -216,7 +216,7 @@ export class PostgresSessionStore implements SessionStore {
   async start(s: Session): Promise<void> {
     await this.ensureReady();
     await this.pool.query(
-      `INSERT INTO sessions
+      `INSERT INTO public.sessions
          (id, tenant_id, identity_ref, device_ref, workflow_key, status, outcome, decision_id, created_at, last_seen_at, expires_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        ON CONFLICT (id) DO NOTHING`,
@@ -227,14 +227,14 @@ export class PostgresSessionStore implements SessionStore {
   async get(tenantId: string, id: string, nowMs: number): Promise<Session | null> {
     await this.ensureReady();
     const res = await this.pool.query(
-      "SELECT * FROM sessions WHERE id = $1 AND tenant_id = $2",
+      "SELECT * FROM public.sessions WHERE id = $1 AND tenant_id = $2",
       [id, tenantId],
     );
     if (!res.rows[0]) return null;
     const s = this.rowToSession(res.rows[0]);
     const applied = withExpiry(s, nowMs);
     if (applied.status !== s.status) {
-      await this.pool.query("UPDATE sessions SET status = $1 WHERE id = $2 AND tenant_id = $3", [applied.status, id, tenantId]);
+      await this.pool.query("UPDATE public.sessions SET status = $1 WHERE id = $2 AND tenant_id = $3", [applied.status, id, tenantId]);
     }
     return applied;
   }
@@ -246,7 +246,7 @@ export class PostgresSessionStore implements SessionStore {
     const lastSeenAt = new Date(nowMs).toISOString();
     const expiresAt = new Date(nowMs + ttlSeconds * 1000).toISOString();
     await this.pool.query(
-      "UPDATE sessions SET last_seen_at = $1, expires_at = $2 WHERE id = $3 AND tenant_id = $4",
+      "UPDATE public.sessions SET last_seen_at = $1, expires_at = $2 WHERE id = $3 AND tenant_id = $4",
       [lastSeenAt, expiresAt, id, tenantId],
     );
     return { ...current, lastSeenAt, expiresAt };
@@ -255,7 +255,7 @@ export class PostgresSessionStore implements SessionStore {
   async end(tenantId: string, id: string): Promise<Session | null> {
     await this.ensureReady();
     const res = await this.pool.query(
-      "UPDATE sessions SET status = 'ended' WHERE id = $1 AND tenant_id = $2 RETURNING *",
+      "UPDATE public.sessions SET status = 'ended' WHERE id = $1 AND tenant_id = $2 RETURNING *",
       [id, tenantId],
     );
     return res.rows[0] ? this.rowToSession(res.rows[0]) : null;

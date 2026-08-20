@@ -166,12 +166,12 @@ export class PostgresAuditBackend implements AuditBackend {
       // Serialize the critical section across all writers.
       await client.query("SELECT pg_advisory_xact_lock($1)", [ADVISORY_LOCK_KEY]);
       const head = await client.query(
-        "SELECT hash FROM audit_ledger ORDER BY seq DESC LIMIT 1",
+        "SELECT hash FROM public.audit_ledger ORDER BY seq DESC LIMIT 1",
       );
       const prevHash: string = head.rows[0]?.hash ?? "";
       const record = build(prevHash);
       await client.query(
-        `INSERT INTO audit_ledger
+        `INSERT INTO public.audit_ledger
            (id, ts, request_id, actor, event_type, target, meta, prev_hash, hash)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
         [
@@ -200,7 +200,7 @@ export class PostgresAuditBackend implements AuditBackend {
     await this.ensureReady();
     const res = await this.pool.query(
       `SELECT id, ts, request_id, actor, event_type, target, meta, prev_hash, hash
-         FROM audit_ledger ORDER BY seq ASC OFFSET $1 LIMIT $2`,
+         FROM public.audit_ledger ORDER BY seq ASC OFFSET $1 LIMIT $2`,
       [offset, limit],
     );
     return res.rows.map((r: any): AuditRecord => ({

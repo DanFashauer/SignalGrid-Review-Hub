@@ -184,6 +184,33 @@ async function main() {
       /NOLOGIN/.test(await failureOf(() => applyRoleSplit(url!))));
     await admin.query(dropRuntimeRoleSql());
 
+    // LOGIN alone is not the ability to connect: CONNECTION LIMIT 0 and an
+    // expired VALID UNTIL are lockouts the out-of-band password never repairs.
+    await admin.query(`CREATE ROLE ${RUNTIME_ROLE} LOGIN CONNECTION LIMIT 0`);
+    check("role split REFUSES a preexisting role with CONNECTION LIMIT 0 (a lockout the password cannot repair)",
+      /CONNECTION LIMIT 0/.test(await failureOf(() => applyRoleSplit(url!))));
+    await admin.query(dropRuntimeRoleSql());
+    await admin.query(`CREATE ROLE ${RUNTIME_ROLE} LOGIN VALID UNTIL '2020-01-01'`);
+    check("role split REFUSES a preexisting role whose password validity has EXPIRED",
+      /EXPIRED/.test(await failureOf(() => applyRoleSplit(url!))));
+    await admin.query(dropRuntimeRoleSql());
+
+    // Cluster-wide ownership: pg_class/pg_namespace see only THIS database,
+    // but the role is cluster-wide — pg_shdepend is the shared catalog that
+    // sees what it owns everywhere else.
+    await admin.query("DROP DATABASE IF EXISTS sg_other_db WITH (FORCE)");
+    await admin.query("CREATE DATABASE sg_other_db");
+    await admin.query(`CREATE ROLE ${RUNTIME_ROLE} LOGIN`);
+    const otherUrl = new URL(url!); otherUrl.pathname = "/sg_other_db";
+    const other = new Pool({ connectionString: otherUrl.toString(), max: 1 });
+    await other.query("CREATE TABLE elsewhere_probe (x INT)");
+    await other.query(`ALTER TABLE elsewhere_probe OWNER TO ${RUNTIME_ROLE}`);
+    await other.end();
+    check("role split REFUSES a role that owns objects in ANOTHER database on the cluster (pg_shdepend sees it)",
+      /ANOTHER database/.test(await failureOf(() => applyRoleSplit(url!))));
+    await admin.query("DROP DATABASE sg_other_db WITH (FORCE)");
+    await admin.query(dropRuntimeRoleSql());
+
     // Ownership beyond relations: pg_class covers tables, but a SCHEMA or
     // DATABASE owner keeps owner-level DDL (drop public CASCADE, for one)
     // that no grant below can take back.
@@ -271,19 +298,23 @@ async function main() {
     await admin.query(`GRANT UPDATE (hash) ON public.audit_ledger TO ${RUNTIME_ROLE}`);
     await admin.query(`GRANT UPDATE ON SEQUENCE ${ledgerSeq} TO ${RUNTIME_ROLE}`);
     await admin.query(`GRANT CREATE ON SCHEMA public TO ${RUNTIME_ROLE}`);
+    await admin.query(`GRANT CREATE ON DATABASE "${dbname}" TO ${RUNTIME_ROLE}`);
     const WEDGES = `
       SELECT has_table_privilege('${RUNTIME_ROLE}', 'public.audit_ledger', 'UPDATE') AS via_public,
              has_column_privilege('${RUNTIME_ROLE}', 'public.audit_ledger', 'hash', 'UPDATE') AS via_column,
              has_sequence_privilege('${RUNTIME_ROLE}', '${ledgerSeq}', 'UPDATE') AS via_sequence,
-             has_schema_privilege('${RUNTIME_ROLE}', 'public', 'CREATE') AS via_schema
+             has_schema_privilege('${RUNTIME_ROLE}', 'public', 'CREATE') AS via_schema,
+             has_database_privilege('${RUNTIME_ROLE}', '${dbname}', 'CREATE') AS via_database
     `;
     const staged = (await admin.query(WEDGES)).rows[0] ?? {};
-    check("wedges staged: PUBLIC-, column-, sequence-, and schema-level grants all reach the runtime (the holes are real)",
-      staged.via_public === true && staged.via_column === true && staged.via_sequence === true && staged.via_schema === true);
+    check("wedges staged: PUBLIC-, column-, sequence-, schema-, and database-level grants all reach the runtime",
+      staged.via_public === true && staged.via_column === true && staged.via_sequence === true &&
+        staged.via_schema === true && staged.via_database === true);
     await applyRoleSplit(url!);
     const converged = (await admin.query(WEDGES)).rows[0] ?? {};
-    check("re-apply CONVERGES: all four back-door paths are revoked (PUBLIC, column ACL, sequence, direct schema CREATE)",
-      converged.via_public === false && converged.via_column === false && converged.via_sequence === false && converged.via_schema === false);
+    check("re-apply CONVERGES: all five back-door paths are revoked (PUBLIC, column ACL, sequence, schema CREATE, database CREATE)",
+      converged.via_public === false && converged.via_column === false && converged.via_sequence === false &&
+        converged.via_schema === false && converged.via_database === false);
     check("…and the runtime's setval() on the ledger sequence is DENIED (42501) — the counter cannot be wedged",
       (await deniedCode(runtime, `SELECT setval('${ledgerSeq}', 1000)`)) === "42501");
     check("…and the runtime's CREATE TABLE is STILL denied after the staged direct schema grant (no-DDL holds)",

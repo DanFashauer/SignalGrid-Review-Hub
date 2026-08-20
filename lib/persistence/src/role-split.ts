@@ -54,7 +54,8 @@ export const ROLE_SPLIT_VALIDATE_SQL = `
   DECLARE
     attrs RECORD;
   BEGIN
-    SELECT rolsuper, rolcreaterole, rolcreatedb, rolreplication, rolbypassrls, rolcanlogin
+    SELECT rolsuper, rolcreaterole, rolcreatedb, rolreplication, rolbypassrls, rolcanlogin,
+           rolconnlimit, rolvaliduntil
       INTO attrs FROM pg_roles WHERE rolname = 'signalgrid_runtime';
     IF NOT FOUND THEN
       RETURN;
@@ -71,6 +72,20 @@ export const ROLE_SPLIT_VALIDATE_SQL = `
       RAISE EXCEPTION 'signalgrid_runtime already exists but is NOLOGIN — every grant would apply '
         'and the API still could not connect; and if the login was disabled deliberately, silently '
         're-enabling it here would undo a lockout. ALTER ROLE signalgrid_runtime LOGIN (or drop it) first.';
+    END IF;
+    -- LOGIN alone does not mean the role can OPEN a connection: CONNECTION
+    -- LIMIT 0 and an expired VALID UNTIL are both lockouts the documented
+    -- out-of-band ALTER ROLE … PASSWORD never repairs — and both may be
+    -- deliberate, so refuse rather than silently normalize.
+    IF attrs.rolconnlimit = 0 THEN
+      RAISE EXCEPTION 'signalgrid_runtime already exists with CONNECTION LIMIT 0 — grants would apply '
+        'and the API still could not open a connection; if that limit is deliberate, this role must not '
+        'be adopted. ALTER ROLE signalgrid_runtime CONNECTION LIMIT -1 (or drop it) first.';
+    END IF;
+    IF attrs.rolvaliduntil IS NOT NULL AND attrs.rolvaliduntil < now() THEN
+      RAISE EXCEPTION 'signalgrid_runtime already exists with an EXPIRED password validity (VALID UNTIL %) '
+        '— the API could not authenticate; if the expiry is a deliberate lockout, this role must not be '
+        'adopted. ALTER ROLE signalgrid_runtime VALID UNTIL ''infinity'' (or drop it) first.', attrs.rolvaliduntil;
     END IF;
     IF EXISTS (SELECT 1 FROM pg_class c JOIN pg_roles o ON o.oid = c.relowner
                WHERE o.rolname = 'signalgrid_runtime') THEN
@@ -91,6 +106,27 @@ export const ROLE_SPLIT_VALIDATE_SQL = `
                WHERE m.member = (SELECT oid FROM pg_roles WHERE rolname = 'signalgrid_runtime')) THEN
       RAISE EXCEPTION 'signalgrid_runtime is a MEMBER of other roles — privileges inherited '
         'through membership cannot be revoked here. REVOKE those memberships first.';
+    END IF;
+    -- pg_class/pg_namespace above are DATABASE-LOCAL; on a shared cluster the
+    -- role could own objects (or hold grants) in ANOTHER database this
+    -- connection can neither see in those catalogs nor revoke. pg_shdepend is
+    -- the cluster-wide shared catalog that records exactly those dependencies
+    -- ('o' = owner, 'a' = appears in an ACL). Rows for THIS database are
+    -- excluded (its ownership is checked above; its grants are the ones this
+    -- very block manages), as is the CONNECT grant on this database itself
+    -- (a shared-catalog row this block issues).
+    IF EXISTS (
+      SELECT 1 FROM pg_shdepend d
+      WHERE d.refclassid = 'pg_authid'::regclass
+        AND d.refobjid = (SELECT oid FROM pg_roles WHERE rolname = 'signalgrid_runtime')
+        AND d.deptype IN ('o', 'a')
+        AND d.dbid <> (SELECT oid FROM pg_database WHERE datname = current_database())
+        AND NOT (d.dbid = 0 AND d.classid = 'pg_database'::regclass
+                 AND d.objid = (SELECT oid FROM pg_database WHERE datname = current_database()))
+    ) THEN
+      RAISE EXCEPTION 'signalgrid_runtime owns objects or holds privileges in ANOTHER database on this '
+        'cluster — owner-level powers and grants this connection cannot see or revoke. Clean those up in '
+        'the databases that hold them (REASSIGN OWNED / REVOKE there), or use a dedicated cluster.';
     END IF;
   END $$;
 `;
@@ -118,9 +154,15 @@ export const ROLE_SPLIT_SQL = `
 
   -- CONNECT is granted DIRECTLY, not inherited from PUBLIC: a hardened
   -- database that has revoked PUBLIC's ambient CONNECT would otherwise leave a
-  -- fully-granted runtime role that still cannot open a connection.
+  -- fully-granted runtime role that still cannot open a connection. Database-
+  -- level CREATE is RESET first: it permits creating SCHEMAS, and with the
+  -- default '"$user", public' search_path a schema named signalgrid_runtime
+  -- would shadow the protected tables for unqualified queries. (The stores
+  -- also schema-qualify every statement, so shadowing of any kind — including
+  -- TEMP tables, which no ACL prevents — cannot redirect their queries.)
   DO $$
   BEGIN
+    EXECUTE format('REVOKE CREATE ON DATABASE %I FROM signalgrid_runtime, PUBLIC', current_database());
     EXECUTE format('GRANT CONNECT ON DATABASE %I TO signalgrid_runtime', current_database());
   END $$;
 

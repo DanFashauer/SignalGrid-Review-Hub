@@ -260,7 +260,10 @@ least-privilege migration credentials deliberately lack. Both `db:migrate` and
 the credential cannot create it, they refuse with the remedy (`CREATE ROLE
 signalgrid_runtime LOGIN;` run by a cluster administrator) instead of dying
 mid-migration or — worse — after `pg_restore` has already replaced the
-database. The split also refuses to **adopt** a preexisting `signalgrid_runtime`
+database. The same precheck verifies the caller's own **grant authority**:
+`GRANT CONNECT ON DATABASE` needs the database owner or a superuser, so a
+credential that owns the tables but not the database is refused up front
+rather than after the restore has stripped every privilege. The split also refuses to **adopt** a preexisting `signalgrid_runtime`
 that is anything more than a plain LOGIN role: elevated attributes
 (`SUPERUSER`, `CREATEROLE`, `BYPASSRLS`, …), `NOLOGIN` (grants would apply and
 the API still could not connect — and a deliberate lockout must not be

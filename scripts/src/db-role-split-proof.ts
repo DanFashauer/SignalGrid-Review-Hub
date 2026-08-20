@@ -270,23 +270,24 @@ async function main() {
     await admin.query("GRANT UPDATE ON public.audit_ledger TO PUBLIC");
     await admin.query(`GRANT UPDATE (hash) ON public.audit_ledger TO ${RUNTIME_ROLE}`);
     await admin.query(`GRANT UPDATE ON SEQUENCE ${ledgerSeq} TO ${RUNTIME_ROLE}`);
-    const staged = await admin.query(`
+    await admin.query(`GRANT CREATE ON SCHEMA public TO ${RUNTIME_ROLE}`);
+    const WEDGES = `
       SELECT has_table_privilege('${RUNTIME_ROLE}', 'public.audit_ledger', 'UPDATE') AS via_public,
              has_column_privilege('${RUNTIME_ROLE}', 'public.audit_ledger', 'hash', 'UPDATE') AS via_column,
-             has_sequence_privilege('${RUNTIME_ROLE}', '${ledgerSeq}', 'UPDATE') AS via_sequence
-    `);
-    check("wedges staged: PUBLIC-, column-, and sequence-level UPDATE all reach the runtime (the holes are real)",
-      staged.rows[0]?.via_public === true && staged.rows[0]?.via_column === true && staged.rows[0]?.via_sequence === true);
+             has_sequence_privilege('${RUNTIME_ROLE}', '${ledgerSeq}', 'UPDATE') AS via_sequence,
+             has_schema_privilege('${RUNTIME_ROLE}', 'public', 'CREATE') AS via_schema
+    `;
+    const staged = (await admin.query(WEDGES)).rows[0] ?? {};
+    check("wedges staged: PUBLIC-, column-, sequence-, and schema-level grants all reach the runtime (the holes are real)",
+      staged.via_public === true && staged.via_column === true && staged.via_sequence === true && staged.via_schema === true);
     await applyRoleSplit(url!);
-    const converged = await admin.query(`
-      SELECT has_table_privilege('${RUNTIME_ROLE}', 'public.audit_ledger', 'UPDATE') AS via_public,
-             has_column_privilege('${RUNTIME_ROLE}', 'public.audit_ledger', 'hash', 'UPDATE') AS via_column,
-             has_sequence_privilege('${RUNTIME_ROLE}', '${ledgerSeq}', 'UPDATE') AS via_sequence
-    `);
-    check("re-apply CONVERGES: all three back-door UPDATE paths are revoked (PUBLIC, column ACL, sequence)",
-      converged.rows[0]?.via_public === false && converged.rows[0]?.via_column === false && converged.rows[0]?.via_sequence === false);
+    const converged = (await admin.query(WEDGES)).rows[0] ?? {};
+    check("re-apply CONVERGES: all four back-door paths are revoked (PUBLIC, column ACL, sequence, direct schema CREATE)",
+      converged.via_public === false && converged.via_column === false && converged.via_sequence === false && converged.via_schema === false);
     check("…and the runtime's setval() on the ledger sequence is DENIED (42501) — the counter cannot be wedged",
       (await deniedCode(runtime, `SELECT setval('${ledgerSeq}', 1000)`)) === "42501");
+    check("…and the runtime's CREATE TABLE is STILL denied after the staged direct schema grant (no-DDL holds)",
+      (await deniedCode(runtime, "CREATE TABLE runtime_probe_2 (x INT)")) === "42501");
 
     // ── 3. NON-VACUITY: the ADMIN can do what the runtime cannot ─────────────
     // Inside a rolled-back transaction so the genuine chain is untouched: the
@@ -381,6 +382,25 @@ async function main() {
     await healthy.close();
 
     await runtime.end();
+
+    // ── 5a. RESTORE REFUSES a credential without GRANT AUTHORITY ─────────────
+    // The runtime role exists and is valid here — but the restoring credential
+    // does not own the database, so applyRoleSplit's GRANT CONNECT ON DATABASE
+    // would fail AFTER pg_restore had already replaced everything. The
+    // precheck must catch the credential's own authority, not just the role.
+    await admin.query(dropRoleSql("sg_dbless_admin"));
+    // Ephemeral throwaway-cluster credential, same standing as the others. gitleaks:allow
+    await admin.query("CREATE ROLE sg_dbless_admin LOGIN PASSWORD 'sg-dbless-proof'"); // gitleaks:allow
+    await admin.query(`GRANT CONNECT ON DATABASE "${dbname}" TO sg_dbless_admin`);
+    const dblessUrl = withLogin(url!, "sg_dbless_admin", "sg-dbless-proof");
+    const beforeAuthority = await admin.query("SELECT count(*)::int AS n FROM audit_ledger");
+    const refusedAuthority = await failureOf(() => restoreBackup(dblessUrl, archive));
+    check("restore REFUSES a credential without grant authority (not the database owner, not superuser)",
+      /database owner/.test(refusedAuthority));
+    const afterAuthority = await admin.query("SELECT count(*)::int AS n FROM audit_ledger");
+    check("…and refused BEFORE pg_restore replaced anything (ledger untouched by the authority refusal)",
+      afterAuthority.rows[0]?.n === beforeAuthority.rows[0]?.n && beforeAuthority.rows[0]?.n === 4);
+    await admin.query(dropRoleSql("sg_dbless_admin"));
 
     // ── 5. RESTORE REFUSES BEFORE pg_restore when re-provisioning would fail ─
     // Stage the disaster: the runtime role is gone entirely, and the credential

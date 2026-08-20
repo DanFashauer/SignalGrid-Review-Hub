@@ -108,7 +108,12 @@ export const ROLE_SPLIT_SQL = `
 
   -- Nobody gets to create objects in public by default (PostgreSQL 15+ already
   -- ships this; stated explicitly so older servers converge to the same posture).
+  -- The runtime role's own schema ACL is RESET, not merely added to: a direct
+  -- CREATE grant to signalgrid_runtime on an upgraded database would survive
+  -- the PUBLIC-only revoke, and GRANT USAGE never narrows — the no-DDL claim
+  -- must not depend on nobody ever having granted CREATE directly.
   REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+  REVOKE ALL ON SCHEMA public FROM signalgrid_runtime;
   GRANT USAGE ON SCHEMA public TO signalgrid_runtime;
 
   -- CONNECT is granted DIRECTLY, not inherited from PUBLIC: a hardened
@@ -211,6 +216,28 @@ export async function assertRoleSplitProvisionable(
   }
   if (r.role_exists) {
     await query(ROLE_SPLIT_VALIDATE_SQL);
+  }
+  // The caller must also hold the AUTHORITY to issue the grants themselves:
+  // GRANT CONNECT ON DATABASE needs the database owner (or a superuser), and
+  // the schema-ACL statements need the schema owner. A restore credential that
+  // owns the tables but not the database would sail through pg_restore and
+  // die in post-restore re-provisioning — with the database already replaced
+  // and every privilege stripped. Refuse before any of that.
+  const auth = await query(`
+    SELECT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) AS is_super,
+           pg_has_role(current_user,
+             (SELECT datdba FROM pg_database WHERE datname = current_database()), 'USAGE') AS owns_db,
+           COALESCE(pg_has_role(current_user,
+             (SELECT nspowner FROM pg_namespace WHERE nspname = 'public'), 'USAGE'), TRUE) AS owns_schema
+  `);
+  const a = auth.rows[0] ?? {};
+  if (!a.is_super && !(a.owns_db && a.owns_schema)) {
+    throw new Error(
+      `this credential cannot issue the role split's grants — GRANT CONNECT ON DATABASE needs the ` +
+        `database owner (or a superuser), and the schema statements need the schema owner. Refusing ` +
+        `BEFORE any schema change or restore so nothing is left half-applied. Run as the database ` +
+        `owner or a superuser, or transfer ownership first (ALTER DATABASE … OWNER TO …).`,
+    );
   }
 }
 

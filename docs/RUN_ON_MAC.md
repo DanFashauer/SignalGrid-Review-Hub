@@ -1,5 +1,30 @@
 # Run SignalGrid — iPhone, iPad, or Mac
 
+> ## ⚠️ First, confirm the folder is the RIGHT repository (GitHub Desktop, 20 seconds)
+>
+> The owner's working copy is `/Users/danfashauer/Public/Projects/SignalGrid`,
+> cloned with **GitHub Desktop**. Desktop names a local folder after the repo it
+> came from — and a folder called `SignalGrid` is the name of the **legacy**
+> repository (`DanFashauer/SignalGrid`), which is retirement-pending and holds a
+> pre-dev concept, *not* this build. The maintained tree is
+> **`SignalGrid-Review-Hub`**.
+>
+> **Check it without a terminal:** open GitHub Desktop, select that repository in
+> the *Current Repository* dropdown (top-left), then **Repository → View on
+> GitHub**. The browser tab that opens names the truth:
+>
+> - opens **`SignalGrid-Review-Hub`** → correct, nothing to do;
+> - opens **`SignalGrid`** → this is the legacy clone. Every Mac-lane run from
+>   here has been against the wrong tree. Clone the right one (**File → Clone
+>   Repository → `SignalGrid-Review-Hub`**) and use that folder from now on.
+>
+> This matters most before `pnpm run sim:run-requests`: results committed from a
+> legacy clone would carry provenance from a repository nobody maintains.
+>
+> **No agent can check this for you.** The cloud lane has no access to this Mac —
+> which is exactly why the sim-request queue and lane-message mail exist: work
+> crosses between machines as commits, never as remote control.
+
 > **Just want the Mac lane to run itself?** From the repo root on your Mac:
 >
 > ```bash
@@ -127,8 +152,16 @@ SignalGrid entirely from the device in your hand.
 Requires **Docker Desktop for Mac** (Apple Silicon or Intel).
 
 ```bash
-git clone https://github.com/DanFashauer/SignalGrid.git   # or your fork/branch
-cd SignalGrid
+# The MAINTAINED tree. `DanFashauer/SignalGrid` is the LEGACY repo (retirement
+# pending on the owner board) — cloning it gets a pre-dev concept, not this build.
+git clone https://github.com/DanFashauer/SignalGrid-Review-Hub.git
+cd SignalGrid-Review-Hub
+
+# On the owner's Mac the working copy already lives at
+#   /Users/danfashauer/Public/Projects/SignalGrid
+# so there is nothing to clone — `cd` there instead. If that folder turns out to
+# be a clone of the legacy `SignalGrid` repo rather than this one, `git remote -v`
+# says so, and it should be re-pointed before any Mac-lane run.
 docker compose -f docker-compose.sim.yml up --build
 ```
 
@@ -144,7 +177,7 @@ confirmation. Stop with `Ctrl-C`.
 Requires **Node 22+** and **pnpm 10+** (`corepack enable` gives you pnpm).
 
 ```bash
-cd SignalGrid
+cd /Users/danfashauer/Public/Projects/SignalGrid   # the owner's working copy
 pnpm install
 pnpm --filter @workspace/api-server run build
 PORT=8080 node artifacts/api-server/dist/index.mjs

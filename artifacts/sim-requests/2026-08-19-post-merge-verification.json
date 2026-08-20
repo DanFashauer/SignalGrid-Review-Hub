@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-08-19-post-merge-verification",
+  "requestedBy": "cloud lane",
+  "reason": "PR #212 merged as 1fb081e — 47 files, 24 commits, the largest single landing this repo has taken. It carries five NEW gates (memory-freshness, action-pinning, org-roster, cited-commands, and a rewired assist-conformance), a restructured SBOM job, a rebuilt Playwright install step, and the org/decision surfaces. All of it is green on Linux CI. NONE of it has ever run on macOS. The Mac lane is the only place that can answer whether the merged base holds on darwin — bash 3.2, the arm64 toolchain, and a real container engine — and every one of those has broken something in this repo before.",
+  "runs": [
+    "preflight",
+    "proofs-full",
+    "evidence"
+  ],
+  "notes": [
+    "Run these IN ORDER. `preflight` first because it is the cheapest full signal and mirrors the per-push CI lane; if it fails, stop and send the output back rather than continuing — a proof failure on top of a broken preflight is not independently interpretable.",
+    "The five new gates are the specific thing being tested here. Each is a plain Node script with a --self-test, so a darwin-specific failure would most likely be a path or shell assumption rather than logic. scripts/check-cited-commands.mjs and scripts/check-org-roster.mjs both shell out to `git ls-files` via execFileSync — that is the argv form, not a shell string, so it should be immune to the bash 3.2 array problem, but this run is what establishes that rather than assuming it.",
+    "`evidence` is the ONLY operation that can refresh artifacts/live-evidence/mac-run.json, and it refuses off-macOS and on CI by design. It also refuses unless BOTH halves are green and SIGNALGRID_MCP_PATH points at a registered signalgrid-mcp. If it refuses, that is recorded as a refusal and is a correct outcome — not a failure, and never a pass.",
+    "Before running anything: confirm this working copy is SignalGrid-Review-Hub and not the legacy `SignalGrid` repo. In GitHub Desktop, Repository -> View on GitHub; the tab that opens names the truth. Results committed from a legacy clone would carry provenance from a repository nobody maintains, which is worse than no results.",
+    "The Fleet lab request (2026-08-12-fleet-lab-real-source) remains pending and is still the request to run AFTER this one — a live-source result is only interpretable against a known-good deterministic baseline."
+  ]
+}

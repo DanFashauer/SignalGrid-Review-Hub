@@ -27,7 +27,7 @@ const PHASES = [
     bg: "bg-emerald-400/10",
     steps: [
       "Badge presence confirmed in case",
-      "BLE/UWB proximity — device in authorized zone",
+      "BLE/UWB proximity — candidate zone signal; device in authorized zone",
       "Device posture re-evaluated at each workflow trigger",
       "Step-up or restrict recommended for specialty-area workflows (ICU, pharmacy, lab) — the PACS grants or revokes",
       "Idle and tamper signals fold into the next evaluation",

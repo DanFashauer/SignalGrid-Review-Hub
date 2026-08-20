@@ -196,6 +196,13 @@ export function fleetHostToDeviceManagementEvidence(
 // the breadth freeze stands and the contract is the point: proving a second
 // open-source source flows through the SAME evidence model needs a shape and
 // an adapter, not another gated transport.
+//
+// LIVE-VERIFIED 2026-08-18 against a real Headwind CE 5.30.3 server driven
+// over the genuine launcher wire protocol — both the never-synced and the
+// healthy-kiosk states reproduced; field mapping and the recorded divergences
+// (model nested in `info`, `lastUpdate` epoch-ms, `configApplied` derived
+// from two wire fields rather than read) live in
+// docs/HEADWIND_LIVE_SHAPE_CHECK.md.
 
 /** A Headwind-community-edition-shaped device row. */
 export interface HeadwindLabDevice {

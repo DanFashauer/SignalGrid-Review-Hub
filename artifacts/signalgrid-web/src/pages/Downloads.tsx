@@ -67,7 +67,7 @@ export default function Downloads() {
                 <Download className="w-4 h-4" /> DOWNLOADS
               </div>
               <h1 className="text-4xl font-bold tracking-tight mb-4">Every Platform. One Decision Engine.</h1>
-              <p className="text-muted-foreground text-lg">Web admin, desktop, and a mobile PWA that serves both the operator and the end-user worker — all backed by the same deterministic decision core.</p>
+              <p className="text-muted-foreground text-lg">Web admin, desktop, and a mobile PWA for operators and access-support leads — workers stay in their own host app — all backed by the same deterministic decision core.</p>
               <div className="mt-6 inline-block rounded-lg border border-amber-400/20 bg-amber-400/5 px-4 py-3 text-sm text-muted-foreground">
                 <span className="text-amber-400 font-medium">Pre-announcement:</span> these surfaces are review artifacts. Delivery today is responsive web + PWA; native desktop/mobile shells are a documented next step. Downloads are not yet live.
               </div>

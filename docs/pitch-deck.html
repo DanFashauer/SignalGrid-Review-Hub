@@ -1,3 +1,7 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
 <title>SignalGrid — Pitch Deck</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
@@ -72,6 +76,8 @@
   .navhint{position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);background:color-mix(in srgb,var(--bg) 80%,transparent);border:1px solid var(--line);border-radius:99px;padding:.3rem .7rem;pointer-events:none;opacity:.85}
   @media print{.navhint{display:none}section{min-height:auto;page-break-after:always;border:none}}
 </style>
+</head>
+<body>
 
 <div class="deck">
 
@@ -124,9 +130,9 @@
     <div class="kicker">See it — the demos do the talking</div>
     <h2>Live, clickable, public-safe.</h2>
     <div class="demos">
-      <a class="demo" href="https://signalgrid.app/embedded-demo.html" target="_blank" rel="noopener"><span class="dot"></span><span><span class="t">The invisible flow (mobile clinical app)</span><br><span class="d">Open a chart friction-free; a controlled med order is held for a native gesture.</span></span><span class="go">open →</span></a>
-      <a class="demo" href="https://signalgrid.app/desktop-demo.html" target="_blank" rel="noopener"><span class="dot"></span><span><span class="t">Cross-platform parity (macOS / Windows)</span><br><span class="d">The same flow in a NOC desktop app — a config push held for step-up, then confirm.</span></span><span class="go">open →</span></a>
-      <a class="demo" href="https://signalgrid.app/console.html" target="_blank" rel="noopener"><span class="dot"></span><span><span class="t">Trusted room entry console</span><br><span class="d">The decision core running on-device, with the verdict and its reasons.</span></span><span class="go">open →</span></a>
+      <a class="demo" href="embedded-demo.html" target="_blank" rel="noopener"><span class="dot"></span><span><span class="t">The invisible flow (mobile clinical app)</span><br><span class="d">Open a chart friction-free; a controlled med order is held for a native gesture.</span></span><span class="go">open →</span></a>
+      <a class="demo" href="desktop-demo.html" target="_blank" rel="noopener"><span class="dot"></span><span><span class="t">Cross-platform parity (macOS / Windows)</span><br><span class="d">The same flow in a NOC desktop app — a config push held for step-up, then confirm.</span></span><span class="go">open →</span></a>
+      <a class="demo" href="console.html" target="_blank" rel="noopener"><span class="dot"></span><span><span class="t">Trusted room entry console</span><br><span class="d">The decision core running on-device, with the verdict and its reasons.</span></span><span class="go">open →</span></a>
     </div>
     <p class="foot">Synthetic data · no real network · the authenticator prompt is a labeled simulation.</p>
   </section>
@@ -233,3 +239,5 @@
     update();
   })();
 </script>
+</body>
+</html>

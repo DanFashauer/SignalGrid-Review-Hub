@@ -41,7 +41,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 10.28.1
           run_install: false
@@ -259,6 +259,40 @@ jobs:
         run: node scripts/check-known-false-claims.mjs
       - name: Known-false-claim self-test (the gate can fail)
         run: node scripts/check-known-false-claims.mjs --self-test
+      - name: Memory freshness (an aging "as of" claim is named; registry rot is fatal)
+        run: node scripts/check-memory-freshness.mjs
+      - name: Memory freshness self-test (the gate can fail)
+        run: node scripts/check-memory-freshness.mjs --self-test
+      - name: Action pinning (third-party actions must be immutable commits)
+        run: node scripts/check-action-pinning.mjs
+      - name: Action pinning self-test (the gate can fail)
+        run: node scripts/check-action-pinning.mjs --self-test
+      - name: Org roster (unactivated roles are named, never silent)
+        run: node scripts/check-org-roster.mjs
+      - name: Org roster self-test (the gate can fail)
+        run: node scripts/check-org-roster.mjs --self-test
+      - name: Cited commands (documents may not promise a command that is gone)
+        run: node scripts/check-cited-commands.mjs
+      - name: Cited-command self-test (the gate can fail)
+        run: node scripts/check-cited-commands.mjs --self-test
+      - name: Review coverage (printed beside every green suite)
+        run: node scripts/check-review-coverage.mjs
+      - name: Review-coverage self-test (the gate can fail)
+        run: node scripts/check-review-coverage.mjs --self-test
+      # MOVED HERE 2026-08-19 because it was path-filtered away from half its own
+      # subject. This gate asserts that EVERY Assist client consumes the shared
+      # wire vectors, and it discovers two — native/android/core (Kotlin) and
+      # native/desktop/core (Rust). It ran only in desktop.yml, whose filter is
+      # native/desktop/** and native/shared/**, so a change to the KOTLIN client
+      # never triggered it: the precise failure it exists to catch ("a client
+      # quietly stops reading the file, keeps its own tests, keeps passing"), in
+      # the client where it already caught two real defects, was invisible. It is
+      # a pure Node file-read with no platform dependency, so gating every PR
+      # costs nothing and removes the whole class.
+      - name: Assist conformance (every client bound to the shared wire vectors)
+        run: node scripts/check-assist-conformance.mjs
+      - name: Assist-conformance self-test (the gate can fail)
+        run: node scripts/check-assist-conformance.mjs --self-test
       - name: Proof — lane messages (identity derived; no lane acknowledges its own mail)
         run: pnpm run proof:lane-messages
       - name: Lane messages (unread mail is named on every run, never silent)
@@ -409,8 +443,53 @@ jobs:
       # this suite uses locally is a property of the dev sandbox, not of CI. The
       # maiden CI run proved it: all 15 tests failed browser LAUNCH in <11ms
       # while the same suite passed 15/15 locally. Install before running.
+      # BOUNDED AND RETRIED, because this step hung for 16 minutes on 2026-08-19
+      # and consumed the whole job. `--with-deps` shells out to apt to install
+      # Chromium's system libraries; that run found `azure.archive.ubuntu.com`
+      # unreachable (repeated `Ign:`), fell back to `archive.ubuntu.com`, and then
+      # stalled with no timeout of its own. Everything before it had already
+      # passed — every gate and all 31 assertions of proof:live-idp — so the job
+      # reported `cancelled` for a reason that had nothing to do with the branch.
+      #
+      # A mirror flake is transient, so retry; but an unbounded step that eats a
+      # 20-minute budget and reports an ambiguous status is the same defect this
+      # workflow's concurrency comment already complains about — a result nobody
+      # can tell apart from a real regression. The step timeout makes it fail
+      # FAST and legibly instead.
       - name: Install Playwright Chromium for the E2E suite
-        run: pnpm --filter @workspace/scripts exec playwright install --with-deps chromium
+        timeout-minutes: 10
+        run: |
+          # SPLIT ON PURPOSE. `--with-deps` does two things: download the browser
+          # (from Playwright's CDN) and apt-install system libraries. Only the
+          # second touches a distro mirror, and that is the half that failed twice
+          # on 2026-08-19 — first hanging 16 minutes until the job timeout, then
+          # again at the step timeout added in response.
+          #
+          # Each ATTEMPT is bounded with `timeout`, not just the step: a retry loop
+          # around an unbounded command is dead code, because one hung attempt eats
+          # the whole budget before the second ever starts. That was the flaw in
+          # the first fix, and it is exactly the shape this repo keeps finding — a
+          # guard that looks like protection and never runs.
+          ok=
+          for attempt in 1 2 3; do
+            if timeout 180 pnpm --filter @workspace/scripts exec playwright install chromium; then
+              ok=1; break
+            fi
+            echo "::warning::Chromium download failed (attempt ${attempt}/3) — retrying"
+            sleep $((attempt * 10))
+          done
+          if [ -z "$ok" ]; then
+            echo "::error::Playwright Chromium download failed three times; the E2E suite cannot run."
+            exit 1
+          fi
+
+          # System libraries are BEST EFFORT. ubuntu-latest already ships nearly
+          # all of Chromium's, so a mirror outage must not fail a build whose
+          # browser is already in place. If a library really is missing, the E2E
+          # suite fails on launch with a message that names it — a better signal
+          # than an apt stall, and it fails in the step that actually needs it.
+          timeout 240 pnpm --filter @workspace/scripts exec playwright install-deps chromium \
+            || echo "::warning::playwright install-deps did not complete (distro mirror?); relying on the runner's preinstalled libraries."
 
       - name: Browser E2E (review console, website, admin console)
         run: pnpm run test:e2e
@@ -537,7 +616,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 10.28.1
           run_install: false
@@ -573,6 +652,7 @@ jobs:
   durable-persistence:
     name: Durable persistence (Postgres audit ledger)
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:16
@@ -592,7 +672,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 10.28.1
           run_install: false
@@ -685,6 +765,7 @@ jobs:
   podman-stack:
     name: Prod stack (Podman)
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     env:
       CONTAINER_ENGINE: podman
     steps:
@@ -756,6 +837,7 @@ jobs:
   deploy-stack:
     name: Prod stack (Docker compose smoke)
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v7

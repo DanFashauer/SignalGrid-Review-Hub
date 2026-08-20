@@ -64,7 +64,17 @@ const isCode = (line) => { const t = line.trim(); return !(t.startsWith("//") ||
     execFileSync("node", ["scripts/build-postman.mjs", "--check"], { cwd: repo, stdio: "pipe" });
     ok("Postman collection covers every /v1 OpenAPI path");
   } catch (e) {
-    bad(`Postman/spec drift: ${String(e.stdout || e.message).trim().split("\n").pop()}`);
+    // Relay the CHECKER'S OWN OUTPUT, whole. This read `.split("\n").pop()` —
+    // the last line only — and the checker prints a headline followed by one
+    // line per drifted path, so the headline was thrown away and the gate
+    // reported `Postman/spec drift:` with an EMPTY message. A gate that fails
+    // without saying why costs the next person a bisect to recover what the
+    // failing command already knew. stderr is included because a crash in the
+    // checker writes there, not to stdout.
+    const detail = [String(e.stdout ?? ""), String(e.stderr ?? "")]
+      .join("\n")
+      .trim();
+    bad(`Postman/spec drift:\n${detail || `(checker produced no output) ${e.message}`}`);
   }
 }
 

@@ -16,8 +16,8 @@ const TIERS = [
       { text: "6 evaluated-today signal dimensions", ok: true },
       { text: "Decision engine + policy editor", ok: true },
       { text: "Operator dashboard", ok: true },
-      { text: "Mobile PWA (worker + operator)", ok: true },
-      { text: "Tamper-evident audit ledger — hash-chained, independently verifiable (retention: owner decision pending)", ok: true },
+      { text: "Mobile PWA (operator + access-support triage)", ok: true },
+      { text: "Tamper-evident audit ledger — hash-chained, independently verifiable (90-day default retention, configurable; the full chain is exportable at any time)", ok: true },
       { text: "Shift Handoff Intelligence", ok: false },
       { text: "Compliance reporting export", ok: false },
       { text: "Custom alert routing", ok: false },
@@ -37,7 +37,7 @@ const TIERS = [
       { text: "Decision engine + policy editor", ok: true },
       { text: "Operator dashboard + Desktop client", ok: true },
       { text: "Mobile PWA (operator + access-support triage)", ok: true },
-      { text: "Tamper-evident audit ledger — hash-chained, independently verifiable (retention: owner decision pending)", ok: true },
+      { text: "Tamper-evident audit ledger — hash-chained, independently verifiable (90-day default retention, configurable; the full chain is exportable at any time)", ok: true },
       { text: "Shift Handoff Intelligence", ok: true },
       { text: "Compliance reporting export", ok: true },
       { text: "Ownership-aware alert routing", ok: true },
@@ -113,7 +113,7 @@ export default function Pricing() {
                   transition={{ delay: idx * 0.1 }}
                   className={`relative rounded-xl border p-8 flex flex-col ${
                     tier.highlight
-                      ? "border-primary shadow-[0_0_40px_-10px_rgba(59,130,246,0.3)] bg-primary/5"
+                      ? "border-primary shadow-[0_0_40px_-10px_rgba(79,140,135,0.35)] bg-primary/5"
                       : "border-border bg-card"
                   }`}
                 >
@@ -129,7 +129,7 @@ export default function Pricing() {
 
                   <ul className="space-y-2.5 mb-8 flex-1">
                     {tier.features.map(f => (
-                      <li key={f.text} className={`flex items-start gap-2.5 text-sm ${f.ok ? "text-foreground/80" : "text-muted-foreground/40"}`}>
+                      <li key={f.text} className={`flex items-start gap-2.5 text-sm ${f.ok ? "text-foreground/80" : "text-muted-foreground/70 line-through decoration-muted-foreground/40"}`}>
                         {f.ok
                           ? <CheckCircle2 className="w-4 h-4 text-primary shrink-0 mt-0.5" />
                           : <X className="w-4 h-4 shrink-0 mt-0.5" />

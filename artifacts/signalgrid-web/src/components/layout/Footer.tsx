@@ -75,7 +75,7 @@ export default function Footer() {
           <div>&copy; {new Date().getFullYear()} Daniel Fashauer. All rights reserved.</div>
           <div className="flex gap-6">
             <a href={`${REPO}/blob/main/docs/CI_AND_VALIDATION.md`} target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Validation &amp; proofs</a>
-            <a href="/federal" className="hover:text-foreground transition-colors">FedRAMP</a>
+            <Link href="/federal" className="hover:text-foreground transition-colors">FedRAMP</Link>
           </div>
         </div>
       </div>

@@ -177,9 +177,11 @@ lone repairs into unreachable code).
       the parser fills NOTHING in (an omitted `evaluatedOffline` is a 400, not an
       "online" — a `?? false` here would be the MCP adapter's defect one layer out), and
       an oversized set is REFUSED rather than truncated, because a dropped record can only
-      remove a restriction. See `docs/OFFLINE_FIRST_SYNC_CATALOG.md` §2a. What remains is
-      the operator-console surface — showing the frontier, the reason codes and which
-      records expired — which is UI work, tracked in the catalog's backlog table.
+      remove a restriction. See `docs/OFFLINE_FIRST_SYNC_CATALOG.md` §2a. The
+      operator-console surface this entry once listed as remaining has SHIPPED
+      (`OperatorConsoleSection.tsx` runs the real reconciler in-browser, §2b), and the
+      catalog's own backlog table now reads *(nothing open)* for this line — the Swift
+      mirror is the only piece left and it is blocked on toolchain, not design.
 
 - [x] **Mobile-app-catalog scanner phase (intake row 33, owner-instructed YELLOW-lane build).
       SCANNER HALF DONE** — hardened build at `scripts/mobile-app-catalog/scan.py`
@@ -569,8 +571,10 @@ only), and the DDM rig is gated on an APNs push certificate.
       module map that is empty at rest, so a static graph walk cannot see them. The
       186 figure above uses textual reference only, which makes no such assumption.
 
-- [ ] **The UI-library majors (recharts / react-day-picker / react-resizable-panels /
-      zod 4 + @hookform/resolvers).** Must ship WITH the bump — measured, not assumed.
+- [ ] **The UI-library majors (recharts / zod 4 + @hookform/resolvers).** Must ship
+      WITH the bump — measured, not assumed. *Re-measured 2026-08-19: this entry named
+      four libraries; `react-day-picker` and `react-resizable-panels` now appear in ZERO
+      package.json files in the tree, so only the two above are still outstanding.*
       The grouping policy is fixed (`f51d86a`), so these now arrive as separate
       per-library PRs instead of one 65-package wall. What is already pre-landed and
       what cannot be, so nobody repeats the experiment:
@@ -596,6 +600,29 @@ only), and the DDM rig is gated on an APNs push certificate.
       The browser E2E suite covers five of the six artifacts, so that migration can be
       verified as RENDERING rather than merely typechecking — which is the standard it
       should be held to.
+
+- [ ] **IP / disclosure posture** ⚠️ **owner decision first.** Before ANY detailed
+      invention material is committed, the owner must confirm repo **visibility**
+      (public GitHub = a public disclosure that starts the US 12-month patent
+      clock and can bar patents abroad). Decisions the owner owns: file a
+      **provisional patent** for the embedded-on-dock method + retrofit module +
+      phone-case/locker embodiments; **trademark** "SignalGrid"; entity
+      formation; **LICENSE posture** (the repo currently has no explicit
+      proprietary notice — changing to "all rights reserved" or adding a LICENSE
+      is a business call). An agent MAY, once the owner OKs and confirms the repo
+      is private (or a private location is chosen): draft an invention-disclosure
+      document from the architecture, add copyright/CONFIDENTIAL headers, and
+      write a tiered-disclosure kit (public one-pager vs. NDA-gated technical
+      brief) + an IP-and-disclosure posture document (planned, not yet written).
+      Do NOT commit a detailed provisional spec into a public repo.
+
+## Later / vision
+
+_(see `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` for the full app-workflow roadmap)_
+
+## Done (recent)
+
+*Re-filed out of **Owner-gated** on 2026-08-19 by the virtual team's PM shift: every one of these was already complete, so that section was implying decisions were still owed when none were. Original-entry records travel with their resolution, which is why some arrive as pairs — the historical reasoning is the point, not clutter.*
 
 - [x] **Run the Mac lane → `liveEvidence` goes `none` → `fresh`.** **DONE 2026-08-07**
       — `artifacts/live-evidence/mac-run.json`, minted on the owner's Mac
@@ -764,27 +791,6 @@ only), and the DDM rig is gated on an APNs push certificate.
       there, so the debt is stated rather than implied.
 
 _These need the owner's call — an agent should not act on them unsupervised._
-
-- [ ] **IP / disclosure posture** ⚠️ **owner decision first.** Before ANY detailed
-      invention material is committed, the owner must confirm repo **visibility**
-      (public GitHub = a public disclosure that starts the US 12-month patent
-      clock and can bar patents abroad). Decisions the owner owns: file a
-      **provisional patent** for the embedded-on-dock method + retrofit module +
-      phone-case/locker embodiments; **trademark** "SignalGrid"; entity
-      formation; **LICENSE posture** (the repo currently has no explicit
-      proprietary notice — changing to "all rights reserved" or adding a LICENSE
-      is a business call). An agent MAY, once the owner OKs and confirms the repo
-      is private (or a private location is chosen): draft an invention-disclosure
-      document from the architecture, add copyright/CONFIDENTIAL headers, and
-      write a tiered-disclosure kit (public one-pager vs. NDA-gated technical
-      brief) + an IP-and-disclosure posture document (planned, not yet written).
-      Do NOT commit a detailed provisional spec into a public repo.
-
-## Later / vision
-
-_(see `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` for the full app-workflow roadmap)_
-
-## Done (recent)
 
 - [x] …and the platform pin was necessary but not sufficient — the follow-up the
       entry below needed. A real `docker compose build` on the owner's Mac, the

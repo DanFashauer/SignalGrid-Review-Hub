@@ -1622,6 +1622,69 @@
               "type": "noauth"
             }
           }
+        },
+        {
+          "name": "Self-audit (checklist + PROPOSED heals; never applied)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cp/v1/self-audit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cp",
+                "v1",
+                "self-audit"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Reliability (SLOs + error budgets; fail-closed is zero-tolerance)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cp/v1/reliability",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cp",
+                "v1",
+                "reliability"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "IaC / GitOps plan + drift (read-only; a rollout never applies itself)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cp/v1/iac",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cp",
+                "v1",
+                "iac"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
         }
       ]
     }

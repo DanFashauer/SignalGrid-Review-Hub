@@ -73,6 +73,39 @@ writes. (`verifyLedgerFull` in `@workspace/audit` is the library form; the cappe
 whenever its 10,000-record cap may have cut the read short — a truncated `ok` is a
 statement about a prefix, never about the chain.)
 
+### What the chain cannot see: deletion from the end
+
+**A clean `db:verify-ledger` does not mean no records are missing.** Each record
+binds to the one before it, so an *edit* anywhere breaks the chain and is localised
+to the exact index. Deleting records from the **end** breaks nothing — every
+surviving link still recomputes, and the verifier reports a clean chain over a
+ledger whose most recent history has been removed.
+
+This is measured, not theorised. Forty records were seeded into a real Postgres,
+the last ten deleted with a plain `DELETE`, and `db:verify-ledger` printed
+*"Chain intact — every record from first to head recomputes and links"* and exited
+**0**. `proof:audit-ledger-pg` now pins the behaviour as an explicit assertion, so
+the day an external anchor or a monotonic counter is added, that assertion fails and
+this section gets rewritten deliberately rather than quietly going stale.
+
+The chain cannot detect this because nothing inside it knows how long it is
+supposed to be. Only someone outside it does — so say it:
+
+```bash
+DATABASE_URL=... pnpm run db:verify-ledger -- --min-records 40000
+```
+
+`--min-records N` fails, non-zero, when the ledger holds fewer than `N` records.
+Use it wherever a machine reads the exit code — a cron job, a monitoring probe, a
+pre-audit check — because until this flag existed those callers could not tell a
+verified ledger from a wiped one. Without the flag an empty ledger still prints
+*"The ledger is EMPTY. Nothing to verify is not the same as verified history."* and
+exits 0, which is correct for a first-run deployment and useless to cron.
+
+The backup manifest is the other half of the answer: it records the audit head hash
+**and record count** at dump time, so a restore that comes back short is caught by
+`db:restore` comparing against it.
+
 > **DO NOT run `proof:audit-ledger-pg` against a restored database.** An earlier
 > revision of this page told you to, and doing so destroys the ledger you just
 > restored: the proof's first statement is `DROP TABLE IF EXISTS audit_ledger`

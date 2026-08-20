@@ -83,7 +83,7 @@ export default function DeploymentSection() {
               transition={{ delay: idx * 0.1 }}
               className={`relative p-8 rounded-xl border flex flex-col ${
                 opt.highlight
-                  ? "border-primary shadow-[0_0_30px_-10px_rgba(59,130,246,0.3)] bg-primary/5"
+                  ? "border-primary shadow-[0_0_30px_-10px_rgba(79,140,135,0.35)] bg-primary/5"
                   : "border-border/50 bg-card"
               }`}
             >

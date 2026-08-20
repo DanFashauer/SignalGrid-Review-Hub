@@ -23,19 +23,32 @@
 import { verifyLedgerFull, getAuditBackend } from "@workspace/audit";
 
 function usage(): never {
-  console.error(`usage: DATABASE_URL=postgres://... pnpm run db:verify-ledger [-- --batch-size N]`);
+  console.error(
+    `usage: DATABASE_URL=postgres://... pnpm run db:verify-ledger [-- --batch-size N] [--min-records N]`,
+  );
   process.exit(2);
 }
 
 async function main() {
   const argv = process.argv.slice(2).filter((a) => a !== "--");
+
+  // Parsed by consuming known flags rather than by "is this the only flag": the
+  // previous form accepted --batch-size alone and rejected EVERY other argument,
+  // so adding a second flag needs this shape or one of the two is refused.
   let batchSize = 1000;
-  const flagAt = argv.indexOf("--batch-size");
-  if (flagAt >= 0) {
-    batchSize = Number(argv[flagAt + 1]);
-    if (!Number.isFinite(batchSize) || batchSize < 1) usage();
-  } else if (argv.length > 0) {
-    usage();
+  let minRecords: number | null = null;
+  const rest = [...argv];
+  while (rest.length > 0) {
+    const flag = rest.shift() as string;
+    if (flag === "--batch-size") {
+      batchSize = Number(rest.shift());
+      if (!Number.isFinite(batchSize) || batchSize < 1) usage();
+    } else if (flag === "--min-records") {
+      minRecords = Number(rest.shift());
+      if (!Number.isInteger(minRecords) || minRecords < 0) usage();
+    } else {
+      usage();
+    }
   }
 
   if (!process.env.DATABASE_URL) {
@@ -72,8 +85,35 @@ async function main() {
     // Verifying an empty DURABLE ledger is a real (if trivial) statement — but say
     // it plainly rather than letting "0 records: ok" read like a health check.
     console.log("\nThe ledger is EMPTY. Nothing to verify is not the same as verified history.");
-    return;
   }
+
+  // --min-records: the operator's assertion that this ledger is not supposed to be
+  // empty or short.
+  //
+  // WHY THIS FLAG EXISTS. This command refuses to run at all without DATABASE_URL,
+  // on the stated grounds that "a verifier that can green-light the void is worse
+  // than none" — and then exited 0 on an EMPTY table, printing a sentence about it.
+  // A human reads the sentence. A cron job, a monitoring probe, and a CI step read
+  // the exit code, and to all three a wiped ledger was indistinguishable from a
+  // verified one. That is the same unearned affirmative the refusal above exists to
+  // prevent, one layer down.
+  //
+  // It is a FLAG rather than an unconditional failure because a first-run
+  // deployment has a legitimately empty ledger, and a check that cries wolf on day
+  // one is a check somebody switches off by day three. The operator who knows their
+  // ledger should hold history is the one who can say so.
+  if (minRecords !== null && result.count < minRecords) {
+    console.error(
+      `\nTOO FEW RECORDS: ${result.count} < the ${minRecords} you asserted with --min-records.` +
+        "\nThe chain that IS here verifies. That is not the same as the history being" +
+        "\nintact — records can be deleted from the end without breaking any hash," +
+        "\nand truncation is exactly what this flag is for. Investigate before" +
+        "\ntreating this ledger as complete.",
+    );
+    process.exit(1);
+  }
+
+  if (result.count === 0) return;
 
   console.log(`\nChain intact — every record from first to head recomputes and links. This read the`);
   console.log(`ENTIRE ledger (${result.count} record(s)); it is not the capped 10,000-record prefix check.`);

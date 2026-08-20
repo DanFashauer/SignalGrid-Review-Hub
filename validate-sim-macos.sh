@@ -72,6 +72,14 @@ WANT=""
 want() { [ -n "$2" ] && WANT="$WANT $1@$2"; }
 want "@esbuild/$PLAT"           "$(pkg_ver esbuild)"
 want "@rollup/rollup-$PLAT"     "$(pkg_ver rollup)"
+# Vite 8 bundles with ROLLDOWN, not rollup — so the `@rollup/rollup-*` line above
+# now resolves to an empty version and adds nothing, and this line is the one that
+# actually supplies the bundler. Without it `vite build` dies on darwin with
+# "Cannot find module '@rolldown/binding-darwin-arm64'" and the harness reports
+# `build (6 web artifacts)` failed on a tree that is fine — which is exactly what
+# it did once the web packages moved to Vite 8. pnpm-workspace.yaml strips this
+# binding like all the others; the list here has to track the bundler.
+want "@rolldown/binding-$PLAT"  "$(pkg_ver rolldown)"
 want "lightningcss-$PLAT"       "$(pkg_ver lightningcss)"
 want "@tailwindcss/oxide-$PLAT" "$(pkg_ver '@tailwindcss\+oxide')"
 

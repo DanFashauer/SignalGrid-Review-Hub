@@ -17,6 +17,7 @@
 //   4. CONCURRENCY  — N concurrent appends produce an intact, fork-free chain
 //      (the advisory-lock critical section holds).
 
+import { spawnSync } from "node:child_process";
 import {
   appendAuditRecord,
   getAuditRecords,
@@ -149,6 +150,31 @@ async function main() {
     "…and the head MOVED, so a separately-recorded head or count is what detects it",
     afterCut.headHash !== beforeCut.headHash,
   );
+
+  // ── THE OPERATOR CLI'S EXIT CODES, exercised end to end ──────────────────────
+  //
+  // Everything above tests the library (`verifyLedgerFull`). The published
+  // article reports `db:verify-ledger` OUTPUT AND EXIT CODES, and a regression
+  // in the CLI's exit-code wiring would leave every library assertion green
+  // while the published table went false. So the CLI itself runs here, as a
+  // child process against the same database, and its exit codes are asserted —
+  // this is the standing independent recheck DR-005 cites before publication.
+  const cli = (args: string[]) => {
+    const r = spawnSync("npx", ["tsx", "./src/verify-ledger-cli.ts", ...args], {
+      env: { ...process.env, DATABASE_URL: url },
+      encoding: "utf8",
+    });
+    if (r.error) throw r.error;
+    return r.status;
+  };
+  // State at this point: 8 records, chain intact (the truncation block above).
+  check("CLI: a clean chain exits 0", cli([]) === 0);
+  check("CLI: --min-records above the count exits 1 — truncation is catchable from outside the chain",
+    cli(["--min-records", "12"]) === 1);
+  await admin.query(
+    "UPDATE audit_ledger SET meta = '{\"i\":777}'::jsonb WHERE seq = (SELECT MIN(seq) + 3 FROM audit_ledger)",
+  );
+  check("CLI: a tampered row exits 1 through the CLI, not only through the library", cli([]) === 1);
 
   await admin.query("DROP TABLE IF EXISTS audit_ledger");
   await admin.end();

@@ -60,16 +60,22 @@ enum SG {
     // decision state; the ratified floor does not bind it, though the same
     // proposal should mention it.
     //
-    // BRAND_SYSTEM.md is dark-only and adopts no accessibility standard, so
-    // whether AA applies is an owner/brand decision, not a lane one. Raised in
-    // docs/BRAND_CONTRAST_FINDING.md. If it is ratified, the fix belongs in
-    // BRAND_SYSTEM.md first and lands here and in the web tokens together.
-    //
-    // The LIGHT values are NOT canonical — BRAND_SYSTEM.md defines no light mode.
-    // They are derived counterparts, and are equally subject to that ratification.
+    // CANONICAL SOURCE: this file and artifacts/signalgrid-web/src/index.css,
+    // together, per DR-005 — DEV (and its BRAND_SYSTEM.md) is retired and does
+    // not receive changes. WCAG AA is the ratified floor for decision-state
+    // colors; a change here lands in the web tokens in the same commit or not
+    // at all. The light values are derived counterparts under the same floor.
     static let allow  = dynamic(light: "3F6B52", dark: "5E8F73") // canonical dark
     static let review = dynamic(light: "7A5B2E", dark: "B08B57") // canonical dark
     static let deny   = dynamic(light: "8A3F3F", dark: "C67070") // DR-005 re-tone: AA on both grounds
+
+    /// Foreground for FILLED deny controls (text/icon sitting ON a deny fill).
+    /// The re-tone that fixed deny-as-text flipped the failure onto deny-as-fill:
+    /// white on the new dark #C67070 measures 3.53:1 — under the ratified AA
+    /// floor — while white on the light #8A3F3F clears it at 7.33:1. So the pair
+    /// is theme-split: light keeps white, dark uses the charcoal background tone
+    /// (#15181B on #C67070 = 5.05:1). Never hardcode .white on a deny fill.
+    static let onDeny = dynamic(light: "FFFFFF", dark: "15181B")
 
     static let radius: CGFloat = 6
 

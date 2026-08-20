@@ -139,7 +139,7 @@ final class ActiveSessionViewController: UIViewController {
     private lazy var endSessionButton: UIButton = {
         let button = UIButton(type: .system)
         button.setTitle("End Session", for: .normal)
-        button.setTitleColor(.white, for: .normal)
+        button.setTitleColor(SG.onDeny, for: .normal)
         button.titleLabel?.font = SG.sans(14, .semibold)
         button.titleLabel?.adjustsFontForContentSizeCategory = true
         button.titleLabel?.numberOfLines = 0

@@ -270,8 +270,15 @@ no GRANT to revoke — the application role *owns* the ledger table, so the real
 fix is the owner/admin vs restricted-runtime role split (build-plan item 3).
 The corrected canonical article is staged at `docs/HASH_CHAIN_TAIL_ARTICLE.md`.
 The independent recheck exists as a standing fact: `proof:audit-ledger-pg`
-re-runs the full experiment against a real Postgres in the "Durable
-persistence" CI job on every push, and ran green today. Publication order:
+re-runs the experiment against a real Postgres in the "Durable persistence" CI
+job on every push — including, since review of this record, the operator CLI
+itself: `db:verify-ledger`'s exit codes are asserted end to end (clean 0,
+`--min-records` breach 1, tampered row 1), because the article publishes the
+CLI's output and a regression in its exit-code wiring would otherwise leave
+the library assertions green while the published table went false. The
+article's runtime-role grant is per-table: on the ledger, `SELECT` and
+`INSERT` only — `UPDATE` would let an attacker rewrite a record and its hash
+and the verifier would accept the result. Publication order:
 signalgrid.app blog (to be built) first, then a shorter founder version on the
 owner's LinkedIn linking back; no third-party outlet for the first piece.
 **Publishing anything remains the owner's send.**
@@ -289,9 +296,15 @@ record. Independently re-measured before applying: dark `#C67070` scores
 5.05:1 on background and 4.55:1 on card; light `#8A3F3F` scores 6.50:1 and
 7.33:1 — all four above the 4.5:1 floor, against the old dark value's 3.18:1
 on card. Applied to web (`index.css`, a committed single-theme dark surface,
-takes the dark value) and iOS (`DesignSystem.swift`, dynamic light/dark) in
-the same commit, because a fork between them was the stated reason the first
-attempt was reverted. Color remains redundant with text/icon labels, never the
+takes the dark value — as `0 43% 60.8%`, because `61%` rounds to `#C67171`
+and quietly forks the platforms) and iOS (`DesignSystem.swift`, dynamic
+light/dark) in the same commit, because a fork between them was the stated
+reason the first attempt was reverted. Review caught the pairing the original
+measurements missed: the re-tone that fixed deny-as-TEXT flipped the failure
+onto deny-as-FILL — white on the new dark fill measures 3.53:1. Filled deny
+controls now carry a paired foreground (`SG.onDeny`, and the web's
+`--destructive-foreground`): charcoal on the dark fill (5.05:1), white kept on
+the light fill (7.33:1). Color remains redundant with text/icon labels, never the
 sole signal. The canonical decision-state palette now lives in THIS repository
 (`docs/BRAND_CONTRAST_FINDING.md` records the resolution); DEV is retired and
 does not receive the change.

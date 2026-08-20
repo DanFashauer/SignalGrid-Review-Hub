@@ -84,8 +84,8 @@
   --muted-foreground: 40 14% 80%;  /* Off-White 300      #D8D4CC */
   --accent: 175 22% 55%;           /* Muted Teal 400     #6FA7A1 */
   --accent-foreground: 210 13% 9%;
-  --destructive: 0 43% 61%;        /* Decision Deny      #C67070 — DR-005: AA on card (4.55:1) and background (5.05:1); was #A15B5B at 3.18:1 on card */
-  --destructive-foreground: 43 26% 94%;
+  --destructive: 0 43% 60.8%;      /* Decision Deny      #C67070 exactly — 61% rounds to #C67171 and forks the iOS palette. DR-005: 4.55:1 on card, 5.05:1 on background; was #A15B5B at 3.18:1 */
+  --destructive-foreground: 210 13% 9%; /* #15181B on the deny fill: 5.05:1. Off-white measured 3.13:1 on the re-toned fill — the fix for deny-as-text had flipped the failure onto deny-as-fill */
   --border: 205 13% 19%;           /* Border Neutral     #2A3136 */
   --input: 205 13% 19%;
   --ring: 175 28% 43%;
@@ -94,12 +94,12 @@
   /* Decision states — use ONLY for allow/step-up/deny communication. */
   --decision-allow: 145 21% 47%;   /* #5E8F73 */
   --decision-review: 32 35% 51%;   /* #B08B57 */
-  --decision-deny: 0 43% 61%;      /* #C67070 — DR-005 re-tone, WCAG AA */
+  --decision-deny: 0 43% 60.8%;    /* #C67070 exactly — DR-005 re-tone, WCAG AA */
 
   --chart-1: 175 28% 43%;          /* teal      */
   --chart-2: 145 21% 47%;          /* allow     */
   --chart-3: 32 35% 51%;           /* review    */
-  --chart-4: 0 43% 61%;            /* deny (#C67070, DR-005) */
+  --chart-4: 0 43% 60.8%;          /* deny (#C67070 exactly, DR-005) */
   --chart-5: 175 22% 55%;          /* teal soft */
 
   --app-font-sans: "Inter", sans-serif;

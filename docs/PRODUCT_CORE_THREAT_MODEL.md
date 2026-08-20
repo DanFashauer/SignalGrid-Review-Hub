@@ -137,7 +137,8 @@ File: `lib/signalgrid-core/src/audit.ts` (`appendAudit`, `verifyAuditChain`).
 
 | STRIDE | Threat | Implemented mitigation | Residual / private core |
 | ------ | ------ | ---------------------- | ----------------------- |
-| Tampering | Retroactively edit or delete an event | **Per-tenant, append-only, digest-chained** ledger: each event digests `prevDigest` + canonical body, so any edit breaks the chain from that point; `verifyAuditChain` reports the broken seq | **Keyed cryptographic chaining**, external anchoring, WORM storage |
+| Tampering | Retroactively **edit** an event | **Per-tenant, append-only, digest-chained** ledger: each event digests `prevDigest` + canonical body, so any edit breaks the chain from that point; `verifyAuditChain` reports the broken seq | **Keyed cryptographic chaining**, external anchoring, WORM storage |
+| Tampering | Retroactively **delete** events from the END | **Not detected by the chain, by construction** — every surviving link still recomputes, so verification reports a clean chain over a truncated ledger. Measured on real Postgres and pinned by `proof:audit-ledger-pg`. Detection is external to the chain: the backup manifest records the head hash **and record count** at dump time, and `db:verify-ledger --min-records N` lets the ledger's owner assert a length nothing inside it knows. See `docs/BACKUP_AND_RESTORE.md`. | External anchoring, WORM storage, append-only DB grants (no `DELETE` for the application role) |
 | Repudiation | Actor denies an audited action | Events record actor, subject, summary, references, seq, and timestamp | Signed events bound to provider identity |
 | Information disclosure | One tenant reads another's audit | Chains are strictly tenant-scoped and never reference another tenant's events | Durable per-tenant isolation |
 | Denial of service | Unbounded ledger growth | Bounded deterministic seed | Retention and archival policy |

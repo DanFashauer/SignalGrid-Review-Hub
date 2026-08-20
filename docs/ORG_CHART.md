@@ -113,6 +113,31 @@ nothing binds legally or in compliance without a human signing; nothing
 irreversible; nothing needing credentials the team does not hold; and no role
 invents an owner preference on taste, appetite or strategy.
 
+## The queue — how the next thing to do is decided
+
+`check-org-roster.mjs` used to print a count of cold roles. A count is a
+census, and a census does not move work: "twenty-one roles have never run" tells
+you the size of a deficit and nothing about what to do about it. The
+`program-manager` shift on 2026-08-19 changed it into a **queue**.
+
+Every cold role now carries a **`priority`** (1 = call next, 2 = real work
+waiting on capacity, 3 = genuinely waiting for its trigger to fire) and a
+**`nextAction`** — one concrete sentence naming what that role would actually
+do first. The gate **refuses** a cold role that has no `nextAction`, which is
+the same law applied one level deeper: an activated role must name what it
+produced, and a cold role must name what would make it real. Neither can be a
+title alone.
+
+So the tool now answers the operating question directly:
+
+```bash
+node scripts/check-org-roster.mjs     # the P1 set, with each role's next action
+```
+
+The top of that list is the next thing to do. Nobody has to deliberate about
+which cold role matters — the deliberation happened once, is written down, and
+is revised when the situation changes rather than re-argued each session.
+
 ## How a role gets activated
 
 1. It is called by name — by the owner, or by `program-manager` reading the

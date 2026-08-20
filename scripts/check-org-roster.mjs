@@ -73,8 +73,18 @@ export function auditOrgRoster(roster, chartText) {
     if (role?.activated != null && (typeof role.produced !== "string" || role.produced.trim() === "")) {
       problems.push(`${ROSTER}: role \`${id}\` claims activation on ${role.activated} but records nothing it produced`);
     }
-    if (role?.activated == null) unactivated.push(`${role?.division ?? "?"}/${id} — waits on: ${role?.trigger ?? "?"}`);
-    else activated.push(`${id} (${role.activated})`);
+    if (role?.activated == null) {
+      // A cold role must say what would make it real. Without this, the roster
+      // drifts back into a list of titles: "we have a threat modeller" with no
+      // answer to "so what happens next?". The program-manager shift added
+      // nextAction + priority to all 21 cold roles on 2026-08-19 precisely so
+      // this list stops being a census and starts being a queue.
+      if (typeof role?.nextAction !== "string" || role.nextAction.trim() === "") {
+        problems.push(`${ROSTER}: cold role \`${id}\` has no \`nextAction\` — a role that cannot say what would activate it is a title, not a job`);
+      }
+      const pri = Number.isInteger(role?.priority) ? role.priority : 9;
+      unactivated.push({ id, division: role?.division ?? "?", priority: pri, nextAction: role?.nextAction ?? "(none)" });
+    } else activated.push(`${id} (${role.activated})`);
   }
 
   if (chartText === null) {
@@ -94,8 +104,12 @@ function selfTest() {
   const ok = { id: "r1", division: "engineering", title: "T", charter: "C", trigger: "G", activated: null };
   const chart = (...ids) => ids.join(" ");
 
-  let a = auditOrgRoster({ roles: [ok] }, chart("r1"));
+  const cold = { ...ok, priority: 1, nextAction: "do the specific thing" };
+  let a = auditOrgRoster({ roles: [cold] }, chart("r1"));
   checks.push(["a well-formed unactivated role is clean, and REPORTED as unactivated", a.problems.length === 0 && a.unactivated.length === 1]);
+
+  a = auditOrgRoster({ roles: [ok] }, chart("r1"));
+  checks.push(["a cold role with NO nextAction is FATAL — a title is not a job", a.problems.some((p) => p.includes("nextAction"))]);
 
   a = auditOrgRoster({ roles: [{ ...ok, activated: "2026-08-19", produced: "a thing" }] }, chart("r1"));
   checks.push(["an activated role that says what it produced is clean", a.problems.length === 0 && a.activated.length === 1]);
@@ -151,9 +165,16 @@ function runGate() {
   const total = activated.length + unactivated.length;
   console.log(`Org roster — ${total} role(s): ${activated.length} activated, ${unactivated.length} never yet run`);
   if (unactivated.length > 0) {
+    // Ordered by priority so the top of this list IS the next thing to do.
+    const byPriority = [...unactivated].sort((a, b) => a.priority - b.priority || a.id.localeCompare(b.id));
+    const nextUp = byPriority.filter((u) => u.priority === 1);
     console.log("\n  NEVER ACTIVATED (reported, never fatal — a role may legitimately wait for its trigger):");
-    for (const u of unactivated) console.log(`    · ${u}`);
-    console.log("  Call one with a shift, or delete it. A role nobody runs is a claim nobody keeps.");
+    for (const u of byPriority) console.log(`    · [P${u.priority}] ${u.division}/${u.id}`);
+    if (nextUp.length > 0) {
+      console.log(`\n  CALL THESE NEXT (priority 1 — ${nextUp.length} of ${unactivated.length}):`);
+      for (const u of nextUp) console.log(`    · ${u.id}\n        ${u.nextAction}`);
+    }
+    console.log("\n  Call one with a shift, or delete it. A role nobody runs is a claim nobody keeps.");
   }
   if (problems.length > 0) {
     console.error(`\nOrg roster check FAILED: ${problems.length} problem(s).`);

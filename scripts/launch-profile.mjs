@@ -302,7 +302,7 @@ export const SURFACES = [
       "and `/metrics` directly on the app, outside it. Those three are recorded as a gap " +
       "rather than folded in, because widening this surface to the served table would mean " +
       "writing a second route parser that drifts on its own, while the spec already has the " +
-      "OpenAPI contract gate holding it.",
+      "OpenAPI contract gate holding it. RUNTIME FENCE, recorded here because it was stated nowhere: the entire `/cp/v1/*` block below is registered ONLY under the `review-demo` profile (`demoSurfacesEnabled()` in routes/index.ts) and 404s under `shared-device-gateway`. It is classified `deferred` rather than `demo_only` on purpose — `demo_only` here means SHIPS NEVER (the /v1/keys credential dispenser), whereas the control plane is a real product surface whose launch is deferred and whose unauthenticated fixture form is a demo IMPLEMENTATION, not a demo PURPOSE. Collapsing the two would cost the distinction that makes demo_only useful.",
     launch: [
   {
     id: "/v1/decisions/evaluate",
@@ -415,6 +415,9 @@ export const SURFACES = [
       "/cp/v1/grid/config",
       "/cp/v1/grid/provisioning",
       "/cp/v1/apps/resilience",
+      "/cp/v1/self-audit",
+      "/cp/v1/reliability",
+      "/cp/v1/iac",
       "/v1/sessions/start",
       "/v1/sessions/{id}",
       "/v1/sessions/{id}/refresh",

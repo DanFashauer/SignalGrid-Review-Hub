@@ -63,7 +63,9 @@
       "charter": "native/* — EnterpriseShell, SignalGridMobile, the byte-faithful Swift ports. New logic goes AROUND the ported engines.",
       "trigger": "Native surfaces change, or port parity needs checking.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 2,
+      "nextAction": "The backlog names a pending Swift mirror of reconcileDecisions. Assess it against golden rule 1 — it must go AROUND the ported engines, never through them — and say whether it is cloud-lane work or Mac-only."
     },
     {
       "id": "compliance-analyst",
@@ -90,7 +92,9 @@
       "charter": "The launch profile, promotion tiers, packaging and version discipline.",
       "trigger": "A surface is added to or reclassified in the launch profile.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 2,
+      "nextAction": "The launch profile classifies every surface and a bijection gate holds it honest, but v4 was never ratified and DR-001 defers five families against it. Establish what v5 would have to say before the freeze lifts."
     },
     {
       "id": "data-persistence-engineer",
@@ -98,8 +102,9 @@
       "title": "Data / persistence engineer",
       "charter": "The Postgres audit ledger: chain integrity, migrations, export, pagination.",
       "trigger": "Ledger, migration or export code changes.",
-      "activated": null,
-      "produced": null
+      "activated": "2026-08-20",
+      "produced": "docs/LEDGER_TRUNCATION_FINDING.md. This role was queued on a claim that turned out to be FALSE — \"the RESTORE path is only described\" — when proof:backup-restore has been exercising it on real Postgres in CI all along (16/16 live, including a flipped byte, a truncated archive and a missing manifest all REFUSED). The real gap was next to it: a hash chain detects EDITS, not deletions of its own tail. 40 records seeded on a live Postgres, the last 10 deleted with a plain DELETE, and db:verify-ledger printed \"Chain intact\" and exited 0. Pinned as an explicit assertion in proof:audit-ledger-pg (14/14), named in the threat model as its own Tampering row, documented in BACKUP_AND_RESTORE.md, and answered operationally with db:verify-ledger --min-records N — because the command already REFUSED a missing DATABASE_URL on the grounds that a verifier which green-lights the void is worse than none, and then exited 0 on an empty table.",
+      "nextAction": "Append-only at the DATABASE grant level: the application role holds DELETE on audit_ledger, and nothing needs it. Revoking it turns the truncation finding from a detection problem into a permissions one. Check what the migration grants and whether the prod compose role is separable."
     },
     {
       "id": "api-contract-architect",
@@ -107,8 +112,9 @@
       "title": "API contract architect",
       "charter": "/v1 contract: OpenAPI fidelity, envelope shape, idempotency, versioning and deprecation.",
       "trigger": "A route is added or an existing contract changes.",
-      "activated": null,
-      "produced": null
+      "activated": "2026-08-20",
+      "produced": "docs/API_CONTRACT_AUDIT.md — the published contract asserted \"every route is tenant-scoped: the tenant is derived from the authenticated bearer token\", which is the inverse of what 21 of its own 55 operations do (/cp/v1/* carries no principal and is scoped only by a client-supplied ?tenant=); nothing said the whole /cp/v1 surface and GET /v1/keys are registered only under the review-demo profile and 404 elsewhere; three served routes (self-audit, reliability, iac) had drifted out of the spec, the Postman collection and the launch profile at once. The cause was that proof:api-contract read one route file and compared only /v1 while printing \"Contract holds\" — widened to the whole served surface, plus a zero-routes-parsed guard, self-test 7/7. Also fixed scripts/safety-check.mjs reporting Postman drift with an EMPTY reason.",
+      "nextAction": "Status codes and response shapes — the deeper half. Nothing compares documented 400/403/404/429 against the handlers that declare them, and test:api is not driven from the spec, so a documented status nobody implemented passes both."
     },
     {
       "id": "devex-tooling-engineer",
@@ -126,7 +132,9 @@
       "charter": "The docs ARE the PRD here: index reachability, cited paths, figure truth, doc-to-code agreement.",
       "trigger": "A doc is added, or a claim in docs outlives what it described.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 2,
+      "nextAction": "272 markdown files, 618 cited paths, 130 cited commands — all gated. Nothing gates whether a document is still ABOUT something current. Sweep for documents describing surfaces that have since changed shape."
     },
     {
       "id": "accessibility-specialist",
@@ -135,7 +143,9 @@
       "charter": "WCAG conformance across the site and the served consoles; keyboard, contrast, live regions, reduced motion.",
       "trigger": "Any user-facing surface changes.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 3,
+      "nextAction": "Waits for a user-facing surface change. The web shift already fixed viewport, contrast, live regions and reduced motion; the next trigger is new UI, not a re-sweep."
     },
     {
       "id": "desktop-engineer",
@@ -144,7 +154,9 @@
       "charter": "The Tauri desktop lane and its cross-platform parity claims.",
       "trigger": "Desktop code or its CI lane changes.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 3,
+      "nextAction": "Waits for desktop code or its CI lane to change. Note check-assist-conformance moved to every-PR on 2026-08-19, so the Rust client's binding is now continuously enforced."
     },
     {
       "id": "firmware-hardware-engineer",
@@ -153,7 +165,9 @@
       "charter": "firmware/ and the dock surfaces; keeps hardware claims inside what a pre-production concept can assert.",
       "trigger": "Firmware or dock/hardware claims change.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 3,
+      "nextAction": "Waits for a firmware or dock claim to change. The hardware is a pre-production concept and platform honesty already bounds what may be said about it."
     },
     {
       "id": "iam-domain",
@@ -161,8 +175,9 @@
       "title": "Identity & Access domain lead",
       "charter": "Entra, Okta, Keycloak, Ping, FIDO2. Owns 15 identity dimensions.",
       "trigger": "An identity dimension changes, or its wire truth is unverified.",
-      "activated": null,
-      "produced": null
+      "activated": "2026-08-20",
+      "produced": "docs/IDENTITY_LIVE_SHAPE_CHECK.md — driven against a live Keycloak 26.4. Three fields sso-session names are NOT wire facts: amr is absent from the access token, the ID token, /userinfo and RFC 7662 introspection alike, leaving only an opaque deployment-configured acr, so single_factor/mfa/phishing_resistant is not derivable from a default IdP; auth_time is absent everywhere, so iat (token issuance) is not when the human authenticated — the same defect class as the RADIUS lastAuthAt finding; and the access token exp is 60s against a 36000s session max, demonstrated live at 75s with the token dead and four SSO sessions still alive. The session record carries no device field at all (id, username, userId, ipAddress, start, lastAccess, rememberMe, clients, transientUser), and two logins by the same user from the same host produced two indistinguishable sessions — precisely the leftover-session case the dimension exists for, so the device-session join must come from the device side. The code is already right (the connector normalizes a bridge-supplied value through oneOf with an unknown fallback and evaluate.ts raises the bar on every unknown); what was missing was the wire-truth record. proof:live-keycloak 14/14.",
+      "nextAction": "Ten of fifteen dimensions remain unverified against any live IdP, and only Keycloak was driven — Entra DOES emit amr and Okta exposes richer session APIs, so the wire-truth table is one IdP wide. Next: script the Keycloak client setup (KEYCLOAK_LIVE_INTEGRATION.md describes it in prose only, and following that prose cost this shift a 13/14 on a misread mapper value), then take passkey-assurance and token-binding against the same lab."
     },
     {
       "id": "endpoint-uem-domain",
@@ -171,7 +186,9 @@
       "charter": "Intune+Graph, Jamf, Fleet, Headwind, Omnissa, SOTI. Owns 9 device dimensions and the platform-honesty line.",
       "trigger": "A device-management dimension changes, or a vendor's wire shape needs verifying.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 1,
+      "nextAction": "Fleet and Headwind are both stood up and verified; take the remaining 7 device dimensions (policy-binding, data-protection, peripheral-control, service-lifecycle, app-update, macos-posture, device-management-health) and check each against what those servers actually emit."
     },
     {
       "id": "secops-domain",
@@ -180,7 +197,9 @@
       "charter": "Wazuh, CrowdStrike, Defender, Splunk, Sentinel. Owns 10 threat/vuln/telemetry-integrity dimensions.",
       "trigger": "A SecOps dimension changes, or a threat-vs-vulnerability conflation is suspected.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 2,
+      "nextAction": "Wazuh is stood up (proof:live-edr). Check the remaining 9 SecOps dimensions against what a real SIEM/EDR exports rather than what a console displays — especially the threat-vs-vulnerability boundary vuln-scan already reasons about."
     },
     {
       "id": "network-domain",
@@ -198,7 +217,9 @@
       "charter": "PACS, RTLS/BLE/UWB, Traccar, CMMS, OT historians. Owns 5 dimensions and the safety-independence boundary.",
       "trigger": "A location/custody/OT dimension changes.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 2,
+      "nextAction": "Traccar is verified. The other 4 dimensions (rtls-custody, custody-beacon, pacs-access, ot-posture) have no live source; say which of them a free/open instance could ever verify and which are structurally documentation-only."
     },
     {
       "id": "itsm-ops-domain",
@@ -207,7 +228,9 @@
       "charter": "ServiceNow, Jira SM, WMS, osquery. Owns 6 operational-context dimensions and the systems-of-record boundary.",
       "trigger": "An operational-context dimension changes.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 2,
+      "nextAction": "osquery is verified via the Fleet lab. Check change-window, shift-context and task-exception against what a real ITSM (a self-hosted GLPI or Zammad) actually exports for approval windows and assignment state."
     },
     {
       "id": "solutions-architect",
@@ -216,7 +239,9 @@
       "charter": "How this actually deploys at a customer site: pilot scope, reference architecture, the admin's setup path.",
       "trigger": "A pilot is scoped, or a deployment question needs a defensible answer.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 2,
+      "nextAction": "Turn PILOT_SCOPE_SKELETON.md into a concrete first-pilot reference architecture: which grants a customer's IT team must issue, in what order, and what SignalGrid can answer before each one lands."
     },
     {
       "id": "threat-modeler",
@@ -225,7 +250,9 @@
       "charter": "Attack surface and abuse cases against the decision fabric itself — including the agent lanes.",
       "trigger": "A trust boundary moves, or a new surface is exposed.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 2,
+      "nextAction": "Re-read threat_model.md against the trust boundaries that moved on 2026-08-19: delegated agent authority, a write-scoped CI job that commits to branches, and two agent lanes exchanging work through committed artifacts. None of those existed when it was written."
     },
     {
       "id": "competitive-analyst",
@@ -234,7 +261,9 @@
       "charter": "Landscape briefs and design studies from primary sources; never restates a number it cannot re-derive.",
       "trigger": "A competitor, category or adjacent product needs assessing.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 3,
+      "nextAction": "Waits for a competitor or category to need assessing. The Smplify study is the current reference; re-open when a new actuator or decision-layer product surfaces."
     },
     {
       "id": "partner-alliances-analyst",
@@ -243,7 +272,9 @@
       "charter": "The MDM/UEM and actuator ecosystem; drafts partner materials. The owner sends; the analyst never does.",
       "trigger": "A partnership candidate surfaces.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 3,
+      "nextAction": "Waits for a partnership candidate. Drafting is in scope; sending is the owner's, always."
     },
     {
       "id": "pricing-packaging-analyst",
@@ -252,7 +283,9 @@
       "charter": "Tier shape and the honesty of every customer-visible figure. Recommends posture; never commits contractually.",
       "trigger": "A pricing or packaging claim changes.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 3,
+      "nextAction": "Waits for a pricing claim to change. The retention default was set by DR-003 and is now customer-visible; the next trigger is a tier or figure moving."
     },
     {
       "id": "brand-design",
@@ -261,7 +294,9 @@
       "charter": "Visual identity and the site's design system; keeps the brand palette actually applied.",
       "trigger": "A user-facing surface's look changes.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 3,
+      "nextAction": "Waits for a look change. The off-brand blue was purged on 2026-08-19 and the teal primary is applied consistently."
     },
     {
       "id": "program-manager",
@@ -269,8 +304,8 @@
       "title": "Program manager",
       "charter": "Runs the shift cadence, the lane loops, and this org itself — including calling roles that have never run.",
       "trigger": "A shift is planned, or the roster reports stale/unactivated roles.",
-      "activated": null,
-      "produced": null
+      "activated": "2026-08-19",
+      "produced": "Converted the cold roster from a census into a QUEUE: every one of the 21 cold roles now carries a priority and a concrete nextAction, and check-org-roster.mjs was upgraded to REFUSE a cold role that cannot say what would activate it (self-test 10/10) and to print the priority-1 set with its actions, so the top of the list is the next thing to do rather than a number to feel bad about. Also queued the Mac lane's post-merge verification as sim-request 2026-08-19-post-merge-verification and sent the lane message that carries its context"
     },
     {
       "id": "records-archivist",
@@ -279,7 +314,9 @@
       "charter": "The intake ledger, decision records and provenance discipline — every input dispositioned, every claim traceable.",
       "trigger": "An owner input arrives, or a decision is made.",
       "activated": null,
-      "produced": null
+      "produced": null,
+      "priority": 3,
+      "nextAction": "Effectively continuous and performed by the coordinating session — every owner input has a ledger row and every delegated call a decision record. Activate as a distinct role only if intake volume outgrows one session."
     }
   ]
 }

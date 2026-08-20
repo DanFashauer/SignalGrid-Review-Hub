@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "cloud-post-merge-pr-212-landed-1fb081e-the-mac-l",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Post-merge: PR #212 landed (1fb081e) — the Mac lane has never seen any of it",
+  "body": "PR #212 merged as 1fb081e: 47 files, 24 commits, 21/21 checks green on Linux CI. None of it has run on macOS.\n\nRun this first, from the repo root:  pnpm run sim:run-requests\n\nThat picks up 2026-08-19-post-merge-verification (preflight, proofs-full, evidence, in that order). Stop and report if preflight fails — a proof failure stacked on a broken preflight is not independently interpretable.\n\nWhat is new and therefore what this run is actually testing: five gates that did not exist when you last ran anything. check-memory-freshness, check-action-pinning, check-org-roster, check-cited-commands, and a rewired check-assist-conformance. Two of them shell out to git ls-files through execFileSync (argv form, not a shell string), so bash 3.2 should not bite — but that is a prediction this run converts into a fact.\n\nAlso landed: the SBOM job split so third-party install scripts no longer share an environment with a push-capable token, and a rebuilt Playwright install step after it hung CI for 16 minutes.\n\nBEFORE ANYTHING: confirm this working copy is SignalGrid-Review-Hub, not the legacy SignalGrid repo. GitHub Desktop -> Repository -> View on GitHub. The folder is named SignalGrid, which is the LEGACY repo name, so this is a real risk rather than a formality. Results committed from a legacy clone carry provenance from a repository nobody maintains.\n\nThe Fleet lab request stays pending and is still the one to run second."
+}

@@ -4,10 +4,31 @@ info:
   version: 1.0.0
   description: >-
     The product-shaped SignalGrid decision API, backed by the deterministic,
-    fixture-backed public-safe core (`@workspace/signalgrid-core`). Every route
-    is tenant-scoped: the tenant is derived from the authenticated bearer token,
-    never from a client-supplied id. This is a review surface, not a production
-    system — no real credentials, tenant data, PHI/PII, or live vendor calls.
+    fixture-backed public-safe core (`@workspace/signalgrid-core`). This is a
+    review surface, not a production system — no real credentials, tenant data,
+    PHI/PII, or live vendor calls.
+
+    TWO SURFACES, AND THEY ARE NOT SCOPED THE SAME WAY. Read this before
+    building against either.
+
+    `/v1/*` is the product surface. Every one of its routes is tenant-scoped:
+    the tenant is derived from the authenticated bearer token, never from a
+    client-supplied id.
+
+    `/cp/v1/*` is the control-plane DEMO surface. It carries no principal at
+    all — every one of its operations declares `security: []`, and a
+    client-supplied `?tenant=` query parameter is the only scoping present.
+    Do not read the `/v1` sentence above as covering it; for a long while this
+    document said "every route" and meant only half of them.
+
+    PROFILE GATING — a documented path is not necessarily a served one. The
+    entire `/cp/v1/*` surface and `GET /v1/keys` are registered ONLY under the
+    review-demo profile. Under `shared-device-gateway` they are not mounted at
+    all and answer 404 with the standard Error schema. That is deliberate: an
+    unauthenticated control plane cannot be made safe by adding a check inside
+    it, and a route that exists and refuses still answers "does this deployment
+    have a control plane?". Check the deployment's profile before treating any
+    of it as available.
 
     RATE LIMITING (applies to every path in this document): requests are limited
     per API key and, more coarsely, per client address. Exceeding either bound
@@ -794,6 +815,46 @@ paths:
       summary: Fleet (open-source, osquery MDM) host posture normalized to decision dimensions (fixtures; distinct from /cp/v1/fleet inventory)
       responses:
         "200": { description: Normalized Fleet host signals + assurance hints (weak/unsupervised posture only raises assurance) }
+
+  /cp/v1/self-audit:
+    get:
+      operationId: cpSelfAudit
+      tags: [control-plane]
+      security: []
+      summary: Self-audit checklist + proposed heals (real run if an operator emitted one, else fixture)
+      description: >-
+        Serves the last REAL run when `artifacts/self-audit/status.json` exists
+        (labelled source:"real-run" with the commit it ran at); otherwise a
+        deterministic fixture snapshot labelled source:"fixture". A heal is only
+        ever PROPOSED — nothing is applied without a recorded human approval.
+      responses:
+        "200": { description: Checklist report, plain-language summary, and proposed heals }
+
+  /cp/v1/reliability:
+    get:
+      operationId: cpReliability
+      tags: [control-plane]
+      security: []
+      summary: SLO / error-budget snapshot over a deterministic window of decision outcomes (fixture)
+      description: >-
+        Latency and availability carry error budgets; fail-closed integrity is
+        zero-tolerance — one fail-open exhausts it and can never be bought back.
+      responses:
+        "200": { description: Reliability report + plain-language summary }
+
+  /cp/v1/iac:
+    get:
+      operationId: cpIacPlan
+      tags: [control-plane]
+      security: []
+      summary: GitOps desired-state vs observed fleet-state — plan and drift, read-only (fixture)
+      description: >-
+        Read-only and simulated. A real rollout actuates through the MDM
+        backend's own API on a supervised device, gated on a live `allow`
+        decision plus a recorded human approval; a rollout can never apply
+        itself. See docs/IAC_GITOPS.md.
+      responses:
+        "200": { description: Plan and drift, each with a summary }
 
   /cp/v1/grid/coverage:
     get:

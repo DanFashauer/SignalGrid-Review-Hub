@@ -115,9 +115,16 @@ check("prod + live + token resolves live", resolveVulnScanConnector({ SIGNALGRID
 const unverifiedSev = evaluateVulnPosture([normalizeFinding({ deviceId: "d", severity: "weird-value" })], { scanned: true });
 check("an unreadable severity → unknown/SEVERITY_UNVERIFIED, never 'low_risk' (wedge #14)",
   unverifiedSev.posture === "unknown" && unverifiedSev.reasonCode === "SEVERITY_UNVERIFIED" && unverifiedSev.recommendedAction === "monitor");
+// Codex review on #221: the first version of the guard sat below the medium
+// branch, so [unknown, medium] still claimed low_risk/MEDIUM_SEVERITY_PRESENT —
+// the exact unsupported calm claim wedge #14 exists to eliminate. The unknown
+// now owns the posture, and the reported medium raises the action to patch.
 const unverifiedPlusMedium = evaluateVulnPosture([normalizeFinding({ deviceId: "d", severity: "weird-value" }), normalizeFinding({ deviceId: "d", severity: "medium" })], { scanned: true });
-check("…but a co-present REPORTED severity still drives the verdict (worst-concern-wins)",
-  unverifiedPlusMedium.reasonCode === "MEDIUM_SEVERITY_PRESENT");
+check("unknown + medium → SEVERITY_UNVERIFIED posture with the medium's patch action (no calm claim, no invented escalation)",
+  unverifiedPlusMedium.posture === "unknown" && unverifiedPlusMedium.reasonCode === "SEVERITY_UNVERIFIED" && unverifiedPlusMedium.recommendedAction === "patch");
+const unverifiedPlusHigh = evaluateVulnPosture([normalizeFinding({ deviceId: "d", severity: "weird-value" }), normalizeFinding({ deviceId: "d", severity: "high" })], { scanned: true });
+check("…while a reported HIGH still wins outright (an alarm posture is not a calm claim)",
+  unverifiedPlusHigh.reasonCode === "HIGH_SEVERITY_PRESENT");
 
 // ── GRANT SAFETY, QUANTIFIED — the whole input space, not chosen fixtures ─────
 //

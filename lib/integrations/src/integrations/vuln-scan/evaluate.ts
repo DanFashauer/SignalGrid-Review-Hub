@@ -63,16 +63,23 @@ export function evaluateVulnPosture(
   if (findings.some((f) => f.severity === "high")) {
     return verdict("at_risk", "HIGH_SEVERITY_PRESENT", "patch", highestSeverity, findingCount, exploitableCount);
   }
+  // A finding whose severity could NOT be read is not a low finding (wedge #14,
+  // caught by the shift-1 sweep; ordering corrected by Codex review on #221):
+  // "low_risk" used to be asserted over evidence that says nothing about
+  // severity — a critical CVE whose severity failed to parse read as low. The
+  // first version of this guard also sat BELOW the medium branch, so a
+  // co-present medium finding re-made the exact unsupported low-risk claim.
+  // Checked here, before any calm posture can be claimed; the action is the
+  // strongest among the REPORTED remainder (patch when a medium is present,
+  // else monitor) — an unreadable severity forecloses calm claims but never
+  // invents an escalation beyond what was observed. Reported high/critical
+  // (above) still win outright: their postures are alarms, not calm claims.
+  if (findings.some((f) => f.severity === "unknown")) {
+    const action = findings.some((f) => f.severity === "medium") ? "patch" : "monitor";
+    return verdict("unknown", "SEVERITY_UNVERIFIED", action, highestSeverity, findingCount, exploitableCount);
+  }
   if (findings.some((f) => f.severity === "medium")) {
     return verdict("low_risk", "MEDIUM_SEVERITY_PRESENT", "patch", highestSeverity, findingCount, exploitableCount);
-  }
-  // A finding whose severity could NOT be read is not a low finding (wedge #14,
-  // caught by the shift-1 sweep): "low_risk" used to be asserted over evidence
-  // that says nothing about severity — a critical CVE whose severity failed to
-  // parse read as low. The posture stops claiming "low"; the action stays
-  // monitor (an unreadable severity forecloses the calm claim but never denies).
-  if (findings.some((f) => f.severity === "unknown")) {
-    return verdict("unknown", "SEVERITY_UNVERIFIED", "monitor", highestSeverity, findingCount, exploitableCount);
   }
   // Only low/info severities remain.
   return verdict("low_risk", "LOW_SEVERITY_ONLY", "monitor", highestSeverity, findingCount, exploitableCount);

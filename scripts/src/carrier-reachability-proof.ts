@@ -223,8 +223,14 @@ check("a stale sighting degrades a reachable device to STALE_LAST_SEEN", future.
   // The strongest affirmative this family CAN make, pinned as an exact set:
   // posture `reachable` requires a live online session, backchannel not declared
   // absent, provisioning not suspended/deactivated, no roaming, and a sighting
-  // that is not provably stale. Everything else — every unknown, every
-  // contradiction — lands in a degraded/unreachable/unverified posture.
+  // whose timestamp is REPORTED, PARSEABLE, and FRESH. Everything else — every
+  // unknown, every contradiction — lands in a degraded/unreachable/unverified
+  // posture. (Wedge #15, raised by Codex review on #221: the first version of
+  // this set admitted null and unparseable timestamps, matching an evaluator
+  // that let its strongest affirmative rest on a timestamp nobody could vouch
+  // for. The evaluator now degrades those to LAST_SEEN_UNVERIFIED/monitor —
+  // weaker than reported-stale's locate, because unreported is a blind spot,
+  // not a reported bad state.)
   let reachableCount = 0;
   let reachableMismatch: string | null = null;
   for (const bc of domains.cellularBackchannel) for (const pv of domains.provisioning)
@@ -233,14 +239,26 @@ check("a stale sighting degrades a reachable device to STALE_LAST_SEEN", future.
         const v = evaluateReachability(build({ cellularBackchannel: bc, provisioning: pv, cellularReachability: cr, smsReachable: sms, roaming: ro, lastSeenAt: at }), NOW_ENUM);
         const isReachable = v.posture === "reachable";
         const shouldBe = bc !== "absent" && pv !== "suspended" && pv !== "deactivated" &&
-          cr === "online" && ro === false && at !== STALE_AT;
+          cr === "online" && ro === false && at === FRESH_AT;
         if (isReachable) reachableCount += 1;
         if (isReachable !== shouldBe && reachableMismatch === null) {
           reachableMismatch = JSON.stringify({ bc, pv, cr, sms, ro, at, got: v.posture });
         }
       }
   check(`the 'reachable' posture is exactly the online-verified set (${reachableCount} states, no strays)`,
-    reachableMismatch === null && reachableCount === 2 * 2 * 1 * 2 * 1 * 3);
+    reachableMismatch === null && reachableCount === 2 * 2 * 1 * 2 * 1 * 1);
+
+  // Wedge #15 pinned directly: an online, non-roaming device whose sighting
+  // timestamp is missing or unparseable is DEGRADED, never confidently
+  // reachable — and a provably-stale sighting keeps the stronger locate.
+  for (const [label, at] of [["a missing lastSeenAt", null], ["an unparseable lastSeenAt", "not-a-date"]] as const) {
+    const w = evaluateReachability(build({ cellularBackchannel: "present", provisioning: "active", cellularReachability: "online", smsReachable: true, roaming: false, lastSeenAt: at }), NOW_ENUM);
+    check(`online + ${label} → degraded/LAST_SEEN_UNVERIFIED/monitor, never 'reachable' (wedge #15)`,
+      w.posture === "degraded" && w.reasonCode === "LAST_SEEN_UNVERIFIED" && w.recommendedAction === "monitor");
+  }
+  const futureSeen = evaluateReachability(build({ cellularBackchannel: "present", provisioning: "active", cellularReachability: "online", smsReachable: true, roaming: false, lastSeenAt: "2026-07-20T14:00:00Z" }), NOW_ENUM);
+  check("online + a future-dated lastSeenAt (a contradiction) → degraded/LAST_SEEN_UNVERIFIED, never the freshest reading (wedge #15)",
+    futureSeen.posture === "degraded" && futureSeen.reasonCode === "LAST_SEEN_UNVERIFIED");
 }
 
 // ── read-only enforcement ──────────────────────────────────────────────────────

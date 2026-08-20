@@ -99,7 +99,13 @@ export function evaluateReachability(
 
 // Build a verdict; when the underlying sighting is stale, degrade a would-be
 // "reachable" to "degraded" and surface STALE_LAST_SEEN so a decaying signal is
-// never reported as confidently current.
+// never reported as confidently current. An UNVERIFIABLE sighting (no
+// lastSeenAt, an unparseable one, or one claimed from the future) degrades the
+// same posture too (wedge #15, raised by Codex review on #221): `reachable` is
+// this family's strongest affirmative, and it must not rest on a timestamp
+// nobody can vouch for. `monitor`, not `locate` — a provably-STALE sighting is a
+// REPORTED bad state and keeps the stronger call; an unreported one is a blind
+// spot, surfaced without inventing an alarm.
 function verdict(
   posture: ReachabilityVerdict["posture"],
   reasonCode: ReachabilityVerdict["reasonCode"],
@@ -110,12 +116,23 @@ function verdict(
   if (freshness === "stale" && posture === "reachable") {
     return { posture: "degraded", reasonCode: "STALE_LAST_SEEN", recommendedAction: "locate", locatable };
   }
+  if (freshness === "unknown" && posture === "reachable") {
+    return { posture: "degraded", reasonCode: "LAST_SEEN_UNVERIFIED", recommendedAction: "monitor", locatable };
+  }
   return { posture, reasonCode, recommendedAction, locatable };
 }
+
+// Clocks in a distributed fleet legitimately skew by seconds; beyond this a
+// "future" sighting is a contradiction, not a skew.
+const FUTURE_SKEW_TOLERANCE_MS = 60 * 1000;
 
 function deriveFreshness(lastSeenAt: string | null, nowMs: number, staleAfterMs: number): Freshness {
   if (!lastSeenAt) return "unknown";
   const seen = Date.parse(lastSeenAt);
   if (Number.isNaN(seen)) return "unknown";
+  // A sighting meaningfully in the FUTURE is contradictory — it used to read as
+  // the freshest possible sighting (nowMs - seen is negative). Contradiction
+  // resolves to unknown, never to the most trusting reading.
+  if (seen - nowMs > FUTURE_SKEW_TOLERANCE_MS) return "unknown";
   return nowMs - seen <= staleAfterMs ? "fresh" : "stale";
 }

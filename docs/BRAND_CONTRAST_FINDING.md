@@ -1,8 +1,26 @@
 # Finding — the canonical dark palette and WCAG AA
 
-**Status: OPEN. Raised by the Mac lane, 2026-08-19. Not acted on.**
-**Decision owner: whoever owns `DEV/docs/BRAND_SYSTEM.md`. This is a brand call,
-not an engineering one.**
+**Status: RESOLVED for `deny` — DR-005, August 20, 2026.** The owner ratified
+WCAG AA as the minimum contrast standard for decision-state colors and adopted
+the exact tones the reverted accessibility pass had tested: **dark `#C67070`,
+light `#8A3F3F`** — re-measured before applying at 5.05:1/4.55:1 (dark, on
+background/card) and 6.50:1/7.33:1 (light). Web and iOS changed in the same
+commit. Color remains redundant with text and icon labels, never the sole
+signal.
+
+**Canonical source moved:** DEV is retired and does not receive this change;
+the decision-state palette's source of truth is now this repository —
+`artifacts/signalgrid-web/src/index.css` and
+`native/ios/EnterpriseShell/Services/DesignSystem.swift`, which must never
+diverge.
+
+**Still open under the ratified floor:** `allow` measures 4.32:1 on the dark
+card. The owner ratified values for deny only, so allow needs an owner
+proposal, queued with `brand-design`.
+
+The original finding follows, kept as the record that motivated the decision.
+
+---
 
 ## Why this is a finding and not a fix
 

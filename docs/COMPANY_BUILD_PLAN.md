@@ -64,9 +64,9 @@ Dropped below the cut, tracked in lens records: the shared-evaluator-skeleton re
 
 Only the items genuinely yours:
 
-1. **Ratify launch-profile v4.** Every classification is still marked "proposal". Scope is your call, and any positioning published against an unratified scope can be invalidated overnight. One sitting.
-2. **Approve or reject the ledger-truncation article, and pick the venue** (company blog to be built, personal blog, or third-party outlet). Nothing publishes without this.
-3. **Decide the deny-color contrast question.** The deny state fails the accessibility contrast bar (3.18:1 where 4.5:1 is required) on its most safety-critical surface. Three options come to you on one screen: re-tone, constrain usage, or decline explicitly. Open since 2026-08-19.
+1. ~~**Ratify launch-profile v4.**~~ **RESOLVED — DR-005 ratified v4 in full.** Every classification is still marked "proposal". Scope is your call, and any positioning published against an unratified scope can be invalidated overnight. One sitting.
+2. ~~**Approve or reject the ledger-truncation article, and pick the venue**~~ **RESOLVED — DR-005: approved after the role-split correction; venue is the signalgrid.app blog.** (company blog to be built, personal blog, or third-party outlet). Nothing publishes without this.
+3. ~~**Decide the deny-color contrast question.**~~ **RESOLVED — DR-005: re-toned to #C67070/#8A3F3F, applied.** The deny state fails the accessibility contrast bar (3.18:1 where 4.5:1 is required) on its most safety-critical surface. Three options come to you on one screen: re-tone, constrain usage, or decline explicitly. Open since 2026-08-19.
 4. **Supply four billing numbers**: monthly Claude spend, Apple Developer status/fee, GitHub plan and sibling-repo visibility, domain spend. These are the only cost-model lines the repo cannot compute.
 5. **Sign up for a ServiceNow developer instance and/or Jira free tier** so the flagship ITSM adapters can be driven against a real vendor wire. The org preps the proof scripts beforehand; your part is the account.
 6. **Start the Intune/Entra trial when ready.** The launch-tier Graph connector — the one family whose transport points at Microsoft's production wire — has never been driven live; zero of three launch families have.

@@ -233,6 +233,116 @@ it until the copy is reconciled.
 
 ---
 
+## DR-005 — The five owner decisions of August 20, 2026
+
+**Date:** August 20, 2026. **Decided by:** the owner, in a message that stated
+each decision explicitly, with the operative wording quoted per decision below.
+Written with the reversal conditions and verbatim sourcing DR-004 had to learn
+in review, from the start.
+
+### 1. Launch-profile v4 — ratified in full
+
+> "v4 is no longer a proposal. Treat every current classification in
+> `scripts/launch-profile.mjs` as ratified unless a future decision record
+> explicitly changes it. This also ratifies the source-agnostic build order:
+> open-source lab first; Microsoft enterprise validation next."
+
+This **supersedes DR-004's carve-out** that held the item-level classifications
+as proposals — by exactly the mechanism DR-004's own reversal clause named: a
+later owner instruction. All 174 classifications are ratified: three launch
+connector families (`graph`, `device-management-health`, `local-authority`),
+three launch signal kinds, three launch app surfaces (API server, operator
+console, `ios:EnterpriseShell`); everything else deferred, demo-only, or
+internal as written. The positioning draft's groundings that DR-004 bounded
+out (graph, EnterpriseShell, the `/v1` routes, the console) are now ratified
+ground. The owner's closing constraint is part of the decision: **"do not
+widen the product again now"** — the backlog executes against a fixed edge.
+
+### 2. The first article — approved after one factual correction; company blog first
+
+> "keep the article, correct that section, independently recheck the
+> experiment, then publish it. Canonical venue should be a technical
+> SignalGrid company blog on `signalgrid.app`."
+
+The blocker the owner found is real and this record confirms it: the draft
+prescribed "revoking DELETE" while the same company audit established there is
+no GRANT to revoke — the application role *owns* the ledger table, so the real
+fix is the owner/admin vs restricted-runtime role split (build-plan item 3).
+The corrected canonical article is staged at `docs/HASH_CHAIN_TAIL_ARTICLE.md`.
+The independent recheck exists as a standing fact: `proof:audit-ledger-pg`
+re-runs the experiment against a real Postgres in the "Durable persistence" CI
+job on every push — including, since review of this record, the operator CLI
+itself: `db:verify-ledger` is spawned as a child process and BOTH its exit codes and
+its verdict lines are asserted — "Chain intact" with the right count, "TOO FEW
+RECORDS" naming both numbers, "CHAIN BROKEN at record index" localizing the
+break — across the same three states the article's table publishes (clean,
+short-of-floor, tampered), at smaller scale (8 records to the article's 40).
+The claim is scoped to that: same code paths and verdict sentences, not a
+literal 40-row replay. The
+article's runtime-role grant is per-table: on the ledger, `SELECT` and
+`INSERT` only — `UPDATE` would let an attacker rewrite a record and its hash
+and the verifier would accept the result. Publication order:
+signalgrid.app blog (to be built) first, then a shorter founder version on the
+owner's LinkedIn linking back; no third-party outlet for the first piece.
+**Publishing anything remains the owner's send.**
+
+### 3. Deny color — re-toned; WCAG AA is now the floor
+
+> "adopt WCAG AA as the minimum contrast standard for SignalGrid
+> decision-state colors. Use: Dark deny: `#C67070`, Light deny: `#8A3F3F`.
+> Do not waive the issue and do not artificially restrict where `deny` may
+> be used."
+
+These are the exact values the accessibility pass had tested in `dd55bca` and
+reverted solely for lacking brand ratification — that ratification is this
+record. Independently re-measured before applying: dark `#C67070` scores
+5.05:1 on background and 4.55:1 on card; light `#8A3F3F` scores 6.50:1 and
+7.33:1 — all four above the 4.5:1 floor, against the old dark value's 3.18:1
+on card. Applied to web (`index.css`, a committed single-theme dark surface,
+takes the dark value — as `0 43% 60.8%`, because `61%` rounds to `#C67171`
+and quietly forks the platforms) and iOS (`DesignSystem.swift`, dynamic
+light/dark) in the same commit, because a fork between them was the stated
+reason the first attempt was reverted. Review caught the pairing the original
+measurements missed: the re-tone that fixed deny-as-TEXT flipped the failure
+onto deny-as-FILL — white on the new dark fill measures 3.53:1. Filled deny
+controls now carry a paired foreground (`SG.onDeny`, and the web's
+`--destructive-foreground`): charcoal on the dark fill (5.05:1), white kept on
+the light fill (7.33:1). Color remains redundant with text/icon labels, never the
+sole signal. The canonical decision-state palette now lives in THIS repository
+(`docs/BRAND_CONTRAST_FINDING.md` records the resolution); DEV is retired and
+does not receive the change.
+
+### 4. Billing numbers — the one open item, owner-only by design
+
+Four values, never estimated, per the cost model's own rule: monthly Claude
+spend; Apple Developer status/fee; GitHub plan, price, and sibling-repo
+visibility; total domain spend. The model carries TBDs until the owner sends
+them.
+
+### 5. Fleet Premium — out of baseline COGS
+
+> "do not renew Fleet Premium for SignalGrid's baseline build. […] If it
+> isn't completed by September 16, mark that capability
+> `deferred/unverified-premium`; do not pay merely to preserve a test."
+
+Baseline economics are Fleet Community/self-hosted: $0 license plus actual
+hosting. The Premium-only `getPolicies()` team-scoped branch gets proven on
+the remaining trial only if it costs no launch focus; otherwise it is marked
+`deferred/unverified-premium` on September 16 and priced as a
+customer-specific dependency if a customer ever requires it.
+
+### Reversal
+
+The owner reverses any line here by saying so. Specifically: a future decision
+record can re-open any v4 classification (that is the only path — silence
+does not); the article's venue or the palette values change only by owner
+instruction, and a palette change re-runs the contrast measurements before it
+applies; the Fleet Premium exclusion reverses if a paying customer requires a
+Premium capability, at which point it enters that deployment's pricing, not
+baseline COGS. The "do not widen" constraint stands until the owner lifts it.
+
+---
+
 ## Still open, and honestly so
 
 Two of the four "standing decisions" are **not** decided here, because the

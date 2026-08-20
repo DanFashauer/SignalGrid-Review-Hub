@@ -94,7 +94,7 @@
       "activated": null,
       "produced": null,
       "priority": 2,
-      "nextAction": "The launch profile classifies every surface and a bijection gate holds it honest, but v4 was never ratified and DR-001 defers five families against it. Establish what v5 would have to say before the freeze lifts."
+      "nextAction": "v4 IS ratified — DR-005, in full, with \"do not widen the product again now\" as a standing constraint. This role's job inverts: instead of preparing v5, hold the ratified edge — any status change now requires a decision record first, and a v5 conversation starts only when the owner opens one."
     },
     {
       "id": "data-persistence-engineer",
@@ -188,7 +188,7 @@
       "activated": null,
       "produced": null,
       "priority": 1,
-      "nextAction": "Fleet and Headwind are both stood up and verified; take the remaining 7 device dimensions (policy-binding, data-protection, peripheral-control, service-lifecycle, app-update, macos-posture, device-management-health) and check each against what those servers actually emit."
+      "nextAction": "Fleet and Headwind are stood up and verified; the remaining 7 device dimensions still need checking against what those servers actually emit. Added by DR-005: prove the Premium-only team-scoped getPolicies() branch on the remaining trial ONLY if it costs no launch focus; on September 16, 2026 mark it deferred/unverified-premium if unproven — do not renew the trial to preserve a test."
     },
     {
       "id": "secops-domain",
@@ -293,10 +293,10 @@
       "title": "Brand & design lead",
       "charter": "Visual identity and the site's design system; keeps the brand palette actually applied.",
       "trigger": "A user-facing surface's look changes.",
-      "activated": null,
-      "produced": null,
+      "activated": "2026-08-20",
+      "produced": "The deny re-tone, applied under DR-005: dark #C67070 / light #8A3F3F across web index.css and iOS DesignSystem.swift in one commit (a fork between them was why the first attempt was reverted), re-measured before applying — 5.05:1/4.55:1 dark, 6.50:1/7.33:1 light, against the old 3.18:1 on card. BRAND_CONTRAST_FINDING.md resolved for deny; canonical decision-state palette now lives in this repository.",
       "priority": 3,
-      "nextAction": "Waits for a look change. The off-brand blue was purged on 2026-08-19 and the teal primary is applied consistently."
+      "nextAction": "allow measures 4.32:1 on the dark card — under the WCAG AA floor DR-005 ratified for decision-state colors. The owner ratified VALUES for deny only, so prepare an owner PROPOSAL for an AA-passing allow tone (same hue family, both grounds, both appearances), mentioning primary (4.15:1 on card, brand accent, not bound by the floor) in passing. One screen, three options, like the deny decision came."
     },
     {
       "id": "program-manager",
@@ -327,7 +327,7 @@
       "activated": null,
       "produced": null,
       "priority": 1,
-      "nextAction": "UNBLOCKED by DR-004, bounded by its ratified subset: public copy may claim only the three ratified launch signal kinds and may name badge, zone, and shift only as roadmap (\"badge\" covers every badge-shaped surface including the badgeBinding evidence lane). The sweep's draft is the STARTING POINT, not landable wholesale — strip or roadmap-mark every claim resting on a classification outside the six (concrete example: \"Microsoft Entra/Intune is the first enterprise connector\" rests on the graph family's still-proposal status). Reconciliation covers EVERY public surface carrying a retired label, found by repo-wide search rather than by list — README.md lines 3 and 136 (\"Operational Trust Orchestration\") and the review dashboard (\"runtime decision layer\", \"Zero Trust orchestration platform\") are already-known instances, not the boundary. The launch-claims gate then denylists the four retired labels so drift cannot recur."
+      "nextAction": "FULLY UNBLOCKED: DR-005 ratified launch-profile v4 in full, superseding DR-004's six-item bound — the draft's groundings (graph, EnterpriseShell, /v1 routes, operator console) are ratified ground. Land docs/POSITIONING.md from the sweep draft, reconcile every public surface carrying a retired label (repo-wide search; README.md and the review dashboard are known instances, not the boundary), rewrite the four site sections presenting deferred signals in the present tense, then the launch-claims gate denylisting the four retired labels."
     },
     {
       "id": "icp-customer-research",
@@ -349,7 +349,7 @@
       "activated": null,
       "produced": null,
       "priority": 2,
-      "nextAction": "The first article is DRAFTED — the ledger-truncation piece, 831 words, every figure traced, in docs/COMPANY_BUILD_PLAN.md under Drafts. Next: independent verification pass, then stage for the owner. It publishes NOWHERE without the owner's explicit approval and venue choice."
+      "nextAction": "The article is APPROVED (DR-005) and the corrected canonical is staged at docs/HASH_CHAIN_TAIL_ARTICLE.md — the role-split correction applied, CI recheck standing. Next: build the signalgrid.app technical blog surface (venue the owner chose), then draft the shorter founder version for LinkedIn linking back. PUBLISHING IS THE OWNER'S SEND — this role stages, never posts."
     },
     {
       "id": "design-partner-outreach",
@@ -393,7 +393,7 @@
       "activated": null,
       "produced": null,
       "priority": 2,
-      "nextAction": "The cost-model skeleton is DRAFTED in docs/COMPANY_BUILD_PLAN.md — serving one tenant is limiter-bound, not compute-bound (240 req/min default vs 5,128 decisions/sec measured). Next: land as docs/COST_MODEL.md with every unpriced line TBD, never guessed. Four numbers need the owner: Claude spend, Apple Developer fee, GitHub plan, domains. Separate deadline: the Fleet Premium trial expires 2026-09-16."
+      "nextAction": "Fleet Premium is OUT of baseline COGS (DR-005): baseline is Fleet Community $0 license plus actual hosting; a Premium capability prices as a customer-specific dependency if ever required. Land docs/COST_MODEL.md from the sweep skeleton with that baseline. The only open inputs are the four owner billing numbers (Claude, Apple Developer, GitHub, domains) — never estimated, TBD until sent."
     },
     {
       "id": "commercial-counsel",

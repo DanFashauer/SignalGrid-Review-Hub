@@ -40,26 +40,42 @@ enum SG {
     // one red in the console and another on the device is a worse failure than
     // the one it would be fixing.
     //
-    // OPEN FINDING, deliberately NOT fixed here: measured against these two
-    // surfaces in dark, several fall short of WCAG AA (4.5:1) for body text —
-    // `deny` worst at 3.53:1 on background and 3.18:1 on card, which is the
-    // weakest contrast in the system sitting on its most safety-critical state.
+    // FINDING RESOLVED for `deny` (DR-005, 2026-08-20): the owner ratified WCAG
+    // AA as the floor for decision-state colors and the exact tones the earlier
+    // accessibility pass had tested — light 8A3F3F / dark C67070. Re-measured
+    // before applying: dark deny now 5.05:1 on background, 4.55:1 on card;
+    // light 6.50:1 / 7.33:1. Web and iOS changed in the same commit, because a
+    // fork between them was the reason the first attempt was reverted.
     //
-    //     deny    3.53 on background   3.18 on card    <- fails AA both
-    //     primary 4.61                 4.15            <- card fails AA
-    //     allow   4.80                 4.32            <- card fails AA
+    // The historical measurements, kept because two rows are still live:
+    //     deny    3.53 on background   3.18 on card    <- WAS: fixed by DR-005
+    //     primary 4.61                 4.15            <- card still under 4.5
+    //     allow   4.80                 4.32            <- card still under 4.5
     //     review  5.67                 5.10            <- passes
     //
-    // BRAND_SYSTEM.md is dark-only and adopts no accessibility standard, so
-    // whether AA applies is an owner/brand decision, not a lane one. Raised in
-    // docs/BRAND_CONTRAST_FINDING.md. If it is ratified, the fix belongs in
-    // BRAND_SYSTEM.md first and lands here and in the web tokens together.
+    // `allow` now sits under the ratified decision-state floor (4.32 on card).
+    // The owner ratified VALUES for deny only, so allow gets a PROPOSAL to the
+    // owner (brand-design's queue), not a unilateral re-tone — color is taste,
+    // and taste is on the never-list. `primary` is the brand accent, not a
+    // decision state; the ratified floor does not bind it, though the same
+    // proposal should mention it.
     //
-    // The LIGHT values are NOT canonical — BRAND_SYSTEM.md defines no light mode.
-    // They are derived counterparts, and are equally subject to that ratification.
+    // CANONICAL SOURCE: this file and artifacts/signalgrid-web/src/index.css,
+    // together, per DR-005 — DEV (and its BRAND_SYSTEM.md) is retired and does
+    // not receive changes. WCAG AA is the ratified floor for decision-state
+    // colors; a change here lands in the web tokens in the same commit or not
+    // at all. The light values are derived counterparts under the same floor.
     static let allow  = dynamic(light: "3F6B52", dark: "5E8F73") // canonical dark
     static let review = dynamic(light: "7A5B2E", dark: "B08B57") // canonical dark
-    static let deny   = dynamic(light: "8A3F3F", dark: "A15B5B") // canonical dark
+    static let deny   = dynamic(light: "8A3F3F", dark: "C67070") // DR-005 re-tone: AA on both grounds
+
+    /// Foreground for FILLED deny controls (text/icon sitting ON a deny fill).
+    /// The re-tone that fixed deny-as-text flipped the failure onto deny-as-fill:
+    /// white on the new dark #C67070 measures 3.53:1 — under the ratified AA
+    /// floor — while white on the light #8A3F3F clears it at 7.33:1. So the pair
+    /// is theme-split: light keeps white, dark uses the charcoal background tone
+    /// (#15181B on #C67070 = 5.05:1). Never hardcode .white on a deny fill.
+    static let onDeny = dynamic(light: "FFFFFF", dark: "15181B")
 
     static let radius: CGFloat = 6
 

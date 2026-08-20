@@ -17,6 +17,7 @@
 //   4. CONCURRENCY  — N concurrent appends produce an intact, fork-free chain
 //      (the advisory-lock critical section holds).
 
+import { spawnSync } from "node:child_process";
 import {
   appendAuditRecord,
   getAuditRecords,
@@ -149,6 +150,42 @@ async function main() {
     "…and the head MOVED, so a separately-recorded head or count is what detects it",
     afterCut.headHash !== beforeCut.headHash,
   );
+
+  // ── THE OPERATOR CLI'S EXIT CODES, exercised end to end ──────────────────────
+  //
+  // Everything above tests the library (`verifyLedgerFull`). The published
+  // article reports `db:verify-ledger` OUTPUT AND EXIT CODES, and a regression
+  // in the CLI's exit-code wiring would leave every library assertion green
+  // while the published table went false. So the CLI itself runs here, as a
+  // child process against the same database, and its exit codes are asserted —
+  // this is the standing independent recheck DR-005 cites before publication.
+  // Exit code AND verdict output are asserted: an exit-code-only check would stay
+  // green while the CLI printed a wrong count, a wrong break index, or the wrong
+  // verdict sentence — and the published table quotes the CLI's words. Scale here
+  // is 8 records where the article ran 40; the STATES match (clean, short-of-floor,
+  // tampered) and the verdict lines are the same code paths, which is what the
+  // standing-recheck claim in DR-005 is scoped to.
+  const cli = (args: string[]) => {
+    const r = spawnSync("npx", ["tsx", "./src/verify-ledger-cli.ts", ...args], {
+      env: { ...process.env, DATABASE_URL: url },
+      encoding: "utf8",
+    });
+    if (r.error) throw r.error;
+    return { status: r.status, out: (r.stdout ?? "") + (r.stderr ?? "") };
+  };
+  // State at this point: 8 records, chain intact (the truncation block above).
+  const cliClean = cli([]);
+  check("CLI: a clean chain exits 0 AND says so with the right count",
+    cliClean.status === 0 && cliClean.out.includes("Chain intact") && cliClean.out.includes("records:  8"));
+  const cliShort = cli(["--min-records", "12"]);
+  check("CLI: --min-records above the count exits 1 and names both numbers — truncation catchable from outside the chain",
+    cliShort.status === 1 && cliShort.out.includes("TOO FEW RECORDS: 8 < the 12"));
+  await admin.query(
+    "UPDATE audit_ledger SET meta = '{\"i\":777}'::jsonb WHERE seq = (SELECT MIN(seq) + 3 FROM audit_ledger)",
+  );
+  const cliTampered = cli([]);
+  check("CLI: a tampered row exits 1 and localizes the break to its exact index",
+    cliTampered.status === 1 && cliTampered.out.includes("CHAIN BROKEN at record index 3"));
 
   await admin.query("DROP TABLE IF EXISTS audit_ledger");
   await admin.end();

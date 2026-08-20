@@ -59,6 +59,18 @@ Afterwards it compares the restored audit head against the manifest. If they dif
 **exits non-zero and says so** — the rows restored, but that is not the chain the backup
 recorded, and that is a fact you need immediately rather than at the next audit.
 
+**The privilege posture is re-applied, not restored.** `pg_restore` runs with
+`--no-owner --no-privileges`, so every table comes back owned by the admin
+credential that ran the restore, with every grant stripped — which is the safe
+direction (an archive can never smuggle the runtime role into ownership), but on
+its own it would silently un-split the database roles. The restore therefore
+re-applies the canonical role split as its last step: `signalgrid_runtime` gets
+back exactly the statements the stores execute — the ledger `SELECT`+`INSERT`
+only (append-only **by privilege**, not just by hash chain) — and still owns
+nothing. `proof:db-role-split` exercises this whole round trip in CI: backup,
+posture deliberately destroyed, restore, runtime writes again, destructive
+statements still denied. See "The runtime role" below.
+
 A matching head hash means the same last record. To establish that every record
 between them is intact, verify the whole chain — read-only, paginated, any length:
 
@@ -201,3 +213,92 @@ upgrade path is tested continuously, not discovered at the first real upgrade.
 The honest procedure is still: take a backup, verify it, run `db:migrate`, deploy,
 and keep the archive until you are satisfied. `db:verify-backup` is what makes
 "keep the archive" mean something.
+
+## The runtime role
+
+Migration v2 splits the database credentials: the API server should run as
+`signalgrid_runtime`, a plain `LOGIN` role that **owns nothing** and holds
+exactly the statements the stores execute —
+
+| Table | Grants | Why |
+| --- | --- | --- |
+| `audit_ledger` | `SELECT`, `INSERT` (+ sequence `USAGE`) | Append-only **by privilege**. The hash chain detects tampering after the fact; the missing `UPDATE`/`DELETE` grant prevents the runtime credential from doing it at all. |
+| `decisions`, `evidence_snapshots` | `SELECT`, `INSERT`, `UPDATE` | The stores upsert via `INSERT … ON CONFLICT DO UPDATE`. |
+| `sessions` | `SELECT`, `INSERT`, `UPDATE` | Lifecycle transitions are `UPDATE`s. |
+
+No `DELETE` anywhere, no `TRUNCATE`, no DDL, no `CREATE` on the schema. Schema
+and admin work (`db:migrate`, `db:backup`/`db:restore`) stays with the admin
+credential — a different login entirely.
+
+To wire it up: run `db:migrate` with the admin credential (creates the role and
+grants), set a password out of band — the canonical SQL deliberately carries
+none — and point the application's `DATABASE_URL` at the runtime login:
+
+```bash
+psql "$ADMIN_DATABASE_URL" -c '\password signalgrid_runtime'   # prompts twice; never in argv or history
+DATABASE_URL=postgres://signalgrid_runtime:…@host:5432/signalgrid  # the app
+```
+
+`\password` hashes the password client-side and sends it inside the session, so
+it never appears in shell history, process arguments, or captured deployment
+logs — never inline it into an `ALTER ROLE … PASSWORD '…'` command. In the
+`DATABASE_URL`, percent-encode any password character that is reserved in URLs
+(`@`, `:`, `/`, `#`, `?`, `%`), or the URL parser will split the string in the
+wrong place.
+
+The stores' bootstrap DDL degrades honestly under this role: if migrations
+already built the schema they proceed; if the schema is missing they refuse with
+the exact remedy ("run `db:migrate` with the admin credential") instead of a
+bare permission error. And existence is not usability — after the missing-schema
+check, each store verifies the exact table privileges its statements need (the
+ledger appender additionally checks sequence `USAGE`), and all three durable
+components' `ping()` probes re-verify them on every `/readyz`, so it goes unready when the
+posture regresses instead of reporting a health the first real write would
+disprove. `proof:db-role-split` proves both directions on a real Postgres in
+CI — every legitimate runtime write works, every destructive statement is
+denied with `insufficient_privilege`, the admin can still do what the runtime
+cannot (so the denial is the role, not the table), and a backup → restore round
+trip recreates the same posture without ever making the runtime an owner.
+
+**Provisioning is prechecked, fail-closed.** Creating `signalgrid_runtime`
+needs cluster-wide `CREATEROLE` (or `SUPERUSER`) — an attribute many
+least-privilege migration credentials deliberately lack. Both `db:migrate` and
+`db:restore` check this **before doing any work**: if the role is missing and
+the credential cannot create it, they refuse with the remedy (`CREATE ROLE
+signalgrid_runtime LOGIN;` run by a cluster administrator) instead of dying
+mid-migration or — worse — after `pg_restore` has already replaced the
+database. The same precheck verifies the caller's own **grant authority**:
+`GRANT CONNECT ON DATABASE` needs the database owner or a superuser, so a
+credential that owns the tables but not the database is refused up front
+rather than after the restore has stripped every privilege. The split also refuses to **adopt** a preexisting `signalgrid_runtime`
+that is anything more than a plain LOGIN role: elevated attributes
+(`SUPERUSER`, `CREATEROLE`, `BYPASSRLS`, …), `NOLOGIN`, a `CONNECTION LIMIT` below the
+runtime's pool budget (three stores × 10 pooled connections), or an expired `VALID UNTIL` (grants would apply and the API still could not
+connect — and a deliberate lockout must not be silently re-enabled), ownership
+of ANY object here (relations, schemas, the database itself, and non-relation
+objects such as functions or types), ownership or grants in ANY OTHER database
+on the cluster (`pg_shdepend`, the cluster-wide catalog, is checked —
+database-local catalogs cannot see them), grants here outside the canonical
+set, reachable owner-rights paths (a `SECURITY DEFINER` routine the runtime
+can execute, a writable admin-owned view — both run with their OWNER's
+privileges and defeat the table grants; refused rather than silently revoked,
+because a `PUBLIC` grant serves other roles too),
+or role memberships — all grounds for refusal, because `REVOKE` cannot demote
+any of them and the append-only claim would be false. Each refusal names its
+one remedy, and a restore runs the same validation BEFORE `pg_restore`. The
+grant reset is wider than the role: `PUBLIC`-level grants, column-level ACLs,
+and the ledger sequence's ACL are all reset on every apply, every relation
+schema-qualified. And `pnpm run db:migrate` doubles as the REPAIR command: on
+a database already at the current schema version it re-applies the (idempotent)
+split, so a dropped role or revoked grant is fixed by exactly the command the
+error messages name.
+
+**The real-Postgres proofs demand a disposable cluster.** Every `proof:*-pg`
+and `proof:backup-restore`/`proof:db-role-split` run DROPs the tables it tests,
+and the role-split proof re-passwords the cluster-wide `signalgrid_runtime`
+role. Setting `DATABASE_URL` is therefore not consent: the proofs refuse
+(loudly, exit 1 — never a silent skip) unless `SIGNALGRID_DB_DISPOSABLE=1`
+declares the **entire target cluster** — data, schema, and roles; roles are
+cluster-wide, so a throwaway *database* on a shared server is not isolation —
+safe to destroy. CI's service container sets it; never set it against anything
+persistent.

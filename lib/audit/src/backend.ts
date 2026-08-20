@@ -20,6 +20,12 @@ export interface AuditBackend {
   appendWithChain(build: (prevHash: string) => AuditRecord): Promise<AuditRecord>;
   /** Records in insertion order, sliced. */
   getRecords(limit: number, offset: number): Promise<AuditRecord[]>;
+  /**
+   * Round-trip readiness probe (durable backends only). Resolves when the
+   * backend can actually append — connection AND privileges — and rejects
+   * otherwise, so /readyz reflects fitness rather than mere liveness.
+   */
+  ping?(): Promise<void>;
   /** Optional teardown (Postgres pool). */
   close?(): Promise<void>;
 }
@@ -50,11 +56,18 @@ const ADVISORY_LOCK_KEY = 0x516e414c; // "sgAL" — stable per-ledger lock id
 export class PostgresAuditBackend implements AuditBackend {
   private pool: any;
   private ready: Promise<void>;
+  private retry: Promise<void> | null = null;
   private readonly connectionString: string;
 
   constructor(connectionString: string) {
     this.connectionString = connectionString;
     this.ready = this.init(connectionString);
+    // A caller may never await this.ready (readyz can bail on an earlier
+    // component before probing this one) — without a standing handler, a
+    // rejected eager init becomes an unhandledRejection that KILLS the
+    // process. The branch below only defuses that; ensureReady still sees and
+    // retries the real rejection.
+    this.ready.catch(() => {});
   }
 
   /**
@@ -69,14 +82,28 @@ export class PostgresAuditBackend implements AuditBackend {
   private async ensureReady(): Promise<void> {
     try {
       await this.ready;
+      return;
     } catch {
-      if (this.pool) {
-        try { await this.pool.end(); } catch { /* the old pool may already be dead */ }
-        this.pool = undefined;
-      }
-      this.ready = this.init(this.connectionString);
-      await this.ready;
+      // fall through to the single-flight rebuild below
     }
+    // SINGLE-FLIGHT: a recovery burst after an outage must not have every
+    // caller independently tear down and rebuild the pool — overlapping
+    // retries overwrite each other's pool reference, leak the orphaned pools'
+    // connections, and can exhaust the server. The first caller performs the
+    // rebuild; every concurrent caller awaits that same attempt.
+    if (!this.retry) {
+      this.retry = (async () => {
+        if (this.pool) {
+          try { await this.pool.end(); } catch { /* the old pool may already be dead */ }
+          this.pool = undefined;
+        }
+        await this.init(this.connectionString);
+      })();
+      this.ready = this.retry;
+      this.ready.catch(() => {});
+      this.retry.finally(() => { this.retry = null; }).catch(() => {});
+    }
+    await this.ready;
   }
 
   private async init(connectionString: string): Promise<void> {
@@ -84,20 +111,83 @@ export class PostgresAuditBackend implements AuditBackend {
     const pg = await import("pg");
     const Pool = (pg as any).default?.Pool ?? (pg as any).Pool;
     this.pool = new Pool({ connectionString, max: 10 });
-    await this.pool.query(`
-      CREATE TABLE IF NOT EXISTS audit_ledger (
-        seq        BIGSERIAL PRIMARY KEY,
-        id         TEXT NOT NULL,
-        ts         TIMESTAMPTZ NOT NULL,
-        request_id TEXT,
-        actor      JSONB NOT NULL,
-        event_type TEXT NOT NULL,
-        target     JSONB,
-        meta       JSONB,
-        prev_hash  TEXT NOT NULL,
-        hash       TEXT NOT NULL
-      );
+    try {
+      await this.pool.query(`
+        CREATE TABLE IF NOT EXISTS public.audit_ledger (
+          seq        BIGSERIAL PRIMARY KEY,
+          id         TEXT NOT NULL,
+          ts         TIMESTAMPTZ NOT NULL,
+          request_id TEXT,
+          actor      JSONB NOT NULL,
+          event_type TEXT NOT NULL,
+          target     JSONB,
+          meta       JSONB,
+          prev_hash  TEXT NOT NULL,
+          hash       TEXT NOT NULL
+        );
+      `);
+    } catch (err) {
+      // Under the role split the runtime credential holds NO DDL privilege, and
+      // PostgreSQL rejects even CREATE TABLE IF NOT EXISTS without CREATE on the
+      // schema — before checking whether the table exists. A denied bootstrap is
+      // FINE exactly when migrations already built the schema: verify that and
+      // proceed. A denied bootstrap over a missing table is a misconfiguration,
+      // named precisely instead of surfacing as a bare permission error.
+      if ((err as { code?: string }).code !== "42501") throw err;
+      const probe = await this.pool.query("SELECT to_regclass('public.audit_ledger') IS NOT NULL AS ok");
+      if (!probe.rows[0]?.ok) {
+        throw new Error(
+          "audit_ledger does not exist and this credential may not create it — " +
+            "run `pnpm run db:migrate` with the admin credential first (the runtime role owns no schema).",
+        );
+      }
+      // Existence is not usability: the appender needs SELECT (chain head) +
+      // INSERT + USAGE on the seq sequence, and nothing else. Verify exactly
+      // that, so missing grants read as "not ready" here instead of a 42501
+      // on the first append — which for the LEDGER would mean decisions
+      // happening without their audit trail.
+      await this.assertPrivileges();
+    }
+  }
+
+  /** The exact privileges appendWithChain needs; also run on every ping() so
+   *  /readyz flips when the posture regresses mid-flight. */
+  private async assertPrivileges(): Promise<void> {
+    const priv = await this.pool.query(`
+      SELECT has_table_privilege('public.audit_ledger', 'SELECT')
+         AND has_table_privilege('public.audit_ledger', 'INSERT')
+         AND has_sequence_privilege(pg_get_serial_sequence('public.audit_ledger', 'seq'), 'USAGE') AS ok,
+             has_any_column_privilege('public.audit_ledger', 'UPDATE')
+          OR has_table_privilege('public.audit_ledger', 'DELETE')
+          OR has_table_privilege('public.audit_ledger', 'TRUNCATE')
+          -- sequence UPDATE means setval(): the append counter could be wedged
+          OR has_sequence_privilege(pg_get_serial_sequence('public.audit_ledger', 'seq'), 'UPDATE') AS forbidden
     `);
+    if (!priv.rows[0]?.ok) {
+      throw new Error(
+        "this credential is missing privileges on audit_ledger (or its sequence) — re-apply the " +
+          "role split with the admin credential (`pnpm run db:migrate`); refusing to report ready " +
+          "for appends that would fail.",
+      );
+    }
+    // The append-only boundary is a NEGATIVE claim, so readiness must also
+    // check the forbidden direction: a grant of UPDATE (table- or
+    // column-level), DELETE, or TRUNCATE that appears under a running process
+    // means the ledger is rewritable — that is not a ready state for a
+    // tamper-evidence component, whatever the required privileges say.
+    if (priv.rows[0]?.forbidden) {
+      throw new Error(
+        "this credential holds FORBIDDEN privileges on audit_ledger (UPDATE, DELETE, or TRUNCATE — " +
+          "directly, via PUBLIC, or column-level): the ledger would not be append-only. Re-apply the " +
+          "role split with the admin credential (`pnpm run db:migrate`); refusing to report ready.",
+      );
+    }
+  }
+
+  async ping(): Promise<void> {
+    await this.ensureReady();
+    await this.pool.query("SELECT 1");
+    await this.assertPrivileges();
   }
 
   async appendWithChain(build: (prevHash: string) => AuditRecord): Promise<AuditRecord> {
@@ -108,12 +198,12 @@ export class PostgresAuditBackend implements AuditBackend {
       // Serialize the critical section across all writers.
       await client.query("SELECT pg_advisory_xact_lock($1)", [ADVISORY_LOCK_KEY]);
       const head = await client.query(
-        "SELECT hash FROM audit_ledger ORDER BY seq DESC LIMIT 1",
+        "SELECT hash FROM public.audit_ledger ORDER BY seq DESC LIMIT 1",
       );
       const prevHash: string = head.rows[0]?.hash ?? "";
       const record = build(prevHash);
       await client.query(
-        `INSERT INTO audit_ledger
+        `INSERT INTO public.audit_ledger
            (id, ts, request_id, actor, event_type, target, meta, prev_hash, hash)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
         [
@@ -142,7 +232,7 @@ export class PostgresAuditBackend implements AuditBackend {
     await this.ensureReady();
     const res = await this.pool.query(
       `SELECT id, ts, request_id, actor, event_type, target, meta, prev_hash, hash
-         FROM audit_ledger ORDER BY seq ASC OFFSET $1 LIMIT $2`,
+         FROM public.audit_ledger ORDER BY seq ASC OFFSET $1 LIMIT $2`,
       [offset, limit],
     );
     return res.rows.map((r: any): AuditRecord => ({

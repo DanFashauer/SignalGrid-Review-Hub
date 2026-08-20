@@ -6,12 +6,14 @@
 //     pnpm --filter @workspace/scripts run proof:session-store-pg
 
 import { PostgresSessionStore, setSessionStore, type Session } from "@workspace/persistence";
+import { requireDisposableCluster } from "./lib/db-guard";
 
 const url = process.env.DATABASE_URL;
 if (!url) {
   console.log("Session-store PG proof: SKIPPED (DATABASE_URL unset).");
   process.exit(0);
 }
+requireDisposableCluster("Session-store PG proof");
 
 let passed = 0;
 const failures: string[] = [];

@@ -40,6 +40,12 @@ export interface SessionStore {
   refresh(tenantId: string, id: string, ttlSeconds: number, nowMs: number): Promise<Session | null>;
   /** End a session (sign-out). Returns the ended session or null. */
   end(tenantId: string, id: string): Promise<Session | null>;
+  /**
+   * Round-trip readiness probe (durable backends only). Resolves when the
+   * store can actually do its work — connection AND privileges — and rejects
+   * otherwise, so /readyz reflects fitness rather than mere liveness.
+   */
+  ping?(): Promise<void>;
   close?(): Promise<void>;
 }
 
@@ -92,11 +98,18 @@ export class InMemorySessionStore implements SessionStore {
 export class PostgresSessionStore implements SessionStore {
   private pool: any;
   private ready: Promise<void>;
+  private retry: Promise<void> | null = null;
   private readonly connectionString: string;
 
   constructor(connectionString: string) {
     this.connectionString = connectionString;
     this.ready = this.init(connectionString);
+    // A caller may never await this.ready (readyz can bail on an earlier
+    // component before probing this one) — without a standing handler, a
+    // rejected eager init becomes an unhandledRejection that KILLS the
+    // process. The branch below only defuses that; ensureReady still sees and
+    // retries the real rejection.
+    this.ready.catch(() => {});
   }
 
   /**
@@ -111,36 +124,91 @@ export class PostgresSessionStore implements SessionStore {
   private async ensureReady(): Promise<void> {
     try {
       await this.ready;
+      return;
     } catch {
-      if (this.pool) {
-        try { await this.pool.end(); } catch { /* the old pool may already be dead */ }
-        this.pool = undefined;
-      }
-      this.ready = this.init(this.connectionString);
-      await this.ready;
+      // fall through to the single-flight rebuild below
     }
+    // SINGLE-FLIGHT: a recovery burst after an outage must not have every
+    // caller independently tear down and rebuild the pool — overlapping
+    // retries overwrite each other's pool reference, leak the orphaned pools'
+    // connections, and can exhaust the server. The first caller performs the
+    // rebuild; every concurrent caller awaits that same attempt.
+    if (!this.retry) {
+      this.retry = (async () => {
+        if (this.pool) {
+          try { await this.pool.end(); } catch { /* the old pool may already be dead */ }
+          this.pool = undefined;
+        }
+        await this.init(this.connectionString);
+      })();
+      this.ready = this.retry;
+      this.ready.catch(() => {});
+      this.retry.finally(() => { this.retry = null; }).catch(() => {});
+    }
+    await this.ready;
   }
 
   private async init(connectionString: string): Promise<void> {
     const pg = await import("pg");
     const Pool = (pg as any).default?.Pool ?? (pg as any).Pool;
     this.pool = new Pool({ connectionString, max: 10 });
-    await this.pool.query(`
-      CREATE TABLE IF NOT EXISTS sessions (
-        id           TEXT PRIMARY KEY,
-        tenant_id    TEXT NOT NULL,
-        identity_ref TEXT NOT NULL,
-        device_ref   TEXT NOT NULL,
-        workflow_key TEXT NOT NULL,
-        status       TEXT NOT NULL,
-        outcome      TEXT NOT NULL,
-        decision_id  TEXT NOT NULL,
-        created_at   TIMESTAMPTZ NOT NULL,
-        last_seen_at TIMESTAMPTZ NOT NULL,
-        expires_at   TIMESTAMPTZ NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS sessions_tenant_idx ON sessions (tenant_id);
+    try {
+      await this.pool.query(`
+        CREATE TABLE IF NOT EXISTS public.sessions (
+          id           TEXT PRIMARY KEY,
+          tenant_id    TEXT NOT NULL,
+          identity_ref TEXT NOT NULL,
+          device_ref   TEXT NOT NULL,
+          workflow_key TEXT NOT NULL,
+          status       TEXT NOT NULL,
+          outcome      TEXT NOT NULL,
+          decision_id  TEXT NOT NULL,
+          created_at   TIMESTAMPTZ NOT NULL,
+          last_seen_at TIMESTAMPTZ NOT NULL,
+          expires_at   TIMESTAMPTZ NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS sessions_tenant_idx ON public.sessions (tenant_id);
+      `);
+    } catch (err) {
+      // Under the role split the runtime credential holds NO DDL privilege, and
+      // PostgreSQL rejects even CREATE TABLE IF NOT EXISTS without CREATE on the
+      // schema. A denied bootstrap is fine exactly when migrations already built
+      // the schema: verify that and proceed; otherwise name the real remedy.
+      if ((err as { code?: string }).code !== "42501") throw err;
+      const probe = await this.pool.query("SELECT to_regclass('public.sessions') IS NOT NULL AS ok");
+      if (!probe.rows[0]?.ok) {
+        throw new Error(
+          "sessions does not exist and this credential may not create it — " +
+            "run `pnpm run db:migrate` with the admin credential first (the runtime role owns no schema).",
+        );
+      }
+      // Existence is not usability: verify the exact privileges the store's
+      // statements need (lifecycle transitions are UPDATEs), so missing grants
+      // surface here as "not ready" instead of as a 42501 mid-request.
+      await this.assertPrivileges();
+    }
+  }
+
+  /** The exact per-table privileges the store's statements need; also run on
+   *  every ping() so /readyz flips when the posture regresses mid-flight. */
+  private async assertPrivileges(): Promise<void> {
+    const priv = await this.pool.query(`
+      SELECT has_table_privilege('public.sessions', 'SELECT')
+         AND has_table_privilege('public.sessions', 'INSERT')
+         AND has_table_privilege('public.sessions', 'UPDATE') AS ok
     `);
+    if (!priv.rows[0]?.ok) {
+      throw new Error(
+        "this credential is missing table privileges on sessions — re-apply the role split " +
+          "with the admin credential (`pnpm run db:migrate`); refusing to report ready for work that would fail.",
+      );
+    }
+  }
+
+  async ping(): Promise<void> {
+    await this.ensureReady();
+    await this.pool.query("SELECT 1");
+    await this.assertPrivileges();
   }
 
   private rowToSession(r: any): Session {
@@ -163,7 +231,7 @@ export class PostgresSessionStore implements SessionStore {
   async start(s: Session): Promise<void> {
     await this.ensureReady();
     await this.pool.query(
-      `INSERT INTO sessions
+      `INSERT INTO public.sessions
          (id, tenant_id, identity_ref, device_ref, workflow_key, status, outcome, decision_id, created_at, last_seen_at, expires_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        ON CONFLICT (id) DO NOTHING`,
@@ -174,14 +242,14 @@ export class PostgresSessionStore implements SessionStore {
   async get(tenantId: string, id: string, nowMs: number): Promise<Session | null> {
     await this.ensureReady();
     const res = await this.pool.query(
-      "SELECT * FROM sessions WHERE id = $1 AND tenant_id = $2",
+      "SELECT * FROM public.sessions WHERE id = $1 AND tenant_id = $2",
       [id, tenantId],
     );
     if (!res.rows[0]) return null;
     const s = this.rowToSession(res.rows[0]);
     const applied = withExpiry(s, nowMs);
     if (applied.status !== s.status) {
-      await this.pool.query("UPDATE sessions SET status = $1 WHERE id = $2 AND tenant_id = $3", [applied.status, id, tenantId]);
+      await this.pool.query("UPDATE public.sessions SET status = $1 WHERE id = $2 AND tenant_id = $3", [applied.status, id, tenantId]);
     }
     return applied;
   }
@@ -193,7 +261,7 @@ export class PostgresSessionStore implements SessionStore {
     const lastSeenAt = new Date(nowMs).toISOString();
     const expiresAt = new Date(nowMs + ttlSeconds * 1000).toISOString();
     await this.pool.query(
-      "UPDATE sessions SET last_seen_at = $1, expires_at = $2 WHERE id = $3 AND tenant_id = $4",
+      "UPDATE public.sessions SET last_seen_at = $1, expires_at = $2 WHERE id = $3 AND tenant_id = $4",
       [lastSeenAt, expiresAt, id, tenantId],
     );
     return { ...current, lastSeenAt, expiresAt };
@@ -202,7 +270,7 @@ export class PostgresSessionStore implements SessionStore {
   async end(tenantId: string, id: string): Promise<Session | null> {
     await this.ensureReady();
     const res = await this.pool.query(
-      "UPDATE sessions SET status = 'ended' WHERE id = $1 AND tenant_id = $2 RETURNING *",
+      "UPDATE public.sessions SET status = 'ended' WHERE id = $1 AND tenant_id = $2 RETURNING *",
       [id, tenantId],
     );
     return res.rows[0] ? this.rowToSession(res.rows[0]) : null;

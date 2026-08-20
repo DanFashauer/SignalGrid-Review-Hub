@@ -35,11 +35,18 @@ export interface DecisionStore {
 export class PostgresDecisionStore implements DecisionStore {
   private pool: any;
   private ready: Promise<void>;
+  private retry: Promise<void> | null = null;
   private readonly connectionString: string;
 
   constructor(connectionString: string) {
     this.connectionString = connectionString;
     this.ready = this.init(connectionString);
+    // A caller may never await this.ready (readyz can bail on an earlier
+    // component before probing this one) — without a standing handler, a
+    // rejected eager init becomes an unhandledRejection that KILLS the
+    // process. The branch below only defuses that; ensureReady still sees and
+    // retries the real rejection.
+    this.ready.catch(() => {});
   }
 
   /**
@@ -56,37 +63,97 @@ export class PostgresDecisionStore implements DecisionStore {
   private async ensureReady(): Promise<void> {
     try {
       await this.ready;
+      return;
     } catch {
-      if (this.pool) {
-        try { await this.pool.end(); } catch { /* the old pool may already be dead */ }
-        this.pool = undefined;
-      }
-      this.ready = this.init(this.connectionString);
-      await this.ready;
+      // fall through to the single-flight rebuild below
     }
+    // SINGLE-FLIGHT: a recovery burst after an outage must not have every
+    // caller independently tear down and rebuild the pool — overlapping
+    // retries overwrite each other's pool reference, leak the orphaned pools'
+    // connections, and can exhaust the server. The first caller performs the
+    // rebuild; every concurrent caller awaits that same attempt.
+    if (!this.retry) {
+      this.retry = (async () => {
+        if (this.pool) {
+          try { await this.pool.end(); } catch { /* the old pool may already be dead */ }
+          this.pool = undefined;
+        }
+        await this.init(this.connectionString);
+      })();
+      this.ready = this.retry;
+      this.ready.catch(() => {});
+      this.retry.finally(() => { this.retry = null; }).catch(() => {});
+    }
+    await this.ready;
   }
 
   private async init(connectionString: string): Promise<void> {
     const pg = await import("pg");
     const Pool = (pg as any).default?.Pool ?? (pg as any).Pool;
     this.pool = new Pool({ connectionString, max: 10 });
-    await this.pool.query(`
-      CREATE TABLE IF NOT EXISTS decisions (
-        id         TEXT PRIMARY KEY,
-        tenant_id  TEXT NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL,
-        outcome    TEXT NOT NULL,
-        data       JSONB NOT NULL
+    try {
+      await this.pool.query(`
+        CREATE TABLE IF NOT EXISTS public.decisions (
+          id         TEXT PRIMARY KEY,
+          tenant_id  TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL,
+          outcome    TEXT NOT NULL,
+          data       JSONB NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS decisions_tenant_created_idx
+          ON public.decisions (tenant_id, created_at DESC);
+        CREATE TABLE IF NOT EXISTS public.evidence_snapshots (
+          id          TEXT PRIMARY KEY,
+          tenant_id   TEXT NOT NULL,
+          decision_id TEXT NOT NULL,
+          data        JSONB NOT NULL
+        );
+      `);
+    } catch (err) {
+      // Under the role split the runtime credential holds NO DDL privilege, and
+      // PostgreSQL rejects even CREATE TABLE IF NOT EXISTS without CREATE on the
+      // schema. A denied bootstrap is fine exactly when migrations already built
+      // the schema: verify that and proceed; otherwise name the real remedy.
+      if ((err as { code?: string }).code !== "42501") throw err;
+      const probe = await this.pool.query(
+        "SELECT to_regclass('public.decisions') IS NOT NULL AND to_regclass('public.evidence_snapshots') IS NOT NULL AS ok",
       );
-      CREATE INDEX IF NOT EXISTS decisions_tenant_created_idx
-        ON decisions (tenant_id, created_at DESC);
-      CREATE TABLE IF NOT EXISTS evidence_snapshots (
-        id          TEXT PRIMARY KEY,
-        tenant_id   TEXT NOT NULL,
-        decision_id TEXT NOT NULL,
-        data        JSONB NOT NULL
-      );
+      if (!probe.rows[0]?.ok) {
+        throw new Error(
+          "decisions/evidence_snapshots do not exist and this credential may not create them — " +
+            "run `pnpm run db:migrate` with the admin credential first (the runtime role owns no schema).",
+        );
+      }
+      // The tables existing is NOT the same as this credential being able to
+      // use them. Without this, a runtime role with missing grants initializes
+      // "healthy", /readyz returns 200, and the first real read or write dies
+      // with insufficient_privilege in front of a user instead of here.
+      await this.assertPrivileges();
+    }
+  }
+
+  /**
+   * The exact per-table privileges the store's statements need (the upsert is
+   * INSERT … ON CONFLICT DO UPDATE, hence UPDATE). Cheap catalog reads — also
+   * run on every ping() so /readyz flips if the posture regresses underneath a
+   * running process instead of reporting a health it no longer has.
+   */
+  private async assertPrivileges(): Promise<void> {
+    const priv = await this.pool.query(`
+      SELECT has_table_privilege('public.decisions', 'SELECT')
+         AND has_table_privilege('public.decisions', 'INSERT')
+         AND has_table_privilege('public.decisions', 'UPDATE')
+         AND has_table_privilege('public.evidence_snapshots', 'SELECT')
+         AND has_table_privilege('public.evidence_snapshots', 'INSERT')
+         AND has_table_privilege('public.evidence_snapshots', 'UPDATE') AS ok
     `);
+    if (!priv.rows[0]?.ok) {
+      throw new Error(
+        "this credential is missing table privileges on decisions/evidence_snapshots — " +
+          "re-apply the role split with the admin credential (`pnpm run db:migrate`); " +
+          "refusing to report ready for work that would fail.",
+      );
+    }
   }
 
   async saveDecision(decision: Decision, snapshot: EvidenceSnapshot): Promise<void> {
@@ -95,13 +162,13 @@ export class PostgresDecisionStore implements DecisionStore {
     try {
       await client.query("BEGIN");
       await client.query(
-        `INSERT INTO decisions (id, tenant_id, created_at, outcome, data)
+        `INSERT INTO public.decisions (id, tenant_id, created_at, outcome, data)
          VALUES ($1,$2,$3,$4,$5)
          ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, outcome = EXCLUDED.outcome`,
         [decision.id, decision.tenantId, decision.createdAt, decision.outcome, JSON.stringify(decision)],
       );
       await client.query(
-        `INSERT INTO evidence_snapshots (id, tenant_id, decision_id, data)
+        `INSERT INTO public.evidence_snapshots (id, tenant_id, decision_id, data)
          VALUES ($1,$2,$3,$4)
          ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`,
         [snapshot.id, snapshot.tenantId, snapshot.decisionId, JSON.stringify(snapshot)],
@@ -119,7 +186,7 @@ export class PostgresDecisionStore implements DecisionStore {
     await this.ensureReady();
     // Keyed on (id, tenant_id): a cross-tenant id returns nothing.
     const res = await this.pool.query(
-      "SELECT data FROM decisions WHERE id = $1 AND tenant_id = $2",
+      "SELECT data FROM public.decisions WHERE id = $1 AND tenant_id = $2",
       [id, tenantId],
     );
     return res.rows[0] ? (res.rows[0].data as Decision) : null;
@@ -128,7 +195,7 @@ export class PostgresDecisionStore implements DecisionStore {
   async listDecisions(tenantId: string, limit = 100): Promise<Decision[]> {
     await this.ensureReady();
     const res = await this.pool.query(
-      "SELECT data FROM decisions WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2",
+      "SELECT data FROM public.decisions WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2",
       [tenantId, limit],
     );
     return res.rows.map((r: any) => r.data as Decision);
@@ -137,7 +204,7 @@ export class PostgresDecisionStore implements DecisionStore {
   async getSnapshot(tenantId: string, id: string): Promise<EvidenceSnapshot | null> {
     await this.ensureReady();
     const res = await this.pool.query(
-      "SELECT data FROM evidence_snapshots WHERE id = $1 AND tenant_id = $2",
+      "SELECT data FROM public.evidence_snapshots WHERE id = $1 AND tenant_id = $2",
       [id, tenantId],
     );
     return res.rows[0] ? (res.rows[0].data as EvidenceSnapshot) : null;
@@ -145,7 +212,11 @@ export class PostgresDecisionStore implements DecisionStore {
 
   async ping(): Promise<void> {
     await this.ensureReady();
+    // Liveness AND fitness: `SELECT 1` proves the connection; the privilege
+    // probe proves the next real statement can succeed. A /readyz that stays
+    // 200 while every write would 42501 is a health report about nothing.
     await this.pool.query("SELECT 1");
+    await this.assertPrivileges();
   }
 
   async close(): Promise<void> {

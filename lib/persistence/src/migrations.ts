@@ -25,6 +25,8 @@
 // keep their inline DDL for the no-migration fixture path; this is the
 // authority an operator runs BEFORE pointing a new revision at a database.
 
+import { ROLE_SPLIT_SQL, assertRoleSplitProvisionable } from "./role-split";
+
 const MIGRATION_LOCK_KEY = 0x5194_a11d;
 
 export interface Migration {
@@ -81,6 +83,16 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX IF NOT EXISTS sessions_tenant_idx ON sessions (tenant_id);
     `,
   },
+  {
+    version: 2,
+    name: "role-split-2026-08-20",
+    // The database role split (owner-ordered shift 2): a `signalgrid_runtime`
+    // LOGIN role that owns nothing and holds exactly the statements the stores
+    // execute — the ledger append-only BY PRIVILEGE. The SQL lives in
+    // role-split.ts because it is also the post-restore re-provisioning step
+    // (pg_restore --no-privileges strips every grant); one source, two callers.
+    statements: ROLE_SPLIT_SQL,
+  },
 ];
 
 export interface MigrationResult {
@@ -115,12 +127,30 @@ export async function runMigrations(connectionString: string): Promise<Migration
             "A database AHEAD of its code is refused, not driven — run newer code instead.",
         );
       }
+      const pending = MIGRATIONS.filter((m) => m.version > recorded);
+      // The role-split migration needs cluster-wide CREATEROLE the first time.
+      // Check BEFORE applying anything: the transaction makes a mid-v2 failure
+      // atomic, but "your credential cannot do this, here is the remedy" beats
+      // a raw 42501 after v1's DDL has already run and rolled back.
+      if (pending.some((m) => m.version === 2)) {
+        await assertRoleSplitProvisionable((sql) => client.query(sql));
+      }
       const applied: number[] = [];
-      for (const m of MIGRATIONS) {
-        if (m.version <= recorded) continue;
+      for (const m of pending) {
         await client.query(m.statements);
         await client.query("INSERT INTO schema_version (version, name) VALUES ($1, $2)", [m.version, m.name]);
         applied.push(m.version);
+      }
+      // REPAIR PATH: on a database already at v2+, re-apply the (idempotent)
+      // role split even though no migration is pending. Without this,
+      // "re-apply the role split (`pnpm run db:migrate`)" — the remedy every
+      // store error names — would apply NOTHING on the exact databases that
+      // need it: schema_version records 2, so a dropped role or revoked grant
+      // has no pending migration to ride in on. Same transaction, so a refused
+      // re-apply (see assertRoleSplitProvisionable) leaves no partial state.
+      if (recorded >= 2) {
+        await assertRoleSplitProvisionable((sql) => client.query(sql));
+        await client.query(ROLE_SPLIT_SQL);
       }
       await client.query("COMMIT");
       return { applied, current: Math.max(recorded, known) };

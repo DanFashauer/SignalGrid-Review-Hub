@@ -18,12 +18,14 @@
 
 import { SignalGridCore, verifySnapshot } from "@workspace/signalgrid-core";
 import { PostgresDecisionStore, setDecisionStore } from "@workspace/persistence";
+import { requireDisposableCluster } from "./lib/db-guard";
 
 const url = process.env.DATABASE_URL;
 if (!url) {
   console.log("Decision-store PG proof: SKIPPED (DATABASE_URL unset).");
   process.exit(0);
 }
+requireDisposableCluster("Decision-store PG proof");
 
 let passed = 0;
 const failures: string[] = [];

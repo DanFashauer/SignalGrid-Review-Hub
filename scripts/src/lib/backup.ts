@@ -196,9 +196,36 @@ export async function verifyBackup(archivePath: string): Promise<BackupManifest>
  * Returns the manifest so the caller can compare what came back against what was
  * backed up. `pg_restore --clean --if-exists` replaces existing objects; the caller
  * is expected to be pointing at a database it intends to overwrite.
+ *
+ * PRIVILEGE POSTURE IS RE-APPLIED, NOT RESTORED. `--no-owner --no-privileges`
+ * means every object comes back owned by the restoring (admin) credential with
+ * every grant stripped — which is the safe direction (the runtime role can never
+ * be smuggled into ownership through an archive), but it also silently un-splits
+ * the roles: the runtime would go from "minimally privileged" to "no privileges
+ * at all", and the tempting 3am fix is a blanket GRANT ALL. So the restore
+ * re-applies the canonical role split as its last step, recreating the same
+ * posture the running system had — the ledger append-only by privilege, the
+ * runtime owning nothing.
  */
 export async function restoreBackup(url: string, archivePath: string): Promise<BackupManifest> {
   const manifest = await verifyBackup(archivePath);
+
+  // Refuse BEFORE pg_restore replaces the database if the post-restore role
+  // re-provisioning would fail (role missing + credential lacks CREATEROLE).
+  // Failing AFTER the restore has run leaves a replaced database with no
+  // privilege posture — the exact half-done state this module exists to avoid.
+  {
+    const pg = await import("pg");
+    const Pool = (pg as any).default?.Pool ?? (pg as any).Pool;
+    const { assertRoleSplitProvisionable } = await import("@workspace/persistence");
+    const pool = new Pool({ connectionString: url, max: 1 });
+    try {
+      await assertRoleSplitProvisionable((sql: string) => pool.query(sql));
+    } finally {
+      await pool.end();
+    }
+  }
+
   try {
     await run(
       "pg_restore",
@@ -209,6 +236,25 @@ export async function restoreBackup(url: string, archivePath: string): Promise<B
     const err = e as { stderr?: string; message: string };
     throw new BackupError(`pg_restore failed: ${err.stderr?.trim() || err.message}`);
   }
+  // pg_restore --no-privileges recreates routines with PostgreSQL's DEFAULT
+  // ACL (PUBLIC EXECUTE) — even definer routines the dumped database had
+  // locked down. Re-lock them BEFORE the role split's owner-rights validation,
+  // or a legitimately hardened archive would be refused only after the
+  // database had already been replaced. Safe exactly here: --no-privileges
+  // stripped every other grant too, so this removes no access the restore
+  // preserved (re-granting is the operator's documented post-restore step).
+  const { applyRoleSplit, RESTORE_DEFINER_LOCKDOWN_SQL } = await import("@workspace/persistence");
+  {
+    const pg = await import("pg");
+    const Pool = (pg as any).default?.Pool ?? (pg as any).Pool;
+    const pool = new Pool({ connectionString: url, max: 1 });
+    try {
+      await pool.query(RESTORE_DEFINER_LOCKDOWN_SQL);
+    } finally {
+      await pool.end();
+    }
+  }
+  await applyRoleSplit(url);
   return manifest;
 }
 

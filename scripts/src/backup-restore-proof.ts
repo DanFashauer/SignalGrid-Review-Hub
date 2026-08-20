@@ -39,12 +39,14 @@ import {
   manifestPathFor,
   BackupError,
 } from "./lib/backup";
+import { requireDisposableCluster } from "./lib/db-guard";
 
 const url = process.env.DATABASE_URL;
 if (!url) {
   console.log("Backup/restore proof: SKIPPED (DATABASE_URL unset — this proof needs a real Postgres).");
   process.exit(0);
 }
+requireDisposableCluster("Backup/restore proof");
 
 let passed = 0;
 const failures: string[] = [];

@@ -2,6 +2,18 @@
 
 These instructions apply to the entire repository.
 
+## Owner-facing communication
+
+For any text written directly to the owner — chat replies, status reports, PR summaries, owner-board entries, or action instructions — follow `.claude/skills/owner-comms/SKILL.md` as the canonical communication standard, even when the current agent is not Claude.
+
+That skill adapts the Google developer documentation style guide to SignalGrid. The priority order is:
+
+1. SignalGrid-specific truth, guardrails, and explicit owner instructions.
+2. The Google developer documentation style guide.
+3. Third-party style references only when the first two do not answer the question.
+
+Keep one source of truth. Do not create a parallel ChatGPT-, Codex-, Gemini-, or Claude-specific owner-writing guide that can drift from `owner-comms`.
+
 ## Repository scope
 
 SignalGrid Review Hub is the public pre-production, review, and validation surface for SignalGrid. It may contain documentation, deterministic fixtures, proof harnesses, review apps, and public-safe automation that explain or validate the SignalGrid direction without exposing protected core implementation details.

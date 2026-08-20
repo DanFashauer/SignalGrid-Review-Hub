@@ -111,6 +111,14 @@ export function evaluateCredentialExposure(
   // Scanner explicitly not enrolled → secrets can pile up unseen.
   if (posture.scannerEnrolled === false) {
     candidates.push({ posture: "scanner_unenrolled", action: "step_up", reason: "SCANNER_UNENROLLED" });
+  } else if (posture.scannerEnrolled === null) {
+    // Enrollment UNREPORTED (wedge #6, caught by the shift-1 sweep): "nothing
+    // found" from a scanner we cannot confirm was even running is not a clean
+    // reading. `=== false` alone let null fall through to a full clean/none
+    // grant. Graded `monitor` — a blind spot to investigate, same level as the
+    // unobserved feed; a confirmed-unenrolled scanner (above) stays the stronger
+    // step_up because it is a REPORTED bad state, not an unreported one.
+    candidates.push({ posture: "unknown", action: "monitor", reason: "SCANNER_ENROLLMENT_UNVERIFIED" });
   }
 
   const winner = candidates.reduce<Candidate>(

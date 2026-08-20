@@ -276,7 +276,13 @@ for (const [label, unreported, reportedNone] of [
   [
     "credential-exposure",
     credential.evaluateCredentialExposure(credential.normalizeDevice({ deviceId: "d", source: "s" } as never), {}),
-    credential.evaluateCredentialExposure(credential.normalizeDevice({ deviceId: "d", source: "s", findings: [] } as never), {}),
+    // scannerEnrolled true is REPORTED on the clean side deliberately, so this
+    // row isolates the FINDINGS collection — the axis this law is about. It used
+    // to omit enrollment and still expect `none`, which only passed because the
+    // evaluator graded unreported enrollment as clean — the exact fail-open
+    // (wedge #6) fixed on 2026-08-20. An empty findings list is a reading; an
+    // unreported scanner enrollment never was one.
+    credential.evaluateCredentialExposure(credential.normalizeDevice({ deviceId: "d", source: "s", scannerEnrolled: true, findings: [] } as never), {}),
   ],
 ] as [string, { recommendedAction?: string; reasonCode?: string }, { recommendedAction?: string }][]) {
   check(

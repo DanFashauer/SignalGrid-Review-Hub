@@ -21,6 +21,7 @@ import {
   type EndpointThreatRaw,
 } from "@workspace/integrations/edr-threat";
 import { checkLiveGateIsolated } from "./lib/live-gate.js";
+import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 
 interface Expected {
   posture: string;
@@ -125,9 +126,105 @@ check("signatures under the 72h threshold stay protected", freshSigs.posture ===
 const unknownSigAge = evaluateThreatPosture(normalizeEndpoint({ deviceId: "u", agentInstalled: true, agentRunning: true, realtimeProtection: true, threats: [] }));
 check("an unreported signature age degrades protection, never 'protected'", unknownSigAge.posture === "degraded_protection" && unknownSigAge.protectionHealthy === false);
 
+// Fail-safe (wedge #5, caught by the shift-1 sweep): a NEGATIVE signature age
+// claims signatures newer than now — a contradictory reading. `typeof ===
+// "number"` alone let -1 through the normalizer, and `-1 >= 72` is false, so the
+// endpoint minted a full protected/none grant. Contradiction must resolve to
+// "unverifiable", exactly like an unreported age.
+const negativeSigAge = evaluateThreatPosture(normalizeEndpoint({ deviceId: "n", agentInstalled: true, agentRunning: true, realtimeProtection: true, signatureAgeHours: -1, threats: [] }));
+check("a NEGATIVE signature age degrades protection, never 'protected' (wedge #5)", negativeSigAge.posture === "degraded_protection" && negativeSigAge.protectionHealthy === false);
+
 // Determinism.
 const dc = normalized.find((e) => e.deviceId === "ep-critical")!;
 check("evaluator is deterministic", JSON.stringify(evaluateThreatPosture(dc)) === JSON.stringify(evaluateThreatPosture(dc)));
+
+// ── GRANT SAFETY, QUANTIFIED — the whole input space, not chosen fixtures ─────
+//
+// Owner-sequenced shift 1: a grant must be UNREACHABLE by any unknown, missing,
+// stale, or contradictory input. This family's negative-signature-age wedge
+// (wedge #5, above) was exactly the kind fixtures never catch — fixtures
+// exercise the states someone thought of. Every combination of every axis is
+// executed through the REAL normalizer + evaluator, and the granting set is
+// pinned by equality, so the next such defect fails the proof instead of
+// shipping.
+{
+  const REMEDIATED = [{ threatId: "r", severity: "medium", remediationState: "quarantined" }];
+  const ACTIVE_HIGH = [{ threatId: "h", severity: "high", remediationState: "active" }];
+  const ACTIVE_LOW = [{ threatId: "l", severity: "low", remediationState: "active" }];
+  // An unmapped remediation state is an UNPROVEN neutralization — must count active.
+  const UNPROVEN = [{ threatId: "u", severity: "high", remediationState: "something-weird" }];
+  const domains = {
+    reporting: [true, false],
+    agentInstalled: [true, false],
+    agentRunning: [true, false],
+    realtimeProtection: [true, false],
+    // fresh, at-threshold stale, negative (contradictory), unreported.
+    sigAge: [1, 72, -1, null],
+    // unobserved feed, observed-empty, and the three live shapes.
+    threats: [null, [], REMEDIATED, ACTIVE_HIGH, ACTIVE_LOW, UNPROVEN],
+  } as const;
+
+  type Enum = { ep: ReturnType<typeof normalizeEndpoint>; reporting: boolean };
+  const build = (c: Record<string, unknown>): Enum => ({
+    ep: normalizeEndpoint({
+      deviceId: "ep.enum",
+      agentInstalled: c.agentInstalled as boolean,
+      agentRunning: c.agentRunning as boolean,
+      realtimeProtection: c.realtimeProtection as boolean,
+      signatureAgeHours: c.sigAge === null ? undefined : (c.sigAge as number),
+      threats: c.threats === null ? undefined : (c.threats as EndpointThreatRaw["threats"]),
+    }),
+    reporting: c.reporting as boolean,
+  });
+
+  const swept = enumerateGrantSafety<Enum, ReturnType<typeof evaluateThreatPosture>>({
+    domains,
+    build,
+    evaluate: (s) => evaluateThreatPosture(s.ep, { reporting: s.reporting }),
+    actionOf: (v) => v.recommendedAction,
+    // The ONLY clean state: reporting, feed observed and empty, agent installed
+    // AND running, RTP on, signature age reported, non-negative, and fresh.
+    positivelyClean: (c) =>
+      c.reporting === true && c.threats === domains.threats[1] &&
+      c.agentInstalled === true && c.agentRunning === true &&
+      c.realtimeProtection === true && c.sigAge === 1,
+    // The grant must be the EARNED reason, with protection positively confirmed.
+    confirmedWhenNone: (v) =>
+      v.reasonCode === "NO_THREATS_HEALTHY" && v.posture === "protected" && v.protectionHealthy === true,
+  });
+  check(`ENUMERATION: all ${swept.combos} combinations swept (= product of domains)`,
+    swept.combos === productOf(domains) && swept.combos === 2 * 2 * 2 * 2 * 4 * 6);
+  check("ENUMERATION: a grant is reachable ONLY by the fully-verified state — zero mismatches",
+    swept.mismatches === 0);
+  check("ENUMERATION: exactly ONE granting state (non-vacuous)", swept.noneCount === 1);
+
+  // NEGATIVE CONTROL — the enumeration can fail: declare signature freshness
+  // irrelevant to cleanliness and the harness must object, because the evaluator
+  // (correctly) refuses to grant stale, negative, or unreported ages. A harness
+  // that cannot fail proves nothing.
+  const wrongPredicate = enumerateGrantSafety<Enum, ReturnType<typeof evaluateThreatPosture>>({
+    domains,
+    build,
+    evaluate: (s) => evaluateThreatPosture(s.ep, { reporting: s.reporting }),
+    actionOf: (v) => v.recommendedAction,
+    positivelyClean: (c) =>
+      c.reporting === true && c.threats === domains.threats[1] &&
+      c.agentInstalled === true && c.agentRunning === true && c.realtimeProtection === true,
+  });
+  check("NEGATIVE CONTROL: declaring signature age irrelevant is CAUGHT (mismatches > 0)",
+    wrongPredicate.mismatches > 0 && typeof wrongPredicate.firstMismatch === "string");
+
+  // The contradictory (negative) age grades identically to an unreported one,
+  // on every other axis combination — pinned so a future normalizer change
+  // cannot quietly turn "newer than now" back into "fresh".
+  check("a negative signature age grades identically to an unreported one, on every axis combination",
+    domains.reporting.every((rep) => domains.agentInstalled.every((ai) => domains.agentRunning.every((ar) =>
+      domains.realtimeProtection.every((rtp) => domains.threats.every((th) => {
+        const va = evaluateThreatPosture(build({ reporting: rep, agentInstalled: ai, agentRunning: ar, realtimeProtection: rtp, sigAge: -1, threats: th }).ep, { reporting: rep });
+        const vb = evaluateThreatPosture(build({ reporting: rep, agentInstalled: ai, agentRunning: ar, realtimeProtection: rtp, sigAge: null, threats: th }).ep, { reporting: rep });
+        return va.reasonCode === vb.reasonCode && va.recommendedAction === vb.recommendedAction && va.posture === vb.posture;
+      }))))));
+}
 
 // ── connector guarantees ──────────────────────────────────────────────────────
 

@@ -27,6 +27,7 @@ import {
 } from "@workspace/integrations/device-attestation";
 import { composeDeviceRisk, fromAttestation } from "@workspace/posture-composition";
 import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
+import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 
 interface Expected {
   posture: string;
@@ -181,6 +182,90 @@ check("prod WITHOUT live flag stays fixture", resolveAttestationConnector({ SIGN
 check("prod + live but NO token stays fixture", resolveAttestationConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" }).mode === "fixture");
 check("prod + live + token resolves live", resolveAttestationConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", DEVICE_ATTESTATION_ACCESS_TOKEN: "t" }).mode === "live");
 
+
+// ── GRANT SAFETY, QUANTIFIED — the whole input space, not chosen fixtures ─────
+//
+// Owner-sequenced shift 1: a grant must be UNREACHABLE by any unknown, missing,
+// stale, or contradictory input. This family has TWO deliberate `none` outcomes —
+// the top-tier grant (verified + fresh + every attested fact positively good) and
+// the honest abstain (hardware declares itself incapable AND carries no
+// attestation evidence). Every raw-value combination is executed through the REAL
+// normalizer + evaluator — including out-of-vocabulary strings, which must read
+// as unknown — and the granting set is pinned by equality.
+{
+  const domains = {
+    covered: [true, false],
+    attestable: [true, false, undefined],
+    // "garbage" is an out-of-vocabulary vendor string; the normalizer must fold
+    // it to unknown, so it doubles as the unknown member of each axis.
+    chain: ["verified", "unverifiable", "garbage"],
+    freshness: ["fresh", "stale", "garbage"],
+    sip: ["on", "off", "garbage"],
+    secureBoot: ["full", "reduced", "permissive", "garbage"],
+    kext: [true, false, undefined],
+    serial: ["C02SYNTH0001", undefined],
+  } as const;
+
+  type Enum = { rep: ReturnType<typeof normalizeReport>; covered: boolean };
+  const build = (c: Record<string, unknown>): Enum => ({
+    rep: normalizeReport("dev.enum", {
+      attestable: c.attestable as boolean | undefined,
+      chain: c.chain as string,
+      freshness: c.freshness as string,
+      sip: c.sip as string,
+      secureBoot: c.secureBoot as string,
+      thirdPartyKextAllowed: c.kext as boolean | undefined,
+      serial: c.serial as string | undefined,
+    }),
+    covered: c.covered as boolean,
+  });
+
+  const swept = enumerateGrantSafety<Enum, ReturnType<typeof evaluateAttestation>>({
+    domains,
+    build,
+    evaluate: (s) => evaluateAttestation(s.rep, { covered: s.covered }),
+    actionOf: (v) => v.recommendedAction,
+    positivelyClean: (c) =>
+      c.covered === true &&
+      // The honest abstain: provably incapable AND silent — no chain, no
+      // freshness, no decoded control, no signed identity fact.
+      ((c.attestable === false && c.chain === "garbage" && c.freshness === "garbage" &&
+        c.sip === "garbage" && c.secureBoot === "garbage" && c.kext === undefined && c.serial === undefined) ||
+      // The top tier: capability not denied, chain verified AND fresh, every
+      // attested fact positively good (SIP on, full secure boot, kexts denied).
+      (c.attestable !== false && c.chain === "verified" && c.freshness === "fresh" &&
+        c.sip === "on" && c.secureBoot === "full" && c.kext === false)),
+    // Each grant must be the EARNED reason for its arm — and hardwareRooted must
+    // tell the truth about which arm it was.
+    confirmedWhenNone: (v) =>
+      (v.reasonCode === "FULLY_ATTESTED" && v.posture === "attested_hardened" && v.hardwareRooted === true) ||
+      (v.reasonCode === "NOT_ATTESTABLE" && v.posture === "not_attestable" && v.hardwareRooted === false),
+  });
+  check(`ENUMERATION: all ${swept.combos} combinations swept (= product of domains)`,
+    swept.combos === productOf(domains) && swept.combos === 2 * 3 * 3 * 3 * 3 * 4 * 3 * 2);
+  check("ENUMERATION: a grant is reachable ONLY by the top tier or the honest abstain — zero mismatches",
+    swept.mismatches === 0);
+  check("ENUMERATION: the granting set is 1 honest abstain + 4 top-tier states (non-vacuous)",
+    swept.noneCount === 5);
+
+  // NEGATIVE CONTROL — the enumeration can fail: declare EVERY `attestable:false`
+  // report clean (ignoring what evidence it carries) and the harness must object,
+  // because a report that denies capability while presenting a chain or attested
+  // facts is contradictory and the evaluator (correctly) refuses to abstain.
+  const wrongPredicate = enumerateGrantSafety<Enum, ReturnType<typeof evaluateAttestation>>({
+    domains,
+    build,
+    evaluate: (s) => evaluateAttestation(s.rep, { covered: s.covered }),
+    actionOf: (v) => v.recommendedAction,
+    positivelyClean: (c) =>
+      c.covered === true &&
+      (c.attestable === false ||
+      (c.attestable !== false && c.chain === "verified" && c.freshness === "fresh" &&
+        c.sip === "on" && c.secureBoot === "full" && c.kext === false)),
+  });
+  check("NEGATIVE CONTROL: declaring every incapability claim clean is CAUGHT (mismatches > 0)",
+    wrongPredicate.mismatches > 0 && typeof wrongPredicate.firstMismatch === "string");
+}
 
 // ── The live-call gate, each condition ISOLATED ──────────────────────────────
 //

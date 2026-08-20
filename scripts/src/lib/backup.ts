@@ -196,6 +196,16 @@ export async function verifyBackup(archivePath: string): Promise<BackupManifest>
  * Returns the manifest so the caller can compare what came back against what was
  * backed up. `pg_restore --clean --if-exists` replaces existing objects; the caller
  * is expected to be pointing at a database it intends to overwrite.
+ *
+ * PRIVILEGE POSTURE IS RE-APPLIED, NOT RESTORED. `--no-owner --no-privileges`
+ * means every object comes back owned by the restoring (admin) credential with
+ * every grant stripped — which is the safe direction (the runtime role can never
+ * be smuggled into ownership through an archive), but it also silently un-splits
+ * the roles: the runtime would go from "minimally privileged" to "no privileges
+ * at all", and the tempting 3am fix is a blanket GRANT ALL. So the restore
+ * re-applies the canonical role split as its last step, recreating the same
+ * posture the running system had — the ledger append-only by privilege, the
+ * runtime owning nothing.
  */
 export async function restoreBackup(url: string, archivePath: string): Promise<BackupManifest> {
   const manifest = await verifyBackup(archivePath);
@@ -209,6 +219,8 @@ export async function restoreBackup(url: string, archivePath: string): Promise<B
     const err = e as { stderr?: string; message: string };
     throw new BackupError(`pg_restore failed: ${err.stderr?.trim() || err.message}`);
   }
+  const { applyRoleSplit } = await import("@workspace/persistence");
+  await applyRoleSplit(url);
   return manifest;
 }
 

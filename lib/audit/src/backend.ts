@@ -84,20 +84,37 @@ export class PostgresAuditBackend implements AuditBackend {
     const pg = await import("pg");
     const Pool = (pg as any).default?.Pool ?? (pg as any).Pool;
     this.pool = new Pool({ connectionString, max: 10 });
-    await this.pool.query(`
-      CREATE TABLE IF NOT EXISTS audit_ledger (
-        seq        BIGSERIAL PRIMARY KEY,
-        id         TEXT NOT NULL,
-        ts         TIMESTAMPTZ NOT NULL,
-        request_id TEXT,
-        actor      JSONB NOT NULL,
-        event_type TEXT NOT NULL,
-        target     JSONB,
-        meta       JSONB,
-        prev_hash  TEXT NOT NULL,
-        hash       TEXT NOT NULL
-      );
-    `);
+    try {
+      await this.pool.query(`
+        CREATE TABLE IF NOT EXISTS audit_ledger (
+          seq        BIGSERIAL PRIMARY KEY,
+          id         TEXT NOT NULL,
+          ts         TIMESTAMPTZ NOT NULL,
+          request_id TEXT,
+          actor      JSONB NOT NULL,
+          event_type TEXT NOT NULL,
+          target     JSONB,
+          meta       JSONB,
+          prev_hash  TEXT NOT NULL,
+          hash       TEXT NOT NULL
+        );
+      `);
+    } catch (err) {
+      // Under the role split the runtime credential holds NO DDL privilege, and
+      // PostgreSQL rejects even CREATE TABLE IF NOT EXISTS without CREATE on the
+      // schema — before checking whether the table exists. A denied bootstrap is
+      // FINE exactly when migrations already built the schema: verify that and
+      // proceed. A denied bootstrap over a missing table is a misconfiguration,
+      // named precisely instead of surfacing as a bare permission error.
+      if ((err as { code?: string }).code !== "42501") throw err;
+      const probe = await this.pool.query("SELECT to_regclass('public.audit_ledger') IS NOT NULL AS ok");
+      if (!probe.rows[0]?.ok) {
+        throw new Error(
+          "audit_ledger does not exist and this credential may not create it — " +
+            "run `pnpm run db:migrate` with the admin credential first (the runtime role owns no schema).",
+        );
+      }
+    }
   }
 
   async appendWithChain(build: (prevHash: string) => AuditRecord): Promise<AuditRecord> {

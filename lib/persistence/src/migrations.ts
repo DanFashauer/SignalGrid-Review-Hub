@@ -25,6 +25,8 @@
 // keep their inline DDL for the no-migration fixture path; this is the
 // authority an operator runs BEFORE pointing a new revision at a database.
 
+import { ROLE_SPLIT_SQL } from "./role-split";
+
 const MIGRATION_LOCK_KEY = 0x5194_a11d;
 
 export interface Migration {
@@ -80,6 +82,16 @@ export const MIGRATIONS: readonly Migration[] = [
       );
       CREATE INDEX IF NOT EXISTS sessions_tenant_idx ON sessions (tenant_id);
     `,
+  },
+  {
+    version: 2,
+    name: "role-split-2026-08-20",
+    // The database role split (owner-ordered shift 2): a `signalgrid_runtime`
+    // LOGIN role that owns nothing and holds exactly the statements the stores
+    // execute — the ledger append-only BY PRIVILEGE. The SQL lives in
+    // role-split.ts because it is also the post-restore re-provisioning step
+    // (pg_restore --no-privileges strips every grant); one source, two callers.
+    statements: ROLE_SPLIT_SQL,
   },
 ];
 

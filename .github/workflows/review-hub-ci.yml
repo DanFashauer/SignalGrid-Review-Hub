@@ -752,6 +752,20 @@ jobs:
           DATABASE_URL: postgres://sg:sg@localhost:5432/signalgrid
         run: pnpm run proof:backup-restore
 
+      # The DATABASE ROLE SPLIT, both directions (owner-ordered shift 2): as
+      # `signalgrid_runtime` every legitimate write works (ledger appends chain,
+      # decision upserts, session transitions) and every destructive statement is
+      # DENIED with 42501 (UPDATE/DELETE/TRUNCATE/DROP/ALTER/CREATE) — the ledger
+      # is append-only BY PRIVILEGE, not just by hash chain. The admin credential
+      # CAN update (rolled back), so the denial is proven to be the role, not the
+      # table. Then backup → posture destroyed → restore: the SAME posture comes
+      # back (restoreBackup re-applies the split after pg_restore --no-privileges
+      # strips it) and the runtime still owns nothing.
+      - name: Database role-split proof on Postgres (append-only by privilege)
+        env:
+          DATABASE_URL: postgres://sg:sg@localhost:5432/signalgrid
+        run: pnpm run proof:db-role-split
+
   # Podman is the repo's chosen runtime (scripts/lib/container-engine.mjs). It was
   # verified locally — full docker-verify lane green under podman 4.9.3 — but a local
   # run is not a gate, and the whole point of that abstraction is that BOTH engines

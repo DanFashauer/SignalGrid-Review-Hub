@@ -33,6 +33,7 @@
     "proof:audit-ledger": "tsx ./src/audit-ledger-proof.ts",
     "proof:audit-ledger-pg": "tsx ./src/audit-ledger-pg-proof.ts",
     "proof:backup-restore": "tsx ./src/backup-restore-proof.ts",
+    "proof:db-role-split": "tsx ./src/db-role-split-proof.ts",
     "proof:benchmark-selection": "tsx ./src/benchmark-selection-proof.ts",
     "proof:bootstrap-credential": "tsx ./src/bootstrap-credential-proof.ts",
     "proof:break-glass": "tsx ./src/break-glass-proof.ts",

@@ -125,22 +125,37 @@ export class PostgresSessionStore implements SessionStore {
     const pg = await import("pg");
     const Pool = (pg as any).default?.Pool ?? (pg as any).Pool;
     this.pool = new Pool({ connectionString, max: 10 });
-    await this.pool.query(`
-      CREATE TABLE IF NOT EXISTS sessions (
-        id           TEXT PRIMARY KEY,
-        tenant_id    TEXT NOT NULL,
-        identity_ref TEXT NOT NULL,
-        device_ref   TEXT NOT NULL,
-        workflow_key TEXT NOT NULL,
-        status       TEXT NOT NULL,
-        outcome      TEXT NOT NULL,
-        decision_id  TEXT NOT NULL,
-        created_at   TIMESTAMPTZ NOT NULL,
-        last_seen_at TIMESTAMPTZ NOT NULL,
-        expires_at   TIMESTAMPTZ NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS sessions_tenant_idx ON sessions (tenant_id);
-    `);
+    try {
+      await this.pool.query(`
+        CREATE TABLE IF NOT EXISTS sessions (
+          id           TEXT PRIMARY KEY,
+          tenant_id    TEXT NOT NULL,
+          identity_ref TEXT NOT NULL,
+          device_ref   TEXT NOT NULL,
+          workflow_key TEXT NOT NULL,
+          status       TEXT NOT NULL,
+          outcome      TEXT NOT NULL,
+          decision_id  TEXT NOT NULL,
+          created_at   TIMESTAMPTZ NOT NULL,
+          last_seen_at TIMESTAMPTZ NOT NULL,
+          expires_at   TIMESTAMPTZ NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS sessions_tenant_idx ON sessions (tenant_id);
+      `);
+    } catch (err) {
+      // Under the role split the runtime credential holds NO DDL privilege, and
+      // PostgreSQL rejects even CREATE TABLE IF NOT EXISTS without CREATE on the
+      // schema. A denied bootstrap is fine exactly when migrations already built
+      // the schema: verify that and proceed; otherwise name the real remedy.
+      if ((err as { code?: string }).code !== "42501") throw err;
+      const probe = await this.pool.query("SELECT to_regclass('public.sessions') IS NOT NULL AS ok");
+      if (!probe.rows[0]?.ok) {
+        throw new Error(
+          "sessions does not exist and this credential may not create it — " +
+            "run `pnpm run db:migrate` with the admin credential first (the runtime role owns no schema).",
+        );
+      }
+    }
   }
 
   private rowToSession(r: any): Session {

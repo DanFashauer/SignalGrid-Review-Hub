@@ -34,6 +34,14 @@ services:
       SIGNALGRID_TIER: prod
       # Enabling durable persistence: with DATABASE_URL set, the audit ledger,
       # decision/evidence store, and session store persist to Postgres.
+      #
+      # This demo stack connects as the database owner for a zero-step boot. A
+      # REAL deployment should run the API as the minimally-privileged
+      # `signalgrid_runtime` role instead (migration v2 creates it; the ledger
+      # is append-only by privilege): run `pnpm run db:migrate` with the admin
+      # credential, set the runtime password, and point this URL at it — see
+      # docs/BACKUP_AND_RESTORE.md § "The runtime role". `proof:db-role-split`
+      # proves both directions of that posture in CI.
       DATABASE_URL: postgres://sg:sg@db:5432/signalgrid
     ports:
       - "8080:8080"

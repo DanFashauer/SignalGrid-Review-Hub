@@ -70,23 +70,40 @@ export class PostgresDecisionStore implements DecisionStore {
     const pg = await import("pg");
     const Pool = (pg as any).default?.Pool ?? (pg as any).Pool;
     this.pool = new Pool({ connectionString, max: 10 });
-    await this.pool.query(`
-      CREATE TABLE IF NOT EXISTS decisions (
-        id         TEXT PRIMARY KEY,
-        tenant_id  TEXT NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL,
-        outcome    TEXT NOT NULL,
-        data       JSONB NOT NULL
+    try {
+      await this.pool.query(`
+        CREATE TABLE IF NOT EXISTS decisions (
+          id         TEXT PRIMARY KEY,
+          tenant_id  TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL,
+          outcome    TEXT NOT NULL,
+          data       JSONB NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS decisions_tenant_created_idx
+          ON decisions (tenant_id, created_at DESC);
+        CREATE TABLE IF NOT EXISTS evidence_snapshots (
+          id          TEXT PRIMARY KEY,
+          tenant_id   TEXT NOT NULL,
+          decision_id TEXT NOT NULL,
+          data        JSONB NOT NULL
+        );
+      `);
+    } catch (err) {
+      // Under the role split the runtime credential holds NO DDL privilege, and
+      // PostgreSQL rejects even CREATE TABLE IF NOT EXISTS without CREATE on the
+      // schema. A denied bootstrap is fine exactly when migrations already built
+      // the schema: verify that and proceed; otherwise name the real remedy.
+      if ((err as { code?: string }).code !== "42501") throw err;
+      const probe = await this.pool.query(
+        "SELECT to_regclass('public.decisions') IS NOT NULL AND to_regclass('public.evidence_snapshots') IS NOT NULL AS ok",
       );
-      CREATE INDEX IF NOT EXISTS decisions_tenant_created_idx
-        ON decisions (tenant_id, created_at DESC);
-      CREATE TABLE IF NOT EXISTS evidence_snapshots (
-        id          TEXT PRIMARY KEY,
-        tenant_id   TEXT NOT NULL,
-        decision_id TEXT NOT NULL,
-        data        JSONB NOT NULL
-      );
-    `);
+      if (!probe.rows[0]?.ok) {
+        throw new Error(
+          "decisions/evidence_snapshots do not exist and this credential may not create them — " +
+            "run `pnpm run db:migrate` with the admin credential first (the runtime role owns no schema).",
+        );
+      }
+    }
   }
 
   async saveDecision(decision: Decision, snapshot: EvidenceSnapshot): Promise<void> {

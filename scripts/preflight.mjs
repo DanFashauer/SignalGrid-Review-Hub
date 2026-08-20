@@ -225,6 +225,9 @@ const STEPS = [
   // stays deterministic and needs no Postgres, and an operator who HAS a database
   // gets the restore path exercised locally.
   { name: "Proof: backup-restore (the restore path, exercised not assumed)", cmd: ["pnpm", "run", "proof:backup-restore"] },
+  // Same self-skip discipline: without DATABASE_URL it skips deterministically;
+  // with one, the role split is proven locally in both directions.
+  { name: "Proof: db-role-split (the ledger append-only by privilege)", cmd: ["pnpm", "run", "proof:db-role-split"] },
   { name: "Proof: audit-ledger", cmd: ["pnpm", "run", "proof:audit-ledger"] },
   { name: "Proof: itsm-template (evidence text cannot rewrite itself on the way into a ticket)", cmd: ["pnpm", "run", "proof:itsm-template"] },
   { name: "Proof: session-store", cmd: ["pnpm", "run", "proof:session-store"] },

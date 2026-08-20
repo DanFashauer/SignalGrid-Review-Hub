@@ -63,17 +63,16 @@
 // diff to the pull request that Blocker 1 says is already too large. Recorded as a
 // gap rather than quietly skipped.
 //
-// RATIFICATION. Scope is the owner's call, not the architect's. This file is the
-// proposal in reviewable form: the launch set is small enough to argue with line
-// by line, and every exclusion is visible. Change a status, re-run the gate.
-//
-// PARTIAL RATIFICATION EXISTS: docs/DECISION_RECORDS.md DR-004 (August 20, 2026)
-// item-ratifies six signal-kind classifications — the three launch kinds, plus
-// pacs_access / location / shift_context as deferred-never-present-tense. This
-// schema has no per-item ratification field yet, so that subset lives in the
-// record, not here; the field arrives with the launch-claims gate, which needs
-// it to check public copy mechanically. Until then, this file's "proposal"
-// language reads as "except where DR-004 says otherwise."
+// RATIFICATION: **v4 IS RATIFIED IN FULL** — docs/DECISION_RECORDS.md DR-005
+// (August 20, 2026), in the owner's words: "v4 is no longer a proposal. Treat
+// every current classification in scripts/launch-profile.mjs as ratified unless
+// a future decision record explicitly changes it." A future DECISION RECORD is
+// the only path that re-opens a status; changing one here without a record is
+// scope drift, and the owner's companion constraint stands: "do not widen the
+// product again now." (History: DR-004 first item-ratified six signal kinds;
+// DR-005 superseded that carve-out by ratifying everything. The per-item
+// ratification field still arrives with the launch-claims gate, which needs it
+// to check public copy mechanically.)
 
 /** Bumped whenever a status changes. Not a semver — a serial number, so a doc or a
  *  review can name the exact revision of the scope it was written against. */
@@ -95,8 +94,8 @@ export const LAUNCH_PROFILE_VERSION = 4;
 //      still at target granularity) and firmware/* too. Classifications in this
 //      bump: three deferred (android, desktop, dock — real, proven in CI, not
 //      Limited GA; nothing about the criterion's "one host app" moves), one
-//      internal (the conformance fixture). No launch-set change. Like every
-//      status here these are a PROPOSAL — owner ratification queued.
+//      internal (the conformance fixture). No launch-set change. Ratification
+//      landed 2026-08-20: DR-005 ratified v4 in full, these four included.
 //   3  THE SOURCE-AGNOSTIC REDIRECT (owner-directed, 2026-08-11 — intake ledger
 //      row 77). The criterion's "one read-only Entra/Intune connector" made
 //      Microsoft a PREREQUISITE; the owner reframed it as the COMMERCIAL TARGET:

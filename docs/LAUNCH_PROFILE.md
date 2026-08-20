@@ -118,8 +118,10 @@ figure guard can see, which is exactly how it went stale. Profile **v4**
 conformance fixture (`native:shared`) and the SmartDock firmware core
 (`firmware:dock`) sat outside the freeze — real, tracked, and unexamined. The
 derivation now reads `native/*` and `firmware/*` too; the four arrivals are
-classified three `deferred` + one `internal`, the launch set is unchanged, and
-the classifications await owner ratification like every status here.
+classified three `deferred` + one `internal`, and the launch set is unchanged.
+**Ratified:** the owner ratified v4 in full on August 20, 2026 (DR-005 in
+`docs/DECISION_RECORDS.md`) — every classification in this profile is decided,
+and only a future decision record re-opens one.
 
 ## The gaps — read these before reading the launch set as readiness
 

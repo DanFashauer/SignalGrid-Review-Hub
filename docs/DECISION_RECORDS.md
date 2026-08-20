@@ -193,7 +193,13 @@ capabilities."* That sentence item-ratifies the six signal-kind classifications
 the site rewrite depends on — the three launch kinds (`device_posture`,
 `device_management_health`, `local_authority`) as the shipping wedge, and
 `pacs_access` (badge), `location` (zone), and `shift_context` (shift) as
-deferred, never present-tense. The remaining launch-profile classifications —
+deferred, never present-tense. The owner's word "badge" ratifies the deferral
+of every badge-shaped surface, not one enum: `pacs_access` (authorization at a
+controlled door) AND the separate badge-binding evidence lane the review
+console presents (`badgeBinding` in the operator evidence). When the
+launch-claims gate derives its allowed terms from this subset, any badge-shaped
+public claim resolves to this deferral — a claim escaping because it rode a
+differently-named field would defeat the ratification it rode around. The remaining launch-profile classifications —
 connector families, app surfaces, API paths — stay marked "proposal" until the
 owner reviews them or ratifies them wholesale. Reading blanket approval into a
 sentence about the site would be the unearned affirmative again.

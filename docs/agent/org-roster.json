@@ -327,7 +327,7 @@
       "activated": null,
       "produced": null,
       "priority": 1,
-      "nextAction": "UNBLOCKED by DR-004, bounded by its ratified subset: public copy may claim only the three ratified launch signal kinds and may name badge, zone, and shift only as roadmap. The sweep's draft is the STARTING POINT, not landable wholesale — strip or roadmap-mark every claim resting on a classification outside the six (the concrete example: \"Microsoft Entra/Intune is the first enterprise connector\" rests on the graph family's still-proposal status). Then land docs/POSITIONING.md, reconcile the one-pager and ecosystem docs to the one label, and rewrite the four site sections. The launch-claims gate follows so drift cannot recur."
+      "nextAction": "UNBLOCKED by DR-004, bounded by its ratified subset: public copy may claim only the three ratified launch signal kinds and may name badge, zone, and shift only as roadmap (\"badge\" covers every badge-shaped surface including the badgeBinding evidence lane). The sweep's draft is the STARTING POINT, not landable wholesale — strip or roadmap-mark every claim resting on a classification outside the six (concrete example: \"Microsoft Entra/Intune is the first enterprise connector\" rests on the graph family's still-proposal status). Reconciliation covers EVERY public surface carrying a retired label, found by repo-wide search rather than by list — README.md lines 3 and 136 (\"Operational Trust Orchestration\") and the review dashboard (\"runtime decision layer\", \"Zero Trust orchestration platform\") are already-known instances, not the boundary. The launch-claims gate then denylists the four retired labels so drift cannot recur."
     },
     {
       "id": "icp-customer-research",

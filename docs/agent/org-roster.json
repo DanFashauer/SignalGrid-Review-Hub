@@ -327,7 +327,7 @@
       "activated": null,
       "produced": null,
       "priority": 1,
-      "nextAction": "The one-sentence, 100-word and boundary drafts EXIST — docs/COMPANY_BUILD_PLAN.md, \"Drafts produced by this sweep\", every claim traced to the launch class. Next: land as docs/POSITIONING.md, reconcile EXECUTIVE_ONE_PAGER.md and ECOSYSTEM_POSITIONING.md to it, and rewrite the four site sections that present deferred signals in the present tense. Blocked only on the owner ratifying launch-profile v4."
+      "nextAction": "UNBLOCKED by DR-004, bounded by its ratified subset: public copy may claim only the three ratified launch signal kinds and may name badge, zone, and shift only as roadmap (\"badge\" covers every badge-shaped surface including the badgeBinding evidence lane). The sweep's draft is the STARTING POINT, not landable wholesale — strip or roadmap-mark every claim resting on a classification outside the six (concrete example: \"Microsoft Entra/Intune is the first enterprise connector\" rests on the graph family's still-proposal status). Reconciliation covers EVERY public surface carrying a retired label, found by repo-wide search rather than by list — README.md lines 3 and 136 (\"Operational Trust Orchestration\") and the review dashboard (\"runtime decision layer\", \"Zero Trust orchestration platform\") are already-known instances, not the boundary. The launch-claims gate then denylists the four retired labels so drift cannot recur."
     },
     {
       "id": "icp-customer-research",

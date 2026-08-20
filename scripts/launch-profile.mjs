@@ -66,6 +66,14 @@
 // RATIFICATION. Scope is the owner's call, not the architect's. This file is the
 // proposal in reviewable form: the launch set is small enough to argue with line
 // by line, and every exclusion is visible. Change a status, re-run the gate.
+//
+// PARTIAL RATIFICATION EXISTS: docs/DECISION_RECORDS.md DR-004 (August 20, 2026)
+// item-ratifies six signal-kind classifications — the three launch kinds, plus
+// pacs_access / location / shift_context as deferred-never-present-tense. This
+// schema has no per-item ratification field yet, so that subset lives in the
+// record, not here; the field arrives with the launch-claims gate, which needs
+// it to check public copy mechanically. Until then, this file's "proposal"
+// language reads as "except where DR-004 says otherwise."
 
 /** Bumped whenever a status changes. Not a semver — a serial number, so a doc or a
  *  review can name the exact revision of the scope it was written against. */

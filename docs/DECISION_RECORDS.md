@@ -128,6 +128,111 @@ the founder should override it freely if he has a market reason.
 
 ---
 
+## DR-004 — Execution order ratified; the category label is "Shared-Device Trust Gateway"
+
+**Date:** August 20, 2026. **Decided by:** the owner, in his own words, in the
+message that verified PR #215 and opened PR #216.
+
+**Source, quoted verbatim** — the operative portion of that message, preserved
+here because this file's contract requires the evidence to be recoverable, and
+a summary cannot be audited against itself. Public-safe; the message contains
+no credentials or personal data beyond what the owner published in the PRs.
+
+> "The company should now execute the existing sweep in this order:
+> 1. Protect the trust engine first. […] extend the same adversarial
+>    grant-safety testing across the remaining uncovered connector families […]
+> 2. Finish the production data boundary. Separate the PostgreSQL runtime role
+>    from the database owner/admin role and make backup/restore preserve those
+>    permissions. […]
+> 3. Close the actual product journey. Fix the native iOS badge/session API
+>    mismatch, then prove one complete shared-device flow […]
+> 4. Make the public product tell only the launch truth. Remove present-tense
+>    claims for deferred badge, zone, and shift capabilities; lock the site to
+>    the ratified Shared-Device Trust Gateway scope; and add a gate so
+>    marketing cannot drift beyond implemented capability again.
+> 5. Use the low-cost lab as the engineering engine. […] Microsoft Entra and
+>    Intune remain the enterprise production target, but they no longer block
+>    product development.
+> 6. Move the company from engineering proof to buyer proof. […] Do not
+>    activate customer-success machinery before a real customer exists."
+
+Elisions ([…]) drop only examples and restatements; every clause this record
+relies on is quoted in full above.
+
+**Decision 1 — the execution order.** The company works the build plan in this
+sequence, quoted in substance from the owner: (1) protect the trust engine —
+extend adversarial grant-safety testing across the uncovered connector families;
+(2) finish the production data boundary — the Postgres runtime/admin role split,
+with backup/restore preserving it; (3) close the actual product journey — the iOS
+badge/session API mismatch, then one complete shared-device flow end to end;
+(4) make the public product tell only the launch truth, with a gate so marketing
+cannot drift again; (5) use the low-cost lab (Fleet Community, Headwind, Keycloak,
+Wazuh, FreeRADIUS) as the engineering engine, with Entra/Intune the enterprise
+target but no longer a blocker; (6) move from engineering proof to buyer proof —
+and "do not activate customer-success machinery before a real customer exists."
+
+**Decision 2 — the category label.** The owner's step 4 directs the site be
+locked to "the ratified Shared-Device Trust Gateway scope." That settles the
+five-labels-in-circulation defect the sweep found: **Shared-Device Trust
+Gateway** — already `PRODUCT_NAME` in `scripts/launch-profile.mjs` — is the
+category label. The other four labels get reconciled out, not kept as synonyms.
+
+**What the order means — and does not.** The six steps rank priority and gate
+what goes OUTWARD: nothing publishes, ships, or reaches a person outside the
+company from a later step while an earlier step's outward preconditions are
+open. They do not serialize internal work — the owner's own step 4 directs the
+site rewrite in the same message that puts trust-engine work first, and step 6
+gates *activation* ("do not activate customer-success machinery before a real
+customer exists"), not preparation. Reading the list as a strict pipeline would
+have the instruction forbidding work it explicitly assigns. Internal drafting
+on any step may proceed in parallel; the sequence binds what leaves.
+
+**What is ratified at the item level, precisely.** The owner's step 4 names its
+own scope: *"Remove present-tense claims for deferred badge, zone, and shift
+capabilities."* That sentence item-ratifies the six signal-kind classifications
+the site rewrite depends on — the three launch kinds (`device_posture`,
+`device_management_health`, `local_authority`) as the shipping wedge, and
+`pacs_access` (badge), `location` (zone), and `shift_context` (shift) as
+deferred, never present-tense. The owner's word "badge" ratifies the deferral
+of every badge-shaped surface, not one enum: `pacs_access` (authorization at a
+controlled door) AND the separate badge-binding evidence lane the review
+console presents (`badgeBinding` in the operator evidence). When the
+launch-claims gate derives its allowed terms from this subset, any badge-shaped
+public claim resolves to this deferral — a claim escaping because it rode a
+differently-named field would defeat the ratification it rode around. The remaining launch-profile classifications —
+connector families, app surfaces, API paths — stay marked "proposal" until the
+owner reviews them or ratifies them wholesale. Reading blanket approval into a
+sentence about the site would be the unearned affirmative again.
+
+**Consequence for the roster:** `positioning-messaging` is unblocked for the
+site rewrite and POSITIONING.md, **bounded by the ratified subset**: public
+copy may claim only the three ratified launch kinds and may name the three
+ratified deferred kinds only as roadmap. Any claim resting on a classification
+outside those six waits for item-level ratification.
+`design-partner-outreach` stays blocked behind positioning and ICP research per
+the owner's own step 6.
+
+**Where the ratified subset is encoded.** For now: here, and only here.
+`scripts/launch-profile.mjs` still describes itself as an unratified proposal
+and its schema has no per-item ratification field, so tooling cannot yet
+distinguish the six ratified items from the other 168. That encoding travels
+with the launch-claims gate (build-plan item 6), which needs exactly that field
+to check public copy mechanically — until it lands, this record is the source
+of truth for the subset and the profile's blanket "proposal" language is read
+as "except where DR-004 says otherwise."
+
+**Reversal.** The owner reverses any part of this by saying so, as with every
+record here. Short of that: the execution order is superseded the moment a
+later owner instruction sequences the work differently, and the earlier order
+does not linger as doctrine; the category label is reversed only by the owner
+naming a different one, at which point every surface carrying "Shared-Device
+Trust Gateway" is reconciled in the same shift rather than left to drift; and
+the six item-level ratifications above are reversed individually if the owner
+re-classifies a named signal kind, which re-blocks any public copy resting on
+it until the copy is reconciled.
+
+---
+
 ## Still open, and honestly so
 
 Two of the four "standing decisions" are **not** decided here, because the

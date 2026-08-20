@@ -94,6 +94,7 @@ export type ReachabilityReasonCode =
   | "BACKCHANNEL_UNPOSED"
   | "PROVISIONING_SUSPENDED"
   | "STALE_LAST_SEEN"
+  | "LAST_SEEN_UNVERIFIED"
   | "REACHABILITY_UNKNOWN";
 
 /** The self-managing playbook action the posture recommends — never a raw alert storm. */

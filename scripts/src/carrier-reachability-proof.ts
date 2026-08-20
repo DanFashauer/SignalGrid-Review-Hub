@@ -26,6 +26,7 @@ import {
   type ReachabilityVerdict,
 } from "@workspace/integrations/carrier";
 import { checkLiveGateIsolated } from "./lib/live-gate.js";
+import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 
 interface ExpectedRow {
   cellularReachability: string;
@@ -155,6 +156,110 @@ check("evaluator is deterministic (identical verdict for identical input)", JSON
 // Freshness is time-driven: a once-reachable device far in the future is stale.
 const future = evaluateReachability(byDevice.get("dev-online")!, NOW_MS + 3 * 60 * 60 * 1000);
 check("a stale sighting degrades a reachable device to STALE_LAST_SEEN", future.reasonCode === "STALE_LAST_SEEN" && future.posture === "degraded");
+
+// ── GRANT SAFETY, QUANTIFIED — the whole input space, not chosen fixtures ─────
+//
+// Owner-sequenced shift 1. This family's affirmative is DIFFERENT from the
+// posture connectors: it recommends playbook actions, and by design NO input
+// ever yields action `none` — even a healthy online device stays `monitor`
+// (post-exit reachability is always being watched). The enumeration pins that:
+// the granting set is EMPTY across the entire input space, so a future edit
+// cannot quietly introduce a silent outcome. The strongest claims it can make —
+// posture `reachable` and `locatable: true` — are pinned as exact sets instead.
+{
+  const NOW_ENUM = Date.parse("2026-07-20T12:00:00Z");
+  const FRESH_AT = "2026-07-20T11:50:00Z";
+  const STALE_AT = "2026-07-20T09:00:00Z";
+  const domains = {
+    cellularBackchannel: ["present", "absent", "unknown"],
+    provisioning: ["active", "suspended", "deactivated", "unknown"],
+    cellularReachability: ["online", "idle", "offline", "unknown"],
+    smsReachable: [true, false],
+    roaming: [true, false],
+    lastSeenAt: [FRESH_AT, STALE_AT, "not-a-date", null],
+  } as const;
+
+  const build = (c: Record<string, unknown>): ReachabilitySignal => ({
+    sourceSystem: "carrier",
+    correlationId: "corr.enum",
+    observedAt: "2026-07-20T11:59:00Z",
+    deviceId: "dev.enum",
+    cellularBackchannel: c.cellularBackchannel,
+    cellularReachability: c.cellularReachability,
+    smsReachable: c.smsReachable,
+    lastSeenAt: c.lastSeenAt,
+    roaming: c.roaming,
+    provisioning: c.provisioning,
+  } as ReachabilitySignal);
+
+  const swept = enumerateGrantSafety<ReachabilitySignal, ReturnType<typeof evaluateReachability>>({
+    domains,
+    build,
+    evaluate: (s) => evaluateReachability(s, NOW_ENUM),
+    actionOf: (v) => v.recommendedAction,
+    // No state is silent: the granting set is empty by design.
+    positivelyClean: () => false,
+  });
+  check(`ENUMERATION: all ${swept.combos} combinations swept (= product of domains)`,
+    swept.combos === productOf(domains) && swept.combos === 3 * 4 * 4 * 2 * 2 * 4);
+  check("ENUMERATION: NO input in the entire space yields action `none` — reachability is always watched",
+    swept.mismatches === 0 && swept.noneCount === 0);
+
+  // NEGATIVE CONTROL — the enumeration can fail: declare the healthy online
+  // state silent and the harness must object, because the evaluator (correctly)
+  // keeps it at monitor.
+  const wrongPredicate = enumerateGrantSafety<ReachabilitySignal, ReturnType<typeof evaluateReachability>>({
+    domains,
+    build,
+    evaluate: (s) => evaluateReachability(s, NOW_ENUM),
+    actionOf: (v) => v.recommendedAction,
+    positivelyClean: (c) =>
+      c.cellularBackchannel === "present" && c.provisioning === "active" &&
+      c.cellularReachability === "online" && c.roaming === false && c.lastSeenAt === FRESH_AT,
+  });
+  check("NEGATIVE CONTROL: declaring the healthy online state silent is CAUGHT (mismatches > 0)",
+    wrongPredicate.mismatches > 0 && typeof wrongPredicate.firstMismatch === "string");
+
+  // The strongest affirmative this family CAN make, pinned as an exact set:
+  // posture `reachable` requires a live online session, backchannel not declared
+  // absent, provisioning not suspended/deactivated, no roaming, and a sighting
+  // whose timestamp is REPORTED, PARSEABLE, and FRESH. Everything else — every
+  // unknown, every contradiction — lands in a degraded/unreachable/unverified
+  // posture. (Wedge #15, raised by Codex review on #221: the first version of
+  // this set admitted null and unparseable timestamps, matching an evaluator
+  // that let its strongest affirmative rest on a timestamp nobody could vouch
+  // for. The evaluator now degrades those to LAST_SEEN_UNVERIFIED/monitor —
+  // weaker than reported-stale's locate, because unreported is a blind spot,
+  // not a reported bad state.)
+  let reachableCount = 0;
+  let reachableMismatch: string | null = null;
+  for (const bc of domains.cellularBackchannel) for (const pv of domains.provisioning)
+    for (const cr of domains.cellularReachability) for (const sms of domains.smsReachable)
+      for (const ro of domains.roaming) for (const at of domains.lastSeenAt) {
+        const v = evaluateReachability(build({ cellularBackchannel: bc, provisioning: pv, cellularReachability: cr, smsReachable: sms, roaming: ro, lastSeenAt: at }), NOW_ENUM);
+        const isReachable = v.posture === "reachable";
+        const shouldBe = bc !== "absent" && pv !== "suspended" && pv !== "deactivated" &&
+          cr === "online" && ro === false && at === FRESH_AT;
+        if (isReachable) reachableCount += 1;
+        if (isReachable !== shouldBe && reachableMismatch === null) {
+          reachableMismatch = JSON.stringify({ bc, pv, cr, sms, ro, at, got: v.posture });
+        }
+      }
+  check(`the 'reachable' posture is exactly the online-verified set (${reachableCount} states, no strays)`,
+    reachableMismatch === null && reachableCount === 2 * 2 * 1 * 2 * 1 * 1);
+
+  // Wedge #15 pinned directly: an online, non-roaming device whose sighting
+  // timestamp is missing or unparseable is DEGRADED, never confidently
+  // reachable — and a provably-stale sighting keeps the stronger locate.
+  for (const [label, at] of [["a missing lastSeenAt", null], ["an unparseable lastSeenAt", "not-a-date"]] as const) {
+    const w = evaluateReachability(build({ cellularBackchannel: "present", provisioning: "active", cellularReachability: "online", smsReachable: true, roaming: false, lastSeenAt: at }), NOW_ENUM);
+    check(`online + ${label} → degraded/LAST_SEEN_UNVERIFIED/monitor, never 'reachable' (wedge #15)`,
+      w.posture === "degraded" && w.reasonCode === "LAST_SEEN_UNVERIFIED" && w.recommendedAction === "monitor");
+  }
+  const futureSeen = evaluateReachability(build({ cellularBackchannel: "present", provisioning: "active", cellularReachability: "online", smsReachable: true, roaming: false, lastSeenAt: "2026-07-20T14:00:00Z" }), NOW_ENUM);
+  check("online + a future-dated lastSeenAt (a contradiction) → degraded/LAST_SEEN_UNVERIFIED, never the freshest reading (wedge #15)",
+    futureSeen.posture === "degraded" && futureSeen.reasonCode === "LAST_SEEN_UNVERIFIED");
+}
 
 // ── read-only enforcement ──────────────────────────────────────────────────────
 let readOnly = false;

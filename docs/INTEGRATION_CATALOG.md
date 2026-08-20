@@ -544,7 +544,7 @@ in one place.
   never-installed are affirmative operator-scale defects (alert — the setup-bypassed
   precedent); a bypass is visible and steps up (a bypass rule can be deliberate policy);
   silence on a mandated path steps up. Reading an edge's device status is not steering
-  traffic: nothing is routed, toggled, or rewritten. `proof:sse-egress` (45 checks, incl.
+  traffic: nothing is routed, toggled, or rewritten. `proof:sse-egress` (49 checks, incl.
   the exhaustive 45-cell standing sweep in both poses: protected in exactly one cell,
   unposed always quiet).
 

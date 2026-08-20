@@ -52,6 +52,7 @@ export type LocationReasonCode =
   | "INSIDE_AUTHORIZED_GEOFENCE"
   | "OUTSIDE_AUTHORIZED_GEOFENCE"
   | "STALE_LOCATION_FIX"
+  | "UNVERIFIED_LOCATION_FRESHNESS"
   | "NO_LOCATION";
 export type LocationAction = "none" | "monitor" | "locate" | "alert";
 

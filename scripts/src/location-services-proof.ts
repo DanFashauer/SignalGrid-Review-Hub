@@ -14,12 +14,14 @@ import {
   createMockLocationTransport,
   evaluateLocation,
   guardReadOnly,
+  normalizeFix,
   resolveLocationServicesConnector,
   type LocationFixRaw,
   type LocationVerdict,
   type NormalizedLocationSignal,
 } from "@workspace/integrations/location-services";
 import { checkLiveGateIsolated } from "./lib/live-gate.js";
+import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 
 interface Expected {
   geofenceState: string; hasPreciseCoordinates: boolean;
@@ -98,6 +100,76 @@ check("dev tier resolves to fixture mode", resolveLocationServicesConnector({ SI
 check("prod WITHOUT live flag stays fixture", resolveLocationServicesConnector({ SIGNALGRID_TIER: "prod" }).mode === "fixture");
 check("prod + live + token resolves live", resolveLocationServicesConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", LOCATION_ACCESS_TOKEN: "t" }).mode === "live");
 
+
+// ── Wedges #12/#13, caught by the shift-1 sweep — each an executed
+// counterexample before the fix, each pinned here after it ──────────────────────
+
+const NOW_ENUM = Date.parse("2026-07-20T12:00:00Z");
+const FRESH_AT = "2026-07-20T11:55:00Z";
+const STALE_AT = "2026-07-20T10:00:00Z";
+const FUTURE_AT = "2026-07-20T14:00:00Z";
+const mkSignal = (geofenceState: string, capturedAt: string | null): NormalizedLocationSignal =>
+  normalizeFix({ deviceId: "d.enum", geofenceId: "g1", geofenceState, capturedAt: capturedAt ?? undefined }, "2026-07-20T11:59:00Z");
+
+// #12: an inside-geofence fix with NO capture time (or an unparseable one) used
+// to skip the stale guard — only provably-stale fixes were caught — and mint the
+// on_premises/none grant. A membership of unverifiable currency is not "inside".
+for (const [label, at] of [["a null capturedAt", null], ["an unparseable capturedAt", "not-a-date"]] as const) {
+  const w = evaluateLocation(mkSignal("inside", at), NOW_ENUM);
+  check(`inside + ${label} → monitor/UNVERIFIED_LOCATION_FRESHNESS, never on_premises (wedge #12)`,
+    w.recommendedAction === "monitor" && w.reasonCode === "UNVERIFIED_LOCATION_FRESHNESS" && w.locatable === false);
+}
+
+// #13: a capture time claimed from the FUTURE (beyond clock-skew tolerance) is a
+// contradiction; it used to read as the freshest possible fix and grant.
+const future = evaluateLocation(mkSignal("inside", FUTURE_AT), NOW_ENUM);
+check("inside + a future-dated capturedAt → monitor/UNVERIFIED_LOCATION_FRESHNESS, never on_premises (wedge #13)",
+  future.recommendedAction === "monitor" && future.reasonCode === "UNVERIFIED_LOCATION_FRESHNESS");
+
+// ── GRANT SAFETY, QUANTIFIED — the whole input space, not chosen fixtures ─────
+//
+// Owner-sequenced shift 1: a grant must be UNREACHABLE by any unknown, missing,
+// stale, or contradictory input. Every combination of every axis is executed
+// through the REAL normalizer + evaluator and the granting set is pinned by
+// equality.
+{
+  const domains = {
+    // "loitering" is an out-of-vocabulary vendor value; the normalizer must fold
+    // it to unknown, so it doubles as the unknown member of the axis.
+    geofenceState: ["inside", "outside", "loitering"],
+    capturedAt: [FRESH_AT, STALE_AT, FUTURE_AT, "not-a-date", null],
+  } as const;
+
+  const swept = enumerateGrantSafety<NormalizedLocationSignal, LocationVerdict>({
+    domains,
+    build: (c) => mkSignal(c.geofenceState as string, c.capturedAt as string | null),
+    evaluate: (s) => evaluateLocation(s, NOW_ENUM),
+    actionOf: (v) => v.recommendedAction,
+    // The ONLY granting state: a POSITIVELY-inside membership on a fix whose
+    // capture time is reported, parseable, not from the future, and fresh.
+    positivelyClean: (c) => c.geofenceState === "inside" && c.capturedAt === FRESH_AT,
+    confirmedWhenNone: (v) =>
+      v.reasonCode === "INSIDE_AUTHORIZED_GEOFENCE" && v.posture === "on_premises" && v.locatable === true,
+  });
+  check(`ENUMERATION: all ${swept.combos} combinations swept (= product of domains)`,
+    swept.combos === productOf(domains) && swept.combos === 3 * 5);
+  check("ENUMERATION: a grant is reachable ONLY by the fully-verified state — zero mismatches",
+    swept.mismatches === 0);
+  check("ENUMERATION: exactly ONE granting state (non-vacuous)", swept.noneCount === 1);
+
+  // NEGATIVE CONTROL — the enumeration can fail: declare capture-time currency
+  // irrelevant to being inside and the harness must object, because the
+  // evaluator (correctly) refuses stale, unverifiable, and future-dated fixes.
+  const wrongPredicate = enumerateGrantSafety<NormalizedLocationSignal, LocationVerdict>({
+    domains,
+    build: (c) => mkSignal(c.geofenceState as string, c.capturedAt as string | null),
+    evaluate: (s) => evaluateLocation(s, NOW_ENUM),
+    actionOf: (v) => v.recommendedAction,
+    positivelyClean: (c) => c.geofenceState === "inside",
+  });
+  check("NEGATIVE CONTROL: declaring capture-time currency irrelevant is CAUGHT (mismatches > 0)",
+    wrongPredicate.mismatches > 0 && typeof wrongPredicate.firstMismatch === "string");
+}
 
 // ── The live-call gate, each condition ISOLATED ──────────────────────────────
 //

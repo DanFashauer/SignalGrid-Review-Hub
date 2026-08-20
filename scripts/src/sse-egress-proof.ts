@@ -31,6 +31,7 @@ import {
 } from "@workspace/integrations/sse-egress";
 import { composeDeviceRisk, fromSseEgress } from "@workspace/posture-composition";
 import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
+import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 
 let passed = 0;
 const failures: string[] = [];
@@ -150,6 +151,81 @@ check("prod WITHOUT live flag stays fixture", resolveSseEgressConnector({ SIGNAL
 check("prod + live but NO token stays fixture", resolveSseEgressConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" }).mode === "fixture");
 check("prod + live + token resolves live", resolveSseEgressConnector({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", SSE_EGRESS_ACCESS_TOKEN: "t" }).mode === "live");
 
+
+// ── GRANT SAFETY, QUANTIFIED — the whole input space, not chosen fixtures ─────
+//
+// Owner-sequenced shift 1. This family has TWO deliberate `none` outcomes — the
+// unposed abstain (a device outside the mandate is never nagged, and
+// egressProtected stays false so nothing is silently affirmed) and the ONE
+// earned grant (mandated + covered + clean report + bridge affirmed + tunneled +
+// edge affirmatively observing). Every combination of every axis is executed
+// through the REAL evaluator and the granting set is pinned by equality.
+{
+  const domains = {
+    egressMandated: [true, false],
+    covered: [true, false],
+    reportIntegrity: ["clean", "malformed"],
+    bridgeReachable: [true, false, null],
+    clientState: ["tunneled", "bypassed", "disabled", "not_installed", "unknown"],
+    serviceObservingTraffic: [true, false, null],
+  } as const;
+
+  type Enum = { egress: Parameters<typeof evaluateSseEgress>[0]; mandated: boolean; covered: boolean };
+  const build = (c: Record<string, unknown>): Enum => ({
+    egress: {
+      sourceSystem: "sse-egress",
+      deviceId: "dev.enum",
+      clientState: c.clientState,
+      serviceObservingTraffic: c.serviceObservingTraffic,
+      bridgeReachable: c.bridgeReachable,
+      reportIntegrity: c.reportIntegrity,
+      source: "enum",
+    } as Parameters<typeof evaluateSseEgress>[0],
+    mandated: c.egressMandated as boolean,
+    covered: c.covered as boolean,
+  });
+
+  const swept = enumerateGrantSafety<Enum, ReturnType<typeof evaluateSseEgress>>({
+    domains,
+    build,
+    evaluate: (s) => evaluateSseEgress(s.egress, { covered: s.covered, egressMandated: s.mandated }),
+    actionOf: (v) => v.recommendedAction,
+    positivelyClean: (c) =>
+      // The unposed abstain: EVERY state grants quiet when the mandate is not posed…
+      c.egressMandated === false ||
+      // …and under a mandate, ONLY the fully-affirmed tunnel grants.
+      (c.covered === true && c.reportIntegrity === "clean" && c.bridgeReachable === true &&
+        c.clientState === "tunneled" && c.serviceObservingTraffic === true),
+    // The abstain must never silently affirm (egressProtected false); the earned
+    // grant must affirm (true). Each arm carries its own reason.
+    confirmedWhenNone: (v) =>
+      (v.reasonCode === "EGRESS_UNPOSED" && v.posture === "unassessed" && v.egressProtected === false) ||
+      (v.reasonCode === "EGRESS_PROTECTED" && v.posture === "egress_protected" && v.egressProtected === true),
+  });
+  check(`ENUMERATION: all ${swept.combos} combinations swept (= product of domains)`,
+    swept.combos === productOf(domains) && swept.combos === 2 * 2 * 2 * 3 * 5 * 3);
+  check("ENUMERATION: a grant is reachable ONLY by the unposed abstain or the fully-affirmed tunnel — zero mismatches",
+    swept.mismatches === 0);
+  check("ENUMERATION: the granting set is the 180 unposed states + exactly 1 earned grant (non-vacuous)",
+    swept.noneCount === 2 * 2 * 3 * 5 * 3 + 1);
+
+  // NEGATIVE CONTROL — the enumeration can fail: declare the tunneled state
+  // clean regardless of the edge's corroboration and the harness must object,
+  // because the evaluator (correctly) refuses the contradicted and unreported
+  // observation states.
+  const wrongPredicate = enumerateGrantSafety<Enum, ReturnType<typeof evaluateSseEgress>>({
+    domains,
+    build,
+    evaluate: (s) => evaluateSseEgress(s.egress, { covered: s.covered, egressMandated: s.mandated }),
+    actionOf: (v) => v.recommendedAction,
+    positivelyClean: (c) =>
+      c.egressMandated === false ||
+      (c.covered === true && c.reportIntegrity === "clean" && c.bridgeReachable === true &&
+        c.clientState === "tunneled"),
+  });
+  check("NEGATIVE CONTROL: declaring the uncorroborated tunnel clean is CAUGHT (mismatches > 0)",
+    wrongPredicate.mismatches > 0 && typeof wrongPredicate.firstMismatch === "string");
+}
 
 // ── The live-call gate, each condition ISOLATED ──────────────────────────────
 //

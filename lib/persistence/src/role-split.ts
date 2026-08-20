@@ -110,6 +110,22 @@ const OWNER_RIGHTS_CHECKS = `
         'rights on the runtime''s own INSERTs, an owner-rights write path no EXECUTE revocation closes. '
         'DROP the trigger (or make its function SECURITY INVOKER), then re-run.';
     END IF;
+    -- REWRITE RULES are the third owner-rights write path: an ON INSERT DO
+    -- ALSO UPDATE rule on the ledger executes its action with the table
+    -- owner's privileges on the runtime's own permitted INSERT. Managed
+    -- tables are plain tables, so ANY rule on them is foreign machinery.
+    IF EXISTS (
+      SELECT 1 FROM pg_rewrite r
+      JOIN pg_class c ON c.oid = r.ev_class
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public'
+        AND c.relname IN ('audit_ledger', 'decisions', 'evidence_snapshots', 'sessions')
+        AND r.rulename <> '_RETURN'
+    ) THEN
+      RAISE EXCEPTION 'a REWRITE RULE sits on a managed table — rule actions run with the table '
+        'owner''s privileges on the runtime''s own statements, an owner-rights write path no grant '
+        'closes. DROP RULE it, then re-run.';
+    END IF;
     -- Effective CREATE on OTHER schemas — including CREATE inherited from a
     -- PUBLIC grant, which no role-specific ACL scan can see. The apply resets
     -- schema public itself, so it is excluded here; any other schema the
@@ -376,10 +392,15 @@ export const ROLE_SPLIT_SQL = `
 
     -- BIGSERIAL owns a sequence whose name is derived; resolve it instead of
     -- hardcoding, so a rename never silently drops the grant.
-    seqname := pg_get_serial_sequence('public.audit_ledger', 'seq');
-    IF seqname IS NOT NULL THEN
-      EXECUTE format('REVOKE ALL ON SEQUENCE %s FROM signalgrid_runtime, PUBLIC', seqname);
-      EXECUTE format('GRANT USAGE ON SEQUENCE %s TO signalgrid_runtime', seqname);
+    -- Guarded by to_regclass FIRST: pg_get_serial_sequence RAISES on a
+    -- missing table (it does not return NULL), and this runs after a restore
+    -- — an archive that predates the ledger must not fail half-applied here.
+    IF to_regclass('public.audit_ledger') IS NOT NULL THEN
+      seqname := pg_get_serial_sequence('public.audit_ledger', 'seq');
+      IF seqname IS NOT NULL THEN
+        EXECUTE format('REVOKE ALL ON SEQUENCE %s FROM signalgrid_runtime, PUBLIC', seqname);
+        EXECUTE format('GRANT USAGE ON SEQUENCE %s TO signalgrid_runtime', seqname);
+      END IF;
     END IF;
   END $$;
 
@@ -438,7 +459,13 @@ export async function assertRoleSplitProvisionable(
            pg_has_role(current_user,
              (SELECT datdba FROM pg_database WHERE datname = current_database()), 'USAGE') AS owns_db,
            COALESCE(pg_has_role(current_user,
-             (SELECT nspowner FROM pg_namespace WHERE nspname = 'public'), 'USAGE'), TRUE) AS owns_schema
+             (SELECT nspowner FROM pg_namespace WHERE nspname = 'public'), 'USAGE'), TRUE) AS owns_schema,
+           NOT EXISTS (
+             SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+             WHERE n.nspname = 'public'
+               AND c.relname IN ('audit_ledger', 'decisions', 'evidence_snapshots', 'sessions')
+               AND NOT pg_has_role(current_user, c.relowner, 'USAGE')
+           ) AS owns_relations
   `);
   const a = auth.rows[0] ?? {};
   if (!a.is_super && !(a.owns_db && a.owns_schema)) {
@@ -447,6 +474,18 @@ export async function assertRoleSplitProvisionable(
         `database owner (or a superuser), and the schema statements need the schema owner. Refusing ` +
         `BEFORE any schema change or restore so nothing is left half-applied. Run as the database ` +
         `owner or a superuser, or transfer ownership first (ALTER DATABASE … OWNER TO …).`,
+    );
+  }
+  // An UPGRADED database can hold managed tables created by an older login:
+  // owning the database and schema does not confer the right to REVOKE/GRANT
+  // on someone else's table, so migration v2 would fail mid-flight at its
+  // first table statement. Refuse up front and name the relation transfer.
+  if (!a.is_super && !a.owns_relations) {
+    throw new Error(
+      `this credential does not own every existing managed table (audit_ledger / decisions / ` +
+        `evidence_snapshots / sessions) — table-level REVOKE/GRANT needs each table's owner. Refusing ` +
+        `BEFORE any change. Transfer them first (ALTER TABLE … OWNER TO this role, or REASSIGN OWNED ` +
+        `BY the old login), then re-run.`,
     );
   }
 }

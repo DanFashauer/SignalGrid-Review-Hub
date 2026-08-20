@@ -154,7 +154,7 @@ export class PostgresSessionStore implements SessionStore {
     this.pool = new Pool({ connectionString, max: 10 });
     try {
       await this.pool.query(`
-        CREATE TABLE IF NOT EXISTS sessions (
+        CREATE TABLE IF NOT EXISTS public.sessions (
           id           TEXT PRIMARY KEY,
           tenant_id    TEXT NOT NULL,
           identity_ref TEXT NOT NULL,
@@ -167,7 +167,7 @@ export class PostgresSessionStore implements SessionStore {
           last_seen_at TIMESTAMPTZ NOT NULL,
           expires_at   TIMESTAMPTZ NOT NULL
         );
-        CREATE INDEX IF NOT EXISTS sessions_tenant_idx ON sessions (tenant_id);
+        CREATE INDEX IF NOT EXISTS sessions_tenant_idx ON public.sessions (tenant_id);
       `);
     } catch (err) {
       // Under the role split the runtime credential holds NO DDL privilege, and

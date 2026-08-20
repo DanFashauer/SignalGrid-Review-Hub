@@ -113,7 +113,7 @@ export class PostgresAuditBackend implements AuditBackend {
     this.pool = new Pool({ connectionString, max: 10 });
     try {
       await this.pool.query(`
-        CREATE TABLE IF NOT EXISTS audit_ledger (
+        CREATE TABLE IF NOT EXISTS public.audit_ledger (
           seq        BIGSERIAL PRIMARY KEY,
           id         TEXT NOT NULL,
           ts         TIMESTAMPTZ NOT NULL,
@@ -159,7 +159,9 @@ export class PostgresAuditBackend implements AuditBackend {
          AND has_sequence_privilege(pg_get_serial_sequence('public.audit_ledger', 'seq'), 'USAGE') AS ok,
              has_any_column_privilege('public.audit_ledger', 'UPDATE')
           OR has_table_privilege('public.audit_ledger', 'DELETE')
-          OR has_table_privilege('public.audit_ledger', 'TRUNCATE') AS forbidden
+          OR has_table_privilege('public.audit_ledger', 'TRUNCATE')
+          -- sequence UPDATE means setval(): the append counter could be wedged
+          OR has_sequence_privilege(pg_get_serial_sequence('public.audit_ledger', 'seq'), 'UPDATE') AS forbidden
     `);
     if (!priv.rows[0]?.ok) {
       throw new Error(

@@ -93,7 +93,7 @@ export class PostgresDecisionStore implements DecisionStore {
     this.pool = new Pool({ connectionString, max: 10 });
     try {
       await this.pool.query(`
-        CREATE TABLE IF NOT EXISTS decisions (
+        CREATE TABLE IF NOT EXISTS public.decisions (
           id         TEXT PRIMARY KEY,
           tenant_id  TEXT NOT NULL,
           created_at TIMESTAMPTZ NOT NULL,
@@ -101,8 +101,8 @@ export class PostgresDecisionStore implements DecisionStore {
           data       JSONB NOT NULL
         );
         CREATE INDEX IF NOT EXISTS decisions_tenant_created_idx
-          ON decisions (tenant_id, created_at DESC);
-        CREATE TABLE IF NOT EXISTS evidence_snapshots (
+          ON public.decisions (tenant_id, created_at DESC);
+        CREATE TABLE IF NOT EXISTS public.evidence_snapshots (
           id          TEXT PRIMARY KEY,
           tenant_id   TEXT NOT NULL,
           decision_id TEXT NOT NULL,

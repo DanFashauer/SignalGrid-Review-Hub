@@ -137,6 +137,14 @@ async function main() {
     await admin.query("DROP DATABASE IF EXISTS sg_other_db WITH (FORCE)");
     await admin.query(dropRuntimeRoleSql());
 
+    // The split must apply cleanly on a database with NO tables at all — the
+    // restore path can meet an archive that predates the ledger, and
+    // pg_get_serial_sequence RAISES on a missing table rather than returning
+    // NULL, so every relation lookup must be guarded.
+    check("apply succeeds on a BARE database (no tables) — every relation lookup is guarded",
+      (await failureOf(() => applyRoleSplit(url!))) === "");
+    await admin.query(dropRuntimeRoleSql());
+
     // 0a. A migration credential that owns the schema but lacks CREATEROLE —
     // the common least-privilege deployment — must be refused UP FRONT with the
     // remedy named, not fail raw inside migration v2.
@@ -424,6 +432,14 @@ async function main() {
       /SECURITY DEFINER trigger/.test(await failureOf(() => applyRoleSplit(url!))));
     await admin.query("DROP TRIGGER sg_probe_trg ON public.audit_ledger");
     await admin.query("DROP FUNCTION public.sg_trigger_probe()");
+
+    // REWRITE RULES are the third owner-rights path (after definer routines
+    // and triggers): a rule's action runs with the table owner's privileges
+    // on the runtime's own statements.
+    await admin.query("CREATE RULE sg_probe_rule AS ON DELETE TO public.audit_ledger DO INSTEAD NOTHING");
+    check("role split REFUSES a rewrite rule on a managed table (rule actions run with the owner's rights)",
+      /REWRITE RULE/.test(await failureOf(() => applyRoleSplit(url!))));
+    await admin.query("DROP RULE sg_probe_rule ON public.audit_ledger");
 
     // CREATE inherited from a PUBLIC grant on another schema: no role-specific
     // ACL scan can see it, but the runtime could create (and then own)

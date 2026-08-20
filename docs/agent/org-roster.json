@@ -327,7 +327,7 @@
       "activated": null,
       "produced": null,
       "priority": 1,
-      "nextAction": "The docs are engineer-truthful and buyer-illegible. There is no one-sentence answer to \"what is it\" that a hospital IT director would repeat back. Write it from what the proofs actually establish — an Assist gate returning allow/step_up/restrict/deny on signal and location, fail-closed — and check it against the launch profile so it never describes deferred surface."
+      "nextAction": "The one-sentence, 100-word and boundary drafts EXIST — docs/COMPANY_BUILD_PLAN.md, \"Drafts produced by this sweep\", every claim traced to the launch class. Next: land as docs/POSITIONING.md, reconcile EXECUTIVE_ONE_PAGER.md and ECOSYSTEM_POSITIONING.md to it, and rewrite the four site sections that present deferred signals in the present tense. Blocked only on the owner ratifying launch-profile v4."
     },
     {
       "id": "icp-customer-research",
@@ -349,7 +349,7 @@
       "activated": null,
       "produced": null,
       "priority": 2,
-      "nextAction": "Four findings are already sitting unpublished and each is genuinely useful to strangers: a quarantined NAC device receives an Access-ACCEPT; an egress proxy collapses the dns_failing rung; a hash-chained audit ledger cannot see deletion of its own tail; Keycloak emits no amr on any surface. Draft the first as a standalone piece. Nothing publishes without owner approval — it reaches people outside the company."
+      "nextAction": "The first article is DRAFTED — the ledger-truncation piece, 831 words, every figure traced, in docs/COMPANY_BUILD_PLAN.md under Drafts. Next: independent verification pass, then stage for the owner. It publishes NOWHERE without the owner's explicit approval and venue choice."
     },
     {
       "id": "design-partner-outreach",
@@ -393,7 +393,7 @@
       "activated": null,
       "produced": null,
       "priority": 2,
-      "nextAction": "There is no cost model for SignalGrid at all — not for infrastructure, not for the agent lanes, not for the founder's time. Build the smallest honest one: what a single tenant costs to serve at the deferred architecture, and what the current burn actually is. Any figure that is an estimate must be labelled an estimate; the docs-figure guard already fails a measured number that has stopped being one."
+      "nextAction": "The cost-model skeleton is DRAFTED in docs/COMPANY_BUILD_PLAN.md — serving one tenant is limiter-bound, not compute-bound (240 req/min default vs 5,128 decisions/sec measured). Next: land as docs/COST_MODEL.md with every unpriced line TBD, never guessed. Four numbers need the owner: Claude spend, Apple Developer fee, GitHub plan, domains. Separate deadline: the Fleet Premium trial expires 2026-09-16."
     },
     {
       "id": "commercial-counsel",
@@ -415,7 +415,7 @@
       "activated": null,
       "produced": null,
       "priority": 2,
-      "nextAction": "Nothing in this repository measures what the agent org costs, and it now spans 40 roles across four divisions and two machines. Review coverage measures what was READ but not what it cost to read it. Establish the baseline: tokens and wall-clock per shift against what each shift actually landed and verified. Expect the answer to be unflattering — the point is that it becomes a number rather than a feeling."
+      "nextAction": "The metric is DEFINED in the sweep: cost-per-shift = monthly agent spend / ledger rows closed, with denominators computable today from committed artifacts (377 Claude-authored commits since 2026-07-20, sim-results durations). Next: publish the denominators now so one owner billing number later yields the ratio instantly. Never publish an invented dollar."
     }
   ]
 }

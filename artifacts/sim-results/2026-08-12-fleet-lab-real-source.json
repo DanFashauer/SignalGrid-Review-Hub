@@ -1,27 +1,26 @@
 {
   "schemaVersion": 1,
   "requestId": "2026-08-12-fleet-lab-real-source",
-  "completedAt": "2026-08-18T15:49:20.350Z",
+  "completedAt": "2026-08-20T01:33:45.232Z",
   "provenance": {
     "platform": "darwin",
     "arch": "arm64",
     "nodeVersion": "v24.18.0",
     "macosVersion": "26.6",
-    "commit": "769e6251ec5e6a58ee352435ebdcaea790f570c3",
+    "commit": "7e720c2513bc6141eccb06d5db471e5ae1d64c24",
     "branch": "SignalGrid_Alpha",
     "workingTreeClean": true
   },
   "runs": [
     {
       "operation": "live-lanes",
-      "status": "refused_missing_prerequisite",
-      "detail": "the command reported SKIPPED lanes: nothing failed, but something did not run",
-      "exitCode": 3,
-      "durationMs": 68719,
+      "status": "failed",
+      "exitCode": 1,
+      "durationMs": 93938,
       "tail": [
         "== SignalGrid live-vendor lanes ==",
         "-- bringing up Fleet (mysql + redis + fleet, amd64 under emulation)",
-        "  \u001b[32mPASS\u001b[0m  proof:live-fleet",
+        "  \u001b[31mFAIL\u001b[0m  proof:live-fleet  (log: /tmp/live_fleet.log)",
         "-- bringing up Traccar",
         "  \u001b[32mPASS\u001b[0m  proof:live-location",
         "-- bringing up Keycloak (DPoP feature)",
@@ -30,16 +29,15 @@
         "",
         "-- removing containers this run started: sg-fleet sg-fleet-mysql sg-fleet-redis sg-traccar sg-keycloak",
         "",
-        "== LIVE LANES: 3 passed, 0 failed, 1 skipped ==",
-        "   skipped (NOT verified by this run): proof:live-edr",
-        "✅ Nothing failed — but a skipped lane proved nothing."
+        "== LIVE LANES: 2 passed, 1 failed, 1 skipped ==",
+        "   failed: proof:live-fleet"
       ]
     },
     {
       "operation": "docker",
       "status": "passed",
       "exitCode": 0,
-      "durationMs": 15181,
+      "durationMs": 14753,
       "tail": [
         "Container verification — the real deployment topology, against a real database",
         "",
@@ -53,7 +51,7 @@
         "  ok   — proof:session-store-pg — durable session lifecycle (start/refresh/expire/end, isolation)",
         "  ok   — proof:enrollment-race — concurrent enrollment loses no credential",
         "",
-        "engine=podman version=6.0.2 pgProofs=3 pgAssertions=22 raceAssertions=4 result=pass"
+        "engine=podman version=6.0.2 pgProofs=3 pgAssertions=27 raceAssertions=4 result=pass"
       ]
     }
   ]

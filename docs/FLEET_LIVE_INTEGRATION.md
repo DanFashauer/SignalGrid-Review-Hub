@@ -192,9 +192,9 @@ ENVS="-e FLEET_MYSQL_ADDRESS=sg-fleet-mysql:3306 -e FLEET_MYSQL_DATABASE=fleet \
  -e FLEET_REDIS_ADDRESS=sg-fleet-redis:6379 -e FLEET_SERVER_TLS=false"
 
 docker run --rm --platform linux/amd64 --network sg-fleetnet $ENVS \
-  fleetdm/fleet:latest fleet prepare db --no-prompt
+  fleetdm/fleet:v4.89.2 fleet prepare db --no-prompt
 docker run -d --name sg-fleet --platform linux/amd64 --network sg-fleetnet \
-  -p 8412:8080 $ENVS fleetdm/fleet:latest fleet serve
+  -p 8412:8080 $ENVS fleetdm/fleet:v4.89.2 fleet serve
 ```
 
 Then create the first admin (`POST /api/v1/setup`), log in for a token
@@ -222,7 +222,7 @@ Premium-licensed lab (the Mac-lane exercise above).
 The protocol-only limitation above ("the enrolled host has no live `osqueryd`,
 so every policy comes back `unknown`") is now CLOSED. The cloud lane brought up
 the full stack in its own container — `mysql:8.0` + `redis:7` +
-`fleetdm/fleet:latest` behind TLS (self-signed lab cert, trusted explicitly via
+`fleetdm/fleet:v4.89.2` behind TLS (self-signed lab cert, trusted explicitly via
 `NODE_EXTRA_CA_CERTS`, verification never disabled) — and enrolled a **real
 `osqueryd` container** (`osquery/osquery:latest`) over the genuine TLS
 enroll/config/logger/distributed protocol. With

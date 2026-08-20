@@ -58,3 +58,21 @@ export SG_ENGINE
 SG_IMAGE_REDIS="docker.io/library/redis:7"
 # shellcheck disable=SC2034
 SG_IMAGE_MYSQL="docker.io/library/mysql:8"
+
+# Fleet is PINNED, and it is the one that most needed to be.
+#
+# `fleetdm/fleet:latest` was used here while mysql and redis beside it were pinned —
+# exactly backwards. The proof asserts nothing about MySQL's or Redis's behaviour;
+# it asserts a great deal about FLEET's, and docs/FLEET_LIVE_INTEGRATION.md records
+# that those 30 assertions were established against **v4.89.2** specifically.
+# Running the lane at `latest` meant a red result could be our regression OR
+# upstream shipping a new Fleet on an unrelated Tuesday, with no way to tell the
+# two apart from the failure alone.
+#
+# Checking whether the adapter still holds against a NEWER Fleet is real work and
+# worth doing — but as a deliberate act, not as a side effect:
+#
+#   FLEET_IMAGE=docker.io/fleetdm/fleet:latest ./scripts/run-live-lanes.sh --only fleet
+#
+# shellcheck disable=SC2034
+SG_IMAGE_FLEET="docker.io/fleetdm/fleet:v4.89.2"

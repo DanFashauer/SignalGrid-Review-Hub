@@ -20,6 +20,14 @@ export type RiskState =
   | "remediated"
   | "dismissed"
   | "confirmed_safe"
+  /** The IdP AFFIRMATIVELY reported no risk — Entra's `riskState: "none"`, the most
+   *  common value in a healthy tenant. Distinct from `unknown` on purpose: "the
+   *  source said none" is a reading, "the source said something we cannot parse (or
+   *  said nothing)" is a blind spot, and the two must never grade the same. Until
+   *  this member existed the normalizer collapsed both into `unknown`, and the
+   *  evaluator graded `unknown` as trusted — so a vendor renaming one enum value
+   *  would have silently converted parse failure into trust. */
+  | "none"
   | "unknown";
 
 /** Vendor-normalized risk-detection type. */
@@ -103,6 +111,10 @@ export type IdentityPosture =
 export type IdentityReasonCode =
   | "NO_RISK"
   | "RISK_FEED_UNOBSERVED"
+  /** riskState is `unknown` — absent from the source, or a value the normalizer
+   *  could not map. Grades `monitor`: a blind spot to investigate, never `trusted`.
+   *  Mirrors RISK_FEED_UNOBSERVED, one field over. */
+  | "RISK_STATE_UNVERIFIED"
   | "NOT_COVERED"
   | "RISK_REMEDIATED"
   | "RISK_STATE_AT_RISK"

@@ -85,6 +85,27 @@ export const AREAS = [
   { path: ".github", class: "tooling", reason: "CI workflows and repository automation." },
   { path: ".githooks", class: "tooling", reason: "The pre-push lockfile hook." },
   { path: ".agents", class: "tooling", reason: "Agent-lane coordination material." },
+  // Classified deliberately rather than waved through. This repository is PUBLIC,
+  // so a prompt committed here is a prompt published — and prompts are exactly the
+  // kind of file that accumulates working context (a customer name in an example, a
+  // real hostname in a "for instance") without anyone thinking of it as content. The
+  // nine commands are generic authoring aids; the one repo-specific thing any of them
+  // says is that the GitHub mobile app cannot open repository settings, which is a
+  // fact about GitHub, not about this company.
+  { path: ".claude", class: "tooling", reason: "Slash commands for prompt authoring, and the note describing them. Generic authoring aids carrying no product, tenant or customer specifics — see .claude/COMMANDS.md." },
+  // A NESTED, more specific area — the gate resolves longest-prefix-wins, so these
+  // files take this class and not the `.claude` one above. Split out because they are
+  // somebody else's work: MIT, and MIT is a grant with conditions, not a free-for-all.
+  // The LICENSE and copyright notice travel WITH the copy, and .claude/skills/VENDORED.md
+  // records the upstream commit plus the licence survey that rejected five other
+  // collections — three of which carry no licence at all.
+  { path: ".claude/skills", class: "third_party_intake", reason: "obra/superpowers, 14 skills vendored unmodified under MIT © 2025 Jesse Vincent. Licence basis, upstream commit and the rejected alternatives are stated in .claude/skills/VENDORED.md." },
+  // FIRST-PARTY, nested inside the vendored area — longest-prefix-wins puts it here,
+  // not in third_party_intake. Written in this repository from the Google developer
+  // documentation style guide (a style guide is ideas, and ideas are not copyrightable
+  // expression — nothing from the guide is reproduced). Kept as its own area so the
+  // vendored claim above ("14 skills, unmodified") stays literally true.
+  { path: ".claude/skills/owner-comms", class: "tooling", reason: "First-party owner-communication skill, authored here. Not part of the vendored superpowers set — see the note in .claude/skills/VENDORED.md." },
   { path: "docker", class: "tooling", reason: "Container assets." },
   { path: "Dockerfile.api", class: "tooling", reason: "API image build." },
   { path: "Dockerfile.web", class: "tooling", reason: "Web image build." },

@@ -256,7 +256,13 @@ for (const [label, unreported, reportedNone] of [
   [
     "identity-risk",
     identityRisk.evaluateIdentityRisk(identityRisk.normalizePrincipal({ principalId: "p", source: "s" } as never), {}),
-    identityRisk.evaluateIdentityRisk(identityRisk.normalizePrincipal({ principalId: "p", source: "s", detections: [] } as never), {}),
+    // riskState "none" is REPORTED on the clean side deliberately, so this row
+    // isolates the DETECTIONS collection — the axis this law is about. It used to
+    // omit riskState and still expect `none`, which only passed because the
+    // normalizer collapsed absent state into "unknown" and the evaluator graded
+    // "unknown" as trusted — the exact fail-open fixed on 2026-08-20. An empty
+    // detections list is a reading; an absent risk state never was one.
+    identityRisk.evaluateIdentityRisk(identityRisk.normalizePrincipal({ principalId: "p", source: "s", riskState: "none", detections: [] } as never), {}),
   ],
   [
     "peripheral-control",

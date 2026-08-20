@@ -190,6 +190,27 @@
       "date": "2026-08-20",
       "depth": "audited",
       "note": "Accurate, but describes the client setup in prose only; following it produced a 13/14 on a misread mapper claim value. A setup script would not have made the mistake."
+    },
+    {
+      "path": "lib/integrations/src/integrations/network-nac/evaluate.ts",
+      "reviewedBy": "network-domain",
+      "date": "2026-08-20",
+      "depth": "audited",
+      "note": "Read against the fail-closed invariant after the sweep's counterexample. Both grant exits returned none whether or not nacCompliant and freshness were reported — unknown graded identical to known-good. Fixed: verified-good none, unreported monitor (AUTHENTICATED_POSTURE_UNVERIFIED), reported-bad step_up. Negative control confirmed the new checks fail on the old code."
+    },
+    {
+      "path": "lib/integrations/src/integrations/identity-risk/evaluate.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-20",
+      "depth": "audited",
+      "note": "riskState unknown + riskLevel unknown + zero detections graded trusted/NO_RISK/none, and the normalizer had no arm for Entra's clean value 'none' — so parse failure and a clean tenant were the same state, graded trusted. Fixed both halves together; a real detection still outranks the new monitor floor."
+    },
+    {
+      "path": "lib/integrations/src/integrations/identity-risk/identity-connector.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-20",
+      "depth": "audited",
+      "note": "normalizeRiskState default arm swallowed the most common healthy-tenant value. Vendor 'none' now maps to riskState 'none'; unmapped values still fall to 'unknown', which no longer earns trust."
     }
   ]
 }

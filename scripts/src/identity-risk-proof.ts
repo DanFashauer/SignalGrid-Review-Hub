@@ -120,6 +120,36 @@ check("mcasImpossibleTravel normalizes to impossible_travel and grades 'high'", 
 const safe = evaluateIdentityRisk(normalizePrincipal({ principalId: "p-safe", riskState: "confirmedSafe", detections: [] }));
 check("confirmed_safe with no detections is trusted/none", safe.posture === "trusted" && safe.recommendedAction === "none");
 
+// ── riskState "none" vs "unknown": a reading vs a blind spot ──────────────────
+//
+// THE DEFECT THIS REPLACES. normalizeRiskState had no arm for the vendor value
+// "none" — Entra's value for a clean principal, the most common value in a
+// healthy tenant — so it fell to the default and became "unknown". And the
+// evaluator graded unknown-state/unknown-level/no-detections as trusted/NO_RISK/
+// none. Two failures fused: every clean principal earned trust via a PARSE
+// FALL-THROUGH rather than a reading, and a vendor renaming one enum value would
+// silently convert parse failure into trust. Executed counterexample 2026-08-20.
+check("vendor 'none' normalizes to riskState 'none' — a reading, not a blind spot",
+  normalizePrincipal({ principalId: "p-n", riskState: "none", detections: [] }).riskState === "none");
+check("an unmapped vendor state still normalizes to 'unknown'",
+  normalizePrincipal({ principalId: "p-x", riskState: "riskFreeUltra2000", detections: [] }).riskState === "unknown");
+
+const stateUnknown = evaluateIdentityRisk(
+  normalizePrincipal({ principalId: "p-blind", detections: [] }), { covered: true });
+check("riskState 'unknown' is a blind spot: monitor / RISK_STATE_UNVERIFIED — the case that used to grade trusted",
+  stateUnknown.posture === "unknown" && stateUnknown.recommendedAction === "monitor" &&
+  stateUnknown.reasonCode === "RISK_STATE_UNVERIFIED");
+
+const stateNone = evaluateIdentityRisk(
+  normalizePrincipal({ principalId: "p-clean", riskState: "none", riskLevel: "none", mfaSatisfied: true, detections: [] }), { covered: true });
+check("NON-VACUITY: an affirmatively clean principal still earns trusted/none — the grant exists, it is just earned now",
+  stateNone.posture === "trusted" && stateNone.recommendedAction === "none" && stateNone.reasonCode === "NO_RISK");
+
+const unknownPlusDetection = evaluateIdentityRisk(
+  normalizePrincipal({ principalId: "p-blind-det", detections: [ { detectionType: "impossibleTravel", riskLevel: "high" } ] }), { covered: true });
+check("a real detection still OUTRANKS the unknown-state floor — strongest wins is preserved",
+  unknownPlusDetection.recommendedAction !== "monitor" && unknownPlusDetection.recommendedAction !== "none");
+
 // leaked credentials (compromise grade) outranks a co-present high risk level.
 const leaked = evaluateIdentityRisk(normalizePrincipal({ principalId: "p-l", riskLevel: "high", riskState: "atRisk", detections: [{ detectionType: "leakedCredentials" }] }));
 check("leaked-credentials (escalate) outranks a high risk level (restrict)", leaked.recommendedAction === "escalate");

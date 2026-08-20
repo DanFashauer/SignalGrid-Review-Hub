@@ -73,8 +73,12 @@ if wanted fleet; then
     "$SG_ENGINE" run -d --name sg-fleet-redis --network sg-fleetnet "$SG_IMAGE_REDIS" >/dev/null 2>&1
     for _ in $(seq 1 90); do "$SG_ENGINE" exec sg-fleet-mysql mysqladmin ping -ufleet -pfleet >/dev/null 2>&1 && break; sleep 2; done
     E="-e FLEET_MYSQL_ADDRESS=sg-fleet-mysql:3306 -e FLEET_MYSQL_DATABASE=fleet -e FLEET_MYSQL_USERNAME=fleet -e FLEET_MYSQL_PASSWORD=fleet -e FLEET_REDIS_ADDRESS=sg-fleet-redis:6379 -e FLEET_SERVER_TLS=false"
-    "$SG_ENGINE" run --rm --platform linux/amd64 --network sg-fleetnet $E docker.io/fleetdm/fleet:latest fleet prepare db --no-prompt >/dev/null 2>&1
-    "$SG_ENGINE" run -d --name sg-fleet --platform linux/amd64 --network sg-fleetnet -p 8412:8080 $E docker.io/fleetdm/fleet:latest fleet serve >/dev/null 2>&1
+    # The version the 30 assertions were established against, overridable for a
+    # deliberate upstream-drift check. See scripts/lib/container-engine.sh.
+    FLEET_IMG="${FLEET_IMAGE:-$SG_IMAGE_FLEET}"
+    echo "   fleet image: $FLEET_IMG"
+    "$SG_ENGINE" run --rm --platform linux/amd64 --network sg-fleetnet $E "$FLEET_IMG" fleet prepare db --no-prompt >/dev/null 2>&1
+    "$SG_ENGINE" run -d --name sg-fleet --platform linux/amd64 --network sg-fleetnet -p 8412:8080 $E "$FLEET_IMG" fleet serve >/dev/null 2>&1
     if wait_http http://127.0.0.1:8412/healthz 120; then
       started="$started sg-fleet sg-fleet-mysql sg-fleet-redis"
       curl -s -X POST http://127.0.0.1:8412/api/v1/setup -H 'Content-Type: application/json' -d '{"admin":{"name":"SG","email":"sg@signalgrid.test","password":"SignalGrid!2026x","password_confirmation":"SignalGrid!2026x"},"org_info":{"org_name":"SG"},"server_url":"http://127.0.0.1:8412"}' >/dev/null 2>&1

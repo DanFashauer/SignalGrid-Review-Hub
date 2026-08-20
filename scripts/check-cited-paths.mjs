@@ -81,7 +81,14 @@ export const ALLOW = [
 // tree and are not this repository's claims to keep true. `attached_assets/` is the
 // Replit paste convention and is where the private core keeps scraped vendor pages.
 // This is a skip with a reason, not a silent exclusion: the count is reported.
-export const INTAKE_PREFIXES = ["attached_assets/", "vendor/", "third_party/"];
+// `.claude/skills/` is VENDORED third-party work (obra/superpowers, MIT — see
+// .claude/skills/VENDORED.md). Its documentation cites illustrative example paths
+// — `tests/exact/path/to/test.py`, `scripts/helper.py`, `docs/file1.md` — which are
+// placeholders in somebody else's prose, not claims about this tree. The alternative
+// was editing the vendored files to satisfy our gate, which would have destroyed the
+// one property that makes a vendored copy auditable: that it is byte-identical to
+// upstream and can be diffed against it. Skipping is the cheaper honesty.
+export const INTAKE_PREFIXES = ["attached_assets/", "vendor/", "third_party/", ".claude/skills/"];
 
 // Documents whose subject IS another repository, keyed by repo directory name. The
 // value names the repo they describe, and it is printed so the exemption stays visible

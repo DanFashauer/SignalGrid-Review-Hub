@@ -1,40 +1,217 @@
 {
   "fixtureName": "identity-risk",
-  "fixtureVersion": "2026-07-20.v1",
+  "fixtureVersion": "2026-08-20.v2",
   "note": "Public-safe synthetic IdP sign-in-risk records (illustrative detections, no real identity or tenant data).",
   "accessToken": "identity-fixture-read-token",
   "principals": {
     "p-trusted": {
-      "record": { "principalId": "p-trusted", "riskLevel": "none", "mfaSatisfied": true, "detections": [], "source": "entra" },
-      "expected": { "posture": "trusted", "reasonCode": "NO_RISK", "recommendedAction": "none", "riskLevel": "none", "riskState": "unknown", "detectionCount": 0, "highestDetectionGrade": null, "mfaSatisfied": true }
+      "record": {
+        "principalId": "p-trusted",
+        "riskLevel": "none",
+        "mfaSatisfied": true,
+        "detections": [],
+        "source": "entra",
+        "riskState": "none"
+      },
+      "expected": {
+        "posture": "trusted",
+        "reasonCode": "NO_RISK",
+        "recommendedAction": "none",
+        "riskLevel": "none",
+        "riskState": "none",
+        "detectionCount": 0,
+        "highestDetectionGrade": null,
+        "mfaSatisfied": true
+      }
+    },
+    "p-state-unreported": {
+      "record": {
+        "principalId": "p-state-unreported",
+        "riskLevel": "none",
+        "mfaSatisfied": true,
+        "detections": [],
+        "source": "entra"
+      },
+      "expected": {
+        "posture": "unknown",
+        "reasonCode": "RISK_STATE_UNVERIFIED",
+        "recommendedAction": "monitor",
+        "riskLevel": "none",
+        "riskState": "unknown",
+        "detectionCount": 0,
+        "highestDetectionGrade": null,
+        "mfaSatisfied": true
+      }
     },
     "p-low": {
-      "record": { "principalId": "p-low", "riskLevel": "low", "riskState": "atRisk", "mfaSatisfied": true, "detections": [], "source": "okta" },
-      "expected": { "posture": "low_risk", "reasonCode": "LOW_RISK_SIGNIN", "recommendedAction": "monitor", "riskLevel": "low", "riskState": "at_risk", "detectionCount": 0, "highestDetectionGrade": null, "mfaSatisfied": true }
+      "record": {
+        "principalId": "p-low",
+        "riskLevel": "low",
+        "riskState": "atRisk",
+        "mfaSatisfied": true,
+        "detections": [],
+        "source": "okta"
+      },
+      "expected": {
+        "posture": "low_risk",
+        "reasonCode": "LOW_RISK_SIGNIN",
+        "recommendedAction": "monitor",
+        "riskLevel": "low",
+        "riskState": "at_risk",
+        "detectionCount": 0,
+        "highestDetectionGrade": null,
+        "mfaSatisfied": true
+      }
     },
     "p-medium": {
-      "record": { "principalId": "p-medium", "riskLevel": "medium", "riskState": "atRisk", "mfaSatisfied": true, "detections": [ { "detectionType": "unfamiliarFeatures", "riskLevel": "medium" } ], "source": "entra" },
-      "expected": { "posture": "at_risk", "reasonCode": "MEDIUM_RISK_SIGNIN", "recommendedAction": "step_up", "riskLevel": "medium", "riskState": "at_risk", "detectionCount": 1, "highestDetectionGrade": "medium", "mfaSatisfied": true }
+      "record": {
+        "principalId": "p-medium",
+        "riskLevel": "medium",
+        "riskState": "atRisk",
+        "mfaSatisfied": true,
+        "detections": [
+          {
+            "detectionType": "unfamiliarFeatures",
+            "riskLevel": "medium"
+          }
+        ],
+        "source": "entra"
+      },
+      "expected": {
+        "posture": "at_risk",
+        "reasonCode": "MEDIUM_RISK_SIGNIN",
+        "recommendedAction": "step_up",
+        "riskLevel": "medium",
+        "riskState": "at_risk",
+        "detectionCount": 1,
+        "highestDetectionGrade": "medium",
+        "mfaSatisfied": true
+      }
     },
     "p-high": {
-      "record": { "principalId": "p-high", "riskLevel": "high", "riskState": "atRisk", "mfaSatisfied": true, "detections": [ { "detectionType": "impossibleTravel", "riskLevel": "high" } ], "source": "entra" },
-      "expected": { "posture": "high_risk", "reasonCode": "HIGH_RISK_SIGNIN", "recommendedAction": "restrict", "riskLevel": "high", "riskState": "at_risk", "detectionCount": 1, "highestDetectionGrade": "high", "mfaSatisfied": true }
+      "record": {
+        "principalId": "p-high",
+        "riskLevel": "high",
+        "riskState": "atRisk",
+        "mfaSatisfied": true,
+        "detections": [
+          {
+            "detectionType": "impossibleTravel",
+            "riskLevel": "high"
+          }
+        ],
+        "source": "entra"
+      },
+      "expected": {
+        "posture": "high_risk",
+        "reasonCode": "HIGH_RISK_SIGNIN",
+        "recommendedAction": "restrict",
+        "riskLevel": "high",
+        "riskState": "at_risk",
+        "detectionCount": 1,
+        "highestDetectionGrade": "high",
+        "mfaSatisfied": true
+      }
     },
     "p-high-no-mfa": {
-      "record": { "principalId": "p-high-no-mfa", "riskLevel": "medium", "riskState": "atRisk", "mfaSatisfied": false, "detections": [ { "detectionType": "anonymizedIPAddress", "riskLevel": "high" } ], "source": "duo" },
-      "expected": { "posture": "high_risk", "reasonCode": "HIGH_RISK_NO_MFA", "recommendedAction": "restrict", "riskLevel": "medium", "riskState": "at_risk", "detectionCount": 1, "highestDetectionGrade": "high", "mfaSatisfied": false }
+      "record": {
+        "principalId": "p-high-no-mfa",
+        "riskLevel": "medium",
+        "riskState": "atRisk",
+        "mfaSatisfied": false,
+        "detections": [
+          {
+            "detectionType": "anonymizedIPAddress",
+            "riskLevel": "high"
+          }
+        ],
+        "source": "duo"
+      },
+      "expected": {
+        "posture": "high_risk",
+        "reasonCode": "HIGH_RISK_NO_MFA",
+        "recommendedAction": "restrict",
+        "riskLevel": "medium",
+        "riskState": "at_risk",
+        "detectionCount": 1,
+        "highestDetectionGrade": "high",
+        "mfaSatisfied": false
+      }
     },
     "p-leaked": {
-      "record": { "principalId": "p-leaked", "riskLevel": "high", "riskState": "atRisk", "mfaSatisfied": true, "detections": [ { "detectionType": "leakedCredentials", "riskLevel": "high" } ], "source": "entra" },
-      "expected": { "posture": "compromised", "reasonCode": "LEAKED_OR_MALICIOUS", "recommendedAction": "escalate", "riskLevel": "high", "riskState": "at_risk", "detectionCount": 1, "highestDetectionGrade": "compromise", "mfaSatisfied": true }
+      "record": {
+        "principalId": "p-leaked",
+        "riskLevel": "high",
+        "riskState": "atRisk",
+        "mfaSatisfied": true,
+        "detections": [
+          {
+            "detectionType": "leakedCredentials",
+            "riskLevel": "high"
+          }
+        ],
+        "source": "entra"
+      },
+      "expected": {
+        "posture": "compromised",
+        "reasonCode": "LEAKED_OR_MALICIOUS",
+        "recommendedAction": "escalate",
+        "riskLevel": "high",
+        "riskState": "at_risk",
+        "detectionCount": 1,
+        "highestDetectionGrade": "compromise",
+        "mfaSatisfied": true
+      }
     },
     "p-confirmed-compromised": {
-      "record": { "principalId": "p-confirmed-compromised", "riskLevel": "high", "riskState": "confirmedCompromised", "mfaSatisfied": true, "detections": [ { "detectionType": "maliciousIPAddress", "riskLevel": "high" } ], "source": "okta" },
-      "expected": { "posture": "compromised", "reasonCode": "CONFIRMED_COMPROMISED", "recommendedAction": "escalate", "riskLevel": "high", "riskState": "confirmed_compromised", "detectionCount": 1, "highestDetectionGrade": "compromise", "mfaSatisfied": true }
+      "record": {
+        "principalId": "p-confirmed-compromised",
+        "riskLevel": "high",
+        "riskState": "confirmedCompromised",
+        "mfaSatisfied": true,
+        "detections": [
+          {
+            "detectionType": "maliciousIPAddress",
+            "riskLevel": "high"
+          }
+        ],
+        "source": "okta"
+      },
+      "expected": {
+        "posture": "compromised",
+        "reasonCode": "CONFIRMED_COMPROMISED",
+        "recommendedAction": "escalate",
+        "riskLevel": "high",
+        "riskState": "confirmed_compromised",
+        "detectionCount": 1,
+        "highestDetectionGrade": "compromise",
+        "mfaSatisfied": true
+      }
     },
     "p-remediated": {
-      "record": { "principalId": "p-remediated", "riskLevel": "medium", "riskState": "remediated", "mfaSatisfied": true, "detections": [ { "detectionType": "passwordSpray", "riskLevel": "high" } ], "source": "entra" },
-      "expected": { "posture": "low_risk", "reasonCode": "RISK_REMEDIATED", "recommendedAction": "monitor", "riskLevel": "medium", "riskState": "remediated", "detectionCount": 1, "highestDetectionGrade": "high", "mfaSatisfied": true }
+      "record": {
+        "principalId": "p-remediated",
+        "riskLevel": "medium",
+        "riskState": "remediated",
+        "mfaSatisfied": true,
+        "detections": [
+          {
+            "detectionType": "passwordSpray",
+            "riskLevel": "high"
+          }
+        ],
+        "source": "entra"
+      },
+      "expected": {
+        "posture": "low_risk",
+        "reasonCode": "RISK_REMEDIATED",
+        "recommendedAction": "monitor",
+        "riskLevel": "medium",
+        "riskState": "remediated",
+        "detectionCount": 1,
+        "highestDetectionGrade": "high",
+        "mfaSatisfied": true
+      }
     }
   }
 }

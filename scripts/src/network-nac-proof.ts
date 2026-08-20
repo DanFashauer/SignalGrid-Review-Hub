@@ -144,6 +144,56 @@ for (const s of fixture.sessions) {
   check("a NAC-noncompliant device still steps up even on an expected segment",
     evaluateNetwork({ ...base, nacCompliant: false, segment: "VLAN10" }, NOW_MS,
       { segmentPolicy: POLICY }).reasonCode === "NAC_NONCOMPLIANT");
+
+  // ── SESSION-PLANE POSTURE: the grant must be earned ─────────────────────────
+  //
+  // THE DEFECT THIS REPLACES, second verse. The segment fix above stopped the
+  // evaluator claiming a segment it never checked. The SAME shape survived one
+  // layer down: both grant exits returned `none` whether or not `nacCompliant`
+  // and auth freshness were ever REPORTED. A device whose source said "stale" or
+  // "noncompliant" stepped up; a device whose source said NOTHING graded
+  // identical to verified-good. Executed counterexample (2026-08-20): authenticated
+  // + nacCompliant:null + lastAuthAt:null on an expected segment → on_trusted_segment
+  // / none. Per docs/RADIUS_NAC_LIVE_SHAPE_CHECK.md those two fields are not
+  // authentication facts and never arrive with a plain RADIUS result — so the
+  // unreported combination is the COMMON live case, not an edge.
+  {
+    // Segment pinned to an expected one, so every check below isolates the
+    // SESSION plane — the fixture device's own segment is not in POLICY.
+    const onExpected = { ...base, segment: "VLAN10" };
+    const unreported = { ...onExpected, nacCompliant: null, lastAuthAt: null, freshness: "unknown" as const };
+
+    // THE CASE THAT USED TO GRANT.
+    const ghost = evaluateNetwork(unreported, NOW_MS, { segmentPolicy: POLICY });
+    check("SESSION-PLANE: nothing reported → monitor, never a clean grant — the case that used to return none",
+      ghost.reasonCode === "AUTHENTICATED_POSTURE_UNVERIFIED" && ghost.recommendedAction === "monitor");
+    check("...and the segment posture survives, because the segment WAS verified",
+      ghost.posture === "on_trusted_segment");
+
+    // Each unreported field alone is enough to withhold the clean grant.
+    check("unreported compliance ALONE withholds the clean grant",
+      evaluateNetwork({ ...onExpected, nacCompliant: null }, NOW_MS, { segmentPolicy: POLICY })
+        .reasonCode === "AUTHENTICATED_POSTURE_UNVERIFIED");
+    check("unknown freshness ALONE withholds the clean grant",
+      evaluateNetwork({ ...onExpected, lastAuthAt: null, freshness: "unknown" }, NOW_MS, { segmentPolicy: POLICY })
+        .reasonCode === "AUTHENTICATED_POSTURE_UNVERIFIED");
+
+    // The lattice, asserted as an ordering rather than three loose facts:
+    // verified-good (none) > unreported (monitor) > reported-bad (step_up).
+    const earned = evaluateNetwork(onExpected, NOW_MS, { segmentPolicy: POLICY });
+    const staleV = evaluateNetwork(onExpected, NOW_MS + 60 * 60 * 1000, { segmentPolicy: POLICY });
+    check("LATTICE: verified-good grants, unreported monitors, reported-stale steps up — three distinct rungs",
+      earned.recommendedAction === "none" && ghost.recommendedAction === "monitor" && staleV.recommendedAction === "step_up");
+
+    // The no-policy grant path is guarded identically.
+    check("the no-policy grant is guarded too: unreported posture monitors there as well",
+      evaluateNetwork(unreported, NOW_MS).reasonCode === "AUTHENTICATED_POSTURE_UNVERIFIED" &&
+      evaluateNetwork(unreported, NOW_MS).posture === "on_unverified_segment");
+
+    // Non-vacuity: the earned grant still exists, or every refusal above is trivial.
+    check("NON-VACUITY: compliant + fresh on an expected segment still earns the clean grant",
+      earned.reasonCode === "AUTHENTICATED_TRUSTED_SEGMENT" && earned.recommendedAction === "none");
+  }
 }
 check("far-future makes the trusted device stale → step_up", evaluateNetwork(byDevice.get("dev-trusted")!, NOW_MS + 60 * 60 * 1000).reasonCode === "STALE_NETWORK_STATE");
 

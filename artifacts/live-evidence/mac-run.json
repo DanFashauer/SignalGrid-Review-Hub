@@ -1,7 +1,7 @@
 {
   "schema": "signalgrid-live-evidence/v1",
-  "manifestFingerprint": "ad48264c8790fb20bc104ac8e84309acaa08e464ea223a1182a63d9b8537bb51",
-  "manifestVersion": 30,
+  "manifestFingerprint": "c8d7b49d0c08defe3e5fb10f385d54aa13e568b43198a6da158dc5cab8e08e84",
+  "manifestVersion": 31,
   "platform": "darwin",
   "preflightCoverage": {
     "nativeBuildExcluded": true,
@@ -10,7 +10,7 @@
       "Build (all packages)",
       "Browser E2E (review console, website, admin)"
     ],
-    "reason": "pnpm-workspace.yaml strips 1 native binary for darwin-arm64 (@esbuild/darwin-arm64), and it is not installed. The repo pins the web build to linux-x64 on purpose, so this step cannot run here — it is not failing, it is absent. Install the binaries to run it for real."
+    "reason": "pnpm-workspace.yaml strips 2 native binaries for darwin-arm64 (@rollup/rollup-darwin-arm64, @esbuild/darwin-arm64), and they are not installed. The repo pins the web build to linux-x64 on purpose, so this step cannot run here — it is not failing, it is absent. Install the binaries to run it for real."
   },
   "reviewHubPass": true,
   "mcpPass": true,

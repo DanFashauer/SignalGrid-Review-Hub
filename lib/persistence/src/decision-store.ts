@@ -40,6 +40,12 @@ export class PostgresDecisionStore implements DecisionStore {
   constructor(connectionString: string) {
     this.connectionString = connectionString;
     this.ready = this.init(connectionString);
+    // A caller may never await this.ready (readyz can bail on an earlier
+    // component before probing this one) — without a standing handler, a
+    // rejected eager init becomes an unhandledRejection that KILLS the
+    // process. The branch below only defuses that; ensureReady still sees and
+    // retries the real rejection.
+    this.ready.catch(() => {});
   }
 
   /**
@@ -119,12 +125,12 @@ export class PostgresDecisionStore implements DecisionStore {
    */
   private async assertPrivileges(): Promise<void> {
     const priv = await this.pool.query(`
-      SELECT has_table_privilege('decisions', 'SELECT')
-         AND has_table_privilege('decisions', 'INSERT')
-         AND has_table_privilege('decisions', 'UPDATE')
-         AND has_table_privilege('evidence_snapshots', 'SELECT')
-         AND has_table_privilege('evidence_snapshots', 'INSERT')
-         AND has_table_privilege('evidence_snapshots', 'UPDATE') AS ok
+      SELECT has_table_privilege('public.decisions', 'SELECT')
+         AND has_table_privilege('public.decisions', 'INSERT')
+         AND has_table_privilege('public.decisions', 'UPDATE')
+         AND has_table_privilege('public.evidence_snapshots', 'SELECT')
+         AND has_table_privilege('public.evidence_snapshots', 'INSERT')
+         AND has_table_privilege('public.evidence_snapshots', 'UPDATE') AS ok
     `);
     if (!priv.rows[0]?.ok) {
       throw new Error(

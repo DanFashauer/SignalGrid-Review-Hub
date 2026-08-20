@@ -244,8 +244,8 @@ already built the schema they proceed; if the schema is missing they refuse with
 the exact remedy ("run `db:migrate` with the admin credential") instead of a
 bare permission error. And existence is not usability — after the missing-schema
 check, each store verifies the exact table privileges its statements need (the
-ledger appender additionally checks sequence `USAGE`), and the decision store's
-`ping()` re-verifies them on every probe, so `/readyz` goes unready when the
+ledger appender additionally checks sequence `USAGE`), and all three durable
+components' `ping()` probes re-verify them on every `/readyz`, so it goes unready when the
 posture regresses instead of reporting a health the first real write would
 disprove. `proof:db-role-split` proves both directions on a real Postgres in
 CI — every legitimate runtime write works, every destructive statement is
@@ -262,10 +262,18 @@ signalgrid_runtime LOGIN;` run by a cluster administrator) instead of dying
 mid-migration or — worse — after `pg_restore` has already replaced the
 database. The split also refuses to **adopt** a preexisting `signalgrid_runtime`
 that is anything more than a plain LOGIN role: elevated attributes
-(`SUPERUSER`, `CREATEROLE`, `BYPASSRLS`, …), object ownership, or role
-memberships are all grounds for refusal, because `REVOKE` cannot demote any of
-them and the append-only claim would be false. Each refusal names its one
-remedy.
+(`SUPERUSER`, `CREATEROLE`, `BYPASSRLS`, …), `NOLOGIN` (grants would apply and
+the API still could not connect — and a deliberate lockout must not be
+silently re-enabled), ownership of relations, schemas, or the database itself,
+or role memberships — all grounds for refusal, because `REVOKE` cannot demote
+any of them and the append-only claim would be false. Each refusal names its
+one remedy, and a restore runs the same validation BEFORE `pg_restore`. The
+grant reset is wider than the role: `PUBLIC`-level grants, column-level ACLs,
+and the ledger sequence's ACL are all reset on every apply, every relation
+schema-qualified. And `pnpm run db:migrate` doubles as the REPAIR command: on
+a database already at the current schema version it re-applies the (idempotent)
+split, so a dropped role or revoked grant is fixed by exactly the command the
+error messages name.
 
 **The real-Postgres proofs demand a disposable cluster.** Every `proof:*-pg`
 and `proof:backup-restore`/`proof:db-role-split` run DROPs the tables it tests,

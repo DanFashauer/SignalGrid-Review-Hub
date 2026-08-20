@@ -20,6 +20,12 @@ export interface AuditBackend {
   appendWithChain(build: (prevHash: string) => AuditRecord): Promise<AuditRecord>;
   /** Records in insertion order, sliced. */
   getRecords(limit: number, offset: number): Promise<AuditRecord[]>;
+  /**
+   * Round-trip readiness probe (durable backends only). Resolves when the
+   * backend can actually append — connection AND privileges — and rejects
+   * otherwise, so /readyz reflects fitness rather than mere liveness.
+   */
+  ping?(): Promise<void>;
   /** Optional teardown (Postgres pool). */
   close?(): Promise<void>;
 }
@@ -55,6 +61,12 @@ export class PostgresAuditBackend implements AuditBackend {
   constructor(connectionString: string) {
     this.connectionString = connectionString;
     this.ready = this.init(connectionString);
+    // A caller may never await this.ready (readyz can bail on an earlier
+    // component before probing this one) — without a standing handler, a
+    // rejected eager init becomes an unhandledRejection that KILLS the
+    // process. The branch below only defuses that; ensureReady still sees and
+    // retries the real rejection.
+    this.ready.catch(() => {});
   }
 
   /**
@@ -119,19 +131,31 @@ export class PostgresAuditBackend implements AuditBackend {
       // that, so missing grants read as "not ready" here instead of a 42501
       // on the first append — which for the LEDGER would mean decisions
       // happening without their audit trail.
-      const priv = await this.pool.query(`
-        SELECT has_table_privilege('audit_ledger', 'SELECT')
-           AND has_table_privilege('audit_ledger', 'INSERT')
-           AND has_sequence_privilege(pg_get_serial_sequence('audit_ledger', 'seq'), 'USAGE') AS ok
-      `);
-      if (!priv.rows[0]?.ok) {
-        throw new Error(
-          "this credential is missing privileges on audit_ledger (or its sequence) — re-apply the " +
-            "role split with the admin credential (`pnpm run db:migrate`); refusing to report ready " +
-            "for appends that would fail.",
-        );
-      }
+      await this.assertPrivileges();
     }
+  }
+
+  /** The exact privileges appendWithChain needs; also run on every ping() so
+   *  /readyz flips when the posture regresses mid-flight. */
+  private async assertPrivileges(): Promise<void> {
+    const priv = await this.pool.query(`
+      SELECT has_table_privilege('public.audit_ledger', 'SELECT')
+         AND has_table_privilege('public.audit_ledger', 'INSERT')
+         AND has_sequence_privilege(pg_get_serial_sequence('public.audit_ledger', 'seq'), 'USAGE') AS ok
+    `);
+    if (!priv.rows[0]?.ok) {
+      throw new Error(
+        "this credential is missing privileges on audit_ledger (or its sequence) — re-apply the " +
+          "role split with the admin credential (`pnpm run db:migrate`); refusing to report ready " +
+          "for appends that would fail.",
+      );
+    }
+  }
+
+  async ping(): Promise<void> {
+    await this.ensureReady();
+    await this.pool.query("SELECT 1");
+    await this.assertPrivileges();
   }
 
   async appendWithChain(build: (prevHash: string) => AuditRecord): Promise<AuditRecord> {

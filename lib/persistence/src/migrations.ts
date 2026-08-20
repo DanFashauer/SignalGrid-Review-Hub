@@ -141,6 +141,17 @@ export async function runMigrations(connectionString: string): Promise<Migration
         await client.query("INSERT INTO schema_version (version, name) VALUES ($1, $2)", [m.version, m.name]);
         applied.push(m.version);
       }
+      // REPAIR PATH: on a database already at v2+, re-apply the (idempotent)
+      // role split even though no migration is pending. Without this,
+      // "re-apply the role split (`pnpm run db:migrate`)" — the remedy every
+      // store error names — would apply NOTHING on the exact databases that
+      // need it: schema_version records 2, so a dropped role or revoked grant
+      // has no pending migration to ride in on. Same transaction, so a refused
+      // re-apply (see assertRoleSplitProvisionable) leaves no partial state.
+      if (recorded >= 2) {
+        await assertRoleSplitProvisionable((sql) => client.query(sql));
+        await client.query(ROLE_SPLIT_SQL);
+      }
       await client.query("COMMIT");
       return { applied, current: Math.max(recorded, known) };
     } catch (err) {

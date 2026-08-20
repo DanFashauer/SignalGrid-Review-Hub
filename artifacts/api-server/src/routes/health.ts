@@ -1,6 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { HealthCheckResponse } from "@workspace/api-zod";
-import { getDecisionStore } from "@workspace/persistence";
+import { getDecisionStore, getSessionStore } from "@workspace/persistence";
+import { getAuditBackend } from "@workspace/audit";
 import { resolveTier, isLiveIntegrationsEnabled } from "../lib/tier";
 import { demoSurfacesEnabled } from "../lib/profile";
 
@@ -56,11 +57,27 @@ router.get("/readyz", async (req: Request, res: Response) => {
     notReady("A durable store is configured but offers no probe; unverifiable is not ready.");
     return;
   }
-  try {
-    await store.ping();
+  // ALL durable components, not just the decision store (review finding: a
+  // probe covering two of the four runtime tables let session or ledger grant
+  // regressions ride under a green readyz). The session store and audit
+  // backend expose ping() only in their Postgres forms — the in-memory
+  // fixture defaults have nothing durable to probe and are skipped, which is
+  // safe precisely because with DATABASE_URL set the selectors return the
+  // Postgres forms.
+  const sessions = getSessionStore();
+  const ledger = getAuditBackend();
+  // allSettled, not sequential awaits: every probe must get a handler even
+  // when another has already failed — an abandoned rejected probe is an
+  // unhandledRejection, and that kills the process the route exists to keep
+  // honest.
+  const probes = [store.ping()];
+  if (typeof sessions.ping === "function") probes.push(sessions.ping());
+  if (typeof ledger.ping === "function") probes.push(ledger.ping());
+  const results = await Promise.allSettled(probes);
+  if (results.every((r) => r.status === "fulfilled")) {
     res.json(verbose ? { status: "ready", durableStore: "postgres" } : { status: "ready" });
-  } catch {
-    notReady("The durable store is configured but unreachable. Not taking traffic.");
+  } else {
+    notReady("A durable component is configured but unreachable or under-privileged. Not taking traffic.");
   }
 });
 

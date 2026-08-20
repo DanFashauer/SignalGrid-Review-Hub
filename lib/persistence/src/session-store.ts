@@ -40,6 +40,12 @@ export interface SessionStore {
   refresh(tenantId: string, id: string, ttlSeconds: number, nowMs: number): Promise<Session | null>;
   /** End a session (sign-out). Returns the ended session or null. */
   end(tenantId: string, id: string): Promise<Session | null>;
+  /**
+   * Round-trip readiness probe (durable backends only). Resolves when the
+   * store can actually do its work — connection AND privileges — and rejects
+   * otherwise, so /readyz reflects fitness rather than mere liveness.
+   */
+  ping?(): Promise<void>;
   close?(): Promise<void>;
 }
 
@@ -97,6 +103,12 @@ export class PostgresSessionStore implements SessionStore {
   constructor(connectionString: string) {
     this.connectionString = connectionString;
     this.ready = this.init(connectionString);
+    // A caller may never await this.ready (readyz can bail on an earlier
+    // component before probing this one) — without a standing handler, a
+    // rejected eager init becomes an unhandledRejection that KILLS the
+    // process. The branch below only defuses that; ensureReady still sees and
+    // retries the real rejection.
+    this.ready.catch(() => {});
   }
 
   /**
@@ -158,18 +170,30 @@ export class PostgresSessionStore implements SessionStore {
       // Existence is not usability: verify the exact privileges the store's
       // statements need (lifecycle transitions are UPDATEs), so missing grants
       // surface here as "not ready" instead of as a 42501 mid-request.
-      const priv = await this.pool.query(`
-        SELECT has_table_privilege('sessions', 'SELECT')
-           AND has_table_privilege('sessions', 'INSERT')
-           AND has_table_privilege('sessions', 'UPDATE') AS ok
-      `);
-      if (!priv.rows[0]?.ok) {
-        throw new Error(
-          "this credential is missing table privileges on sessions — re-apply the role split " +
-            "with the admin credential (`pnpm run db:migrate`); refusing to report ready for work that would fail.",
-        );
-      }
+      await this.assertPrivileges();
     }
+  }
+
+  /** The exact per-table privileges the store's statements need; also run on
+   *  every ping() so /readyz flips when the posture regresses mid-flight. */
+  private async assertPrivileges(): Promise<void> {
+    const priv = await this.pool.query(`
+      SELECT has_table_privilege('public.sessions', 'SELECT')
+         AND has_table_privilege('public.sessions', 'INSERT')
+         AND has_table_privilege('public.sessions', 'UPDATE') AS ok
+    `);
+    if (!priv.rows[0]?.ok) {
+      throw new Error(
+        "this credential is missing table privileges on sessions — re-apply the role split " +
+          "with the admin credential (`pnpm run db:migrate`); refusing to report ready for work that would fail.",
+      );
+    }
+  }
+
+  async ping(): Promise<void> {
+    await this.ensureReady();
+    await this.pool.query("SELECT 1");
+    await this.assertPrivileges();
   }
 
   private rowToSession(r: any): Session {

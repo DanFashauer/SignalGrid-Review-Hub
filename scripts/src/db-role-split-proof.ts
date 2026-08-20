@@ -134,6 +134,11 @@ async function main() {
     // schema is skipped as a creation target ("no schema has been selected")
     // before the precheck this test exists to reach.
     await admin.query("GRANT USAGE, CREATE ON SCHEMA public TO sg_limited_admin");
+    // CONNECT explicitly: a prior run leaves PUBLIC's ambient CONNECT revoked
+    // (see the direct-CONNECT check in section 5), so like any real hardened
+    // deployment this credential needs its own grant.
+    const dbname = new URL(url!).pathname.slice(1);
+    await admin.query(`GRANT CONNECT ON DATABASE "${dbname}" TO sg_limited_admin`);
     const limitedUrl = withLogin(url!, "sg_limited_admin", "sg-limited-proof");
     let refusedMigrate = "";
     try { await runMigrations(limitedUrl); } catch (e) { refusedMigrate = (e as Error).message; }
@@ -169,6 +174,32 @@ async function main() {
       /MEMBER of other roles/.test(await failureOf(() => applyRoleSplit(url!))));
     await admin.query(dropRuntimeRoleSql());
     await admin.query("DROP ROLE sg_probe_group");
+
+    // NOLOGIN is CREATE ROLE's default, so an administrator who pre-created
+    // the role by hand very plausibly made one the API can never connect as —
+    // and one that may have been locked out DELIBERATELY. Refuse, never
+    // silently re-enable.
+    await admin.query(`CREATE ROLE ${RUNTIME_ROLE}`);
+    check("role split REFUSES a preexisting NOLOGIN role (grants would apply; the API still could not connect)",
+      /NOLOGIN/.test(await failureOf(() => applyRoleSplit(url!))));
+    await admin.query(dropRuntimeRoleSql());
+
+    // Ownership beyond relations: pg_class covers tables, but a SCHEMA or
+    // DATABASE owner keeps owner-level DDL (drop public CASCADE, for one)
+    // that no grant below can take back.
+    await admin.query(`CREATE ROLE ${RUNTIME_ROLE} LOGIN`);
+    await admin.query(`ALTER SCHEMA public OWNER TO ${RUNTIME_ROLE}`);
+    check("role split REFUSES a preexisting role that OWNS a schema (schema owners can DROP … CASCADE)",
+      /OWNS a schema/.test(await failureOf(() => applyRoleSplit(url!))));
+    await admin.query("ALTER SCHEMA public OWNER TO CURRENT_USER");
+    await admin.query(dropRuntimeRoleSql());
+
+    await admin.query(`CREATE ROLE ${RUNTIME_ROLE} LOGIN`);
+    await admin.query(`ALTER DATABASE "${dbname}" OWNER TO ${RUNTIME_ROLE}`);
+    check("role split REFUSES a preexisting role that OWNS the database (owner-level rights survive any grant)",
+      /OWNS a database/.test(await failureOf(() => applyRoleSplit(url!))));
+    await admin.query(`ALTER DATABASE "${dbname}" OWNER TO CURRENT_USER`);
+    await admin.query(dropRuntimeRoleSql());
 
     // ── Then the REAL provisioning path: migrations v1 + v2 from nothing ─────
     const migrated = await runMigrations(url!);
@@ -228,6 +259,35 @@ async function main() {
     check("runtime CREATE TABLE is DENIED (no CREATE on the schema)",
       (await deniedCode(runtime, "CREATE TABLE runtime_probe (x INT)")) === "42501");
 
+    // ── 2b. POISONED GRANTS CONVERGE: the reset is wider than the role ───────
+    // Three ways an UPDATE can reach the runtime that a plain role-level
+    // REVOKE never touches: a PUBLIC grant (inherited by every login), a
+    // column-level ACL (survives table-level REVOKE ALL), and a direct grant
+    // on the ledger's sequence (setval could wedge all future appends). Stage
+    // all three, verify each is really effective, re-apply, verify each gone.
+    const seqRow = await admin.query("SELECT pg_get_serial_sequence('public.audit_ledger', 'seq') AS s");
+    const ledgerSeq: string = seqRow.rows[0].s;
+    await admin.query("GRANT UPDATE ON public.audit_ledger TO PUBLIC");
+    await admin.query(`GRANT UPDATE (hash) ON public.audit_ledger TO ${RUNTIME_ROLE}`);
+    await admin.query(`GRANT UPDATE ON SEQUENCE ${ledgerSeq} TO ${RUNTIME_ROLE}`);
+    const staged = await admin.query(`
+      SELECT has_table_privilege('${RUNTIME_ROLE}', 'public.audit_ledger', 'UPDATE') AS via_public,
+             has_column_privilege('${RUNTIME_ROLE}', 'public.audit_ledger', 'hash', 'UPDATE') AS via_column,
+             has_sequence_privilege('${RUNTIME_ROLE}', '${ledgerSeq}', 'UPDATE') AS via_sequence
+    `);
+    check("wedges staged: PUBLIC-, column-, and sequence-level UPDATE all reach the runtime (the holes are real)",
+      staged.rows[0]?.via_public === true && staged.rows[0]?.via_column === true && staged.rows[0]?.via_sequence === true);
+    await applyRoleSplit(url!);
+    const converged = await admin.query(`
+      SELECT has_table_privilege('${RUNTIME_ROLE}', 'public.audit_ledger', 'UPDATE') AS via_public,
+             has_column_privilege('${RUNTIME_ROLE}', 'public.audit_ledger', 'hash', 'UPDATE') AS via_column,
+             has_sequence_privilege('${RUNTIME_ROLE}', '${ledgerSeq}', 'UPDATE') AS via_sequence
+    `);
+    check("re-apply CONVERGES: all three back-door UPDATE paths are revoked (PUBLIC, column ACL, sequence)",
+      converged.rows[0]?.via_public === false && converged.rows[0]?.via_column === false && converged.rows[0]?.via_sequence === false);
+    check("…and the runtime's setval() on the ledger sequence is DENIED (42501) — the counter cannot be wedged",
+      (await deniedCode(runtime, `SELECT setval('${ledgerSeq}', 1000)`)) === "42501");
+
     // ── 3. NON-VACUITY: the ADMIN can do what the runtime cannot ─────────────
     // Inside a rolled-back transaction so the genuine chain is untouched: the
     // point is that the denial above is the ROLE, not the table.
@@ -267,6 +327,30 @@ async function main() {
     check("a store facing missing grants REFUSES readiness (ping fails naming privileges — /readyz cannot lie)",
       /privilege/i.test(await failureOf(() => degraded.ping())));
     await degraded.close();
+    // ALL durable components refuse, not just the decision store — a probe
+    // covering two of the four runtime tables would let session or ledger
+    // grant regressions ride under a green readyz.
+    const degradedSessions = new PostgresSessionStore(runtimeUrl);
+    check("the SESSION store's ping refuses too (grant regressions on sessions cannot hide behind decisions)",
+      /privilege/i.test(await failureOf(() => degradedSessions.ping())));
+    await degradedSessions.close();
+    const degradedLedger = new PostgresAuditBackend(runtimeUrl);
+    check("the AUDIT backend's ping refuses too (a ledger that cannot append is not ready)",
+      /privilege/i.test(await failureOf(() => degradedLedger.ping())));
+    await degradedLedger.close();
+
+    // REPAIR: the remedy every error message names — `pnpm run db:migrate` —
+    // must actually work on a database already recorded at v2, where no
+    // migration is pending to carry the grants in. applied=[] AND the posture
+    // is back is exactly the claim.
+    const repaired = await runMigrations(url!);
+    check("repair path: db:migrate on an already-current database re-applies the posture (applied=[], grants back)",
+      repaired.applied.length === 0 &&
+        (await deniedCode(runtime, "INSERT INTO audit_ledger (id, ts, actor, event_type, prev_hash, hash) VALUES ('repair-probe', now(), '{}', 'probe', '', 'h')")) === null);
+    // Re-stage the destroyed posture so the restore below re-applies from a
+    // genuinely broken state, not from the repair we just proved.
+    await admin.query("DELETE FROM audit_ledger WHERE id = 'repair-probe'");
+    await admin.query(`REVOKE ALL ON audit_ledger, decisions, evidence_snapshots, sessions FROM ${RUNTIME_ROLE}`);
 
     await restoreBackup(url!, archive);
 
@@ -326,6 +410,16 @@ async function main() {
     check("…and the recovered role STILL cannot UPDATE the ledger (recovery converges to the same posture)",
       (await deniedCode(recoveredRuntime, "UPDATE audit_ledger SET hash = 'forged' WHERE seq = 1")) === "42501");
     await recoveredRuntime.end();
+
+    // A hardened database revokes PUBLIC's ambient CONNECT. The runtime must
+    // hold its own grant (applyRoleSplit issues it), or a fully-granted role
+    // still cannot open a connection. Left revoked on purpose — the re-run
+    // exercises the proof from hardened state.
+    await admin.query(`REVOKE CONNECT ON DATABASE "${dbname}" FROM PUBLIC`);
+    const hardenedConn = new Pool({ connectionString: runtimeUrl, max: 1 });
+    check("runtime connects through its DIRECT CONNECT grant with PUBLIC's ambient CONNECT revoked (hardened DB)",
+      (await failureOf(async () => { await hardenedConn.query("SELECT 1"); })) === "");
+    await hardenedConn.end();
     await admin.query(dropRoleSql("sg_limited_admin"));
   } finally {
     await admin.end();

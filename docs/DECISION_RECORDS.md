@@ -133,6 +133,32 @@ the founder should override it freely if he has a market reason.
 **Date:** August 20, 2026. **Decided by:** the owner, in his own words, in the
 message that verified PR #215 and opened PR #216.
 
+**Source, quoted verbatim** — the operative portion of that message, preserved
+here because this file's contract requires the evidence to be recoverable, and
+a summary cannot be audited against itself. Public-safe; the message contains
+no credentials or personal data beyond what the owner published in the PRs.
+
+> "The company should now execute the existing sweep in this order:
+> 1. Protect the trust engine first. […] extend the same adversarial
+>    grant-safety testing across the remaining uncovered connector families […]
+> 2. Finish the production data boundary. Separate the PostgreSQL runtime role
+>    from the database owner/admin role and make backup/restore preserve those
+>    permissions. […]
+> 3. Close the actual product journey. Fix the native iOS badge/session API
+>    mismatch, then prove one complete shared-device flow […]
+> 4. Make the public product tell only the launch truth. Remove present-tense
+>    claims for deferred badge, zone, and shift capabilities; lock the site to
+>    the ratified Shared-Device Trust Gateway scope; and add a gate so
+>    marketing cannot drift beyond implemented capability again.
+> 5. Use the low-cost lab as the engineering engine. […] Microsoft Entra and
+>    Intune remain the enterprise production target, but they no longer block
+>    product development.
+> 6. Move the company from engineering proof to buyer proof. […] Do not
+>    activate customer-success machinery before a real customer exists."
+
+Elisions ([…]) drop only examples and restatements; every clause this record
+relies on is quoted in full above.
+
 **Decision 1 — the execution order.** The company works the build plan in this
 sequence, quoted in substance from the owner: (1) protect the trust engine —
 extend adversarial grant-safety testing across the uncovered connector families;
@@ -150,6 +176,16 @@ locked to "the ratified Shared-Device Trust Gateway scope." That settles the
 five-labels-in-circulation defect the sweep found: **Shared-Device Trust
 Gateway** — already `PRODUCT_NAME` in `scripts/launch-profile.mjs` — is the
 category label. The other four labels get reconciled out, not kept as synonyms.
+
+**What the order means — and does not.** The six steps rank priority and gate
+what goes OUTWARD: nothing publishes, ships, or reaches a person outside the
+company from a later step while an earlier step's outward preconditions are
+open. They do not serialize internal work — the owner's own step 4 directs the
+site rewrite in the same message that puts trust-engine work first, and step 6
+gates *activation* ("do not activate customer-success machinery before a real
+customer exists"), not preparation. Reading the list as a strict pipeline would
+have the instruction forbidding work it explicitly assigns. Internal drafting
+on any step may proceed in parallel; the sequence binds what leaves.
 
 **What is ratified at the item level, precisely.** The owner's step 4 names its
 own scope: *"Remove present-tense claims for deferred badge, zone, and shift
@@ -169,6 +205,15 @@ ratified deferred kinds only as roadmap. Any claim resting on a classification
 outside those six waits for item-level ratification.
 `design-partner-outreach` stays blocked behind positioning and ICP research per
 the owner's own step 6.
+
+**Where the ratified subset is encoded.** For now: here, and only here.
+`scripts/launch-profile.mjs` still describes itself as an unratified proposal
+and its schema has no per-item ratification field, so tooling cannot yet
+distinguish the six ratified items from the other 168. That encoding travels
+with the launch-claims gate (build-plan item 6), which needs exactly that field
+to check public copy mechanically — until it lands, this record is the source
+of truth for the subset and the profile's blanket "proposal" language is read
+as "except where DR-004 says otherwise."
 
 **Reversal.** The owner reverses any part of this by saying so, as with every
 record here. Short of that: the execution order is superseded the moment a

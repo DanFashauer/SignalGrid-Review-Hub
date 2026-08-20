@@ -327,7 +327,7 @@
       "activated": null,
       "produced": null,
       "priority": 1,
-      "nextAction": "UNBLOCKED by DR-004, bounded by its ratified subset: public copy may claim only the three ratified launch signal kinds (device_posture, device_management_health, local_authority) and may name badge, zone, and shift only as roadmap. Land docs/POSITIONING.md from the draft in COMPANY_BUILD_PLAN.md, reconcile EXECUTIVE_ONE_PAGER.md and ECOSYSTEM_POSITIONING.md to the one label, and rewrite the four site sections that present deferred signals in the present tense. The launch-claims gate follows so it cannot recur."
+      "nextAction": "UNBLOCKED by DR-004, bounded by its ratified subset: public copy may claim only the three ratified launch signal kinds and may name badge, zone, and shift only as roadmap. The sweep's draft is the STARTING POINT, not landable wholesale — strip or roadmap-mark every claim resting on a classification outside the six (the concrete example: \"Microsoft Entra/Intune is the first enterprise connector\" rests on the graph family's still-proposal status). Then land docs/POSITIONING.md, reconcile the one-pager and ecosystem docs to the one label, and rewrite the four site sections. The launch-claims gate follows so drift cannot recur."
     },
     {
       "id": "icp-customer-research",

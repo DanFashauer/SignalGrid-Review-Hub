@@ -271,7 +271,13 @@ for (const [label, unreported, reportedNone] of [
   [
     "peripheral-control",
     peripheral.evaluatePeripheralPosture(peripheral.normalizeDevice({ deviceId: "d", source: "s" } as never), {}),
-    peripheral.evaluatePeripheralPosture(peripheral.normalizeDevice({ deviceId: "d", source: "s", peripherals: [] } as never), {}),
+    // policyEnforced true is REPORTED on the clean side deliberately, so this
+    // row isolates the PERIPHERALS collection — the axis this law is about. It
+    // used to omit enforcement and still expect `none`, which only passed
+    // because the evaluator graded unreported enforcement as clean — the exact
+    // fail-open (wedge #7) fixed on 2026-08-20. An empty inventory is a
+    // reading; an unreported enforcement state never was one.
+    peripheral.evaluatePeripheralPosture(peripheral.normalizeDevice({ deviceId: "d", source: "s", policyEnforced: true, peripherals: [] } as never), {}),
   ],
   [
     "credential-exposure",

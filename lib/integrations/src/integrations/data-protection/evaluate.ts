@@ -109,6 +109,14 @@ export function evaluateDlpPosture(
   // DLP policy explicitly not enforced → data can leave unchecked.
   if (posture.dlpPolicyEnforced === false) {
     candidates.push({ posture: "policy_unenforced", action: "step_up", reason: "POLICY_UNENFORCED" });
+  } else if (posture.dlpPolicyEnforced === null) {
+    // Enforcement UNREPORTED (wedge #8, caught by the shift-1 sweep): "no
+    // violations" from a DLP layer whose enforcement cannot be confirmed is not
+    // a protected reading. `=== false` alone let null fall through to a full
+    // protected/none grant. Graded `monitor` — a blind spot to investigate;
+    // confirmed-unenforced (above) stays the stronger step_up because it is a
+    // REPORTED bad state, not an unreported one.
+    candidates.push({ posture: "unknown", action: "monitor", reason: "POLICY_ENFORCEMENT_UNVERIFIED" });
   }
 
   const winner = candidates.reduce<Candidate>(

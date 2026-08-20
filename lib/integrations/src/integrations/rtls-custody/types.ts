@@ -67,6 +67,7 @@ export type CustodyPosture =
   | "off_zone"
   | "at_egress"
   | "abandoned"
+  | "badge_unverified"
   | "left_area"
   | "unknown";
 
@@ -78,6 +79,7 @@ export type CustodyReasonCode =
   | "OFF_ZONE"
   | "AT_EGRESS"
   | "ABANDONED"
+  | "BADGE_UNVERIFIED"
   | "LEFT_AREA";
 
 /** All members are on the unified action ladder used by posture-composition. */

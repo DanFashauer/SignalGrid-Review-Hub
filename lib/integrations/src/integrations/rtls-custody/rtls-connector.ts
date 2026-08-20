@@ -130,8 +130,20 @@ export function normalizeLocation(loc: AssetLocationRaw): NormalizedAssetLocatio
     zoneId: loc.zoneId ?? null,
     zoneType: normalizeZoneType(loc.zoneType),
     zoneAuthorized: typeof loc.zoneAuthorized === "boolean" ? loc.zoneAuthorized : null,
-    fixAgeSeconds: typeof loc.fixAgeSeconds === "number" ? loc.fixAgeSeconds : null,
-    dwellSeconds: typeof loc.dwellSeconds === "number" ? loc.dwellSeconds : null,
+    // Only a finite, non-negative duration is a REPORTED one (wedge #10, caught
+    // by the shift-1 sweep). A negative fix age claims a fix newer than now — a
+    // contradiction that `typeof === "number"` let read as fresh, minting a
+    // CUSTODY_OK/none grant; a negative dwell likewise disarmed the abandonment
+    // arm. Contradiction resolves to "unverifiable" (null), which the evaluator
+    // already fails safe on (stale fix / unconfirmable dwell).
+    fixAgeSeconds:
+      typeof loc.fixAgeSeconds === "number" && Number.isFinite(loc.fixAgeSeconds) && loc.fixAgeSeconds >= 0
+        ? loc.fixAgeSeconds
+        : null,
+    dwellSeconds:
+      typeof loc.dwellSeconds === "number" && Number.isFinite(loc.dwellSeconds) && loc.dwellSeconds >= 0
+        ? loc.dwellSeconds
+        : null,
     badgeAssociated: typeof loc.badgeAssociated === "boolean" ? loc.badgeAssociated : null,
     atEgress: loc.atEgress === true,
     // Tri-state: an omitted presence field is null (unknown), NOT a positive

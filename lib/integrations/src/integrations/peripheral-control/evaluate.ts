@@ -129,6 +129,14 @@ export function evaluatePeripheralPosture(
   // Device-control policy explicitly not enforced → anything can attach unchecked.
   if (posture.policyEnforced === false) {
     candidates.push({ posture: "policy_unenforced", action: "step_up", reason: "POLICY_UNENFORCED" });
+  } else if (posture.policyEnforced === null) {
+    // Enforcement UNREPORTED (wedge #7, caught by the shift-1 sweep): "no
+    // removable media" from a device-control layer whose enforcement cannot be
+    // confirmed is not a clean reading. `=== false` alone let null fall through
+    // to a full no_removable/none grant. Graded `monitor` — a blind spot to
+    // investigate; confirmed-unenforced (above) stays the stronger step_up
+    // because it is a REPORTED bad state, not an unreported one.
+    candidates.push({ posture: "unknown", action: "monitor", reason: "POLICY_ENFORCEMENT_UNVERIFIED" });
   }
 
   const winner = candidates.reduce<Candidate>(

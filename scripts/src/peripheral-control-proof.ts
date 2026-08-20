@@ -22,6 +22,7 @@ import {
   type PeripheralPostureRaw,
 } from "@workspace/integrations/peripheral-control";
 import { checkLiveGateIsolated } from "./lib/live-gate.js";
+import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 
 interface Expected {
   posture: string;
@@ -147,6 +148,77 @@ check("a blocked unrecognized-class device stays no_removable (contained, no fal
 // Determinism.
 const de = normalized.find((d) => d.deviceId === "d-exfil")!;
 check("evaluator is deterministic", JSON.stringify(evaluatePeripheralPosture(de)) === JSON.stringify(evaluatePeripheralPosture(de)));
+
+// Fail-safe (wedge #7, caught by the shift-1 sweep): UNREPORTED device-control
+// enforcement must not read as clean. `=== false` alone let `null` fall
+// through: a covered device with an observed-empty inventory and unverifiable
+// enforcement minted a full no_removable/none grant — "no removable media"
+// from a control we cannot confirm was enforcing. Unreported grades `monitor`;
+// confirmed-unenforced stays the stronger step_up (a reported bad state).
+const enforceUnverified = evaluatePeripheralPosture(normalizeDevice({ deviceId: "p-null", peripherals: [] }));
+check("unreported policy enforcement → monitor/POLICY_ENFORCEMENT_UNVERIFIED, never clean (wedge #7)",
+  enforceUnverified.recommendedAction === "monitor" && enforceUnverified.reasonCode === "POLICY_ENFORCEMENT_UNVERIFIED" && enforceUnverified.posture === "unknown");
+
+// ── GRANT SAFETY, QUANTIFIED — the whole input space, not chosen fixtures ─────
+//
+// Owner-sequenced shift 1: a grant must be UNREACHABLE by any unknown, missing,
+// stale, or contradictory input. Wedge #7 above was exactly the kind fixtures
+// never catch. Every combination of every axis is executed through the REAL
+// normalizer + evaluator and the granting set is pinned by equality.
+{
+  const USB_CONTAINED = [{ peripheralId: "c", class: "mass_storage", access: "read_only" }];
+  const USB_CLEAN = [{ peripheralId: "k", class: "mass_storage", access: "read_write", authorized: true, encrypted: true }];
+  const USB_UNAUTHORIZED = [{ peripheralId: "a", class: "mass_storage", access: "read_write", encrypted: true }];
+  const USB_EXFIL = [{ peripheralId: "x", class: "mass_storage", access: "read_write" }];
+  // Unmapped class + unmapped access — both must fail safe (writable, surfaced).
+  const NOVEL_WRITABLE = [{ peripheralId: "n", class: "brand-new-thing", access: "something-weird" }];
+  const domains = {
+    covered: [true, false],
+    policyEnforced: [true, false, undefined],
+    peripherals: [null, [], USB_CONTAINED, USB_CLEAN, USB_UNAUTHORIZED, USB_EXFIL, NOVEL_WRITABLE],
+  } as const;
+
+  type Enum = { dev: ReturnType<typeof normalizeDevice>; covered: boolean };
+  const build = (c: Record<string, unknown>): Enum => ({
+    dev: normalizeDevice({
+      deviceId: "dev.enum",
+      policyEnforced: c.policyEnforced as boolean | undefined,
+      peripherals: c.peripherals === null ? undefined : (c.peripherals as PeripheralPostureRaw["peripherals"]),
+    }),
+    covered: c.covered as boolean,
+  });
+
+  const swept = enumerateGrantSafety<Enum, ReturnType<typeof evaluatePeripheralPosture>>({
+    domains,
+    build,
+    evaluate: (s) => evaluatePeripheralPosture(s.dev, { covered: s.covered }),
+    actionOf: (v) => v.recommendedAction,
+    // The ONLY clean state: covered, enforcement POSITIVELY confirmed, and the
+    // inventory observed and empty. Even a fully-authorized encrypted stick is
+    // `monitor` (surfaced), so no attached-device state grants.
+    positivelyClean: (c) =>
+      c.covered === true && c.policyEnforced === true && c.peripherals === domains.peripherals[1],
+    confirmedWhenNone: (v) => v.reasonCode === "NO_REMOVABLE" && v.posture === "no_removable",
+  });
+  check(`ENUMERATION: all ${swept.combos} combinations swept (= product of domains)`,
+    swept.combos === productOf(domains) && swept.combos === 2 * 3 * 7);
+  check("ENUMERATION: a grant is reachable ONLY by the fully-verified state — zero mismatches",
+    swept.mismatches === 0);
+  check("ENUMERATION: exactly ONE granting state (non-vacuous)", swept.noneCount === 1);
+
+  // NEGATIVE CONTROL — the enumeration can fail: declare policy enforcement
+  // irrelevant to cleanliness and the harness must object, because the evaluator
+  // (correctly) refuses to grant unenforced or unverified-enforcement devices.
+  const wrongPredicate = enumerateGrantSafety<Enum, ReturnType<typeof evaluatePeripheralPosture>>({
+    domains,
+    build,
+    evaluate: (s) => evaluatePeripheralPosture(s.dev, { covered: s.covered }),
+    actionOf: (v) => v.recommendedAction,
+    positivelyClean: (c) => c.covered === true && c.peripherals === domains.peripherals[1],
+  });
+  check("NEGATIVE CONTROL: declaring policy enforcement irrelevant is CAUGHT (mismatches > 0)",
+    wrongPredicate.mismatches > 0 && typeof wrongPredicate.firstMismatch === "string");
+}
 
 // ── connector guarantees ──────────────────────────────────────────────────────
 

@@ -2,6 +2,10 @@
 
 Third-party work, copied in unmodified. **Not ours.**
 
+> **One exception in this directory:** `owner-comms/` is FIRST-PARTY — written in
+> this repository, not part of the upstream set. It lives here because the harness
+> loads skills from this directory. Everything else below describes the other 14.
+
 | | |
 |---|---|
 | Upstream | https://github.com/obra/superpowers |

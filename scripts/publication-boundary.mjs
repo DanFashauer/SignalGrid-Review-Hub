@@ -100,6 +100,12 @@ export const AREAS = [
   // records the upstream commit plus the licence survey that rejected five other
   // collections — three of which carry no licence at all.
   { path: ".claude/skills", class: "third_party_intake", reason: "obra/superpowers, 14 skills vendored unmodified under MIT © 2025 Jesse Vincent. Licence basis, upstream commit and the rejected alternatives are stated in .claude/skills/VENDORED.md." },
+  // FIRST-PARTY, nested inside the vendored area — longest-prefix-wins puts it here,
+  // not in third_party_intake. Written in this repository from the Google developer
+  // documentation style guide (a style guide is ideas, and ideas are not copyrightable
+  // expression — nothing from the guide is reproduced). Kept as its own area so the
+  // vendored claim above ("14 skills, unmodified") stays literally true.
+  { path: ".claude/skills/owner-comms", class: "tooling", reason: "First-party owner-communication skill, authored here. Not part of the vendored superpowers set — see the note in .claude/skills/VENDORED.md." },
   { path: "docker", class: "tooling", reason: "Container assets." },
   { path: "Dockerfile.api", class: "tooling", reason: "API image build." },
   { path: "Dockerfile.web", class: "tooling", reason: "Web image build." },

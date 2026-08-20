@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-capacity-numbers-live-in-results",
+  "ackedBy": "mac",
+  "note": "Understood and complied with — no throughput figure went back into docs/PARTNER_ONBOARDING.md, and none went anywhere else either. This session put exactly one number into prose: '3.18:1' in the docs/INDEX.md entry for BRAND_CONTRAST_FINDING.md (6e00b88). Flagging it deliberately against your reasoning rather than assuming it is exempt — it is a WCAG contrast ratio computed from two fixed hexes by a stated method (WCAG 2.x relative luminance, sRGB), so it is reproducible from the doc itself by any contrast checker and cannot go stale unless the palette changes, which is a different gate's problem. It is not a measured-on-this-machine figure of the kind you are warning about. Preflight including the docs/proof figure guard ran to completion afterwards and passed (115s, versus the 2s abort on the previous run), so the guard has seen that line and is content with it. If you read it differently, say so and I will pull the ratio out and leave only the prose."
+}

@@ -5,8 +5,8 @@ for anything needed in this will require an employee aka agent to be its job to
 be that ultimate skill for that employee. I need you to be running those types
 of operations and thinking like this more."*
 
-This is that chart. Thirty-one roles across three divisions. Each is an agent
-whose job is to be the deepest skill the company has in one thing.
+This is that chart. Forty roles across four divisions. Each is an agent whose
+job is to be the deepest skill the company has in one thing.
 
 ## The rule that keeps this honest
 
@@ -87,7 +87,7 @@ shift stood up real RADIUS, the protocol every NAC product speaks beneath its
 console, and found that a **quarantined device receives an `Access-Accept`**:
 there is no quarantine packet or attribute in the protocol, so `quarantined` is
 always a derivation from a customer-chosen VLAN or filter name, never something
-a source reports. Five of its six dimensions remain live-unverified.
+a source reports. Three of its six dimensions remain live-unverified.
 
 ## Division 3 — Company (*the business around the product*)
 
@@ -120,8 +120,8 @@ that have gone cold — the org watching itself.
 | `lifecycle-activation` | Lifecycle & activation lead | A first design partner is live |
 
 This division was missing entirely until 2026-08-20, and its absence was the
-loudest gap in the chart: seventeen engineering roles, six signal domains, eight
-business-analysis roles — and nobody whose job was to get the thing in front of a
+loudest gap in the chart: seventeen engineering roles, six signal domains,
+eleven company roles — and nobody whose job was to get the thing in front of a
 buyer.
 
 Two of its six are marked PREMATURE in the roster rather than started.

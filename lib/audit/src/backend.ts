@@ -156,13 +156,28 @@ export class PostgresAuditBackend implements AuditBackend {
     const priv = await this.pool.query(`
       SELECT has_table_privilege('public.audit_ledger', 'SELECT')
          AND has_table_privilege('public.audit_ledger', 'INSERT')
-         AND has_sequence_privilege(pg_get_serial_sequence('public.audit_ledger', 'seq'), 'USAGE') AS ok
+         AND has_sequence_privilege(pg_get_serial_sequence('public.audit_ledger', 'seq'), 'USAGE') AS ok,
+             has_any_column_privilege('public.audit_ledger', 'UPDATE')
+          OR has_table_privilege('public.audit_ledger', 'DELETE')
+          OR has_table_privilege('public.audit_ledger', 'TRUNCATE') AS forbidden
     `);
     if (!priv.rows[0]?.ok) {
       throw new Error(
         "this credential is missing privileges on audit_ledger (or its sequence) — re-apply the " +
           "role split with the admin credential (`pnpm run db:migrate`); refusing to report ready " +
           "for appends that would fail.",
+      );
+    }
+    // The append-only boundary is a NEGATIVE claim, so readiness must also
+    // check the forbidden direction: a grant of UPDATE (table- or
+    // column-level), DELETE, or TRUNCATE that appears under a running process
+    // means the ledger is rewritable — that is not a ready state for a
+    // tamper-evidence component, whatever the required privileges say.
+    if (priv.rows[0]?.forbidden) {
+      throw new Error(
+        "this credential holds FORBIDDEN privileges on audit_ledger (UPDATE, DELETE, or TRUNCATE — " +
+          "directly, via PUBLIC, or column-level): the ledger would not be append-only. Re-apply the " +
+          "role split with the admin credential (`pnpm run db:migrate`); refusing to report ready.",
       );
     }
   }

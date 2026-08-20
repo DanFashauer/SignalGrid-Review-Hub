@@ -89,7 +89,74 @@ const OWNER_RIGHTS_CHECKS = `
         'run with their owner''s rights, so a writable admin-owned view over the ledger defeats the '
         'append-only grants. REVOKE the write privilege on it FROM PUBLIC (and from '
         'signalgrid_runtime), then re-run.';
+    END IF;
+    -- Triggers on the managed tables fire on the runtime's own permitted
+    -- INSERTs REGARDLESS of the runtime's EXECUTE privilege on the trigger
+    -- function — so a SECURITY DEFINER trigger function is an owner-rights
+    -- write path that has_function_privilege can never see. (A SECURITY
+    -- INVOKER trigger runs with the runtime's own privileges and is bounded
+    -- by the grants above.)
+    IF EXISTS (
+      SELECT 1 FROM pg_trigger t
+      JOIN pg_class c ON c.oid = t.tgrelid
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      JOIN pg_proc p ON p.oid = t.tgfoid
+      WHERE NOT t.tgisinternal
+        AND n.nspname = 'public'
+        AND c.relname IN ('audit_ledger', 'decisions', 'evidence_snapshots', 'sessions')
+        AND p.prosecdef
+    ) THEN
+      RAISE EXCEPTION 'a SECURITY DEFINER trigger sits on a managed table — it fires with its owner''s '
+        'rights on the runtime''s own INSERTs, an owner-rights write path no EXECUTE revocation closes. '
+        'DROP the trigger (or make its function SECURITY INVOKER), then re-run.';
+    END IF;
+    -- Effective CREATE on OTHER schemas — including CREATE inherited from a
+    -- PUBLIC grant, which no role-specific ACL scan can see. The apply resets
+    -- schema public itself, so it is excluded here; any other schema the
+    -- runtime could create (and then own) objects in makes the no-DDL claim
+    -- false, and the grant may serve other roles, so it is refused, not
+    -- revoked.
+    IF EXISTS (
+      SELECT 1 FROM pg_namespace n
+      WHERE n.nspname NOT IN ('pg_catalog', 'information_schema', 'public')
+        AND n.nspname NOT LIKE 'pg\\_%'
+        AND has_schema_privilege('signalgrid_runtime', n.oid, 'CREATE')
+    ) THEN
+      RAISE EXCEPTION 'signalgrid_runtime holds effective CREATE on a schema other than public '
+        '(directly or inherited from a PUBLIC grant) — it could create and own objects there, making '
+        'the no-DDL posture false. REVOKE CREATE on that schema FROM PUBLIC / signalgrid_runtime, '
+        'then re-run.';
     END IF;`;
+
+/**
+ * Restore-context ONLY: `pg_restore --no-privileges` recreates every routine
+ * with PostgreSQL's DEFAULT ACL — which grants EXECUTE to PUBLIC — so a
+ * definer routine the dumped database had deliberately locked down comes back
+ * ambient-executable, and the owner-rights refusal above would fire AFTER the
+ * database had already been replaced. Since --no-privileges stripped every
+ * other grant too (re-granting is the operator's documented post-restore
+ * step), re-locking definer routines here removes no access the restore
+ * preserved. Never run outside a restore: on a live database the same revoke
+ * would be a silent outage for the routines' legitimate callers.
+ */
+export const RESTORE_DEFINER_LOCKDOWN_SQL = `
+  DO $$
+  DECLARE
+    fn RECORD;
+  BEGIN
+    FOR fn IN
+      SELECT p.oid, p.prokind
+      FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE p.prosecdef
+        AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+        AND n.nspname NOT LIKE 'pg\\_%'
+    LOOP
+      EXECUTE format('REVOKE EXECUTE ON %s %s FROM PUBLIC',
+                     CASE fn.prokind WHEN 'p' THEN 'PROCEDURE' ELSE 'FUNCTION' END,
+                     fn.oid::regprocedure);
+    END LOOP;
+  END $$;
+`;
 
 export const ROLE_SPLIT_VALIDATE_SQL = `
   DO $$
@@ -124,10 +191,11 @@ export const ROLE_SPLIT_VALIDATE_SQL = `
     -- role capped below that budget initializes, then starves under load and
     -- /readyz flaps. Either way the cap may be deliberate, so refuse.
     IF attrs.rolconnlimit >= 0 AND attrs.rolconnlimit < 30 THEN
-      RAISE EXCEPTION 'signalgrid_runtime already exists with CONNECTION LIMIT % — below the runtime''s '
-        'pool budget (three stores x 10 pooled connections = 30; 0 is a full lockout). The API could not '
-        'reliably connect, and a deliberate cap must not be silently raised. ALTER ROLE '
-        'signalgrid_runtime CONNECTION LIMIT -1 (or >= 30, or drop the role) first.', attrs.rolconnlimit;
+      RAISE EXCEPTION 'signalgrid_runtime already exists with CONNECTION LIMIT % — below ONE API '
+        'process''s pool budget (three stores x 10 pooled connections = 30; 0 is a full lockout; a '
+        'multi-replica deployment needs replicas x 30). The API could not reliably connect, and a '
+        'deliberate cap must not be silently raised. ALTER ROLE signalgrid_runtime CONNECTION LIMIT -1 '
+        '(or >= 30 per replica, or drop the role) first.', attrs.rolconnlimit;
     END IF;
     IF attrs.rolvaliduntil IS NOT NULL AND attrs.rolvaliduntil < now() THEN
       RAISE EXCEPTION 'signalgrid_runtime already exists with an EXPIRED password validity (VALID UNTIL %) '

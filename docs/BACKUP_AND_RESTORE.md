@@ -235,9 +235,16 @@ grants), set a password out of band — the canonical SQL deliberately carries
 none — and point the application's `DATABASE_URL` at the runtime login:
 
 ```bash
-psql "$ADMIN_DATABASE_URL" -c "ALTER ROLE signalgrid_runtime PASSWORD '…'"
+psql "$ADMIN_DATABASE_URL" -c '\password signalgrid_runtime'   # prompts twice; never in argv or history
 DATABASE_URL=postgres://signalgrid_runtime:…@host:5432/signalgrid  # the app
 ```
+
+`\password` hashes the password client-side and sends it inside the session, so
+it never appears in shell history, process arguments, or captured deployment
+logs — never inline it into an `ALTER ROLE … PASSWORD '…'` command. In the
+`DATABASE_URL`, percent-encode any password character that is reserved in URLs
+(`@`, `:`, `/`, `#`, `?`, `%`), or the URL parser will split the string in the
+wrong place.
 
 The stores' bootstrap DDL degrades honestly under this role: if migrations
 already built the schema they proceed; if the schema is missing they refuse with

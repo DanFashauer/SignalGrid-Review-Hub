@@ -119,7 +119,22 @@ async function main() {
 
   try {
     // ── 0. BARE CLUSTER: tables and the runtime role itself both gone ────────
+    // Probe objects from a CRASHED earlier run are dropped too — a leftover
+    // PUBLIC-executable definer function would make the very first migration
+    // refuse (correctly!) and the proof must be re-runnable after any crash.
     await admin.query("DROP TABLE IF EXISTS audit_ledger, decisions, evidence_snapshots, sessions, schema_version CASCADE");
+    await admin.query(`
+      DROP VIEW IF EXISTS public.sg_ledger_probe_view;
+      DROP FUNCTION IF EXISTS public.sg_backdoor_probe();
+      DROP FUNCTION IF EXISTS public.sg_trigger_probe();
+      DROP FUNCTION IF EXISTS public.sg_owned_probe();
+      DROP FUNCTION IF EXISTS public.sg_locked_probe();
+      DROP SCHEMA IF EXISTS sg_probe_schema CASCADE;
+      DROP SCHEMA IF EXISTS sg_ambient_probe CASCADE;
+    `);
+    // Its own statement: DROP DATABASE refuses to run inside a transaction,
+    // and a multi-statement simple query is one implicit transaction.
+    await admin.query("DROP DATABASE IF EXISTS sg_other_db WITH (FORCE)");
     await admin.query(dropRuntimeRoleSql());
 
     // 0a. A migration credential that owns the schema but lacks CREATEROLE —
@@ -327,6 +342,13 @@ async function main() {
     check("wedges staged: PUBLIC-, column-, sequence-, schema-, and database-level grants all reach the runtime",
       staged.via_public === true && staged.via_column === true && staged.via_sequence === true &&
         staged.via_schema === true && staged.via_database === true);
+    // While the PUBLIC UPDATE wedge stands, readiness must say NO: the
+    // append-only boundary is a negative claim, and a probe that only checks
+    // required privileges would report 200 over a rewritable ledger.
+    const poisonedLedger = new PostgresAuditBackend(runtimeUrl);
+    check("…and the audit backend's ping REFUSES while forbidden privileges stand (append-only is a negative claim)",
+      /FORBIDDEN/.test(await failureOf(() => poisonedLedger.ping())));
+    await poisonedLedger.close();
     await applyRoleSplit(url!);
     const converged = (await admin.query(WEDGES)).rows[0] ?? {};
     check("re-apply CONVERGES: all five back-door paths are revoked (PUBLIC, column ACL, sequence, schema CREATE, database CREATE)",
@@ -386,6 +408,34 @@ async function main() {
       (await deniedCode(runtime, "UPDATE public.sg_ledger_probe_view SET request_id = 'via-view' WHERE seq = 1")) === "42501");
     await admin.query("DROP VIEW public.sg_ledger_probe_view");
 
+    // A SECURITY DEFINER TRIGGER function fires on the runtime's own INSERTs
+    // regardless of EXECUTE privileges — so it must be refused even when the
+    // function itself is locked down (which is exactly what makes it
+    // invisible to has_function_privilege).
+    await admin.query(
+      "CREATE OR REPLACE FUNCTION public.sg_trigger_probe() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS " +
+        "$fn$ BEGIN RETURN NEW; END $fn$",
+    );
+    await admin.query("REVOKE EXECUTE ON FUNCTION public.sg_trigger_probe() FROM PUBLIC");
+    await admin.query(
+      "CREATE TRIGGER sg_probe_trg BEFORE INSERT ON public.audit_ledger FOR EACH ROW EXECUTE FUNCTION public.sg_trigger_probe()",
+    );
+    check("role split REFUSES a SECURITY DEFINER trigger on a managed table (fires on INSERT past any EXECUTE revoke)",
+      /SECURITY DEFINER trigger/.test(await failureOf(() => applyRoleSplit(url!))));
+    await admin.query("DROP TRIGGER sg_probe_trg ON public.audit_ledger");
+    await admin.query("DROP FUNCTION public.sg_trigger_probe()");
+
+    // CREATE inherited from a PUBLIC grant on another schema: no role-specific
+    // ACL scan can see it, but the runtime could create (and then own)
+    // objects there.
+    await admin.query("CREATE SCHEMA IF NOT EXISTS sg_ambient_probe");
+    await admin.query("GRANT CREATE ON SCHEMA sg_ambient_probe TO PUBLIC");
+    check("role split REFUSES effective CREATE on another schema inherited from PUBLIC (no role ACL to see)",
+      /CREATE on a schema other than public/.test(await failureOf(() => applyRoleSplit(url!))));
+    await admin.query("REVOKE CREATE ON SCHEMA sg_ambient_probe FROM PUBLIC");
+    await admin.query("DROP SCHEMA sg_ambient_probe");
+    await applyRoleSplit(url!); // clean again
+
     // ── 3. NON-VACUITY: the ADMIN can do what the runtime cannot ─────────────
     // Inside a rolled-back transaction so the genuine chain is untouched: the
     // point is that the denial above is the ROLE, not the table.
@@ -408,6 +458,14 @@ async function main() {
     check("the ledger's owner is the admin credential, not the runtime role", owner.rows[0]?.tableowner !== RUNTIME_ROLE);
 
     // ── 4. RESTORE recreates the POSTURE, not just the rows ──────────────────
+    // A legitimately LOCKED-DOWN definer routine rides in the archive:
+    // pg_restore --no-privileges will recreate it with PostgreSQL's default
+    // PUBLIC EXECUTE, and without the restore's definer re-lock the
+    // owner-rights refusal would fire AFTER the database was replaced.
+    await admin.query(
+      "CREATE OR REPLACE FUNCTION public.sg_locked_probe() RETURNS int LANGUAGE sql SECURITY DEFINER AS 'SELECT 1'",
+    );
+    await admin.query("REVOKE EXECUTE ON FUNCTION public.sg_locked_probe() FROM PUBLIC");
     const archive = join(workdir, "role-split.dump");
     await createBackup(url!, archive, "2026-08-20T18:30:00Z");
 
@@ -470,6 +528,16 @@ async function main() {
     );
     check("after restore: the runtime is STILL not the owner (--no-owner cannot be smuggled around)",
       ownerAfter.rows[0]?.tableowner !== RUNTIME_ROLE);
+    // The restore SUCCEEDED with the locked-down definer routine in the
+    // archive (the checks above ran) — and the routine came back re-locked,
+    // not with pg_restore's default PUBLIC EXECUTE.
+    const relocked = await admin.query(`
+      SELECT to_regprocedure('public.sg_locked_probe()') IS NOT NULL AS present,
+             has_function_privilege('${RUNTIME_ROLE}', 'public.sg_locked_probe()', 'EXECUTE') AS runtime_exec
+    `);
+    check("after restore: the archived definer routine is back AND re-locked (default PUBLIC EXECUTE stripped)",
+      relocked.rows[0]?.present === true && relocked.rows[0]?.runtime_exec === false);
+    await admin.query("DROP FUNCTION public.sg_locked_probe()");
     // …and a fresh store passes the privilege-probing readiness check — the
     // counterpart of the degraded refusal above, so the probe is proven able to
     // say yes as well as no.

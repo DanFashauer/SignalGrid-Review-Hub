@@ -151,15 +151,34 @@ five-labels-in-circulation defect the sweep found: **Shared-Device Trust
 Gateway** — already `PRODUCT_NAME` in `scripts/launch-profile.mjs` — is the
 category label. The other four labels get reconciled out, not kept as synonyms.
 
-**Still open, deliberately:** this ratifies the order and the label, not the
-174 item-level classifications in launch-profile v4. Those stay marked
-"proposal" until the owner reviews them item by item or explicitly ratifies
-them wholesale — reading blanket approval into a sentence about the site would
-be the unearned affirmative again.
+**What is ratified at the item level, precisely.** The owner's step 4 names its
+own scope: *"Remove present-tense claims for deferred badge, zone, and shift
+capabilities."* That sentence item-ratifies the six signal-kind classifications
+the site rewrite depends on — the three launch kinds (`device_posture`,
+`device_management_health`, `local_authority`) as the shipping wedge, and
+`pacs_access` (badge), `location` (zone), and `shift_context` (shift) as
+deferred, never present-tense. The remaining launch-profile classifications —
+connector families, app surfaces, API paths — stay marked "proposal" until the
+owner reviews them or ratifies them wholesale. Reading blanket approval into a
+sentence about the site would be the unearned affirmative again.
 
 **Consequence for the roster:** `positioning-messaging` is unblocked for the
-site rewrite and POSITIONING.md; `design-partner-outreach` stays blocked behind
-positioning and ICP research per the owner's own step 6.
+site rewrite and POSITIONING.md, **bounded by the ratified subset**: public
+copy may claim only the three ratified launch kinds and may name the three
+ratified deferred kinds only as roadmap. Any claim resting on a classification
+outside those six waits for item-level ratification.
+`design-partner-outreach` stays blocked behind positioning and ICP research per
+the owner's own step 6.
+
+**Reversal.** The owner reverses any part of this by saying so, as with every
+record here. Short of that: the execution order is superseded the moment a
+later owner instruction sequences the work differently, and the earlier order
+does not linger as doctrine; the category label is reversed only by the owner
+naming a different one, at which point every surface carrying "Shared-Device
+Trust Gateway" is reconciled in the same shift rather than left to drift; and
+the six item-level ratifications above are reversed individually if the owner
+re-classifies a named signal kind, which re-blocks any public copy resting on
+it until the copy is reconciled.
 
 ---
 

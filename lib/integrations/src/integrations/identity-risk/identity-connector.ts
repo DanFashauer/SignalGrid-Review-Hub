@@ -186,6 +186,13 @@ function normalizeRiskState(state: string | undefined): RiskState {
     case "confirmedsafe":
     case "confirmed_safe":
       return "confirmed_safe";
+    // Entra's value for a clean principal — the MOST COMMON value in a healthy
+    // tenant. Without this arm it fell to the default below, so every clean
+    // principal and every unparseable vendor state normalized to the same
+    // "unknown". The two must part ways here, because downstream they grade
+    // very differently: "none" can earn trusted, "unknown" never can.
+    case "none":
+      return "none";
     default:
       return "unknown";
   }

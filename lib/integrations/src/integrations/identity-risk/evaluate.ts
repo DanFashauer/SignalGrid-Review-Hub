@@ -89,9 +89,19 @@ export function evaluateIdentityRisk(
       : { ...base, posture: "trusted", reasonCode: "NO_RISK", recommendedAction: "none" };
   }
 
-  // at_risk or unknown state: collect every applicable risk factor as a
-  // candidate, then let the STRONGEST win (order-proof).
+  // at_risk, none, or unknown state: collect every applicable risk factor as a
+  // candidate, then let the STRONGEST win (order-proof). riskState "none" adds no
+  // candidate — the IdP affirmatively said no risk, so trusted is EARNED if
+  // nothing else fires — while "unknown" adds a monitor floor below.
   const candidates: Candidate[] = [];
+  // The state was never read, or the vendor sent something unmappable. Executed
+  // counterexample before this existed: riskState "unknown" + riskLevel "unknown"
+  // + zero detections graded trusted / NO_RISK / none — so a vendor renaming one
+  // enum value silently converted parse failure into trust. A blind spot is
+  // monitor, never trusted; a genuinely observed problem still outranks it.
+  if (principal.riskState === "unknown") {
+    candidates.push({ posture: "unknown", action: "monitor", reason: "RISK_STATE_UNVERIFIED" });
+  }
   if (!detectionsObserved) {
     // Never read the feed, so "nothing found" is not a reading we are entitled to.
     // `monitor` — a blind spot to investigate, not an alarm. Beats the `none`

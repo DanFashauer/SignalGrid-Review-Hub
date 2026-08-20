@@ -86,7 +86,7 @@ export function evaluateNetwork(
       // the failure mode this repo has already been bitten by twice (the BYOD
       // supervision gate, the always-on unsupervised check). The honest fix is to
       // stop CLAIMING trust, not to invent a concern nobody asked for.
-      return v("on_unverified_segment", "AUTHENTICATED_SEGMENT_UNVERIFIED", "none", loc);
+      return grantIfPostureVerified(signal, freshness, "on_unverified_segment", "AUTHENTICATED_SEGMENT_UNVERIFIED", loc);
     }
     if (signal.segment === null) {
       // A policy exists but the source did not say where the device is. Foreclose:
@@ -103,11 +103,40 @@ export function evaluateNetwork(
     if (!expected) {
       return v("on_unexpected_segment", "SEGMENT_UNEXPECTED", "step_up", loc);
     }
-    return v("on_trusted_segment", "AUTHENTICATED_TRUSTED_SEGMENT", "none", loc);
+    return grantIfPostureVerified(signal, freshness, "on_trusted_segment", "AUTHENTICATED_TRUSTED_SEGMENT", loc);
   }
 
   // 5. Unknown — resolve toward attention, not silence.
   return v("network_unknown", "NETWORK_STATE_UNKNOWN", "monitor", loc);
+}
+
+// ── THE GRANT MUST BE EARNED ─────────────────────────────────────────────────
+//
+// Both grant exits used to return `none` regardless of whether `nacCompliant`
+// and auth freshness were REPORTED. The asymmetry was exact: a device whose
+// source said "stale" or "noncompliant" stepped up, while a device whose source
+// said NOTHING sailed through as verified-good — unknown graded identical to
+// known-good and strictly better than known-bad. Executed counterexample:
+// authenticated + nacCompliant:null + lastAuthAt:null on an expected segment
+// returned on_trusted_segment / none. Per the live RADIUS shape check, that
+// unreported combination is the COMMON case on a real wire, not an edge.
+//
+// The lattice this restores: verified-good (none) > unreported (monitor) >
+// reported-bad (step_up). `monitor` and not `step_up` on purpose — see the
+// AUTHENTICATED_POSTURE_UNVERIFIED comment in types.ts: these fields never
+// arrive with a plain RADIUS result, and a control that challenges every
+// decision forever is a control an operator switches off.
+function grantIfPostureVerified(
+  signal: NormalizedNetworkSignal,
+  freshness: NacFreshness,
+  posture: NetworkVerdict["posture"],
+  earnedReason: NetworkVerdict["reasonCode"],
+  loc: string | null,
+): NetworkVerdict {
+  if (signal.nacCompliant === true && freshness === "fresh") {
+    return v(posture, earnedReason, "none", loc);
+  }
+  return v(posture, "AUTHENTICATED_POSTURE_UNVERIFIED", "monitor", loc);
 }
 
 function v(

@@ -715,7 +715,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   deployment without `REDIS_URL` set, which is this package's documented default. The
   id rule is an **allowlist** (`/^[A-Za-z0-9._-]{1,128}$/`), so the characters nobody
   thought of are refused by default rather than enumerated by someone who tried.
-- **`proof:network-nac` (42 checks)** — 802.1X / NAC access posture, read-only. The
+- **`proof:network-nac` (49 checks)** — 802.1X / NAC access posture, read-only. The
   device's network SEGMENT is now evaluated against an operator-supplied policy rather
   than merely carried: an unexpected VLAN steps up, a segment the operator marked
   high-consequence (management / security / OT) restricts, and a policy that cannot be

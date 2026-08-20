@@ -93,6 +93,15 @@ export type NetworkReasonCode =
    *  Grants — an operator who has expressed no segment policy has not asked for the
    *  check — but says plainly that trust was not established, rather than claiming it. */
   | "AUTHENTICATED_SEGMENT_UNVERIFIED"
+  /** Authenticated and the segment cleared (or was ungraded), but the session-plane
+   *  claims behind the grant were NOT reported: `nacCompliant` null and/or auth
+   *  freshness unknown. Grades `monitor`, not `none` — an unreported posture must
+   *  never produce the same verdict as a verified-good one. It also does not
+   *  step_up: per docs/RADIUS_NAC_LIVE_SHAPE_CHECK.md these two fields are not
+   *  authentication facts and never arrive with a plain RADIUS auth result, so a
+   *  challenge here would fire on every decision of every posture-less deployment
+   *  forever — the always-on failure mode this repo has been bitten by twice. */
+  | "AUTHENTICATED_POSTURE_UNVERIFIED"
   /** On a segment outside the expected set. */
   | "SEGMENT_UNEXPECTED"
   /** On a segment the operator marked high-consequence (management / security / OT)

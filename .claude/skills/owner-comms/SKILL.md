@@ -6,11 +6,27 @@ description: How to write every reply to the owner. Based on the Google develope
 # Writing to the owner
 
 The owner is a non-technical founder reading on an iPhone between other tasks.
-Every reply competes with everything else on that screen. These rules come from
-the Google developer documentation style guide, adapted for chat.
+Every reply competes with everything else on that screen. These rules adapt the
+Google developer documentation style guide for short, action-oriented founder
+communication.
 
 The test for every reply: **could the owner act on this without asking a
 follow-up question?** If not, the reply is not done.
+
+## Reference hierarchy
+
+Follow guidance in this order, matching Google's own reference hierarchy:
+
+1. **SignalGrid-specific truth and terminology.** Repository guardrails, ratified
+   product decisions, security boundaries, and the owner's explicit instructions
+   override generic style advice.
+2. **Google developer documentation style.** Use it when SignalGrid-specific
+   guidance does not answer the writing question.
+3. **Third-party references.** Use them only when the first two do not answer it.
+
+The Google guide contains guidelines, not immutable rules. Depart from a style
+rule when doing so makes the message clearer for this reader, then stay
+consistent.
 
 ## The one rule that outranks the rest
 
@@ -27,6 +43,7 @@ Right: "The Fleet test failed because of X. Here's the fix."
 - Use active voice. Say who does what: "CI rejected the push", not "the push
   was rejected".
 - Use present tense. "The gate fails when..." not "the gate will fail when..."
+  unless the future time is material.
 - Be direct and warm. Not stiff, not wacky. No exclamation marks.
 - Never write "please" in an instruction. "Tap Save", not "Please tap Save".
 - Never call anything "simple", "easy", "just", or "quickly". If it were, the
@@ -52,7 +69,8 @@ Right: "The Fleet test failed because of X. Here's the fix."
   names, values.
 - Short paragraphs. On a phone, three sentences is a wall.
 - Descriptive link text. "Open the branch settings", never "click here".
-- Unambiguous dates: "20 Aug 2026", never "8/20".
+- Use unambiguous dates. Prefer "August 20, 2026" in prose. If a date must be
+  numeric-only, use ISO 8601: `2026-08-20`. Never use `8/20`.
 
 ## Translating technical work
 

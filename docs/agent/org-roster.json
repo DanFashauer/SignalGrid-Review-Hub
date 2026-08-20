@@ -175,10 +175,9 @@
       "title": "Identity & Access domain lead",
       "charter": "Entra, Okta, Keycloak, Ping, FIDO2. Owns 15 identity dimensions.",
       "trigger": "An identity dimension changes, or its wire truth is unverified.",
-      "activated": null,
-      "produced": null,
-      "priority": 1,
-      "nextAction": "Drive the live Keycloak 26.4 lab against the 15 identity dimensions the way network-domain drove FreeRADIUS — the lab already exists (proof:live-keycloak) and nothing has checked the other 14 dimensions' wire truth against it."
+      "activated": "2026-08-20",
+      "produced": "docs/IDENTITY_LIVE_SHAPE_CHECK.md — driven against a live Keycloak 26.4. Three fields sso-session names are NOT wire facts: amr is absent from the access token, the ID token, /userinfo and RFC 7662 introspection alike, leaving only an opaque deployment-configured acr, so single_factor/mfa/phishing_resistant is not derivable from a default IdP; auth_time is absent everywhere, so iat (token issuance) is not when the human authenticated — the same defect class as the RADIUS lastAuthAt finding; and the access token exp is 60s against a 36000s session max, demonstrated live at 75s with the token dead and four SSO sessions still alive. The session record carries no device field at all (id, username, userId, ipAddress, start, lastAccess, rememberMe, clients, transientUser), and two logins by the same user from the same host produced two indistinguishable sessions — precisely the leftover-session case the dimension exists for, so the device-session join must come from the device side. The code is already right (the connector normalizes a bridge-supplied value through oneOf with an unknown fallback and evaluate.ts raises the bar on every unknown); what was missing was the wire-truth record. proof:live-keycloak 14/14.",
+      "nextAction": "Ten of fifteen dimensions remain unverified against any live IdP, and only Keycloak was driven — Entra DOES emit amr and Okta exposes richer session APIs, so the wire-truth table is one IdP wide. Next: script the Keycloak client setup (KEYCLOAK_LIVE_INTEGRATION.md describes it in prose only, and following that prose cost this shift a 13/14 on a misread mapper value), then take passkey-assurance and token-binding against the same lab."
     },
     {
       "id": "endpoint-uem-domain",

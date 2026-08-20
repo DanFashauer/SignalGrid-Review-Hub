@@ -155,6 +155,41 @@
       "date": "2026-08-20",
       "depth": "audited",
       "note": "verifySegment recomputes body-plus-prevHash per record and checks the prevHash link separately, so an edit is caught two ways. Neither way can see a missing tail."
+    },
+    {
+      "path": "lib/integrations/src/integrations/sso-session/types.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-20",
+      "depth": "verified-live",
+      "note": "Read field by field against a live Keycloak 26.4. assurance, freshness and binding are none of them wire facts: no amr anywhere, no auth_time, token exp 60s vs session max 36000s, and no device field in the session record. The type's own comment already says it consumes an evaluated view, which is what makes it correct."
+    },
+    {
+      "path": "lib/integrations/src/integrations/sso-session/sso-session-connector.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-20",
+      "depth": "audited",
+      "note": "Normalizes report.freshness through oneOf with an unknown fallback rather than deriving it from a token — the one place the exp trap could have entered, and it does not."
+    },
+    {
+      "path": "lib/integrations/src/integrations/sso-session/evaluate.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-20",
+      "depth": "audited",
+      "note": "Every unknown raises the bar; a mismatched subject on a live session is the strongest negative. Fail-closed law holds under all three unknowns the wire actually produces."
+    },
+    {
+      "path": "scripts/src/live-keycloak-proof.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-20",
+      "depth": "verified-live",
+      "note": "14/14 against a live Keycloak 26.4, including cross-implementation RFC 7638 thumbprint agreement and rejections asserted to be for their own reason rather than a key-loading failure."
+    },
+    {
+      "path": "docs/KEYCLOAK_LIVE_INTEGRATION.md",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-20",
+      "depth": "audited",
+      "note": "Accurate, but describes the client setup in prose only; following it produced a 13/14 on a misread mapper claim value. A setup script would not have made the mistake."
     }
   ]
 }

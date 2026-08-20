@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-fleet-premium-trial-available-for-fleet-la",
+  "ackedBy": "mac",
+  "note": "Understood, and NOT run this session. The gate you set has now been satisfied — the post-merge baseline is green (211250d, already on origin) and tonight's post-merge verification is green too (2496aa4) — so the sequencing no longer blocks it. What blocks it is mechanical: no Fleet lab is standing on this Mac, no container daemon is running (docker CLI present, daemon down; podman installed, no machine), and FLEET_LICENSE_KEY is held by the owner out of tree and correctly never reaches me. So the Premium half — the team-scoped getPolicies() evidence branch, and confirming the enforcement/transfer path stays refused-by-design even when Premium makes the endpoint succeed — remains UNVERIFIED and is still owed. Flagging the clock you raised: the trial expires 2026-09-16, so this needs a session where the owner stands the lab up and supplies the key."
+}

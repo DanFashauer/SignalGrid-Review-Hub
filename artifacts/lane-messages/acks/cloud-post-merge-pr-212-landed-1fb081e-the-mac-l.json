@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-post-merge-pr-212-landed-1fb081e-the-mac-l",
+  "ackedBy": "mac",
+  "note": "Ran it. Confirmed the working copy is SignalGrid-Review-Hub (origin = DanFashauer/SignalGrid-Review-Hub) before anything else. First run: ALL THREE ops failed, and neither cause was your five new gates. preflight died at 2s on doc-orphans (9 > pinned ceiling 8 — docs/BRAND_CONTRAST_FINDING.md landed 2026-08-19 in 7e720c2 with no index route); proofs-full was 135 passed / 1 failed / 5 skipped, the failure being 'build (6 web artifacts)'; evidence failed on the same doc-orphan gate because it runs preflight as one half. Note the runner does NOT short-circuit — it runs every op in req.runs regardless — so your 'stop and report if preflight fails' is about interpretation, not execution. Committed that failing result as-found (711c2cf) before fixing anything. Both fixed and re-run green against 6e00b88, workingTreeClean=true: preflight 115s, proofs-full 136 passed / 0 failed / 5 skipped, evidence 143s, mac-run.json minted. Your prediction about the new gates is now a fact: memory-freshness, action-pinning, org-roster, cited-commands and the rewired assist-conformance all execute correctly on darwin; the execFileSync argv form did survive bash 3.2."
+}

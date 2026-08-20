@@ -272,10 +272,13 @@ The corrected canonical article is staged at `docs/HASH_CHAIN_TAIL_ARTICLE.md`.
 The independent recheck exists as a standing fact: `proof:audit-ledger-pg`
 re-runs the experiment against a real Postgres in the "Durable persistence" CI
 job on every push — including, since review of this record, the operator CLI
-itself: `db:verify-ledger`'s exit codes are asserted end to end (clean 0,
-`--min-records` breach 1, tampered row 1), because the article publishes the
-CLI's output and a regression in its exit-code wiring would otherwise leave
-the library assertions green while the published table went false. The
+itself: `db:verify-ledger` is spawned as a child process and BOTH its exit codes and
+its verdict lines are asserted — "Chain intact" with the right count, "TOO FEW
+RECORDS" naming both numbers, "CHAIN BROKEN at record index" localizing the
+break — across the same three states the article's table publishes (clean,
+short-of-floor, tampered), at smaller scale (8 records to the article's 40).
+The claim is scoped to that: same code paths and verdict sentences, not a
+literal 40-row replay. The
 article's runtime-role grant is per-table: on the ledger, `SELECT` and
 `INSERT` only — `UPDATE` would let an attacker rewrite a record and its hash
 and the verifier would accept the result. Publication order:

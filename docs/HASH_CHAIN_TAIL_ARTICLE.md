@@ -37,7 +37,7 @@ What actually closes the gap is a record count asserted from outside the chain:
 
 One more move worth stealing. We pinned the limitation into the test suite as a *passing* assertion: the proof seeds twelve records, deletes down to eight, and asserts that verification still returns ok. That reads backwards until you consider the alternative, which is rediscovering the limit during an incident. The day someone adds an external anchor or a monotonic counter, that assertion fails, and the doctrine gets updated on purpose instead of drifting. Both new assertions were confirmed to fail when the deletion step is removed — a test that cannot fail proves nothing.
 
-Reproducing this on your own ledger takes five minutes: delete the last N rows with plain SQL, run your integrity verifier, and read the exit code, not the prose. If it says 0, your tamper evidence has the same hole ours did — and now you know which of the three fixes fits your deployment.
+Reproducing this takes five minutes — **on a disposable copy, never on retained data**. The test IS a destructive deletion of your newest audit records, which is precisely the evidence the log exists to protect; run it against a restored backup in a throwaway container (a `docker run postgres` plus `pg_restore` is enough), not against the live database. Then: delete the last N rows with plain SQL, run your integrity verifier, and read the exit code, not the prose. If it says 0, your tamper evidence has the same hole ours did — and now you know which of the three fixes fits your deployment.
 
 ---
 

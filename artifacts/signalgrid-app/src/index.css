@@ -99,19 +99,19 @@
   --muted-foreground: 40 14% 80%;
   --accent: 175 22% 55%;
   --accent-foreground: 210 13% 9%;
-  --destructive: 0 28% 49%;
-  --destructive-foreground: 43 26% 94%;
+  --destructive: 0 43% 60.8%; /* #C67070 exactly — DR-005 deny re-tone, same value as web + iOS */
+  --destructive-foreground: 210 13% 9%; /* charcoal on the deny fill: 5.05:1; off-white measured 3.13:1 */
   --input: 205 13% 19%;
   --ring: 175 28% 43%;
   --chart-1: 175 28% 43%;
   --chart-2: 145 21% 47%;
   --chart-3: 32 35% 51%;
-  --chart-4: 0 28% 49%;
+  --chart-4: 0 43% 60.8%; /* deny, DR-005 */
   --chart-5: 175 22% 55%;
 
   --decision-allow: 145 21% 47%;
   --decision-review: 32 35% 51%;
-  --decision-deny: 0 28% 49%;
+  --decision-deny: 0 43% 60.8%; /* #C67070 exactly, DR-005 */
 
   --app-font-sans: 'Inter', sans-serif;
   --app-font-serif: Georgia, serif;
@@ -151,19 +151,19 @@
   --muted-foreground: 40 14% 80%;
   --accent: 175 22% 55%;
   --accent-foreground: 210 13% 9%;
-  --destructive: 0 28% 49%;
-  --destructive-foreground: 43 26% 94%;
+  --destructive: 0 43% 60.8%; /* #C67070 exactly — DR-005 deny re-tone, same value as web + iOS */
+  --destructive-foreground: 210 13% 9%; /* charcoal on the deny fill: 5.05:1; off-white measured 3.13:1 */
   --input: 205 13% 19%;
   --ring: 175 28% 43%;
   --chart-1: 175 28% 43%;
   --chart-2: 145 21% 47%;
   --chart-3: 32 35% 51%;
-  --chart-4: 0 28% 49%;
+  --chart-4: 0 43% 60.8%; /* deny, DR-005 */
   --chart-5: 175 22% 55%;
 
   --decision-allow: 145 21% 47%;
   --decision-review: 32 35% 51%;
-  --decision-deny: 0 28% 49%;
+  --decision-deny: 0 43% 60.8%; /* #C67070 exactly, DR-005 */
 }
 
 @layer base {

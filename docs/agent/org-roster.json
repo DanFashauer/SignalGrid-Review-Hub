@@ -113,10 +113,9 @@
       "title": "API contract architect",
       "charter": "/v1 contract: OpenAPI fidelity, envelope shape, idempotency, versioning and deprecation.",
       "trigger": "A route is added or an existing contract changes.",
-      "activated": null,
-      "produced": null,
-      "priority": 1,
-      "nextAction": "Read lib/api-spec/v1-openapi.yaml against the routes as served: every path, every envelope, every status. proof:api-contract gates the shape; nobody has asked whether the DOCUMENT still describes the product."
+      "activated": "2026-08-20",
+      "produced": "docs/API_CONTRACT_AUDIT.md — the published contract asserted \"every route is tenant-scoped: the tenant is derived from the authenticated bearer token\", which is the inverse of what 21 of its own 55 operations do (/cp/v1/* carries no principal and is scoped only by a client-supplied ?tenant=); nothing said the whole /cp/v1 surface and GET /v1/keys are registered only under the review-demo profile and 404 elsewhere; three served routes (self-audit, reliability, iac) had drifted out of the spec, the Postman collection and the launch profile at once. The cause was that proof:api-contract read one route file and compared only /v1 while printing \"Contract holds\" — widened to the whole served surface, plus a zero-routes-parsed guard, self-test 7/7. Also fixed scripts/safety-check.mjs reporting Postman drift with an EMPTY reason.",
+      "nextAction": "Status codes and response shapes — the deeper half. Nothing compares documented 400/403/404/429 against the handlers that declare them, and test:api is not driven from the spec, so a documented status nobody implemented passes both."
     },
     {
       "id": "devex-tooling-engineer",

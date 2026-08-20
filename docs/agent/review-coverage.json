@@ -85,6 +85,41 @@
       "date": "2026-08-19",
       "depth": "audited",
       "note": "Every cited file and command resolved; both load-bearing claims checked against the code. Accurate."
+    },
+    {
+      "path": "lib/api-spec/v1-openapi.yaml",
+      "reviewedBy": "api-contract-architect",
+      "date": "2026-08-20",
+      "depth": "audited",
+      "note": "Every path and every per-operation security declaration read against the served routers. info.description asserted every route derives its tenant from the bearer token; 21 of 55 documented operations carry no principal at all. Nothing said the /cp/v1 surface and GET /v1/keys are registered only under the review-demo profile."
+    },
+    {
+      "path": "scripts/src/api-contract-proof.ts",
+      "reviewedBy": "api-contract-architect",
+      "date": "2026-08-20",
+      "depth": "audited",
+      "note": "Read only routes/v1.ts and skipped /cp/v1 by design, so 21 documented control-plane operations were ungated and three served routes had drifted out of the spec while it printed 'Contract holds'. Widened to the whole served surface; self-test 7/7."
+    },
+    {
+      "path": "artifacts/api-server/src/routes/index.ts",
+      "reviewedBy": "api-contract-architect",
+      "date": "2026-08-20",
+      "depth": "audited",
+      "note": "Router composition and the demo-profile fence. The reasoning for not mounting rather than 403'ing is sound and written down; it had simply never reached the published contract."
+    },
+    {
+      "path": "scripts/safety-check.mjs",
+      "reviewedBy": "api-contract-architect",
+      "date": "2026-08-20",
+      "depth": "read",
+      "note": "Postman-drift branch kept only the LAST line of the checker's output, so a multi-line failure reported an empty reason. Fixed and verified with an induced drift."
+    },
+    {
+      "path": "scripts/build-postman.mjs",
+      "reviewedBy": "api-contract-architect",
+      "date": "2026-08-20",
+      "depth": "read",
+      "note": "The collection is hand-authored and checked against the spec, not generated from it — so a new spec path needs a matching item added by hand."
     }
   ]
 }

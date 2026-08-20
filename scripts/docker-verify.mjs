@@ -145,7 +145,13 @@ const PG_PROOFS = [
 ];
 let pgAssertions = 0;
 for (const [script, what] of PG_PROOFS) {
-  const r = run("pnpm", ["run", script], { env: { ...process.env, DATABASE_URL: PG_URL } });
+  // SIGNALGRID_DB_DISPOSABLE: this script CREATED the postgres container above
+  // and tears it down below, so declaring the cluster throwaway is a fact, not
+  // a waiver. Without it the proofs refuse to run (by design — DATABASE_URL
+  // alone is not consent to destructive resets; see scripts/src/lib/db-guard.ts).
+  const r = run("pnpm", ["run", script], {
+    env: { ...process.env, DATABASE_URL: PG_URL, SIGNALGRID_DB_DISPOSABLE: "1" },
+  });
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
   // Count only what the proof itself reports — never infer a number from exit status.
   const m = out.match(/(\d+)\/(\d+) assertions passed/);

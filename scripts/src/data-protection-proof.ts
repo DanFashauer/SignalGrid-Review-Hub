@@ -22,6 +22,7 @@ import {
   type DataProtectionRaw,
 } from "@workspace/integrations/data-protection";
 import { checkLiveGateIsolated } from "./lib/live-gate.js";
+import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 
 interface Expected {
   posture: string;
@@ -129,6 +130,75 @@ check("a high-severity egress escalates even when data class is not regulated", 
 // Determinism.
 const de = normalized.find((d) => d.deviceId === "d-exfil-phi")!;
 check("evaluator is deterministic", JSON.stringify(evaluateDlpPosture(de)) === JSON.stringify(evaluateDlpPosture(de)));
+
+// Fail-safe (wedge #8, caught by the shift-1 sweep): UNREPORTED DLP enforcement
+// must not read as protected. `=== false` alone let `null` fall through: a
+// covered device with an observed-empty violation feed and unverifiable
+// enforcement minted a full protected/none grant — "no violations" from a DLP
+// layer we cannot confirm was enforcing. Unreported grades `monitor`;
+// confirmed-unenforced stays the stronger step_up (a reported bad state).
+const dlpUnverified = evaluateDlpPosture(normalizeDevice({ deviceId: "d-null", violations: [] }));
+check("unreported DLP enforcement → monitor/POLICY_ENFORCEMENT_UNVERIFIED, never protected (wedge #8)",
+  dlpUnverified.recommendedAction === "monitor" && dlpUnverified.reasonCode === "POLICY_ENFORCEMENT_UNVERIFIED" && dlpUnverified.posture === "unknown");
+
+// ── GRANT SAFETY, QUANTIFIED — the whole input space, not chosen fixtures ─────
+//
+// Owner-sequenced shift 1: a grant must be UNREACHABLE by any unknown, missing,
+// stale, or contradictory input. Wedge #8 above was exactly the kind fixtures
+// never catch. Every combination of every axis is executed through the REAL
+// normalizer + evaluator and the granting set is pinned by equality.
+{
+  const CONTAINED = [{ violationId: "c", channel: "usb", action: "blocked", severity: "medium", dataClass: "phi" }];
+  const EGRESS_LOW = [{ violationId: "l", channel: "web", action: "allowed", severity: "low", dataClass: "confidential" }];
+  const EGRESS_REGULATED = [{ violationId: "r", channel: "cloud_storage", action: "allowed", severity: "medium", dataClass: "phi" }];
+  // Unmapped action — containment unproven, must count as egressed (fail-safe).
+  const UNPROVEN = [{ violationId: "u", channel: "email", action: "something-weird", severity: "low", dataClass: "confidential" }];
+  const domains = {
+    covered: [true, false],
+    dlpPolicyEnforced: [true, false, undefined],
+    violations: [null, [], CONTAINED, EGRESS_LOW, EGRESS_REGULATED, UNPROVEN],
+  } as const;
+
+  type Enum = { dev: ReturnType<typeof normalizeDevice>; covered: boolean };
+  const build = (c: Record<string, unknown>): Enum => ({
+    dev: normalizeDevice({
+      deviceId: "dev.enum",
+      dlpPolicyEnforced: c.dlpPolicyEnforced as boolean | undefined,
+      violations: c.violations === null ? undefined : (c.violations as DataProtectionRaw["violations"]),
+    }),
+    covered: c.covered as boolean,
+  });
+
+  const swept = enumerateGrantSafety<Enum, ReturnType<typeof evaluateDlpPosture>>({
+    domains,
+    build,
+    evaluate: (s) => evaluateDlpPosture(s.dev, { covered: s.covered }),
+    actionOf: (v) => v.recommendedAction,
+    // The ONLY protected state: covered, enforcement POSITIVELY confirmed, and
+    // the violation feed observed and empty.
+    positivelyClean: (c) =>
+      c.covered === true && c.dlpPolicyEnforced === true && c.violations === domains.violations[1],
+    confirmedWhenNone: (v) => v.reasonCode === "NO_VIOLATIONS" && v.posture === "protected",
+  });
+  check(`ENUMERATION: all ${swept.combos} combinations swept (= product of domains)`,
+    swept.combos === productOf(domains) && swept.combos === 2 * 3 * 6);
+  check("ENUMERATION: a grant is reachable ONLY by the fully-verified state — zero mismatches",
+    swept.mismatches === 0);
+  check("ENUMERATION: exactly ONE granting state (non-vacuous)", swept.noneCount === 1);
+
+  // NEGATIVE CONTROL — the enumeration can fail: declare DLP enforcement
+  // irrelevant to protection and the harness must object, because the evaluator
+  // (correctly) refuses to grant unenforced or unverified-enforcement devices.
+  const wrongPredicate = enumerateGrantSafety<Enum, ReturnType<typeof evaluateDlpPosture>>({
+    domains,
+    build,
+    evaluate: (s) => evaluateDlpPosture(s.dev, { covered: s.covered }),
+    actionOf: (v) => v.recommendedAction,
+    positivelyClean: (c) => c.covered === true && c.violations === domains.violations[1],
+  });
+  check("NEGATIVE CONTROL: declaring DLP enforcement irrelevant is CAUGHT (mismatches > 0)",
+    wrongPredicate.mismatches > 0 && typeof wrongPredicate.firstMismatch === "string");
+}
 
 // ── connector guarantees ──────────────────────────────────────────────────────
 

@@ -271,12 +271,24 @@ for (const [label, unreported, reportedNone] of [
   [
     "peripheral-control",
     peripheral.evaluatePeripheralPosture(peripheral.normalizeDevice({ deviceId: "d", source: "s" } as never), {}),
-    peripheral.evaluatePeripheralPosture(peripheral.normalizeDevice({ deviceId: "d", source: "s", peripherals: [] } as never), {}),
+    // policyEnforced true is REPORTED on the clean side deliberately, so this
+    // row isolates the PERIPHERALS collection — the axis this law is about. It
+    // used to omit enforcement and still expect `none`, which only passed
+    // because the evaluator graded unreported enforcement as clean — the exact
+    // fail-open (wedge #7) fixed on 2026-08-20. An empty inventory is a
+    // reading; an unreported enforcement state never was one.
+    peripheral.evaluatePeripheralPosture(peripheral.normalizeDevice({ deviceId: "d", source: "s", policyEnforced: true, peripherals: [] } as never), {}),
   ],
   [
     "credential-exposure",
     credential.evaluateCredentialExposure(credential.normalizeDevice({ deviceId: "d", source: "s" } as never), {}),
-    credential.evaluateCredentialExposure(credential.normalizeDevice({ deviceId: "d", source: "s", findings: [] } as never), {}),
+    // scannerEnrolled true is REPORTED on the clean side deliberately, so this
+    // row isolates the FINDINGS collection — the axis this law is about. It used
+    // to omit enrollment and still expect `none`, which only passed because the
+    // evaluator graded unreported enrollment as clean — the exact fail-open
+    // (wedge #6) fixed on 2026-08-20. An empty findings list is a reading; an
+    // unreported scanner enrollment never was one.
+    credential.evaluateCredentialExposure(credential.normalizeDevice({ deviceId: "d", source: "s", scannerEnrolled: true, findings: [] } as never), {}),
   ],
 ] as [string, { recommendedAction?: string; reasonCode?: string }, { recommendedAction?: string }][]) {
   check(

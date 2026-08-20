@@ -27,6 +27,7 @@ import {
   type CredentialExposureRaw,
 } from "@workspace/integrations/credential-exposure";
 import { checkLiveGateIsolated } from "./lib/live-gate.js";
+import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 
 interface Expected {
   posture: string;
@@ -138,6 +139,75 @@ check("an unmapped location/kind normalizes to 'unknown'", normalizeFinding({ lo
 // Determinism.
 const ck = normalized.find((d) => d.deviceId === "c-agent-key")!;
 check("evaluator is deterministic", JSON.stringify(evaluateCredentialExposure(ck)) === JSON.stringify(evaluateCredentialExposure(ck)));
+
+// Fail-safe (wedge #6, caught by the shift-1 sweep): UNREPORTED scanner
+// enrollment must not read as clean. `=== false` alone let `null` fall through:
+// a covered device with an observed-empty findings list and unverifiable
+// enrollment minted a full clean/none grant — "nothing found" by a scanner we
+// cannot confirm was running. Unreported grades `monitor` (a blind spot);
+// confirmed-unenrolled stays the stronger step_up (a reported bad state).
+const enrollUnverified = evaluateCredentialExposure(normalizeDevice({ deviceId: "e-null", findings: [] }));
+check("unreported scanner enrollment → monitor/SCANNER_ENROLLMENT_UNVERIFIED, never clean (wedge #6)",
+  enrollUnverified.recommendedAction === "monitor" && enrollUnverified.reasonCode === "SCANNER_ENROLLMENT_UNVERIFIED" && enrollUnverified.posture === "unknown");
+
+// ── GRANT SAFETY, QUANTIFIED — the whole input space, not chosen fixtures ─────
+//
+// Owner-sequenced shift 1: a grant must be UNREACHABLE by any unknown, missing,
+// stale, or contradictory input. Wedge #6 above was exactly the kind fixtures
+// never catch. Every combination of every axis is executed through the REAL
+// normalizer + evaluator and the granting set is pinned by equality.
+{
+  const REMEDIATED = [{ findingId: "r", location: "dotenv", kind: "password", severity: "low", remediation: "remediated" }];
+  const EXPOSED_LOW = [{ findingId: "l", location: "shell_history", kind: "some-low-token", severity: "low", validity: "active", remediation: "open" }];
+  const EXPOSED_HIGH = [{ findingId: "h", location: "dotenv", kind: "private_key", severity: "high", validity: "active", remediation: "open" }];
+  // Unmapped remediation AND validity — containment unproven, must count exposed.
+  const UNPROVEN = [{ findingId: "u", location: "agent_log", kind: "some-low-token", severity: "low", validity: "something-weird", remediation: "something-weird" }];
+  const domains = {
+    covered: [true, false],
+    scannerEnrolled: [true, false, undefined],
+    findings: [null, [], REMEDIATED, EXPOSED_LOW, EXPOSED_HIGH, UNPROVEN],
+  } as const;
+
+  type Enum = { dev: ReturnType<typeof normalizeDevice>; covered: boolean };
+  const build = (c: Record<string, unknown>): Enum => ({
+    dev: normalizeDevice({
+      deviceId: "dev.enum",
+      scannerEnrolled: c.scannerEnrolled as boolean | undefined,
+      findings: c.findings === null ? undefined : (c.findings as CredentialExposureRaw["findings"]),
+    }),
+    covered: c.covered as boolean,
+  });
+
+  const swept = enumerateGrantSafety<Enum, ReturnType<typeof evaluateCredentialExposure>>({
+    domains,
+    build,
+    evaluate: (s) => evaluateCredentialExposure(s.dev, { covered: s.covered }),
+    actionOf: (v) => v.recommendedAction,
+    // The ONLY clean state: covered, enrollment POSITIVELY confirmed, and the
+    // findings feed observed and empty.
+    positivelyClean: (c) =>
+      c.covered === true && c.scannerEnrolled === true && c.findings === domains.findings[1],
+    confirmedWhenNone: (v) => v.reasonCode === "NO_FINDINGS" && v.posture === "clean",
+  });
+  check(`ENUMERATION: all ${swept.combos} combinations swept (= product of domains)`,
+    swept.combos === productOf(domains) && swept.combos === 2 * 3 * 6);
+  check("ENUMERATION: a grant is reachable ONLY by the fully-verified state — zero mismatches",
+    swept.mismatches === 0);
+  check("ENUMERATION: exactly ONE granting state (non-vacuous)", swept.noneCount === 1);
+
+  // NEGATIVE CONTROL — the enumeration can fail: declare enrollment irrelevant
+  // to cleanliness and the harness must object, because the evaluator
+  // (correctly) refuses to grant unenrolled or unverified-enrollment devices.
+  const wrongPredicate = enumerateGrantSafety<Enum, ReturnType<typeof evaluateCredentialExposure>>({
+    domains,
+    build,
+    evaluate: (s) => evaluateCredentialExposure(s.dev, { covered: s.covered }),
+    actionOf: (v) => v.recommendedAction,
+    positivelyClean: (c) => c.covered === true && c.findings === domains.findings[1],
+  });
+  check("NEGATIVE CONTROL: declaring scanner enrollment irrelevant is CAUGHT (mismatches > 0)",
+    wrongPredicate.mismatches > 0 && typeof wrongPredicate.firstMismatch === "string");
+}
 
 // ── connector guarantees ──────────────────────────────────────────────────────
 

@@ -137,7 +137,16 @@ export function normalizeEndpoint(endpoint: EndpointThreatRaw): NormalizedEndpoi
     agentInstalled: endpoint.agentInstalled === true,
     agentRunning: endpoint.agentRunning === true,
     realtimeProtection: endpoint.realtimeProtection === true,
-    signatureAgeHours: typeof endpoint.signatureAgeHours === "number" ? endpoint.signatureAgeHours : null,
+    // Only a finite, non-negative age is a REPORTED age. A negative value claims
+    // signatures newer than now — a contradictory reading that must resolve to
+    // "unverifiable" (null → stale → degraded), never to fresh. `typeof === "number"`
+    // alone let -1 grade as fresher than 0 and mint a full protected/none grant.
+    signatureAgeHours:
+      typeof endpoint.signatureAgeHours === "number" &&
+      Number.isFinite(endpoint.signatureAgeHours) &&
+      endpoint.signatureAgeHours >= 0
+        ? endpoint.signatureAgeHours
+        : null,
     lastSeen: endpoint.lastSeen ?? null,
     // `?? []` here was the whole defect: it turned "this vendor has no detection
     // endpoint" into "this vendor found nothing". Absence is preserved as null and

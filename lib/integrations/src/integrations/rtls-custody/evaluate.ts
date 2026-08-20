@@ -86,11 +86,15 @@ export function evaluateCustodyPosture(
   }
   if (loc.zoneAuthorized === false || loc.zoneType === "unauthorized") {
     candidates.push({ posture: "off_zone", action: "alert", reason: "OFF_ZONE" });
-  } else if (loc.zoneType === "unknown" && loc.zoneAuthorized === null) {
-    // Fail-safe: we can neither classify the zone nor confirm the device is
-    // authorized for it — never stamp this "custody OK". An unconfirmable
-    // authorization is not the same as an authorized one (same discipline as
-    // null fixAge → stale). Surface it for review.
+  } else if (loc.zoneAuthorized === null) {
+    // Fail-safe: the device's authorization for this zone cannot be confirmed —
+    // never stamp that "custody OK". An unconfirmable authorization is not the
+    // same as an authorized one (same discipline as null fixAge → stale).
+    // Wedge #9, caught by the shift-1 sweep: this branch used to also require
+    // zoneType === "unknown", so a device in a CLASSIFIED zone (clinical,
+    // storage…) with unreported authorization skipped it entirely and could
+    // mint a full CUSTODY_OK/none grant. Knowing the zone's category never
+    // proved THIS device was allowed there. Surface it for review.
     candidates.push({ posture: "zone_unverified", action: "monitor", reason: "ZONE_UNVERIFIED" });
   }
   // Fail-safe: an unconfirmable fix age (null) is treated as stale — we never
@@ -102,6 +106,14 @@ export function evaluateCustodyPosture(
   // fail-safe) — a device sitting unattended without its checkout badge.
   if (loc.badgeAssociated === false && (loc.dwellSeconds === null || loc.dwellSeconds >= abandonDwell)) {
     candidates.push({ posture: "abandoned", action: "alert", reason: "ABANDONED" });
+  } else if (loc.badgeAssociated === null && (loc.dwellSeconds === null || loc.dwellSeconds >= abandonDwell)) {
+    // Badge association UNREPORTED over an abandonment-length (or unconfirmable)
+    // dwell (wedge #11, caught by the shift-1 sweep): `=== false` alone let null
+    // fall through, so a device sitting for hours with an unverifiable badge
+    // state could mint a full CUSTODY_OK/none grant. Graded `monitor` — a blind
+    // spot to investigate; a REPORTED badge-less long dwell (above) stays the
+    // stronger alert.
+    candidates.push({ posture: "badge_unverified", action: "monitor", reason: "BADGE_UNVERIFIED" });
   }
 
   const winner = candidates.reduce<Candidate>(

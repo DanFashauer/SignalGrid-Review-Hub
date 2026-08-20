@@ -26,6 +26,7 @@ import {
 } from "@workspace/integrations/macos-posture";
 import { composeDeviceRisk, fromMacosPosture } from "@workspace/posture-composition";
 import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
+import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 
 interface Expected {
   posture: string;
@@ -184,6 +185,87 @@ check("a negative/sentinel residual_count → unverified/step_up (not clean)", s
 // Determinism.
 const d = await connector.fetchPosture(fixture.devices["filevault-off"].deviceId);
 check("evaluator is deterministic", JSON.stringify(evaluateMacosPosture(d)) === JSON.stringify(evaluateMacosPosture(d)));
+
+// ── GRANT SAFETY, QUANTIFIED — the whole input space, not chosen fixtures ─────
+//
+// Owner-sequenced shift 1: a grant must be UNREACHABLE by any unknown, missing,
+// stale, or contradictory input. This evaluator was built under the fail-safe
+// discipline from day one; the enumeration is the proof that it holds across the
+// ENTIRE normalized space, not just the states someone thought of. The granting
+// set is pinned by equality.
+{
+  const domains = {
+    covered: [true, false],
+    sip: ["on", "off", "unknown"],
+    fileVault: ["on", "off", "unknown"],
+    gatekeeper: ["on", "off", "unknown"],
+    firewall: ["on", "off", "unknown"],
+    mdmEnrolled: [true, false, null],
+    autoUpdate: ["on", "off", "unknown"],
+    malwareDefs: ["present", "unknown"],
+    sysextResidual: [0, 2, null],
+    sysextConflict: [true, false, null],
+    sysextUnreliable: [true, false],
+  } as const;
+
+  type Enum = { p: Parameters<typeof evaluateMacosPosture>[0]; covered: boolean };
+  const build = (c: Record<string, unknown>): Enum => ({
+    p: {
+      sourceSystem: "macos-posture",
+      deviceId: "dev.enum",
+      osVersion: "15.5",
+      sip: c.sip, fileVault: c.fileVault, gatekeeper: c.gatekeeper, firewall: c.firewall,
+      mdmEnrolled: c.mdmEnrolled, autoUpdate: c.autoUpdate, malwareDefs: c.malwareDefs,
+      sysextResidual: c.sysextResidual, sysextConflict: c.sysextConflict,
+      sysextUnreliable: c.sysextUnreliable,
+      source: "enum",
+    } as Parameters<typeof evaluateMacosPosture>[0],
+    covered: c.covered as boolean,
+  });
+
+  const swept = enumerateGrantSafety<Enum, ReturnType<typeof evaluateMacosPosture>>({
+    domains,
+    build,
+    evaluate: (s) => evaluateMacosPosture(s.p, { covered: s.covered }),
+    actionOf: (v) => v.recommendedAction,
+    // FULLY_HARDENED requires every core control POSITIVELY on, enrollment
+    // POSITIVELY confirmed, auto-update on, malware defs present, no stranded
+    // extension, no conflict, and a trustworthy (or honestly absent) sysext
+    // section. Two axes are deliberately tolerant, per the documented contract:
+    // an ABSENT sysext section (residual/conflict null with unreliable=false)
+    // is "not a factor" — absence of the OPTIONAL section, unlike an untrusted
+    // one, does not raise the bar.
+    positivelyClean: (c) =>
+      c.covered === true &&
+      c.sip === "on" && c.fileVault === "on" && c.gatekeeper === "on" && c.firewall === "on" &&
+      c.mdmEnrolled === true && c.autoUpdate === "on" && c.malwareDefs === "present" &&
+      c.sysextResidual !== 2 && c.sysextConflict !== true && c.sysextUnreliable === false,
+    confirmedWhenNone: (v) => v.reasonCode === "FULLY_HARDENED" && v.posture === "hardened",
+  });
+  check(`ENUMERATION: all ${swept.combos} combinations swept (= product of domains)`,
+    swept.combos === productOf(domains) && swept.combos === 2 * 3 * 3 * 3 * 3 * 3 * 3 * 2 * 3 * 3 * 2);
+  check("ENUMERATION: a grant is reachable ONLY by the fully-verified state — zero mismatches",
+    swept.mismatches === 0);
+  check("ENUMERATION: the granting set is residual{0,null} × conflict{false,null} = 4 states (non-vacuous)",
+    swept.noneCount === 4);
+
+  // NEGATIVE CONTROL — the enumeration can fail: declare unknown MDM enrollment
+  // clean and the harness must object, because the evaluator (correctly) counts
+  // an undetermined enrollment among the unknowns that raise the bar.
+  const wrongPredicate = enumerateGrantSafety<Enum, ReturnType<typeof evaluateMacosPosture>>({
+    domains,
+    build,
+    evaluate: (s) => evaluateMacosPosture(s.p, { covered: s.covered }),
+    actionOf: (v) => v.recommendedAction,
+    positivelyClean: (c) =>
+      c.covered === true &&
+      c.sip === "on" && c.fileVault === "on" && c.gatekeeper === "on" && c.firewall === "on" &&
+      c.mdmEnrolled !== false && c.autoUpdate === "on" && c.malwareDefs === "present" &&
+      c.sysextResidual !== 2 && c.sysextConflict !== true && c.sysextUnreliable === false,
+  });
+  check("NEGATIVE CONTROL: declaring undetermined MDM enrollment clean is CAUGHT (mismatches > 0)",
+    wrongPredicate.mismatches > 0 && typeof wrongPredicate.firstMismatch === "string");
+}
 
 // ── fabric fusion ─────────────────────────────────────────────────────────────
 

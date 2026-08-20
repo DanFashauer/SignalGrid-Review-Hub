@@ -21,6 +21,7 @@ import {
   type AssetLocationRaw,
 } from "@workspace/integrations/rtls-custody";
 import { checkLiveGateIsolated } from "./lib/live-gate.js";
+import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 
 interface Expected {
   posture: string;
@@ -114,6 +115,133 @@ check("a fix under the 900s threshold stays in_zone", freshEnough.posture === "i
 // Determinism.
 const dl = normalized.find((l) => l.deviceId === "d-abandoned")!;
 check("evaluator is deterministic", JSON.stringify(evaluateCustodyPosture(dl)) === JSON.stringify(evaluateCustodyPosture(dl)));
+
+// ── Wedges #9/#10/#11, caught by the shift-1 sweep — each an executed
+// counterexample before the fix, each pinned here after it ──────────────────────
+
+// #9: a device in a CLASSIFIED zone with UNREPORTED authorization used to skip
+// the zone_unverified branch (it also required zoneType unknown) and mint
+// CUSTODY_OK/none. Knowing the zone's category never proved THIS device was
+// allowed there.
+const classifiedUnverified = evaluateCustodyPosture(normalizeLocation({ deviceId: "d", zoneId: "z1", zoneType: "clinical", fixAgeSeconds: 10, dwellSeconds: 60, badgeAssociated: true, present: true }));
+check("a classified zone with unreported authorization → monitor/ZONE_UNVERIFIED, never CUSTODY_OK (wedge #9)",
+  classifiedUnverified.recommendedAction === "monitor" && classifiedUnverified.reasonCode === "ZONE_UNVERIFIED");
+
+// #10: a NEGATIVE fix age (a fix newer than now — contradictory) used to pass
+// `typeof number` and read fresher than the stale threshold → CUSTODY_OK/none.
+// A negative dwell likewise disarmed the abandonment arm.
+const negFix = evaluateCustodyPosture(normalizeLocation({ deviceId: "d", zoneId: "z1", zoneType: "clinical", zoneAuthorized: true, fixAgeSeconds: -5, dwellSeconds: 60, badgeAssociated: true, present: true }));
+check("a NEGATIVE fix age is unverifiable → stale_fix/locate, never CUSTODY_OK (wedge #10)",
+  negFix.posture === "stale_fix" && negFix.recommendedAction === "locate");
+const negDwell = evaluateCustodyPosture(normalizeLocation({ deviceId: "d", zoneId: "z1", zoneType: "clinical", zoneAuthorized: true, fixAgeSeconds: 10, dwellSeconds: -5, badgeAssociated: false, present: true }));
+check("a NEGATIVE dwell is unverifiable → the badge-less device is still abandoned (wedge #10)",
+  negDwell.posture === "abandoned" && negDwell.recommendedAction === "alert");
+
+// #11: UNREPORTED badge association over an abandonment-length dwell used to
+// fall through `=== false` and mint CUSTODY_OK/none.
+const badgeNull = evaluateCustodyPosture(normalizeLocation({ deviceId: "d", zoneId: "z1", zoneType: "clinical", zoneAuthorized: true, fixAgeSeconds: 10, dwellSeconds: 7200, present: true }));
+check("an unreported badge over a long dwell → monitor/BADGE_UNVERIFIED, never CUSTODY_OK (wedge #11)",
+  badgeNull.recommendedAction === "monitor" && badgeNull.reasonCode === "BADGE_UNVERIFIED");
+
+// ── GRANT SAFETY, QUANTIFIED — the whole input space, not chosen fixtures ─────
+//
+// Owner-sequenced shift 1: a grant must be UNREACHABLE by any unknown, missing,
+// stale, or contradictory input. This family shipped THREE such wedges (above) —
+// all invisible to fixture-driven checks. Every combination of every axis is
+// executed through the REAL normalizer + evaluator and the granting set is
+// pinned by equality.
+{
+  const domains = {
+    tracked: [true, false],
+    present: [true, false, undefined],
+    zoneType: ["clinical", "unauthorized", "garbage"],
+    zoneAuthorized: [true, false, undefined],
+    fixAgeSeconds: [10, 900, -5, undefined],
+    dwellSeconds: [60, 3600, -5, undefined],
+    badgeAssociated: [true, false, undefined],
+    atEgress: [true, false],
+  } as const;
+
+  type Enum = { loc: ReturnType<typeof normalizeLocation>; tracked: boolean };
+  const build = (c: Record<string, unknown>): Enum => ({
+    loc: normalizeLocation({
+      deviceId: "dev.enum",
+      zoneId: "z.enum",
+      zoneType: c.zoneType as string,
+      zoneAuthorized: c.zoneAuthorized as boolean | undefined,
+      fixAgeSeconds: c.fixAgeSeconds as number | undefined,
+      dwellSeconds: c.dwellSeconds as number | undefined,
+      badgeAssociated: c.badgeAssociated as boolean | undefined,
+      atEgress: c.atEgress as boolean,
+      present: c.present as boolean | undefined,
+    }),
+    tracked: c.tracked as boolean,
+  });
+
+  const swept = enumerateGrantSafety<Enum, ReturnType<typeof evaluateCustodyPosture>>({
+    domains,
+    build,
+    evaluate: (s) => evaluateCustodyPosture(s.loc, { tracked: s.tracked }),
+    actionOf: (v) => v.recommendedAction,
+    // Custody OK requires: tracked, not at egress, presence not denied, zone
+    // authorization POSITIVELY confirmed (and the zone not classified
+    // unauthorized — a contradiction that resolves to off_zone), a reported
+    // fresh fix, and the badge axis clean. Two axes are deliberately free:
+    // `present` may be unreported (the fix-age fail-safe is the documented
+    // guard — a departed device stops producing fresh fixes), and the badge
+    // association only bears on ABANDONMENT — it constrains the verdict only
+    // when the dwell is abandonment-length or unconfirmable, so "no badge but
+    // only briefly dwelling" (a device in transit between users) stays clean.
+    positivelyClean: (c) =>
+      c.tracked === true && c.atEgress === false && c.present !== false &&
+      c.zoneAuthorized === true && c.zoneType !== "unauthorized" &&
+      c.fixAgeSeconds === 10 &&
+      (c.badgeAssociated === true || c.dwellSeconds === 60),
+    confirmedWhenNone: (v) => v.reasonCode === "CUSTODY_OK" && v.posture === "in_zone",
+  });
+  check(`ENUMERATION: all ${swept.combos} combinations swept (= product of domains)`,
+    swept.combos === productOf(domains) && swept.combos === 2 * 3 * 3 * 3 * 4 * 4 * 3 * 2);
+  check("ENUMERATION: a grant is reachable ONLY by the fully-verified state — zero mismatches",
+    swept.mismatches === 0);
+  check("ENUMERATION: the granting set is present{2} × zoneType{2} × (badge-true×dwell{4} + badge-other{2}×short-dwell) = 24 states (non-vacuous)",
+    swept.noneCount === 24);
+
+  // NEGATIVE CONTROL — the enumeration can fail: declare zone authorization
+  // irrelevant to custody and the harness must object, because the evaluator
+  // (correctly) refuses to grant unauthorized or unverified-authorization zones.
+  const wrongPredicate = enumerateGrantSafety<Enum, ReturnType<typeof evaluateCustodyPosture>>({
+    domains,
+    build,
+    evaluate: (s) => evaluateCustodyPosture(s.loc, { tracked: s.tracked }),
+    actionOf: (v) => v.recommendedAction,
+    positivelyClean: (c) =>
+      c.tracked === true && c.atEgress === false && c.present !== false &&
+      c.zoneType !== "unauthorized" && c.fixAgeSeconds === 10 && c.badgeAssociated === true,
+  });
+  check("NEGATIVE CONTROL: declaring zone authorization irrelevant is CAUGHT (mismatches > 0)",
+    wrongPredicate.mismatches > 0 && typeof wrongPredicate.firstMismatch === "string");
+
+  // The contradictory (negative) durations grade identically to unreported ones,
+  // on every other axis combination — pinned so a future normalizer change
+  // cannot quietly turn "newer than now" back into "fresh".
+  const othersAgree = (field: "fixAgeSeconds" | "dwellSeconds"): boolean =>
+    domains.tracked.every((tr) => domains.present.every((pr) => domains.zoneType.every((zt) =>
+      domains.zoneAuthorized.every((za) => domains.badgeAssociated.every((ba) => domains.atEgress.every((eg) =>
+        (field === "fixAgeSeconds" ? domains.dwellSeconds : domains.fixAgeSeconds).every((other) => {
+          const mk = (val: number | undefined): ReturnType<typeof evaluateCustodyPosture> =>
+            evaluateCustodyPosture(build({
+              tracked: tr, present: pr, zoneType: zt, zoneAuthorized: za,
+              fixAgeSeconds: field === "fixAgeSeconds" ? val : other,
+              dwellSeconds: field === "dwellSeconds" ? val : other,
+              badgeAssociated: ba, atEgress: eg,
+            }).loc, { tracked: tr });
+          const va = mk(-5);
+          const vb = mk(undefined);
+          return va.reasonCode === vb.reasonCode && va.recommendedAction === vb.recommendedAction && va.posture === vb.posture;
+        })))))));
+  check("a negative fix age grades identically to an unreported one, on every axis combination", othersAgree("fixAgeSeconds"));
+  check("a negative dwell grades identically to an unreported one, on every axis combination", othersAgree("dwellSeconds"));
+}
 
 // ── connector guarantees ──────────────────────────────────────────────────────
 

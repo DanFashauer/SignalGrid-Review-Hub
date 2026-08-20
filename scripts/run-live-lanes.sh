@@ -50,9 +50,9 @@ skip() { printf "  \033[33mSKIP\033[0m  %s  (%s)\n" "$1" "$2"; skipped=$((skippe
 # Resolved ONCE here so every lane below reports and uses the same engine.
 sg_resolve_engine || true
 have_engine() { [ -n "${SG_ENGINE:-}" ]; }
-wait_http() { # url  seconds
+wait_http() { # url  seconds   (honours WAIT_CACERT for self-signed lab TLS)
   local i=0
-  until [ "$(curl -s -o /dev/null -w '%{http_code}' "$1" 2>/dev/null)" = "200" ]; do
+  until [ "$(curl -s ${WAIT_CACERT:+--cacert "$WAIT_CACERT"} -o /dev/null -w '%{http_code}' "$1" 2>/dev/null)" = "200" ]; do
     i=$((i+1)); [ "$i" -ge "$2" ] && return 1; sleep 1
   done
 }
@@ -65,34 +65,92 @@ if wanted fleet; then
   if [ -n "${FLEET_URL:-}" ]; then
     :
   elif have_engine; then
-    echo "-- bringing up Fleet (mysql + redis + fleet, amd64 under emulation)"
+    echo "-- bringing up Fleet (mysql + redis + fleet + osqueryd, amd64 under emulation)"
     "$SG_ENGINE" network create sg-fleetnet >/dev/null 2>&1
-    "$SG_ENGINE" rm -f sg-fleet sg-fleet-mysql sg-fleet-redis >/dev/null 2>&1
+    "$SG_ENGINE" rm -f sg-fleet sg-fleet-mysql sg-fleet-redis sg-osquery >/dev/null 2>&1
     "$SG_ENGINE" run -d --name sg-fleet-mysql --network sg-fleetnet -e MYSQL_ROOT_PASSWORD=root \
       -e MYSQL_DATABASE=fleet -e MYSQL_USER=fleet -e MYSQL_PASSWORD=fleet "$SG_IMAGE_MYSQL" >/dev/null 2>&1
     "$SG_ENGINE" run -d --name sg-fleet-redis --network sg-fleetnet "$SG_IMAGE_REDIS" >/dev/null 2>&1
     for _ in $(seq 1 90); do "$SG_ENGINE" exec sg-fleet-mysql mysqladmin ping -ufleet -pfleet >/dev/null 2>&1 && break; sleep 2; done
-    E="-e FLEET_MYSQL_ADDRESS=sg-fleet-mysql:3306 -e FLEET_MYSQL_DATABASE=fleet -e FLEET_MYSQL_USERNAME=fleet -e FLEET_MYSQL_PASSWORD=fleet -e FLEET_REDIS_ADDRESS=sg-fleet-redis:6379 -e FLEET_SERVER_TLS=false"
+    # TLS is forced by the REAL AGENT below: osquery's remote plugins (enroll,
+    # config, logger, distributed) are TLS-only — there is no plain-http mode —
+    # and without a live agent nothing ever answers a distributed campaign, so
+    # the collector assertions added 2026-08-17 could never pass (the Mac lane
+    # proved this at 33/37). Self-signed, minted per run, discarded with the
+    # run; trusted EXPLICITLY at every client (curl --cacert, the proof via
+    # NODE_EXTRA_CA_CERTS, osqueryd via --tls_server_certs) — verification is
+    # never disabled anywhere.
+    FLEET_TLS_DIR=$(mktemp -d)
+    openssl req -x509 -newkey rsa:2048 -nodes -days 2 \
+      -keyout "$FLEET_TLS_DIR/fleet.key" -out "$FLEET_TLS_DIR/fleet.crt" \
+      -subj "/CN=sg-fleet" -addext "subjectAltName=DNS:sg-fleet,DNS:localhost,IP:127.0.0.1" >/dev/null 2>&1
+    # World-readable ON PURPOSE: the fleet container runs unprivileged and must
+    # read the key across the bind mount. Lab-only, per-run, deleted at exit.
+    # The DIRECTORY too — mktemp -d mints 700, which blocks traversal for the
+    # container user even when the files themselves are readable.
+    chmod 755 "$FLEET_TLS_DIR"
+    chmod 644 "$FLEET_TLS_DIR/fleet.key" "$FLEET_TLS_DIR/fleet.crt"
+    E="-e FLEET_MYSQL_ADDRESS=sg-fleet-mysql:3306 -e FLEET_MYSQL_DATABASE=fleet -e FLEET_MYSQL_USERNAME=fleet -e FLEET_MYSQL_PASSWORD=fleet -e FLEET_REDIS_ADDRESS=sg-fleet-redis:6379 -e FLEET_SERVER_CERT=/fleet-tls/fleet.crt -e FLEET_SERVER_KEY=/fleet-tls/fleet.key"
     # The version the 30 assertions were established against, overridable for a
     # deliberate upstream-drift check. See scripts/lib/container-engine.sh.
     FLEET_IMG="${FLEET_IMAGE:-$SG_IMAGE_FLEET}"
     echo "   fleet image: $FLEET_IMG"
     "$SG_ENGINE" run --rm --platform linux/amd64 --network sg-fleetnet $E "$FLEET_IMG" fleet prepare db --no-prompt >/dev/null 2>&1
-    "$SG_ENGINE" run -d --name sg-fleet --platform linux/amd64 --network sg-fleetnet -p 8412:8080 $E "$FLEET_IMG" fleet serve >/dev/null 2>&1
-    if wait_http http://127.0.0.1:8412/healthz 120; then
+    "$SG_ENGINE" run -d --name sg-fleet --platform linux/amd64 --network sg-fleetnet -p 8412:8080 \
+      -v "$FLEET_TLS_DIR:/fleet-tls" $E "$FLEET_IMG" fleet serve >/dev/null 2>&1
+    WAIT_CACERT="$FLEET_TLS_DIR/fleet.crt"
+    if wait_http https://127.0.0.1:8412/healthz 120; then
       started="$started sg-fleet sg-fleet-mysql sg-fleet-redis"
-      curl -s -X POST http://127.0.0.1:8412/api/v1/setup -H 'Content-Type: application/json' -d '{"admin":{"name":"SG","email":"sg@signalgrid.test","password":"SignalGrid!2026x","password_confirmation":"SignalGrid!2026x"},"org_info":{"org_name":"SG"},"server_url":"http://127.0.0.1:8412"}' >/dev/null 2>&1
-      export FLEET_URL=http://127.0.0.1:8412
+      CURL="curl -s --cacert $FLEET_TLS_DIR/fleet.crt"
+      $CURL -X POST https://127.0.0.1:8412/api/v1/setup -H 'Content-Type: application/json' -d '{"admin":{"name":"SG","email":"sg@signalgrid.test","password":"SignalGrid!2026x","password_confirmation":"SignalGrid!2026x"},"org_info":{"org_name":"SG"},"server_url":"https://127.0.0.1:8412"}' >/dev/null 2>&1
+      export FLEET_URL=https://127.0.0.1:8412
+      # The proof is a Node child; this is the explicit-trust path for it.
+      export NODE_EXTRA_CA_CERTS="$FLEET_TLS_DIR/fleet.crt"
       # Declared then exported SEPARATELY (SC2155): `export X=$(cmd)` returns the
       # EXPORT's status, not the command's, so a failed login would export an empty
       # token and the live lane below would run against fixtures while reporting it
       # ran live. `export` is required — proof:live-fleet is a child process.
-      FLEET_TOKEN=$(curl -s -X POST "$FLEET_URL"/api/v1/fleet/login -H 'Content-Type: application/json' -d '{"email":"sg@signalgrid.test","password":"SignalGrid!2026x"}' | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d).token||'')}catch(e){console.log('')}})")
+      FLEET_TOKEN=$($CURL -X POST "$FLEET_URL"/api/v1/fleet/login -H 'Content-Type: application/json' -d '{"email":"sg@signalgrid.test","password":"SignalGrid!2026x"}' | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d).token||'')}catch(e){console.log('')}})")
       export FLEET_TOKEN
-      SECRET=$(curl -s -H "Authorization: Bearer $FLEET_TOKEN" $FLEET_URL/api/v1/fleet/spec/enroll_secret | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d).spec.secrets[0].secret)}catch(e){console.log('')}})")
-      curl -s -X POST $FLEET_URL/api/v1/fleet/global/policies -H "Authorization: Bearer $FLEET_TOKEN" -H 'Content-Type: application/json' -d '{"name":"Disk encryption","query":"SELECT 1;","platform":"darwin"}' >/dev/null 2>&1
-      curl -s -X POST $FLEET_URL/api/v1/osquery/enroll -H 'Content-Type: application/json' -d "{\"enroll_secret\":\"$SECRET\",\"host_identifier\":\"SG-TEST\",\"host_details\":{\"system_info\":{\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"hostname\":\"sg\",\"hardware_serial\":\"SGTEST\"},\"os_version\":{\"name\":\"macOS\",\"platform\":\"darwin\"}}}" >/dev/null 2>&1
+      SECRET=$($CURL -H "Authorization: Bearer $FLEET_TOKEN" $FLEET_URL/api/v1/fleet/spec/enroll_secret | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d).spec.secrets[0].secret)}catch(e){console.log('')}})")
+      # A darwin-platform policy the LINUX agent below will never answer and the
+      # synthetic host cannot answer: the fail-closed assertions ("an unreported
+      # policy grades unknown") need at least one never-answered policy alive at
+      # proof time, per the re-run note in docs/FLEET_LIVE_INTEGRATION.md.
+      $CURL -X POST $FLEET_URL/api/v1/fleet/global/policies -H "Authorization: Bearer $FLEET_TOKEN" -H 'Content-Type: application/json' -d '{"name":"Disk encryption","query":"SELECT 1;","platform":"darwin"}' >/dev/null 2>&1
+      # The SYNTHETIC host stays: it is the host that never answers anything,
+      # which the unknown-grading and non_compliant-hold assertions are about.
+      $CURL -X POST $FLEET_URL/api/v1/osquery/enroll -H 'Content-Type: application/json' -d "{\"enroll_secret\":\"$SECRET\",\"host_identifier\":\"SG-TEST\",\"host_details\":{\"system_info\":{\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"hostname\":\"sg\",\"hardware_serial\":\"SGTEST\"},\"os_version\":{\"name\":\"macOS\",\"platform\":\"darwin\"}}}" >/dev/null 2>&1
+      # The REAL agent: a live osqueryd polling /distributed/read is the only
+      # thing that can ever answer a live-query campaign — the collector
+      # assertions (2026-08-17) require exactly that, and a synthetic curl
+      # enroll can never provide it.
+      printf '%s' "$SECRET" > "$FLEET_TLS_DIR/secret"
+      "$SG_ENGINE" run -d --name sg-osquery --platform linux/amd64 --network sg-fleetnet \
+        -v "$FLEET_TLS_DIR:/fleet-tls" --entrypoint osqueryd docker.io/osquery/osquery:latest \
+        --enroll_secret_path=/fleet-tls/secret \
+        --tls_hostname=sg-fleet:8080 \
+        --tls_server_certs=/fleet-tls/fleet.crt \
+        --host_identifier=instance \
+        --enroll_tls_endpoint=/api/v1/osquery/enroll \
+        --config_plugin=tls --config_tls_endpoint=/api/v1/osquery/config --config_refresh=10 \
+        --logger_plugin=tls --logger_tls_endpoint=/api/v1/osquery/log \
+        --disable_distributed=false --distributed_plugin=tls --distributed_interval=5 \
+        --distributed_tls_read_endpoint=/api/v1/osquery/distributed/read \
+        --distributed_tls_write_endpoint=/api/v1/osquery/distributed/write \
+        --disable_events --force >/dev/null 2>&1
+      started="$started sg-osquery"
+      # Wait until the REAL agent is enrolled and checking in — a campaign fired
+      # before its first /distributed/read poll would time out legitimately.
+      printf '   waiting for the live agent to enroll'
+      for _ in $(seq 1 60); do
+        AGENT_HOSTS=$($CURL -H "Authorization: Bearer $FLEET_TOKEN" "$FLEET_URL/api/v1/fleet/hosts" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log((JSON.parse(d).hosts||[]).length)}catch(e){console.log(0)}})")
+        [ "${AGENT_HOSTS:-0}" -ge 2 ] && break
+        printf '.'; sleep 2
+      done
+      echo " ($AGENT_HOSTS hosts enrolled)"
     fi
+    WAIT_CACERT=""
   fi
   if [ -n "${FLEET_URL:-}" ] && [ -n "${FLEET_TOKEN:-}" ]; then
     if $PNPM run proof:live-fleet >/tmp/live_fleet.log 2>&1; then ok "proof:live-fleet"; else bad "proof:live-fleet" /tmp/live_fleet.log; fi
@@ -160,6 +218,7 @@ if wanted edr; then
   fi
 fi
 
+[ -n "${FLEET_TLS_DIR:-}" ] && rm -rf "$FLEET_TLS_DIR"
 if [ "$KEEP" -eq 0 ] && [ -n "$started" ]; then
   echo; echo "-- removing containers this run started:$started"
   # shellcheck disable=SC2086

@@ -194,6 +194,23 @@ async function main() {
     check("role split REFUSES a preexisting role whose password validity has EXPIRED",
       /EXPIRED/.test(await failureOf(() => applyRoleSplit(url!))));
     await admin.query(dropRuntimeRoleSql());
+    // A PARTIAL cap is a partial lockout: the runtime opens three pools of up
+    // to 10 connections each, so CONNECTION LIMIT 5 initializes and then
+    // starves under load — refused just like 0.
+    await admin.query(`CREATE ROLE ${RUNTIME_ROLE} LOGIN CONNECTION LIMIT 5`);
+    check("role split REFUSES a role capped below the pool budget (CONNECTION LIMIT 5 < three pools x 10)",
+      /CONNECTION LIMIT 5/.test(await failureOf(() => applyRoleSplit(url!))));
+    await admin.query(dropRuntimeRoleSql());
+
+    // Ownership of NON-RELATION objects in this database: a function the role
+    // owns carries owner-only DDL that pg_class never sees.
+    await admin.query(`CREATE ROLE ${RUNTIME_ROLE} LOGIN`);
+    await admin.query("CREATE OR REPLACE FUNCTION public.sg_owned_probe() RETURNS int LANGUAGE sql AS 'SELECT 1'");
+    await admin.query(`ALTER FUNCTION public.sg_owned_probe() OWNER TO ${RUNTIME_ROLE}`);
+    check("role split REFUSES a role that OWNS a non-relation object here (a function — pg_shdepend sees it)",
+      /OWNS non-relation/.test(await failureOf(() => applyRoleSplit(url!))));
+    await admin.query("DROP FUNCTION public.sg_owned_probe()");
+    await admin.query(dropRuntimeRoleSql());
 
     // Cluster-wide ownership: pg_class/pg_namespace see only THIS database,
     // but the role is cluster-wide — pg_shdepend is the shared catalog that
@@ -333,7 +350,9 @@ async function main() {
 
     // SECURITY DEFINER: an admin-owned definer function that writes the
     // ledger, executable by PUBLIC (PostgreSQL's default), is a write path no
-    // table grant closes. The apply resets ambient execution.
+    // table grant closes. REFUSED, not silently reset — a PUBLIC grant serves
+    // other roles too, and revoking it out from under them would turn a
+    // migration into an outage; the administrator locks it down and re-runs.
     await admin.query(
       "CREATE OR REPLACE FUNCTION public.sg_backdoor_probe() RETURNS void LANGUAGE sql SECURITY DEFINER AS " +
         "'UPDATE public.audit_ledger SET request_id = request_id'",
@@ -342,14 +361,30 @@ async function main() {
       `SELECT has_function_privilege('${RUNTIME_ROLE}', 'public.sg_backdoor_probe()', 'EXECUTE') AS ok`);
     check("wedge staged: the runtime can execute an admin-owned SECURITY DEFINER ledger-writer (PUBLIC default)",
       fnBefore.rows[0]?.ok === true);
-    await applyRoleSplit(url!);
-    const fnAfter = await admin.query(
-      `SELECT has_function_privilege('${RUNTIME_ROLE}', 'public.sg_backdoor_probe()', 'EXECUTE') AS ok`);
-    check("re-apply resets ambient definer execution (has_function_privilege now false)",
-      fnAfter.rows[0]?.ok === false);
-    check("…and the runtime's call is DENIED (42501) — the definer write path is closed",
+    check("role split REFUSES while the definer write path is reachable (a PUBLIC grant is not ours to revoke)",
+      /SECURITY DEFINER/.test(await failureOf(() => applyRoleSplit(url!))));
+    await admin.query("REVOKE EXECUTE ON FUNCTION public.sg_backdoor_probe() FROM PUBLIC");
+    await applyRoleSplit(url!); // locked down → converges again
+    check("…after the administrator locks it down, the runtime's call is DENIED (42501)",
       (await deniedCode(runtime, "SELECT public.sg_backdoor_probe()")) === "42501");
     await admin.query("DROP FUNCTION public.sg_backdoor_probe()");
+
+    // Owner-rights VIEWS are the same class: a writable admin-owned view over
+    // the ledger executes with its owner's rights and defeats the append-only
+    // grants. Same treatment — refuse until the administrator revokes.
+    await admin.query("CREATE VIEW public.sg_ledger_probe_view AS SELECT * FROM public.audit_ledger");
+    await admin.query("GRANT UPDATE ON public.sg_ledger_probe_view TO PUBLIC");
+    const viewStaged = await admin.query(
+      `SELECT has_table_privilege('${RUNTIME_ROLE}', 'public.sg_ledger_probe_view', 'UPDATE') AS ok`);
+    check("wedge staged: the runtime can UPDATE an admin-owned view over the ledger (owner-rights path)",
+      viewStaged.rows[0]?.ok === true);
+    check("role split REFUSES while the writable view stands",
+      /WRITE through a view/.test(await failureOf(() => applyRoleSplit(url!))));
+    await admin.query(`REVOKE UPDATE ON public.sg_ledger_probe_view FROM PUBLIC`);
+    await applyRoleSplit(url!);
+    check("…after the administrator revokes it, the runtime's UPDATE through the view is DENIED (42501)",
+      (await deniedCode(runtime, "UPDATE public.sg_ledger_probe_view SET request_id = 'via-view' WHERE seq = 1")) === "42501");
+    await admin.query("DROP VIEW public.sg_ledger_probe_view");
 
     // ── 3. NON-VACUITY: the ADMIN can do what the runtime cannot ─────────────
     // Inside a rolled-back transaction so the genuine chain is untouched: the

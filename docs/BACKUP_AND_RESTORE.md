@@ -265,12 +265,17 @@ database. The same precheck verifies the caller's own **grant authority**:
 credential that owns the tables but not the database is refused up front
 rather than after the restore has stripped every privilege. The split also refuses to **adopt** a preexisting `signalgrid_runtime`
 that is anything more than a plain LOGIN role: elevated attributes
-(`SUPERUSER`, `CREATEROLE`, `BYPASSRLS`, …), `NOLOGIN`, `CONNECTION LIMIT 0`,
-or an expired `VALID UNTIL` (grants would apply and the API still could not
+(`SUPERUSER`, `CREATEROLE`, `BYPASSRLS`, …), `NOLOGIN`, a `CONNECTION LIMIT` below the
+runtime's pool budget (three stores × 10 pooled connections), or an expired `VALID UNTIL` (grants would apply and the API still could not
 connect — and a deliberate lockout must not be silently re-enabled), ownership
-of relations, schemas, or the database itself, ownership or grants in ANY
-OTHER database on the cluster (`pg_shdepend`, the cluster-wide catalog, is
-checked — database-local catalogs cannot see them),
+of ANY object here (relations, schemas, the database itself, and non-relation
+objects such as functions or types), ownership or grants in ANY OTHER database
+on the cluster (`pg_shdepend`, the cluster-wide catalog, is checked —
+database-local catalogs cannot see them), grants here outside the canonical
+set, reachable owner-rights paths (a `SECURITY DEFINER` routine the runtime
+can execute, a writable admin-owned view — both run with their OWNER's
+privileges and defeat the table grants; refused rather than silently revoked,
+because a `PUBLIC` grant serves other roles too),
 or role memberships — all grounds for refusal, because `REVOKE` cannot demote
 any of them and the append-only claim would be false. Each refusal names its
 one remedy, and a restore runs the same validation BEFORE `pg_restore`. The

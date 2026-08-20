@@ -49,6 +49,48 @@ export const RUNTIME_ROLE = "signalgrid_runtime";
  * credential out — silently re-enabling it would undo that). Each refusal
  * names the one remedy that makes re-running converge.
  */
+// OWNER-RIGHTS PATHS the runtime must not be able to reach, refused rather
+// than silently reset (a PUBLIC grant serves OTHER roles too — revoking it
+// here would turn a migration into an outage for unrelated callers; the
+// administrator revokes or regrants deliberately, then re-runs):
+//   · SECURITY DEFINER routines run with their OWNER's privileges, and
+//     PostgreSQL grants PUBLIC EXECUTE on every new routine by default — an
+//     admin-owned definer function that writes the ledger is a write path no
+//     table grant closes.
+//   · Views execute with their OWNER's rights by default — a writable
+//     admin-owned view over the ledger lets the runtime rewrite the base
+//     table with no table-level UPDATE of its own.
+// Interpolated into the validation (existing-role precheck) AND run after
+// create-if-missing in the apply, so a fresh provisioning on a database that
+// already contains such a path refuses too.
+const OWNER_RIGHTS_CHECKS = `
+    IF EXISTS (
+      SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE p.prosecdef
+        AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+        AND n.nspname NOT LIKE 'pg\\_%'
+        AND has_function_privilege('signalgrid_runtime', p.oid, 'EXECUTE')
+    ) THEN
+      RAISE EXCEPTION 'signalgrid_runtime can EXECUTE a SECURITY DEFINER routine outside the system '
+        'schemas — definer routines run with their owner''s privileges, a write path no table grant '
+        'closes. REVOKE EXECUTE on it FROM PUBLIC (granting the roles that need it explicitly), '
+        'then re-run.';
+    END IF;
+    IF EXISTS (
+      SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE c.relkind = 'v'
+        AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+        AND n.nspname NOT LIKE 'pg\\_%'
+        AND (has_table_privilege('signalgrid_runtime', c.oid, 'INSERT')
+          OR has_table_privilege('signalgrid_runtime', c.oid, 'UPDATE')
+          OR has_table_privilege('signalgrid_runtime', c.oid, 'DELETE'))
+    ) THEN
+      RAISE EXCEPTION 'signalgrid_runtime can WRITE through a view outside the system schemas — views '
+        'run with their owner''s rights, so a writable admin-owned view over the ledger defeats the '
+        'append-only grants. REVOKE the write privilege on it FROM PUBLIC (and from '
+        'signalgrid_runtime), then re-run.';
+    END IF;`;
+
 export const ROLE_SPLIT_VALIDATE_SQL = `
   DO $$
   DECLARE
@@ -77,10 +119,15 @@ export const ROLE_SPLIT_VALIDATE_SQL = `
     -- LIMIT 0 and an expired VALID UNTIL are both lockouts the documented
     -- out-of-band ALTER ROLE … PASSWORD never repairs — and both may be
     -- deliberate, so refuse rather than silently normalize.
-    IF attrs.rolconnlimit = 0 THEN
-      RAISE EXCEPTION 'signalgrid_runtime already exists with CONNECTION LIMIT 0 — grants would apply '
-        'and the API still could not open a connection; if that limit is deliberate, this role must not '
-        'be adopted. ALTER ROLE signalgrid_runtime CONNECTION LIMIT -1 (or drop it) first.';
+    -- 0 is a full lockout; 1..29 is a partial one — the runtime opens THREE
+    -- pools (decisions, sessions, ledger) of up to 10 connections each, so a
+    -- role capped below that budget initializes, then starves under load and
+    -- /readyz flaps. Either way the cap may be deliberate, so refuse.
+    IF attrs.rolconnlimit >= 0 AND attrs.rolconnlimit < 30 THEN
+      RAISE EXCEPTION 'signalgrid_runtime already exists with CONNECTION LIMIT % — below the runtime''s '
+        'pool budget (three stores x 10 pooled connections = 30; 0 is a full lockout). The API could not '
+        'reliably connect, and a deliberate cap must not be silently raised. ALTER ROLE '
+        'signalgrid_runtime CONNECTION LIMIT -1 (or >= 30, or drop the role) first.', attrs.rolconnlimit;
     END IF;
     IF attrs.rolvaliduntil IS NOT NULL AND attrs.rolvaliduntil < now() THEN
       RAISE EXCEPTION 'signalgrid_runtime already exists with an EXPIRED password validity (VALID UNTIL %) '
@@ -101,6 +148,21 @@ export const ROLE_SPLIT_VALIDATE_SQL = `
                WHERE o.rolname = 'signalgrid_runtime') THEN
       RAISE EXCEPTION 'signalgrid_runtime already OWNS a database — a database owner holds '
         'owner-level rights no grant here can take back. ALTER DATABASE … OWNER TO a different role first.';
+    END IF;
+    -- Ownership beyond relations IN THIS DATABASE: pg_class covers tables,
+    -- views and sequences, but a function, procedure, type, or any other
+    -- owned object carries owner-only DDL too. pg_shdepend records every
+    -- ownership dependency regardless of catalog class.
+    IF EXISTS (
+      SELECT 1 FROM pg_shdepend d
+      WHERE d.refclassid = 'pg_authid'::regclass
+        AND d.refobjid = (SELECT oid FROM pg_roles WHERE rolname = 'signalgrid_runtime')
+        AND d.deptype = 'o'
+        AND d.dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
+    ) THEN
+      RAISE EXCEPTION 'signalgrid_runtime OWNS non-relation objects in this database (a function, '
+        'procedure, type, …) — owner-only DDL survives every grant. REASSIGN OWNED BY '
+        'signalgrid_runtime (or DROP OWNED) first.';
     END IF;
     IF EXISTS (SELECT 1 FROM pg_auth_members m
                WHERE m.member = (SELECT oid FROM pg_roles WHERE rolname = 'signalgrid_runtime')) THEN
@@ -155,6 +217,7 @@ export const ROLE_SPLIT_VALIDATE_SQL = `
         'leave them standing, so the role would hold more than the documented posture. REVOKE those '
         'grants first, then re-run.';
     END IF;
+${OWNER_RIGHTS_CHECKS}
   END $$;
 `;
 
@@ -252,28 +315,14 @@ export const ROLE_SPLIT_SQL = `
     END IF;
   END $$;
 
-  -- SECURITY DEFINER routines run with their OWNER's privileges, and
-  -- PostgreSQL grants EXECUTE to PUBLIC by default on every new routine — so
-  -- an admin-owned definer function that writes the ledger would hand the
-  -- runtime a write path no table grant can close. Ambient execution of every
-  -- non-system definer routine is therefore RESET on each apply; a role that
-  -- genuinely needs one gets an explicit grant, which is the standard posture
-  -- for SECURITY DEFINER. System schemas are left alone.
+  -- Owner-rights paths (SECURITY DEFINER routines, writable views) are
+  -- REFUSED, not reset — see OWNER_RIGHTS_CHECKS above. Run here as well as
+  -- in the validation because a FRESH provisioning creates the role two
+  -- statements ago: a database that already contains such a path must refuse
+  -- even when no role existed to validate.
   DO $$
-  DECLARE
-    fn RECORD;
   BEGIN
-    FOR fn IN
-      SELECT p.oid, p.prokind
-      FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-      WHERE p.prosecdef
-        AND n.nspname NOT IN ('pg_catalog', 'information_schema')
-        AND n.nspname NOT LIKE 'pg\\_%'
-    LOOP
-      EXECUTE format('REVOKE EXECUTE ON %s %s FROM signalgrid_runtime, PUBLIC',
-                     CASE fn.prokind WHEN 'p' THEN 'PROCEDURE' ELSE 'FUNCTION' END,
-                     fn.oid::regprocedure);
-    END LOOP;
+${OWNER_RIGHTS_CHECKS}
   END $$;
 `;
 

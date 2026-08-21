@@ -51,9 +51,22 @@ export function loadEnterpriseAuthConfig(env: NodeJS.ProcessEnv = process.env): 
   if (!tenantMap) {
     return { status: "invalid", reason: "OIDC_TENANT_MAP must be a JSON object of {idpTenant: internalTenantId}." };
   }
+  // An EMPTY map is well-formed JSON and a dead deployment: no tenant (or
+  // role) can ever match, so every verified token is refused — while a
+  // status-only readiness check would still report the gateway ready. Same
+  // for a mapping whose target is blank. Both are configuration errors.
+  if (Object.keys(tenantMap).length === 0) {
+    return { status: "invalid", reason: "OIDC_TENANT_MAP is empty — no tenant can match, every verified token would be refused." };
+  }
+  if (Object.values(tenantMap).some((v) => v.trim().length === 0)) {
+    return { status: "invalid", reason: "OIDC_TENANT_MAP has an empty internal-tenant target." };
+  }
   const roleMapRaw = parseJsonRecord(env.OIDC_ROLE_MAP);
   if (!roleMapRaw) {
     return { status: "invalid", reason: "OIDC_ROLE_MAP must be a JSON object of {idpRole: role}." };
+  }
+  if (Object.keys(roleMapRaw).length === 0) {
+    return { status: "invalid", reason: "OIDC_ROLE_MAP is empty — no role can match, every verified token would be refused." };
   }
   const roleByClaimValue: Record<string, Role> = {};
   for (const [key, value] of Object.entries(roleMapRaw)) {

@@ -16,6 +16,18 @@ This builds the API image (`Dockerfile.api`) and starts two services:
 
 The API is then at `http://localhost:8080` (health: `/api/healthz`, metrics: `/metrics`).
 
+**This one command is a liveness-only boot, deliberately.** It serves the
+gateway profile with the zero-step owner database URL and no IdP configured,
+so `/api/healthz` goes green but **`/api/readyz` answers 503 until the
+production posture is completed** — and that refusal is correct twice over:
+the owner credential holds DELETE on the ledger (a rewritable ledger fails
+the append-only probe), and a gateway with no OIDC configured can
+authenticate nobody. A stack that should take real traffic follows
+[Schema — migrate first, then boot](#schema--migrate-first-then-boot) (runtime
+role + password) and sets the OIDC variables from the table below. For an
+evaluation stack with the demo surfaces instead, prefix the same command with
+`SIGNALGRID_PRODUCT_PROFILE=review-demo`.
+
 ## What turns durability on
 
 The persistence layer (audit ledger, decision + evidence store, session store) is
@@ -50,7 +62,7 @@ in-memory (the fixture-safe default used by the public build and CI).
 | `REDIS_URL` | Set ⇒ WebAuthn step-up session state persists to Redis instead of in-memory. That is the ONLY Redis-backed state in this deployment: the connector/webhook routes run the in-process core, and the `@workspace/integrations` Redis stores are not part of the served API. | unset (in-memory) |
 | `STEPUP_TTL_SECONDS` | Step-up session time-to-live. | `300` |
 | `WEBAUTHN_RP_ID` / `WEBAUTHN_RP_NAME` / `WEBAUTHN_ORIGIN` | WebAuthn relying-party identity for step-up ceremonies; must match the origin the operator console is served from. | `localhost` / dev defaults |
-| `WEBAUTHN_REQUIRE_STEP_UP_FOR_ADMIN` | Set ⇒ admin actions demand a fresh WebAuthn step-up. | unset |
+| `WEBAUTHN_REQUIRE_STEP_UP_FOR_ADMIN` | **Reserved — currently UNENFORCED.** The value is parsed into the WebAuthn config, but no route consults it yet: admin actions enforce their role checks only. Do not rely on it as a control; the wiring is tracked as backlog work. | unset |
 | `GRAPH_ACCESS_TOKEN` | Read-only Microsoft Graph token for the posture connector. | unset (fixture mode) |
 | `CARRIER_ACCESS_TOKEN` | Read-only carrier/IoT-connectivity token for the reachability connector. | unset (fixture mode) |
 | `LOCATION_ACCESS_TOKEN` | Read-only token for the device location-services connector. | unset (fixture mode) |

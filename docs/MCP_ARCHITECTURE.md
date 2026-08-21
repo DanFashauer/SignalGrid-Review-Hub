@@ -1,7 +1,7 @@
 # The three-plane architecture — Bruno, MCP, and the deterministic core
 
-Ratified 2026-08-21, owner-directed (decision record drafted at
-`docs/agent/DR-008-draft.md`, pending append to `docs/DECISION_RECORDS.md`).
+Ratified 2026-08-21, owner-directed — DR-008 in
+`docs/DECISION_RECORDS.md` is the decision record.
 This document is the map; `docs/MCP_SECURITY_MODEL.md` is the security truth
 for the middle plane, and `docs/BRUNO_API_TESTING.md` is the operator's manual
 for the first.

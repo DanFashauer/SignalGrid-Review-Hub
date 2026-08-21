@@ -300,7 +300,7 @@ if wanted edr; then
     if [ "$got_ca" = "1" ]; then
       # wazuh:wazuh is the image's public default API credential, not a secret.
       for _ in $(seq 1 90); do
-        [ "$(curl -s --cacert "$WAZUH_CA" -o /dev/null -w '%{http_code}' -u wazuh:wazuh -X POST https://localhost:55000/security/user/authenticate 2>/dev/null)" = "200" ] && { wazuh_up=1; break; }
+        [ "$(curl -s --cacert "$WAZUH_CA" -o /dev/null -w '%{http_code}' -u wazuh:wazuh -X POST https://localhost:55000/security/user/authenticate 2>/dev/null)" = "200" ] && { wazuh_up=1; break; } # gitleaks:allow — wazuh/wazuh-manager's documented default, same standing as postgres:16's POSTGRES_PASSWORD in CI
         sleep 2
       done
     fi

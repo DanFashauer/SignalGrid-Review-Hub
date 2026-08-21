@@ -124,14 +124,17 @@ const DENYLIST = [
 // Docs whose PURPOSE is to enumerate the forbidden phrases (a "do not say" list),
 // so every denylist phrase legitimately appears there as a negative example — the
 // same file-level exemption review-invariants.mjs uses for its own guard docs.
-const META_FILES = new Set([
-  "docs/PUBLIC_MESSAGING_GUARDRAILS.md",
-  // The claim inventory RECORDS every buyer-facing claim verbatim — including
-  // the forbidden ones — each with its classification and contradicting
-  // citation. Quoting a defect to order its removal is evidence, not a claim;
-  // failing the record of the defect would forbid writing the record.
-  "docs/CLAIM_INVENTORY.md",
-  "docs/agent/CLAIM_INVENTORY.json",
+const META_FILES = new Set(["docs/PUBLIC_MESSAGING_GUARDRAILS.md"]);
+// The claim inventory RECORDS every buyer-facing claim verbatim — including
+// forbidden ones — each row carrying its classification and contradicting
+// citation. Quoting a defect to order its removal is evidence, not a claim —
+// but only the QUOTED ROWS earn that: the files' framing prose stays scanned,
+// so an affirmative over-reach sentence added to the introduction still fails.
+const QUOTED_ROW_FILES = new Map([
+  // Markdown: only table rows (the quoted claims + their evidence) are exempt.
+  ["docs/CLAIM_INVENTORY.md", (line) => line.trimStart().startsWith("|")],
+  // JSON twin: only the structured claim/evidence/resolution string fields.
+  ["docs/agent/CLAIM_INVENTORY.json", (line) => /^\s*"(?:claim|evidence|resolution)":/.test(line)],
 ]);
 // Meta framing that legitimately references a denylist phrase as the guard's own
 // machinery or a negative example — never a real claim.
@@ -220,6 +223,8 @@ for (const phrase of DENYLIST) {
     const lineNo = m ? Number(m[2]) : 0;
     const content = m ? m[3] : line;
     if (META_FILES.has(path)) continue;
+    const rowExempt = QUOTED_ROW_FILES.get(path);
+    if (rowExempt && rowExempt(content)) continue;
     if (META.test(content)) continue;
     if (!hasBareClaim(content, phrase)) continue;
     const leadIn = lineNo > 0 ? listLeadIn(path, lineNo) : null;

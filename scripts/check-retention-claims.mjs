@@ -38,11 +38,35 @@ const RECORDING = new Set([
   "docs/COMPANY_BUILD_PLAN.md",
 ]);
 
-const DURATION_NEAR_RETENTION =
-  /\b\d+[- ]?(?:day|month|year)s?\b[^\n]{0,80}?retention|retention[^\n]{0,80}?\b\d+[- ]?(?:day|month|year)s?\b/i;
-// "Retention" the metric, not the mechanism: gross/net/customer retention is
-// revenue vocabulary and no claim about stored data.
-const REVENUE_RETENTION = /\b(?:gross|net|customer|user|logo|employee)\s+retention\b/i;
+// Numeric OR spelled-out amounts, and every unit a policy is written in —
+// "12 weeks", "24 hours", "ninety days" are all duration claims.
+const AMOUNT =
+  "(?:\\d+|(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred)(?:[- ](?:one|two|three|four|five|six|seven|eight|nine))?)";
+const UNIT = "(?:hour|day|week|month|quarter|year)s?";
+const DURATION = new RegExp(`\\b${AMOUNT}[- ]?${UNIT}\\b`, "i");
+const RETENTION_TOKEN = /retention/gi;
+const REVENUE_QUALIFIER = /(?:gross|net|customer|user|logo|employee)\s+$/i;
+
+/** Every retention TOKEN with a duration within 80 chars either side, minus
+ *  revenue-qualified tokens and third-party-marked windows. Token-wise, not
+ *  one regex alternation: a match anchored on an exempt "net retention"
+ *  earlier in the text must not consume — and thereby shelter — a real
+ *  data-retention claim later in the same span. */
+function durationClaimsIn(text, windowChars = 80) {
+  const hits = [];
+  for (const t of text.matchAll(RETENTION_TOKEN)) {
+    const before = text.slice(Math.max(0, t.index - 12), t.index);
+    if (REVENUE_QUALIFIER.test(before)) continue;
+    const window = text.slice(Math.max(0, t.index - windowChars), t.index + 9 + windowChars);
+    if (!DURATION.test(window)) continue;
+    if (window.includes(THIRD_PARTY_MARKER)) continue;
+    hits.push({ index: t.index, window });
+  }
+  return hits;
+}
+// "Retention" the metric, not the mechanism: a retention token immediately
+// preceded by gross/net/customer/… is revenue vocabulary, exempted per
+// TOKEN (never per line) inside the audit below.
 // A third-party product's own retention spec (a vendor free-tier row, a
 // competitor fact) is not a SignalGrid claim — but the waiver must be worn
 // IN PLACE so a reader of the line sees it was classified, not missed.
@@ -65,14 +89,14 @@ export function auditRetentionClaims(files) {
     if (isDr) drSeen = true;
     let lineHitInFile = false;
     content.split("\n").forEach((line, i) => {
-      if (!DURATION_NEAR_RETENTION.test(line)) return;
-      if (REVENUE_RETENTION.test(line) || line.includes(THIRD_PARTY_MARKER)) return;
-      lineHitInFile = true;
-      totalHits += 1;
-      if (!RECORDING.has(path)) {
-        problems.push(
-          `${path}:${i + 1} states a retention duration — no duration is implemented in any store; the position is docs/DATA_RETENTION_AND_PERSONAL_DATA.md`,
-        );
+      for (const _hit of durationClaimsIn(line)) {
+        lineHitInFile = true;
+        totalHits += 1;
+        if (!RECORDING.has(path)) {
+          problems.push(
+            `${path}:${i + 1} states a retention duration — no duration is implemented in any store; the position is docs/DATA_RETENTION_AND_PERSONAL_DATA.md`,
+          );
+        }
       }
     });
     // Markdown wrapping can split the duration from the word "retention"
@@ -82,23 +106,32 @@ export function auditRetentionClaims(files) {
     // so a wrapped revenue-retention KPI or a marked vendor fact stays clean.
     if (!lineHitInFile) {
       const collapsed = content.replace(/\s+/g, " ");
-      const m = DURATION_NEAR_RETENTION.exec(collapsed);
-      if (m) {
-        const window = collapsed.slice(Math.max(0, m.index - 120), m.index + m[0].length + 120);
-        if (!REVENUE_RETENTION.test(window) && !window.includes(THIRD_PARTY_MARKER)) {
-          totalHits += 1;
-          if (!RECORDING.has(path)) {
-            problems.push(
-              `${path} states a LINE-WRAPPED retention duration ("…${m[0].slice(0, 60)}…") — no duration is implemented in any store; the position is docs/DATA_RETENTION_AND_PERSONAL_DATA.md`,
-            );
-          }
+      const wrapped = durationClaimsIn(collapsed);
+      if (wrapped.length > 0) {
+        totalHits += wrapped.length;
+        if (!RECORDING.has(path)) {
+          problems.push(
+            `${path} states a LINE-WRAPPED retention duration ("…${wrapped[0].window.trim().slice(0, 70)}…") — no duration is implemented in any store; the position is docs/DATA_RETENTION_AND_PERSONAL_DATA.md`,
+          );
         }
       }
     }
-    if (isDr && DURATION_NEAR_RETENTION.test(content) && !content.includes(DR_STATUS_MARKER)) {
-      problems.push(
-        "docs/DECISION_RECORDS.md carries the 90-day retention figure WITHOUT its dated status line — the figure alone reads as shipped",
-      );
+    if (isDr && durationClaimsIn(content.replace(/\s+/g, " ")).length > 0) {
+      // The marker alone is a heading; the CORRECTIVE MEANING is what keeps
+      // DR-003 honest. The status paragraph must still say the default is
+      // intended/not implemented — a rewrite that keeps the dated marker but
+      // says "shipped" restores the exact claim this check exists to prevent.
+      const at = content.indexOf(DR_STATUS_MARKER);
+      const statusText = at >= 0 ? content.slice(at, at + 700) : "";
+      if (at < 0) {
+        problems.push(
+          "docs/DECISION_RECORDS.md carries the 90-day retention figure WITHOUT its dated status line — the figure alone reads as shipped",
+        );
+      } else if (!/\bintended\b|\bnot implemented\b|no retention mechanism is implemented/i.test(statusText)) {
+        problems.push(
+          "docs/DECISION_RECORDS.md's DR-003 status paragraph no longer says the default is INTENDED / not implemented — the dated marker without the corrective meaning reads as shipped",
+        );
+      }
     }
   }
   if (totalHits === 0) {
@@ -168,6 +201,30 @@ function selfTest() {
     "docs/WRAPPED_KPI.md": "We track gross and net retention and started renewals\n90 days ahead of schedule.",
   });
   checks.push(["a line-wrapped REVENUE-retention KPI stays clean", p.length === 0]);
+  for (const [label, text] of [
+    ["'12 weeks'", "Data retention defaults to 12 weeks for all tiers."],
+    ["'24 hours'", "Retention: 24 hours of hot data."],
+    ["spelled-out 'ninety days'", "Data retention defaults to ninety days."],
+  ]) {
+    p = auditRetentionClaims({ ...good, "docs/FORMATS.md": text });
+    checks.push([`a ${label} duration claim FAILS (format coverage)`, p.some((x) => x.includes("FORMATS"))]);
+  }
+  p = auditRetentionClaims({
+    ...good,
+    "docs/MIXED.md": "Net retention is 90%; SignalGrid data retention defaults to 30 days.",
+  });
+  checks.push([
+    "revenue vocabulary earlier on the line does NOT shelter a data-retention claim after it",
+    p.some((x) => x.includes("MIXED")),
+  ]);
+  p = auditRetentionClaims({
+    ...good,
+    "docs/DECISION_RECORDS.md": `## DR-003 — retention: 90-day default retention window\n${DR_STATUS_MARKER} The 90-day default retention window is shipped and on by default.`,
+  });
+  checks.push([
+    "a DR-003 status that keeps the marker but claims SHIPPED fails (semantic check)",
+    p.some((x) => x.includes("corrective meaning")),
+  ]);
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);

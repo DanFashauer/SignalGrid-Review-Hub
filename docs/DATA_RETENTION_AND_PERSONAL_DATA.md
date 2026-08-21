@@ -19,10 +19,13 @@ any retention promise therefore requires an admin-credential job that has not be
 designed. DR-003's 90-day figure is the **intended** default, not an implemented
 one. No data-subject-request (DSAR) procedure exists.
 
-Session **expiry** exists and is not retention: `sessions.status` flips to
-`expired` when `expires_at` lapses (`lib/persistence/src/session-store.ts`), but
-the row itself persists indefinitely — expiry ends a session's validity, it deletes
-nothing.
+Session **expiry** exists, is enforced LAZILY, and is not retention: the API
+answers with `expired` for a lapsed session, but the stored `status` is only
+rewritten when that session is next read (`withExpiry` inside
+`PostgresSessionStore.get()`, `lib/persistence/src/session-store.ts`) — no
+timer or database job touches an unread row, so a direct database report can
+show `status = 'active'` indefinitely after `expires_at`. Either way the row
+persists — expiry ends a session's validity, it deletes nothing.
 
 ## Per-store inventory
 
@@ -46,7 +49,7 @@ the field is open hardening work.
 | `decisions` | `lib/persistence/migrations/001_decisions.sql:6-13` | One row per Assist decision; `data` JSONB is the full serialized Decision (`lib/persistence/src/decision-store.ts:165-169`) | `data.context.identityRef`, `data.context.deviceRef`; reason codes and rule ids | Decision audit and reconciliation | **Unwritten** — no lifecycle column, no purge path, runtime role denied DELETE |
 | `evidence_snapshots` | `lib/persistence/migrations/001_decisions.sql:15-21` | The evidence a decision was computed from; `data` JSONB is the full snapshot (`decision-store.ts:171-174`) | Signal payloads may embed device identifiers and posture detail; `identityRef`/`deviceRef` echoes | Prove what the gate saw | **Unwritten** — same posture as `decisions`, and the largest rows in the stack |
 | `sessions` | `lib/persistence/migrations/002_sessions.sql:5-18` | One row per gated session | `identity_ref`, `device_ref` (columns, not JSONB) | Session continuity and step-up | **Decided-not-implemented for expiry-then-delete**: expiry is implemented (`expires_at`, status flip), deletion is not — expired rows persist |
-| `audit_ledger` | `lib/audit/migrations/001_audit_ledger.sql:10-21` | Hash-chained audit events | `actor` JSONB (`{type, id}` — id can be an identity ref), `target` JSONB, `meta` JSONB | Tamper-evident record of actions | **Unwritten, and structurally append-only**: no expiry column, no partitioning, runtime role denied DELETE; any future retention design must preserve chain verifiability (deletion breaks `prev_hash` continuity — the design must be truncate-and-anchor, not row deletion) |
+| `audit_ledger` | `lib/audit/migrations/001_audit_ledger.sql:10-21` | Hash-chained audit events | `actor` JSONB (`{type, id}` — id can be an identity ref), `target` JSONB, `meta` JSONB | Tamper-evident record of actions | **Unwritten, and structurally append-only**: no expiry column, no partitioning, runtime role denied DELETE; any future retention design must preserve chain verifiability — with the known limitation stated: deleting a PREFIX or interior rows breaks `prev_hash` continuity and is detectable, but deleting a SUFFIX leaves every surviving link valid and still verifies as intact (`proof:audit-ledger-pg` pins this; `docs/LEDGER_TRUNCATION_FINDING.md`), so the design needs an external anchor or minimum-record-count check, not chain verification alone |
 
 ## What this means for claims
 

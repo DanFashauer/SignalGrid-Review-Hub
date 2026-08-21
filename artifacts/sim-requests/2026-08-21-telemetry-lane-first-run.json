@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-08-21-telemetry-lane-first-run",
+  "requestedBy": "cloud lane",
+  "reason": "Backlog row 33 landed the opt-in telemetry lane (OTel Collector 0.116.1 + Prometheus v3.1.0, both sha-pinned by tag in scripts/lib/container-engine.sh) but the cloud session has no runnable container engine today, so the lane has never executed anywhere. deployedInLab for both registry rows stays false until a live run passes - this request is that run. The lane asserts signalgrid_up==1 arriving through the FULL chain (api /metrics -> collector prometheus receiver -> collector exporter -> Prometheus), where Prometheus's target list names only the collector, so a pass cannot be a direct-scrape shortcut. If it passes: flip deployedInLab on open-telemetry/opentelemetry-collector and prometheus/prometheus with deployedEvidence scripts/run-live-lanes.sh, and update the OPEN_SOURCE_LAB_REGISTRY.md table's Deployed column to match (the gate checks both halves).",
+  "runs": [
+    "live-telemetry"
+  ],
+  "notes": [
+    "First pull fetches two images (~300MB total). host.docker.internal:host-gateway is used for the collector-to-host scrape; on podman machine this resolves via the VM's gateway - if the scrape target never comes up, check that the api-server port 5330 is reachable from inside the VM before concluding the lane is broken.",
+    "The image tags are pinned conservatively (0.116.1 / v3.1.0, verified to exist at pin time). If a pull fails with manifest-not-found, that is a pin error to fix in container-engine.sh, not a lane failure."
+  ]
+}

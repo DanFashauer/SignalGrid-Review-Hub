@@ -28,10 +28,12 @@ cd "$(dirname "$0")/.." || { echo "cannot enter repo root" >&2; exit 1; }
 
 KEEP=0
 ONLY=""
+WITH_TELEMETRY=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --keep) KEEP=1 ;;
     --only) ONLY="${2:-}"; shift ;;
+    --with-telemetry) WITH_TELEMETRY=1 ;;
     *) echo "unknown flag: $1"; exit 2 ;;
   esac
   shift
@@ -341,11 +343,73 @@ if wanted edr; then
   fi
 fi
 
+# ── Telemetry (OPT-IN: --with-telemetry or --only telemetry) ─────────────────
+# Backlog row 33: the OTel Collector + Prometheus lab profile. OFF by default
+# like the heavy lanes — telemetry is operational tooling, not a vendor-evidence
+# proof, and pulling two more images on every run would tax the default path.
+# What it proves when it runs: the api-server's dependency-free /metrics
+# (decision outcomes, latency histogram, liveness) travels the vendor-neutral
+# transport end to end — app → OTel collector (prometheus receiver) →
+# Prometheus — and comes back out of Prometheus's query API. The assertion
+# metric is signalgrid_up==1 WITH the full chain in the middle, not a direct
+# scrape shortcut.
+TELEMETRY_WANTED=0
+if [ "$WITH_TELEMETRY" = 1 ]; then TELEMETRY_WANTED=1; fi
+case ",$ONLY," in *",telemetry,"*) TELEMETRY_WANTED=1 ;; esac
+if [ "$TELEMETRY_WANTED" = 1 ]; then
+  if have_engine; then
+    echo "-- bringing up telemetry (otel-collector + prometheus, api-server on the host)"
+    TEL_LOG=$(mktemp)
+    ( cd artifacts/api-server && $PNPM run build >/dev/null 2>&1 )
+    if [ ! -f artifacts/api-server/dist/index.mjs ]; then
+      skip telemetry "api-server build did not produce dist/index.mjs"
+    else
+      PORT=5330 node artifacts/api-server/dist/index.mjs >"$TEL_LOG" 2>&1 &
+      TEL_API_PID=$!
+      if ! wait_http "http://127.0.0.1:5330/metrics" 30; then
+        kill "$TEL_API_PID" >/dev/null 2>&1
+        skip telemetry "api-server never served /metrics (log: $TEL_LOG)"
+      else
+        "$SG_ENGINE" network create sg-telnet >/dev/null 2>&1
+        "$SG_ENGINE" rm -f sg-otelcol sg-prometheus >/dev/null 2>&1
+        "$SG_ENGINE" run -d --name sg-otelcol --network sg-telnet \
+          --add-host host.docker.internal:host-gateway \
+          -v "$PWD/scripts/lab/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro" \
+          "$SG_IMAGE_OTELCOL" >/dev/null 2>&1
+        "$SG_ENGINE" run -d --name sg-prometheus --network sg-telnet -p 127.0.0.1:5390:9090 \
+          -v "$PWD/scripts/lab/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
+          "$SG_IMAGE_PROMETHEUS" >/dev/null 2>&1
+        started="$started sg-otelcol sg-prometheus"
+        # A few real requests so decision/latency series exist, not just liveness.
+        for _ in 1 2 3; do curl -s -o /dev/null "http://127.0.0.1:5330/metrics"; done
+        TEL_OK=0
+        i=0
+        # signalgrid_up must arrive VIA the chain: Prometheus's own target list
+        # names only the collector, so the metric existing in a query result
+        # proves app → collector → prometheus, no shortcut possible.
+        until [ "$i" -ge 45 ]; do
+          RES=$(curl -s "http://127.0.0.1:5390/api/v1/query?query=signalgrid_up" 2>/dev/null)
+          case "$RES" in *'"value"'*'"1"'*) TEL_OK=1; break ;; esac
+          i=$((i+1)); sleep 2
+        done
+        kill "$TEL_API_PID" >/dev/null 2>&1
+        if [ "$TEL_OK" = 1 ]; then
+          ok "telemetry (signalgrid_up traversed app -> otel-collector -> prometheus)"
+        else
+          bad telemetry "$TEL_LOG"
+        fi
+      fi
+    fi
+  else
+    skip telemetry "no container engine"
+  fi
+fi
+
 if [ "$KEEP" -eq 0 ] && [ -n "$started" ]; then
   echo; echo "-- removing containers this run started:$started"
   # shellcheck disable=SC2086
   "$SG_ENGINE" rm -f $started >/dev/null 2>&1
-  "$SG_ENGINE" network rm sg-fleetnet >/dev/null 2>&1
+  "$SG_ENGINE" network rm sg-fleetnet sg-telnet >/dev/null 2>&1
 else
   [ -n "$started" ] && echo "-- leaving running (--keep):$started"
   [ -n "${FLEET_TLS_DIR:-}" ] && echo "-- lab TLS material kept for the retained containers: $FLEET_TLS_DIR (delete it when you remove them)"

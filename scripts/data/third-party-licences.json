@@ -1,5 +1,5 @@
 {
-  "$comment": "Committed licence registry for non-npm ecosystems (cargo, maven), recorded from each package's public registry with per-entry provenance. Cargo.lock and build.gradle.kts carry no licence metadata, so the SBOM generator reads THIS file \u2014 deterministic, no network at generation time. A component absent from this registry is emitted with its licence unresolved and scripts/check-licence-policy.mjs routes it to REVIEW: a named unknown, never a silent omission. Re-record by re-running the recorder when a lockfile changes.",
+  "$comment": "Committed licence registry for non-npm ecosystems (cargo, maven), recorded from each package's public registry with per-entry provenance. Cargo.lock and build.gradle.kts carry no licence metadata, so the SBOM generator reads THIS file — deterministic, no network at generation time. A component absent from this registry is emitted with its licence unresolved and scripts/check-licence-policy.mjs routes it to REVIEW: a named unknown, never a silent omission. Re-record by re-running the recorder when a lockfile changes.",
   "recordedOn": "2026-08-21",
   "entries": {
     "pkg:cargo/adler2@2.0.1": {
@@ -1676,34 +1676,34 @@
     },
     "pkg:maven/androidx.activity/activity-compose@1.9.3": {
       "licence": "Apache-2.0",
-      "basis": "POM <licenses> at https://dl.google.com/android/maven2/androidx/activity/activity-compose/1.9.3/activity-compose-1.9.3.pom, recorded 2026-08-21 (POM names it 'The Apache Software License, Version 2.0' \u2014 normalised to its SPDX id)"
+      "basis": "POM <licenses> at https://dl.google.com/android/maven2/androidx/activity/activity-compose/1.9.3/activity-compose-1.9.3.pom, recorded 2026-08-21 (POM names it 'The Apache Software License, Version 2.0' — normalised to its SPDX id)"
     },
     "pkg:maven/androidx.compose.material3/material3": {
       "licence": "Apache-2.0",
       "resolvedVersionByBom": "androidx.compose:compose-bom:2024.12.01 pins 1.3.1",
-      "basis": "POM <licenses> at https://dl.google.com/android/maven2/androidx/compose/material3/material3/1.3.1/material3-1.3.1.pom, recorded 2026-08-21 (POM names it 'The Apache Software License, Version 2.0' \u2014 normalised to its SPDX id)"
+      "basis": "POM <licenses> at https://dl.google.com/android/maven2/androidx/compose/material3/material3/1.3.1/material3-1.3.1.pom, recorded 2026-08-21 (POM names it 'The Apache Software License, Version 2.0' — normalised to its SPDX id)"
     },
     "pkg:maven/androidx.compose.ui/ui": {
       "licence": "Apache-2.0",
       "resolvedVersionByBom": "androidx.compose:compose-bom:2024.12.01 pins 1.7.6",
-      "basis": "POM <licenses> at https://dl.google.com/android/maven2/androidx/compose/ui/ui/1.7.6/ui-1.7.6.pom, recorded 2026-08-21 (POM names it 'The Apache Software License, Version 2.0' \u2014 normalised to its SPDX id)"
+      "basis": "POM <licenses> at https://dl.google.com/android/maven2/androidx/compose/ui/ui/1.7.6/ui-1.7.6.pom, recorded 2026-08-21 (POM names it 'The Apache Software License, Version 2.0' — normalised to its SPDX id)"
     },
     "pkg:maven/androidx.compose.ui/ui-tooling-preview": {
       "licence": "Apache-2.0",
       "resolvedVersionByBom": "androidx.compose:compose-bom:2024.12.01 pins 1.7.6",
-      "basis": "POM <licenses> at https://dl.google.com/android/maven2/androidx/compose/ui/ui-tooling-preview/1.7.6/ui-tooling-preview-1.7.6.pom, recorded 2026-08-21 (POM names it 'The Apache Software License, Version 2.0' \u2014 normalised to its SPDX id)"
+      "basis": "POM <licenses> at https://dl.google.com/android/maven2/androidx/compose/ui/ui-tooling-preview/1.7.6/ui-tooling-preview-1.7.6.pom, recorded 2026-08-21 (POM names it 'The Apache Software License, Version 2.0' — normalised to its SPDX id)"
     },
     "pkg:maven/androidx.compose/compose-bom@2024.12.01": {
       "licence": "Apache-2.0",
-      "basis": "POM <licenses> at https://dl.google.com/android/maven2/androidx/compose/compose-bom/2024.12.01/compose-bom-2024.12.01.pom, recorded 2026-08-21 (POM names it 'The Apache Software License, Version 2.0' \u2014 normalised to its SPDX id)"
+      "basis": "POM <licenses> at https://dl.google.com/android/maven2/androidx/compose/compose-bom/2024.12.01/compose-bom-2024.12.01.pom, recorded 2026-08-21 (POM names it 'The Apache Software License, Version 2.0' — normalised to its SPDX id)"
     },
     "pkg:maven/androidx.core/core-ktx@1.15.0": {
       "licence": "Apache-2.0",
-      "basis": "POM <licenses> at https://dl.google.com/android/maven2/androidx/core/core-ktx/1.15.0/core-ktx-1.15.0.pom, recorded 2026-08-21 (POM names it 'The Apache Software License, Version 2.0' \u2014 normalised to its SPDX id)"
+      "basis": "POM <licenses> at https://dl.google.com/android/maven2/androidx/core/core-ktx/1.15.0/core-ktx-1.15.0.pom, recorded 2026-08-21 (POM names it 'The Apache Software License, Version 2.0' — normalised to its SPDX id)"
     },
     "pkg:maven/org.jetbrains.kotlinx/kotlinx-serialization-json@1.7.3": {
       "licence": "Apache-2.0",
-      "basis": "POM <licenses> at https://repo1.maven.org/maven2/org/jetbrains/kotlinx/kotlinx-serialization-json/1.7.3/kotlinx-serialization-json-1.7.3.pom, recorded 2026-08-21 (POM names it 'The Apache Software License, Version 2.0' \u2014 normalised to its SPDX id)"
+      "basis": "POM <licenses> at https://repo1.maven.org/maven2/org/jetbrains/kotlinx/kotlinx-serialization-json/1.7.3/kotlinx-serialization-json-1.7.3.pom, recorded 2026-08-21 (POM names it 'The Apache Software License, Version 2.0' — normalised to its SPDX id)"
     },
     "pkg:npm/%40esbuild/win32-arm64@0.27.3": {
       "licence": "MIT",
@@ -1768,6 +1768,26 @@
     "pkg:npm/tv4@1.3.0": {
       "licence": "MIT",
       "basis": "registry.npmjs.org legacy licenses array for tv4@1.3.0 offers 'Public Domain' or 'MIT'; used under the MIT grant, recorded 2026-08-21"
+    },
+    "pkg:npm/%40esbuild/linux-x64@0.27.3": {
+      "licence": "MIT",
+      "basis": "installed manifest read on linux-x64 (where the workspace overrides DO install this binary), recorded 2026-08-21 after the Mac lane reported darwin regeneration dropped it — the linux twin of the win32 handling above, so generation is platform-independent"
+    },
+    "pkg:npm/%40rolldown/binding-linux-x64-gnu@1.2.4": {
+      "licence": "MIT",
+      "basis": "installed manifest read on linux-x64 (where the workspace overrides DO install this binary), recorded 2026-08-21 after the Mac lane reported darwin regeneration dropped it — the linux twin of the win32 handling above, so generation is platform-independent"
+    },
+    "pkg:npm/%40tailwindcss/oxide-linux-x64-gnu@4.3.3": {
+      "licence": "MIT",
+      "basis": "installed manifest read on linux-x64 (where the workspace overrides DO install this binary), recorded 2026-08-21 after the Mac lane reported darwin regeneration dropped it — the linux twin of the win32 handling above, so generation is platform-independent"
+    },
+    "pkg:npm/lightningcss-linux-x64-gnu@1.32.0": {
+      "licence": "MPL-2.0",
+      "basis": "installed manifest read on linux-x64 (where the workspace overrides DO install this binary), recorded 2026-08-21 after the Mac lane reported darwin regeneration dropped it — the linux twin of the win32 handling above, so generation is platform-independent"
+    },
+    "pkg:npm/lightningcss-linux-x64-gnu@1.33.0": {
+      "licence": "MPL-2.0",
+      "basis": "installed manifest read on linux-x64 (where the workspace overrides DO install this binary), recorded 2026-08-21 after the Mac lane reported darwin regeneration dropped it — the linux twin of the win32 handling above, so generation is platform-independent"
     }
   }
 }

@@ -98,3 +98,13 @@ SG_IMAGE_OSQUERY="docker.io/osquery/osquery:5.17.0-ubuntu24.04"
 # the manifest lists both architectures.
 # shellcheck disable=SC2034
 SG_IMAGE_WAZUH="docker.io/wazuh/wazuh-manager:4.14.7"
+
+# Telemetry lane (opt-in, --with-telemetry). Contrib image because the
+# prometheus receiver lives there; the lane's collector config allowlists
+# exactly two pipeline components regardless of what the image ships
+# (docs/METRIC_STANDARDS.md). Pinned like every other lane image; a pull
+# failure is a SKIP with the reason, never a silent fallback to :latest.
+# shellcheck disable=SC2034
+SG_IMAGE_OTELCOL="docker.io/otel/opentelemetry-collector-contrib:0.116.1"
+# shellcheck disable=SC2034
+SG_IMAGE_PROMETHEUS="docker.io/prom/prometheus:v3.1.0"

@@ -80,19 +80,41 @@ if wanted fleet; then
     # run; trusted EXPLICITLY at every client (curl --cacert, the proof via
     # NODE_EXTRA_CA_CERTS, osqueryd via --tls_server_certs) — verification is
     # never disabled anywhere.
-    FLEET_TLS_DIR=$(mktemp -d)
+    # Under $HOME, not bare mktemp: on the Mac lane, podman machine only shares
+    # the home directory into its Linux VM, and a default mktemp dir lives in
+    # /var/folders — a bind mount from there would arrive EMPTY in the VM and
+    # Fleet would never see its cert. $HOME works on both engines.
+    FLEET_TLS_DIR=$(mktemp -d "$HOME/.sg-fleet-lab.XXXXXX")
     # Registered the moment the directory exists: an interrupted run must not
     # leave the (deliberately world-readable) lab key and enroll secret on a
     # shared machine. --keep intentionally KEEPS them — retained containers are
     # useless without the CA/key they were started with; the path is printed so
-    # the caller knows what to trust and what to delete.
+    # the caller knows what to trust and what to delete. INT/TERM must EXIT
+    # after cleanup — a bare handler would return into the script and keep
+    # starting containers against a directory the handler just deleted.
     cleanup_fleet_tls() {
       if [ "${KEEP:-0}" -eq 0 ] && [ -n "${FLEET_TLS_DIR:-}" ]; then rm -rf "$FLEET_TLS_DIR"; fi
     }
-    trap cleanup_fleet_tls EXIT INT TERM
+    trap cleanup_fleet_tls EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    # SAN via a config file, not -addext: stock macOS ships LibreSSL at
+    # /usr/bin/openssl, and its req has no -addext — the silent failure mode
+    # is no certificate at all and a lane that reports "could not stand up
+    # Fleet". The config-file form works on OpenSSL and LibreSSL alike.
+    cat > "$FLEET_TLS_DIR/req.cnf" <<'REQCNF'
+[req]
+distinguished_name = dn
+x509_extensions = ext
+prompt = no
+[dn]
+CN = sg-fleet
+[ext]
+subjectAltName = DNS:sg-fleet,DNS:localhost,IP:127.0.0.1
+REQCNF
     openssl req -x509 -newkey rsa:2048 -nodes -days 2 \
       -keyout "$FLEET_TLS_DIR/fleet.key" -out "$FLEET_TLS_DIR/fleet.crt" \
-      -subj "/CN=sg-fleet" -addext "subjectAltName=DNS:sg-fleet,DNS:localhost,IP:127.0.0.1" >/dev/null 2>&1
+      -config "$FLEET_TLS_DIR/req.cnf" >/dev/null 2>&1
     # World-readable ON PURPOSE: the fleet container runs unprivileged and must
     # read the key across the bind mount. Lab-only, per-run, deleted at exit.
     # The DIRECTORY too — mktemp -d mints 700, which blocks traversal for the

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-08-21-three-plane-verification",
+  "requestedBy": "cloud lane",
+  "reason": "Four merges landed today on the three-plane directive (#233 routine registry, #234 every-ecosystem SBOM + licence gate, #235 Bruno/MCP/lab-registry architecture with DR-008, #236 Bruno CLI execution plane + registry v2). All green on Linux CI; none has run on macOS. Two pieces specifically need darwin truth: the NEW 'bruno-collection' operation (the @usebruno/cli devDependency must resolve on arm64 and its harness boots the api-server twice — profile fences and negative tests included), and the MCP server's 16-tool surface, which the Mac's own Claude Desktop consumes via mcp-up.sh — proof:mcp-answer-discipline pins the wire truth and has only ever run on Linux since the tool count moved 8 → 15 → 16.",
+  "runs": [
+    "preflight",
+    "bruno-collection",
+    "proofs-full",
+    "evidence"
+  ],
+  "notes": [
+    "bruno-collection is NEW in scripts/lib/sim-operations.mjs — it runs scripts/run-bruno-collection.mjs: self-booted fixture api-server, whole committed collection, both product profiles, negative tests asserted. Its first Linux run caught a real WebAuthn 500 (fixed in lib/webauthn the same hour), which is exactly why it should meet darwin too.",
+    "The lab-service Bruno collections moved OUT of artifacts/api-collection to artifacts/lab-collections/ (Bruno cannot run nested collections). If you drive the live lanes, each service folder there opens directly in Bruno and its README carries base URL + the lane's documented bootstrap credentials.",
+    "pnpm install first — the lockfile grew with @usebruno/cli and the pre-push hook will hold you to it."
+  ]
+}

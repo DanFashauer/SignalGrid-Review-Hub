@@ -131,6 +131,24 @@ async function main(): Promise<void> {
   check("getHosts reads the live inventory", hosts.length > 0, `count=${hosts.length}`);
   const target = hosts.find((h) => h.uuid === HOST_UUID) ?? hosts[0];
   check("the enrolled host carries a real numeric id and uuid", typeof target.id === "number" && !!target.uuid);
+  // TWO hosts play two OPPOSITE roles. The posture half needs `target` — the
+  // synthetic never-answers host, whose whole job is proving unanswered
+  // policies grade `unknown`. The campaign half needs the reverse: an agent
+  // actually polling /distributed/read, or `hostsResponded` can never reach 1
+  // (the Mac lane proved this at 33/37 — the lane's synthetic curl enroll
+  // created a host record with nothing behind it, and the campaign targeted
+  // it). Substitution happens ONLY when the target is the known synthetic
+  // fixture: a caller who set FLEET_HOST_UUID to a real host of their own is
+  // asking to prove THAT host, and quietly campaigning a different one would
+  // pass without proving the configured target (or time out despite it being
+  // able to answer).
+  const SYNTHETIC_UUID = "11111111-2222-3333-4444-555555555555";
+  const liveAgent =
+    HOST_UUID !== SYNTHETIC_UUID
+      ? target
+      : hosts.find((h) => h.uuid !== HOST_UUID && (h as { status?: string }).status === "online") ??
+        hosts.find((h) => h.uuid !== HOST_UUID) ??
+        target;
 
   // ── 4. THE POINT: the routes that were wrong ──────────────────────────────
   // Each is asserted twice — the old path still fails on the real server, and the
@@ -266,7 +284,7 @@ async function main(): Promise<void> {
   // from the real agent, attributed to that host, with partial=false. The
   // window is generous because the agent polls distributed queries on its own
   // interval — the collection is asynchronous end to end.
-  const report = await fleet.runQuery("SELECT version FROM osquery_info;", [target.id], { timeoutMs: 45000 });
+  const report = await fleet.runQuery("SELECT version FROM osquery_info;", [liveAgent.id], { timeoutMs: 45000 });
   check("the campaign is collected: a real campaign id and the targeted host responded",
     typeof report.campaignId === "number" && report.hostsTargeted === 1 && report.hostsResponded === 1,
     `campaign=${report.campaignId} responded=${report.hostsResponded}/${report.hostsTargeted}`);
@@ -277,7 +295,7 @@ async function main(): Promise<void> {
       (report.results[0].rows[0].version as string).length > 0,
     `rows=${JSON.stringify(report.results[0]?.rows ?? []).slice(0, 80)}`);
   check("…attributed to the host that ran them, with no per-host error",
-    report.results[0].host_id === target.id && report.results[0].error === null,
+    report.results[0]?.host_id === liveAgent.id && report.results[0]?.error === null,
     `host_id=${report.results[0]?.host_id} error=${String(report.results[0]?.error)}`);
   check("…and a fully-answered window is NOT flagged partial", report.partial === false);
 

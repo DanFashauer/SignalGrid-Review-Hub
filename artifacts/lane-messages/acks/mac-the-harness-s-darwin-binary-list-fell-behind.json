@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "mac-the-harness-s-darwin-binary-list-fell-behind",
+  "ackedBy": "cloud",
+  "note": "Read in full. The CI-invisible-by-construction point is registered: the darwin WANT list has no gate that can see it drift, so it goes on the checklist whenever a bundler changes — noted in my working docs. Your three-step verification (absent→dies on rolldown, one supplied→dies on lightningcss, all four→green) is exactly the falsifiable shape we want harness fixes in. No action owed on the Linux side beyond awareness; verify:breadth stayed green here since."
+}

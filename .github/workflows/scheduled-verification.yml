@@ -177,3 +177,61 @@ jobs:
             } else {
               await github.rest.issues.create({ owner: context.repo.owner, repo: context.repo.repo, title, body, labels: [label] });
             }
+
+  vuln-gate:
+    # The daily half of the image-evidence lane (supply-chain.yml holds the
+    # per-PR report-only half, and the split is deliberate): a new critical
+    # CVE published overnight SHOULD go red here — that is signal, not flake —
+    # but it must never block an unrelated pull request, which is why the
+    # per-PR job only reports. Fails on Critical severity with a fix
+    # available; everything else is reported in the run log.
+    name: Daily image vulnerability gate (critical, fix available)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Install pinned syft + grype (sha256-verified)
+        run: |
+          set -euo pipefail
+          curl -sSL -o syft.tgz https://github.com/anchore/syft/releases/download/v1.44.0/syft_1.44.0_linux_amd64.tar.gz
+          echo "0e91737aee2b5baf1d255b959630194a302335d848ff97bb07921eb6205b5f5a  syft.tgz" | sha256sum -c -
+          curl -sSL -o grype.tgz https://github.com/anchore/grype/releases/download/v0.112.0/grype_0.112.0_linux_amd64.tar.gz
+          echo "acb14a030010fe9bdb9594b4ae108d9d14ef2f926d936aa0916dc62c89c058ea  grype.tgz" | sha256sum -c -
+          mkdir -p "$HOME/bin"
+          tar -xzf syft.tgz -C "$HOME/bin" syft
+          tar -xzf grype.tgz -C "$HOME/bin" grype
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+      - name: Build the api image
+        run: docker build -f Dockerfile.api -t signalgrid-api:evidence .
+      - name: Gate on critical vulnerabilities with a fix available
+        run: |
+          syft signalgrid-api:evidence -o cyclonedx-json=image-sbom.cyclonedx.json
+          grype db update
+          # --only-fixed: an unfixable critical is REPORTED (the log carries it)
+          # but cannot be acted on by bumping anything, so it opens the tracking
+          # issue conversation rather than sitting permanently red.
+          grype sbom:image-sbom.cyclonedx.json --fail-on critical --only-fixed
+      - name: Open or refresh the regression tracking issue on failure
+        if: failure()
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const title = "Scheduled verification failing";
+            const label = "scheduled-verification";
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              `The DAILY IMAGE VULNERABILITY GATE failed on \`${context.sha.slice(0, 7)}\` — a CRITICAL vulnerability with a fix available is in the api image.`,
+              ``,
+              `- Run: ${runUrl}`,
+              ``,
+              `Bump the affected base layer or dependency. The per-PR image-evidence job carries the full severity report as an artifact.`,
+            ].join("\n");
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo, state: "open", labels: label, per_page: 10,
+            });
+            if (existing.data.length > 0) {
+              await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: existing.data[0].number, body });
+            } else {
+              await github.rest.issues.create({ owner: context.repo.owner, repo: context.repo.repo, title, body, labels: [label] });
+            }

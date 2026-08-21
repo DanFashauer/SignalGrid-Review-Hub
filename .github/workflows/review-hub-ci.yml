@@ -948,16 +948,19 @@ jobs:
           SMOKE_EXPECT_PROFILE: review-demo
         run: node scripts/smoke-stack.mjs
 
-      # The packaged container must not run as root, and readiness must name
-      # the durable store it actually probed (the verbose body is review-demo
-      # only, so this asserts in phase 1).
+      # The packaged container must not run as root. (A durableStore-label
+      # probe on /readyz was tried here and removed as UNREACHABLE BY DESIGN:
+      # the verbose body exists only under review-demo, and this phase runs as
+      # the database owner — whose readyz is honestly 503, because the owner
+      # holds DELETE on the ledger. The positive durable-store probe is the
+      # gateway smoke's readyz-200 requirement in phase 2, which pings all
+      # three Postgres stores with both-direction privilege assertions —
+      # strictly stronger than reading a JSON label.)
       - name: The api container runs as a non-root user
         run: |
           UID_IN_CONTAINER=$(docker compose -f docker-compose.prod.yml exec -T api id -u)
           echo "container uid: $UID_IN_CONTAINER"
           test "$UID_IN_CONTAINER" != "0"
-      - name: Readiness names the durable store it probed
-        run: curl -sf http://localhost:8080/api/readyz | grep -q '"durableStore":"postgres"'
 
       # Phase 2: the PRODUCTION default (shared-device-gateway) on the SAME
       # image — and in the PRODUCTION POSTURE, by executing the runbook's

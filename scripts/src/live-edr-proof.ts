@@ -42,15 +42,33 @@ if (!BASE) {
   console.error(
     "proof:live-edr REFUSED — no WAZUH_URL set.\n" +
       "This proof exists to read a REAL EDR server; without one there is nothing it\n" +
-      "could honestly report. Start one and re-run:\n" +
-      "  docker run -d --name sg-wazuh -p 55000:55000 wazuh/wazuh-manager:4.9.0\n" +
-      "  WAZUH_URL=https://127.0.0.1:55000 pnpm run proof:live-edr\n",
+      "could honestly report. Start one and re-run (the lane script does all of\n" +
+      "this for you: ./scripts/run-live-lanes.sh --only edr):\n" +
+      "  docker run -d --name sg-wazuh -p 55000:55000 wazuh/wazuh-manager:4.14.7\n" +
+      "  WAZUH_URL=https://127.0.0.1:55000 pnpm run proof:live-edr\n" +
+      "NOTE: 4.14.7, not 4.9.0 — 4.9.0 is published amd64-only and DIES under\n" +
+      "QEMU on Apple Silicon (segfault in wazuh-modulesd). Measured 2026-08-21.\n",
   );
   process.exit(1);
 }
 
-// The container serves a self-signed cert. Scoped to this proof process only.
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+// VERIFICATION IS NEVER DISABLED. An earlier revision set
+// NODE_TLS_REJECT_UNAUTHORIZED=0 here — globally, for the whole process —
+// which is the exact doctrine the Fleet lane was built to avoid (mint or
+// extract the lab CA, trust it EXPLICITLY). The lane script exports
+// NODE_EXTRA_CA_CERTS pointing at the container's own API certificate; a
+// caller running this proof by hand must do the same. An https target with
+// no explicit trust anchor is REFUSED, not "handled".
+if (BASE.startsWith("https:") && !process.env.NODE_EXTRA_CA_CERTS) {
+  console.error(
+    "proof:live-edr REFUSED — https target with no NODE_EXTRA_CA_CERTS.\n" +
+      "This proof never disables TLS verification. Extract the lab cert and\n" +
+      "trust it explicitly (run-live-lanes.sh does this automatically):\n" +
+      "  docker cp sg-wazuh:/var/ossec/api/configuration/ssl/server.crt /tmp/sg-wazuh-ca.crt\n" +
+      "  NODE_EXTRA_CA_CERTS=/tmp/sg-wazuh-ca.crt WAZUH_URL=... pnpm run proof:live-edr\n",
+  );
+  process.exit(1);
+}
 
 let passed = 0;
 const failures: string[] = [];
@@ -102,12 +120,14 @@ async function main(): Promise<void> {
 
   // 4. The connector's own normalizer, on real data.
   const normalized = raw.map(normalizeEndpoint);
+  // Guarded (the 5039ccc class): an empty inventory must FAIL these checks,
+  // not crash the proof and take every later assertion with it.
   const first = normalized[0];
 
-  check("agent presence is read from the live server", first.agentInstalled === true);
+  check("agent presence is read from the live server", first?.agentInstalled === true);
   check(
     "agent running-state reflects the live status field",
-    first.agentRunning === (agents[0].status === "active"),
+    first?.agentRunning === (agents[0]?.status === "active"),
     `wazuh status=${agents[0].status}`,
   );
   check("the live source is attributed to wazuh", first.source === "wazuh");

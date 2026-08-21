@@ -58,6 +58,16 @@ Blocking items first. "Fail-closed" means: when the system cannot verify somethi
 24. **Stage the ledger-truncation article for your review** — proof-led-content + compliance-analyst, hours. The draft exists (below), every number traces, and it publishes nowhere without your approval. Independent verification pass first; drafts 2–4 queue behind it with the corrected framings (NAC as "derived state, not wire fact"; the gateway CA name generalized; the one-IdP caveat in the Keycloak lede). (Proof-led-content lens.)
 25. **Bound the CI jobs and wire the Mac lane's alarm** — sre, hours. Nine CI jobs have no timeout (two of them PR-gating; a hang holds a required check for six hours), and the weekly macOS lane fails into a tab nobody reads between Mondays. (Gate-estate lens.)
 
+26. **Role-split follow-ups from PR #222's round-9 review (post-cutoff)** — data-persistence-engineer + security-engineer, days total, none launch-blocking. Eight findings arrived after the declared review cutoff (PR #222 comment, 2026-08-20); the core append-only-by-privilege claim is unaffected — these deepen adjacent hardening. Each needs its executed counterexample when picked up, per the standing acceptance bar:
+    - Invoker (non-definer) BEFORE INSERT triggers on the ledger can suppress or rewrite an append without UPDATE privilege; also have `appendWithChain` verify the inserted row count. (P1)
+    - Archive-shape validation before destructive restore: an older archive carrying a rule/definer-trigger on a managed table is refused only after `pg_restore --clean` replaced the target; validate the archive's structure first (staging restore or catalog scan of the dump). (P1)
+    - PUBLIC-inherited grants on noncanonical relations: the runtime can inherit read/write access to tables outside the four managed ones; extend the effective-privilege refusal beyond schema CREATE. (P1)
+    - Migration v1 DDL and `schema_version` are search_path-relative while v2 grants and store DML are `public.`-qualified; force a migration-local `search_path` or qualify the baseline. (P1)
+    - Negative (forbidden-privilege) readiness probes for the decisions/evidence/sessions stores, mirroring the ledger's — DELETE/TRUNCATE drift currently rides under a green /readyz. (P1)
+    - Schema `USAGE` in every store's readiness probe: table ACLs answer true even when the schema itself is unreachable. (P1)
+    - TEMPORARY privilege: PUBLIC holds TEMP by default, so `CREATE TEMP TABLE` still works under the "no DDL" wording — revoke it or narrow the documented boundary (shadowing is already defused by qualified statements). (P2)
+    - Definer-routine refusal over-fires for routines in schemas the runtime cannot USE — combine the function ACL with effective schema access to avoid blocking migrations on unreachable paths. (P2)
+
 Dropped below the cut, tracked in lens records: the shared-evaluator-skeleton refactor (week+), the /metrics timing-safe compare, the cp/v1 requestId envelope fix, the shell-lint population widening, the Autopilot-era doc archival stamps, and the weekly deferred-family sampling cadence (starts after Tier 1 completes).
 
 ## Owner hands

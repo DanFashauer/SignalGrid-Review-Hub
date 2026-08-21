@@ -76,3 +76,17 @@ SG_IMAGE_MYSQL="docker.io/library/mysql:8"
 #
 # shellcheck disable=SC2034
 SG_IMAGE_FLEET="docker.io/fleetdm/fleet:v4.89.2"
+# Same drift rule as Fleet: pinned so two runs of one commit run one agent,
+# overridable for a deliberate compatibility check:
+#
+#   OSQUERY_IMAGE=docker.io/osquery/osquery:latest ./scripts/run-live-lanes.sh --only fleet
+#
+# Chosen the hard way: osquery's Docker Hub tags are VERSION-DISTRO pairs and
+# lag the project badly — a bare "5.23.1" does not exist (a silent pull
+# failure that cost a full lane run to notice), and :latest is osqueryd
+# 4.9.0. This is the newest published tag; the lane re-verifies it live on
+# every run — the enroll wait and the loud agent-start warning report a tag
+# that cannot serve. The docs' "osqueryd 5.23.1" run of 2026-08-17 used the
+# out-of-tree scratch harness, not this image.
+# shellcheck disable=SC2034
+SG_IMAGE_OSQUERY="docker.io/osquery/osquery:5.17.0-ubuntu24.04"

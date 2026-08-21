@@ -63,9 +63,11 @@ export function auditRetentionClaims(files) {
   for (const [path, content] of Object.entries(files)) {
     const isDr = path === "docs/DECISION_RECORDS.md";
     if (isDr) drSeen = true;
+    let lineHitInFile = false;
     content.split("\n").forEach((line, i) => {
       if (!DURATION_NEAR_RETENTION.test(line)) return;
       if (REVENUE_RETENTION.test(line) || line.includes(THIRD_PARTY_MARKER)) return;
+      lineHitInFile = true;
       totalHits += 1;
       if (!RECORDING.has(path)) {
         problems.push(
@@ -73,6 +75,26 @@ export function auditRetentionClaims(files) {
         );
       }
     });
+    // Markdown wrapping can split the duration from the word "retention"
+    // across lines ("defaults to\n90 days"), and a per-line scan reads the
+    // wrapped claim as two innocent lines. A whitespace-collapsed pass over
+    // the whole file catches it; the exclusions apply to the matched window
+    // so a wrapped revenue-retention KPI or a marked vendor fact stays clean.
+    if (!lineHitInFile) {
+      const collapsed = content.replace(/\s+/g, " ");
+      const m = DURATION_NEAR_RETENTION.exec(collapsed);
+      if (m) {
+        const window = collapsed.slice(Math.max(0, m.index - 120), m.index + m[0].length + 120);
+        if (!REVENUE_RETENTION.test(window) && !window.includes(THIRD_PARTY_MARKER)) {
+          totalHits += 1;
+          if (!RECORDING.has(path)) {
+            problems.push(
+              `${path} states a LINE-WRAPPED retention duration ("…${m[0].slice(0, 60)}…") — no duration is implemented in any store; the position is docs/DATA_RETENTION_AND_PERSONAL_DATA.md`,
+            );
+          }
+        }
+      }
+    }
     if (isDr && DURATION_NEAR_RETENTION.test(content) && !content.includes(DR_STATUS_MARKER)) {
       problems.push(
         "docs/DECISION_RECORDS.md carries the 90-day retention figure WITHOUT its dated status line — the figure alone reads as shipped",
@@ -136,6 +158,16 @@ function selfTest() {
     "docs/SOME_MATRIX.md": "Datadog free tier (1-day retention), unmarked",
   });
   checks.push(["an UNMARKED third-party duration still FAILS (classification is explicit)", p.some((x) => x.includes("SOME_MATRIX"))]);
+  p = auditRetentionClaims({
+    ...good,
+    "docs/WRAPPED.md": "Retention is configurable and defaults to\n90 days for every paid tier.",
+  });
+  checks.push(["a LINE-WRAPPED duration claim FAILS (multiline negative control)", p.some((x) => x.includes("WRAPPED") && x.includes("LINE-WRAPPED"))]);
+  p = auditRetentionClaims({
+    ...good,
+    "docs/WRAPPED_KPI.md": "We track gross and net retention and started renewals\n90 days ahead of schedule.",
+  });
+  checks.push(["a line-wrapped REVENUE-retention KPI stays clean", p.length === 0]);
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);

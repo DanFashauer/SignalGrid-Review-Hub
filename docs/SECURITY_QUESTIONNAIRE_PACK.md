@@ -58,7 +58,7 @@ against the repository). Answers use three statuses:
 |---|---|---|---|
 | What customer data does the repository hold? | **None, by enforced rule**: no secrets, credentials, tenant IDs, customer data, PHI, or PII. All fixtures are public-safe. | `AGENTS.md` | Built and gated |
 | Does the product write to source systems? | No write to any source system exists on the launch surface; adapters supply evidence only. The one sync trigger route runs the core's fixture pipeline and the core refuses non-fixture connectors by construction. | `scripts/launch-profile.mjs` (the `/v1/connectors/{id}/sync` entry) | Built and gated |
-| Data retention? | **Not implemented** — no retention or deletion mechanism exists in any durable store; the intended default is recorded in DR-003 and is not shipped. Session expiry exists (rows persist); per-tenant export exists. | `docs/DATA_RETENTION_AND_PERSONAL_DATA.md` | Position documented, mechanism not built |
+| Data retention? | **Not implemented** — no retention or deletion mechanism exists in any durable store; the intended default is recorded in DR-003 and is not shipped. Session expiry exists (rows persist); ledger export is the operator-side `db:export-ledger` CLI (no tenant filter, no `/v1` route — customer self-serve export is not available). | `docs/DATA_RETENTION_AND_PERSONAL_DATA.md` | Position documented, mechanism not built |
 
 ## API robustness
 

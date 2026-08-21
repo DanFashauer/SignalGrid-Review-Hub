@@ -114,8 +114,10 @@ days is the **intended** default — no retention mechanism is implemented in
 any durable store (per-store evidence: `docs/DATA_RETENTION_AND_PERSONAL_DATA.md`;
 the runtime role is denied DELETE, so honouring any window requires an
 admin-credential job that has not been designed). Until the mechanism exists,
-no surface states a retention duration as shipped; the pricing page carries
-the export claim only. `scripts/check-retention-claims.mjs` enforces this.
+no surface states a retention duration as shipped, and export is stated
+honestly as the operator-side CLI (`db:export-ledger`, no tenant filter) —
+not a customer self-serve route. `scripts/check-retention-claims.mjs`
+enforces the duration half.
 
 **Rationale.** 90 days is the common floor for security-incident review and it
 is short enough not to imply an archival commitment this product does not yet

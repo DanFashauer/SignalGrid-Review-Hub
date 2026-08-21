@@ -553,7 +553,8 @@
    "kind": "capability",
    "classification": "launch",
    "evidence": "pnpm run proof:audit-ledger and pnpm run proof:audit-ledger-pg (package.json:67-68), pnpm run db:verify-ledger (package.json:30) and pnpm run verify:ledger-export (package.json:33); published route lib/api-spec/v1-openapi.yaml:393 /v1/audit (\"List audit events and verify the tamper-evident chain\"), launch at scripts/launch-profile.mjs:330-338 \u2014 with the caveat recorded there that /v1/audit serves the in-process digest chain, not the durable Postgres ledger | CRITIC: overstated-true \u2014 /v1/audit serves the in-process digest chain that does not survive a restart; the DURABLE Postgres hash-chain ledger has no route (scripts/launch-profile.mjs:330-338; export is CLI-only, scripts/src/export-ledger-cli.ts).",
-   "action": "rewrite"
+   "action": "rewrite",
+   "resolution": "RESOLVED 2026-08-21 (this PR): bullet reworded to hash-chained + independently verifiable only"
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
@@ -562,7 +563,8 @@
    "kind": "retention",
    "classification": "unsubstantiated",
    "evidence": "No retention/prune/purge mechanism exists in any store: lib/audit/migrations/001_audit_ledger.sql:10-21 and lib/persistence/migrations/001_decisions.sql:6-20 have no lifecycle/expiry column, and scripts/src/db-role-split-proof.ts:316-321 proves the runtime credential is DENIED DELETE on both tables; docs/SECURITY_QUESTIONNAIRE_PACK.md:61 states \"Owner decision pending \u2014 retention durations are on the owner's open decision list and no default is claimed\"; docs/DECISION_RECORDS.md:100-110 (DR-003) calls 90 days \"the shipped default\", which is the tense error this row inherits",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-08-21 (this PR): retention clause removed from Pricing.tsx; see docs/DATA_RETENTION_AND_PERSONAL_DATA.md"
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
@@ -697,7 +699,8 @@
    "kind": "capability",
    "classification": "launch",
    "evidence": "pnpm run proof:audit-ledger / proof:audit-ledger-pg (package.json:67-68), pnpm run db:verify-ledger (package.json:30); lib/api-spec/v1-openapi.yaml:393 /v1/audit, launch at scripts/launch-profile.mjs:330-338 | CRITIC: overstated-true \u2014 /v1/audit serves the in-process digest chain that does not survive a restart; the DURABLE Postgres hash-chain ledger has no route (scripts/launch-profile.mjs:330-338; export is CLI-only, scripts/src/export-ledger-cli.ts).",
-   "action": "rewrite"
+   "action": "rewrite",
+   "resolution": "RESOLVED 2026-08-21 (this PR): bullet reworded to hash-chained + independently verifiable only"
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
@@ -706,7 +709,8 @@
    "kind": "retention",
    "classification": "unsubstantiated",
    "evidence": "No retention mechanism in any store \u2014 lib/audit/migrations/001_audit_ledger.sql:10-21 has no expiry column, lib/persistence/migrations/001_decisions.sql:6-20 none either, and scripts/src/db-role-split-proof.ts:316-321 proves the runtime role is DENIED DELETE; contradicted by docs/SECURITY_QUESTIONNAIRE_PACK.md:61 (\"no default is claimed\")",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-08-21 (this PR): retention clause removed from Pricing.tsx; see docs/DATA_RETENTION_AND_PERSONAL_DATA.md"
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",

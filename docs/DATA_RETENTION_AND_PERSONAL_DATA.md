@@ -26,10 +26,20 @@ nothing.
 
 ## Per-store inventory
 
-Personal data in SignalGrid is **pseudonymous by design**: stores carry references
+SignalGrid's **own** fields are pseudonymous by design: stores carry references
 (`identity_ref`, `device_ref`), never names, and the mapping from a ref to a person
 lives in the customer's IdP/MDM, not here. Under GDPR-style definitions a
 pseudonymous ref is still personal data, so the fields are named honestly below.
+
+**One field breaks the pseudonymity-by-design claim and must be stated:**
+`requestContext` on `/v1/decisions/evaluate` is caller-supplied free text — up
+to 32 string entries with pattern-valid keys survive `sanitizeContext`
+(`artifacts/api-server/src/routes/v1.ts:894-909`) and are serialized whole into
+`decisions.data`. A host app that sends `{userEmail: "person@example.com"}`
+has put a name-equivalent into a durable store with no deletion path.
+SignalGrid cannot prevent this by design today; integration guidance must tell
+host apps to send references, not identifiers, and constraining or redacting
+the field is open hardening work.
 
 | Store | Defined at | What it holds | Personal-data-capable fields | Purpose | Retention state |
 | --- | --- | --- | --- | --- | --- |
@@ -40,9 +50,14 @@ pseudonymous ref is still personal data, so the fields are named honestly below.
 
 ## What this means for claims
 
-- No surface may state a retention **duration** as shipped. The only honest present-tense
-  claims are: per-tenant **export** exists for decisions and the ledger (the
-  `/v1` export routes), and session **expiry** exists.
+- No surface may state a retention **duration** as shipped. The honest
+  present-tense claims are narrow: session **expiry** exists, and ledger
+  **export** exists as the operator-side `db:export-ledger` CLI only — no
+  `/v1` export route exists in the published contract
+  (`lib/api-spec/v1-openapi.yaml` defines no export operation), and the CLI
+  has **no tenant filter**, so per-tenant customer self-serve export is not
+  available today. Any surface implying a customer can export their own data
+  overclaims.
 - "Configurable retention" is doubly false today: there is nothing to configure and
   no mechanism to apply a configuration to.
 - The DSAR position for assessors: SignalGrid holds pseudonymous refs; identity
@@ -58,7 +73,9 @@ pseudonymous ref is still personal data, so the fields are named honestly below.
 ## Surfaces corrected to this position (2026-08-21)
 
 - `artifacts/signalgrid-web/src/pages/Pricing.tsx` — "90-day default retention,
-  configurable" removed from both tiers; export claim retained.
+  configurable" removed from both tiers, and the "exportable at any time"
+  clause removed too (export is an operator CLI without a tenant filter, not
+  a buyer feature).
 - `docs/DECISION_RECORDS.md` DR-003 — status line added: 90 days is the intended
   default, not implemented as of August 21, 2026. The decision stands; the tense
   was corrected.

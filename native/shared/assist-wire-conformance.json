@@ -1,6 +1,8 @@
 {
   "$comment": "Shared Assist-wire conformance vectors. EVERY client implementation must run these and agree. Do not edit a case to make a client pass \u2014 a disagreement here is a client that will mis-handle a real gate response.",
   "version": 1,
+  "route": "/v1/authorize",
+  "routeComment": "The wire these vectors bind, as DATA \u2014 the gate (scripts/check-assist-wire-served.mjs) reads THIS field, not prose; DR-007 records that the route is a declared gap until the spec serves it.",
   "requires": {
     "$comment": "Non-vacuity floor, asserted by each client's test before the cases run. Without it a client that returns DENY unconditionally passes every deny case and the suite proves nothing.",
     "minCases": 30,

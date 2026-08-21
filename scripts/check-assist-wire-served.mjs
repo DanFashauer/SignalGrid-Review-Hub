@@ -1,18 +1,20 @@
 #!/usr/bin/env node
-// Assist-wire served-ness gate (DR-007). The shared conformance vectors bind
-// the Kotlin and Rust SDKs to POST /v1/authorize returning {assist, reasons,
-// decisionId} — a route this repository does not serve. A green conformance
-// suite over an unserved wire proves two SDKs agree with each other about a
-// contract nothing answers; that is tolerable ONLY while the gap is declared
-// where declared gaps live (scripts/launch-profile.mjs GAPS, entry
-// assist-wire-unserved). This gate fails when:
-//   1. the SDKs bind a route the OpenAPI spec does not register, AND no
-//      declared-gap entry claims the assist wire — deleting the gap entry
-//      without serving the route fails here;
-//   2. the SDKs' bound routes diverge from each other (a second phantom
-//      contract would be worse than one);
-//   3. the vectors stop parsing, or bind fewer cases than their own floor —
-//      a vacuity guard so an emptied suite cannot read as agreement.
+// Assist-wire served-ness gate (DR-007), v2 — rebuilt after the assurance
+// review executed v1's blind spots: it derived "the SDK-bound route" from
+// two DOC COMMENTS through two different regexes (so retargeting the prose
+// passed green while the success line hardcoded a route it never checked,
+// and any two-segment route produced a fabricated divergence), and the gap's
+// closedWhen watched a directory whose evaluator could never read the YAML.
+//
+// v2 reads DATA:
+//   · the bound route is the `route` field of the shared vectors file — the
+//     artifact both SDK suites actually consume;
+//   · the SDK endpoint files must MENTION that same route (one regex, both
+//     files) so their documentation cannot drift from the contract;
+//   · the route must be served by the spec OR claimed by the declared gap,
+//     and the gap entry must name THIS route — a retargeted wire cannot
+//     shelter under a gap that does not cover it;
+//   · served-with-stale-gap fails; an emptied vector suite fails (vacuity).
 import { readFileSync } from "node:fs";
 
 const VECTORS = "native/shared/assist-wire-conformance.json";
@@ -21,6 +23,7 @@ const GAPS_FILE = "scripts/launch-profile.mjs";
 const KOTLIN = "native/android/core/src/main/kotlin/com/signalgrid/assist/core/GateEndpoint.kt";
 const RUST = "native/desktop/core/src/endpoint.rs";
 const GAP_ID = "assist-wire-unserved";
+const ROUTE_SHAPE = /^\/v1\/[a-z-]+(?:\/[a-z-]+)*$/;
 
 export function auditAssistWire({ vectorsJson, specYaml, gapsSrc, kotlinSrc, rustSrc }) {
   const problems = [];
@@ -28,39 +31,37 @@ export function auditAssistWire({ vectorsJson, specYaml, gapsSrc, kotlinSrc, rus
   try {
     vectors = JSON.parse(vectorsJson);
   } catch {
-    return [`${VECTORS} does not parse — the shared contract is unreadable`];
+    return { problems: [`${VECTORS} does not parse — the shared contract is unreadable`], boundRoute: null };
   }
   const minCases = vectors?.requires?.minCases ?? 30;
   if (!Array.isArray(vectors?.cases) || vectors.cases.length < minCases) {
     problems.push(`${VECTORS} carries ${vectors?.cases?.length ?? 0} cases, below its own floor of ${minCases} — an emptied suite cannot count as agreement`);
   }
-  const routeOf = (src, name) => {
-    const m = /\/v1\/[a-z-]+(?:\/[a-z-]+)?/i.exec(src.match(/appending `([^`]+)`/)?.[1] ?? "");
-    if (m) return m[0];
-    const any = src.match(/\/v1\/[a-z][a-z-]*/i);
-    return any ? (name, any[0]) : null;
-  };
-  const kotlinRoute = routeOf(kotlinSrc, "kotlin");
-  const rustRoute = routeOf(rustSrc, "rust");
-  if (!kotlinRoute || !rustRoute) {
-    problems.push("could not extract the bound route from one of the SDK endpoint files — the extractor, not the SDK, changed");
-  } else if (kotlinRoute !== rustRoute) {
-    problems.push(`the SDKs bind DIFFERENT routes (kotlin ${kotlinRoute}, rust ${rustRoute}) — two phantom contracts`);
+  const boundRoute = vectors?.route ?? null;
+  if (!boundRoute || !ROUTE_SHAPE.test(boundRoute)) {
+    problems.push(`${VECTORS} carries no well-formed "route" field — the wire the vectors bind must be DATA in the shared artifact, not prose in SDK comments`);
+    return { problems, boundRoute: null };
   }
-  const boundRoute = kotlinRoute ?? rustRoute;
-  if (boundRoute) {
-    const served = specYaml.includes(`${boundRoute}:`);
-    const gapDeclared = gapsSrc.includes(`id: "${GAP_ID}"`);
-    if (!served && !gapDeclared) {
-      problems.push(
-        `the SDK conformance suite binds ${boundRoute}, which the OpenAPI spec does not serve, and no "${GAP_ID}" entry claims it in ${GAPS_FILE} — a green suite over an unserved wire with no declared gap is the phantom contract DR-007 exists to prevent`,
-      );
-    }
-    if (served && gapDeclared) {
-      problems.push(`${boundRoute} is now SERVED but the "${GAP_ID}" gap entry still stands — remove the entry (its closedWhen should have fired; if it did not, the closedWhen predicate broke)`);
+  // SDK docs must agree with the data — one check, one shape, both files.
+  for (const [name, src] of [["Kotlin GateEndpoint.kt", kotlinSrc], ["Rust endpoint.rs", rustSrc]]) {
+    if (!src.includes(boundRoute)) {
+      problems.push(`${name} never mentions ${boundRoute} — its documentation drifted from the shared vectors' bound route`);
     }
   }
-  return problems;
+  const served = specYaml.includes(`${boundRoute}:`);
+  const gapDeclared = gapsSrc.includes(`id: "${GAP_ID}"`);
+  const gapNamesRoute = gapDeclared && new RegExp(`id: "${GAP_ID}"[\\s\\S]{0,2000}?${boundRoute.replace(/\//g, "\\/")}`).test(gapsSrc);
+  if (!served) {
+    if (!gapDeclared) {
+      problems.push(`the vectors bind ${boundRoute}, which the OpenAPI spec does not serve, and no "${GAP_ID}" entry claims it in ${GAPS_FILE} — a green suite over an unserved wire with no declared gap is the phantom contract DR-007 exists to prevent`);
+    } else if (!gapNamesRoute) {
+      problems.push(`the vectors bind ${boundRoute}, but the "${GAP_ID}" gap entry names a different route — a retargeted wire cannot shelter under a gap that does not cover it`);
+    }
+  }
+  if (served && gapDeclared) {
+    problems.push(`${boundRoute} is now SERVED but the "${GAP_ID}" gap entry still stands — remove the entry (its closedWhen should have fired; if it did not, the closedWhen predicate broke)`);
+  }
+  return { problems, boundRoute };
 }
 
 function load() {
@@ -76,27 +77,46 @@ function load() {
 function selfTest() {
   const checks = [];
   const base = load();
-  let p = auditAssistWire(base);
-  checks.push(["the committed tree passes (gap declared, route unserved)", p.length === 0]);
-  p = auditAssistWire({ ...base, gapsSrc: base.gapsSrc.replace(`id: "${GAP_ID}"`, 'id: "renamed-away"') });
-  checks.push(["deleting the gap entry while the route stays unserved FAILS", p.some((x) => x.includes("no \"assist-wire-unserved\" entry"))]);
-  p = auditAssistWire({ ...base, specYaml: base.specYaml + "\n  /v1/authorize:\n    post: {}\n" });
-  checks.push(["serving the route while the gap entry still stands FAILS (stale gap)", p.some((x) => x.includes("still stands"))]);
-  p = auditAssistWire({ ...base, vectorsJson: JSON.stringify({ requires: { minCases: 30 }, cases: [] }) });
-  checks.push(["an emptied vector suite trips the vacuity floor", p.some((x) => x.includes("below its own floor"))]);
+  let r = auditAssistWire(base);
+  checks.push(["the committed tree passes (gap declared, route unserved)", r.problems.length === 0]);
+  r = auditAssistWire({ ...base, gapsSrc: base.gapsSrc.replace(`id: "${GAP_ID}"`, 'id: "renamed-away"') });
+  checks.push(["deleting the gap entry while the route stays unserved FAILS", r.problems.some((x) => x.includes("no \"assist-wire-unserved\" entry"))]);
+  r = auditAssistWire({ ...base, specYaml: base.specYaml + "\n  /v1/authorize:\n    post: {}\n" });
+  checks.push(["serving the route while the gap entry still stands FAILS (stale gap)", r.problems.some((x) => x.includes("still stands"))]);
+  // The retarget the review executed against v1 — now caught, because the
+  // route is data and the gap must name it:
+  const retargeted = JSON.stringify({ ...JSON.parse(base.vectorsJson), route: "/v1/assist" });
+  r = auditAssistWire({ ...base, vectorsJson: retargeted });
+  checks.push(["retargeting the vectors to a second unserved route FAILS", r.problems.some((x) => x.includes("different route") || x.includes("never mentions"))]);
+  // Multi-segment identical routes must NOT fabricate divergence — the v1
+  // defect where the honest comment fix failed the gate:
+  const deep = JSON.stringify({ ...JSON.parse(base.vectorsJson), route: "/v1/decisions/evaluate" });
+  r = auditAssistWire({
+    ...base,
+    vectorsJson: deep,
+    kotlinSrc: base.kotlinSrc + "\n// appends /v1/decisions/evaluate\n",
+    rustSrc: base.rustSrc + "\n// appends /v1/decisions/evaluate\n",
+    gapsSrc: base.gapsSrc.replace(/\/v1\/authorize/g, "/v1/decisions/evaluate"),
+  });
+  checks.push(["identical multi-segment routes do NOT report divergence", !r.problems.some((x) => x.includes("DIFFERENT"))]);
+  r = auditAssistWire({ ...base, vectorsJson: JSON.stringify({ requires: { minCases: 30 }, cases: [], route: "/v1/authorize" }) });
+  checks.push(["an emptied vector suite trips the vacuity floor", r.problems.some((x) => x.includes("below its own floor"))]);
+  r = auditAssistWire({ ...base, vectorsJson: JSON.stringify({ ...JSON.parse(base.vectorsJson), route: undefined }) });
+  checks.push(["vectors without a route field FAIL (the wire must be data)", r.problems.some((x) => x.includes("no well-formed \"route\""))]);
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
   return failed.length === 0 ? 0 : 1;
 }
 
-if (process.argv.includes("--self-test")) process.exit(selfTest());
-
-const problems = auditAssistWire(load());
-console.log("Assist-wire served-ness — the SDK-bound wire is either served or a declared gap (DR-007)");
-if (problems.length > 0) {
-  console.error(`Assist-wire check FAILED: ${problems.length} problem(s).`);
-  for (const p of problems) console.error(`  ✗ ${p}`);
-  process.exit(1);
+if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop())) {
+  if (process.argv.includes("--self-test")) process.exit(selfTest());
+  const { problems, boundRoute } = auditAssistWire(load());
+  console.log("Assist-wire served-ness — the vector-bound wire is served or a declared gap (DR-007)");
+  if (problems.length > 0) {
+    console.error(`Assist-wire check FAILED: ${problems.length} problem(s).`);
+    for (const p of problems) console.error(`  ✗ ${p}`);
+    process.exit(1);
+  }
+  console.log(`Assist-wire check passed — ${boundRoute} is a declared gap, not a phantom contract.`);
 }
-console.log("Assist-wire check passed — /v1/authorize is a declared gap, not a phantom contract.");

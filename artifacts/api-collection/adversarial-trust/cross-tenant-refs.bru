@@ -1,0 +1,37 @@
+meta {
+  name: Cross-tenant refs read as nonexistent
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/v1/decisions/evaluate
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{atlasToken}}
+}
+
+body:json {
+  {
+    "identityRef": "nurse.compliant",
+    "deviceRef": "ipad-ward-01",
+    "workflowKey": "clinical-session"
+  }
+}
+
+assert {
+  res.status: eq 404
+}
+
+tests {
+  test("another tenant's refs are indistinguishable from nonexistent ones", function () {
+    expect(res.body.error).to.equal("not_found");
+  });
+}
+
+docs {
+  An atlas-tenant token naming northwind's fixtures gets the same 404 a typo would - cross-tenant probing cannot even learn that the refs exist, let alone earn a verdict over them.
+}

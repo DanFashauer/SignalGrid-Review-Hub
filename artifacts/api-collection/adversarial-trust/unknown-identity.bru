@@ -1,0 +1,33 @@
+meta {
+  name: Unknown identity is not found - never graded
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/v1/decisions/evaluate
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "identityRef": "ghost.person",
+    "deviceRef": "ipad-ward-01",
+    "workflowKey": "clinical-session"
+  }
+}
+
+assert {
+  res.status: eq 404
+}
+
+tests {
+  test("an identity the tenant has never seen cannot earn any verdict", function () {
+    expect(res.body.error).to.equal("not_found");
+  });
+}
+
+docs {
+  Same refusal as the unknown device: identity is resolved inside the caller's tenant or not at all.
+}

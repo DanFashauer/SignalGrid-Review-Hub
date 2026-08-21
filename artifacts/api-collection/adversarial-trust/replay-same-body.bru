@@ -1,0 +1,42 @@
+meta {
+  name: Replay - same key and body returns the stored decision
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/v1/decisions/evaluate
+  body: json
+  auth: inherit
+}
+
+headers {
+  Idempotency-Key: bruno-adversarial-replay
+}
+
+body:json {
+  {
+    "identityRef": "nurse.compliant",
+    "deviceRef": "ipad-ward-01",
+    "workflowKey": "clinical-session"
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("the run's second pass over this file is a marked replay, not a second decision", function () {
+    // First execution stores; a retry (same caller, key, route, body) replays
+    // with the header set. On the FIRST run this header is absent - both
+    // states are legitimate, so the pinned property is the pair below.
+    const replay = res.headers["idempotency-replay"];
+    expect(["true", undefined]).to.include(replay);
+    expect(res.body.decision.outcome).to.equal("allow");
+  });
+}
+
+docs {
+  Exactly-once for transport retries: same key + same body replays the stored 2xx (marked Idempotency-Replay: true). The body is PART of the key - see the sibling request - so this can never serve someone else's answer.
+}

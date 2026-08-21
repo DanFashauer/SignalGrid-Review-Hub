@@ -1,0 +1,34 @@
+meta {
+  name: Disabled identity denies
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/v1/decisions/evaluate
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "identityRef": "nurse.disabled",
+    "deviceRef": "ipad-ward-01",
+    "workflowKey": "clinical-session"
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("a disabled identity is denied outright - no device state can rescue it", function () {
+    expect(res.body.decision.outcome).to.equal("deny");
+    expect(res.body.decision.reasonCodes).to.include("IDENTITY_DISABLED");
+  });
+}
+
+docs {
+  Identity disablement wins over a healthy device - proven here on the healthiest device in the fixture set.
+}

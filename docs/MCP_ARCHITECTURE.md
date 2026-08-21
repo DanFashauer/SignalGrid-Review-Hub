@@ -29,7 +29,8 @@ route, and every registered route must carry at least one request (or a
 declared exception with a reason and a date; GA routes may never be excepted).
 The collection therefore cannot quietly become documentation of an API that no
 longer exists, and a new route cannot ship unmapped. `negative-tests/` pins
-the refusals (401/404/400 and the GA fence); the standalone collections for
+the refusals (401/404/400 and the GA fence), `adversarial-trust/` executes
+the no-unearned-affirmative doctrine per attack; the standalone collections for
 the external lab services `scripts/run-live-lanes.sh` actually starts live at
 `artifacts/lab-collections/` — third-party surfaces, deliberately outside both
 this collection and its route gate. Details and run instructions:

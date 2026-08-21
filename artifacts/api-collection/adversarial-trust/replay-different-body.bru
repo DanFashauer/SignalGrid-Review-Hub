@@ -1,0 +1,39 @@
+meta {
+  name: Replay - same key with a different body executes fresh
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{baseUrl}}/v1/decisions/evaluate
+  body: json
+  auth: inherit
+}
+
+headers {
+  Idempotency-Key: bruno-adversarial-replay
+}
+
+body:json {
+  {
+    "identityRef": "nurse.noncompliant",
+    "deviceRef": "ipad-ward-02",
+    "workflowKey": "clinical-session"
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("key reuse with a different payload cannot serve the other payload's answer", function () {
+    expect(res.headers["idempotency-replay"]).to.equal(undefined);
+    expect(res.body.decision.outcome).to.equal("restrict");
+    expect(res.body.decision.reasonCodes).to.include("DEVICE_NONCOMPLIANT");
+  });
+}
+
+docs {
+  The same Idempotency-Key as the sibling request, a different body: the payload digest is part of the cache key, so this evaluates FRESH and earns its own restrict - a compliant allow can never be replayed onto a noncompliant question.
+}

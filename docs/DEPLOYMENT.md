@@ -27,7 +27,8 @@ in-memory (the fixture-safe default used by the public build and CI).
 
 | Variable | Purpose | Default |
 | --- | --- | --- |
-| `DATABASE_URL` | Postgres connection string. Set ⇒ durable persistence on. | unset (in-memory) |
+| `SIGNALGRID_PRODUCT_PROFILE` | **The profile fence.** `shared-device-gateway` for every real deployment; `review-demo` (the unset default) serves demo credentials via `/v1/keys`, the unauthenticated simulator, and accepts demo bearers — measured: a stack without this variable handed an anonymous caller nine bearer tokens, a tenant owner among them. | unset ⇒ `review-demo` |
+| `DATABASE_URL` | Postgres connection string, **as the `signalgrid_runtime` role** (see Schema below). Set ⇒ durable persistence on. | unset (in-memory) |
 | `SIGNALGRID_TIER` | `dev` \| `alpha` \| `beta` \| `prod`. | `dev` |
 | `SIGNALGRID_LIVE_INTEGRATIONS` | `true` only permits live vendor calls, and only on `beta`/`prod`. | unset (off) |
 | `PORT` | API listen port. | `8080` |
@@ -38,6 +39,9 @@ in-memory (the fixture-safe default used by the public build and CI).
 | `OIDC_AUDIENCE` | Expected token audience (the API's app/client id). | unset |
 | `OIDC_JWKS_URI` | IdP JWKS endpoint (discovery `jwks_uri`). | unset |
 | `OIDC_TENANT_CLAIM` / `OIDC_ROLE_CLAIM` | Claims carrying the IdP tenant / role. | `tid` / `roles` |
+| `METRICS_TOKEN` | Set ⇒ `/metrics` requires this bearer. | unset (open on the internal port) |
+| `NODE_ENV` | Standard Node environment switch; the compose file sets `production`. | unset |
+| `SIGNALGRID_DEPRECATED_ROUTES` | Comma-separated route ids to serve with a `Deprecation` header during a migration window. | unset |
 | `OIDC_TENANT_MAP` / `OIDC_ROLE_MAP` | JSON maps: IdP value → internal tenant id / role. | unset |
 | `GRAPH_ACCESS_TOKEN` | Read-only Microsoft Graph token for the posture connector. | unset (fixture mode) |
 | `CARRIER_ACCESS_TOKEN` | Read-only carrier/IoT-connectivity token for the reachability connector. | unset (fixture mode) |
@@ -196,11 +200,51 @@ every other integration (live only on `beta`/`prod` + `SIGNALGRID_LIVE_INTEGRATI
 are made unless `SIGNALGRID_LIVE_INTEGRATIONS=true` is also set — so this stack is
 safe to stand up for evaluation without any external credentials.
 
-## Schema
+## Schema — migrate first, then boot
 
-Tables are created automatically on first connect. Canonical migrations live in
-`lib/persistence/migrations/` and `lib/audit/migrations/` for use with a
-migration tool in a managed deployment.
+Do not rely on first-connect table creation: a real deployment runs the API as
+the minimally-privileged `signalgrid_runtime` role, which owns nothing and may
+not create tables — the ledger is append-only **by privilege** (migration v2;
+see `docs/BACKUP_AND_RESTORE.md` § "The runtime role"). The sequence is:
+
+1. **Migrate with the admin credential** — `DATABASE_URL=<admin> pnpm run
+   db:migrate`. This creates the schema AND provisions the role split; it
+   refuses up front (nothing half-applied) if the credential cannot.
+2. **Set the runtime password out of band** —
+   `psql "$ADMIN_DATABASE_URL" -c '\password signalgrid_runtime'` (prompts;
+   never inline a password into a command).
+3. **Boot the API as the runtime role** — point the API's `DATABASE_URL` at
+   `signalgrid_runtime`. The stores verify their exact privileges at boot and
+   on every `/readyz`, and refuse to report ready for work that would fail.
+
+`pnpm run db:migrate` is also the repair command: on an already-current
+database it re-applies the idempotent role split, so a dropped grant is fixed
+by exactly the command the error messages name.
+
+## Upgrade and rollback
+
+Upgrades: migrate first (admin credential), then roll the API image. The
+migration runner applies only versions the database has not recorded.
+
+Rollbacks: rolling the API image back is always safe against the same schema.
+Rolling back **past a migration** is a restore, not a downgrade — migrations
+have no down path by design, and `db:migrate` refuses a database from the
+future. Use `pnpm run db:restore` with the pre-upgrade backup
+(`docs/BACKUP_AND_RESTORE.md`); the restore re-applies the privilege posture
+itself.
+
+## What this deployment decides about
+
+Be precise about the decision core this stack serves: the API boots the
+demo-seeded core (`artifacts/api-server/src/lib/core.ts:10` —
+`SignalGridCore.demo()`), whose only constructor path is the demo factory with
+a fixed clock (`lib/signalgrid-core/src/engine.ts:51,92`). The
+`shared-device-gateway` profile fences off the demo *surfaces* (credential
+dispenser, simulator, demo bearers), but the tenants, identities, and devices
+the core evaluates are still the seeded fixtures — a customer's own directory
+and fleet are not yet wired in. That gap is declared mechanically in
+`scripts/launch-profile.mjs` (GAPS: `non-demo-core-constructor`) and closes
+when the served core stops being `SignalGridCore.demo()`.
 
 ## How it's validated
 

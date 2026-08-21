@@ -201,6 +201,9 @@ jobs:
         run: node scripts/check-publication-boundary.mjs
       - name: API collection (a committed request must name a served route)
         run: node scripts/check-api-collection.mjs
+
+      - name: Deployment runbook (the documented path must be the real one)
+        run: node scripts/check-deployment-runbook.mjs
       - name: "Connector discipline (gated + proven, no device actuators)"
         run: node scripts/check-connector-discipline.mjs
       - name: "Ungated fetch (the live boundary covers every outbound path)"
@@ -900,7 +903,12 @@ jobs:
       # Build the API image and bring up the durable stack (api + Postgres) so
       # the packaged deployment is proven, not just the source. DATABASE_URL in
       # the compose file turns on the gated persistence layer.
-      - name: Build and start the durable stack
+      # Phase 1: the EVALUATION profile (review-demo), so the demo-credential
+      # end-to-end flow can run — the packaged image must still prove a real
+      # decision written through to durable Postgres.
+      - name: Build and start the durable stack (review-demo profile)
+        env:
+          SIGNALGRID_PRODUCT_PROFILE: review-demo
         run: docker compose -f docker-compose.prod.yml up -d --build
 
       - name: Wait for the API to be healthy
@@ -919,6 +927,23 @@ jobs:
       # evaluated, read back from durable Postgres, its evidence verifies, cross-
       # tenant reads are denied, and /metrics reflects the traffic.
       - name: Smoke-test the running stack
+        env:
+          BASE_URL: http://localhost:8080
+        run: node scripts/smoke-stack.mjs
+
+      # Phase 2: the PRODUCTION default (shared-device-gateway) on the SAME
+      # image — recreate only the api container with the compose default and
+      # prove the fence: /v1/keys and the simulator unmounted, demo bearers
+      # refused. This is the leak measured on 2026-08-21 (an anonymous caller
+      # received nine demo bearers from the documented stack), pinned so it
+      # cannot come back.
+      - name: Recreate the api on the production default profile
+        run: docker compose -f docker-compose.prod.yml up -d --force-recreate api
+
+      - name: Wait for the gateway-profile API
+        run: curl -sf --retry 60 --retry-delay 2 --retry-all-errors http://localhost:8080/api/healthz
+
+      - name: Smoke-test the gateway fence
         env:
           BASE_URL: http://localhost:8080
         run: node scripts/smoke-stack.mjs

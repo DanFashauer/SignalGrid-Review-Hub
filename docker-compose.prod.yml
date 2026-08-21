@@ -32,6 +32,16 @@ services:
       NODE_ENV: production
       PORT: 8080
       SIGNALGRID_TIER: prod
+      # THE PROFILE FENCE. Without this line the server resolves to
+      # `review-demo` and SERVES THE DEMO SURFACES: GET /api/v1/keys hands an
+      # anonymous caller nine bearer tokens (including a tenant owner), and
+      # the unauthenticated simulator and control plane are mounted. Measured
+      # before this line existed — a stack booted from this very file did
+      # exactly that. A production deployment is the gateway profile, always.
+      # Overridable for an EVALUATION stack (SIGNALGRID_PRODUCT_PROFILE=review-demo
+      # docker compose up …), because the demo surfaces are the point of an
+      # evaluation — but the DEFAULT is the production truth.
+      SIGNALGRID_PRODUCT_PROFILE: ${SIGNALGRID_PRODUCT_PROFILE:-shared-device-gateway}
       # Enabling durable persistence: with DATABASE_URL set, the audit ledger,
       # decision/evidence store, and session store persist to Postgres.
       #

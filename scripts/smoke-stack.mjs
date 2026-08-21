@@ -26,6 +26,30 @@ async function main() {
   // Fixture-safe by default even at prod tier: no live vendor calls.
   check("live integrations are OFF by default", health.liveIntegrations === false);
 
+  // ── which profile is this stack actually serving? ───────────────────────────
+  // Probed, not assumed: /v1/keys exists ONLY under review-demo. Under the
+  // shared-device-gateway profile this suite asserts THE FENCE — the exact
+  // leak measured before the compose file set the profile (an anonymous
+  // caller received nine demo bearers, a tenant owner among them) — and skips
+  // the demo-credential flow LOUDLY, because no credential can exist here:
+  // the gateway profile accepts only verified enterprise credentials.
+  const keysProbe = await fetch(`${API}/v1/keys`);
+  if (keysProbe.status !== 200) {
+    check("gateway fence: /v1/keys is NOT served (was the credential dispenser)", keysProbe.status === 404);
+    const sim = await fetch(`${API}/sim/room-entry`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    check("gateway fence: the unauthenticated simulator is NOT mounted", sim.status === 404);
+    const demoEval = await fetch(`${API}/v1/decisions/evaluate`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
+      body: JSON.stringify({ identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" }),
+    });
+    check("gateway fence: a demo bearer is REFUSED as a credential (401)", demoEval.status === 401);
+    const ready = await fetch(`${API}/readyz`);
+    check("readyz answers under the gateway profile", ready.status === 200 || ready.status === 503);
+    console.log("  NOTE: gateway profile detected — demo-credential flow NOT RUN (no credential can exist here); the review-demo pass covers it.");
+    return finishSmoke();
+  }
+
   // ── evaluate a real decision (write-through to durable store) ────────────────
   const evalRes = await fetch(`${API}/v1/decisions/evaluate`, {
     method: "POST",
@@ -64,6 +88,10 @@ async function main() {
     /signalgrid_decisions_total\{outcome="allow"\} [1-9]/.test(metrics));
   check("metrics: request counter present", metrics.includes("signalgrid_http_requests_total"));
 
+  finishSmoke();
+}
+
+function finishSmoke() {
   const total = passed + failures.length;
   console.log(`Stack smoke: ${passed}/${total} checks passed (BASE=${BASE})`);
   if (failures.length) {
@@ -71,7 +99,7 @@ async function main() {
     for (const f of failures) console.error(`  - ${f}`);
     process.exit(1);
   }
-  console.log("Deployed stack verified — durable decision persistence + tamper-evident evidence + tenant isolation + metrics, end to end.");
+  console.log("Deployed stack verified for the profile it serves.");
 }
 
 main().catch((err) => { console.error("Smoke test error:", err.message); process.exit(1); });

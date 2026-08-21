@@ -53,8 +53,12 @@ async function main() {
       body: JSON.stringify({ identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" }),
     });
     check("gateway fence: a demo bearer is REFUSED as a credential (401)", demoEval.status === 401);
+    // 200 REQUIRED, not merely answered: /readyz is the probe that exercises
+    // the durable store with the running credential, and a production-shaped
+    // instance answering 503 is explicitly saying "do not send me traffic" —
+    // a smoke that passes anyway certifies a stack that refuses work.
     const ready = await fetch(`${API}/readyz`);
-    check("readyz answers under the gateway profile", ready.status === 200 || ready.status === 503);
+    check("readyz reports READY (200) — the gateway can reach its durable store", ready.status === 200);
     console.log("  NOTE: gateway profile detected — demo-credential flow NOT RUN (no credential can exist here); the review-demo pass covers it.");
     return finishSmoke();
   }

@@ -58,6 +58,26 @@ services:
       # them here would un-deploy the gateway while appearing configured.
       OIDC_TENANT_MAP: ${OIDC_TENANT_MAP:-}
       OIDC_ROLE_MAP: ${OIDC_ROLE_MAP:-}
+      # Every remaining boot-read setting passes through too — a runbook row
+      # for a variable this file swallows is documentation of a dead knob
+      # (exporting it on the host would be silently ignored). The runbook
+      # checker now holds this mapping against the collected boot-reads.
+      # Blank-safety verified per reader: the rate limiters fall back on
+      # non-positive parses, REDIS_URL/WEBAUTHN_* treat blank as unset, and
+      # the step-up TTL and OIDC clock tolerance readers were hardened to
+      # treat blank as their documented defaults.
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      LOG_LEVEL: ${LOG_LEVEL:-}
+      REDIS_URL: ${REDIS_URL:-}
+      SIGNALGRID_DEPRECATED_ROUTES: ${SIGNALGRID_DEPRECATED_ROUTES:-}
+      SIGNALGRID_LIVE_INTEGRATIONS: ${SIGNALGRID_LIVE_INTEGRATIONS:-}
+      SIGNALGRID_V1_RATE_LIMIT: ${SIGNALGRID_V1_RATE_LIMIT:-}
+      SIGNALGRID_GLOBAL_RATE_LIMIT: ${SIGNALGRID_GLOBAL_RATE_LIMIT:-}
+      STEPUP_TTL_SECONDS: ${STEPUP_TTL_SECONDS:-}
+      WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-}
+      WEBAUTHN_RP_NAME: ${WEBAUTHN_RP_NAME:-}
+      WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:-}
+      WEBAUTHN_REQUIRE_STEP_UP_FOR_ADMIN: ${WEBAUTHN_REQUIRE_STEP_UP_FOR_ADMIN:-}
       SIGNALGRID_ENROLLMENT_SECRET: ${SIGNALGRID_ENROLLMENT_SECRET:-}
       METRICS_TOKEN: ${METRICS_TOKEN:-}
       # Enabling durable persistence: with DATABASE_URL set, the audit ledger,

@@ -92,6 +92,13 @@ export function auditRunbook({ envVars, runbook, compose }) {
     if (!runbook.includes("`" + v + "`")) {
       problems.push(`the server boot-reads ${v}; the runbook's env table never mentions it`);
     }
+    // Direction 4: documented is not enough — the compose file must PASS the
+    // variable into the container. A runbook row for a var this mapping
+    // swallows documents a dead knob: the operator exports it, compose drops
+    // it, and the stack silently runs on the default.
+    if (!new RegExp(`^\\s+${v}:`, "m").test(compose)) {
+      problems.push(`the server boot-reads ${v}; docker-compose.prod.yml never passes it into the container — exporting it on the host is silently ignored`);
+    }
   }
   if (!/SIGNALGRID_PRODUCT_PROFILE:\s*\$\{SIGNALGRID_PRODUCT_PROFILE:-shared-device-gateway\}/.test(compose)) {
     problems.push(
@@ -109,12 +116,22 @@ export function auditRunbook({ envVars, runbook, compose }) {
 
 function selfTest() {
   const checks = [];
-  const goodCompose = "SIGNALGRID_PRODUCT_PROFILE: ${SIGNALGRID_PRODUCT_PROFILE:-shared-device-gateway}";
+  const goodCompose =
+    "      SIGNALGRID_PRODUCT_PROFILE: ${SIGNALGRID_PRODUCT_PROFILE:-shared-device-gateway}\n      PORT: 8080";
   const goodBook = "`PORT` db:migrate signalgrid_runtime";
   let p = auditRunbook({ envVars: new Set(["PORT"]), runbook: goodBook, compose: goodCompose });
   checks.push(["a coherent runbook/compose/env trio passes", p.length === 0]);
   p = auditRunbook({ envVars: new Set(["PORT", "NEW_VAR"]), runbook: goodBook, compose: goodCompose });
   checks.push(["a boot-read var missing from the runbook FAILS", p.some((x) => x.includes("NEW_VAR"))]);
+  p = auditRunbook({
+    envVars: new Set(["PORT", "DOCUMENTED_BUT_DROPPED"]),
+    runbook: goodBook + " `DOCUMENTED_BUT_DROPPED`",
+    compose: goodCompose,
+  });
+  checks.push([
+    "a var documented in the runbook but not passed through compose FAILS (dead knob)",
+    p.some((x) => x.includes("DOCUMENTED_BUT_DROPPED") && x.includes("never passes it")),
+  ]);
   p = auditRunbook({ envVars: new Set(["PORT"]), runbook: goodBook, compose: "environment: {}" });
   checks.push(["a compose file without the profile default FAILS", p.some((x) => x.includes("PRODUCT_PROFILE"))]);
   p = auditRunbook({ envVars: new Set(["PORT"]), runbook: "`PORT` signalgrid_runtime", compose: goodCompose });

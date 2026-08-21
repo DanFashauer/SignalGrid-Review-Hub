@@ -63,7 +63,11 @@ export function loadEnterpriseAuthConfig(env: NodeJS.ProcessEnv = process.env): 
     roleByClaimValue[key] = value as Role;
   }
 
-  const toleranceRaw = Number(env.OIDC_CLOCK_TOLERANCE_SEC);
+  // Blank must mean UNSET, not zero: a compose pass-through with the variable
+  // unset on the host injects "" here, and Number("") is 0 — a silent zero
+  // tolerance rejects valid tokens for ordinary clock skew.
+  const toleranceTrimmed = env.OIDC_CLOCK_TOLERANCE_SEC?.trim();
+  const toleranceRaw = toleranceTrimmed ? Number(toleranceTrimmed) : NaN;
   const clockToleranceSec = Number.isFinite(toleranceRaw) && toleranceRaw >= 0 ? Math.floor(toleranceRaw) : 60;
 
   return {

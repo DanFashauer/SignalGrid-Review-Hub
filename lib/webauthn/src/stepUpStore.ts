@@ -71,7 +71,13 @@ export const STEPUP_REQUIRED_OPERATIONS: StepUpChallenge[] = [
 const CONFIG = {
   redisUrl: process.env.REDIS_URL,
   keyPrefix: 'stepup',
-  ttlSeconds: parseInt(process.env.STEPUP_TTL_SECONDS ?? '300'), // 5 minutes default
+  // `|| '300'` not `?? '300'`: a compose pass-through injects "" when the host
+  // leaves the variable unset, and parseInt("") is NaN — every step-up session
+  // would be minted already-expired. Non-positive/garbage also falls back.
+  ttlSeconds: (() => {
+    const n = parseInt(process.env.STEPUP_TTL_SECONDS || '300');
+    return Number.isFinite(n) && n > 0 ? n : 300;
+  })(), // 5 minutes default
 };
 
 // ============================================================================

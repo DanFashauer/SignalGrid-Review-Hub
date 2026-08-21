@@ -933,12 +933,38 @@ jobs:
         run: node scripts/smoke-stack.mjs
 
       # Phase 2: the PRODUCTION default (shared-device-gateway) on the SAME
-      # image — recreate only the api container with the compose default and
-      # prove the fence: /v1/keys and the simulator unmounted, demo bearers
-      # refused. This is the leak measured on 2026-08-21 (an anonymous caller
-      # received nine demo bearers from the documented stack), pinned so it
-      # cannot come back.
-      - name: Recreate the api on the production default profile
+      # image — and in the PRODUCTION POSTURE, by executing the runbook's
+      # migrate-then-boot sequence literally rather than simulating it. The
+      # gateway smoke now requires /readyz 200, and readyz asserts the
+      # append-only boundary in BOTH directions: an owner credential holds
+      # DELETE on the ledger, so a gateway running as the owner is honestly
+      # not-ready (a rewritable ledger is not a tamper-evidence component).
+      # The only way to a green phase 2 is the documented path: migrate as
+      # admin, boot as signalgrid_runtime. The fence assertions ride along:
+      # /v1/keys and the simulator unmounted, demo bearers refused — the leak
+      # measured on 2026-08-21 (nine demo bearers to an anonymous caller),
+      # pinned so it cannot come back.
+      - name: Publish the db to the runner loopback (CI-only overlay)
+        run: docker compose -f docker-compose.prod.yml -f docker-compose.ci-db-port.yml up -d db
+
+      - name: Enable corepack (pnpm)
+        run: corepack enable
+
+      - name: Install dependencies (the migration runner)
+        run: pnpm install --frozen-lockfile
+
+      - name: "Runbook step 1: migrate with the admin credential"
+        run: DATABASE_URL=postgres://sg:sg@127.0.0.1:55432/signalgrid pnpm run db:migrate
+
+      - name: "Runbook step 2: set the runtime password"
+        # ci-smoke is a throwaway for this runner's ephemeral Postgres, same
+        # standing as the compose file's sg:sg. Real deployments set it out of
+        # band via \password (see docs/DEPLOYMENT.md).
+        run: docker compose -f docker-compose.prod.yml exec -T db psql -U sg -d signalgrid -c "ALTER ROLE signalgrid_runtime WITH LOGIN PASSWORD 'ci-smoke'"
+
+      - name: "Runbook step 3: recreate the api as the runtime role on the production default profile"
+        env:
+          DATABASE_URL: postgres://signalgrid_runtime:ci-smoke@db:5432/signalgrid
         run: docker compose -f docker-compose.prod.yml up -d --force-recreate api
 
       - name: Wait for the gateway-profile API

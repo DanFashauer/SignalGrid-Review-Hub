@@ -204,6 +204,10 @@ jobs:
 
       - name: Deployment runbook (the documented path must be the real one)
         run: node scripts/check-deployment-runbook.mjs
+      - name: Decision palette self-test (the gate must be able to fail)
+        run: node scripts/check-decision-palette.mjs --self-test
+      - name: Decision palette (one palette, every tree, AA everywhere)
+        run: node scripts/check-decision-palette.mjs
       - name: Reason codes self-test (the gate must be able to fail)
         run: node scripts/check-reason-codes.mjs --self-test
       - name: Reason codes (the engine's vocabulary is the catalog's and the contract's)

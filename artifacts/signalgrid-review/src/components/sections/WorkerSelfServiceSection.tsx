@@ -55,10 +55,10 @@ const title: Record<DecisionOutcome, string> = {
 };
 
 const tone: Record<DecisionOutcome, string> = {
-  allow: "text-teal-300",
-  step_up: "text-amber-300",
-  restrict: "text-orange-300",
-  deny: "text-red-300",
+  allow: "text-status-allow",
+  step_up: "text-status-step-up",
+  restrict: "text-status-restrict",
+  deny: "text-status-deny",
 };
 
 const channelLabel: Record<string, string> = {

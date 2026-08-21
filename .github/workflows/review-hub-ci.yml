@@ -204,6 +204,10 @@ jobs:
 
       - name: Deployment runbook (the documented path must be the real one)
         run: node scripts/check-deployment-runbook.mjs
+      - name: Scheduled routines self-test (the gate must be able to fail)
+        run: node scripts/check-scheduled-routines.mjs --self-test
+      - name: Scheduled routines (every always-on lane declared, authorized, scoped, evidenced)
+        run: node scripts/check-scheduled-routines.mjs
       - name: Assist wire self-test (the gate must be able to fail)
         run: node scripts/check-assist-wire-served.mjs --self-test
       - name: Assist wire served-ness (a bound wire is served or a declared gap)

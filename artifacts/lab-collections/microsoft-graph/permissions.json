@@ -1,0 +1,22 @@
+{
+  "$comment": "The least-privilege application-permission set the launch Graph transport requires — the record a tenant admin consents from. Derived from the connector's real requests (see README table); recorded 2026-08-21. Adding a permission here without a matching connector call is the drift this file exists to make visible.",
+  "application": [
+    {
+      "permission": "DeviceManagementManagedDevices.Read.All",
+      "usedBy": [
+        "GET /deviceManagement/managedDevices?$top=1",
+        "GET /deviceManagement/managedDevices"
+      ],
+      "why": "read-only device posture — the DeviceManagementEvidence source"
+    },
+    {
+      "permission": "User.Read.All",
+      "usedBy": [
+        "GET /users?$select=id,userPrincipalName,accountEnabled"
+      ],
+      "why": "identity enablement only; $select limits the read to the three fields the engine consumes"
+    }
+  ],
+  "delegated": [],
+  "notRequested": "No write, no wipe, no retire, no beta endpoints — the connector is read-only by doctrine (lab registry: mutationsAllowed false)."
+}

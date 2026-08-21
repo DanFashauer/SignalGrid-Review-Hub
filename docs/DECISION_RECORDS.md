@@ -531,3 +531,43 @@ mechanically — a gate, not a promise — for each of the three forbidden moves
 Absent that record, the planes stay separate and the prohibitions stand.
 
 **Status: ratified by owner directive, 2026-08-21. Confidence: high.**
+
+---
+
+## DR-009 — Signing-key custody: keyless Sigstore OIDC via the CI identity (2026-08-21)
+
+**Question.** The release-evidence lane (backlog row 32, `docs/RELEASE_EVIDENCE.md`)
+reaches the signature stage: before the first cosign signature exists, who —
+or what — holds the key? Two custody models were on file: (a) keyless
+Sigstore OIDC bound to the repository's CI identity, trust rooted in a public
+transparency log; (b) an owner-custodied key pair.
+
+**Decision.** Keyless — option (a), the recommendation as filed, ratified by
+the owner 2026-08-21 in his own words: "I will go with recommendation on key
+custody model." A solo founder holding a private signing key is a single
+point of loss, and the transparency log is the assessor-legible answer. The
+signing identity is the repository's GitHub Actions OIDC identity
+(`id-token: write`, granted to exactly one job); every signature lands in the
+public Rekor log by construction.
+
+**Scope of the first signatures.** Blob signatures over the per-push release
+evidence (the image SBOM and vulnerability report), produced only on `push`
+events to the protected branches — never on pull requests, where a fork's
+context must not mint repository-identity signatures. Signing a REGISTRY
+image by digest arrives when an image registry exists to push to; nothing
+here claims it early.
+
+**What this forbids.** Any privately-held signing key for release artifacts
+without a superseding decision record; any signing step in a job that
+installs third-party dependencies (the signing job must stay
+install-nothing-untrusted, the same isolation reasoning as `sbom-sync`);
+any claim that a signature proves more than "this exact byte content
+existed in this repository's CI at this time."
+
+**Reversal.** A future decision record choosing held keys — expected only if
+a customer's air-gapped verification requirement makes the public log
+unusable, which is a real scenario and the reason option (b) stays written
+down rather than deleted.
+
+**Status: ratified by owner directive, 2026-08-21. Confidence: high.**
+

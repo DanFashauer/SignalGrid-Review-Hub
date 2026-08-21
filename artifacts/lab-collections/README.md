@@ -1,7 +1,11 @@
 # Source collections — the lab services that actually run
 
 Bruno collections for the **external lab services** `scripts/run-live-lanes.sh`
-starts today, and none that it does not. Each subdirectory is a standalone
+starts today — plus exactly one deliberate exception: `microsoft-graph/`, the
+launch profile's production connector TARGET, whose collection transcribes the
+connector's real transport for a tenant that does not exist in any lab (its
+own README states why it is here and why it never runs in CI). Everything
+else: deployed lanes only, and none that are not. Each subdirectory is a standalone
 Bruno collection (its own `bruno.json` + `environments/`) — open the service
 folder directly in Bruno, not this directory. They are deliberately separate
 from the parent SignalGrid API collection: the parent maps the api-server's

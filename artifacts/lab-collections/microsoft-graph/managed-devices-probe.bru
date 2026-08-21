@@ -1,0 +1,15 @@
+meta {
+  name: Managed devices - reachability probe
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/deviceManagement/managedDevices?$top=1
+  body: none
+  auth: inherit
+}
+
+docs {
+  The connector's own health probe, verbatim (lib/integrations/src/integrations/graph/posture-connector.ts:75): one device, just to prove the tenant answers and the permission grant holds. Requires DeviceManagementManagedDevices.Read.All (application) and an Intune-enabled tenant.
+}

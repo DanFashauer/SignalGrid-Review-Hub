@@ -44,7 +44,14 @@ const AMOUNT =
   "(?:\\d+|(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred)(?:[- ](?:one|two|three|four|five|six|seven|eight|nine))?)";
 const UNIT = "(?:hour|day|week|month|quarter|year)s?";
 const DURATION = new RegExp(`\\b${AMOUNT}[- ]?${UNIT}\\b`, "i");
-const RETENTION_TOKEN = /retention/gi;
+// "retention" plus the storage vocabulary a copywriter reaches for instead:
+// "Audit history is available for 90 days" and "we store decision data for
+// 12 months" are the same unsupported claim without the word.
+const RETENTION_TOKEN = /retention|retain(?:ed|s)?|\bstored?\b|\bstoring\b|\bhistory\b|\barchived?\b|\bkept\b|\bheld\b|\bavailable\b/gi;
+// The storage synonyms only count when the window is about OUR data — a
+// vendor "free trial, 31 days" or "available now" marketing line is not a
+// duration claim about SignalGrid's stores.
+const DATA_NOUN = /\b(?:data|history|audit|log|record|decision|evidence|ledger|chain|session)s?\b/i;
 const REVENUE_QUALIFIER = /(?:gross|net|customer|user|logo|employee)\s+$/i;
 
 /** Every retention TOKEN with a duration within 80 chars either side, minus
@@ -54,12 +61,22 @@ const REVENUE_QUALIFIER = /(?:gross|net|customer|user|logo|employee)\s+$/i;
  *  data-retention claim later in the same span. */
 function durationClaimsIn(text, windowChars = 80) {
   const hits = [];
+  const seenWindows = new Set();
   for (const t of text.matchAll(RETENTION_TOKEN)) {
+    const isRetentionWord = /^retention|^retain/i.test(t[0]);
     const before = text.slice(Math.max(0, t.index - 12), t.index);
-    if (REVENUE_QUALIFIER.test(before)) continue;
-    const window = text.slice(Math.max(0, t.index - windowChars), t.index + 9 + windowChars);
+    if (isRetentionWord && REVENUE_QUALIFIER.test(before)) continue;
+    const window = text.slice(Math.max(0, t.index - windowChars), t.index + t[0].length + windowChars);
     if (!DURATION.test(window)) continue;
     if (window.includes(THIRD_PARTY_MARKER)) continue;
+    // Storage synonyms need a data-noun in the window; the retention word
+    // stands on its own.
+    if (!isRetentionWord && !DATA_NOUN.test(window)) continue;
+    // One claim, several trigger words ("history … stored … available"):
+    // report it once per overlapping region, not once per synonym.
+    const bucket = Math.floor(t.index / windowChars);
+    if (seenWindows.has(bucket)) continue;
+    seenWindows.add(bucket);
     hits.push({ index: t.index, window });
   }
   return hits;
@@ -140,6 +157,16 @@ export function auditRetentionClaims(files) {
   if (!drSeen) {
     problems.push("docs/DECISION_RECORDS.md was not scanned — the DR-003 status-line check cannot run");
   }
+  // The canonical position document is in RECORDING (it must quote durations
+  // to refute them), which would let a rewrite claiming IMPLEMENTED ride
+  // green while the questionnaire cites it as authoritative. Validate its
+  // corrective meaning, exactly as DR-003's.
+  const position = files["docs/DATA_RETENTION_AND_PERSONAL_DATA.md"];
+  if (position !== undefined && !/no retention, deletion, or purge mechanism is implemented/i.test(position)) {
+    problems.push(
+      "docs/DATA_RETENTION_AND_PERSONAL_DATA.md no longer states that NO retention/deletion/purge mechanism is implemented — the canonical position lost its corrective meaning while every surface cites it",
+    );
+  }
   return problems;
 }
 
@@ -159,7 +186,8 @@ function selfTest() {
   const dr = `## DR-003 — retention: 90-day default retention window\n${DR_STATUS_MARKER} intended, not implemented.`;
   const good = {
     "docs/DECISION_RECORDS.md": dr,
-    "docs/DATA_RETENTION_AND_PERSONAL_DATA.md": "No retention is implemented. The former 90-day retention claim was removed.",
+    "docs/DATA_RETENTION_AND_PERSONAL_DATA.md":
+      "No retention, deletion, or purge mechanism is implemented. The former 90-day retention claim was removed.",
     "artifacts/signalgrid-web/src/pages/Pricing.tsx": "Tamper-evident audit ledger — exportable at any time",
   };
   let p = auditRetentionClaims(good);
@@ -223,7 +251,24 @@ function selfTest() {
   });
   checks.push([
     "a DR-003 status that keeps the marker but claims SHIPPED fails (semantic check)",
-    p.some((x) => x.includes("corrective meaning")),
+    p.some((x) => x.includes("no longer says the default is INTENDED")),
+  ]);
+  for (const [label, text] of [
+    ["'Audit history is available for 90 days'", "Audit history is available for 90 days."],
+    ["'We store decision data for 12 months'", "We store decision data for 12 months."],
+  ]) {
+    p = auditRetentionClaims({ ...good, "docs/SYNONYM.md": text });
+    checks.push([`a retention-free duration claim ${label} FAILS (storage vocabulary)`, p.some((x) => x.includes("SYNONYM"))]);
+  }
+  p = auditRetentionClaims({ ...good, "docs/TRIAL.md": "Microsoft Sentinel free trial, 31 days, then billed." });
+  checks.push(["a vendor free-trial duration without a data-noun stays clean", p.length === 0]);
+  p = auditRetentionClaims({
+    ...good,
+    "docs/DATA_RETENTION_AND_PERSONAL_DATA.md": "Retention defaults to 90 days and is implemented in every store.",
+  });
+  checks.push([
+    "the POSITION DOCUMENT itself claiming implemented fails (self-validation)",
+    p.some((x) => x.includes("canonical position lost its corrective meaning")),
   ]);
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);

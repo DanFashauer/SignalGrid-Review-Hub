@@ -2,16 +2,16 @@
  "generated": "2026-08-21",
  "derivation": "README.md + artifacts/signalgrid-web/src (pages + sections) + artifacts/{signalgrid-review,signalgrid-app,signalgrid-desktop,signalgrid-mobile-pwa}/src + docs/{fabric,room-entry}-console.html \u2014 the union of docs-sanity's app SCAN_PATHS plus README and the consoles; extraction: 9-agent workflow + completeness critic (web/README/consoles), 4-agent second pass (app trees, after review found the first derivation incomplete); corrections per docs/CLAIM_INVENTORY.md honesty note",
  "groundTruth": "scripts/launch-profile.mjs (DR-005)",
- "rowCount": 1027,
+ "rowCount": 1023,
  "counts": {
-  "unsubstantiated": 258,
+  "unsubstantiated": 255,
   "deferred": 291,
-  "launch": 235,
+  "launch": 234,
   "demo-only": 243
  },
  "actions": {
-  "rewrite": 556,
-  "keep": 314,
+  "rewrite": 554,
+  "keep": 312,
   "remove": 157
  },
  "rows": [
@@ -934,7 +934,7 @@
    "claim": "Headline: \"Indicative Pricing. No Per-Workflow Tax.\" \u2014 asserts a pricing model that does not charge per decision",
    "kind": "pricing",
    "classification": "unsubstantiated",
-   "evidence": "No metering of any kind exists to charge either per device or per decision \u2014 a repo-wide grep for metering/billing/quota/seat across artifacts/api-server/src hits only connector catalogue prose, and artifacts/api-server/src/routes/v1.ts:295-298 is the only metrics arm; docs/company/ROLE_LENS_REVIEW_2026-08-21.md:491-493",
+   "evidence": "No metering of any kind exists to charge either per device or per decision \u2014 a repo-wide grep for metering/billing/quota/seat across artifacts/api-server/src hits only connector catalogue prose, and artifacts/api-server/src/routes/v1.ts:295-298 is the only metrics arm; docs/company/ROLE_LENS_REVIEW_2026-08-21.md:491-493 | DEDUP (second extraction): Asserts a pricing MODEL (per-device, never per-workflow/per-decision) that no metering code can implement in either direction: there is no device registry and no decision meter \u2014 lib/persistence/migrations/001_decisions.sql and lib/audit/migrations/001_audit_ledger.sql carry no device column, and the only metrics arm (artifacts/api-server/src/routes/v1.ts, /v1/metrics) exposes global aggregates with no tenant label by design (artifacts/api-server/src/app.ts:104-108). The only real per-caller ceiling in the product is the per-key rate limit (artifacts/api-server/src/middlewares/rateLimit.ts:56, default 240/min), which IS a per-request tax \u2014 the opposite of the headline. Entirely absent from the 54-row Pricing extraction.",
    "action": "rewrite"
   },
   {
@@ -943,8 +943,8 @@
    "claim": "\"Illustrative per-device pricing that would scale with your fleet \u2014 not your decision volume. Pre-announcement: figures are indicative and not a live offer.\"",
    "kind": "status",
    "classification": "deferred",
-   "evidence": "The pre-announcement disclaimer is truthful and is the citation that contradicts the concrete \"$8\"/\"$14\" figures at :9 and :29; note docs/company/ROLE_CATALOG.md:1605 (\"No cost or billing figure appears in this repository, and none may\") is refuted by those two figures, and no preflight gate scans for currency amounts (docs/company/ROLE_LENS_REVIEW_2026-08-21.md:498)",
-   "action": "keep"
+   "evidence": "The pre-announcement disclaimer is truthful and is the citation that contradicts the concrete \"$8\"/\"$14\" figures at :9 and :29; note docs/company/ROLE_CATALOG.md:1605 (\"No cost or billing figure appears in this repository, and none may\") is refuted by those two figures, and no preflight gate scans for currency amounts (docs/company/ROLE_LENS_REVIEW_2026-08-21.md:498) | DEDUP (second extraction): Same missing billable unit as :9-10/:29-30 \u2014 no fleet or device dimension exists to scale against (only lib/persistence/migrations/002_sessions.sql device_ref, a lazily-expired session field). The extraction cites :103 as EVIDENCE against five other rows but never extracts it as a row of its own, so the sentence carrying the scaling promise is unclassified.",
+   "action": "rewrite"
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
@@ -1186,8 +1186,8 @@
    "claim": "\"FIPS 140-2-oriented cryptographic module design\"",
    "kind": "framework",
    "classification": "unsubstantiated",
-   "evidence": "docs/WHAT_SIGNALGRID_DOES_TODAY.md:151 lists FIPS among certifications/authorizations NOT held. No cryptographic module, validation boundary, or FIPS-mode configuration exists in the tree.",
-   "action": "rewrite"
+   "evidence": "docs/WHAT_SIGNALGRID_DOES_TODAY.md:151 lists FIPS among certifications/authorizations NOT held. No cryptographic module, validation boundary, or FIPS-mode configuration exists in the tree. | DEDUP (second extraction): POSSIBLE DUPLICATE (Federal rows not visible in the supplied set). Verified this session: the string \"FIPS\" does not appear anywhere in docs/*.md or lib/ \u2014 there is no cryptographic-module design document of any kind. docs/SECURITY_BASELINE_ALIGNMENT.md:98-105, the only substantiation table, has no FIPS row, and :127 forbids claiming unearned regulatory posture.",
+   "action": "remove"
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Federal.tsx",
@@ -1204,8 +1204,8 @@
    "claim": "\"Tamper-evident hash-chained audit ledger with an independent paginating verifier and signed export\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "`pnpm run proof:audit-ledger` and `pnpm run verify:ledger-export` exist in package.json; OpenAPI path lib/api-spec/v1-openapi.yaml:393-397 `/v1/audit` \u2014 \"List audit events and verify the tamper-evident chain\". True as written.",
-   "action": "keep"
+   "evidence": "`pnpm run proof:audit-ledger` and `pnpm run verify:ledger-export` exist in package.json; OpenAPI path lib/api-spec/v1-openapi.yaml:393-397 `/v1/audit` \u2014 \"List audit events and verify the tamper-evident chain\". True as written. | DEDUP (second extraction): POSSIBLE DUPLICATE (Federal rows not visible). This one is largely TRUE and needs the grounded-true treatment rather than a blanket Federal-page sweep: `pnpm run db:verify-ledger` and `pnpm run verify:ledger-export` both exist in package.json, alongside proof:audit-ledger / proof:audit-ledger-pg. The overstatement is only that it is listed as an air-gap DEPLOYMENT feature of an offering Pricing.tsx:85 says does not exist.",
+   "action": "rewrite"
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Federal.tsx",
@@ -5205,26 +5205,6 @@
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
-   "line": "102",
-   "claim": "Page headline: \"Indicative Pricing. No Per-Workflow Tax.\"",
-   "kind": "pricing",
-   "classification": "unsubstantiated",
-   "evidence": "Asserts a pricing MODEL (per-device, never per-workflow/per-decision) that no metering code can implement in either direction: there is no device registry and no decision meter \u2014 lib/persistence/migrations/001_decisions.sql and lib/audit/migrations/001_audit_ledger.sql carry no device column, and the only metrics arm (artifacts/api-server/src/routes/v1.ts, /v1/metrics) exposes global aggregates with no tenant label by design (artifacts/api-server/src/app.ts:104-108). The only real per-caller ceiling in the product is the per-key rate limit (artifacts/api-server/src/middlewares/rateLimit.ts:56, default 240/min), which IS a per-request tax \u2014 the opposite of the headline. Entirely absent from the 54-row Pricing extraction.",
-   "action": "rewrite",
-   "source": "critic"
-  },
-  {
-   "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
-   "line": "103",
-   "claim": "\"Illustrative per-device pricing that would scale with your fleet \u2014 not your decision volume.\"",
-   "kind": "pricing",
-   "classification": "unsubstantiated",
-   "evidence": "Same missing billable unit as :9-10/:29-30 \u2014 no fleet or device dimension exists to scale against (only lib/persistence/migrations/002_sessions.sql device_ref, a lazily-expired session field). The extraction cites :103 as EVIDENCE against five other rows but never extracts it as a row of its own, so the sentence carrying the scaling promise is unclassified.",
-   "action": "rewrite",
-   "source": "critic"
-  },
-  {
-   "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
    "line": "103",
    "claim": "\"Pre-announcement: figures are indicative and not a live offer.\"",
    "kind": "status",
@@ -5340,26 +5320,6 @@
    "kind": "count",
    "classification": "unsubstantiated",
    "evidence": "POSSIBLE DUPLICATE \u2014 no Federal.tsx rows were visible in the extraction text supplied to me (it truncated inside Pricing.tsx). Flagging because the count is checkable and fails: docs/SECURITY_BASELINE_ALIGNMENT.md:105 is the ONLY 800-171 substantiation and is a single table row (\"Control-family coverage (e.g. CM-6)\") with no per-control mapping and no count; a repo-wide grep for \"800-171\" hits only that file and docs/company/ROLE_LENS_REVIEW_2026-08-21.md. No 110-control artifact exists, and no CUI handling appears in the policy engine.",
-   "action": "rewrite",
-   "source": "critic"
-  },
-  {
-   "file": "artifacts/signalgrid-web/src/pages/Federal.tsx",
-   "line": "38",
-   "claim": "Deployment feature: \"FIPS 140-2-oriented cryptographic module design\"",
-   "kind": "framework",
-   "classification": "unsubstantiated",
-   "evidence": "POSSIBLE DUPLICATE (Federal rows not visible in the supplied set). Verified this session: the string \"FIPS\" does not appear anywhere in docs/*.md or lib/ \u2014 there is no cryptographic-module design document of any kind. docs/SECURITY_BASELINE_ALIGNMENT.md:98-105, the only substantiation table, has no FIPS row, and :127 forbids claiming unearned regulatory posture.",
-   "action": "remove",
-   "source": "critic"
-  },
-  {
-   "file": "artifacts/signalgrid-web/src/pages/Federal.tsx",
-   "line": "40",
-   "claim": "Deployment feature: \"Tamper-evident hash-chained audit ledger with an independent paginating verifier and signed export\"",
-   "kind": "capability",
-   "classification": "launch",
-   "evidence": "POSSIBLE DUPLICATE (Federal rows not visible). This one is largely TRUE and needs the grounded-true treatment rather than a blanket Federal-page sweep: `pnpm run db:verify-ledger` and `pnpm run verify:ledger-export` both exist in package.json, alongside proof:audit-ledger / proof:audit-ledger-pg. The overstatement is only that it is listed as an air-gap DEPLOYMENT feature of an offering Pricing.tsx:85 says does not exist.",
    "action": "rewrite",
    "source": "critic"
   },

@@ -22,7 +22,9 @@
 //
 // It runs in milliseconds and reads no proof output, so it belongs in preflight even
 // though the full mutation sweep — one proof run per mutation, per registered file —
-// deliberately does not. (That count is deliberately NOT written here: a hard-coded
+// deliberately does not: the sweep runs DAILY in scheduled-verification.yml
+// (measured 2026-08-21 at ~40 minutes wall-clock), and a survivor opens the
+// scheduled-verification tracking issue. (That count is deliberately NOT written here: a hard-coded
 // sweep size is exactly the fossil figure this file exists to prevent, and it went
 // stale the moment the queued connectors were registered.)
 

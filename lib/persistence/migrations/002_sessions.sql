@@ -1,3 +1,9 @@
+-- NON-AUTHORITATIVE. This file is NOT executed by anything: the schema
+-- authority is lib/persistence/src/migrations.ts (run via `pnpm run
+-- db:migrate`), which also applies migration v2 — the signalgrid_runtime
+-- role split — that this file does not contain. Kept as a readable
+-- reference only; a deployment provisioned from this file alone would be
+-- missing the role split entirely.
 -- Session lifecycle: durable start/refresh/expire for worker device sessions.
 -- Auto-created by PostgresSessionStore on first connect; canonical schema here
 -- for migration tooling. Tenant-scoped; single reads keyed on (id, tenant_id).

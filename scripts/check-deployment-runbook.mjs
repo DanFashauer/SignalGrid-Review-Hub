@@ -140,6 +140,19 @@ export function auditRunbook({ envVars, runbook, compose }) {
   return problems;
 }
 
+/** The reference .sql files are NOT executed (lib/persistence/src/migrations.ts
+ *  is, and it alone applies the v2 role split) — each must say so, or a reader
+ *  provisions a schema with no role split and believes the docs told them to. */
+export function auditMigrationBanners(sqlFiles) {
+  const problems = [];
+  for (const [path, content] of Object.entries(sqlFiles)) {
+    if (!content.includes("NON-AUTHORITATIVE")) {
+      problems.push(`${path} lacks the NON-AUTHORITATIVE banner — a reference schema that reads as executable is the mis-citation the platform review found`);
+    }
+  }
+  return problems;
+}
+
 function selfTest() {
   const checks = [];
   const composeWith = (apiLines, dbLines = "") =>
@@ -195,6 +208,10 @@ function selfTest() {
     "parameter-mediated env.NAME reads are collected (OIDC_TENANT_MAP found)",
     memberVars.has("OIDC_TENANT_MAP") && memberVars.has("OIDC_ROLE_MAP"),
   ]);
+  let bp = auditMigrationBanners({ "lib/persistence/migrations/001_decisions.sql": "-- NON-AUTHORITATIVE reference\nCREATE TABLE x ();" });
+  checks.push(["a bannered reference schema passes", bp.length === 0]);
+  bp = auditMigrationBanners({ "lib/persistence/migrations/001_decisions.sql": "-- canonical schema for migration tooling\nCREATE TABLE x ();" });
+  checks.push(["a reference schema WITHOUT the banner fails (the mis-citation)", bp.length === 1]);
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
@@ -205,11 +222,19 @@ if (process.argv.includes("--self-test")) process.exit(selfTest());
 
 const srcRoots = resolveWorkspaceSrcRoots();
 const envVars = collectBootEnvVars(srcRoots);
-const problems = auditRunbook({
-  envVars,
-  runbook: readFileSync("docs/DEPLOYMENT.md", "utf8"),
-  compose: readFileSync("docker-compose.prod.yml", "utf8"),
-});
+const SQL_REFS = [
+  "lib/persistence/migrations/001_decisions.sql",
+  "lib/persistence/migrations/002_sessions.sql",
+  "lib/audit/migrations/001_audit_ledger.sql",
+];
+const problems = [
+  ...auditRunbook({
+    envVars,
+    runbook: readFileSync("docs/DEPLOYMENT.md", "utf8"),
+    compose: readFileSync("docker-compose.prod.yml", "utf8"),
+  }),
+  ...auditMigrationBanners(Object.fromEntries(SQL_REFS.map((f) => [f, readFileSync(f, "utf8")]))),
+];
 console.log(`Deployment-runbook check — ${envVars.size} boot-read env vars held against the runbook`);
 if (problems.length > 0) {
   console.error(`Deployment-runbook check FAILED: ${problems.length} problem(s).`);

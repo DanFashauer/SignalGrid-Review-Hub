@@ -122,3 +122,58 @@ jobs:
                 labels: [label],
               });
             }
+
+  mutation-sweep:
+    # The full mutation sweep — one proof run per mutation, per registered
+    # file. Measured 2026-08-21: 1,160 mutations in 40m29s on one runner
+    # (1,083 killed, 77 documented-inert, 0 survivors, 0 hung), which is why
+    # this is a DAILY lane and not a per-push gate: the cadence follows the
+    # measurement. Preflight deliberately does not run it and says so.
+    name: Daily mutation sweep (every guard must be falsifiable)
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 10.28.1
+          run_install: false
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Full mutation sweep
+        run: pnpm run guard:mutations
+
+      - name: Open or refresh the regression tracking issue on failure
+        if: failure()
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const title = "Scheduled verification failing";
+            const label = "scheduled-verification";
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              `The DAILY MUTATION SWEEP failed on \`${context.sha.slice(0, 7)}\` — a mutation survived, hung, or the sweep broke.`,
+              ``,
+              `- Run: ${runUrl}`,
+              ``,
+              `A surviving mutation means a guard stopped being falsifiable — the repo's worst defect class. Investigate before anything else ships.`,
+            ].join("\n");
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo, state: "open", labels: label, per_page: 10,
+            });
+            if (existing.data.length > 0) {
+              await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: existing.data[0].number, body });
+            } else {
+              await github.rest.issues.create({ owner: context.repo.owner, repo: context.repo.repo, title, body, labels: [label] });
+            }

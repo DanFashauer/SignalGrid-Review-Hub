@@ -1165,6 +1165,13 @@ function main() {
   console.log(
     `\nmutations=${total} killed=${killed} hung=${hung} known-inert=${allowed} survivors=${survivors.length}`,
   );
+  // Machine-readable counts, same convention as the proofs' figures= lines —
+  // docs quote these as DATED measurements (the sweep is too heavy for the
+  // figure guard to re-run, so the doc convention is "measured <date>", which
+  // the guard's historical markers already recognise).
+  console.log(
+    `figures=mutations=${total},killed=${killed},inert=${allowed},survivors=${survivors.length}`,
+  );
 
   if (survivors.length > 0) {
     console.error("\nMutation guard FAILED — these guards are unfalsifiable by their own proof:\n");

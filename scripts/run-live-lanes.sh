@@ -85,6 +85,12 @@ if wanted fleet; then
     # /var/folders — a bind mount from there would arrive EMPTY in the VM and
     # Fleet would never see its cert. $HOME works on both engines.
     FLEET_TLS_DIR=$(mktemp -d "$HOME/.sg-fleet-lab.XXXXXX")
+    # Captured HERE, before any branch can fail: the restore below must know
+    # the caller's original trust bundle even when Fleet never becomes
+    # healthy — restoring "empty" after a failed bring-up would unset a
+    # bundle this script never replaced.
+    SAVED_NODE_CA="${NODE_EXTRA_CA_CERTS:-}"
+    NODE_CA_REPLACED=0
     # Registered the moment the directory exists: an interrupted run must not
     # leave the (deliberately world-readable) lab key and enroll secret on a
     # shared machine. --keep intentionally KEEPS them — retained containers are
@@ -139,7 +145,7 @@ REQCNF
       # COMBINED with any CA bundle the caller already supplied — clobbering it
       # would break a later lane (Keycloak over HTTPS) whose CA was configured
       # correctly. Restored right after the Fleet proof runs.
-      SAVED_NODE_CA="${NODE_EXTRA_CA_CERTS:-}"
+      NODE_CA_REPLACED=1
       if [ -n "$SAVED_NODE_CA" ] && [ -f "$SAVED_NODE_CA" ]; then
         cat "$SAVED_NODE_CA" "$FLEET_TLS_DIR/fleet.crt" > "$FLEET_TLS_DIR/combined-ca.crt"
         export NODE_EXTRA_CA_CERTS="$FLEET_TLS_DIR/combined-ca.crt"
@@ -205,8 +211,9 @@ REQCNF
   else
     skip "proof:live-fleet" "could not stand up Fleet (see docs/FLEET_LIVE_INTEGRATION.md)"
   fi
-  # Hand the caller's own trust bundle back to every later lane.
-  if [ -n "${FLEET_TLS_DIR:-}" ]; then
+  # Hand the caller's own trust bundle back to every later lane — but ONLY
+  # if this script actually replaced it; a failed bring-up never did.
+  if [ "${NODE_CA_REPLACED:-0}" -eq 1 ]; then
     if [ -n "${SAVED_NODE_CA:-}" ]; then export NODE_EXTRA_CA_CERTS="$SAVED_NODE_CA"; else unset NODE_EXTRA_CA_CERTS; fi
   fi
 fi

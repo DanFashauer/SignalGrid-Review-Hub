@@ -1,0 +1,21 @@
+meta {
+  name: Run room entry
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/sim/room-entry
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "scenarioId": "{{roomScenarioId}}"
+  }
+}
+
+docs {
+  Real decision core + orchestration plan for a synthetic room approach. Derives the tenant from the scenario and writes real fixture-ledger records - the reason this route is never mounted outside review-demo.
+}

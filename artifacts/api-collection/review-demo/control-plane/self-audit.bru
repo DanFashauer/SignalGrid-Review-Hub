@@ -1,0 +1,15 @@
+meta {
+  name: Self-audit
+  type: http
+  seq: 13
+}
+
+get {
+  url: {{baseUrl}}/cp/v1/self-audit
+  body: none
+  auth: inherit
+}
+
+docs {
+  The system's own health in plain language. Serves a real operator-emitted run when artifacts/self-audit/status.json exists, otherwise an honestly-labeled fixture snapshot.
+}

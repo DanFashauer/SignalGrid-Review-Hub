@@ -1,0 +1,15 @@
+meta {
+  name: Reliability (SLOs)
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{baseUrl}}/cp/v1/reliability
+  body: none
+  auth: inherit
+}
+
+docs {
+  Fixture SLO / error-budget snapshot. Fail-closed integrity is zero-tolerance - one fail-open exhausts the budget permanently.
+}

@@ -1,0 +1,15 @@
+meta {
+  name: Dashboard metrics
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/metrics/dashboard
+  body: none
+  auth: inherit
+}
+
+docs {
+  The 24h rollup fixture the dashboards render.
+}

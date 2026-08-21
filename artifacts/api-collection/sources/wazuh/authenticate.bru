@@ -1,0 +1,25 @@
+meta {
+  name: Authenticate (mint JWT)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/security/user/authenticate
+  body: none
+  auth: basic
+}
+
+auth:basic {
+  username: {{wazuhUser}}
+  password: {{wazuhPass}}
+}
+
+docs {
+  Auth bootstrap, not a mutation: mirrors scripts/src/live-edr-proof.ts:110.
+  Basic wazuh/wazuh (the image's documented public default API credential -
+  see this folder's README and .gitleaksignore) exchanges for a short-lived
+  JWT; copy data.token into the wazuhJwt environment var. The base URL must
+  say localhost, never 127.0.0.1 - the container's self-minted cert has SAN
+  DNS:localhost only.
+}

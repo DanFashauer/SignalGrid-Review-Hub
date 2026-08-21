@@ -1,0 +1,15 @@
+meta {
+  name: Webhook endpoints
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/v1/webhooks
+  body: none
+  auth: inherit
+}
+
+docs {
+  Seeded SIEM + ITSM webhook endpoints for the tenant. Fixture-backed; nothing is delivered from this demo.
+}

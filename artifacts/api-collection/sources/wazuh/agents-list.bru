@@ -1,0 +1,18 @@
+meta {
+  name: Agents list
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/agents?limit=50
+  body: none
+  auth: inherit
+}
+
+docs {
+  Mirrors live-edr-proof.ts:119 - the ONE evidence read the EDR proof
+  consumes. On a fresh manager the only agent is 000 (the manager itself,
+  status active); that near-empty truthful answer is exactly what the
+  fail-closed grading assertions run against.
+}

@@ -1,0 +1,15 @@
+meta {
+  name: App resilience
+  type: http
+  seq: 20
+}
+
+get {
+  url: {{baseUrl}}/cp/v1/apps/resilience
+  body: none
+  auth: inherit
+}
+
+docs {
+  Each app's availability turned into a PHI-safe resilience decision. Fixture data; fallbacks described, not executed.
+}

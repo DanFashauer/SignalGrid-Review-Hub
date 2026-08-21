@@ -1,0 +1,19 @@
+meta {
+  name: Ops intelligence
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/cp/v1/ops-intelligence
+  body: none
+  auth: inherit
+}
+
+params:query {
+  tenant: tenant_northwind
+}
+
+docs {
+  Friction hotspots, posture/config drift, and custody gaps derived from ingested telemetry + node state.
+}

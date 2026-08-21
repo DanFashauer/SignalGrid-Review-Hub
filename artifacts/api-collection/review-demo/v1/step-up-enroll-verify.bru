@@ -1,0 +1,23 @@
+meta {
+  name: Step-up enroll - verify
+  type: http
+  seq: 14
+}
+
+post {
+  url: {{baseUrl}}/v1/step-up/enroll/verify
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "identityRef": "nurse.compliant",
+    "challengeId": "{{challengeId}}",
+    "response": { "placeholder": "a real WebAuthn registration response belongs here" }
+  }
+}
+
+docs {
+  Stores the credential iff the attestation cryptographically verifies. Bruno cannot perform the native authenticator gesture, so as sent this request meets the fail-closed 403 - which is itself the contract worth exercising. Drive a real enrollment from a browser/device against the same route.
+}

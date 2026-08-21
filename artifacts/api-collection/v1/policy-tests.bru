@@ -1,0 +1,15 @@
+meta {
+  name: Policy tests
+  type: http
+  seq: 20
+}
+
+get {
+  url: {{baseUrl}}/v1/policies/{{policyId}}/tests
+  body: none
+  auth: inherit
+}
+
+docs {
+  Runs the seeded policy test fixtures against the active version (add ?versionId= to target a draft) and reports pass/fail per test.
+}

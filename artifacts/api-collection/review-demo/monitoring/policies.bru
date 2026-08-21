@@ -1,0 +1,15 @@
+meta {
+  name: Monitoring policies
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/policies
+  body: none
+  auth: inherit
+}
+
+docs {
+  The console's policy fixture list. Distinct from GET /v1/policies, which serves the decision core's real seeded policies.
+}

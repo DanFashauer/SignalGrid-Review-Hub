@@ -1,0 +1,15 @@
+meta {
+  name: Simulator audit ledger
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/simulator/audit
+  body: none
+  auth: inherit
+}
+
+docs {
+  The in-memory demo ledger of audit evidence from prior runs in this process.
+}

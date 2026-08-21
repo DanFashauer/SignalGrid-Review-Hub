@@ -1,0 +1,15 @@
+meta {
+  name: Reset simulator ledger
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/simulator/reset
+  body: none
+  auth: inherit
+}
+
+docs {
+  Clears the in-memory demo ledger. Affects only this surface's demo state.
+}

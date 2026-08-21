@@ -1,0 +1,15 @@
+meta {
+  name: Monitoring decisions
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/decisions
+  body: none
+  auth: inherit
+}
+
+docs {
+  Synthetic decision telemetry backing the operator console. Note the bare path - this surface has no /v1 prefix and is separate from the /v1 decision core. Filter with ?outcome= and ?limit=.
+}

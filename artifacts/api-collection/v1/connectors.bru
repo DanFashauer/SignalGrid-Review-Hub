@@ -1,0 +1,15 @@
+meta {
+  name: Connectors
+  type: http
+  seq: 16
+}
+
+get {
+  url: {{baseUrl}}/v1/connectors
+  body: none
+  auth: inherit
+}
+
+docs {
+  Seeded connector inventory for the tenant (Entra/Intune posture, DockBridge custody, WFM shift context). All fixture-backed; no source system is contacted.
+}

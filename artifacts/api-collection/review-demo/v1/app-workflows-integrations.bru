@@ -1,0 +1,15 @@
+meta {
+  name: App-workflow integrations
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/v1/app-workflows/integrations
+  body: none
+  auth: inherit
+}
+
+docs {
+  The catalog of host-app integrations the Assist gate can plan for. Filter with ?vertical=healthcare|warehouse|logistics|retail|datacenter|public-sector.
+}

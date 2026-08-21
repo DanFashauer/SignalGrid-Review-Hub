@@ -1,0 +1,15 @@
+meta {
+  name: Zero-touch provisioning
+  type: http
+  seq: 19
+}
+
+get {
+  url: {{baseUrl}}/cp/v1/grid/provisioning
+  body: none
+  auth: inherit
+}
+
+docs {
+  Zero-touch device setup, simulated - steps described, never executed. Preview another device with ?serial=/?model=; a non-matching device is never touched.
+}

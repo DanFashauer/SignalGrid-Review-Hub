@@ -1,0 +1,15 @@
+meta {
+  name: Monitoring decision by id
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/decisions/{{monitoringDecisionId}}
+  body: none
+  auth: inherit
+}
+
+docs {
+  One synthetic telemetry decision (fixture ids run dec-1000..dec-1023).
+}

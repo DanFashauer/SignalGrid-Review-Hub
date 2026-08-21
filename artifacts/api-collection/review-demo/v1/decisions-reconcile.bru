@@ -1,0 +1,32 @@
+meta {
+  name: Reconcile partitioned decisions
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/v1/decisions/reconcile
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "records": [
+      {
+        "id": "dec_offline_a",
+        "outcome": "allow",
+        "provenance": { "policyVersion": 1, "evaluatedOffline": false, "policyKnownSuperseded": false }
+      },
+      {
+        "id": "dec_offline_b",
+        "outcome": "restrict",
+        "provenance": { "policyVersion": 1, "evaluatedOffline": true, "policyKnownSuperseded": false }
+      }
+    ]
+  }
+}
+
+docs {
+  Pure reduction over caller-supplied records from both sides of a network partition — nothing is stored or read. Omitting evaluatedOffline or policyKnownSuperseded on a record is a 400 by design: an omitted field must never buy a record the right to relax.
+}

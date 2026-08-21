@@ -1,0 +1,23 @@
+meta {
+  name: App-workflow evaluate
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/v1/app-workflows/evaluate
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "integrationId": "{{appIntegrationId}}",
+    "identityRef": "nurse.compliant",
+    "deviceRef": "ipad-ward-01"
+  }
+}
+
+docs {
+  Runs the REAL decision core for the actor + device, then returns which of the app's actions run automatically vs. must be held. A stepUpSatisfied flag in this body is deliberately never read - the only release path is the WebAuthn ceremony.
+}

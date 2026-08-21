@@ -1,0 +1,22 @@
+meta {
+  name: Position history
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/positions?deviceId={{deviceId}}&from={{from}}&to={{to}}
+  body: none
+  auth: inherit
+}
+
+vars:pre-request {
+  from: 2026-01-01T00:00:00Z
+  to: 2026-12-31T00:00:00Z
+}
+
+docs {
+  Mirrors live-location-proof.ts:222 - the history read the proof uses to
+  verify an ingested position round-tripped. from/to are ISO timestamps;
+  Traccar rejects the query without both.
+}

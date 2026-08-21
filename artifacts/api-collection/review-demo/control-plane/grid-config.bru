@@ -1,0 +1,15 @@
+meta {
+  name: Grid config lint
+  type: http
+  seq: 18
+}
+
+get {
+  url: {{baseUrl}}/cp/v1/grid/config
+  body: none
+  auth: inherit
+}
+
+docs {
+  The declarative grid config with the validation/lint/governance verdicts the pipeline runs before running the Grid.
+}

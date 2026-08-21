@@ -1,0 +1,15 @@
+meta {
+  name: Connector sync (fixture)
+  type: http
+  seq: 18
+}
+
+post {
+  url: {{baseUrl}}/v1/connectors/{{connectorId}}/sync
+  body: none
+  auth: inherit
+}
+
+docs {
+  Replays the connector's fixture records through the real ingestion pipeline and appends an audit event. runFixtureSync throws on any non-fixture connector, so this can never touch a source system.
+}

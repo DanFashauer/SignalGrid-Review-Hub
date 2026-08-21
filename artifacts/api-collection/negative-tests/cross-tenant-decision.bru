@@ -1,0 +1,29 @@
+meta {
+  name: Cross-tenant read is a 404
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/v1/decisions/{{decisionId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{atlasToken}}
+}
+
+assert {
+  res.status: eq 404
+}
+
+docs {
+  Run v1/Evaluate - compliant nurse first (it stores a Northwind decisionId), then this request reads it with the Atlas owner token. The handlers key every lookup on (id, tenant-from-token), so a cross-tenant id is served the SAME 404 as a nonexistent one - 404, not 403, so existence is never leaked (routes/v1.ts).
+}
+
+tests {
+  test("another tenant's decision id reads as not found", function() {
+    expect(res.getStatus()).to.equal(404);
+  });
+}

@@ -1,0 +1,21 @@
+meta {
+  name: Simulate decision under draft policy
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/v1/decisions/{{decisionId}}/simulate
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "policyVersionId": "{{policyVersionId}}"
+  }
+}
+
+docs {
+  What-if: re-runs a recorded decision's evidence under another policy version (the seeded v2 draft by default). Set decisionId by running v1/Evaluate - compliant nurse first.
+}

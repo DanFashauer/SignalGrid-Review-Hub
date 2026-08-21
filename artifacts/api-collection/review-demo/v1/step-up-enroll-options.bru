@@ -1,0 +1,27 @@
+meta {
+  name: Step-up enroll - options
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{baseUrl}}/v1/step-up/enroll/options
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "identityRef": "nurse.compliant"
+  }
+}
+
+docs {
+  Mints a WebAuthn registration challenge for the identity. Operator/owner tokens only - an auditor is refused 403 before any WebAuthn work. Captures challengeId for the verify step.
+}
+
+script:post-response {
+  if (res.body && res.body.challengeId) {
+    bru.setVar("challengeId", res.body.challengeId);
+  }
+}

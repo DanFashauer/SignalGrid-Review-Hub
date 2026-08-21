@@ -1,0 +1,15 @@
+meta {
+  name: Simulator scenario by id
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/simulator/scenarios/{{simScenarioId}}
+  body: none
+  auth: inherit
+}
+
+docs {
+  One scenario definition. Unknown ids are a 404.
+}

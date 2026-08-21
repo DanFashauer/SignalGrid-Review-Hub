@@ -1,0 +1,15 @@
+meta {
+  name: Integration by id
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/integrations/{{integrationCatalogId}}
+  body: none
+  auth: inherit
+}
+
+docs {
+  One catalog entry. An unknown id is a 404; an id failing the slug pattern is a 400.
+}

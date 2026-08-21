@@ -1,0 +1,15 @@
+meta {
+  name: Integrations catalog
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/integrations
+  body: none
+  auth: inherit
+}
+
+docs {
+  The full connector/integration catalog fixture that backs the console. Vendor names describe categories of integration, not partnerships.
+}

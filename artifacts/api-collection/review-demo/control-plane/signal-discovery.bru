@@ -1,0 +1,15 @@
+meta {
+  name: Signal discovery
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/cp/v1/signal-discovery
+  body: none
+  auth: inherit
+}
+
+docs {
+  What the Grid detected across connected sources. Auto-onboarding is simulated - it produces the record the Grid would create; no source is called.
+}

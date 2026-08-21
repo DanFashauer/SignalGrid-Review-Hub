@@ -1,0 +1,19 @@
+meta {
+  name: Host detail + policy results
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/fleet/hosts/identifier/{{hostUuid}}?populate_policies=true
+  body: none
+  auth: inherit
+}
+
+docs {
+  Mirrors fleetdm.ts:173 - the single call that returns a host WITH its
+  per-policy pass/fail rows. The default hostUuid is SG-TEST, the synthetic
+  host that never answers, so the "Disk encryption" policy result stays null:
+  that null is the point (unknown raises assurance, never lowers it), not a
+  broken fixture.
+}

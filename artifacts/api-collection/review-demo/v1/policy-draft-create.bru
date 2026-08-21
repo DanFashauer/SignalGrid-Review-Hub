@@ -1,0 +1,30 @@
+meta {
+  name: Create policy draft
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/v1/policies/{{policyId}}/versions
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "rules": [
+      {
+        "id": "device-noncompliant",
+        "description": "A non-compliant managed device is restricted.",
+        "match": [{ "field": "deviceCompliance", "in": ["non_compliant"] }],
+        "outcome": "restrict",
+        "reasonCode": "DEVICE_NONCOMPLIANT",
+        "severity": "high"
+      }
+    ]
+  }
+}
+
+docs {
+  Authors a new draft version (201). The core fully validates the untrusted rule set - structure, field domains, count/depth caps - so a malformed rule is a 400 and can never be persisted.
+}

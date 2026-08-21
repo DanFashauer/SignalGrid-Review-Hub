@@ -1,0 +1,15 @@
+meta {
+  name: Approve remediation (simulated)
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/v1/remediation/{{remediationId}}/approve
+  body: none
+  auth: inherit
+}
+
+docs {
+  Approves a requires_approval action. The approval is recorded and the action SIMULATED - no source-system change is executed. Set remediationId by running Remediation actions first.
+}

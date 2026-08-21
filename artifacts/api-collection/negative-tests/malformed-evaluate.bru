@@ -1,0 +1,31 @@
+meta {
+  name: Malformed evaluate body is a 400
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/v1/decisions/evaluate
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "identityRef": "nurse.compliant"
+  }
+}
+
+assert {
+  res.status: eq 400
+}
+
+docs {
+  parseEvaluate requires identityRef, deviceRef, and workflowKey as strings; this body omits two of them. The refusal must be a clean 400 validation error, never a decision minted from partial input.
+}
+
+tests {
+  test("refuses a body missing required fields", function() {
+    expect(res.getStatus()).to.equal(400);
+  });
+}

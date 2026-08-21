@@ -1,0 +1,27 @@
+meta {
+  name: Ingest telemetry (up)
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/cp/v1/telemetry
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "nodeId": "{{edgeNodeId}}",
+    "windowMins": 1440,
+    "decisions": 120,
+    "allow": 100,
+    "stepUp": 12,
+    "restrict": 6,
+    "deny": 2
+  }
+}
+
+docs {
+  An edge node reporting decision counts for a window. In-memory fixture ingestion; nodeId is required (400 without it).
+}

@@ -1,0 +1,17 @@
+meta {
+  name: OIDC discovery
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/realms/{{realm}}/.well-known/openid-configuration
+  body: none
+  auth: none
+}
+
+docs {
+  Mirrors live-keycloak-proof.ts:99. With start-dev --features=dpop the
+  document advertises dpop_signing_alg_values_supported - the capability the
+  DPoP lane exists to exercise; its absence means the feature flag was lost.
+}

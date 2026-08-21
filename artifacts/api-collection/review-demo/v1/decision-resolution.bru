@@ -1,0 +1,15 @@
+meta {
+  name: Decision resolution plan
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/v1/decisions/{{decisionId}}/resolution
+  body: none
+  auth: inherit
+}
+
+docs {
+  The deterministic resolution plan for a non-allow decision (who is told what, over which channel). Set decisionId from an evaluate response - the noncompliant scenario produces the richest plan.
+}

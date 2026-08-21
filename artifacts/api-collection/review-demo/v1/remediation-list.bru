@@ -1,0 +1,22 @@
+meta {
+  name: Remediation actions
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/v1/remediation
+  body: none
+  auth: inherit
+}
+
+docs {
+  Proposed follow-up actions for non-allow decisions. Always approval-gated and always simulated - there is deliberately no executed status. Run the noncompliant evaluate first to mint one; this request captures the first requires_approval id.
+}
+
+script:post-response {
+  const pending = (res.body.actions || []).find((a) => a.status === "requires_approval");
+  if (pending) {
+    bru.setVar("remediationId", pending.id);
+  }
+}

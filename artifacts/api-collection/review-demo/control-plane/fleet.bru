@@ -1,0 +1,15 @@
+meta {
+  name: Fleet devices
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/cp/v1/fleet
+  body: none
+  auth: inherit
+}
+
+docs {
+  Device-fleet inventory (capped at 200 rows). Filter with ?site=.
+}

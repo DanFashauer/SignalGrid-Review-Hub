@@ -1,0 +1,18 @@
+meta {
+  name: Global policies
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/fleet/global/policies
+  body: none
+  auth: inherit
+}
+
+docs {
+  Mirrors fleetdm.ts:137 (the no-teamId branch; the lab has no teams). Expect
+  the lane-seeded darwin policy "Disk encryption" (SELECT 1;) - deliberately
+  never answered by any host, so passing/failing counts stay zero against the
+  enrolled responder.
+}

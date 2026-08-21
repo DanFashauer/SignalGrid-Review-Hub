@@ -1,0 +1,17 @@
+meta {
+  name: Realm info
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/realms/{{realm}}
+  body: none
+  auth: none
+}
+
+docs {
+  Mirrors scripts/src/live-keycloak-proof.ts:60 and the readiness probe
+  run-live-lanes.sh:260 waits on. Public endpoint; returns the realm's issuer
+  and key metadata the proof pins its issuer checks against.
+}

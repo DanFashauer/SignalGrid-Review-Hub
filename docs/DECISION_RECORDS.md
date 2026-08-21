@@ -439,10 +439,28 @@ closes mechanically when the spec registers `/v1/authorize`; building that
 route now would widen the frozen launch surface and is deliberately not done.
 
 **Enforcement.** `scripts/check-assist-wire-served.mjs` (preflight + CI)
-fails when the shared vectors bind an envelope whose route the spec does not
-serve AND no declared-gap entry claims it — so deleting the gap entry without
-serving the route, or retargeting the vectors to a second unserved route,
-both fail. The conformance gate's iOS disclaimer is corrected in the same
+reads the bound wire as DATA — the `route` field the shared vectors file now
+carries — and fails when that route is neither served by the spec nor claimed
+BY NAME in the declared-gap entry: deleting the gap entry, retargeting the
+vectors to a second unserved route, and SDK documentation drifting from the
+vectors' route all fail. (The first version of this paragraph claimed the
+retarget case before the vectors carried a route at all — the gate then read
+two SDK doc comments through two different regexes; the assurance review
+executed the retarget and it passed. Corrected the same day: the route is
+data, the gap must name it, and the gate prints the route it actually
+checked.)
+
+**The second unserved wire, stated.** The client this record calls "the one
+that talks to the real server" — iOS `RemoteDecisionService`, and
+SignalGridMobile beside it — posts to `/v1/app-workflows/evaluate`, which the
+launch profile classifies **deferred** and the gateway profile fences: under
+`shared-device-gateway` it 404s (executed: 404 on the gateway boot, 401 —
+served — under review-demo). So the iOS wire is served only on the
+review-demo surface today. It needs no second gap entry because the
+deferral IS its declaration — `/v1/app-workflows/evaluate` sits in the
+launch profile's deferred route list, which is the register for exactly
+this; what the deferral does NOT license is calling that envelope "served"
+for a commercial deployment, and no surface may. The conformance gate's iOS disclaimer is corrected in the same
 change: EnterpriseShell consumes `/v1` through `RemoteDecisionService` (its
 local `DecisionEngine` remains the offline fallback), and bringing that
 envelope under shared vectors is follow-on work, not a reason to misstate

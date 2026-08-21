@@ -98,7 +98,7 @@ export default function HeroSection() {
                   transition={{ delay: 1.1 }}
                   className="flex items-center justify-between rounded-md bg-emerald-500/10 border border-emerald-500/30 px-4 py-3"
                 >
-                  <span className="text-xs font-mono font-semibold text-emerald-400">DECISION: ALLOW</span>
+                  <span className="text-xs font-mono font-semibold text-status-allow">DECISION: ALLOW</span>
                   <span className="text-xs font-mono text-muted-foreground">DETERMINISTIC</span>
                 </motion.div>
               </div>

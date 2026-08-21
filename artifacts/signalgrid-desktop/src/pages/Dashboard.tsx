@@ -83,9 +83,9 @@ export default function DashboardPage() {
             {decisions?.decisions.slice(0, 8).map(d => (
               <div key={d.id} className="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-muted/30 transition-colors decision-row">
                 <span className={`text-xs font-mono font-semibold w-14 shrink-0 ${
-                  d.outcome === "allow" ? "text-green-400" :
-                  d.outcome === "deny" ? "text-red-400" :
-                  d.outcome === "step-up" ? "text-yellow-400" : "text-orange-400"
+                  d.outcome === "allow" ? "text-status-allow" :
+                  d.outcome === "deny" ? "text-status-deny" :
+                  d.outcome === "step-up" ? "text-status-step-up" : "text-status-restrict"
                 }`}>{d.outcome.toUpperCase()}</span>
                 <span className="text-xs font-mono text-foreground/80 truncate flex-1">{d.identityId}</span>
                 <span className="text-xs font-mono text-muted-foreground shrink-0">{d.latencyMs}ms</span>

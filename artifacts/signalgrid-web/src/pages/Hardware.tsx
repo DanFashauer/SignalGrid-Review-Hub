@@ -72,7 +72,7 @@ const DETECTION_PHASES = [
     color: "text-primary border-primary/20 bg-primary/5",
     signals: ["BLE zone heartbeat every 4 seconds", "UWB proximity binding (≤1 m)", "Badge electrical continuity check", "Dock occupancy sensor"],
     outcome: "Nominal — access continues",
-    outcomeColor: "text-green-400",
+    outcomeColor: "text-status-allow",
   },
   {
     phase: "02",
@@ -80,7 +80,7 @@ const DETECTION_PHASES = [
     color: "text-amber-400 border-amber-400/20 bg-amber-400/5",
     signals: ["BLE RSSI degradation > threshold", "UWB zone boundary crossing", "Door contact event in PACS log", "Badge removal tension spike"],
     outcome: "WARN — step-up MFA triggered",
-    outcomeColor: "text-amber-400",
+    outcomeColor: "text-status-step-up",
   },
   {
     phase: "03",
@@ -88,7 +88,7 @@ const DETECTION_PHASES = [
     color: "text-red-400 border-red-400/20 bg-red-400/5",
     signals: ["Badge physically removed from case", "BLE beacon gap > 30 seconds", "Door exit event without checkout", "Session still active post-boundary"],
     outcome: "DENY — decision + evidence recorded; lost-mode stays an approval-gated MDM action",
-    outcomeColor: "text-red-400",
+    outcomeColor: "text-status-deny",
   },
   {
     phase: "04",

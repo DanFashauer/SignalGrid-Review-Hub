@@ -39,11 +39,16 @@ warn() { printf '   \033[33mWARN\033[0m %s\n' "$1"; PROBLEMS=$((PROBLEMS+1)); }
 # ── 1. git: come current without clobbering anything ─────────────────────────
 say "git — sync with origin"
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+FETCH_OK=0
+if git fetch origin --prune; then
+  FETCH_OK=1
+else
+  warn "could not reach origin — everything below (branch state, lane mail, sim requests) describes a possibly-STALE clone, not the lane"
+fi
 if [ -n "$(git status --porcelain)" ]; then
   warn "uncommitted local changes exist — NOT pulling over them. Commit or stash, then re-run."
   git status --short | head -10
-else
-  git fetch origin --prune
+elif [ "$FETCH_OK" = "1" ]; then
   if git merge-base --is-ancestor "origin/$BRANCH" HEAD 2>/dev/null; then
     ok "branch $BRANCH already current"
   elif git pull --ff-only origin "$BRANCH"; then
@@ -52,15 +57,29 @@ else
     warn "could not fast-forward $BRANCH — local and remote diverged; resolve per docs/LANE_COORDINATION.md before running anything"
   fi
 fi
+# Undelivered work is invisible work: the push is the delivery.
+AHEAD="$(git rev-list --count "origin/$BRANCH"..HEAD 2>/dev/null || echo 0)"
+if [ "$AHEAD" != "0" ]; then
+  warn "$AHEAD commit(s) on $BRANCH not pushed — the push is the delivery; run: git push"
+fi
 
 # ── 2. dependencies: only when the lockfile moved ────────────────────────────
 say "dependencies"
 if command -v pnpm >/dev/null 2>&1; then
-  if git diff --quiet "HEAD@{1}" HEAD -- pnpm-lock.yaml 2>/dev/null; then
-    ok "lockfile unchanged since last position — skipping install"
+  # Compare against what was actually INSTALLED, not a reflog position — a
+  # local commit moved HEAD@{1} and silently skipped a required install.
+  LOCK_SHA="$(shasum -a 256 pnpm-lock.yaml 2>/dev/null | cut -d' ' -f1)"
+  STAMP="node_modules/.sg-installed-lock-sha"
+  if [ -n "$LOCK_SHA" ] && [ -f "$STAMP" ] && [ "$(cat "$STAMP" 2>/dev/null)" = "$LOCK_SHA" ]; then
+    ok "installed node_modules matches the lockfile — skipping install"
   else
-    echo "   lockfile changed (or first run after clone) — installing…"
-    if pnpm install --frozen-lockfile; then ok "pnpm install clean"; else warn "pnpm install failed — nothing below can be trusted until it passes"; fi
+    echo "   lockfile differs from installed state (or no stamp) — installing…"
+    if pnpm install --frozen-lockfile; then
+      printf '%s' "$LOCK_SHA" > "$STAMP"
+      ok "pnpm install clean"
+    else
+      warn "pnpm install failed — nothing below can be trusted until it passes"
+    fi
   fi
 else
   warn "pnpm not on PATH — install Node+pnpm before anything else"
@@ -69,9 +88,11 @@ fi
 # ── 3. container engine (the fleet/wazuh live lanes need it) ─────────────────
 say "container engine"
 if command -v podman >/dev/null 2>&1; then
-  if podman machine list 2>/dev/null | grep -q "Currently running"; then
+  # --noheading: the header row made a bare grep match even with no machine,
+  # so the "create one" remedy was unreachable.
+  if podman machine list --noheading 2>/dev/null | grep -qi "running"; then
     ok "podman machine running"
-  elif podman machine list 2>/dev/null | grep -q .; then
+  elif podman machine list --noheading 2>/dev/null | grep -q .; then
     echo "   starting podman machine…"
     if podman machine start >/dev/null 2>&1; then ok "podman machine started"; else warn "podman machine failed to start — the live fleet/EDR lanes will SKIP (they say so themselves)"; fi
   else
@@ -87,7 +108,7 @@ fi
 say "GitHub auth"
 if command -v gh >/dev/null 2>&1; then
   if gh auth status >/dev/null 2>&1; then
-    ok "gh authenticated — pushes will deliver"
+    ok "gh reports an authenticated account (push rights are proven by the first push, not by this check)"
   else
     warn "gh NOT authenticated. Run:  gh auth login   (this blocked local commits from delivering once already)"
   fi

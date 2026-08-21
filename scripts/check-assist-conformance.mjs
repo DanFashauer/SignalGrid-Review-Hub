@@ -235,8 +235,9 @@ function main() {
     · iOS. \`native/ios\` has no \`core\` directory and is not scanned. The old reason
       here ("EnterpriseShell ports the decision engine rather than consuming /v1")
       went stale when RemoteDecisionService landed: the shell now DOES consume /v1
-      (POST /v1/app-workflows/evaluate, a different envelope than these vectors
-      bind — DR-007 records which envelope is served). The engine port is still
+      (POST /v1/app-workflows/evaluate — a DEFERRED route, fenced under the
+      gateway profile, so that wire is served only on the review-demo surface;
+      DR-007 records both unserved wires honestly). The engine port is still
       covered by \`scripts/check-decision-port-parity.mjs\`; bringing the iOS wire
       envelope under shared vectors is follow-on work, stated rather than implied
       done. And note what a green run here proves: the Kotlin and Rust SDKs agree

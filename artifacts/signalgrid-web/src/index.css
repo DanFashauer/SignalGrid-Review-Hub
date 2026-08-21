@@ -137,3 +137,14 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Decision-state utilities over the ratified tokens (DR-005/DR-006 — see
+   scripts/check-decision-palette.mjs, which measures the composited grounds). */
+.text-status-allow { color: hsl(var(--decision-allow)); }
+.bg-status-allow { background-color: hsl(var(--decision-allow) / 0.08); color: hsl(var(--decision-allow-on-tint)); border-color: hsl(var(--decision-allow) / 0.2); }
+.text-status-step-up { color: hsl(var(--decision-review)); }
+.bg-status-step-up { background-color: hsl(var(--decision-review) / 0.08); color: hsl(var(--decision-review)); border-color: hsl(var(--decision-review) / 0.2); }
+.text-status-restrict { color: hsl(var(--decision-deny)); }
+.bg-status-restrict { background-color: hsl(var(--decision-deny) / 0.08); color: hsl(var(--decision-deny-on-tint)); border-color: hsl(var(--decision-deny) / 0.2); }
+.text-status-deny { color: hsl(var(--decision-deny)); }
+.bg-status-deny { background-color: hsl(var(--decision-deny) / 0.08); color: hsl(var(--decision-deny-on-tint)); border-color: hsl(var(--decision-deny) / 0.2); }

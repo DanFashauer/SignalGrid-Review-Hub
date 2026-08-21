@@ -85,7 +85,7 @@ struct OutcomeBadge: View {
             .font(.caption2.monospaced().weight(.bold))
             .padding(.horizontal, 9)
             .padding(.vertical, 5)
-            .foregroundStyle(Color.outcome(outcome))
+            .foregroundStyle(Color.outcomeOnTint(outcome)) // measured: flat fg over the 12% tint sat under AA on every state
             .background(Color.outcome(outcome).opacity(0.12))
             .clipShape(Capsule())
             .overlay {

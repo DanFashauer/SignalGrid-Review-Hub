@@ -706,9 +706,14 @@ export const GAPS = [
       "rather than quietly implied as served. scripts/check-assist-wire-served.mjs " +
       "fails if the vectors bind an unserved route while this entry is missing.",
     // Closed mechanically the moment the spec registers the path — the same
-    // change that would make the SDK binding true.
+    // change that would make the SDK binding true. The FILE form, deliberately:
+    // the dir evaluator reads only .ts files, so a dir condition on lib/api-spec
+    // could never see the YAML and the gap would have reported "open" forever —
+    // the assurance review proved it by inserting the path and watching the
+    // predicate stay false (the stale-gap defect this register exists to
+    // prevent, reintroduced by the entry citing it).
     closedWhen: [
-      { dir: "lib/api-spec", anyFileContainsAll: ["/v1/authorize:"] },
+      { file: "lib/api-spec/v1-openapi.yaml", contains: "/v1/authorize:" },
     ],
   },
 ];

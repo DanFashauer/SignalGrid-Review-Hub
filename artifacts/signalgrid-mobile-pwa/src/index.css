@@ -147,14 +147,6 @@ html { color-scheme: dark; }
 }
 
 /* Outcome & signal color utilities */
-.text-allow { color: #22c55e; }
-.bg-allow { background: rgba(34,197,94,.12); color: #22c55e; border-color: rgba(34,197,94,.25); }
-.text-step-up { color: #f59e0b; }
-.bg-step-up { background: rgba(245,158,11,.12); color: #f59e0b; border-color: rgba(245,158,11,.25); }
-.text-restrict { color: #f97316; }
-.bg-restrict { background: rgba(249,115,22,.12); color: #f97316; border-color: rgba(249,115,22,.25); }
-.text-deny { color: #ef4444; }
-.bg-deny { background: rgba(239,68,68,.12); color: #ef4444; border-color: rgba(239,68,68,.25); }
 .text-nominal { color: #22c55e; }
 .text-anomalous { color: #f59e0b; }
 .text-critical { color: #ef4444; }

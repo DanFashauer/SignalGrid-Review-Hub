@@ -116,8 +116,8 @@ export default function HandoffPage() {
           {recentDecisions?.decisions.slice(0, 4).map(d => (
             <div key={d.id} className="flex items-center gap-3 px-3 py-2 bg-card border border-border rounded text-xs font-mono">
               <span className={`font-semibold w-14 ${
-                d.outcome === "allow" ? "text-green-400" :
-                d.outcome === "deny" ? "text-red-400" : "text-yellow-400"
+                d.outcome === "allow" ? "text-status-allow" :
+                d.outcome === "deny" ? "text-status-deny" : "text-status-step-up"
               }`}>{d.outcome.toUpperCase()}</span>
               <span className="text-foreground/70 flex-1">{d.identityId}</span>
               <span className="text-muted-foreground">{d.deviceId}</span>

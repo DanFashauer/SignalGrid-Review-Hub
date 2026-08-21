@@ -159,6 +159,12 @@ if wanted fleet; then
         --distributed_tls_read_endpoint=/api/v1/osquery/distributed/read \
         --distributed_tls_write_endpoint=/api/v1/osquery/distributed/write \
         --disable_events --force >/dev/null 2>&1
+      # LOUD when the agent did not start (bad tag, failed pull, bad flags):
+      # the silenced run -d above once swallowed a nonexistent-tag pull error,
+      # and the only symptom was a campaign that timed out minutes later.
+      if ! "$SG_ENGINE" inspect -f '{{.State.Running}}' sg-osquery 2>/dev/null | grep -q true; then
+        echo "   WARNING: osquery agent container did not start ($OSQ_IMG) — campaigns will have no responder"
+      fi
       started="$started sg-osquery"
       # Wait until the REAL agent is enrolled and checking in — a campaign fired
       # before its first /distributed/read poll would time out legitimately.

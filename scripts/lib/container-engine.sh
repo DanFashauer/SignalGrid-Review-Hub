@@ -76,3 +76,12 @@ SG_IMAGE_MYSQL="docker.io/library/mysql:8"
 #
 # shellcheck disable=SC2034
 SG_IMAGE_FLEET="docker.io/fleetdm/fleet:v4.89.2"
+# The agent version the collector assertions were validated against (the
+# 2026-08-17 cloud run enrolled osqueryd 5.23.1). Same drift rule as Fleet:
+# pinned so two runs of one commit run one agent, overridable for a deliberate
+# compatibility check:
+#
+#   OSQUERY_IMAGE=docker.io/osquery/osquery:latest ./scripts/run-live-lanes.sh --only fleet
+#
+# shellcheck disable=SC2034
+SG_IMAGE_OSQUERY="docker.io/osquery/osquery:5.23.1"

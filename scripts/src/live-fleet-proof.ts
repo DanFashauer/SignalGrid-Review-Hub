@@ -137,12 +137,18 @@ async function main(): Promise<void> {
   // actually polling /distributed/read, or `hostsResponded` can never reach 1
   // (the Mac lane proved this at 33/37 — the lane's synthetic curl enroll
   // created a host record with nothing behind it, and the campaign targeted
-  // it). Prefer an online host that is NOT the synthetic one; fall back to
-  // `target` so a single-host lab (the original cloud recipe) still works.
+  // it). Substitution happens ONLY when the target is the known synthetic
+  // fixture: a caller who set FLEET_HOST_UUID to a real host of their own is
+  // asking to prove THAT host, and quietly campaigning a different one would
+  // pass without proving the configured target (or time out despite it being
+  // able to answer).
+  const SYNTHETIC_UUID = "11111111-2222-3333-4444-555555555555";
   const liveAgent =
-    hosts.find((h) => h.uuid !== HOST_UUID && (h as { status?: string }).status === "online") ??
-    hosts.find((h) => h.uuid !== HOST_UUID) ??
-    target;
+    HOST_UUID !== SYNTHETIC_UUID
+      ? target
+      : hosts.find((h) => h.uuid !== HOST_UUID && (h as { status?: string }).status === "online") ??
+        hosts.find((h) => h.uuid !== HOST_UUID) ??
+        target;
 
   // ── 4. THE POINT: the routes that were wrong ──────────────────────────────
   // Each is asserted twice — the old path still fails on the real server, and the

@@ -81,6 +81,15 @@ if wanted fleet; then
     # NODE_EXTRA_CA_CERTS, osqueryd via --tls_server_certs) — verification is
     # never disabled anywhere.
     FLEET_TLS_DIR=$(mktemp -d)
+    # Registered the moment the directory exists: an interrupted run must not
+    # leave the (deliberately world-readable) lab key and enroll secret on a
+    # shared machine. --keep intentionally KEEPS them — retained containers are
+    # useless without the CA/key they were started with; the path is printed so
+    # the caller knows what to trust and what to delete.
+    cleanup_fleet_tls() {
+      if [ "${KEEP:-0}" -eq 0 ] && [ -n "${FLEET_TLS_DIR:-}" ]; then rm -rf "$FLEET_TLS_DIR"; fi
+    }
+    trap cleanup_fleet_tls EXIT INT TERM
     openssl req -x509 -newkey rsa:2048 -nodes -days 2 \
       -keyout "$FLEET_TLS_DIR/fleet.key" -out "$FLEET_TLS_DIR/fleet.crt" \
       -subj "/CN=sg-fleet" -addext "subjectAltName=DNS:sg-fleet,DNS:localhost,IP:127.0.0.1" >/dev/null 2>&1
@@ -105,7 +114,16 @@ if wanted fleet; then
       $CURL -X POST https://127.0.0.1:8412/api/v1/setup -H 'Content-Type: application/json' -d '{"admin":{"name":"SG","email":"sg@signalgrid.test","password":"SignalGrid!2026x","password_confirmation":"SignalGrid!2026x"},"org_info":{"org_name":"SG"},"server_url":"https://127.0.0.1:8412"}' >/dev/null 2>&1
       export FLEET_URL=https://127.0.0.1:8412
       # The proof is a Node child; this is the explicit-trust path for it.
-      export NODE_EXTRA_CA_CERTS="$FLEET_TLS_DIR/fleet.crt"
+      # COMBINED with any CA bundle the caller already supplied — clobbering it
+      # would break a later lane (Keycloak over HTTPS) whose CA was configured
+      # correctly. Restored right after the Fleet proof runs.
+      SAVED_NODE_CA="${NODE_EXTRA_CA_CERTS:-}"
+      if [ -n "$SAVED_NODE_CA" ] && [ -f "$SAVED_NODE_CA" ]; then
+        cat "$SAVED_NODE_CA" "$FLEET_TLS_DIR/fleet.crt" > "$FLEET_TLS_DIR/combined-ca.crt"
+        export NODE_EXTRA_CA_CERTS="$FLEET_TLS_DIR/combined-ca.crt"
+      else
+        export NODE_EXTRA_CA_CERTS="$FLEET_TLS_DIR/fleet.crt"
+      fi
       # Declared then exported SEPARATELY (SC2155): `export X=$(cmd)` returns the
       # EXPORT's status, not the command's, so a failed login would export an empty
       # token and the live lane below would run against fixtures while reporting it
@@ -126,8 +144,10 @@ if wanted fleet; then
       # assertions (2026-08-17) require exactly that, and a synthetic curl
       # enroll can never provide it.
       printf '%s' "$SECRET" > "$FLEET_TLS_DIR/secret"
+      OSQ_IMG="${OSQUERY_IMAGE:-$SG_IMAGE_OSQUERY}"
+      echo "   osquery image: $OSQ_IMG"
       "$SG_ENGINE" run -d --name sg-osquery --platform linux/amd64 --network sg-fleetnet \
-        -v "$FLEET_TLS_DIR:/fleet-tls" --entrypoint osqueryd docker.io/osquery/osquery:latest \
+        -v "$FLEET_TLS_DIR:/fleet-tls" --entrypoint osqueryd "$OSQ_IMG" \
         --enroll_secret_path=/fleet-tls/secret \
         --tls_hostname=sg-fleet:8080 \
         --tls_server_certs=/fleet-tls/fleet.crt \
@@ -156,6 +176,10 @@ if wanted fleet; then
     if $PNPM run proof:live-fleet >/tmp/live_fleet.log 2>&1; then ok "proof:live-fleet"; else bad "proof:live-fleet" /tmp/live_fleet.log; fi
   else
     skip "proof:live-fleet" "could not stand up Fleet (see docs/FLEET_LIVE_INTEGRATION.md)"
+  fi
+  # Hand the caller's own trust bundle back to every later lane.
+  if [ -n "${FLEET_TLS_DIR:-}" ]; then
+    if [ -n "${SAVED_NODE_CA:-}" ]; then export NODE_EXTRA_CA_CERTS="$SAVED_NODE_CA"; else unset NODE_EXTRA_CA_CERTS; fi
   fi
 fi
 
@@ -218,7 +242,6 @@ if wanted edr; then
   fi
 fi
 
-[ -n "${FLEET_TLS_DIR:-}" ] && rm -rf "$FLEET_TLS_DIR"
 if [ "$KEEP" -eq 0 ] && [ -n "$started" ]; then
   echo; echo "-- removing containers this run started:$started"
   # shellcheck disable=SC2086
@@ -226,6 +249,7 @@ if [ "$KEEP" -eq 0 ] && [ -n "$started" ]; then
   "$SG_ENGINE" network rm sg-fleetnet >/dev/null 2>&1
 else
   [ -n "$started" ] && echo "-- leaving running (--keep):$started"
+  [ -n "${FLEET_TLS_DIR:-}" ] && echo "-- lab TLS material kept for the retained containers: $FLEET_TLS_DIR (delete it when you remove them)"
 fi
 
 echo

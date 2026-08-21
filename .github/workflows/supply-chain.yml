@@ -73,6 +73,10 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Generate SBOM
         run: pnpm run sbom
+      - name: Licence policy self-test (the gate must be able to fail)
+        run: node scripts/check-licence-policy.mjs --self-test
+      - name: Licence policy (every component's licence resolves to a declared class)
+        run: node scripts/check-licence-policy.mjs
 
       # Uploaded BEFORE verification so the artifact exists even when the SBOM has
       # drifted: `sbom-sync` consumes exactly this file rather than regenerating it,

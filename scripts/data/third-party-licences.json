@@ -1,0 +1,1765 @@
+{
+  "$comment": "Committed licence registry for non-npm ecosystems (cargo, maven), recorded from each package's public registry with per-entry provenance. Cargo.lock and build.gradle.kts carry no licence metadata, so the SBOM generator reads THIS file \u2014 deterministic, no network at generation time. A component absent from this registry is emitted with its licence unresolved and scripts/check-licence-policy.mjs routes it to REVIEW: a named unknown, never a silent omission. Re-record by re-running the recorder when a lockfile changes.",
+  "recordedOn": "2026-08-21",
+  "entries": {
+    "pkg:cargo/adler2@2.0.1": {
+      "licence": "0BSD OR MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 2.0.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/aho-corasick@1.1.5": {
+      "licence": "Unlicense OR MIT",
+      "basis": "crates.io API (versions[].license for 1.1.5), recorded 2026-08-21"
+    },
+    "pkg:cargo/alloc-no-stdlib@2.0.4": {
+      "licence": "BSD-3-Clause",
+      "basis": "crates.io API (versions[].license for 2.0.4), recorded 2026-08-21"
+    },
+    "pkg:cargo/alloc-stdlib@0.2.4": {
+      "licence": "BSD-3-Clause",
+      "basis": "crates.io API (versions[].license for 0.2.4), recorded 2026-08-21"
+    },
+    "pkg:cargo/android_system_properties@0.1.6": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.1.6), recorded 2026-08-21"
+    },
+    "pkg:cargo/anyhow@1.0.104": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.0.104), recorded 2026-08-21"
+    },
+    "pkg:cargo/atk-sys@0.18.2": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.18.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/atk@0.18.2": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.18.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/atomic-waker@1.1.2": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 1.1.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/autocfg@1.5.1": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 1.5.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/base64@0.21.7": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.21.7), recorded 2026-08-21"
+    },
+    "pkg:cargo/base64@0.22.1": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.22.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/bit-set@0.8.0": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.8.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/bit-vec@0.8.0": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.8.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/bitflags@1.3.2": {
+      "licence": "MIT/Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.3.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/bitflags@2.13.1": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 2.13.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/block-buffer@0.10.4": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.10.4), recorded 2026-08-21"
+    },
+    "pkg:cargo/block2@0.6.2": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.6.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/brotli-decompressor@5.0.3": {
+      "licence": "BSD-3-Clause/MIT",
+      "basis": "crates.io API (versions[].license for 5.0.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/brotli@8.0.4": {
+      "licence": "BSD-3-Clause AND MIT",
+      "basis": "crates.io API (versions[].license for 8.0.4), recorded 2026-08-21"
+    },
+    "pkg:cargo/bs58@0.5.1": {
+      "licence": "MIT/Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.5.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/bumpalo@3.20.3": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 3.20.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/bytemuck@1.25.2": {
+      "licence": "Zlib OR Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 1.25.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/byteorder@1.5.0": {
+      "licence": "Unlicense OR MIT",
+      "basis": "crates.io API (versions[].license for 1.5.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/bytes@1.12.1": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 1.12.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/cairo-rs@0.18.5": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.18.5), recorded 2026-08-21"
+    },
+    "pkg:cargo/cairo-sys-rs@0.18.2": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.18.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/camino@1.2.5": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.2.5), recorded 2026-08-21"
+    },
+    "pkg:cargo/cargo-platform@0.1.9": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.1.9), recorded 2026-08-21"
+    },
+    "pkg:cargo/cargo_metadata@0.19.2": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.19.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/cargo_toml@0.22.3": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.22.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/cc@1.4.2": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.4.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/cesu8@1.1.0": {
+      "licence": "Apache-2.0/MIT",
+      "basis": "crates.io API (versions[].license for 1.1.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/cfb@0.7.3": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.7.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/cfg-expr@0.15.8": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.15.8), recorded 2026-08-21"
+    },
+    "pkg:cargo/cfg-if@1.0.4": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.0.4), recorded 2026-08-21"
+    },
+    "pkg:cargo/chrono@0.4.45": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.4.45), recorded 2026-08-21"
+    },
+    "pkg:cargo/combine@4.6.7": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 4.6.7), recorded 2026-08-21"
+    },
+    "pkg:cargo/cookie@0.18.1": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.18.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/core-foundation-sys@0.8.7": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.8.7), recorded 2026-08-21"
+    },
+    "pkg:cargo/core-foundation@0.10.1": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.10.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/core-graphics-types@0.2.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.2.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/core-graphics@0.25.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.25.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/cpufeatures@0.2.17": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.2.17), recorded 2026-08-21"
+    },
+    "pkg:cargo/crc32fast@1.5.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.5.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/crossbeam-channel@0.5.16": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.5.16), recorded 2026-08-21"
+    },
+    "pkg:cargo/crossbeam-utils@0.8.22": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.8.22), recorded 2026-08-21"
+    },
+    "pkg:cargo/crypto-common@0.1.7": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.1.7), recorded 2026-08-21"
+    },
+    "pkg:cargo/cssparser-macros@0.6.1": {
+      "licence": "MPL-2.0",
+      "basis": "crates.io API (versions[].license for 0.6.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/cssparser@0.36.0": {
+      "licence": "MPL-2.0",
+      "basis": "crates.io API (versions[].license for 0.36.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/ctor-proc-macro@0.0.7": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.0.7), recorded 2026-08-21"
+    },
+    "pkg:cargo/ctor@0.8.0": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.8.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/darling@0.23.0": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.23.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/darling_core@0.23.0": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.23.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/darling_macro@0.23.0": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.23.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/dbus@0.9.12": {
+      "licence": "Apache-2.0/MIT",
+      "basis": "crates.io API (versions[].license for 0.9.12), recorded 2026-08-21"
+    },
+    "pkg:cargo/deranged@0.5.8": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.5.8), recorded 2026-08-21"
+    },
+    "pkg:cargo/derive_more-impl@2.1.1": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 2.1.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/derive_more@2.1.1": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 2.1.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/digest@0.10.7": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.10.7), recorded 2026-08-21"
+    },
+    "pkg:cargo/dirs-sys@0.5.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.5.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/dirs@6.0.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 6.0.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/dispatch2@0.3.1": {
+      "licence": "Zlib OR Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.3.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/displaydoc@0.2.7": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.2.7), recorded 2026-08-21"
+    },
+    "pkg:cargo/dlopen2@0.8.2": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.8.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/dlopen2_derive@0.4.3": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.4.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/dom_query@0.27.0": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.27.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/dpi@0.1.2": {
+      "licence": "Apache-2.0 AND MIT",
+      "basis": "crates.io API (versions[].license for 0.1.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/dtoa-short@0.3.5": {
+      "licence": "MPL-2.0",
+      "basis": "crates.io API (versions[].license for 0.3.5), recorded 2026-08-21"
+    },
+    "pkg:cargo/dtoa@1.0.11": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.0.11), recorded 2026-08-21"
+    },
+    "pkg:cargo/dtor-proc-macro@0.0.6": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.0.6), recorded 2026-08-21"
+    },
+    "pkg:cargo/dtor@0.3.0": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.3.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/dunce@1.0.5": {
+      "licence": "CC0-1.0 OR MIT-0 OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.0.5), recorded 2026-08-21"
+    },
+    "pkg:cargo/dyn-clone@1.0.20": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.0.20), recorded 2026-08-21"
+    },
+    "pkg:cargo/embed-resource@3.0.11": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 3.0.11), recorded 2026-08-21"
+    },
+    "pkg:cargo/embed_plist@1.2.2": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.2.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/equivalent@1.0.2": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 1.0.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/erased-serde@0.4.10": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.4.10), recorded 2026-08-21"
+    },
+    "pkg:cargo/fastrand@2.5.0": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 2.5.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/fdeflate@0.3.7": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.3.7), recorded 2026-08-21"
+    },
+    "pkg:cargo/field-offset@0.3.6": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.3.6), recorded 2026-08-21"
+    },
+    "pkg:cargo/find-msvc-tools@0.1.10": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.1.10), recorded 2026-08-21"
+    },
+    "pkg:cargo/flate2@1.1.9": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.1.9), recorded 2026-08-21"
+    },
+    "pkg:cargo/fnv@1.0.7": {
+      "licence": "Apache-2.0 / MIT",
+      "basis": "crates.io API (versions[].license for 1.0.7), recorded 2026-08-21"
+    },
+    "pkg:cargo/foldhash@0.2.0": {
+      "licence": "Zlib",
+      "basis": "crates.io API (versions[].license for 0.2.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/foreign-types-macros@0.2.4": {
+      "licence": "MIT/Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.2.4), recorded 2026-08-21"
+    },
+    "pkg:cargo/foreign-types-shared@0.3.1": {
+      "licence": "MIT/Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.3.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/foreign-types@0.5.0": {
+      "licence": "MIT/Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.5.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/form_urlencoded@1.2.2": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.2.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/futures-channel@0.3.33": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.3.33), recorded 2026-08-21"
+    },
+    "pkg:cargo/futures-core@0.3.33": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.3.33), recorded 2026-08-21"
+    },
+    "pkg:cargo/futures-executor@0.3.33": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.3.33), recorded 2026-08-21"
+    },
+    "pkg:cargo/futures-io@0.3.33": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.3.33), recorded 2026-08-21"
+    },
+    "pkg:cargo/futures-macro@0.3.33": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.3.33), recorded 2026-08-21"
+    },
+    "pkg:cargo/futures-sink@0.3.33": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.3.33), recorded 2026-08-21"
+    },
+    "pkg:cargo/futures-task@0.3.33": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.3.33), recorded 2026-08-21"
+    },
+    "pkg:cargo/futures-util@0.3.33": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.3.33), recorded 2026-08-21"
+    },
+    "pkg:cargo/gdk-pixbuf-sys@0.18.0": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.18.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/gdk-pixbuf@0.18.5": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.18.5), recorded 2026-08-21"
+    },
+    "pkg:cargo/gdk-sys@0.18.2": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.18.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/gdk@0.18.2": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.18.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/gdkwayland-sys@0.18.2": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.18.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/gdkx11-sys@0.18.2": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.18.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/gdkx11@0.18.2": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.18.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/generic-array@0.14.7": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.14.7), recorded 2026-08-21"
+    },
+    "pkg:cargo/getrandom@0.2.17": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.2.17), recorded 2026-08-21"
+    },
+    "pkg:cargo/getrandom@0.3.4": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.3.4), recorded 2026-08-21"
+    },
+    "pkg:cargo/getrandom@0.4.3": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.4.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/gio-sys@0.18.1": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.18.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/gio@0.18.4": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.18.4), recorded 2026-08-21"
+    },
+    "pkg:cargo/glib-macros@0.18.5": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.18.5), recorded 2026-08-21"
+    },
+    "pkg:cargo/glib-sys@0.18.1": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.18.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/glib@0.18.5": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.18.5), recorded 2026-08-21"
+    },
+    "pkg:cargo/glob@0.3.4": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.3.4), recorded 2026-08-21"
+    },
+    "pkg:cargo/gobject-sys@0.18.0": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.18.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/gtk-sys@0.18.2": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.18.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/gtk3-macros@0.18.2": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.18.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/gtk@0.18.2": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.18.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/hashbrown@0.12.3": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.12.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/hashbrown@0.17.1": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.17.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/heck@0.4.1": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.4.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/heck@0.5.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.5.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/hex@0.4.3": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.4.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/html5ever@0.38.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.38.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/http-body-util@0.1.4": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.1.4), recorded 2026-08-21"
+    },
+    "pkg:cargo/http-body@1.1.0": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 1.1.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/http@1.5.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.5.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/httparse@1.10.1": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.10.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/hyper-util@0.1.20": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.1.20), recorded 2026-08-21"
+    },
+    "pkg:cargo/hyper@1.11.0": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 1.11.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/iana-time-zone-haiku@0.1.2": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.1.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/iana-time-zone@0.1.65": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.1.65), recorded 2026-08-21"
+    },
+    "pkg:cargo/ico@0.5.0": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.5.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/icu_collections@2.2.0": {
+      "licence": "Unicode-3.0",
+      "basis": "crates.io API (versions[].license for 2.2.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/icu_locale_core@2.2.0": {
+      "licence": "Unicode-3.0",
+      "basis": "crates.io API (versions[].license for 2.2.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/icu_normalizer@2.2.0": {
+      "licence": "Unicode-3.0",
+      "basis": "crates.io API (versions[].license for 2.2.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/icu_normalizer_data@2.2.0": {
+      "licence": "Unicode-3.0",
+      "basis": "crates.io API (versions[].license for 2.2.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/icu_properties@2.2.0": {
+      "licence": "Unicode-3.0",
+      "basis": "crates.io API (versions[].license for 2.2.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/icu_properties_data@2.2.0": {
+      "licence": "Unicode-3.0",
+      "basis": "crates.io API (versions[].license for 2.2.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/icu_provider@2.2.0": {
+      "licence": "Unicode-3.0",
+      "basis": "crates.io API (versions[].license for 2.2.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/ident_case@1.0.1": {
+      "licence": "MIT/Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.0.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/idna@1.1.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.1.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/idna_adapter@1.2.2": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 1.2.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/indexmap@1.9.3": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 1.9.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/indexmap@2.14.0": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 2.14.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/infer@0.19.0": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.19.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/ipnet@2.12.1": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 2.12.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/itoa@1.0.18": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.0.18), recorded 2026-08-21"
+    },
+    "pkg:cargo/javascriptcore-rs-sys@1.1.1": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 1.1.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/javascriptcore-rs@1.1.2": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 1.1.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/jni-sys-macros@0.4.1": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.4.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/jni-sys@0.3.1": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.3.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/jni-sys@0.4.1": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.4.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/jni@0.21.1": {
+      "licence": "MIT/Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.21.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/js-sys@0.3.104": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.3.104), recorded 2026-08-21"
+    },
+    "pkg:cargo/json-patch@3.0.1": {
+      "licence": "MIT/Apache-2.0",
+      "basis": "crates.io API (versions[].license for 3.0.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/jsonptr@0.6.3": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.6.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/keyboard-types@0.7.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.7.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/libappindicator-sys@0.9.0": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.9.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/libappindicator@0.9.0": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.9.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/libc@0.2.189": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.2.189), recorded 2026-08-21"
+    },
+    "pkg:cargo/libdbus-sys@0.2.7": {
+      "licence": "Apache-2.0/MIT",
+      "basis": "crates.io API (versions[].license for 0.2.7), recorded 2026-08-21"
+    },
+    "pkg:cargo/libloading@0.7.4": {
+      "licence": "ISC",
+      "basis": "crates.io API (versions[].license for 0.7.4), recorded 2026-08-21"
+    },
+    "pkg:cargo/libredox@0.1.19": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.1.19), recorded 2026-08-21"
+    },
+    "pkg:cargo/litemap@0.8.2": {
+      "licence": "Unicode-3.0",
+      "basis": "crates.io API (versions[].license for 0.8.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/lock_api@0.4.14": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.4.14), recorded 2026-08-21"
+    },
+    "pkg:cargo/log@0.4.33": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.4.33), recorded 2026-08-21"
+    },
+    "pkg:cargo/markup5ever@0.38.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.38.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/memchr@2.8.3": {
+      "licence": "Unlicense OR MIT",
+      "basis": "crates.io API (versions[].license for 2.8.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/memoffset@0.9.1": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.9.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/mime@0.3.17": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.3.17), recorded 2026-08-21"
+    },
+    "pkg:cargo/miniz_oxide@0.8.9": {
+      "licence": "MIT OR Zlib OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.8.9), recorded 2026-08-21"
+    },
+    "pkg:cargo/mio@1.2.2": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 1.2.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/muda@0.19.3": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.19.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/ndk-sys@0.6.0+11769913": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.6.0+11769913), recorded 2026-08-21"
+    },
+    "pkg:cargo/ndk@0.9.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.9.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/new_debug_unreachable@1.0.6": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 1.0.6), recorded 2026-08-21"
+    },
+    "pkg:cargo/num-conv@0.2.2": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.2.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/num-traits@0.2.19": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.2.19), recorded 2026-08-21"
+    },
+    "pkg:cargo/num_enum@0.7.6": {
+      "licence": "BSD-3-Clause OR MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.7.6), recorded 2026-08-21"
+    },
+    "pkg:cargo/num_enum_derive@0.7.6": {
+      "licence": "BSD-3-Clause OR MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.7.6), recorded 2026-08-21"
+    },
+    "pkg:cargo/objc2-app-kit@0.3.2": {
+      "licence": "Zlib OR Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.3.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/objc2-cloud-kit@0.3.2": {
+      "licence": "Zlib OR Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.3.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/objc2-core-data@0.3.2": {
+      "licence": "Zlib OR Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.3.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/objc2-core-foundation@0.3.2": {
+      "licence": "Zlib OR Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.3.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/objc2-core-graphics@0.3.2": {
+      "licence": "Zlib OR Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.3.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/objc2-core-image@0.3.2": {
+      "licence": "Zlib OR Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.3.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/objc2-core-location@0.3.2": {
+      "licence": "Zlib OR Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.3.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/objc2-core-text@0.3.2": {
+      "licence": "Zlib OR Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.3.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/objc2-encode@4.1.0": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 4.1.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/objc2-exception-helper@0.1.1": {
+      "licence": "Zlib OR Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.1.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/objc2-foundation@0.3.2": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.3.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/objc2-io-surface@0.3.2": {
+      "licence": "Zlib OR Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.3.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/objc2-quartz-core@0.3.2": {
+      "licence": "Zlib OR Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.3.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/objc2-ui-kit@0.3.2": {
+      "licence": "Zlib OR Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.3.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/objc2-user-notifications@0.3.2": {
+      "licence": "Zlib OR Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.3.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/objc2-web-kit@0.3.2": {
+      "licence": "Zlib OR Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.3.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/objc2@0.6.4": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.6.4), recorded 2026-08-21"
+    },
+    "pkg:cargo/once_cell@1.21.4": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.21.4), recorded 2026-08-21"
+    },
+    "pkg:cargo/option-ext@0.2.0": {
+      "licence": "MPL-2.0",
+      "basis": "crates.io API (versions[].license for 0.2.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/pango-sys@0.18.0": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.18.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/pango@0.18.3": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.18.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/parking_lot@0.12.5": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.12.5), recorded 2026-08-21"
+    },
+    "pkg:cargo/parking_lot_core@0.9.12": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.9.12), recorded 2026-08-21"
+    },
+    "pkg:cargo/percent-encoding@2.3.2": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 2.3.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/phf@0.13.1": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.13.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/phf_codegen@0.13.1": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.13.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/phf_generator@0.13.1": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.13.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/phf_macros@0.13.1": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.13.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/phf_shared@0.13.1": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.13.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/pin-project-lite@0.2.17": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.2.17), recorded 2026-08-21"
+    },
+    "pkg:cargo/pkg-config@0.3.33": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.3.33), recorded 2026-08-21"
+    },
+    "pkg:cargo/plist@1.10.0": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 1.10.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/png@0.17.16": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.17.16), recorded 2026-08-21"
+    },
+    "pkg:cargo/png@0.18.1": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.18.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/potential_utf@0.1.5": {
+      "licence": "Unicode-3.0",
+      "basis": "crates.io API (versions[].license for 0.1.5), recorded 2026-08-21"
+    },
+    "pkg:cargo/powerfmt@0.2.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.2.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/precomputed-hash@0.1.1": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.1.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/proc-macro-crate@1.3.1": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.3.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/proc-macro-crate@2.0.2": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 2.0.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/proc-macro-crate@3.5.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 3.5.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/proc-macro-error-attr@1.0.4": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.0.4), recorded 2026-08-21"
+    },
+    "pkg:cargo/proc-macro-error@1.0.4": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.0.4), recorded 2026-08-21"
+    },
+    "pkg:cargo/proc-macro2@1.0.107": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.0.107), recorded 2026-08-21"
+    },
+    "pkg:cargo/quick-xml@0.41.0": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.41.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/quote@1.0.47": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.0.47), recorded 2026-08-21"
+    },
+    "pkg:cargo/r-efi@5.3.0": {
+      "licence": "MIT OR Apache-2.0 OR LGPL-2.1-or-later",
+      "basis": "crates.io API (versions[].license for 5.3.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/r-efi@6.0.0": {
+      "licence": "MIT OR Apache-2.0 OR LGPL-2.1-or-later",
+      "basis": "crates.io API (versions[].license for 6.0.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/raw-window-handle@0.6.2": {
+      "licence": "MIT OR Apache-2.0 OR Zlib",
+      "basis": "crates.io API (versions[].license for 0.6.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/redox_syscall@0.5.18": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.5.18), recorded 2026-08-21"
+    },
+    "pkg:cargo/redox_users@0.5.2": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.5.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/ref-cast-impl@1.0.26": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.0.26), recorded 2026-08-21"
+    },
+    "pkg:cargo/ref-cast@1.0.26": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.0.26), recorded 2026-08-21"
+    },
+    "pkg:cargo/regex-automata@0.4.18": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.4.18), recorded 2026-08-21"
+    },
+    "pkg:cargo/regex-syntax@0.8.11": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.8.11), recorded 2026-08-21"
+    },
+    "pkg:cargo/regex@1.13.1": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.13.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/reqwest@0.13.4": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.13.4), recorded 2026-08-21"
+    },
+    "pkg:cargo/rustc-hash@2.1.3": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 2.1.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/rustc_version@0.4.1": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.4.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/rustversion@1.0.23": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.0.23), recorded 2026-08-21"
+    },
+    "pkg:cargo/same-file@1.0.6": {
+      "licence": "Unlicense/MIT",
+      "basis": "crates.io API (versions[].license for 1.0.6), recorded 2026-08-21"
+    },
+    "pkg:cargo/schemars@0.8.22": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.8.22), recorded 2026-08-21"
+    },
+    "pkg:cargo/schemars@0.9.0": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.9.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/schemars@1.2.2": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 1.2.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/schemars_derive@0.8.22": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.8.22), recorded 2026-08-21"
+    },
+    "pkg:cargo/scopeguard@1.2.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.2.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/selectors@0.36.1": {
+      "licence": "MPL-2.0",
+      "basis": "crates.io API (versions[].license for 0.36.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/semver@1.0.28": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.0.28), recorded 2026-08-21"
+    },
+    "pkg:cargo/serde-untagged@0.1.9": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.1.9), recorded 2026-08-21"
+    },
+    "pkg:cargo/serde@1.0.229": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.0.229), recorded 2026-08-21"
+    },
+    "pkg:cargo/serde_core@1.0.229": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.0.229), recorded 2026-08-21"
+    },
+    "pkg:cargo/serde_derive@1.0.229": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.0.229), recorded 2026-08-21"
+    },
+    "pkg:cargo/serde_derive_internals@0.29.1": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.29.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/serde_json@1.0.151": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.0.151), recorded 2026-08-21"
+    },
+    "pkg:cargo/serde_repr@0.1.21": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.1.21), recorded 2026-08-21"
+    },
+    "pkg:cargo/serde_spanned@0.6.9": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.6.9), recorded 2026-08-21"
+    },
+    "pkg:cargo/serde_spanned@1.1.1": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.1.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/serde_with@3.21.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 3.21.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/serde_with_macros@3.21.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 3.21.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/serialize-to-javascript-impl@0.1.2": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.1.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/serialize-to-javascript@0.1.2": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.1.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/servo_arc@0.4.3": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.4.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/sha2@0.10.9": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.10.9), recorded 2026-08-21"
+    },
+    "pkg:cargo/shlex@2.0.1": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 2.0.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/simd-adler32@0.3.10": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.3.10), recorded 2026-08-21"
+    },
+    "pkg:cargo/siphasher@1.0.3": {
+      "licence": "MIT/Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.0.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/slab@0.4.12": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.4.12), recorded 2026-08-21"
+    },
+    "pkg:cargo/smallvec@1.15.2": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.15.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/socket2@0.6.5": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.6.5), recorded 2026-08-21"
+    },
+    "pkg:cargo/softbuffer@0.4.8": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.4.8), recorded 2026-08-21"
+    },
+    "pkg:cargo/soup3-sys@0.5.0": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.5.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/soup3@0.5.0": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.5.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/stable_deref_trait@1.2.1": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.2.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/string_cache@0.9.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.9.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/string_cache_codegen@0.6.1": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.6.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/strsim@0.11.1": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.11.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/swift-rs@1.0.7": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.0.7), recorded 2026-08-21"
+    },
+    "pkg:cargo/syn@1.0.109": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.0.109), recorded 2026-08-21"
+    },
+    "pkg:cargo/syn@2.0.119": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 2.0.119), recorded 2026-08-21"
+    },
+    "pkg:cargo/syn@3.0.3": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 3.0.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/sync_wrapper@1.0.2": {
+      "licence": "Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.0.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/synstructure@0.13.2": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.13.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/system-deps@6.2.2": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 6.2.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/tao-macros@0.1.4": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.1.4), recorded 2026-08-21"
+    },
+    "pkg:cargo/tao@0.35.3": {
+      "licence": "Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.35.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/target-lexicon@0.12.16": {
+      "licence": "Apache-2.0 WITH LLVM-exception",
+      "basis": "crates.io API (versions[].license for 0.12.16), recorded 2026-08-21"
+    },
+    "pkg:cargo/tauri-build@2.6.3": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 2.6.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/tauri-codegen@2.6.3": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 2.6.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/tauri-macros@2.6.3": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 2.6.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/tauri-runtime-wry@2.11.4": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 2.11.4), recorded 2026-08-21"
+    },
+    "pkg:cargo/tauri-runtime@2.11.3": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 2.11.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/tauri-utils@2.9.3": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 2.9.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/tauri-winres@0.3.6": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.3.6), recorded 2026-08-21"
+    },
+    "pkg:cargo/tauri@2.11.5": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 2.11.5), recorded 2026-08-21"
+    },
+    "pkg:cargo/tendril@0.5.1": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.5.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/thiserror-impl@1.0.69": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.0.69), recorded 2026-08-21"
+    },
+    "pkg:cargo/thiserror-impl@2.0.20": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 2.0.20), recorded 2026-08-21"
+    },
+    "pkg:cargo/thiserror@1.0.69": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.0.69), recorded 2026-08-21"
+    },
+    "pkg:cargo/thiserror@2.0.20": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 2.0.20), recorded 2026-08-21"
+    },
+    "pkg:cargo/time-core@0.1.9": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.1.9), recorded 2026-08-21"
+    },
+    "pkg:cargo/time-macros@0.2.32": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.2.32), recorded 2026-08-21"
+    },
+    "pkg:cargo/time@0.3.55": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.3.55), recorded 2026-08-21"
+    },
+    "pkg:cargo/tinystr@0.8.3": {
+      "licence": "Unicode-3.0",
+      "basis": "crates.io API (versions[].license for 0.8.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/tinyvec@1.12.0": {
+      "licence": "Zlib OR Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 1.12.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/tinyvec_macros@0.1.1": {
+      "licence": "MIT OR Apache-2.0 OR Zlib",
+      "basis": "crates.io API (versions[].license for 0.1.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/tokio-util@0.7.19": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.7.19), recorded 2026-08-21"
+    },
+    "pkg:cargo/tokio@1.53.1": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 1.53.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/toml@0.8.2": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.8.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/toml@0.9.12+spec-1.1.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.9.12+spec-1.1.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/toml@1.1.4+spec-1.1.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.1.4+spec-1.1.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/toml_datetime@0.6.3": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.6.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/toml_datetime@0.7.5+spec-1.1.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.7.5+spec-1.1.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/toml_datetime@1.1.1+spec-1.1.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.1.1+spec-1.1.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/toml_edit@0.19.15": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.19.15), recorded 2026-08-21"
+    },
+    "pkg:cargo/toml_edit@0.20.2": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.20.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/toml_edit@0.25.13+spec-1.1.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.25.13+spec-1.1.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/toml_parser@1.1.3+spec-1.1.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.1.3+spec-1.1.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/toml_writer@1.1.2+spec-1.1.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.1.2+spec-1.1.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/tower-http@0.6.11": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.6.11), recorded 2026-08-21"
+    },
+    "pkg:cargo/tower-layer@0.3.3": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.3.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/tower-service@0.3.3": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.3.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/tower@0.5.3": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.5.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/tracing-core@0.1.36": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.1.36), recorded 2026-08-21"
+    },
+    "pkg:cargo/tracing@0.1.44": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.1.44), recorded 2026-08-21"
+    },
+    "pkg:cargo/tray-icon@0.24.2": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.24.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/try-lock@0.2.5": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.2.5), recorded 2026-08-21"
+    },
+    "pkg:cargo/typeid@1.0.3": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.0.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/typenum@1.20.1": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.20.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/unic-char-property@0.9.0": {
+      "licence": "MIT/Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.9.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/unic-char-range@0.9.0": {
+      "licence": "MIT/Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.9.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/unic-common@0.9.0": {
+      "licence": "MIT/Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.9.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/unic-ucd-ident@0.9.0": {
+      "licence": "MIT/Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.9.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/unic-ucd-version@0.9.0": {
+      "licence": "MIT/Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.9.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/unicode-ident@1.0.24": {
+      "licence": "(MIT OR Apache-2.0) AND Unicode-3.0",
+      "basis": "crates.io API (versions[].license for 1.0.24), recorded 2026-08-21"
+    },
+    "pkg:cargo/unicode-segmentation@1.13.3": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 1.13.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/url@2.5.8": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 2.5.8), recorded 2026-08-21"
+    },
+    "pkg:cargo/urlpattern@0.3.0": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.3.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/utf8_iter@1.0.4": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 1.0.4), recorded 2026-08-21"
+    },
+    "pkg:cargo/uuid@1.24.0": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 1.24.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/version-compare@0.2.1": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.2.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/version_check@0.9.5": {
+      "licence": "MIT/Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.9.5), recorded 2026-08-21"
+    },
+    "pkg:cargo/vswhom-sys@0.1.3": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.1.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/vswhom@0.1.0": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.1.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/walkdir@2.5.0": {
+      "licence": "Unlicense/MIT",
+      "basis": "crates.io API (versions[].license for 2.5.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/want@0.3.1": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.3.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/wasi@0.11.1+wasi-snapshot-preview1": {
+      "licence": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.11.1+wasi-snapshot-preview1), recorded 2026-08-21"
+    },
+    "pkg:cargo/wasip2@1.0.4+wasi-0.2.12": {
+      "licence": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 1.0.4+wasi-0.2.12), recorded 2026-08-21"
+    },
+    "pkg:cargo/wasm-bindgen-futures@0.4.77": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.4.77), recorded 2026-08-21"
+    },
+    "pkg:cargo/wasm-bindgen-macro-support@0.2.127": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.2.127), recorded 2026-08-21"
+    },
+    "pkg:cargo/wasm-bindgen-macro@0.2.127": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.2.127), recorded 2026-08-21"
+    },
+    "pkg:cargo/wasm-bindgen-shared@0.2.127": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.2.127), recorded 2026-08-21"
+    },
+    "pkg:cargo/wasm-bindgen@0.2.127": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.2.127), recorded 2026-08-21"
+    },
+    "pkg:cargo/wasm-streams@0.5.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.5.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/web-sys@0.3.104": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.3.104), recorded 2026-08-21"
+    },
+    "pkg:cargo/web_atoms@0.2.5": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.2.5), recorded 2026-08-21"
+    },
+    "pkg:cargo/webkit2gtk-sys@2.0.2": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 2.0.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/webkit2gtk@2.0.2": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 2.0.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/webview2-com-macros@0.8.1": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.8.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/webview2-com-sys@0.38.2": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.38.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/webview2-com@0.38.2": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.38.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/winapi-i686-pc-windows-gnu@0.4.0": {
+      "licence": "MIT/Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.4.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/winapi-util@0.1.11": {
+      "licence": "Unlicense OR MIT",
+      "basis": "crates.io API (versions[].license for 0.1.11), recorded 2026-08-21"
+    },
+    "pkg:cargo/winapi-x86_64-pc-windows-gnu@0.4.0": {
+      "licence": "MIT/Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.4.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/winapi@0.3.9": {
+      "licence": "MIT/Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.3.9), recorded 2026-08-21"
+    },
+    "pkg:cargo/window-vibrancy@0.6.0": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.6.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows-collections@0.2.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.2.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows-core@0.61.2": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.61.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows-core@0.62.2": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.62.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows-future@0.2.1": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.2.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows-implement@0.60.2": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.60.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows-interface@0.59.3": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.59.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows-link@0.1.3": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.1.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows-link@0.2.1": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.2.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows-numerics@0.2.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.2.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows-result@0.3.4": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.3.4), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows-result@0.4.1": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.4.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows-strings@0.4.2": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.4.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows-strings@0.5.1": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.5.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows-sys@0.45.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.45.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows-sys@0.59.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.59.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows-sys@0.61.2": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.61.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows-targets@0.42.2": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.42.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows-targets@0.52.6": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.52.6), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows-threading@0.1.0": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.1.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows-version@0.1.7": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.1.7), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows@0.61.3": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.61.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows_aarch64_gnullvm@0.42.2": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.42.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows_aarch64_gnullvm@0.52.6": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.52.6), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows_aarch64_msvc@0.42.2": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.42.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows_aarch64_msvc@0.52.6": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.52.6), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows_i686_gnu@0.42.2": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.42.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows_i686_gnu@0.52.6": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.52.6), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows_i686_gnullvm@0.52.6": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.52.6), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows_i686_msvc@0.42.2": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.42.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows_i686_msvc@0.52.6": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.52.6), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows_x86_64_gnu@0.42.2": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.42.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows_x86_64_gnu@0.52.6": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.52.6), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows_x86_64_gnullvm@0.42.2": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.42.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows_x86_64_gnullvm@0.52.6": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.52.6), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows_x86_64_msvc@0.42.2": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.42.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/windows_x86_64_msvc@0.52.6": {
+      "licence": "MIT OR Apache-2.0",
+      "basis": "crates.io API (versions[].license for 0.52.6), recorded 2026-08-21"
+    },
+    "pkg:cargo/winnow@0.5.40": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.5.40), recorded 2026-08-21"
+    },
+    "pkg:cargo/winnow@0.7.15": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.7.15), recorded 2026-08-21"
+    },
+    "pkg:cargo/winnow@1.0.4": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 1.0.4), recorded 2026-08-21"
+    },
+    "pkg:cargo/winreg@0.55.0": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 0.55.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/wit-bindgen@0.57.1": {
+      "licence": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.57.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/writeable@0.6.3": {
+      "licence": "Unicode-3.0",
+      "basis": "crates.io API (versions[].license for 0.6.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/wry@0.55.1": {
+      "licence": "Apache-2.0 OR MIT",
+      "basis": "crates.io API (versions[].license for 0.55.1), recorded 2026-08-21"
+    },
+    "pkg:cargo/x11-dl@2.21.0": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 2.21.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/x11@2.21.0": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 2.21.0), recorded 2026-08-21"
+    },
+    "pkg:cargo/yoke-derive@0.8.2": {
+      "licence": "Unicode-3.0",
+      "basis": "crates.io API (versions[].license for 0.8.2), recorded 2026-08-21"
+    },
+    "pkg:cargo/yoke@0.8.3": {
+      "licence": "Unicode-3.0",
+      "basis": "crates.io API (versions[].license for 0.8.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/zerofrom-derive@0.1.7": {
+      "licence": "Unicode-3.0",
+      "basis": "crates.io API (versions[].license for 0.1.7), recorded 2026-08-21"
+    },
+    "pkg:cargo/zerofrom@0.1.8": {
+      "licence": "Unicode-3.0",
+      "basis": "crates.io API (versions[].license for 0.1.8), recorded 2026-08-21"
+    },
+    "pkg:cargo/zerotrie@0.2.4": {
+      "licence": "Unicode-3.0",
+      "basis": "crates.io API (versions[].license for 0.2.4), recorded 2026-08-21"
+    },
+    "pkg:cargo/zerovec-derive@0.11.3": {
+      "licence": "Unicode-3.0",
+      "basis": "crates.io API (versions[].license for 0.11.3), recorded 2026-08-21"
+    },
+    "pkg:cargo/zerovec@0.11.6": {
+      "licence": "Unicode-3.0",
+      "basis": "crates.io API (versions[].license for 0.11.6), recorded 2026-08-21"
+    },
+    "pkg:cargo/zmij@1.0.23": {
+      "licence": "MIT",
+      "basis": "crates.io API (versions[].license for 1.0.23), recorded 2026-08-21"
+    },
+    "pkg:maven/androidx.activity/activity-compose@1.9.3": {
+      "licence": "Apache-2.0",
+      "basis": "POM <licenses> at https://dl.google.com/android/maven2/androidx/activity/activity-compose/1.9.3/activity-compose-1.9.3.pom, recorded 2026-08-21 (POM names it 'The Apache Software License, Version 2.0' \u2014 normalised to its SPDX id)"
+    },
+    "pkg:maven/androidx.compose.material3/material3": {
+      "licence": "Apache-2.0",
+      "resolvedVersionByBom": "androidx.compose:compose-bom:2024.12.01 pins 1.3.1",
+      "basis": "POM <licenses> at https://dl.google.com/android/maven2/androidx/compose/material3/material3/1.3.1/material3-1.3.1.pom, recorded 2026-08-21 (POM names it 'The Apache Software License, Version 2.0' \u2014 normalised to its SPDX id)"
+    },
+    "pkg:maven/androidx.compose.ui/ui": {
+      "licence": "Apache-2.0",
+      "resolvedVersionByBom": "androidx.compose:compose-bom:2024.12.01 pins 1.7.6",
+      "basis": "POM <licenses> at https://dl.google.com/android/maven2/androidx/compose/ui/ui/1.7.6/ui-1.7.6.pom, recorded 2026-08-21 (POM names it 'The Apache Software License, Version 2.0' \u2014 normalised to its SPDX id)"
+    },
+    "pkg:maven/androidx.compose.ui/ui-tooling-preview": {
+      "licence": "Apache-2.0",
+      "resolvedVersionByBom": "androidx.compose:compose-bom:2024.12.01 pins 1.7.6",
+      "basis": "POM <licenses> at https://dl.google.com/android/maven2/androidx/compose/ui/ui-tooling-preview/1.7.6/ui-tooling-preview-1.7.6.pom, recorded 2026-08-21 (POM names it 'The Apache Software License, Version 2.0' \u2014 normalised to its SPDX id)"
+    },
+    "pkg:maven/androidx.compose/compose-bom@2024.12.01": {
+      "licence": "Apache-2.0",
+      "basis": "POM <licenses> at https://dl.google.com/android/maven2/androidx/compose/compose-bom/2024.12.01/compose-bom-2024.12.01.pom, recorded 2026-08-21 (POM names it 'The Apache Software License, Version 2.0' \u2014 normalised to its SPDX id)"
+    },
+    "pkg:maven/androidx.core/core-ktx@1.15.0": {
+      "licence": "Apache-2.0",
+      "basis": "POM <licenses> at https://dl.google.com/android/maven2/androidx/core/core-ktx/1.15.0/core-ktx-1.15.0.pom, recorded 2026-08-21 (POM names it 'The Apache Software License, Version 2.0' \u2014 normalised to its SPDX id)"
+    },
+    "pkg:maven/org.jetbrains.kotlinx/kotlinx-serialization-json@1.7.3": {
+      "licence": "Apache-2.0",
+      "basis": "POM <licenses> at https://repo1.maven.org/maven2/org/jetbrains/kotlinx/kotlinx-serialization-json/1.7.3/kotlinx-serialization-json-1.7.3.pom, recorded 2026-08-21 (POM names it 'The Apache Software License, Version 2.0' \u2014 normalised to its SPDX id)"
+    },
+    "pkg:npm/%40esbuild/win32-arm64@0.27.3": {
+      "licence": "MIT",
+      "basis": "registry.npmjs.org manifest for @esbuild/win32-arm64@0.27.3 (platform binary not installed under the workspace overrides), recorded 2026-08-21"
+    },
+    "pkg:npm/%40esbuild/win32-ia32@0.27.3": {
+      "licence": "MIT",
+      "basis": "registry.npmjs.org manifest for @esbuild/win32-ia32@0.27.3 (platform binary not installed under the workspace overrides), recorded 2026-08-21"
+    },
+    "pkg:npm/%40esbuild/win32-x64@0.27.3": {
+      "licence": "MIT",
+      "basis": "registry.npmjs.org manifest for @esbuild/win32-x64@0.27.3 (platform binary not installed under the workspace overrides), recorded 2026-08-21"
+    },
+    "pkg:npm/%40rolldown/binding-win32-arm64-msvc@1.2.4": {
+      "licence": "MIT",
+      "basis": "registry.npmjs.org manifest for @rolldown/binding-win32-arm64-msvc@1.2.4 (platform binary not installed under the workspace overrides), recorded 2026-08-21"
+    },
+    "pkg:npm/%40rolldown/binding-win32-x64-msvc@1.2.4": {
+      "licence": "MIT",
+      "basis": "registry.npmjs.org manifest for @rolldown/binding-win32-x64-msvc@1.2.4 (platform binary not installed under the workspace overrides), recorded 2026-08-21"
+    },
+    "pkg:npm/%40tailwindcss/oxide-wasm32-wasi@4.3.3": {
+      "licence": "MIT",
+      "basis": "registry.npmjs.org manifest for @tailwindcss/oxide-wasm32-wasi@4.3.3 (platform binary not installed under the workspace overrides), recorded 2026-08-21"
+    },
+    "pkg:npm/%40tailwindcss/oxide-win32-arm64-msvc@4.3.3": {
+      "licence": "MIT",
+      "basis": "registry.npmjs.org manifest for @tailwindcss/oxide-win32-arm64-msvc@4.3.3 (platform binary not installed under the workspace overrides), recorded 2026-08-21"
+    },
+    "pkg:npm/%40tailwindcss/oxide-win32-x64-msvc@4.3.3": {
+      "licence": "MIT",
+      "basis": "registry.npmjs.org manifest for @tailwindcss/oxide-win32-x64-msvc@4.3.3 (platform binary not installed under the workspace overrides), recorded 2026-08-21"
+    },
+    "pkg:npm/fsevents@2.3.2": {
+      "licence": "MIT",
+      "basis": "registry.npmjs.org manifest for fsevents@2.3.2 (platform binary not installed under the workspace overrides), recorded 2026-08-21"
+    },
+    "pkg:npm/fsevents@2.3.3": {
+      "licence": "MIT",
+      "basis": "registry.npmjs.org manifest for fsevents@2.3.3 (platform binary not installed under the workspace overrides), recorded 2026-08-21"
+    },
+    "pkg:npm/lightningcss-win32-arm64-msvc@1.32.0": {
+      "licence": "MPL-2.0",
+      "basis": "registry.npmjs.org manifest for lightningcss-win32-arm64-msvc@1.32.0 (platform binary not installed under the workspace overrides), recorded 2026-08-21"
+    },
+    "pkg:npm/lightningcss-win32-arm64-msvc@1.33.0": {
+      "licence": "MPL-2.0",
+      "basis": "registry.npmjs.org manifest for lightningcss-win32-arm64-msvc@1.33.0 (platform binary not installed under the workspace overrides), recorded 2026-08-21"
+    },
+    "pkg:npm/lightningcss-win32-x64-msvc@1.32.0": {
+      "licence": "MPL-2.0",
+      "basis": "registry.npmjs.org manifest for lightningcss-win32-x64-msvc@1.32.0 (platform binary not installed under the workspace overrides), recorded 2026-08-21"
+    },
+    "pkg:npm/lightningcss-win32-x64-msvc@1.33.0": {
+      "licence": "MPL-2.0",
+      "basis": "registry.npmjs.org manifest for lightningcss-win32-x64-msvc@1.33.0 (platform binary not installed under the workspace overrides), recorded 2026-08-21"
+    }
+  }
+}

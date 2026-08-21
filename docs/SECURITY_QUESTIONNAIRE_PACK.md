@@ -72,7 +72,7 @@ against the repository). Answers use three statuses:
 
 | Question | Answer | Evidence | Status |
 |---|---|---|---|
-| SBOM? | Generated and committed. | `artifacts/sbom` | Built and gated |
+| SBOM? | Generated and committed, covering every ecosystem in the tree — npm (pnpm resolved tree), cargo (3 committed Cargo.lock files), maven (2 committed build.gradle.kts files); the Swift manifests are read and currently declare zero external packages, recorded as such in the SBOM's metadata. Each component carries a licence entry, and `scripts/check-licence-policy.mjs` (preflight + CI) fails on any licence that is absent, unparsed, deny-class, or never ruled on. Not covered: container base images and OS packages — the bill is source-dependency scope only. | `artifacts/sbom`, `scripts/check-licence-policy.mjs` | Built and gated |
 | Dependency scanning? | Dependabot (grouped minor/patch cadence) plus a Supply Chain CI workflow; lockfile integrity is enforced (`--frozen-lockfile` in CI, plus a pre-push hook). | `.github/workflows/supply-chain.yml` | Built and gated |
 | Static analysis? | CodeQL runs on every push; findings have been remediated by capability removal (removing shell and dynamic-regex capabilities rather than escaping around them). | `.github/workflows/codeql.yml` | Built and gated |
 

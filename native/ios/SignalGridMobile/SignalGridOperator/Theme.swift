@@ -11,7 +11,10 @@ extension Color {
     static let sgAccent = Color(red: 0.455, green: 0.671, blue: 0.647)
     static let sgAllow = Color(red: 0.388, green: 0.592, blue: 0.475)   // #639779 — DR-006, matches every other tree
     static let sgStepUp = Color(red: 0.690, green: 0.545, blue: 0.341)  // #B08B57 — canonical review
-    static let sgRestrict = Color(red: 0.776, green: 0.439, blue: 0.439) // #C67070 — restrict RENDERS THE DENY RED everywhere (DesignSystem.swift maps restrict→deny); a caution amber here changed what the verdict color means
+    // #C67070 — restrict RENDERS THE DENY RED everywhere (DesignSystem.swift
+    // maps restrict→deny); a caution amber here changed what the verdict color
+    // means from one SignalGrid surface to the next.
+    static let sgRestrict = Color(red: 0.776, green: 0.439, blue: 0.439)
     static let sgDeny = Color(red: 0.776, green: 0.439, blue: 0.439)    // #C67070 exactly — DR-005
 
     static func outcome(_ outcome: DecisionOutcome) -> Color {

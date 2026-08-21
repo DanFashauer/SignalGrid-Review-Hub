@@ -1,0 +1,11 @@
+meta {
+  name: Refresh session
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/v1/sessions/{{sessionId}}/refresh
+  body: none
+  auth: inherit
+}

@@ -90,3 +90,11 @@ SG_IMAGE_FLEET="docker.io/fleetdm/fleet:v4.89.2"
 # out-of-tree scratch harness, not this image.
 # shellcheck disable=SC2034
 SG_IMAGE_OSQUERY="docker.io/osquery/osquery:5.17.0-ubuntu24.04"
+# 4.14.7, NOT 4.9.0, and the difference is not preference: 4.9.0 is published
+# amd64-only, and under QEMU on Apple Silicon it does not run slowly — it DIES
+# (segfault in wazuh-modulesd, no API, ever). 4.14.7 ships native arm64 and is
+# up in seconds on both engines. Measured on the Mac lane 2026-08-21 (commit
+# c22177e); do not "upgrade" this pin to an amd64-only tag without checking
+# the manifest lists both architectures.
+# shellcheck disable=SC2034
+SG_IMAGE_WAZUH="docker.io/wazuh/wazuh-manager:4.14.7"

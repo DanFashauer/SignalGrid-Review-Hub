@@ -199,6 +199,8 @@ jobs:
         run: node scripts/check-container-native-base.mjs
       - name: "Publication boundary (public repo — nothing arrives unclassified)"
         run: node scripts/check-publication-boundary.mjs
+      - name: API collection (a committed request must name a served route)
+        run: node scripts/check-api-collection.mjs
       - name: "Connector discipline (gated + proven, no device actuators)"
         run: node scripts/check-connector-discipline.mjs
       - name: "Ungated fetch (the live boundary covers every outbound path)"

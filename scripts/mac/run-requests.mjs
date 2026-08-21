@@ -188,8 +188,23 @@ function main() {
     if (onlyId && id !== onlyId) continue;
     if (!rerun && !onlyId && doneIds.has(id)) continue;
 
-    considered += 1;
     const req = readJson(join(REQ_DIR, file));
+    // A superseded request is retired work — but only a VALIDATED retirement
+    // skips: the successor must exist, name this request back, and itself be
+    // active. Skipping on the field's mere presence let a dangling pointer
+    // park work in a state the checker reports pending while the documented
+    // command refused to pick it up.
+    if (req.supersededBy && !onlyId) {
+      let successor = null;
+      try { successor = readJson(join(REQ_DIR, `${req.supersededBy}.json`)); } catch { /* missing */ }
+      const valid = successor && successor.id === req.supersededBy && successor.supersedes === id && !successor.supersededBy;
+      if (valid) {
+        console.log(`\n== request ${id} == superseded by ${req.supersededBy} — not run`);
+        continue;
+      }
+      console.log(`\n== request ${id} == supersededBy "${req.supersededBy}" does NOT validate (missing, non-reciprocal, or itself superseded) — running the request; fix the link (check-sim-requests names the problem)`);
+    }
+    considered += 1;
     console.log(`\n== request ${id} ==`);
     console.log(`   ${req.reason ?? "(no reason recorded)"}`);
     console.log(`   runs: ${req.runs.join(", ")}`);

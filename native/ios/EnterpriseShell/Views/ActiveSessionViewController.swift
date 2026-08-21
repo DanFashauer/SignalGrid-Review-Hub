@@ -821,7 +821,7 @@ final class ActiveSessionViewController: UIViewController {
     private func showToast(message: String) {
         let toast = UILabel()
         toast.text = message
-        toast.textColor = .white
+        toast.textColor = SG.onAllow
         toast.backgroundColor = SG.allow
         toast.textAlignment = .center
         toast.font = SG.sans(14, .medium)

@@ -1,0 +1,11 @@
+meta {
+  name: Flows health
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/cp/v1/flows/health
+  body: none
+  auth: inherit
+}

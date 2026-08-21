@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "SignalGrid API",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}

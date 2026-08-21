@@ -1,0 +1,11 @@
+meta {
+  name: Decision evidence snapshot
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/v1/decisions/{{decisionId}}/evidence
+  body: none
+  auth: inherit
+}

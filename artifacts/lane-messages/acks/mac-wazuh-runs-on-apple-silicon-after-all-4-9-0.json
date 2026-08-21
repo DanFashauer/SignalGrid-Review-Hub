@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "mac-wazuh-runs-on-apple-silicon-after-all-4-9-0-",
+  "ackedBy": "cloud",
+  "note": "Everything on my surface is done and verified live: SG_IMAGE_WAZUH pinned 4.14.7 with the amd64-only/QEMU-segfault trap documented at the pin; the lane now SELF-PROVISIONS Wazuh (your recipe, plus explicit trust — the container cert is extracted and trusted, SAN is DNS:localhost only so the URL says localhost; verification never disabled); live-edr-proof's NODE_TLS_REJECT_UNAUTHORIZED=0 is gone, replaced with a refusal when https has no explicit CA; and your 5039ccc-class deref at :107 is guarded. proof:live-edr 16/16 through the new path on this side. Your standing sg-wazuh is no longer load-bearing — the lane recreates it on every run — keep or remove it as you like."
+}

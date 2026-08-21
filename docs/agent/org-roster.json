@@ -417,6 +417,15 @@
       "produced": null,
       "priority": 2,
       "nextAction": "The metric is DEFINED in the sweep: cost-per-shift = monthly agent spend / ledger rows closed, with denominators computable today from committed artifacts (377 Claude-authored commits since 2026-07-20, sim-results durations). Next: publish the denominators now so one owner billing number later yields the ratio instantly. Never publish an invented dollar."
+    },
+    {
+      "id": "mac-lane-steward",
+      "division": "engineering",
+      "title": "Mac lane steward / local-lane operations",
+      "charter": "Owns the cloud side of the cloud↔Mac loop as a standing duty, not an ad-hoc errand: watches the remote for Mac pushes and branches, keeps lane-messages flowing both directions (nothing unread past one duty cycle, nothing sent without a committed push), tracks simulation-request debt (a pending request is REPORTED every cycle, never silently aged out), keeps the Mac's run instructions current when shared surfaces change, and escalates to the owner exactly the blockers only the owner can clear (auth, hardware, physical presence). Cannot operate the Mac itself — it is a separate machine with its own lane; stewardship is observation, shared-surface repair, mail, and escalation. Duty cycle runs on a schedule (owner-requested 2026-08-21); a cycle where nothing changed produces no owner traffic.",
+      "trigger": "Every scheduled duty cycle; immediately when a Mac push, lane message, or sim-result lands; when a shared-surface change (run-live-lanes.sh, sim loop, harness) alters what the Mac must do.",
+      "activated": "2026-08-21",
+      "produced": "PR #223 aftercare: lane mail with re-run instructions, ack of the Mac's harness message, standing 4-hour monitor routine"
     }
   ]
 }

@@ -18,8 +18,10 @@
 # but it is also not a proof failure, and conflating the two would teach the reader
 # to ignore both.
 #
-# Wazuh is deliberately NOT auto-provisioned: it is a ~2GB image and minutes of
-# boot. It runs only if WAZUH_URL is already set, and says so otherwise.
+# Wazuh IS auto-provisioned since 2026-08-21 (pinned 4.14.7 — native on both
+# architectures, up in seconds; the never-start rule dated from the amd64-only
+# 4.9.0 era). First run pulls a ~2GB image. To skip the EDR lane:
+#   ./scripts/run-live-lanes.sh --only fleet,location,keycloak
 # =============================================================================
 set -uo pipefail
 cd "$(dirname "$0")/.." || { echo "cannot enter repo root" >&2; exit 1; }
@@ -56,6 +58,17 @@ wait_http() { # url  seconds   (honours WAIT_CACERT for self-signed lab TLS)
     i=$((i+1)); [ "$i" -ge "$2" ] && return 1; sleep 1
   done
 }
+
+# Lab TLS material cleanup is registered ONCE, at top level: the earlier trap
+# lived inside Fleet's provisioning branch, so a run selecting only another
+# lane (--only edr) never installed it and left extracted certs behind.
+cleanup_lab_tls() {
+  if [ "${KEEP:-0}" -eq 0 ] && [ -n "${FLEET_TLS_DIR:-}" ]; then rm -rf "$FLEET_TLS_DIR"; fi
+  if [ "${KEEP:-0}" -eq 0 ] && [ -n "${WAZUH_CA:-}" ]; then rm -f "$WAZUH_CA" "$WAZUH_CA.combined"; fi
+}
+trap cleanup_lab_tls EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 echo "== SignalGrid live-vendor lanes =="
 have_engine || echo "   (no container engine available — only lanes whose env vars are already set can run)"
@@ -98,12 +111,6 @@ if wanted fleet; then
     # the caller knows what to trust and what to delete. INT/TERM must EXIT
     # after cleanup — a bare handler would return into the script and keep
     # starting containers against a directory the handler just deleted.
-    cleanup_fleet_tls() {
-      if [ "${KEEP:-0}" -eq 0 ] && [ -n "${FLEET_TLS_DIR:-}" ]; then rm -rf "$FLEET_TLS_DIR"; fi
-    }
-    trap cleanup_fleet_tls EXIT
-    trap 'exit 130' INT
-    trap 'exit 143' TERM
     # SAN via a config file, not -addext: stock macOS ships LibreSSL at
     # /usr/bin/openssl, and its req has no -addext — the silent failure mode
     # is no certificate at all and a lane that reports "could not stand up
@@ -273,12 +280,64 @@ if wanted keycloak; then
   fi
 fi
 
-# ── Wazuh — never auto-provisioned ───────────────────────────────────────────
+# ── Wazuh ────────────────────────────────────────────────────────────────────
+# Self-provisioned since 2026-08-21: the "never starts it for you" rule dated
+# from the amd64-only 4.9.0 era (a ~2GB image, minutes of QEMU boot, and on
+# Apple Silicon a fatal segfault). The pinned 4.14.7 ships native arm64 and is
+# up in seconds on both engines — the Mac lane measured it (c22177e).
 if wanted edr; then
+  if [ -z "${WAZUH_URL:-}" ] && have_engine; then
+    echo "-- bringing up Wazuh"
+    "$SG_ENGINE" rm -f sg-wazuh >/dev/null 2>&1
+    rm -f "$HOME"/.sg-wazuh-ca.* 2>/dev/null  # residue from any pre-trap crash, swept like the containers are
+    WAZUH_IMG="${WAZUH_IMAGE:-$SG_IMAGE_WAZUH}"
+    echo "   wazuh image: $WAZUH_IMG"
+    "$SG_ENGINE" run -d --name sg-wazuh -p 55000:55000 "$WAZUH_IMG" >/dev/null 2>&1
+    # Tracked the moment it exists: a container whose API never becomes healthy
+    # must still be torn down, or the failure path leaks a running Wazuh.
+    started="$started sg-wazuh"
+    # EXPLICIT TRUST, verification never disabled: the container mints its own
+    # self-signed API certificate; extract it and trust exactly it. Its SAN is
+    # DNS:localhost ONLY — measured — so the URL must say localhost, not
+    # 127.0.0.1, or hostname verification (correctly) fails.
+    WAZUH_CA="$HOME/.sg-wazuh-ca.$$.crt"
+    got_ca=0
+    for _ in $(seq 1 60); do
+      if "$SG_ENGINE" cp sg-wazuh:/var/ossec/api/configuration/ssl/server.crt "$WAZUH_CA" >/dev/null 2>&1; then got_ca=1; break; fi
+      sleep 2
+    done
+    wazuh_up=0
+    if [ "$got_ca" != "1" ]; then
+      echo "   (certificate never appeared — the container likely failed before its API config was written)"
+    else
+      # wazuh:wazuh is the image's public default API credential, not a secret.
+      for _ in $(seq 1 150); do
+        [ "$(curl -s --cacert "$WAZUH_CA" -o /dev/null -w '%{http_code}' -u wazuh:wazuh -X POST https://localhost:55000/security/user/authenticate 2>/dev/null)" = "200" ] && { wazuh_up=1; break; } # gitleaks:allow — wazuh/wazuh-manager's documented default, same standing as postgres:16's POSTGRES_PASSWORD in CI
+        sleep 2
+      done
+    fi
+    if [ "$wazuh_up" = "1" ]; then
+      export WAZUH_URL=https://localhost:55000
+      SAVED_NODE_CA_EDR="${NODE_EXTRA_CA_CERTS:-}"
+      if [ -n "$SAVED_NODE_CA_EDR" ] && [ -f "$SAVED_NODE_CA_EDR" ]; then
+        cat "$SAVED_NODE_CA_EDR" "$WAZUH_CA" > "$WAZUH_CA.combined"
+        export NODE_EXTRA_CA_CERTS="$WAZUH_CA.combined"
+      else
+        export NODE_EXTRA_CA_CERTS="$WAZUH_CA"
+      fi
+      NODE_CA_REPLACED_EDR=1
+    else
+      echo "   WARNING: Wazuh API never answered ($WAZUH_IMG) — the edr lane will be reported as skipped"
+      rm -f "$WAZUH_CA"
+    fi
+  fi
   if [ -n "${WAZUH_URL:-}" ]; then
     if $PNPM run proof:live-edr >/tmp/live_edr.log 2>&1; then ok "proof:live-edr"; else bad "proof:live-edr" /tmp/live_edr.log; fi
   else
-    skip "proof:live-edr" "needs WAZUH_URL — a ~2GB image and minutes of boot, so this script never starts it for you"
+    skip "proof:live-edr" "could not stand up Wazuh (no engine, or the API never answered)"
+  fi
+  if [ "${NODE_CA_REPLACED_EDR:-0}" -eq 1 ]; then
+    if [ -n "${SAVED_NODE_CA_EDR:-}" ]; then export NODE_EXTRA_CA_CERTS="$SAVED_NODE_CA_EDR"; else unset NODE_EXTRA_CA_CERTS; fi
   fi
 fi
 

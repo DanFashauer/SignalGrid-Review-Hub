@@ -121,6 +121,7 @@ export const AREAS = [
   { path: ".gitignore", class: "tooling", reason: "Ignore rules." },
   { path: ".npmrc", class: "tooling", reason: "Package manager settings." },
   { path: ".gitleaks.toml", class: "tooling", reason: "Secret-scanner configuration." },
+  { path: ".gitleaksignore", class: "tooling", reason: "Reviewed-and-accepted scanner fingerprints, each with its recorded reason — the file itself contains no secrets, only pointers to findings judged not to be ones." },
   { path: "validate-sim-macos.sh", class: "tooling", reason: "The full local harness." },
   {
     path: "mac-kickoff.sh",

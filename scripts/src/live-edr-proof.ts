@@ -42,15 +42,36 @@ if (!BASE) {
   console.error(
     "proof:live-edr REFUSED — no WAZUH_URL set.\n" +
       "This proof exists to read a REAL EDR server; without one there is nothing it\n" +
-      "could honestly report. Start one and re-run:\n" +
-      "  docker run -d --name sg-wazuh -p 55000:55000 wazuh/wazuh-manager:4.9.0\n" +
-      "  WAZUH_URL=https://127.0.0.1:55000 pnpm run proof:live-edr\n",
+      "could honestly report. Start one and re-run (the lane script does all of\n" +
+      "this for you: ./scripts/run-live-lanes.sh --only edr):\n" +
+      "  docker run -d --name sg-wazuh -p 55000:55000 wazuh/wazuh-manager:4.14.7\n" +
+      "  docker cp sg-wazuh:/var/ossec/api/configuration/ssl/server.crt /tmp/sg-wazuh-ca.crt\n" +
+      "  NODE_EXTRA_CA_CERTS=/tmp/sg-wazuh-ca.crt WAZUH_URL=https://localhost:55000 \\\n" +
+      "    pnpm run proof:live-edr\n" +
+      "(localhost, not 127.0.0.1 — the container cert's SAN is DNS:localhost only.\n" +
+      "4.14.7, not 4.9.0 — 4.9.0 is published amd64-only and DIES under QEMU on\n" +
+      "Apple Silicon: segfault in wazuh-modulesd. Measured 2026-08-21.)\n",
   );
   process.exit(1);
 }
 
-// The container serves a self-signed cert. Scoped to this proof process only.
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+// VERIFICATION IS NEVER DISABLED. An earlier revision set
+// NODE_TLS_REJECT_UNAUTHORIZED=0 here — globally, for the whole process —
+// which is the exact doctrine the Fleet lane was built to avoid (mint or
+// extract the lab CA, trust it EXPLICITLY). The lane script exports
+// NODE_EXTRA_CA_CERTS pointing at the container's own API certificate; a
+// caller running this proof by hand must do the same. An https target with
+// no explicit trust anchor is REFUSED, not "handled".
+if (BASE.startsWith("https:") && !process.env.NODE_EXTRA_CA_CERTS) {
+  console.error(
+    "proof:live-edr REFUSED — https target with no NODE_EXTRA_CA_CERTS.\n" +
+      "This proof never disables TLS verification. Extract the lab cert and\n" +
+      "trust it explicitly (run-live-lanes.sh does this automatically):\n" +
+      "  docker cp sg-wazuh:/var/ossec/api/configuration/ssl/server.crt /tmp/sg-wazuh-ca.crt\n" +
+      "  NODE_EXTRA_CA_CERTS=/tmp/sg-wazuh-ca.crt WAZUH_URL=... pnpm run proof:live-edr\n",
+  );
+  process.exit(1);
+}
 
 let passed = 0;
 const failures: string[] = [];
@@ -69,6 +90,19 @@ interface WazuhAgent {
   status?: string;
   lastKeepAlive?: string;
   name?: string;
+}
+
+/** The one summary path — reached by a full run and by the empty-inventory
+ *  early return alike, so a deterministic failure always reports itself. */
+function finish(): void {
+  const total = passed + failures.length;
+  console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${total})`);
+  if (failures.length > 0) {
+    console.error("failed:");
+    for (const f of failures) console.error(`  - ${f}`);
+    process.exit(1);
+  }
+  console.log("edr-threat verified against a live Wazuh: absent vendor fields fail closed, never assumed good.");
 }
 
 async function main(): Promise<void> {
@@ -102,7 +136,17 @@ async function main(): Promise<void> {
 
   // 4. The connector's own normalizer, on real data.
   const normalized = raw.map(normalizeEndpoint);
+  // Guarded (the 5039ccc class): an empty inventory must FAIL, deterministically
+  // and completely — every remaining assertion depends on a first endpoint, so
+  // record the one honest failure and stop rather than crash mid-argument (the
+  // ?. on one dereference was not enough: the detail strings and the posture
+  // section still dereferenced bare).
   const first = normalized[0];
+  if (!first) {
+    check("the server reports at least one agent (empty inventory: every remaining check depends on one)", false);
+    finish();
+    return;
+  }
 
   check("agent presence is read from the live server", first.agentInstalled === true);
   check(
@@ -150,14 +194,7 @@ async function main(): Promise<void> {
 
   console.log(`\n  measured: wazuh supplied ${Object.keys(raw[0]).length} of 8 EndpointThreatRaw fields`);
 
-  const total = passed + failures.length;
-  console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${total})`);
-  if (failures.length > 0) {
-    console.error("failed:");
-    for (const f of failures) console.error(`  - ${f}`);
-    process.exit(1);
-  }
-  console.log("edr-threat verified against a live Wazuh: absent vendor fields fail closed, never assumed good.");
+  finish();
 }
 
 main().catch((err) => {

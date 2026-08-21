@@ -51,6 +51,7 @@ Detailed charters, the shift loop and the delegated-authority model live in
 | `performance-engineer` | Performance engineer | A performance figure is quoted, or the decision path changes |
 | `release-engineer` | Release engineer | A surface is added to or reclassified in the launch profile |
 | `data-persistence-engineer` | Data / persistence engineer | Ledger, migration or export code changes |
+| `mac-lane-steward` | Mac lane steward / local-lane operations | Every duty cycle; any Mac push, lane message, or shared-surface change |
 | `api-contract-architect` | API contract architect | A route is added or a contract changes |
 | `devex-tooling-engineer` | DevEx / tooling engineer | A gate changes, or one is suspected of passing vacuously |
 | `docs-writer` | Documentation engineer | A doc is added, or a claim outlives what it described |

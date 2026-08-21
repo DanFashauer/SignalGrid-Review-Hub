@@ -1,0 +1,11 @@
+# Fingerprints of findings reviewed and accepted as NOT secrets, each with its
+# reason. A fingerprint pins one commit+file+rule+line, so this file cannot
+# blanket-exempt anything — a new occurrence gets its own red run and its own
+# review. Inline `gitleaks:allow` annotations cover the lines going forward;
+# these entries cover the historical commits that predate the annotation.
+
+# wazuh:wazuh is the wazuh/wazuh-manager container image's DOCUMENTED default
+# API credential for a per-run, localhost-only lab container — the same
+# standing as postgres:16's MYSQL/POSTGRES passwords already used across this
+# repo's CI service containers. Reviewed 2026-08-21.
+3481fcc9a8d1b487e2d02eb3bb430c6a8dfe6a30:scripts/run-live-lanes.sh:curl-auth-user:303

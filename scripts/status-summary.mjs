@@ -193,13 +193,13 @@ if (liveLanes.length) {
   for (const lane of liveLanes.sort()) {
     const [envVar, doc] = LANE_ENV[lane] ?? ["(see docs)", ""];
     const armed = envVar !== "(see docs)" && !!process.env[envVar];
-    L.push(`| \`${lane}\` | \`${envVar}\`${doc ? ` — ${doc}` : ""} | ${armed ? "yes" : "no — would SKIP"} |`);
+    L.push(`| \`${lane}\` | \`${envVar}\`${doc ? ` — ${doc}` : ""} | ${armed ? "yes (external lab)" : "self-provisions in Docker"} |`);
   }
   L.push("");
   L.push(
     `\`pnpm run verify:live\` stands up what Docker allows, runs those lanes and removes what it started. ` +
       `A lane it cannot provision is reported SKIPPED with the reason — never counted as passed. ` +
-      `Wazuh is never auto-started (~2GB image).`,
+      `All four lanes self-provision (Wazuh since 2026-08-21, pinned 4.14.7; its first pull is ~2GB — omit it with --only fleet,location,keycloak).`,
   );
   if (undeclared.length) {
     L.push("");

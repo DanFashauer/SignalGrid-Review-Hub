@@ -1,0 +1,11 @@
+meta {
+  name: Control-plane health
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/cp/v1/health
+  body: none
+  auth: inherit
+}

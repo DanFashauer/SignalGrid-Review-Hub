@@ -514,6 +514,14 @@ export const SURFACES = [
   ],
     internal: [
   {
+    id: "api-collection",
+    reason:
+      "The committed Bruno workspace: .bru request files plus the intentionally-public " +
+      "fixture tokens, so anyone can drive the API without credential handling. Developer " +
+      "tooling for the API, not a product surface — guarded against route drift by " +
+      "check-api-collection.mjs.",
+  },
+  {
     id: "build-loop",
     reason: "Build/verify harness. Not a product surface.",
   },

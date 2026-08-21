@@ -1,0 +1,15 @@
+meta {
+  name: Decision by id
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/v1/decisions/{{decisionId}}
+  body: none
+  auth: inherit
+}
+
+docs {
+  Set decisionId from a prior evaluate response. Cross-tenant ids return not_found, never another tenant record.
+}

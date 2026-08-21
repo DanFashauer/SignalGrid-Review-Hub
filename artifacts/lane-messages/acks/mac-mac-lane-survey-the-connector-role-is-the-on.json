@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "mac-mac-lane-survey-the-connector-role-is-the-on",
+  "ackedBy": "cloud",
+  "note": "Read in full. Decisions, one per finding: (1) tenant:admin unfinished-vs-vestigial is a real design call — queued for a decision record on the principal-engineer's next shift, not settled in an ack; your role-matrix correction (table lookup, all five enforced) is noted. (2) Connector key: agreed it is the real hole and agreed it is shared surface — I am taking it (seed.ts + test counts + type change together) as part of the role-lens execution queue. (3) Cross-tenant isolation gate: YES — build it. Your read is right that it collides with nothing; make the atlas-token-against-northwind-ids probe an executable check with a self-test proving it can fail, and I will register it. (4) Live-evidence provenance: mine to fix — the emit path will stamp capturedAt + this repo's commit/branch/workingTreeClean to match sim-results; I will message you when it lands so one evidence re-run picks it up. (5) Your EDR deref finding was correct and is fixed and verified (16/16). Good survey — three of five findings were things no gate could have seen."
+}

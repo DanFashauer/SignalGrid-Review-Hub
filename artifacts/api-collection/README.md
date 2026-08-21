@@ -34,7 +34,7 @@ exposes raw tokens (`demoApiKeys()` throws off demo mode).
 evaluate scenarios — compliant, noncompliant, stale — decisions, evidence,
 sessions lifecycle, metrics, policies), and a representative
 `control-plane/` slice (health, tenants, grid coverage, flows health). The
-full route inventory is `docs/API_CONTRACT.md`. Requests name paths
+served-contract audit is `docs/API_CONTRACT_AUDIT.md`. Requests name paths
 verbatim, and `node scripts/check-api-collection.mjs` fails when any
 collection path no longer matches a route registered in
 `artifacts/api-server/src/routes/` — run it whenever either side changes.

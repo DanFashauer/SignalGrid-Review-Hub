@@ -91,7 +91,13 @@ async function main() {
   check("cross-tenant read is denied (404)", crossRes.status === 404);
 
   // ── operational metrics reflect the traffic ──────────────────────────────────
-  const metrics = await (await fetch(`${BASE}/metrics`)).text();
+  // A stack with METRICS_TOKEN set protects /metrics with a bearer; a bare
+  // fetch would 401 and fail all three assertions on a correctly-secured
+  // stack, so pass the token through when the environment has it.
+  const metricsHeaders = process.env.METRICS_TOKEN
+    ? { authorization: `Bearer ${process.env.METRICS_TOKEN}` }
+    : {};
+  const metrics = await (await fetch(`${BASE}/metrics`, { headers: metricsHeaders })).text();
   check("metrics: process is up", /(^|\n)signalgrid_up 1/.test(metrics));
   check("metrics: an allow decision was counted",
     /signalgrid_decisions_total\{outcome="allow"\} [1-9]/.test(metrics));

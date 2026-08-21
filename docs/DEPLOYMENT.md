@@ -44,7 +44,13 @@ in-memory (the fixture-safe default used by the public build and CI).
 | `SIGNALGRID_DEPRECATED_ROUTES` | Comma-separated route ids to serve with a `Deprecation` header during a migration window. | unset |
 | `SIGNALGRID_V1_RATE_LIMIT` | Requests/min/bearer on `/v1`. Malformed values fall back — never to "unlimited". | `240` |
 | `SIGNALGRID_GLOBAL_RATE_LIMIT` | Requests/min/IP across the server. | `600` |
-| `OIDC_TENANT_MAP` / `OIDC_ROLE_MAP` | JSON maps: IdP value → internal tenant id / role. | unset |
+| `OIDC_TENANT_MAP` / `OIDC_ROLE_MAP` | JSON maps: IdP value → internal tenant id / role. **Required** once OIDC is on — without both, the config is invalid and every request is 401. | unset |
+| `OIDC_SUBJECT_CLAIM` | Claim used as the caller's subject id. | `sub` |
+| `OIDC_CLOCK_TOLERANCE_SEC` | Allowed clock skew when validating token times. | `60` |
+| `REDIS_URL` | Set ⇒ the connector stores (ITSM/UEM/NAC/telemetry/webhooks) persist to Redis instead of in-memory. | unset (in-memory) |
+| `STEPUP_TTL_SECONDS` | Step-up session time-to-live. | `300` |
+| `WEBAUTHN_RP_ID` / `WEBAUTHN_RP_NAME` / `WEBAUTHN_ORIGIN` | WebAuthn relying-party identity for step-up ceremonies; must match the origin the operator console is served from. | `localhost` / dev defaults |
+| `WEBAUTHN_REQUIRE_STEP_UP_FOR_ADMIN` | Set ⇒ admin actions demand a fresh WebAuthn step-up. | unset |
 | `GRAPH_ACCESS_TOKEN` | Read-only Microsoft Graph token for the posture connector. | unset (fixture mode) |
 | `CARRIER_ACCESS_TOKEN` | Read-only carrier/IoT-connectivity token for the reachability connector. | unset (fixture mode) |
 | `LOCATION_ACCESS_TOKEN` | Read-only token for the device location-services connector. | unset (fixture mode) |
@@ -209,14 +215,18 @@ the minimally-privileged `signalgrid_runtime` role, which owns nothing and may
 not create tables — the ledger is append-only **by privilege** (migration v2;
 see `docs/BACKUP_AND_RESTORE.md` § "The runtime role"). The sequence is:
 
-1. **Migrate with the admin credential** — `DATABASE_URL=<admin> pnpm run
-   db:migrate`. This creates the schema AND provisions the role split; it
-   refuses up front (nothing half-applied) if the credential cannot.
+1. **Migrate with the admin credential** — `DATABASE_URL="$ADMIN_DATABASE_URL"
+   pnpm run db:migrate`. This creates the schema AND provisions the role split;
+   it refuses up front (nothing half-applied) if the credential cannot. (The
+   variable form is deliberate: a `<admin>` placeholder pasted literally is
+   shell redirection and dies on `admin: No such file or directory`.)
 2. **Set the runtime password out of band** —
    `psql "$ADMIN_DATABASE_URL" -c '\password signalgrid_runtime'` (prompts;
    never inline a password into a command).
-3. **Boot the API as the runtime role** — point the API's `DATABASE_URL` at
-   `signalgrid_runtime`. Store initialization is LAZY: the process starts and
+3. **Boot the API as the runtime role** — export `DATABASE_URL` pointing at
+   `signalgrid_runtime` before `docker compose up`; the compose file
+   interpolates it (`${DATABASE_URL:-…}`), falling back to the zero-step
+   owner URL only when unset. Store initialization is LAZY: the process starts and
    `/healthz` goes green before any database work happens, so a wrong runtime
    password or missing grant is not a boot failure. The stores verify their
    exact privileges on first use and on every `/readyz`.

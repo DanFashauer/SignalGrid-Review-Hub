@@ -21,9 +21,43 @@ function walk(dir) {
   });
 }
 
+// The api-server is not the only package that boot-reads configuration:
+// @workspace/enterprise-auth reads the OIDC variables (as `env.NAME` off a
+// parameter, not `process.env.NAME`), and a var that moves into any imported
+// workspace package would otherwise vanish from this gate while it kept
+// reporting success. Resolve the server's TRANSITIVE @workspace/* runtime
+// dependencies to their source dirs and scan those too.
+export function resolveWorkspaceSrcRoots(pkgDir = "artifacts/api-server") {
+  const byName = new Map();
+  for (const base of ["lib", "artifacts"]) {
+    for (const n of readdirSync(base)) {
+      const pj = join(base, n, "package.json");
+      try {
+        byName.set(JSON.parse(readFileSync(pj, "utf8")).name, join(base, n));
+      } catch { /* not a package dir */ }
+    }
+  }
+  const roots = new Set();
+  const visit = (dir) => {
+    let deps;
+    try {
+      deps = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")).dependencies ?? {};
+    } catch { return; }
+    for (const name of Object.keys(deps).filter((d) => d.startsWith("@workspace/"))) {
+      const depDir = byName.get(name);
+      if (!depDir || roots.has(join(depDir, "src"))) continue;
+      roots.add(join(depDir, "src"));
+      visit(depDir);
+    }
+  };
+  visit(pkgDir);
+  return [join(pkgDir, "src"), ...roots];
+}
+
 export function collectBootEnvVars(root = SRC) {
+  const roots = Array.isArray(root) ? root : [root];
   const vars = new Set();
-  for (const f of walk(root).filter((f) => f.endsWith(".ts"))) {
+  for (const f of roots.flatMap((r) => walk(r)).filter((f) => f.endsWith(".ts"))) {
     const src = readFileSync(f, "utf8");
     for (const m of src.matchAll(/process\.env(?:\.([A-Z_]{3,})|\[\s*"([A-Z_]{3,})"\s*\])/g)) {
       vars.add(m[1] ?? m[2]);
@@ -35,6 +69,14 @@ export function collectBootEnvVars(root = SRC) {
     // first argument counts as a boot-read.
     for (const m of src.matchAll(/\w*[Ee]nv\w*\(\s*"([A-Z][A-Z0-9_]{2,})"/g)) {
       vars.add(m[1]);
+    }
+    // Parameter-mediated member reads: loadEnterpriseAuthConfig(env = process.env)
+    // then `env.OIDC_TENANT_MAP` — no `process.` prefix, no helper call, and the
+    // pattern that hid the two REQUIRED OIDC maps from this gate's first two
+    // versions. Any ALL_CAPS property read off an identifier ending in `env`
+    // counts (process.env.X matches too; the Set dedupes).
+    for (const m of src.matchAll(/\benv\.([A-Z][A-Z0-9_]{2,})\b/gi)) {
+      if (/^[A-Z][A-Z0-9_]{2,}$/.test(m[1])) vars.add(m[1]);
     }
   }
   return vars;
@@ -79,6 +121,16 @@ function selfTest() {
   checks.push(["a runbook without db:migrate FAILS", p.some((x) => x.includes("db:migrate"))]);
   p = auditRunbook({ envVars: new Set(), runbook: goodBook, compose: goodCompose });
   checks.push(["zero collected env vars is a scanner failure, not a pass", p.some((x) => x.includes("vacuity"))]);
+  const roots = resolveWorkspaceSrcRoots();
+  checks.push([
+    "the scan traverses into @workspace runtime deps (enterprise-auth present)",
+    roots.some((r) => r.includes("enterprise-auth")),
+  ]);
+  const memberVars = collectBootEnvVars(["lib/enterprise-auth/src"]);
+  checks.push([
+    "parameter-mediated env.NAME reads are collected (OIDC_TENANT_MAP found)",
+    memberVars.has("OIDC_TENANT_MAP") && memberVars.has("OIDC_ROLE_MAP"),
+  ]);
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
@@ -87,7 +139,8 @@ function selfTest() {
 
 if (process.argv.includes("--self-test")) process.exit(selfTest());
 
-const envVars = collectBootEnvVars();
+const srcRoots = resolveWorkspaceSrcRoots();
+const envVars = collectBootEnvVars(srcRoots);
 const problems = auditRunbook({
   envVars,
   runbook: readFileSync("docs/DEPLOYMENT.md", "utf8"),

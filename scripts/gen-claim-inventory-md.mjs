@@ -24,7 +24,10 @@ const actionCount = (a) => rows.filter((r) => (r.action ?? "keep") === a).length
 const counts = { launch: count("launch"), deferred: count("deferred"), "demo-only": count("demo-only"), unsubstantiated: count("unsubstantiated") };
 const actions = { remove: actionCount("remove"), rewrite: actionCount("rewrite"), keep: actionCount("keep") };
 
-const esc = (t) => String(t ?? "").replace(/\|/g, "\\|").replace(/\s*\n\s*/g, " ").trim();
+// Backslashes FIRST, then pipes — escaping the pipe alone lets a value that
+// ends in a backslash swallow the escape (CodeQL js/incomplete-sanitization).
+const esc = (t) =>
+  String(t ?? "").replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\s*\n\s*/g, " ").trim();
 const res = (r) => (r.resolution ? ` ✔ ${esc(r.resolution)}` : "");
 
 const bySurface = new Map();

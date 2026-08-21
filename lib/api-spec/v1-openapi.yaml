@@ -1046,7 +1046,51 @@ components:
           enum: [allow, step_up, restrict, deny]
         reasonCodes:
           type: array
+          # Deliberately NOT an enum: tenant-authored policy rules carry custom
+          # reason codes verbatim, so the wire set is open by construction. The
+          # list below is the ENGINE-emitted vocabulary — the catalog a host
+          # app renders worker messages from (docs/REASON_CODES.md) — held
+          # against source by scripts/check-reason-codes.mjs.
           items: { type: string }
+          x-signalgrid-reason-codes:
+            - ALLOW_SUPPRESSED_DEGRADED_EVIDENCE
+            - BADGE_FORCED_REMOVAL
+            - BADGE_REMOVED
+            - BASELINE_DRIFTED
+            - BASELINE_DRIFTED_STRICT
+            - BATTERY_CRITICAL
+            - BATTERY_FAILING
+            - BENCHMARK_SELECTION_MISFIT
+            - BENCHMARK_SELECTION_UNESTABLISHED_STRICT
+            - CRITICAL_WORKFLOW_UNTRUSTED_DEVICE
+            - CUSTODY_EXCEPTION
+            - CUSTODY_MAINTENANCE
+            - CUSTODY_OVERDUE
+            - DEVICE_NONCOMPLIANT
+            - DEVICE_UNMANAGED
+            - DOCK_FAULTED
+            - DOCK_OFFLINE
+            - ENCRYPTION_REQUIRED_FOR_WORKFLOW
+            - IDENTITY_DISABLED
+            - IDENTITY_STATE_UNKNOWN
+            - IDENTITY_STATE_UNKNOWN_STRICT
+            - LOCAL_AUTHORITY_WITHHELD
+            - MANAGEMENT_HEALTH_BROKEN
+            - NEWER_PROVENANCE_RELAXED_STALE_DECISION
+            - NO_RULE_MATCHED_DEFAULT_STEP_UP
+            - OFFLINE_AUTHORITY_CANNOT_RELAX
+            - POSTURE_MISSING
+            - POSTURE_STALE
+            - POSTURE_STALE_STRICT
+            - PROVENANCE_CONTESTED_FAIL_CLOSED
+            - PROVENANCE_UNIFORM_ACROSS_RECORDS
+            - SHIFT_CONTEXT_MISFIT
+            - SHIFT_CONTEXT_UNESTABLISHED_STRICT
+            - SUPERSEDED_POLICY_AUTHORITY_CANNOT_RELAX
+            - TAMPER_CONFIRMED
+            - TAMPER_SENSOR_UNAVAILABLE
+            - TAMPER_SUSPECTED
+            - TRUST_ESTABLISHED
         policyId: { type: string }
         policyVersion: { type: integer }
         policyVersionId: { type: string }
@@ -1060,6 +1104,8 @@ components:
             type: object
             properties:
               ruleId: { type: string }
+              # Engine rules use the x-signalgrid-reason-codes vocabulary above;
+              # tenant-authored rules extend it with custom codes (open set).
               reasonCode: { type: string }
               outcome:
                 type: string

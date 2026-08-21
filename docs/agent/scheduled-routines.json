@@ -1,0 +1,46 @@
+{
+  "$comment": "The committed registry of ALWAYS-ON agent routines (role-lens review, ai-ops next-work). Every recurring scheduled lane is declared here with its cadence, the human who authorized it, what it may write, where it stops and escalates, and where its firing evidence lands. scripts/check-scheduled-routines.mjs holds this file against the heartbeat artifacts and the org roster; its header states honestly that it gates the DECLARATION and the EVIDENCE OF FIRING — it cannot read the live account scheduler. Transcribed FROM the live scheduler (list_triggers) on 2026-08-21, not from memory. One-shot self-reminders (send_later check-ins) are deliberately out of scope: they are ephemeral work-pacing, not standing lanes.",
+  "transcribedFrom": "live scheduler, 2026-08-21",
+  "routines": [
+    {
+      "id": "mac-lane-steward-duty-cycle",
+      "trigger": "trig_01XqdtQrmMEtUXTS7pCDr8GS",
+      "cron": "24 */4 * * *",
+      "binding": "self-session (resumes the operating session)",
+      "authorizedBy": "Dan Fashauer (owner)",
+      "authorizedOn": "2026-08-21",
+      "authorizationEvidence": "owner message in-session: 'Can you have an employee monitor and administrator for the Mac lane please' — the role was created in direct response, same day",
+      "writeScope": "artifacts/lane-messages/** and artifacts/agent-heartbeats/mac-lane-steward-duty-cycle.json only, committed and pushed to the working branch",
+      "escalationBoundary": "escalates to the owner ONLY what only the owner can clear (credentials, Mac-side actions); a quiet cycle produces no owner message",
+      "heartbeatPath": "artifacts/agent-heartbeats/mac-lane-steward-duty-cycle.json",
+      "cadenceToleranceHours": 9
+    },
+    {
+      "id": "live-sync-loop-keeper",
+      "trigger": "trig_01SrTcPxYQrZNs43Hq2afwHE",
+      "cron": "0 13 * * *",
+      "binding": "fresh session per fire",
+      "authorizedBy": "Dan Fashauer (owner)",
+      "authorizedOn": "2026-07-27",
+      "authorizationEvidence": "created from the owner's account during the owner-directed live-sync-loop build (docs/LIVE_SYNC_LOOP.md); creation date is the trigger's created_at",
+      "writeScope": "artifacts/sync/live-sync-manifest.json, artifacts/sync/last-evidence-notice.json, and artifacts/agent-heartbeats/live-sync-loop-keeper.json only; never touches lib/ or proofs",
+      "escalationBoundary": "notifies the owner only when live evidence is stale >3 days and not recently notified; flags rather than fixes anything large",
+      "heartbeatPath": "artifacts/agent-heartbeats/live-sync-loop-keeper.json",
+      "cadenceToleranceHours": 50
+    },
+    {
+      "id": "nightly-build-agent",
+      "trigger": "trig_01WaoZcckmBjv5Pqs8hGNhFS",
+      "cron": "0 14 * * *",
+      "binding": "fresh session per fire",
+      "authorizedBy": "Dan Fashauer (owner)",
+      "authorizedOn": "2026-07-15",
+      "authorizationEvidence": "created from the owner's account when the nightly backlog agent was commissioned; creation date is the trigger's created_at",
+      "writeScope": "claude/build-agent-* branches ONLY — one bounded backlog item per run, pushed for the owner to review; never merges, never writes the mainline",
+      "escalationBoundary": "anything ambiguous or refactor-sized: push nothing, leave the item; reports the compare link and stops",
+      "heartbeatPath": null,
+      "heartbeatPathReason": "its write scope is claude/build-agent-* branches only — a mainline heartbeat commit would WIDEN that scope, which is worse than the gap it fills. Firing evidence is the pushed branch (or the run's completion notification when no item was actionable). A declared null-with-reason is coherent; a silent absence is not.",
+      "cadenceToleranceHours": null
+    }
+  ]
+}

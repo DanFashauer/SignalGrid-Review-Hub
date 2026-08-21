@@ -1,0 +1,15 @@
+meta {
+  name: Readiness (readyz)
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/readyz
+  body: none
+  auth: none
+}
+
+docs {
+  Should this instance take traffic? With DATABASE_URL set, probes all three durable stores including their privileges; without it, ready by design (fixture mode).
+}

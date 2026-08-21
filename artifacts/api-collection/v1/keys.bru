@@ -1,0 +1,15 @@
+meta {
+  name: Demo API keys
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/v1/keys
+  body: none
+  auth: none
+}
+
+docs {
+  Public-safe fixture tokens only (sgk_demo_*). These are not real credentials - a production core has no such route.
+}

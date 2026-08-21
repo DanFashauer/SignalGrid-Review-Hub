@@ -1,0 +1,11 @@
+meta {
+  name: End session
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/v1/sessions/{{sessionId}}/end
+  body: none
+  auth: inherit
+}

@@ -1,0 +1,15 @@
+meta {
+  name: Liveness (healthz)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/healthz
+  body: none
+  auth: none
+}
+
+docs {
+  Pure is-the-process-up probe. No auth, no database - a DB outage must not fail this.
+}

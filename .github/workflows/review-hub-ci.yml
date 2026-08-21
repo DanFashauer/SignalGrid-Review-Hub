@@ -204,6 +204,10 @@ jobs:
 
       - name: Deployment runbook (the documented path must be the real one)
         run: node scripts/check-deployment-runbook.mjs
+      - name: Assist wire self-test (the gate must be able to fail)
+        run: node scripts/check-assist-wire-served.mjs --self-test
+      - name: Assist wire served-ness (a bound wire is served or a declared gap)
+        run: node scripts/check-assist-wire-served.mjs
       - name: Decision palette self-test (the gate must be able to fail)
         run: node scripts/check-decision-palette.mjs --self-test
       - name: Decision palette (one palette, every tree, AA everywhere)

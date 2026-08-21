@@ -89,6 +89,8 @@ const STEPS = [
   { name: "Publication boundary (nothing reaches a public repo unclassified)", cmd: ["node", "scripts/check-publication-boundary.mjs"] },
   { name: "API collection (a committed request must name a served route)", cmd: ["node", "scripts/check-api-collection.mjs"] },
   { name: "Deployment runbook (the documented path must be the real one)", cmd: ["node", "scripts/check-deployment-runbook.mjs"] },
+  { name: "Assist wire self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-assist-wire-served.mjs", "--self-test"] },
+  { name: "Assist wire served-ness (a bound wire is served or a declared gap)", cmd: ["node", "scripts/check-assist-wire-served.mjs"] },
   { name: "Decision palette self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-decision-palette.mjs", "--self-test"] },
   { name: "Decision palette (one palette, every tree, AA everywhere)", cmd: ["node", "scripts/check-decision-palette.mjs"] },
   { name: "Reason codes self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-reason-codes.mjs", "--self-test"] },

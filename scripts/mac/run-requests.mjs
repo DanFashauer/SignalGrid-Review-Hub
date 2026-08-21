@@ -188,8 +188,15 @@ function main() {
     if (onlyId && id !== onlyId) continue;
     if (!rerun && !onlyId && doneIds.has(id)) continue;
 
-    considered += 1;
     const req = readJson(join(REQ_DIR, file));
+    // A superseded request is retired work: the checker validates the two-way
+    // link and reports it on every run; the runner must not re-execute it.
+    // Named explicitly here so retirement is visible in the run log too.
+    if (req.supersededBy && !onlyId) {
+      console.log(`\n== request ${id} == superseded by ${req.supersededBy} — not run`);
+      continue;
+    }
+    considered += 1;
     console.log(`\n== request ${id} ==`);
     console.log(`   ${req.reason ?? "(no reason recorded)"}`);
     console.log(`   runs: ${req.runs.join(", ")}`);

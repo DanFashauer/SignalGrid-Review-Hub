@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-08-21-fleet-lab-scoped",
+  "supersedes": "2026-08-12-fleet-lab-real-source",
+  "requestedBy": "cloud lane",
+  "reason": "Successor to 2026-08-12-fleet-lab-real-source, whose scoping proved structurally unresolvable on the Mac (commit 7d98fa3): 'live-lanes' exits 3 when ANY lane skips, Wazuh never self-provisions, and the original request's own notes said Fleet is the one that matters. The Mac correctly refused to weaken either gate; this successor names the lane the request always cared about, using the per-lane operation key built for exactly this. The claim under test is unchanged: the source-agnostic DeviceManagementEvidence contract backed by a REAL Fleet, through the full request loop with provenance.",
+  "runs": [
+    "live-fleet",
+    "docker"
+  ],
+  "notes": [
+    "live-fleet stands up mysql + redis + fleetdm/fleet:v4.89.2 over TLS and a real pinned osqueryd (5.17.0-ubuntu24.04) by itself — no credentials needed, just a container engine.",
+    "The Mac already proved 37/37 under podman amd64 emulation on 2026-08-20 (commit 7d98fa3), retiring the emulation risk; this run is the same work through sim:run-requests so it closes with provenance.",
+    "docker verifies the production stack builds and smoke-tests on the Mac — the half CI cannot reach."
+  ]
+}

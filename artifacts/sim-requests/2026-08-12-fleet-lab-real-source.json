@@ -12,5 +12,6 @@
     "Fleet Free runs in Docker: docs/FLEET_LIVE_INTEGRATION.md has the compose path. The image is amd64-only and Docker Desktop emulates it on Apple Silicon.",
     "`docker` verifies the production stack builds and smoke-tests on the Mac — the half CI cannot reach because it needs a container engine.",
     "This is the request to run SECOND, after the post-merge baseline is green. A live-source failure is only interpretable against a known-good deterministic baseline."
-  ]
+  ],
+  "supersededBy": "2026-08-21-fleet-lab-scoped"
 }

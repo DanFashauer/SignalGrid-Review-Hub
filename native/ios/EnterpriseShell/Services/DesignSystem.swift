@@ -53,10 +53,10 @@ enum SG {
     //     allow   4.80                 4.32            <- card still under 4.5
     //     review  5.67                 5.10            <- passes
     //
-    // `allow` now sits under the ratified decision-state floor (4.32 on card).
-    // The owner ratified VALUES for deny only, so allow gets a PROPOSAL to the
-    // owner (brand-design's queue), not a unilateral re-tone — color is taste,
-    // and taste is on the never-list. `primary` is the brand accent, not a
+    // `allow` RESOLVED (DR-006, 2026-08-21): the owner ratified the proposed
+    // re-tone — dark 5E8F73 → 639779 (hsl 145 21% 49%), light unchanged.
+    // Measured before applying: dark 5.29 on background, 4.76 on card; light
+    // 5.41 / 6.11. `onAllow` ratified with it for allow-filled surfaces. `primary` is the brand accent, not a
     // decision state; the ratified floor does not bind it, though the same
     // proposal should mention it.
     //
@@ -65,7 +65,7 @@ enum SG {
     // not receive changes. WCAG AA is the ratified floor for decision-state
     // colors; a change here lands in the web tokens in the same commit or not
     // at all. The light values are derived counterparts under the same floor.
-    static let allow  = dynamic(light: "3F6B52", dark: "5E8F73") // canonical dark
+    static let allow  = dynamic(light: "3F6B52", dark: "639779") // DR-006 re-tone: AA on both grounds
     static let review = dynamic(light: "7A5B2E", dark: "B08B57") // canonical dark
     static let deny   = dynamic(light: "8A3F3F", dark: "C67070") // DR-005 re-tone: AA on both grounds
 
@@ -76,6 +76,11 @@ enum SG {
     /// is theme-split: light keeps white, dark uses the charcoal background tone
     /// (#15181B on #C67070 = 5.05:1). Never hardcode .white on a deny fill.
     static let onDeny = dynamic(light: "FFFFFF", dark: "15181B")
+    /// Text/icons ON an allow-filled surface (toast, chip). Same shape as
+    /// `onDeny`, ratified with it in DR-006: white on the dark allow fill sat
+    /// at 3.72:1 — the exact defect onDeny was created to fix. Measured:
+    /// dark 15181B on 639779 = 5.29:1; light FFFFFF on 3F6B52 = 6.11:1.
+    static let onAllow = dynamic(light: "FFFFFF", dark: "15181B")
 
     static let radius: CGFloat = 6
 

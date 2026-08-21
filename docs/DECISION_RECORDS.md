@@ -357,3 +357,34 @@ affirmative this repository exists to refuse:
 
 These stay open as **team** work, not owner work: the next shift finds the
 records and decides them. They are listed here rather than silently dropped.
+
+## DR-006 — Allow re-tone and the onAllow pair (2026-08-21)
+
+**Decision.** The owner ratified the recommended allow re-tone: dark
+`#5E8F73` → `#639779` (hsl 145 21% 49% — same hue, same saturation, two
+lightness steps), light `#3F6B52` unchanged. With it, the paired foreground
+`onAllow` (light `FFFFFF`, dark `15181B`), the same shape as DR-005's
+`onDeny`. Owner's words: "I allow color pick" — ratifying the recommended
+option from the proposal of the same day.
+
+**Why.** Dark allow sat at 4.32:1 on card — under the DR-005-ratified WCAG
+AA floor for decision-state colors — and white toast text on the dark allow
+fill sat at 3.72:1, the exact defect class onDeny closed for deny.
+
+**Measured before applying, from the committed files** (the ratios are
+computed from the token values as committed, not from intentions): dark
+5.29:1 on background / 4.76:1 on card; light 5.41:1 / 6.11:1; onAllow dark
+5.29:1 on the fill, light 6.11:1. Both web palettes' `--decision-allow`
+round-trips to the identical hex as the iOS dark token — no cross-surface
+fork, which is why the first deny attempt was reverted.
+
+**Scope.** Landed together, per the ratified landing rule: canonical tokens
+first (DesignSystem.swift + both web `index.css` palettes), the allow-filled
+toast switched to `onAllow`, and signalgrid-app's rendered
+`.text-status-allow`/`.bg-status-allow` classes moved off raw Tailwind
+green onto the canonical token. The full palette-parity gate over every
+rendered tree (the design lens's queued deliverable) is follow-up work, not
+part of this record.
+
+**Reversal.** A future decision record naming new hexes, measured the same
+way, on every surface in the same commit.

@@ -40,7 +40,41 @@ const listJson = (dir) =>
 export function auditSimRequests(requests, results) {
   const problems = [];
   const pending = [];
+  const superseded = [];
   const reqById = new Map(requests.map((r) => [r.id, r]));
+
+  // ── Supersession ──────────────────────────────────────────────────────────
+  // A request whose SCOPING proved wrong cannot be amended in place — its
+  // committed results are bound to the runs it originally named, and this
+  // gate rightly rejects a result reporting work its (rewritten) request
+  // never asked for. The honest mechanism: the AUTHOR writes a successor
+  // request and links the two. Rules, all enforced:
+  //   · the successor must exist, and must name its predecessor back
+  //     (`supersedes`), so a one-sided pointer cannot quietly retire work;
+  //   · a superseded request stops counting as pending, but is REPORTED on
+  //     every run — retirement is visible forever, never silent;
+  //   · its existing results stay bound to its original runs, untouched.
+  const supersededIds = new Set();
+  for (const req of requests) {
+    if (!req.supersededBy) continue;
+    if (req.supersededBy === req.id) {
+      problems.push(`request ${req.__fileId}: supersededBy points at itself`);
+      continue;
+    }
+    const successor = reqById.get(req.supersededBy);
+    if (!successor) {
+      problems.push(`request ${req.__fileId}: supersededBy "${req.supersededBy}" names a request that does not exist`);
+      continue;
+    }
+    if (successor.supersedes !== req.id) {
+      problems.push(
+        `request ${req.__fileId}: successor "${req.supersededBy}" does not name it back (its supersedes field is "${successor.supersedes ?? "absent"}") — a one-sided pointer cannot retire a request`,
+      );
+      continue;
+    }
+    supersededIds.add(req.id);
+    superseded.push(`${req.id} → superseded by ${req.supersededBy}`);
+  }
 
   for (const req of requests) {
     if (req.id !== req.__fileId) {
@@ -103,23 +137,25 @@ export function auditSimRequests(requests, results) {
     // affirmative this loop was built to prevent, arriving through the back door
     // of the loop itself — a refusal is an honest record of an ATTEMPT, never
     // evidence that the work happened.
-    for (const key of req.runs) {
-      const row = (res.runs ?? []).find((r) => r.operation === key);
-      if (!row) {
-        pending.push(`${res.requestId} → ${key} (result exists but this operation has no row: NOT run)`);
-      } else if (!EXECUTED_STATUSES.includes(row.status)) {
-        pending.push(
-          `${res.requestId} → ${key} (${row.status} on ${res.provenance?.platform ?? "unknown platform"}: attempted, NOT run — still needs a machine that can)`,
-        );
+    if (!supersededIds.has(req.id)) {
+      for (const key of req.runs) {
+        const row = (res.runs ?? []).find((r) => r.operation === key);
+        if (!row) {
+          pending.push(`${res.requestId} → ${key} (result exists but this operation has no row: NOT run)`);
+        } else if (!EXECUTED_STATUSES.includes(row.status)) {
+          pending.push(
+            `${res.requestId} → ${key} (${row.status} on ${res.provenance?.platform ?? "unknown platform"}: attempted, NOT run — still needs a machine that can)`,
+          );
+        }
       }
     }
   }
 
   for (const req of requests) {
-    if (!resById.has(req.id)) pending.push(`${req.id} → every run still queued (no result yet)`);
+    if (!resById.has(req.id) && !supersededIds.has(req.id)) pending.push(`${req.id} → every run still queued (no result yet)`);
   }
 
-  return { problems, pending };
+  return { problems, pending, superseded };
 }
 
 function loadDir(dir) {
@@ -174,6 +210,21 @@ function selfTest() {
   a = auditSimRequests([req("r1", ["preflight"])], [{ requestId: "r1", __fileId: "r1", runs: [], provenance: {} }]);
   checks.push(["a result with no provenance commit is caught", a.problems.some((p) => p.includes("provenance.commit"))]);
 
+  // Supersession: retirement must be two-sided, visible, and never silent.
+  const sup = (id, runs, extra) => ({ id, __fileId: id, runs, reason: "why", ...extra });
+  a = auditSimRequests(
+    [sup("old", ["everything"], { supersededBy: "new" }), sup("new", ["preflight"], { supersedes: "old" })],
+    [res("new", [{ operation: "preflight", status: "passed" }])],
+  );
+  checks.push([
+    "a properly superseded request stops pending AND is reported as superseded",
+    a.problems.length === 0 && a.pending.length === 0 && a.superseded.length === 1,
+  ]);
+  a = auditSimRequests([sup("old", ["everything"], { supersededBy: "missing" })], []);
+  checks.push(["supersededBy naming a nonexistent successor is caught", a.problems.some((p) => p.includes("does not exist")) && a.pending.length === 1]);
+  a = auditSimRequests([sup("old", ["everything"], { supersededBy: "new" }), sup("new", ["preflight"], {})], []);
+  checks.push(["a one-sided supersession pointer is caught and the old request stays pending", a.problems.some((p) => p.includes("name it back")) && a.pending.some((p) => p.startsWith("old"))]);
+
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
@@ -184,11 +235,16 @@ if (process.argv.includes("--self-test")) process.exit(selfTest());
 
 const requests = loadDir(REQ_DIR);
 const results = loadDir(RES_DIR);
-const { problems, pending } = auditSimRequests(requests, results);
+const { problems, pending, superseded } = auditSimRequests(requests, results);
 
 console.log(`Simulation request loop — ${requests.length} request(s), ${results.length} result(s)`);
 const greenRuns = results.flatMap((r) => (r.runs ?? []).filter((x) => GREEN_STATUSES.includes(x.status)));
 console.log(`  operations that actually ran clean: ${greenRuns.length}`);
+
+if (superseded.length > 0) {
+  console.log(`\n  SUPERSEDED — retired by a successor request (reported forever, never silent):`);
+  for (const line of superseded) console.log(`    · ${line}`);
+}
 
 if (pending.length > 0) {
   console.log(`\n  PENDING — asked for, not yet run (reported, never counted as green):`);

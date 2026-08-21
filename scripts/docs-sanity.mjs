@@ -124,7 +124,15 @@ const DENYLIST = [
 // Docs whose PURPOSE is to enumerate the forbidden phrases (a "do not say" list),
 // so every denylist phrase legitimately appears there as a negative example — the
 // same file-level exemption review-invariants.mjs uses for its own guard docs.
-const META_FILES = new Set(["docs/PUBLIC_MESSAGING_GUARDRAILS.md"]);
+const META_FILES = new Set([
+  "docs/PUBLIC_MESSAGING_GUARDRAILS.md",
+  // The claim inventory RECORDS every buyer-facing claim verbatim — including
+  // the forbidden ones — each with its classification and contradicting
+  // citation. Quoting a defect to order its removal is evidence, not a claim;
+  // failing the record of the defect would forbid writing the record.
+  "docs/CLAIM_INVENTORY.md",
+  "docs/agent/CLAIM_INVENTORY.json",
+]);
 // Meta framing that legitimately references a denylist phrase as the guard's own
 // machinery or a negative example — never a real claim.
 const META = /denylist|unsafe-claim scan|validation command|git grep|guardrail|disclaimer|pre-announcement|design target/i;

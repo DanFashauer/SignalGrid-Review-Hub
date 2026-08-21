@@ -70,7 +70,13 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-}
       REDIS_URL: ${REDIS_URL:-}
       SIGNALGRID_DEPRECATED_ROUTES: ${SIGNALGRID_DEPRECATED_ROUTES:-}
-      SIGNALGRID_LIVE_INTEGRATIONS: ${SIGNALGRID_LIVE_INTEGRATIONS:-}
+      # PINNED false, deliberately not a pass-through: this image has no
+      # @workspace/integrations wiring — the connector routes run the
+      # fixture-backed core — so a true here would only flip /healthz and
+      # /v1/context to CLAIM live signals the stack cannot produce. A
+      # deployment that actually wires live integrations changes the image,
+      # not this line.
+      SIGNALGRID_LIVE_INTEGRATIONS: "false"
       SIGNALGRID_V1_RATE_LIMIT: ${SIGNALGRID_V1_RATE_LIMIT:-}
       SIGNALGRID_GLOBAL_RATE_LIMIT: ${SIGNALGRID_GLOBAL_RATE_LIMIT:-}
       STEPUP_TTL_SECONDS: ${STEPUP_TTL_SECONDS:-}

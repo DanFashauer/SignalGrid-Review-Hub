@@ -30,7 +30,7 @@ in-memory (the fixture-safe default used by the public build and CI).
 | `SIGNALGRID_PRODUCT_PROFILE` | **The profile fence.** `shared-device-gateway` for every real deployment; `review-demo` (the unset default) serves demo credentials via `/v1/keys`, the unauthenticated simulator, and accepts demo bearers — measured: a stack without this variable handed an anonymous caller nine bearer tokens, a tenant owner among them. | unset ⇒ `review-demo` |
 | `DATABASE_URL` | Postgres connection string, **as the `signalgrid_runtime` role** (see Schema below). Set ⇒ durable persistence on. | unset (in-memory) |
 | `SIGNALGRID_TIER` | `dev` \| `alpha` \| `beta` \| `prod`. | `dev` |
-| `SIGNALGRID_LIVE_INTEGRATIONS` | `true` only permits live vendor calls, and only on `beta`/`prod`. | unset (off) |
+| `SIGNALGRID_LIVE_INTEGRATIONS` | `true` only permits live vendor calls, and only on `beta`/`prod`. **Pinned `false` in the compose stack**: that image has no live-integration wiring, so a `true` would only make `/healthz` and `/v1/context` claim live signals the fixture-backed routes cannot produce. | unset (off) |
 | `PORT` | API listen port. | `8080` |
 | `LOG_LEVEL` | pino log level. | `info` |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated browser origins allowed to call `/v1`. | none (deny all cross-origin) |

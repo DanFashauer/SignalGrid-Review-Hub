@@ -108,8 +108,11 @@ export function auditRunbook({ envVars, runbook, compose }) {
   // key under the db service, or a fixed value, leaves the documented knob
   // dead while a whole-file regex stays green. The three PINNED values are
   // the compose file's own design decisions, not knobs: the image listens on
-  // 8080, the stack is the prod tier, NODE_ENV is production.
-  const PINNED = new Set(["NODE_ENV", "PORT", "SIGNALGRID_TIER"]);
+  // 8080, the stack is the prod tier, NODE_ENV is production — and
+  // SIGNALGRID_LIVE_INTEGRATIONS is pinned FALSE because the image has no
+  // live-integration wiring; interpolating it would let an export make the
+  // health/context surfaces claim live signals a fixture stack cannot produce.
+  const PINNED = new Set(["NODE_ENV", "PORT", "SIGNALGRID_TIER", "SIGNALGRID_LIVE_INTEGRATIONS"]);
   const apiEnv = extractApiEnvironment(compose);
   if (apiEnv === null) {
     problems.push("could not locate the api service's environment block in docker-compose.prod.yml — the pass-through direction cannot be verified");

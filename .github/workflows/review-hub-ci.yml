@@ -963,8 +963,19 @@ jobs:
         run: docker compose -f docker-compose.prod.yml exec -T db psql -U sg -d signalgrid -c "ALTER ROLE signalgrid_runtime WITH LOGIN PASSWORD 'ci-smoke'"
 
       - name: "Runbook step 3: recreate the api as the runtime role on the production default profile"
+        # The OIDC values are WELL-FORMED PLACEHOLDERS (a .invalid host cannot
+        # resolve), because gateway readiness now refuses an instance whose
+        # enterprise auth is unconfigured — an IdP-less gateway can
+        # authenticate nobody. This proves the configuration path; no token
+        # can verify against it, and the smoke's demo-bearer-401 assertion
+        # still holds for exactly that reason.
         env:
           DATABASE_URL: postgres://signalgrid_runtime:ci-smoke@db:5432/signalgrid
+          OIDC_ISSUER: https://idp.ci-placeholder.invalid
+          OIDC_AUDIENCE: signalgrid-ci
+          OIDC_JWKS_URI: https://idp.ci-placeholder.invalid/jwks
+          OIDC_TENANT_MAP: '{"ci-tenant":"tenant-ci"}'
+          OIDC_ROLE_MAP: '{"ci-role":"operator"}'
         run: docker compose -f docker-compose.prod.yml up -d --force-recreate api
 
       - name: Wait for the gateway-profile API

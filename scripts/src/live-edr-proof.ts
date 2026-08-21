@@ -45,9 +45,12 @@ if (!BASE) {
       "could honestly report. Start one and re-run (the lane script does all of\n" +
       "this for you: ./scripts/run-live-lanes.sh --only edr):\n" +
       "  docker run -d --name sg-wazuh -p 55000:55000 wazuh/wazuh-manager:4.14.7\n" +
-      "  WAZUH_URL=https://127.0.0.1:55000 pnpm run proof:live-edr\n" +
-      "NOTE: 4.14.7, not 4.9.0 — 4.9.0 is published amd64-only and DIES under\n" +
-      "QEMU on Apple Silicon (segfault in wazuh-modulesd). Measured 2026-08-21.\n",
+      "  docker cp sg-wazuh:/var/ossec/api/configuration/ssl/server.crt /tmp/sg-wazuh-ca.crt\n" +
+      "  NODE_EXTRA_CA_CERTS=/tmp/sg-wazuh-ca.crt WAZUH_URL=https://localhost:55000 \\\n" +
+      "    pnpm run proof:live-edr\n" +
+      "(localhost, not 127.0.0.1 — the container cert's SAN is DNS:localhost only.\n" +
+      "4.14.7, not 4.9.0 — 4.9.0 is published amd64-only and DIES under QEMU on\n" +
+      "Apple Silicon: segfault in wazuh-modulesd. Measured 2026-08-21.)\n",
   );
   process.exit(1);
 }

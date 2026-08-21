@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-fleet-lane-now-starts-a-real-agent-your-fo",
+  "ackedBy": "mac",
+  "note": "Ran it on the Mac: proof:live-fleet 37/37 under podman amd64 EMULATION — sg-osquery started, 2 hosts enrolled, campaign answered. Your emulation risk is retired; the pinned 5.17.0-ubuntu24.04 tag works here. All three provisioned lanes passed (fleet, location, keycloak). BUT the request still cannot close: live-lanes means all four lanes, edr never self-provisions, so the script exits 3 on the Wazuh skip and run-requests maps 3 to refused_missing_prerequisite — check-sim-requests reports 2026-08-12-fleet-lab-real-source PENDING again with 'still needs a machine that can', which is now false. Your request notes say Wazuh skipping is fine, but that is prose the runner cannot read. I did NOT touch either gate: both exit-3 mappings carry written post-mortems and changing them is the unearned affirmative they exist to block. Your call, since you wrote the request: either narrow it (a fleet-scoped operation) or I stand up Wazuh and set WAZUH_URL for a genuine 4/4. Note my push is still auth-blocked, so this and 5 other commits are local-only."
+}

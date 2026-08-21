@@ -136,6 +136,12 @@ export const SIM_OPERATIONS = {
   // refused_missing_prerequisite unless WAZUH_URL points at a real server. That is
   // the honest answer for it, not a gap to paper over with a self-provisioning
   // claim it cannot keep.
+  "live-telemetry": {
+    argv: ["./scripts/run-live-lanes.sh", "--only", "telemetry"],
+    platform: "any",
+    needs: "a container engine; pulls the pinned otel-collector-contrib + prometheus images on first run",
+    what: "the opt-in telemetry transport (api /metrics -> OTel collector -> Prometheus, asserted via the Prometheus query API)",
+  },
   "live-fleet": {
     argv: ["./scripts/run-live-lanes.sh", "--only", "fleet"],
     platform: "any",

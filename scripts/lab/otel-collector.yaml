@@ -1,0 +1,34 @@
+# OTel Collector config for the opt-in telemetry lane (run-live-lanes.sh
+# --with-telemetry). One deliberate shape: the collector SCRAPES the
+# api-server's existing /metrics (dependency-free Prometheus text — the app
+# gained no OTLP SDK for this) and re-exposes it on :8889 for Prometheus.
+# That proves the vendor-neutral transport the research report proposed
+# without adding a single dependency to the decision path.
+#
+# Curated allowlist doctrine (docs/METRIC_STANDARDS.md): exactly TWO
+# pipeline components beyond the health extension. The contrib image ships
+# hundreds; a receiver is added by naming it here in a reviewed diff, never
+# by "it was already in the image".
+receivers:
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: signalgrid-api
+          scrape_interval: 2s
+          static_configs:
+            - targets: ["host.docker.internal:5330"]
+
+exporters:
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+
+extensions:
+  health_check:
+    endpoint: "0.0.0.0:13133"
+
+service:
+  extensions: [health_check]
+  pipelines:
+    metrics:
+      receivers: [prometheus]
+      exporters: [prometheus]

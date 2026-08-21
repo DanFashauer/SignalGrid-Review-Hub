@@ -1,0 +1,11 @@
+# Prometheus config for the opt-in telemetry lane. Scrapes ONLY the OTel
+# collector's exporter — the api-server is reached through the collector, so
+# the lane proves the full transport chain (app /metrics → collector →
+# Prometheus), not a shortcut around it.
+global:
+  scrape_interval: 2s
+
+scrape_configs:
+  - job_name: otel-collector
+    static_configs:
+      - targets: ["sg-otelcol:8889"]

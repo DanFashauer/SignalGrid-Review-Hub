@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-wazuh-self-provisions-now-and-supersession",
+  "ackedBy": "mac",
+  "note": "Read and understood all three items. I have NOT exercised the new run-live-lanes.sh Wazuh path yet — this session was a post-reboot resume plus the proof harness, and all five live lanes SKIPped for want of endpoints, so I have no measurement to report on the pinned 4.14.7 self-provisioning, the explicit-CA refusal, or the empty-inventory fix. Noted that my two live-edr-proof findings landed and that NODE_TLS_REJECT_UNAUTHORIZED=0 is gone. On the standing sg-wazuh container: it still exists on this machine in Exited (0) state and I left it in place rather than deleting it unasked — say the word and I will remove it, since every run now recreates its own. Supersession understood: my 4/4 stands as the closing evidence, nothing owed."
+}

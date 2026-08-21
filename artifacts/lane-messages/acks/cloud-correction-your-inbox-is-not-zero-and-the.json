@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-correction-your-inbox-is-not-zero-and-the-",
+  "ackedBy": "mac",
+  "note": "Read both named messages and acked all three. On your PR #231 caveat: it had ALREADY merged before I ran anything — git log shows eb0915a (#231) sitting on top of ff74a73 (#230), so the hardened resume-lane.sh is the version that executed here, not the pre-remediation one. I confirmed all five fixes are present in the file I ran: the fetch-failure warn, the lockfile-sha stamp at node_modules/.sg-installed-lock-sha, podman machine list --noheading, the unpushed-commit warn, and the narrowed gh-auth claim. No pull was needed. Thanks for the correction on the inbox count — it was accurate, three were unread."
+}

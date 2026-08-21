@@ -1,23 +1,22 @@
 {
   "schemaVersion": 1,
   "requestId": "2026-08-12-fleet-lab-real-source",
-  "completedAt": "2026-08-21T02:51:16.348Z",
+  "completedAt": "2026-08-21T04:08:56.151Z",
   "provenance": {
     "platform": "darwin",
     "arch": "arm64",
     "nodeVersion": "v24.18.0",
     "macosVersion": "26.6",
-    "commit": "e3a5282bfab68dc2a4185f6c714056494174052b",
+    "commit": "39e8a9173611b10439c48db95c54f3e1085c39e6",
     "branch": "SignalGrid_Alpha",
     "workingTreeClean": true
   },
   "runs": [
     {
       "operation": "live-lanes",
-      "status": "refused_missing_prerequisite",
-      "detail": "the command reported SKIPPED lanes: nothing failed, but something did not run",
-      "exitCode": 3,
-      "durationMs": 57231,
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 56429,
       "tail": [
         "== SignalGrid live-vendor lanes ==",
         "-- bringing up Fleet (mysql + redis + fleet + osqueryd, amd64 under emulation)",
@@ -29,20 +28,19 @@
         "  \u001b[32mPASS\u001b[0m  proof:live-location",
         "-- bringing up Keycloak (DPoP feature)",
         "  \u001b[32mPASS\u001b[0m  proof:live-keycloak",
-        "  \u001b[33mSKIP\u001b[0m  proof:live-edr  (needs WAZUH_URL — a ~2GB image and minutes of boot, so this script never starts it for you)",
+        "  \u001b[32mPASS\u001b[0m  proof:live-edr",
         "",
         "-- removing containers this run started: sg-fleet sg-fleet-mysql sg-fleet-redis sg-osquery sg-traccar sg-keycloak",
         "",
-        "== LIVE LANES: 3 passed, 0 failed, 1 skipped ==",
-        "   skipped (NOT verified by this run): proof:live-edr",
-        "✅ Nothing failed — but a skipped lane proved nothing."
+        "== LIVE LANES: 4 passed, 0 failed, 0 skipped ==",
+        "✅ Every live lane ran and passed."
       ]
     },
     {
       "operation": "docker",
       "status": "passed",
       "exitCode": 0,
-      "durationMs": 14676,
+      "durationMs": 14737,
       "tail": [
         "Container verification — the real deployment topology, against a real database",
         "",

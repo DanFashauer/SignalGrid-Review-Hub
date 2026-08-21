@@ -539,6 +539,15 @@ export const SURFACES = [
       "knowledge.",
   },
   {
+    id: "agent-heartbeats",
+    reason:
+      "Firing evidence for the always-on agent routines declared in " +
+      "docs/agent/scheduled-routines.json: one {firedAt, result} JSON per lane, written " +
+      "on every fire so 'ran and did nothing' differs from 'never ran'. Agent-ops " +
+      "plumbing gated by scripts/check-scheduled-routines.mjs — no tenant, no worker " +
+      "and no customer ever sees it.",
+  },
+  {
     id: "sim-requests",
     reason:
       "The cloud→Mac half of the simulation request loop: committed JSON asking the " +

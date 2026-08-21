@@ -89,6 +89,19 @@ interface WazuhAgent {
   name?: string;
 }
 
+/** The one summary path — reached by a full run and by the empty-inventory
+ *  early return alike, so a deterministic failure always reports itself. */
+function finish(): void {
+  const total = passed + failures.length;
+  console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${total})`);
+  if (failures.length > 0) {
+    console.error("failed:");
+    for (const f of failures) console.error(`  - ${f}`);
+    process.exit(1);
+  }
+  console.log("edr-threat verified against a live Wazuh: absent vendor fields fail closed, never assumed good.");
+}
+
 async function main(): Promise<void> {
   // 1. Real authentication against the real server.
   const authRes = await fetch(`${BASE}/security/user/authenticate`, {
@@ -120,14 +133,22 @@ async function main(): Promise<void> {
 
   // 4. The connector's own normalizer, on real data.
   const normalized = raw.map(normalizeEndpoint);
-  // Guarded (the 5039ccc class): an empty inventory must FAIL these checks,
-  // not crash the proof and take every later assertion with it.
+  // Guarded (the 5039ccc class): an empty inventory must FAIL, deterministically
+  // and completely — every remaining assertion depends on a first endpoint, so
+  // record the one honest failure and stop rather than crash mid-argument (the
+  // ?. on one dereference was not enough: the detail strings and the posture
+  // section still dereferenced bare).
   const first = normalized[0];
+  if (!first) {
+    check("the server reports at least one agent (empty inventory: every remaining check depends on one)", false);
+    finish();
+    return;
+  }
 
-  check("agent presence is read from the live server", first?.agentInstalled === true);
+  check("agent presence is read from the live server", first.agentInstalled === true);
   check(
     "agent running-state reflects the live status field",
-    first?.agentRunning === (agents[0]?.status === "active"),
+    first.agentRunning === (agents[0].status === "active"),
     `wazuh status=${agents[0].status}`,
   );
   check("the live source is attributed to wazuh", first.source === "wazuh");
@@ -170,14 +191,7 @@ async function main(): Promise<void> {
 
   console.log(`\n  measured: wazuh supplied ${Object.keys(raw[0]).length} of 8 EndpointThreatRaw fields`);
 
-  const total = passed + failures.length;
-  console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${total})`);
-  if (failures.length > 0) {
-    console.error("failed:");
-    for (const f of failures) console.error(`  - ${f}`);
-    process.exit(1);
-  }
-  console.log("edr-threat verified against a live Wazuh: absent vendor fields fail closed, never assumed good.");
+  finish();
 }
 
 main().catch((err) => {

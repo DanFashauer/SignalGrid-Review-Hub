@@ -36,7 +36,7 @@
 | `proof:live-keycloak` | `KEYCLOAK_URL` — docs/KEYCLOAK_LIVE_INTEGRATION.md | no — would SKIP |
 | `proof:live-location` | `TRACCAR_URL` — docs/TRACCAR_LIVE_INTEGRATION.md | no — would SKIP |
 
-`pnpm run verify:live` stands up what Docker allows, runs those lanes and removes what it started. A lane it cannot provision is reported SKIPPED with the reason — never counted as passed. Wazuh is never auto-started (~2GB image).
+`pnpm run verify:live` stands up what Docker allows, runs those lanes and removes what it started. A lane it cannot provision is reported SKIPPED with the reason — never counted as passed. All four lanes self-provision (Wazuh since 2026-08-21, pinned 4.14.7; its first pull is ~2GB — omit with --only).
 
 > ⚠️ `proof:live-fleet-workflow` looks like an external lane but has no entry in this report's LANE_ENV — add one, or it goes unlisted and this section quietly under-reports.
 

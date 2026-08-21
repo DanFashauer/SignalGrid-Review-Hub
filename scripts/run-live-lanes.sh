@@ -18,8 +18,10 @@
 # but it is also not a proof failure, and conflating the two would teach the reader
 # to ignore both.
 #
-# Wazuh is deliberately NOT auto-provisioned: it is a ~2GB image and minutes of
-# boot. It runs only if WAZUH_URL is already set, and says so otherwise.
+# Wazuh IS auto-provisioned since 2026-08-21 (pinned 4.14.7 — native on both
+# architectures, up in seconds; the never-start rule dated from the amd64-only
+# 4.9.0 era). First run pulls a ~2GB image. To skip the EDR lane:
+#   ./scripts/run-live-lanes.sh --only fleet,location,keycloak
 # =============================================================================
 set -uo pipefail
 cd "$(dirname "$0")/.." || { echo "cannot enter repo root" >&2; exit 1; }

@@ -30,7 +30,7 @@ effectively unreachable — the bring-up steps lived in four separate documents.
 one command stands up whatever Docker allows, runs those lanes, removes what it
 started (`--keep` to leave them), and reports a lane it could not provision as
 SKIPPED with the reason rather than counting it as passed. `--only fleet,keycloak`
-narrows it. Wazuh is never auto-started (~2GB image); it runs only if WAZUH_URL is
+narrows it. Wazuh auto-starts too since 2026-08-21 (pinned 4.14.7; first pull is ~2GB — omit it with --only fleet,location,keycloak), or it uses WAZUH_URL if
 already set.
 
 Everything below extends this base outward to external systems.

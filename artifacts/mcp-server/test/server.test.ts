@@ -39,6 +39,7 @@ const NEW_TOOLS = [
   "query_audit",
   "bruno_collection_list",
   "bruno_request_get",
+  "bruno_collection_run",
 ];
 
 const PREEXISTING_TOOLS = [

@@ -221,6 +221,7 @@ const EXPECTED_TOOLS = [
   "query_audit",
   "bruno_collection_list",
   "bruno_request_get",
+  "bruno_collection_run",
 ];
 
 const mcp = new McpStdio();

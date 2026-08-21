@@ -19,6 +19,15 @@
 //     reuse before licence review") is only findable if the flag is on the row
 //   ✗ the md table naming a repo the json lacks, or vice versa
 //   ✗ deployedInLab true but the evidence path does not exist on disk
+// v2 (second owner research report, 2026-08-21) — the org match:
+//   ✗ ownerRole missing, or naming a role docs/agent/org-roster.json does not
+//     carry — an owner the org chart cannot produce is no owner at all
+//   ✗ priorityTier outside P0/P1/P2
+//   ✗ credentialClass or lastReviewed missing
+//   ✗ mutationsAllowed anything but false without a decisionRecord naming the
+//     approval-gate ratification (DR-008: no mutation without a gated record)
+//   ✗ ownerRanked neither a number nor null-with-a-report-basis (unranked
+//     rows arrived with the report; silence about rank is still forbidden)
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import {fileURLToPath, pathToFileURL } from "node:url";
@@ -63,7 +72,9 @@ export function reposInMarkdown(mdText) {
  * Pure audit. `pathExists` is injected so the self-test can prove the
  * evidence-on-disk check fires without needing a missing file to exist.
  */
-export function auditLabRegistry(registry, mdText, pathExists) {
+const PRIORITY_TIERS = new Set(["P0", "P1", "P2"]);
+
+export function auditLabRegistry(registry, mdText, pathExists, rosterRoles) {
   const fatal = [];
   const entries = registry?.entries;
   if (!Array.isArray(entries)) return { fatal: [`${REGISTRY} carries no entries array`] };
@@ -85,7 +96,20 @@ export function auditLabRegistry(registry, mdText, pathExists) {
     }
     if (!e.licence) fatal.push(`${name}: no licence — an unlicensed dependency is an unreviewable one`);
     if (!e.role) fatal.push(`${name}: no role — a repo nobody can say the purpose of does not belong in the index`);
-    if (typeof e.ownerRanked !== "number") fatal.push(`${name}: no ownerRanked position`);
+    if (typeof e.ownerRanked !== "number" && !(e.ownerRanked === null && /research report/i.test(e.basis ?? ""))) {
+      fatal.push(`${name}: ownerRanked must be a number, or null with a basis naming the research report that brought the row in unranked`);
+    }
+    if (!e.ownerRole) {
+      fatal.push(`${name}: no ownerRole — a repo the org chart cannot produce an owner for is unowned`);
+    } else if (rosterRoles && !rosterRoles.has(e.ownerRole)) {
+      fatal.push(`${name}: ownerRole "${e.ownerRole}" does not exist in docs/agent/org-roster.json — phantom ownership`);
+    }
+    if (!PRIORITY_TIERS.has(e.priorityTier)) fatal.push(`${name}: priorityTier must be P0, P1 or P2`);
+    if (!e.credentialClass) fatal.push(`${name}: no credentialClass — the least-privilege posture must be stated per relationship`);
+    if (!e.lastReviewed || Number.isNaN(Date.parse(e.lastReviewed))) fatal.push(`${name}: lastReviewed missing or unparseable`);
+    if (e.mutationsAllowed !== false && !e.decisionRecord) {
+      fatal.push(`${name}: mutationsAllowed is not false and no decisionRecord names the approval-gate ratification — DR-008 forbids mutation without one`);
+    }
     if (e.deployedInLab === true) {
       if (!e.deployedEvidence) {
         fatal.push(`${name}: deployedInLab with no deployedEvidence — "it runs" without a citation is exactly the claim this repo forbids`);
@@ -118,34 +142,45 @@ function selfTest() {
     transcribedFrom: "owner research directive, 2026-08-21",
     rule: { boundary: "adapter → evidence → policy → verdict", neverRule: "no code reuse before licence review" },
     entries: [
-      { repo: "a/one", ownerRanked: 1, classification: "LAB_SOURCE", licence: "Apache-2.0", licenceCaution: false, role: "r", deployedInLab: true, deployedEvidence: "scripts/run-live-lanes.sh" },
-      { repo: "b/two", ownerRanked: 2, classification: "DEFERRED_RESEARCH", licence: "AGPL-3.0", licenceCaution: true, role: "r", deployedInLab: false, deployedEvidence: null },
+      { repo: "a/one", ownerRanked: 1, classification: "LAB_SOURCE", licence: "Apache-2.0", licenceCaution: false, role: "r", deployedInLab: true, deployedEvidence: "scripts/run-live-lanes.sh", ownerRole: "endpoint-uem-domain", priorityTier: "P0", credentialClass: "read_only", mutationsAllowed: false, lastReviewed: "2026-08-21" },
+      { repo: "b/two", ownerRanked: 2, classification: "DEFERRED_RESEARCH", licence: "AGPL-3.0", licenceCaution: true, role: "r", deployedInLab: false, deployedEvidence: null, ownerRole: "secops-domain", priorityTier: "P2", credentialClass: "lab_isolated", mutationsAllowed: false, lastReviewed: "2026-08-21" },
     ],
   };
   const onDisk = () => true;
-  let r = auditLabRegistry(good, mdFor(["a/one", "b/two"]), onDisk);
+  const roster = new Set(["endpoint-uem-domain", "secops-domain"]);
+  let r = auditLabRegistry(good, mdFor(["a/one", "b/two"]), onDisk, roster);
   checks.push(["a coherent registry with a matching md table passes clean", r.fatal.length === 0]);
-  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], licence: undefined }] }, mdFor(["a/one"]), onDisk);
+  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], licence: undefined }] }, mdFor(["a/one"]), onDisk, roster);
   checks.push(["an entry with no licence is FATAL", r.fatal.some((x) => x.includes("no licence"))]);
-  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], classification: "COOL_REPO" }] }, mdFor(["a/one"]), onDisk);
+  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], classification: "COOL_REPO" }] }, mdFor(["a/one"]), onDisk, roster);
   checks.push(["a classification outside the enum is FATAL", r.fatal.some((x) => x.includes("outside the declared enum"))]);
-  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], deployedEvidence: null }] }, mdFor(["a/one"]), onDisk);
+  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], deployedEvidence: null }] }, mdFor(["a/one"]), onDisk, roster);
   checks.push(["deployedInLab without evidence is FATAL — 'it runs' needs a citation", r.fatal.some((x) => x.includes("no deployedEvidence"))]);
-  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[1], licenceCaution: false }] }, mdFor(["b/two"]), onDisk);
+  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[1], licenceCaution: false }] }, mdFor(["b/two"]), onDisk, roster);
   checks.push(["an AGPL licence without licenceCaution is FATAL", r.fatal.some((x) => x.includes("caution family"))]);
-  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[1], licence: "Sustainable Use License", licenceCaution: false }] }, mdFor(["b/two"]), onDisk);
+  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[1], licence: "Sustainable Use License", licenceCaution: false }] }, mdFor(["b/two"]), onDisk, roster);
   checks.push(["a Sustainable Use licence without caution is FATAL — custom families count", r.fatal.some((x) => x.includes("caution family"))]);
-  r = auditLabRegistry(good, mdFor(["a/one"]), onDisk);
+  r = auditLabRegistry(good, mdFor(["a/one"]), onDisk, roster);
   checks.push(["a json repo missing from the md table is FATAL", r.fatal.some((x) => x.includes("not in the md table"))]);
-  r = auditLabRegistry(good, mdFor(["a/one", "b/two", "c/three"]), onDisk);
+  r = auditLabRegistry(good, mdFor(["a/one", "b/two", "c/three"]), onDisk, roster);
   checks.push(["an md-table repo missing from the json is FATAL", r.fatal.some((x) => x.includes("not in the json"))]);
-  r = auditLabRegistry(good, mdFor(["a/one", "b/two"]), () => false);
+  r = auditLabRegistry(good, mdFor(["a/one", "b/two"]), () => false, roster);
   checks.push(["deployedEvidence absent from disk is FATAL — the claim cites nothing", r.fatal.some((x) => x.includes("does not exist on disk"))]);
   // Parser controls: a backticked file path in a table row, or a repo named
   // only in prose, must not enter the cross-check.
   const mdWithNoise = `${mdFor(["a/one", "b/two"])}\n| gate | \`scripts/check-lab-registry.mjs\` |\n\nSee also \`c/prose-only\` in passing.`;
-  r = auditLabRegistry(good, mdWithNoise, onDisk);
+  r = auditLabRegistry(good, mdWithNoise, onDisk, roster);
   checks.push(["file paths and prose mentions do not desynchronize the halves", r.fatal.length === 0]);
+  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], ownerRole: "made-up-role" }] }, mdFor(["a/one"]), onDisk, roster);
+  checks.push(["an ownerRole the org roster does not carry is FATAL — phantom ownership", r.fatal.some((x) => x.includes("does not exist in docs/agent/org-roster.json"))]);
+  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], priorityTier: "P9" }] }, mdFor(["a/one"]), onDisk, roster);
+  checks.push(["a priority tier outside P0/P1/P2 is FATAL", r.fatal.some((x) => x.includes("priorityTier"))]);
+  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], mutationsAllowed: true }] }, mdFor(["a/one"]), onDisk, roster);
+  checks.push(["mutationsAllowed true without a decisionRecord is FATAL — DR-008", r.fatal.some((x) => x.includes("DR-008"))]);
+  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], ownerRanked: null, basis: "recorded from owner research report 2026-08-21" }] }, mdFor(["a/one"]), onDisk, roster);
+  checks.push(["null ownerRanked WITH a report basis is coherent — unranked arrivals are allowed", r.fatal.length === 0]);
+  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], ownerRanked: null, basis: "just because" }] }, mdFor(["a/one"]), onDisk, roster);
+  checks.push(["null ownerRanked WITHOUT a report basis is FATAL", r.fatal.some((x) => x.includes("ownerRanked"))]);
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
@@ -159,7 +194,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (process.argv.includes("--self-test")) process.exit(selfTest());
   const registry = JSON.parse(readFileSync(join(repoRoot, REGISTRY), "utf8"));
   const mdText = readFileSync(join(repoRoot, HUMAN_HALF), "utf8");
-  const { fatal } = auditLabRegistry(registry, mdText, (p) => existsSync(join(repoRoot, p)));
+  const roster = JSON.parse(readFileSync(join(repoRoot, "docs/agent/org-roster.json"), "utf8"));
+  const rosterRoles = new Set((roster.roles ?? roster).map((r) => r.id ?? r.roleId ?? r.name));
+  const { fatal } = auditLabRegistry(registry, mdText, (p) => existsSync(join(repoRoot, p)), rosterRoles);
   const deployed = registry.entries?.filter((e) => e.deployedInLab === true).length ?? 0;
   console.log(`Open-source lab registry — ${registry.entries?.length ?? 0} entr(ies), ${deployed} deployed-in-lab`);
   if (fatal.length > 0) {

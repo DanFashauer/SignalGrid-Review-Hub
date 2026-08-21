@@ -32,44 +32,54 @@ design, deploying a service as a separate container, and speaking a wire
 protocol are not the same act as embedding code — the caution flags below mark
 where that review is mandatory before reuse of any kind.
 
-## The index (owner-ranked, 1–30)
+## The index
 
-| Rank | Repo | Classification | Licence | Caution | Deployed today |
-| ---: | --- | --- | --- | :-: | :-: |
-| 1 | `fleetdm/fleet` | LAB_SOURCE | MIT (open core; ee/ paid) | — | yes |
-| 2 | `keycloak/keycloak` | LAB_SOURCE | Apache-2.0 | — | yes |
-| 3 | `h-mdm/hmdm-server` | LAB_SOURCE | Apache-2.0 | — | no |
-| 4 | `microsoftgraph/msgraph-sdk-javascript` | PRODUCTION_CONNECTOR_TARGET | MIT | — | no |
-| 5 | `open-telemetry/opentelemetry-collector` | DEFERRED_RESEARCH | Apache-2.0 | — | no |
-| 6 | `open-policy-agent/opa` | REFERENCE_ARCHITECTURE | Apache-2.0 | — | no |
-| 7 | `cedar-policy/cedar` | REFERENCE_ARCHITECTURE | Apache-2.0 | — | no |
-| 8 | `wazuh/wazuh` | LAB_SOURCE | GPL-2.0 | ⚠ | yes |
-| 9 | `glpi-project/glpi` | DEFERRED_RESEARCH | GPL-3.0 | ⚠ | no |
-| 10 | `FreeRADIUS/freeradius-server` | DEFERRED_RESEARCH | GPL-2.0 | ⚠ | no |
-| 11 | `inverse-inc/packetfence` | DEFERRED_RESEARCH | GPL-2.0 | ⚠ | no |
-| 12 | `ocsf/ocsf-schema` | OPEN_STANDARD | Apache-2.0 | — | no |
-| 13 | `PostHog/posthog` | DEFERRED_RESEARCH | MIT (open core) | — | no |
-| 14 | `anchore/syft` | INTERNAL_COMPANY_TOOL | Apache-2.0 | — | no |
-| 15 | `anchore/grype` | INTERNAL_COMPANY_TOOL | Apache-2.0 | — | no |
-| 16 | `sigstore/cosign` | INTERNAL_COMPANY_TOOL | Apache-2.0 | — | no |
-| 17 | `Velocidex/velociraptor` | DEFERRED_RESEARCH | AGPL-3.0 | ⚠ | no |
-| 18 | `SigmaHQ/sigma` | OPEN_STANDARD | Detection Rule License (custom) | ⚠ | no |
-| 19 | `zeek/zeek` | DEFERRED_RESEARCH | BSD-3-Clause | — | no |
-| 20 | `OISF/suricata` | DEFERRED_RESEARCH | GPL-2.0 | ⚠ | no |
-| 21 | `prometheus/prometheus` | DEFERRED_RESEARCH | Apache-2.0 | — | no |
-| 22 | `grafana/grafana` | DEFERRED_RESEARCH | AGPL-3.0 | ⚠ | no |
-| 23 | `openfga/openfga` | REFERENCE_ARCHITECTURE | Apache-2.0 | — | no |
-| 24 | `micromdm/nanomdm` | REFERENCE_ARCHITECTURE | MIT | — | no |
-| 25 | `gravitational/teleport` | REFERENCE_ARCHITECTURE | AGPL-3.0 (community edition) | ⚠ | no |
-| 26 | `langfuse/langfuse` | DEFERRED_RESEARCH | MIT (open core) | — | no |
-| 27 | `promptfoo/promptfoo` | INTERNAL_COMPANY_TOOL | MIT | — | no |
-| 28 | `zammad/zammad` | DEFERRED_RESEARCH | AGPL-3.0 | ⚠ | no |
-| 29 | `twentyhq/twenty` | DEFERRED_RESEARCH | AGPL-3.0 | ⚠ | no |
-| 30 | `n8n-io/n8n` | INTERNAL_COMPANY_TOOL | Sustainable Use License (NOT open source) | ⚠ | no |
+Ranks 1–30 are the owner's original ranking; unranked rows arrived with the
+2026-08-21 research report. `Tier` is the build priority (P0 prove the
+product / P1 prove the enterprise workflow / P2 ecosystem depth) — a P1 tier
+on a `DEFERRED_RESEARCH` row means "picked up at that phase", not "in use".
+`Owner` is the org-roster role accountable for the relationship; the gate
+fails on any owner the roster does not carry.
 
-Licence values are recorded from owner research (2026-08-21) as commonly known;
-where an entry carries a `basis` field in the JSON, verify against the upstream
-repository before any code reuse.
+| Rank | Repo | Classification | Tier | Owner | Licence | Caution | Deployed today |
+| ---: | --- | --- | :-: | --- | --- | :-: | :-: |
+| 1 | `fleetdm/fleet` | LAB_SOURCE | P0 | `endpoint-uem-domain` | MIT (open core; ee/ paid) | — | yes |
+| 2 | `keycloak/keycloak` | LAB_SOURCE | P0 | `iam-domain` | Apache-2.0 | — | yes |
+| 3 | `h-mdm/hmdm-server` | LAB_SOURCE | P1 | `endpoint-uem-domain` | Apache-2.0 | — | no |
+| 4 | `microsoftgraph/msgraph-sdk-javascript` | PRODUCTION_CONNECTOR_TARGET | P0 | `endpoint-uem-domain` | MIT | — | no |
+| 5 | `open-telemetry/opentelemetry-collector` | OPEN_STANDARD | P0 | `sre` | Apache-2.0 | — | no |
+| 6 | `open-policy-agent/opa` | REFERENCE_ARCHITECTURE | P1 | `solutions-architect` | Apache-2.0 | — | no |
+| 7 | `cedar-policy/cedar` | REFERENCE_ARCHITECTURE | P1 | `solutions-architect` | Apache-2.0 | — | no |
+| 8 | `wazuh/wazuh` | LAB_SOURCE | P1 | `secops-domain` | GPL-2.0 | ⚠️ | yes |
+| 9 | `glpi-project/glpi` | DEFERRED_RESEARCH | P1 | `itsm-ops-domain` | GPL-3.0 | ⚠️ | no |
+| 10 | `FreeRADIUS/freeradius-server` | DEFERRED_RESEARCH | P1 | `network-domain` | GPL-2.0 | ⚠️ | no |
+| 11 | `inverse-inc/packetfence` | DEFERRED_RESEARCH | P2 | `network-domain` | GPL-2.0 | ⚠️ | no |
+| 12 | `ocsf/ocsf-schema` | OPEN_STANDARD | P0 | `secops-domain` | Apache-2.0 | — | no |
+| 13 | `PostHog/posthog` | DEFERRED_RESEARCH | P1 | `lifecycle-activation` | MIT (open core) | — | no |
+| 14 | `anchore/syft` | INTERNAL_COMPANY_TOOL | P0 | `release-engineer` | Apache-2.0 | — | no |
+| 15 | `anchore/grype` | INTERNAL_COMPANY_TOOL | P0 | `release-engineer` | Apache-2.0 | — | no |
+| 16 | `sigstore/cosign` | INTERNAL_COMPANY_TOOL | P0 | `release-engineer` | Apache-2.0 | — | no |
+| 17 | `Velocidex/velociraptor` | DEFERRED_RESEARCH | P2 | `secops-domain` | AGPL-3.0 | ⚠️ | no |
+| 18 | `SigmaHQ/sigma` | OPEN_STANDARD | P2 | `secops-domain` | Detection Rule License (custom, non-SPDX) | ⚠️ | no |
+| 19 | `zeek/zeek` | DEFERRED_RESEARCH | P2 | `network-domain` | BSD-3-Clause | — | no |
+| 20 | `OISF/suricata` | DEFERRED_RESEARCH | P2 | `network-domain` | GPL-2.0 | ⚠️ | no |
+| 21 | `prometheus/prometheus` | INTERNAL_COMPANY_TOOL | P0 | `sre` | Apache-2.0 | — | no |
+| 22 | `grafana/grafana` | DEFERRED_RESEARCH | P1 | `sre` | AGPL-3.0 | ⚠️ | no |
+| 23 | `openfga/openfga` | REFERENCE_ARCHITECTURE | P2 | `solutions-architect` | Apache-2.0 | — | no |
+| 24 | `micromdm/nanomdm` | REFERENCE_ARCHITECTURE | P2 | `endpoint-uem-domain` | MIT | — | no |
+| 25 | `gravitational/teleport` | REFERENCE_ARCHITECTURE | P2 | `iam-domain` | AGPL-3.0 (community edition) | ⚠️ | no |
+| 26 | `langfuse/langfuse` | DEFERRED_RESEARCH | P1 | `agent-ops-economics` | MIT (open core) | — | no |
+| 27 | `promptfoo/promptfoo` | INTERNAL_COMPANY_TOOL | P1 | `agent-ops-economics` | MIT | — | no |
+| 28 | `zammad/zammad` | DEFERRED_RESEARCH | P2 | `itsm-ops-domain` | AGPL-3.0 | ⚠️ | no |
+| 29 | `twentyhq/twenty` | DEFERRED_RESEARCH | P2 | `design-partner-outreach` | AGPL-3.0 | ⚠️ | no |
+| 30 | `n8n-io/n8n` | INTERNAL_COMPANY_TOOL | P2 | `devex-tooling-engineer` | Sustainable Use License (NOT open source) | ⚠️ | no |
+| — | `osquery/osquery` | REFERENCE_ARCHITECTURE | P0 | `endpoint-uem-domain` | multiple licences reported by GitHub — inspect per file | ⚠️ | yes |
+| — | `microsoftgraph/msgraph-metadata` | OPEN_STANDARD | P0 | `api-contract-architect` | MIT | — | no |
+| — | `microsoftgraph/msgraph-sdk-powershell` | INTERNAL_COMPANY_TOOL | P1 | `endpoint-uem-domain` | MIT | — | no |
+| — | `modelcontextprotocol/typescript-sdk` | OPEN_STANDARD | P0 | `agent-ops-economics` | MIT (existing code) / Apache-2.0 (new contributions) | — | no |
+| — | `modelcontextprotocol/servers` | REFERENCE_ARCHITECTURE | P2 | `agent-ops-economics` | MIT (existing code) / Apache-2.0 (new contributions) | — | no |
+| — | `usebruno/bruno` | INTERNAL_COMPANY_TOOL | P0 | `api-contract-architect` | MIT core; commercial offerings exist | — | no |
+| — | `usebruno/bruno-mcp` | DEFERRED_RESEARCH | P2 | `agent-ops-economics` | unspecified in surfaced repository metadata | ⚠️ | no |
 
 ## The deployed-lab truth
 

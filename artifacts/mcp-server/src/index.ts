@@ -11,6 +11,7 @@
 // MCP client config example:
 //   { "command": "node", "args": ["<repo>/artifacts/mcp-server/dist/index.mjs"] }
 
+import { spawnSync } from "node:child_process";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -724,12 +725,13 @@ server.registerTool(
 // ── Bruno contract-plane bridge ──────────────────────────────────────────────
 //
 // The Bruno collection under artifacts/api-collection is the executable
-// contract for the /v1 and control-plane HTTP surfaces. These two tools READ
-// it; deliberately, neither EXECUTES it. Execution needs the Bruno CLI as a
-// dependency, and this package adds no dependencies in this pass — the execute
-// tool lands together with that dependency in a later PR. Until then, an agent
-// that wants a request run asks a human (or reads the api-server test suite,
-// which exercises the same surface).
+// contract for the /v1 and control-plane HTTP surfaces. Two tools READ it;
+// bruno_collection_run EXECUTES it — not request-by-request against whatever
+// server happens to be up, but by delegating to scripts/run-bruno-collection.mjs,
+// which boots its own fixture-mode api-server, runs the WHOLE collection under
+// both product profiles, and tears the server down. One deterministic harness,
+// no partial state, nothing external touched: the only network traffic is
+// localhost to a process the harness itself started.
 
 const BRUNO_ROOT = resolve(REPO_ROOT, "artifacts/api-collection");
 
@@ -766,8 +768,8 @@ server.registerTool(
     title: "List the Bruno API collection",
     description:
       "Walk artifacts/api-collection (the executable contract for the /v1 and control-plane HTTP surfaces) " +
-      "and return every folder with its .bru request files and display names. Listing only — execution is " +
-      "deliberately absent until the Bruno CLI dependency lands in a later PR. " + INSPECTION_ONLY,
+      "and return every folder with its .bru request files and display names. Listing only — " +
+      "bruno_collection_run executes the collection as one harnessed run. " + INSPECTION_ONLY,
     inputSchema: z.object({}).strict(),
     annotations: READ_ONLY,
   },
@@ -809,6 +811,46 @@ server.registerTool(
       return asText({ path, content: readFileSync(target, "utf8") });
     } catch (err) {
       return asError(err instanceof Error ? err.message : "request read failed");
+    }
+  },
+);
+
+server.registerTool(
+  "bruno_collection_run",
+  {
+    title: "Run the Bruno collection against a fixture server",
+    description:
+      "Execute the committed API collection as ONE harnessed run: delegates to " +
+      "scripts/run-bruno-collection.mjs, which boots its own fixture-mode api-server " +
+      "(in-memory demo core, intentionally-public sgk_demo_* tokens), runs every request " +
+      "under both product profiles including the negative tests, tears the server down, " +
+      "and fails on any transport error, any 5xx, or any failed assertion. Nothing outside " +
+      "localhost is touched and no durable state changes — the run IS the evidence. " +
+      "Takes on the order of a minute. " + INSPECTION_ONLY,
+    inputSchema: z.object({}).strict(),
+    annotations: READ_ONLY,
+  },
+  async () => {
+    try {
+      // The harness owns the whole lifecycle; this tool only relays its
+      // verdict. stdio capture is bounded so a runaway log cannot flood the
+      // MCP transport.
+      const r = spawnSync("node", [resolve(REPO_ROOT, "scripts/run-bruno-collection.mjs")], {
+        cwd: REPO_ROOT,
+        encoding: "utf8",
+        timeout: 5 * 60 * 1000,
+        maxBuffer: 4 * 1024 * 1024,
+      });
+      const tail = (text: string | null | undefined) =>
+        (text ?? "").trim().split("\n").slice(-25).join("\n");
+      return asText({
+        passed: r.status === 0,
+        exitCode: r.status,
+        report: tail(r.stdout),
+        problems: r.status === 0 ? null : tail(r.stderr),
+      });
+    } catch (err) {
+      return asError(err instanceof Error ? err.message : "collection run failed");
     }
   },
 );
@@ -972,7 +1014,7 @@ if (entryBasename && import.meta.url.endsWith(entryBasename)) {
   // `ready \(stdio\)\. Tools: ([^"]+)\."` and holds it against the registered
   // list, so a wrapped/concatenated literal reads as "no ready message" and
   // fails the gate. Resources get their own line for the same reason.
-  console.error("SignalGrid MCP server ready (stdio). Tools: list_room_scenarios, evaluate_room_entry, signal_catalog, scan_signals, evaluate_decision, facility_graph, evaluate_location_certainty, fabric_status, explain_decision, evidence_freshness, list_connectors, list_policies, query_audit, bruno_collection_list, bruno_request_get.");
+  console.error("SignalGrid MCP server ready (stdio). Tools: list_room_scenarios, evaluate_room_entry, signal_catalog, scan_signals, evaluate_decision, facility_graph, evaluate_location_certainty, fabric_status, explain_decision, evidence_freshness, list_connectors, list_policies, query_audit, bruno_collection_list, bruno_request_get, bruno_collection_run.");
   console.error("Resources: signalgrid://reason-codes, signalgrid://launch-profile, signalgrid://agent-routines, signalgrid://lab-registry.");
 }
 

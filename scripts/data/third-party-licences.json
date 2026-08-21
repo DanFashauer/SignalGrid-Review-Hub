@@ -1745,6 +1745,10 @@
       "licence": "MIT",
       "basis": "registry.npmjs.org manifest for fsevents@2.3.3 (platform binary not installed under the workspace overrides), recorded 2026-08-21"
     },
+    "pkg:npm/iconv-lite@0.7.2": {
+      "licence": "MIT",
+      "basis": "registry.npmjs.org manifest for iconv-lite@0.7.2 (this exact version is resolved by the lockfile but not installed on every platform), recorded 2026-08-21"
+    },
     "pkg:npm/lightningcss-win32-arm64-msvc@1.32.0": {
       "licence": "MPL-2.0",
       "basis": "registry.npmjs.org manifest for lightningcss-win32-arm64-msvc@1.32.0 (platform binary not installed under the workspace overrides), recorded 2026-08-21"
@@ -1760,6 +1764,10 @@
     "pkg:npm/lightningcss-win32-x64-msvc@1.33.0": {
       "licence": "MPL-2.0",
       "basis": "registry.npmjs.org manifest for lightningcss-win32-x64-msvc@1.33.0 (platform binary not installed under the workspace overrides), recorded 2026-08-21"
+    },
+    "pkg:npm/tv4@1.3.0": {
+      "licence": "MIT",
+      "basis": "registry.npmjs.org legacy licenses array for tv4@1.3.0 offers 'Public Domain' or 'MIT'; used under the MIT grant, recorded 2026-08-21"
     }
   }
 }

@@ -51,7 +51,7 @@ Every figure in this section is published by `proof:launch-profile` and checked 
 docs↔proof figure guard on each run — stated here, beside the numbers, because scope
 is per-section and a proof named three sections away checks nothing.
 
-`scripts/launch-profile.mjs` classifies **176 classified items** across **4 profile
+`scripts/launch-profile.mjs` classifies **177 classified items** across **4 profile
 surfaces** — connector families, signal kinds, published API paths, and client/app
 surfaces. Every item carries exactly one status:
 
@@ -60,7 +60,7 @@ surfaces. Every item carries exactly one status:
 | `launch` | **22 launch items** | In the Limited GA surface. |
 | `deferred` | **134 deferred items** | Real, gated, proven, staying in the repository — not Limited GA. |
 | `demo_only` | **9 demo only items** | Exists to demonstrate or explain. Must never be presented as shipping product. |
-| `internal` | **11 internal items** | Harness, generator or evidence plumbing. Not a product surface at all. |
+| `internal` | **12 internal items** | Harness, generator or evidence plumbing. Not a product surface at all. |
 
 `deferred` is not a demotion. It is the freeze working.
 

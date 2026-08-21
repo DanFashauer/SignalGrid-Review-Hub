@@ -55,6 +55,11 @@ export const SIM_OPERATIONS = {
     platform: "any",
     what: "the /v1 decision API exercised end to end, every assertion",
   },
+  "bruno-collection": {
+    argv: ["node", "scripts/run-bruno-collection.mjs"],
+    platform: "any",
+    what: "the committed Bruno collection executed with the real CLI against a self-booted fixture server, both product profiles, negative tests included",
+  },
   load: {
     argv: ["pnpm", "--filter", "@workspace/api-server", "run", "test:load"],
     platform: "any",

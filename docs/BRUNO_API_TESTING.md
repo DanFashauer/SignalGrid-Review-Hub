@@ -27,14 +27,16 @@ contract and the code move together or the gate fails.
   design.
 - **`negative-tests/`** — requests that MUST fail correctly, each asserting
   its exact expected status. See below.
-- **`sources/`** — standalone Bruno collections for the **external lab
-  services** `scripts/run-live-lanes.sh` actually starts (Fleet, Traccar,
-  Keycloak, Wazuh — `artifacts/api-collection/sources/README.md`). These map
-  third-party surfaces, not api-server routes, so the route gate excludes
-  `sources/` by name and the parent `bruno.json` ignores the folder — open
-  each `sources/<service>/` directly in Bruno. A service gets a folder here
-  only if `run-live-lanes.sh` starts it; everything aspirational stays in
-  `docs/OPEN_SOURCE_LAB_REGISTRY.md` as `DEFERRED_RESEARCH` with no folder.
+- **`artifacts/lab-collections/`** (a sibling root, NOT inside this
+  collection) — standalone Bruno collections for the **external lab services**
+  `scripts/run-live-lanes.sh` actually starts (Fleet, Traccar, Keycloak,
+  Wazuh — `artifacts/lab-collections/README.md`). These map third-party
+  surfaces, not api-server routes, and Bruno cannot run a collection that
+  nests other collections, so they live outside — open each
+  `artifacts/lab-collections/<service>/` directly in Bruno. A service gets a
+  collection there only if `run-live-lanes.sh` starts it; everything
+  aspirational stays in `docs/OPEN_SOURCE_LAB_REGISTRY.md` as
+  `DEFERRED_RESEARCH` with no folder.
 
 ## The gate — two-directional coverage
 
@@ -76,6 +78,23 @@ operator token as the default bearer, so every other request works
 immediately. For the GA-fence negative test, start the server with
 `SIGNALGRID_PRODUCT_PROFILE=shared-device-gateway` instead.
 
+## The live run — the whole contract, executed
+
+`node scripts/run-bruno-collection.mjs` executes the entire collection with
+the real Bruno CLI (`@usebruno/cli`, a devDependency of the scripts package)
+against an api-server it boots itself: one pass under the `review-demo`
+profile (where the fenced routes serve and the `sgk_demo_*` fixtures
+authenticate — including the token-dependent negative tests), one pass under
+`shared-device-gateway` (where the profile fence 404 and the no-token 401
+prove). It fails on any transport error, any 5xx, any failed assertion, and
+on a zero-request run — an empty run must never read as a green one. Results
+land under `artifacts/bruno/` (gitignored: a run record, not a committed
+claim). Agents can trigger the same harness over MCP via
+`bruno_collection_run`. Its first-ever full run caught a real server defect:
+a malformed WebAuthn enrollment body answered 500 where fail-closed demands a
+clean refusal — fixed in `lib/webauthn` the same day, which is the argument
+for running the paper against the server and not only against itself.
+
 ## Negative-test philosophy — a refusal on schedule
 
 A passing negative test is not the absence of a result; it is **a refusal
@@ -100,7 +119,7 @@ Nothing in any collection is, or may ever become, a real secret:
   the demo seed (`lib/signalgrid-core/src/seed.ts`) precisely so reviewers can
   drive the API without credentials. A production core never exposes raw
   tokens (`demoApiKeys()` throws off demo mode).
-- The `sources/` environments carry only **documented container image
+- The `artifacts/lab-collections/` environments carry only **documented container image
   defaults** — `wazuh`/`wazuh` is the wazuh-manager image's documented default
   API credential, `admin`/`admin` is Keycloak's `KC_BOOTSTRAP_ADMIN_*`
   container default (both per the repo's standing `.gitleaksignore`
@@ -108,4 +127,4 @@ Nothing in any collection is, or may ever become, a real secret:
   `scripts/run-live-lanes.sh` itself mints into a localhost container.
 - If a request would need a credential that does not fit those categories, the
   request does not belong in the collection. Full scope rules:
-  `artifacts/api-collection/sources/README.md`.
+  `artifacts/lab-collections/README.md`.

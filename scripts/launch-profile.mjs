@@ -539,6 +539,15 @@ export const SURFACES = [
       "knowledge.",
   },
   {
+    id: "lab-collections",
+    reason:
+      "Standalone Bruno collections for the external lab services " +
+      "run-live-lanes.sh starts (Fleet, Traccar, Keycloak, Wazuh) — read-only " +
+      "evidence requests against third-party surfaces, outside the api " +
+      "collection because Bruno cannot run nested collections. Verification " +
+      "tooling; no tenant, worker or customer ever sees it.",
+  },
+  {
     id: "agent-heartbeats",
     reason:
       "Firing evidence for the always-on agent routines declared in " +

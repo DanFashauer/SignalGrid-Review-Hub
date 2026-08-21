@@ -1,8 +1,8 @@
 {
-  "$comment": "Open-source lab registry — the owner's 30-repo research index, transcribed into a governed artifact. Machine half; the human half is docs/OPEN_SOURCE_LAB_REGISTRY.md and the gate is scripts/check-lab-registry.mjs. deployedInLab is TRUE only for services scripts/run-live-lanes.sh actually starts today; classification records intent, not deployment.",
+  "$comment": "Open-source lab registry \u2014 the owner's 30-repo research index, transcribed into a governed artifact. Machine half; the human half is docs/OPEN_SOURCE_LAB_REGISTRY.md and the gate is scripts/check-lab-registry.mjs. deployedInLab is TRUE only for services scripts/run-live-lanes.sh actually starts today; classification records intent, not deployment. v2 (2026-08-21, second owner research report): every entry now carries ownerRole (must exist in docs/agent/org-roster.json \u2014 the gate enforces it), priorityTier (P0 prove-the-product / P1 prove-the-enterprise-workflow / P2 ecosystem depth), credentialClass, mutationsAllowed (false across the board \u2014 a true requires a decision record naming its approval gate), and lastReviewed. Seven repositories added from the same report.",
   "transcribedFrom": "owner research directive, 2026-08-21",
   "rule": {
-    "boundary": "external system → source adapter → normalized evidence → freshness + provenance + contradictions → deterministic policy → verdict",
+    "boundary": "external system \u2192 source adapter \u2192 normalized evidence \u2192 freshness + provenance + contradictions \u2192 deterministic policy \u2192 verdict",
     "neverRule": "No repository's code is copied or embedded into SignalGrid until its licence has been reviewed against the distribution model. Studying, deploying as a separate lab service, and speaking a wire protocol are not the same act as embedding code."
   },
   "classifications": [
@@ -23,7 +23,12 @@
       "basis": "recorded from owner research 2026-08-21, verify before any code reuse",
       "role": "The MDM control plane the lab runs (fleet lane: server + MySQL + Redis + a real enrolled osqueryd); the chosen enforcement backend for supervised devices.",
       "deployedInLab": true,
-      "deployedEvidence": "scripts/run-live-lanes.sh"
+      "deployedEvidence": "scripts/run-live-lanes.sh",
+      "ownerRole": "endpoint-uem-domain",
+      "priorityTier": "P0",
+      "credentialClass": "read_only",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "keycloak/keycloak",
@@ -33,7 +38,12 @@
       "licenceCaution": false,
       "role": "The IdP the lab runs (keycloak lane) for DPoP-bound token issuance feeding the auth-signal evidence path.",
       "deployedInLab": true,
-      "deployedEvidence": "scripts/run-live-lanes.sh"
+      "deployedEvidence": "scripts/run-live-lanes.sh",
+      "ownerRole": "iam-domain",
+      "priorityTier": "P0",
+      "credentialClass": "service_account_least_privilege",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "h-mdm/hmdm-server",
@@ -41,9 +51,14 @@
       "classification": "LAB_SOURCE",
       "licence": "Apache-2.0",
       "licenceCaution": false,
-      "role": "Headwind MDM server — an Apache-licensed Android MDM source under study alongside Fleet; the live lanes do not start it.",
+      "role": "Headwind MDM server \u2014 an Apache-licensed Android MDM source under study alongside Fleet; the live lanes do not start it.",
       "deployedInLab": false,
-      "deployedEvidence": null
+      "deployedEvidence": null,
+      "ownerRole": "endpoint-uem-domain",
+      "priorityTier": "P1",
+      "credentialClass": "read_only",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "microsoftgraph/msgraph-sdk-javascript",
@@ -53,17 +68,27 @@
       "licenceCaution": false,
       "role": "SDK a future Microsoft Graph/Intune connector would build against; connector scope is frozen (DR-005), so nothing is built today.",
       "deployedInLab": false,
-      "deployedEvidence": null
+      "deployedEvidence": null,
+      "ownerRole": "endpoint-uem-domain",
+      "priorityTier": "P0",
+      "credentialClass": "application_identity_least_privilege",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "open-telemetry/opentelemetry-collector",
       "ownerRanked": 5,
-      "classification": "DEFERRED_RESEARCH",
+      "classification": "OPEN_STANDARD",
       "licence": "Apache-2.0",
       "licenceCaution": false,
-      "role": "Telemetry-pipeline research for signal transport; deferred.",
+      "role": "Telemetry-pipeline research for signal transport; deferred. Reclassified DEFERRED_RESEARCH \u2192 OPEN_STANDARD in v2: OTLP is the telemetry transport standard the report ratifies; adoption itself is still future work (backlog).",
       "deployedInLab": false,
-      "deployedEvidence": null
+      "deployedEvidence": null,
+      "ownerRole": "sre",
+      "priorityTier": "P0",
+      "credentialClass": "none_local_pipeline",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "open-policy-agent/opa",
@@ -73,7 +98,12 @@
       "licenceCaution": false,
       "role": "Policy-engine architecture studied for the decision core; SignalGrid's policy stays in-house, deterministic, and fixture-backed.",
       "deployedInLab": false,
-      "deployedEvidence": null
+      "deployedEvidence": null,
+      "ownerRole": "solutions-architect",
+      "priorityTier": "P1",
+      "credentialClass": "not_applicable_reference",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "cedar-policy/cedar",
@@ -83,7 +113,12 @@
       "licenceCaution": false,
       "role": "Policy-language design reference (typed, analyzable authorization); studied, not embedded.",
       "deployedInLab": false,
-      "deployedEvidence": null
+      "deployedEvidence": null,
+      "ownerRole": "solutions-architect",
+      "priorityTier": "P1",
+      "credentialClass": "not_applicable_reference",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "wazuh/wazuh",
@@ -93,7 +128,12 @@
       "licenceCaution": true,
       "role": "The EDR manager the lab runs (edr lane) as a live device-health evidence source, spoken to over its HTTPS API.",
       "deployedInLab": true,
-      "deployedEvidence": "scripts/run-live-lanes.sh"
+      "deployedEvidence": "scripts/run-live-lanes.sh",
+      "ownerRole": "secops-domain",
+      "priorityTier": "P1",
+      "credentialClass": "read_only",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "glpi-project/glpi",
@@ -103,7 +143,12 @@
       "licenceCaution": true,
       "role": "IT asset/inventory research for future evidence enrichment; deferred.",
       "deployedInLab": false,
-      "deployedEvidence": null
+      "deployedEvidence": null,
+      "ownerRole": "itsm-ops-domain",
+      "priorityTier": "P1",
+      "credentialClass": "service_account_least_privilege",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "FreeRADIUS/freeradius-server",
@@ -113,7 +158,12 @@
       "licenceCaution": true,
       "role": "Network-access (RADIUS) research for network-signal evidence; deferred.",
       "deployedInLab": false,
-      "deployedEvidence": null
+      "deployedEvidence": null,
+      "ownerRole": "network-domain",
+      "priorityTier": "P1",
+      "credentialClass": "lab_isolated",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "inverse-inc/packetfence",
@@ -121,9 +171,14 @@
       "classification": "DEFERRED_RESEARCH",
       "licence": "GPL-2.0",
       "licenceCaution": true,
-      "role": "NAC research — network posture as an evidence source; deferred.",
+      "role": "NAC research \u2014 network posture as an evidence source; deferred.",
       "deployedInLab": false,
-      "deployedEvidence": null
+      "deployedEvidence": null,
+      "ownerRole": "network-domain",
+      "priorityTier": "P2",
+      "credentialClass": "lab_isolated",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "ocsf/ocsf-schema",
@@ -133,7 +188,12 @@
       "licenceCaution": false,
       "role": "Open event-schema standard studied for normalized-evidence field naming; a vocabulary, not a dependency.",
       "deployedInLab": false,
-      "deployedEvidence": null
+      "deployedEvidence": null,
+      "ownerRole": "secops-domain",
+      "priorityTier": "P0",
+      "credentialClass": "not_applicable_schema",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "PostHog/posthog",
@@ -143,7 +203,12 @@
       "licenceCaution": false,
       "role": "Product-analytics research for the company/tooling surface; deferred.",
       "deployedInLab": false,
-      "deployedEvidence": null
+      "deployedEvidence": null,
+      "ownerRole": "lifecycle-activation",
+      "priorityTier": "P1",
+      "credentialClass": "privacy_scoped",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "anchore/syft",
@@ -153,7 +218,12 @@
       "licenceCaution": false,
       "role": "SBOM generation for this company's own release artifacts; internal tooling, not product surface.",
       "deployedInLab": false,
-      "deployedEvidence": null
+      "deployedEvidence": null,
+      "ownerRole": "release-engineer",
+      "priorityTier": "P0",
+      "credentialClass": "none_local_tool",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "anchore/grype",
@@ -163,7 +233,12 @@
       "licenceCaution": false,
       "role": "Vulnerability scanning of this company's own artifacts; internal tooling.",
       "deployedInLab": false,
-      "deployedEvidence": null
+      "deployedEvidence": null,
+      "ownerRole": "release-engineer",
+      "priorityTier": "P0",
+      "credentialClass": "none_local_tool",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "sigstore/cosign",
@@ -173,7 +248,12 @@
       "licenceCaution": false,
       "role": "Signing of this company's own release artifacts; internal tooling.",
       "deployedInLab": false,
-      "deployedEvidence": null
+      "deployedEvidence": null,
+      "ownerRole": "release-engineer",
+      "priorityTier": "P0",
+      "credentialClass": "signing_key_custody",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "Velocidex/velociraptor",
@@ -183,7 +263,12 @@
       "licenceCaution": true,
       "role": "DFIR/endpoint-forensics research; deferred.",
       "deployedInLab": false,
-      "deployedEvidence": null
+      "deployedEvidence": null,
+      "ownerRole": "secops-domain",
+      "priorityTier": "P2",
+      "credentialClass": "lab_isolated",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "SigmaHQ/sigma",
@@ -193,7 +278,12 @@
       "licenceCaution": true,
       "role": "Open detection-rule standard studied as a rule vocabulary; the rules carry their own custom licence terms.",
       "deployedInLab": false,
-      "deployedEvidence": null
+      "deployedEvidence": null,
+      "ownerRole": "secops-domain",
+      "priorityTier": "P2",
+      "credentialClass": "not_applicable_content",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "zeek/zeek",
@@ -203,7 +293,12 @@
       "licenceCaution": false,
       "role": "Network-monitoring research as a possible network-evidence source; deferred.",
       "deployedInLab": false,
-      "deployedEvidence": null
+      "deployedEvidence": null,
+      "ownerRole": "network-domain",
+      "priorityTier": "P2",
+      "credentialClass": "lab_isolated",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "OISF/suricata",
@@ -213,17 +308,27 @@
       "licenceCaution": true,
       "role": "IDS research as a possible network-evidence source; deferred.",
       "deployedInLab": false,
-      "deployedEvidence": null
+      "deployedEvidence": null,
+      "ownerRole": "network-domain",
+      "priorityTier": "P2",
+      "credentialClass": "lab_isolated",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "prometheus/prometheus",
       "ownerRanked": 21,
-      "classification": "DEFERRED_RESEARCH",
+      "classification": "INTERNAL_COMPANY_TOOL",
       "licence": "Apache-2.0",
       "licenceCaution": false,
-      "role": "Metrics research; scripts/run-live-lanes.sh does not start it, so it stays deferred until a lane exists.",
+      "role": "Metrics research; scripts/run-live-lanes.sh does not start it, so it stays deferred until a lane exists. Reclassified DEFERRED_RESEARCH \u2192 INTERNAL_COMPANY_TOOL in v2: the report makes it the P0 operations metric layer; adoption is backlog work, and deployedInLab stays false until a lane starts it.",
       "deployedInLab": false,
-      "deployedEvidence": null
+      "deployedEvidence": null,
+      "ownerRole": "sre",
+      "priorityTier": "P0",
+      "credentialClass": "none_local_pipeline",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "grafana/grafana",
@@ -233,7 +338,12 @@
       "licenceCaution": true,
       "role": "Dashboards research over lab metrics; deferred.",
       "deployedInLab": false,
-      "deployedEvidence": null
+      "deployedEvidence": null,
+      "ownerRole": "sre",
+      "priorityTier": "P1",
+      "credentialClass": "internal_dashboard_only",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "openfga/openfga",
@@ -243,7 +353,12 @@
       "licenceCaution": false,
       "role": "Relationship-based authorization architecture reference (Zanzibar family); studied, not embedded.",
       "deployedInLab": false,
-      "deployedEvidence": null
+      "deployedEvidence": null,
+      "ownerRole": "solutions-architect",
+      "priorityTier": "P2",
+      "credentialClass": "not_applicable_reference",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "micromdm/nanomdm",
@@ -251,9 +366,14 @@
       "classification": "REFERENCE_ARCHITECTURE",
       "licence": "MIT",
       "licenceCaution": false,
-      "role": "Minimal Apple MDM server — the clearest reference for the MDM protocol surface Fleet abstracts.",
+      "role": "Minimal Apple MDM server \u2014 the clearest reference for the MDM protocol surface Fleet abstracts.",
       "deployedInLab": false,
-      "deployedEvidence": null
+      "deployedEvidence": null,
+      "ownerRole": "endpoint-uem-domain",
+      "priorityTier": "P2",
+      "credentialClass": "lab_isolated",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "gravitational/teleport",
@@ -263,7 +383,12 @@
       "licenceCaution": true,
       "role": "Infrastructure-access architecture reference (short-lived certs, device trust); studied, not embedded.",
       "deployedInLab": false,
-      "deployedEvidence": null
+      "deployedEvidence": null,
+      "ownerRole": "iam-domain",
+      "priorityTier": "P2",
+      "credentialClass": "not_applicable_reference",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "langfuse/langfuse",
@@ -273,7 +398,12 @@
       "licenceCaution": false,
       "role": "LLM-observability research for internal agent tooling; deferred.",
       "deployedInLab": false,
-      "deployedEvidence": null
+      "deployedEvidence": null,
+      "ownerRole": "agent-ops-economics",
+      "priorityTier": "P1",
+      "credentialClass": "privacy_scoped",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "promptfoo/promptfoo",
@@ -283,7 +413,12 @@
       "licenceCaution": false,
       "role": "Prompt/agent evaluation for internal tooling; company surface only.",
       "deployedInLab": false,
-      "deployedEvidence": null
+      "deployedEvidence": null,
+      "ownerRole": "agent-ops-economics",
+      "priorityTier": "P1",
+      "credentialClass": "none_local_tool",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "zammad/zammad",
@@ -293,7 +428,12 @@
       "licenceCaution": true,
       "role": "Helpdesk research for company operations; deferred.",
       "deployedInLab": false,
-      "deployedEvidence": null
+      "deployedEvidence": null,
+      "ownerRole": "itsm-ops-domain",
+      "priorityTier": "P2",
+      "credentialClass": "service_account_least_privilege",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "twentyhq/twenty",
@@ -303,7 +443,12 @@
       "licenceCaution": true,
       "role": "CRM research for company operations; deferred.",
       "deployedInLab": false,
-      "deployedEvidence": null
+      "deployedEvidence": null,
+      "ownerRole": "design-partner-outreach",
+      "priorityTier": "P2",
+      "credentialClass": "internal_records_only",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     },
     {
       "repo": "n8n-io/n8n",
@@ -311,9 +456,126 @@
       "classification": "INTERNAL_COMPANY_TOOL",
       "licence": "Sustainable Use License (NOT open source)",
       "licenceCaution": true,
-      "role": "Workflow-automation candidate for internal company ops ONLY — the Sustainable Use License is not an open-source licence; never distribute, embed, or offer it as part of any product.",
+      "role": "Workflow-automation candidate for internal company ops ONLY \u2014 the Sustainable Use License is not an open-source licence; never distribute, embed, or offer it as part of any product.",
       "deployedInLab": false,
-      "deployedEvidence": null
+      "deployedEvidence": null,
+      "ownerRole": "devex-tooling-engineer",
+      "priorityTier": "P2",
+      "credentialClass": "internal_automation_only",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
+    },
+    {
+      "repo": "osquery/osquery",
+      "ownerRanked": null,
+      "classification": "REFERENCE_ARCHITECTURE",
+      "licence": "multiple licences reported by GitHub \u2014 inspect per file",
+      "licenceCaution": true,
+      "basis": "owner research report 2026-08-21: GitHub surfaces multiple licences; verify before any code reuse",
+      "role": "SQL-based OS instrumentation underlying Fleet's endpoint evidence; the reference for what an endpoint can prove about itself. The lab already runs a real osqueryd agent inside the fleet lane.",
+      "deployedInLab": true,
+      "deployedEvidence": "scripts/run-live-lanes.sh",
+      "ownerRole": "endpoint-uem-domain",
+      "priorityTier": "P0",
+      "credentialClass": "allowlisted_query_catalog_only",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
+    },
+    {
+      "repo": "microsoftgraph/msgraph-metadata",
+      "ownerRanked": null,
+      "classification": "OPEN_STANDARD",
+      "licence": "MIT",
+      "licenceCaution": false,
+      "basis": "owner research report 2026-08-21, verify before any code reuse",
+      "role": "Machine-readable Graph metadata/OpenAPI \u2014 the contract source for a curated launch-subset Bruno collection and for diffing connector assumptions against Microsoft's own schema instead of fixtures invented from memory. Never imported wholesale.",
+      "deployedInLab": false,
+      "deployedEvidence": null,
+      "ownerRole": "api-contract-architect",
+      "priorityTier": "P0",
+      "credentialClass": "not_applicable_schema",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
+    },
+    {
+      "repo": "microsoftgraph/msgraph-sdk-powershell",
+      "ownerRanked": null,
+      "classification": "INTERNAL_COMPANY_TOOL",
+      "licence": "MIT",
+      "licenceCaution": false,
+      "basis": "owner research report 2026-08-21, verify before any code reuse",
+      "role": "Cmdlet wrappers over Graph \u2014 the owner's independent validation tool for cross-checking connector results by hand; never part of the server runtime.",
+      "deployedInLab": false,
+      "deployedEvidence": null,
+      "ownerRole": "endpoint-uem-domain",
+      "priorityTier": "P1",
+      "credentialClass": "delegated_owner_session",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
+    },
+    {
+      "repo": "modelcontextprotocol/typescript-sdk",
+      "ownerRanked": null,
+      "classification": "OPEN_STANDARD",
+      "licence": "MIT (existing code) / Apache-2.0 (new contributions)",
+      "licenceCaution": false,
+      "basis": "owner research report 2026-08-21; already a dependency of artifacts/mcp-server (@modelcontextprotocol/sdk in its package.json)",
+      "role": "The official MCP SDK the in-repo agent-plane server is built on. The 2026-07-28 protocol revision (stateless HTTP, hardened authorization) is the target for any future remote transport \u2014 deferred per docs/MCP_ARCHITECTURE.md. (In OPERATIONAL use \u2014 artifacts/mcp-server/package.json \u2014 but deployedInLab stays false: that field means run-live-lanes.sh starts a lab SERVICE, and a dependency is not a lane.)",
+      "deployedInLab": false,
+      "deployedEvidence": null,
+      "ownerRole": "agent-ops-economics",
+      "priorityTier": "P0",
+      "credentialClass": "none_local_stdio",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
+    },
+    {
+      "repo": "modelcontextprotocol/servers",
+      "ownerRanked": null,
+      "classification": "REFERENCE_ARCHITECTURE",
+      "licence": "MIT (existing code) / Apache-2.0 (new contributions)",
+      "licenceCaution": false,
+      "basis": "owner research report 2026-08-21: maintainers state these are educational examples, NOT production-ready",
+      "role": "Reference tool/resource server patterns to study; never copied into the fabric server.",
+      "deployedInLab": false,
+      "deployedEvidence": null,
+      "ownerRole": "agent-ops-economics",
+      "priorityTier": "P2",
+      "credentialClass": "not_applicable_reference",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
+    },
+    {
+      "repo": "usebruno/bruno",
+      "ownerRanked": null,
+      "classification": "INTERNAL_COMPANY_TOOL",
+      "licence": "MIT core; commercial offerings exist",
+      "licenceCaution": false,
+      "basis": "owner research report 2026-08-21; @usebruno/cli is a devDependency of the scripts package, recorded in the SBOM/licence registry",
+      "role": "The contract plane's tooling: the CLI executes the committed collection on every push (scripts/run-bruno-collection.mjs, preflight + CI) and the desktop app opens the same folders. Collections carry fixture tokens only, never real credentials. (In OPERATIONAL use \u2014 scripts/run-bruno-collection.mjs \u2014 but deployedInLab stays false: that field means run-live-lanes.sh starts a lab SERVICE, and a dependency is not a lane.)",
+      "deployedInLab": false,
+      "deployedEvidence": null,
+      "ownerRole": "api-contract-architect",
+      "priorityTier": "P0",
+      "credentialClass": "fixture_tokens_only",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
+    },
+    {
+      "repo": "usebruno/bruno-mcp",
+      "ownerRanked": null,
+      "classification": "DEFERRED_RESEARCH",
+      "licence": "unspecified in surfaced repository metadata",
+      "licenceCaution": true,
+      "basis": "owner research report 2026-08-21: one commit, README-level maturity at research date",
+      "role": "Official Bruno-over-MCP project \u2014 watched, not adopted. The in-repo server already bridges Bruno through its own tools (list/get/run) with no dependency on this project; revisit if it matures.",
+      "deployedInLab": false,
+      "deployedEvidence": null,
+      "ownerRole": "agent-ops-economics",
+      "priorityTier": "P2",
+      "credentialClass": "not_applicable_reference",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-21"
     }
   ]
 }

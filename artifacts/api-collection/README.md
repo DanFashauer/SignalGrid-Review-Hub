@@ -66,9 +66,11 @@ via the checker's declared-exceptions list — reason + date required, GA
 routes never exceptable, stale exceptions fatal). Run it whenever either side
 changes; `--self-test` proves both directions can fail.
 
-`sources/` is different in kind: standalone Bruno collections for the
-**external lab services** `scripts/run-live-lanes.sh` actually starts (Fleet,
-Traccar, Keycloak, Wazuh). Those are third-party surfaces, not api-server
-routes, so the route gate excludes `sources/` by name and this collection's
-`bruno.json` ignores the folder — open each `sources/<service>/` directly in
-Bruno instead. Scope and credential rules live in `sources/README.md`.
+The lab-service collections are different in kind and live OUTSIDE this
+collection, at `artifacts/lab-collections/`: standalone Bruno collections for
+the **external lab services** `scripts/run-live-lanes.sh` actually starts
+(Fleet, Traccar, Keycloak, Wazuh). Those are third-party surfaces, not
+api-server routes — and Bruno cannot run a collection that nests other
+collections (their environments parse as requests from the parent, which is
+why they moved). Open each `artifacts/lab-collections/<service>/` directly in
+Bruno. Scope and credential rules live in `artifacts/lab-collections/README.md`.

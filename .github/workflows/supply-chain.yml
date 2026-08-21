@@ -119,6 +119,70 @@ jobs:
           git --no-pager diff --stat -- artifacts/sbom/cyclonedx.json
           exit 1
 
+  # Container-image evidence: the report's release-assurance chain, first half.
+  # The committed source-scope SBOM above answers "what code is in the tree";
+  # this job answers "what is in the IMAGE a deployment actually runs" — base
+  # layers and OS packages included, which the source SBOM's own docs state it
+  # does not cover. Syft and Grype are version-pinned release binaries with
+  # sha256 verification (recorded 2026-08-21 from the published release
+  # artifacts) — not install-latest scripts, so a hijacked release cannot ride
+  # in silently. Per-PR this job REPORTS: it fails on tool failure, never on
+  # vulnerability count, because scanner databases move daily and a gate that
+  # goes red without a code change is a flaky gate (the repo switches those
+  # off). The daily fail-on-critical gate lives in scheduled-verification.yml.
+  image-evidence:
+    name: Image SBOM + vulnerability evidence (report-only per PR)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Install pinned syft + grype (sha256-verified)
+        run: |
+          set -euo pipefail
+          curl -sSL -o syft.tgz https://github.com/anchore/syft/releases/download/v1.44.0/syft_1.44.0_linux_amd64.tar.gz
+          echo "0e91737aee2b5baf1d255b959630194a302335d848ff97bb07921eb6205b5f5a  syft.tgz" | sha256sum -c -
+          curl -sSL -o grype.tgz https://github.com/anchore/grype/releases/download/v0.112.0/grype_0.112.0_linux_amd64.tar.gz
+          echo "acb14a030010fe9bdb9594b4ae108d9d14ef2f926d936aa0916dc62c89c058ea  grype.tgz" | sha256sum -c -
+          mkdir -p "$HOME/bin"
+          tar -xzf syft.tgz -C "$HOME/bin" syft
+          tar -xzf grype.tgz -C "$HOME/bin" grype
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+      - name: Build the api image
+        run: docker build -f Dockerfile.api -t signalgrid-api:evidence .
+      - name: Image SBOM (CycloneDX, from the built image)
+        run: |
+          syft signalgrid-api:evidence -o cyclonedx-json=image-sbom.cyclonedx.json -o spdx-json=image-sbom.spdx.json
+          echo "Image SBOM components: $(python3 -c "import json;print(len(json.load(open('image-sbom.cyclonedx.json')).get('components',[])))")"
+      - name: Vulnerability scan (REPORTED — database version recorded as evidence)
+        run: |
+          # Evidence, not a frozen claim: the same image scans differently as
+          # the database moves, so the db build date rides with the result.
+          grype db update
+          grype sbom:image-sbom.cyclonedx.json -o json --file grype-report.json || true
+          python3 - <<'PY'
+          import json
+          r = json.load(open("grype-report.json"))
+          desc = r.get("descriptor", {}).get("db", {}) or {}
+          sev = {}
+          for m in r.get("matches", []):
+              s = m.get("vulnerability", {}).get("severity", "Unknown")
+              sev[s] = sev.get(s, 0) + 1
+          print("grype db:", desc.get("built", "unknown build date"))
+          print("matches by severity:", dict(sorted(sev.items())))
+          PY
+      - name: Upload evidence bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: image-evidence
+          path: |
+            image-sbom.cyclonedx.json
+            image-sbom.spdx.json
+            grype-report.json
+          if-no-files-found: error
+
   # The ONLY job here with write scope - and deliberately the one that installs
   # NOTHING and runs no third-party code. It downloads the SBOM the read-only job
   # produced and commits it. Tightly gated: dependabot-authored PRs only, same-repo

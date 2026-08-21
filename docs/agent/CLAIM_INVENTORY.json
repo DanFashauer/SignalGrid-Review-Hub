@@ -3135,7 +3135,7 @@
    "claim": "\"Shared Android scanners\" presented as a supported device surface",
    "kind": "surface",
    "classification": "unsubstantiated",
-   "evidence": "No Android application appears in the app-surface classification at all; launch app surfaces are api-server, signalgrid-app and ios:EnterpriseShell (scripts/launch-profile.mjs:446-465), and the surface list is derived from the iOS project manifests (scripts/launch-profile.mjs:440-444).",
+   "evidence": "An Android tree EXISTS (native/android \u2014 the Assist-wire Kotlin core and a demo app; the 2026-08-08 registry entry corrected the earlier absence claim), but the LAUNCH app-surface list names only api-server, signalgrid-app and ios:EnterpriseShell \u2014 launch surfaces are api-server, signalgrid-app and ios:EnterpriseShell (scripts/launch-profile.mjs:446-465). Presenting shared Android scanners as supported TODAY is a present-tense claim with no launch backing.",
    "action": "remove"
   },
   {

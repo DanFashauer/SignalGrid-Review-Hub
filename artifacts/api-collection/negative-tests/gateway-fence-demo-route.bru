@@ -1,0 +1,25 @@
+meta {
+  name: Demo route under commercial profile is a 404
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/v1/keys
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 404
+}
+
+docs {
+  PROVES ONLY when the server runs with SIGNALGRID_PRODUCT_PROFILE=shared-device-gateway. Under that profile the GA fence (routes/index.ts) answers 404 for everything outside GA_ALLOWED_ROUTES, and /v1/keys - the demo credential dispenser - is not even registered. Under the default review-demo profile this route serves 200 and this assertion fails, correctly: the demo surface is supposed to exist there.
+}
+
+tests {
+  test("the credential dispenser does not exist under the gateway profile", function() {
+    expect(res.getStatus()).to.equal(404);
+  });
+}

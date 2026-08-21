@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 35,
-  "fingerprint": "747b4081d41450036dcc8c73e115e526ddffc8293a628d49d7a773f4b0d1cb41",
+  "manifestVersion": 36,
+  "fingerprint": "bcecef9f13a2b65a15c2b29a0610bd8165453c48f450bac5d6453be681157f82",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -165,7 +165,14 @@
       "evaluate_decision",
       "facility_graph",
       "evaluate_location_certainty",
-      "fabric_status"
+      "fabric_status",
+      "explain_decision",
+      "evidence_freshness",
+      "list_connectors",
+      "list_policies",
+      "query_audit",
+      "bruno_collection_list",
+      "bruno_request_get"
     ],
     "consumers": {
       "macMcpLane": "scripts/verify-all.mjs (SIGNALGRID_MCP_PATH=... --require-mcp --emit-evidence)",

@@ -1,0 +1,15 @@
+meta {
+  name: IaC / GitOps plan + drift
+  type: http
+  seq: 15
+}
+
+get {
+  url: {{baseUrl}}/cp/v1/iac
+  body: none
+  auth: inherit
+}
+
+docs {
+  Declared desired-state diffed against observed fleet state. Read-only here; a real apply is approval- and decision-gated through the MDM backend.
+}

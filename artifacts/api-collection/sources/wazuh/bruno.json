@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "Lab source - Wazuh manager",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}

@@ -1,0 +1,15 @@
+meta {
+  name: Decision series
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/metrics/decisions/series
+  body: none
+  auth: inherit
+}
+
+docs {
+  24 hourly outcome-count points - a deterministic shift-shaped load curve.
+}

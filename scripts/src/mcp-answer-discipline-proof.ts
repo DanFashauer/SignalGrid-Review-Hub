@@ -212,6 +212,15 @@ const EXPECTED_TOOLS = [
   "facility_graph",
   "evaluate_location_certainty",
   "fabric_status",
+  // The DR-008 agent-plane additions (all read-only by doctrine — a tool
+  // appearing here without readOnly discipline still fails the checks below):
+  "explain_decision",
+  "evidence_freshness",
+  "list_connectors",
+  "list_policies",
+  "query_audit",
+  "bruno_collection_list",
+  "bruno_request_get",
 ];
 
 const mcp = new McpStdio();

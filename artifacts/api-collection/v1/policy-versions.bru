@@ -1,0 +1,15 @@
+meta {
+  name: Policy versions
+  type: http
+  seq: 19
+}
+
+get {
+  url: {{baseUrl}}/v1/policies/{{policyId}}/versions
+  body: none
+  auth: inherit
+}
+
+docs {
+  Version history for the seeded shared-device policy: v1 active, v2 draft. Each version carries a deterministic rule-set digest (tamper evidence).
+}

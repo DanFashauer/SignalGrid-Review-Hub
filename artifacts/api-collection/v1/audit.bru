@@ -1,0 +1,15 @@
+meta {
+  name: Audit ledger
+  type: http
+  seq: 15
+}
+
+get {
+  url: {{baseUrl}}/v1/audit
+  body: none
+  auth: inherit
+}
+
+docs {
+  Tenant-scoped audit events plus the hash-chain verification verdict. The chain result is computed on read, so tampering shows up here, not in a log nobody checks.
+}

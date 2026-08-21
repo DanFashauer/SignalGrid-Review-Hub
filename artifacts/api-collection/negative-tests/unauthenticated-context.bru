@@ -1,0 +1,25 @@
+meta {
+  name: No bearer token is a 401
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/v1/context
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 401
+}
+
+docs {
+  requireTenantContext (middlewares/context.ts) fails closed: a missing or unknown token is a 401, never a default tenant. This request deliberately sends no Authorization header.
+}
+
+tests {
+  test("refuses without a bearer token", function() {
+    expect(res.getStatus()).to.equal(401);
+  });
+}

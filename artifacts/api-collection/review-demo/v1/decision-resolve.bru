@@ -1,0 +1,15 @@
+meta {
+  name: Simulate decision resolution
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/v1/decisions/{{decisionId}}/resolve
+  body: none
+  auth: inherit
+}
+
+docs {
+  Simulates walking the resolution plan. Simulated only - no device, person, or source system is contacted.
+}

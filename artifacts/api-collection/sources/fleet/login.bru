@@ -1,0 +1,26 @@
+meta {
+  name: Login (mint bearer token)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/fleet/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "{{fleetUser}}",
+    "password": "{{fleetPass}}"
+  }
+}
+
+docs {
+  Auth bootstrap, not a mutation of MDM state: mints the bearer token every
+  other request inherits. Copy response.token into the fleetToken environment
+  var. The account is the lab bootstrap admin run-live-lanes.sh itself creates
+  via POST /api/v1/setup (org "SG") - not committed here as a request because
+  setup is a one-shot mutation the lane owns.
+}

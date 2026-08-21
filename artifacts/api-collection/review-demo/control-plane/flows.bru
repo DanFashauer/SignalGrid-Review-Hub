@@ -1,0 +1,15 @@
+meta {
+  name: Admin flows
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/cp/v1/flows
+  body: none
+  auth: inherit
+}
+
+docs {
+  The configured admin flows (signals to actions + approvals).
+}

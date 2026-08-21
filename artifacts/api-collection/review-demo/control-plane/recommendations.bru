@@ -1,0 +1,15 @@
+meta {
+  name: Recommendations
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/cp/v1/recommendations
+  body: none
+  auth: inherit
+}
+
+docs {
+  Learned-habit proposals from observed usage. Advisory only - nothing is changed by this endpoint.
+}

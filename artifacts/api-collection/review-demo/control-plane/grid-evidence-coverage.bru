@@ -1,0 +1,19 @@
+meta {
+  name: Grid evidence coverage
+  type: http
+  seq: 17
+}
+
+get {
+  url: {{baseUrl}}/cp/v1/grid/evidence-coverage
+  body: none
+  auth: inherit
+}
+
+params:query {
+  planes: identity,device_management
+}
+
+docs {
+  Which evidence axes a declared estate can honestly answer. Parameterised by ?planes=; an unrecognised plane is refused, never dropped.
+}

@@ -115,7 +115,19 @@ Restart Claude Desktop. Claude now has the fabric's tools —
 `list_room_scenarios`, `evaluate_room_entry`, `signal_catalog`, `scan_signals`,
 `evaluate_decision`, `facility_graph`, `evaluate_location_certainty`, and
 `fabric_status` (ask it: *"a Wi-Fi room fix in Room 312 for a med-admin
-workflow — allow it?"* and watch the multi-bed rule step it up) — and every call
+workflow — allow it?"* and watch the multi-bed rule step it up) — plus the
+agent-plane read surface: `explain_decision` (reason codes with their catalog
+prose from `docs/REASON_CODES.md`), `evidence_freshness` (snapshot age and
+digest verification against the demo core's fixed clock), `list_connectors`,
+`list_policies`, `query_audit` (the tamper-evident chain, verified alongside
+every read), and the Bruno contract-plane bridge `bruno_collection_list` /
+`bruno_request_get` (read the committed API collection; execution deliberately
+waits for the Bruno CLI dependency). Every one of those is evidence collection
+/ inspection only — it grants nothing, and no mutating surface (policy
+activation, remediation approval) is exposed over MCP at all. The server also
+serves committed repo truth as resources, read from disk at request time:
+`signalgrid://reason-codes`, `signalgrid://launch-profile`,
+`signalgrid://agent-routines`, and `signalgrid://lab-registry`. Every call
 runs your local, fixture-backed decision core. No cloud, no vendor, nothing
 leaves the machine.
 

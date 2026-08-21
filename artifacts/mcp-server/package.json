@@ -8,6 +8,7 @@
     "dev": "tsx src/index.ts",
     "build": "esbuild src/index.ts --bundle --platform=node --format=esm --external:@modelcontextprotocol/sdk --outfile=dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test test/server.test.ts",
     "start": "node dist/index.mjs"
   },
   "dependencies": {

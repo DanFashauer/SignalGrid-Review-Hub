@@ -470,3 +470,64 @@ the present.
 gap's `closedWhen` clears on the spec change itself; this record then reads
 as the period when the wire was declared ahead of the server, which is what
 happened.
+
+---
+
+## DR-008 — Three-plane architecture: Bruno contract plane, MCP agent plane, deterministic trust plane (2026-08-21)
+
+**Question.** The repository now carries three surfaces that all touch the
+API from outside the core: a committed Bruno workspace
+(`artifacts/api-collection/`), two MCP servers (the in-repo
+`artifacts/mcp-server/` fabric server and the public sibling `signalgrid-mcp`
+posture source), and the deterministic decision core they both orbit. Absent
+a ratified relationship, each surface drifts toward doing the others' jobs —
+a Bruno request that "checks" behavior becomes a shadow test suite, an MCP
+tool that acts on results becomes a shadow control plane, and an agent
+reading evidence becomes, one convenience at a time, a thing that decides.
+What is the standing relationship?
+
+**Decision.** Three planes, each with exactly one job, owner-directed:
+**Plane 1, the API contract** — Bruno, two-directionally gated by
+`scripts/check-api-collection.mjs`, proves what the API serves and what it
+refuses. **Plane 2, agent interoperability** — MCP gives agents controlled
+access: the in-repo server exposes the fabric as read-only tools over stdio,
+the sibling `signalgrid-mcp` reads macOS posture as a signal source; neither
+decides anything. **Plane 3, the trust authority** — the deterministic core
+alone turns evidence into a verdict. The two governing principles, stated as
+doctrine: **"Bruno proves the API. MCP gives agents controlled access to the
+API. SignalGrid determines what the evidence means."** and **"MCP is an
+orchestration interface, not a new trust authority."**
+
+**What this forbids.** Three moves, each of which would have been easy and
+each of which is now a doctrine violation: (1) **MCP mutation tools without
+approval gates** — no tool that changes durable state lands without an
+explicit human-approval step in the loop and its own decision record; today
+the server has none, and `scripts/check-mcp-surface.mjs` makes a new tool
+visible the moment it registers. (2) **Agents deciding trust** — no agent
+output, tool result, or model judgment may bypass the core or be returned as
+a verdict the core did not compute. (3) **Collapsing planes** — Bruno does
+not evaluate, MCP does not certify the contract, the core grows no
+agent-facing bypass; a change making one plane do another's job is wrong even
+when it works.
+
+**Evidence.** Read from the committed files, not asserted:
+`artifacts/api-collection/README.md` and `scripts/check-api-collection.mjs`
+(both coverage directions, self-test proving both can fail);
+`artifacts/mcp-server/src/index.ts` (stdio transport, demo core, the
+registered tool set — reads and in-memory evaluations only);
+`scripts/mac/mcp-up.sh` (the launcher, stdout reserved for the transport);
+`docs/ESTATE_SYNC_REPORT.md` §2.1 (the sibling's 22-tool read-only posture
+surface, verified from a checkout at `369e08e`);
+`docs/OPEN_SOURCE_LAB_REGISTRY.md` (the evidence boundary the planes overlay).
+The deferred items — an MCP execute-bridge for Bruno, HTTP transport, OAuth
+scopes — are recorded as design intent in `docs/MCP_ARCHITECTURE.md` and
+`docs/MCP_SECURITY_MODEL.md`, in the future tense they are entitled to and no
+other.
+
+**Reversal.** A future decision record, owner-ratified, that either (a)
+grants a named MCP tool mutation rights together with its approval-gate
+design, or (b) merges two planes with the drift risks above answered
+mechanically — a gate, not a promise — for each of the three forbidden moves.
+Absent that record, the planes stay separate and the prohibitions stand.
+
+**Status: ratified by owner directive, 2026-08-21. Confidence: high.**

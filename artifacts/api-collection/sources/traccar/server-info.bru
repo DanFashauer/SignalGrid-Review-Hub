@@ -1,0 +1,18 @@
+meta {
+  name: Server info
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/server
+  body: none
+  auth: inherit
+}
+
+docs {
+  Mirrors scripts/src/live-location-proof.ts:150 and the readiness probe
+  run-live-lanes.sh:239 waits on. Returns the Traccar version - the image is
+  deliberately unpinned (traccar/traccar:latest), so record the version this
+  returns whenever a result depends on it.
+}

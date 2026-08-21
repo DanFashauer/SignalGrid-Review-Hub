@@ -1,0 +1,15 @@
+meta {
+  name: Latest signals
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/signals/latest
+  body: none
+  auth: inherit
+}
+
+docs {
+  Latest synthetic signal readings. Filter with ?signalType= and ?limit=.
+}

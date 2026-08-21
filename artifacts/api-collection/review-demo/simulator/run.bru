@@ -1,0 +1,21 @@
+meta {
+  name: Run simulator scenario
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/simulator/run
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "scenarioId": "{{simScenarioId}}"
+  }
+}
+
+docs {
+  Runs one scenario through the simulator and appends its audit evidence to a bounded in-memory demo ledger (ring-buffer past 500 entries).
+}

@@ -1,0 +1,30 @@
+meta {
+  name: Step-up challenge
+  type: http
+  seq: 15
+}
+
+post {
+  url: {{baseUrl}}/v1/step-up/challenge
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "identityRef": "nurse.compliant",
+    "integrationId": "{{appIntegrationId}}",
+    "deviceRef": "ipad-ward-01",
+    "actionKey": "order.place"
+  }
+}
+
+docs {
+  Mints an authentication challenge bound to ONE pending action (tenant + identity + integration + device + actionKey). Returns 409 until a credential is enrolled for the identity - no enrolled credential means nothing to sign, fail closed.
+}
+
+script:post-response {
+  if (res.body && res.body.challengeId) {
+    bru.setVar("challengeId", res.body.challengeId);
+  }
+}

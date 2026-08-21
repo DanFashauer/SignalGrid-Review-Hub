@@ -1,0 +1,19 @@
+meta {
+  name: Policy bundle (config down)
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/cp/v1/policy-bundle
+  body: none
+  auth: inherit
+}
+
+params:query {
+  tenant: tenant_northwind
+}
+
+docs {
+  The policy bundle an edge node should run. The tenant query parameter is required - omitting it is a 400.
+}

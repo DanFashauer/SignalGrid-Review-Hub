@@ -30,11 +30,45 @@ exposes raw tokens (`demoApiKeys()` throws off demo mode).
 
 ## Coverage
 
-`health/` (liveness + readiness), `v1/` (keys, context, the three seeded
-evaluate scenarios — compliant, noncompliant, stale — decisions, evidence,
-sessions lifecycle, metrics, policies), and a representative
-`control-plane/` slice (health, tenants, grid coverage, flows health). The
-served-contract audit is `docs/API_CONTRACT_AUDIT.md`. Requests name paths
-verbatim, and `node scripts/check-api-collection.mjs` fails when any
-collection path no longer matches a route registered in
-`artifacts/api-server/src/routes/` — run it whenever either side changes.
+**Every registered route has at least one request, and a gate enforces it in
+both directions.** As of 2026-08-21 that is 77 distinct method+path pairs
+across 83 request files (evaluate carries three scenario variants; four
+requests are deliberate negative tests), with zero declared exceptions.
+
+- `health/` — liveness + readiness probes (no auth).
+- `v1/` — the launch-surface `/v1` routes: keys, context, the three seeded
+  evaluate scenarios (compliant, noncompliant, stale), decisions + evidence,
+  sessions lifecycle, metrics, policies + versions + tests, connectors +
+  sync, audit.
+- `control-plane/` — the original representative `/cp/v1` slice (health,
+  tenants, grid coverage, flows health). Review-demo only, like everything
+  under `review-demo/`.
+- `review-demo/` — every route that exists only under the default
+  `review-demo` profile: the deferred `/v1` routes (reconcile, simulate,
+  resolution, policy authoring, webhooks, remediation, app-workflows, the
+  WebAuthn step-up ceremony), plus `integrations/`, `monitoring/`,
+  `simulator/`, `radar/`, `sim/`, and the remaining 20 `control-plane/`
+  routes. Under `SIGNALGRID_PRODUCT_PROFILE=shared-device-gateway` these
+  paths 404 by design — see `review-demo/README.md`.
+- `negative-tests/` — requests that MUST fail correctly (401 unauthenticated,
+  404 cross-tenant, 400 malformed, 404 behind the GA fence), each asserting
+  its expected status. See `negative-tests/README.md`.
+
+The WebAuthn verify/complete requests send placeholder attestations and meet
+the fail-closed 403 — Bruno cannot perform a native authenticator gesture, and
+the refusal is itself the contract those routes promise. The served-contract
+audit is `docs/API_CONTRACT_AUDIT.md`.
+
+`node scripts/check-api-collection.mjs` is the enforcement: it fails when any
+collection path matches no registered route AND when any registered route in
+`artifacts/api-server/src/routes/` has no request (a route may only opt out
+via the checker's declared-exceptions list — reason + date required, GA
+routes never exceptable, stale exceptions fatal). Run it whenever either side
+changes; `--self-test` proves both directions can fail.
+
+`sources/` is different in kind: standalone Bruno collections for the
+**external lab services** `scripts/run-live-lanes.sh` actually starts (Fleet,
+Traccar, Keycloak, Wazuh). Those are third-party surfaces, not api-server
+routes, so the route gate excludes `sources/` by name and this collection's
+`bruno.json` ignores the folder — open each `sources/<service>/` directly in
+Bruno instead. Scope and credential rules live in `sources/README.md`.

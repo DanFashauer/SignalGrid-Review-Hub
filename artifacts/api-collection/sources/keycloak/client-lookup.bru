@@ -1,0 +1,23 @@
+meta {
+  name: DPoP client lookup (sg-dpop)
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/admin/realms/{{realm}}/clients?clientId=sg-dpop
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{adminToken}}
+}
+
+docs {
+  Mirrors run-live-lanes.sh:266 - the admin-API read the lane uses to find the
+  seeded confidential client. Expect sg-dpop with dpop.bound.access.tokens
+  true and the two hardcoded-claim mappers (tid=master, roles=service). The
+  lane's POSTs that create the client and mappers are mutations and stay in
+  the script, not here.
+}

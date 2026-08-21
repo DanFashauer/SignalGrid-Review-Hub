@@ -1,0 +1,1 @@
+`/cp/v1` control plane — carries no principal (client-supplied `?tenant=` is the only scoping), so the router is only MOUNTED under the `review-demo` profile (`routes/index.ts`); elsewhere these paths do not exist. See `../README.md`.

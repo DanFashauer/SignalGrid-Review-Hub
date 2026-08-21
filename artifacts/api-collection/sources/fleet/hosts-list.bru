@@ -1,0 +1,19 @@
+meta {
+  name: Hosts list
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/fleet/hosts
+  body: none
+  auth: inherit
+}
+
+docs {
+  The read lib/integrations/src/integrations/telemetry/fleetdm.ts:65 and
+  lib/fleet-connector/src/client.ts:83 both consume. After a full lane run,
+  two hosts are enrolled: the real osqueryd agent (sg-osquery) and the
+  synthetic never-answering SG-TEST host that backs the unknown-grading
+  assertions.
+}

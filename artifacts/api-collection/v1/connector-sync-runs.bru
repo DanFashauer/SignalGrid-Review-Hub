@@ -1,0 +1,15 @@
+meta {
+  name: Connector sync runs
+  type: http
+  seq: 17
+}
+
+get {
+  url: {{baseUrl}}/v1/connectors/{{connectorId}}/sync-runs
+  body: none
+  auth: inherit
+}
+
+docs {
+  Sync history for one connector. connectorId defaults to the Northwind Entra/Intune fixture connector in the Local environment.
+}

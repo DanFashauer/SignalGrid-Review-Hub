@@ -1,0 +1,19 @@
+meta {
+  name: API info (liveness)
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/
+  body: none
+  auth: inherit
+}
+
+docs {
+  Liveness + version probe, the equivalent of the wait loop
+  run-live-lanes.sh runs before proofing. Not a path the connector code
+  consumes (the proof reads only authenticate + /agents) - it exists so a
+  reviewer can distinguish "manager down" from "credential wrong" before
+  blaming the evidence read. Returns api_version/revision.
+}

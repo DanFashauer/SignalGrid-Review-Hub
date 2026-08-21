@@ -1,0 +1,26 @@
+meta {
+  name: Complete step-up
+  type: http
+  seq: 16
+}
+
+post {
+  url: {{baseUrl}}/v1/app-workflows/complete-step-up
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "integrationId": "{{appIntegrationId}}",
+    "identityRef": "nurse.compliant",
+    "deviceRef": "ipad-ward-01",
+    "actionKey": "order.place",
+    "challengeId": "{{challengeId}}",
+    "assertion": { "placeholder": "a real WebAuthn authentication assertion belongs here" }
+  }
+}
+
+docs {
+  Releases the ONE action the challenge was minted for, only after the signed assertion cryptographically verifies with user-verification required. As sent from Bruno the placeholder assertion meets the fail-closed 403 with no plan attached - the refusal is the exercisable contract.
+}

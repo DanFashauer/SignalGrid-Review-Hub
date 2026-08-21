@@ -194,6 +194,8 @@ const STEPS = [
   { name: "Action pinning self-test (the gate can actually fail)", cmd: ["node", "scripts/check-action-pinning.mjs", "--self-test"] },
   { name: "Scheduled routines self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-scheduled-routines.mjs", "--self-test"] },
   { name: "Scheduled routines (every always-on lane declared, authorized, scoped, evidenced)", cmd: ["node", "scripts/check-scheduled-routines.mjs"] },
+  { name: "Lab registry self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-lab-registry.mjs", "--self-test"] },
+  { name: "Lab registry (both halves agree; every deployment claim cites evidence on disk)", cmd: ["node", "scripts/check-lab-registry.mjs"] },
   { name: "Org roster (a role nobody has ever run is named on every run)", cmd: ["node", "scripts/check-org-roster.mjs"] },
   { name: "Org roster self-test (the gate can actually fail)", cmd: ["node", "scripts/check-org-roster.mjs", "--self-test"] },
   { name: "Cited commands (a command a document promises must still exist)", cmd: ["node", "scripts/check-cited-commands.mjs"] },

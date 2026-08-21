@@ -1,0 +1,19 @@
+meta {
+  name: Sites
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/cp/v1/sites
+  body: none
+  auth: inherit
+}
+
+params:query {
+  tenant: tenant_northwind
+}
+
+docs {
+  Sites across the seeded tenants. /cp/v1 carries no principal - its ?tenant= query is the only scoping, which is why this router is mounted only under review-demo.
+}

@@ -1,0 +1,18 @@
+meta {
+  name: Devices list
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/devices
+  body: none
+  auth: inherit
+}
+
+docs {
+  Mirrors live-location-proof.ts:155 - the proof lists devices to find (or
+  create, which this collection deliberately does not) its test device.
+  Position ingest happens over the OsmAnd protocol on port 5055, not this
+  REST surface; a curl GET with lat/lon params there is how positions arrive.
+}

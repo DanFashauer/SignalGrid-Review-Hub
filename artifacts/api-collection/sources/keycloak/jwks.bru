@@ -1,0 +1,17 @@
+meta {
+  name: JWKS (signing keys)
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/realms/{{realm}}/protocol/openid-connect/certs
+  body: none
+  auth: none
+}
+
+docs {
+  Mirrors live-keycloak-proof.ts:62 - the key set the proof verifies issued
+  tokens against. Evidence read only: signature verification happens in the
+  proof's own code, never by trusting the transport.
+}

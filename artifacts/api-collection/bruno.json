@@ -4,6 +4,7 @@
   "type": "collection",
   "ignore": [
     "node_modules",
-    ".git"
+    ".git",
+    "sources"
   ]
 }

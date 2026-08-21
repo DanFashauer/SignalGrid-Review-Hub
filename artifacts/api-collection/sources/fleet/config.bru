@@ -1,0 +1,16 @@
+meta {
+  name: Server config
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/fleet/config
+  body: none
+  auth: inherit
+}
+
+docs {
+  Mirrors fleetdm.ts:284 - the connector reads this for server-side capability
+  and version context that grades evidence freshness. Read-only.
+}

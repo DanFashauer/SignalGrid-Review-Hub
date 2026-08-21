@@ -1,0 +1,18 @@
+meta {
+  name: Liveness (healthz)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/healthz
+  body: none
+  auth: none
+}
+
+docs {
+  The probe run-live-lanes.sh waits on before any seeding. No auth. Fleet
+  serves HTTPS with a per-run self-signed cert (SAN: sg-fleet, localhost,
+  127.0.0.1) minted into $HOME/.sg-fleet-lab.XXXXXX - trust that fleet.crt or
+  Bruno will refuse the connection; verification is never disabled in this lab.
+}

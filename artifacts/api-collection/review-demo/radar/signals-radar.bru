@@ -1,0 +1,24 @@
+meta {
+  name: Scan signals (radar)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/signals/radar
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "signals": [
+      { "category": "identity", "sourceReference": "demo-idp" },
+      { "category": "unrecognized-novel-source", "sourceReference": "demo-edge" }
+    ]
+  }
+}
+
+docs {
+  Classifies a batch of incoming signals as evaluated / candidate / novel and raises first-seen alerts for types the core does not yet use.
+}

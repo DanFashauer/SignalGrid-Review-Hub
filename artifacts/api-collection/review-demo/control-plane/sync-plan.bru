@@ -1,0 +1,15 @@
+meta {
+  name: Edge sync plan
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/cp/v1/sync/{{edgeNodeId}}
+  body: none
+  auth: inherit
+}
+
+docs {
+  What one edge node should pull. Unknown node ids are a 404.
+}

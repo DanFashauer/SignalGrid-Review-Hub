@@ -1,0 +1,15 @@
+meta {
+  name: Activate policy version
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/v1/policies/{{policyId}}/versions/{{policyVersionId}}/activate
+  body: none
+  auth: inherit
+}
+
+docs {
+  Promotes a draft to active (the seeded v2 draft by default) and supersedes the current version. Appends an audit event.
+}

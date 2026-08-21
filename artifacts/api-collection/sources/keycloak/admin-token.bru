@@ -1,0 +1,26 @@
+meta {
+  name: Admin token (password grant)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/realms/{{realm}}/protocol/openid-connect/token
+  body: formUrlEncoded
+  auth: none
+}
+
+body:form-urlencoded {
+  client_id: admin-cli
+  grant_type: password
+  username: {{kcAdminUser}}
+  password: {{kcAdminPass}}
+}
+
+docs {
+  Auth bootstrap, not a mutation: the exact admin-cli password grant
+  run-live-lanes.sh:263 performs before seeding. admin/admin is the
+  KC_BOOTSTRAP_ADMIN_USERNAME/PASSWORD container default the lane sets - a
+  documented image bootstrap, not a secret. Copy access_token into the
+  adminToken environment var for the client-lookup request.
+}

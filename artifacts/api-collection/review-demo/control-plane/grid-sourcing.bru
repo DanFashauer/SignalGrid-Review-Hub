@@ -1,0 +1,15 @@
+meta {
+  name: Grid sourcing
+  type: http
+  seq: 16
+}
+
+get {
+  url: {{baseUrl}}/cp/v1/grid/sourcing
+  body: none
+  auth: inherit
+}
+
+docs {
+  How each signal reaches the Grid - vendor-integrated, grid-collected, or a stated gap (never a false 'we have it').
+}

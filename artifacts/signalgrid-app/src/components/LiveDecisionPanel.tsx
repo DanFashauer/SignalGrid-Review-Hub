@@ -20,10 +20,10 @@ const PRESETS: Preset[] = [
 ];
 
 const TONE: Record<V1Outcome, { dot: string; text: string; ring: string; label: string }> = {
-  allow: { dot: "bg-emerald-400", text: "text-emerald-400", ring: "border-emerald-400/40", label: "ALLOW" },
-  step_up: { dot: "bg-amber-400", text: "text-amber-400", ring: "border-amber-400/40", label: "STEP-UP" },
-  restrict: { dot: "bg-orange-400", text: "text-orange-400", ring: "border-orange-400/40", label: "RESTRICT" },
-  deny: { dot: "bg-red-400", text: "text-red-400", ring: "border-red-400/40", label: "DENY" },
+  allow: { dot: "bg-[hsl(var(--decision-allow))]", text: "text-status-allow", ring: "border-[hsl(var(--decision-allow)/0.4)]", label: "ALLOW" },
+  step_up: { dot: "bg-[hsl(var(--decision-review))]", text: "text-status-step-up", ring: "border-[hsl(var(--decision-review)/0.4)]", label: "STEP-UP" },
+  restrict: { dot: "bg-[hsl(var(--decision-deny))]", text: "text-status-restrict", ring: "border-[hsl(var(--decision-deny)/0.4)]", label: "RESTRICT" },
+  deny: { dot: "bg-[hsl(var(--decision-deny))]", text: "text-status-deny", ring: "border-[hsl(var(--decision-deny)/0.4)]", label: "DENY" },
 };
 
 export function LiveDecisionPanel() {

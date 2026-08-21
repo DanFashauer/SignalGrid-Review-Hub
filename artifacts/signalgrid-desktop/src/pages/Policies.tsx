@@ -50,9 +50,9 @@ export default function PoliciesPage() {
                   <span className="text-foreground/70">{r.condition}</span>
                   <span className="text-foreground/40">→</span>
                   <span className={`font-semibold ${
-                    r.outcome === "allow" ? "text-green-400" :
-                    r.outcome === "deny" ? "text-red-400" :
-                    r.outcome === "step-up" ? "text-yellow-400" : "text-orange-400"
+                    r.outcome === "allow" ? "text-status-allow" :
+                    r.outcome === "deny" ? "text-status-deny" :
+                    r.outcome === "step-up" ? "text-status-step-up" : "text-status-restrict"
                   }`}>{r.outcome.toUpperCase()}</span>
                 </div>
               ))}

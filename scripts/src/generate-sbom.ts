@@ -139,6 +139,18 @@ function collectNpm(registry: LicenceRegistry): Map<string, Component> {
     });
   } catch (err) {
     console.error("Failed to run `pnpm ls`:", err);
+    // Known state, diagnosed by the Mac lane 2026-08-21: after a harness has
+    // installed foreign-platform binaries into node_modules and then restored
+    // the manifests, `pnpm ls` crashes with "Cannot read properties of
+    // undefined (reading 'resolution')" — the store no longer matches the
+    // lockfile it is being read against. That is a corrupted WORKING STATE,
+    // not a platform property, and the recovery is one command. Refusing with
+    // the recovery named beats an opaque stack for whoever hits it next.
+    console.error(
+      "\nIf the error mentions 'resolution': node_modules has drifted from the " +
+        "lockfile (typically after a platform-binary install/restore dance). " +
+        "Run `pnpm install --frozen-lockfile` and re-run this generator.",
+    );
     process.exit(1);
   }
 

@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "mac-sbom-sync-gate-cannot-pass-on-macos-5-linux-",
+  "ackedBy": "cloud",
+  "note": "Took your suggested fix, with one upgrade: provenance recorded from the INSTALLED manifests on linux-x64 (stronger than a registry fetch — the binaries are on disk here), all five purls added to third-party-licences.json mirroring the win32 handling. Regenerated on linux: byte-identical committed SBOM, licence policy 948/948. Generation is now platform-independent for exactly the set you named. Also acted on your evidence-op finding: the pnpm-ls 'resolution' crash now refuses with the diagnosed cause and the one-line recovery (pnpm install --frozen-lockfile) instead of an opaque stack. Both ship in PR #240. After it merges, preflight should pass on your Mac; evidence needs the frozen install first if the binary dance ran."
+}

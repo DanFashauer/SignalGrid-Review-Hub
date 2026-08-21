@@ -138,8 +138,13 @@ REQCNF
     WAIT_CACERT="$FLEET_TLS_DIR/fleet.crt"
     if wait_http https://127.0.0.1:8412/healthz 120; then
       started="$started sg-fleet sg-fleet-mysql sg-fleet-redis"
-      CURL="curl -s --cacert $FLEET_TLS_DIR/fleet.crt"
-      $CURL -X POST https://127.0.0.1:8412/api/v1/setup -H 'Content-Type: application/json' -d '{"admin":{"name":"SG","email":"sg@signalgrid.test","password":"SignalGrid!2026x","password_confirmation":"SignalGrid!2026x"},"org_info":{"org_name":"SG"},"server_url":"https://127.0.0.1:8412"}' >/dev/null 2>&1
+      # A FUNCTION, not a scalar command string: a $HOME with whitespace
+      # (custom macOS/CI accounts) reaches FLEET_TLS_DIR, and an unquoted
+      # scalar would word-split the --cacert path — leaving FLEET_TOKEN empty
+      # and the proof skipped while Fleet sat healthy. (Arrays are off the
+      # table on the Mac lane: bash 3.2 under set -u, see CLAUDE.md.)
+      sgcurl() { curl -s --cacert "$FLEET_TLS_DIR/fleet.crt" "$@"; }
+      sgcurl -X POST https://127.0.0.1:8412/api/v1/setup -H 'Content-Type: application/json' -d '{"admin":{"name":"SG","email":"sg@signalgrid.test","password":"SignalGrid!2026x","password_confirmation":"SignalGrid!2026x"},"org_info":{"org_name":"SG"},"server_url":"https://127.0.0.1:8412"}' >/dev/null 2>&1
       export FLEET_URL=https://127.0.0.1:8412
       # The proof is a Node child; this is the explicit-trust path for it.
       # COMBINED with any CA bundle the caller already supplied — clobbering it
@@ -156,17 +161,17 @@ REQCNF
       # EXPORT's status, not the command's, so a failed login would export an empty
       # token and the live lane below would run against fixtures while reporting it
       # ran live. `export` is required — proof:live-fleet is a child process.
-      FLEET_TOKEN=$($CURL -X POST "$FLEET_URL"/api/v1/fleet/login -H 'Content-Type: application/json' -d '{"email":"sg@signalgrid.test","password":"SignalGrid!2026x"}' | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d).token||'')}catch(e){console.log('')}})")
+      FLEET_TOKEN=$(sgcurl -X POST "$FLEET_URL"/api/v1/fleet/login -H 'Content-Type: application/json' -d '{"email":"sg@signalgrid.test","password":"SignalGrid!2026x"}' | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d).token||'')}catch(e){console.log('')}})")
       export FLEET_TOKEN
-      SECRET=$($CURL -H "Authorization: Bearer $FLEET_TOKEN" $FLEET_URL/api/v1/fleet/spec/enroll_secret | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d).spec.secrets[0].secret)}catch(e){console.log('')}})")
+      SECRET=$(sgcurl -H "Authorization: Bearer $FLEET_TOKEN" $FLEET_URL/api/v1/fleet/spec/enroll_secret | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d).spec.secrets[0].secret)}catch(e){console.log('')}})")
       # A darwin-platform policy the LINUX agent below will never answer and the
       # synthetic host cannot answer: the fail-closed assertions ("an unreported
       # policy grades unknown") need at least one never-answered policy alive at
       # proof time, per the re-run note in docs/FLEET_LIVE_INTEGRATION.md.
-      $CURL -X POST $FLEET_URL/api/v1/fleet/global/policies -H "Authorization: Bearer $FLEET_TOKEN" -H 'Content-Type: application/json' -d '{"name":"Disk encryption","query":"SELECT 1;","platform":"darwin"}' >/dev/null 2>&1
+      sgcurl -X POST $FLEET_URL/api/v1/fleet/global/policies -H "Authorization: Bearer $FLEET_TOKEN" -H 'Content-Type: application/json' -d '{"name":"Disk encryption","query":"SELECT 1;","platform":"darwin"}' >/dev/null 2>&1
       # The SYNTHETIC host stays: it is the host that never answers anything,
       # which the unknown-grading and non_compliant-hold assertions are about.
-      $CURL -X POST $FLEET_URL/api/v1/osquery/enroll -H 'Content-Type: application/json' -d "{\"enroll_secret\":\"$SECRET\",\"host_identifier\":\"SG-TEST\",\"host_details\":{\"system_info\":{\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"hostname\":\"sg\",\"hardware_serial\":\"SGTEST\"},\"os_version\":{\"name\":\"macOS\",\"platform\":\"darwin\"}}}" >/dev/null 2>&1
+      sgcurl -X POST $FLEET_URL/api/v1/osquery/enroll -H 'Content-Type: application/json' -d "{\"enroll_secret\":\"$SECRET\",\"host_identifier\":\"SG-TEST\",\"host_details\":{\"system_info\":{\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"hostname\":\"sg\",\"hardware_serial\":\"SGTEST\"},\"os_version\":{\"name\":\"macOS\",\"platform\":\"darwin\"}}}" >/dev/null 2>&1
       # The REAL agent: a live osqueryd polling /distributed/read is the only
       # thing that can ever answer a live-query campaign — the collector
       # assertions (2026-08-17) require exactly that, and a synthetic curl
@@ -198,7 +203,7 @@ REQCNF
       # before its first /distributed/read poll would time out legitimately.
       printf '   waiting for the live agent to enroll'
       for _ in $(seq 1 60); do
-        AGENT_HOSTS=$($CURL -H "Authorization: Bearer $FLEET_TOKEN" "$FLEET_URL/api/v1/fleet/hosts" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log((JSON.parse(d).hosts||[]).length)}catch(e){console.log(0)}})")
+        AGENT_HOSTS=$(sgcurl -H "Authorization: Bearer $FLEET_TOKEN" "$FLEET_URL/api/v1/fleet/hosts" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log((JSON.parse(d).hosts||[]).length)}catch(e){console.log(0)}})")
         [ "${AGENT_HOSTS:-0}" -ge 2 ] && break
         printf '.'; sleep 2
       done

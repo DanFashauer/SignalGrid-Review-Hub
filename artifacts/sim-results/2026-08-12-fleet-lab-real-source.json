@@ -1,44 +1,48 @@
 {
   "schemaVersion": 1,
   "requestId": "2026-08-12-fleet-lab-real-source",
-  "completedAt": "2026-08-21T00:48:32.978Z",
+  "completedAt": "2026-08-21T02:51:16.348Z",
   "provenance": {
     "platform": "darwin",
     "arch": "arm64",
     "nodeVersion": "v24.18.0",
     "macosVersion": "26.6",
-    "commit": "44a00ddfa7e02385b6c0c18129173aad6e708a8b",
+    "commit": "e3a5282bfab68dc2a4185f6c714056494174052b",
     "branch": "SignalGrid_Alpha",
     "workingTreeClean": true
   },
   "runs": [
     {
       "operation": "live-lanes",
-      "status": "failed",
-      "exitCode": 1,
-      "durationMs": 86548,
+      "status": "refused_missing_prerequisite",
+      "detail": "the command reported SKIPPED lanes: nothing failed, but something did not run",
+      "exitCode": 3,
+      "durationMs": 57231,
       "tail": [
         "== SignalGrid live-vendor lanes ==",
-        "-- bringing up Fleet (mysql + redis + fleet, amd64 under emulation)",
+        "-- bringing up Fleet (mysql + redis + fleet + osqueryd, amd64 under emulation)",
         "   fleet image: docker.io/fleetdm/fleet:v4.89.2",
-        "  \u001b[31mFAIL\u001b[0m  proof:live-fleet  (log: /tmp/live_fleet.log)",
+        "   osquery image: docker.io/osquery/osquery:5.17.0-ubuntu24.04",
+        "   waiting for the live agent to enroll. (2 hosts enrolled)",
+        "  \u001b[32mPASS\u001b[0m  proof:live-fleet",
         "-- bringing up Traccar",
         "  \u001b[32mPASS\u001b[0m  proof:live-location",
         "-- bringing up Keycloak (DPoP feature)",
         "  \u001b[32mPASS\u001b[0m  proof:live-keycloak",
         "  \u001b[33mSKIP\u001b[0m  proof:live-edr  (needs WAZUH_URL — a ~2GB image and minutes of boot, so this script never starts it for you)",
         "",
-        "-- removing containers this run started: sg-fleet sg-fleet-mysql sg-fleet-redis sg-traccar sg-keycloak",
+        "-- removing containers this run started: sg-fleet sg-fleet-mysql sg-fleet-redis sg-osquery sg-traccar sg-keycloak",
         "",
-        "== LIVE LANES: 2 passed, 1 failed, 1 skipped ==",
-        "   failed: proof:live-fleet"
+        "== LIVE LANES: 3 passed, 0 failed, 1 skipped ==",
+        "   skipped (NOT verified by this run): proof:live-edr",
+        "✅ Nothing failed — but a skipped lane proved nothing."
       ]
     },
     {
       "operation": "docker",
       "status": "passed",
       "exitCode": 0,
-      "durationMs": 14869,
+      "durationMs": 14676,
       "tail": [
         "Container verification — the real deployment topology, against a real database",
         "",

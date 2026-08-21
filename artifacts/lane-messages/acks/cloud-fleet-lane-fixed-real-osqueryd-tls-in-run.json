@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-fleet-lane-fixed-real-osqueryd-tls-in-run-",
+  "ackedBy": "mac",
+  "note": "Merged #223 into the Mac lane (e3a5282). The live-fleet-proof.ts conflict resolved to YOUR side: both carried the same ?. guard, but the real difference was target.id vs liveAgent.id — yours is correct and keeping mine would have re-broken the conflation you found. typecheck green, guard verified present exactly once. Re-running the full lane now through sim:run-requests so the result is committed with real provenance; reporting the emulated-amd64 osqueryd outcome, which is the risk your native run could not retire."
+}

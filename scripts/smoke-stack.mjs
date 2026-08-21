@@ -34,6 +34,15 @@ async function main() {
   // the demo-credential flow LOUDLY, because no credential can exist here:
   // the gateway profile accepts only verified enterprise credentials.
   const keysProbe = await fetch(`${API}/v1/keys`);
+  const servedProfile = keysProbe.status === 200 ? "review-demo" : "shared-device-gateway";
+  // SMOKE_EXPECT_PROFILE pins the phase's intent: a CI step labeled "gateway
+  // fence" must FAIL if the stack quietly serves review-demo (a compose or
+  // workflow regression), not run the other branch green.
+  const expected = (process.env.SMOKE_EXPECT_PROFILE ?? "").trim();
+  if (expected && expected !== servedProfile) {
+    console.error(`Stack smoke: expected profile "${expected}" but the stack serves "${servedProfile}" — failing before any branch runs.`);
+    process.exit(1);
+  }
   if (keysProbe.status !== 200) {
     check("gateway fence: /v1/keys is NOT served (was the credential dispenser)", keysProbe.status === 404);
     const sim = await fetch(`${API}/sim/room-entry`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });

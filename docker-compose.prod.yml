@@ -42,6 +42,17 @@ services:
       # docker compose up …), because the demo surfaces are the point of an
       # evaluation — but the DEFAULT is the production truth.
       SIGNALGRID_PRODUCT_PROFILE: ${SIGNALGRID_PRODUCT_PROFILE:-shared-device-gateway}
+      # The gateway profile accepts only verified enterprise credentials, so a
+      # usable gateway stack NEEDS these passed through — without them every
+      # caller is 401 and the API is a fence around nothing. Empty stays unset
+      # server-side (the reader trims and treats blank as unconfigured).
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
+      OIDC_JWKS_URI: ${OIDC_JWKS_URI:-}
+      OIDC_TENANT_CLAIM: ${OIDC_TENANT_CLAIM:-}
+      OIDC_ROLE_CLAIM: ${OIDC_ROLE_CLAIM:-}
+      SIGNALGRID_ENROLLMENT_SECRET: ${SIGNALGRID_ENROLLMENT_SECRET:-}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
       # Enabling durable persistence: with DATABASE_URL set, the audit ledger,
       # decision/evidence store, and session store persist to Postgres.
       #

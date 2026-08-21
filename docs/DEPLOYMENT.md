@@ -42,6 +42,8 @@ in-memory (the fixture-safe default used by the public build and CI).
 | `METRICS_TOKEN` | Set ⇒ `/metrics` requires this bearer. | unset (open on the internal port) |
 | `NODE_ENV` | Standard Node environment switch; the compose file sets `production`. | unset |
 | `SIGNALGRID_DEPRECATED_ROUTES` | Comma-separated route ids to serve with a `Deprecation` header during a migration window. | unset |
+| `SIGNALGRID_V1_RATE_LIMIT` | Requests/min/bearer on `/v1`. Malformed values fall back — never to "unlimited". | `240` |
+| `SIGNALGRID_GLOBAL_RATE_LIMIT` | Requests/min/IP across the server. | `600` |
 | `OIDC_TENANT_MAP` / `OIDC_ROLE_MAP` | JSON maps: IdP value → internal tenant id / role. | unset |
 | `GRAPH_ACCESS_TOKEN` | Read-only Microsoft Graph token for the posture connector. | unset (fixture mode) |
 | `CARRIER_ACCESS_TOKEN` | Read-only carrier/IoT-connectivity token for the reachability connector. | unset (fixture mode) |
@@ -214,8 +216,17 @@ see `docs/BACKUP_AND_RESTORE.md` § "The runtime role"). The sequence is:
    `psql "$ADMIN_DATABASE_URL" -c '\password signalgrid_runtime'` (prompts;
    never inline a password into a command).
 3. **Boot the API as the runtime role** — point the API's `DATABASE_URL` at
-   `signalgrid_runtime`. The stores verify their exact privileges at boot and
-   on every `/readyz`, and refuse to report ready for work that would fail.
+   `signalgrid_runtime`. Store initialization is LAZY: the process starts and
+   `/healthz` goes green before any database work happens, so a wrong runtime
+   password or missing grant is not a boot failure. The stores verify their
+   exact privileges on first use and on every `/readyz`.
+4. **Verify readiness before taking traffic** — `curl -sf
+   http://localhost:8080/api/readyz`. This is the call that exercises the
+   database with the runtime credential and its privilege probes (including
+   the forbidden direction on the ledger); a 503 here names the remedy.
+   `/healthz` is liveness only and must stay database-free — wiring readiness
+   into the compose healthcheck would restart-loop a working process through
+   any database blip.
 
 `pnpm run db:migrate` is also the repair command: on an already-current
 database it re-applies the idempotent role split, so a dropped grant is fixed

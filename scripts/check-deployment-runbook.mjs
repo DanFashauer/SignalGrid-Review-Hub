@@ -28,6 +28,14 @@ export function collectBootEnvVars(root = SRC) {
     for (const m of src.matchAll(/process\.env(?:\.([A-Z_]{3,})|\[\s*"([A-Z_]{3,})"\s*\])/g)) {
       vars.add(m[1] ?? m[2]);
     }
+    // Helper-mediated reads: limitFromEnv("SIGNALGRID_V1_RATE_LIMIT", …) reads
+    // process.env[name] through a parameter, invisible to the literal pattern
+    // above — which is exactly how the two rate-limit knobs escaped the first
+    // version of this gate. Any *env*-named call taking an ALL_CAPS literal
+    // first argument counts as a boot-read.
+    for (const m of src.matchAll(/\w*[Ee]nv\w*\(\s*"([A-Z][A-Z0-9_]{2,})"/g)) {
+      vars.add(m[1]);
+    }
   }
   return vars;
 }

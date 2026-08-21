@@ -929,6 +929,7 @@ jobs:
       - name: Smoke-test the running stack
         env:
           BASE_URL: http://localhost:8080
+          SMOKE_EXPECT_PROFILE: review-demo
         run: node scripts/smoke-stack.mjs
 
       # Phase 2: the PRODUCTION default (shared-device-gateway) on the SAME
@@ -946,6 +947,7 @@ jobs:
       - name: Smoke-test the gateway fence
         env:
           BASE_URL: http://localhost:8080
+          SMOKE_EXPECT_PROFILE: shared-device-gateway
         run: node scripts/smoke-stack.mjs
 
       - name: Stack logs (on failure)

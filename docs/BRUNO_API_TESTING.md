@@ -27,6 +27,14 @@ contract and the code move together or the gate fails.
   design.
 - **`negative-tests/`** — requests that MUST fail correctly, each asserting
   its exact expected status. See below.
+- **`adversarial-trust/`** — the "no unearned affirmative" folder: unknown
+  refs 404, cross-tenant refs indistinguishable from nonexistent, missing
+  posture restricts, stale steps up, contradictory custody denies as tamper,
+  malformed context is discarded, and the idempotency replay pair proves the
+  body is part of the key. Every expected verdict was derived by probing the
+  running server before being pinned; the folder README carries the full
+  attack table and the declared out-of-scope line (off-clock lives on the
+  deferred app-workflows surface).
 - **`artifacts/lab-collections/`** (a sibling root, NOT inside this
   collection) — standalone Bruno collections for the **external lab services**
   `scripts/run-live-lanes.sh` actually starts (Fleet, Traccar, Keycloak,

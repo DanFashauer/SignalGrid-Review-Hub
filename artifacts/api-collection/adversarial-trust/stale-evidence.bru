@@ -1,0 +1,34 @@
+meta {
+  name: Stale evidence steps up
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/v1/decisions/evaluate
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "identityRef": "nurse.stale",
+    "deviceRef": "ipad-ward-03",
+    "workflowKey": "clinical-session"
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("evidence past its freshness window earns step_up, not a remembered allow", function () {
+    expect(res.body.decision.outcome).to.equal("step_up");
+    expect(res.body.decision.reasonCodes).to.include("POSTURE_STALE");
+  });
+}
+
+docs {
+  Freshness is part of the verdict: yesterday's compliance is today's step-up.
+}

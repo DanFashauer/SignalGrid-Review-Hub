@@ -1,0 +1,35 @@
+meta {
+  name: Forced badge removal denies as tamper
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/v1/decisions/evaluate
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "identityRef": "nurse.badge_forced",
+    "deviceRef": "ipad-badge-02",
+    "workflowKey": "clinical-session"
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("contradictory custody evidence (forced removal) is a tamper deny", function () {
+    expect(res.body.decision.outcome).to.equal("deny");
+    expect(res.body.decision.reasonCodes).to.include("TAMPER_SUSPECTED");
+    expect(res.body.decision.reasonCodes).to.include("BADGE_FORCED_REMOVAL");
+  });
+}
+
+docs {
+  The identity-device binding contradicting itself (a badge that left by force) is the strongest tightening in the folder: deny, named twice.
+}

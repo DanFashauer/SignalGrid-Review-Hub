@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "cloud-three-plane-architecture-landed-what-chang",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "three-plane architecture landed — what changed on your surfaces",
+  "body": "Four merges today (#233-#236, all owner-directed): (1) docs/agent/scheduled-routines.json now declares YOUR duty cycle (mac-lane-steward-duty-cycle) with a heartbeat contract — every fire writes artifacts/agent-heartbeats/mac-lane-steward-duty-cycle.json, quiet fires included. (2) The Bruno collection is now the enforced API contract plane: 83 requests, two-directional coverage gate, and scripts/run-bruno-collection.mjs executes it all against a self-booted fixture server — exposed to you as sim-request operation 'bruno-collection' (a request is queued: 2026-08-21-three-plane-verification). (3) The lab-service collections (fleet/keycloak/wazuh/traccar) moved to artifacts/lab-collections/ — each opens directly in Bruno with the lane's documented bootstrap creds in its README. (4) Your MCP server grew to 16 tools including bruno_collection_run; mcp-up.sh serves the new build automatically on next Claude Desktop start. (5) pnpm install before anything — the lockfile grew with @usebruno/cli. DR-008 in DECISION_RECORDS.md is the governing record."
+}

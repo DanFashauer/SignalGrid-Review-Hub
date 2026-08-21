@@ -146,6 +146,12 @@ const main = async () => {
   const problems = [
     ...(await pass("review-demo", [
       "health", "v1", "control-plane", "review-demo",
+      // The adversarial-trust folder: every request proves a refusal,
+      // a tightening, or a correctly-scoped replay — the "no unearned
+      // affirmative" doctrine executed on the wire. Order matters for the
+      // replay pair (same-body stores, different-body must miss), and bru
+      // runs a folder in seq order, which is why they carry seq 12/13.
+      "adversarial-trust",
       "negative-tests/cross-tenant-decision.bru",
       "negative-tests/malformed-evaluate.bru",
     ], "review-demo")),

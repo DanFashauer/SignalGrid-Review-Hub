@@ -1,0 +1,34 @@
+meta {
+  name: Missing posture source restricts
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/v1/decisions/evaluate
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "identityRef": "nurse.nosync",
+    "deviceRef": "ipad-ward-05",
+    "workflowKey": "clinical-session"
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("a device whose management source never reported is restricted, not defaulted healthy", function () {
+    expect(res.body.decision.outcome).to.equal("restrict");
+    expect(res.body.decision.reasonCodes).to.include("POSTURE_MISSING");
+  });
+}
+
+docs {
+  The report's first adversarial case: no posture signal at all. The engine answers restrict with POSTURE_MISSING - absence raises assurance, never lowers it.
+}

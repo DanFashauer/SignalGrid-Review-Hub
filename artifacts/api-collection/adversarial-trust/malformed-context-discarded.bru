@@ -1,0 +1,35 @@
+meta {
+  name: Malformed request context is discarded, never trusted
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/v1/decisions/evaluate
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "identityRef": "nurse.compliant",
+    "deviceRef": "ipad-ward-01",
+    "workflowKey": "clinical-session",
+    "requestContext": { "requestedAt": "not-a-timestamp", "zone": "icu", "madeUpField": true }
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("garbage context neither crashes nor changes the verdict the evidence earned", function () {
+    expect(res.body.decision.outcome).to.equal("allow");
+    expect(res.body.decision.reasonCodes).to.include("TRUST_ESTABLISHED");
+  });
+}
+
+docs {
+  requestContext is sanitized to a whitelist: a malformed timestamp or invented field is dropped before the engine sees it. The pinned property is that garbage context cannot ESCALATE anything - the verdict matches the evidence-only baseline (see Evaluate - compliant device).
+}

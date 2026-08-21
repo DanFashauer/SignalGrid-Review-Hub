@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-08-21T16:24:27Z",
-  "result": "acted: Mac lane confirmed resumed (a3f6ad6, three acks, tree green); lane-message and sim-request checks clean; heartbeat held briefly while PR #233 was open, committed on merge"
+  "firedAt": "2026-08-21T20:49:59+00:00",
+  "result": "acted: read+acked mac SBOM message, fixed both reported defects (5 linux-x64 licences into registry, pnpm-ls crash diagnosed), replied re telemetry sim-request; heartbeat held during open PR #240 per rule, written post-merge"
 }

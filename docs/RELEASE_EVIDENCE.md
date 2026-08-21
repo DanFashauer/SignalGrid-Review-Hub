@@ -35,24 +35,24 @@ evidence           Split deliberately in two:
                    frozen claim: the database build date rides with every
                    result.
   ↓
-signature          NOT BUILT — deliberately. Cosign is the chosen tool
-(deferred)         (registry row, Apache-2.0), but the first signature
-                   requires the KEY-CUSTODY decision, which is the owner's:
-                     a) keyless (Sigstore OIDC via the CI identity) — no
-                        key to lose, trust rooted in the repository's CI
-                        identity and a public transparency log;
-                     b) a held key pair — owner-custodied private key,
-                        no third-party log dependency.
-                   Recommendation on file: (a) keyless, because a solo
-                   founder holding a signing key is a single point of loss
-                   and the transparency log is an assessor-legible answer.
-                   Recorded as an owner-hands item in
-                   docs/COMPANY_BUILD_PLAN.md; no signing until ratified
-                   in a decision record.
+signature          BUILT — custody RATIFIED as keyless Sigstore OIDC via
+                   the CI identity (DR-009, owner-directed 2026-08-21).
+                   Cosign v3.1.3 (sha256-pinned) signs the evidence blobs
+                   with `sign-blob --yes` on PUSH events only — a pull
+                   request, fork context included, must never mint
+                   signatures under the repository's identity. Every
+                   signature lands in the public Rekor transparency log;
+                   the .sigstore.json bundles travel with the CI
+                   artifacts. NOT yet signed: a registry image by digest —
+                   that arrives when an image registry exists to push to.
+                   The held-key option stays written down in DR-009's
+                   reversal clause (air-gapped verification is the real
+                   scenario that would revive it).
 ```
 
-What this page does NOT claim: no signature exists today, no attestation
-exists today, and the vulnerability evidence covers the api image only —
+What this page does NOT claim: no attestation (in-toto predicate) exists
+yet, no registry image is signed yet, and the vulnerability evidence
+covers the api image only —
 the web images and native binaries are not yet scanned (extend the same
 job when they matter). The pinned tool versions and checksums live in the
 workflow files themselves, next to their use, so a bump is a reviewable

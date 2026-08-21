@@ -1,0 +1,15 @@
+meta {
+  name: Users - identity enablement read
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/users?$select=id,userPrincipalName,accountEnabled
+  body: none
+  auth: inherit
+}
+
+docs {
+  The identity half of the launch transport (posture-connector.ts:85): id, principal name, and accountEnabled only - the $select is the privacy posture, requesting nothing the engine does not consume. Requires User.Read.All (application).
+}

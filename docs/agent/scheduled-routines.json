@@ -1,6 +1,6 @@
 {
-  "$comment": "The committed registry of ALWAYS-ON agent routines (role-lens review, ai-ops next-work). Every recurring scheduled lane is declared here with its cadence, the human who authorized it, what it may write, where it stops and escalates, and where its firing evidence lands. scripts/check-scheduled-routines.mjs holds this file against the heartbeat artifacts and the org roster; its header states honestly that it gates the DECLARATION and the EVIDENCE OF FIRING — it cannot read the live account scheduler. Transcribed FROM the live scheduler (list_triggers) on 2026-08-21, not from memory. One-shot self-reminders (send_later check-ins) are deliberately out of scope: they are ephemeral work-pacing, not standing lanes.",
-  "transcribedFrom": "live scheduler, 2026-08-21",
+  "$comment": "The committed registry of ALWAYS-ON agent routines (role-lens review, ai-ops next-work). Every recurring scheduled lane is declared here with its cadence, the human who authorized it, what it may write, where it stops and escalates, and where its firing evidence lands. scripts/check-scheduled-routines.mjs holds this file against the heartbeat artifacts and the org roster; its header states honestly that it gates the DECLARATION and the EVIDENCE OF FIRING \u2014 it cannot read the live account scheduler. Transcribed FROM the live scheduler (list_triggers) on 2026-08-21, not from memory. One-shot self-reminders (send_later check-ins) are deliberately out of scope: they are ephemeral work-pacing, not standing lanes.",
+  "transcribedFrom": "live scheduler, 2026-08-21 (re-transcribed same day on adding cloud-lane-hygiene-sweep)",
   "routines": [
     {
       "id": "mac-lane-steward-duty-cycle",
@@ -9,7 +9,7 @@
       "binding": "self-session (resumes the operating session)",
       "authorizedBy": "Dan Fashauer (owner)",
       "authorizedOn": "2026-08-21",
-      "authorizationEvidence": "owner message in-session: 'Can you have an employee monitor and administrator for the Mac lane please' — the role was created in direct response, same day",
+      "authorizationEvidence": "owner message in-session: 'Can you have an employee monitor and administrator for the Mac lane please' \u2014 the role was created in direct response, same day",
       "writeScope": "artifacts/lane-messages/** and artifacts/agent-heartbeats/mac-lane-steward-duty-cycle.json only, committed and pushed to the working branch",
       "escalationBoundary": "escalates to the owner ONLY what only the owner can clear (credentials, Mac-side actions); a quiet cycle produces no owner message",
       "heartbeatPath": "artifacts/agent-heartbeats/mac-lane-steward-duty-cycle.json",
@@ -36,11 +36,24 @@
       "authorizedBy": "Dan Fashauer (owner)",
       "authorizedOn": "2026-07-15",
       "authorizationEvidence": "created from the owner's account when the nightly backlog agent was commissioned; creation date is the trigger's created_at",
-      "writeScope": "claude/build-agent-* branches ONLY — one bounded backlog item per run, pushed for the owner to review; never merges, never writes the mainline",
+      "writeScope": "claude/build-agent-* branches ONLY \u2014 one bounded backlog item per run, pushed for the owner to review; never merges, never writes the mainline",
       "escalationBoundary": "anything ambiguous or refactor-sized: push nothing, leave the item; reports the compare link and stops",
       "heartbeatPath": null,
-      "heartbeatPathReason": "its write scope is claude/build-agent-* branches only — a mainline heartbeat commit would WIDEN that scope, which is worse than the gap it fills. Firing evidence is the pushed branch (or the run's completion notification when no item was actionable). A declared null-with-reason is coherent; a silent absence is not.",
+      "heartbeatPathReason": "its write scope is claude/build-agent-* branches only \u2014 a mainline heartbeat commit would WIDEN that scope, which is worse than the gap it fills. Firing evidence is the pushed branch (or the run's completion notification when no item was actionable). A declared null-with-reason is coherent; a silent absence is not.",
       "cadenceToleranceHours": null
+    },
+    {
+      "id": "cloud-lane-hygiene-sweep",
+      "trigger": "trig_01V3PJFfpNNBdxddnqJg2SAj",
+      "cron": "40 9 * * *",
+      "binding": "self-session (resumes the operating session)",
+      "authorizedBy": "Dan Fashauer (owner)",
+      "authorizedOn": "2026-08-21",
+      "authorizationEvidence": "owner message in-session: 'clean up anything you need for space and also make this a routine check' \u2014 created in direct response, same day; the docker-cache removal it performs was explicitly authorized in the same message",
+      "writeScope": "the session scratchpad, dead container/package caches on the cloud machine (never the repo tree), and artifacts/agent-heartbeats/cloud-lane-hygiene-sweep.json",
+      "escalationBoundary": "escalates to the owner ONLY if free space stays under 1GB after every cleanup step (environment-level fix); a quiet sweep produces no owner message",
+      "heartbeatPath": "artifacts/agent-heartbeats/cloud-lane-hygiene-sweep.json",
+      "cadenceToleranceHours": 50
     }
   ]
 }

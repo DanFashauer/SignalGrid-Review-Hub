@@ -13,13 +13,14 @@ artifacts under `artifacts/agent-heartbeats/`); it cannot read the live
 account scheduler. The registry records the date it was last transcribed
 from the live scheduler; re-transcription is a deliberate act.
 
-## The three standing lanes
+## The four standing lanes
 
 | Routine | Cadence | Authorized by | Writes | Stops and escalates when |
 | --- | --- | --- | --- | --- |
 | `mac-lane-steward-duty-cycle` | every 4 hours | the owner, 2026-08-21, by direct request in-session | `artifacts/lane-messages/**` + its heartbeat | only what only the owner can clear (credentials, Mac-side actions) |
 | `live-sync-loop-keeper` | daily 13:00 UTC | the owner, 2026-07-27 (owner-directed live-sync build) | the sync manifest, its notice marker, its heartbeat | live evidence stale >3 days and not recently notified; anything large is flagged, not fixed |
 | `nightly-build-agent` | daily 14:00 UTC | the owner, 2026-07-15 | `claude/build-agent-*` branches ONLY — never merges, never the mainline | anything ambiguous or refactor-sized: pushes nothing |
+| `cloud-lane-hygiene-sweep` | daily 09:40 UTC | the owner, 2026-08-21, by direct request in-session | scratchpad + dead caches on the cloud machine (never the repo tree) + its heartbeat | free space under 1GB after every cleanup step — an environment-level fix only the owner can approve |
 
 ## Heartbeats — "ran and did nothing" must differ from "never ran"
 

@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "Production target - Microsoft Graph (launch subset)",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}

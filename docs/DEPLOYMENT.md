@@ -47,7 +47,7 @@ in-memory (the fixture-safe default used by the public build and CI).
 | `OIDC_TENANT_MAP` / `OIDC_ROLE_MAP` | JSON maps: IdP value → internal tenant id / role. **Required** once OIDC is on — without both, the config is invalid and every request is 401. | unset |
 | `OIDC_SUBJECT_CLAIM` | Claim used as the caller's subject id. | `sub` |
 | `OIDC_CLOCK_TOLERANCE_SEC` | Allowed clock skew when validating token times. | `60` |
-| `REDIS_URL` | Set ⇒ the connector stores (ITSM/UEM/NAC/telemetry/webhooks) persist to Redis instead of in-memory. | unset (in-memory) |
+| `REDIS_URL` | Set ⇒ WebAuthn step-up session state persists to Redis instead of in-memory. That is the ONLY Redis-backed state in this deployment: the connector/webhook routes run the in-process core, and the `@workspace/integrations` Redis stores are not part of the served API. | unset (in-memory) |
 | `STEPUP_TTL_SECONDS` | Step-up session time-to-live. | `300` |
 | `WEBAUTHN_RP_ID` / `WEBAUTHN_RP_NAME` / `WEBAUTHN_ORIGIN` | WebAuthn relying-party identity for step-up ceremonies; must match the origin the operator console is served from. | `localhost` / dev defaults |
 | `WEBAUTHN_REQUIRE_STEP_UP_FOR_ADMIN` | Set ⇒ admin actions demand a fresh WebAuthn step-up. | unset |
@@ -223,23 +223,31 @@ see `docs/BACKUP_AND_RESTORE.md` § "The runtime role"). The sequence is:
 
    **Against the bundled two-service stack**, the database is deliberately
    unpublished and the api image carries no migration source, so use the
-   migration overlay to reach it from a repo checkout:
+   migration overlay to reach it from a repo checkout. Export the admin URL
+   once — step 2 below reads the same variable:
 
    ```bash
    docker compose -f docker-compose.prod.yml -f docker-compose.migrate.yml up -d db
-   DATABASE_URL=postgres://sg:sg@127.0.0.1:55432/signalgrid pnpm run db:migrate
+   export ADMIN_DATABASE_URL=postgres://sg:sg@127.0.0.1:55432/signalgrid
+   DATABASE_URL="$ADMIN_DATABASE_URL" pnpm run db:migrate
    ```
 
-   The overlay publishes Postgres on the loopback only; after migrating,
-   `docker compose -f docker-compose.prod.yml up -d db` re-creates it
-   unpublished. (The CI deploy-stack job runs exactly this sequence.)
+   The overlay publishes Postgres on the loopback only. Keep it active
+   through step 2 (the password command uses the same loopback URL); after
+   both steps, `docker compose -f docker-compose.prod.yml up -d db`
+   re-creates the db unpublished. (The CI deploy-stack job runs exactly
+   this sequence.)
 2. **Set the runtime password out of band** —
    `psql "$ADMIN_DATABASE_URL" -c '\password signalgrid_runtime'` (prompts;
    never inline a password into a command).
 3. **Boot the API as the runtime role** — export `DATABASE_URL` pointing at
-   `signalgrid_runtime` before `docker compose up`; the compose file
-   interpolates it (`${DATABASE_URL:-…}`), falling back to the zero-step
-   owner URL only when unset. Store initialization is LAZY: the process starts and
+   `signalgrid_runtime` before
+   `docker compose -f docker-compose.prod.yml up -d` (name the file: a bare
+   `docker compose up` selects `docker-compose.yml`, which passes neither
+   the profile nor `DATABASE_URL` — the exported credential is discarded
+   and the stack serves review-demo). The prod compose file interpolates it
+   (`${DATABASE_URL:-…}`), falling back to the zero-step owner URL only
+   when unset. Store initialization is LAZY: the process starts and
    `/healthz` goes green before any database work happens, so a wrong runtime
    password or missing grant is not a boot failure. The stores verify their
    exact privileges on first use and on every `/readyz`.

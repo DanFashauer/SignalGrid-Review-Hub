@@ -1,3 +1,9 @@
+-- NON-AUTHORITATIVE. This file is NOT executed by anything: the schema
+-- authority is lib/persistence/src/migrations.ts (run via `pnpm run
+-- db:migrate`), which also applies migration v2 — the signalgrid_runtime
+-- role split — that this file does not contain. Kept as a readable
+-- reference only; a deployment provisioned from this file alone would be
+-- missing the role split entirely.
 -- Audit ledger — durable, tamper-evident decision record.
 -- Applied automatically by PostgresAuditBackend on first connect (CREATE TABLE
 -- IF NOT EXISTS); kept here as the canonical schema for real deployments and

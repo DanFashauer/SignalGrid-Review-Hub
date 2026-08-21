@@ -79,6 +79,12 @@ COPY --from=builder /app/artifacts/api-server/dist/ ./artifacts/api-server/dist/
 # CI=true so pnpm never prompts to purge a modules dir (non-interactive build).
 RUN CI=true pnpm install --frozen-lockfile --prod
 
+# Non-root, per the platform operability pass: the server needs no write
+# access outside /tmp, and a root process in a compromised container is the
+# difference between a bad day and a very bad day. The deploy-stack CI job
+# asserts id -u != 0 on the running container.
+RUN chown -R node:node /app
+USER node
 WORKDIR /app/artifacts/api-server
 
 ENV NODE_ENV=production

@@ -1,6 +1,11 @@
+-- NON-AUTHORITATIVE. This file is NOT executed by anything: the schema
+-- authority is lib/persistence/src/migrations.ts (run via `pnpm run
+-- db:migrate`), which also applies migration v2 — the signalgrid_runtime
+-- role split — that this file does not contain. Kept as a readable
+-- reference only; a deployment provisioned from this file alone would be
+-- missing the role split entirely.
 -- Durable decision + evidence store for production deployments.
--- Auto-created by PostgresDecisionStore on first connect; kept here as the
--- canonical schema for migration tooling. Every row is tenant-scoped and single
+-- Auto-created by the store on first connect when the credential may DDL. Every row is tenant-scoped and single
 -- reads are keyed on (id, tenant_id) so cross-tenant access is structurally denied.
 
 CREATE TABLE IF NOT EXISTS decisions (

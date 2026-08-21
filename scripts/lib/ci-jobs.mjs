@@ -41,6 +41,10 @@ import { fileURLToPath } from "node:url";
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const workflowDir = join(repoRoot, ".github", "workflows");
 
+// `scheduled-verification.yml:mutation-sweep` (added 2026-08-21) is likewise
+// deliberately NOT classified: preflight does not run the 40-minute sweep and
+// must keep printing it as uncovered — that footer line IS the honest cadence
+// statement. The daily cron runs it; a survivor opens the tracking issue.
 // `review-hub-ci.yml:breadth` (the verify:breadth lane, added 2026-08-11) is
 // deliberately NOT classified here. It is a real gate, but preflight does not
 // run it — that is the whole point of the lane — so it must keep appearing in

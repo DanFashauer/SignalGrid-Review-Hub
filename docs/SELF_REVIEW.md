@@ -141,8 +141,11 @@ because a reviewer thought to try mutation testing. That is not a control; it is
 good habits.
 
 The guard mutates each condition in a registered file, runs that proof under a timeout,
-and fails on any survivor. Current sweep: **500 mutations, 460 killed, 40 documented-inert,
-0 survivors.** The timeout is not incidental — deleting `MAX_PROTOTYPE_DEPTH` makes the
+and fails on any survivor. Measured 2026-08-21: **1,160 mutations, 1,083 killed, 77 documented-inert,
+0 survivors, 40m29s wall-clock** — the sweep runs DAILY in the scheduled
+verification lane (it is too heavy for per-push CI, and preflight says so),
+and each run prints its own counts, so these numbers are a dated measurement,
+not a live claim. The timeout is not incidental — deleting `MAX_PROTOTYPE_DEPTH` makes the
 proof *hang* rather than fail, because the walk meets a Proxy returning a fresh prototype
 from every `getPrototypeOf`; in CI that failure mode burns a job's whole budget instead of
 going red, so hangs are detected and reported separately.

@@ -948,6 +948,17 @@ jobs:
           SMOKE_EXPECT_PROFILE: review-demo
         run: node scripts/smoke-stack.mjs
 
+      # The packaged container must not run as root, and readiness must name
+      # the durable store it actually probed (the verbose body is review-demo
+      # only, so this asserts in phase 1).
+      - name: The api container runs as a non-root user
+        run: |
+          UID_IN_CONTAINER=$(docker compose -f docker-compose.prod.yml exec -T api id -u)
+          echo "container uid: $UID_IN_CONTAINER"
+          test "$UID_IN_CONTAINER" != "0"
+      - name: Readiness names the durable store it probed
+        run: curl -sf http://localhost:8080/api/readyz | grep -q '"durableStore":"postgres"'
+
       # Phase 2: the PRODUCTION default (shared-device-gateway) on the SAME
       # image — and in the PRODUCTION POSTURE, by executing the runbook's
       # migrate-then-boot sequence literally rather than simulating it. The

@@ -388,3 +388,15 @@ part of this record.
 
 **Reversal.** A future decision record naming new hexes, measured the same
 way, on every surface in the same commit.
+
+### DR-006 addendum (2026-08-21, same day): the on-tint variant
+
+Cross-lane review caught a composite the original nine measurements did not
+cover: the operator console's tinted allow badge lightens its ground (10%
+allow over card composites to ~#242E2E), putting the ratified #639779 text at
+4.14:1 — under the floor. Resolution, measured from the committed files: tint
+reduced to 8%, and badge text moved to a new canonical variant
+`--decision-allow-on-tint` (hsl 145 21% 55%, #74A488) — 5.09:1 on the tinted
+card, 5.55:1 on the tinted background, and ≥5.5:1 on both plain surfaces. The
+lesson folds into the pending decision-palette gate: composited grounds are
+render surfaces too, and must be in its measurement set.

@@ -110,6 +110,7 @@
   --chart-5: 175 22% 55%;
 
   --decision-allow: 145 21% 49%;
+  --decision-allow-on-tint: 145 21% 55%;
   --decision-review: 32 35% 51%;
   --decision-deny: 0 43% 60.8%; /* #C67070 exactly, DR-005 */
 
@@ -162,6 +163,7 @@
   --chart-5: 175 22% 55%;
 
   --decision-allow: 145 21% 49%;
+  --decision-allow-on-tint: 145 21% 55%;
   --decision-review: 32 35% 51%;
   --decision-deny: 0 43% 60.8%; /* #C67070 exactly, DR-005 */
 }
@@ -180,7 +182,11 @@
    ratified WCAG floor. Signal-status classes below are NOT decision
    states and keep their utility palette. */
 .text-status-allow { color: hsl(var(--decision-allow)); }
-.bg-status-allow { background-color: hsl(var(--decision-allow) / 0.1); color: hsl(var(--decision-allow)); border-color: hsl(var(--decision-allow) / 0.2); }
+/* Tinted badge: the tint COMPOSITES over the card, lightening the ground —
+   #639779 on the 10%-tinted card measured 4.14:1, under the DR-006 floor.
+   Tint reduced to 8% and text stepped to the measured on-tint variant:
+   5.09:1 on tinted card, 5.55:1 on tinted background. */
+.bg-status-allow { background-color: hsl(var(--decision-allow) / 0.08); color: hsl(var(--decision-allow-on-tint)); border-color: hsl(var(--decision-allow) / 0.2); }
 .text-status-step-up { @apply text-amber-500; }
 .bg-status-step-up { @apply bg-amber-500/10 text-amber-500 border-amber-500/20; }
 .text-status-restrict { @apply text-orange-500; }

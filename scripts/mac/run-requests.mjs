@@ -197,7 +197,7 @@ function main() {
     if (req.supersededBy && !onlyId) {
       let successor = null;
       try { successor = readJson(join(REQ_DIR, `${req.supersededBy}.json`)); } catch { /* missing */ }
-      const valid = successor && successor.supersedes === id && !successor.supersededBy;
+      const valid = successor && successor.id === req.supersededBy && successor.supersedes === id && !successor.supersededBy;
       if (valid) {
         console.log(`\n== request ${id} == superseded by ${req.supersededBy} — not run`);
         continue;

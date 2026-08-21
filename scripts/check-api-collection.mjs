@@ -26,11 +26,24 @@ const norm = (p) => p.replace(/\{\{[^}]+\}\}/g, "*").replace(/:[A-Za-z_]+/g, "*"
 // EXACT method+path pairs, never suffix matching: with a suffix rule,
 // deleting /v1/policies stayed green because monitoring.ts registers a bare
 // /policies — a removed route read as covered by an unrelated shorter one.
+// Only MOUNTED routers count: a route file removed from routes/index.ts but
+// left on disk must not keep its registrations alive here, and a
+// commented-out registration must not either — both were false-pass paths.
+// Not established by this: a router mounted conditionally at runtime; the
+// api test suite exercises the configured app for that.
+const indexSrc = readFileSync(join(ROUTES_DIR, "index.ts"), "utf8");
+const mounted = new Set(
+  [...indexSrc.matchAll(/from\s+"\.\/([A-Za-z0-9-]+)"/g)].map((m) => `${m[1]}.ts`),
+);
 const routePairs = new Set();
-for (const f of walk(ROUTES_DIR).filter((f) => f.endsWith(".ts"))) {
+for (const f of walk(ROUTES_DIR).filter((f) => f.endsWith(".ts") && f !== join(ROUTES_DIR, "index.ts"))) {
+  const base = f.split("/").pop();
+  if (!mounted.has(base)) continue;
   const src = readFileSync(f, "utf8");
-  for (const m of src.matchAll(/router\.(get|post|put|delete|patch)\(\s*\n?\s*"([^"]+)"/g)) {
-    routePairs.add(`${m[1].toUpperCase()} ${norm(m[2])}`);
+  for (const line of src.split("\n")) {
+    if (/^\s*\/\//.test(line)) continue;
+    const m = line.match(/router\.(get|post|put|delete|patch)\(\s*"([^"]+)"/);
+    if (m) routePairs.add(`${m[1].toUpperCase()} ${norm(m[2])}`);
   }
 }
 

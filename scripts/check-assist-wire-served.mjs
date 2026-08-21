@@ -50,7 +50,10 @@ export function auditAssistWire({ vectorsJson, specYaml, gapsSrc, kotlinSrc, rus
   }
   const served = specYaml.includes(`${boundRoute}:`);
   const gapDeclared = gapsSrc.includes(`id: "${GAP_ID}"`);
-  const gapNamesRoute = gapDeclared && new RegExp(`id: "${GAP_ID}"[\\s\\S]{0,2000}?${boundRoute.replace(/\//g, "\\/")}`).test(gapsSrc);
+  // Full metacharacter escape (CodeQL js/incomplete-sanitization): the route
+  // shape is validated above, but an escape must not depend on that.
+  const escaped = boundRoute.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+  const gapNamesRoute = gapDeclared && new RegExp(`id: "${GAP_ID}"[\\s\\S]{0,2000}?${escaped}`).test(gapsSrc);
   if (!served) {
     if (!gapDeclared) {
       problems.push(`the vectors bind ${boundRoute}, which the OpenAPI spec does not serve, and no "${GAP_ID}" entry claims it in ${GAPS_FILE} — a green suite over an unserved wire with no declared gap is the phantom contract DR-007 exists to prevent`);

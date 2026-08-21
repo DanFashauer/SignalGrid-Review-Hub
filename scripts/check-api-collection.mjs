@@ -190,19 +190,18 @@ function load() {
   }
   const indexSource = readFileSync(join(ROUTES_DIR, "index.ts"), "utf8");
   const bruFiles = {};
-  // sources/ holds standalone Bruno collections for the EXTERNAL lab services
-  // run-live-lanes.sh starts (Fleet, Traccar, Keycloak, Wazuh). Their URLs are
-  // third-party API paths, not api-server routes — auditing them against
-  // routes/ would flag every one as matching nothing. Scope, not a loophole:
-  // the parent collection stays fully two-directionally gated, and a request
-  // for a SignalGrid route hidden under sources/ buys nothing, because the
-  // reverse direction still demands a visible request for that route.
+  // The lab-service collections (Fleet, Traccar, Keycloak, Wazuh) live at
+  // artifacts/lab-collections/ — OUTSIDE this collection — because their URLs
+  // are third-party API paths, not api-server routes, and because Bruno
+  // itself cannot run a collection that nests other collections (their
+  // environments/ parse as requests from the parent). One collection, one
+  // target server; the reverse direction below still demands a visible
+  // request here for every api-server route.
   for (const f of walk(COLLECTION).filter(
     (f) =>
       f.endsWith(".bru") &&
       !f.includes("environments") &&
-      !f.endsWith("collection.bru") &&
-      !f.includes(`${COLLECTION}/sources/`),
+      !f.endsWith("collection.bru"),
   )) {
     bruFiles[f] = readFileSync(f, "utf8");
   }

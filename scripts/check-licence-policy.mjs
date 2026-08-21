@@ -86,10 +86,15 @@ export const POLICY = {
 // with the reason it is unresolved and what closes it. Anything unresolved
 // and NOT in this list fails the gate — an unnamed unknown is a silent one.
 export const REVIEW_COMPONENTS = {
-  // (none today — the committed registry scripts/data/third-party-licences.json
-  //  resolves every cargo/maven component and the uninstalled npm platform
-  //  binaries; a future lockfile bump that outruns the registry lands here,
-  //  by name, until the recorder is re-run)
+  // The committed registry scripts/data/third-party-licences.json resolves
+  // every cargo/maven component and the uninstalled npm platform binaries; a
+  // lockfile bump that outruns the registry lands here, by name, until the
+  // recorder is re-run — or, as below, until upstream actually grants one.
+  "pkg:npm/json-query@2.2.2":
+    "upstream declares NO licence in any npm metadata (version manifest and " +
+    "packument both empty, verified 2026-08-21); a transitive dependency of " +
+    "@usebruno/cli (dev-only, never shipped). Closes when upstream publishes " +
+    "a licence field or counsel reviews the repository's LICENSE file for reuse.",
 };
 
 const CLASS_RANK = { allow: 0, review: 1, deny: 2 };

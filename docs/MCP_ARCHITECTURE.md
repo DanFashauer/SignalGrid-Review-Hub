@@ -29,10 +29,11 @@ route, and every registered route must carry at least one request (or a
 declared exception with a reason and a date; GA routes may never be excepted).
 The collection therefore cannot quietly become documentation of an API that no
 longer exists, and a new route cannot ship unmapped. `negative-tests/` pins
-the refusals (401/404/400 and the GA fence), and `sources/` holds standalone
-collections for the external lab services `scripts/run-live-lanes.sh` actually
-starts — third-party surfaces, deliberately outside the route gate. Details
-and run instructions: `docs/BRUNO_API_TESTING.md`.
+the refusals (401/404/400 and the GA fence); the standalone collections for
+the external lab services `scripts/run-live-lanes.sh` actually starts live at
+`artifacts/lab-collections/` — third-party surfaces, deliberately outside both
+this collection and its route gate. Details and run instructions:
+`docs/BRUNO_API_TESTING.md`.
 
 This plane answers one question: **what does the API actually serve, and does
 it refuse what it promises to refuse?** Nothing on this plane evaluates
@@ -93,7 +94,7 @@ in `docs/agent/open-source-lab-registry.json`, gated by
    posture reads)                                          ▼
         ▲                                          deterministic policy
         │                                                  │
-  Plane 1 (Bruno, sources/)                                ▼
+  Plane 1 (Bruno, lab colls)                                ▼
   maps + asserts these                                  VERDICT
   surfaces; changes nothing                    allow / step_up / restrict / deny
                                                            │
@@ -114,21 +115,23 @@ list):
 
 - The Bruno collection with two-directional route coverage
   (`scripts/check-api-collection.mjs`, `--self-test` proves it can fail),
-  negative tests, and the `sources/` lab collections.
+  negative tests, and the `artifacts/lab-collections/` lab collections.
 - The in-repo stdio MCP server, its `mcp-up.sh` launcher, and the
   `check-mcp-surface.mjs` drift gate.
 - The `signalgrid-mcp` posture source in its own repository, with its tool
   count derived — not asserted — by `verify:all`.
 - The deterministic core and its invariant/proof gates.
+- **The Bruno execute-bridge** (`bruno_collection_run`): an agent can run the
+  committed collection as ONE harnessed run — `scripts/run-bruno-collection.mjs`
+  boots its own fixture-mode api-server, executes every request under both
+  product profiles (negative tests included), and tears it down. Localhost
+  only; nothing durable changes; the harness's verdict is the tool's answer.
 
 **Deferred — design intent only, not served, and no document may use present
 tense for these.** No gate scans for this specific drift yet — the ban is
 doctrine, held by review (the docs-sanity denylist and the false-claims
 registry cover other claim classes, not these):
 
-- **An MCP execute-bridge for Bruno** — a tool that would let an agent run
-  collection requests through MCP. Today an agent cannot execute the Bruno
-  collection over MCP; a human runs Bruno, and the gate runs the audit.
 - **HTTP transport for the in-repo MCP server.** Today it is stdio only.
 - **OAuth scopes / tenant-bound authorization for MCP access** (the
   `signalgrid:evidence:read` shape). Today there is no MCP authentication

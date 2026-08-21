@@ -92,3 +92,4 @@ native/ios/build/
 # once already (~97MB untracked, every result mis-stamped). Ignored ahead of the
 # first vault rather than after the first bad provenance stamp.
 .obsidian/
+artifacts/bruno/

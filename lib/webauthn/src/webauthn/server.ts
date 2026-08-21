@@ -142,6 +142,20 @@ export async function verifyRegistration(
 ): Promise<VerificationResult> {
   const timestamp = new Date().toISOString();
 
+  // A malformed CALL SHAPE is a refusal, not a crash. Everything below assumes
+  // the WebAuthn envelope fields exist and are strings; a caller handing this
+  // function a placeholder object used to surface as an unhandled TypeError —
+  // an HTTP 500 — where fail-closed demands a clean rejection. Found by the
+  // Bruno live run, whose ordered execution minted a real challenge and then
+  // submitted a non-WebAuthn body against it. Checked BEFORE the challenge is
+  // consumed, so a malformed attempt does not burn a valid ceremony.
+  if (
+    typeof response?.response?.clientDataJSON !== 'string' ||
+    typeof response?.response?.attestationObject !== 'string'
+  ) {
+    return { success: false, error: 'Malformed WebAuthn registration response', timestamp };
+  }
+
   // Get and delete challenge
   const challengeData = await getAndDeleteChallenge(challengeId);
   if (!challengeData) {
@@ -161,10 +175,16 @@ export async function verifyRegistration(
     return { success: false, error: 'Challenge user mismatch', timestamp };
   }
 
-  // Parse client data JSON (WebAuthn base64url-encodes clientDataJSON).
-  const clientData = JSON.parse(
-    Buffer.from(response.response.clientDataJSON, 'base64url').toString()
-  );
+  // Parse client data JSON (WebAuthn base64url-encodes clientDataJSON). A
+  // payload that does not decode to JSON is the same refusal as a bad shape.
+  let clientData;
+  try {
+    clientData = JSON.parse(
+      Buffer.from(response.response.clientDataJSON, 'base64url').toString()
+    );
+  } catch {
+    return { success: false, error: 'Malformed clientDataJSON', timestamp };
+  }
 
   // Verify challenge matches
   if (clientData.challenge !== challengeData.challenge.challenge) {
@@ -330,6 +350,16 @@ export async function verifyAuthentication(
 ): Promise<VerificationResult> {
   const timestamp = new Date().toISOString();
 
+  // Same shape refusal as verifyRegistration, same reason, same ordering:
+  // checked before the challenge is consumed.
+  if (
+    typeof response?.response?.clientDataJSON !== 'string' ||
+    typeof response?.response?.authenticatorData !== 'string' ||
+    typeof response?.response?.signature !== 'string'
+  ) {
+    return { success: false, error: 'Malformed WebAuthn authentication response', timestamp };
+  }
+
   // Get and delete challenge
   const challengeData = await getAndDeleteChallenge(challengeId);
   if (!challengeData) {
@@ -348,9 +378,15 @@ export async function verifyAuthentication(
     return { success: false, error: 'Challenge user mismatch', timestamp };
   }
 
-  // Verify challenge matches (clientDataJSON is base64url-encoded).
+  // Verify challenge matches (clientDataJSON is base64url-encoded). A payload
+  // that does not decode to JSON is the same refusal as a bad shape.
   const clientDataBytes = Buffer.from(response.response.clientDataJSON, 'base64url');
-  const clientData = JSON.parse(clientDataBytes.toString());
+  let clientData;
+  try {
+    clientData = JSON.parse(clientDataBytes.toString());
+  } catch {
+    return { success: false, error: 'Malformed clientDataJSON', timestamp };
+  }
 
   if (clientData.challenge !== challengeData.challenge.challenge) {
     return { success: false, error: 'Challenge mismatch', timestamp };

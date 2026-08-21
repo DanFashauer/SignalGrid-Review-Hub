@@ -201,6 +201,7 @@
     "@playwright/test": "1.62.1",
     "@types/node": "catalog:",
     "@types/pg": "^8.21.0",
+    "@usebruno/cli": "^4.0.0",
     "esbuild": "0.28.2",
     "oidc-provider": "9.11.3",
     "tsx": "catalog:"

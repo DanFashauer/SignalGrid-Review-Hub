@@ -121,8 +121,10 @@ prose from `docs/REASON_CODES.md`), `evidence_freshness` (snapshot age and
 digest verification against the demo core's fixed clock), `list_connectors`,
 `list_policies`, `query_audit` (the tamper-evident chain, verified alongside
 every read), and the Bruno contract-plane bridge `bruno_collection_list` /
-`bruno_request_get` (read the committed API collection; execution deliberately
-waits for the Bruno CLI dependency). Every one of those is evidence collection
+`bruno_request_get` / `bruno_collection_run` (read the committed API
+collection, or execute the whole of it as one harnessed run — the runner boots
+its own fixture-mode api-server, drives every request under both product
+profiles, and tears it down; localhost only, nothing durable changes). Every one of those is evidence collection
 / inspection only — it grants nothing, and no mutating surface (policy
 activation, remediation approval) is exposed over MCP at all. The server also
 serves committed repo truth as resources, read from disk at request time:

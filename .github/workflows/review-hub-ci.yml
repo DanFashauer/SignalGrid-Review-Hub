@@ -449,6 +449,8 @@ jobs:
 
       - name: API integration test
         run: pnpm run test:api
+      - name: Bruno collection live run (the committed contract, executed both profiles)
+        run: node scripts/run-bruno-collection.mjs
 
       - name: Observability (metrics endpoint) proof
         run: pnpm run proof:observability

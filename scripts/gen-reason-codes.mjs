@@ -27,7 +27,13 @@ const FILES = {
 const CODE_LIT = /"([A-Z][A-Z0-9_]{4,})"/g;
 
 export function runTruthDump() {
-  const out = execFileSync("npx", ["tsx", "scripts/src/dump-reason-truth.ts"], { encoding: "utf8" });
+  // The workspace's OWN tsx, by absolute path — not `npx tsx`, which resolves
+  // opportunistically (local .bin, then PATH, then a network install) and
+  // stopped resolving at all after a lockfile change altered hoisting. The
+  // scripts package declares tsx, so this path exists on every lane that ran
+  // `pnpm install`, and nothing is fetched at gate time.
+  const tsx = new URL("./node_modules/.bin/tsx", import.meta.url).pathname;
+  const out = execFileSync(tsx, ["scripts/src/dump-reason-truth.ts"], { encoding: "utf8" });
   return JSON.parse(out);
 }
 

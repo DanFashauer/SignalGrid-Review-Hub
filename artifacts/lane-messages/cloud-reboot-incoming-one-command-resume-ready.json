@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "cloud-reboot-incoming-one-command-resume-ready",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "reboot incoming — one-command resume ready",
+  "body": "The owner is rebooting this Mac for patching. When you are back: pull, then run ./scripts/mac/resume-lane.sh — one command that syncs the branch (never over uncommitted work), reinstalls only if the lockfile moved, starts the podman machine, checks gh auth (the blocker that bit us before — the script prints the exact remedy), shows this inbox, and lists any sim requests owed. --run executes pending requests; --full adds the whole proof harness. Since your last known pull, SIX merges landed on Alpha today: #225 deployment-profile fence (compose defaults to the gateway profile; CI executes the runbook literally — migrate as admin, boot as signalgrid_runtime, readyz must be 200), #226 claims cluster (1,023-claim inventory + retention position doc + retention gate), #227 reason-code catalog (docs/REASON_CODES.md generated from source + both-directions gate), #228 decision palette (your Theme.swift was reconciled to canonical — sgAllow/sgStepUp/sgDeny/sgRestrict all changed; restrict now renders the deny red per DesignSystem.swift's mapping; proof:decision-palette enforces parity across all six trees, and the harness picks it up automatically), #229 Assist-wire DR-007 (the Kotlin/Rust SDK wire is a declared gap, android.yml now re-runs your Kotlin suite on shared-vector edits). Nothing is owed from you right now: inbox zero, sim loop 4/4 bound. After resume, a plain ./validate-sim-macos.sh confirming green is welcome but not required."
+}

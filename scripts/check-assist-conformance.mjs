@@ -232,10 +232,16 @@ function main() {
     · that the clients' tests actually RAN. This checks each client has a test that
       reads the vectors; the language-specific lanes (\`gradle test\`, \`cargo test\`)
       are what execute them.
-    · iOS. \`native/ios\` has no \`core\` directory and is not scanned: EnterpriseShell
-      ports the DECISION ENGINE rather than consuming /v1 as a wire client, so these
-      vectors do not describe it. \`scripts/check-decision-port-parity.mjs\` is the
-      gate that covers that port.
+    · iOS. \`native/ios\` has no \`core\` directory and is not scanned. The old reason
+      here ("EnterpriseShell ports the decision engine rather than consuming /v1")
+      went stale when RemoteDecisionService landed: the shell now DOES consume /v1
+      (POST /v1/app-workflows/evaluate, a different envelope than these vectors
+      bind — DR-007 records which envelope is served). The engine port is still
+      covered by \`scripts/check-decision-port-parity.mjs\`; bringing the iOS wire
+      envelope under shared vectors is follow-on work, stated rather than implied
+      done. And note what a green run here proves: the Kotlin and Rust SDKs agree
+      about a PLANNED wire (/v1/authorize, a declared gap) — served-ness is
+      \`scripts/check-assist-wire-served.mjs\`'s question, not this gate's.
     · the TypeScript source of truth in \`lib/\`, which is what the vectors were
       written FROM. A case that misreads the product would be wrong in every client
       at once, and consistently.`);

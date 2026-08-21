@@ -24,11 +24,23 @@ on:
   pull_request:
     paths:
       - "native/android/**"
+      # The shared conformance vectors and their static gate: editing a vector
+      # must re-run the KOTLIN suite too — desktop.yml always had this, and the
+      # asymmetry left the client that caught two real permissive-parse defects
+      # as the one client a vector edit never re-ran (role-lens engineering.4).
+      - "native/shared/**"
+      - "scripts/check-assist-conformance.mjs"
       - ".github/workflows/android.yml"
   push:
     branches: [SignalGrid_Alpha]
     paths:
       - "native/android/**"
+      # The shared conformance vectors and their static gate: editing a vector
+      # must re-run the KOTLIN suite too — desktop.yml always had this, and the
+      # asymmetry left the client that caught two real permissive-parse defects
+      # as the one client a vector edit never re-ran (role-lens engineering.4).
+      - "native/shared/**"
+      - "scripts/check-assist-conformance.mjs"
       - ".github/workflows/android.yml"
   workflow_dispatch:
 

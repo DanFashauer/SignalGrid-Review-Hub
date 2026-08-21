@@ -693,6 +693,24 @@ export const GAPS = [
       { file: "artifacts/api-server/src/lib/core.ts", absent: "SignalGridCore.demo()" },
     ],
   },
+  {
+    id: "assist-wire-unserved",
+    surface: "published-api-paths",
+    whatIsMissing:
+      "The Assist wire the Kotlin and Rust SDKs bind — POST /v1/authorize returning " +
+      "{assist, reasons, decisionId} — is not served: no route implements it and the " +
+      "OpenAPI spec registers no such path. The 42 shared conformance vectors and both " +
+      "SDK suites test a PLANNED wire (DR-007); the envelope a host app integrates " +
+      "today is EvaluateResult from POST /v1/decisions/evaluate. Building /v1/authorize " +
+      "now would widen the frozen launch surface, so the wire stays declared-ahead " +
+      "rather than quietly implied as served. scripts/check-assist-wire-served.mjs " +
+      "fails if the vectors bind an unserved route while this entry is missing.",
+    // Closed mechanically the moment the spec registers the path — the same
+    // change that would make the SDK binding true.
+    closedWhen: [
+      { dir: "lib/api-spec", anyFileContainsAll: ["/v1/authorize:"] },
+    ],
+  },
 ];
 
 export const STATUSES = ["launch", "deferred", "demo_only", "internal"];

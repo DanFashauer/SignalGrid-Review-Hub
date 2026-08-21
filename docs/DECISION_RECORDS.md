@@ -410,3 +410,45 @@ reduced to 8%, and badge text moved to a new canonical variant
 card, 5.55:1 on the tinted background, and ≥5.5:1 on both plain surfaces. The
 lesson folds into the pending decision-palette gate: composited grounds are
 render surfaces too, and must be in its measurement set.
+
+## DR-007 — The Assist wire: **one served envelope, and the planned one is a declared gap, not a phantom contract**
+
+**Question.** Three native Assist clients decode three different answers from
+the server. The Kotlin and Rust SDKs — the two bound by the 42 shared
+conformance vectors and `scripts/check-assist-conformance.mjs` — decode an
+envelope `{assist, reasons, decisionId}` from `POST /v1/authorize`, a route
+this repository does not implement (verified: the OpenAPI spec registers no
+such path; the only `/v1/authorize` mentions in the tree are URL-normalization
+comments). The one client that talks to the real server — iOS
+`RemoteDecisionService` — decodes `{decision:{outcome}, plan:{outcome}}` from
+`POST /v1/app-workflows/evaluate`, and sits OUTSIDE the vector suite under a
+disclaimer whose stated reason ("EnterpriseShell ports the decision engine
+rather than consuming /v1") stopped being true when that service landed. Which
+envelope is the Assist wire?
+
+**Call.** The **served** Assist surface is what the launch profile already
+ratifies: `POST /v1/decisions/evaluate` returning `EvaluateResult` — outcome,
+reasonCodes (the DR-catalogued vocabulary, `docs/REASON_CODES.md`), matched
+rules, evidence reference. That is the envelope a host app integrates TODAY.
+The `{assist, reasons, decisionId}` / `/v1/authorize` envelope the SDKs bind
+is a **planned wire, recorded as a declared gap** (`assist-wire-unserved` in
+`scripts/launch-profile.mjs` GAPS) — the vectors stay, the SDK suites stay
+(they still catch real parse defects, which is why the Kotlin lane matters),
+but no document may present that wire as served until the gap closes. The gap
+closes mechanically when the spec registers `/v1/authorize`; building that
+route now would widen the frozen launch surface and is deliberately not done.
+
+**Enforcement.** `scripts/check-assist-wire-served.mjs` (preflight + CI)
+fails when the shared vectors bind an envelope whose route the spec does not
+serve AND no declared-gap entry claims it — so deleting the gap entry without
+serving the route, or retargeting the vectors to a second unserved route,
+both fail. The conformance gate's iOS disclaimer is corrected in the same
+change: EnterpriseShell consumes `/v1` through `RemoteDecisionService` (its
+local `DecisionEngine` remains the offline fallback), and bringing that
+envelope under shared vectors is follow-on work, not a reason to misstate
+the present.
+
+**Reversal path.** If the owner later ratifies serving `/v1/authorize`, the
+gap's `closedWhen` clears on the spec change itself; this record then reads
+as the period when the wire was declared ahead of the server, which is what
+happened.

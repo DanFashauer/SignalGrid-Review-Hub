@@ -82,6 +82,16 @@ export function collectBootEnvVars(root = SRC) {
   return vars;
 }
 
+/** The api service's environment block, or null when it cannot be found —
+ *  scoped by indentation so a key under db (or anywhere else in the file)
+ *  never satisfies the api-side pass-through requirement. */
+export function extractApiEnvironment(compose) {
+  const api = compose.match(/^ {2}api:\n((?: {4,}.*\n|\n)*)/m);
+  if (!api) return null;
+  const env = api[1].match(/^ {4}environment:\n((?: {6,}.*\n?)*)/m);
+  return env ? env[1] : null;
+}
+
 /** Pure over file CONTENTS so the self-test can drive the same code path. */
 export function auditRunbook({ envVars, runbook, compose }) {
   const problems = [];
@@ -92,12 +102,25 @@ export function auditRunbook({ envVars, runbook, compose }) {
     if (!runbook.includes("`" + v + "`")) {
       problems.push(`the server boot-reads ${v}; the runbook's env table never mentions it`);
     }
-    // Direction 4: documented is not enough — the compose file must PASS the
-    // variable into the container. A runbook row for a var this mapping
-    // swallows documents a dead knob: the operator exports it, compose drops
-    // it, and the stack silently runs on the default.
-    if (!new RegExp(`^\\s+${v}:`, "m").test(compose)) {
-      problems.push(`the server boot-reads ${v}; docker-compose.prod.yml never passes it into the container — exporting it on the host is silently ignored`);
+  }
+  // Direction 4: documented is not enough — the compose file must PASS the
+  // variable into the API CONTAINER, as an interpolation the host can set. A
+  // key under the db service, or a fixed value, leaves the documented knob
+  // dead while a whole-file regex stays green. The three PINNED values are
+  // the compose file's own design decisions, not knobs: the image listens on
+  // 8080, the stack is the prod tier, NODE_ENV is production.
+  const PINNED = new Set(["NODE_ENV", "PORT", "SIGNALGRID_TIER"]);
+  const apiEnv = extractApiEnvironment(compose);
+  if (apiEnv === null) {
+    problems.push("could not locate the api service's environment block in docker-compose.prod.yml — the pass-through direction cannot be verified");
+  } else {
+    for (const v of envVars) {
+      const line = apiEnv.match(new RegExp(`^\\s+${v}:\\s*(.*)$`, "m"));
+      if (!line) {
+        problems.push(`the server boot-reads ${v}; the api service's environment never passes it into the container — exporting it on the host is silently ignored`);
+      } else if (!PINNED.has(v) && !line[1].includes("${" + v)) {
+        problems.push(`the api service sets ${v} to a fixed value (${line[1].trim()}) instead of interpolating \${${v}…} — the documented knob is dead`);
+      }
     }
   }
   if (!/SIGNALGRID_PRODUCT_PROFILE:\s*\$\{SIGNALGRID_PRODUCT_PROFILE:-shared-device-gateway\}/.test(compose)) {
@@ -116,10 +139,13 @@ export function auditRunbook({ envVars, runbook, compose }) {
 
 function selfTest() {
   const checks = [];
-  const goodCompose =
-    "      SIGNALGRID_PRODUCT_PROFILE: ${SIGNALGRID_PRODUCT_PROFILE:-shared-device-gateway}\n      PORT: 8080";
-  const goodBook = "`PORT` db:migrate signalgrid_runtime";
-  let p = auditRunbook({ envVars: new Set(["PORT"]), runbook: goodBook, compose: goodCompose });
+  const composeWith = (apiLines, dbLines = "") =>
+    `services:\n  db:\n    environment:\n      POSTGRES_USER: sg\n${dbLines}  api:\n    environment:\n${apiLines}    ports:\n      - "8080:8080"\n`;
+  const goodCompose = composeWith(
+    "      SIGNALGRID_PRODUCT_PROFILE: ${SIGNALGRID_PRODUCT_PROFILE:-shared-device-gateway}\n      PORT: 8080\n      METRICS_TOKEN: ${METRICS_TOKEN:-}\n",
+  );
+  const goodBook = "`PORT` `METRICS_TOKEN` db:migrate signalgrid_runtime";
+  let p = auditRunbook({ envVars: new Set(["PORT", "METRICS_TOKEN"]), runbook: goodBook, compose: goodCompose });
   checks.push(["a coherent runbook/compose/env trio passes", p.length === 0]);
   p = auditRunbook({ envVars: new Set(["PORT", "NEW_VAR"]), runbook: goodBook, compose: goodCompose });
   checks.push(["a boot-read var missing from the runbook FAILS", p.some((x) => x.includes("NEW_VAR"))]);
@@ -131,6 +157,24 @@ function selfTest() {
   checks.push([
     "a var documented in the runbook but not passed through compose FAILS (dead knob)",
     p.some((x) => x.includes("DOCUMENTED_BUT_DROPPED") && x.includes("never passes it")),
+  ]);
+  p = auditRunbook({
+    envVars: new Set(["PORT", "METRICS_TOKEN"]),
+    runbook: goodBook,
+    compose: composeWith("      SIGNALGRID_PRODUCT_PROFILE: ${SIGNALGRID_PRODUCT_PROFILE:-shared-device-gateway}\n      PORT: 8080\n", "      METRICS_TOKEN: ${METRICS_TOKEN:-}\n"),
+  });
+  checks.push([
+    "a var passed only under the DB service FAILS (api-side scoping)",
+    p.some((x) => x.includes("METRICS_TOKEN") && x.includes("never passes it")),
+  ]);
+  p = auditRunbook({
+    envVars: new Set(["PORT", "METRICS_TOKEN"]),
+    runbook: goodBook,
+    compose: composeWith("      SIGNALGRID_PRODUCT_PROFILE: ${SIGNALGRID_PRODUCT_PROFILE:-shared-device-gateway}\n      PORT: 8080\n      METRICS_TOKEN: fixed-value\n"),
+  });
+  checks.push([
+    "a non-pinned var set to a FIXED value FAILS (interpolation required)",
+    p.some((x) => x.includes("METRICS_TOKEN") && x.includes("fixed value")),
   ]);
   p = auditRunbook({ envVars: new Set(["PORT"]), runbook: goodBook, compose: "environment: {}" });
   checks.push(["a compose file without the profile default FAILS", p.some((x) => x.includes("PRODUCT_PROFILE"))]);

@@ -945,7 +945,7 @@ jobs:
       # measured on 2026-08-21 (nine demo bearers to an anonymous caller),
       # pinned so it cannot come back.
       - name: Publish the db to the runner loopback (CI-only overlay)
-        run: docker compose -f docker-compose.prod.yml -f docker-compose.ci-db-port.yml up -d db
+        run: docker compose -f docker-compose.prod.yml -f docker-compose.migrate.yml up -d db
 
       - name: Enable corepack (pnpm)
         run: corepack enable

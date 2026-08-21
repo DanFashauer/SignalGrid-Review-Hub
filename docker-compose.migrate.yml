@@ -1,0 +1,16 @@
+# Migration overlay: publish the bundled db to the host loopback so the
+# runbook's migrate-then-boot sequence can run against the two-service stack —
+# `pnpm run db:migrate` executes from a repo checkout and needs TCP reach, the
+# base compose file deliberately publishes no database port, and the api
+# runtime image carries only the built server, not the migration source.
+#
+#   docker compose -f docker-compose.prod.yml -f docker-compose.migrate.yml up -d db
+#   DATABASE_URL=postgres://sg:sg@127.0.0.1:55432/signalgrid pnpm run db:migrate
+#
+# Used by operators and by the CI deploy-stack job alike. Loopback-only on
+# purpose; after migrating, `up -d db` WITHOUT this overlay re-creates the db
+# unpublished — do not leave a production database listening on the host.
+services:
+  db:
+    ports:
+      - "127.0.0.1:55432:5432"

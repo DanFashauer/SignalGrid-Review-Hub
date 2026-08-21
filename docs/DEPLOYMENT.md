@@ -220,6 +220,19 @@ see `docs/BACKUP_AND_RESTORE.md` § "The runtime role"). The sequence is:
    it refuses up front (nothing half-applied) if the credential cannot. (The
    variable form is deliberate: a `<admin>` placeholder pasted literally is
    shell redirection and dies on `admin: No such file or directory`.)
+
+   **Against the bundled two-service stack**, the database is deliberately
+   unpublished and the api image carries no migration source, so use the
+   migration overlay to reach it from a repo checkout:
+
+   ```bash
+   docker compose -f docker-compose.prod.yml -f docker-compose.migrate.yml up -d db
+   DATABASE_URL=postgres://sg:sg@127.0.0.1:55432/signalgrid pnpm run db:migrate
+   ```
+
+   The overlay publishes Postgres on the loopback only; after migrating,
+   `docker compose -f docker-compose.prod.yml up -d db` re-creates it
+   unpublished. (The CI deploy-stack job runs exactly this sequence.)
 2. **Set the runtime password out of band** —
    `psql "$ADMIN_DATABASE_URL" -c '\password signalgrid_runtime'` (prompts;
    never inline a password into a command).

@@ -89,6 +89,8 @@ const STEPS = [
   { name: "Publication boundary (nothing reaches a public repo unclassified)", cmd: ["node", "scripts/check-publication-boundary.mjs"] },
   { name: "API collection (a committed request must name a served route)", cmd: ["node", "scripts/check-api-collection.mjs"] },
   { name: "Deployment runbook (the documented path must be the real one)", cmd: ["node", "scripts/check-deployment-runbook.mjs"] },
+  { name: "Decision palette self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-decision-palette.mjs", "--self-test"] },
+  { name: "Decision palette (one palette, every tree, AA everywhere)", cmd: ["node", "scripts/check-decision-palette.mjs"] },
   { name: "Reason codes self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-reason-codes.mjs", "--self-test"] },
   { name: "Reason codes (the engine's vocabulary is the catalog's and the contract's)", cmd: ["node", "scripts/check-reason-codes.mjs"] },
   { name: "Retention claims self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-retention-claims.mjs", "--self-test"] },

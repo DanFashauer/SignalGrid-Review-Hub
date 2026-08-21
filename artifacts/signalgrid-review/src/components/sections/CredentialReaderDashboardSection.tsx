@@ -8,7 +8,7 @@ import {
 
 const decisionStyles: Record<CredentialReaderDecision, string> = {
   allowCandidate: "border-teal-500/50 bg-teal-950/30 text-teal-200",
-  restrict: "border-amber-500/50 bg-amber-950/30 text-amber-200",
+  restrict: "bg-status-restrict",
   stepUp: "border-sky-500/50 bg-sky-950/30 text-sky-200",
   approvalRequired: "border-violet-500/50 bg-violet-950/30 text-violet-200",
 };

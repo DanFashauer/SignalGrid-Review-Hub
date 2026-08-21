@@ -33,7 +33,7 @@ const DISP_STYLE: Record<V1AppActionPlan["disposition"], string> = {
   auto: "text-emerald-400 border-emerald-400/30",
   applied: "text-emerald-400 border-emerald-400/30",
   assist: "text-amber-400 border-amber-400/30",
-  step_up: "text-amber-400 border-amber-400/30",
+  step_up: "text-status-step-up border-[hsl(var(--decision-review)/0.3)]",
   blocked: "text-red-400 border-red-400/30",
 };
 

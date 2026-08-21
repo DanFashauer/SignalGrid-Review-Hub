@@ -94,8 +94,9 @@
   /* Decision states — use ONLY for allow/step-up/deny communication. */
   --decision-allow: 145 21% 49%;   /* #639779 — DR-006 re-tone, AA on both grounds */
   --decision-allow-on-tint: 145 21% 55%; /* #74A488 — text over the 8% allow tint; 5.09:1 on tinted card (DR-006 addendum) */
-  --decision-review: 32 35% 51%;   /* #B08B57 */
+  --decision-review: 35 36% 51.5%; /* #B08B57 exactly — matches DesignSystem.swift */   /* #B08B57 */
   --decision-deny: 0 43% 60.8%;    /* #C67070 exactly — DR-005 re-tone, WCAG AA */
+  --decision-deny-on-tint: 0 43% 64.8%; /* #CC7F7F — measured 4.79:1 on the 8% deny-tinted card */
 
   --chart-1: 175 28% 43%;          /* teal      */
   --chart-2: 145 21% 47%;          /* allow     */

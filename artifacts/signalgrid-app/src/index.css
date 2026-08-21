@@ -111,8 +111,9 @@
 
   --decision-allow: 145 21% 49%;
   --decision-allow-on-tint: 145 21% 55%;
-  --decision-review: 32 35% 51%;
+  --decision-review: 35 36% 51.5%; /* #B08B57 exactly — matches DesignSystem.swift */
   --decision-deny: 0 43% 60.8%; /* #C67070 exactly, DR-005 */
+  --decision-deny-on-tint: 0 43% 64.8%; /* #CC7F7F — measured 4.79:1 on the 8% deny-tinted card */
 
   --app-font-sans: 'Inter', sans-serif;
   --app-font-serif: Georgia, serif;
@@ -164,8 +165,9 @@
 
   --decision-allow: 145 21% 49%;
   --decision-allow-on-tint: 145 21% 55%;
-  --decision-review: 32 35% 51%;
+  --decision-review: 35 36% 51.5%; /* #B08B57 exactly — matches DesignSystem.swift */
   --decision-deny: 0 43% 60.8%; /* #C67070 exactly, DR-005 */
+  --decision-deny-on-tint: 0 43% 64.8%; /* #CC7F7F — measured 4.79:1 on the 8% deny-tinted card */
 }
 
 @layer base {
@@ -187,12 +189,12 @@
    Tint reduced to 8% and text stepped to the measured on-tint variant:
    5.09:1 on tinted card, 5.55:1 on tinted background. */
 .bg-status-allow { background-color: hsl(var(--decision-allow) / 0.08); color: hsl(var(--decision-allow-on-tint)); border-color: hsl(var(--decision-allow) / 0.2); }
-.text-status-step-up { @apply text-amber-500; }
-.bg-status-step-up { @apply bg-amber-500/10 text-amber-500 border-amber-500/20; }
-.text-status-restrict { @apply text-orange-500; }
-.bg-status-restrict { @apply bg-orange-500/10 text-orange-500 border-orange-500/20; }
-.text-status-deny { @apply text-red-500; }
-.bg-status-deny { @apply bg-red-500/10 text-red-500 border-red-500/20; }
+.text-status-step-up { color: hsl(var(--decision-review)); }
+.bg-status-step-up { background-color: hsl(var(--decision-review) / 0.08); color: hsl(var(--decision-review)); border-color: hsl(var(--decision-review) / 0.2); }
+.text-status-restrict { color: hsl(var(--decision-deny)); }
+.bg-status-restrict { background-color: hsl(var(--decision-deny) / 0.08); color: hsl(var(--decision-deny-on-tint)); border-color: hsl(var(--decision-deny) / 0.2); }
+.text-status-deny { color: hsl(var(--decision-deny)); }
+.bg-status-deny { background-color: hsl(var(--decision-deny) / 0.08); color: hsl(var(--decision-deny-on-tint)); border-color: hsl(var(--decision-deny) / 0.2); }
 
 .text-signal-nominal { @apply text-green-500; }
 .bg-signal-nominal { @apply bg-green-500/10 text-green-500 border-green-500/20; }

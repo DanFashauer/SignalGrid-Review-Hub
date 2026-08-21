@@ -19,10 +19,10 @@ const layerLabels: Record<SignalGridLayer, string> = {
 };
 
 const outcomeTone: Partial<Record<DecisionOutcome, string>> = {
-  allow: "text-teal-300 bg-teal-950/40 border-teal-700/50",
-  step_up: "text-amber-300 bg-amber-950/40 border-amber-700/50",
-  restrict: "text-red-300 bg-red-950/40 border-red-700/50",
-  deny: "text-red-300 bg-red-950/40 border-red-700/50",
+  allow: "bg-status-allow",
+  step_up: "bg-status-step-up",
+  restrict: "bg-status-restrict",
+  deny: "bg-status-deny",
   alert_operator: "text-sky-300 bg-sky-950/40 border-sky-700/50",
   create_ticket: "text-violet-300 bg-violet-950/40 border-violet-700/50",
   route_to_owner: "text-stone-200 bg-stone-800/60 border-stone-700",

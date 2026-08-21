@@ -79,9 +79,11 @@
   --chart-3: 32 35% 51%;
   --chart-4: 0 28% 49%;
   --chart-5: 175 22% 55%;
-  --decision-allow: 145 21% 47%;
-  --decision-review: 32 35% 51%;
-  --decision-deny: 0 28% 49%;
+  --decision-allow: 145 21% 49%; /* #639779 — DR-006 re-tone */
+  --decision-allow-on-tint: 145 21% 55%; /* #74A488 — DR-006 addendum */
+  --decision-review: 35 36% 51.5%; /* #B08B57 exactly — matches DesignSystem.swift */
+  --decision-deny: 0 43% 60.8%; /* #C67070 exactly — DR-005 re-tone */
+  --decision-deny-on-tint: 0 43% 64.8%; /* #CC7F7F — measured 4.79:1 on the 8% deny-tinted card */
   --app-font-sans: 'Inter', system-ui, sans-serif;
   --app-font-mono: "IBM Plex Mono", 'Menlo', 'Consolas', monospace;
   --radius: 0.375rem;
@@ -111,3 +113,16 @@
 
 /* Table striping */
 .decision-row:nth-child(even) { background: hsl(210 13% 9% / 0.5); }
+
+/* Decision-state utilities over the ratified tokens (DR-005 deny, DR-006
+   allow). Review at its base value measures 4.58:1 on the 8%-tinted card;
+   deny needs the measured on-tint step (l+4 → #CC7F7F, 4.79:1 tinted card,
+   5.35:1 tinted background) — same composite math as DR-006's allow-on-tint. */
+.text-status-allow { color: hsl(var(--decision-allow)); }
+.bg-status-allow { background-color: hsl(var(--decision-allow) / 0.08); color: hsl(var(--decision-allow-on-tint)); border-color: hsl(var(--decision-allow) / 0.2); }
+.text-status-step-up { color: hsl(var(--decision-review)); }
+.bg-status-step-up { background-color: hsl(var(--decision-review) / 0.08); color: hsl(var(--decision-review)); border-color: hsl(var(--decision-review) / 0.2); }
+.text-status-restrict { color: hsl(var(--decision-deny)); }
+.bg-status-restrict { background-color: hsl(var(--decision-deny) / 0.08); color: hsl(var(--decision-deny-on-tint)); border-color: hsl(var(--decision-deny) / 0.2); }
+.text-status-deny { color: hsl(var(--decision-deny)); }
+.bg-status-deny { background-color: hsl(var(--decision-deny) / 0.08); color: hsl(var(--decision-deny-on-tint)); border-color: hsl(var(--decision-deny) / 0.2); }

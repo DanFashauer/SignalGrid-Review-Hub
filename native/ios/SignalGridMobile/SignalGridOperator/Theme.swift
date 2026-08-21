@@ -9,10 +9,10 @@ extension Color {
     static let sgInk = Color(red: 0.949, green: 0.941, blue: 0.914)
     static let sgMuted = Color(red: 0.682, green: 0.706, blue: 0.686)
     static let sgAccent = Color(red: 0.455, green: 0.671, blue: 0.647)
-    static let sgAllow = Color(red: 0.435, green: 0.659, blue: 0.549)
-    static let sgStepUp = Color(red: 0.761, green: 0.604, blue: 0.400)
-    static let sgRestrict = Color(red: 0.788, green: 0.608, blue: 0.420)
-    static let sgDeny = Color(red: 0.753, green: 0.455, blue: 0.455)
+    static let sgAllow = Color(red: 0.388, green: 0.592, blue: 0.475)   // #639779 — DR-006, matches every other tree
+    static let sgStepUp = Color(red: 0.690, green: 0.545, blue: 0.341)  // #B08B57 — canonical review
+    static let sgRestrict = Color(red: 0.776, green: 0.439, blue: 0.439) // #C67070 — restrict RENDERS THE DENY RED everywhere (DesignSystem.swift maps restrict→deny); a caution amber here changed what the verdict color means
+    static let sgDeny = Color(red: 0.776, green: 0.439, blue: 0.439)    // #C67070 exactly — DR-005
 
     static func outcome(_ outcome: DecisionOutcome) -> Color {
         switch outcome {

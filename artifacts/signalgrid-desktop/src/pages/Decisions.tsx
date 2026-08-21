@@ -5,8 +5,8 @@ const OUTCOMES = ["all", "allow", "step-up", "restrict", "deny"] as const;
 type Filter = typeof OUTCOMES[number];
 
 const OUTCOME_COLOR: Record<string, string> = {
-  allow: "text-green-400", deny: "text-red-400",
-  "step-up": "text-yellow-400", restrict: "text-orange-400",
+  allow: "text-status-allow", deny: "text-status-deny",
+  "step-up": "text-status-step-up", restrict: "text-status-restrict",
 };
 
 type DecRow = { id: string; identityId: string; deviceId: string; workflowId: string; outcome: string; latencyMs: number; evaluatedAt: string };

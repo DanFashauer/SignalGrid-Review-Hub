@@ -60,10 +60,10 @@ const SCENARIOS: ScenarioSpec[] = [
 ];
 
 const outcomeTone: Record<DecisionOutcome, string> = {
-  allow: "text-teal-300 bg-teal-950/40 border-teal-700/50",
-  step_up: "text-amber-300 bg-amber-950/40 border-amber-700/50",
-  restrict: "text-red-300 bg-red-950/40 border-red-700/50",
-  deny: "text-red-200 bg-red-950/60 border-red-600/60",
+  allow: "bg-status-allow",
+  step_up: "bg-status-step-up",
+  restrict: "bg-status-restrict",
+  deny: "bg-status-deny",
 };
 
 const outcomeLabel: Record<DecisionOutcome, string> = {

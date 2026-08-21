@@ -102,15 +102,22 @@ Each reason code on the decision maps to two public-safe explanations: worker-fa
 (plain, actionable) and operator-facing (precise, diagnostic). No PHI/PII, no tenant
 data — only the reason code and the normalized signal shape.
 
+> **Canonical catalog:** [`docs/REASON_CODES.md`](REASON_CODES.md) — generated
+> from the engine source and gate-enforced (`scripts/check-reason-codes.mjs`).
+> The tables below are an illustrative subset. An earlier revision of this
+> section named four codes the engine has never emitted (DEVICE_POSTURE_STALE,
+> IDENTITY_UNVERIFIED, WRONG_BAY_OR_CUSTODY, CRITICAL_ON_UNTRUSTED_DEVICE) —
+> corrected 2026-08-21; absence corroborated four ways per code.
+
 | Reason code | Worker-facing | Operator-facing |
 | ----------- | ------------- | --------------- |
-| `DEVICE_POSTURE_STALE` | "This device hasn't checked in recently. A quick re-sync should fix it." | Intune last-sync signal is stale; evidence marked degraded, allow suppressed fail-closed. |
-| `IDENTITY_UNVERIFIED` | "We couldn't confirm it's you. Re-verify at the reader." | Credential event did not resolve to a synthetic actor; identity correlation unresolved. |
+| `POSTURE_STALE` | "Reconnect the device (or return it to its dock) to refresh its compliance check, then retry." | Posture freshness lapsed; request a posture re-sync from the device-management source, then re-evaluate. |
+| `IDENTITY_STATE_UNKNOWN` | "We couldn't confirm your account's status. Step up to continue." | Identity state unreported by the IdP source; unknown raises assurance (step-up), never lowers it. |
 | `DEVICE_NONCOMPLIANT` | "This device needs an admin fix before you can continue." | Intune compliance state non-compliant; remediation is owner/admin-gated. |
 | `DEVICE_UNMANAGED` | "This device isn't enrolled for this workflow." | Device not managed / not enrolled; enrollment is admin-gated. |
-| `WRONG_BAY_OR_CUSTODY` | "Return the device to its assigned bay." | Locker/dock custody mismatch vs. expected assignment; route custody owner. |
+| `CUSTODY_EXCEPTION` | "A custody issue was flagged — an operator is reviewing the device's dock/bay status." | Custody exception raised (removed without a session?); review and clear or route it. |
 | `IDENTITY_DISABLED` | "Your account is disabled. Contact your administrator." | Entra identity disabled; hard block, no self-service path. |
-| `CRITICAL_ON_UNTRUSTED_DEVICE` | "This action can't run on this device." | Critical workflow attempted on an untrusted device; hard block. |
+| `CRITICAL_WORKFLOW_UNTRUSTED_DEVICE` | "This high-risk workflow requires a managed, trusted device — switch to one to continue." | Critical workflow attempted on an untrusted device; do not grant on this device. |
 
 ### 2.2 Ordered resolution steps and resolution classes
 
@@ -127,13 +134,13 @@ and a **resolution class**:
 
 | Reason code | Proposed step | Audience | Channel | Class |
 | ----------- | ------------- | -------- | ------- | ----- |
-| `DEVICE_POSTURE_STALE` | Request a posture re-sync, then re-evaluate | worker / system | device prompt | `auto_proposed` |
-| `IDENTITY_UNVERIFIED` | Re-verify identity at the reader | worker | badge reader | `auto_proposed` |
-| `WRONG_BAY_OR_CUSTODY` | Return device to assigned bay | worker | smart-locker / bay | `auto_proposed` |
+| `POSTURE_STALE` | Request a posture re-sync, then re-evaluate | worker / system | device prompt | `auto_proposed` |
+| `IDENTITY_STATE_UNKNOWN` | Step up (re-verify) to continue; IdP state re-queried | worker | device prompt | `auto_proposed` |
+| `CUSTODY_EXCEPTION` | Operator reviews and clears the custody exception | operator | operator console | `requires_approval` |
 | `DEVICE_NONCOMPLIANT` | Open compliance remediation for owner/admin approval | admin | operator console / ITSM | `requires_approval` |
 | `DEVICE_UNMANAGED` | Propose enrollment for admin approval | admin | operator console / ITSM | `requires_approval` |
 | `IDENTITY_DISABLED` | Escalate to administrator | operator | operator console / ITSM | `manual_only` |
-| `CRITICAL_ON_UNTRUSTED_DEVICE` | Escalate; no self-service path | operator | operator console | `manual_only` |
+| `CRITICAL_WORKFLOW_UNTRUSTED_DEVICE` | Advise a managed shared device; no grant on this one | operator | operator console | `manual_only` |
 
 Steps are emitted in a deterministic order: `auto_proposed` first (fastest safe
 self-service), then `requires_approval`, then `manual_only`.

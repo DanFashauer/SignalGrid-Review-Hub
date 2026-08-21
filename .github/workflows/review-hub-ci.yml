@@ -204,6 +204,10 @@ jobs:
 
       - name: Deployment runbook (the documented path must be the real one)
         run: node scripts/check-deployment-runbook.mjs
+      - name: Retention claims self-test (the gate must be able to fail)
+        run: node scripts/check-retention-claims.mjs --self-test
+      - name: Retention claims (no surface sells a duration nothing implements)
+        run: node scripts/check-retention-claims.mjs
       - name: "Connector discipline (gated + proven, no device actuators)"
         run: node scripts/check-connector-discipline.mjs
       - name: "Ungated fetch (the live boundary covers every outbound path)"

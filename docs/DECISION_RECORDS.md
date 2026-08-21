@@ -109,6 +109,16 @@ already exists), and the window operator-configurable. The pricing page stops
 saying "owner decision pending" and states the default plus the fact that it
 is configurable.
 
+**Status (August 21, 2026).** The decision stands; its tense was wrong. 90
+days is the **intended** default — no retention mechanism is implemented in
+any durable store (per-store evidence: `docs/DATA_RETENTION_AND_PERSONAL_DATA.md`;
+the runtime role is denied DELETE, so honouring any window requires an
+admin-credential job that has not been designed). Until the mechanism exists,
+no surface states a retention duration as shipped, and export is stated
+honestly as the operator-side CLI (`db:export-ledger`, no tenant filter) —
+not a customer self-serve route. `scripts/check-retention-claims.mjs`
+enforces the duration half.
+
 **Rationale.** 90 days is the common floor for security-incident review and it
 is short enough not to imply an archival commitment this product does not yet
 make. The important property is not the number — it is that **export is

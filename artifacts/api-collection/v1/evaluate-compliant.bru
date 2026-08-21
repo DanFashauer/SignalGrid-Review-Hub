@@ -21,3 +21,9 @@ body:json {
 docs {
   The happy path: healthy identity + managed device -> allow. Fixture actors from the demo seed.
 }
+
+script:post-response {
+  if (res.body && res.body.decision && res.body.decision.decisionId) {
+    bru.setVar("decisionId", res.body.decision.decisionId);
+  }
+}

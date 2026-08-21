@@ -23,11 +23,14 @@ function walk(dir) {
 
 const norm = (p) => p.replace(/\{\{[^}]+\}\}/g, "*").replace(/:[A-Za-z_]+/g, "*").replace(/\/+$/, "");
 
-const routePaths = new Set();
+// EXACT method+path pairs, never suffix matching: with a suffix rule,
+// deleting /v1/policies stayed green because monitoring.ts registers a bare
+// /policies — a removed route read as covered by an unrelated shorter one.
+const routePairs = new Set();
 for (const f of walk(ROUTES_DIR).filter((f) => f.endsWith(".ts"))) {
   const src = readFileSync(f, "utf8");
-  for (const m of src.matchAll(/router\.(?:get|post|put|delete|patch)\(\s*\n?\s*"([^"]+)"/g)) {
-    routePaths.add(norm(m[1]));
+  for (const m of src.matchAll(/router\.(get|post|put|delete|patch)\(\s*\n?\s*"([^"]+)"/g)) {
+    routePairs.add(`${m[1].toUpperCase()} ${norm(m[2])}`);
   }
 }
 
@@ -35,12 +38,11 @@ let checked = 0;
 const misses = [];
 for (const f of walk(COLLECTION).filter((f) => f.endsWith(".bru") && !f.includes("environments") && !f.endsWith("collection.bru"))) {
   const src = readFileSync(f, "utf8");
-  const m = src.match(/url:\s*\{\{baseUrl\}\}(\S+)/);
+  const m = src.match(/(get|post|put|delete|patch)\s*\{[^}]*url:\s*\{\{baseUrl\}\}(\S+)/);
   if (!m) continue;
   checked += 1;
-  const want = norm(m[1]);
-  const hit = [...routePaths].some((r) => want === r || want.endsWith(r));
-  if (!hit) misses.push(`${f} → ${m[1]}`);
+  const want = `${m[1].toUpperCase()} ${norm(m[2])}`;
+  if (!routePairs.has(want)) misses.push(`${f} → ${m[1].toUpperCase()} ${m[2]}`);
 }
 
 if (checked === 0) {

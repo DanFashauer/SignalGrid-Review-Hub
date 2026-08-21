@@ -17,3 +17,14 @@ body:json {
     "workflowKey": "clinical-session"
   }
 }
+
+script:post-response {
+  if (res.body && res.body.session && res.body.session.id) {
+    bru.setVar("sessionId", res.body.session.id);
+  }
+}
+
+docs {
+  Captures the new session id into {{sessionId}} so the get/refresh/end
+  requests below run in sequence with no hand-editing.
+}

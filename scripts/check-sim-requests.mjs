@@ -72,6 +72,16 @@ export function auditSimRequests(requests, results) {
       );
       continue;
     }
+    // The successor must itself be ACTIVE. Without this, two requests naming
+    // each other retire BOTH — zero pending, zero problems, and no runnable
+    // work left anywhere: the unearned affirmative again, via a cycle. A
+    // chain therefore points every predecessor at the FINAL active request.
+    if (successor.supersededBy) {
+      problems.push(
+        `request ${req.__fileId}: successor "${req.supersededBy}" is itself superseded — a retired request cannot retire another; point supersededBy at the ACTIVE end of the chain`,
+      );
+      continue;
+    }
     supersededIds.add(req.id);
     superseded.push(`${req.id} → superseded by ${req.supersededBy}`);
   }
@@ -224,6 +234,15 @@ function selfTest() {
   checks.push(["supersededBy naming a nonexistent successor is caught", a.problems.some((p) => p.includes("does not exist")) && a.pending.length === 1]);
   a = auditSimRequests([sup("old", ["everything"], { supersededBy: "new" }), sup("new", ["preflight"], {})], []);
   checks.push(["a one-sided supersession pointer is caught and the old request stays pending", a.problems.some((p) => p.includes("name it back")) && a.pending.some((p) => p.startsWith("old"))]);
+
+  a = auditSimRequests(
+    [sup("a", ["preflight"], { supersededBy: "b", supersedes: "b" }), sup("b", ["preflight"], { supersededBy: "a", supersedes: "a" })],
+    [],
+  );
+  checks.push([
+    "a supersession CYCLE retires nothing: both refused, both still pending",
+    a.problems.length === 2 && a.pending.length === 2 && a.superseded.length === 0,
+  ]);
 
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);

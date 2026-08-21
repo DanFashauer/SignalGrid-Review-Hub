@@ -57,6 +57,17 @@ wait_http() { # url  seconds   (honours WAIT_CACERT for self-signed lab TLS)
   done
 }
 
+# Lab TLS material cleanup is registered ONCE, at top level: the earlier trap
+# lived inside Fleet's provisioning branch, so a run selecting only another
+# lane (--only edr) never installed it and left extracted certs behind.
+cleanup_lab_tls() {
+  if [ "${KEEP:-0}" -eq 0 ] && [ -n "${FLEET_TLS_DIR:-}" ]; then rm -rf "$FLEET_TLS_DIR"; fi
+  if [ "${KEEP:-0}" -eq 0 ] && [ -n "${WAZUH_CA:-}" ]; then rm -f "$WAZUH_CA" "$WAZUH_CA.combined"; fi
+}
+trap cleanup_lab_tls EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 echo "== SignalGrid live-vendor lanes =="
 have_engine || echo "   (no container engine available — only lanes whose env vars are already set can run)"
 
@@ -98,13 +109,6 @@ if wanted fleet; then
     # the caller knows what to trust and what to delete. INT/TERM must EXIT
     # after cleanup — a bare handler would return into the script and keep
     # starting containers against a directory the handler just deleted.
-    cleanup_fleet_tls() {
-      if [ "${KEEP:-0}" -eq 0 ] && [ -n "${FLEET_TLS_DIR:-}" ]; then rm -rf "$FLEET_TLS_DIR"; fi
-      if [ "${KEEP:-0}" -eq 0 ] && [ -n "${WAZUH_CA:-}" ]; then rm -f "$WAZUH_CA" "$WAZUH_CA.combined"; fi
-    }
-    trap cleanup_fleet_tls EXIT
-    trap 'exit 130' INT
-    trap 'exit 143' TERM
     # SAN via a config file, not -addext: stock macOS ships LibreSSL at
     # /usr/bin/openssl, and its req has no -addext — the silent failure mode
     # is no certificate at all and a lane that reports "could not stand up
@@ -286,6 +290,9 @@ if wanted edr; then
     WAZUH_IMG="${WAZUH_IMAGE:-$SG_IMAGE_WAZUH}"
     echo "   wazuh image: $WAZUH_IMG"
     "$SG_ENGINE" run -d --name sg-wazuh -p 55000:55000 "$WAZUH_IMG" >/dev/null 2>&1
+    # Tracked the moment it exists: a container whose API never becomes healthy
+    # must still be torn down, or the failure path leaks a running Wazuh.
+    started="$started sg-wazuh"
     # EXPLICIT TRUST, verification never disabled: the container mints its own
     # self-signed API certificate; extract it and trust exactly it. Its SAN is
     # DNS:localhost ONLY — measured — so the URL must say localhost, not
@@ -305,7 +312,6 @@ if wanted edr; then
       done
     fi
     if [ "$wazuh_up" = "1" ]; then
-      started="$started sg-wazuh"
       export WAZUH_URL=https://localhost:55000
       SAVED_NODE_CA_EDR="${NODE_EXTRA_CA_CERTS:-}"
       if [ -n "$SAVED_NODE_CA_EDR" ] && [ -f "$SAVED_NODE_CA_EDR" ]; then

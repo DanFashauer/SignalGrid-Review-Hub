@@ -56,7 +56,7 @@ fi
 # ── 2. dependencies: only when the lockfile moved ────────────────────────────
 say "dependencies"
 if command -v pnpm >/dev/null 2>&1; then
-  if git diff --quiet HEAD@{1} HEAD -- pnpm-lock.yaml 2>/dev/null; then
+  if git diff --quiet "HEAD@{1}" HEAD -- pnpm-lock.yaml 2>/dev/null; then
     ok "lockfile unchanged since last position — skipping install"
   else
     echo "   lockfile changed (or first run after clone) — installing…"

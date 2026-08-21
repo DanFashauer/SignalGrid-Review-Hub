@@ -39,7 +39,12 @@ const misses = [];
 for (const f of walk(COLLECTION).filter((f) => f.endsWith(".bru") && !f.includes("environments") && !f.endsWith("collection.bru"))) {
   const src = readFileSync(f, "utf8");
   const m = src.match(/(get|post|put|delete|patch)\s*\{[^}]*url:\s*\{\{baseUrl\}\}(\S+)/);
-  if (!m) continue;
+  if (!m) {
+    // A request file this parser cannot read is a request this gate cannot
+    // guard — silently excluding it would let coverage shrink under a green.
+    misses.push(`${f} → UNPARSEABLE (no method/url block this checker recognizes)`);
+    continue;
+  }
   checked += 1;
   const want = `${m[1].toUpperCase()} ${norm(m[2])}`;
   if (!routePairs.has(want)) misses.push(`${f} → ${m[1].toUpperCase()} ${m[2]}`);

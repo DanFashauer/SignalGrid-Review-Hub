@@ -287,6 +287,7 @@ if wanted edr; then
   if [ -z "${WAZUH_URL:-}" ] && have_engine; then
     echo "-- bringing up Wazuh"
     "$SG_ENGINE" rm -f sg-wazuh >/dev/null 2>&1
+    rm -f "$HOME"/.sg-wazuh-ca.* 2>/dev/null  # residue from any pre-trap crash, swept like the containers are
     WAZUH_IMG="${WAZUH_IMAGE:-$SG_IMAGE_WAZUH}"
     echo "   wazuh image: $WAZUH_IMG"
     "$SG_ENGINE" run -d --name sg-wazuh -p 55000:55000 "$WAZUH_IMG" >/dev/null 2>&1
@@ -304,9 +305,11 @@ if wanted edr; then
       sleep 2
     done
     wazuh_up=0
-    if [ "$got_ca" = "1" ]; then
+    if [ "$got_ca" != "1" ]; then
+      echo "   (certificate never appeared — the container likely failed before its API config was written)"
+    else
       # wazuh:wazuh is the image's public default API credential, not a secret.
-      for _ in $(seq 1 90); do
+      for _ in $(seq 1 150); do
         [ "$(curl -s --cacert "$WAZUH_CA" -o /dev/null -w '%{http_code}' -u wazuh:wazuh -X POST https://localhost:55000/security/user/authenticate 2>/dev/null)" = "200" ] && { wazuh_up=1; break; } # gitleaks:allow — wazuh/wazuh-manager's documented default, same standing as postgres:16's POSTGRES_PASSWORD in CI
         sleep 2
       done

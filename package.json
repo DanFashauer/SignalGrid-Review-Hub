@@ -31,7 +31,7 @@
     "db:migrate": "pnpm --filter @workspace/scripts run db:migrate",
     "db:export-ledger": "pnpm --filter @workspace/scripts run db:export-ledger",
     "verify:ledger-export": "pnpm --filter @workspace/scripts run verify:ledger-export",
-    "demo": "pnpm run build:room-console && node -e \"console.log('\\nDemo ready (no tenant, no network, no database):\\n  1. Open docs/room-entry-console.html in ANY browser \u2014 fully offline, 20 scenarios, allow/step-up/restrict/deny with reasons.\\n  2. Full console: docker compose -f docker-compose.sim.yml up --build  ->  http://localhost:8080/console\\n')\"",
+    "demo": "pnpm run build:room-console && node -e \"console.log('\\nDemo ready (no tenant, no network, no database):\\n  1. Open docs/room-entry-console.html in ANY browser — fully offline, 20 scenarios, allow/step-up/restrict/deny with reasons.\\n  2. Full console: docker compose -f docker-compose.sim.yml up --build  ->  http://localhost:8080/console\\n')\"",
     "dev:simulator": "node scripts/dev-simulator.cjs",
     "dispatch": "node scripts/dev-dispatch.mjs",
     "docs:sanity": "node scripts/docs-sanity.mjs",
@@ -217,7 +217,8 @@
     "verify:all": "node scripts/verify-all.mjs",
     "verify:breadth": "node scripts/verify-breadth.mjs",
     "verify:docker": "node scripts/docker-verify.mjs",
-    "verify:live": "./scripts/run-live-lanes.sh"
+    "verify:live": "./scripts/run-live-lanes.sh",
+    "check:api-collection": "node scripts/check-api-collection.mjs"
   },
   "private": true,
   "devDependencies": {

@@ -676,6 +676,23 @@ export const GAPS = [
       { dir: "artifacts/api-server/src/routes", anyFileContainsAll: ['"enforced"', '"observed"', '"simulated"'] },
     ],
   },
+  {
+    id: "non-demo-core-constructor",
+    surface: "app-surfaces",
+    whatIsMissing:
+      "A decision core a CUSTOMER deployment can boot. SignalGridCore has one public " +
+      "factory — demo(), a seeded core on a fixed clock — and the served API constructs " +
+      "exactly that (artifacts/api-server/src/lib/core.ts). The shared-device-gateway " +
+      "profile fences the demo SURFACES, and the database posture is real, but the " +
+      "evaluated tenants/identities/devices are still the demo seed: this deployment " +
+      "demonstrates in a customer environment and does not yet decide about the " +
+      "customer's own estate.",
+    // Closed when the served core stops being the demo factory — the only
+    // mechanical fact that matters, checked where the server constructs it.
+    closedWhen: [
+      { file: "artifacts/api-server/src/lib/core.ts", absent: "SignalGridCore.demo()" },
+    ],
+  },
 ];
 
 export const STATUSES = ["launch", "deferred", "demo_only", "internal"];

@@ -68,6 +68,8 @@ Blocking items first. "Fail-closed" means: when the system cannot verify somethi
     - TEMPORARY privilege: PUBLIC holds TEMP by default, so `CREATE TEMP TABLE` still works under the "no DDL" wording — revoke it or narrow the documented boundary (shadowing is already defused by qualified statements). (P2)
     - Definer-routine refusal over-fires for routines in schemas the runtime cannot USE — combine the function ACL with effective schema access to avoid blocking migrations on unreachable paths. (P2)
 
+27. **Wire WEBAUTHN_REQUIRE_STEP_UP_FOR_ADMIN or retire it** — security-engineer + api-contract-architect, hours. The flag is parsed into the WebAuthn config but no route consults `requireStepUpForAdmin`: admin actions (e.g. `/v1/remediation/:id/approve`) enforce role checks only, so setting it changes nothing — a documented security control that is a dead knob (found by PR #225 round-7 review; the runbook row now says UNENFORCED). Either enforce a fresh step-up on the named admin actions with an executed counterexample proving the refusal, or delete the config field and the row. (Security lens.)
+
 Dropped below the cut, tracked in lens records: the shared-evaluator-skeleton refactor (week+), the /metrics timing-safe compare, the cp/v1 requestId envelope fix, the shell-lint population widening, the Autopilot-era doc archival stamps, and the weekly deferred-family sampling cadence (starts after Tier 1 completes).
 
 ## Owner hands

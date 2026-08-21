@@ -26,6 +26,43 @@ async function main() {
   // Fixture-safe by default even at prod tier: no live vendor calls.
   check("live integrations are OFF by default", health.liveIntegrations === false);
 
+  // ── which profile is this stack actually serving? ───────────────────────────
+  // Probed, not assumed: /v1/keys exists ONLY under review-demo. Under the
+  // shared-device-gateway profile this suite asserts THE FENCE — the exact
+  // leak measured before the compose file set the profile (an anonymous
+  // caller received nine demo bearers, a tenant owner among them) — and skips
+  // the demo-credential flow LOUDLY, because no credential can exist here:
+  // the gateway profile accepts only verified enterprise credentials.
+  const keysProbe = await fetch(`${API}/v1/keys`);
+  const servedProfile = keysProbe.status === 200 ? "review-demo" : "shared-device-gateway";
+  // SMOKE_EXPECT_PROFILE pins the phase's intent: a CI step labeled "gateway
+  // fence" must FAIL if the stack quietly serves review-demo (a compose or
+  // workflow regression), not run the other branch green.
+  const expected = (process.env.SMOKE_EXPECT_PROFILE ?? "").trim();
+  if (expected && expected !== servedProfile) {
+    console.error(`Stack smoke: expected profile "${expected}" but the stack serves "${servedProfile}" — failing before any branch runs.`);
+    process.exit(1);
+  }
+  if (keysProbe.status !== 200) {
+    check("gateway fence: /v1/keys is NOT served (was the credential dispenser)", keysProbe.status === 404);
+    const sim = await fetch(`${API}/sim/room-entry`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    check("gateway fence: the unauthenticated simulator is NOT mounted", sim.status === 404);
+    const demoEval = await fetch(`${API}/v1/decisions/evaluate`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
+      body: JSON.stringify({ identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" }),
+    });
+    check("gateway fence: a demo bearer is REFUSED as a credential (401)", demoEval.status === 401);
+    // 200 REQUIRED, not merely answered: /readyz is the probe that exercises
+    // the durable store with the running credential, and a production-shaped
+    // instance answering 503 is explicitly saying "do not send me traffic" —
+    // a smoke that passes anyway certifies a stack that refuses work.
+    const ready = await fetch(`${API}/readyz`);
+    check("readyz reports READY (200) — the gateway can reach its durable store", ready.status === 200);
+    console.log("  NOTE: gateway profile detected — demo-credential flow NOT RUN (no credential can exist here); the review-demo pass covers it.");
+    return finishSmoke();
+  }
+
   // ── evaluate a real decision (write-through to durable store) ────────────────
   const evalRes = await fetch(`${API}/v1/decisions/evaluate`, {
     method: "POST",
@@ -58,12 +95,22 @@ async function main() {
   check("cross-tenant read is denied (404)", crossRes.status === 404);
 
   // ── operational metrics reflect the traffic ──────────────────────────────────
-  const metrics = await (await fetch(`${BASE}/metrics`)).text();
+  // A stack with METRICS_TOKEN set protects /metrics with a bearer; a bare
+  // fetch would 401 and fail all three assertions on a correctly-secured
+  // stack, so pass the token through when the environment has it.
+  const metricsHeaders = process.env.METRICS_TOKEN
+    ? { authorization: `Bearer ${process.env.METRICS_TOKEN}` }
+    : {};
+  const metrics = await (await fetch(`${BASE}/metrics`, { headers: metricsHeaders })).text();
   check("metrics: process is up", /(^|\n)signalgrid_up 1/.test(metrics));
   check("metrics: an allow decision was counted",
     /signalgrid_decisions_total\{outcome="allow"\} [1-9]/.test(metrics));
   check("metrics: request counter present", metrics.includes("signalgrid_http_requests_total"));
 
+  finishSmoke();
+}
+
+function finishSmoke() {
   const total = passed + failures.length;
   console.log(`Stack smoke: ${passed}/${total} checks passed (BASE=${BASE})`);
   if (failures.length) {
@@ -71,7 +118,7 @@ async function main() {
     for (const f of failures) console.error(`  - ${f}`);
     process.exit(1);
   }
-  console.log("Deployed stack verified — durable decision persistence + tamper-evident evidence + tenant isolation + metrics, end to end.");
+  console.log("Deployed stack verified for the profile it serves.");
 }
 
 main().catch((err) => { console.error("Smoke test error:", err.message); process.exit(1); });

@@ -54,7 +54,20 @@ const PROFILES: readonly ProductProfile[] = ["review-demo", "shared-device-gatew
  */
 export function resolveProfile(): ProductProfile {
   const raw = (process.env["SIGNALGRID_PRODUCT_PROFILE"] ?? "").trim().toLowerCase();
-  return (PROFILES as readonly string[]).includes(raw) ? (raw as ProductProfile) : "review-demo";
+  if (raw === "") return "review-demo";
+  if ((PROFILES as readonly string[]).includes(raw)) return raw as ProductProfile;
+  // An EXPLICITLY SET but unrecognized value refuses to boot. The old
+  // behavior mapped it to review-demo — so a production operator who
+  // misspelled "shared-device-gatewy" silently got the credential dispenser
+  // and the unauthenticated simulator back on a production-shaped stack.
+  // Unset stays review-demo (the reviewer default that changes nothing);
+  // garbage is a configuration error and the only fail-closed answer to a
+  // configuration error on THIS variable is to not serve at all.
+  throw new Error(
+    `SIGNALGRID_PRODUCT_PROFILE="${process.env["SIGNALGRID_PRODUCT_PROFILE"]}" is not a known profile ` +
+      `(known: ${PROFILES.join(", ")}). Refusing to start: an unrecognized value must not silently ` +
+      `select the demo surfaces.`,
+  );
 }
 
 /**

@@ -4,6 +4,7 @@ import { getDecisionStore, getSessionStore } from "@workspace/persistence";
 import { getAuditBackend } from "@workspace/audit";
 import { resolveTier, isLiveIntegrationsEnabled } from "../lib/tier";
 import { demoSurfacesEnabled } from "../lib/profile";
+import { loadEnterpriseAuthConfig } from "@workspace/enterprise-auth";
 
 const router: IRouter = Router();
 
@@ -48,6 +49,23 @@ router.get("/readyz", async (req: Request, res: Response) => {
       message: verbose ? message : "Not ready.",
     });
   };
+  // Under the gateway profile the ONLY credentials are verified enterprise
+  // ones, so an instance whose OIDC configuration is absent or invalid can
+  // authenticate nobody — every /v1 call is 401. Routing traffic to it is
+  // routing traffic to a refusal machine, so readiness fails first (the
+  // database probes below being green would only make the 200 more
+  // misleading). Demo profile is unaffected: its bearer surface needs no IdP.
+  if (!verbose) {
+    const auth = loadEnterpriseAuthConfig();
+    if (auth.status !== "enabled") {
+      notReady(
+        auth.status === "invalid"
+          ? `enterprise auth configuration is invalid (${auth.reason}) — no caller can authenticate.`
+          : "gateway profile with no enterprise auth configured (OIDC_ISSUER unset) — no caller can authenticate; set the OIDC variables from docs/DEPLOYMENT.md.",
+      );
+      return;
+    }
+  }
   const store = getDecisionStore();
   if (store === null) {
     res.json(verbose ? { status: "ready", durableStore: "none" } : { status: "ready" });

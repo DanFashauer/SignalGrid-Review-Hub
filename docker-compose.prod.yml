@@ -32,6 +32,60 @@ services:
       NODE_ENV: production
       PORT: 8080
       SIGNALGRID_TIER: prod
+      # THE PROFILE FENCE. Without this line the server resolves to
+      # `review-demo` and SERVES THE DEMO SURFACES: GET /api/v1/keys hands an
+      # anonymous caller nine bearer tokens (including a tenant owner), and
+      # the unauthenticated simulator and control plane are mounted. Measured
+      # before this line existed — a stack booted from this very file did
+      # exactly that. A production deployment is the gateway profile, always.
+      # Overridable for an EVALUATION stack (SIGNALGRID_PRODUCT_PROFILE=review-demo
+      # docker compose up …), because the demo surfaces are the point of an
+      # evaluation — but the DEFAULT is the production truth.
+      SIGNALGRID_PRODUCT_PROFILE: ${SIGNALGRID_PRODUCT_PROFILE:-shared-device-gateway}
+      # The gateway profile accepts only verified enterprise credentials, so a
+      # usable gateway stack NEEDS these passed through — without them every
+      # caller is 401 and the API is a fence around nothing. Empty stays unset
+      # server-side (the reader trims and treats blank as unconfigured).
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
+      OIDC_JWKS_URI: ${OIDC_JWKS_URI:-}
+      OIDC_TENANT_CLAIM: ${OIDC_TENANT_CLAIM:-}
+      OIDC_ROLE_CLAIM: ${OIDC_ROLE_CLAIM:-}
+      OIDC_SUBJECT_CLAIM: ${OIDC_SUBJECT_CLAIM:-}
+      OIDC_CLOCK_TOLERANCE_SEC: ${OIDC_CLOCK_TOLERANCE_SEC:-}
+      # The two maps are REQUIRED by loadEnterpriseAuthConfig — without them the
+      # OIDC config is invalid and every gateway request is 401, so dropping
+      # them here would un-deploy the gateway while appearing configured.
+      OIDC_TENANT_MAP: ${OIDC_TENANT_MAP:-}
+      OIDC_ROLE_MAP: ${OIDC_ROLE_MAP:-}
+      # Every remaining boot-read setting passes through too — a runbook row
+      # for a variable this file swallows is documentation of a dead knob
+      # (exporting it on the host would be silently ignored). The runbook
+      # checker now holds this mapping against the collected boot-reads.
+      # Blank-safety verified per reader: the rate limiters fall back on
+      # non-positive parses, REDIS_URL/WEBAUTHN_* treat blank as unset, and
+      # the step-up TTL and OIDC clock tolerance readers were hardened to
+      # treat blank as their documented defaults.
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      LOG_LEVEL: ${LOG_LEVEL:-}
+      REDIS_URL: ${REDIS_URL:-}
+      SIGNALGRID_DEPRECATED_ROUTES: ${SIGNALGRID_DEPRECATED_ROUTES:-}
+      # PINNED false, deliberately not a pass-through: this image has no
+      # @workspace/integrations wiring — the connector routes run the
+      # fixture-backed core — so a true here would only flip /healthz and
+      # /v1/context to CLAIM live signals the stack cannot produce. A
+      # deployment that actually wires live integrations changes the image,
+      # not this line.
+      SIGNALGRID_LIVE_INTEGRATIONS: "false"
+      SIGNALGRID_V1_RATE_LIMIT: ${SIGNALGRID_V1_RATE_LIMIT:-}
+      SIGNALGRID_GLOBAL_RATE_LIMIT: ${SIGNALGRID_GLOBAL_RATE_LIMIT:-}
+      STEPUP_TTL_SECONDS: ${STEPUP_TTL_SECONDS:-}
+      WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-}
+      WEBAUTHN_RP_NAME: ${WEBAUTHN_RP_NAME:-}
+      WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:-}
+      WEBAUTHN_REQUIRE_STEP_UP_FOR_ADMIN: ${WEBAUTHN_REQUIRE_STEP_UP_FOR_ADMIN:-}
+      SIGNALGRID_ENROLLMENT_SECRET: ${SIGNALGRID_ENROLLMENT_SECRET:-}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
       # Enabling durable persistence: with DATABASE_URL set, the audit ledger,
       # decision/evidence store, and session store persist to Postgres.
       #
@@ -41,8 +95,11 @@ services:
       # is append-only by privilege): run `pnpm run db:migrate` with the admin
       # credential, set the runtime password, and point this URL at it — see
       # docs/BACKUP_AND_RESTORE.md § "The runtime role". `proof:db-role-split`
-      # proves both directions of that posture in CI.
-      DATABASE_URL: postgres://sg:sg@db:5432/signalgrid
+      # proves both directions of that posture in CI. The value interpolates so
+      # exporting DATABASE_URL on the host actually takes effect — a hardcoded
+      # URL here silently kept the API running as the database owner no matter
+      # what the runbook's step 3 said.
+      DATABASE_URL: ${DATABASE_URL:-postgres://sg:sg@db:5432/signalgrid}
     ports:
       - "8080:8080"
     # `db` has a healthcheck and `api` waits for it — but nothing described whether

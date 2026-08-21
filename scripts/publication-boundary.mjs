@@ -111,6 +111,7 @@ export const AREAS = [
   { path: "Dockerfile.web", class: "tooling", reason: "Web image build." },
   { path: "docker-compose.yml", class: "tooling", reason: "Local stack." },
   { path: "docker-compose.prod.yml", class: "tooling", reason: "Production-shaped stack used by the CI smoke job." },
+  { path: "docker-compose.migrate.yml", class: "tooling", reason: "Migration overlay publishing the bundled db to the loopback for the runbook's migrate-then-boot sequence; used by operators and the CI deploy-stack job alike." },
   { path: "docker-compose.sim.yml", class: "tooling", reason: "Simulator stack." },
   { path: "nginx.conf", class: "tooling", reason: "Static web serving config." },
   { path: "package.json", class: "tooling", reason: "Workspace root manifest." },

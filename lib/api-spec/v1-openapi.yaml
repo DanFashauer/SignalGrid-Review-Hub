@@ -276,7 +276,7 @@ paths:
                       additionalProperties: { type: number, minimum: 0 }
                     floor: { type: string, enum: [allow, step_up, restrict, deny] }
       responses:
-        "200": { description: The outcome that stands, its reason codes, the provenance frontier, whether it was contested, and which records expired }
+        "200": { description: "The outcome that stands, its reason codes, the provenance frontier, whether it was contested, and which records expired" }
         "400": { $ref: "#/components/responses/ValidationError" }
 
   /v1/decisions/{id}/simulate:
@@ -414,7 +414,7 @@ paths:
       parameters: [{ $ref: "#/components/parameters/Id" }]
       summary: Resolution Assistant plan for a decision (deterministic)
       responses:
-        "200": { description: Resolution plan (steps, classes, channels) }
+        "200": { description: "Resolution plan (steps, classes, channels)" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /v1/decisions/{id}/resolve:
@@ -536,7 +536,7 @@ paths:
       responses:
         "200": { description: challengeId + WebAuthn PublicKeyCredentialCreationOptions (+ demoNote on a demo core with no out-of-band secret configured) }
         "400": { $ref: "#/components/responses/ValidationError" }
-        "403": { description: Role not operator/owner, or the configured out-of-band authorization header is absent/wrong — fail closed }
+        "403": { description: "Role not operator/owner, or the configured out-of-band authorization header is absent/wrong — fail closed" }
 
   /v1/step-up/enroll/verify:
     post:
@@ -563,7 +563,7 @@ paths:
       responses:
         "200": { description: Credential enrolled (+ demoNote on a demo core with no out-of-band secret configured) }
         "400": { $ref: "#/components/responses/ValidationError" }
-        "403": { description: Attestation failed verification, role not operator/owner, or out-of-band authorization absent/wrong — fail closed, nothing stored }
+        "403": { description: "Attestation failed verification, role not operator/owner, or out-of-band authorization absent/wrong — fail closed, nothing stored" }
 
   /v1/step-up/challenge:
     post:
@@ -591,7 +591,7 @@ paths:
       responses:
         "200": { description: challengeId + WebAuthn PublicKeyCredentialRequestOptions (userVerification required) }
         "400": { $ref: "#/components/responses/ValidationError" }
-        "404": { description: Unknown app integration, or unknown action key for it }
+        "404": { description: "Unknown app integration, or unknown action key for it" }
         "409": { description: No enrolled credential for this identity in this tenant — enroll first (fail closed) }
 
   /v1/app-workflows/complete-step-up:
@@ -625,7 +625,7 @@ paths:
       responses:
         "200": { description: Decision + re-cut plan + stepUp verification record (released only if the current outcome was step_up) }
         "400": { $ref: "#/components/responses/ValidationError" }
-        "403": { description: Assertion failed verification (bad signature, replayed/expired challenge, missing user-verification) — no plan returned }
+        "403": { description: "Assertion failed verification (bad signature, replayed/expired challenge, missing user-verification) — no plan returned" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   # ── Control plane (public management surface; see docs/DEPLOYMENT_MODELS.md) ──
@@ -778,7 +778,7 @@ paths:
       security: []
       summary: Flow + signal health with self-heal / incident resolution and a grid-intelligence score
       responses:
-        "200": { description: Flow health, break resolution, and grid intelligence }
+        "200": { description: "Flow health, break resolution, and grid intelligence" }
 
   /cp/v1/recommendations:
     get:
@@ -828,7 +828,7 @@ paths:
         deterministic fixture snapshot labelled source:"fixture". A heal is only
         ever PROPOSED — nothing is applied without a recorded human approval.
       responses:
-        "200": { description: Checklist report, plain-language summary, and proposed heals }
+        "200": { description: "Checklist report, plain-language summary, and proposed heals" }
 
   /cp/v1/reliability:
     get:
@@ -854,7 +854,7 @@ paths:
         decision plus a recorded human approval; a rollout can never apply
         itself. See docs/IAC_GITOPS.md.
       responses:
-        "200": { description: Plan and drift, each with a summary }
+        "200": { description: "Plan and drift, each with a summary" }
 
   /cp/v1/grid/coverage:
     get:
@@ -892,7 +892,7 @@ paths:
           schema: { type: string }
           description: Comma-separated source planes, e.g. `identity,device_management`. Omit for the empty estate.
       responses:
-        "200": { description: Coverage report — per-axis findings, answerable/needsInstrumentation/notSourced counts, and silentHoles }
+        "200": { description: "Coverage report — per-axis findings, answerable/needsInstrumentation/notSourced counts, and silentHoles" }
         "400": { description: An unrecognised source plane was supplied; the response names it and lists the valid planes }
 
   /cp/v1/grid/config:
@@ -902,7 +902,7 @@ paths:
       security: []
       summary: Workflows as code — the declarative grid and the CI validation run before it runs
       responses:
-        "200": { description: Validation result, summary, issues, and the declarative config }
+        "200": { description: "Validation result, summary, issues, and the declarative config" }
 
   /cp/v1/grid/provisioning:
     get:
@@ -917,7 +917,7 @@ paths:
           schema: { type: string }
           description: Preview the plan against a chosen device serial (defaults to a matching preset).
       responses:
-        "200": { description: Recording, validation, chosen device, preset devices, and the simulated plan }
+        "200": { description: "Recording, validation, chosen device, preset devices, and the simulated plan" }
 
   /cp/v1/apps/resilience:
     get:
@@ -945,6 +945,8 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
 
   /v1/sessions/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
     get:
       operationId: getSession
       tags: [sessions]
@@ -956,6 +958,8 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
 
   /v1/sessions/{id}/refresh:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
     post:
       operationId: refreshSession
       tags: [sessions]
@@ -967,6 +971,8 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
 
   /v1/sessions/{id}/end:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
     post:
       operationId: endSession
       tags: [sessions]

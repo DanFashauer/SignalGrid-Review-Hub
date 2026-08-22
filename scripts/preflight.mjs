@@ -138,6 +138,7 @@ const STEPS = [
   { name: "Proof: mcp-server (the published plugin path boots and serves its declared tools)", cmd: ["pnpm", "run", "proof:mcp-server"] },
   { name: "Preflight↔CI parity (a gate that runs only locally is not a gate)", cmd: ["node", "scripts/check-preflight-ci-parity.mjs"] },
   { name: "Assessor package (every link, command and path in it resolves)", cmd: ["node", "scripts/check-assessor-package.mjs"] },
+  { name: "OpenAPI validity (the published contract parses as OpenAPI; self-tested)", cmd: ["node", "scripts/check-openapi-valid.mjs"] },
   { name: "Connector discipline (every family gated + proven, none acting on a device)", cmd: ["node", "scripts/check-connector-discipline.mjs"] },
   { name: "Launch profile (the declared product edge matches the real one)", cmd: ["node", "scripts/check-launch-profile.mjs"] },
   { name: "Ungated fetch (a health check is still a live call)", cmd: ["node", "scripts/check-ungated-fetch.mjs"] },

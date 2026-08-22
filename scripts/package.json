@@ -199,6 +199,7 @@
   },
   "devDependencies": {
     "@playwright/test": "1.62.1",
+    "@seriousme/openapi-schema-validator": "^2.9.1",
     "@types/node": "catalog:",
     "@types/pg": "^8.21.0",
     "@usebruno/cli": "^4.0.0",

@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-08-22T08:27:13+00:00",
-  "result": "quiet \u2014 no new Mac activity since the licence-basis exchange; telemetry first-run result not yet landed (Mac said it was taking it; 4am there)"
+  "firedAt": "2026-08-22T12:26:17+00:00",
+  "result": "quiet \u2014 no new Mac activity (telemetry first-run + darwin SBOM proof still pending there); heartbeat commit rides the rows-13+15 push currently gated on full preflight"
 }

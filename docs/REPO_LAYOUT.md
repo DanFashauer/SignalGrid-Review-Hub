@@ -57,6 +57,67 @@ native/ios/              EnterpriseShell (BLE / USB-C badge) — hardware design
 .github/workflows/       CI, safety gate, CodeQL, SBOM, gitleaks, Pages, promote-tier
 ```
 
+## The packages — all 43, derived not curated
+
+Counted from `lib/*/package.json` + `artifacts/*/package.json` on 2026-08-22;
+one-liners come from each package's own source header where one exists. The
+code is the truth — a one-liner that drifts gets fixed by reading the source,
+not by trusting this table. (`scripts/` is a 44th workspace package holding
+the proof harnesses and gates.)
+
+### `lib/` — the decision fabric (35)
+
+| Package | What it is |
+| --- | --- |
+| `adaptive-proposals` | The governed lifecycle around a recommendation |
+| `api-client-react` | React client bindings for the /v1 API |
+| `api-spec` | The OpenAPI contract (`v1-openapi.yaml`) |
+| `api-zod` | Zod schemas mirroring the API contract |
+| `app-workflows` | Public-safe catalog of integrated application workflows, by vertical |
+| `audit` | Audit ledger storage backends |
+| `control-plane` | Control-plane bundles, checksums, seeded refs |
+| `ddm-connector` | Apple Declarative Device Management schema alignment |
+| `dual-control` | Two-person approval flows |
+| `enterprise-auth` | JWT/OIDC parsing and enterprise auth helpers |
+| `event-contract` | Shared event-shape contract between surfaces |
+| `facility-trust-graph` | Facility/room/bed context graph (clinical phases) |
+| `fleet-connector` | The read half of the SignalGrid↔Fleet loop |
+| `flows` | Application resilience — keep staff working when a cloud app wobbles |
+| `handoff-sim` | Deterministic cross-device handoff simulation |
+| `iac` | Public-safe infrastructure-as-code demo fixtures |
+| `incident-playbook` | Deterministic mapping from a decision to an incident playbook |
+| `integration-bridge` | The source-agnostic device-management evidence contract |
+| `integrations` | The connector families (graph, headwind, fleet, radius, wazuh…) |
+| `location` | Location/zone evidence |
+| `orchestration` | The "trust + orchestration = action" layer |
+| `persistence` | Durable decision + evidence store (production persistence) |
+| `pim-activation` | Privileged-identity activation flows |
+| `posture-composition` | Composes posture evidence; task-exception subpath |
+| `recommendations` | Public-safe observed-usage fixtures for the demo flows |
+| `reliability` | SLOs and error budgets for the decision plane |
+| `room-sim` | Client-side Trusted Room Entry console |
+| `self-audit` | The fail-closed self-audit checklist runner |
+| `signal-discovery` | Discovery fixtures: connected sources and raw signals |
+| `signal-radar` | "Watch the edges of the grid" — signal coverage radar |
+| `signalgrid-core` | The deterministic decision core |
+| `signalgrid-simulator` | The real-life simulator the proofs and iOS port share |
+| `verdict-attestation` | Signing/attestation of decision verdicts |
+| `webauthn` | FIDO2/passkey registration + authentication |
+| `work-context` | Fabric verdict summaries in, portable work context out |
+
+### `artifacts/` — runnable surfaces (8)
+
+| Package | What it is |
+| --- | --- |
+| `api-server` | The Node control-plane + `/v1` decision API |
+| `mcp-server` | The 16-tool MCP agent gateway |
+| `mockup-sandbox` | Design mockup sandbox |
+| `signalgrid-app` | The operator web console |
+| `signalgrid-desktop` | Tauri desktop shell |
+| `signalgrid-mobile-pwa` | Mobile PWA surface |
+| `signalgrid-review` | The public review hub app |
+| `signalgrid-web` | The marketing/website surface |
+
 ## Tier branches — dev → alpha → beta → prod
 
 The four-tier buildout is reflected as branches, promoted upward. Each tier runs

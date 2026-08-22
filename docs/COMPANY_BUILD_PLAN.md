@@ -52,7 +52,7 @@ Blocking items first. "Fail-closed" means: when the system cannot verify somethi
 18. **Make iOS port parity behavioral, not textual** — mobile-native-engineer, days. Emit deterministic decision vectors from the TS engine, replay them in a Swift test, add the TS engine paths to the iOS CI trigger. The gate's stated excuse — no Mac in CI — stopped being true when the macos-native job landed. (Native lens.)
 19. **Finish Dynamic Type and pin it with a lint rule** — accessibility-specialist, days. The screens that render the Assist verdict still hold 14 fixed-size font calls; writing the rule in CLAUDE.md twice has not held it, so add a SwiftLint error banning raw systemFont outside DesignSystem.swift. Queue the Mac-lane sim-request that screenshots the verdict screen at accessibility-extra-large. (Native lens.)
 20. **Fix the docs entry points and drain the orphan list to zero** — docs-writer, hours. The CI doc's first screen describes 5% of the CI that exists; the index claims 31 roles against a 40-role roster; the doctrine doc behind a CLAUDE.md golden rule is unreachable from any index; two ready-to-use owner drafts are filed where you cannot find them. Add the honest "28 of 134, as of 2026-08-03" scope line to the proof-coverage audit. (Docs lens.)
-21. **Write the glossary and tier the index** — docs-writer, days. The corpus is written in a house idiom ("unearned affirmative", "breadth freeze", "Level 10") no outsider can parse, and the 64KB index fails its one job. A ~40-term glossary plus a 20-line "first hour by audience" table on top of the existing catalog. Refresh REPO_LAYOUT.md to all 35 packages. (Docs lens.)
+21. **Write the glossary and tier the index** — docs-writer. DONE 2026-08-22: docs/GLOSSARY.md (42 terms, usage-grounded, including the honest entry for "Level 10" as a recorded fossil warning), the first-hour-by-audience table now opens INDEX.md (five audiences, the unsubstantiated "Level 10 review" heading retired per CLAIM_INVENTORY), and REPO_LAYOUT.md carries the derived 43-package table dated and marked derived-not-curated. The corpus is written in a house idiom ("unearned affirmative", "breadth freeze", "Level 10") no outsider can parse, and the 64KB index fails its one job. A ~40-term glossary plus a 20-line "first hour by audience" table on top of the existing catalog. Refresh REPO_LAYOUT.md to all 35 packages. (Docs lens.)
 22. **Stand up the cost model and shift economics** — finance-fundraising + agent-ops-economics, days. The site publishes $8/$14 per-device prices with no cost side anywhere in the tree. The skeleton is fully derivable from committed files today (see Drafts); every unpriced line stays TBD, never guessed. Publish shift denominators now so one owner billing number later yields cost-per-shift instantly. (Finance lens.)
 23. **Decide the Fleet Premium question before 2026-09-16** — endpoint-uem-domain, hours. The one identified paid dependency in the evidence path; whether a per-deployment license line exists in COGS is currently unknowable, and the trial clock has ~27 days. (Finance lens.)
 24. **Stage the ledger-truncation article for your review** — proof-led-content + compliance-analyst, hours. The draft exists (below), every number traces, and it publishes nowhere without your approval. Independent verification pass first; drafts 2–4 queue behind it with the corrected framings (NAC as "derived state, not wire fact"; the gateway CA name generalized; the one-IdP caveat in the Keycloak lede). (Proof-led-content lens.)
@@ -107,10 +107,15 @@ but skippable; telemetry opt-in). The genuine deltas, filed:
     produce the same decisions under fresh/stale/missing/contradictory
     states. Trigger: identity breadth scheduling, not before row 35 (its
     credentials should be born inside the secret boundary).
-37. **Trivy beside Grype** — release-engineer, hours-to-days. Run on
-    controlled fixtures next to the live Grype workflow, preserve tool and
-    database versions, record disagreement as data. Only after that
-    comparison does anyone decide whether it becomes a second gate.
+37. **Trivy beside Grype** — release-engineer. DONE 2026-08-22:
+    trivy v0.74.0 (sha-recorded) beside grype v0.112.0 over the committed
+    1299-component SBOM — 19 findings each, identical severity histograms,
+    ZERO true disagreements; the eight per-side deltas are the same
+    vulnerabilities under different id schemes (GHSA vs CVE), mapped 1:1 in
+    artifacts/scanner-comparison/2026-08-22-grype-vs-trivy.json. DECISION
+    the row asked for: corroboration, not divergence — no second gate;
+    trivy stays an on-demand cross-check, re-run on scanner majors or when
+    image-scope scanning exists (where the analyzers genuinely differ).
 38. **Free-tier proprietary validation targets** — design-partner-outreach +
     endpoint-uem-domain, when a pilot's stack matches: Miradore (free plan,
     up to 50 devices) and ManageEngine Endpoint Central (free to 25

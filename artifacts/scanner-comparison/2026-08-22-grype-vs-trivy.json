@@ -1,0 +1,31 @@
+{
+  "$comment": "Backlog row 37: Trivy run beside the live Grype workflow, disagreement recorded as DATA, deliberately not a gate. Both scanners over the committed source-scope SBOM (artifacts/sbom/cyclonedx.json, 1299 components).",
+  "ranAt": "2026-08-22T11:20:52+00:00",
+  "tools": {
+    "grype": {
+      "version": "0.112.0",
+      "sha256Pinned": true,
+      "dbUpdatedBeforeRun": true
+    },
+    "trivy": {
+      "version": "0.74.0",
+      "tarballSha256": "2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a"
+    }
+  },
+  "input": "artifacts/sbom/cyclonedx.json @ post-#244 (platform-invariant generation)",
+  "result": {
+    "grypeMatches": 19,
+    "trivyMatches": 19,
+    "severityHistogramIdentical": {
+      "high": 4,
+      "medium": 12,
+      "low": 3
+    },
+    "sharedByExactId": 11,
+    "idSchemeOnlyDeltas": 8,
+    "idSchemeExplanation": "every grype-only GHSA id maps to a trivy-only CVE id for the SAME package@version at the SAME severity (form-data GHSA-hmw2-7cc7-3qxx = CVE-2026-12143, nanoid GHSA-28wg-ghj8-5hjv/GHSA-2v37-7h3g-55p8 = CVE-2026-67213/67214, uuid, qs, axios, body-parser, @babel/core likewise)",
+    "severityDisagreementsOnShared": 0,
+    "trueDisagreements": 0
+  },
+  "disposition": "CORROBORATION, not divergence. A second gate would add ceremony without catching anything the first misses on this surface; trivy stays an on-demand cross-check (this record is the repeatable procedure). Re-run when either scanner majors or when an image registry exists (image-scope scanning is where the tools' analyzers genuinely differ)."
+}

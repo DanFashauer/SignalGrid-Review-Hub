@@ -50,6 +50,13 @@ signature          BUILT — custody RATIFIED as keyless Sigstore OIDC via
                    scenario that would revive it).
 ```
 
+Cross-check (row 37, 2026-08-22): Trivy v0.74.0 run beside Grype over the
+committed SBOM produced 19/19 findings with identical severities and zero
+true disagreements — the only delta is id scheme (GHSA vs CVE), mapped in
+`artifacts/scanner-comparison/2026-08-22-grype-vs-trivy.json`. Decision:
+corroboration, not divergence; no second gate. Trivy remains an on-demand
+cross-check until image-scope scanning exists.
+
 What this page does NOT claim: no attestation (in-toto predicate) exists
 yet, no registry image is signed yet, and the vulnerability evidence
 covers the api image only —

@@ -712,7 +712,7 @@
       "licence": "Apache-2.0",
       "licenceCaution": false,
       "basis": "owner research report v3 2026-08-22 (open-source lab + integration stack), verify before any code reuse",
-      "role": "Independent cross-check of Grype plus IaC/config scanning. Scanner disagreement is normal and is the point \u2014 run beside Grype on controlled fixtures, preserve tool+database versions, and only then decide whether it becomes a second gate. Not adopted until the Grype workflow (live in CI since 2026-08-21) has produced enough runs to compare against.",
+      "role": "Independent cross-check of Grype plus IaC/config scanning. Scanner disagreement is normal and is the point \u2014 run beside Grype on controlled fixtures, preserve tool+database versions, and only then decide whether it becomes a second gate. Not adopted until the Grype workflow (live in CI since 2026-08-21) has produced enough runs to compare against. COMPARISON RUN 2026-08-22 (v0.74.0 beside grype v0.112.0, committed SBOM): zero true disagreements, id-scheme delta only \u2014 no second gate; on-demand cross-check, record in artifacts/scanner-comparison/.",
       "deployedInLab": false,
       "deployedEvidence": null,
       "ownerRole": "release-engineer",

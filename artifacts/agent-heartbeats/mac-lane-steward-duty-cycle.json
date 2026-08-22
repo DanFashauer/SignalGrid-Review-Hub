@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-08-22T04:43:39+00:00",
-  "result": "acted: read Mac follow-up on the licence-basis mirror defect, applied its suggested registry-precedence fix, regenerated SBOM (1299/1299), acked, PR #244 in flight"
+  "firedAt": "2026-08-22T08:27:13+00:00",
+  "result": "quiet \u2014 no new Mac activity since the licence-basis exchange; telemetry first-run result not yet landed (Mac said it was taking it; 4am there)"
 }

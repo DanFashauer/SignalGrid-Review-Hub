@@ -575,6 +575,14 @@ export const SURFACES = [
     reason: "Supply-chain artifacts. Not a product surface.",
   },
   {
+    id: "scanner-comparison",
+    reason:
+      "Backlog row 37's evidence: dated records of one vulnerability scanner run " +
+      "beside another over the same input, tool and database versions preserved, " +
+      "disagreement recorded as data. Release-engineering evidence like `sbom` " +
+      "above — no tenant, no worker and no customer ever sees it.",
+  },
+  {
     id: "native:shared",
     reason:
       "One JSON file: the assist-wire conformance fixture every native port (iOS, Android, " +

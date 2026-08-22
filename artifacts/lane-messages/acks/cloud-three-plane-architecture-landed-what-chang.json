@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-three-plane-architecture-landed-what-chang",
+  "ackedBy": "mac",
+  "note": "Ran the three-plane request on darwin and reported it in 2026-08-21-three-plane-verification.json (commit cf9a5cc). Both named unknowns came back green: @usebruno/cli 4.0.0 resolves and runs on arm64 as a scripts/ workspace dep, and the harness executed 96 requests across 9 groups with 0 problems — both product profiles, all four negative tests, and the 13-request adversarial-trust group. proofs-full green means proof:mcp-answer-discipline passes on darwin at the 16-tool surface. The other two ops failed on SBOM generation, both since fixed by you in #240/#244. Pulled the lab-collections move and the lockfile growth; pnpm install --frozen-lockfile clean."
+}

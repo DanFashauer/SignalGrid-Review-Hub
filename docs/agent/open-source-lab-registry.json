@@ -1,6 +1,6 @@
 {
   "$comment": "Open-source lab registry \u2014 the owner's 30-repo research index, transcribed into a governed artifact. Machine half; the human half is docs/OPEN_SOURCE_LAB_REGISTRY.md and the gate is scripts/check-lab-registry.mjs. deployedInLab is TRUE only for services scripts/run-live-lanes.sh actually starts today; classification records intent, not deployment. v2 (2026-08-21, second owner research report): every entry now carries ownerRole (must exist in docs/agent/org-roster.json \u2014 the gate enforces it), priorityTier (P0 prove-the-product / P1 prove-the-enterprise-workflow / P2 ecosystem depth), credentialClass, mutationsAllowed (false across the board \u2014 a true requires a decision record naming its approval gate), and lastReviewed. Seven repositories added from the same report.",
-  "transcribedFrom": "owner research directive, 2026-08-21",
+  "transcribedFrom": "live scheduler n/a \u2014 registry re-transcribed 2026-08-22 on report v3 intake (48 entries)",
   "rule": {
     "boundary": "external system \u2192 source adapter \u2192 normalized evidence \u2192 freshness + provenance + contradictions \u2192 deterministic policy \u2192 verdict",
     "neverRule": "No repository's code is copied or embedded into SignalGrid until its licence has been reviewed against the distribution model. Studying, deploying as a separate lab service, and speaking a wire protocol are not the same act as embedding code."
@@ -578,12 +578,12 @@
       "lastReviewed": "2026-08-21"
     },
     {
-      "repo": "snipe/snipe-it",
+      "repo": "grokability/snipe-it",
       "ownerRanked": null,
       "classification": "LAB_SOURCE",
       "licence": "AGPL-3.0",
       "licenceCaution": true,
-      "basis": "owner research report 2026-08-21 (full ecosystem edition), verify before any code reuse",
+      "basis": "owner research report 2026-08-21 (full ecosystem edition), verify before any code reuse; repo org corrected to grokability (current upstream home) per report v3",
       "role": "Simpler ITAM alternative to GLPI for asset-assignment evidence (asset tag, assigned-to, check-in/out). AGPL: API integration with an independently deployed service only \u2014 never embedded. GLPI already covers this class in the lab; adopt only if a pilot's stack demands it.",
       "deployedInLab": false,
       "deployedEvidence": null,
@@ -591,7 +591,7 @@
       "priorityTier": "P2",
       "credentialClass": "read_only",
       "mutationsAllowed": false,
-      "lastReviewed": "2026-08-21"
+      "lastReviewed": "2026-08-22"
     },
     {
       "repo": "Ylianst/MeshCentral",
@@ -672,6 +672,86 @@
       "credentialClass": "not_applicable_reference",
       "mutationsAllowed": false,
       "lastReviewed": "2026-08-21"
+    },
+    {
+      "repo": "openbao/openbao",
+      "ownerRanked": 9,
+      "classification": "INTERNAL_COMPANY_TOOL",
+      "licence": "MPL-2.0",
+      "licenceCaution": false,
+      "basis": "owner research report v3 2026-08-22 (open-source lab + integration stack), verify before any code reuse",
+      "role": "Secrets management \u2014 the report names this one of the three most important gaps in the stack. Target state: connector/API credentials and service identities out of env files and into scoped, rotatable leases with audit; secret-zero, unseal and root-token procedures kept OUT of any agent's reach; never returns a secret conversationally. Adoption is backlog row 35 (secret model + naming + rotation runbook BEFORE the first stored secret, the METRIC_STANDARDS pattern applied to credentials). mutationsAllowed stays FALSE until the row-35 adoption DR exists \u2014 DR-008's gate enforces exactly this, and it fired on the first attempt to record otherwise.",
+      "deployedInLab": false,
+      "deployedEvidence": null,
+      "ownerRole": "secops-domain",
+      "priorityTier": "P0",
+      "credentialClass": "service_account_least_privilege",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-22"
+    },
+    {
+      "repo": "goauthentik/authentik",
+      "ownerRanked": 18,
+      "classification": "LAB_SOURCE",
+      "licence": "MIT core; enterprise components separately licensed",
+      "licenceCaution": true,
+      "basis": "owner research report v3 2026-08-22 (open-source lab + integration stack), verify before any code reuse",
+      "role": "Second IdP implementation for identity source-independence: the Fleet/Headwind pattern applied to IAM \u2014 Keycloak and authentik feeding the SAME normalized identity evidence must produce the SAME decisions. Trigger: the Keycloak adapter is already live-proven (15 dimensions, 2026-08-21), so this is genuinely next when identity breadth is scheduled, not aspirational.",
+      "deployedInLab": false,
+      "deployedEvidence": null,
+      "ownerRole": "iam-domain",
+      "priorityTier": "P1",
+      "credentialClass": "read_only",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-22"
+    },
+    {
+      "repo": "aquasecurity/trivy",
+      "ownerRanked": 28,
+      "classification": "INTERNAL_COMPANY_TOOL",
+      "licence": "Apache-2.0",
+      "licenceCaution": false,
+      "basis": "owner research report v3 2026-08-22 (open-source lab + integration stack), verify before any code reuse",
+      "role": "Independent cross-check of Grype plus IaC/config scanning. Scanner disagreement is normal and is the point \u2014 run beside Grype on controlled fixtures, preserve tool+database versions, and only then decide whether it becomes a second gate. Not adopted until the Grype workflow (live in CI since 2026-08-21) has produced enough runs to compare against.",
+      "deployedInLab": false,
+      "deployedEvidence": null,
+      "ownerRole": "release-engineer",
+      "priorityTier": "P1",
+      "credentialClass": "none_local_tool",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-22"
+    },
+    {
+      "repo": "louislam/uptime-kuma",
+      "ownerRanked": null,
+      "classification": "DEFERRED_RESEARCH",
+      "licence": "MIT",
+      "licenceCaution": false,
+      "basis": "owner research report v3 2026-08-22 (open-source lab + integration stack), verify before any code reuse",
+      "role": "Lightweight availability monitoring \u2014 deferred per the report's own reasoning: Prometheus (row 33 lane) already gives the deeper metric model, and a second monitoring stack is consolidation debt, not evidence.",
+      "deployedInLab": false,
+      "deployedEvidence": null,
+      "ownerRole": "sre",
+      "priorityTier": "P2",
+      "credentialClass": "not_applicable_reference",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-22"
+    },
+    {
+      "repo": "zitadel/zitadel",
+      "ownerRanked": null,
+      "classification": "DEFERRED_RESEARCH",
+      "licence": "AGPL-3.0",
+      "licenceCaution": true,
+      "basis": "owner research report v3 2026-08-22 (open-source lab + integration stack), verify before any code reuse",
+      "role": "Third IAM implementation \u2014 deferred: Keycloak (live) + authentik (queued) already give two independent identity sources, and the AGPL licence merits deliberate review before anything beyond API observation.",
+      "deployedInLab": false,
+      "deployedEvidence": null,
+      "ownerRole": "iam-domain",
+      "priorityTier": "P2",
+      "credentialClass": "not_applicable_reference",
+      "mutationsAllowed": false,
+      "lastReviewed": "2026-08-22"
     }
   ]
 }

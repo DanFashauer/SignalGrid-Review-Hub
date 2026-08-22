@@ -80,12 +80,17 @@ fails on any owner the roster does not carry.
 | — | `modelcontextprotocol/servers` | REFERENCE_ARCHITECTURE | P2 | `agent-ops-economics` | MIT (existing code) / Apache-2.0 (new contributions) | — | no |
 | — | `usebruno/bruno` | INTERNAL_COMPANY_TOOL | P0 | `api-contract-architect` | MIT core; commercial offerings exist | — | no |
 | — | `usebruno/bruno-mcp` | DEFERRED_RESEARCH | P2 | `agent-ops-economics` | unspecified in surfaced repository metadata | ⚠️ | no |
-| — | `snipe/snipe-it` | LAB_SOURCE | P2 | `itsm-ops-domain` | AGPL-3.0 | ⚠️ | no |
+| — | `grokability/snipe-it` | LAB_SOURCE | P2 | `itsm-ops-domain` | AGPL-3.0 | ⚠️ | no |
 | — | `Ylianst/MeshCentral` | DEFERRED_RESEARCH | P2 | `endpoint-uem-domain` | Apache-2.0 |  | no |
 | — | `netbox-community/netbox` | REFERENCE_ARCHITECTURE | P2 | `network-domain` | Apache-2.0 |  | no |
 | — | `github/github-mcp-server` | INTERNAL_COMPANY_TOOL | P1 | `devex-tooling-engineer` | MIT |  | no |
 | — | `grafana/mcp-grafana` | INTERNAL_COMPANY_TOOL | P2 | `sre` | Apache-2.0 |  | no |
 | — | `amidaware/tacticalrmm` | DEFERRED_RESEARCH | P2 | `endpoint-uem-domain` | source-available, NOT open source; commercial/SaaS use restricted | ⚠️ | no |
+| 9 | `openbao/openbao` | INTERNAL_COMPANY_TOOL | P0 | `secops-domain` | MPL-2.0 |  | no |
+| 18 | `goauthentik/authentik` | LAB_SOURCE | P1 | `iam-domain` | MIT core; enterprise components separately licensed | ⚠️ | no |
+| 28 | `aquasecurity/trivy` | INTERNAL_COMPANY_TOOL | P1 | `release-engineer` | Apache-2.0 |  | no |
+| — | `louislam/uptime-kuma` | DEFERRED_RESEARCH | P2 | `sre` | MIT |  | no |
+| — | `zitadel/zitadel` | DEFERRED_RESEARCH | P2 | `iam-domain` | AGPL-3.0 | ⚠️ | no |
 
 ## The deployed-lab truth
 

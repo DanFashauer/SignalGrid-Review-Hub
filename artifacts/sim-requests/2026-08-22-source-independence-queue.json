@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-08-22-source-independence-queue",
+  "requestedBy": "cloud lane",
+  "reason": "DR-013 (owner-directed): open-source proof IS product proof; the queue re-aims at the source-independence milestones. The cloud box still has no runnable engine, so the engine-dependent lanes queue here. Priority order: (1) live-telemetry (already queued 2026-08-21, still owed \u2014 the collector/prometheus first run); (2) live-lanes with --keep for a Headwind CE + Fleet PARITY session: both feeding DeviceManagementEvidence, then proof:evidence-adapter against both live captures to show SAME decisions from either source \u2014 the endpoint source-independence milestone; (3) GLPI first bring-up (registry P0, compose per its official docker docs) \u2014 even a reachability + API-read capture starts the ITSM class without any vendor signup. Items 2-3 may need new operations in sim-operations.mjs; if so, run what exists (live-telemetry, live-fleet) and lane-mail what the runner is missing so the cloud lane builds it.",
+  "runs": [
+    "live-telemetry",
+    "live-fleet"
+  ],
+  "notes": [
+    "The parity and GLPI pieces are named in `reason` as coming work \u2014 this request's runnable half is telemetry + fleet; a follow-up request will carry the new operations once built.",
+    "DR-013 and docs/company/FUNDING_READINESS.md land in the same PR as this request \u2014 pull first."
+  ]
+}

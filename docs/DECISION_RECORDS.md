@@ -662,3 +662,38 @@ most advantage of this product.
 
 **Status: owner-directed, decision session 2026-08-22.**
 
+---
+
+## DR-013 — Open-source proof IS product proof; paid platforms are wires, not milestones (2026-08-22)
+
+**Owner-directed, in his own words:** "focus on proof validating even with
+open source cause if it can work with open source then there shouldn't be
+any reason why it shouldn't work with paid platforms." Extends DR-012 from
+GTM sequencing into VALIDATION DOCTRINE.
+
+**The doctrine.** The DeviceManagementEvidence contract (and its identity
+and ITSM siblings) is the product boundary. A capability proven live against
+an open-source implementation of a source class is proven FOR THE PRODUCT;
+a paid platform in the same class adds a thin adapter and exactly ONE
+honest obligation — a single live-wire verification when a real tenant
+exists — because this repository's own record says so: all live checks ever
+run (10 for 10) found some fixture-vs-wire divergence. Adapter work is a
+day per vendor; it is never again treated as product risk, a launch
+blocker, or a reason to buy a vendor trial.
+
+**What this re-aims the proof queue at — the source-independence
+milestones (report v3's own capstone):**
+1. Fleet + Headwind → same normalized contract → SAME decisions under
+   fresh/stale/missing/contradictory states (endpoint class, second
+   implementation).
+2. Keycloak (live-proven) + authentik → same, for identity.
+3. GLPI live-driven → the ITSM class proven without any vendor signup.
+4. The CROSS-SOURCE CONTRADICTION MATRIX: one workflow, all classes, the
+   engine detecting disagreement between independent open sources — the
+   demo that sells, per the reports and per this doctrine.
+
+Engine-dependent pieces queue to the Mac lane via sim-requests; nothing
+waits on a purchased platform.
+
+**Status: owner-directed, 2026-08-22.**
+

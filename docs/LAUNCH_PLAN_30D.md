@@ -33,6 +33,15 @@ and a pilot offer they can say yes to in one meeting.
    templates with per-claim traces, the send/reply log format, and the
    guardrail checklist encoded where the outreach lane reads it.
 
+## The proof track (parallel, all weeks — DR-013)
+
+Open-source proof IS product proof. Alongside outreach, the
+source-independence milestones run continuously: Fleet+Headwind decision
+parity, Keycloak+authentik, GLPI for ITSM, and the cross-source
+contradiction matrix — the demo that sells. Engine-dependent lanes queue to
+the Mac (sim-request 2026-08-22-source-independence-queue); no vendor
+trial is ever on this plan's critical path.
+
 ## Week 2 — proof in motion, first sends
 
 5. **Demo hardening**: the Fleet-backed end-to-end demo (already live-proven)

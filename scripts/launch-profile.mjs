@@ -575,6 +575,14 @@ export const SURFACES = [
     reason: "Supply-chain artifacts. Not a product surface.",
   },
   {
+    id: "outreach-log",
+    reason:
+      "The audit trail of the guardrailed outreach lane: one JSON per send day, " +
+      "dispositions only, reply content never committed " +
+      "(docs/outreach/OPERATING_RULES.md). Company go-to-market plumbing — no " +
+      "tenant, no worker and no customer-of-the-product ever sees it.",
+  },
+  {
     id: "scanner-comparison",
     reason:
       "Backlog row 37's evidence: dated records of one vulnerability scanner run " +

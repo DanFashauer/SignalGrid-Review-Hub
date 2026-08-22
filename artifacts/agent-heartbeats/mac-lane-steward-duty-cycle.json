@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-08-21T20:49:59+00:00",
-  "result": "acted: read+acked mac SBOM message, fixed both reported defects (5 linux-x64 licences into registry, pnpm-ls crash diagnosed), replied re telemetry sim-request; heartbeat held during open PR #240 per rule, written post-merge"
+  "firedAt": "2026-08-22T00:27:33+00:00",
+  "result": "quiet \u2014 no new Mac activity, no unread mail, no new sim results; also confirmed the post-#240 Alpha run 15/15 green (signing job third consecutive pass)"
 }

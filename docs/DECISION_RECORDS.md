@@ -571,3 +571,33 @@ down rather than deleted.
 
 **Status: ratified by owner directive, 2026-08-21. Confidence: high.**
 
+---
+
+## DR-010 — OpenBao as the secret boundary (PROPOSED 2026-08-22, awaiting owner ratification)
+
+**Question.** Report v3 names secrets management one of the three most
+important gaps: ~75 credential-shaped environment names exist, and while
+nearly all are fixture/lab throwaways today, the first real tenant
+credential must not follow that path. Adopt OpenBao (MPL-2.0, registry row,
+P0) as the secret boundary?
+
+**Proposal.** Yes, under docs/SECRET_MODEL.md's five rules — path-naming as
+audit trail, per-consumer service identities, the agent-never-holds list
+(secret-zero, unseal material, root token, any secret value in
+conversation), leases with rotation proven by rotating, and sealed-storage
+snapshots under the existing backup discipline. Migration starts with ONE
+real credential (the lab DATABASE_URL) and fixture tokens deliberately stay
+env-minted throwaways.
+
+**What ratification changes.** The registry row's `mutationsAllowed` flips
+true citing this DR (the DR-008 gate refused it without one — it fired on
+intake, correctly), and the lab deployment plus first migration proceed.
+Until then: model only, no instance, no stored secret.
+
+**What this forbids either way.** Any AI lane reading a secret VALUE back
+through any tool; root-token or unseal material anywhere an agent can
+reach; a shared secret whose path cannot name its single consumer.
+
+**Status: PROPOSED — the owner ratifies or amends; custody of unseal
+material is recorded here at ratification time.**
+

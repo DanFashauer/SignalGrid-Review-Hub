@@ -80,6 +80,51 @@ Dropped below the cut, tracked in lens records: the shared-evaluator-skeleton re
 32. **Release-evidence lane: Syft + Grype + Cosign** — release-engineer. LARGELY BUILT 2026-08-21 (same day as filed): image SBOM + vulnerability evidence live in supply-chain.yml (per-PR, reported) and scheduled-verification.yml (daily, gated on critical-with-fix), tools sha256-pinned; docs/RELEASE_EVIDENCE.md records the chain. REMAINING: cosign signing — held for the owner's key-custody decision (owner hands, below). Adopt the three `INTERNAL_COMPANY_TOOL` P0 rows the registry now carries: SBOM-from-image (complementing the in-repo source-scope generator, whose docs already state container scope is NOT covered), vulnerability scan with database version recorded as evidence, and artifact signing with key-custody decision recorded BEFORE the first signature. CI stages after the existing supply-chain job; scanner-database drift means results are evidence with a timestamp, never a frozen claim.
 33. **Lab telemetry: OTel Collector + Prometheus profile** — sre. BUILT 2026-08-21: opt-in lane in run-live-lanes.sh (--with-telemetry; app /metrics → collector → Prometheus asserted end to end via the Prometheus query API), pinned images, docs/METRIC_STANDARDS.md written BEFORE any tenant-shaped label exists (rule 2 requires a DR for one). REMAINING: first live run — queued as sim-request 2026-08-21-telemetry-lane-first-run (no engine in the cloud session); deployedInLab flips on its pass. A compose profile (off by default, like the heavy lanes) giving the lab connector-health, decision-latency and stale-evidence metrics; a metric privacy/cardinality standard BEFORE the first tenant-shaped label. The registry reclassified both rows for this (OPEN_STANDARD / INTERNAL_COMPANY_TOOL, P0 tier); adoption is this row, and `deployedInLab` flips only when `run-live-lanes.sh` actually starts them.
 
+### Report v3 intake (2026-08-22): open-source lab + integration stack
+
+The owner's third research report arrived 2026-08-22. Most of its thirty rows
+were already dispositioned — 43 of the registry's rows predate it, its six
+integration classes and three priority tiers are the registry's own enum, and
+its "profiles, not one giant compose file" doctrine is what
+`run-live-lanes.sh` already is (each lane a profile; Wazuh auto-provisioned
+but skippable; telemetry opt-in). The genuine deltas, filed:
+
+34. **Registry delta v3** — DONE 2026-08-22 with intake: openbao (P0),
+    authentik (P1), trivy (P1), uptime-kuma + zitadel (deferred, with
+    reasons), snipe-it org corrected to grokability. Registry at 48 rows,
+    both halves synced.
+35. **OpenBao secret boundary** — secops-domain, days. The report names
+    secrets management one of the three most important gaps, and it is right:
+    connector credentials live in env files today. Order of work mirrors
+    METRIC_STANDARDS: the secret model FIRST (naming scheme, service
+    identities, lease/rotation posture, what an agent may NEVER hold —
+    secret-zero, unseal, root token), ratified as a DR (the registry gate
+    already refuses mutationsAllowed without one — it fired on intake); the
+    lab deployment and the first migrated credential second; the rotation
+    runbook proven by actually rotating, third.
+36. **Second-IdP source independence: authentik** — iam-domain, days.
+    The Fleet/Headwind pattern applied to identity: Keycloak (live-proven
+    2026-08-21) and authentik feeding the same normalized evidence must
+    produce the same decisions under fresh/stale/missing/contradictory
+    states. Trigger: identity breadth scheduling, not before row 35 (its
+    credentials should be born inside the secret boundary).
+37. **Trivy beside Grype** — release-engineer, hours-to-days. Run on
+    controlled fixtures next to the live Grype workflow, preserve tool and
+    database versions, record disagreement as data. Only after that
+    comparison does anyone decide whether it becomes a second gate.
+38. **Free-tier proprietary validation targets** — design-partner-outreach +
+    endpoint-uem-domain, when a pilot's stack matches: Miradore (free plan,
+    up to 50 devices) and ManageEngine Endpoint Central (free to 25
+    endpoints) are the report's proprietary-SMB contrast points to Fleet.
+    Validate API entitlement IN the free tier before any connector work —
+    do not assume the free plan includes the API.
+
+Two report items deliberately NOT adopted as rows: its Aug-24 twelve-week
+gantt (this repo runs a live queue, not a calendar plan — sequencing above
+is by trigger) and its MCP tool list (16 tools exist and their surface is
+wire-proven; a reconciliation pass against the report's list belongs in the
+next MCP change, not as standalone churn).
+
 ## Owner hands
 
 Only the items genuinely yours:

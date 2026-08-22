@@ -2,6 +2,13 @@
 
 ## Executive summary
 
+> **Scope, stated honestly (added 2026-08-22):** this audit covers **28 of the
+> proof gates as of 2026-08-03** — the suite has grown well past that since
+> (`grep -c '"proof:' package.json` gives the live count), and nothing here
+> re-audits gates added after that date. It remains the deepest per-gate
+> coverage read the repo has; treat unlisted gates as UNAUDITED, not as fine.
+
+
 Across 28 per-gate coverage audits, overall proof health is **fair-to-good but uneven**: **12 gates rate strong, 16 moderate, 0 weak**, and **0 gates were formally flagged as rubber-stamps** (`rubber_stamp: false` on all 28). However, the aggregate hides a consistent structural weakness — the moderate gates repeatedly assert only that outputs are *present/non-empty/well-typed* rather than *correct*, and several proofs contain tautological or self-referential assertions (notably `signalgrid-grid`, `microsoft-graph-sandbox`, and `signalgrid-simulator`) that cannot fail regardless of the code under test. The highest concentration of real risk is in **untested fail-closed security branches**: allow-suppression guardrails, hash-chain tamper localization, WebAuthn clone detection, and bundle-signature verification are each exercised only on the happy path or not at all. Several database-backed gates (`*-pg`) also self-skip or verify only `.status`, leaving field-mapping and durability largely unproven.
 
 ## Gate coverage

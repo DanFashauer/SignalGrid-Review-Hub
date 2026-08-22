@@ -14,7 +14,7 @@ conversation BOOKED with a lean-IT organization (75–1,000 employees, 1–10 IT
 staff, shared/frontline devices), on the strength of a Fleet-backed live demo
 and a pilot offer they can say yes to in one meeting.
 
-## Week 1 — the face matches the truth
+## Week 1 — the face matches the truth  ← items 1–4 SHIPPED 2026-08-22 (#253 + this block; named-target research proceeds in the private channel before any send)
 
 1. **Site rewrite to POSITIONING.md** (backlog row 6's copy half): Hero,
    Problem, Verticals, About rewritten to the three launch signals and the

@@ -43,9 +43,70 @@ const isCode = (line) => { const t = line.trim(); return !(t.startsWith("//") ||
     [/AKIA[0-9A-Z]{16}/, "AWS access key id"],
     [/sk_live_[0-9A-Za-z]{20,}/, "Stripe live secret"],
     [/ghp_[0-9A-Za-z]{36}/, "GitHub PAT"],
+    [/github_pat_[0-9A-Za-z_]{22,}/, "GitHub fine-grained PAT"],
+    [/glpat-[0-9A-Za-z_-]{20}/, "GitLab PAT"],
+    [/npm_[0-9A-Za-z]{36}/, "npm token"],
+    [/AIza[0-9A-Za-z_-]{35}/, "Google API key"],
+    [/SG\.[0-9A-Za-z_-]{22}\.[0-9A-Za-z_-]{43}/, "SendGrid key"],
     [/xox[baprs]-[0-9A-Za-z-]{10,}/, "Slack token"],
     [/-----BEGIN (?:RSA |EC |OPENSSH |DSA |)PRIVATE KEY-----/, "private key"],
   ];
+  // Connection strings with an embedded REAL-looking password — the exact class
+  // an operator pastes into a doc as a DATABASE_URL command line (backlog row
+  // 16's named blind spot). Deliberately NOT a bare regex in PATTERNS: the lab
+  // legitimately commits throwaway creds like postgres://fleet:fleet@ and
+  // mysql root:root, so a hit requires a password that is (a) >= 8 chars,
+  // (b) different from the username, and (c) not an obvious placeholder —
+  // otherwise every compose file goes red and the gate gets switched off,
+  // which is how blind spots are born.
+  const CONN_RE = /\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|amqp|mssql):\/\/([^\s:/@'"]+):([^\s@'"]{1,})@/g;
+  const PLACEHOLDER = /^(?:pass(?:word)?|secret|changeme|example|test|xxx+|\*+|<[^>]*>|\$\{[^}]*\}|\$[A-Z_]+|%s|\{\{[^}]*\}\})$/i;
+  const connHit = (body) => {
+    for (const m of body.matchAll(CONN_RE)) {
+      const [, user, pw] = m;
+      // High-confidence only: a real leaked password mixes letters and digits
+      // (or is very long); CI/lab throwaways here are short lowercase words
+      // ("sg", "fleet", "ci-smoke"). Without this, the gate fires on its own
+      // repository's deliberate fixtures and gets switched off — the fate this
+      // whole gate class is trying to escape.
+      const mixed = /[0-9]/.test(pw) && /[a-zA-Z]/.test(pw);
+      if (pw !== user && !PLACEHOLDER.test(pw) && ((pw.length >= 8 && mixed) || pw.length >= 16)) return true;
+    }
+    return false;
+  };
+  // SELF-TEST — a scanner nobody has watched fail proves nothing. Plants are
+  // built at runtime by concatenation so this file never contains a matchable
+  // literal; each pattern must catch its plant, and the connection-string rule
+  // must catch a real-looking password while IGNORING the lab convention.
+  {
+    const plants = [
+      ["AKIA" + "ABCDEFGHIJKLMNOP", "AWS access key id"],
+      ["sk_live_" + "a1b2c3d4e5f6a1b2c3d4e5", "Stripe live secret"],
+      ["ghp_" + "a".repeat(36), "GitHub PAT"],
+      ["github_pat_" + "b".repeat(24), "GitHub fine-grained PAT"],
+      ["glpat-" + "c".repeat(20), "GitLab PAT"],
+      ["npm_" + "d".repeat(36), "npm token"],
+      ["AIza" + "e".repeat(35), "Google API key"],
+      ["SG." + "f".repeat(22) + "." + "g".repeat(43), "SendGrid key"],
+      ["xoxb-" + "1234567890-abc", "Slack token"],
+      ["-----BEGIN RSA PRIVATE KEY" + "-----", "private key"],
+    ];
+    const missed = plants.filter(([plant, label]) =>
+      !PATTERNS.some(([re, l]) => l === label && re.test(plant)));
+    const connPlant = "postgres" + "://svc_user:" + "S3cr3tPr0dPw!" + "@db.internal/app";
+    const connLab = "postgres" + "://fleet:fleet" + "@sg-fleet-mysql/app";
+    const connCi = "postgres" + "://signalgrid_runtime:" + "ci-smoke" + "@localhost/app";
+    if (missed.length || !connHit(connPlant) || connHit(connLab) || connHit(connCi)) {
+      bad(
+        "Secret-scan SELF-TEST failed — " +
+          (missed.length ? `patterns missing their plants: ${missed.map(([, l]) => l).join(", ")}; ` : "") +
+          (!connHit(connPlant) ? "connection-string rule missed a real-looking password; " : "") +
+          (connHit(connLab) ? "connection-string rule fired on the lab fleet:fleet convention; " : "") +
+          (connHit(connCi) ? "connection-string rule fired on a short lowercase CI throwaway; " : "") +
+          "a scanner that cannot fail proves nothing",
+      );
+    } else ok("Secret-scan self-test: every pattern catches its plant; lab creds ignored");
+  }
   const scan = tracked.filter((f) =>
     !f.includes("pnpm-lock.yaml") && !f.endsWith(".png") && !f.endsWith(".jpg") &&
     !f.startsWith("docs/postman/") && f !== "scripts/safety-check.mjs");
@@ -53,6 +114,7 @@ const isCode = (line) => { const t = line.trim(); return !(t.startsWith("//") ||
   for (const f of scan) {
     const body = read(f);
     for (const [re, label] of PATTERNS) if (re.test(body)) hits.push(`${f} (${label})`);
+    if (connHit(body)) hits.push(`${f} (connection string with embedded password)`);
   }
   if (hits.length) bad(`Secret scan: possible secrets — ${hits.join(", ")}`);
   else ok("Secret scan: no high-confidence secret patterns in tracked source");

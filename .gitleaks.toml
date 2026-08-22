@@ -47,13 +47,31 @@ regexes = [
   # is still caught.
   '''Authorization: (?:Bearer )?YOUR_(?:TOKEN|API_KEY)''',
   '''-u "api_user:api_password"''',
+  # ── line-scoped .md allowances (backlog row 16) ──────────────────────────────
+  # These five REPLACE what used to be a blanket `paths = ['.*\.md$']` exemption.
+  # That exemption meant a real DATABASE_URL password or API key pasted into any
+  # doc passed this scanner green — in exactly the file class operators paste
+  # command lines into. Removing it was tested empirically (gitleaks 8.30.0 over
+  # the full tree): five findings, every one illustrative, each allowlisted by
+  # its own shape below. Docs are now scanned like everything else.
+  #
+  # The RFC 7638 thumbprint exhibit in docs/KEYCLOAK_LIVE_INTEGRATION.md — two
+  # PUBLIC key thumbprints (hashes, not secrets) shown to prove member-ordering
+  # changes the digest. Anchored to the exhibit's own `name = value` layout.
+  '''(?:keycloak|ours)\s+= [A-Za-z0-9_-]{43}''',
+  # Any YOUR_*-style placeholder in a curl/example line — the literal words a
+  # reader replaces (native/ios/README.md and friends). A real key contains no
+  # such marker.
+  '''YOUR_[A-Z_]{4,}''',
 ]
-# Documentation is prose + illustrative examples (e.g. `Authorization: Bearer …`,
-# vendor feature lists), which trip the generic-api-key / curl-auth-header rules.
-# This repo is public-safe by policy (no real secrets anywhere), and the
-# scripts/safety-check.mjs gate independently scans ALL tracked files — including
-# docs — for high-confidence real-secret patterns (AWS keys, Stripe live keys,
-# GitHub PATs, private keys), so genuine leaks are still caught.
-paths = [
-  '''.*\.md$''',
+# Prose fragments shaped like `word/word` ("compliant/hybrid", "OPC/industrial")
+# that the generic-api-key rule misreads as key material. Targeted at the
+# candidate SECRET itself — pure-alphabetic word/word is never a credential —
+# so a genuine mixed-alphanumeric secret on the same line is still caught.
+[[rules]]
+id = "generic-api-key"
+[rules.allowlist]
+regexTarget = "secret"
+regexes = [
+  '''^[A-Za-z]+/[A-Za-z]+$''',
 ]

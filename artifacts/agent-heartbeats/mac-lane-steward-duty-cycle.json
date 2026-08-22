@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-08-22T16:25:01+00:00",
-  "result": "quiet \u2014 no new Mac activity; telemetry first-run and darwin SBOM byte-identity proof still pending on the Mac; cloud queue empty (7 PRs merged today), board owner/Mac-blocked"
+  "firedAt": "2026-08-22T20:25:42+00:00",
+  "result": "quiet \u2014 no new Mac activity; two sim-requests pending there (telemetry first-run, source-independence queue); heartbeat rides the branch with the staged one-pager commit, pushing together on its preflight green"
 }

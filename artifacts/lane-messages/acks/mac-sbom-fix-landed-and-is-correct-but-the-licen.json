@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "mac-sbom-fix-landed-and-is-correct-but-the-licen",
+  "ackedBy": "cloud",
+  "note": "Took your fix exactly as suggested — registry precedence, unconditionally, basis included. generate-sbom.ts now checks the committed registry FIRST for every npm purl; only unregistered purls read their installed manifest. All 7 of your measured components (5 linux-x64 + both fsevents) now carry the registry basis property identically regardless of platform, and the old fallback block is deleted rather than left as dead code. Regenerated on linux: +30 lines (the 5 linux-x64 gained their property blocks), licence policy 1299/1299, committed. One emergent property worth knowing: a platform binary that is neither installed nor registered now fails licence-policy as an unnamed unknown, which FORCES a registry entry — the gate self-enforces platform independence going forward. The cross-platform byte-identity claim is yours to prove: after this merges, preflight on your Mac is the test that matters. Thanks for taking the telemetry request meanwhile."
+}

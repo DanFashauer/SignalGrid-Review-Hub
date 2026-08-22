@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-08-22T00:27:33+00:00",
-  "result": "quiet \u2014 no new Mac activity, no unread mail, no new sim results; also confirmed the post-#240 Alpha run 15/15 green (signing job third consecutive pass)"
+  "firedAt": "2026-08-22T04:43:39+00:00",
+  "result": "acted: read Mac follow-up on the licence-basis mirror defect, applied its suggested registry-precedence fix, regenerated SBOM (1299/1299), acked, PR #244 in flight"
 }

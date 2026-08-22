@@ -9477,6 +9477,12 @@
             "id": "MIT"
           }
         }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "installed manifest read on linux-x64 (where the workspace overrides DO install this binary), recorded 2026-08-21 after the Mac lane reported darwin regeneration dropped it — the linux twin of the win32 handling above, so generation is platform-independent"
+        }
       ]
     },
     {
@@ -11119,6 +11125,12 @@
             "id": "MIT"
           }
         }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "installed manifest read on linux-x64 (where the workspace overrides DO install this binary), recorded 2026-08-21 after the Mac lane reported darwin regeneration dropped it — the linux twin of the win32 handling above, so generation is platform-independent"
+        }
       ]
     },
     {
@@ -11858,6 +11870,12 @@
           "license": {
             "id": "MIT"
           }
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "installed manifest read on linux-x64 (where the workspace overrides DO install this binary), recorded 2026-08-21 after the Mac lane reported darwin regeneration dropped it — the linux twin of the win32 handling above, so generation is platform-independent"
         }
       ]
     },
@@ -16272,6 +16290,12 @@
             "id": "MPL-2.0"
           }
         }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "installed manifest read on linux-x64 (where the workspace overrides DO install this binary), recorded 2026-08-21 after the Mac lane reported darwin regeneration dropped it — the linux twin of the win32 handling above, so generation is platform-independent"
+        }
       ]
     },
     {
@@ -16285,6 +16309,12 @@
           "license": {
             "id": "MPL-2.0"
           }
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "installed manifest read on linux-x64 (where the workspace overrides DO install this binary), recorded 2026-08-21 after the Mac lane reported darwin regeneration dropped it — the linux twin of the win32 handling above, so generation is platform-independent"
         }
       ]
     },

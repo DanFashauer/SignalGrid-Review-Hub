@@ -170,11 +170,31 @@ function collectNpm(registry: LicenceRegistry): Map<string, Component> {
       const purl = npmPurl(name, version);
       if (!components.has(purl)) {
         const component: Component = { name, version, purl };
-        // Primary source: the resolved package's own package.json. A platform
-        // binary the workspace overrides strip is listed by `pnpm ls` but not
-        // installed, so its manifest is unreadable here — the committed
-        // registry is the deterministic fallback for exactly those.
+        // Precedence: a committed registry entry wins UNCONDITIONALLY — its
+        // basis included — and only purls the registry does not carry read
+        // their installed manifest. It used to be the other way around, and
+        // the licence-basis property then encoded WHICH MACHINE generated the
+        // file: a platform binary is installed on one OS and absent on the
+        // other, so the same purl got the property on one platform and not
+        // the other (5 linux-x64 components one way, 2 fsevents the mirror
+        // way — the Mac lane measured all 7), and the byte-for-byte sync gate
+        // could never pass on both. The registry entry is also the more
+        // auditable source: its basis says where the fact came from and when.
         let licence: string | undefined;
+        const registryEntry = registry.entries?.[purl];
+        if (registryEntry?.licence) {
+          component.licence = registryEntry.licence;
+          component.properties = [
+            {
+              name: "signalgrid:licence-basis",
+              value: registryEntry.basis ?? "committed registry",
+            },
+          ];
+          components.set(purl, component);
+          walk(node.dependencies);
+          walk(node.devDependencies);
+          continue;
+        }
         if (node.path) {
           try {
             const meta = JSON.parse(
@@ -193,15 +213,6 @@ function collectNpm(registry: LicenceRegistry): Map<string, Component> {
             }
           } catch {
             // Not installed on this machine — fall through to the registry.
-          }
-        }
-        if (!licence) {
-          const entry = registry.entries?.[purl];
-          if (entry?.licence) {
-            licence = entry.licence;
-            component.properties = [
-              { name: "signalgrid:licence-basis", value: entry.basis ?? "committed registry" },
-            ];
           }
         }
         component.licence = licence;

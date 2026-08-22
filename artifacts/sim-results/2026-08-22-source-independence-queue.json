@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "requestId": "2026-08-22-source-independence-queue",
+  "completedAt": "2026-08-22T20:31:53.521Z",
+  "provenance": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "nodeVersion": "v24.18.0",
+    "macosVersion": "26.6.2",
+    "commit": "aa239cfb095b36b49544ea432c538db4db46a878",
+    "branch": "SignalGrid_Alpha",
+    "workingTreeClean": true
+  },
+  "runs": [
+    {
+      "operation": "live-telemetry",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 10323,
+      "tail": [
+        "== SignalGrid live-vendor lanes ==",
+        "-- bringing up telemetry (otel-collector + prometheus, api-server on the host)",
+        "  \u001b[32mPASS\u001b[0m  telemetry (signalgrid_up traversed app -> otel-collector -> prometheus)",
+        "",
+        "-- removing containers this run started: sg-otelcol sg-prometheus",
+        "",
+        "== LIVE LANES: 1 passed, 0 failed, 0 skipped ==",
+        "✅ Every live lane ran and passed."
+      ]
+    },
+    {
+      "operation": "live-fleet",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 34135,
+      "tail": [
+        "== SignalGrid live-vendor lanes ==",
+        "-- bringing up Fleet (mysql + redis + fleet + osqueryd, amd64 under emulation)",
+        "   fleet image: docker.io/fleetdm/fleet:v4.89.2",
+        "   osquery image: docker.io/osquery/osquery:5.17.0-ubuntu24.04",
+        "   waiting for the live agent to enroll. (2 hosts enrolled)",
+        "  \u001b[32mPASS\u001b[0m  proof:live-fleet",
+        "",
+        "-- removing containers this run started: sg-fleet sg-fleet-mysql sg-fleet-redis sg-osquery",
+        "",
+        "== LIVE LANES: 1 passed, 0 failed, 0 skipped ==",
+        "✅ Every live lane ran and passed."
+      ]
+    }
+  ]
+}

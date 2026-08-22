@@ -191,3 +191,28 @@ creep.
 the operating lane, not additional roles; they carry their own registered
 authorization and write scopes.
 
+---
+
+## How determinations flow (owner-directed, 2026-08-22)
+
+The founder's operating instruction, made doctrine: **the org determines,
+main integrates, the owner is the endpoint only for what is genuinely his.**
+
+1. **Roles determine.** Questions of gap, priority, legitimacy, and fix
+   belong to the chartered roles — run as agents through their own seats
+   (role-lens sweeps, domain reviews, the skills under `.claude/skills/`).
+   A determination nobody's charter produced is main's opinion, not the
+   org's finding.
+2. **Main integrates and decides.** The operating lane collects role
+   findings, verifies them adversarially, resolves conflicts between
+   charters, sequences the queue, and executes — without waiting.
+3. **The owner is reached only for**: consent gates (ratifications, money,
+   outward actions under his name beyond standing grants), genuine
+   real-life opinion calls, and physical acts no agent can perform
+   (accounts, hardware, signatures, incorporation). Everything else flows
+   back into main and keeps moving.
+
+This section describes the loop the repository already runs — sweeps in,
+queue out, digests up — so the next session inherits it as a rule rather
+than a habit.
+

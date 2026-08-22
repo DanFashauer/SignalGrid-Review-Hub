@@ -201,19 +201,32 @@ jobs:
         run: swiftlint --config .swiftlint.yml
         working-directory: native/ios
 
-      - name: Security Analysis
+      - name: Security Analysis (fails on findings)
         run: |
-          echo "=== Security Analysis ==="
-          
-          # Check for hardcoded credentials
-          echo "Checking for hardcoded credentials..."
-          grep -r "password\s*=" native/ios/EnterpriseShell --include="*.swift" | grep -v "TODO\|FIXME" || echo "✅ No hardcoded credentials"
-          
-          # Check for insecure URL schemes
-          echo "Checking for insecure URL schemes..."
-          grep -r "http://" native/ios/EnterpriseShell --include="*.swift" | grep -v "// TODO" | grep -v "// FIXME" || echo "✅ No insecure URLs"
-          
-          # Check for TODOs
-          echo "Checking for TODOs..."
-          grep -rn "TODO:" native/ios/EnterpriseShell --include="*.swift" || echo "✅ No TODOs found"
-          grep -rn "FIXME:" native/ios/EnterpriseShell --include="*.swift" || echo "✅ No FIXMEs found"
+          # This step used to end every check with `|| echo "PASS …"`, which made
+          # it green in BOTH directions — findings printed and the step passed
+          # anyway. A check that cannot fail proves nothing (backlog row 10's
+          # fourth defect). Now: credential-shaped literals and non-local http://
+          # URLs FAIL the job; TODO/FIXME counts are REPORTED, honestly labelled
+          # as unenforced. Filters verified both ways locally before landing: the
+          # current tree is clean under them, and planted bad lines are caught.
+          set -euo pipefail
+          fail=0
+          echo "=== hardcoded credential-shaped literals (GATED) ==="
+          if grep -rnE '(password|secret|apiKey|token)[[:space:]]*=[[:space:]]*"[^"]{4,}"' \
+               native/ios/EnterpriseShell --include="*.swift" \
+             | grep -vE '//|TODO|FIXME|placeholder|example|demo'; then
+            echo "::error::credential-shaped literal(s) above — move to configuration or the demo fixtures"
+            fail=1
+          else
+            echo "none"
+          fi
+          echo "=== insecure http:// URLs outside localhost (GATED) ==="
+          if grep -rn "http://" native/ios/EnterpriseShell --include="*.swift" \
+             | grep -vE '//.*http://|localhost|127\.0\.0\.1'; then
+            echo "::error::non-local plaintext URL(s) above"
+            fail=1
+          fi
+          echo "=== TODO/FIXME (REPORTED, not gated) ==="
+          grep -rc "TODO:" native/ios/EnterpriseShell --include="*.swift" 2>/dev/null | grep -v ':0$' || echo "none"
+          exit $fail

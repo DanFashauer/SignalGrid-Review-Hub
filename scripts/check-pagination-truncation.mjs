@@ -103,8 +103,37 @@ for (const name of families) {
   problems += 1;
 }
 
+// ── vacuity floor + self-test (backlog row 10) ────────────────────────────────
+// Two ways this gate could rot into green-forever, both now refused:
+//  1. VACUITY: if the CAPPED_LOOP regex drifts from how connectors are written,
+//     `capped` empties and the gate passes having checked nothing. Eleven capped
+//     connectors exist today; fewer than 8 detected means the DETECTOR broke, not
+//     that pagination disappeared — lower the floor only with a reason in the diff.
+//  2. SELF-TEST: a synthetic source with a capped loop and no signal must be
+//     flagged by the same regexes, or the scan refuses to conclude anything.
+const FLOOR = 8;
+{
+  const syntheticBad = 'while (pages < this.maxPages) { fetch(); }';
+  const syntheticGood = syntheticBad + ' if (capReached) out.truncated = true;';
+  const selfTestOk =
+    CAPPED_LOOP.test(syntheticBad) && !TRUNCATION_SIGNAL.test(syntheticBad) &&
+    CAPPED_LOOP.test(syntheticGood) && TRUNCATION_SIGNAL.test(syntheticGood);
+  if (!selfTestOk) {
+    console.error("  ✗ SELF-TEST: the capped-loop/truncation regexes no longer detect the shape they exist for.");
+    problems += 1;
+  }
+  if (capped.length < FLOOR) {
+    console.error(
+      `  ✗ VACUITY FLOOR: only ${capped.length} capped connectors detected (floor ${FLOOR}). ` +
+        "The detector has almost certainly drifted from the codebase's pagination idiom; " +
+        "a gate scanning nothing is green about nothing.",
+    );
+    problems += 1;
+  }
+}
+
 console.log(
-  `\npagination-truncation: ${capped.length} capped connectors, ` +
+  `\npagination-truncation: ${capped.length} capped connectors (floor ${FLOOR}), ` +
     `${KNOWN_SILENT.size} known-silent, ${problems} new problem(s), ${stale} stale exemption(s)`,
 );
 

@@ -2,10 +2,13 @@
 //
 // WHY THIS EXISTS, precisely.
 //
-// Every grant-emitting connector is brute-forced by `scripts/src/lib/grant-safety.ts`
-// over its full input space, and every one reports 0 mismatches. That proves a real
-// thing: no unknown, missing or malformed input reaches a grant. It does NOT prove that
-// each individual guard is doing work, and the two properties are easy to confuse.
+// The connectors REGISTERED in `scripts/src/lib/grant-safety.ts` are brute-forced over
+// their full input space and report 0 mismatches. (Which connectors that covers is the
+// proof's own output on each run — this comment deliberately claims no count, because a
+// hand-written "every" here once outlived the registry it described.) That proves a
+// real thing: no unknown, missing or malformed input reaches a grant through a covered
+// family. It does NOT prove that each individual guard is doing work, and the two
+// properties are easy to confuse.
 //
 // The reason is structural. Grant-safety observes only GRANT-NESS. Every malformed value
 // already normalizes to a denying sentinel, so deleting an integrity condition changes

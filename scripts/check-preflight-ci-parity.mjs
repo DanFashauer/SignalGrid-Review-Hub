@@ -87,9 +87,21 @@ function gatesIn(source) {
     const parts = m[1].replace(/["']/g, "").split(",").map((s) => s.trim());
     if (parts[0] === "node" && parts[1]) out.push(parts[1]);
     else if (parts[0] === "pnpm" && parts[1] === "run" && parts[2]) out.push(parts[2]);
-    // `bash -c "..."` steps embed their own commands; the tokens inside them are
-    // matched by the workflow scan below via the script names they invoke, so they
-    // are deliberately not reduced to a single key here.
+    else if (parts[0] === "bash") {
+      // A `bash -c "…"` gate used to be dropped here while the comment claimed the
+      // workflow scan caught it "via the script names it invokes" — it did not: a
+      // gate with no key was simply never compared, so a bash-registered gate could
+      // vanish from CI with this checker green (backlog row 10's third defect).
+      // Reduce it to its pnpm-run / script tokens; a bash gate that yields NO
+      // extractable token fails the parity check loudly instead of being skipped.
+      const inner = m[1];
+      const keys = [
+        ...[...inner.matchAll(/pnpm run ([a-z0-9:_-]+)/g)].map((x) => x[1]),
+        ...[...inner.matchAll(/scripts\/[a-z0-9./_-]+\.(?:mjs|sh)/g)].map((x) => x[0]),
+      ];
+      if (keys.length === 0) out.push(`__UNPARSEABLE_BASH_GATE__:${inner.slice(0, 60)}`);
+      else out.push(...keys);
+    }
   }
   return out;
 }

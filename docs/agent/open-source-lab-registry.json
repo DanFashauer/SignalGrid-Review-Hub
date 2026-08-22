@@ -680,14 +680,15 @@
       "licence": "MPL-2.0",
       "licenceCaution": false,
       "basis": "owner research report v3 2026-08-22 (open-source lab + integration stack), verify before any code reuse",
-      "role": "Secrets management \u2014 the report names this one of the three most important gaps in the stack. Target state: connector/API credentials and service identities out of env files and into scoped, rotatable leases with audit; secret-zero, unseal and root-token procedures kept OUT of any agent's reach; never returns a secret conversationally. Adoption is backlog row 35 (secret model + naming + rotation runbook BEFORE the first stored secret, the METRIC_STANDARDS pattern applied to credentials). mutationsAllowed stays FALSE until the row-35 adoption DR exists \u2014 DR-008's gate enforces exactly this, and it fired on the first attempt to record otherwise.",
+      "role": "Secrets management \u2014 the report names this one of the three most important gaps in the stack. Target state: connector/API credentials and service identities out of env files and into scoped, rotatable leases with audit; secret-zero, unseal and root-token procedures kept OUT of any agent's reach; never returns a secret conversationally. Adoption is backlog row 35 (secret model + naming + rotation runbook BEFORE the first stored secret, the METRIC_STANDARDS pattern applied to credentials). DR-010 RATIFIED 2026-08-22: write authority granted under SECRET_MODEL.md's five rules; unseal custody with the owner.",
       "deployedInLab": false,
       "deployedEvidence": null,
       "ownerRole": "secops-domain",
       "priorityTier": "P0",
       "credentialClass": "service_account_least_privilege",
-      "mutationsAllowed": false,
-      "lastReviewed": "2026-08-22"
+      "mutationsAllowed": true,
+      "lastReviewed": "2026-08-22",
+      "decisionRecord": "DR-010"
     },
     {
       "repo": "goauthentik/authentik",

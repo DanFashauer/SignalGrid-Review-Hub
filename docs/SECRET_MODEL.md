@@ -3,10 +3,11 @@
 Backlog row 35, ordered the METRIC_STANDARDS way: the model is written and
 ratified before OpenBao holds anything, because the moment credentials move
 into a secret manager is the moment its conventions fossilize. Owned by
-`secops-domain`. Adoption authority: DR-010 (PROPOSED — the registry's
-DR-008 gate keeps `mutationsAllowed: false` on the openbao row until an
-owner-ratified record exists; it fired on the intake attempt to record
-otherwise, which is the gate working).
+`secops-domain`. Adoption authority: DR-010, RATIFIED by the
+owner 2026-08-22 — write authority granted; unseal custody with the owner,
+outside this repository. (The DR-008 gate held the row at
+`mutationsAllowed: false` until this ratification existed, firing once on an
+intake attempt to record otherwise — the gate working.)
 
 ## What exists today, honestly
 

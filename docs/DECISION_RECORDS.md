@@ -573,7 +573,7 @@ down rather than deleted.
 
 ---
 
-## DR-010 — OpenBao as the secret boundary (PROPOSED 2026-08-22, awaiting owner ratification)
+## DR-010 — OpenBao as the secret boundary (RATIFIED by owner, decision session 2026-08-22)
 
 **Question.** Report v3 names secrets management one of the three most
 important gaps: ~75 credential-shaped environment names exist, and while
@@ -598,6 +598,67 @@ Until then: model only, no instance, no stored secret.
 through any tool; root-token or unseal material anywhere an agent can
 reach; a shared secret whose path cannot name its single consumer.
 
-**Status: PROPOSED — the owner ratifies or amends; custody of unseal
-material is recorded here at ratification time.**
+**Status: RATIFIED by owner, decision session 2026-08-22. Custody: unseal /
+recovery material lives with the owner, outside this repository and outside
+any agent's reach — recorded here per the proposal's own terms. Deployment
+proceeds when a container engine is available (Mac lane, or the cloud
+engine if restored); first migrated credential is the lab DATABASE_URL,
+rotation proven on it before anything else moves.**
+
+---
+
+## DR-011 — Positioning ratified: sentence, label hierarchy (2026-08-22)
+
+**Decision.** The owner ratified the filed positioning draft as written — the
+one sentence, the 100-word version, and the boundary paragraph, every claim
+traced to a launch-class proof — landing as docs/POSITIONING.md. On the
+category label the owner answered "all", ratified here as a HIERARCHY rather
+than a contradiction: "Shared-Device Trust Gateway" is the product
+name/category (matching DR-005's launch-profile name), "access-decision
+service" is the descriptor phrase, "workflow trust engine" is the vision
+phrase reserved for roadmap contexts. One name everywhere that names, one
+explainer everywhere that explains.
+
+**What this unblocks.** The public-site rewrite to launch scope (backlog row
+6), the launch-claims gate, the GTM pack, and every outreach message — all of
+which now copy from POSITIONING.md and nowhere else.
+
+**Status: ratified by owner, decision session 2026-08-22.**
+
+---
+
+## DR-012 — Target market and proof stack: lean-IT first, Fleet-first, Microsoft when a prospect brings a tenant (2026-08-22)
+
+**Decision, in the owner's own direction (decision session).** Asked to start
+a Microsoft Intune/Entra trial, the owner redirected: use Fleet (or another
+open alternative) to prove the connector story for now — "Microsoft is not
+the only one that can help prove this," and jumping straight at major
+enterprise "would be crazy." The first market is organizations with LIMITED
+IT STAFF OR LIMITED RESOURCES — the SMB/mid-market lean-IT segment the
+research reports independently identified as the sweet spot — beginning
+there to scale correctly rather than missing the industry that can take the
+most advantage of this product.
+
+**What this fixes in place:**
+
+1. **Proof stack**: Fleet-first. The source-agnostic DeviceManagementEvidence
+   contract is already proven LIVE against Fleet (TLS + real osqueryd,
+   proof:live-fleet + live-fleet-workflow). That is the demo. The Graph/
+   Intune adapter stays implemented and wire-hardened (12/12 socket proof),
+   honestly described as awaiting a real tenant — which arrives when a
+   PROSPECT brings one, not from a trial the owner buys first.
+2. **ITSM the same way**: no ServiceNow/Jira signups on the critical path;
+   GLPI (registry P0 lab source) becomes the ITSM lab when an engine is
+   available. Proof scripts stay ready for the day a prospect's stack names
+   a vendor.
+3. **Outreach targeting** follows the segment: 75–1,000-employee
+   organizations, 1–10 IT people, shared/frontline devices, consolidation
+   pressure — not Fortune-500 procurement.
+4. **Positioning amendment (owner-sourced)**: DR-011's ratified 100-word
+   version named Intune as the first enterprise connector; amended same-day
+   to state the Fleet-first truth with Intune as the enterprise-roadmap
+   connector. The launch profile itself is untouched — this is GTM
+   sequencing, not scope change.
+
+**Status: owner-directed, decision session 2026-08-22.**
 

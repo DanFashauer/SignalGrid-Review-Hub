@@ -137,14 +137,11 @@ Only the items genuinely yours:
 2. ~~**Approve or reject the ledger-truncation article, and pick the venue**~~ **RESOLVED — DR-005: approved after the role-split correction; venue is the signalgrid.app blog.** (company blog to be built, personal blog, or third-party outlet). Nothing publishes without this.
 3. ~~**Decide the deny-color contrast question.**~~ **RESOLVED — DR-005: re-toned to #C67070/#8A3F3F, applied.** The deny state fails the accessibility contrast bar (3.18:1 where 4.5:1 is required) on its most safety-critical surface. Three options come to you on one screen: re-tone, constrain usage, or decline explicitly. Open since 2026-08-19.
 4. **Decide signing-key custody** — DECIDED 2026-08-21, same day: the owner ratified the keyless recommendation ('I will go with recommendation on key custody model') → DR-009, and the signing stage landed in supply-chain.yml (cosign v3.1.3 sha256-pinned, push events only, Rekor-logged).
-5. **Supply four billing numbers** — PARTIALLY ANSWERED 2026-08-21: the owner supplied the Claude, ChatGPT, and domain figures directly (a fifth line item, ChatGPT, that the original list did not have — it pays for the cross-lane reviewer). The VALUES are deliberately not republished here: this repository is public and the owner-only rule these documents state applies to the repository too, not only to estimation. They live in the owner's private record and in the session that received them; the cost-model work (backlog row 22) must define the owner-private channel that carries them into computation without ever committing them. STILL OWED: Apple Developer status/fee, GitHub plan and sibling-repo visibility.
-5. **Ratify or amend DR-010 (OpenBao secret boundary)** — NEW 2026-08-22:
-   the secret model is drafted (docs/SECRET_MODEL.md) and the decision
-   record is PROPOSED. Your ratification flips write authority on the
-   registry row and starts the lab deployment + first credential migration;
-   unseal-material custody gets recorded in the DR at that moment. One
-   read, one word.
-6. **Sign up for a ServiceNow developer instance and/or Jira free tier** so the flagship ITSM adapters can be driven against a real vendor wire. The org preps the proof scripts beforehand; your part is the account.
+5. **Supply four billing numbers** — PARTIALLY ANSWERED 2026-08-21: the owner supplied the Claude, ChatGPT, and domain figures directly (a fifth line item, ChatGPT, that the original list did not have — it pays for the cross-lane reviewer). The VALUES are deliberately not republished here: this repository is public and the owner-only rule these documents state applies to the repository too, not only to estimation. They live in the owner's private record and in the session that received them; the cost-model work (backlog row 22) must define the owner-private channel that carries them into computation without ever committing them. CLOSED 2026-08-22 (decision session): Apple — not enrolled, $0 today, enrollment scheduled by the device-path milestone; GitHub — free plan, all seven repos public, CI $0 across the estate. All five billing facts now answered.
+5. ~~**Ratify or amend DR-010 (OpenBao secret boundary)**~~ **RATIFIED
+   2026-08-22 (decision session)** — write authority live, unseal custody
+   with the owner, deployment queued on engine availability.
+6. ~~**Sign up for a ServiceNow developer instance and/or Jira free tier**~~ **RESOLVED BY REDIRECT 2026-08-22 (DR-012)** — no vendor signups on the critical path; GLPI becomes the ITSM lab when an engine is available, and vendor wires arrive when a prospect's stack names one.
 6. **Start the Intune/Entra trial when ready.** The launch-tier Graph connector — the one family whose transport points at Microsoft's production wire — has never been driven live; zero of three launch families have.
 
 ## This week

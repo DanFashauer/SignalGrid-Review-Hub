@@ -37,18 +37,21 @@ in chat, never by committing it here.
 - **Fleet Premium**: OPEN — the team-scoped `getPolicies()` branch needs
   Premium; trial expires 2026-09-16; per-device price TBD (public page,
   agent-computable). This is the one identified paid software dependency.
-- **APNs + Apple Business Manager**: owner enrollment; Apple Developer
-  Program fee ASSUMED ~$99/yr — confirm (owner hands, billing item).
+- **APNs + Apple Business Manager**: NOT YET ENROLLED (owner-confirmed
+  2026-08-22) — $0 today. The ~$99/yr fee lands only when the supervised-
+  device path needs APNs; the 30-day plan schedules enrollment at that
+  point, not before.
 - **Supervised devices**: hardware is customer-side; no hardware for sale
   (`Pricing.tsx` FAQ).
 
 ## 3. Company run-rate
 
-- **CI**: $0 while this repo is public. Exposure if that changes: ios-ci up
-  to 135 macOS-minutes/trigger at the 10× multiplier; desktop windows matrix
-  2×; mac-lane 60 macOS-min weekly; scheduled-verification 45 ubuntu-min
-  daily; observed volume 576 commits/month. The first real bill arrives the
-  day visibility changes or a private sibling repo replicates these lanes.
+- **CI**: $0 across the estate (owner-confirmed 2026-08-22: free plan, ALL
+  seven repos public). Exposure if that ever changes: ios-ci up to 135
+  macOS-minutes/trigger at the 10× multiplier; desktop windows matrix 2×;
+  mac-lane 60 macOS-min weekly; scheduled-verification 45 ubuntu-min daily;
+  observed volume 576 commits/month. The first real bill arrives the day any
+  repo running these lanes goes private.
 - **Agent org**: Claude subscription/API spend — owner hands, the only
   missing numerator. (Supplied 2026-08-21 through the private channel; not
   republished here, per the rule above.)
@@ -74,5 +77,5 @@ in chat, never by committing it here.
 | --- | --- | --- |
 | VM + backup hosting | an agent computes it from a public price list at deployment-decision time | any lane |
 | Fleet Premium per-device | read from Fleet's public pricing page when the Premium decision is live | any lane |
-| Apple Developer fee | owner confirms status + fee (billing item, still owed) | owner |
+| Apple Developer fee | CLOSED 2026-08-22: not enrolled, $0 today; enrollment scheduled by the device-path milestone | — |
 | Agent spend numerator | already supplied via the private channel; recomputed monthly there | owner + session |

@@ -259,6 +259,8 @@ jobs:
         run: node scripts/check-assessor-package.mjs
       - name: OpenAPI validity (the published contract parses as OpenAPI)
         run: node scripts/check-openapi-valid.mjs
+      - name: Launch claims (nothing deferred presented as current)
+        run: node scripts/check-launch-claims.mjs
 
       # The declared product edge must match the real one, in BOTH directions. The
       # omission direction is the freeze: a new connector family, signal kind, API

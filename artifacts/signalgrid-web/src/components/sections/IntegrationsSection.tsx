@@ -14,11 +14,11 @@ const CATEGORY_GROUPS = [
   },
   {
     label: "Endpoint & MDM",
-    items: ["Intune", "Jamf Pro", "Kandji", "Workspace ONE", "Fleet", "CrowdStrike", "SentinelOne", "Mosyle", "Carbon Black", "Trellix"],
+    items: ["Fleet (live-proven)", "Intune (adapter wire-hardened, roadmap)", "Jamf Pro", "Kandji", "Workspace ONE", "CrowdStrike", "SentinelOne", "Mosyle", "Carbon Black", "Trellix"],
     owner: "Endpoint Mgmt / SOC",
   },
   {
-    label: "Physical Access, Custody & Cellular",
+    label: "Physical Access, Custody & Cellular (roadmap — deferred, not Limited GA)",
     items: ["DockBridge (custody)", "Traccar", "HID Global", "LenelS2", "Genetec", "RF IDeas", "Verkada", "Honeywell Pro-Watch", "Twilio Super SIM", "Soracom", "C•CURE 9000"],
     owner: "Physical Security / NetOps",
   },

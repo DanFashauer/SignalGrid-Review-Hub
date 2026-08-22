@@ -11,7 +11,7 @@ const STEPS = [
     tag: "SIGNAL",
     icon: Radio,
     title: "A signal fires",
-    body: "The moment a workflow starts, the evidence arrives — identity, device posture, physical custody, and security baseline.",
+    body: "The moment a sensitive action starts, the evidence arrives — the device's compliance, how current that answer is, and whether the device can vouch for itself right now.",
     accent: "text-teal-400",
     ring: "ring-teal-400/30",
     glow: "bg-teal-400/10",

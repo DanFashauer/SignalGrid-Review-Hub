@@ -93,15 +93,14 @@ but skippable; telemetry opt-in). The genuine deltas, filed:
     authentik (P1), trivy (P1), uptime-kuma + zitadel (deferred, with
     reasons), snipe-it org corrected to grokability. Registry at 48 rows,
     both halves synced.
-35. **OpenBao secret boundary** — secops-domain, days. The report names
-    secrets management one of the three most important gaps, and it is right:
-    connector credentials live in env files today. Order of work mirrors
-    METRIC_STANDARDS: the secret model FIRST (naming scheme, service
-    identities, lease/rotation posture, what an agent may NEVER hold —
-    secret-zero, unseal, root token), ratified as a DR (the registry gate
-    already refuses mutationsAllowed without one — it fired on intake); the
-    lab deployment and the first migrated credential second; the rotation
-    runbook proven by actually rotating, third.
+35. **OpenBao secret boundary** — secops-domain, days. MODEL DRAFTED
+    2026-08-22, same day as filed: docs/SECRET_MODEL.md (five rules: path
+    naming as audit trail, per-consumer service identities, the
+    agent-never-holds list, leases with rotation proven by rotating,
+    snapshots under backup discipline) and DR-010 PROPOSED. BLOCKED on two
+    things, honestly: owner ratification of DR-010 (owner hands, below) and
+    a runnable container engine for the lab deployment. Until both: no
+    instance, no stored secret, mutationsAllowed false.
 36. **Second-IdP source independence: authentik** — iam-domain, days.
     The Fleet/Headwind pattern applied to identity: Keycloak (live-proven
     2026-08-21) and authentik feeding the same normalized evidence must
@@ -134,7 +133,13 @@ Only the items genuinely yours:
 3. ~~**Decide the deny-color contrast question.**~~ **RESOLVED — DR-005: re-toned to #C67070/#8A3F3F, applied.** The deny state fails the accessibility contrast bar (3.18:1 where 4.5:1 is required) on its most safety-critical surface. Three options come to you on one screen: re-tone, constrain usage, or decline explicitly. Open since 2026-08-19.
 4. **Decide signing-key custody** — DECIDED 2026-08-21, same day: the owner ratified the keyless recommendation ('I will go with recommendation on key custody model') → DR-009, and the signing stage landed in supply-chain.yml (cosign v3.1.3 sha256-pinned, push events only, Rekor-logged).
 5. **Supply four billing numbers** — PARTIALLY ANSWERED 2026-08-21: the owner supplied the Claude, ChatGPT, and domain figures directly (a fifth line item, ChatGPT, that the original list did not have — it pays for the cross-lane reviewer). The VALUES are deliberately not republished here: this repository is public and the owner-only rule these documents state applies to the repository too, not only to estimation. They live in the owner's private record and in the session that received them; the cost-model work (backlog row 22) must define the owner-private channel that carries them into computation without ever committing them. STILL OWED: Apple Developer status/fee, GitHub plan and sibling-repo visibility.
-5. **Sign up for a ServiceNow developer instance and/or Jira free tier** so the flagship ITSM adapters can be driven against a real vendor wire. The org preps the proof scripts beforehand; your part is the account.
+5. **Ratify or amend DR-010 (OpenBao secret boundary)** — NEW 2026-08-22:
+   the secret model is drafted (docs/SECRET_MODEL.md) and the decision
+   record is PROPOSED. Your ratification flips write authority on the
+   registry row and starts the lab deployment + first credential migration;
+   unseal-material custody gets recorded in the DR at that moment. One
+   read, one word.
+6. **Sign up for a ServiceNow developer instance and/or Jira free tier** so the flagship ITSM adapters can be driven against a real vendor wire. The org preps the proof scripts beforehand; your part is the account.
 6. **Start the Intune/Entra trial when ready.** The launch-tier Graph connector — the one family whose transport points at Microsoft's production wire — has never been driven live; zero of three launch families have.
 
 ## This week

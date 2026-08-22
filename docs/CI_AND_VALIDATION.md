@@ -4,20 +4,25 @@ SignalGrid Review Hub has its own repository-native CI because it is the public 
 
 ## Review Hub CI
 
-The `Review Hub CI` workflow runs on pull requests, pushes to `SignalGrid_Alpha`, and manual workflow dispatch. It is intentionally conservative and validates the public-safe repo surface only.
+The `Review Hub CI` workflow runs on pull requests, pushes to `SignalGrid_Alpha`,
+and manual workflow dispatch. **This page deliberately does not enumerate its
+commands** — an eight-command list written here in July described 5% of the CI
+that exists by August, and read as current the whole time. The workflow file is
+the truth; what this page owes you is the shape:
 
-The validation job runs:
-
-```bash
-pnpm install --frozen-lockfile
-pnpm run typecheck
-PORT=3000 BASE_PATH=/ pnpm run build
-pnpm run proof:intune-entra-posture
-pnpm run proof:signalgrid-simulator
-pnpm run proof:signalgrid-grid
-pnpm run proof:microsoft-graph-sandbox
-pnpm run proof:connector-emulator
-```
+- **Six jobs in `review-hub-ci.yml`**: `validation` (the full gate lane —
+  typecheck, build, every registered preflight gate and `proof:*` script),
+  `breadth` (the deferred connector families and doctrine proofs),
+  `docs-sanity`, `durable-persistence` (the Postgres-backed gates),
+  `podman-stack` and `deploy-stack` (the compose smokes).
+- **Fifteen workflow files total** — the Apple lane, Android, supply-chain
+  (SBOM + image evidence + keyless signing), CodeQL, scheduled verification,
+  windows desktop, and the rest.
+- **The guarantee that keeps this page honest**:
+  `scripts/check-preflight-ci-parity.mjs` fails CI when any gate registered in
+  `scripts/preflight.mjs` is not wired into a workflow — so "the gate exists"
+  and "CI runs it" cannot drift apart silently. The live gate count is the
+  parity checker's own output on every run (208 at last count).
 
 The docs sanity job verifies that required public-review docs exist and checks for narrow, direct unsafe claims such as production-ready, replacement, partner, MFi certification, or autonomous production-remediation claims. It is not intended to block explicit disclaimers, guardrail language, or validation-command examples that document the scanner itself.
 

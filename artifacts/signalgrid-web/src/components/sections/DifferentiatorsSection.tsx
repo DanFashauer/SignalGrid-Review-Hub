@@ -4,43 +4,43 @@ import { Link2, MapPinned, ClipboardList, Radio, Layers } from "lucide-react";
 const DIFFERENTIATORS = [
   {
     icon: Link2,
-    title: "Physical Custody Binding",
+    title: "Freshness Is a First-Class Signal",
     description:
-      "The employee badge mechanically locks into the device case, and badge state from the reader case is a first-class decision signal: a withdrawn badge restricts the session at the next workflow evaluation, and a forced removal denies. Identity and custody are evaluated together, every time.",
-    before: "Badge system: separate",
-    after: "Badge = first-class signal",
+      "Every management console can tell you the last state it recorded. SignalGrid treats HOW OLD that answer is as a decision input in its own right — a stale \u201ccompliant\u201d is the unearned yes in its purest form, and here it tightens the verdict instead of passing as green.",
+    before: "\u201cCompliant\u201d (as of… when?)",
+    after: "Compliant, current, verified now",
   },
   {
     icon: MapPinned,
-    title: "Contextual Physical Access",
+    title: "Fail-Closed by Doctrine, Not by Default Config",
     description:
-      "Floor access, elevator permissions, ICU access, pharmacy, lab, and server room authorizations are evaluated at runtime against current assignment, current device, current shift, and live posture — not a static role list. The PACS remains the system that grants.",
-    before: "Static RBAC list",
-    after: "Runtime zone authorization",
+      "Missing, unknown, or contradictory evidence RAISES the assurance required — mechanically, proven by gates that run on every commit. There is no configuration in which absence reads as fine.",
+    before: "Absent signal = assumed OK",
+    after: "Absent signal = tighter answer",
   },
   {
     icon: ClipboardList,
-    title: "Chain of Custody, Audited",
+    title: "Every Verdict Carries Its Evidence",
     description:
-      "Every device has a timestamped owner at every moment of the shift. Dock-out, zone transitions, workflow access, and dock-in are all audited as a continuous custody chain. Compliance is a byproduct, not a reporting task.",
-    before: "Asset spreadsheet",
-    after: "Continuous custody audit",
+      "Each allow, step-up, restrict, or deny records what was observed, from which source, at what age, under which policy version — in a tamper-evident ledger an operator can replay without reading code.",
+    before: "\u201cThe system said no\u201d",
+    after: "Here is exactly why, and who fixes it",
   },
   {
     icon: Radio,
-    title: "Pre-Exit Prevention + Post-Exit Recovery",
+    title: "Invisible to Workers, Legible to Auditors",
     description:
-      "BLE proximity, badge checkout state, and door events surface an unauthorized exit before it completes. Cellular/eSIM reachability is a candidate signal category for the post-exit story; no carrier integration exists today.",
-    before: "Gone = lost",
-    after: "Pre-exit + post-exit coverage",
+      "Workers use the apps they already know; SignalGrid has no end-user surface at all. The people who DO see it — operators and auditors — get reproducible evidence instead of dashboards.",
+    before: "Another console to babysit",
+    after: "No new surface for workers at all",
   },
   {
     icon: Layers,
     title: "Additive — Nothing Replaced",
     description:
-      "SignalGrid is designed to read from tools like Intune, Okta, HID, and ServiceNow — as candidate sources — and to replace none of them. Each stays the system of record; SignalGrid fuses their signals into one runtime context that none of them can produce alone.",
-    before: "~149 candidate sources, ~16 categories",
-    after: "One decision layer",
+      "SignalGrid reads from the management plane you already run — proven live against Fleet, with Microsoft Intune as the enterprise connector on the roadmap — and replaces none of it. Your MDM stays your MDM; your IdP stays your IdP. Badge, custody, and zone signals are deferred roadmap categories, not Limited GA.",
+    before: "Rip-and-replace platform",
+    after: "One decision layer on your stack",
   },
 ];
 
@@ -51,7 +51,7 @@ export default function DifferentiatorsSection() {
         <div className="text-center mb-16 max-w-3xl mx-auto">
           <h2 className="text-3xl font-bold tracking-tight mb-4">Nobody Owns This Gap. Yet.</h2>
           <p className="text-muted-foreground text-lg">
-            Imprivata owns tap-and-go. HID owns badge credentials. Jamf owns device trust. ServiceNow owns tickets. Nobody owns the layer that binds them all into physical accountability at workflow time. That's SignalGrid.
+            Your MDM knows what it last recorded. Your IdP knows who logged in. Nobody owns the question that actually matters on a shared device: should THIS action proceed RIGHT NOW? That's SignalGrid.
           </p>
         </div>
 

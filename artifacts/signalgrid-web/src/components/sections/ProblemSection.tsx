@@ -24,7 +24,7 @@ export default function ProblemSection() {
               </div>
               <h2 className="text-3xl font-bold tracking-tight mb-4">Seven Silos. Zero Accountability.</h2>
               <p className="text-muted-foreground text-lg leading-relaxed">
-                Every system that should protect a shared device lives in a different silo. The badge system doesn't know the device is out of bounds. The MDM doesn't know the badge was removed. The SIEM knows neither. No single control plane owns the chain of custody.
+                Every system that should protect a shared device lives in a different silo. The management console knows what it last recorded — not whether that answer is still true. The identity stack knows who logged in this morning — not who is holding the device now. Nothing asks the one question that matters at the moment of action: should this proceed?
               </p>
             </div>
 
@@ -33,7 +33,7 @@ export default function ProblemSection() {
               <div>
                 <h4 className="font-semibold text-foreground">The Real Scenario</h4>
                 <p className="text-sm text-muted-foreground mt-1">
-                  A medication cart iPad is compliant at 08:00. At 14:03, the security agent has crashed, the device crossed a zone boundary without a badge checkout, and the badge was forcibly removed from the case — but the session is still active and the workflow is still accessible.
+                  A medication cart iPad is compliant at 08:00. At 14:03 the management agent has stopped reporting, the encryption check has gone unverified, and nothing has re-confirmed the device since morning — but the session is still active, the workflow is still accessible, and every console still shows green because green is just the last thing anyone recorded.
                 </p>
               </div>
             </div>
@@ -43,7 +43,7 @@ export default function ProblemSection() {
               <div>
                 <h4 className="font-semibold text-foreground">SignalGrid: One Control Plane</h4>
                 <p className="text-sm text-muted-foreground mt-1">
-                  All seven signal sources stream into a single runtime decision layer. Badge state, device posture, zone presence, and shift authorization are evaluated together — at the moment the workflow fires.
+                  One question, answered at the moment the workflow fires: is this device compliant, is that answer current, and may it act right now? Missing or stale evidence tightens the verdict — it never passes as green.
                 </p>
               </div>
             </div>

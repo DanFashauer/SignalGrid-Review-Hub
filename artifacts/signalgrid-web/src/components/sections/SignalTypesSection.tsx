@@ -1,141 +1,82 @@
 import { motion } from "framer-motion";
-import { UserCircle, Shield, ShieldCheck, MapPin, Clock, Wifi, ActivitySquare } from "lucide-react";
+import { Shield, HeartPulse, KeyRound, Layers } from "lucide-react";
 
+// Copy source: docs/POSITIONING.md (DR-011/DR-012). The three cards marked
+// "Limited GA" are exactly the launch-profile's three launch signal kinds —
+// the launch-claims gate fails this file if a deferred capability is ever
+// presented as current again (that defect shipped once: six dimensions
+// wore a current-capability label while three were deferred).
 export default function SignalTypesSection() {
   const signals = [
     {
-      id: "identity",
-      evaluated: true,
-      name: "Identity State",
-      icon: UserCircle,
-      items: [
-        "IdP/SSO token + MFA state",
-        "Account enabled / disabled / unknown",
-        "Tap-and-go session binding",
-        "Passkey / FIDO2 verification",
-      ],
-      color: "text-teal-400",
-      bg: "bg-teal-400/10",
-      border: "border-teal-400/20",
-    },
-    {
-      id: "device",
-      evaluated: true,
-      name: "Device Posture",
+      id: "device-posture",
+      limitedGA: true,
+      name: "Device Compliance",
       icon: Shield,
       items: [
-        "MDM/UEM compliance state",
-        "EDR agent health & threat score",
-        "Encryption, patch, jailbreak state",
-        "Tamper sensor — forced badge removal",
+        "Read-only from your device-management source",
+        "Proven live against Fleet — the management plane lean IT teams run",
+        "Microsoft Intune adapter implemented and wire-hardened, awaiting a customer tenant",
+        "Encryption, enrollment, compliance state",
       ],
       color: "text-green-400",
       bg: "bg-green-400/10",
       border: "border-green-400/20",
     },
     {
-      id: "physical",
-      evaluated: true,
-      name: "Physical Presence",
-      icon: MapPin,
+      id: "management-health",
+      limitedGA: true,
+      name: "Is That Answer Still Current?",
+      icon: HeartPulse,
       items: [
-        "DockBridge custody — checked out / overdue / returned",
-        "SmartDock hardware state — faulted / offline",
-        "Battery / charge state from the dock",
-        "Tamper witness — sensor present / blinded",
-      ],
-      color: "text-orange-400",
-      bg: "bg-orange-400/10",
-      border: "border-orange-400/20",
-    },
-    {
-      id: "baseline",
-      evaluated: true,
-      name: "Security Baseline (CIS)",
-      icon: ShieldCheck,
-      items: [
-        "CIS Benchmark alignment (aligned / drifted)",
-        "CIS Controls v8 safeguard coverage",
-        "DISA STIG / SCAP finding state",
-        "Hardening drift → step-up or restrict",
-      ],
-      color: "text-emerald-400",
-      bg: "bg-emerald-400/10",
-      border: "border-emerald-400/20",
-    },
-    {
-      id: "badge",
-      evaluated: true,
-      name: "Badge Binding (reader case)",
-      icon: ShieldCheck,
-      items: [
-        "Badge present / removed / forced in the case",
-        "Person → shared-device binding, live",
-        "Withdrawn badge → restrict the session",
-        "Forced / torn removal → deny",
-      ],
-      color: "text-amber-400",
-      bg: "bg-amber-400/10",
-      border: "border-amber-400/20",
-    },
-    {
-      id: "session",
-      evaluated: true,
-      name: "Session & Shift Context",
-      icon: Clock,
-      items: [
-        "Shift window & role match",
-        "Device-to-worker assignment",
-        "Specialty area authorization (ICU, pharmacy)",
-        "Time-of-access pattern baseline",
-      ],
-      color: "text-purple-400",
-      bg: "bg-purple-400/10",
-      border: "border-purple-400/20",
-    },
-    {
-      id: "network",
-      evaluated: false,
-      name: "Network & Cellular Posture",
-      icon: Wifi,
-      items: [
-        "Enterprise Wi-Fi association state",
-        "Cellular/eSIM reachability (post-exit)",
-        "VPN / NAC / ISE trust level",
-        "Network zone & VLAN classification",
+        "How fresh the compliance answer really is",
+        "A stale “compliant” is the unearned yes in its purest form",
+        "Source unreachable or late → the decision tightens",
+        "Every verdict records the observation age it acted on",
       ],
       color: "text-teal-400",
       bg: "bg-teal-400/10",
       border: "border-teal-400/20",
     },
     {
-      id: "operational",
-      evaluated: false,
-      name: "Operational Signals",
-      icon: ActivitySquare,
+      id: "local-authority",
+      limitedGA: true,
+      name: "Can the Device Vouch for Itself Right Now?",
+      icon: KeyRound,
       items: [
-        "ITSM open incident context",
-        "SIEM / SOAR alert state",
-        "Infrastructure health from Datadog/Grafana",
-        "PagerDuty escalation level",
+        "Whether the device may act on its own authority at this moment",
+        "Missing or unverifiable → step up, restrict, or deny — never assume",
+        "Evaluated per action, not per login",
+        "Reproducible evidence attached to every verdict",
       ],
-      color: "text-amber-400",
-      bg: "bg-amber-400/10",
-      border: "border-amber-400/20",
+      color: "text-orange-400",
+      bg: "bg-orange-400/10",
+      border: "border-orange-400/20",
     },
+  ];
+
+  const beyondGA = [
+    "Identity & session state", "Badge binding", "Physical custody & docks",
+    "Security-baseline (CIS) alignment", "Shift & role context",
+    "Network posture", "EDR & threat state", "Location & zones",
+    "ITSM & operational context",
   ];
 
   return (
     <section className="py-24 bg-background border-b border-border/50" id="platform">
       <div className="container mx-auto px-4 md:px-8 max-w-screen-xl">
         <div className="mb-16 max-w-3xl">
-          <h2 className="text-3xl font-bold tracking-tight mb-4">Multi-Dimensional Signal Fusion</h2>
+          <h2 className="text-3xl font-bold tracking-tight mb-4">Three Signals, One Honest Answer</h2>
           <p className="text-muted-foreground text-lg leading-relaxed">
-            A token proves identity. MDM proves enrollment. A badge tap proves presence. None of them alone proves readiness for a sensitive workflow. The deterministic core evaluates <span className="text-foreground font-medium">six dimensions today</span> — identity, device posture, DockBridge physical custody, CIS security-baseline alignment, badge binding from the reader case, and session &amp; shift context — in a single deterministic evaluation. The remaining dimensions below are <span className="text-foreground font-medium">candidate signal categories</span> on the roadmap, not decision inputs today.
+            At Limited GA the decision core evaluates <span className="text-foreground font-medium">exactly three things</span>:
+            the device&apos;s compliance, how current that compliance answer really is, and whether the
+            device can vouch for itself right now. Anything it can&apos;t verify{" "}
+            <span className="text-foreground font-medium">tightens the answer instead of waving it through</span>.
+            That narrowness is deliberate — every claim on this page traces to a proof that runs on every commit.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {signals.map((signal, idx) => (
             <motion.div
               key={signal.id}
@@ -150,14 +91,8 @@ export default function SignalTypesSection() {
                 <div className={`w-10 h-10 rounded-lg ${signal.bg} flex items-center justify-center`}>
                   <signal.icon className={`w-5 h-5 ${signal.color}`} />
                 </div>
-                <span
-                  className={`text-[10px] font-mono px-2 py-0.5 rounded-full border uppercase tracking-wider ${
-                    signal.evaluated
-                      ? "text-emerald-400 border-emerald-400/30 bg-emerald-400/5"
-                      : "text-muted-foreground border-border bg-muted/20"
-                  }`}
-                >
-                  {signal.evaluated ? "Evaluated today" : "Candidate"}
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border uppercase tracking-wider text-emerald-400 border-emerald-400/30 bg-emerald-400/5">
+                  Limited GA
                 </span>
               </div>
               <h3 className="text-base font-semibold mb-4 text-foreground">{signal.name}</h3>
@@ -172,6 +107,34 @@ export default function SignalTypesSection() {
             </motion.div>
           ))}
         </div>
+
+        <motion.div
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          className="mt-10 p-6 rounded-xl border border-border bg-muted/20"
+        >
+          <div className="flex items-center gap-3 mb-3">
+            <Layers className="w-5 h-5 text-muted-foreground" />
+            <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">
+              Beyond Limited GA — proven in the repository, not shipping yet
+            </h3>
+          </div>
+          <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
+            These signal families exist as working, gate-checked code in the public repository —
+            and they are deliberately <span className="text-foreground">not</span> part of what we
+            ship at Limited GA. They arrive when they can be proven against a customer&apos;s real
+            environment, not before. We would rather show you three signals that are true than nine
+            that are aspirational.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {beyondGA.map((name) => (
+              <span key={name} className="text-xs px-3 py-1 rounded-full border border-border bg-background text-muted-foreground">
+                {name}
+              </span>
+            ))}
+          </div>
+        </motion.div>
       </div>
     </section>
   );

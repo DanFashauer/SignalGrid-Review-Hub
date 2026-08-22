@@ -2,14 +2,13 @@ import { motion } from "framer-motion";
 
 // Vendor-neutral candidate signal categories (public-safe fixture values, not
 // named live vendor integrations).
+// The three Limited-GA signals, exactly — the fixture panel shows what the
+// shipping engine actually evaluates, nothing more.
 const LIVE_SIGNALS = [
-  { label: "BADGE", value: "INSERTED", color: "text-orange-400" },
-  { label: "IDENTITY", value: "ENABLED", color: "text-teal-400" },
-  { label: "DEVICE POSTURE", value: "COMPLIANT", color: "text-green-400" },
-  { label: "LOCATION", value: "ZONE 3B / ICU", color: "text-teal-400" },
-  { label: "SHIFT", value: "07:00–19:00 MATCHED", color: "text-purple-400" },
-  { label: "SECURITY BASELINE", value: "CIS ALIGNED", color: "text-green-400" },
-  { label: "CUSTODY (DOCKBRIDGE)", value: "CHECKED OUT", color: "text-teal-400" },
+  { label: "DEVICE COMPLIANCE", value: "COMPLIANT (via Fleet)", color: "text-green-400" },
+  { label: "ANSWER FRESHNESS", value: "OBSERVED 41s AGO", color: "text-teal-400" },
+  { label: "LOCAL AUTHORITY", value: "VERIFIED FOR THIS ACTION", color: "text-orange-400" },
+  { label: "VERDICT", value: "ALLOW · EVIDENCE ATTACHED", color: "text-green-400" },
 ];
 
 export default function HeroSection() {
@@ -25,18 +24,20 @@ export default function HeroSection() {
           >
             <div className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-sm font-medium text-primary mb-6">
               <span className="flex h-2 w-2 rounded-full bg-primary mr-2 animate-pulse"></span>
-              Contextual Workforce Trust Orchestration
+              Shared-Device Trust Gateway
             </div>
 
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground mb-6 leading-tight text-balance">
-              Every access signal,<br className="hidden md:block" />
-              <span className="text-primary">turned into one clear call.</span>
+              Should this shared device<br className="hidden md:block" />
+              <span className="text-primary">proceed right now?</span>
             </h1>
 
             <p className="text-lg text-muted-foreground mb-8 max-w-[600px] leading-relaxed text-pretty">
-              The moment a workflow fires, SignalGrid reads the signals that matter — identity, device
-              posture, physical custody, and security baseline — and turns them into a simple decision:
-              allow, step-up, restrict, or deny. You choose the action.
+              SignalGrid is an access-decision service built invisibly into the apps your staff
+              already use. Before a sensitive action on a shared device it answers allow, step up,
+              restrict, or deny — from the device&apos;s compliance, how current that answer really is,
+              and whether the device can vouch for itself right now. Anything it can&apos;t verify
+              tightens the answer instead of waving it through.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
@@ -49,7 +50,7 @@ export default function HeroSection() {
             </div>
 
             <div className="mt-10 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
-              {["Fixture-backed proof", "On-premise-ready design", "Air-gap-capable design", "Systems of record stay external"].map((t) => (
+              {["Proven live against Fleet", "Built for lean IT teams", "Fail-closed by doctrine", "Your MDM stays your MDM"].map((t) => (
                 <div key={t} className="flex items-center">
                   <svg className="mr-2 h-4 w-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />

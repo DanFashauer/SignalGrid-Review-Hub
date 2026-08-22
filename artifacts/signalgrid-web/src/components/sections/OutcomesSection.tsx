@@ -10,12 +10,11 @@ const PHASES = [
     border: "border-teal-400/20",
     bg: "bg-teal-400/10",
     steps: [
-      "Employee taps badge at smart dock",
-      "SignalGrid evaluates schedule, role, training, and location signals",
-      "ALLOW recorded with evidence — the dock releases the assigned device",
-      "Badge locks into the reader case; custody binding recorded",
-      "Session evidence issued — the host app scopes its own credentials",
-      "Floor and specialty-area recommendations routed to the PACS",
+      "A worker picks up a shared device and opens your app",
+      "First sensitive action asks SignalGrid: compliant, current, authorized?",
+      "ALLOW recorded with reproducible evidence attached",
+      "A device your management plane hasn't confirmed recently gets STEP UP instead",
+      "Your app applies the verdict — SignalGrid stays invisible to the worker",
     ],
   },
   {
@@ -26,12 +25,11 @@ const PHASES = [
     border: "border-emerald-400/20",
     bg: "bg-emerald-400/10",
     steps: [
-      "Badge presence confirmed in case",
-      "BLE/UWB proximity — candidate zone signal; device in authorized zone",
-      "Device posture re-evaluated at each workflow trigger",
-      "Step-up or restrict recommended for specialty-area workflows (ICU, pharmacy, lab) — the PACS grants or revokes",
-      "Idle and tamper signals fold into the next evaluation",
-      "Cellular/eSIM reachability — a candidate resilience signal",
+      "Every sensitive action re-asks — per action, not per login",
+      "Compliance drifts mid-shift → the next answer tightens to RESTRICT",
+      "The evidence names what changed and who owns the fix",
+      "Source unreachable? The decision tightens — never assumes",
+      "Recovery is verified the same way: a fresh answer, not a promise",
     ],
   },
   {
@@ -42,12 +40,10 @@ const PHASES = [
     border: "border-orange-400/20",
     bg: "bg-orange-400/10",
     steps: [
-      "Device docked — dock signals feed a closing evaluation",
       "Session close recorded — credential revocation stays with your identity stack",
-      "Decision evidence exportable to your ITSM / SIEM (candidate integrations)",
-      "Badge released from the reader case",
-      "Re-baseline and charging recommended before next checkout",
-      "If not returned: DENY recorded with evidence — alerting and lost-mode stay approval-gated in your paging tool and MDM",
+      "Every verdict of the day sits in the audit ledger, tamper-evident",
+      "An operator can reconstruct any decision: source → evidence → policy → verdict",
+      "Enforcement on the device itself remained your MDM's job throughout",
     ],
   },
 ];
@@ -58,9 +54,9 @@ export default function OutcomesSection() {
 
       <div className="container mx-auto px-4 md:px-8 max-w-screen-xl relative z-10">
         <div className="mb-16 max-w-3xl">
-          <h2 className="text-3xl font-bold tracking-tight mb-4">The Complete Shift Lifecycle</h2>
+          <h2 className="text-3xl font-bold tracking-tight mb-4">A Shift, As the Decision Engine Sees It</h2>
           <p className="text-muted-foreground text-lg leading-relaxed">
-            SignalGrid follows device custody from dock-out to dock-in. The smart dock becomes the identity broker, the physical lock creates accountability, and the decision engine maintains trust state continuously across the entire shift.
+            One shared device, one shift, every sensitive action answered. SignalGrid evaluates per action — so trust reflects the device's state now, not its state at login — and leaves an evidence trail an operator can replay.
           </p>
         </div>
 

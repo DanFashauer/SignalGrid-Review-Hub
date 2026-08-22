@@ -21,7 +21,7 @@ const TEAM_ROUTING = [
   {
     team: "Physical Security",
     owns: ["Physical Access (PACS)", "IoT / Smart Building"],
-    alerts: "Badge removal, door event violations, zone boundary breaches, dock-out without checkout",
+    alerts: "Roadmap (deferred, not Limited GA): badge, door, and zone events route here when those signal families ship",
     color: "text-orange-400 bg-orange-400/10 border-orange-400/20",
   },
   {

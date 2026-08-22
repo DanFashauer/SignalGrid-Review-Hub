@@ -8,7 +8,7 @@ const TIERS = [
     name: "Starter",
     price: "$8",
     unit: "per device / month",
-    desc: "For teams piloting Zero Trust on shared devices.",
+    desc: "For lean IT teams starting with a 30\u201345-day shadow-mode pilot on shared devices.",
     highlight: false,
     cta: "Request a walkthrough",
     features: [
@@ -28,7 +28,7 @@ const TIERS = [
     name: "Enterprise",
     price: "$14",
     unit: "per device / month",
-    desc: "For enterprise security teams managing large frontline device fleets across facilities.",
+    desc: "For larger frontline fleets across multiple facilities — same lean-IT-first product, more devices.",
     highlight: true,
     cta: "Request a walkthrough",
     features: [

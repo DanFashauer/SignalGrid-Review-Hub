@@ -47,7 +47,7 @@ fails on any owner the roster does not carry.
 | 2 | `keycloak/keycloak` | LAB_SOURCE | P0 | `iam-domain` | Apache-2.0 | — | yes |
 | 3 | `h-mdm/hmdm-server` | LAB_SOURCE | P1 | `endpoint-uem-domain` | Apache-2.0 | — | no |
 | 4 | `microsoftgraph/msgraph-sdk-javascript` | PRODUCTION_CONNECTOR_TARGET | P0 | `endpoint-uem-domain` | MIT | — | no |
-| 5 | `open-telemetry/opentelemetry-collector` | OPEN_STANDARD | P0 | `sre` | Apache-2.0 | — | no |
+| 5 | `open-telemetry/opentelemetry-collector` | OPEN_STANDARD | P0 | `sre` | Apache-2.0 | — | yes |
 | 6 | `open-policy-agent/opa` | REFERENCE_ARCHITECTURE | P1 | `solutions-architect` | Apache-2.0 | — | no |
 | 7 | `cedar-policy/cedar` | REFERENCE_ARCHITECTURE | P1 | `solutions-architect` | Apache-2.0 | — | no |
 | 8 | `wazuh/wazuh` | LAB_SOURCE | P1 | `secops-domain` | GPL-2.0 | ⚠️ | yes |
@@ -63,7 +63,7 @@ fails on any owner the roster does not carry.
 | 18 | `SigmaHQ/sigma` | OPEN_STANDARD | P2 | `secops-domain` | Detection Rule License (custom, non-SPDX) | ⚠️ | no |
 | 19 | `zeek/zeek` | DEFERRED_RESEARCH | P2 | `network-domain` | BSD-3-Clause | — | no |
 | 20 | `OISF/suricata` | DEFERRED_RESEARCH | P2 | `network-domain` | GPL-2.0 | ⚠️ | no |
-| 21 | `prometheus/prometheus` | INTERNAL_COMPANY_TOOL | P0 | `sre` | Apache-2.0 | — | no |
+| 21 | `prometheus/prometheus` | INTERNAL_COMPANY_TOOL | P0 | `sre` | Apache-2.0 | — | yes |
 | 22 | `grafana/grafana` | DEFERRED_RESEARCH | P1 | `sre` | AGPL-3.0 | ⚠️ | no |
 | 23 | `openfga/openfga` | REFERENCE_ARCHITECTURE | P2 | `solutions-architect` | Apache-2.0 | — | no |
 | 24 | `micromdm/nanomdm` | REFERENCE_ARCHITECTURE | P2 | `endpoint-uem-domain` | MIT | — | no |
@@ -95,15 +95,21 @@ fails on any owner the roster does not carry.
 ## The deployed-lab truth
 
 "Deployed today" means one thing: `scripts/run-live-lanes.sh` starts the
-service. That script runs **four lanes** — `fleet` (Fleet server + MySQL +
+service. That script runs **five lanes** — `fleet` (Fleet server + MySQL +
 Redis + a real enrolled osqueryd agent), `location` (Traccar), `keycloak`
-(Keycloak with DPoP), and `edr` (Wazuh manager). Of the 30 repos in this index,
-that makes exactly three deployed: **Fleet**, **Keycloak**, and **Wazuh**, each
-with `deployedEvidence: scripts/run-live-lanes.sh` in the JSON. Traccar (the
-`location` lane) runs too but is not one of the owner's 30 ranked repos, so it
-appears here only as this note. Everything else — including Prometheus, which
-is ranked but has no lane — is not deployed, and the gate fails any entry that
-claims otherwise without evidence on disk.
+(Keycloak with DPoP), `edr` (Wazuh manager), and `telemetry` (OTel Collector +
+Prometheus, opt-in via `--with-telemetry` or `--only telemetry`). That makes
+**six** entries deployed, each with `deployedEvidence:
+scripts/run-live-lanes.sh` in the JSON: **Fleet**, **Keycloak**, **Wazuh**,
+**osquery** (the enrolled agent the `fleet` lane starts), **OpenTelemetry
+Collector**, and **Prometheus**. The last two flipped on 2026-08-21 when the
+telemetry lane first executed anywhere — on the Mac lane, because the cloud
+session had no runnable container engine that day; the run asserted
+`signalgrid_up` traversing api `/metrics` -> collector -> Prometheus, recorded
+in `artifacts/sim-results/2026-08-21-telemetry-lane-first-run.json`. Traccar
+(the `location` lane) runs too but is not one of the owner's ranked repos, so
+it appears here only as this note. Everything else is not deployed, and the
+gate fails any entry that claims otherwise without evidence on disk.
 
 ## Licence caution
 

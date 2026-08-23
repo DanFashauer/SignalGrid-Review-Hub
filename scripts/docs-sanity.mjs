@@ -87,6 +87,27 @@ const DENYLIST = [
   "replaces GroundControl",
   "available now",
   "SOC 2 Type II certified",
+  // A THIRD ROUND, from the org sweep (2026-08-23), and this one was found by
+  // reading a PROMISE rather than a page. docs/SECURITY_QUESTIONNAIRE_PACK.md
+  // tells assessors, for the row "SOC 2 / ISO 27001 / HIPAA / FedRAMP?", that
+  // "the docs-sanity gate fails the build if any document claims otherwise".
+  // It did not: of the four frameworks that sentence names, only SOC 2 (in its
+  // "Type II certified" phrasing) and FedRAMP (hyphenated only) had entries —
+  // ISO 27001 and HIPAA had none at all, in any form. The strongest fix is to
+  // make the promise true rather than soften it, because the promise is a good
+  // one to have made.
+  "SOC 2 certified",
+  "SOC 2 compliant",
+  "SOC2 certified",
+  "ISO 27001 certified",
+  "ISO 27001 compliant",
+  "ISO27001 certified",
+  "HIPAA compliant",
+  "HIPAA-compliant",
+  "HIPAA certified",
+  "FedRAMP authorized",
+  "FedRAMP certified",
+  "PCI DSS compliant",
   "99.99% uptime SLA",
   "FedRAMP-authorized",
   "CMMC-certified",

@@ -82,13 +82,15 @@
 <div class="deck">
 
   <!-- 1 — Title -->
+  <div style="max-width:70rem;margin:0 auto;padding:.75rem 1rem;background:#3b2f0b;color:#f5e6b8;border-bottom:1px solid #6b5a1f;font:14px/1.5 system-ui,sans-serif"><strong>Scope:</strong> this deck describes the product vision, and it demonstrates signal families that are <strong>deferred &mdash; proven in the public repository, not shipping at Limited GA</strong>. What ships today is three signals: device compliance, how current that answer is, and whether the device can vouch for itself right now (see <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/blob/main/docs/POSITIONING.md" style="color:#ffd97a">POSITIONING.md</a>). Nothing here is a claim of current capability.</div>
+
   <section>
     <span class="num">01 / 11</span>
     <div class="brandrow"><div class="glyph"></div><div class="brand">SIGNAL<span>GRID</span></div></div>
-    <div class="kicker">Context-aware trust for shared &amp; frontline devices</div>
+    <div class="kicker">A Shared-Device Trust Gateway &mdash; an access-decision service</div>
     <h1>The trust decision at the <em>moment of action</em> — invisible, on any shared device.</h1>
     <p class="big">Should this person, on this shared device, in this context, be allowed to do this — right now? SignalGrid answers it in that instant, inside the app people already use.</p>
-    <span class="stage">Pre-production concept · live demos · seeking design partners + pre-seed</span>
+    <span class="stage">Deterministic core, proven live against an open-source stack · Limited GA target 2027-02-04 · seeking design partners + pre-seed</span>
   </section>
 
   <!-- 2 — Problem -->
@@ -121,7 +123,7 @@
       <span class="chip v-restrict"><b>RESTRICT</b> · low-risk only</span>
       <span class="chip v-deny"><b>DENY</b> · held + logged</span>
     </div>
-    <p>Fail-closed by design: nothing sensitive fires silently, and a critical action needs a real native gesture <strong>and</strong> an explicit in-app confirmation.</p>
+    <p>Fail-closed by design: unknown or stale evidence raises assurance, never lowers it. At Limited GA the gateway runs in shadow mode &mdash; it <em>returns</em> step_up and the host app&rsquo;s own native authenticator answers it. SignalGrid enforces nothing on the device itself.</p>
   </section>
 
   <!-- 5 — Demo -->
@@ -141,11 +143,11 @@
   <section>
     <span class="num">06 / 11</span>
     <div class="kicker">How it works</div>
-    <h2>A vendor-neutral decision layer that sits <em>on top of</em> your stack.</h2>
-    <div class="flow"><b>badge / who</b> + <b>device custody &amp; tamper</b> + <b>security baseline</b> + <b>workflow risk</b> → <b>one verdict · one audit trail</b></div>
+    <h2>A vendor-neutral access-decision service that sits <em>on top of</em> your stack.</h2>
+    <div class="flow"><b>device compliance</b> + <b>how current that answer is</b> + <b>the device's present authority</b> → <b>one verdict · one audit trail</b></div>
     <div class="grid">
-      <div class="cardi"><div class="k">Consumes, doesn't replace</div><p>Takes the IAM / badge / UEM / EDR signals as inputs — it doesn't replace the login.</p></div>
-      <div class="cardi"><div class="k">Custody as a decision input</div><p>Is the shared device docked, in-hand, or tampered — and is the badged-in holder still the one using it?</p></div>
+      <div class="cardi"><div class="k">Consumes, doesn't replace</div><p>Takes your device-management evidence as input — it doesn't replace the login, and it holds no write route back to any source system.</p></div>
+      <div class="cardi"><div class="k">Custody — a design target, not shipping</div><p>Whether a shared device is docked, in-hand, or tampered is proven in the public repository and <b>deferred</b>: it is not evaluated at Limited GA, and no verdict today depends on it.</p></div>
       <div class="cardi"><div class="k">One plane, mixed fleet</div><p>A single allow/step-up/restrict/deny across every app and vendor, with one audit trail.</p></div>
       <div class="cardi"><div class="k">Deterministic + fail-closed</div><p>Unknown or ambiguous input never grants access. The core is pure and provable.</p></div>
     </div>
@@ -196,7 +198,7 @@
     <div class="kicker">Roadmap · where funding goes</div>
     <h2>Concept → partner → pilot → hardware.</h2>
     <div class="steps">
-      <div class="step"><div class="s">Today</div><div class="h">Concept + demos</div><p>Deterministic core, six verticals, clickable demos.</p></div>
+      <div class="step"><div class="s">Today</div><div class="h">Deterministic core, proven live</div><p>Fixture-backed decision core plus live end-to-end proof against an open-source stack (Fleet, Keycloak, FreeRADIUS, Wazuh), every gate machine-checked in CI.</p></div>
       <div class="step"><div class="s">Next</div><div class="h">Design partner</div><p>One frontline org, small low-risk pilot. Protect IP.</p></div>
       <div class="step"><div class="s">Then</div><div class="h">Real-world pilot</div><p>Measured evidence on real (de-identified) signal.</p></div>
       <div class="step"><div class="s">Funded</div><div class="h">Hardware anchor</div><p>Dock/bay proto with a hardware partner.</p></div>

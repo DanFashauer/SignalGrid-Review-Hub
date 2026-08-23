@@ -156,10 +156,33 @@ earlier — that is the loop working, not a reason to soften the record.
     differentiators rewritten to the provable ones (per-action + freshness +
     fail-closed + evidence).
 40. **Row 7's reconcile half never ran** — docs-writer + positioning, days.
-    EXECUTIVE_ONE_PAGER, ECOSYSTEM_POSITIONING and pitch-deck still open with
-    the retired "operational trust orchestration layer" and name custody /
-    credential-reader / network as connected capability. DR-011 rules those
-    wrong; no gate scopes prose docs. (Verified 2026-08-23.)
+    HALF DONE 2026-08-23: the PUBLISHED half is fixed and now gated; the prose
+    docs are not. Auditing the three named documents found the more serious
+    defect one layer down, in the gate meant to police exactly this. Rule 3 of
+    `check-launch-claims.mjs` required a hedge somewhere in the FILE, so
+    `docs/pitch-deck.html` — deployed to signalgrid.app by pages.yml — sold
+    "badge / who + device custody & tamper + security baseline + workflow risk
+    -> one verdict" on its How-it-works slide, with a card titled "Custody as a
+    decision input", and passed green because slide 1 said "Pre-production
+    concept" fifty-four lines earlier. Blanket immunity, bought with one word,
+    and the deck's own UNDERstatement was what licensed its OVERstatements.
+    Rule 3 is now block-scoped (same <section>, same paragraph), which surfaced
+    12 live violations across 5 buyer-facing files that had all been green.
+    Nine were real and the copy was rewritten: the deck's label, stage line,
+    how-it-works slide, step-up claim and roadmap, and six battlecard sites
+    including a moat pillar selling deferred custody as a current
+    differentiator on a card whose own masthead says "never overclaim custody
+    certainty". Three were the gate punishing honest copy in idioms it had not
+    been taught to read — "candidate signals, not evaluated today", a page-scope
+    banner that disclaims current capability outright, and a "Trap phrases to
+    avoid" list — and those taught the gate, not the copy. Falsified: 13
+    self-test cases, including the distant-hedge defect itself and the
+    artifact-footer near-miss that must NOT earn a page exemption.
+    STILL OPEN: the prose docs. EXECUTIVE_ONE_PAGER, ECOSYSTEM_POSITIONING and
+    the research pitch packs still carry the retired "operational trust
+    orchestration layer" label, a superseded "current proof is synthetic and
+    fixture-backed" status that DR-013 makes false, and a Microsoft-anchored
+    wedge DR-012 reversed. No gate scopes prose docs.
 41. **POSITIONING.md's claim-to-proof trace has fossilized** —
     positioning + devex, days. The trace is what makes the positioning
     DR-013-legitimate, and its `launch-profile.mjs` line anchors now point at
@@ -168,11 +191,64 @@ earlier — that is the loop working, not a reason to soften the record.
     days. `review-coverage.json` carries zero entries for the ~2,900 lines
     computing every verdict; `review-tiers.json` was never committed.
     Blocking row 8 restated with measurement.
-43. **Falsifiability is enforced only for the connector tier** —
-    qa-engineer, days. Mutation coverage does not reach the verdict core;
-    `signalgrid-grid` still ships ~90 assertions over local literals that
-    cannot fail; 21 of 50 check-gates carry no self-test; eight written
-    security suites (`tests/security-reference/`) run nowhere.
+43. **Falsifiability is enforced only for the connector tier** — HALF DONE
+    2026-08-23: the worst unfailable arm is fixed, and fixing it found a live
+    bug. Note the path first, because the row named a package that does not
+    exist: there is no `lib/signalgrid-grid`; `proof:signalgrid-grid` runs
+    `scripts/src/signalgrid-grid-proof.ts`, a harness over the simulator.
+    Its `safeMalformedRun` caught EVERY error and returned a synthesized
+    result — status "validation_error", plus a one-element `auditEvidence`
+    array built inside the catch block. The two assertions per case then
+    checked that status and that `auditEvidence.length > 0`, both against data
+    the catch had just written. All seven malformed inputs throw, so all
+    fourteen assertions passed unconditionally and the simulator was never
+    exercised on that path. Unfailable was the lesser half: it was fail-OPEN,
+    because ANY error became "the guard worked".
+    Each case now DECLARES the guard that must reject it
+    (`expectRejectedBy`), the catch reports the real thrown message instead of
+    minting evidence, and a rejection arriving from anywhere else fails.
+    On its first run the rewritten assertions caught a real latent defect:
+    `allowedSignalTypes` and `allowedSeverity` were `const`s declared ~650
+    lines BELOW the top-level loop that reaches them, so the enum check ran in
+    the temporal dead zone and threw `Cannot access 'allowedSignalTypes'
+    before initialization`. The "invalid enum values" case had therefore never
+    tested the enum guard at all — it crashed, and the old catch recorded the
+    crash as a pass. Both sets are hoisted above first use; the enum guard now
+    genuinely runs. Proof: 783/783, determinism hash unchanged in shape.
+    Falsified both directions: pointing one `expectRejectedBy` at a message
+    that never fires → 2 failures; re-introducing the temporal-dead-zone
+    ordering → the same 2 failures it originally exposed; restored → 783/0.
+    STILL OPEN, and deliberately NOT restated as measured here: a review pass
+    reported roughly 334 further structurally-unfailable assertions in the
+    same file (tautologies over values the code under test computes, and total
+    functions that cannot return falsy). Only the fourteen above were verified
+    by falsification, so the rest stays a reported figure until someone plants
+    a defect against it. Also open: mutation coverage still does not reach the
+    verdict core, and 21 of 50 check-gates carry no self-test.
+    The unexecuted-test half is now DISPOSITIONED rather than merely known.
+    Reading the eight `tests/security-reference/` suites settled what they are:
+    not portable, and honestly labelled. They are Vitest specs against the
+    retired DEV Next.js server — `/api/session/start`, `/api/health`,
+    `badgeUid`, launched with `bun run scripts/test-server.ts` — and none of
+    those endpoints exist on this monorepo's `/v1` surface. One of them tests
+    step-up enforcement, a DEFERRED family, so there is no shipping surface to
+    port it onto yet. Their README already says "reference to port, not yet
+    wired into CI", and it is true.
+    That truthfulness was the problem: prose does not fail a build, and nothing
+    stopped those eight from being written and never run, or an eleventh from
+    joining them. `scripts/check-test-execution.mjs` (preflight + CI, parity
+    green at 212 gates) now derives what actually runs — expanding package
+    scripts transitively from preflight, the CI workflows and
+    validate-sim-macos.sh, 110 scripts reached — and requires every
+    test-shaped file to be REACHED or DECLARED with a reason and a disposition.
+    It reports 21 test files: 12 reached, 9 declared. A declaration that
+    outlives its reason fails, so porting a suite retires its line and the last
+    one out deletes the entry. Falsified three ways: a planted orphan test →
+    exit 1; a declared file that IS reached → exit 1; restored → exit 0.
+    STILL OPEN under this row: `artifacts/mcp-server/test/server.test.ts` (its
+    unique assertions want folding into the gated `proof:mcp-server`, then the
+    orphan deleted) and the k6 scripts in `tests/load/`, which the gate
+    deliberately does not pattern-match and says so in its own header.
 44. **Two ungated contracts in the governance layer** — HALF DONE
     2026-08-23: the decision-record format contract now has
     scripts/check-decision-record-format.mjs (preflight + CI). DR-010 through
@@ -206,10 +282,19 @@ earlier — that is the loop working, not a reason to soften the record.
     carved out of the shared assist-wire conformance vectors; ios-ci does not
     trigger on simulator/workflow library changes; BackendService still calls
     five endpoints that exist nowhere.
-49. **Assessor-facing overstatement** — compliance-analyst, hours. The
-    security questionnaire pack tells assessors docs-sanity fails the build
-    on ISO 27001 / HIPAA certification claims; it does not. Also:
-    SECURITY_CONTROLS_MATRIX's status column has no drift gate.
+49. **Assessor-facing overstatement** — HALF DONE 2026-08-23: the
+    questionnaire pack told assessors that docs-sanity "fails the build if any
+    document claims otherwise" for SOC 2 / ISO 27001 / HIPAA / FedRAMP. Of
+    those four, only SOC 2 (in its "Type II certified" phrasing) and FedRAMP
+    (hyphenated only) had denylist entries — ISO 27001 and HIPAA had NONE, in
+    any form. Fixed by making the promise TRUE rather than softening it: twelve
+    certification phrasings added, falsified both directions (a planted document
+    asserting two of those framework certifications fails the gate; the clean
+    tree passes — and this very row had to be reworded because quoting the
+    planted phrases verbatim tripped the widened gate, which is the gate
+    working: fix the copy, never the gate). The existing negation handling means the pack's own "None held,
+    none claimed" row stays legal. REMAINING: SECURITY_CONTROLS_MATRIX's status
+    column still has no drift gate (days).
 50. **Operability claims without live evidence** — sre, days. The SLO surface
     has never consumed a real decision outcome (its only non-proof caller is
     an all-healthy fixture); nine CI jobs remain unbounded, two of them

@@ -31,6 +31,10 @@ interface SafeMalformedResult {
   primaryOutcome: DecisionOutcome | "validation_error";
   reasonCodes: string[];
   auditEvidence: Array<{ id: string; summary: string; references: string[] }>;
+  /** The message the guard actually threw. Empty on the safe_decision path. */
+  rejectionMessage: string;
+  /** Did the DECLARED guard reject this input, or did something else break? */
+  matchedExpectedGuard: boolean;
 }
 
 const fixtureTimestamp = "2026-06-09T14:05:00.000Z";
@@ -50,6 +54,50 @@ const scenarios = listSimulatorScenarios();
 const baselineResults = scenarios.map(runScenario);
 const assertions: Assertion[] = [];
 const mutationResults: SimulatorRunResult[] = [];
+// These two sets MUST be initialised before the malformed-input loop runs.
+// They used to sit ~650 lines below, after validateScenarioInput's definition
+// but far below the top-level loop that calls it. `const` is not hoisted, so
+// the enum check reached them inside the temporal dead zone and threw
+// ReferenceError: Cannot access 'allowedSignalTypes' before initialization.
+// The "invalid enum values" case therefore never tested the enum guard at all
+// — it crashed, and the old fail-open catch recorded that crash as the guard
+// working. The rewritten assertions surfaced it on their first run.
+const allowedSignalTypes = new Set<SignalGridSignal["type"]>([
+  "identity.authenticated",
+  "identity.risk_detected",
+  "apple.ddm_declared_state",
+  "apple.platform_sso_status",
+  "apple.audit_event_recorded",
+  "device.configuration_observed",
+  "device.enrollment_observed",
+  "device.posture_observed",
+  "device.non_compliant",
+  "device.stale_checkin",
+  "device.low_battery",
+  "device.health_degraded",
+  "dock.device_docked",
+  "dock.device_undocked",
+  "dock.wrong_slot_return",
+  "dock.device_missing",
+  "rtls.location_observed",
+  "rtls.wrong_zone",
+  "rts.staff_safety_alert",
+  "workflow.assignment_changed",
+  "api.integration_failed",
+  "ticket.created",
+  "ticket.updated",
+  "remediation.requested",
+  "remediation.verified",
+  "audit.recorded",
+]);
+const allowedSeverity = new Set<SignalGridSignal["severity"]>([
+  "info",
+  "low",
+  "medium",
+  "high",
+  "critical",
+]);
+
 const malformedResults: SafeMalformedResult[] = [];
 const highRiskActionGates = [
   "quarantine",
@@ -148,20 +196,33 @@ for (const gate of highRiskActionGates) {
 }
 
 for (const malformed of malformedInputs()) {
-  const result = safeMalformedRun(malformed.name, malformed.input);
+  const result = safeMalformedRun(
+    malformed.name,
+    malformed.input,
+    malformed.expectRejectedBy,
+  );
   malformedResults.push(result);
   assertions.push(
     assertion(
       `malformed input guard: ${malformed.name} never silently allows`,
-      result.status === "validation_error" ||
-        ["deny", "restrict", "step_up"].includes(result.primaryOutcome),
-      `${result.status}:${result.primaryOutcome}`,
+      result.status === "validation_error"
+        ? result.matchedExpectedGuard
+        : ["deny", "restrict", "step_up"].includes(result.primaryOutcome),
+      `${result.status}:${result.primaryOutcome}:${result.rejectionMessage || "(no rejection)"}`,
     ),
   );
   assertions.push(
     assertion(
-      `malformed input guard: ${malformed.name} records validation evidence`,
-      result.auditEvidence.length > 0,
+      // The old form of this assertion read auditEvidence.length > 0 against an
+      // array the catch block had just built. It now demands that the input was
+      // turned away by the guard the case DECLARES, so a rejection arriving from
+      // an unrelated crash fails instead of passing.
+      `malformed input guard: ${malformed.name} is refused by its declared guard, not by an unrelated crash`,
+      result.status === "validation_error"
+        ? result.matchedExpectedGuard &&
+            malformed.expectRejectedBy.test(result.rejectionMessage)
+        : result.auditEvidence.length > 0,
+      result.rejectionMessage || `${result.auditEvidence.length} audit records`,
     ),
   );
 }
@@ -645,20 +706,31 @@ function mutation(
   };
 }
 
-function malformedInputs(): Array<{ name: string; input: unknown }> {
+function malformedInputs(): Array<{
+  name: string;
+  input: unknown;
+  expectRejectedBy: RegExp;
+}> {
   return [
     {
       name: "missing scenario id",
       input: { ...cloneScenario(scenarios[0]), id: undefined },
+      expectRejectedBy: /Scenario id is required/,
     },
-    { name: "unknown scenario id", input: "unknown-scenario-id" },
+    {
+      name: "unknown scenario id",
+      input: "unknown-scenario-id",
+      expectRejectedBy: /Unknown simulator scenario/,
+    },
     {
       name: "null critical fields",
       input: { ...cloneScenario(scenarios[0]), startingSignals: null },
+      expectRejectedBy: /startingSignals must be an array/,
     },
     {
       name: "undefined critical fields",
       input: { ...cloneScenario(scenarios[0]), expectedOwnerTeam: undefined },
+      expectRejectedBy: /expectedOwnerTeam is required/,
     },
     {
       name: "invalid enum values",
@@ -672,6 +744,7 @@ function malformedInputs(): Array<{ name: string; input: unknown }> {
           },
         ],
       },
+      expectRejectedBy: /invalid enum value/,
     },
     {
       name: "unexpected extra fields",
@@ -679,6 +752,7 @@ function malformedInputs(): Array<{ name: string; input: unknown }> {
         ...cloneScenario(scenarios[0]),
         unexpected: "ignored-public-safe-fixture",
       },
+      expectRejectedBy: /Unexpected scenario fields/,
     },
     {
       name: "malformed signal payload",
@@ -686,11 +760,34 @@ function malformedInputs(): Array<{ name: string; input: unknown }> {
         ...cloneScenario(scenarios[0]),
         startingSignals: [{ payload: "not-a-signal" }],
       },
+      expectRejectedBy: /Signal payload is incomplete/,
     },
   ];
 }
 
-function safeMalformedRun(name: string, input: unknown): SafeMalformedResult {
+// WHY THIS FUNCTION LOOKS THE WAY IT DOES.
+//
+// It used to catch every error and RETURN a synthesized result: status
+// "validation_error", reasonCodes ["VALIDATION_FAILURE"], and a one-element
+// auditEvidence array built right here in the catch block. The two assertions
+// downstream then checked that status was "validation_error" and that
+// auditEvidence.length > 0 — both against data this catch had just written.
+// All seven malformed inputs throw, so all fourteen assertions passed
+// unconditionally, and nothing in the simulator was exercised on this path.
+//
+// Worse than unfailable: it was fail-OPEN. Any error at all became "the guard
+// worked". A TypeError from an unrelated regression inside runScenario would
+// have been recorded as proof that malformed input is safely rejected.
+//
+// Now the caller DECLARES which guard must reject each input, the catch
+// reports the real thrown message instead of inventing evidence, and an
+// unexpected error fails the proof — which is the only way this path can say
+// anything true about the guards.
+function safeMalformedRun(
+  name: string,
+  input: unknown,
+  expectRejectedBy: RegExp,
+): SafeMalformedResult {
   try {
     let result: SimulatorRunResult;
     if (typeof input === "string") {
@@ -709,22 +806,22 @@ function safeMalformedRun(name: string, input: unknown): SafeMalformedResult {
         summary: item.summary,
         references: item.references,
       })),
+      rejectionMessage: "",
+      matchedExpectedGuard: false,
     };
   } catch (error) {
+    const rejectionMessage =
+      error instanceof Error ? error.message : String(error);
     return {
       status: "validation_error",
       primaryOutcome: "validation_error",
       reasonCodes: ["VALIDATION_FAILURE"],
-      auditEvidence: [
-        {
-          id: `audit:validation:${name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`,
-          summary:
-            error instanceof Error
-              ? `Validation failure recorded: ${error.message}`
-              : "Validation failure recorded.",
-          references: ["signalgrid-grid-proof"],
-        },
-      ],
+      // Deliberately EMPTY. Evidence minted by the catch block is evidence of
+      // the catch block, and asserting on it proved only that this file can
+      // build an array.
+      auditEvidence: [],
+      rejectionMessage,
+      matchedExpectedGuard: expectRejectedBy.test(rejectionMessage),
     };
   }
 }
@@ -798,41 +895,6 @@ function validateScenarioInput(
   }
 }
 
-const allowedSignalTypes = new Set<SignalGridSignal["type"]>([
-  "identity.authenticated",
-  "identity.risk_detected",
-  "apple.ddm_declared_state",
-  "apple.platform_sso_status",
-  "apple.audit_event_recorded",
-  "device.configuration_observed",
-  "device.enrollment_observed",
-  "device.posture_observed",
-  "device.non_compliant",
-  "device.stale_checkin",
-  "device.low_battery",
-  "device.health_degraded",
-  "dock.device_docked",
-  "dock.device_undocked",
-  "dock.wrong_slot_return",
-  "dock.device_missing",
-  "rtls.location_observed",
-  "rtls.wrong_zone",
-  "rts.staff_safety_alert",
-  "workflow.assignment_changed",
-  "api.integration_failed",
-  "ticket.created",
-  "ticket.updated",
-  "remediation.requested",
-  "remediation.verified",
-  "audit.recorded",
-]);
-const allowedSeverity = new Set<SignalGridSignal["severity"]>([
-  "info",
-  "low",
-  "medium",
-  "high",
-  "critical",
-]);
 
 function toEvidenceRecord(result: SimulatorRunResult) {
   return {

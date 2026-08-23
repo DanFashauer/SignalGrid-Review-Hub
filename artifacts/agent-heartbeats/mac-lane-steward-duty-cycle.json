@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-08-22T20:25:42+00:00",
-  "result": "quiet \u2014 no new Mac activity; two sim-requests pending there (telemetry first-run, source-independence queue); heartbeat rides the branch with the staged one-pager commit, pushing together on its preflight green"
+  "firedAt": "2026-08-23T00:26:26+00:00",
+  "result": "acted: read Mac darwin-green + source-independence results, flipped otel/prometheus deployedInLab, adopted its three named gaps as the build queue (headwind lane, capture-mode proof path, GLPI bring-up)"
 }

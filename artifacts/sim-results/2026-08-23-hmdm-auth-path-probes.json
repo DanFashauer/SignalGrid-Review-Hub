@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "requestId": "2026-08-23-hmdm-auth-path-probes",
+  "completedAt": "2026-08-23T07:17:45.866Z",
+  "provenance": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "nodeVersion": "v24.18.0",
+    "macosVersion": "26.6.2",
+    "commit": "f1a16da3398676e419d988bc9f73f0f981ae95a0",
+    "branch": "SignalGrid_Alpha",
+    "workingTreeClean": false
+  },
+  "runs": [
+    {
+      "operation": "proofs-sim-only",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 5158,
+      "tail": [
+        "-- install deps",
+        "-- add platform binaries for this run: @esbuild/darwin-arm64@0.27.3 @rolldown/binding-darwin-arm64@1.2.4 lightningcss-darwin-arm64@1.32.0 @tailwindcss/oxide-darwin-arm64@4.3.3",
+        "   (manifests restored; binaries kept in node_modules)",
+        "-- build api-server (esbuild; needed for observability + api integration test)",
+        "   dist built",
+        "-- started sgval-redis on 6381 for proof:enrollment-race",
+        "",
+        "== real-life simulator scenarios ==",
+        "  \u001b[32mPASS\u001b[0m  proof:signalgrid-simulator (11 scenarios)",
+        "  \u001b[32mPASS\u001b[0m  proof:room-sim",
+        "  \u001b[32mPASS\u001b[0m  proof:signalgrid-core",
+        "  \u001b[32mPASS\u001b[0m  proof:signalgrid-grid",
+        "",
+        "== lane inbox ==",
+        "Lane inbox — this machine is the MAC lane (override with SIGNALGRID_LANE)",
+        "",
+        "  nothing unread. (--all to include acknowledged.)",
+        "",
+        "== NOTE: the web build now RUNS here (it used to be skipped) ==",
+        "   — the vite/rollup/lightningcss/tailwind darwin binaries this repo strips are",
+        "     added to node_modules for the run, exactly as tsx's esbuild binary always",
+        "     was. Nothing about the sources is linux-only; all 6 artifacts build on arm64.",
+        "",
+        "== SUMMARY: 4 passed, 0 failed, 0 skipped ==",
+        "✅ Simulation validation GREEN."
+      ]
+    }
+  ]
+}

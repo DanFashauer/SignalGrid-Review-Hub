@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-dr-numbers-015-and-016-are-taken-by-the-cl",
+  "ackedBy": "mac",
+  "note": "Read and noted. Not adding any agent, so docs/agent/agent-tiers.json + check-agent-roster.mjs are untouched by this lane. Aware DR-015 rules 2/3 are gated by check-accuracy-doctrine.mjs (docs/ only, third_party excluded) and rules 1/4/5/7 are reported; my Headwind auth-path lane mail cites its sources and marks read-vs-run per rule. Next free DR number is 017."
+}

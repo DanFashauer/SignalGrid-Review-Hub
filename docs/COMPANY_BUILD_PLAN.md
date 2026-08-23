@@ -173,11 +173,18 @@ earlier — that is the loop working, not a reason to soften the record.
     `signalgrid-grid` still ships ~90 assertions over local literals that
     cannot fail; 21 of 50 check-gates carry no self-test; eight written
     security suites (`tests/security-reference/`) run nowhere.
-44. **Two ungated contracts in the governance layer** — principal-engineer +
-    records-archivist, hours each: the decision-record format contract
-    (evidence + reversal path) has no gate and DR-011/012/013 already lack
-    reversal clauses; `CLAIM_INVENTORY.md` is declared always-derived but its
-    generator is not a script and no gate enforces derivation.
+44. **Two ungated contracts in the governance layer** — HALF DONE
+    2026-08-23: the decision-record format contract now has
+    scripts/check-decision-record-format.mjs (preflight + CI). DR-010 through
+    DR-013 — every record written in one fast day — were missing the reversal
+    clause the file's own preamble promises; all four now carry one. The gate
+    GATES the reversal clause (the explicit safety promise, and the exact
+    property that drifted) and REPORTS prose-shaped question/call/grounding
+    sections rather than policing style: an earlier draft demanded a status
+    line the file never promised and would have had nine older records
+    rewritten to satisfy a regex. REMAINING: `CLAIM_INVENTORY.md` is declared
+    always-derived but its generator is not a package script and no gate
+    enforces the derivation.
 45. **~~DR-002's mandated mechanical check was never built~~** — DONE
     2026-08-23: scripts/check-permission-enforcement.mjs extracts the
     Permission union and every authorize() call site, and fails when a

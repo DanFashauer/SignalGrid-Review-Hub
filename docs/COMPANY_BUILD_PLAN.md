@@ -281,7 +281,32 @@ earlier — that is the loop working, not a reason to soften the record.
     guard alone still passes, reverting BOTH drops seven, so what is pinned is
     the property, not which arm enforces it — recorded in the proof rather than
     left for a reader to assume.
-    **OPEN — freshness is computed, stamped, then discarded.** `dock.ts`
+    **FIXED 2026-08-23 — freshness is computed, stamped, and now CONSUMED.**
+    `DecisionEvidence` gained `dockEvidenceFreshness`: the worst freshness across
+    the dock-family signals that actually exist, folded into
+    `deriveCriticalSignalsPresent`, so stale/expired/unreadable dock evidence
+    suppresses `allow` to `step_up` through the existing fail-closed backstop and
+    its existing reason code. No new policy rule and no new reason code were
+    needed.
+    Two traps were found on the way, both worth keeping:
+    (a) **the obvious fix relaxes the gateway.** Degrading a stale VALUE to
+    "unknown" would stop an expired `custody_state:"checked_out"` matching
+    `custody-overdue` — a restriction would vanish. Staleness therefore travels
+    as its own input into a backstop that can only ever tighten.
+    (b) **`"missing"` must stay permissive.** A tenant with no dock hardware is a
+    deployment shape, not a degraded signal; treating the two alike would step up
+    every such tenant on day one. That arm is asserted explicitly.
+    The snapshot canary fired on the first run, exactly as designed: the digest
+    covers the whole evidence body, so adding a field moved it.
+    `LEGACY_SNAPSHOT_DIGEST` re-pinned b8d6988973734339 → 6ab07be9ec3cdddc with
+    the reason recorded beside the 2026-08-10 precedent, and
+    `CORE_NORMALIZATION_VERSION` 5 → 6 records the same change as provenance.
+    Real pre-change rows still verify — the digest FUNCTION is unchanged and each
+    row is checked against its own stored body.
+    Falsified across all five freshness values plus a non-vacuity control
+    proving the intact case is genuinely intact. Core proof 219 assertions, 20
+    evidence fields.
+    **(superseded — the original finding, kept for provenance)** `dock.ts`
     classifies each record's age and stamps `freshness` on all six signals it
     emits; `buildEvidence` reads only category/value/observedAt and never
     consults it, and `DecisionEvidence` carries no per-signal freshness at all.

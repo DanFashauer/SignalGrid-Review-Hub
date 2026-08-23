@@ -6,6 +6,7 @@ import { CONSOLE_HTML } from "./console-html";
 import { logger } from "./lib/logger";
 import { requestContext } from "./middlewares/context";
 import { demoSurfacesEnabled } from "./lib/profile";
+import { constantTimeEquals } from "@workspace/signalgrid-core";
 import { errorHandler } from "./middlewares/errors";
 import { globalRateLimiter } from "./middlewares/rateLimit";
 import { deprecationHeaders } from "./middlewares/deprecation";
@@ -108,7 +109,12 @@ if (demoSurfacesEnabled()) {
 // as a bearer, without breaking deployments that never set it.
 app.get("/metrics", (req, res) => {
   const required = process.env.METRICS_TOKEN?.trim();
-  if (required && req.headers.authorization !== `Bearer ${required}`) {
+  // constantTimeEquals, not `!==`: an early-exit string compare on the one
+  // static secret an operator actually sets leaks it character by character,
+  // and the core already protects even its PUBLIC demo keys this way
+  // (store.ts:128). The weaker guard sat on the stronger secret.
+  const presented = typeof req.headers.authorization === "string" ? req.headers.authorization : "";
+  if (required && !constantTimeEquals(presented, `Bearer ${required}`)) {
     res.status(401).type("text/plain").send("metrics: bearer token required");
     return;
   }

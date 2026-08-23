@@ -140,6 +140,7 @@ const STEPS = [
   { name: "Assessor package (every link, command and path in it resolves)", cmd: ["node", "scripts/check-assessor-package.mjs"] },
   { name: "OpenAPI validity (the published contract parses as OpenAPI; self-tested)", cmd: ["node", "scripts/check-openapi-valid.mjs"] },
   { name: "Launch claims (buyer-facing copy asserts nothing deferred as current; self-tested)", cmd: ["node", "scripts/check-launch-claims.mjs"] },
+  { name: "Permission enforcement (no declared scope goes unrequired — DR-002; self-tested)", cmd: ["node", "scripts/check-permission-enforcement.mjs"] },
   { name: "Connector discipline (every family gated + proven, none acting on a device)", cmd: ["node", "scripts/check-connector-discipline.mjs"] },
   { name: "Launch profile (the declared product edge matches the real one)", cmd: ["node", "scripts/check-launch-profile.mjs"] },
   { name: "Ungated fetch (a health check is still a live call)", cmd: ["node", "scripts/check-ungated-fetch.mjs"] },

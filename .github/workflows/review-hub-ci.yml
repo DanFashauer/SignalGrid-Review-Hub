@@ -261,6 +261,8 @@ jobs:
         run: node scripts/check-openapi-valid.mjs
       - name: Launch claims (nothing deferred presented as current)
         run: node scripts/check-launch-claims.mjs
+      - name: Permission enforcement (DR-002 — no scope granted that no surface demands)
+        run: node scripts/check-permission-enforcement.mjs
 
       # The declared product edge must match the real one, in BOTH directions. The
       # omission direction is the freeze: a new connector family, signal kind, API

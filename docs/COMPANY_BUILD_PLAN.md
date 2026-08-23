@@ -458,6 +458,42 @@ earlier — that is the loop working, not a reason to soften the record.
     Nine shape cases falsified, including the `{note: "All gates green."}` file
     that previously replaced the server's own words. `test:api` 301/301.
 
+40g. **The determinism scope was a hand-listed fossil covering EIGHT of
+    thirty-four packages.** DONE 2026-08-23.
+    `review-invariants.mjs` check 2 scanned a literal `PURE_LIBS` array. A list
+    like that is a fossil the day someone adds a package: the new one is simply
+    not scanned, and nothing says so. Scope is now DERIVED from the filesystem —
+    34 packages, 3 with declared clock reads (39 pinned), 31 held at zero.
+    A package that legitimately reads the clock is DECLARED with a reason, a
+    retirement condition, and a PINNED count. The pin fails in BOTH directions:
+    more reads than declared means new ones arrived unexamined, FEWER means the
+    entry has outlived part of its justification. A declared package that stops
+    reading a clock entirely is a STALE exemption and fails too. All three
+    directions were falsified against the real tree.
+    The three declared: `lib/integrations` (22 — connector-boundary fixture
+    stamps and freshness computed where wall-clock IS the input; the core
+    receives the derived value and never reads a clock), `lib/location` (5 —
+    observation stamps and the TTL sweep; it emits signals, not verdicts), and
+    `lib/webauthn` (12 — challenge and step-up expiry, inherently
+    clock-dependent; the risk there was never the read but its DIRECTION, now
+    gated by `check-nan-fail-open.mjs` after nine fail-open sites).
+    **Check 2 also did not mask string literals** while check 1 did — harmless
+    across eight planner libs, immediately wrong across thirty-four, where a
+    string containing the text of a clock call reads as a clock call. Fixed with
+    the widening.
+    `PURE_LIBS` stays narrow and hand-listed on purpose: checks 1 and 3 assert
+    fail-closed switch shapes meaningful only for the planner libs, and widening
+    THOSE would flag correct code everywhere. Only the clock rule is
+    repository-wide.
+    **A claim was nearly made here and checked instead.** The draft of this row
+    said nothing prevented a clock read entering the decision core. That is
+    FALSE: `scripts/safety-check.mjs` check 1 scans `lib/signalgrid-core/src/`
+    for exactly this, and predates all of the above. The repo's own
+    `check:absence` probe returned CORROBORATED and would have licensed the
+    wrong claim — it tests a PHRASE, not a property, which is a limit worth
+    knowing about that tool. Reading the gate settled it. The two gates together
+    now cover every package under `lib/`.
+
 41. **POSITIONING.md's claim-to-proof trace has fossilized** — DONE
     2026-08-23, exactly as the row prescribed: anchors that resolve by ID, plus
     a gate. Measured first: ALL FIVE `launch-profile.mjs` line anchors had

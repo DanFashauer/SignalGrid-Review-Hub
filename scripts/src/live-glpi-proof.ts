@@ -38,6 +38,17 @@
 // this prints the status and body prefix and exits non-zero so the runner
 // records a real failure. Do not add a fallback that makes it green.
 import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// ANCHORED TO THE REPO ROOT, not to cwd. Both live proofs are invoked with
+// cwd=scripts/, so a bare "artifacts/live-captures/..." silently writes to
+// scripts/artifacts/ — the capture is produced, lands somewhere nothing reads,
+// and the consuming proof reports it ABSENT. The Mac lane hit exactly this on
+// the Headwind lane and fixed it there; this is its twin, found by grepping for
+// the shape rather than waiting to hit it, and fixed before the GLPI bring-up
+// runs. Same pattern as live-headwind-proof.ts, deliberately.
+const CAPTURE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../artifacts/live-captures");
 
 const BASE = process.env.GLPI_URL ?? "http://127.0.0.1:8430";
 const FIXTURE_TIMESTAMP = "2026-08-23T00:00:00.000Z";
@@ -138,8 +149,8 @@ const capture = {
   probes,
 };
 
-mkdirSync("artifacts/live-captures", { recursive: true });
-writeFileSync("artifacts/live-captures/glpi.json", `${JSON.stringify(capture, null, 2)}\n`);
+mkdirSync(CAPTURE_DIR, { recursive: true });
+writeFileSync(resolve(CAPTURE_DIR, "glpi.json"), `${JSON.stringify(capture, null, 2)}\n`);
 console.log("\n  capture written: artifacts/live-captures/glpi.json");
 
 const failed = assertions.filter((a) => !a.ok);

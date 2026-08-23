@@ -148,6 +148,7 @@ const STEPS = [
   { name: "Positioning trace (every ratified claim resolves by id in the launch profile; self-tested)", cmd: ["node", "scripts/check-positioning-trace.mjs"] },
   { name: "Module init order (a const read before it is initialised; self-tested)", cmd: ["node", "scripts/check-module-init-order.mjs"] },
   { name: "NaN fail-open (an unparseable expiry must read as EXPIRED; self-tested)", cmd: ["node", "scripts/check-nan-fail-open.mjs"] },
+  { name: "CI liveness (a sweep that stops running must fail a build; self-tested)", cmd: ["node", "scripts/check-ci-liveness.mjs"] },
   { name: "CI job timeouts (an unbounded job is an unbounded outage; self-tested)", cmd: ["node", "scripts/check-ci-job-timeouts.mjs"] },
   { name: "Connector discipline (every family gated + proven, none acting on a device)", cmd: ["node", "scripts/check-connector-discipline.mjs"] },
   { name: "Launch profile (the declared product edge matches the real one)", cmd: ["node", "scripts/check-launch-profile.mjs"] },

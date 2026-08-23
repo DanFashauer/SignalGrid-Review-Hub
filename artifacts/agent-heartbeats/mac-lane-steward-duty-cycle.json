@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-08-23T08:24:28Z",
-  "result": "acted: the Mac returned the hmdm-auth-path-probes result and it UNBLOCKED the headwind lane. They pinned the scheme from the decompiled war (SHA1(UPPER(hex(MD5(pw))) + compiled-in salt '5YdSYHyg2U'); the JWT endpoint wants MD5 hex, never plaintext) and retracted their own earlier 'the password is not admin' - it is 'admin', the encoding was the problem. I closed the empirical loop they were blocked from running: SHA1(UPPER(md5('admin'))+salt) equals the hash observed in the container, MATCH. run-live-lanes.sh now md5-hexes before POSTing. Acked, re-queued the first-capture request with what changed."
+  "firedAt": "2026-08-23T12:24:38Z",
+  "result": "quiet: no new Mac commits, no new sim-results, no mail addressed to cloud. The one unread lane message is cloud->mac (the GLPI bring-up notice) and is theirs to ack. Both sim-requests remain correctly pending and need that machine: headwind-first-capture (re-queued after the auth fix, first run that can authenticate) and glpi-first-bringup. Shared-surface change from last cycle - run-live-lanes.sh now md5-hexes the headwind password - was already delivered in the ack that shipped with it, so no new notice was owed."
 }

@@ -811,9 +811,26 @@ earlier — that is the loop working, not a reason to soften the record.
     path runs `pnpm run db:migrate` from a repo CHECKOUT rather than inside the
     container. `Dockerfile.web` is unaffected — its runtime is `nginx:alpine`
     with no node at all.
-    Sufficiency checked, not assumed: the repo dependency SBOM (a superset of
-    the image's prod deps) has 19 fixed-available matches and **0 CRITICAL**, so
-    the bundled tar was the only one.
+    **The first attempt was INCOMPLETE, and CI caught it.** Removing npm alone
+    left a second vulnerable copy: `corepack enable pnpm` fetches pnpm into the
+    corepack cache, and pnpm 10.28.1 bundles its OWN `tar` at
+    `dist/node_modules/tar` — version 7.5.3, also below the 7.5.19 fix.
+    How it surfaced is the point. The per-PR image-evidence job reported
+    `conclusion=success` — it is REPORT-ONLY, so its green says the job ran, not
+    that the image is clean. Its log said `matches by severity: {'Critical': 1}`.
+    That number alone proves nothing, because that job runs grype WITHOUT
+    `--only-fixed` and therefore counts unfixable findings too. What made the
+    leftover provable was scanning the base image separately: it has exactly ONE
+    critical in total and it is fixed-available, and the repo dependency SBOM has
+    ZERO criticals of any kind — so the surviving one could not be an unfixable
+    base finding or an application dependency. It had to be something in neither
+    scan, which is what the corepack cache is.
+    Both package managers and the cache are now removed. The cache is FOUND by
+    search rather than hardcoded, because its path depends on `$COREPACK_HOME`
+    and on which user ran `corepack enable` — and a wrong hardcoded path fails
+    SILENTLY, since `rm -rf` on a non-existent directory succeeds. The step then
+    proves itself: any bundled `tar` surviving outside `/app` FAILS THE BUILD,
+    rather than shipping an image the daily gate rejects hours later.
     **Limit stated: this could not be built here.** No Docker daemon in the
     cloud lane, so the image was never assembled locally; the base image was
     scanned directly from the registry instead. CI's compose smoke and the next

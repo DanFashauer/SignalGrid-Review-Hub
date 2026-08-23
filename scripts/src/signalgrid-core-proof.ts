@@ -19,6 +19,7 @@
 import {
   buildEvidence,
   deriveCriticalSignalsPresent,
+  FRESHNESS_VALUES,
   canonicalJson,
   constantTimeEquals,
   CoreError,
@@ -43,6 +44,7 @@ import {
   SIGNAL_CATEGORIES,
   EVIDENCE_FIELDS,
 } from "@workspace/signalgrid-core";
+import type { Freshness } from "@workspace/signalgrid-core";
 
 interface Assertion {
   name: string;
@@ -1611,20 +1613,47 @@ if (pending) {
     "critical set: an UNKNOWN osSupported degrades critical evidence",
     deriveCriticalSignalsPresent({ ...allCriticalKnown, osSupported: "unknown" }) === false,
   );
-  check(
-    "critical set: an EXPIRED postureFreshness degrades critical evidence (a lapsed answer is not an answer)",
-    deriveCriticalSignalsPresent({ ...allCriticalKnown, postureFreshness: "expired" }) === false,
-  );
-  for (const [freshness, expectCritical] of [
-    ["fresh", true],
-    ["missing", true],
-    ["stale", false],
-    ["expired", false],
-    ["unknown", false],
-  ] as const) {
+  // BOTH freshness ladders are swept across the WHOLE union, from a list derived
+  // from the exhaustive severity map — not hand-listed here.
+  //
+  // This shape exists because the previous one hid a live defect. The dock ladder
+  // was swept across all five values; posture got a single hand-written
+  // "expired" case. `postureFreshness: "stale"` was therefore never asserted, and
+  // it passed the backstop — while the dock ladder eleven lines away rejected the
+  // same word. 221 assertions were green and the one value that mattered was the
+  // one nobody wrote down. A partial sweep is not coverage; it is a sample that
+  // looks like coverage.
+  //
+  // The expectations are `Record<Freshness, boolean>`, so adding a member to the
+  // union fails to COMPILE until someone states what it means for each ladder.
+  // The two ladders legitimately DIFFER on "missing": no dock hardware at all is
+  // a deployment shape, not a degraded signal, whereas a missing posture answer
+  // is the absence of the thing being asked about. That difference is declared
+  // here rather than left implicit in two chains of `!==`.
+  const CRITICAL_BY_POSTURE_FRESHNESS: Record<Freshness, boolean> = {
+    fresh: true,
+    stale: false,
+    expired: false,
+    missing: false,
+    unknown: false,
+  };
+  const CRITICAL_BY_DOCK_FRESHNESS: Record<Freshness, boolean> = {
+    fresh: true,
+    missing: true,
+    stale: false,
+    expired: false,
+    unknown: false,
+  };
+  for (const freshness of FRESHNESS_VALUES) {
+    const expectPosture = CRITICAL_BY_POSTURE_FRESHNESS[freshness];
     check(
-      `stale-dock guardrail: dockEvidenceFreshness "${freshness}" -> criticalSignalsPresent ${expectCritical}`,
-      deriveCriticalSignalsPresent({ ...allCriticalKnown, dockEvidenceFreshness: freshness }) === expectCritical,
+      `critical set: postureFreshness "${freshness}" -> criticalSignalsPresent ${expectPosture}`,
+      deriveCriticalSignalsPresent({ ...allCriticalKnown, postureFreshness: freshness }) === expectPosture,
+    );
+    const expectDock = CRITICAL_BY_DOCK_FRESHNESS[freshness];
+    check(
+      `stale-dock guardrail: dockEvidenceFreshness "${freshness}" -> criticalSignalsPresent ${expectDock}`,
+      deriveCriticalSignalsPresent({ ...allCriticalKnown, dockEvidenceFreshness: freshness }) === expectDock,
     );
   }
   // Mutation sanity: the same rule set on INTACT critical evidence allows — proving

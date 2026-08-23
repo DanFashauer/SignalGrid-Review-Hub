@@ -378,6 +378,39 @@ earlier — that is the loop working, not a reason to soften the record.
     `record_audit` only, neither reaches allow. It was queued for the Mac lane on
     an inherited belief nobody had checked; the queue entry is withdrawn.
 
+40d. **The fail-closed backstop let a STALE posture answer through — the two
+    freshness ladders disagreed about the same word.** DONE 2026-08-23, found by
+    `fail-closed-auditor` on its first run.
+    `deriveCriticalSignalsPresent` rejected `postureFreshness` of `missing`,
+    `unknown` and `expired`, but NOT `stale` — while the dock ladder eleven lines
+    below rejected `stale` explicitly. Reproduced directly against the real
+    function: `postureFreshness: "stale"` returned `true`,
+    `dockEvidenceFreshness: "stale"` returned `false`.
+    Shipped v1's `posture-stale` rule masks it, which is exactly why it survived
+    — and exactly why it mattered. This file's own comment says the backstop "is
+    the layer that is supposed to hold when the rules do not", and for a custom
+    rule set that does not gate on freshness, it was not holding: a compliance
+    answer of unknown age could reach `allow`.
+    **The proof had the same asymmetry, which is why the then-221 green
+    assertions never caught it**: the dock ladder was swept across all five
+    `Freshness` values, and posture got a single hand-written `"expired"` case.
+    The one value that mattered was the one nobody wrote down. A partial sweep is
+    not coverage; it is a sample that looks like coverage.
+    Both ladders now sweep the WHOLE union, from `FRESHNESS_VALUES` derived from
+    the exhaustive `Record<Freshness, number>` severity map rather than listed
+    again — add a member to the union and it fails to COMPILE until someone says
+    what it means. Expectations are declared per ladder as
+    `Record<Freshness, boolean>`, so the one place they legitimately differ
+    (`missing`: no dock hardware is a deployment shape, a missing posture answer
+    is the absence of the thing being asked about) is written down instead of
+    left implicit in two chains of `!==`.
+    The core proof now runs 225 assertions. Falsified by exit code, not by eye:
+    removing the one-line fix drops the proof to exit 1; restoring it, exit 0.
+    Four documents cited the superseded figure. A plain grep found only one of
+    them — the others read "invariant assertions" rather than "assertions" — and
+    the figure guard caught every one. The gate was stricter than the search,
+    which is the entire argument for having it.
+
 41. **POSITIONING.md's claim-to-proof trace has fossilized** — DONE
     2026-08-23, exactly as the row prescribed: anchors that resolve by ID, plus
     a gate. Measured first: ALL FIVE `launch-profile.mjs` line anchors had

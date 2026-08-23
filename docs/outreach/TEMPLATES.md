@@ -3,7 +3,9 @@
 Governing rules (DR-011/DR-012 + the owner's confirmed guardrails,
 2026-08-22): messages go out under the owner's identity via his connected
 Gmail; **every product claim here traces to POSITIONING.md or a running
-gate**; ~5–10 sends/day to researched targets only; every send and reply
+gate** — and that is now enforced by one, `scripts/check-launch-claims.mjs`,
+which reads this file and the documents it cites and fails on a deferred
+family presented as current; ~5–10 sends/day to researched targets only; every send and reply
 logged in `artifacts/outreach-log/`; the owner can halt everything with one
 word. The publication boundary applies to outreach exactly as it applies to
 the repository: nothing deferred presented as current, ever.

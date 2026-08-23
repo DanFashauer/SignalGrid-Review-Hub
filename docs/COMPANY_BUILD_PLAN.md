@@ -178,11 +178,34 @@ earlier — that is the loop working, not a reason to soften the record.
     avoid" list — and those taught the gate, not the copy. Falsified: 13
     self-test cases, including the distant-hedge defect itself and the
     artifact-footer near-miss that must NOT earn a page exemption.
-    STILL OPEN: the prose docs. EXECUTIVE_ONE_PAGER, ECOSYSTEM_POSITIONING and
-    the research pitch packs still carry the retired "operational trust
-    orchestration layer" label, a superseded "current proof is synthetic and
-    fixture-backed" status that DR-013 makes false, and a Microsoft-anchored
-    wedge DR-012 reversed. No gate scopes prose docs.
+    2026-08-23, second pass: the OUTREACH surface is now in scope too, which
+    matters more than the website. `docs/outreach/` is sent to real people as
+    real email under the owner's identity, increasingly without a human reading
+    each one, so it is where an overclaim costs most and gets checked least.
+    Both `OPERATING_RULES.md` and `TEMPLATES.md` already promised that every
+    product claim traces to POSITIONING.md — in prose, which does not fail a
+    build, exactly like the security-questionnaire promise that turned out to be
+    unenforced for two of four frameworks (row 49). The gate now scans the
+    outreach directory AND every document those files cite as a claim-trace
+    target, derived rather than listed, so citing a new document pulls it in on
+    the next run. It was already clean: 89 files, 0 violations. Falsified in
+    both scopes — an overclaim planted in a template fails, and one planted in
+    the CITED pilot package fails, which is what proves the citation
+    derivation works rather than merely existing. Both documents now name the
+    gate that enforces them instead of asking to be believed.
+    STILL OPEN: the prose docs. ~20 documents still carry the retired
+    "operational trust orchestration layer" / "Zero Trust orchestration
+    platform" labels, ~9 carry a "current proof is synthetic and fixture-backed"
+    status that DR-013 makes false (an UNDERstatement — it denies live
+    open-source proof), and ECOSYSTEM_POSITIONING still states the
+    Microsoft-anchored wedge DR-012 reversed. Most sit under `docs/research/`
+    and `docs/inspiration/`, which are archival and want a dated supersession
+    banner rather than a rewrite; `EXECUTIVE_ONE_PAGER.md` and
+    `ECOSYSTEM_POSITIONING.md` are live and want fixing. POSITIONING.md:26-27
+    states an explicit contract — "any document using a label outside these
+    three roles is wrong and gets fixed to this page" — which is gateable in
+    the same shape as the decision-record reversal clause, once the archival
+    boundary is drawn.
 41. **POSITIONING.md's claim-to-proof trace has fossilized** —
     positioning + devex, days. The trace is what makes the positioning
     DR-013-legitimate, and its `launch-profile.mjs` line anchors now point at

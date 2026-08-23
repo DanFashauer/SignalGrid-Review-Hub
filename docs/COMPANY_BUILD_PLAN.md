@@ -524,10 +524,44 @@ earlier — that is the loop working, not a reason to soften the record.
     PR-gating; the daily mutation sweep — the repo's only falsifiability
     measurement — has no liveness evidence and is absent from the routine
     registry.
-51. **`lib/location` remains an undispositioned orphan** — principal-engineer
-    + devex, days. `Date.now()` in signal-admission logic, zero importers,
-    outside the determinism gate's scan prefixes while CLAUDE.md asserts the
-    rule repo-wide.
+51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
+    MEASURED 2026-08-23; the disposition itself is an owner call, stated below.
+    Every clause of the row holds. `lib/location` has ZERO importers (only a
+    tsconfig project reference), and carries 5 real `Date.now()` calls across 3
+    files — `validate.ts:8` does age arithmetic on admission, which is a clock
+    inside a signal-admission path.
+    **The larger finding underneath it: the determinism gate's scope is
+    hand-listed and OPT-IN.** `review-invariants.mjs` scans 8 prefixes
+    (`PURE_LIBS`) while the repository holds **35 lib packages** — so a new
+    package is exempt by default until somebody remembers to add it, which is
+    the fossil shape this repo derives scope to avoid everywhere else.
+    Measured with comments stripped the way the gate itself strips them (a
+    naive grep first reported 5 packages; two were comment-only, one of them
+    the decision core's own comment EXPLAINING why a decision path may not read
+    a clock — the figure below is the corrected one):
+      lib/integrations  25 occurrences / 12 files — connector timeouts and
+                        retry jitter; plausibly legitimate, needs a read
+      lib/webauthn      13 / 3 — challenge expiry and randomness; expected for
+                        this domain
+      lib/location       5 / 3 — the orphan, and the only one where the clock
+                        sits in admission logic
+    So "the rule is enforced repo-wide" is not true today, and making it true
+    means classifying 43 occurrences across three packages rather than flipping
+    a flag. That is real work and a wrong call on connector code would be worse
+    than the gap.
+    **NEEDS AN OWNER CALL on `lib/location` specifically**, because the options
+    trade different things and none is obviously right:
+      (a) delete it — zero importers, and the breadth freeze argues for it, but
+          it discards real work done for a deferred family;
+      (b) keep and repair — make the 5 clock reads caller-posed like
+          `continuity.ts` already does, then bring it under the gate. Real work
+          with no current consumer;
+      (c) keep and declare — an explicit exemption naming the reason and the
+          condition that retires it, which is honest but leaves doctrine-
+          violating code in the tree.
+    Not chosen here: this is product scope, not a skill gap, and the loop's own
+    rule is that an agent takes it to the edge and stops where a person carries
+    the consequence.
 
 The thirty-one seats the limit cut short re-run on the next sweep; their
 absence is stated rather than counted as clean.

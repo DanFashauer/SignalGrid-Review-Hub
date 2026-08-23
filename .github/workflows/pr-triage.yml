@@ -43,7 +43,26 @@ jobs:
               ["area:ci",            p => p.startsWith(".github/")],
               ["area:docs",          p => p.startsWith("docs/") || p.endsWith(".md")],
               ["area:tooling",       p => p.startsWith("scripts/") || p.startsWith("tools/")],
+              // Added 2026-08-23 from two observed misses, not from imagination.
+              //
+              // CONTAINER: PR #283 changed Dockerfile.api to clear a live CRITICAL
+              // and was labelled `area:docs` ONLY — the .md that rode along matched,
+              // the Dockerfile matched nothing. A pure container change was therefore
+              // invisible to triage, and the deploy surface is the last one that
+              // should draw less scrutiny than a doc edit.
+              ["area:container",     p => /^(Dockerfile|docker-compose|\.dockerignore)/.test(p) || p.endsWith(".dockerfile")],
+              // LANES: PR #285 carried a lane message and a steward heartbeat and
+              // reported "Areas: —". The cross-lane coordination artifacts are how
+              // the two Claude lanes tell each other what changed; a change to them
+              // having no area at all is exactly backwards.
+              ["area:lanes",         p => /^artifacts\/(lane-messages|agent-heartbeats|sim-requests|sim-results)\//.test(p)],
+              // NATIVE: native/ios had a rule and its siblings did not, which reads
+              // as an oversight rather than a decision.
+              ["area:native",        p => p.startsWith("native/android/") || p.startsWith("firmware/")],
             ];
+            // NOT every path needs an area, and no gate demands one — a PR touching
+            // only, say, a fixture may legitimately match nothing. What these three
+            // fix is a surface that SHOULD be visible and was not.
             const areas = rules.filter(([, test]) => paths.some(test)).map(([label]) => label);
 
             // Size label.

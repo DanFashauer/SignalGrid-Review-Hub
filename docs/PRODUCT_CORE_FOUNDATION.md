@@ -26,7 +26,7 @@ deployment live.
 | Audit ledger | `src/audit.ts` | Append-only, per-tenant, digest-chained (tamper-evident) |
 | Product API | `artifacts/api-server/src/routes/v1.ts` + middleware | `/v1` surface backed by the in-memory core (works with no database) |
 | Operator console | `artifacts/signalgrid-review/.../OperatorConsoleSection.tsx` | In-browser decision trace over synthetic data |
-| Proof | `scripts/src/signalgrid-core-proof.ts` | `pnpm run proof:signalgrid-core` — 213 invariant assertions |
+| Proof | `scripts/src/signalgrid-core-proof.ts` | `pnpm run proof:signalgrid-core` — 219 invariant assertions |
 
 ## The decision loop
 

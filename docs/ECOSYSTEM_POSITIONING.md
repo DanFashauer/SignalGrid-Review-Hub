@@ -1,6 +1,13 @@
 # Ecosystem Positioning
 
-SignalGrid is a runtime decision layer and Zero Trust orchestration platform for shared-device and mobile frontline environments. It is not another IAM, UEM/MDM, ITSM, SIEM/SOAR, NAC, healthcare access-management, or hardware platform. Those systems remain the systems of record for their own domains.
+> **`docs/POSITIONING.md` is canonical for how SignalGrid is described.** This
+> page is the ECOSYSTEM map — how the product relates to neighbouring system
+> categories — and it does not get to define the product. Where the two
+> disagree, POSITIONING.md wins and this page gets fixed to it. Corrected
+> 2026-08-23: this document opened with two unratified product labels and named
+> the Microsoft wedge that DR-012 reversed.
+
+SignalGrid is a **Shared-Device Trust Gateway** — an access-decision service for shared-device and mobile frontline environments (the one ratified name and descriptor; DR-011). It is not another IAM, UEM/MDM, ITSM, SIEM/SOAR, NAC, healthcare access-management, or hardware platform. Those systems remain the systems of record for their own domains.
 
 SignalGrid consumes signals from those systems, evaluates runtime context, determines an access outcome, and emits decision evidence or action requests back to connected workflows.
 
@@ -334,8 +341,12 @@ of them decide anything about a workflow, and SignalGrid does not run a network.
 
 The expansion story is genuinely large — manufacturing, warehouse, logistics,
 healthcare, smart city, energy, fleet, remote operations — and it is explicitly **not
-the launch wedge**. The wedge stays Entra + Intune → one shared-device workflow → one
-customer-approved sandbox → one live decision loop. This section is the expansion map,
+the launch wedge**. Per DR-012 the wedge is Fleet-first: the source-agnostic
+device-management evidence contract, proven LIVE against Fleet (TLS with a real
+osqueryd agent) — the management plane lean IT teams actually run — → one
+shared-device workflow → one live decision loop. Microsoft Entra/Intune stays
+implemented and wire-hardened as the enterprise connector, awaiting a real
+tenant, which arrives when a prospect brings one. This section is the expansion map,
 recorded so the sequencing is a decision rather than a drift.
 
 **What already exists.** The connectivity plane is not a gap; it is four deliberately
@@ -448,11 +459,11 @@ This public positioning artifact intentionally avoids unsafe claims:
 
 ## First proof alignment
 
-The strongest next proof remains the Entra ID + Intune posture path because it combines authenticated identity with device posture in one Microsoft path:
+The strongest next proof is the open-source posture path, per DR-012 and DR-013: proof that does not wait on a purchased licence, driven against systems anyone can stand up and inspect. Shape, with Fleet as the device-management source and Keycloak as the identity source:
 
-`User/device identity → Graph-backed posture lookup → normalized identity + posture signal → SignalGrid decision → audit record`
+`User/device identity → device-management posture lookup (Fleet live today; Graph on the roadmap) → normalized identity + posture signal → SignalGrid decision → audit record`
 
-That proof keeps the public story anchored in a conservative runtime decision flow: IAM authenticates identity, Intune proves posture, source systems remain authoritative, SignalGrid evaluates cross-system runtime trust, and every decision is recorded for review. See [Identity Trust Layer strategy](IDENTITY_TRUST_LAYER_STRATEGY.md) for the broader identity roadmap. The [Operational Health / DEX Layer Strategy](OPERATIONAL_HEALTH_DEX_LAYER_STRATEGY.md) documents the follow-on endpoint health, API health, alerting, ITSM routing, and user-experience layer that should be sequenced after identity/posture foundations.
+That proof keeps the public story anchored in a conservative runtime decision flow: IAM authenticates identity, the device-management source proves posture, source systems remain authoritative, SignalGrid evaluates cross-system runtime trust, and every decision is recorded for review. See [Identity Trust Layer strategy](IDENTITY_TRUST_LAYER_STRATEGY.md) for the broader identity roadmap. The [Operational Health / DEX Layer Strategy](OPERATIONAL_HEALTH_DEX_LAYER_STRATEGY.md) documents the follow-on endpoint health, API health, alerting, ITSM routing, and user-experience layer that should be sequenced after identity/posture foundations.
 
 ## Visual artifact discipline
 

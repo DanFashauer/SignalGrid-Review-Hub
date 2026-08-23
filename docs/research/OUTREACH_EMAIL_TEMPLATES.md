@@ -1,5 +1,16 @@
 # Outreach Email Templates
 
+> **SUPERSEDED 2026-08-23 — do not send from this file.**
+> The live outreach surface is `docs/outreach/` (`TEMPLATES.md`,
+> `OPERATING_RULES.md`, `TARGETS_CRITERIA.md`), which is gate-checked by
+> `scripts/check-launch-claims.mjs` on every build. This document predates
+> DR-011 (one ratified product label), DR-012 (the lean-IT market and the
+> Fleet-first proof stack) and DR-013 (open-source proof IS product proof).
+> It uses a retired label, names deferred signal families as current
+> capability, and describes the proof as synthetic when live open-source proof
+> already exists. It is kept for provenance only. 
+> **Nothing here is a claim of current capability**, and no message may be sent from it.
+
 These drafts are short editable starting points. Keep claims factual, public-safe, and tied to current synthetic Review Hub proof.
 
 **Contact of record:** all outreach is sent from and replies go to **hello@signalgrid.app** — the primary SignalGrid address (owner-directed, 2026-08-17). The `[Name]` in each greeting is the *recipient*; the signature is Dan Fashauer, founder, at that address. Keep the real address in this partner/outreach surface only — never seed it into a connector, fixture, or test (AGENTS.md: no environment-specific real values in the product tree).

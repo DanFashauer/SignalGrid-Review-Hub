@@ -112,6 +112,66 @@ if (existsSync(OUTREACH_DIR)) {
   outreachScanned = outreachDocs.length + cited.size;
 }
 
+// A third derivation, because the first two still missed a document whose whole
+// purpose is to be handed to an outsider. `docs/EXECUTIVE_ONE_PAGER.md` sat
+// outside every scope while opening with a founder's name and a public address
+// — and it predated DR-011, DR-012 and DR-013 in every section: a retired
+// product label, four deferred families named as connected capability, buyers
+// courted "regardless of company size", and the proof described as synthetic
+// when live open-source proof already existed.
+//
+// The rule that catches it without a hand-list: a document that PUBLISHES THE
+// CONTACT ADDRESS is addressed to someone outside this repository, by
+// construction. Nobody prints hello@signalgrid.app for an internal reader. Write
+// a new one-pager tomorrow and it is in scope the moment it carries the address,
+// which is precisely when it starts being able to do harm.
+//
+// ONE KNOWN WRINKLE, recorded rather than papered over: this rule cannot tell a
+// document that PRINTS the address from one that merely DISCUSSES it. Spelling
+// the address out inside commentary pulls that document into buyer-facing scope
+// — which is how the build-plan row describing this very rule first failed the
+// gate. Teaching the rule that difference would be markedly more fragile than
+// the rule itself, so the guidance is simply: do not spell the address out when
+// writing ABOUT it.
+//
+// A superseded document opts out by SAYING SO — the PAGE_SCOPE disclaimer
+// below already means "nothing here is a claim of current capability", which is
+// exactly what a retired document is. That keeps the archival boundary a
+// property of the document rather than of the folder it happens to sit in;
+// `docs/research/` earns no exemption for its name.
+const CONTACT_LINE = /hello@signalgrid\.app/;
+let contactScanned = 0;
+// `withFileTypes` rather than a separate statSync: asking readdir what each
+// entry IS removes the check-then-use pair that CodeQL flagged here as a
+// filesystem race (stat says file, read happens later against something that
+// may have changed). No attacker is racing a build-time gate against its own
+// repository, but the finding is right about the shape, and the version without
+// the race is also the shorter one. The read is guarded because a file can
+// still vanish between the listing and the open, and a gate that dies on a
+// disappearing file would fail for a reason that has nothing to do with claims.
+const walkDocs = (d) => {
+  for (const entry of readdirSync(d, { withFileTypes: true })) {
+    const p = join(d, entry.name);
+    if (entry.isDirectory()) {
+      walkDocs(p);
+      continue;
+    }
+    if (!entry.isFile()) continue;
+    if (!/\.(md|html)$/.test(p)) continue;
+    if (files.includes(p)) continue;
+    let body;
+    try {
+      body = readFileSync(p, "utf8");
+    } catch {
+      continue;
+    }
+    if (!CONTACT_LINE.test(body)) continue;
+    files.push(p);
+    contactScanned += 1;
+  }
+};
+if (existsSync("docs")) walkDocs("docs");
+
 // Case- and separator-insensitive: the first version matched only the exact
 // string "Evaluated today", and the pricing page's "6 evaluated-today signal
 // dimensions" — a claim of SIX current dimensions against a three-signal
@@ -282,7 +342,8 @@ for (const f of files) {
 console.log(
   `launch-claims: ${files.length} buyer-facing files scanned ` +
     `(${publishedPages.length} derived from the Pages deploy, ${outreachScanned} from the outreach surface ` +
-    `and the documents it cites), ${problems} violation(s); self-test green`,
+    `and the documents it cites, ${contactScanned} from carrying the public contact address), ` +
+    `${problems} violation(s); self-test green`,
 );
 if (problems > 0) {
   console.error(

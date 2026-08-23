@@ -50,7 +50,20 @@ function frontmatter(body) {
   return out;
 }
 
-const overlaps = (a, b) => a === b || a.startsWith(b) || b.startsWith(a);
+// Two write scopes may not overlap — with ONE declared exception. A flat
+// no-nesting rule sounded right until the org tried to use it: `scripts/` holds
+// 317 files, every gate and every proof, and it could not be given an owner
+// because `scripts/src/e2e/` was already assigned to the e2e-runner. The rule
+// was forbidding the most ordinary shape an organisation has — a team owns a
+// directory, one specialist owns one subdirectory inside it.
+//
+// So nesting is allowed when the INNER scope names the outer one it is carved
+// out of. That keeps the property the rule exists for: for any path, exactly
+// one agent owns it, and which one is written down rather than inferred. An
+// undeclared overlap is still a collision and still fails — the carve-out has
+// to be deliberate, and it has to name a scope that actually exists.
+const nests = (a, b) => a !== b && (a.startsWith(b) || b.startsWith(a));
+const overlaps = (a, b) => a === b || nests(a, b);
 
 if (!existsSync(AGENT_DIR)) {
   console.log("Agent-roster gate: no .claude/agents directory — nothing dispatchable, nothing to govern.");
@@ -85,7 +98,7 @@ const declared = new Map((registry.agents ?? []).map((a) => [a.id, a]));
   const parses = frontmatter("---\nname: x\ntools: Read, Write\n---\nbody");
   const derives = parses !== null && WRITE_TOOLS.test(parses.tools);
   const readOnly = !WRITE_TOOLS.test("Read, Grep, Glob");
-  const catchesOverlap = overlaps("lib/", "lib/core/") && !overlaps("docs/", "lib/");
+  const catchesOverlap = overlaps("lib/", "lib/core/") && !overlaps("docs/", "lib/") && nests("scripts/", "scripts/src/e2e/");
   if (agents.length < AGENT_FLOOR || !derives || !readOnly || !catchesOverlap) {
     console.error(
       `✗ SELF-TEST FAILED — agents=${agents.length} (floor ${AGENT_FLOOR}), parse+derive=${derives}, ` +
@@ -153,15 +166,26 @@ for (const a of agents.sort((x, y) => x.id.localeCompare(y.id))) {
     }
     const clash = writeScopes.find((w) => overlaps(w.scope, d.writeScope));
     if (clash) {
-      console.error(
-        `  ✗ ${a.id}: write scope "${d.writeScope}" OVERLAPS ${clash.id}'s "${clash.scope}".\n` +
-          "      This is the collision ORG.md's 'why only four' was preventing by hand.",
-      );
-      problems += 1;
-      continue;
+      // A carve-out is legitimate only if THIS agent declares it, and declares
+      // the scope it is carved out of — which must be the one it collides with.
+      const carvedFrom = d.carvedOutOf;
+      const declaredHere = carvedFrom === clash.scope && d.writeScope.startsWith(clash.scope);
+      const declaredThere = clash.carvedOutOf === d.writeScope && clash.scope.startsWith(d.writeScope);
+      if (!declaredHere && !declaredThere) {
+        console.error(
+          `  ✗ ${a.id}: write scope "${d.writeScope}" OVERLAPS ${clash.id}'s "${clash.scope}" ` +
+            "with no declared carve-out.\n" +
+            "      This is the collision ORG.md's 'why only four' was preventing by hand. Either\n" +
+            "      pick disjoint ground, or set carvedOutOf on the NARROWER of the two so the\n" +
+            "      nesting is deliberate and a reader can tell who owns a given path.",
+        );
+        problems += 1;
+        continue;
+      }
     }
-    writeScopes.push({ id: a.id, scope: d.writeScope });
-    console.log(`  ✓ ${a.id}  tier ${d.tier} · writes ${d.writeScope} · ${d.provenance}`);
+    writeScopes.push({ id: a.id, scope: d.writeScope, carvedOutOf: d.carvedOutOf });
+    const carve = d.carvedOutOf ? ` (carved out of ${d.carvedOutOf})` : "";
+    console.log(`  ✓ ${a.id}  tier ${d.tier} · writes ${d.writeScope}${carve} · ${d.provenance}`);
   } else {
     if (d.writeScope) {
       console.error(

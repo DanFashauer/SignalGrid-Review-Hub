@@ -1,5 +1,5 @@
 {
-  "$comment": "The employment record for every agent the harness can dispatch (.claude/agents/*.md). DR-016. Tier and write capability are DERIVED from each agent's own `tools:` frontmatter by scripts/check-agent-roster.mjs, not trusted from this file \u2014 an agent that lists Write or Edit can write, whatever it says here. What this file supplies is the part that cannot be derived: the write BOUNDARY, which must be disjoint from every other writing agent's. Vendored agents are byte-identical to third_party/everything-claude-code/agents/ and are never edited; their governance lives here instead, which is how a third-party definition gets a first-party boundary without modifying it.",
+  "$comment": "The employment record for every agent the harness can dispatch (.claude/agents/*.md). DR-016. Tier and write capability are DERIVED from each agent's own `tools:` frontmatter by scripts/check-agent-roster.mjs, not trusted from this file — an agent that lists Write or Edit can write, whatever it says here. What this file supplies is the part that cannot be derived: the write BOUNDARY, which must be disjoint from every other writing agent's. Vendored agents are byte-identical to third_party/everything-claude-code/agents/ and are never edited; their governance lives here instead, which is how a third-party definition gets a first-party boundary without modifying it.",
   "version": 1,
   "tiers": {
     "0": "Doctrine. DR-015's accuracy rules. Binding on every agent; owns no surface.",
@@ -94,6 +94,14 @@
       "provenance": "first-party",
       "writeScope": null,
       "charter": "Reads the ~3,900 lines of decision core that compute every verdict and have no named reader in review-coverage.json, and reports: dead computed fields, unexercised branches, unfailable assertions, and any path where unknown evidence could loosen rather than tighten the answer. Reports only, never fixes. Hired 2026-08-23 by the DR-016 loop to close build-plan row 42.",
+      "carvedOutOf": null
+    },
+    {
+      "id": "fail-closed-auditor",
+      "tier": 3,
+      "provenance": "first-party",
+      "writeScope": null,
+      "charter": "Audits ONE property estate-wide: when the code does not know, does the answer tighten or loosen? Hunts fail-open inversions (NaN comparisons, guards that short-circuit on unknown, empty collections concluding no-objection, absent evidence read as good evidence, catch arms minting their own success) and the same defect on a slower clock — figures, cited paths and exemptions that have drifted from what they describe. Hired 2026-08-23 after seven instances of one NaN fail-open were found live on the authentication path, none of which any existing reviewer's lens asked about. Reports with a reproduction and the SHAPE of the gate that would hold the finding; gate-and-proof-engineer builds it. Writes nothing, so it collides with no one.",
       "carvedOutOf": null
     }
   ]

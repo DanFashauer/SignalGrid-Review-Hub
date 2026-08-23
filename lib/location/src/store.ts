@@ -18,8 +18,12 @@ class InMemoryLocationStore implements StoreBackend {
     const signal = this.lastByDevice.get(deviceId);
     if (!signal) return null;
     
-    // Check if signal is too old
-    if (Date.now() - new Date(signal.observedAt).getTime() > this.maxAge) {
+    // Check if signal is too old. An UNPARSEABLE observedAt yields NaN, and
+    // `NaN > maxAge` is false — so a signal of unknown age read as FRESH, which
+    // is the fail-closed rule inverted: what we cannot date must be treated as
+    // stale, never as current.
+    const observedAtMs = new Date(signal.observedAt).getTime();
+    if (!Number.isFinite(observedAtMs) || Date.now() - observedAtMs > this.maxAge) {
       this.lastByDevice.delete(deviceId);
       return null;
     }

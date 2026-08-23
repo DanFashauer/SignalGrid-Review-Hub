@@ -267,6 +267,72 @@ earlier — that is the loop working, not a reason to soften the record.
     TypeScript compiler API), not regex. Sized honestly at hours, not minutes.
     Recorded here rather than papered over in the gate's own header.
 
+40c. **NaN fail-open on parsed timestamps — found SIX times in one package,
+    now gated.** DONE 2026-08-23. `Date.parse("not-a-date")` is NaN and every
+    comparison with NaN is false, so `if (Date.parse(x) < Date.now())` answered
+    "not expired" for the one value the code could not interpret. In
+    `lib/webauthn` — the authentication surface — this was live at both
+    challenge-verification sites, the challenge store's read, the in-memory
+    purge sweep, the step-up session read, and a TTL computation that turned an
+    unparseable expiry into a session with NO expiry at all. One variant was
+    explicit: `if (!Number.isNaN(exp) && exp <= Date.now())` SKIPS the check
+    when the value is unreadable. It is the fail-closed doctrine exactly
+    inverted — the rule the decision core enforces was never carried to auth.
+    A seventh instance sat in `lib/location`'s freshness check, where an
+    undateable signal read as FRESH.
+    All seven are fixed to treat unparseable as expired/stale.
+    `scripts/check-nan-fail-open.mjs` (preflight + CI, four rules, self-tested)
+    holds the line: run against the pre-fix sources it independently
+    rediscovers all seven at the reported line numbers (it prints EIGHT
+    violations, because `store.ts:430` trips two rules at once — hits are not
+    sites, and the distinction is worth stating since the first draft of this
+    row miscounted from the gate's own output); against the fixed tree, 0
+    violations across 1217 source files.
+    Eleven regression assertions pin the webauthn fixes in
+    `proof:webauthn-verify` (37 → 48). The first version of those assertions
+    checked only `success === false`, which passed identically with the defect
+    planted back — any rejection satisfies it. They now assert the REASON
+    (`error === "Challenge expired"`), and falsification drops the proof to
+    38/48. An assertion that cannot distinguish the fix from the bug is not
+    coverage.
+    NOT COVERED, deliberately: forward TTL arithmetic (`now.getTime() + ttl`)
+    is not flagged — it never compares a parsed value against the clock and
+    flagging it would fire on every correct TTL in the repo. Rule 3's window is
+    20 lines and matching is lexical, not dataflow, so a parsed date that
+    crosses a helper before comparison is missed.
+    `lib/webauthn/src/stepUpStore.ts` remains reachable by NO test runner, so
+    its fix is held by the static gate alone — which is why the gate, not a
+    runtime test, was the right instrument. Verified rather than assumed: every
+    function it exports (`verifyStepUpSession`, `hasValidStepUpSession`,
+    `consumeStepUpSession`, `requiresStepUp`, `getRequiredChallenge`) has zero
+    callers repo-wide outside the file itself. A grep for "step_up" in the
+    api-server DOES hit — but those are the decision OUTCOME (`plan.mode ===
+    "step_up"`), an unrelated concept that shares the name; the WebAuthn
+    step-up SESSION store is a deferred family with no shipping surface.
+
+    **A hire came out of this, per DR-016.** The gate closes the shapes it can
+    express; it cannot close the LENS that was missing. Seven live fail-opens
+    sat on the authentication path and no existing reviewer asked the question
+    that finds them, because none of them is directional: `code-reviewer` reads
+    for correctness, `security-reviewer` for auth seams and injection,
+    `verdict-core-reader` walks the decision path. The code at every one of
+    those seven sites was correct on its happy path.
+    `fail-closed-auditor` (tier 3, read-only, `.claude/agents/`) audits one
+    property estate-wide — *when this code does not know, does the answer
+    tighten or loosen?* — plus the same defect on a slower clock: figures,
+    cited paths and exemptions that have drifted from what they describe. It
+    reports a reproduction and the SHAPE of the gate that would hold each
+    finding; `gate-and-proof-engineer` builds it. Read-only was not a
+    compromise: the roster gate's own rule 4 says a non-writing agent cannot
+    collide, and a reviewer that also fixes starts arguing for its own patches.
+    Its charter encodes what this defect cost — verify the checker against the
+    thing it checks, distinguish hits from sites, and never trust an assertion
+    that has not been watched failing.
+    Stated rather than discovered: it holds `Bash` (a finding it cannot run is a
+    suspicion), so its read-only status is BEHAVIOURAL — the roster gate derives
+    write capability from `Write`/`Edit` frontmatter only and would not catch a
+    shell edit. The two vendored reviewers carry the identical hole.
+
 41. **POSITIONING.md's claim-to-proof trace has fossilized** — DONE
     2026-08-23, exactly as the row prescribed: anchors that resolve by ID, plus
     a gate. Measured first: ALL FIVE `launch-profile.mjs` line anchors had

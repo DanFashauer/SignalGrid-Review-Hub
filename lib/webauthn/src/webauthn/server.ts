@@ -165,7 +165,13 @@ export async function verifyRegistration(
   // Enforce expiry, purpose, and user binding independently of the backing
   // store's TTL (the in-memory fallback has none): reject a stale challenge, one
   // minted for authentication, or one bound to a different user.
-  if (Date.parse(challengeData.challenge.expiresAt) < Date.now()) {
+  // UNPARSEABLE MEANS EXPIRED. `Date.parse` returns NaN on a malformed value,
+  // and every comparison with NaN is false — so the bare `< Date.now()` form
+  // read a challenge with a corrupt `expiresAt` as NOT expired and accepted it.
+  // That is the fail-closed rule inverted on an authentication surface: the one
+  // input we cannot interpret was the one that bought unlimited time.
+  const expiresAtMs = Date.parse(challengeData.challenge.expiresAt);
+  if (!Number.isFinite(expiresAtMs) || expiresAtMs < Date.now()) {
     return { success: false, error: 'Challenge expired', timestamp };
   }
   if (challengeData.challenge.purpose !== 'registration') {
@@ -368,7 +374,13 @@ export async function verifyAuthentication(
 
   // Enforce expiry, purpose, and user binding independently of store TTL: reject
   // a stale challenge, one minted for registration, or one bound to another user.
-  if (Date.parse(challengeData.challenge.expiresAt) < Date.now()) {
+  // UNPARSEABLE MEANS EXPIRED. `Date.parse` returns NaN on a malformed value,
+  // and every comparison with NaN is false — so the bare `< Date.now()` form
+  // read a challenge with a corrupt `expiresAt` as NOT expired and accepted it.
+  // That is the fail-closed rule inverted on an authentication surface: the one
+  // input we cannot interpret was the one that bought unlimited time.
+  const expiresAtMs = Date.parse(challengeData.challenge.expiresAt);
+  if (!Number.isFinite(expiresAtMs) || expiresAtMs < Date.now()) {
     return { success: false, error: 'Challenge expired', timestamp };
   }
   if (challengeData.challenge.purpose !== 'authentication') {

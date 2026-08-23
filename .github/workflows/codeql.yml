@@ -26,6 +26,7 @@ concurrency:
 
 jobs:
   analyze:
+    timeout-minutes: 30
     name: Analyze (javascript-typescript)
     runs-on: ubuntu-latest
     steps:

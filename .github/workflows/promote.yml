@@ -25,6 +25,7 @@ permissions:
 
 jobs:
   open-promotion-pr:
+    timeout-minutes: 10
     name: Open promotion PR
     runs-on: ubuntu-latest
     steps:

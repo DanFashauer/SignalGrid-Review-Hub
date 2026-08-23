@@ -48,6 +48,7 @@ concurrency:
 
 jobs:
   prune:
+    timeout-minutes: 10
     name: Prune merged branches
     runs-on: ubuntu-latest
     steps:

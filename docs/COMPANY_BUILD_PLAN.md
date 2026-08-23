@@ -518,12 +518,29 @@ earlier — that is the loop working, not a reason to soften the record.
     working: fix the copy, never the gate). The existing negation handling means the pack's own "None held,
     none claimed" row stays legal. REMAINING: SECURITY_CONTROLS_MATRIX's status
     column still has no drift gate (days).
-50. **Operability claims without live evidence** — sre, days. The SLO surface
-    has never consumed a real decision outcome (its only non-proof caller is
-    an all-healthy fixture); nine CI jobs remain unbounded, two of them
-    PR-gating; the daily mutation sweep — the repo's only falsifiability
-    measurement — has no liveness evidence and is absent from the routine
-    registry.
+50. **Operability claims without live evidence** — ONE THIRD DONE 2026-08-23.
+    The CI-bound half is closed and gated; the other two remain open.
+    **DONE — the nine unbounded jobs.** The row's figure was exactly right: 32
+    real jobs, 9 without `timeout-minutes` (a first parse of mine said 43 and
+    was wrong — it counted `on:` trigger keys as jobs; the corrected count
+    matched the row). All nine now declare a bound, and
+    `scripts/check-ci-job-timeouts.mjs` (preflight + CI) keeps it that way,
+    with a declared-exemption escape that fails if it outlives its reason.
+    Why it mattered: GitHub's default ceiling is 360 minutes, so a hung step
+    does not fail — it holds the job, and on a PR-gating job the merge, for six
+    hours while reporting "in progress". Indistinguishable from slow CI, which
+    is how it went unnoticed. The bounds are set at roughly 2–3x observed
+    runtime rather than at it, because a tight timeout is a flaky gate and this
+    repository's standing position is that a flaky gate gets switched off.
+    Falsified: stripping any single bound fails the gate.
+    **STILL OPEN — the SLO surface has never consumed a real decision
+    outcome.** Its only non-proof caller is an all-healthy fixture, so the
+    operability claim rests on a shape that cannot report degradation.
+    **STILL OPEN — the daily mutation sweep has no liveness evidence** and is
+    absent from the routine registry. It is the repo's only falsifiability
+    measurement, and nothing proves it ran; the heartbeat pattern the two
+    scheduled routines now use (`artifacts/agent-heartbeats/`) is the obvious
+    shape for it.
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23; the disposition itself is an owner call, stated below.
     Every clause of the row holds. `lib/location` has ZERO importers (only a

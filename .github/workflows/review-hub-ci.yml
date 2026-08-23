@@ -275,6 +275,8 @@ jobs:
         run: node scripts/check-positioning-trace.mjs
       - name: Module init order (a const read before it is initialised)
         run: node scripts/check-module-init-order.mjs
+      - name: CI job timeouts (an unbounded job is an unbounded outage)
+        run: node scripts/check-ci-job-timeouts.mjs
 
       # The declared product edge must match the real one, in BOTH directions. The
       # omission direction is the freeze: a new connector family, signal kind, API
@@ -686,6 +688,7 @@ jobs:
         run: pnpm run verify:breadth
 
   docs-sanity:
+    timeout-minutes: 15
     name: Required docs and unsafe-claim sanity
     runs-on: ubuntu-latest
     steps:

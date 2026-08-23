@@ -20,6 +20,7 @@ on:
 
 jobs:
   smoke:
+    timeout-minutes: 20
     name: Deterministic connector emulator smoke
     runs-on: ubuntu-latest
     permissions:

@@ -206,10 +206,19 @@ earlier — that is the loop working, not a reason to soften the record.
     carved out of the shared assist-wire conformance vectors; ios-ci does not
     trigger on simulator/workflow library changes; BackendService still calls
     five endpoints that exist nowhere.
-49. **Assessor-facing overstatement** — compliance-analyst, hours. The
-    security questionnaire pack tells assessors docs-sanity fails the build
-    on ISO 27001 / HIPAA certification claims; it does not. Also:
-    SECURITY_CONTROLS_MATRIX's status column has no drift gate.
+49. **Assessor-facing overstatement** — HALF DONE 2026-08-23: the
+    questionnaire pack told assessors that docs-sanity "fails the build if any
+    document claims otherwise" for SOC 2 / ISO 27001 / HIPAA / FedRAMP. Of
+    those four, only SOC 2 (in its "Type II certified" phrasing) and FedRAMP
+    (hyphenated only) had denylist entries — ISO 27001 and HIPAA had NONE, in
+    any form. Fixed by making the promise TRUE rather than softening it: twelve
+    certification phrasings added, falsified both directions (a planted document
+    asserting two of those framework certifications fails the gate; the clean
+    tree passes — and this very row had to be reworded because quoting the
+    planted phrases verbatim tripped the widened gate, which is the gate
+    working: fix the copy, never the gate). The existing negation handling means the pack's own "None held,
+    none claimed" row stays legal. REMAINING: SECURITY_CONTROLS_MATRIX's status
+    column still has no drift gate (days).
 50. **Operability claims without live evidence** — sre, days. The SLO surface
     has never consumed a real decision outcome (its only non-proof caller is
     an all-healthy fixture); nine CI jobs remain unbounded, two of them

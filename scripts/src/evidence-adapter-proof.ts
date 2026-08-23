@@ -19,6 +19,7 @@
 //
 // Zero network, enforced: `fetch` is replaced with a tripwire for the run.
 
+import { existsSync, readFileSync } from "node:fs";
 import {
   evaluateDecision,
   runFixtureSync,
@@ -264,6 +265,51 @@ async function main(): Promise<void> {
     sig(replay) === sig(badResults[0]!.r));
 
   // ── 6. Zero network ────────────────────────────────────────────────────────
+  // ── 5. LIVE CAPTURES, when they exist (DR-013's second half) ────────────────
+  // The Mac's source-independence run named this gap exactly: "proving 'same
+  // decisions from either LIVE source' needs captures on disk and a proof
+  // that reads them." This section is that proof-side. It reads
+  // artifacts/live-captures/*.json — files MINTED by the live lanes
+  // (proof:live-headwind writes headwind.json from a real CE server) — maps
+  // them through the SAME adapters as the fixtures, and asserts the live
+  // shape decides identically. fs.readFileSync, deliberately: the
+  // zero-network tripwire below stays intact, because a capture on disk is
+  // evidence with provenance, not a network dependency. When no capture
+  // exists the section reports ABSENT and the proof stays green — a machine
+  // that never ran the lane has nothing to assert, and saying so beats
+  // pretending.
+  console.log("\n— live captures (present = live shape must decide like the fixture shape) —");
+  {
+    const capPath = "artifacts/live-captures/headwind.json";
+    if (existsSync(capPath)) {
+      const cap = JSON.parse(readFileSync(capPath, "utf8")) as {
+        serverImage?: string;
+        devices?: Array<{ deviceNumber: string; model: string; enrolled: boolean; kioskLocked: boolean; configApplied: "applied" | "failed" | "unknown"; lastSeenAt: string | null }>;
+      };
+      const devs = cap.devices ?? [];
+      check("headwind capture parses and carries at least one live-derived device", devs.length > 0, capPath);
+      const capEv = devs.map((d) => headwindLabToDeviceManagementEvidence(d, { tenantId: "tenant_lab", observedAt: NOW }));
+      check("every LIVE-captured device maps through the same adapter (sourceSystem 'headwind', platform 'android')",
+        capEv.length === devs.length && capEv.every((e) => e.sourceSystem === "headwind" && e.platform === "android"));
+      const liveOk = devs.find((d) => d.configApplied === "applied" && d.enrolled && d.kioskLocked);
+      if (liveOk) {
+        const fixtureTwin = headwindLabToDeviceManagementEvidence(
+          { deviceNumber: liveOk.deviceNumber, model: liveOk.model, enrolled: true, kioskLocked: true, configApplied: "applied", lastSeenAt: liveOk.lastSeenAt },
+          { tenantId: "tenant_lab", observedAt: NOW },
+        );
+        const liveEv = capEv.find((e) => e.deviceId === liveOk.deviceNumber)!;
+        check("the live-captured state and its fixture twin normalize IDENTICALLY (compliance, managed, ownership)",
+          liveEv.complianceState === fixtureTwin.complianceState &&
+          liveEv.managedState === fixtureTwin.managedState &&
+          liveEv.ownership === fixtureTwin.ownership,
+          `live=${liveEv.complianceState}/${liveEv.managedState} fixture=${fixtureTwin.complianceState}/${fixtureTwin.managedState}`);
+      }
+      console.log(`  capture provenance: ${cap.serverImage ?? "unrecorded"}`);
+    } else {
+      console.log("  · headwind capture ABSENT — fixture-only run (mint one: ./scripts/run-live-lanes.sh --only headwind)");
+    }
+  }
+
   check("zero network: not one fetch() was attempted across the whole lab", fetchAttempts === 0, `attempts=${fetchAttempts}`);
 
   const total = passed + failures.length;

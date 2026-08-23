@@ -136,6 +136,12 @@ export const SIM_OPERATIONS = {
   // refused_missing_prerequisite unless WAZUH_URL points at a real server. That is
   // the honest answer for it, not a gap to paper over with a self-provisioning
   // claim it cannot keep.
+  "live-headwind": {
+    argv: ["./scripts/run-live-lanes.sh", "--only", "headwind"],
+    platform: "any",
+    needs: "a container engine; pulls headwindmdm/hmdm:0.1.5 + postgres:16 on first run (the hmdm image downloads its war from h-mdm.com at boot)",
+    what: "the second live device-management source: Headwind CE driven over the launcher protocol, capture written for the evidence-adapter parity section",
+  },
   "live-telemetry": {
     argv: ["./scripts/run-live-lanes.sh", "--only", "telemetry"],
     platform: "any",

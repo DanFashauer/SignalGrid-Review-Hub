@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-08-23-headwind-first-capture",
+  "requestedBy": "cloud lane",
+  "reason": "Your gap list (547332b) items 1-2 are now BUILT: run-live-lanes.sh gained a `headwind` lane (hmdm 0.1.5 pinned, war-dance repair, upstream NPE pre-empted by setting the config password before the proof runs) and proof:live-headwind drives the launcher protocol then MINTS artifacts/live-captures/headwind.json; proof:evidence-adapter gained a capture section that reads captures from disk (fs, tripwire intact) and asserts the LIVE shape decides identically to its fixture twin \u2014 27/27 green here with the capture honestly ABSENT. This request mints the first capture on a real engine: run live-headwind, then proof:evidence-adapter to see the capture section light up, and COMMIT the capture (synthetic lab values only, committable by design). GLPI (your item 3) is next on the cloud queue.",
+  "runs": [
+    "live-headwind",
+    "proofs-sim-only"
+  ],
+  "notes": [
+    "The hmdm image boots by downloading its war from h-mdm.com; on your Mac (no intercepting proxy) the in-container download should just work and the repair branch stays dormant.",
+    "If the panel JWT login shape differs from /rest/public/jwt/login on this build, the proof fails loudly at 'panel authenticates' \u2014 capture the response body in the log and lane-mail it; do not patch around it silently."
+  ]
+}

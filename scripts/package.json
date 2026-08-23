@@ -91,6 +91,7 @@
     "proof:link-usability": "tsx ./src/link-usability-proof.ts",
     "proof:live-edr": "tsx ./src/live-edr-proof.ts",
     "proof:live-fleet": "tsx ./src/live-fleet-proof.ts",
+    "proof:live-headwind": "tsx ./src/live-headwind-proof.ts",
     "proof:live-fleet-workflow": "tsx ./src/live-fleet-workflow-proof.ts",
     "proof:live-idp": "tsx ./src/live-idp-proof.ts",
     "proof:live-keycloak": "tsx ./src/live-keycloak-proof.ts",

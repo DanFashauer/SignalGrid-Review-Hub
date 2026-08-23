@@ -339,6 +339,64 @@ async function main() {
     check("expired challenge rejected", res.success === false);
   }
 
+  // 9a-NaN. An UNPARSEABLE expiry must read as EXPIRED, on every path.
+  //
+  //   This is the regression pin for a real fail-open family. `Date.parse("x")`
+  //   is NaN and every comparison with NaN is false, so `expiresAt < Date.now()`
+  //   answered "not expired" for the one value the code could not interpret —
+  //   and one site went further, guarding with `!Number.isNaN(exp) &&`, which
+  //   SKIPPED the expiry check outright when the timestamp was malformed. A
+  //   corrupt or attacker-influenced expiry bought unlimited time on an
+  //   authentication surface. Assertion 9 above only ever used a well-formed
+  //   date, so it could not have caught any of it.
+  //
+  //   Every malformed shape below is asserted against BOTH verify paths and the
+  //   store, because the sites were separately written and drifted separately.
+  for (const bad of ["not-a-date", "", "1234-99-99T99:99:99Z", "NaN", "undefined"]) {
+    const label = bad === "" ? "(empty string)" : bad;
+
+    const chAuth = randomBytes(32).toString("base64url");
+    const chIdAuth = randomBytes(16).toString("base64url");
+    await webauthnStore.saveChallenge(chIdAuth, {
+      challenge: chAuth, expiresAt: bad, purpose: "authentication", userId,
+    });
+    // Assert the REASON, not just the boolean. `success === false` is satisfied by
+    // any rejection — counter regression, replay, signature — so a bare boolean
+    // here passed identically with the defect planted back, which is to say it
+    // proved nothing. The only rejection that falsifies the fail-open is the
+    // expiry one, so that is what is asserted.
+    const authRes = await webauthn.verifyAuthentication(userId, chIdAuth, signedAssertion(chAuth, 31));
+    check(
+      `unparseable expiresAt ${label} rejected on authentication AS EXPIRED (got: ${authRes.error ?? "accepted"})`,
+      authRes.success === false && authRes.error === "Challenge expired",
+    );
+
+    const chIdReg = randomBytes(16).toString("base64url");
+    await webauthnStore.saveChallenge(chIdReg, {
+      challenge: randomBytes(32).toString("base64url"), expiresAt: bad, purpose: "registration", userId,
+    });
+    const ctx = await webauthnStore.getChallengeContext(chIdReg);
+    check(`unparseable expiresAt ${label} is not a live challenge in the store`, ctx === null);
+  }
+
+  // 9a-TTL. A step-up session whose expiry cannot be parsed must be REFUSED at
+  //   mint time, not created with a NaN TTL — a NaN TTL is not a short session,
+  //   it is a session with no expiry at all.
+  {
+    let refused = false;
+    try {
+      await webauthnStore.createStepUpSession({
+        sessionId: randomBytes(16).toString("base64url"),
+        userId,
+        createdAt: new Date().toISOString(),
+        expiresAt: "not-a-date",
+      });
+    } catch {
+      refused = true;
+    }
+    check("step-up session with unparseable expiresAt is refused, not minted with a NaN TTL", refused);
+  }
+
   // 9b. Signature-counter clone reset: once a credential has ADVANCED (counter > 0), an
   //     assertion reporting counter 0 is a cloned authenticator whose counter reset. The
   //     spec exemption for always-zero authenticators must not launder this through — the

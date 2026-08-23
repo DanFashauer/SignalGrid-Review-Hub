@@ -51,7 +51,15 @@ export interface SessionStore {
 
 // Apply lazy expiry: an active session past its expiry reads back as "expired".
 function withExpiry(s: Session, nowMs: number): Session {
-  if (s.status === "active" && Date.parse(s.expiresAt) < nowMs) {
+  // An unparseable expiresAt must read as EXPIRED. Reported honestly: the shipped
+  // schema makes this LATENT rather than live — `expires_at` is TIMESTAMPTZ NOT
+  // NULL in both the migration and the inline DDL, and `pg` hands back a Date, so
+  // no path on the current schema reaches the `String(v)` fallback in `iso()`
+  // that would produce "null"/"undefined". It is fixed anyway: the guard costs
+  // one comparison, and "unreachable today" is a property of the schema, not of
+  // this function.
+  const expiresAtMs = Date.parse(s.expiresAt);
+  if (s.status === "active" && (!Number.isFinite(expiresAtMs) || expiresAtMs < nowMs)) {
     return { ...s, status: "expired" };
   }
   return s;

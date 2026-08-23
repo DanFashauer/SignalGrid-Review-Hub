@@ -6,6 +6,7 @@
 // throws (fails closed) rather than degrading to a racy GET+DEL. Managed Redis
 // (AWS/GCP/Azure/Upstash) is 6.2+/7.x, so this holds by default.
 
+import { randomUUID } from 'node:crypto';
 import type { WebAuthnUser, WebAuthnCredential, WebAuthnChallenge, StepUpSession } from './types';
 
 const USER_PREFIX = 'webauthn:user:';
@@ -168,7 +169,11 @@ export async function addCredential(userId: string, credential: WebAuthnCredenti
   if (redisConfigured()) {
     const redis = await getRedisClient();
     const lockKey = `${key}:lock`;
-    const lockToken = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    // Crypto randomness, not Math.random(). The SET NX PX acquisition is what
+    // actually serialises writers, so this token is not the only guard — but it
+    // is compared on RELEASE, and a predictable token on a security surface is
+    // the wrong primitive whether or not today's code path makes it exploitable.
+    const lockToken = `${Date.now()}-${randomUUID()}`;
     let held = false;
     try {
       await redis!.connect();
@@ -362,8 +367,14 @@ export async function advanceCredentialCounter(
 function purgeExpiredInMemoryChallenges(): void {
   const now = Date.now();
   for (const [key, entry] of inMemoryChallenges) {
+    // An UNPARSEABLE expiry is purged too. The previous `!Number.isNaN(exp) &&`
+    // form skipped exactly those entries, so the one input shape that can never
+    // be honoured on read was also the one shape this sweep never collected —
+    // reintroducing, for malformed entries only, the unbounded growth the sweep
+    // exists to prevent. Every read path now refuses an unparseable expiry, so
+    // such an entry is dead weight by definition.
     const exp = Date.parse(entry.challenge.expiresAt);
-    if (!Number.isNaN(exp) && exp <= now) inMemoryChallenges.delete(key);
+    if (!Number.isFinite(exp) || exp <= now) inMemoryChallenges.delete(key);
   }
 }
 
@@ -426,8 +437,12 @@ export async function getChallengeContext(
 
   const entry = inMemoryChallenges.get(key);
   if (!entry) return null;
+  // This used to read `if (!Number.isNaN(exp) && exp <= Date.now())`, which
+  // SKIPPED the expiry check whenever the timestamp could not be parsed — an
+  // unreadable expiry was treated as a valid one. Unknown must tighten, so an
+  // unparseable value is now refused outright.
   const exp = Date.parse(entry.challenge.expiresAt);
-  if (!Number.isNaN(exp) && exp <= Date.now()) return null;
+  if (!Number.isFinite(exp) || exp <= Date.now()) return null;
   return { context: entry.challenge.context, userId: entry.userId };
 }
 
@@ -466,7 +481,13 @@ export async function getAndDeleteChallenge(
 export async function createStepUpSession(session: StepUpSession): Promise<void> {
   const redis = await getRedisClient();
   const key = `${STEPUP_PREFIX}${session.sessionId}`;
-  const ttlSeconds = Math.floor((new Date(session.expiresAt).getTime() - Date.now()) / 1000);
+  // An unparseable expiresAt yielded NaN here, and a NaN TTL is not a short
+  // session — it is a session with no expiry at all. Refuse to mint one.
+  const expiresAtMs = new Date(session.expiresAt).getTime();
+  if (!Number.isFinite(expiresAtMs)) {
+    throw new Error('createStepUpSession: expiresAt is not a valid timestamp — refusing to mint a session that cannot expire.');
+  }
+  const ttlSeconds = Math.floor((expiresAtMs - Date.now()) / 1000);
 
   if (redis) {
     try {

@@ -275,6 +275,8 @@ jobs:
         run: node scripts/check-positioning-trace.mjs
       - name: Module init order (a const read before it is initialised)
         run: node scripts/check-module-init-order.mjs
+      - name: NaN fail-open (an unparseable expiry must read as EXPIRED)
+        run: node scripts/check-nan-fail-open.mjs
       - name: CI job timeouts (an unbounded job is an unbounded outage)
         run: node scripts/check-ci-job-timeouts.mjs
 

@@ -18,8 +18,12 @@ class InMemoryLocationStore implements StoreBackend {
     const signal = this.lastByDevice.get(deviceId);
     if (!signal) return null;
     
-    // Check if signal is too old
-    if (Date.now() - new Date(signal.observedAt).getTime() > this.maxAge) {
+    // Check if signal is too old. An UNPARSEABLE observedAt yields NaN, and
+    // `NaN > maxAge` is false — so a signal of unknown age read as FRESH, which
+    // is the fail-closed rule inverted: what we cannot date must be treated as
+    // stale, never as current.
+    const observedAtMs = new Date(signal.observedAt).getTime();
+    if (!Number.isFinite(observedAtMs) || Date.now() - observedAtMs > this.maxAge) {
       this.lastByDevice.delete(deviceId);
       return null;
     }
@@ -30,7 +34,13 @@ class InMemoryLocationStore implements StoreBackend {
   private cleanup() {
     const cutoff = Date.now() - this.maxAge;
     for (const [deviceId, signal] of this.lastByDevice) {
-      if (new Date(signal.observedAt).getTime() < cutoff) {
+      // The twin of the guard eleven lines above, and it was missed on the first
+      // pass precisely because the gate could not see it: every rule required a
+      // literal `Date.now()` as the other operand, and here it is the local
+      // `cutoff`. Same NaN, same inversion — an undateable signal was never
+      // swept, so the sweep leaked exactly the entries it could not read.
+      const observedAtMs = new Date(signal.observedAt).getTime();
+      if (!Number.isFinite(observedAtMs) || observedAtMs < cutoff) {
         this.lastByDevice.delete(deviceId);
       }
     }

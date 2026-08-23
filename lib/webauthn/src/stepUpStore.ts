@@ -200,7 +200,10 @@ export async function verifyStepUpSession(
   const session: StepUpSession = JSON.parse(sessionData);
 
   // Check expiration
-  if (new Date(session.expiresAt).getTime() < Date.now()) {
+  // Same NaN family as the challenge checks: `new Date(bad).getTime()` is NaN,
+  // and NaN < now is false, so an unreadable expiry read as a live session.
+  const sessionExpiresAtMs = new Date(session.expiresAt).getTime();
+  if (!Number.isFinite(sessionExpiresAtMs) || sessionExpiresAtMs < Date.now()) {
     console.log(`[StepUpStore] Step-up session ${stepUpSessionId} expired`);
     return null;
   }

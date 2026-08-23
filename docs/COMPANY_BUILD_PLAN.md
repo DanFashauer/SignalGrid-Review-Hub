@@ -245,10 +245,31 @@ earlier — that is the loop working, not a reason to soften the record.
     page") remains gateable repo-wide if that is ever wanted; it is deliberately
     not done here, because a gate over 18 archival documents would be a large
     rewrite in service of a regex rather than of a reader.
-41. **POSITIONING.md's claim-to-proof trace has fossilized** —
-    positioning + devex, days. The trace is what makes the positioning
-    DR-013-legitimate, and its `launch-profile.mjs` line anchors now point at
-    unrelated content. Needs anchors that resolve by ID, plus a gate.
+41. **POSITIONING.md's claim-to-proof trace has fossilized** — DONE
+    2026-08-23, exactly as the row prescribed: anchors that resolve by ID, plus
+    a gate. Measured first: ALL FIVE `launch-profile.mjs` line anchors had
+    rotted, and the other five references (types.ts, adapters.ts, preflight.mjs,
+    review-invariants.mjs, v1-openapi.yaml) still resolved correctly.
+    What the five pointed at instead — `:126-129` claimed the criterion string
+    and pointed at `TARGET`; `:240-243` claimed `device_posture` is launch and
+    pointed at `"webhooks"`, a DEFERRED entry; `:274-275` claimed location is
+    deferred and pointed at `"credential_rotation"`; `:308-310` claimed
+    `/v1/decisions/evaluate` and pointed at a comment about `/api` mounting;
+    `:453-458` claimed `ios:EnterpriseShell` and pointed at the operator
+    console.
+    The distinction that matters: every CLAIM was true and every CITATION was
+    false. `device_posture` really is launch; `location` really is deferred. A
+    reader checking the work would have found nonsense at the line with no way
+    to tell whether the claim or the pointer had drifted — which is worse than
+    an uncited claim, because it looks checkable.
+    The trace now references the profile BY ID (`launch-profile: \`x\` is
+    \`status\``) and `scripts/check-positioning-trace.mjs` (preflight + CI)
+    resolves each against the profile itself: 7 references against 179
+    classified items. An id that does not exist fails; an id whose status
+    differs fails; a bare export reference that is not exported fails.
+    Falsified all three ways. Only launch-profile references are GATED, because
+    only they are mechanically resolvable — prose grounding stays with the
+    cited-paths gate rather than being pretend-verified here.
 42. **The verdict core still has no named reader** — DONE 2026-08-23, and it
     found a live fail-closed inversion on a reachable route.
     The row's figure was wrong and is now measured: **3,895 lines**, not

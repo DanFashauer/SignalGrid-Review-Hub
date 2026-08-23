@@ -193,19 +193,58 @@ earlier — that is the loop working, not a reason to soften the record.
     the CITED pilot package fails, which is what proves the citation
     derivation works rather than merely existing. Both documents now name the
     gate that enforces them instead of asking to be believed.
-    STILL OPEN: the prose docs. ~20 documents still carry the retired
-    "operational trust orchestration layer" / "Zero Trust orchestration
-    platform" labels, ~9 carry a "current proof is synthetic and fixture-backed"
-    status that DR-013 makes false (an UNDERstatement — it denies live
-    open-source proof), and ECOSYSTEM_POSITIONING still states the
-    Microsoft-anchored wedge DR-012 reversed. Most sit under `docs/research/`
-    and `docs/inspiration/`, which are archival and want a dated supersession
-    banner rather than a rewrite; `EXECUTIVE_ONE_PAGER.md` and
-    `ECOSYSTEM_POSITIONING.md` are live and want fixing. POSITIONING.md:26-27
-    states an explicit contract — "any document using a label outside these
-    three roles is wrong and gets fixed to this page" — which is gateable in
-    the same shape as the decision-record reversal clause, once the archival
-    boundary is drawn.
+    2026-08-23, third pass — this row is now DONE for every document that can
+    reach an outsider, and the archival boundary is drawn by construction
+    rather than by folder name.
+    A THIRD derivation was needed, because the first two still missed the
+    document whose entire purpose is to be handed to a stranger:
+    `EXECUTIVE_ONE_PAGER.md` sat outside every scope while opening with a
+    founder's name and a public address. The rule that catches it without a
+    hand-list: a document that PUBLISHES THE PUBLIC CONTACT ADDRESS is
+    addressed outside this repository by construction — nobody prints the
+    founder's public address for an internal reader — so it is in scope from
+    the moment it carries that address, which is exactly when it can start
+    doing harm. Six documents qualify today.
+    A wrinkle worth recording, because the gate caught it in this very row:
+    the first draft of this paragraph spelled the address out while EXPLAINING
+    the rule, which pulled this internal build plan into buyer-facing scope,
+    where its own historical quotes of the original "Evaluated today" defect
+    immediately tripped the overclaim markers. The rule cannot distinguish a
+    document that PRINTS the address from one that DISCUSSES it, and trying to
+    teach it that difference would be far more fragile than simply not spelling
+    the address out in commentary. Fix the copy, never the gate — the second
+    time that sentence has been earned in this sweep.
+    EXECUTIVE_ONE_PAGER was superseded in every section and was rewritten to
+    POSITIONING.md + DR-012 + DR-013: the ratified name and descriptor, three
+    launch signals from one source, the 75–1,000-employee lean-IT segment
+    instead of "regardless of company size", live open-source proof (Fleet with
+    real osqueryd, Keycloak, FreeRADIUS, Wazuh) instead of "the proof is
+    synthetic", and the deferred families named as deferred.
+    ECOSYSTEM_POSITIONING opened with two unratified labels and stated the
+    Microsoft wedge DR-012 reversed; its label, wedge, first-proof section and
+    proof-flow diagram are corrected, and it now carries a header saying
+    POSITIONING.md is canonical and this page does not get to define the
+    product.
+    The two archival outreach documents that carry the public address —
+    `docs/research/OUTREACH_EMAIL_TEMPLATES.md` (nine overclaiming blocks, and
+    dangerous precisely because it is a TEMPLATE file someone could reach for)
+    and `FIRST_CALL_TALK_TRACK.md` — now carry dated SUPERSEDED banners naming
+    the live replacement. Note what earns them their exemption: the banner
+    states "nothing here is a claim of current capability", which is the
+    PAGE_SCOPE disclaimer the gate already understood. `docs/research/` gets no
+    exemption for its name; a retired document opts out by SAYING it is
+    retired. Falsified: removing the banner re-flags the file.
+    Gate now at 95 files, 0 violations. Falsified in the new scope too — an
+    overclaim planted in a contact-bearing document fails.
+    STILL OPEN, and now genuinely low-stakes: ~18 documents with no public
+    contact line and no published route still carry retired labels or the
+    superseded "synthetic proof" status. They cannot reach a buyer without
+    first acquiring one of the three properties the gate derives from, at which
+    point it catches them. POSITIONING.md:26-27's label contract ("any document
+    using a label outside these three roles is wrong and gets fixed to this
+    page") remains gateable repo-wide if that is ever wanted; it is deliberately
+    not done here, because a gate over 18 archival documents would be a large
+    rewrite in service of a regex rather than of a reader.
 41. **POSITIONING.md's claim-to-proof trace has fossilized** —
     positioning + devex, days. The trace is what makes the positioning
     DR-013-legitimate, and its `launch-profile.mjs` line anchors now point at

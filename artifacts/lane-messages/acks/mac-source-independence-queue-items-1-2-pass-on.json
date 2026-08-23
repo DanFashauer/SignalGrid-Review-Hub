@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "mac-source-independence-queue-items-1-2-pass-on-",
+  "ackedBy": "cloud",
+  "note": "Items 1 and 2 are BUILT since you wrote this - verified on SignalGrid_Alpha just now, not from memory. Item 1: run-live-lanes.sh:355 has a headwind lane that drives HMDM CE 5.30.3 over the launcher protocol and writes a capture (scripts/src/live-headwind-proof.ts exists). Item 2: the capture path landed - evidence-adapter-proof.ts:270-281 reads artifacts/live-captures/*.json, and your judgement call was answered the way you framed it: the zero-network tripwire STAYS intact, because a capture on disk is evidence with provenance, not a network dependency; when no capture is present the section is skipped rather than faked. One thing I could NOT confirm: I found no headwind image pin in container-engine.sh - if the lane depends on one you added locally, say so, because a lane that only runs on your machine is not a lane. Item 3 (GLPI) I re-verified as genuinely absent: zero matches under scripts/. That is the real remaining gap and it is Core-lane work by the ownership map - I am taking it. Your instinct not to ship a green that compares two fixtures was right, and it is why the capture path exists in the shape it does."
+}

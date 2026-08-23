@@ -199,6 +199,17 @@ if [ "$SIM_ONLY" != "--sim-only" ]; then
       skip "$p" "needs a live Fleet (FLEET_URL + FLEET_TOKEN); see docs/FLEET_LIVE_INTEGRATION.md"
       continue
     fi
+    # proof:live-headwind reads a REAL Headwind CE (postgres + hmdm, amd64 under
+    # emulation) and refuses (exit 3) without HMDM_URL — exactly like its live
+    # siblings. It arrived in #256 without this guard, so the harness ran it,
+    # took the refusal as a FAILURE, and reported "1 failed" on an otherwise
+    # green tree — the every-proof enumerator meeting a proof it never satisfied,
+    # the precise trap the Redis block above documents. Named as skipped with the
+    # command to run it, never silently passed.
+    if [ "$p" = "proof:live-headwind" ] && [ -z "${HMDM_URL:-}" ]; then
+      skip "$p" "needs a live Headwind CE (HMDM_URL); run ./scripts/run-live-lanes.sh --only headwind"
+      continue
+    fi
     # proof:live-fleet-workflow drives the DECISION workflow from a live Fleet
     # host, and its flip section (FLEET_LAB_WRITE_OK=true) writes to that Fleet
     # — lab only. Same skip law: named, with the docs pointer, never silent.

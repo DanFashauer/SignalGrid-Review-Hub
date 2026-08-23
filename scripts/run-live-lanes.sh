@@ -343,6 +343,70 @@ if wanted edr; then
   fi
 fi
 
+# ── Headwind CE ──────────────────────────────────────────────────────────────
+# The SECOND live device-management source (DR-013 source-independence). The
+# 2026-08-18 shape-check documented every wrinkle this lane handles: the image
+# downloads its war from h-mdm.com at boot (under a TLS-intercepting proxy the
+# in-container wget silently writes an empty ROOT.war — detected and repaired
+# by fetching on the host and docker-cp'ing in); and stock CE seeds
+# configuration 1 with password:null, which the sync handler MD5-hashes
+# unconditionally → NPE on the first device sync. The lane sets the config
+# password BEFORE the proof drives the launcher protocol.
+if wanted headwind; then
+  if have_engine; then
+    echo "-- bringing up Headwind CE (postgres + hmdm 0.1.5 / 5.30.3-os)"
+    "$SG_ENGINE" network create sg-hmdmnet >/dev/null 2>&1
+    "$SG_ENGINE" rm -f sg-hmdm sg-hmdm-pg >/dev/null 2>&1
+    "$SG_ENGINE" run -d --name sg-hmdm-pg --network sg-hmdmnet \
+      -e POSTGRES_DB=hmdm -e POSTGRES_USER=hmdm -e POSTGRES_PASSWORD=hmdm \
+      "$SG_IMAGE_POSTGRES" >/dev/null 2>&1
+    for _ in $(seq 1 60); do "$SG_ENGINE" exec sg-hmdm-pg pg_isready -U hmdm >/dev/null 2>&1 && break; sleep 2; done
+    "$SG_ENGINE" run -d --name sg-hmdm --network sg-hmdmnet -p 127.0.0.1:8425:8080 \
+      -e SQL_HOST=sg-hmdm-pg -e SQL_BASE=hmdm -e SQL_USER=hmdm -e SQL_PASS=hmdm \
+      -e PROTOCOL=http -e BASE_DOMAIN=localhost -e LOCAL_IP=127.0.0.1 \
+      "$SG_IMAGE_HMDM" >/dev/null 2>&1
+    started="$started sg-hmdm sg-hmdm-pg"
+    # The war-download dance can take minutes; a zero-byte ROOT.war means the
+    # proxy ate it — repair from the host, which trusts the proxy CA.
+    HMDM_UP=0
+    for i in $(seq 1 90); do
+      code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8425/rest/public/jwt/login" -X POST -H 'Content-Type: application/json' -d '{"login":"admin","password":"admin"}' 2>/dev/null)
+      [ "$code" = "200" ] && { HMDM_UP=1; break; }
+      if [ "$i" = "30" ]; then
+        SZ=$("$SG_ENGINE" exec sg-hmdm sh -c 'stat -c %s /usr/local/tomcat/webapps/ROOT.war 2>/dev/null || echo 0')
+        if [ "${SZ:-0}" -lt 1000000 ]; then
+          echo "   war download failed in-container (size=$SZ) — repairing from host"
+          HMDM_TMP=$(mktemp)
+          curl -sL --max-time 300 -o "$HMDM_TMP" "https://h-mdm.com/files/hmdm-5.30.3-os.war" && \
+            "$SG_ENGINE" cp "$HMDM_TMP" sg-hmdm:/usr/local/tomcat/webapps/ROOT.war && \
+            "$SG_ENGINE" restart sg-hmdm >/dev/null 2>&1
+          rm -f "$HMDM_TMP"
+        fi
+      fi
+      sleep 4
+    done
+    if [ "$HMDM_UP" = "1" ]; then
+      # Pre-empt the upstream NPE: set an admin password on configuration 1.
+      HW_JWT=$(curl -s -X POST "http://127.0.0.1:8425/rest/public/jwt/login" -H 'Content-Type: application/json' -d '{"login":"admin","password":"admin"}' | sed -n 's/.*"id_token" *: *"\([^"]*\)".*/\1/p')
+      HW_CFG=$(curl -s "http://127.0.0.1:8425/rest/private/configurations/1" -H "Authorization: Bearer $HW_JWT")
+      # shellcheck disable=SC2001
+      HW_CFG_PATCHED=$(echo "$HW_CFG" | sed 's/"data" *: *{/"data":{/; s/{"status":"OK","data":{/{/; s/}}$/}/' )
+      curl -s -X PUT "http://127.0.0.1:8425/rest/private/configurations" -H "Authorization: Bearer $HW_JWT" -H 'Content-Type: application/json' \
+        -d "$(echo "$HW_CFG_PATCHED" | sed 's/"password" *: *null/"password":"lab-config-pass"/; s/"password" *: *""/"password":"lab-config-pass"/')" >/dev/null 2>&1
+      LOG=$(mktemp)
+      if HMDM_URL=http://127.0.0.1:8425 $PNPM run proof:live-headwind >"$LOG" 2>&1; then
+        ok "headwind (CE 5.30.3 driven over the launcher protocol; capture written)"
+      else
+        bad headwind "$LOG"
+      fi
+    else
+      skip headwind "hmdm never became healthy after the war dance (see: $SG_ENGINE logs sg-hmdm)"
+    fi
+  else
+    skip headwind "no container engine"
+  fi
+fi
+
 # ── Telemetry (OPT-IN: --with-telemetry or --only telemetry) ─────────────────
 # Backlog row 33: the OTel Collector + Prometheus lab profile. OFF by default
 # like the heavy lanes — telemetry is operational tooling, not a vendor-evidence
@@ -409,7 +473,7 @@ if [ "$KEEP" -eq 0 ] && [ -n "$started" ]; then
   echo; echo "-- removing containers this run started:$started"
   # shellcheck disable=SC2086
   "$SG_ENGINE" rm -f $started >/dev/null 2>&1
-  "$SG_ENGINE" network rm sg-fleetnet sg-telnet >/dev/null 2>&1
+  "$SG_ENGINE" network rm sg-fleetnet sg-telnet sg-hmdmnet >/dev/null 2>&1
 else
   [ -n "$started" ] && echo "-- leaving running (--keep):$started"
   [ -n "${FLEET_TLS_DIR:-}" ] && echo "-- lab TLS material kept for the retained containers: $FLEET_TLS_DIR (delete it when you remove them)"

@@ -81,14 +81,14 @@
       "classification": "OPEN_STANDARD",
       "licence": "Apache-2.0",
       "licenceCaution": false,
-      "role": "Telemetry-pipeline research for signal transport; deferred. Reclassified DEFERRED_RESEARCH \u2192 OPEN_STANDARD in v2: OTLP is the telemetry transport standard the report ratifies; adoption itself is still future work (backlog). Lane BUILT 2026-08-21: run-live-lanes.sh --with-telemetry (opt-in; app /metrics -> collector -> Prometheus asserted end to end); deployedInLab flips when a live run passes.",
+      "role": "Telemetry-pipeline research for signal transport; deferred. Reclassified DEFERRED_RESEARCH \u2192 OPEN_STANDARD in v2: OTLP is the telemetry transport standard the report ratifies; adoption itself is still future work (backlog). DEPLOYED: first live run PASSED on darwin 2026-08-22 (signalgrid_up traversed api -> collector -> prometheus, 10s).",
       "deployedInLab": true,
-      "deployedEvidence": "scripts/run-live-lanes.sh",
+      "deployedEvidence": "artifacts/sim-results/2026-08-22-source-independence-queue.json",
       "ownerRole": "sre",
       "priorityTier": "P0",
       "credentialClass": "none_local_pipeline",
       "mutationsAllowed": false,
-      "lastReviewed": "2026-08-21"
+      "lastReviewed": "2026-08-23"
     },
     {
       "repo": "open-policy-agent/opa",
@@ -321,14 +321,14 @@
       "classification": "INTERNAL_COMPANY_TOOL",
       "licence": "Apache-2.0",
       "licenceCaution": false,
-      "role": "Metrics research; scripts/run-live-lanes.sh does not start it, so it stays deferred until a lane exists. Reclassified DEFERRED_RESEARCH \u2192 INTERNAL_COMPANY_TOOL in v2: the report makes it the P0 operations metric layer; adoption is backlog work, and deployedInLab stays false until a lane starts it. Lane BUILT 2026-08-21: run-live-lanes.sh --with-telemetry (opt-in; app /metrics -> collector -> Prometheus asserted end to end); deployedInLab flips when a live run passes.",
+      "role": "Metrics research; scripts/run-live-lanes.sh does not start it, so it stays deferred until a lane exists. Reclassified DEFERRED_RESEARCH \u2192 INTERNAL_COMPANY_TOOL in v2: the report makes it the P0 operations metric layer; adoption is backlog work, and deployedInLab stays false until a lane starts it. DEPLOYED: first live run PASSED on darwin 2026-08-22 (signalgrid_up traversed api -> collector -> prometheus, 10s).",
       "deployedInLab": true,
-      "deployedEvidence": "scripts/run-live-lanes.sh",
+      "deployedEvidence": "artifacts/sim-results/2026-08-22-source-independence-queue.json",
       "ownerRole": "sre",
       "priorityTier": "P0",
       "credentialClass": "none_local_pipeline",
       "mutationsAllowed": false,
-      "lastReviewed": "2026-08-21"
+      "lastReviewed": "2026-08-23"
     },
     {
       "repo": "grafana/grafana",

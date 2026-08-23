@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-08-22T16:25:01+00:00",
-  "result": "quiet \u2014 no new Mac activity; telemetry first-run and darwin SBOM byte-identity proof still pending on the Mac; cloud queue empty (7 PRs merged today), board owner/Mac-blocked"
+  "firedAt": "2026-08-23T00:26:26+00:00",
+  "result": "acted: read Mac darwin-green + source-independence results, flipped otel/prometheus deployedInLab, adopted its three named gaps as the build queue (headwind lane, capture-mode proof path, GLPI bring-up)"
 }

@@ -108,3 +108,11 @@ SG_IMAGE_WAZUH="docker.io/wazuh/wazuh-manager:4.14.7"
 SG_IMAGE_OTELCOL="docker.io/otel/opentelemetry-collector-contrib:0.116.1"
 # shellcheck disable=SC2034
 SG_IMAGE_PROMETHEUS="docker.io/prom/prometheus:v3.1.0"
+
+# Headwind CE lane: the exact build the 2026-08-18 shape-check verified
+# (5.30.3-os). Postgres re-enters here after its earlier removal-for-zero-uses:
+# this is the use.
+# shellcheck disable=SC2034
+SG_IMAGE_HMDM="docker.io/headwindmdm/hmdm:0.1.5"
+# shellcheck disable=SC2034
+SG_IMAGE_POSTGRES="docker.io/library/postgres:16"

@@ -72,6 +72,46 @@ if (publishedPages.length === 0) {
 }
 for (const p of publishedPages) if (existsSync(p) && !files.includes(p)) files.push(p);
 
+// The website is not the only thing that reaches a stranger. `docs/outreach/`
+// is sent to real prospects, as real email, under the owner's own identity and
+// increasingly without a human reading each one first — which makes it the
+// surface where an overclaim costs the most and gets checked the least.
+// `OPERATING_RULES.md` already promises that "any deviation still traces every
+// product claim to POSITIONING.md", and `TEMPLATES.md` writes a claim-trace
+// line under each template. Both promises were prose. Prose does not fail a
+// build, and the same rule written down in the security questionnaire pack had
+// already turned out to be unenforced for two of its four frameworks.
+//
+// Scope is DERIVED twice over: every document in the outreach directory, plus
+// every doc those documents name as a claim-trace target (today POSITIONING.md
+// and PILOT_PACKAGE.md — the pilot package IS what a prospect receives, so a
+// deferred family presented as current in it is an overclaim made to a buyer).
+// Adding a template that cites a new document pulls that document in on the
+// next run, with no second edit to remember.
+const OUTREACH_DIR = "docs/outreach";
+let outreachScanned = 0;
+if (existsSync(OUTREACH_DIR)) {
+  const outreachDocs = readdirSync(OUTREACH_DIR)
+    .filter((e) => /\.(md|html)$/.test(e))
+    .map((e) => join(OUTREACH_DIR, e));
+  if (outreachDocs.length === 0) {
+    console.error(
+      `✗ ${OUTREACH_DIR} exists but yielded no documents — the outreach surface's shape changed; ` +
+        "fix this derivation, do not silently scan less.",
+    );
+    process.exit(1);
+  }
+  const cited = new Set();
+  for (const d of outreachDocs) {
+    for (const m of readFileSync(d, "utf8").matchAll(/\b([A-Z][A-Z0-9_]{3,})\.md\b/g)) {
+      const candidate = join("docs", `${m[1]}.md`);
+      if (existsSync(candidate)) cited.add(candidate);
+    }
+  }
+  for (const p of [...outreachDocs, ...cited]) if (!files.includes(p)) files.push(p);
+  outreachScanned = outreachDocs.length + cited.size;
+}
+
 // Case- and separator-insensitive: the first version matched only the exact
 // string "Evaluated today", and the pricing page's "6 evaluated-today signal
 // dimensions" — a claim of SIX current dimensions against a three-signal
@@ -239,7 +279,11 @@ for (const f of files) {
   }
 }
 
-console.log(`launch-claims: ${files.length} buyer-facing files scanned (${publishedPages.length} derived from the Pages deploy), ${problems} violation(s); self-test green`);
+console.log(
+  `launch-claims: ${files.length} buyer-facing files scanned ` +
+    `(${publishedPages.length} derived from the Pages deploy, ${outreachScanned} from the outreach surface ` +
+    `and the documents it cites), ${problems} violation(s); self-test green`,
+);
 if (problems > 0) {
   console.error(
     "\nLaunch-claims gate FAILED — buyer-facing copy asserts deferred capability as current.\n" +

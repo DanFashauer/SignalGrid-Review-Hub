@@ -14,7 +14,12 @@ every send; the log makes compliance auditable; DR-012 sets the segment.
    quotas; log entries reference Drive row ids.
 2. **Traced claims**: the message is built from `TEMPLATES.md`; any
    deviation still traces every product claim to POSITIONING.md or a
-   running gate.
+   running gate. This rule is MECHANICAL, not a promise:
+   `scripts/check-launch-claims.mjs` (preflight + CI) scans this directory
+   and every document it cites, and fails the build if a deferred family
+   is presented as current. It was prose until 2026-08-23, and prose does
+   not fail a build — the security-questionnaire pack made the same kind of
+   promise and turned out to be unenforced for two of its four frameworks.
 3. **Volume**: at most 10 first-touches per day; at most one follow-up per
    thread, ever.
 4. **Identity**: sent from the owner's connected Gmail, signed as him,

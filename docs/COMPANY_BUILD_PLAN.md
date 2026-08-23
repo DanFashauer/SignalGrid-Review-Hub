@@ -178,16 +178,22 @@ earlier — that is the loop working, not a reason to soften the record.
     (evidence + reversal path) has no gate and DR-011/012/013 already lack
     reversal clauses; `CLAIM_INVENTORY.md` is declared always-derived but its
     generator is not a script and no gate enforces derivation.
-45. **DR-002's mandated mechanical check was never built** —
-    security-engineer, hours. `tenant:admin` is declared, granted, and
-    enforced by nothing; the DR itself ruled this must be caught
-    mechanically.
+45. **~~DR-002's mandated mechanical check was never built~~** — DONE
+    2026-08-23: scripts/check-permission-enforcement.mjs extracts the
+    Permission union and every authorize() call site, and fails when a
+    declared scope is required by no surface. Measured: 10 of 11 enforced;
+    `tenant:admin` is now a DECLARED exemption naming the private-core
+    surfaces that will require it — and the gate fails if that exemption
+    outlives its reason (a permission that becomes enforced must lose its
+    entry). Self-tested with union/call-site floors. Registered preflight +
+    CI.
 46. **Production OIDC branch of /v1 never executes in any test** —
     security-engineer, days. Only its rejections run; the middleware wiring
     that turns a bearer token into a tenant principal is unproven end to end.
-47. **METRICS_TOKEN compared non-constant-time** — security-engineer, hours.
-    `app.ts:111` early-exits on the one static secret an operator sets, while
-    the core protects even demo keys with constant-time compare.
+47. **~~METRICS_TOKEN compared non-constant-time~~** — DONE 2026-08-23:
+    the operator's real secret now goes through the same constantTimeEquals
+    the core already used for its PUBLIC demo keys. The weaker guard had been
+    sitting on the stronger secret.
 48. **Native parity is textual, not behavioral** — mobile-native, days. The
     port-parity gate compares extracted vocabulary and says so itself; iOS is
     carved out of the shared assist-wire conformance vectors; ios-ci does not

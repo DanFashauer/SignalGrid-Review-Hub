@@ -368,9 +368,32 @@ if wanted headwind; then
     started="$started sg-hmdm sg-hmdm-pg"
     # The war-download dance can take minutes; a zero-byte ROOT.war means the
     # proxy ate it — repair from the host, which trusts the proxy CA.
+    # CREDENTIALS. This lane shipped hardcoding admin/admin, and the Mac lane
+    # proved on a live sg-hmdm 0.1.5 container that the seeded admin password is
+    # NOT 'admin' — the stored hash (349242D3…) is neither sha1('admin') nor
+    # md5('admin'), the login returns 401 with audit errorCode=2 (bad
+    # credentials, not missing user), and resetting the row to sha1('admin')
+    # still 401s, so the comparison is not sha1(plaintext) either. That was
+    # tested three ways, including a container restart to rule out a cached
+    # user. There is no published web-panel default for this image.
+    #
+    # Consequence, recorded because it was missed once: this lane has NEVER
+    # authenticated on any machine. The proof it feeds went "27/27 green with
+    # the capture ABSENT", so the admin/admin assumption was never exercised —
+    # a green that came from the capture step being skipped, not from it
+    # working.
+    #
+    # So the credential is no longer hardcoded to a value known to fail. It must
+    # be supplied. Absent it the lane SKIPS with the reason, which is what the
+    # runner already does correctly: a skipped lane proved nothing, and the
+    # sim-request stays open rather than counting green.
+    HMDM_LOGIN="${HMDM_ADMIN_LOGIN:-admin}"
     HMDM_UP=0
+    HMDM_CRED_OK=0
+    if [ -n "${HMDM_ADMIN_PASSWORD:-}" ]; then HMDM_CRED_OK=1; fi
     for i in $(seq 1 90); do
-      code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8425/rest/public/jwt/login" -X POST -H 'Content-Type: application/json' -d '{"login":"admin","password":"admin"}' 2>/dev/null)
+      [ "$HMDM_CRED_OK" = "1" ] || break
+      code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8425/rest/public/jwt/login" -X POST -H 'Content-Type: application/json' -d "{\"login\":\"$HMDM_LOGIN\",\"password\":\"$HMDM_ADMIN_PASSWORD\"}" 2>/dev/null)
       [ "$code" = "200" ] && { HMDM_UP=1; break; }
       if [ "$i" = "30" ]; then
         SZ=$("$SG_ENGINE" exec sg-hmdm sh -c 'stat -c %s /usr/local/tomcat/webapps/ROOT.war 2>/dev/null || echo 0')
@@ -387,7 +410,7 @@ if wanted headwind; then
     done
     if [ "$HMDM_UP" = "1" ]; then
       # Pre-empt the upstream NPE: set an admin password on configuration 1.
-      HW_JWT=$(curl -s -X POST "http://127.0.0.1:8425/rest/public/jwt/login" -H 'Content-Type: application/json' -d '{"login":"admin","password":"admin"}' | sed -n 's/.*"id_token" *: *"\([^"]*\)".*/\1/p')
+      HW_JWT=$(curl -s -X POST "http://127.0.0.1:8425/rest/public/jwt/login" -H 'Content-Type: application/json' -d "{\"login\":\"$HMDM_LOGIN\",\"password\":\"$HMDM_ADMIN_PASSWORD\"}" | sed -n 's/.*"id_token" *: *"\([^"]*\)".*/\1/p')
       HW_CFG=$(curl -s "http://127.0.0.1:8425/rest/private/configurations/1" -H "Authorization: Bearer $HW_JWT")
       # shellcheck disable=SC2001
       HW_CFG_PATCHED=$(echo "$HW_CFG" | sed 's/"data" *: *{/"data":{/; s/{"status":"OK","data":{/{/; s/}}$/}/' )
@@ -400,7 +423,11 @@ if wanted headwind; then
         bad headwind "$LOG"
       fi
     else
-      skip headwind "hmdm never became healthy after the war dance (see: $SG_ENGINE logs sg-hmdm)"
+      if [ "$HMDM_CRED_OK" = "1" ]; then
+        skip headwind "hmdm never became healthy after the war dance (see: $SG_ENGINE logs sg-hmdm)"
+      else
+        skip headwind "HMDM_ADMIN_PASSWORD is unset, and this image's seeded admin password is UNKNOWN — empirically not 'admin', and the scheme is not sha1(plaintext), so it cannot be reset to a guess either. Set HMDM_ADMIN_PASSWORD once the auth path is pinned. A skipped lane proved nothing; the sim-request stays open."
+      fi
     fi
   else
     skip headwind "no container engine"

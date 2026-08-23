@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-08-23T00:26:26+00:00",
-  "result": "acted: read Mac darwin-green + source-independence results, flipped otel/prometheus deployedInLab, adopted its three named gaps as the build queue (headwind lane, capture-mode proof path, GLPI bring-up)"
+  "firedAt": "2026-08-23T04:24:39Z",
+  "result": "acted: read 4 Mac messages and acked all 4, including CORRECTING my own prior overclaim that the headwind lane was 'BUILT' (the code exists; it has never authenticated on any machine). Fixed run-live-lanes.sh to stop hardcoding admin/admin - a credential the Mac empirically proved cannot work - and to skip with the real reason. Queued 2026-08-23-hmdm-auth-path-probes for the algorithm, not the password. Left the 2026-08-22 queue request unedited: it was accurate when written and the loop already reconciles it."
 }

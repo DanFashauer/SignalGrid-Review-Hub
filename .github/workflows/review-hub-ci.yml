@@ -27,6 +27,12 @@ concurrency:
 
 permissions:
   contents: read
+  # actions: read is what lets check-ci-liveness.mjs ask the Actions API when the
+  # mutation sweep last SUCCEEDED. Without it GITHUB_TOKEN cannot read workflow
+  # runs, the gate's API call fails, and because that gate is FATAL in CI by
+  # design it would redden every build the moment it merged. Read-only scope,
+  # added deliberately rather than discovered.
+  actions: read
 
 jobs:
   validation:
@@ -277,6 +283,8 @@ jobs:
         run: node scripts/check-module-init-order.mjs
       - name: NaN fail-open (an unparseable expiry must read as EXPIRED)
         run: node scripts/check-nan-fail-open.mjs
+      - name: CI liveness (a sweep that stops running must fail a build)
+        run: node scripts/check-ci-liveness.mjs
       - name: CI job timeouts (an unbounded job is an unbounded outage)
         run: node scripts/check-ci-job-timeouts.mjs
 

@@ -786,6 +786,42 @@ earlier — that is the loop working, not a reason to soften the record.
     it wants an owner's call rather than an agent's preference. The alternative
     — a separate always-on registry for CI-scheduled lanes, checked the same way
     — is the same decision wearing a different hat.
+53. **CI liveness: the harness that proves every guard can fail had nothing
+    watching whether it still ran.** DONE 2026-08-23.
+    The mutation sweep is the only thing establishing that the gates in this
+    repository are falsifiable, and it runs on a schedule — the one kind of work
+    with no author waiting on its result. If it stopped, nothing would turn red.
+    GitHub also disables scheduled workflows on inactive repositories, so "it
+    stopped" is a real state.
+    `scripts/check-ci-liveness.mjs` (preflight + CI, self-tested) resolves the
+    sweep JOB's own last success and fails when it is older than 48h — one
+    missed run tolerated, two consecutive misses fatal.
+    **It gates the JOB, not the RUN, and row 52 is why.** That day the run
+    reported `conclusion=failure` while the sweep itself SUCCEEDED; the failure
+    was a sibling job on a real CRITICAL. "Did any job fail" and "did the sweep
+    run" are different questions needing opposite responses, and a run-level
+    conclusion conflates them. When the sweep passes inside a red run, this gate
+    passes and says so explicitly in its output.
+    **The committed-heartbeat design was rejected**, not merely un-chosen. It
+    needs the workflow's GITHUB_TOKEN to push, which was never established as
+    possible here — the repo's only precedent commits to a PR head branch, never
+    the protected default — and it is strictly less truthful, because an artifact
+    can be stale-but-present or written by a run that then failed, whereas a
+    job's completion timestamp cannot lie about whether the job ran.
+    FATAL in CI when the API is unreachable, REPORTED locally. Unknown must
+    tighten, but a gate that fails a developer's preflight for holding no token
+    is a gate that gets switched off, and a switched-off gate protects nothing.
+    **The thing that would have broken the build was caught by reading, not by
+    running**: `review-hub-ci.yml` granted `contents: read` only. Without
+    `actions: read` the token cannot read workflow runs, the API call fails, and
+    a gate that is fatal-on-unreachable in CI would have reddened every build the
+    moment it merged. The scope is now granted deliberately.
+    Also fixed in passing: importing the module used to execute the whole gate,
+    including its network call. The pure decision is exported; the script body
+    runs only on direct invocation.
+    Falsified: disabling the staleness comparison makes the gate REFUSE TO RUN
+    (exit 1) and name which cases broke, rather than passing quietly.
+
 52. **The daily image-vulnerability gate had been RED for two days and nobody
     acted on it.** FIXED 2026-08-23, found while scoping the CI-liveness lane.
     Scheduled Verification reported `conclusion=failure` on 2026-08-22 and

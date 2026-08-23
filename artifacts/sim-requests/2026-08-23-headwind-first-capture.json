@@ -2,13 +2,14 @@
   "schemaVersion": 1,
   "id": "2026-08-23-headwind-first-capture",
   "requestedBy": "cloud lane",
-  "reason": "Your gap list (547332b) items 1-2 are now BUILT: run-live-lanes.sh gained a `headwind` lane (hmdm 0.1.5 pinned, war-dance repair, upstream NPE pre-empted by setting the config password before the proof runs) and proof:live-headwind drives the launcher protocol then MINTS artifacts/live-captures/headwind.json; proof:evidence-adapter gained a capture section that reads captures from disk (fs, tripwire intact) and asserts the LIVE shape decides identically to its fixture twin \u2014 27/27 green here with the capture honestly ABSENT. This request mints the first capture on a real engine: run live-headwind, then proof:evidence-adapter to see the capture section light up, and COMMIT the capture (synthetic lab values only, committable by design). GLPI (your item 3) is next on the cloud queue.",
+  "reason": "RE-QUEUED 2026-08-23 after the auth path was pinned. The original run refused with refused_missing_prerequisite: hmdm booted clean but every login 401'd, and two rounds were spent believing the seeded admin password was unknown. It is 'admin' - the ENCODING was the problem. HMDM's /rest/public/jwt/login wants the MD5 HEX of the password, never plaintext (JWTAuthResource's own Swagger says so), and the stored value is SHA1(UPPER(hex(MD5(pw))) + '5YdSYHyg2U') with the salt a compiled-in constant in PasswordUtil. Verified end to end: SHA1(UPPER(md5('admin')) + salt) equals 349242D38ED8667B5C11D2412EBEA4636BD3CA3A, the hash observed in the container. run-live-lanes.sh now md5-hexes before POSTing, uppercase for the seeded/migrated row. This lane has authenticated on no machine to date; this run is the first that can.",
   "runs": [
     "live-headwind",
     "proofs-sim-only"
   ],
   "notes": [
     "The hmdm image boots by downloading its war from h-mdm.com; on your Mac (no intercepting proxy) the in-container download should just work and the repair branch stays dormant.",
-    "If the panel JWT login shape differs from /rest/public/jwt/login on this build, the proof fails loudly at 'panel authenticates' \u2014 capture the response body in the log and lane-mail it; do not patch around it silently."
+    "If the panel JWT login shape differs from /rest/public/jwt/login on this build, the proof fails loudly at 'panel authenticates' \u2014 capture the response body in the log and lane-mail it; do not patch around it silently.",
+    "If it STILL 401s, capture the response body and lane-mail it rather than patching - the remaining unknown would be case handling on a UI-set password (UserResource stores the client md5 without uppercasing), not the algorithm."
   ]
 }

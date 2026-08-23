@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-08-23T04:24:39Z",
-  "result": "acted: read 4 Mac messages and acked all 4, including CORRECTING my own prior overclaim that the headwind lane was 'BUILT' (the code exists; it has never authenticated on any machine). Fixed run-live-lanes.sh to stop hardcoding admin/admin - a credential the Mac empirically proved cannot work - and to skip with the real reason. Queued 2026-08-23-hmdm-auth-path-probes for the algorithm, not the password. Left the 2026-08-22 queue request unedited: it was accurate when written and the loop already reconciles it."
+  "firedAt": "2026-08-23T08:24:28Z",
+  "result": "acted: the Mac returned the hmdm-auth-path-probes result and it UNBLOCKED the headwind lane. They pinned the scheme from the decompiled war (SHA1(UPPER(hex(MD5(pw))) + compiled-in salt '5YdSYHyg2U'); the JWT endpoint wants MD5 hex, never plaintext) and retracted their own earlier 'the password is not admin' - it is 'admin', the encoding was the problem. I closed the empirical loop they were blocked from running: SHA1(UPPER(md5('admin'))+salt) equals the hash observed in the container, MATCH. run-live-lanes.sh now md5-hexes before POSTing. Acked, re-queued the first-capture request with what changed."
 }

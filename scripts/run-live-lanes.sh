@@ -429,13 +429,40 @@ if wanted headwind; then
     # be supplied. Absent it the lane SKIPS with the reason, which is what the
     # runner already does correctly: a skipped lane proved nothing, and the
     # sim-request stays open rather than counting green.
+    # THE CREDENTIAL WAS NEVER WRONG — THE ENCODING WAS.
+    #
+    # This lane spent two rounds believing the seeded admin password was unknown.
+    # It is 'admin'. The Mac lane pinned the scheme by decompiling the pinned war
+    # (hmdm-5.30.3-os, CFR) rather than guessing:
+    #
+    #   com.hmdm.util.PasswordUtil
+    #     PASS_SALT           = "5YdSYHyg2U"   (a compiled-in constant — not a
+    #                            column, not a properties file, not per-install)
+    #     getHashFromRaw(pw)  = SHA1( UPPER(hex(MD5(pw))) + PASS_SALT )
+    #     passwordMatch(e,db) = SHA1( e + PASS_SALT ) == db   (case-insensitive)
+    #
+    # JWTAuthResource's own Swagger text says it outright: "The password field
+    # should contain the MD5 hash of the actual password." The server never
+    # hashes plaintext. We POSTed plaintext, so every login 401'd — which is why
+    # this lane had authenticated on no machine to date.
+    #
+    # Verified here rather than taken on trust:
+    #   SHA1( UPPER(md5("admin")) + "5YdSYHyg2U" )
+    #     == 349242D38ED8667B5C11D2412EBEA4636BD3CA3A
+    # the hash actually observed in the container's users row.
+    #
+    # CASE MATTERS for the seeded row: equalsIgnoreCase applies to the SHA1
+    # output, not to the md5 fed into it, and the startup migration uppercased
+    # the seeded md5 — so the seeded admin needs UPPERCASE md5 hex.
     HMDM_LOGIN="${HMDM_ADMIN_LOGIN:-admin}"
+    HMDM_PLAINTEXT="${HMDM_ADMIN_PASSWORD:-admin}"
+    HMDM_PW=$(node -e 'process.stdout.write(require("node:crypto").createHash("md5").update(process.argv[1]).digest("hex").toUpperCase())' "$HMDM_PLAINTEXT")
     HMDM_UP=0
-    HMDM_CRED_OK=0
-    if [ -n "${HMDM_ADMIN_PASSWORD:-}" ]; then HMDM_CRED_OK=1; fi
+    HMDM_CRED_OK=1
+    if [ -z "$HMDM_PW" ]; then HMDM_CRED_OK=0; fi
     for i in $(seq 1 90); do
       [ "$HMDM_CRED_OK" = "1" ] || break
-      code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8425/rest/public/jwt/login" -X POST -H 'Content-Type: application/json' -d "{\"login\":\"$HMDM_LOGIN\",\"password\":\"$HMDM_ADMIN_PASSWORD\"}" 2>/dev/null)
+      code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8425/rest/public/jwt/login" -X POST -H 'Content-Type: application/json' -d "{\"login\":\"$HMDM_LOGIN\",\"password\":\"$HMDM_PW\"}" 2>/dev/null)
       [ "$code" = "200" ] && { HMDM_UP=1; break; }
       if [ "$i" = "30" ]; then
         SZ=$("$SG_ENGINE" exec sg-hmdm sh -c 'stat -c %s /usr/local/tomcat/webapps/ROOT.war 2>/dev/null || echo 0')
@@ -452,7 +479,7 @@ if wanted headwind; then
     done
     if [ "$HMDM_UP" = "1" ]; then
       # Pre-empt the upstream NPE: set an admin password on configuration 1.
-      HW_JWT=$(curl -s -X POST "http://127.0.0.1:8425/rest/public/jwt/login" -H 'Content-Type: application/json' -d "{\"login\":\"$HMDM_LOGIN\",\"password\":\"$HMDM_ADMIN_PASSWORD\"}" | sed -n 's/.*"id_token" *: *"\([^"]*\)".*/\1/p')
+      HW_JWT=$(curl -s -X POST "http://127.0.0.1:8425/rest/public/jwt/login" -H 'Content-Type: application/json' -d "{\"login\":\"$HMDM_LOGIN\",\"password\":\"$HMDM_PW\"}" | sed -n 's/.*"id_token" *: *"\([^"]*\)".*/\1/p')
       HW_CFG=$(curl -s "http://127.0.0.1:8425/rest/private/configurations/1" -H "Authorization: Bearer $HW_JWT")
       # shellcheck disable=SC2001
       HW_CFG_PATCHED=$(echo "$HW_CFG" | sed 's/"data" *: *{/"data":{/; s/{"status":"OK","data":{/{/; s/}}$/}/' )
@@ -468,7 +495,7 @@ if wanted headwind; then
       if [ "$HMDM_CRED_OK" = "1" ]; then
         skip headwind "hmdm never became healthy after the war dance (see: $SG_ENGINE logs sg-hmdm)"
       else
-        skip headwind "HMDM_ADMIN_PASSWORD is unset, and this image's seeded admin password is UNKNOWN — empirically not 'admin', and the scheme is not sha1(plaintext), so it cannot be reset to a guess either. Set HMDM_ADMIN_PASSWORD once the auth path is pinned. A skipped lane proved nothing; the sim-request stays open."
+        skip headwind "could not compute the md5 of the admin password (is node on PATH?) — HMDM's login wants MD5 hex, never plaintext"
       fi
     fi
   else

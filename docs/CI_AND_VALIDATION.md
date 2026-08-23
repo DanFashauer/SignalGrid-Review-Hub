@@ -286,7 +286,7 @@ how that grading gets bypassed.
 
 ### Proving a merge rule, not just a merge
 
-`proof:decision-continuity` (65 checks) guards `lib/signalgrid-core/src/continuity.ts`,
+`proof:decision-continuity` (72 checks) guards `lib/signalgrid-core/src/continuity.ts`,
 which answers "which decision wins" when a device has been deciding offline. It is worth
 noting here because of *how* it is guarded rather than what it guards.
 

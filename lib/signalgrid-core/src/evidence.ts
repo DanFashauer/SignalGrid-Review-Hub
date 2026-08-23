@@ -67,6 +67,7 @@ export function buildEvidence(
     dockChargeState: readCharge(latestByCategory),
     batteryHealth: readBatteryHealth(latestByCategory),
     tamperState: readTamper(latestByCategory),
+    dockEvidenceFreshness: readDockEvidenceFreshness(latestByCategory),
     dockState: readDock(latestByCategory),
     baselineCompliance: readBaseline(latestByCategory),
     benchmarkSelection: readBenchmarkSelection(latestByCategory),
@@ -96,7 +97,14 @@ export function deriveCriticalSignalsPresent(
     evidence.deviceManaged !== "unknown" &&
     evidence.deviceEncrypted !== "unknown" &&
     evidence.postureFreshness !== "missing" &&
-    evidence.postureFreshness !== "unknown"
+    evidence.postureFreshness !== "unknown" &&
+    // Dock evidence that EXISTS but is stale, expired, or unreadable is not
+    // evidence. "missing" is deliberately absent from this list: no dock at all
+    // is a deployment shape, not a degraded signal, and treating the two alike
+    // would step up every tenant without dock hardware.
+    evidence.dockEvidenceFreshness !== "stale" &&
+    evidence.dockEvidenceFreshness !== "expired" &&
+    evidence.dockEvidenceFreshness !== "unknown"
   );
 }
 
@@ -252,6 +260,43 @@ const BENCHMARK_SELECTION_STATES = ["confirmed", "misfit"] as const;
 // deliberately does not match.
 const SHIFT_CONTEXT_STATES = ["confirmed", "misfit"] as const;
 const BADGE_STATES = ["present", "removed", "forced", "absent"] as const;
+
+/** The dock-family categories whose age the dock connector stamps. */
+const DOCK_CATEGORIES = [
+  "custody_state",
+  "charge_state",
+  "battery_health",
+  "tamper_state",
+  "dock_state",
+  "badge_binding",
+] as const;
+
+/** Worst-wins, because one stale channel is enough to make the reading unreliable. */
+const FRESHNESS_SEVERITY: Record<Freshness, number> = {
+  fresh: 0,
+  missing: 1,
+  unknown: 2,
+  stale: 3,
+  expired: 4,
+};
+
+/**
+ * The worst freshness across dock signals THAT EXIST. Absent dock evidence
+ * stays "missing" — a deployment with no dock is not a degraded deployment, and
+ * making it one would step up every such tenant on day one.
+ */
+function readDockEvidenceFreshness(latestByCategory: LatestByCategory): Freshness {
+  let worst: Freshness | undefined;
+  for (const category of DOCK_CATEGORIES) {
+    const signal = latestByCategory.get(category);
+    if (!signal) continue;
+    const freshness = signal.freshness ?? "unknown";
+    if (worst === undefined || FRESHNESS_SEVERITY[freshness] > FRESHNESS_SEVERITY[worst]) {
+      worst = freshness;
+    }
+  }
+  return worst ?? "missing";
+}
 
 function readCustody(latestByCategory: LatestByCategory): CustodyState {
   return readEnum(latestByCategory, "custody_state", CUSTODY_STATES) ?? "unknown";

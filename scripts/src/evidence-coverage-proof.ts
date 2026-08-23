@@ -92,6 +92,7 @@ const ALL_PLANES: readonly SourcePlane[] = KNOWN_SOURCE_PLANES;
     dockChargeState: "charged",
     batteryHealth: "healthy",
     tamperState: "none",
+    dockEvidenceFreshness: "missing",
     dockState: "occupied",
     baselineCompliance: "aligned",
     benchmarkSelection: "confirmed",

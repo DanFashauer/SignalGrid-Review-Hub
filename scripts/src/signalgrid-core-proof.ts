@@ -18,6 +18,7 @@
  */
 import {
   buildEvidence,
+  deriveCriticalSignalsPresent,
   canonicalJson,
   constantTimeEquals,
   CoreError,
@@ -144,13 +145,22 @@ for (const scenario of scenarios) {
 // snapshot's canonical JSON is byte-identical to the pre-stamp one, so no
 // version-conditional branch and no precondition exists anywhere. These four checks
 // are what make that a fact rather than a claim.
+// Re-pinned 2026-08-23 (was b8d6988973734339): the evidence body gained
+// `dockEvidenceFreshness`, so the canonical body of a FRESH unstamped snapshot
+// moved again. Same reasoning as the 2026-08-10 re-pin below, and the same
+// evidence for it: the digest FUNCTION is unchanged and every durable row is
+// verified against its OWN stored body, so real pre-change rows in Postgres
+// still verify. This constant is the canary, and it fired exactly as designed —
+// it caught the shape change on the first run rather than letting it ship
+// quietly. CORE_NORMALIZATION_VERSION goes 5 -> 6 to record the same change as
+// provenance.
 // Re-pinned 2026-08-10 (was 28d821302756a247): the evidence body gained the two
 // launch-family fields (managementHealthState, localAuthorityState), so the canonical
 // body of a FRESH unstamped snapshot moved. TRUE pre-change rows still verify — the
 // digest FUNCTION is unchanged and each row is verified against its own stored body —
 // this constant is the canary that makes an evidence-shape change loud instead of
 // silent, and the normalization-version bump records the same change as provenance.
-const LEGACY_SNAPSHOT_DIGEST = "b8d6988973734339";
+const LEGACY_SNAPSHOT_DIGEST = "6ab07be9ec3cdddc";
 const freshSnapshot = core.getSnapshot(T.operator, decisions[0].evidenceSnapshotId);
 
 // The exact shape a pre-stamp row deserializes into: every field the same, no stamp.
@@ -1565,6 +1575,46 @@ if (pending) {
     ungated.reasonCodes.includes("ALLOW_SUPPRESSED_DEGRADED_EVIDENCE"),
     `got [${ungated.reasonCodes.join(", ")}]`,
   );
+  // ── stale dock evidence is not evidence ────────────────────────────────────
+  //
+  // runDockSync classified every record's age and stamped `freshness` onto all
+  // six signals it emitted, and buildEvidence never read it. A dock silent for a
+  // year produced a tamperState:"none" indistinguishable from one measured a
+  // minute ago. The asymmetry was the tell: a dock that HONESTLY reports
+  // sensor_unavailable steps up, while a dock silent for a year did not.
+  //
+  // Note what is NOT done. Degrading a stale VALUE to "unknown" — the obvious
+  // fix — would RELAX the gateway: an expired custody_state:"checked_out" stops
+  // matching custody-overdue and a restriction disappears. Staleness therefore
+  // travels as its own input into the fail-closed backstop, which can only ever
+  // move allow to step_up.
+  //
+  // "missing" must stay permissive, and that arm matters as much as the others:
+  // a tenant with no dock hardware is a deployment shape, not a degraded signal,
+  // and treating the two alike would step up every such tenant on day one.
+  const allCriticalKnown = buildEvidence(identity, device, workflow, [
+    sig("device_compliance", "compliant"),
+    sig("device_management", true),
+    sig("device_encryption", true),
+    sig("os_support", true),
+    sig("posture_freshness", "fresh"),
+  ]);
+  check(
+    "stale-dock guardrail: the control case is genuinely intact (else the sweep below is vacuous)",
+    allCriticalKnown.criticalSignalsPresent === true,
+  );
+  for (const [freshness, expectCritical] of [
+    ["fresh", true],
+    ["missing", true],
+    ["stale", false],
+    ["expired", false],
+    ["unknown", false],
+  ] as const) {
+    check(
+      `stale-dock guardrail: dockEvidenceFreshness "${freshness}" -> criticalSignalsPresent ${expectCritical}`,
+      deriveCriticalSignalsPresent({ ...allCriticalKnown, dockEvidenceFreshness: freshness }) === expectCritical,
+    );
+  }
   // Mutation sanity: the same rule set on INTACT critical evidence allows — proving
   // the suppression above is driven by criticalSignalsPresent, not a dead rule.
   const intactEvidence = buildEvidence(identity, device, workflow, [

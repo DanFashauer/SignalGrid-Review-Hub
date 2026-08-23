@@ -482,6 +482,27 @@ export interface DecisionEvidence {
   batteryHealth: BatteryHealthState;
   tamperState: TamperState;
   /**
+   * The WORST freshness across the dock-family signals that are actually
+   * present (custody, charge, battery health, tamper, dock, badge binding), or
+   * "missing" when the device has no dock evidence at all.
+   *
+   * WHY THIS EXISTS. `runDockSync` already classified each record's age and
+   * stamped `freshness` onto every signal it emitted — and `buildEvidence` never
+   * read it. A dock that last reported a year ago produced a
+   * `tamperState: "none"` indistinguishable from one measured a minute ago, so
+   * the verdict rested on a year-old reading with nothing marking it as such.
+   * The asymmetry was the giveaway: a dock that HONESTLY reports
+   * `sensor_unavailable` steps up, while a dock silent for a year did not.
+   *
+   * Note what this field is NOT. The obvious fix — degrade a stale value to
+   * "unknown" — is wrong and would have relaxed the gateway: an expired
+   * `custody_state: "checked_out"` would stop matching `custody-overdue` and a
+   * restriction would vanish. Staleness therefore travels as its OWN input and
+   * is consumed by the fail-closed backstop, which can only ever move `allow` to
+   * `step_up`.
+   */
+  dockEvidenceFreshness: Freshness;
+  /**
    * Dock/SmartDock hardware state (default "unknown"). A `faulted` or `offline`
    * dock means the custody/charge/tamper channel for the device is unreliable,
    * so `allow` should not rest on it. See docs/SIGNALGRID_SMARTDOCK.md.

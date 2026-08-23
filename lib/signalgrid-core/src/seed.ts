@@ -448,6 +448,7 @@ function seedPolicyTests(
     dockChargeState: "charged",
     batteryHealth: "healthy",
     tamperState: "none",
+    dockEvidenceFreshness: "missing",
     dockState: "occupied",
     baselineCompliance: "aligned",
     benchmarkSelection: "confirmed",

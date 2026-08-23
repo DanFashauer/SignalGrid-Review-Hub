@@ -536,11 +536,29 @@ earlier — that is the loop working, not a reason to soften the record.
     **STILL OPEN — the SLO surface has never consumed a real decision
     outcome.** Its only non-proof caller is an all-healthy fixture, so the
     operability claim rests on a shape that cannot report degradation.
-    **STILL OPEN — the daily mutation sweep has no liveness evidence** and is
-    absent from the routine registry. It is the repo's only falsifiability
-    measurement, and nothing proves it ran; the heartbeat pattern the two
-    scheduled routines now use (`artifacts/agent-heartbeats/`) is the obvious
-    shape for it.
+    **PARTLY A CATEGORY ERROR, corrected 2026-08-23 — and the real half is
+    still open.**
+    "Absent from the routine registry" does not hold as written.
+    `docs/agent/scheduled-routines.json` says in its own comment that it is the
+    registry of ALWAYS-ON **agent** routines, transcribed from the live account
+    scheduler via `list_triggers`. The daily sweep is
+    `.github/workflows/scheduled-verification.yml` — a GitHub Actions cron
+    (07:17 UTC, bounded at 45 minutes), not an agent lane. Adding it to that
+    file would put a thing the account scheduler cannot see into a registry
+    whose gate checks it against heartbeats and the org roster. Same shape as
+    row 42's "no named reader": true in spirit, wrong in the letter, and acting
+    on the letter would have made a document less accurate rather than more.
+    **The liveness half DOES hold.** The workflow runs and leaves nothing
+    committed, so nothing in this repository can answer "did the mutation sweep
+    run today, and what did it measure" — only the Actions history can, and
+    that is not evidence the repo carries.
+    NOT DONE, and deliberately not decided by an agent: the obvious fix is the
+    heartbeat pattern the two agent routines use, but that means a scheduled
+    workflow committing to the repository every day. That is a standing change
+    to what CI is allowed to write and how much noise the history carries, and
+    it wants an owner's call rather than an agent's preference. The alternative
+    — a separate always-on registry for CI-scheduled lanes, checked the same way
+    — is the same decision wearing a different hat.
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23; the disposition itself is an owner call, stated below.
     Every clause of the row holds. `lib/location` has ZERO importers (only a

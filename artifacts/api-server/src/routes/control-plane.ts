@@ -226,6 +226,24 @@ const SELF_AUDIT_DEMO_PROBES: Record<string, ProbeResult> = Object.fromEntries(
   DEFAULT_CHECKLIST.map((i) => [i.probeKey, { status: "healthy" as const, detail: "fixture: verified in CI" }]),
 );
 
+// A self-audit status file is only served if it has the shape the emitter
+// actually writes (see scripts/src/self-audit-run.ts): an object carrying
+// source:"real-run", the administrator summary, the machine report and the
+// proposed-heal list. Anything else — an array, null, a number, a bare string,
+// an object missing the parts a reader will index into — is not a self-audit
+// run and is refused in favour of the labelled fixture.
+function isRealRunPayload(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  const isObject = (x: unknown) => typeof x === "object" && x !== null && !Array.isArray(x);
+  return (
+    v.source === "real-run" &&
+    isObject(v.plain) &&
+    isObject(v.report) &&
+    Array.isArray(v.proposedHeals)
+  );
+}
+
 router.get("/cp/v1/self-audit", (_req, res) => {
   // Prefer a REAL run if an operator has emitted one (`pnpm run self-audit:run
   // --emit` writes artifacts/self-audit/status.json). It is honestly labeled
@@ -235,12 +253,28 @@ router.get("/cp/v1/self-audit", (_req, res) => {
   const statusPath = resolve(process.cwd(), "artifacts/self-audit/status.json");
   if (existsSync(statusPath)) {
     try {
-      const real = JSON.parse(readFileSync(statusPath, "utf8"));
-      res.json({
-        note: "Last real self-audit run (an operator ran the gates). 'plain' is the administrator view; a heal is only ever proposed, never applied, without a human approval.",
-        ...real,
-      });
-      return;
+      const real: unknown = JSON.parse(readFileSync(statusPath, "utf8"));
+      // PARSEABLE IS NOT VALID. The previous form spread whatever `JSON.parse`
+      // returned straight into the response, so the catch only guarded against
+      // text that is not JSON at all. `[]`, `null`, `0` and `"corrupt"` all parse
+      // and all produced a 200 with no `plain`, no `report` and no
+      // `proposedHeals` — a console rendering `plain.allClear` or
+      // `report.failures` sees nothing and shows CLEAN. Worse, the spread came
+      // AFTER `note`, so an operator file carrying its own `note` key replaced
+      // the server's honesty statement with its own text. On the surface whose
+      // entire job is reporting status honestly, an unreadable file must fall
+      // back to the fixture, exactly as unparseable text already did.
+      if (isRealRunPayload(real)) {
+        res.json({
+          ...real,
+          // Server-authored LAST, so an operator file can never overwrite the
+          // provenance label or the honesty note by supplying its own keys.
+          source: "real-run",
+          note: "Last real self-audit run (an operator ran the gates). 'plain' is the administrator view; a heal is only ever proposed, never applied, without a human approval.",
+        });
+        return;
+      }
+      // Shape did not hold — fall through to the fixture.
     } catch {
       // Fall through to the fixture rather than serving a malformed real file.
     }

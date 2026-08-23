@@ -411,6 +411,53 @@ earlier — that is the loop working, not a reason to soften the record.
     the figure guard caught every one. The gate was stricter than the search,
     which is the entire argument for having it.
 
+40e. **The simulator's PASS verdict was the conjunction of two things that could
+    not fail.** DONE 2026-08-23, found by `fail-closed-auditor`.
+    `runScenario` computed `expectedOutcomes.every(...) && auditEvidence.length
+    > 0`. Both halves verified by reading the artifacts, not inferred:
+    `[].every()` is vacuously TRUE, so a scenario declaring no expectations
+    passed while asserting nothing — it could emit `restrict`,
+    `alert_operator` and `create_ticket` and still report PASS. And
+    `createAuditEvidence` returns an unconditional two-element array literal,
+    so `length > 0` has no input for which it is false. It read as a safety
+    check and was a constant.
+    Both halves are now falsifiable: expectations must EXIST (a scenario that
+    asserts nothing is a FAIL, because there is nothing it could have got
+    wrong), and the evidence must actually COVER what was routed — every routed
+    action id must appear in the routing trace's references, which diverges the
+    moment routing and evidence disagree.
+    Falsified in both directions: a scenario with `expectedOutcomes: []` now
+    reports FAIL where it reported PASS, and breaking the evidence references
+    flips a real fixture from PASS to FAIL. Proofs stay green — simulator 43/43,
+    grid proof exit 0.
+    **NOT a golden-rule-1 change, verified rather than assumed.**
+    `decisionEngine.ts` has a byte-faithful Swift port, so this was checked
+    before touching it: `check-decision-port-parity.mjs` reports 16 TS rules vs
+    16 Swift rules, 0 divergences, and the Swift port carries no
+    `expectedOutcomes` or `status` at all. The PASS verdict is the simulator's
+    self-assessment harness, not a decision rule, so there is no twin to keep in
+    step.
+
+40f. **The self-audit route treated PARSEABLE as VALID — and let an operator
+    file overwrite the server's own honesty note.** DONE 2026-08-23, found by
+    `fail-closed-auditor`.
+    `/cp/v1/self-audit` spread `JSON.parse(status.json)` straight into the
+    response. The `catch` only guarded text that is not JSON at all, so `[]`,
+    `null`, `0` and `"corrupt"` each parsed and each produced a 200 carrying no
+    `plain`, no `report` and no `proposedHeals` — a console rendering
+    `plain.allClear` or `report.failures` sees nothing and shows CLEAN.
+    Worse, the spread came AFTER the server's `note`, so a file containing its
+    own `note` key replaced the honesty statement with its own text. On the
+    surface whose entire job is reporting status honestly.
+    Now shape-checked against what the emitter actually writes (read from
+    `scripts/src/self-audit-run.ts` rather than guessed): an object with
+    `source: "real-run"`, object `plain` and `report`, and an array
+    `proposedHeals`. Anything else falls back to the labelled fixture, exactly
+    as unparseable text already did. Server-authored `source` and `note` are
+    now written AFTER the spread, so an operator file cannot overwrite either.
+    Nine shape cases falsified, including the `{note: "All gates green."}` file
+    that previously replaced the server's own words. `test:api` 301/301.
+
 41. **POSITIONING.md's claim-to-proof trace has fossilized** — DONE
     2026-08-23, exactly as the row prescribed: anchors that resolve by ID, plus
     a gate. Measured first: ALL FIVE `launch-profile.mjs` line anchors had

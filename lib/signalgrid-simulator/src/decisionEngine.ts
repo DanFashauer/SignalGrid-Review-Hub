@@ -35,10 +35,33 @@ export function runScenario(scenario: SimulatorScenario): SimulatorRunResult {
   const decision = evaluateScenario(scenario, normalizedSignals);
   const routedActions = routeDecision(scenario, decision.outcomes);
   const auditEvidence = createAuditEvidence(scenario, decision, routedActions);
+  // A PASS must be earned by an assertion that some input could have FAILED.
+  // Neither half of the previous verdict qualified:
+  //
+  //   * `expectedOutcomes.every(...)` — `[].every()` is vacuously TRUE, so a
+  //     scenario declaring no expectations passed while asserting nothing. It
+  //     could produce restrict, alert_operator and create_ticket and still
+  //     report PASS.
+  //   * `auditEvidence.length > 0` — `createAuditEvidence` returns an
+  //     unconditional two-element array literal. There is no input for which
+  //     this is false. It read as a safety check and was a constant.
+  //
+  // A verdict that cannot fail is a decoration, and this one sat on the
+  // simulator's own definition of "did the scenario behave".
+  //
+  // Both halves are now falsifiable. Expectations must EXIST — a scenario that
+  // asserts nothing is a FAIL, not a pass, because there is nothing it could
+  // have got wrong. And the evidence must actually COVER what was routed: every
+  // routed action id has to appear in the routing trace's references, which
+  // diverges the moment routing and evidence disagree.
+  const routedIds = new Set(routedActions.map((action) => action.id));
+  const evidenceReferences = new Set(auditEvidence.flatMap((record) => record.references));
+  const evidenceCoversRouting = [...routedIds].every((id) => evidenceReferences.has(id));
   const status =
-    scenario.expectedOutcomes.every((outcome) =>
-      decision.outcomes.includes(outcome),
-    ) && auditEvidence.length > 0
+    scenario.expectedOutcomes.length > 0 &&
+    scenario.expectedOutcomes.every((outcome) => decision.outcomes.includes(outcome)) &&
+    evidenceReferences.has(decision.id) &&
+    evidenceCoversRouting
       ? "PASS"
       : "FAIL";
 

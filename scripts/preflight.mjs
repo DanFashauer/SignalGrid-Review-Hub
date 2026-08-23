@@ -146,6 +146,7 @@ const STEPS = [
   { name: "Accuracy doctrine (DR-015 — unsourced citations, bare external statistics; self-tested)", cmd: ["node", "scripts/check-accuracy-doctrine.mjs"] },
   { name: "Agent roster (DR-016 — tier, charter, disjoint write boundary, vendor drift; self-tested)", cmd: ["node", "scripts/check-agent-roster.mjs"] },
   { name: "Positioning trace (every ratified claim resolves by id in the launch profile; self-tested)", cmd: ["node", "scripts/check-positioning-trace.mjs"] },
+  { name: "Module init order (a const read before it is initialised; self-tested)", cmd: ["node", "scripts/check-module-init-order.mjs"] },
   { name: "Connector discipline (every family gated + proven, none acting on a device)", cmd: ["node", "scripts/check-connector-discipline.mjs"] },
   { name: "Launch profile (the declared product edge matches the real one)", cmd: ["node", "scripts/check-launch-profile.mjs"] },
   { name: "Ungated fetch (a health check is still a live call)", cmd: ["node", "scripts/check-ungated-fetch.mjs"] },

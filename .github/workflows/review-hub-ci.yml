@@ -273,6 +273,8 @@ jobs:
         run: node scripts/check-agent-roster.mjs
       - name: Positioning trace (every ratified claim resolves by id in the launch profile)
         run: node scripts/check-positioning-trace.mjs
+      - name: Module init order (a const read before it is initialised)
+        run: node scripts/check-module-init-order.mjs
 
       # The declared product edge must match the real one, in BOTH directions. The
       # omission direction is the freeze: a new connector family, signal kind, API

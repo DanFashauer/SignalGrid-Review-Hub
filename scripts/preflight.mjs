@@ -142,6 +142,7 @@ const STEPS = [
   { name: "Launch claims (buyer-facing copy asserts nothing deferred as current; self-tested)", cmd: ["node", "scripts/check-launch-claims.mjs"] },
   { name: "Permission enforcement (no declared scope goes unrequired — DR-002; self-tested)", cmd: ["node", "scripts/check-permission-enforcement.mjs"] },
   { name: "Decision-record format (every call states how it gets undone; self-tested)", cmd: ["node", "scripts/check-decision-record-format.mjs"] },
+  { name: "Test execution (a test no runner reaches is not coverage; self-tested)", cmd: ["node", "scripts/check-test-execution.mjs"] },
   { name: "Connector discipline (every family gated + proven, none acting on a device)", cmd: ["node", "scripts/check-connector-discipline.mjs"] },
   { name: "Launch profile (the declared product edge matches the real one)", cmd: ["node", "scripts/check-launch-profile.mjs"] },
   { name: "Ungated fetch (a health check is still a live call)", cmd: ["node", "scripts/check-ungated-fetch.mjs"] },

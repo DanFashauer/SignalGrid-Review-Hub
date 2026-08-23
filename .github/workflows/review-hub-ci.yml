@@ -265,6 +265,8 @@ jobs:
         run: node scripts/check-permission-enforcement.mjs
       - name: Decision-record format (every call states how it gets undone)
         run: node scripts/check-decision-record-format.mjs
+      - name: Test execution (a test no runner reaches is not coverage)
+        run: node scripts/check-test-execution.mjs
 
       # The declared product edge must match the real one, in BOTH directions. The
       # omission direction is the freeze: a new connector family, signal kind, API

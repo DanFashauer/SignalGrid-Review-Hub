@@ -224,11 +224,31 @@ earlier — that is the loop working, not a reason to soften the record.
     functions that cannot return falsy). Only the fourteen above were verified
     by falsification, so the rest stays a reported figure until someone plants
     a defect against it. Also open: mutation coverage still does not reach the
-    verdict core; 21 of 50 check-gates carry no self-test; the eight suites in
-    `tests/security-reference/` run nowhere (no Vitest is installed and
-    `tests/` is outside the pnpm workspace), and two more unexecuted suites
-    were found beside them — `artifacts/mcp-server/test/server.test.ts` and
-    the k6 scripts in `tests/load/`.
+    verdict core, and 21 of 50 check-gates carry no self-test.
+    The unexecuted-test half is now DISPOSITIONED rather than merely known.
+    Reading the eight `tests/security-reference/` suites settled what they are:
+    not portable, and honestly labelled. They are Vitest specs against the
+    retired DEV Next.js server — `/api/session/start`, `/api/health`,
+    `badgeUid`, launched with `bun run scripts/test-server.ts` — and none of
+    those endpoints exist on this monorepo's `/v1` surface. One of them tests
+    step-up enforcement, a DEFERRED family, so there is no shipping surface to
+    port it onto yet. Their README already says "reference to port, not yet
+    wired into CI", and it is true.
+    That truthfulness was the problem: prose does not fail a build, and nothing
+    stopped those eight from being written and never run, or an eleventh from
+    joining them. `scripts/check-test-execution.mjs` (preflight + CI, parity
+    green at 212 gates) now derives what actually runs — expanding package
+    scripts transitively from preflight, the CI workflows and
+    validate-sim-macos.sh, 110 scripts reached — and requires every
+    test-shaped file to be REACHED or DECLARED with a reason and a disposition.
+    It reports 21 test files: 12 reached, 9 declared. A declaration that
+    outlives its reason fails, so porting a suite retires its line and the last
+    one out deletes the entry. Falsified three ways: a planted orphan test →
+    exit 1; a declared file that IS reached → exit 1; restored → exit 0.
+    STILL OPEN under this row: `artifacts/mcp-server/test/server.test.ts` (its
+    unique assertions want folding into the gated `proof:mcp-server`, then the
+    orphan deleted) and the k6 scripts in `tests/load/`, which the gate
+    deliberately does not pattern-match and says so in its own header.
 44. **Two ungated contracts in the governance layer** — HALF DONE
     2026-08-23: the decision-record format contract now has
     scripts/check-decision-record-format.mjs (preflight + CI). DR-010 through

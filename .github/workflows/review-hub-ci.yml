@@ -267,6 +267,10 @@ jobs:
         run: node scripts/check-decision-record-format.mjs
       - name: Test execution (a test no runner reaches is not coverage)
         run: node scripts/check-test-execution.mjs
+      - name: Accuracy doctrine (DR-015 — unsourced citations, bare external statistics)
+        run: node scripts/check-accuracy-doctrine.mjs
+      - name: Agent roster (DR-016 — tier, charter, disjoint write boundary)
+        run: node scripts/check-agent-roster.mjs
 
       # The declared product edge must match the real one, in BOTH directions. The
       # omission direction is the freeze: a new connector family, signal kind, API

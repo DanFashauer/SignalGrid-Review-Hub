@@ -100,6 +100,17 @@ export const AREAS = [
   // records the upstream commit plus the licence survey that rejected five other
   // collections — three of which carry no licence at all.
   { path: ".claude/skills", class: "third_party_intake", reason: "obra/superpowers, 14 skills vendored unmodified under MIT © 2025 Jesse Vincent. Licence basis, upstream commit and the rejected alternatives are stated in .claude/skills/VENDORED.md." },
+  // SECOND vendor, DR-016. The owner supplied a fork URL that carries NO licence file
+  // (verified HTTP 404) while declaring "MIT" inside a JSON manifest; a declaration is
+  // not a grant, and this directory's sibling above already states the rule — absence of
+  // a licence is not permission. Vendored instead from the licensed upstream it forks
+  // from, at its current commit, restricted to the component set the owner approved.
+  { path: "third_party/everything-claude-code", class: "third_party_intake", reason: "affaan-m/everything-claude-code, 60 files vendored unmodified under MIT © 2026 Affaan Mustafa. Licence basis, upstream commit, the rejected fork and what was deliberately not taken are stated in third_party/everything-claude-code/VENDORED.md (DR-016)." },
+  // Activated copies of nine agents from the vendor tree above — same licence, same
+  // grant. Held byte-identical to their vendored source and checked by
+  // scripts/check-agent-roster.mjs, so an edit here shows up as drift rather than as a
+  // silent divergence from upstream.
+  { path: ".claude/agents", class: "third_party_intake", reason: "Nine agent definitions activated from third_party/everything-claude-code/agents/, byte-identical to that source under MIT © 2026 Affaan Mustafa. Drift from the vendored copy fails scripts/check-agent-roster.mjs." },
   // FIRST-PARTY, nested inside the vendored area — longest-prefix-wins puts it here,
   // not in third_party_intake. Written in this repository from the Google developer
   // documentation style guide (a style guide is ideas, and ideas are not copyrightable

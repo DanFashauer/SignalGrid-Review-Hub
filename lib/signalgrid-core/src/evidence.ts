@@ -96,8 +96,22 @@ export function deriveCriticalSignalsPresent(
     evidence.deviceCompliance !== "unknown" &&
     evidence.deviceManaged !== "unknown" &&
     evidence.deviceEncrypted !== "unknown" &&
+    // osSupported belongs here and was missing. The shipped v1 rules MASK the
+    // gap — `healthy-allow` gates on osSupported: true, so an unknown one simply
+    // fails to match and the step_up default applies — but createPolicyDraft
+    // lets an owner activate any rule set validatePolicyRules accepts, and
+    // nothing requires an allow rule to gate on this field. A version whose only
+    // allow rule is {deviceManaged: true} would have allowed on unverifiable OS
+    // support with the backstop none the wiser. The backstop is the layer that
+    // is supposed to hold when the rules do not.
+    evidence.osSupported !== "unknown" &&
     evidence.postureFreshness !== "missing" &&
     evidence.postureFreshness !== "unknown" &&
+    // "expired" counted as PRESENT, which is the same unearned affirmative in a
+    // different coat: a posture answer whose own freshness says it has lapsed is
+    // not a posture answer. `posture-stale` catches it in v1; this makes it hold
+    // when a custom rule set does not.
+    evidence.postureFreshness !== "expired" &&
     // Dock evidence that EXISTS but is stale, expired, or unreadable is not
     // evidence. "missing" is deliberately absent from this list: no dock at all
     // is a deployment shape, not a degraded signal, and treating the two alike

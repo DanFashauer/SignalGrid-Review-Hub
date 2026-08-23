@@ -304,7 +304,7 @@ earlier — that is the loop working, not a reason to soften the record.
     Real pre-change rows still verify — the digest FUNCTION is unchanged and each
     row is checked against its own stored body.
     Falsified across all five freshness values plus a non-vacuity control
-    proving the intact case is genuinely intact. Core proof 219 assertions, 20
+    proving the intact case is genuinely intact. Core proof 221 assertions, 20
     evidence fields.
     **(superseded — the original finding, kept for provenance)** `dock.ts`
     classifies each record's age and stamps `freshness` on all six signals it
@@ -322,9 +322,21 @@ earlier — that is the loop working, not a reason to soften the record.
     an allow that the same evidence WITHOUT the remediation does not. NOT fixed
     here on purpose: this file is the byte-faithful source of the Swift port and
     editing it breaks parity — it needs the twin changed in the same commit.
-    **OPEN — the fail-closed backstop's "critical" set omits `osSupported`** and
-    counts `postureFreshness:"expired"` as present. Shipped v1 rules mask both,
-    but `createPolicyDraft` can activate a rule set that does not.
+    **FIXED 2026-08-23 — the backstop's "critical" set now includes
+    `osSupported` and rejects an EXPIRED `postureFreshness`.** Both were masked
+    by the shipped v1 rules (`healthy-allow` gates on `osSupported: true`, so an
+    unknown one simply fails to match; `posture-stale` catches expired), and
+    both were reachable by a custom rule set: `createPolicyDraft` activates
+    anything `validatePolicyRules` accepts, and nothing requires an allow rule
+    to gate on either field. A version whose only allow rule was
+    `{deviceManaged: true}` would have allowed on unverifiable OS support with
+    the backstop none the wiser — and the backstop is precisely the layer meant
+    to hold when the rules do not. A posture answer whose own freshness says it
+    has lapsed is not a posture answer.
+    Blast radius measured before applying, not assumed: core proof exit 0 and
+    the API suite 301/301 with the change probed in, so nothing existing
+    depended on the hole. Falsified: reverting either clause fails exactly its
+    own assertion. Core proof 221 assertions.
     **Dead computed fields:** `SignalGridDecision.confidence` confirmed zero
     readers anywhere, plus `summaryForOperator`, `projectedReasonCodes` and
     `clears` in `resolution.ts` — while the sibling `summaryForWorker` is

@@ -530,6 +530,14 @@ export const SURFACES = [
     reason: "Evidence artifacts written by verification lanes. Not a product surface.",
   },
   {
+    id: "live-captures",
+    reason:
+      "Captures minted by the live-vendor proof lanes (proof:live-headwind writes " +
+      "headwind.json from a real Headwind CE server) and read back by " +
+      "proof:evidence-adapter's parity section — synthetic lab values only, no tenant " +
+      "and no real device. Verification plumbing, sibling to live-evidence. Not a product surface.",
+  },
+  {
     id: "lane-messages",
     reason:
       "The cloud↔Mac message channel: committed JSON carrying what one lane needs the " +

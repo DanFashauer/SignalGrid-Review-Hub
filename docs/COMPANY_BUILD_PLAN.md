@@ -156,10 +156,33 @@ earlier — that is the loop working, not a reason to soften the record.
     differentiators rewritten to the provable ones (per-action + freshness +
     fail-closed + evidence).
 40. **Row 7's reconcile half never ran** — docs-writer + positioning, days.
-    EXECUTIVE_ONE_PAGER, ECOSYSTEM_POSITIONING and pitch-deck still open with
-    the retired "operational trust orchestration layer" and name custody /
-    credential-reader / network as connected capability. DR-011 rules those
-    wrong; no gate scopes prose docs. (Verified 2026-08-23.)
+    HALF DONE 2026-08-23: the PUBLISHED half is fixed and now gated; the prose
+    docs are not. Auditing the three named documents found the more serious
+    defect one layer down, in the gate meant to police exactly this. Rule 3 of
+    `check-launch-claims.mjs` required a hedge somewhere in the FILE, so
+    `docs/pitch-deck.html` — deployed to signalgrid.app by pages.yml — sold
+    "badge / who + device custody & tamper + security baseline + workflow risk
+    -> one verdict" on its How-it-works slide, with a card titled "Custody as a
+    decision input", and passed green because slide 1 said "Pre-production
+    concept" fifty-four lines earlier. Blanket immunity, bought with one word,
+    and the deck's own UNDERstatement was what licensed its OVERstatements.
+    Rule 3 is now block-scoped (same <section>, same paragraph), which surfaced
+    12 live violations across 5 buyer-facing files that had all been green.
+    Nine were real and the copy was rewritten: the deck's label, stage line,
+    how-it-works slide, step-up claim and roadmap, and six battlecard sites
+    including a moat pillar selling deferred custody as a current
+    differentiator on a card whose own masthead says "never overclaim custody
+    certainty". Three were the gate punishing honest copy in idioms it had not
+    been taught to read — "candidate signals, not evaluated today", a page-scope
+    banner that disclaims current capability outright, and a "Trap phrases to
+    avoid" list — and those taught the gate, not the copy. Falsified: 13
+    self-test cases, including the distant-hedge defect itself and the
+    artifact-footer near-miss that must NOT earn a page exemption.
+    STILL OPEN: the prose docs. EXECUTIVE_ONE_PAGER, ECOSYSTEM_POSITIONING and
+    the research pitch packs still carry the retired "operational trust
+    orchestration layer" label, a superseded "current proof is synthetic and
+    fixture-backed" status that DR-013 makes false, and a Microsoft-anchored
+    wedge DR-012 reversed. No gate scopes prose docs.
 41. **POSITIONING.md's claim-to-proof trace has fossilized** —
     positioning + devex, days. The trace is what makes the positioning
     DR-013-legitimate, and its `launch-profile.mjs` line anchors now point at

@@ -251,7 +251,7 @@
       <span class="mast__tag">Competitive Battlecard · Internal</span>
     </div>
     <h1 class="thesis">The decision layer for the moment a workflow fires on a <em>shared</em> device — <span class="q">is the person holding it right now allowed to do this?</span></h1>
-    <p class="mast__note"><strong>How to use this card:</strong> we win by being narrow and true, not by claiming everything. Anchor every conversation on the three pillars below, concede where an incumbent already wins, and reframe competitors as signal sources — never rip-and-replace. Never overclaim custody certainty, compliance, or novelty on “step-up.”</p>
+    <p class="mast__note"><strong>How to use this card:</strong> we win by being narrow and true, not by claiming everything. Anchor every conversation on the three pillars below, concede where an incumbent already wins, and reframe competitors as signal sources — never rip-and-replace. Never overclaim custody certainty, compliance, or novelty on “step-up.” The custody, baseline and workflow-risk families are <b>deferred</b> — proven in the public repository, <b>not shipping at Limited GA</b> — so they are roadmap in every conversation, never a current capability.</p>
   </header>
 
   <section>
@@ -269,9 +269,9 @@
     <div class="shead"><span class="idx">01</span><h2>The moat — always anchor here</h2><span class="rule"></span></div>
     <div class="moat">
       <div class="pillar">
-        <span class="k">Signal others don't fuse</span>
-        <h3>Custody &amp; tamper</h3>
-        <p>Is the shared device docked, charging, in-hand, or <b>tampered</b> — and is the badged-in holder still the one using it? Others treat charge/dock state as logout hygiene; we make it a gating input to the verdict.</p>
+        <span class="k">Signal others don't fuse — roadmap</span>
+        <h3>Custody &amp; tamper — a design target</h3>
+        <p>Is the shared device docked, charging, in-hand, or <b>tampered</b> — and is the badged-in holder still the one using it? Others treat charge/dock state as logout hygiene. Making it a gating input is where this is going, and it is <b>deferred</b>: modeled and proven in the public repository, not evaluated at Limited GA. Sell the direction, never the tense.</p>
       </div>
       <div class="pillar">
         <span class="k">Signal others don't fuse</span>
@@ -293,7 +293,7 @@
       <div class="lexcol lex--use">
         <h3>Words to use</h3>
         <div class="chips">
-          <span class="chip">custody-aware authorization</span>
+          <span class="chip">per-action authorization</span>
           <span class="chip">shared-device workflow governance</span>
           <span class="chip">moment-of-action decisioning</span>
           <span class="chip">decision &amp; attribution layer</span>
@@ -386,7 +386,7 @@
           <li>Mixed, multi-vendor frontline stack needing one decision + audit plane</li>
           <li>Retail / warehouse / logistics frontline — incumbents are shallow here</li>
           <li>Per-action gating wanted <b>without</b> changing how workers log in</li>
-          <li>Custody/tamper or baseline-drift is a felt pain</li>
+          <li>Custody/tamper or baseline-drift is a felt pain — qualify for it, but sell it as roadmap: those families are <b>deferred</b></li>
           <li>Audit must explain <b>why</b> an action was allowed, not just who did it</li>
         </ul>
       </div>
@@ -407,7 +407,7 @@
     <div class="shead"><span class="idx">05</span><h2>Objection handling</h2><span class="rule"></span></div>
     <div class="obj">
       <div class="obj__row"><div class="obj__q">Isn't this just Imprivata / OLOID?</div><div class="obj__a">Those own the <b>login and badge</b>. We own the <b>decision at the moment of action</b>, across your whole stack — and we take their badge as an input. A layer above, not a replacement.</div></div>
-      <div class="obj__row"><div class="obj__q">We already have Entra Conditional Access.</div><div class="obj__a">Great — we consume it. Entra decides the <b>session</b>; we decide the <b>action on a shared device</b> using custody and baseline it doesn't track.</div></div>
+      <div class="obj__row"><div class="obj__q">We already have Entra Conditional Access.</div><div class="obj__a">Great — we consume it. Entra decides the <b>session</b>; we decide the <b>action on a shared device</b>, using device compliance, how current that answer is, and the device's present authority. (Custody and baseline deepen that later — <b>deferred</b>, not shipping at Limited GA.)</div></div>
       <div class="obj__row"><div class="obj__q">We already do step-up for controlled substances.</div><div class="obj__a">EPCS is mandated and solved. We're for the <b>other</b> high-risk workflows and the mixed-fleet fusion + one audit trail — not EPCS re-invention.</div></div>
       <div class="obj__row"><div class="obj__q">Sounds like a policy engine / PDP.</div><div class="obj__a">It is one — for the physical frontline. The novelty is the <b>signals</b> (custody, tamper, badge-holder, CIS drift), not the pattern.</div></div>
       <div class="obj__row"><div class="obj__q">How reliable is “custody” really?</div><div class="obj__a">It's one <b>weighted evidence input</b>, never ground truth. We publish false-accept / false-reject behavior and let policy decide how much it counts.</div></div>
@@ -443,7 +443,7 @@
 
   <div class="coda">
     <span class="eyebrow">Leave this in every prospect's head</span>
-    <p>You've already bought identity, badges, and device management — SignalGrid is the <b>neutral decision layer</b> that fuses them, plus device custody and baseline, into one allow / step-up / deny verdict at the moment a shared-device workflow fires — with an audit trail that explains <b>why</b>.</p>
+    <p>You've already bought identity, badges, and device management — SignalGrid is the <b>neutral access-decision service</b> that fuses them into one allow / step-up / deny verdict at the moment a shared-device workflow fires — with an audit trail that explains <b>why</b>.</p>
   </div>
 
   <footer>

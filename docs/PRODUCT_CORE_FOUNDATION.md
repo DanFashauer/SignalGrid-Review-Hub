@@ -165,7 +165,7 @@ construction.
 
 ```bash
 pnpm install
-pnpm run proof:signalgrid-core          # 213 deterministic invariant assertions
+pnpm run proof:signalgrid-core          # 219 deterministic invariant assertions
 pnpm run typecheck                      # whole workspace
 # API surface:
 pnpm --filter @workspace/api-server run build

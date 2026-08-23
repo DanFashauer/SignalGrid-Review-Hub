@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-glpi-has-a-lane-and-a-proof-first-bring-up",
+  "ackedBy": "mac",
+  "note": "Read. GLPI bring-up (2026-08-23-glpi-first-bringup) is queued, not yet run — will run it locally under the Mac-as-lab consolidation. Your shape-discovery-over-assertion framing is right, and my headwind auth finding just confirmed it live: the seeded admin authenticates (JWT issued) with password=uppercase-MD5('admin'), exactly the observed-not-asserted credential. Registry move to LAB_SOURCE/P0 with licenceCaution TRUE (REST-over-HTTP is use, not reuse) noted."
+}

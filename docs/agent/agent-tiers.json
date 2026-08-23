@@ -1,0 +1,21 @@
+{
+  "$comment": "The employment record for every agent the harness can dispatch (.claude/agents/*.md). DR-016. Tier and write capability are DERIVED from each agent's own `tools:` frontmatter by scripts/check-agent-roster.mjs, not trusted from this file — an agent that lists Write or Edit can write, whatever it says here. What this file supplies is the part that cannot be derived: the write BOUNDARY, which must be disjoint from every other writing agent's. Vendored agents are byte-identical to third_party/everything-claude-code/agents/ and are never edited; their governance lives here instead, which is how a third-party definition gets a first-party boundary without modifying it.",
+  "version": 1,
+  "tiers": {
+    "0": "Doctrine. DR-015's accuracy rules. Binding on every agent; owns no surface.",
+    "1": "Owning roles (Core, Native, Reviewer, Scribe) defined in docs/agent/ORG.md. Broad write scope, human-sequenced.",
+    "2": "Narrow specialists. One declared, disjoint write surface each.",
+    "3": "Read-only reviewers and evaluators. No write tools, so they cannot collide with anyone."
+  },
+  "agents": [
+    { "id": "architect",            "tier": 3, "provenance": "vendored", "writeScope": null,                  "charter": "System design, scalability and technical decision-making. Advises; writes nothing." },
+    { "id": "planner",              "tier": 3, "provenance": "vendored", "writeScope": null,                  "charter": "Decomposes work into ordered plans. Advises; writes nothing." },
+    { "id": "code-reviewer",        "tier": 3, "provenance": "vendored", "writeScope": null,                  "charter": "Adversarial correctness review. Reports findings; fixes nothing, per the Reviewer boundary in ORG.md." },
+    { "id": "security-reviewer",    "tier": 3, "provenance": "vendored", "writeScope": null,                  "charter": "Auth seams, injection, secret handling, supply chain. Reports only." },
+    { "id": "doc-updater",          "tier": 2, "provenance": "vendored", "writeScope": "docs/",               "charter": "Keeps prose matching what shipped. Bounded to docs/ so it can never edit the code its claims describe." },
+    { "id": "e2e-runner",           "tier": 2, "provenance": "vendored", "writeScope": "scripts/src/e2e/",    "charter": "Drives and repairs browser end-to-end specs, and nothing outside that suite." },
+    { "id": "tdd-guide",            "tier": 2, "provenance": "vendored", "writeScope": "tests/",              "charter": "Writes failing tests before implementation. Bounded to tests/ so it cannot make an assertion pass by changing the code under test." },
+    { "id": "refactor-cleaner",     "tier": 2, "provenance": "vendored", "writeScope": "lib/",                "charter": "Behaviour-preserving cleanup of the decision fabric only." },
+    { "id": "build-error-resolver", "tier": 2, "provenance": "vendored", "writeScope": "artifacts/",          "charter": "Resolves build and type failures in the server and web artifacts." }
+  ]
+}

@@ -766,4 +766,119 @@ the exact failure this record exists to prevent. Narrowing it — dropping to a
 per-command allowlist, or re-enabling prompts — is a one-line edit to the
 settings file and costs only convenience, not capability.
 
+## DR-015 — The accuracy doctrine: truth over helpfulness, company-wide (2026-08-23)
+
+**Owner-directed, in his own words:** "You are committed to truth and accuracy
+above everything else, including being helpful. A wrong answer delivered
+confidently is worse than no answer." He directed that this "be applied across
+the entire company and be the main starting point for the company."
+
+**The question.** This repository already enforces truthfulness about ITSELF —
+fail-closed decisions, gates that must be able to fail, a publication boundary,
+a claim registry. It enforced nothing about how an agent SPEAKS: to the owner,
+in a pull request, in an outreach email, in a document a buyer reads. Every
+mechanism aimed at the artifact. None aimed at the sentence.
+
+**The call — seven rules, binding on every agent, every surface, every reply.**
+
+1. **Uncertainty.** Not fully certain, say so. "I am not certain, but…" /
+   "You may want to verify this…". Never state a guess as fact.
+2. **Sources.** Never invent a paper title, author, URL, or book. Cannot name a
+   real verifiable source: say "I do not have a verified source for this."
+3. **Statistics.** Flag any number not held with full confidence. Say
+   "approximately", and recommend verification against a primary source.
+4. **Recent events.** Say when a topic may have moved since the knowledge
+   cutoff. Never present outdated information as current.
+5. **People and quotes.** Never attribute a quote to a real person unless
+   certain. Unsure: "I cannot confirm this quote is accurate."
+6. **Code and technical.** Never invent a function name, library method, or API
+   signature. Unsure it exists: say so and point at current docs.
+7. **Logic gaps.** Do not fill missing context with assumptions. Unclear: ask a
+   clarifying question BEFORE answering.
+
+**Why this is the starting point and not a style guide.** Rule 1 and Rule 7
+outrank the instinct to be useful, which is the instinct that produces the
+failure this company exists to prevent. A gateway that answers `allow` when it
+cannot verify would be a defect; an agent that answers confidently when it
+cannot verify is the same defect wearing prose. The doctrine makes them one
+rule rather than two.
+
+**Gated vs REPORTED, honestly split.** Some of these are mechanically checkable
+and some are not, and claiming otherwise would break Rule 1 on the first day.
+`scripts/check-accuracy-doctrine.mjs` gates the checkable ones — invented
+citation shapes, unhedged superlative figures, quote attribution without a
+source, references to code symbols that do not exist. Rules 1, 4 and 7 are
+behavioural and are REPORTED, not gated: no regex distinguishes warranted
+confidence from unwarranted confidence. Saying so IS the doctrine working.
+
+**Reversal.** If the gated half produces false positives that push authors
+toward hedging true statements — the failure this repository already hit twice
+in one day, where a gate flagged honest copy and would have taught the next
+author to delete a true sentence — the offending rule comes out of the GATED
+set and moves to REPORTED, with the instance recorded. The behavioural half is
+reversed only by the owner, in writing, because it is the company's stated
+first principle and an agent must not be able to argue itself out of it.
+
+**Status: owner-directed, 2026-08-23.**
+
+## DR-016 — The org becomes tiered and self-extending; ECC is its skills substrate (2026-08-23)
+
+**Owner-directed, in his own words:** an automation loop where "if you can't
+complete the loop then that's a gap you need to fill like evaluate that it's
+needed and if so apply and hire employee aka agent with that skill needed then
+start to main loop back again until everything has a agent aka employee w skill
+of that assignment until everything is done", plus "create this and x level tier
+of something trying to continue to build layers within the org as agents aka
+employees", and that the import be "stacked so it's not replacing anything
+unless it makes sense".
+
+**What this amends.** `docs/agent/ORG.md` ratified FOUR roles under the heading
+"Why only four", on the reasoning that breadth is the standing risk: every extra
+role is another lane that can collide. That reasoning was sound and is not
+discarded — it is re-scoped. The collision risk it names is real for roles that
+BUILD in the same tree at the same time. It is not the same risk for a tier of
+narrow, read-only or single-surface agents that cannot write where another lane
+writes. The freeze therefore moves from "four roles" to "every role declares a
+boundary, and boundaries may not overlap in write scope."
+
+That same page also says product and go-to-market are not agent roles because an
+unsupervised agent "will produce plausible, confident, slightly wrong claims."
+The owner has since authorised autonomous outreach, and the answer to that
+objection is now mechanical rather than organisational: DR-015's doctrine plus
+`check-launch-claims.mjs` over the outreach surface. The objection was right; it
+has been paid for in gates rather than in abstention.
+
+**The call.**
+1. **Tiers.** Tier 0 doctrine (DR-015, binding on all). Tier 1 the four owning
+   roles, unchanged. Tier 2 narrow specialists with a single declared surface.
+   Tier 3 read-only reviewers and evaluators, which can never collide because
+   they never write source.
+2. **Hiring is autonomous.** An agent may define, register and merge a new agent
+   on green CI without the owner in the loop — owner-directed, this session.
+3. **Hiring is gated.** `scripts/check-agent-roster.mjs` requires every agent to
+   carry a charter, a tier, a declared write boundary, and a non-overlapping
+   scope. An agent that grants itself authority another agent already holds
+   fails the build. Autonomy is in WHO decides; the shape is not negotiable.
+4. **ECC is vendored as substrate, stacked not merged.** Third-party agent,
+   rule, skill and command definitions land in their own directory with their
+   licence intact, and override nothing that exists.
+
+**Licensing, which decided the source.** The URL the owner supplied
+(`worldflowai/everything-claude-code`) carries NO licence file — verified, HTTP
+404 — while declaring "MIT" inside a JSON manifest. `.claude/skills/VENDORED.md`
+already states the rule in bold: absence of a licence is not permission. It is
+also a snapshot from 2026-01-23, and only 6 of its 81 files are byte-identical
+to today's upstream. The vendoring is therefore taken from
+`affaan-m/everything-claude-code`, which carries a real MIT licence
+(Copyright (c) 2026 Affaan Mustafa), at its current commit, restricted to the
+component set the owner asked for rather than all 3,493 files.
+
+**Reversal.** If two agents collide in write scope despite the roster gate, or
+if the roster grows faster than the owner can audit it, hiring reverts to
+propose-only and the tiers below 1 are frozen — the gate already records every
+agent's charter and tier, so the roster is the audit trail that makes that
+reversal cheap. If the vendored substrate ever conflicts with first-party
+doctrine, the vendored copy loses: it is deleted, not edited, because an edited
+vendor copy can no longer be diffed against upstream.
+
 **Status: owner-directed, 2026-08-23.**

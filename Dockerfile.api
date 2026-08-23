@@ -79,6 +79,63 @@ COPY --from=builder /app/artifacts/api-server/dist/ ./artifacts/api-server/dist/
 # CI=true so pnpm never prompts to purge a modules dir (non-interactive build).
 RUN CI=true pnpm install --frozen-lockfile --prod
 
+# REMOVE npm FROM THE SHIPPING IMAGE. It is not used by anything here: the
+# install above runs through corepack/pnpm, and the entrypoint is plain `node`.
+# It is not merely unused — it is the sole source of a CRITICAL finding. The
+# daily image-vulnerability gate went red on 2026-08-22 and stayed red for two
+# days on GHSA-23hp-3jrh-7fpw: `tar` 7.5.11, fixed in 7.5.19, carried at
+# /usr/local/lib/node_modules/npm/node_modules/tar inside the base image.
+#
+# The tracking issue said "bump the affected base layer or dependency", and
+# that advice could not be followed: scanning docker.io/library/node:22-alpine
+# directly shows the CURRENT published tag still ships 7.5.11, so there was
+# nothing to bump to. The choices were to suppress a real critical or to delete
+# code the image does not run. Deleting it is the honest one — the vulnerable
+# bytes are gone rather than filtered out of a report, and the attack surface
+# shrinks by a package manager that had no business being in a runtime image.
+#
+# BOTH package managers go, and the corepack CACHE with them. npm was the
+# obvious copy; corepack's downloaded pnpm is the one that hides. `corepack
+# enable pnpm` fetches pnpm into $COREPACK_HOME, and pnpm 10.28.1 bundles its
+# OWN tar at dist/node_modules/tar — version 7.5.3, also below the 7.5.19 fix.
+# Removing npm alone left that second copy behind and the gate still failed.
+#
+# CI caught that, not foresight. This change cannot be built in the cloud lane
+# (docker CLI, no daemon); the per-PR evidence job scanned the BUILT image and
+# still reported Critical: 1. Reading that number instead of the job's green
+# conclusion is what surfaced it — that job runs grype WITHOUT --only-fixed, so
+# its count includes unfixable findings and a bare "1" proves nothing alone. The
+# base image was scanned separately to establish that its only critical was
+# fixed-available, which is what made the leftover provable rather than guessed.
+#
+# The cache is FOUND, not guessed: its location depends on $COREPACK_HOME and on
+# which user ran `corepack enable`. Hardcoding one path is the assumption that
+# fails silently — the directory is simply not there, `rm -rf` succeeds, and the
+# vulnerable copy ships anyway.
+#
+# The removal then PROVES itself: if any bundled tar survives outside /app the
+# build FAILS here, rather than shipping an image the daily gate rejects hours
+# later. A cleanup step that cannot fail is worth as little as an assertion that
+# cannot fail.
+#
+# No comments inside the RUN body. A `#` line within a multi-line RUN relies on
+# the parser stripping it before the shell sees it, and this cannot be built
+# here to confirm it. The prose stays out here where it is unambiguously a
+# Dockerfile comment.
+#
+# If a package manager is ever genuinely needed at runtime, this must be changed
+# deliberately and the advisory re-checked — not worked around.
+RUN set -eux; \
+    rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx; \
+    rm -rf /usr/local/lib/node_modules/corepack /usr/local/bin/corepack; \
+    find / -xdev -type d -name corepack -not -path '/app/*' -prune -exec rm -rf {} + || true; \
+    remaining="$(find / -xdev -path '*/node_modules/tar/package.json' -not -path '/app/*' || true)"; \
+    if [ -n "$remaining" ]; then \
+      echo "FATAL: a bundled tar survived the package-manager removal:" >&2; \
+      echo "$remaining" >&2; \
+      exit 1; \
+    fi
+
 # Non-root, per the platform operability pass: the server needs no write
 # access outside /tmp, and a root process in a compromised container is the
 # difference between a bad day and a very bad day. The deploy-stack CI job

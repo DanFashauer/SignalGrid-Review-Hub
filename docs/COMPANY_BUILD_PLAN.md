@@ -786,6 +786,60 @@ earlier — that is the loop working, not a reason to soften the record.
     it wants an owner's call rather than an agent's preference. The alternative
     — a separate always-on registry for CI-scheduled lanes, checked the same way
     — is the same decision wearing a different hat.
+52. **The daily image-vulnerability gate had been RED for two days and nobody
+    acted on it.** FIXED 2026-08-23, found while scoping the CI-liveness lane.
+    Scheduled Verification reported `conclusion=failure` on 2026-08-22 and
+    2026-08-23. **Read the JOBS, not the run**: the mutation sweep SUCCEEDED
+    (28 min) and the launch-gate lane SUCCEEDED; the failing job was the daily
+    image-vulnerability gate. A run-level conclusion answers "did any job fail",
+    not "did the sweep run", and the first reading of this incident got that
+    exactly backwards.
+    Nor was it silent — the workflow opened issue #245 and refreshed it daily.
+    The alerting worked. What failed was that nobody read it.
+    **The finding, reproduced locally** with the same sha256-pinned grype
+    0.112.0 CI uses: GHSA-23hp-3jrh-7fpw, `tar` 7.5.11 fixed in 7.5.19,
+    CRITICAL, at `/usr/local/lib/node_modules/npm/node_modules/tar` — npm's
+    BUNDLED tar, inside the `node:22-alpine` base image.
+    **The issue's own advice could not be followed.** It said "bump the affected
+    base layer or dependency"; scanning `docker.io/library/node:22-alpine`
+    directly shows the CURRENT published tag still ships 7.5.11. There was
+    nothing to bump to. The real choice was to suppress a live critical or to
+    delete code the image does not run.
+    npm is deleted from the runtime stage. Verified unused before removal: the
+    install runs through corepack/pnpm, the entrypoint is plain `node`, the
+    api-server source never shells out to npm or npx, and the compose migrate
+    path runs `pnpm run db:migrate` from a repo CHECKOUT rather than inside the
+    container. `Dockerfile.web` is unaffected — its runtime is `nginx:alpine`
+    with no node at all.
+    **The first attempt was INCOMPLETE, and CI caught it.** Removing npm alone
+    left a second vulnerable copy: `corepack enable pnpm` fetches pnpm into the
+    corepack cache, and pnpm 10.28.1 bundles its OWN `tar` at
+    `dist/node_modules/tar` — version 7.5.3, also below the 7.5.19 fix.
+    How it surfaced is the point. The per-PR image-evidence job reported
+    `conclusion=success` — it is REPORT-ONLY, so its green says the job ran, not
+    that the image is clean. Its log said `matches by severity: {'Critical': 1}`.
+    That number alone proves nothing, because that job runs grype WITHOUT
+    `--only-fixed` and therefore counts unfixable findings too. What made the
+    leftover provable was scanning the base image separately: it has exactly ONE
+    critical in total and it is fixed-available, and the repo dependency SBOM has
+    ZERO criticals of any kind — so the surviving one could not be an unfixable
+    base finding or an application dependency. It had to be something in neither
+    scan, which is what the corepack cache is.
+    Both package managers and the cache are now removed. The cache is FOUND by
+    search rather than hardcoded, because its path depends on `$COREPACK_HOME`
+    and on which user ran `corepack enable` — and a wrong hardcoded path fails
+    SILENTLY, since `rm -rf` on a non-existent directory succeeds. The step then
+    proves itself: any bundled `tar` surviving outside `/app` FAILS THE BUILD,
+    rather than shipping an image the daily gate rejects hours later.
+    **Limit stated: this could not be built here.** No Docker daemon in the
+    cloud lane, so the image was never assembled locally; the base image was
+    scanned directly from the registry instead. CI's compose smoke and the next
+    daily vuln gate are the verification, and if the build breaks, that is where
+    it surfaces.
+    Carried into the CI-liveness design: the gate must distinguish "the sweep
+    did not run" from "a sibling job failed". This incident is the proof that
+    those get conflated, and they need different responses.
+
 51a. **DISPOSITION OF ROW 51: `lib/location` is KEPT. Deletion considered and
     REJECTED 2026-08-23.** The row below measured it as an orphan with zero
     importers and queued deletion. The measurement was right and the conclusion

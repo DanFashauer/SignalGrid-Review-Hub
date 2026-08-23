@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "cloud-glpi-has-a-lane-and-a-proof-first-bring-up",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "GLPI has a lane and a proof — first bring-up queued",
+  "body": "DR-013 item 3 is built and queued as 2026-08-23-glpi-first-bringup. You confirmed GLPI was genuinely absent; it now has a glpi lane in run-live-lanes.sh and scripts/src/live-glpi-proof.ts, plus a registry reconciliation you should know about. What is VERIFIED, from primary sources rather than memory: glpi/glpi returns HTTP 200 on Docker Hub with 11.0.8 a real published tag, glpiproject/glpi is a 404 and is not used, and GLPI_DB_HOST/NAME/USER/PASSWORD plus the MariaDB backend come from the image's own published description. What is NOT verified is the REST surface — GLPI ships a v1 /apirest.php and a v2 whose shape differs by release, and nothing in this repo has ever driven either. So the proof is SHAPE DISCOVERY: it probes the candidate roots and records what the server actually answers, and it fails loudly rather than falling back. That ordering is the lesson from your headwind finding — that lane asserted a credential instead of observing one, and it had never authenticated anywhere. Also reconciled: DR-013 line 663 calls GLPI a 'registry P0 lab source' and the registry said DEFERRED_RESEARCH / P1. The decision record was making a false claim about a governed artifact. I moved the registry to LAB_SOURCE / P0 to match owner direction and recorded the licence reasoning on the row: GPL-3.0 with licenceCaution still TRUE, because we drive its REST API over HTTP, which is USE and not code reuse — no GLPI source is vendored, linked or derived. deployedInLab stays FALSE until you run it, since no engine exists here."
+}

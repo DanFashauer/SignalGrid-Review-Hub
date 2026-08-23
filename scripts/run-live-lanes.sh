@@ -352,6 +352,48 @@ fi
 # configuration 1 with password:null, which the sync handler MD5-hashes
 # unconditionally → NPE on the first device sync. The lane sets the config
 # password BEFORE the proof drives the launcher protocol.
+# GLPI — the ITSM class, proven without any vendor signup (DR-013 item 3).
+#
+# Image and env are VERIFIED, not remembered: `glpi/glpi` returns HTTP 200 on
+# Docker Hub with `11.0.8` a real published tag (`glpiproject/glpi` is a 404 and
+# is not used), and GLPI_DB_* plus the MariaDB backend come from the image's own
+# published description. The REST surface is NOT verified — GLPI ships a v1
+# /apirest.php and a v2 whose shape differs by release — so proof:live-glpi is a
+# SHAPE-DISCOVERY proof that records what the server answers instead of
+# asserting a contract nobody here has driven. It fails loudly on a shape it
+# cannot interpret; do not add a fallback that makes it green.
+if wanted glpi; then
+  if [ -z "${GLPI_URL:-}" ] && have_engine; then
+    echo "-- bringing up GLPI (mariadb + glpi 11.0.8)"
+    "$SG_ENGINE" network create sg-glpinet >/dev/null 2>&1
+    "$SG_ENGINE" rm -f sg-glpi sg-glpi-db >/dev/null 2>&1
+    "$SG_ENGINE" run -d --name sg-glpi-db --network sg-glpinet \
+      -e MARIADB_DATABASE=glpi -e MARIADB_USER=glpi -e MARIADB_PASSWORD=glpi \
+      -e MARIADB_RANDOM_ROOT_PASSWORD=yes \
+      "${SG_IMAGE_MARIADB:-docker.io/library/mariadb:11}" >/dev/null 2>&1
+    # GLPI serves on 80 in-container; bind high so rootless podman is happy.
+    "$SG_ENGINE" run -d --name sg-glpi --network sg-glpinet -p 8430:80 \
+      -e GLPI_DB_HOST=sg-glpi-db -e GLPI_DB_NAME=glpi \
+      -e GLPI_DB_USER=glpi -e GLPI_DB_PASSWORD=glpi \
+      "${SG_IMAGE_GLPI:-docker.io/glpi/glpi:11.0.8}" >/dev/null 2>&1
+    # First boot runs the installer against a database that is itself still
+    # starting, so this waits on GLPI answering rather than on the container.
+    if wait_http http://127.0.0.1:8430/ 300; then
+      started="$started sg-glpi sg-glpi-db"
+      export GLPI_URL=http://127.0.0.1:8430
+    fi
+  fi
+  if [ -n "${GLPI_URL:-}" ]; then
+    if $PNPM run proof:live-glpi >/tmp/live_glpi.log 2>&1; then
+      ok "proof:live-glpi (shape discovery; capture written)"
+    else
+      bad "proof:live-glpi" /tmp/live_glpi.log
+    fi
+  else
+    skip "proof:live-glpi" "could not stand up GLPI (no engine, or it never answered on :8430)"
+  fi
+fi
+
 if wanted headwind; then
   if have_engine; then
     echo "-- bringing up Headwind CE (postgres + hmdm 0.1.5 / 5.30.3-os)"

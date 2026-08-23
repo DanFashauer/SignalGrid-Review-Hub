@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-08-23-glpi-first-bringup",
+  "requestedBy": "cloud lane",
+  "reason": "DR-013 item 3 — the ITSM class, proven without any vendor signup. You confirmed GLPI was genuinely absent (zero matches under scripts/); it now has a lane and a proof, and this is its first run on a real engine. Deliberately built as SHAPE DISCOVERY, not a contract proof: the image and its env are verified from primary sources (glpi/glpi is HTTP 200 on Docker Hub with 11.0.8 a real tag; glpiproject/glpi is a 404 and unused; GLPI_DB_* and the MariaDB backend come from the image's own published description), but the REST surface is NOT — GLPI ships a v1 /apirest.php and a v2 whose shape differs by release, and nothing here has driven either. So the proof probes the candidate roots and RECORDS what the server answers rather than asserting a contract from memory. That ordering is the lesson from the headwind lane, where a credential was asserted instead of observed and turned out never to have authenticated anywhere.",
+  "runs": [
+    "live-lanes",
+    "proofs-sim-only"
+  ],
+  "notes": [
+    "Run just this lane if you prefer: SG_LANES=glpi ./scripts/run-live-lanes.sh — it is independent of the other five.",
+    "First boot runs GLPI's installer against a MariaDB that is itself still starting, so the wait is 300s on GLPI answering, not on the container being up. If it never answers, the lane SKIPS rather than fails, and the request stays open.",
+    "EXPECTED and fine: /apirest.php/initSession refusing without tokens. The refusal SHAPE is the evidence — a 400/401 there tells us the surface exists. A 404 on every candidate root is the interesting failure and it means our probe paths are wrong.",
+    "If it fails, do NOT patch around it. The capture at artifacts/live-captures/glpi.json carries the status and body prefix of every probe; lane-mail those and the real paths get recorded once instead of guessed twice.",
+    "COMMIT the capture — it is synthetic lab data by construction (a fresh install with no real assets), and it is what lets the NEXT proof assert a contract instead of discovering one."
+  ]
+}

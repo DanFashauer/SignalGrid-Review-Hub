@@ -1,0 +1,16 @@
+{
+  "$comment": "Live capture from a real Headwind CE server (lane: run-live-lanes.sh --only headwind). Synthetic lab values only — no tenant, no real device. Read by proof:evidence-adapter's capture section; regenerate by re-running the lane.",
+  "source": "headwind-ce",
+  "serverImage": "headwindmdm/hmdm:0.1.5 (5.30.3-os)",
+  "capturedAt": "2026-08-23T15:35:00.469Z",
+  "devices": [
+    {
+      "deviceNumber": "hw-scanner-01",
+      "model": "Zebra TC52",
+      "enrolled": true,
+      "kioskLocked": true,
+      "configApplied": "applied",
+      "lastSeenAt": "2026-08-23T15:35:00.384Z"
+    }
+  ]
+}

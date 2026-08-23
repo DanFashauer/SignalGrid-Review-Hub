@@ -20,6 +20,8 @@
 // Zero network, enforced: `fetch` is replaced with a tripwire for the run.
 
 import { existsSync, readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   evaluateDecision,
   runFixtureSync,
@@ -280,7 +282,10 @@ async function main(): Promise<void> {
   // pretending.
   console.log("\n— live captures (present = live shape must decide like the fixture shape) —");
   {
-    const capPath = "artifacts/live-captures/headwind.json";
+    // Repo-root anchored, matching where proof:live-headwind writes it — the
+    // harness runs both via `pnpm --filter @workspace/scripts` (cwd = scripts/),
+    // so a bare relative path would read scripts/artifacts/ and miss the capture.
+    const capPath = resolve(dirname(fileURLToPath(import.meta.url)), "../../artifacts/live-captures/headwind.json");
     if (existsSync(capPath)) {
       const cap = JSON.parse(readFileSync(capPath, "utf8")) as {
         serverImage?: string;

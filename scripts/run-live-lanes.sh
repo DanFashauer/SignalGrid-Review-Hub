@@ -478,6 +478,15 @@ if wanted headwind; then
       sleep 4
     done
     if [ "$HMDM_UP" = "1" ]; then
+      # Clear the seeded admin's "must change password on first login" flag.
+      # HMDM ships the admin row with passwordReset=true; while it is set,
+      # AuthFilter 403s EVERY /rest/private/* call even with a valid JWT
+      # (verified on a live 5.30.3-os container: PUT /rest/private/devices and
+      # GET /rest/private/configurations/1 both return 403 while the flag is
+      # set, 200 once it clears). Without this the config patch below and the
+      # proof's device calls all fail. Deterministic DB update via the pg
+      # sidecar, same standing as the config-password patch.
+      "$SG_ENGINE" exec sg-hmdm-pg psql -U hmdm -d hmdm -c "UPDATE users SET passwordReset=false WHERE login='$HMDM_LOGIN';" >/dev/null 2>&1
       # Pre-empt the upstream NPE: set an admin password on configuration 1.
       HW_JWT=$(curl -s -X POST "http://127.0.0.1:8425/rest/public/jwt/login" -H 'Content-Type: application/json' -d "{\"login\":\"$HMDM_LOGIN\",\"password\":\"$HMDM_PW\"}" | sed -n 's/.*"id_token" *: *"\([^"]*\)".*/\1/p')
       HW_CFG=$(curl -s "http://127.0.0.1:8425/rest/private/configurations/1" -H "Authorization: Bearer $HW_JWT")
@@ -486,7 +495,11 @@ if wanted headwind; then
       curl -s -X PUT "http://127.0.0.1:8425/rest/private/configurations" -H "Authorization: Bearer $HW_JWT" -H 'Content-Type: application/json' \
         -d "$(echo "$HW_CFG_PATCHED" | sed 's/"password" *: *null/"password":"lab-config-pass"/; s/"password" *: *""/"password":"lab-config-pass"/')" >/dev/null 2>&1
       LOG=$(mktemp)
-      if HMDM_URL=http://127.0.0.1:8425 $PNPM run proof:live-headwind >"$LOG" 2>&1; then
+      # Hand the SAME credential to the proof. The proof reads HMDM_ADMIN /
+      # HMDM_PASSWORD (not HMDM_ADMIN_LOGIN / HMDM_ADMIN_PASSWORD); without this
+      # it fell back to the plaintext 'admin' default and 401'd even though the
+      # lane above authenticated fine.
+      if HMDM_URL=http://127.0.0.1:8425 HMDM_ADMIN="$HMDM_LOGIN" HMDM_PASSWORD="$HMDM_PW" $PNPM run proof:live-headwind >"$LOG" 2>&1; then
         ok "headwind (CE 5.30.3 driven over the launcher protocol; capture written)"
       else
         bad headwind "$LOG"

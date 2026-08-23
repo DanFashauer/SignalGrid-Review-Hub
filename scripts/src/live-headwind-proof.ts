@@ -30,6 +30,15 @@
 // Refusal, not skip: without HMDM_URL this exits 3 with the bring-up command
 // named, because a proof that silently passes with no server proves nothing.
 import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// Anchor the capture at the REPO ROOT, not the cwd. The harness runs this proof
+// via `pnpm --filter @workspace/scripts`, so cwd is scripts/ — a bare relative
+// "artifacts/…" would land in scripts/artifacts/. Resolve from this source file
+// (scripts/src/…) up to the repo root so the capture is written where every
+// other artifacts/* lives and where proof:evidence-adapter reads it.
+const CAPTURE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../artifacts/live-captures");
 
 const BASE = process.env.HMDM_URL?.replace(/\/$/, "");
 if (!BASE) {
@@ -106,12 +115,17 @@ const main = async () => {
   check("telemetry push accepted (phone/imei as strings — the wire's real rule)",
     info.status === 200 && infoBody?.status === "OK", `status=${info.status} body.status=${infoBody?.status}`);
 
-  // 5. server-side record transition — freshness observed live
-  const list = await jf(`/rest/private/devices/search?value=${DEVICE}`, { headers: auth });
-  const listBody = list.body as { data?: { devices?: { items?: Array<Record<string, unknown>> } } };
-  const rec = listBody?.data?.devices?.items?.find((d) => d.number === DEVICE)
-    ?? (listBody?.data as { items?: Array<Record<string, unknown>> } | undefined)?.items?.find((d) => d.number === DEVICE);
-  check("device record readable back from the panel", rec !== undefined);
+  // 5. server-side record transition — freshness observed live.
+  // Read the device back by its number: GET /rest/private/devices/number/{number}
+  // returns the device object directly under `data` (observed live on 5.30.3-os:
+  // {status:"OK",data:{number,id,description,groups,info,configurationId,lastUpdate}}).
+  // The earlier /devices/search?value= form was wrong twice over — that endpoint is
+  // a POST taking a DeviceSearchRequest body, and its response nests under
+  // data.configurations, not a device list — so it never matched and the record
+  // read back as absent even though the device existed.
+  const read = await jf(`/rest/private/devices/number/${DEVICE}`, { headers: auth });
+  const rec = (read.body as { data?: Record<string, unknown> })?.data;
+  check("device record readable back from the panel", read.status === 200 && rec?.number === DEVICE);
   const lastUpdate = Number(rec?.lastUpdate ?? 0);
   check("lastUpdate transitioned 0 → >0 after the sync (freshness, observed live)", lastUpdate > 0, `lastUpdate=${lastUpdate}`);
 
@@ -136,8 +150,8 @@ const main = async () => {
     ],
   };
   if (failed === 0) {
-    mkdirSync("artifacts/live-captures", { recursive: true });
-    writeFileSync("artifacts/live-captures/headwind.json", JSON.stringify(capture, null, 2) + "\n");
+    mkdirSync(CAPTURE_DIR, { recursive: true });
+    writeFileSync(resolve(CAPTURE_DIR, "headwind.json"), JSON.stringify(capture, null, 2) + "\n");
     console.log("  capture written: artifacts/live-captures/headwind.json");
   } else {
     console.log("  capture NOT written — a capture minted from a failing run would be an unearned artifact");

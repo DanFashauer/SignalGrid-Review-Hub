@@ -1,39 +1,45 @@
 {
   "schemaVersion": 1,
   "requestId": "2026-08-23-headwind-first-capture",
-  "completedAt": "2026-08-23T14:59:46.007Z",
+  "completedAt": "2026-08-23T15:35:15.810Z",
   "provenance": {
     "platform": "darwin",
     "arch": "arm64",
     "nodeVersion": "v24.18.0",
     "macosVersion": "26.6.2",
-    "commit": "9d2c6ed35b4e3ee8823d07b299cea006af117346",
+    "commit": "da1ee232fc9f5cbfbf248f9816c7d119d3ee4914",
     "branch": "SignalGrid_Alpha",
-    "workingTreeClean": true
+    "workingTreeClean": false
   },
   "runs": [
     {
       "operation": "live-headwind",
-      "status": "failed",
-      "exitCode": 1,
-      "durationMs": 68251,
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 70833,
       "tail": [
         "== SignalGrid live-vendor lanes ==",
         "-- bringing up Headwind CE (postgres + hmdm 0.1.5 / 5.30.3-os)",
-        "  \u001b[31mFAIL\u001b[0m  headwind  (log: /var/folders/ks/gz211t6x40q8sbryhlbync_00000gn/T/tmp.MNXE3c662w)",
+        "  \u001b[32mPASS\u001b[0m  headwind (CE 5.30.3 driven over the launcher protocol; capture written)",
         "",
         "-- removing containers this run started: sg-hmdm sg-hmdm-pg",
         "",
-        "== LIVE LANES: 0 passed, 1 failed, 0 skipped ==",
-        "   failed: headwind"
+        "== LIVE LANES: 1 passed, 0 failed, 0 skipped ==",
+        "✅ Every live lane ran and passed."
       ]
     },
     {
       "operation": "proofs-sim-only",
       "status": "passed",
       "exitCode": 0,
-      "durationMs": 5268,
+      "durationMs": 5019,
       "tail": [
+        "-- install deps",
+        "-- add platform binaries for this run: @esbuild/darwin-arm64@0.27.3 @rolldown/binding-darwin-arm64@1.2.4 lightningcss-darwin-arm64@1.32.0 @tailwindcss/oxide-darwin-arm64@4.3.3",
+        "   (manifests restored; binaries kept in node_modules)",
+        "-- build api-server (esbuild; needed for observability + api integration test)",
+        "   dist built",
+        "-- started sgval-redis on 6381 for proof:enrollment-race",
         "",
         "== real-life simulator scenarios ==",
         "  \u001b[32mPASS\u001b[0m  proof:signalgrid-simulator (11 scenarios)",
@@ -44,13 +50,7 @@
         "== lane inbox ==",
         "Lane inbox — this machine is the MAC lane (override with SIGNALGRID_LANE)",
         "",
-        "── cloud-glpi-has-a-lane-and-a-proof-first-bring-up",
-        "   from cloud: GLPI has a lane and a proof — first bring-up queued",
-        "",
-        "   DR-013 item 3 is built and queued as 2026-08-23-glpi-first-bringup. You confirmed GLPI was genuinely absent; it now has a glpi lane in run-live-lanes.sh and scripts/src/live-glpi-proof.ts, plus a registry reconciliation you should know about. What is VERIFIED, from primary sources rather than memory: glpi/glpi returns HTTP 200 on Docker Hub with 11.0.8 a real published tag, glpiproject/glpi is a 404 and is not used, and GLPI_DB_HOST/NAME/USER/PASSWORD plus the MariaDB backend come from the image's own published description. What is NOT verified is the REST surface — GLPI ships a v1 /apirest.php and a v2 whose shape differs by release, and nothing in this repo has ever driven either. So the proof is SHAPE DISCOVERY: it probes the candidate roots and records what the server actually answers, and it fails loudly rather than falling back. That ordering is the lesson from your headwind finding — that lane asserted a credential instead of observing one, and it had never authenticated anywhere. Also reconciled: DR-013 line 663 calls GLPI a 'registry P0 lab source' and the registry said DEFERRED_RESEARCH / P1. The decision record was making a false claim about a governed artifact. I moved the registry to LAB_SOURCE / P0 to match owner direction and recorded the licence reasoning on the row: GPL-3.0 with licenceCaution still TRUE, because we drive its REST API over HTTP, which is USE and not code reuse — no GLPI source is vendored, linked or derived. deployedInLab stays FALSE until you run it, since no engine exists here.",
-        "",
-        "   acknowledge with: pnpm run lane:ack cloud-glpi-has-a-lane-and-a-proof-first-bring-up \"what you did\"",
-        "",
+        "  nothing unread. (--all to include acknowledged.)",
         "",
         "== NOTE: the web build now RUNS here (it used to be skipped) ==",
         "   — the vite/rollup/lightningcss/tailwind darwin binaries this repo strips are",

@@ -271,6 +271,8 @@ jobs:
         run: node scripts/check-accuracy-doctrine.mjs
       - name: Agent roster (DR-016 — tier, charter, disjoint write boundary)
         run: node scripts/check-agent-roster.mjs
+      - name: Positioning trace (every ratified claim resolves by id in the launch profile)
+        run: node scripts/check-positioning-trace.mjs
 
       # The declared product edge must match the real one, in BOTH directions. The
       # omission direction is the freeze: a new connector family, signal kind, API

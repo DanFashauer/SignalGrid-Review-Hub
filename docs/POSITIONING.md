@@ -46,13 +46,13 @@ SignalGrid is not an MDM: it never enrolls, configures, locks, or wipes a device
 
 | Claim | Grounding |
 |---|---|
-| "invisibly into the apps your staff already use" | docs/EMBEDDED_UX_PRINCIPLE.md:1-32 (design law); ios:EnterpriseShell is launch as the reference host app (launch-profile.mjs:453-458) |
-| "allow, step up, restrict, deny" | lib/signalgrid-core/src/types.ts:374; lib/api-spec/v1-openapi.yaml:243; /v1/decisions/evaluate is launch (launch-profile.mjs:308-310) |
-| "device's compliance" | signal kind device_posture, launch (launch-profile.mjs:240-243); graph family launch (:151-160) |
+| "invisibly into the apps your staff already use" | docs/EMBEDDED_UX_PRINCIPLE.md:1-32 (design law); ios:EnterpriseShell is launch as the reference host app (launch-profile: `ios:EnterpriseShell` is `launch`) |
+| "allow, step up, restrict, deny" | lib/signalgrid-core/src/types.ts:374; lib/api-spec/v1-openapi.yaml:243; /v1/decisions/evaluate is launch (launch-profile: `/v1/decisions/evaluate` is `launch`) |
+| "device's compliance" | signal kind device_posture, launch (launch-profile: `device_posture` is `launch`); graph family launch (launch-profile: `graph` is `launch`) |
 | "how current that answer really is" | signal kind device_management_health, launch (:245-247); family reason: a stale 'compliant' is "the unearned affirmative in its purest form" (:162-168) |
 | "vouch for itself right now" | signal kind local_authority, launch (:249-251); family launch (:175-181) |
 | "tightens instead of waving through" / "never loosen" | lib/posture-composition/src/adapters.ts:543; enforced structurally by scripts/review-invariants.mjs:144-176, run in preflight (preflight.mjs:67) |
 | "reproducible evidence an operator can audit" | /v1/decisions/{id}/evidence launch (:317-321, "it is the claim"); operator console signalgrid-app launch (:444-451) |
-| "read-only from your device-management source" | criterion string (launch-profile.mjs:126-129); no write route to any source system (:362-367) |
+| "read-only from your device-management source" | criterion string (launch-profile: `CRITERION`); no write route to any source system (scripts/launch-profile.mjs) |
 | "your app applies the verdict, including the step-up prompt" | GAPS step-up-answerability (:633-646): Limited GA is shadow mode — SignalGrid returns step_up, /v1/step-up/* is deferred; the host app's native authenticator answers it (EMBEDDED_UX_PRINCIPLE.md:34-37) |
-| Deliberately omitted: location | 'location' and 'location_certainty' are deferred signal kinds (launch-profile.mjs:274-275) — say it in the roadmap, never in the present tense |
+| Deliberately omitted: location | 'location' and 'location_certainty' are deferred signal kinds (launch-profile: `location` is `deferred`; launch-profile: `location_certainty` is `deferred`) — say it in the roadmap, never in the present tense |

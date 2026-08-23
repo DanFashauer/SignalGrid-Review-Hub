@@ -722,3 +722,48 @@ the evidence contract itself.
 
 **Status: owner-directed, 2026-08-22.**
 
+## DR-014 — The Mac lane is the build host that offsets cloud's hard limits (owner-directed 2026-08-23)
+
+**The question.** The cloud lane runs on a Linux box with no container engine,
+no arm64/darwin toolchain, and no Xcode — so a growing set of the product's own
+proofs (every live vendor lane, the arm64 SBOM, the iOS build, the source-
+independence captures) cannot execute there at all. Where should that work run,
+and how freely may that machine install what the work requires?
+
+**Owner-directed, in his own words:** "I want the repo to be able to use the Mac
+for installing anything it needs to build whatever required so it can offset
+limitations in cloud that cannot be done period. I can install additional apps
+if needed." Said 2026-08-23 while distinguishing three things he had previously
+conflated: the Bash sandbox (a restriction — kept OFF), MCP servers (tool/data
+connectors, not a way to install software), and the machine's own package
+managers (brew, pnpm, cargo, podman, Xcode — the actual install path).
+
+**The call.** This Mac is the designated build host for everything the cloud
+lane physically cannot do. It installs build dependencies without prompting —
+brew, the JS/Rust/Python/Ruby/Go package managers, podman/docker images, and the
+Xcode toolchain — encoded as an allowlist in the gitignored
+`.claude/settings.local.json`. The mechanism is already the product's: the
+cloud lane queues engine-dependent work as sim-requests, the Mac runs it and
+commits the result, and gaps get lane-mailed back (DR-013 routes the source-
+independence milestones here for exactly this reason). This grants install
+latitude ONLY; it does not lift the guardrails that are not about installing —
+sending data to an external service, destructive git, and any compliance /
+production / certification claim still stop for the owner. Apps that need an
+Apple ID, a licence, or a GUI installer remain the owner's to install by hand.
+
+**Evidence this is load-bearing, not theoretical.** In the sessions preceding
+this record the Mac lane alone produced: the live telemetry lane's first run
+anywhere (the cloud box had no engine), Fleet + osquery live under emulation,
+the arm64 SBOM byte-identity proof that Linux CI could not see, and the Headwind
+CE capture — every one blocked on cloud by construction.
+
+**Reversal.** A supervised-device / hosted-runner path that gives the cloud lane
+a real container engine and an arm64 + macOS build surface would retire the
+Mac's role as the sole offset host and fold this latitude back behind that
+managed boundary. Until such a runner exists and is proven, revoking the install
+latitude would strand the engine-dependent proofs with nowhere to run, which is
+the exact failure this record exists to prevent. Narrowing it — dropping to a
+per-command allowlist, or re-enabling prompts — is a one-line edit to the
+settings file and costs only convenience, not capability.
+
+**Status: owner-directed, 2026-08-23.**

@@ -129,6 +129,88 @@ is by trigger) and its MCP tool list (16 tools exist and their surface is
 wire-proven; a reconciliation pass against the report's list belongs in the
 next MCP change, not as standalone churn).
 
+### DR-013 org sweep (2026-08-23) — the roles' own findings
+
+Ten chartered seats reviewed the repository under DR-013 (open-source proof
+IS product proof; everything legitimate, including the source itself) before
+a usage limit stopped the remaining thirty-one. Their raw findings are
+preserved in the workflow journal; the substantive ones are queued here.
+**Two were fixed on discovery** because they indicted work shipped hours
+earlier — that is the loop working, not a reason to soften the record.
+
+39. **~~Launch-claims gate blind to its own defect class~~** — DONE
+    2026-08-23 (found by web-engineer + positioning seats, fixed same hour):
+    the gate matched `Evaluated today` but not `evaluated-today`, so the
+    pricing page sold **six** evaluated-today dimensions against a
+    three-signal scope, green. It also scanned only the SPA source while
+    `pages.yml` publishes seven standalone `docs/*.html` pages to
+    signalgrid.app — the competitive battlecard among them, carrying sixteen
+    unhedged deferred-capability claims including "we fuse custody/tamper +
+    CIS baseline (they don't)" as our differentiator, live to buyers. Fixed:
+    markers are case/separator-insensitive AND negation-aware (Hardware.tsx's
+    correct "*not* evaluated today" must never be punished — a gate that
+    punishes honesty is worse than none); scope is now DERIVED from the
+    deploy workflow, so adding a page to pages.yml puts it under the gate
+    with no second edit. Copy fixed at source: pricing, integrations, the
+    room-console generator, fabric/evidence banners, and four battlecard
+    differentiators rewritten to the provable ones (per-action + freshness +
+    fail-closed + evidence).
+40. **Row 7's reconcile half never ran** — docs-writer + positioning, days.
+    EXECUTIVE_ONE_PAGER, ECOSYSTEM_POSITIONING and pitch-deck still open with
+    the retired "operational trust orchestration layer" and name custody /
+    credential-reader / network as connected capability. DR-011 rules those
+    wrong; no gate scopes prose docs. (Verified 2026-08-23.)
+41. **POSITIONING.md's claim-to-proof trace has fossilized** —
+    positioning + devex, days. The trace is what makes the positioning
+    DR-013-legitimate, and its `launch-profile.mjs` line anchors now point at
+    unrelated content. Needs anchors that resolve by ID, plus a gate.
+42. **The verdict core still has no named reader** — principal-engineer,
+    days. `review-coverage.json` carries zero entries for the ~2,900 lines
+    computing every verdict; `review-tiers.json` was never committed.
+    Blocking row 8 restated with measurement.
+43. **Falsifiability is enforced only for the connector tier** —
+    qa-engineer, days. Mutation coverage does not reach the verdict core;
+    `signalgrid-grid` still ships ~90 assertions over local literals that
+    cannot fail; 21 of 50 check-gates carry no self-test; eight written
+    security suites (`tests/security-reference/`) run nowhere.
+44. **Two ungated contracts in the governance layer** — principal-engineer +
+    records-archivist, hours each: the decision-record format contract
+    (evidence + reversal path) has no gate and DR-011/012/013 already lack
+    reversal clauses; `CLAIM_INVENTORY.md` is declared always-derived but its
+    generator is not a script and no gate enforces derivation.
+45. **DR-002's mandated mechanical check was never built** —
+    security-engineer, hours. `tenant:admin` is declared, granted, and
+    enforced by nothing; the DR itself ruled this must be caught
+    mechanically.
+46. **Production OIDC branch of /v1 never executes in any test** —
+    security-engineer, days. Only its rejections run; the middleware wiring
+    that turns a bearer token into a tenant principal is unproven end to end.
+47. **METRICS_TOKEN compared non-constant-time** — security-engineer, hours.
+    `app.ts:111` early-exits on the one static secret an operator sets, while
+    the core protects even demo keys with constant-time compare.
+48. **Native parity is textual, not behavioral** — mobile-native, days. The
+    port-parity gate compares extracted vocabulary and says so itself; iOS is
+    carved out of the shared assist-wire conformance vectors; ios-ci does not
+    trigger on simulator/workflow library changes; BackendService still calls
+    five endpoints that exist nowhere.
+49. **Assessor-facing overstatement** — compliance-analyst, hours. The
+    security questionnaire pack tells assessors docs-sanity fails the build
+    on ISO 27001 / HIPAA certification claims; it does not. Also:
+    SECURITY_CONTROLS_MATRIX's status column has no drift gate.
+50. **Operability claims without live evidence** — sre, days. The SLO surface
+    has never consumed a real decision outcome (its only non-proof caller is
+    an all-healthy fixture); nine CI jobs remain unbounded, two of them
+    PR-gating; the daily mutation sweep — the repo's only falsifiability
+    measurement — has no liveness evidence and is absent from the routine
+    registry.
+51. **`lib/location` remains an undispositioned orphan** — principal-engineer
+    + devex, days. `Date.now()` in signal-admission logic, zero importers,
+    outside the determinism gate's scan prefixes while CLAUDE.md asserts the
+    rule repo-wide.
+
+The thirty-one seats the limit cut short re-run on the next sweep; their
+absence is stated rather than counted as clean.
+
 ## Owner hands
 
 Only the items genuinely yours:

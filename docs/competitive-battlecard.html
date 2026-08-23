@@ -326,8 +326,8 @@
         <p class="comp__sub">The closest thesis-twin</p>
         <dl>
           <div><dt>They own — concede it</dt><dd>Passwordless frontline login + badge attribution, HIPAA / 21 CFR Part 11 story, real logos, hardware. Their <b>FIL</b> (May 2026) is moving toward per-action governance.</dd></div>
-          <div><dt>Our wedge</dt><dd>They <b>attribute at login</b>; we <b>decide per action</b>. We fuse custody/tamper + CIS baseline (they don't) and are a neutral overlay. FIL routes to a human; we <b>compute</b> a multi-signal verdict.</dd></div>
-          <div><dt>“OLOID already does this” → say</dt><dd class="say">“OLOID resolves who's logged in, brilliantly. We decide whether <b>this action</b> should proceed given custody and baseline — and we take OLOID's badge as an input.”</dd></div>
+          <div><dt>Our wedge</dt><dd>They <b>attribute at login</b>; we <b>decide per action</b> &mdash; and we treat <b>how current the device answer is</b> as a first-class input, so a stale &ldquo;compliant&rdquo; tightens the verdict instead of passing as green. FIL routes to a human; we <b>compute</b> a fail-closed verdict with reproducible evidence attached.</dd></div>
+          <div><dt>“OLOID already does this” → say</dt><dd class="say">&ldquo;OLOID resolves who&rsquo;s logged in, brilliantly. We decide whether <b>this action</b> should proceed given the device&rsquo;s compliance, how current that answer is, and whether the device can vouch for itself right now &mdash; and their badge is an input we can consume as that family ships.&rdquo;</dd></div>
           <div><dt>Walk / partner when</dt><dd>The whole ask is passwordless login + attribution. Offer coexistence.</dd></div>
         </dl>
       </article>
@@ -337,7 +337,7 @@
         <p class="comp__sub">Healthcare incumbent — the hardest wall</p>
         <dl>
           <div><dt>They own — concede loudly</dt><dd>Badge tap-in/out, roaming, Entra SSO, <b>per-transaction EPCS step-up</b>, posture checks, charge-state custody, and Verosint (Nov 2025) for runtime risk. “We already own the badge” is largely true.</dd></div>
-          <div><dt>Our wedge</dt><dd>A neutral, <b>unified</b> per-action verdict fusing custody(+tamper) + CIS baseline + posture + badge + workflow risk into <b>one decision + one audit plane</b> across a <b>mixed</b> fleet — consuming their badge, not replacing it.</dd></div>
+          <div><dt>Our wedge</dt><dd>A neutral, <b>unified</b> per-action verdict &mdash; device compliance + its freshness + the device&rsquo;s present authority &mdash; into <b>one decision + one audit plane</b> across a <b>mixed</b> fleet, consuming their badge rather than replacing it. (Custody, baseline and workflow-risk families are <b>deferred</b>: proven in the public repository, not shipping at Limited GA.)</dd></div>
           <div><dt>“Isn't this just Imprivata?” → say</dt><dd class="say">“All-Imprivata in one hospital? They cover most of it. We're for the <b>mixed fleet</b> and <b>non-EPCS workflows</b>, and we sit <b>above</b> Imprivata — taking its badge as one input.”</dd></div>
           <div><dt>Do NOT fight</dt><dd>Badge-SSO, roaming, Entra SSO, EPCS signing. Best ground: retail / warehouse / logistics, where they're shallow.</dd></div>
         </dl>
@@ -359,7 +359,7 @@
         <p class="comp__sub">Shared device mode + CAE — extend, don't fight</p>
         <dl>
           <div><dt>Their strength — concede precisely</dt><dd>CA + CAE + Shared Device Mode + posture — native, Microsoft-standardized. <b>Don't say “Entra can't do per-action”</b> — auth context already does per-action step-up on auth strength.</dd></div>
-          <div><dt>Our wedge</dt><dd>Entra steps up on auth strength but can't condition on <b>who holds the device, custody/tamper, or CIS baseline</b>; it decides at session/token level and assumes session = person.</dd></div>
+          <div><dt>Our wedge</dt><dd>Entra steps up on auth strength but decides at session/token level and assumes session = person; it does not condition on <b>whether the device&rsquo;s compliance answer is still current at this action</b>, which is the gap we close.</dd></div>
           <div><dt>“We already have Entra” → say</dt><dd class="say">“Perfect — we sit on top of it. Entra gives us session + posture; we add <b>who's physically holding this shared device</b> and <b>should this action proceed</b>. An Entra multiplier, not a replacement.”</dd></div>
         </dl>
       </article>

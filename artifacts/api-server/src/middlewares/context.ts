@@ -50,6 +50,24 @@ export const requestContext: RequestHandler = (
 // the public-safe demo bearer keys, exactly as before. An INVALID partial config
 // stays disabled and logs a warning, so a misconfiguration fails closed to the
 // fixture path rather than silently trusting unverified tokens.
+// Fetch the IdP's JWKS with a hard timeout, so a hung IdP can't stall requests.
+//
+// DECLARED BEFORE ITS USE, AND THAT IS LOAD-BEARING. This sat 21 lines BELOW
+// the initEnterpriseAuth() call at module load. `function` hoists; `const` does
+// not — so when the authenticator was constructed this was still in the
+// temporal dead zone, and it was built with an undefined fetch. Every
+// enterprise token then failed with "could not load signing keys: fetchImpl is
+// not a function", i.e. ENTERPRISE OIDC AUTHENTICATION NEVER WORKED IN
+// PRODUCTION. It was invisible because the positive OIDC branch had never
+// executed in any test — the exact gap docs/COMPANY_BUILD_PLAN.md row 46
+// named, with the exact kind of defect an unexecuted path hides.
+//
+// Second instance of this class in one day: signalgrid-grid-proof.ts had
+// `allowedSignalTypes` declared ~650 lines below the loop that read it. Both
+// were silent. Keep initialisation above first use in module scope.
+const defaultJwksFetch: JwksFetch = (uri: string) =>
+  fetch(uri, { signal: AbortSignal.timeout(5000) });
+
 const enterpriseAuth: EnterpriseAuthenticator | null = initEnterpriseAuth();
 
 function initEnterpriseAuth(): EnterpriseAuthenticator | null {
@@ -70,9 +88,6 @@ function initEnterpriseAuth(): EnterpriseAuthenticator | null {
   return null;
 }
 
-// Fetch the IdP's JWKS with a hard timeout, so a hung IdP can't stall requests.
-const defaultJwksFetch: JwksFetch = (uri: string) =>
-  fetch(uri, { signal: AbortSignal.timeout(5000) });
 
 /**
  * Tenant-context + authentication middleware for the /v1 product surface.

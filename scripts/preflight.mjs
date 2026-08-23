@@ -239,6 +239,7 @@ const STEPS = [
   { name: "Proof: connector-emulator", cmd: ["pnpm", "run", "proof:connector-emulator"] },
   { name: "OpenAPI contract check (proof:api-contract)", cmd: ["pnpm", "run", "proof:api-contract"] },
   { name: "API integration test (boots the server)", cmd: ["pnpm", "run", "test:api"] },
+  { name: "OIDC middleware test (the PRODUCTION auth branch actually executes)", cmd: ["pnpm", "run", "test:oidc"] },
   { name: "Bruno collection live run (the committed contract, executed both profiles)", cmd: ["node", "scripts/run-bruno-collection.mjs"] },
   { name: "Proof: observability (metrics endpoint)", cmd: ["pnpm", "run", "proof:observability"] },
   { name: "Proof: enterprise-auth (OIDC/JWT)", cmd: ["pnpm", "run", "proof:enterprise-auth"] },

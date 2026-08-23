@@ -441,9 +441,39 @@ earlier — that is the loop working, not a reason to soften the record.
     outlives its reason (a permission that becomes enforced must lose its
     entry). Self-tested with union/call-site floors. Registered preflight +
     CI.
-46. **Production OIDC branch of /v1 never executes in any test** —
-    security-engineer, days. Only its rejections run; the middleware wiring
-    that turns a bearer token into a tenant principal is unproven end to end.
+46. **Production OIDC branch of /v1 never executes in any test** — DONE
+    2026-08-23, and the unexecuted path was hiding a defect that broke
+    enterprise authentication completely.
+    The gap was confirmed first: `scripts/src/live-idp-proof.ts` drives an
+    issuer directly (`/token`, `/jwks`, discovery) and never touches
+    `middlewares/context.ts`, and `api.test.mjs` carried ZERO OIDC references.
+    So the most security-sensitive path in the product was held by review alone.
+    **THE DEFECT: enterprise OIDC authentication had never worked in
+    production.** `context.ts` called `initEnterpriseAuth()` at line 53 (module
+    load) and declared `const defaultJwksFetch` at line 74 — twenty-one lines
+    BELOW the call. `function` hoists; `const` does not, so the authenticator
+    was constructed with an undefined fetch and every enterprise token failed
+    with "could not load signing keys: fetchImpl is not a function". Any
+    deployment that configured an IdP would have 401'd every real caller while
+    logging "Enterprise OIDC authentication enabled for /v1."
+    Second instance of this class in one day — `signalgrid-grid-proof.ts` had
+    `allowedSignalTypes` declared ~650 lines below the loop that read it. Both
+    silent, both in code no test executed. The rule is now written where it
+    matters: initialisation above first use in module scope.
+    `artifacts/api-server/test/oidc.test.mjs` (preflight + CI, parity green at
+    216 gates) executes the real branch with no IdP: it mints an RSA key, serves
+    a genuine JWKS over localhost and signs real RS256 tokens, so everything the
+    middleware verifies is authentic and only the issuer is local. 14/14 —
+    the valid token authenticates and maps to the INTERNAL tenant; a demo key is
+    refused while OIDC is configured (the no-fallback rule); and wrong audience,
+    wrong issuer, expired, unmapped tenant, unmapped role, `alg:none`, unknown
+    signing key and non-JWT garbage are each refused.
+    Falsified: moving the declaration back below its use drops it to 12/14 with
+    the two positive assertions failing — the exact defect, reproduced on demand.
+    Recorded because it cost a debugging round: a mapped internal tenant must
+    ALREADY EXIST (`registerVerifiedPrincipal` calls `requireTenant` — "an OIDC
+    identity cannot conjure one"), so an `OIDC_TENANT_MAP` naming an absent
+    tenant produces a 401 indistinguishable from a bad token.
 47. **~~METRICS_TOKEN compared non-constant-time~~** — DONE 2026-08-23:
     the operator's real secret now goes through the same constantTimeEquals
     the core already used for its PUBLIC demo keys. The weaker guard had been

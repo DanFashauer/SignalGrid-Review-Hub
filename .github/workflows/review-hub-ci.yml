@@ -465,6 +465,9 @@ jobs:
 
       - name: API integration test
         run: pnpm run test:api
+
+      - name: OIDC middleware test (the production auth branch actually executes)
+        run: pnpm run test:oidc
       - name: Bruno collection live run (the committed contract, executed both profiles)
         run: node scripts/run-bruno-collection.mjs
 

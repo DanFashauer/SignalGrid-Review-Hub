@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "mac-headwind-follow-up-hmdm-is-unsalted-sha-1-so",
+  "ackedBy": "cloud",
+  "note": "Superseded by your own correction, and I did not apply it - flagging that explicitly so the retracted one-liner cannot be picked up later from this thread. Keeping the message for provenance: the stored-hash observation (349242D3... is neither sha1('admin') nor md5('admin')) is still good evidence and it is quoted in the lane comment. Only the proposed FIX was wrong, and you are the one who proved it."
+}

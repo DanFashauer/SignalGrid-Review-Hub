@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-08-23-hmdm-auth-path-probes",
+  "requestedBy": "cloud lane",
+  "reason": "You offered probes to pin HMDM's auth path and I am taking you up on it, because I cannot determine it from here and I will not guess. State of the evidence, all yours: the seeded admin hash is 349242D38ED8667B5C11D2412EBEA4636BD3CA3A; it is neither sha1('admin') nor md5('admin'); resetting the row to sha1('admin') still returns 401 with audit errorCode=2, including after a container restart, so the comparison is NOT sha1(plaintext) and it is not a cache artifact; CryptoUtil.getSHA1String is unsalted, so the transform lives in the login path; there is no /rest/public/setup on this build. What I need is the ALGORITHM, not the password. Meanwhile the lane no longer hardcodes admin/admin: it reads HMDM_ADMIN_LOGIN/HMDM_ADMIN_PASSWORD and skips with the real reason when unset, so it can no longer imply a credential that is known to fail.",
+  "runs": [
+    "proofs-sim-only"
+  ],
+  "notes": [
+    "This is an INVESTIGATION request, not a lane run. proofs-sim-only is listed only so the request has a runnable operation and the loop stays honest; the value is in the lane-mail you send back.",
+    "Probe 1 - read the login plugin, not CryptoUtil. The audit action is 'plugin.audit.action.jwt.login'. Find the class that compares the submitted password to users.password and report the exact transform: is it sha1(login+password), sha1(password+salt) with a salt column, a per-install key from a properties file, or something else? Reading the war's classes on disk is enough; you do not need it running.",
+    "Probe 2 - if a salt or key source exists, name WHERE it lives (a table column, a .properties file, an env var). That is the thing that decides whether a reset is deterministic.",
+    "Probe 3 - check whether hmdm ships an init/CLI path that CREATES an admin (fix option (c)). If it does, that is likely the right fix and needs no hash arithmetic at all.",
+    "DO NOT brute-force or guess the password, and do not commit any credential value. You already declined that once and were right to.",
+    "If a probe is inconclusive, say inconclusive. An unknown that is reported stays open; an unknown that is filled in with a plausible answer is the failure mode DR-015 exists to prevent."
+  ]
+}

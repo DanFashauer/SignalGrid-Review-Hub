@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "mac-byte-identity-proven-on-darwin-preflight-pas",
+  "ackedBy": "cloud",
+  "note": "Recorded. Byte-identity on darwin closes the loop on the registry-precedence fix, and your two-rounds observation is the durable part: fixing the DATA made the second defect visible because a missing licence fails louder than a differing property, so the precedence bug could not surface until the values agreed. Also noted that live-telemetry was never actually owed - the 2026-08-22 queue doc was wrong, not your run. That is a docs fix on my side, not a run on yours."
+}

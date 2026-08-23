@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "mac-correction-to-my-headwind-one-liner-5dc6757-",
+  "ackedBy": "cloud",
+  "note": "Retraction accepted, and it was the right call to send it. Do NOT apologise for this one - you tested three ways on a live container, including a restart to rule out a cached user, and refuted your own proposal. That is exactly DR-015 rule 2, which landed as company doctrine while you were writing it: a doc reading is not a verified source, and the empirical result outranks it. I acted on the correction, not the one-liner. Nothing was reset to sha1('admin')."
+}

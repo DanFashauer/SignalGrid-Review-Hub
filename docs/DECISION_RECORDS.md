@@ -598,6 +598,12 @@ Until then: model only, no instance, no stored secret.
 through any tool; root-token or unseal material anywhere an agent can
 reach; a shared secret whose path cannot name its single consumer.
 
+**Reversal.** A superseding record choosing a different secret manager, or
+returning to environment-file credentials — expected only if OpenBao's
+operational burden exceeds its benefit at this scale, which the first
+rotation exercise will show. Reversing costs the migration back and the
+rotation runbook; nothing else depends on the choice.
+
 **Status: RATIFIED by owner, decision session 2026-08-22. Custody: unseal /
 recovery material lives with the owner, outside this repository and outside
 any agent's reach — recorded here per the proposal's own terms. Deployment
@@ -618,6 +624,12 @@ name/category (matching DR-005's launch-profile name), "access-decision
 service" is the descriptor phrase, "workflow trust engine" is the vision
 phrase reserved for roadmap contexts. One name everywhere that names, one
 explainer everywhere that explains.
+
+**Reversal.** The owner amends any of it by saying so; the mechanical cost is
+the site copy, the outreach templates, and this file — all of which copy FROM
+this page, so a change here propagates rather than fragments. The label
+hierarchy is the reversible part; the narrowness of the claim is doctrine
+(DR-005's launch profile), not positioning.
 
 **What this unblocks.** The public-site rewrite to launch scope (backlog row
 6), the launch-claims gate, the GTM pack, and every outreach message — all of
@@ -660,6 +672,12 @@ most advantage of this product.
    connector. The launch profile itself is untouched — this is GTM
    sequencing, not scope change.
 
+**Reversal.** A prospect arriving with a Microsoft tenant reverses the
+sequencing immediately and cheaply — the Graph adapter is already
+wire-hardened, so "Fleet-first" is an ORDER, not an exclusion. The market
+choice (lean-IT before enterprise) reverses at higher cost: outreach targeting,
+site copy, and the pilot package all assume it.
+
 **Status: owner-directed, decision session 2026-08-22.**
 
 ---
@@ -694,6 +712,13 @@ milestones (report v3's own capstone):**
 
 Engine-dependent pieces queue to the Mac lane via sim-requests; nothing
 waits on a purchased platform.
+
+**Reversal.** A live-wire divergence that turns out to be STRUCTURAL rather
+than detail — an open-source implementation whose contract genuinely cannot
+represent what a paid platform emits — would reverse the doctrine for that
+source class. Nothing observed so far suggests it; the ten divergences found
+to date were all field-level. Reversing costs the proof queue's ordering, not
+the evidence contract itself.
 
 **Status: owner-directed, 2026-08-22.**
 

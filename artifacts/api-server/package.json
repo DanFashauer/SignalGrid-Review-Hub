@@ -10,7 +10,8 @@
     "test:api": "pnpm run build && node ./test/api.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:load": "pnpm run build && node ./test/load.test.mjs",
-    "test:stress": "pnpm run build && node ./test/load.test.mjs --stress"
+    "test:stress": "pnpm run build && node ./test/load.test.mjs --stress",
+    "test:oidc": "pnpm run build && node ./test/oidc.test.mjs"
   },
   "dependencies": {
     "@workspace/api-zod": "workspace:*",

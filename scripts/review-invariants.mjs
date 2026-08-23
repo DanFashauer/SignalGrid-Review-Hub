@@ -25,7 +25,7 @@
 //      PUBLISHED web artifact; that would leak a visitor's IP to a vendor
 //      (Codex #81, fonts.googleapis.com). Self-host assets instead.
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -50,6 +50,9 @@ const GATING_LIBS = [
   "lib/orchestration/src/",
   "lib/flows/src/",
 ];
+// PURE_LIBS stays a HAND-LISTED, NARROW set on purpose: checks 1 and 3 assert
+// fail-closed switch shapes that are only meaningful for the planner libs, and
+// widening those to every package would flag correct code everywhere.
 const PURE_LIBS = [
   ...GATING_LIBS,
   "lib/recommendations/src/",
@@ -58,6 +61,71 @@ const PURE_LIBS = [
   "lib/posture-composition/src/",
   "lib/incident-playbook/src/",
 ];
+
+// DETERMINISM SCOPE IS DERIVED FROM THE FILESYSTEM, not listed here.
+//
+// The clock rule is not a planner-library rule; it is a repository rule. A
+// hand-listed scope covered EIGHT of the thirty-four packages under lib/, and
+// the list is a fossil the day someone adds a package — the new one is simply
+// not scanned, and nothing says so.
+//
+// What this does NOT cover, stated so nobody assumes otherwise: the decision
+// core itself is scanned by `scripts/safety-check.mjs` check 1
+// (`lib/signalgrid-core/src/`), which predates this and stays where it is. The
+// two together now cover every package under lib/.
+const determinismScope = () => {
+  const dirs = readdirSync(resolve(repo, "lib"), { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => `lib/${e.name}/src/`);
+  return dirs.filter((d) => existsSync(resolve(repo, d)));
+};
+
+// A package that legitimately reads the clock is DECLARED, with the reason, the
+// condition that retires the entry, and a PINNED count.
+//
+// The pin is the anti-fossil part and it fails in BOTH directions. More reads
+// than declared means new ones arrived unexamined. FEWER means the entry has
+// outlived some of its justification and should be re-stated or removed. An
+// exemption that quietly stops matching reality is the failure mode every other
+// declared-exemption in this repo exists to prevent.
+const DECLARED_CLOCK_READS = new Map([
+  [
+    "lib/integrations/src/",
+    {
+      count: 22,
+      reason:
+        "Connector boundary. Fixture/demo enrolment and last-seen timestamps, and freshness computed " +
+        "AT the boundary where wall-clock is the input being read — not a decision path. The decision " +
+        "core receives the derived Freshness value and never reads a clock itself.",
+      retires: "When connector fixtures move to injected clocks, this drops to the freshness derivations only.",
+    },
+  ],
+  [
+    "lib/location/src/",
+    {
+      count: 5,
+      reason:
+        "Signal observation stamps and the TTL sweep. Reading the clock is the point of an age check; " +
+        "what must not happen is a DECISION reading it, and location emits signals rather than verdicts.",
+      retires:
+        "Retires when location-services stops being a DEFERRED family and its clock reads move behind " +
+        "an injected clock. NOT by deleting the package — that deletion was considered and REJECTED " +
+        "(docs/COMPANY_BUILD_PLAN.md row 51a): zero importers is the expected state of a deferred " +
+        "family's implementation, not evidence it is dead.",
+    },
+  ],
+  [
+    "lib/webauthn/src/",
+    {
+      count: 12,
+      reason:
+        "Challenge and step-up session expiry. An expiry check is inherently clock-dependent; the risk " +
+        "here was never the read but its DIRECTION, which is now gated separately by " +
+        "scripts/check-nan-fail-open.mjs after nine fail-open sites were found on this surface.",
+      retires: "When step-up moves to an injected clock for testability, this drops to the store TTLs.",
+    },
+  ],
+]);
 const isTs = (f) => f.endsWith(".ts") && !f.endsWith(".d.ts");
 const inAny = (f, prefixes) => prefixes.some((p) => f.startsWith(p));
 
@@ -176,15 +244,53 @@ function findSwitchBlocks(code) {
 
 // 2 — determinism in the pure planners ─────────────────────────────────────────
 {
-  const hits = [];
-  const files = tracked.filter((f) => isTs(f) && inAny(f, PURE_LIBS));
+  const scope = determinismScope();
+  const files = tracked.filter((f) => isTs(f) && inAny(f, scope));
+  // LITERALS ARE MASKED as well as comments. This scan used stripComments alone
+  // while check 1 above used maskLiterals(stripComments(...)) — a difference that
+  // did not matter while the scope was eight planner libs and matters immediately
+  // at thirty-four packages, where a string containing the text of a clock call
+  // would be reported as a clock call.
+  const byPackage = new Map();
   for (const f of files) {
-    stripComments(read(f)).split("\n").forEach((line, idx) => {
-      if (/\b(Date\.now|Math\.random)\s*\(/.test(line)) hits.push(`${f}:${idx + 1}`);
+    const code = maskLiterals(stripComments(read(f)));
+    code.split("\n").forEach((line, idx) => {
+      if (/\b(Date\.now|Math\.random)\s*\(/.test(line)) {
+        const pkg = scope.find((p) => f.startsWith(p)) ?? f;
+        if (!byPackage.has(pkg)) byPackage.set(pkg, []);
+        byPackage.get(pkg).push(`${f}:${idx + 1}`);
+      }
     });
   }
-  if (hits.length) bad(`Determinism: Date.now/Math.random in a pure planner lib — ${hits.join(", ")}`);
-  else ok("Determinism: no Date.now/Math.random in the pure planner libs");
+
+  const undeclared = [];
+  const drifted = [];
+  for (const [pkg, lines] of byPackage) {
+    const declared = DECLARED_CLOCK_READS.get(pkg);
+    if (!declared) {
+      undeclared.push(`${pkg} (${lines.length}) — ${lines.slice(0, 3).join(", ")}${lines.length > 3 ? ", …" : ""}`);
+    } else if (declared.count !== lines.length) {
+      drifted.push(`${pkg}: declared ${declared.count}, found ${lines.length}`);
+    }
+  }
+  // An exemption for a package that no longer reads the clock at all has outlived
+  // its reason and must be removed, the same as every other declared exemption here.
+  const stale = [...DECLARED_CLOCK_READS.keys()].filter((pkg) => !byPackage.has(pkg));
+
+  if (undeclared.length || drifted.length || stale.length) {
+    const parts = [];
+    if (undeclared.length) parts.push(`UNDECLARED clock reads — ${undeclared.join(" | ")}`);
+    if (drifted.length) parts.push(`COUNT DRIFT — ${drifted.join(" | ")} (a pin that stops matching is not a pin)`);
+    if (stale.length) parts.push(`STALE exemption, package no longer reads a clock — ${stale.join(", ")}`);
+    bad(`Determinism: ${parts.join("; ")}`);
+  } else {
+    const declaredTotal = [...DECLARED_CLOCK_READS.values()].reduce((n, d) => n + d.count, 0);
+    ok(
+      `Determinism: ${scope.length} packages scanned (derived from lib/), ` +
+        `${byPackage.size} with declared clock reads (${declaredTotal} pinned), ` +
+        `${scope.length - byPackage.size} at zero`,
+    );
+  }
 }
 
 // 3 — Assist catalog invariant: critical ⇒ sensitive ───────────────────────────

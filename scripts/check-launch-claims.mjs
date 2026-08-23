@@ -141,16 +141,31 @@ if (existsSync(OUTREACH_DIR)) {
 // `docs/research/` earns no exemption for its name.
 const CONTACT_LINE = /hello@signalgrid\.app/;
 let contactScanned = 0;
+// `withFileTypes` rather than a separate statSync: asking readdir what each
+// entry IS removes the check-then-use pair that CodeQL flagged here as a
+// filesystem race (stat says file, read happens later against something that
+// may have changed). No attacker is racing a build-time gate against its own
+// repository, but the finding is right about the shape, and the version without
+// the race is also the shorter one. The read is guarded because a file can
+// still vanish between the listing and the open, and a gate that dies on a
+// disappearing file would fail for a reason that has nothing to do with claims.
 const walkDocs = (d) => {
-  for (const e of readdirSync(d)) {
-    const p = join(d, e);
-    if (statSync(p).isDirectory()) {
+  for (const entry of readdirSync(d, { withFileTypes: true })) {
+    const p = join(d, entry.name);
+    if (entry.isDirectory()) {
       walkDocs(p);
       continue;
     }
+    if (!entry.isFile()) continue;
     if (!/\.(md|html)$/.test(p)) continue;
     if (files.includes(p)) continue;
-    if (!CONTACT_LINE.test(readFileSync(p, "utf8"))) continue;
+    let body;
+    try {
+      body = readFileSync(p, "utf8");
+    } catch {
+      continue;
+    }
+    if (!CONTACT_LINE.test(body)) continue;
     files.push(p);
     contactScanned += 1;
   }

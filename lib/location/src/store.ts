@@ -34,7 +34,13 @@ class InMemoryLocationStore implements StoreBackend {
   private cleanup() {
     const cutoff = Date.now() - this.maxAge;
     for (const [deviceId, signal] of this.lastByDevice) {
-      if (new Date(signal.observedAt).getTime() < cutoff) {
+      // The twin of the guard eleven lines above, and it was missed on the first
+      // pass precisely because the gate could not see it: every rule required a
+      // literal `Date.now()` as the other operand, and here it is the local
+      // `cutoff`. Same NaN, same inversion — an undateable signal was never
+      // swept, so the sweep leaked exactly the entries it could not read.
+      const observedAtMs = new Date(signal.observedAt).getTime();
+      if (!Number.isFinite(observedAtMs) || observedAtMs < cutoff) {
         this.lastByDevice.delete(deviceId);
       }
     }

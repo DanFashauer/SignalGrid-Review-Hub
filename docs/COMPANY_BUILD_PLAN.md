@@ -279,15 +279,25 @@ earlier — that is the loop working, not a reason to soften the record.
     when the value is unreadable. It is the fail-closed doctrine exactly
     inverted — the rule the decision core enforces was never carried to auth.
     A seventh instance sat in `lib/location`'s freshness check, where an
-    undateable signal read as FRESH.
-    All seven are fixed to treat unparseable as expired/stale.
+    undateable signal read as FRESH — and the auditor later found its twin
+    eleven lines below, plus one more in `lib/persistence`, for NINE fail-open
+    sites in total (see the widening note below).
+    All nine are fixed to treat unparseable as expired/stale.
     `scripts/check-nan-fail-open.mjs` (preflight + CI, four rules, self-tested)
-    holds the line: run against the pre-fix sources it independently
-    rediscovers all seven at the reported line numbers (it prints EIGHT
-    violations, because `store.ts:430` trips two rules at once — hits are not
-    sites, and the distinction is worth stating since the first draft of this
-    row miscounted from the gate's own output); against the fixed tree, 0
-    violations across 1217 source files.
+    holds the line. Two measurements, each attributed to the gate version that
+    produced it, because conflating them is how a figure goes stale:
+    the FIRST (clock-operand-only) gate, run against the pre-fix sources,
+    rediscovered all seven then-known sites at their reported line numbers,
+    printing EIGHT violations — `store.ts:430` trips two rules at once, so hits
+    are not sites, a distinction worth stating since the first draft of this row
+    miscounted straight from the gate's own output.
+    The WIDENED gate, run against the true pre-PR base, reports **13 violations
+    across 10 distinct sites**: the six in `lib/webauthn`, both in
+    `lib/location`, one in `lib/persistence`, and one in
+    `microsoft-graph-sandbox-proof.ts` that is direction-SAFE (an unreadable
+    date already fell to `stale`) but was unguarded, and now returns `unknown`
+    to match the connector it models.
+    Against the fixed tree: 0 violations across 1217 source files.
     Eleven regression assertions pin the webauthn fixes in
     `proof:webauthn-verify` (37 → 48). The first version of those assertions
     checked only `success === false`, which passed identically with the defect
@@ -332,6 +342,41 @@ earlier — that is the loop working, not a reason to soften the record.
     suspicion), so its read-only status is BEHAVIOURAL — the roster gate derives
     write capability from `Write`/`Edit` frontmatter only and would not catch a
     shell edit. The two vendored reviewers carry the identical hole.
+
+    **The auditor's first run paid for itself, and its first finding was against
+    THIS row.** Two more sites existed that the gate could not see, and one of
+    them was eleven lines below a fix in a file already being edited:
+    `lib/location/src/store.ts` — `getLast` got the guard, `cleanup()` did not.
+    The second was `lib/persistence/src/session-store.ts`'s lazy expiry. Both
+    were invisible for one reason: every rule required the literal `Date.now()`
+    as the other operand, and these compare against a local `cutoff` and a
+    `nowMs` parameter. The clock does not have to be spelled out for NaN to
+    invert the meaning. Rules 2 and 3 now match ANY operand — SEVEN becomes
+    NINE sites — and the widened gate catches both on demand while the narrow
+    one saw neither.
+    The session-store one is reported honestly as LATENT, not live: `expires_at`
+    is `TIMESTAMPTZ NOT NULL` in both the migration and the inline DDL and `pg`
+    returns a Date, so no path on the shipped schema reaches the `String(v)`
+    fallback that would produce an unparseable value. Fixed anyway — one
+    comparison, and "unreachable today" is a property of the schema, not of the
+    function.
+    Widening cost two rounds of false positives, both instructive. The first
+    reported EIGHT violations, every one correct code: the connectors and the
+    core's own `util.ts` guard with a REJECTING `Number.isNaN(x) → return
+    "unknown"`, which the gate only recognised as `Number.isFinite`. It now
+    accepts both — while still refusing `!Number.isNaN(x) &&`, which is not a
+    guard but the skip-on-unknown shape rule 1 exists for. The second was a
+    proof comparing two parsed timestamps against each other, which fails CLOSED
+    (NaN loses either way); both-operands-parsed is now excluded, inline and via
+    variables. Seven self-test cases pin every one of those decisions.
+    **The claim this row previously carried about the simulator was REFUTED.**
+    `decisionEngine.ts` has no remediation guard keyed on `outcomes.size === 0`;
+    that expression appears once, at line 230, inside the base-trust allow gate,
+    where it TIGHTENS — allow is considered only when nothing else objected, and
+    still requires affirmative identity and posture evidence. Verified by running
+    the engine: an unknown-type signal and an empty scenario both return
+    `record_audit` only, neither reaches allow. It was queued for the Mac lane on
+    an inherited belief nobody had checked; the queue entry is withdrawn.
 
 41. **POSITIONING.md's claim-to-proof trace has fossilized** — DONE
     2026-08-23, exactly as the row prescribed: anchors that resolve by ID, plus

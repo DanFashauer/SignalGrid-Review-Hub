@@ -123,8 +123,20 @@ function sanitize(text) {
 }
 
 const RULE1 = /!\s*Number\.isNaN\s*\([^)]*\)\s*&&/;
-const RULE2 =
-  /(?:Date\.parse\s*\([^;]*?\)|\.getTime\s*\(\))\s*[<>]=?\s*Date\.now\s*\(\)|Date\.now\s*\(\)\s*[<>]=?\s*(?:Date\.parse\s*\(|new\s+Date\s*\()/;
+// A parse expression on EITHER side of a relational operator, against ANY
+// operand — not just a literal `Date.now()`. The original form required
+// `Date.now()` by name, and that is exactly how it missed two live sites: a
+// sweep comparing against a local `cutoff` and a lazy-expiry check comparing
+// against a `nowMs` parameter. The clock does not have to be spelled out for
+// NaN to invert the meaning.
+const PARSE_EXPR = String.raw`(?:Date\.parse\s*\([^;]*?\)|new\s+Date\s*\([^;]*?\)\s*\.getTime\s*\(\)|\.getTime\s*\(\))`;
+const RULE2 = new RegExp(`${PARSE_EXPR}\\s*[<>]=?\\s*[^=]|[^<>=!]\\s*[<>]=?\\s*${PARSE_EXPR}`);
+// BOTH sides parsed is excluded: comparing two parsed dates (a sort comparator,
+// a test asserting one timestamp precedes another) fails CLOSED — NaN makes the
+// comparison false either way and no permissive branch is taken. Flagging it
+// would be a false positive on correct code, and a gate with false alarms gets
+// switched off.
+const BOTH_PARSED = new RegExp(`${PARSE_EXPR}\\s*[<>]=?\\s*${PARSE_EXPR}`);
 const RULE4 =
   /Date\.now\s*\(\)\s*-\s*(?:Date\.parse\s*\(|new\s+Date\s*\()|(?:Date\.parse\s*\([^;]*?\)|\.getTime\s*\(\))\s*-\s*Date\.now\s*\(\)/;
 const ASSIGN = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:Date\.parse\s*\(|new\s+Date\s*\([^)]*\)\s*\.getTime\s*\()/;
@@ -133,11 +145,16 @@ const RULE3_WINDOW = 20;
 function findViolations(source) {
   const lines = sanitize(source).split("\n");
   const hits = [];
+  const parsedNames = [];
+  for (const line of lines) {
+    const m = ASSIGN.exec(line);
+    if (m) parsedNames.push(m[1]);
+  }
   lines.forEach((line, i) => {
     if (RULE1.test(line)) {
       hits.push({ line: i + 1, rule: 1, text: line.trim() });
     }
-    if (RULE2.test(line) && !/Number\.isFinite/.test(line)) {
+    if (RULE2.test(line) && !BOTH_PARSED.test(line) && !/Number\.isFinite/.test(line)) {
       hits.push({ line: i + 1, rule: 2, text: line.trim() });
     }
     if (RULE4.test(line) && !/Number\.isFinite/.test(line)) {
@@ -146,11 +163,31 @@ function findViolations(source) {
     const m = ASSIGN.exec(line);
     if (m) {
       const name = m[1];
-      const cmp = new RegExp(`\\b${name}\\b\\s*[<>]=?\\s*Date\\.now\\s*\\(\\)|Date\\.now\\s*\\(\\)\\s*[<>]=?\\s*\\b${name}\\b`);
-      const guard = new RegExp(`Number\\.isFinite\\s*\\(\\s*${name}\\s*\\)`);
+      // Widened with rule 2, and for the same reason: the comparison target is
+      // any operand, not the literal clock.
+      const cmp = new RegExp(`\\b${name}\\b\\s*[<>]=?\\s*[^=]|[^<>=!]\\s*[<>]=?\\s*\\b${name}\\b`);
+      // TWO guard forms are legitimate and both must count. `Number.isFinite(x)`
+      // used to reject, and the REJECTING `Number.isNaN(x)` — `if
+      // (Number.isNaN(x)) return "unknown"`, which the connectors and the core's
+      // own `util.ts` use. Recognising only isFinite made the first widening
+      // report eight violations, every one of them correct code that guards
+      // properly. The dangerous cousin, `!Number.isNaN(x) &&`, is NOT a guard —
+      // it is the skip-on-unknown shape, and rule 1 flags it on its own.
+      const guard = new RegExp(
+        `Number\\.isFinite\\s*\\(\\s*${name}\\s*\\)|(?<!!\\s{0,4})Number\\.isNaN\\s*\\(\\s*${name}\\s*\\)`,
+      );
       for (let j = i; j < Math.min(lines.length, i + RULE3_WINDOW); j += 1) {
         if (guard.test(lines[j])) break;
-        if (j > i && cmp.test(lines[j])) {
+        // Comparing two PARSE-ASSIGNED variables fails closed for the same
+        // reason the inline both-parsed case does: NaN makes the comparison
+        // false whichever side it is on, and no permissive branch is taken.
+        // `BOTH_PARSED` only sees the inline spelling, so the variable spelling
+        // is handled here — it is how a proof comparing two timestamps got
+        // flagged on the first widening.
+        const otherParsed = parsedNames.some(
+          (o) => o !== name && new RegExp(`\\b${o}\\b`).test(lines[j]),
+        );
+        if (j > i && cmp.test(lines[j]) && !otherParsed) {
           hits.push({ line: j + 1, rule: 3, text: lines[j].trim(), via: `${name} (assigned line ${i + 1})` });
           break;
         }
@@ -176,6 +213,31 @@ function findViolations(source) {
       false,
     ],
     ["forward TTL arithmetic is NOT flagged", "const expiresAt = new Date(now.getTime() + ttl * 1000);", false],
+    // The widening, pinned. Every one of these came from a real site or a real
+    // false positive the first widening produced.
+    ["non-clock operand, inline (the sweep that leaked)", "if (new Date(s.observedAt).getTime() < cutoff) { drop(); }", true],
+    [
+      "non-clock operand, inline, fixed",
+      "const o = new Date(s.observedAt).getTime();\nif (!Number.isFinite(o) || o < cutoff) { drop(); }",
+      false,
+    ],
+    ["non-clock operand, parameter (the lazy expiry)", 'if (s.status === "active" && Date.parse(s.expiresAt) < nowMs) { expire(); }', true],
+    [
+      "REJECTING Number.isNaN counts as a guard",
+      'const seen = Date.parse(lastSeenAt);\nif (Number.isNaN(seen)) return "unknown";\nreturn nowMs - seen <= staleAfterMs ? "fresh" : "stale";',
+      false,
+    ],
+    [
+      "but !Number.isNaN(x) && is NOT a guard — it is rule 1",
+      "const exp = Date.parse(r.expiresAt);\nif (!Number.isNaN(exp) && exp <= cutoff) return null;",
+      true,
+    ],
+    ["both operands parsed, inline — fails closed, not flagged", "if (Date.parse(a) < Date.parse(b)) swap();", false],
+    [
+      "both operands parsed via variables — fails closed, not flagged",
+      "const lastMs = Date.parse(a);\nconst evalMs = Date.parse(b);\nif (lastMs > evalMs) reject();",
+      false,
+    ],
     ["comment describing the bug is NOT flagged", "// was: if (!Number.isNaN(exp) && exp <= Date.now())", false],
   ];
   const failures = cases.filter(([, src, shouldFlag]) => findViolations(src).length > 0 !== shouldFlag);

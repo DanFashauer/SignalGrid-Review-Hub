@@ -346,7 +346,16 @@ function liftShippedSignal(
 
 function freshness(lastSeenAt: string | null, observedAt: string) {
   if (!lastSeenAt) return "unknown";
+  // An unreadable date already fell to "stale" here, because NaN <= threshold is
+  // false — safe in DIRECTION, but not what the shipped connector does: it
+  // returns "unknown" (see the deriveFreshness helpers in
+  // lib/integrations/src/integrations/*/evaluate.ts, which guard with a
+  // rejecting Number.isNaN before comparing). A proof that models a connector
+  // should model the connector it has, so the two now agree. Made explicit
+  // rather than left implicit: relying on which way a NaN comparison happens to
+  // fall is how the seven auth-path sites were written in the first place.
   const ageMs = Date.parse(observedAt) - Date.parse(lastSeenAt);
+  if (!Number.isFinite(ageMs)) return "unknown";
   return ageMs <= 7 * 24 * 60 * 60 * 1000 ? "fresh" : "stale";
 }
 

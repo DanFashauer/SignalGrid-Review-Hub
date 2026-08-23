@@ -112,6 +112,15 @@ export function deriveCriticalSignalsPresent(
     // not a posture answer. `posture-stale` catches it in v1; this makes it hold
     // when a custom rule set does not.
     evidence.postureFreshness !== "expired" &&
+    // "stale" was MISSING from this ladder while the dock ladder eleven lines
+    // below rejected it — the two disagreed about the same word, and posture is
+    // the more load-bearing of the two. A stale posture answer passed the
+    // backstop, so a custom rule set that does not itself gate on freshness
+    // could allow on a compliance answer of unknown age. The shipped v1
+    // `posture-stale` rule masks it, which is exactly why it survived: the
+    // backstop is the layer that holds when the rules do NOT, and it was not
+    // holding. Verified before and after against the real function.
+    evidence.postureFreshness !== "stale" &&
     // Dock evidence that EXISTS but is stale, expired, or unreadable is not
     // evidence. "missing" is deliberately absent from this list: no dock at all
     // is a deployment shape, not a degraded signal, and treating the two alike
@@ -286,6 +295,13 @@ const DOCK_CATEGORIES = [
 ] as const;
 
 /** Worst-wins, because one stale channel is enough to make the reading unreliable. */
+// Exported so proofs can sweep EVERY freshness value instead of hand-listing a
+// few. The asymmetry fixed above survived because the core proof enumerated all
+// five values for the dock ladder and hand-wrote a single "expired" case for
+// posture — 221 green assertions, and the one value that mattered was the one
+// nobody wrote down. A `Record<Freshness, …>` is exhaustive by construction: add
+// a member to the union and this object fails to compile until it is handled, so
+// a list derived from its keys cannot fossilise the way a literal array does.
 const FRESHNESS_SEVERITY: Record<Freshness, number> = {
   fresh: 0,
   missing: 1,
@@ -293,6 +309,11 @@ const FRESHNESS_SEVERITY: Record<Freshness, number> = {
   stale: 3,
   expired: 4,
 };
+
+/** Every member of the `Freshness` union, derived from the exhaustive severity
+ *  map above rather than written out again. Use this in any sweep that must
+ *  cover the whole union. */
+export const FRESHNESS_VALUES = Object.keys(FRESHNESS_SEVERITY) as readonly Freshness[];
 
 /**
  * The worst freshness across dock signals THAT EXIST. Absent dock evidence

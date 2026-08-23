@@ -134,6 +134,32 @@ target — the same reasoning behind that bench's own 6,000x floor headroom.
    saves an eight-file conflict.
 5. **Keep this table current.** A lane that changes branch, scope, or goes
    dormant updates its row in the same commit as the change.
+6. **A lane that DIAGNOSES a defect may FIX it, in any lane's work.** Standing
+   authority, owner-granted 2026-08-23, recorded as DR-017.
+
+   This rule exists because its absence cost six hours. The Mac lane found that
+   `live-headwind` could never authenticate, read the decompiled war, and pinned
+   the exact scheme — then handed it back rather than applying a one-line change,
+   on the reading that rule 1 forbids patching into another lane's recent work.
+   That reading was reasonable; nothing above actually said it. The ambiguity
+   resolved toward caution, and caution here meant three round trips to move a
+   fix the finder already held.
+
+   So it resolves the other way now: **whoever has the diagnosis has the
+   authority.** Two conditions, both cheap:
+   - the fix is committed with the EVIDENCE that justifies it, so the other lane
+     can audit rather than re-derive;
+   - a lane message says what was touched and why, in the same push.
+
+   The sim-request loop stays, and its purpose narrows to what it was always
+   good at: PROVENANCE — a committed record that an operation ran, on what
+   revision, with what result. It is not a permission gate and was never meant
+   to be one. Do not queue a request to ask whether you may fix something you
+   have already proven is broken; queue it so the run is on the record.
+
+   What still hands back: a change that would alter a RATIFIED decision
+   (docs/DECISION_RECORDS.md), widen the launch profile, or edit the byte-faithful
+   Swift ports for behaviour. Those are boundary changes, not defect repairs.
 
 ## Collision log
 

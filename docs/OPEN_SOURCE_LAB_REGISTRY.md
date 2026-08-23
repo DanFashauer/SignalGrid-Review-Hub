@@ -51,7 +51,7 @@ fails on any owner the roster does not carry.
 | 6 | `open-policy-agent/opa` | REFERENCE_ARCHITECTURE | P1 | `solutions-architect` | Apache-2.0 | — | no |
 | 7 | `cedar-policy/cedar` | REFERENCE_ARCHITECTURE | P1 | `solutions-architect` | Apache-2.0 | — | no |
 | 8 | `wazuh/wazuh` | LAB_SOURCE | P1 | `secops-domain` | GPL-2.0 | ⚠️ | yes |
-| 9 | `glpi-project/glpi` | DEFERRED_RESEARCH | P1 | `itsm-ops-domain` | GPL-3.0 | ⚠️ | no |
+| 9 | `glpi-project/glpi` | LAB_SOURCE | P0 | `itsm-ops-domain` | GPL-3.0 | ⚠️ | no |
 | 10 | `FreeRADIUS/freeradius-server` | DEFERRED_RESEARCH | P1 | `network-domain` | GPL-2.0 | ⚠️ | no |
 | 11 | `inverse-inc/packetfence` | DEFERRED_RESEARCH | P2 | `network-domain` | GPL-2.0 | ⚠️ | no |
 | 12 | `ocsf/ocsf-schema` | OPEN_STANDARD | P0 | `secops-domain` | Apache-2.0 | — | no |

@@ -138,17 +138,17 @@
     {
       "repo": "glpi-project/glpi",
       "ownerRanked": 9,
-      "classification": "DEFERRED_RESEARCH",
+      "classification": "LAB_SOURCE",
       "licence": "GPL-3.0",
       "licenceCaution": true,
-      "role": "IT asset/inventory research for future evidence enrichment; deferred.",
+      "role": "ITSM lab source. DR-013 item 3: GLPI live-driven proves the ITSM class without any vendor signup. Licence is GPL-3.0 and licenceCaution stays TRUE: SignalGrid drives its REST API over HTTP, which is USE, not code reuse \u2014 no GLPI source is vendored, linked, or derived, so no GPL obligation attaches to this repository. The never-rule still governs: no code reuse before licence review.",
       "deployedInLab": false,
       "deployedEvidence": null,
       "ownerRole": "itsm-ops-domain",
-      "priorityTier": "P1",
+      "priorityTier": "P0",
       "credentialClass": "service_account_least_privilege",
       "mutationsAllowed": false,
-      "lastReviewed": "2026-08-21"
+      "lastReviewed": "2026-08-23"
     },
     {
       "repo": "FreeRADIUS/freeradius-server",

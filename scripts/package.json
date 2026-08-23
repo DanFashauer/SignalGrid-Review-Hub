@@ -161,7 +161,8 @@
     "smoke:connector-emulator": "pnpm run proof:connector-emulator",
     "sync:manifest": "node ../scripts/generate-sync-manifest.mjs",
     "test:e2e": "playwright test --config playwright.config.ts --tsconfig ../tsconfig.base.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.page.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.page.json --noEmit",
+    "proof:live-glpi": "tsx ./src/live-glpi-proof.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

@@ -191,11 +191,44 @@ earlier — that is the loop working, not a reason to soften the record.
     days. `review-coverage.json` carries zero entries for the ~2,900 lines
     computing every verdict; `review-tiers.json` was never committed.
     Blocking row 8 restated with measurement.
-43. **Falsifiability is enforced only for the connector tier** —
-    qa-engineer, days. Mutation coverage does not reach the verdict core;
-    `signalgrid-grid` still ships ~90 assertions over local literals that
-    cannot fail; 21 of 50 check-gates carry no self-test; eight written
-    security suites (`tests/security-reference/`) run nowhere.
+43. **Falsifiability is enforced only for the connector tier** — HALF DONE
+    2026-08-23: the worst unfailable arm is fixed, and fixing it found a live
+    bug. Note the path first, because the row named a package that does not
+    exist: there is no `lib/signalgrid-grid`; `proof:signalgrid-grid` runs
+    `scripts/src/signalgrid-grid-proof.ts`, a harness over the simulator.
+    Its `safeMalformedRun` caught EVERY error and returned a synthesized
+    result — status "validation_error", plus a one-element `auditEvidence`
+    array built inside the catch block. The two assertions per case then
+    checked that status and that `auditEvidence.length > 0`, both against data
+    the catch had just written. All seven malformed inputs throw, so all
+    fourteen assertions passed unconditionally and the simulator was never
+    exercised on that path. Unfailable was the lesser half: it was fail-OPEN,
+    because ANY error became "the guard worked".
+    Each case now DECLARES the guard that must reject it
+    (`expectRejectedBy`), the catch reports the real thrown message instead of
+    minting evidence, and a rejection arriving from anywhere else fails.
+    On its first run the rewritten assertions caught a real latent defect:
+    `allowedSignalTypes` and `allowedSeverity` were `const`s declared ~650
+    lines BELOW the top-level loop that reaches them, so the enum check ran in
+    the temporal dead zone and threw `Cannot access 'allowedSignalTypes'
+    before initialization`. The "invalid enum values" case had therefore never
+    tested the enum guard at all — it crashed, and the old catch recorded the
+    crash as a pass. Both sets are hoisted above first use; the enum guard now
+    genuinely runs. Proof: 783/783, determinism hash unchanged in shape.
+    Falsified both directions: pointing one `expectRejectedBy` at a message
+    that never fires → 2 failures; re-introducing the temporal-dead-zone
+    ordering → the same 2 failures it originally exposed; restored → 783/0.
+    STILL OPEN, and deliberately NOT restated as measured here: a review pass
+    reported roughly 334 further structurally-unfailable assertions in the
+    same file (tautologies over values the code under test computes, and total
+    functions that cannot return falsy). Only the fourteen above were verified
+    by falsification, so the rest stays a reported figure until someone plants
+    a defect against it. Also open: mutation coverage still does not reach the
+    verdict core; 21 of 50 check-gates carry no self-test; the eight suites in
+    `tests/security-reference/` run nowhere (no Vitest is installed and
+    `tests/` is outside the pnpm workspace), and two more unexecuted suites
+    were found beside them — `artifacts/mcp-server/test/server.test.ts` and
+    the k6 scripts in `tests/load/`.
 44. **Two ungated contracts in the governance layer** — HALF DONE
     2026-08-23: the decision-record format contract now has
     scripts/check-decision-record-format.mjs (preflight + CI). DR-010 through

@@ -245,6 +245,28 @@ earlier — that is the loop working, not a reason to soften the record.
     page") remains gateable repo-wide if that is ever wanted; it is deliberately
     not done here, because a gate over 18 archival documents would be a large
     rewrite in service of a regex rather than of a reader.
+40b. **Module-scope temporal-dead-zone reads — gated for the COLUMN-0 shape,
+    open for the rest.** This defect shipped twice in one day, silently both
+    times: `context.ts` broke enterprise OIDC entirely (a hoisted function
+    called at module load read a `const` declared 21 lines below), and
+    `signalgrid-grid-proof.ts` never ran its enum guard (same mechanism, ~650
+    lines apart). `function` hoists; `const` does not, and under a bundler the
+    read surfaces as `undefined` rather than throwing.
+    `scripts/check-module-init-order.mjs` (preflight + CI) detects it,
+    transitively through local calls, for a call written at COLUMN 0 — 802
+    source files, 0 false positives, and reintroducing the real OIDC defect
+    fails it on demand.
+    **It does NOT catch the grid-proof shape**, whose call sits inside a
+    TOP-LEVEL `for` loop: indented, yet still executing at module load. Widening
+    to any indentation and filtering out function bodies was tried and reverted
+    — bounding those bodies by text is unreliable (arrow functions assigned to
+    consts, class methods, nested braces) and it produced 75 false positives on
+    a tree known clean. A gate with 75 false alarms is worse than none; it
+    teaches people to ignore it.
+    OPEN: doing this properly needs real scope analysis via a parser (the
+    TypeScript compiler API), not regex. Sized honestly at hours, not minutes.
+    Recorded here rather than papered over in the gate's own header.
+
 41. **POSITIONING.md's claim-to-proof trace has fossilized** — DONE
     2026-08-23, exactly as the row prescribed: anchors that resolve by ID, plus
     a gate. Measured first: ALL FIVE `launch-profile.mjs` line anchors had

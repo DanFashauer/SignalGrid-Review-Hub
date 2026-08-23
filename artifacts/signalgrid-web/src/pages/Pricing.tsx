@@ -13,7 +13,7 @@ const TIERS = [
     cta: "Request a walkthrough",
     features: [
       { text: "Device counts indicative — the measured constraint is the per-key rate limit (240 requests/minute default, operator-tunable)", ok: true },
-      { text: "6 evaluated-today signal dimensions", ok: true },
+      { text: "The three Limited GA signals: device compliance, its freshness, and the device's authority to act now", ok: true },
       { text: "Decision engine + policy editor", ok: true },
       { text: "Operator dashboard", ok: true },
       { text: "Mobile PWA (operator + access-support triage)", ok: true },

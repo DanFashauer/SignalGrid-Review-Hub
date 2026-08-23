@@ -1603,6 +1603,18 @@ if (pending) {
     "stale-dock guardrail: the control case is genuinely intact (else the sweep below is vacuous)",
     allCriticalKnown.criticalSignalsPresent === true,
   );
+  // The two fields the critical set used to omit. Both are masked by the shipped
+  // v1 rules and both were reachable by a custom rule set, which is exactly the
+  // case the backstop exists for — it is the layer that holds when the rules do
+  // not.
+  check(
+    "critical set: an UNKNOWN osSupported degrades critical evidence",
+    deriveCriticalSignalsPresent({ ...allCriticalKnown, osSupported: "unknown" }) === false,
+  );
+  check(
+    "critical set: an EXPIRED postureFreshness degrades critical evidence (a lapsed answer is not an answer)",
+    deriveCriticalSignalsPresent({ ...allCriticalKnown, postureFreshness: "expired" }) === false,
+  );
   for (const [freshness, expectCritical] of [
     ["fresh", true],
     ["missing", true],

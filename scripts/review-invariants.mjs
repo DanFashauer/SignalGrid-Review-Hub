@@ -107,7 +107,11 @@ const DECLARED_CLOCK_READS = new Map([
       reason:
         "Signal observation stamps and the TTL sweep. Reading the clock is the point of an age check; " +
         "what must not happen is a DECISION reading it, and location emits signals rather than verdicts.",
-      retires: "Retires with the package if the lib/location deletion proceeds (docs/COMPANY_BUILD_PLAN.md).",
+      retires:
+        "Retires when location-services stops being a DEFERRED family and its clock reads move behind " +
+        "an injected clock. NOT by deleting the package — that deletion was considered and REJECTED " +
+        "(docs/COMPANY_BUILD_PLAN.md row 51a): zero importers is the expected state of a deferred " +
+        "family's implementation, not evidence it is dead.",
     },
   ],
   [

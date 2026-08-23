@@ -786,6 +786,34 @@ earlier — that is the loop working, not a reason to soften the record.
     it wants an owner's call rather than an agent's preference. The alternative
     — a separate always-on registry for CI-scheduled lanes, checked the same way
     — is the same decision wearing a different hat.
+51a. **DISPOSITION OF ROW 51: `lib/location` is KEPT. Deletion considered and
+    REJECTED 2026-08-23.** The row below measured it as an orphan with zero
+    importers and queued deletion. The measurement was right and the conclusion
+    was wrong, for a reason worth keeping.
+    `location-services` is a DEFERRED CONNECTOR FAMILY, and `location` and
+    `location_certainty` are DEFERRED SIGNAL KINDS — all three verified in the
+    `deferred:` lists of `scripts/launch-profile.mjs`, not inferred. **Zero
+    importers is the EXPECTED state of a deferred family's implementation**, not
+    evidence that it is dead. It is unwired because the family has not shipped,
+    which is the plan, not a defect.
+    What would have been deleted: 440 lines implementing NAC RADIUS Accounting
+    and DHCP-lease location ingest — MDM/UEM-agnostic, network-derived presence.
+    That is committed future work, and irreversibly discarding it to reduce a
+    package count would have been a bad trade.
+    **The error was in the question, not the arithmetic.** "Does anything import
+    this today" is the wrong measurement for a deferred family; "is this the
+    implementation of something we have committed to ship" is the right one, and
+    it answers yes. This is the same failure class `fail-closed-auditor` was
+    hired for — a measurement that is accurate and answers something other than
+    what was asked — applied to a plan row rather than to code.
+    Two clock reads in it were fixed on the way past (`getLast` and the
+    `cleanup()` twin, row 40c), and the package is now DECLARED in the
+    determinism ledger (row 40g) with a retirement condition tied to the family
+    shipping — not to the package being deleted.
+    Reversal clause: revisit if `location-services` is ever moved from deferred
+    to WONTFIX, at which point the implementation genuinely has no future and
+    deletion becomes correct. Recoverable from history at `4a170db` regardless.
+
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23; the disposition itself is an owner call, stated below.
     Every clause of the row holds. `lib/location` has ZERO importers (only a

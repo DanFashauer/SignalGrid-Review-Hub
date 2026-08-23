@@ -1,5 +1,5 @@
 {
-  "$comment": "What has actually been READ by a named role, as opposed to what a gate asserts. scripts/check-review-coverage.mjs prints the percentage on every run and fails only on incoherence — a claim naming a path that does not exist, or a claim with no reviewer, date or depth. Seeded honestly on 2026-08-19: the number is small on purpose, because the alternative was leaving it invisible. depth: read = opened and understood; audited = read adversarially against a specific question; verified-live = checked against a real running system.",
+  "$comment": "What has actually been READ by a named role, as opposed to what a gate asserts. scripts/check-review-coverage.mjs prints the percentage on every run and fails only on incoherence \u2014 a claim naming a path that does not exist, or a claim with no reviewer, date or depth. Seeded honestly on 2026-08-19: the number is small on purpose, because the alternative was leaving it invisible. depth: read = opened and understood; audited = read adversarially against a specific question; verified-live = checked against a real running system.",
   "version": 1,
   "reviews": [
     {
@@ -7,7 +7,7 @@
       "reviewedBy": "qa-engineer",
       "date": "2026-08-19",
       "depth": "audited",
-      "note": "WebSocket campaign collector — found the resolved report still being mutated by late frames, and duplicate host frames double-counting rows."
+      "note": "WebSocket campaign collector \u2014 found the resolved report still being mutated by late frames, and duplicate host frames double-counting rows."
     },
     {
       "path": "lib/integrations/src/integrations/network-nac/types.ts",
@@ -49,7 +49,7 @@
       "reviewedBy": "principal-engineer",
       "date": "2026-08-19",
       "depth": "audited",
-      "note": "Role/permission table — found tenant:admin granted and required by nothing."
+      "note": "Role/permission table \u2014 found tenant:admin granted and required by nothing."
     },
     {
       "path": "artifacts/api-server/src/middlewares/rateLimit.ts",
@@ -63,7 +63,7 @@
       "reviewedBy": "web-engineer",
       "date": "2026-08-19",
       "depth": "audited",
-      "note": "Full site sweep: 14 findings, 8 applied — router-base 404s, invisible signal dots, contrast, reduced motion, worker-PWA claims."
+      "note": "Full site sweep: 14 findings, 8 applied \u2014 router-base 404s, invisible signal dots, contrast, reduced motion, worker-PWA claims."
     },
     {
       "path": ".github/workflows",
@@ -119,7 +119,7 @@
       "reviewedBy": "api-contract-architect",
       "date": "2026-08-20",
       "depth": "read",
-      "note": "The collection is hand-authored and checked against the spec, not generated from it — so a new spec path needs a matching item added by hand."
+      "note": "The collection is hand-authored and checked against the spec, not generated from it \u2014 so a new spec path needs a matching item added by hand."
     },
     {
       "path": "scripts/src/verify-ledger-cli.ts",
@@ -140,7 +140,7 @@
       "reviewedBy": "data-persistence-engineer",
       "date": "2026-08-20",
       "depth": "verified-live",
-      "note": "16/16 on real Postgres. Refutes the roster claim that the restore path was only described — flipped byte, truncated archive and missing manifest all refused, and a good archive accepted as the negative control."
+      "note": "16/16 on real Postgres. Refutes the roster claim that the restore path was only described \u2014 flipped byte, truncated archive and missing manifest all refused, and a good archive accepted as the negative control."
     },
     {
       "path": "docs/BACKUP_AND_RESTORE.md",
@@ -168,7 +168,7 @@
       "reviewedBy": "iam-domain",
       "date": "2026-08-20",
       "depth": "audited",
-      "note": "Normalizes report.freshness through oneOf with an unknown fallback rather than deriving it from a token — the one place the exp trap could have entered, and it does not."
+      "note": "Normalizes report.freshness through oneOf with an unknown fallback rather than deriving it from a token \u2014 the one place the exp trap could have entered, and it does not."
     },
     {
       "path": "lib/integrations/src/integrations/sso-session/evaluate.ts",
@@ -196,14 +196,14 @@
       "reviewedBy": "network-domain",
       "date": "2026-08-20",
       "depth": "audited",
-      "note": "Read against the fail-closed invariant after the sweep's counterexample. Both grant exits returned none whether or not nacCompliant and freshness were reported — unknown graded identical to known-good. Fixed: verified-good none, unreported monitor (AUTHENTICATED_POSTURE_UNVERIFIED), reported-bad step_up. Negative control confirmed the new checks fail on the old code."
+      "note": "Read against the fail-closed invariant after the sweep's counterexample. Both grant exits returned none whether or not nacCompliant and freshness were reported \u2014 unknown graded identical to known-good. Fixed: verified-good none, unreported monitor (AUTHENTICATED_POSTURE_UNVERIFIED), reported-bad step_up. Negative control confirmed the new checks fail on the old code."
     },
     {
       "path": "lib/integrations/src/integrations/identity-risk/evaluate.ts",
       "reviewedBy": "iam-domain",
       "date": "2026-08-20",
       "depth": "audited",
-      "note": "riskState unknown + riskLevel unknown + zero detections graded trusted/NO_RISK/none, and the normalizer had no arm for Entra's clean value 'none' — so parse failure and a clean tenant were the same state, graded trusted. Fixed both halves together; a real detection still outranks the new monitor floor."
+      "note": "riskState unknown + riskLevel unknown + zero detections graded trusted/NO_RISK/none, and the normalizer had no arm for Entra's clean value 'none' \u2014 so parse failure and a clean tenant were the same state, graded trusted. Fixed both halves together; a real detection still outranks the new monitor floor."
     },
     {
       "path": "lib/integrations/src/integrations/identity-risk/identity-connector.ts",
@@ -217,35 +217,35 @@
       "reviewedBy": "security-engineer",
       "date": "2026-08-20",
       "depth": "audited",
-      "note": "The shared enumeration harness read end to end before extending its reach — self-proof carries both too-strict and too-loose negative controls, so a predicate error in either direction is caught."
+      "note": "The shared enumeration harness read end to end before extending its reach \u2014 self-proof carries both too-strict and too-loose negative controls, so a predicate error in either direction is caught."
     },
     {
       "path": "scripts/src/local-authority-proof.ts",
       "reviewedBy": "security-engineer",
       "date": "2026-08-20",
       "depth": "audited",
-      "note": "Already fully enumerated by hand (360 combinations, granting set pinned by equality) — the symbol-grep coverage count under-reported it. The launch family is covered."
+      "note": "Already fully enumerated by hand (360 combinations, granting set pinned by equality) \u2014 the symbol-grep coverage count under-reported it. The launch family is covered."
     },
     {
       "path": "lib/integrations/src/integrations/vuln-scan/evaluate.ts",
       "reviewedBy": "security-engineer",
       "date": "2026-08-20",
       "depth": "audited",
-      "note": "Shift-1 sweep: found wedge #14 — a finding whose severity failed to parse fell to the low/info residual and graded low_risk/LOW_SEVERITY_ONLY. Now unknown/SEVERITY_UNVERIFIED/monitor; grant pinned by enumeration to the attested-empty scan only."
+      "note": "Shift-1 sweep: found wedge #14 \u2014 a finding whose severity failed to parse fell to the low/info residual and graded low_risk/LOW_SEVERITY_ONLY. Now unknown/SEVERITY_UNVERIFIED/monitor; grant pinned by enumeration to the attested-empty scan only."
     },
     {
       "path": "scripts/src/uem-proof.ts",
       "reviewedBy": "security-engineer",
       "date": "2026-08-20",
       "depth": "audited",
-      "note": "Coverage audit: already fully enumerated by hand (2160 states, granting set pinned exactly, ZERO unjustified grants). Counted toward the shift-1 covered tier without modification — symbol-grep undercounts hand-rolled sweeps."
+      "note": "Coverage audit: already fully enumerated by hand (2160 states, granting set pinned exactly, ZERO unjustified grants). Counted toward the shift-1 covered tier without modification \u2014 symbol-grep undercounts hand-rolled sweeps."
     },
     {
       "path": "lib/integrations/src/integrations/location-services/evaluate.ts",
       "reviewedBy": "security-engineer",
       "date": "2026-08-20",
       "depth": "audited",
-      "note": "Shift-1 sweep: wedges #12/#13 — unknown freshness (null/unparseable capturedAt) skipped the stale guard and granted on_premises; a future-dated capture read as fresh. Both now UNVERIFIED_LOCATION_FRESHNESS/monitor; enumeration pins the single granting state."
+      "note": "Shift-1 sweep: wedges #12/#13 \u2014 unknown freshness (null/unparseable capturedAt) skipped the stale guard and granted on_premises; a future-dated capture read as fresh. Both now UNVERIFIED_LOCATION_FRESHNESS/monitor; enumeration pins the single granting state."
     },
     {
       "path": "lib/persistence/src/role-split.ts",
@@ -259,14 +259,77 @@
       "reviewedBy": "data-persistence-engineer",
       "date": "2026-08-20",
       "depth": "verified-live",
-      "note": "Executed against a local PostgreSQL 16 before CI: 61/61, three consecutive runs (idempotent from a used cluster). Positive direction, seven denial classes (all 42501), admin non-vacuity, the backup → posture-destroyed → restore round trip, and the Codex-review guard set: migrations/restore refuse UP FRONT without CREATEROLE (database untouched, proven by row counts), the split refuses to adopt a preexisting SUPERUSER/owning/member role, all three durable components (decision, session, ledger) refuse readiness on missing grants; PUBLIC/column/sequence/schema/database grant wedges staged and proven converged; owner-rights paths (SECURITY DEFINER routines, writable views) staged and REFUSED until the administrator locks them down; partial connection caps, non-relation ownership, SECURITY DEFINER triggers, rewrite rules, and PUBLIC-inherited schema CREATE refused; bare-database apply proven (guarded relation lookups); forbidden-privilege readiness (negative probe) proven; restore re-locks archived definer routines (pg_restore default-ACL artifact); grants outside the canonical set refused (pg_shdepend allowlist) staged and proven converged; NOLOGIN, CONNECTION LIMIT 0, expired VALID UNTIL, schema/database ownership, and cross-database ownership (pg_shdepend) refused; db:migrate proven as the repair command on an already-current database; runtime connects via its direct CONNECT grant on a hardened cluster; a restore credential without grant authority (owns tables, not the database) is refused before pg_restore, and role loss recovers to the same posture. Destructive runs are gated behind SIGNALGRID_DB_DISPOSABLE=1 (loud refusal, never a silent skip)."
+      "note": "Executed against a local PostgreSQL 16 before CI: 61/61, three consecutive runs (idempotent from a used cluster). Positive direction, seven denial classes (all 42501), admin non-vacuity, the backup \u2192 posture-destroyed \u2192 restore round trip, and the Codex-review guard set: migrations/restore refuse UP FRONT without CREATEROLE (database untouched, proven by row counts), the split refuses to adopt a preexisting SUPERUSER/owning/member role, all three durable components (decision, session, ledger) refuse readiness on missing grants; PUBLIC/column/sequence/schema/database grant wedges staged and proven converged; owner-rights paths (SECURITY DEFINER routines, writable views) staged and REFUSED until the administrator locks them down; partial connection caps, non-relation ownership, SECURITY DEFINER triggers, rewrite rules, and PUBLIC-inherited schema CREATE refused; bare-database apply proven (guarded relation lookups); forbidden-privilege readiness (negative probe) proven; restore re-locks archived definer routines (pg_restore default-ACL artifact); grants outside the canonical set refused (pg_shdepend allowlist) staged and proven converged; NOLOGIN, CONNECTION LIMIT 0, expired VALID UNTIL, schema/database ownership, and cross-database ownership (pg_shdepend) refused; db:migrate proven as the repair command on an already-current database; runtime connects via its direct CONNECT grant on a hardened cluster; a restore credential without grant authority (owns tables, not the database) is refused before pg_restore, and role loss recovers to the same posture. Destructive runs are gated behind SIGNALGRID_DB_DISPOSABLE=1 (loud refusal, never a silent skip)."
     },
     {
       "path": "scripts/src/lib/db-guard.ts",
       "reviewedBy": "data-persistence-engineer",
       "date": "2026-08-20",
       "depth": "verified-live",
-      "note": "The disposable-cluster declaration (SIGNALGRID_DB_DISPOSABLE=1) every destructive Postgres proof now requires. DATABASE_URL alone is not consent: the proofs DROP the tables they test and the role-split proof re-passwords the cluster-wide runtime role. Refusal is exit 1 and loud — a silent skip in CI would leave the gate green while testing nothing. Refusal path executed locally."
+      "note": "The disposable-cluster declaration (SIGNALGRID_DB_DISPOSABLE=1) every destructive Postgres proof now requires. DATABASE_URL alone is not consent: the proofs DROP the tables they test and the role-split proof re-passwords the cluster-wide runtime role. Refusal is exit 1 and loud \u2014 a silent skip in CI would leave the gate green while testing nothing. Refusal path executed locally."
+    },
+    {
+      "path": "lib/signalgrid-core/src/continuity.ts",
+      "reviewedBy": "verdict-core-reader",
+      "date": "2026-08-23",
+      "depth": "audited",
+      "note": "Prototype-key outcomes passed `in OUTCOME_RANK` and stuck as the reduce accumulator (rank undefined loses every > as NaN), erasing a genuine deny and making the answer order-dependent \u2014 falsifying the module's own headline law. FIXED: Set membership in validateRecord and in the exported mostRestrictiveOutcome. Also read: the standing bound cannot expire an ONLINE record (continuity.ts:276) \u2014 tested and intended, recorded so nobody re-finds it as a bug."
+    },
+    {
+      "path": "lib/signalgrid-core/src/evidence.ts",
+      "reviewedBy": "verdict-core-reader",
+      "date": "2026-08-23",
+      "depth": "audited",
+      "note": "Per-signal `freshness` is computed and stamped by dock.ts but buildEvidence never reads it \u2014 only category/value/observedAt. A year-old tamper_state:'none' is indistinguishable from a fresh one, and a dock that honestly reports sensor_unavailable steps up while a silent dock does not. OPEN, not fixed here. Also: deriveCriticalSignalsPresent omits osSupported and counts postureFreshness 'expired' as present."
+    },
+    {
+      "path": "lib/signalgrid-core/src/policy.ts",
+      "reviewedBy": "verdict-core-reader",
+      "date": "2026-08-23",
+      "depth": "read",
+      "note": "Validates authored rules at the write boundary, then most-restrictive-wins with a step_up default and an allow-on-degraded backstop. The backstop's critical set is five fields; shipped v1 rules mask the osSupported gap, but createPolicyDraft can activate a rule set that does not."
+    },
+    {
+      "path": "lib/signalgrid-core/src/engine.ts",
+      "reviewedBy": "verdict-core-reader",
+      "date": "2026-08-23",
+      "depth": "read",
+      "note": "Tenant-safe facade: every method resolves a bearer token to a principal and checks one named Permission before any query; no method takes a caller-supplied tenant id. No fail-closed inversion found."
+    },
+    {
+      "path": "lib/signalgrid-core/src/decision.ts",
+      "reviewedBy": "verdict-core-reader",
+      "date": "2026-08-23",
+      "depth": "read",
+      "note": "The decision loop \u2014 resolve, gather, derive, evaluate, snapshot, persist, audit, remediate, webhook. No fail-closed inversion found."
+    },
+    {
+      "path": "lib/signalgrid-core/src/resolution.ts",
+      "reviewedBy": "verdict-core-reader",
+      "date": "2026-08-23",
+      "depth": "read",
+      "note": "Turns reason codes into ordered routed steps and can project a re-evaluation. Three fields written and never read: summaryForOperator, projectedReasonCodes, clears \u2014 while the sibling summaryForWorker IS rendered twice."
+    },
+    {
+      "path": "lib/signalgrid-simulator/src/decisionEngine.ts",
+      "reviewedBy": "verdict-core-reader",
+      "date": "2026-08-23",
+      "depth": "audited",
+      "note": "The remediation allow (lines 220-227) does not carry the `outcomes.size === 0` guard the base allow requires, so remediation.verified plus a non-suppressing outcome (api.integration_failed, low_battery, health_degraded) yields allow where the same evidence without it does not. OPEN \u2014 deliberately not fixed: this file is the byte-faithful source of the Swift port and changing it breaks parity. Also confirmed: SignalGridDecision.confidence has zero readers anywhere."
+    },
+    {
+      "path": "lib/posture-composition/src/compose.ts",
+      "reviewedBy": "verdict-core-reader",
+      "date": "2026-08-23",
+      "depth": "read",
+      "note": "Strongest action wins, tier follows, drivers most-severe-first. Zero signals compose to ok/none \u2014 handled downstream by signalCount and pinned by two proofs, so not a defect."
+    },
+    {
+      "path": "lib/posture-composition/src/adapters.ts",
+      "reviewedBy": "verdict-core-reader",
+      "date": "2026-08-23",
+      "depth": "read",
+      "note": "40 one-line mappings plus fromDevicePosture, the only one with real logic (13 conditions over five Graph fields; 3 of 900 input states grant). All 40 cast recommendedAction with no runtime check \u2014 every member is on the ladder today, so safe by construction, but it is a load-bearing invariant with no guard."
     }
   ]
 }

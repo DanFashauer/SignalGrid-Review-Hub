@@ -301,6 +301,37 @@ refuses("an omitted policyKnownSuperseded is refused (omission is not 'current')
   reconcileDecisions([{ id: "x", outcome: "allow", provenance: { policyVersion: 1, evaluatedOffline: false } as DecisionProvenance }]));
 refuses("an unknown outcome is refused", () =>
   reconcileDecisions([{ id: "x", outcome: "permit" as DecisionOutcome, provenance: prov() }]));
+// PROTOTYPE KEYS, and why an ordinary unknown string was not enough. The guard
+// above used to be `record.outcome in OUTCOME_RANK`, and `in` walks
+// Object.prototype — so "permit" was refused while "constructor" sailed through.
+// It was not a harmless extra value: mostRestrictiveOutcome reduces with NO
+// initial value, so a poisoned key arriving FIRST becomes the accumulator, its
+// rank is a function, `4 > function` is NaN, and nothing displaces it. A genuine
+// deny was erased and the answer became order-dependent — falsifying this
+// module's headline law, which the exhaustive sweeps below could never catch
+// because they iterate OUTCOMES, an alphabet the counterexample is not in.
+//
+// WHAT THESE ASSERTIONS DO AND DO NOT PIN, measured rather than assumed:
+// there are now TWO guards — validateRecord's Set membership, and
+// mostRestrictiveOutcome validating its own input because it is exported.
+// Reverting EITHER one alone leaves these assertions green (72/72); reverting
+// BOTH drops seven. So what is pinned is the PROPERTY — a prototype key never
+// reaches the ranking table — not which guard enforces it. That is deliberate
+// defense in depth, and stating it beats letting a reader assume both arms
+// are independently covered when only their conjunction is.
+for (const key of ["constructor", "toString", "__proto__", "hasOwnProperty", "valueOf"]) {
+  refuses(`a prototype key as an outcome is refused (${key})`, () =>
+    reconcileDecisions([{ id: "x", outcome: key as DecisionOutcome, provenance: prov() }]));
+}
+// The erasure itself, asserted directly: a poisoned record must never be able to
+// swallow a real deny, in EITHER arrival order.
+for (const order of [["poison", "real"], ["real", "poison"]] as const) {
+  refuses(`a prototype-key record cannot erase a deny (${order.join(" then ")})`, () => {
+    const poison = { id: "poison", outcome: "constructor" as DecisionOutcome, provenance: prov() };
+    const real = { id: "real", outcome: "deny" as DecisionOutcome, provenance: prov() };
+    return reconcileDecisions(order[0] === "poison" ? [poison, real] : [real, poison]);
+  });
+}
 refuses("a non-integer policyVersion is refused", () =>
   reconcileDecisions([rec("x", "allow", { policyVersion: 1.5 })]));
 refuses("a zero policyVersion is refused", () => reconcileDecisions([rec("x", "allow", { policyVersion: 0 })]));

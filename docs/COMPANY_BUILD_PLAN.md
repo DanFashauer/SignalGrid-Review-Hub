@@ -249,10 +249,61 @@ earlier — that is the loop working, not a reason to soften the record.
     positioning + devex, days. The trace is what makes the positioning
     DR-013-legitimate, and its `launch-profile.mjs` line anchors now point at
     unrelated content. Needs anchors that resolve by ID, plus a gate.
-42. **The verdict core still has no named reader** — principal-engineer,
-    days. `review-coverage.json` carries zero entries for the ~2,900 lines
-    computing every verdict; `review-tiers.json` was never committed.
-    Blocking row 8 restated with measurement.
+42. **The verdict core still has no named reader** — DONE 2026-08-23, and it
+    found a live fail-closed inversion on a reachable route.
+    The row's figure was wrong and is now measured: **3,895 lines**, not
+    ~2,900 (engine 560, decision 216, policy 764, resolution 522, evidence 340,
+    continuity 409, simulator decisionEngine 313, posture-composition 771).
+    The row's other two claims held on checking, and were not "corrected":
+    `review-coverage.json` genuinely carried zero entries for the
+    verdict-computing files — its one signalgrid-core entry is `auth.ts`, which
+    is authorization, not verdict computation — and `review-tiers.json` was
+    genuinely never committed.
+    `verdict-core-reader` (hired by the DR-016 loop for exactly this) read all
+    eleven files and filed nine ledger entries. What it found:
+    **FIXED — prototype keys erased a deny.** `continuity.ts` gated outcomes
+    with `record.outcome in OUTCOME_RANK`, and `in` walks Object.prototype, so
+    `"constructor"` passed validation. It was not a harmless extra value:
+    `mostRestrictiveOutcome` reduces with NO initial value, so a poisoned key
+    arriving first becomes the accumulator, its rank is a function, `4 >
+    function` is NaN, and nothing displaces it. `most(["constructor","deny"])`
+    returned `"constructor"` while `most(["deny","constructor"])` returned
+    `"deny"` — a genuine deny erased, and the answer order-dependent, which
+    falsifies the module's own headline law twenty lines above. Reachable via
+    `POST /v1/decisions/reconcile`, served under the default `review-demo`
+    profile and fenced under `shared-device-gateway`. Fixed with Set membership
+    in `validateRecord` AND inside the exported `mostRestrictiveOutcome`, which
+    a caller can reach without validation at all. The prototype-less table was
+    the first attempt and the proof rejected it — `policy.ts` holds a twin and a
+    parity check requires the two byte-identical — so the defense moved to where
+    the danger is rather than deforming a table that must match its twin.
+    Regression assertions added; 72/72. Falsified honestly: reverting EITHER
+    guard alone still passes, reverting BOTH drops seven, so what is pinned is
+    the property, not which arm enforces it — recorded in the proof rather than
+    left for a reader to assume.
+    **OPEN — freshness is computed, stamped, then discarded.** `dock.ts`
+    classifies each record's age and stamps `freshness` on all six signals it
+    emits; `buildEvidence` reads only category/value/observedAt and never
+    consults it, and `DecisionEvidence` carries no per-signal freshness at all.
+    A year-old `tamper_state:"none"` is indistinguishable from a fresh one, and
+    the asymmetry is sharp: a dock that HONESTLY reports `sensor_unavailable`
+    steps up, while a dock silent for a year does not. The operator console
+    renders that same `freshness` as an evidence-quality badge, so it is shown
+    to a human as meaningful while the verdict ignores it. Zero proof coverage.
+    **OPEN — the simulator's remediation allow skips the base-trust guard.**
+    `decisionEngine.ts:220-227` omits the `outcomes.size === 0` condition every
+    other allow must pass, so `remediation.verified` plus a non-suppressing
+    outcome (`api.integration_failed`, `low_battery`, `health_degraded`) yields
+    an allow that the same evidence WITHOUT the remediation does not. NOT fixed
+    here on purpose: this file is the byte-faithful source of the Swift port and
+    editing it breaks parity — it needs the twin changed in the same commit.
+    **OPEN — the fail-closed backstop's "critical" set omits `osSupported`** and
+    counts `postureFreshness:"expired"` as present. Shipped v1 rules mask both,
+    but `createPolicyDraft` can activate a rule set that does not.
+    **Dead computed fields:** `SignalGridDecision.confidence` confirmed zero
+    readers anywhere, plus `summaryForOperator`, `projectedReasonCodes` and
+    `clears` in `resolution.ts` — while the sibling `summaryForWorker` is
+    rendered twice, which is what makes the operator one conspicuous.
 43. **Falsifiability is enforced only for the connector tier** — HALF DONE
     2026-08-23: the worst unfailable arm is fixed, and fixing it found a live
     bug. Note the path first, because the row named a package that does not

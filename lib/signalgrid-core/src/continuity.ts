@@ -68,6 +68,31 @@ import {
  * `decision-continuity-proof.ts` pins the two against each other so the duplication
  * cannot drift silently.
  */
+// PROTOTYPE-LESS ON PURPOSE. This was a plain object literal, and two guards
+// below tested membership with `in`, which walks Object.prototype. So
+// `"constructor" in OUTCOME_RANK` was TRUE and a record could carry
+// outcome:"constructor" through validation. The damage was not cosmetic:
+// mostRestrictiveOutcome reduces WITHOUT an initial value, so the poisoned key
+// becomes the accumulator when it arrives first, its "rank" is a function, and
+// `4 > function` is NaN — false. Nothing ever displaces it.
+//
+//   mostRestrictiveOutcome(["constructor", "deny"])  ->  "constructor"
+//   mostRestrictiveOutcome(["deny", "constructor"])  ->  "deny"
+//
+// A genuine deny was erased, and the answer became order-dependent — which
+// falsifies this file's own headline claim, twenty lines above, that the result
+// "does not depend on the order records arrived in".
+//
+// Two independent fixes, because either alone leaves a hole. The guards now use
+// a Set — the pattern policy.ts:224 already used — and mostRestrictiveOutcome
+// validates its OWN input below, because it is exported and a caller can reach
+// it without passing through validateRecord at all.
+//
+// The table itself stays a plain literal on purpose. Making it prototype-less
+// was the first attempt and the continuity proof rejected it: policy.ts holds a
+// twin table and a parity check requires the two to be byte-identical. That
+// guard is right, so the defense moved to where the danger actually is rather
+// than deforming a table that has to match its twin.
 const OUTCOME_RANK: Record<DecisionOutcome, number> = {
   deny: 4,
   restrict: 3,
@@ -75,10 +100,22 @@ const OUTCOME_RANK: Record<DecisionOutcome, number> = {
   allow: 1,
 };
 
+/** Membership, without Object.prototype in the answer. */
+const VALID_OUTCOMES: ReadonlySet<string> = new Set(["deny", "restrict", "step_up", "allow"]);
+
 /** The fail-closed join on outcomes: the most restrictive of the set wins. */
 export function mostRestrictiveOutcome(outcomes: readonly DecisionOutcome[]): DecisionOutcome {
   if (outcomes.length === 0) {
     throw new CoreError("validation", "mostRestrictiveOutcome requires at least one outcome.", 400);
+  }
+  // Validate before ranking. This function is EXPORTED, so it can be reached
+  // without validateRecord — and an unranked key does not merely rank low, it
+  // ranks `undefined`, which loses every `>` comparison as NaN and therefore
+  // STICKS as the accumulator. That is a fail-closed inversion, not a typo.
+  for (const outcome of outcomes) {
+    if (!VALID_OUTCOMES.has(outcome)) {
+      throw new CoreError("validation", `mostRestrictiveOutcome received an unknown outcome "${String(outcome)}".`, 400);
+    }
   }
   return outcomes.reduce((worst, next) => (OUTCOME_RANK[next] > OUTCOME_RANK[worst] ? next : worst));
 }
@@ -344,7 +381,7 @@ function validateRecord(record: ReconcilableDecision): void {
   if (typeof record.id !== "string" || record.id.trim().length === 0) {
     throw new CoreError("validation", "reconcileDecisions record has no id.", 400);
   }
-  if (!(record.outcome in OUTCOME_RANK)) {
+  if (!VALID_OUTCOMES.has(record.outcome)) {
     throw new CoreError("validation", `reconcileDecisions record "${record.id}" has an unknown outcome.`, 400);
   }
   const p = record.provenance;
@@ -403,7 +440,7 @@ function validateStandingBound(bound: StandingBound): void {
       throw new CoreError("validation", `standingBound.elapsedSecondsById["${id}"] must be a finite, non-negative number.`, 400);
     }
   }
-  if (bound.floor !== undefined && !(bound.floor in OUTCOME_RANK)) {
+  if (bound.floor !== undefined && !(VALID_OUTCOMES.has(bound.floor))) {
     throw new CoreError("validation", "standingBound.floor is not a known outcome.", 400);
   }
 }

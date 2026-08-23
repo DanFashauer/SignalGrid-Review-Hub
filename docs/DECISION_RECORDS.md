@@ -882,3 +882,53 @@ doctrine, the vendored copy loses: it is deleted, not edited, because an edited
 vendor copy can no longer be diffed against upstream.
 
 **Status: owner-directed, 2026-08-23.**
+
+## DR-017 — Whoever has the diagnosis has the authority to fix it (2026-08-23)
+
+**Owner-directed, in his own words:** "The Mac lane I want to be absolutely
+clear one more time you have free use and can do whatever you want and or need
+from that path", and — the correction that prompted this record — "if you cannot
+determine the outcome then build it and assign it to yourself and or employee
+aka agent with that skill can perform that task."
+
+**The question.** Two lanes work this repository. `LANE_COORDINATION.md` rule 1
+said to check before touching a shared surface. It did not say a lane may not
+repair a defect it found in the other lane's work — but that is how it was read,
+and reasonably so. Should a finder hand back, or fix?
+
+**What the reading cost, measured rather than supposed.** The Mac lane
+established that `live-headwind` had never authenticated on any machine,
+decompiled the pinned war, and pinned the scheme exactly:
+`SHA1(UPPER(hex(MD5(pw))) + "5YdSYHyg2U")`, with the login endpoint wanting MD5
+hex rather than plaintext. It held a one-line fix and handed it back. Three
+round trips and roughly six hours later the same one-line fix landed, unchanged.
+Nothing was learned in the interval that the finder did not already know.
+
+**The call.** A lane that diagnoses a defect may fix it, in any lane's work,
+under two cheap conditions: the fix is committed WITH the evidence that
+justifies it, and a lane message names what was touched. The sim-request loop
+narrows to what it was always good at — provenance, a committed record that an
+operation ran on a known revision — and is explicitly NOT a permission gate.
+
+**What still hands back**, because these are boundary changes rather than defect
+repairs: altering a ratified decision record, widening the launch profile, or
+editing the byte-faithful Swift ports for behaviour (golden rule 1 — parity is
+the point, and a behaviour change there needs both twins in one commit).
+
+**Why not merge the lanes instead.** The owner asked whether to collapse
+everything onto the Mac. Considered and declined, on evidence: the cloud lane
+merged twenty pull requests in a session during which the Mac was mostly idle,
+and it is the lane holding continuous CI and merge authority. Going fully local
+trades always-on throughput for the convenience of one tree. The split is not
+the cost; the HANDBACK was, and this record removes it. Revisit if the cloud
+lane's inability to run a container engine ever blocks more work than the
+coordination saves — today it blocks two queued operations and nothing else.
+
+**Reversal.** If a repair made under this authority breaks something the finding
+lane did not understand — the shape rule 1 was guarding against — the authority
+narrows to surfaces the fixing lane already owns, and the evidence-with-the-fix
+condition becomes a review rather than a commit note. The collision log in
+`LANE_COORDINATION.md` is where that evidence would appear, and it is empty of
+such a case today.
+
+**Status: owner-directed, 2026-08-23.**

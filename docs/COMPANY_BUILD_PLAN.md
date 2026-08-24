@@ -1326,13 +1326,32 @@ earlier — that is the loop working, not a reason to soften the record.
     `docs/research/` exits 1, and scanning `docs/inspiration/` exits 1. Coverage
     can no longer shrink quietly, because a gate that scans less still prints
     that it passed — which is how this survived unnoticed in the first place.
-    QUALIFICATION, added 2026-08-24 after a review challenged the wording above.
-    "Zero new violations" was reported as though it meant the newly-scanned prose
-    is clean. It does not. It means the GATED RULES DO NOT REACH THIS PROSE.
-    `docs/research/COMPETITIVE_IMPRIVATA.md:21` carries five bare external
-    figures in a single paragraph — `~$544M`, `~$500M revenue`, `500+ hospitals
-    across 12 countries`, `~1M healthcare users`, `~47% of customers are
-    healthcare` — and the gate flags none of them. Coverage without detection.
+    CORRECTED AGAIN 2026-08-24, and the qualification above was itself wrong.
+    It said `docs/research/COMPETITIVE_IMPRIVATA.md:21` carries "five bare
+    external figures ... and the gate flags none of them. Coverage without
+    detection." Both halves fail on inspection.
+    THEY ARE NOT BARE. The file carries 28 anchored sources in a `## Sources`
+    section, hedges every figure with `~`, and CAVEATS the revenue number
+    explicitly — "from sale-process reporting; a getLatka $130M figure appears
+    stale and is not relied upon". That is the DR-015 discipline done properly,
+    and calling it bare was a slander on prose more careful than the gate.
+    THEY ARE NOT EXTERNAL STATISTICS BY THE GATE'S DEFINITION. Tested, not
+    assumed: all five were run against `EXTERNAL_STAT` and NONE matches any of
+    its three arms. `~47% of customers` misses because `customers` is not in the
+    noun list; `~$500M revenue` misses because `revenue` is not
+    market/TAM/opportunity/industry. The rule targets marketing-shaped claims,
+    and vendor facts in a competitive brief sit outside that target by design.
+    So "zero violations" here means the prose is OUT OF SCOPE, which is a third
+    thing — neither "clean" nor "unreachable". The lesson is the one this
+    cluster keeps relearning: I measured that the gate did not flag them and
+    concluded it could not see them.
+    A SECONDARY MISMATCH, real but not a defect: the discharge accepts
+    `https?://`, and ZERO of the six `COMPETITIVE_*.md` files use a scheme —
+    all cite bare domain-paths. Sources also sit at the FOOT, outside the
+    same-BLOCK rule, and figures hedge with `~` where the regex wants the word
+    "approximately". Three mechanical reasons a URL discharge could never fire
+    in that tree. Whether to teach the gate this convention is
+    competitive-analyst's call; nothing is wrong with the documents.
     That is the same defect class as everything else in this cluster, committed
     while writing about the defect class: a measurement that was accurate and
     answered a different question than the one it was used to support. The scan

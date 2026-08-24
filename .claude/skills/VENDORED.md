@@ -2,9 +2,25 @@
 
 Third-party work, copied in unmodified. **Not ours.**
 
-> **One exception in this directory:** `owner-comms/` is FIRST-PARTY — written in
-> this repository, not part of the upstream set. It lives here because the harness
-> loads skills from this directory. Everything else below describes the other 14.
+> **SIX exceptions in this directory — read this before any re-vendor.** These are
+> FIRST-PARTY, written in this repository and NOT part of the upstream set. They live
+> here because the harness loads skills from this directory. Everything else below
+> describes the other 14.
+>
+> | Skill | Authored | What it defines |
+> | --- | --- | --- |
+> | `owner-comms/` | 2026-08-20 | how this org writes to the owner |
+> | `signalgrid/` | 2026-08-22 | the base skill every SignalGrid role inherits |
+> | `signalgrid-core/` | 2026-08-22 | executor for web, performance, data, API and six domain roles |
+> | `signalgrid-native/` | 2026-08-22 | executor for mobile, desktop, firmware and the Mac lane |
+> | `signalgrid-reviewer/` | 2026-08-22 | executor for qa-engineer |
+> | `signalgrid-scribe/` | 2026-08-22 | executor for docs, compliance, release, archivist, positioning |
+>
+> **This note said "one exception" until 2026-08-24, and it was true when written on
+> 08-20.** The five `signalgrid-*` skills landed on 08-22, after it, and nothing
+> updated the sentence — so a re-vendor operator following it literally would have
+> overwritten the skills that define four of the org's executors. Found by the
+> first audit of `.claude/`, which until that day no role owned.
 
 | | |
 |---|---|

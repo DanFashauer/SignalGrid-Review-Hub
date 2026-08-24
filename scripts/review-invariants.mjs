@@ -365,23 +365,50 @@ function findSwitchBlocks(code) {
     "cdnjs.cloudflare.com",
     "ajax.googleapis.com",
   ];
-  // Published surfaces: the web marketing app's shell + source, and the static
-  // HTML files the Pages workflow copies into the site.
+  // SCOPE WIDENED 2026-08-24. This scanned `artifacts/signalgrid-web/` only, plus the
+  // static HTML the Pages workflow copies — and then reported "no third-party vendor
+  // host in ANY published web artifact". Six files in five other web trees carried
+  // fonts.googleapis.com, and the gate saw none of them. One was
+  // artifacts/signalgrid-app, which Dockerfile.web:58 SHIPS at /app/: a deployed
+  // surface handing every visitor's IP to Google, behind a green check that claimed
+  // the opposite. The scope answered a narrower question than the sentence it printed.
+  //
+  // Now every web tree under artifacts/ is scanned. The GATED/REPORTED split follows
+  // what is actually served:
+  //   GATED    — trees Dockerfile.web builds and nginx serves, plus docs/ and site/.
+  //   REPORTED — demo-only trees (launch-profile classes them demo_only; they are not
+  //              in any deploy path). Printed on every run so the number cannot hide,
+  //              and NOT failed on, because failing the build over a surface nobody
+  //              serves would get this gate switched off — which is how it lost its
+  //              scope in the first place.
+  const SHIPPED_TREES = ["artifacts/signalgrid-web/", "artifacts/signalgrid-app/"];
+  const isWebSource = (f) =>
+    f.endsWith(".html") || f.endsWith(".ts") || f.endsWith(".tsx") || f.endsWith(".css");
+  const inArtifactWebTree = (f) => f.startsWith("artifacts/") && isWebSource(f) && !f.includes("/dist/");
   const scan = tracked.filter((f) =>
-    (f.startsWith("artifacts/signalgrid-web/") &&
-      (f.endsWith(".html") || f.endsWith(".ts") || f.endsWith(".tsx") || f.endsWith(".css"))) ||
+    inArtifactWebTree(f) ||
     (f.startsWith("docs/") && f.endsWith(".html")) ||
     (f.startsWith("site/") && f.endsWith(".html")));
+  const shipped = (f) => SHIPPED_TREES.some((t) => f.startsWith(t)) || f.startsWith("docs/") || f.startsWith("site/");
   const hits = [];
+  const reported = [];
   for (const f of scan) {
     // DNS hostnames are case-insensitive, so lower-case the content before
     // matching the (already-lowercase) host list — FONTS.GOOGLEAPIS.COM must
     // trip the same as fonts.googleapis.com.
     const body = read(f).toLowerCase();
-    for (const host of VENDOR_HOSTS) if (body.includes(host)) hits.push(`${f} (${host})`);
+    for (const host of VENDOR_HOSTS) {
+      if (!body.includes(host)) continue;
+      (shipped(f) ? hits : reported).push(`${f} (${host})`);
+    }
   }
-  if (hits.length) bad(`Public-safe web: third-party vendor host in a published artifact — ${hits.join(", ")}. Self-host it instead.`);
-  else ok("Public-safe web: no third-party vendor host in any published web artifact");
+  if (reported.length) {
+    console.log(`  ⚠ third-party vendor host in ${reported.length} DEMO-ONLY web file(s) — not served, so reported:`);
+    for (const r of reported) console.log(`      ${r}`);
+    console.log("      Fix by self-hosting (@fontsource), as signalgrid-web and signalgrid-app do.");
+  }
+  if (hits.length) bad(`Public-safe web: third-party vendor host in a SERVED artifact — ${hits.join(", ")}. Self-host it instead.`);
+  else ok(`Public-safe web: no third-party vendor host in any SERVED web artifact (${scan.length} files scanned across every web tree)`);
 }
 
 console.log("");

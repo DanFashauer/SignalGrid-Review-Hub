@@ -211,3 +211,58 @@ reported separately rather than padding the entry count.
   environment's proxy; the branch-based-Jekyll conclusion was reached from served
   artifacts (a `?v=` stylesheet hash resolving to a real commit, `/README.md`
   returning 200, no `_config.yml`, no `gh-pages` branch), not from the API.
+
+## 2026-08-24 — "A 403 from the GitHub API is always a permission finding"
+Command:
+```
+# CI, PR #303, job "Typecheck, build, and proof scaffold", re-run after an
+# unrelated E2E flake:
+node scripts/check-ci-liveness.mjs
+```
+Output:
+```
+  ✗ could not reach the GitHub Actions API: GET /repos/DanFashauer/SignalGrid-Review-Hub/
+    actions/workflows/scheduled-verification.yml/runs?per_page=10&status=completed
+    -> 403 rate limit exceeded
+      In CI this is FATAL.
+```
+Verdict:  **refuted, and it was my own arm.** Earlier the same day I gave this gate a
+bounded retry and wrote that 401/403/404 "must surface on the first attempt rather than
+being buried under three retries". True for a token lacking `actions: read` — and GitHub
+also returns 403 for a SECONDARY RATE LIMIT, which is as transient as the 429 the same
+commit made retryable. The arm added to keep permission findings honest reintroduced the
+cry-wolf failure the retry existed to prevent.
+
+The status alone cannot separate them, so the BODY decides: a 403 saying "rate limit",
+"secondary rate" or "abuse detection", or carrying an exhausted-quota header, is
+retried; every other 403 still fails on the first attempt. Positive evidence only — an
+empty or unreadable body stays permanent, because guessing "probably a rate limit" would
+bury the `actions: read` finding.
+
+Falsified in BOTH directions, which is the part that matters for a discriminator:
+```
+classifier forced FALSE -> 3 checks fail, incl. "a rate-limit BODY marks a 403 retryable"
+classifier forced TRUE  -> 3 checks fail, incl. "a PERMISSION 403 stays permanent"
+restored                -> self-test green
+```
+
+## 2026-08-24 — "The E2E failure on PR #303 was caused by this branch"
+Command:
+```
+pnpm --filter @workspace/scripts exec playwright test --config playwright.config.ts \
+  --tsconfig ../tsconfig.base.json src/e2e/workflow-safety.spec.ts
+pnpm run test:e2e            # the full suite, full concurrency
+pnpm --filter @workspace/api-server run test:api
+```
+Output:
+```
+3 passed (28.7s)        # including the exact spec CI failed on
+53 passed (57.3s)       # E2E_EXIT=0
+API integration test: 301/301 assertions passed
+```
+Verdict:  **not reproducible here — reported as such, not as "fixed".** CI failed one of
+53 E2E tests (`workflow-safety.spec.ts:37`, a `/cp/v1/grid/config` status check); the
+same spec and the whole suite pass locally on the same tree, and the api-server suite is
+301/301. The re-run then failed on the unrelated 403 above rather than repeating it,
+so the E2E failure has been observed ONCE and never reproduced. Recorded as an
+unexplained single occurrence, not as a flake I have proven.

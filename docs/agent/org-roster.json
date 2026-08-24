@@ -16,7 +16,7 @@
       ],
       "activated": "2026-08-19",
       "produced": "docs/DECISION_RECORDS.md DR-001..DR-003",
-      "nextAction": "CORRECTED 2026-08-24 — the previous entry claimed no decision record names how the September 16 Fleet Premium call gets undone. DR-005 section 5 states the action, and its Reversal clause states the undo: the exclusion reverses if a paying customer requires a Premium capability. The record exists. What is genuinely missing is a reversal-path AUDIT across the whole ledger: check-decision-record-format.mjs gates that each record STATES how it gets undone, but nothing checks that the stated reversal still applies to the world the record now sits in. Read every DR against that question and record which reversals have gone stale."
+      "nextAction": "Row 73: qa-engineer's surface is lib/** plus api-server plus tests — 570 files — while its executor skill:signalgrid-reviewer is forbidden to write source. Both ownership gates count those files as owned, so they read as covered while no writer can touch them. Decide: mark the surface review-only in the roster schema, or move the write half to a role that can discharge it."
     },
     {
       "id": "qa-engineer",
@@ -27,7 +27,8 @@
       "executor": "skill:signalgrid-reviewer",
       "surface": [
         "lib/**",
-        "artifacts/api-server/**"
+        "artifacts/api-server/**",
+        "tests/**"
       ],
       "activated": "2026-08-19",
       "produced": "5 confirmed defects incl. the freshness gate's NaN-date silent pass",
@@ -44,11 +45,15 @@
         ".github/workflows/**",
         "scripts/**",
         "lib/webauthn/**",
-        "lib/api-auth/**"
+        "lib/api-auth/**",
+        "tests/security-reference/**",
+        ".gitleaks.toml",
+        ".gitleaksignore",
+        "SECURITY.md"
       ],
       "activated": "2026-08-19",
       "produced": "SBOM token split; third-party actions pinned + check-action-pinning.mjs",
-      "nextAction": "SHIFT 1 (owner-sequenced, acceptance bar in the owner's words): extend adversarial trust testing across the uncovered connector tier, grant-producing or assurance-lowering paths first. The bar is stronger than \"tests added\": every unknown/missing/stale/contradictory input that could previously produce an affirmative needs an explicit counterexample, and the harness itself needs a mutation/self-test proving it can fail. Does NOT reopen launch scope — no deferred family activates, no surface is added."
+      "nextAction": "Row 71: triage tests/security-reference/** — five of eight specs cannot fail against broken code (verified by two independent agents). Mark which are worth porting (admin-auth-hardening, fail-closed-fallbacks, webauthn-request-identity carry real falsifiable assertions) and which are tautologies that must never be ported as coverage. Then row 73: the roster gives this role lib/api-auth/**, which matches no file in the tree — likely lib/enterprise-auth/**."
     },
     {
       "id": "product-manager",
@@ -76,11 +81,14 @@
       "surface": [
         "artifacts/signalgrid-web/**",
         "artifacts/signalgrid-review/**",
-        "artifacts/signalgrid-app/**"
+        "artifacts/signalgrid-app/**",
+        "artifacts/signalgrid-mobile-pwa/**",
+        "artifacts/mockup-sandbox/**",
+        "tools/**"
       ],
       "activated": "2026-08-19",
       "produced": "14 findings; 8 applied incl. router-base 404s and invisible signal dots",
-      "nextAction": "ROW 56 DECIDED 2026-08-24, owner delegated the call. signalgrid-core now declares artifacts/signalgrid-web/** and artifacts/signalgrid-review/**, so this role has a real executor for the first time. Two alternatives were considered and rejected on evidence: signalgrid-scribe is disqualified by its own words, \"You touch no source\" — it owns docs/** and README.md, and these trees are React source; and a NEW web skill would have been a label with nothing behind it, because CLAUDE.md's four accessibility rules are entirely iOS and no web a11y or brand doctrine exists in the tree to put in one. THE WORK IS UNCHANGED by the decision: reconcile the retired labels this role owns — README.md:3 and :136 say \"Operational Trust Orchestration platform\"; ReviewDashboard.tsx:350 and About.tsx:50 say \"Zero Trust orchestration platform\" — against DR-004's ratified \"Shared-Device Trust Gateway\". Repo-wide search; those four are known instances, not the boundary."
+      "nextAction": "Row 70: four demo-only web trees still load remote fonts and are REPORTED by review-invariants on every run (signalgrid-review, signalgrid-mobile-pwa, signalgrid-desktop, mockup-sandbox). Same @fontsource fix already proven twice, on signalgrid-web and signalgrid-app. Then row 70's siblings from the same read: the PWA's <link rel=manifest> resolves to a 404 at every mount point, its Decision Volume chart renders restrict and deny in the identical colour (--chart-4 and --destructive are the same triple), and its decision detail drops the assurance label, reason codes, matched rules, evidence digest and freshness that make signalgrid-app the console."
     },
     {
       "id": "sre",
@@ -93,7 +101,8 @@
         ".github/workflows/**",
         "docker-compose*.yml",
         "Dockerfile*",
-        "nginx.conf"
+        "nginx.conf",
+        "docker/**"
       ],
       "activated": "2026-08-19",
       "produced": "timeouts on unbounded jobs; concurrency groups on three workflows",
@@ -141,7 +150,8 @@
       "surface": [
         "scripts/src/*bench*",
         "docs/RELIABILITY_SLO.md",
-        "lib/signalgrid-core/**"
+        "lib/signalgrid-core/**",
+        "tests/load/**"
       ],
       "activated": "2026-08-19",
       "produced": "Re-measured every quoted performance figure and recorded the dated baseline in docs/RELIABILITY_SLO.md. p95 1.2671 ms against the quoted 1.3 ms; 5,128 decisions/sec aggregate at 3.38x scaling (85% of linear) with identical verdicts on every worker; the 240 req/min default confirmed in rateLimit.ts. Recorded the judgement NOT to gate absolute values — a latency threshold on a shared runner is a flaky gate — and named the consequence: check-proof-figures.mjs does not cover these, so keeping them true is this role's standing duty",
@@ -189,7 +199,9 @@
       "surface": [
         "lib/api-spec/**",
         "artifacts/api-server/**",
-        "artifacts/api-collection/**"
+        "artifacts/api-collection/**",
+        "artifacts/sync/**",
+        "native/shared/**"
       ],
       "activated": "2026-08-20",
       "produced": "docs/API_CONTRACT_AUDIT.md — the published contract asserted \"every route is tenant-scoped: the tenant is derived from the authenticated bearer token\", which is the inverse of what 21 of its own 55 operations do (/cp/v1/* carries no principal and is scoped only by a client-supplied ?tenant=); nothing said the whole /cp/v1 surface and GET /v1/keys are registered only under the review-demo profile and 404 elsewhere; three served routes (self-audit, reliability, iac) had drifted out of the spec, the Postman collection and the launch profile at once. The cause was that proof:api-contract read one route file and compared only /v1 while printing \"Contract holds\" — widened to the whole served surface, plus a zero-routes-parsed guard, self-test 7/7. Also fixed scripts/safety-check.mjs reporting Postman drift with an EMPTY reason.",
@@ -203,11 +215,21 @@
       "trigger": "A gate is added or changed, or a gate is suspected of passing vacuously. Standing question: is any gate path-filtered away from part of its own subject?",
       "executor": "agent:gate-and-proof-engineer",
       "surface": [
-        "scripts/**"
+        "scripts/**",
+        "artifacts/lab-collections/**",
+        "fixtures/**",
+        ".github/**",
+        ".githooks/**",
+        ".npmrc",
+        ".gitignore",
+        "pnpm-workspace.yaml",
+        "tsconfig.json",
+        "tsconfig.base.json",
+        "mac-kickoff.sh"
       ],
       "activated": "2026-08-19",
       "produced": "Audited whether any preflight gate is referenced only by a workflow that does not gate every PR — the weakness check-preflight-ci-parity.mjs admits in its own header. Found and fixed one real hole: check-assist-conformance.mjs discovers TWO Assist clients (native/android/core Kotlin, native/desktop/core Rust) but ran only in desktop.yml, filtered to native/desktop/** and native/shared/**, so a change to the KOTLIN client never triggered the gate that binds it — the exact failure it exists to catch, in the client where it had already caught two real defects. Now runs in review-hub-ci.yml on every PR. Two other candidates were the false positive the parity gate already documents (npm alias vs script path), and check-ios-port-sources is correctly scoped since its subject lives entirely inside its filter",
-      "nextAction": "CORRECTED 2026-08-24 — the previous entry here asked for work already done a week earlier: it claimed check-preflight-ci-parity.mjs cannot resolve an npm alias against a script path, when aliasesFor/wired() have resolved exactly that since 43ec8f7, and LOCAL_ONLY is empty so there was no exemption to delete. The real open question is narrower and was found while checking that: wired() resolves aliases through a /scripts\\/([a-z0-9-]+\\.mjs)/ pattern, so a gate invoked through an npm script whose target is a .sh — or anything not .mjs — resolves to nothing and would read as unwired. Nothing is currently in that shape, which is why nobody has hit it. Either widen the pattern or state the limit in the file, so the next shell-script gate does not land on a silent false positive."
+      "nextAction": "Row 73, three items: CLAUDE.md:54,63 understates the preflight-vs-harness gap by ~3x (says ~35 non-proof gates outside the harness; parsed from preflight.mjs it is ~79 distinct against seven in the harness); check-cited-paths.mjs skips all of .claude/skills/ as vendored, which has been false for six first-party directories since 2026-08-22, leaving every path they cite ungated; and check-role-coverage.mjs writes its ratchet on every run, so a read-only review dirties the tree that sim-results provenance reads."
     },
     {
       "id": "docs-writer",
@@ -218,7 +240,8 @@
       "executor": "skill:signalgrid-scribe",
       "surface": [
         "docs/**",
-        "README.md"
+        "README.md",
+        "site/**"
       ],
       "activated": null,
       "produced": null,
@@ -298,7 +321,8 @@
       "executor": "skill:signalgrid-core",
       "surface": [
         "lib/integrations/src/integrations/device*/**",
-        "lib/integrations/src/integrations/telemetry/**"
+        "lib/integrations/src/integrations/telemetry/**",
+        "fleet/**"
       ],
       "activated": null,
       "produced": null,
@@ -540,7 +564,9 @@
       "charter": "Getting the first real deployments. Prepares target lists, sequences and materials. PREPARES ONLY — every send is the owner's, without exception.",
       "trigger": "The product can be demonstrated end to end and the positioning is settled enough to describe in a paragraph.",
       "executor": "lane",
-      "surface": null,
+      "surface": [
+        "artifacts/outreach-log/**"
+      ],
       "activated": null,
       "produced": null,
       "priority": 2,
@@ -627,6 +653,24 @@
       "activated": "2026-08-21",
       "produced": "PR #223 aftercare: lane mail with re-run instructions, ack of the Mac's harness message, standing 4-hour monitor routine",
       "nextAction": "The Fleet trial expires September 16, 2026 and the Mac lane holds the only enrollable device, so the seven unverified endpoint dimensions have a deadline this lane cannot move. Confirm the queued sim-requests are drained and report the remaining debt to the owner while the trial is still live."
+    },
+    {
+      "id": "agent-platform-engineer",
+      "title": "Agent platform engineer",
+      "mandate": "Owns the org's own executable definition — the skills, agents, commands and MCP plane that every other role runs through. Audits instructions against the code they govern, resolves two skills claiming one surface, and keeps a named executor from being a name that resolves and nothing more.",
+      "executor": "agent:agent-platform-steward",
+      "surface": [
+        ".claude/**",
+        ".agents/**",
+        "artifacts/mcp-server/**",
+        "CLAUDE.md",
+        "AGENTS.md"
+      ],
+      "activated": null,
+      "nextAction": "Row 73, four items on this role's own surface: .agents/agent_assets_metadata.toml is 100% of that directory and both entries point at images that do not exist; signalgrid/SKILL.md:197 quotes ~1,800 files and ~131 proofs against an actual 2,328 and 139; signalgrid-scribe and signalgrid-reviewer both claim docs/agent/FALSE_CLAIMS.json as a write path while records-archivist owns docs/agent/** on top of them; and two skills name secret-scan as a review-hub-ci job when it lives in supply-chain.yml, omitting the real third service-dependent job, podman-stack. Write only inside .claude/ — the rest is REPORTED and handed to its owner.",
+      "division": "engineering",
+      "charter": "The org's own executable definition: skills, agents, commands, and the MCP agent plane. Instructions audited against the code they govern.",
+      "trigger": "A skill or agent is written or changed; a skill contradicts the tree or another skill; a roster executor resolves but cannot do the work."
     }
   ]
 }

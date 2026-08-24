@@ -1811,6 +1811,128 @@ earlier — that is the loop working, not a reason to soften the record.
     ledger, and a lane message. An empty buffer is its correct resting state; an
     empty evidence log is not.
 
+70. **A deployed surface was handing every visitor's IP to Google, behind a
+    green gate that said it was not.** — FIXED 2026-08-24 (the shipped half),
+    found by the first `web-engineer` read of two apps that until that day had no
+    owner. `review-invariants.mjs` printed "no third-party vendor host in any
+    published web artifact" while scanning `artifacts/signalgrid-web/` plus
+    `docs/*.html` and `site/*.html` — 19 files. SIX files in five other web trees
+    carried `fonts.googleapis.com`, and the gate saw none of them. Its scope
+    answered a narrower question than the sentence it printed.
+    THE ONE THAT WAS SERVED: `artifacts/signalgrid-app` — `Dockerfile.web:58`
+    copies its build to `/usr/share/nginx/html/app/`. A deployed console fetching
+    fonts from a third party on every load, which is a privacy fact about
+    visitors, not a style preference.
+    FIXED by replicating what `signalgrid-web` already did: `@fontsource/inter`
+    and `@fontsource/ibm-plex-mono`, the same seven faces the remote URL
+    requested, imported in `main.tsx`. Verified by building: 43 `.woff2` files
+    now bundled locally and `grep` finds no vendor host anywhere in `dist/`.
+    SCOPE WIDENED, 19 files -> 503 across every web tree, with a GATED/REPORTED
+    split that follows what is actually served. Trees `Dockerfile.web` builds are
+    FATAL; demo-only trees are REPORTED loudly and not failed on, because failing
+    the build over a surface nobody serves is how a gate gets switched off — which
+    is how this one lost its scope to begin with.
+    THE WIDENED GATE IMMEDIATELY CAUGHT ITS OWN AUTHOR. My explanatory comment in
+    `main.tsx` contained the literal hostname, and the gate flagged it. The gate
+    matches a literal string and does not parse comments; for a security check
+    that is correct fail-closed behaviour, so the COMMENT was reworded rather than
+    the gate weakened.
+    STILL OPEN — web-engineer: four demo-only trees still load remote fonts and
+    are reported on every run: `signalgrid-review`, `signalgrid-mobile-pwa`,
+    `signalgrid-desktop`, `mockup-sandbox`. Same fix, already proven twice.
+
+71. **Five of eight security reference tests cannot fail against broken code.**
+    — OPEN, security-engineer. Found by the first `security-engineer` read of
+    `tests/security-reference/**`, assigned to that role only on 2026-08-24, and
+    INDEPENDENTLY VALIDATED by a second agent that re-derived every claim from
+    source and was asked to refute them.
+    · `webhook-signing.test.ts` — all four cases compute an HMAC locally and
+      compare it to a second local HMAC. No application module is imported. It
+      tests that Node's `crypto` is internally consistent.
+    · `secret-redaction.test.ts:60-68` — asserts a hardcoded literal containing
+      "Bearer" contains "Bearer". No redaction utility is invoked.
+    · `rate-limit.test.ts:53-61` — the pass condition is a disjunction that
+      includes `statusCodes.every(s => s === 200)`, so a limiter that does nothing
+      satisfies it.
+    · `rate-limit.test.ts:74-95` — computes `hasRateLimitHeader` and never
+      asserts on it; the only `expect` checks a status code, despite the name.
+    · `replay-attack.test.ts:23-48` — the only real assertion sits inside
+      `if (firstResponse.ok)`, and no request carries auth.
+    · `stepup-enforcement.test.ts` — asserts only that UNAUTHENTICATED access is
+      rejected, never the step-up distinction its name claims.
+    NOT A SILENT GAP, and this is why the row is a should-fix and not a blocker:
+    `check-test-execution.mjs` already declares this whole directory unexecuted,
+    with a dated reason, and that gate IS wired into preflight and CI. The specs
+    were harvested from a retired DEV Next.js build whose modules do not exist
+    here. The validator added a caveat the first agent missed: the three GOOD
+    files cannot run here either, for a different reason — their imports do not
+    resolve in this monorepo.
+    THE ACTION IS TRIAGE, NOT REPAIR: mark which specs are worth porting
+    (`admin-auth-hardening`, `fail-closed-fallbacks`, `webauthn-request-identity`
+    carry real falsifiable assertions) and which are tautologies that must not be
+    ported as-is and mistaken for coverage.
+
+72. **The org published four of its own agent definitions under another author's
+    MIT grant, and told a re-vendor operator to overwrite five first-party
+    skills.** — FIXED 2026-08-24 by the first audit of `.claude/`, a directory
+    that until that day belonged to no role.
+    · `publication-boundary.mjs` classed all of `.claude/agents` as
+      `third_party_intake` under "MIT (c) 2026 Affaan Mustafa". NINE of thirteen
+      are byte-identical to the vendored source; FOUR are first-party
+      (`fail-closed-auditor`, `gate-and-proof-engineer`, `verdict-core-reader`,
+      `agent-platform-steward`) — verified by `cmp` against
+      `third_party/everything-claude-code/agents/`. In a PUBLIC repository this
+      attributed this company's work to someone else. Carve-outs added.
+    · `.claude/skills/VENDORED.md` said `owner-comms` was the ONE first-party
+      skill and "everything else below describes the other 14". True when written
+      on 2026-08-20; the five `signalgrid-*` skills landed on 08-22 in `fa0e32e`
+      and nothing updated it. A re-vendor operator following it literally would
+      have destroyed the skills defining four of the org's executors. Now names
+      all six, with authored dates and what each defines.
+    THE GATE PASSED THROUGHOUT, because it audits COVERAGE — is every path
+    classified — and never the truth of the `reason` text. No gate reads English.
+
+73. **What the first audit of the instruction layer found, and who owns each.**
+    — OPEN. `.claude/`, `CLAUDE.md` and `AGENTS.md` had never been reviewed by
+    anyone because no role owned them. Each item names its role.
+    · agent-platform-engineer: `.agents/agent_assets_metadata.toml` is 100% of
+      that surface and both its entries point at images that do not exist
+      (verified five ways, including `find` and `git ls-files`). Nothing in the
+      repo reads the file. Delete it or restore the images.
+    · agent-platform-engineer: `signalgrid/SKILL.md:197` says "~1,800 files,
+      ~131 proofs"; the tree has 2,328 and 139. A fossil inside a bullet whose
+      argument is that surface area is a cost.
+    · agent-platform-engineer: `signalgrid-scribe` and `signalgrid-reviewer` BOTH
+      name `docs/agent/FALSE_CLAIMS.json` as a write path, and `records-archivist`
+      owns `docs/agent/**` on top. Two lanes editing one registry is the
+      eight-file collision shape `LANE_COORDINATION.md` exists for. Decide the
+      direction — reviewer appends, scribe maintains — and state it in both.
+    · agent-platform-engineer: two skills list the CI jobs preflight does not
+      mirror and name `secret-scan`, which is not a `review-hub-ci.yml` job at all
+      (it lives in `supply-chain.yml`); the real third service-dependent job is
+      `podman-stack`. The correction cited at `signalgrid/SKILL.md:95` has itself
+      drifted.
+    · devex-tooling-engineer: `CLAUDE.md:54,63` says "roughly thirty-five
+      preflight gates" are outside the harness. Parsed from `preflight.mjs`: 176
+      steps, 73 proofs, ~79 distinct non-proof gates, against seven in the
+      harness — the gap is ~3x what the number says, in a paragraph whose whole
+      job is to stop a reader trusting harness-green.
+    · devex-tooling-engineer: `check-cited-paths.mjs` skips `.claude/skills/`
+      entirely as "VENDORED third-party work", which has been false for six
+      directories since 08-22, so every repo path cited in the first-party skills
+      is ungated. Hand-audited: only one stale citation, and it is benign.
+    · devex-tooling-engineer: running `check-role-coverage.mjs` WRITES its
+      ratchet, so a read-only review run dirties the tree — and
+      `provenance.workingTreeClean` in `sim-results` reads `git status`.
+    · security-engineer: the roster gives it `lib/api-auth/**`, which matches
+      nothing (three searches). Likely meant `lib/enterprise-auth/**`. A surface
+      matching no file is a coverage claim about nothing.
+    · principal-engineer: `qa-engineer`'s surface is `lib/**` + api-server +
+      tests — 570 files — but its executor `skill:signalgrid-reviewer` is
+      forbidden to write source. Both ownership gates count those files as owned,
+      so they read as covered while no writer can touch them. Either mark the
+      surface review-only in the schema, or move the write half.
+
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —
     `lib/location` is KEPT. Nothing is outstanding on this row.

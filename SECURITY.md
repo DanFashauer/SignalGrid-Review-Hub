@@ -42,8 +42,8 @@ Out of scope (by design, since this is a review surface):
 
 This repository runs the following automated controls:
 
-- **Dependabot** — weekly dependency and GitHub Actions update pull requests
-  (`.github/dependabot.yml`).
+- **Dependabot** — monthly dependency and GitHub Actions update pull requests
+  (`.github/dependabot.yml`), grouped, with majors arriving separately.
 - **CodeQL** — static code scanning for JavaScript/TypeScript
   (`.github/workflows/codeql.yml`).
 - **gitleaks** — secret scanning on pushes and pull requests

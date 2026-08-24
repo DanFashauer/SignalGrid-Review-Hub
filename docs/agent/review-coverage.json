@@ -512,6 +512,41 @@
       "date": "2026-08-24",
       "depth": "verified-live",
       "note": "Run on the current head. Gates what is machine-independent — a throughput floor derived from the pilot gate, no parallel collapse, and identical verdicts across workers — and reports absolute rates as hardware-specific. Its own output says so on every run, which is why the figure it produces cannot be quoted as a capacity promise by accident."
+    },
+    {
+      "path": ".claude/skills/VENDORED.md",
+      "reviewedBy": "agent-platform-engineer",
+      "date": "2026-08-24",
+      "depth": "audited",
+      "note": "FINDING (row 72, fixed here): said owner-comms was the ONE first-party skill and 'everything else describes the other 14'. True when written 2026-08-20; the five signalgrid-* skills landed 08-22 in fa0e32e and nothing updated it. A re-vendor operator following it literally would have destroyed the skills defining four of the org's executors. Now names all six with authored dates. Verified separately: no vendored skill has been modified in place — git log over the 14 vendored dirs returns exactly one commit, the 2026-08-20 vendoring."
+    },
+    {
+      "path": "scripts/publication-boundary.mjs",
+      "reviewedBy": "agent-platform-engineer",
+      "date": "2026-08-24",
+      "depth": "audited",
+      "note": "FINDING (row 72, fixed here): classed all of .claude/agents as third_party_intake under another author's MIT grant. cmp against third_party/everything-claude-code/agents/ shows nine byte-identical and FOUR first-party. In a public repo this published this company's work under someone else's licence. Carve-outs added for the four agents and the five first-party skills. The gate passed throughout because it audits coverage — is every path classified — never the truth of the reason text."
+    },
+    {
+      "path": "docs/agent/agent-tiers.json",
+      "reviewedBy": "agent-platform-engineer",
+      "date": "2026-08-24",
+      "depth": "audited",
+      "note": "Read end to end. Registered agent-platform-steward here after check-agent-roster.mjs correctly FAILED the build on it — I had hired an agent without registering it, which is precisely what that gate exists to catch. writeScope is a single flat string and overlap is rejected without a declared carve-out, so the steward writes .claude/ only: artifacts/mcp-server/ sits inside build-error-resolver's registered artifacts/ scope, and CLAUDE.md/AGENTS.md are read by every role at once. Review surface wider than write surface, the same shape signalgrid-reviewer uses."
+    },
+    {
+      "path": "artifacts/signalgrid-app/src/main.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-24",
+      "depth": "verified-live",
+      "note": "FINDING (row 70, fixed here): this app is SHIPPED — Dockerfile.web:58 serves its build at /app/ — and loaded fonts from a third-party CDN via three index.html link tags plus an index.css @import, handing every visitor's IP to that vendor. Migrated to @fontsource, the same seven faces, replicating what signalgrid-web already did. VERIFIED by building, not assumed: 43 .woff2 files now bundled locally and no vendor host appears anywhere in dist/."
+    },
+    {
+      "path": "scripts/review-invariants.mjs",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-24",
+      "depth": "audited",
+      "note": "FINDING (row 70, fixed here): the public-safe-web check printed 'no third-party vendor host in any published web artifact' while scanning 19 files in one tree. Six files across five other web trees carried a Google font host. Scope widened to every web tree under artifacts/ — 19 files to 503 — with a GATED/REPORTED split following what Dockerfile.web actually serves. On its first run the widened gate flagged my own explanatory comment for containing the literal hostname; the comment was reworded rather than the gate weakened, because matching a literal string without parsing comments is correct fail-closed behaviour for a security check."
     }
   ]
 }

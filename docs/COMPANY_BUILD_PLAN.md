@@ -998,12 +998,20 @@ earlier — that is the loop working, not a reason to soften the record.
     while no role named the agent or skill that would run it. CORRECTED
     2026-08-24, same day, by an adversarial audit of this very row: the first
     version claimed "ZERO references to `.claude/agents/` or `.claude/skills/`
-    across all SEVEN role documents", and that was FALSE TWICE OVER. There are
-    TWELVE role-adjacent documents, not seven — `docs/company/` holds nine
-    files, not the four that were checked — and `docs/agent/ORG.md:275` already
-    carried one reference, to "the skills under `.claude/skills/`" as a
-    category. The measured truth, re-run across all twelve at `a7a9ae7^`: one
-    reference in twelve documents, and it names no role's executor. The
+    across all SEVEN role documents", and that was FALSE TWICE OVER. "Seven" was
+    not a defined set: three org documents plus "the four under `docs/company/`",
+    a directory that holds NINE files. And `docs/agent/ORG.md:275` already
+    carried one reference, to "the skills under `.claude/skills/`" as a category.
+    Both counts are now stated rather than asserted, because the first attempt to
+    correct this said "twelve role-adjacent documents" and that was the loosest
+    available reading — it counted every file in `docs/company/`, including
+    `ICP_EVIDENCE.md` and `INVESTOR_ONE_PAGER.md`, which mention a role once each.
+    By FILE COUNT the set is twelve; by CONTENT — a document that actually
+    describes roles — it is nine: the three org documents plus `ROLE_CATALOG.md`,
+    `ROLE_ACTIVATION_MATRIX.md`, `RESPONSIBILITY_AND_DRI_MATRIX.md`,
+    `ROLE_LENS_REVIEW_2026-08-21.md`, `ORG_STRUCTURE.md` and `HIRING_SEQUENCE.md`.
+    The measured truth is the same under either: re-run at `a7a9ae7^`, exactly
+    one reference across all twelve files, and it names no role's executor. The
     substantive finding survives; the quantification did not, and it failed for
     the reason everything else this week failed — the verification regex
     required a name after the slash (`.claude/skills/[a-z0-9-]+`) while the

@@ -122,7 +122,7 @@
       "activated": null,
       "produced": null,
       "priority": 2,
-      "nextAction": "The backlog names a pending Swift mirror of reconcileDecisions. Assess it against golden rule 1 — it must go AROUND the ported engines, never through them — and say whether it is cloud-lane work or Mac-only."
+      "nextAction": "FIRST EXECUTION DONE 2026-08-24 (row 78). Highest value first: CLAUDE.md's OWN grep for the raw-font rule returns a false clean — the literal spelling it gives matches zero, while Swift's implicit-member form matches 18, all in the two view controllers that host the Assist gate. Fix the doc's spelling, convert the 18 sites to SG tokens with Dynamic Type, and add the ~20-line gate; the conversion has already been done once and regressed, so the gate matters more than the conversion. Then row 58's nil-expiry fail-open (confirmed still live, two stacked permissive defaults on a live Assist input), the missing scoped step-up release the TS side already fixed, and the three string-vs-boolean attribute predicates. All need a lane that can compile Swift; this lane cannot."
     },
     {
       "id": "compliance-analyst",
@@ -263,7 +263,7 @@
       "activated": null,
       "produced": null,
       "priority": 3,
-      "nextAction": "STAYS ON `lane` BY DECISION, not by omission — row 56, 2026-08-24. Assigning this role a skill would have meant inventing one, and there is nothing to put in it: CLAUDE.md's four accessibility rules are all iOS (UIFont, UIFontMetrics, accessibility-extra-large, the SG tokens), and check-decision-palette is the ONLY gate covering web contrast. So the first work here is not an audit, it is DOCTRINE: write what good looks like for the served web surfaces — focus order, live regions, reduced motion, contrast against both themes — the way the iOS rules are written, and then a skill can honestly claim it."
+      "nextAction": "FIRST EXECUTION DONE 2026-08-24 (rows 75-77). Fixed: the pre-DR-005 deny at 3.14:1 in three trees, and the pinch-zoom lock in four. STILL OPEN, in order: (1) write docs/WEB_ACCESSIBILITY_STANDARD.md — row 77 proves eight ways that no web a11y bar exists here, which makes every other finding advisory; the material is in third_party/everything-claude-code/skills/frontend-patterns, vendored and never opened. (2) restrict and deny render as the identical pixel in the mobile-PWA chart, which has no legend, tooltip or axis, so colour is the sole channel (row 76). (3) two dashboards paint verdicts from raw Tailwind hex, one at 4.26:1 on deny, invisible to the palette gate because the verdict arrives as a JSX attribute. Then the live-region, ARIA, form-label and reduced-motion items."
     },
     {
       "id": "desktop-engineer",
@@ -401,12 +401,13 @@
       "surface": [
         "docs/RUN_AND_GO_LIVE.md",
         "docs/DEPLOYMENT*.md",
-        "config/**"
+        "config/**",
+        "attached_assets/**"
       ],
       "activated": null,
       "produced": null,
       "priority": 2,
-      "nextAction": "Turn PILOT_SCOPE_SKELETON.md into a concrete first-pilot reference architecture: which grants a customer's IT team must issue, in what order, and what SignalGrid can answer before each one lands."
+      "nextAction": "NEWLY OWNED 2026-08-24: attached_assets/ (4 files, 976 lines) was EXCLUDED as 'a source, not a maintained surface', which meant nobody was accountable for MINING it. It is the owner's own research — the enterprise ITSM/ticketing stack with APIs, the MDM/UEM/endpoint and networking repo-and-SDK list, the shared-device custody architecture, and the PACS/IAM/mobile-credential/FIDO2 convergence thesis. That is the raw material for this role's existing next action: turn PILOT_SCOPE_SKELETON.md into a concrete first-pilot reference architecture. Read it, extract what is decision-relevant, and say plainly which parts the product does NOT do. Cross-check the repo list against docs/agent/open-source-lab-registry.json before adding anything."
     },
     {
       "id": "threat-modeler",
@@ -618,11 +619,14 @@
       "charter": "The paperwork of selling: MSA, DPA, BAA, security questionnaires, and what SignalGrid may and may not commit to in writing. Distinct from `compliance-analyst`, which owns whether a CONTROL claim is true; this owns whether a CONTRACT claim is safe to sign.",
       "trigger": "A counterparty sends paperwork, or a document starts making a commitment rather than a description.",
       "executor": "lane",
-      "surface": null,
+      "surface": [
+        "LICENSE",
+        "NOTICE"
+      ],
       "activated": null,
       "produced": null,
       "priority": 2,
-      "nextAction": "Selling into healthcare requires a BAA, and this repository states plainly that Claude Code does not guarantee HIPAA or SOC 2 and that a human compliance review is required. Those two facts have never been reconciled in writing. Draft the gap analysis: what a hospital's standard paperwork asks for, what SignalGrid can honestly answer today, and which answers need a human lawyer. NEVER signs anything — a signature is one of the owner's five reserved actions."
+      "nextAction": "NEWLY OWNED 2026-08-24: LICENSE and NOTICE were EXCLUDED as 'legal text, not a maintained surface' while this role held zero surfaces — an exclusion standing in for an absent owner. First pass, and it is not cosmetic: on 2026-08-24 four first-party agent definitions were found published under another author's MIT grant (COMPANY_BUILD_PLAN row 72). Verify NOTICE actually reflects what this public repository vendors and from whom, now that third_party/ has an owner and the .claude/ carve-outs are recorded."
     },
     {
       "id": "agent-ops-economics",
@@ -664,10 +668,11 @@
         ".agents/**",
         "artifacts/mcp-server/**",
         "CLAUDE.md",
-        "AGENTS.md"
+        "AGENTS.md",
+        "third_party/**"
       ],
       "activated": null,
-      "nextAction": "Row 73, four items on this role's own surface: .agents/agent_assets_metadata.toml is 100% of that directory and both entries point at images that do not exist; signalgrid/SKILL.md:197 quotes ~1,800 files and ~131 proofs against an actual 2,328 and 139; signalgrid-scribe and signalgrid-reviewer both claim docs/agent/FALSE_CLAIMS.json as a write path while records-archivist owns docs/agent/** on top of them; and two skills name secret-scan as a review-hub-ci job when it lives in supply-chain.yml, omitting the real third service-dependent job, podman-stack. Write only inside .claude/ — the rest is REPORTED and handed to its owner.",
+      "nextAction": "NEWLY OWNED 2026-08-24: third_party/everything-claude-code (48 files) was EXCLUDED from ownership as 'upstream owns it' — true about authorship, false about accountability, because this org executes it and VENDORED.md admits it was 'surveyed, not audited'. First pass: audit what we actually run, and triage the 13 vendored skills, 10 commands, 10 rules and 3 contexts that have NEVER been activated against the org's measured gaps. frontend-patterns carries an Accessibility Patterns section, which directly refutes the reason recorded in COMPANY_BUILD_PLAN row 56 for NOT creating a web skill ('no web a11y/brand doctrine exists to put in it'). Read before activating: a vendored skill is a standing instruction to every future session. THEN row 73's four items on the .claude/ surface. Write only inside .claude/; report the rest.",
       "division": "engineering",
       "charter": "The org's own executable definition: skills, agents, commands, and the MCP agent plane. Instructions audited against the code they govern.",
       "trigger": "A skill or agent is written or changed; a skill contradicts the tree or another skill; a roster executor resolves but cannot do the work."

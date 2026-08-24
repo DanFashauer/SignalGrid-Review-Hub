@@ -1933,6 +1933,201 @@ earlier — that is the loop working, not a reason to soften the record.
       so they read as covered while no writer can touch them. Either mark the
       surface review-only in the schema, or move the write half.
 
+74. **Three of my own exclusions were "nobody owns this" wearing a different
+    label.** — FIXED 2026-08-24, on the owner's instruction the same day: "if the
+    reason is due to no role or skill please acquire that and assign the work."
+    He was right, and it was the first thing I got wrong about the ownership gate
+    I had just built. Row 70's gate reached UNOWNED: 0 partly by EXCLUDING 75
+    files. Re-examined, three of those rules were not describing generated output
+    at all:
+    · `third_party/**` — 48 files of agents, skills, commands, rules, contexts
+      and MCP configs this org EXECUTES. "Upstream owns it" is true about
+      AUTHORSHIP and false about ACCOUNTABILITY: upstream does not decide whether
+      it is safe for us to run, and `VENDORED.md` itself admits the vendored set
+      was "surveyed, not audited". Now owned by agent-platform-engineer for
+      REVIEW; its writeScope stays `.claude/`, so it still cannot edit vendored
+      source in place, which is the rule CLAUDE.md already sets.
+    · `attached_assets/**` — 976 lines of the OWNER'S OWN research: the
+      enterprise ITSM stack with APIs, the MDM/UEM/endpoint and networking
+      repo-and-SDK list, the shared-device custody architecture, and the
+      PACS/IAM/mobile-credential/FIDO2 convergence thesis. "A source, not a
+      maintained surface" meant nobody was accountable for MINING it. Now owned
+      by solutions-architect, whose existing next action — turn
+      PILOT_SCOPE_SKELETON into a concrete reference architecture — this is the
+      direct input for.
+    · `LICENSE` and `NOTICE` — excluded as "legal text" while
+      `commercial-counsel` had existed with ZERO surfaces the entire time. Now
+      owned by it, and not cosmetically: row 72 found four first-party agent
+      files published under another author's MIT grant in this public repo, so
+      whether NOTICE reflects what we actually vendor is a live question.
+    THE STRUCTURAL FIX, so this cannot recur. Every exclusion is now
+    `[glob, reason, accountableRole]`, and the gate FAILS if the named role does
+    not resolve in the roster. An exclusion is a promise that somebody is still
+    accountable for that ground; a promise pointing at a name nobody answers to
+    is exactly the gap the gate exists to close. Falsified both ways: a rule
+    naming a non-existent role fails, and a rule naming no role fails.
+    WHAT LEGITIMATELY REMAINS EXCLUDED: 21 files across 11 rules, all generated
+    output — sim results and requests, live evidence, lane mail, heartbeats,
+    build-loop history, emulator results, vendor captures, the SBOM, scanner
+    comparisons, the lockfile. Those need no READER, but each now names the role
+    accountable for the retention decision and the pipeline that mints it:
+    mac-lane-steward, devex-tooling-engineer, security-engineer,
+    agent-platform-engineer.
+    Result: owned 2,253 -> 2,307, excluded 75 files -> 21, unowned still 0.
+    A RESOURCE POOL NOBODY HAD OPENED, found by this re-examination and now
+    queued on agent-platform-engineer: `third_party/everything-claude-code`
+    holds 13 skills, 10 commands, 10 rules and 3 contexts that have NEVER been
+    activated. Among them `frontend-patterns`, which carries an Accessibility
+    Patterns section — directly refuting the reason recorded in row 56 for NOT
+    creating a web skill, namely that "no web a11y/brand doctrine exists to put
+    in it". It existed, vendored and unopened, while accessibility-specialist sat
+    at 0 of 294 files with `lane` as its executor.
+
+75. **The pre-DR-005 deny was live in three trees at 3.14:1 — worse than the
+    historic worst this repo records — one line away from the gate that rejects
+    it by name.** — FIXED 2026-08-24, found by the first `accessibility-specialist`
+    execution. That role had read 0 of 294 files and its executor is `lane`.
+    `check-decision-palette.mjs` exits 0 with "AA everywhere". Its own self-test
+    asserts it would reject `#A05A5A`, the pre-DR-005 fork of deny, and names that
+    exact hex. Meanwhile `artifacts/signalgrid-{review,desktop,mobile-pwa}/src/
+    index.css` each declared `--destructive: 0 28% 49%` — the identical colour,
+    in the same file, a few lines from the `--decision-*` block.
+    MEASURED with the gate's OWN exported `hslToHex`/`contrast`, not asserted:
+    `#A05A5A` is **3.14:1 on card** and 3.52:1 on background. The AA floor DR-005
+    ratifies is 4.5:1, and CLAUDE.md records 3.18:1 as the worst this system ever
+    shipped. This was worse, in three of five trees, behind a green check.
+    `signalgrid-web` and `signalgrid-app` had migrated to `0 43% 60.8%`
+    (`#C67070`, 4.55:1 on card). Three trees never did and nothing could tell.
+    THE REAL BOUNDARY WAS THE EXTRACTOR, NOT THE AUDIT. Widening the canonical
+    table alone changed NOTHING — `cssBlocks()` matches
+    `--(decision-…|background|card)` and simply never collected `--destructive`,
+    so no comparison could ever run on it. A token the extractor does not see can
+    never be wrong. `destructive` is now in that pattern.
+    IN SCOPE FROM THE START: DR-005 says "do not artificially restrict where
+    `deny` may be used" and already brings `--destructive-foreground` into scope.
+    `--destructive` paints destructive buttons and deny-coloured chart fills. It
+    was never out of scope; it was merely unextracted.
+    FALSIFIED PROPERLY, on the second attempt. The first run of the falsification
+    reported PASS because I grepped the output instead of checking the exit code —
+    the same wrong-signal error this session keeps finding. Re-run reading `$?`:
+    exit 1, `✗ ... destructive is #A05A5A, canonical is #C67070`, with the 3.14:1
+    row printed beside it.
+    ALSO FIXED, from the same read: `maximum-scale=1` in the viewport meta of
+    `signalgrid-app`, `signalgrid-review`, `signalgrid-desktop` and
+    `mockup-sandbox` blocked pinch-zoom (WCAG 1.4.4). Removed. Chrome/Android
+    honours it; iOS Safari has ignored it since iOS 10 — so the impact is real but
+    narrower than "everyone", and is stated that way. `signalgrid-web` and the
+    mobile PWA were already clean: the one tree built for phones got it right.
+    `--chart-*` IS DELIBERATELY NOT PINNED. Its semantics vary by tree — in
+    mobile-pwa `--chart-4` painted `restrict`, not `deny` — so a blanket equality
+    rule would assert something untrue. Left to row 76 rather than papered over
+    with a gate that reads stricter than it is.
+
+76. **What the first accessibility execution found that is still open.** — OPEN,
+    accessibility-specialist. Every item below was measured, not asserted; the
+    ratios were computed with the ratified gate's own arithmetic.
+    · **`restrict` and `deny` are the identical pixel** in
+      `signalgrid-mobile-pwa/src/pages/Overview.tsx:45-48` — 1.000:1 — in a chart
+      with **no legend, no tooltip, no axis and no text of any kind**. Colour is
+      the sole channel and two of four colours are one colour. WCAG 1.4.1.
+      Contrast with `signalgrid-app/src/components/LiveDecisionPanel.tsx`, which
+      also maps both to deny but carries text labels, so colour is redundant
+      exactly as DR-005 requires — that is the reference implementation.
+    · **Two dashboards paint every verdict from raw Tailwind hex** —
+      `signalgrid-app` and `signalgrid-desktop` `Dashboard.tsx`. Three of the four
+      hexes are already on the palette gate's blocklist; it does not fire because
+      the verdict arrives as `dataKey="allow"`, a JSX attribute with no colon,
+      outside its modelled shapes. `#EF4444` measures **4.26:1 on card — below
+      AA** on deny. This is a second decision palette, which
+      `BRAND_CONTRAST_FINDING.md` calls a worse defect than any single ratio.
+    · **Zero live regions in hand-written code** across five trees, while six
+      views poll every 15-30s. A new deny landing in the list is announced to
+      nobody. WCAG 4.1.3.
+    · **Six ARIA attributes total** across ~294 files; three trees have none.
+      `PolicyCreate.tsx:278` is an icon-only delete button whose accessible name
+      is empty — verified against lucide's source, which sets `aria-hidden` by
+      default. It deletes a policy rule.
+    · Five unlabelled form controls, hand-rolled focus rings at 2.03:1 (below the
+      3:1 non-text floor), `prefers-reduced-motion` honoured in only one of five
+      trees, status dots conveying state by colour alone at 1.02-1.13:1, and
+      desktop chart axis text at 1.74:1.
+
+77. **There is no web accessibility standard in this repository, proven eight
+    ways.** — OPEN, accessibility-specialist. This is why row 76 is advisory
+    rather than enforceable, and it is the role's real first deliverable.
+    `check:absence "web accessibility standard"` returns CORROBORATED across four
+    probes. No a11y tooling in any `package.json` (axe, pa11y, lighthouse,
+    jest-axe, eslint-plugin-jsx-a11y) — and **no eslint config exists at all**, so
+    no `jsx-a11y` rules. Of 175 preflight gates and 15 workflows,
+    `check-decision-palette.mjs` is the only accessibility gate.
+    WHAT IS RATIFIED IS NARROWER THAN IT LOOKS, and the distinction matters: DR-005
+    ratifies WCAG AA for decision-state COLOURS, not conformance; DR-006 says
+    outright that full palette parity over every rendered tree is follow-up work;
+    CLAUDE.md's four accessibility rules are iOS-only. Nothing states a bar for
+    keyboard access, focus order, live regions, reduced motion, form labelling,
+    landmarks or zoom.
+    THE MATERIAL TO WRITE IT WITH ALREADY EXISTS AND WAS NEVER OPENED:
+    `third_party/everything-claude-code/skills/frontend-patterns` carries an
+    Accessibility Patterns section (keyboard navigation, `aria-expanded`), vendored
+    and unactivated — see row 74. Row 56 recorded "no web a11y/brand doctrine
+    exists to put in it" as the reason not to create a web skill. That reason was
+    false when written.
+
+78. **What the first iOS execution found — including that CLAUDE.md's own way of
+    checking one of its rules returns a false clean.** — OPEN,
+    mobile-native-engineer. That role had read 0 of 129 files.
+    · **THE VERIFICATION METHOD IS BROKEN, and this is the finding that matters
+      most, because it hid the others.** CLAUDE.md says "Never call
+      `UIFont.systemFont` / `monospacedSystemFont` directly". Grepping that exact
+      spelling returns **ZERO**. Grepping Swift's implicit-member form,
+      `.systemFont(ofSize`, returns **18** — all in
+      `HostAppViewController.swift` (16) and `ManagedAppViewController.swift` (2).
+      Anyone verifying the rule the way the rule is written concludes the codebase
+      is clean. It is not. `dd55bca` (2026-08-18) converted eight view controllers
+      to `SG` tokens with Dynamic Type and skipped exactly these two, and
+      SG-adoption to `adjustsFontForContentSizeCategory` correlates 1:1 across
+      every other file.
+      WHY IT MATTERS: `HostAppViewController` IS the embedded Assist gate. It
+      renders the verdict, the reason and the step-up copy at fixed 9pt, 10pt,
+      11pt and 12pt. A worker at `accessibility-extra-large` sees no change on the
+      one screen that tells them why they were blocked. No gate covers this —
+      preflight has two native gates and neither concerns typography.
+    · **Backlog row 58 confirmed still live.** `SessionData.isExpired` is
+      `guard let expiresAt = expiresAt else { return false }` — a session that
+      cannot say when it expires reads as NOT expired — and
+      `HostAppViewController:189` stacks a second permissive default on top
+      (`?? false`). `stale` is a live posture input to the Assist gate, and `nil`
+      is producible by a real auth path. Golden rule 2 inverted, twice, on the
+      gate's input. None of these files is a frozen port, so the fix is allowed —
+      it needs a lane that can compile.
+    · **The Swift port is missing a fix the TypeScript side already made.**
+      `lib/app-workflows/src/index.ts:124-138` gained `stepUpSatisfiedActionKeys`
+      so that "a gesture obtained for one pending action can never release the
+      rest of the integration (review finding)". `AppWorkflows.swift` has only the
+      boolean full release, so `completeAppStepUp` releases EVERY held action.
+      Bounded today because the one UI consumer steps action-by-action, but it is
+      a fail-open in the port's public API that TS closed.
+    · **Three attribute predicates compare a string where TS compares a boolean** —
+      `DecisionEngine.swift:57,69,70` test `== "true"` where
+      `decisionEngine.ts:115,129,130` test `=== true`. Latent: no Swift producer
+      sets them today. It becomes live the moment anything decodes `/v1` signal
+      JSON into `[String: String]` on device.
+    · `KioskConfig` reads MDM-only security settings (`SingleAppModeEnabled`,
+      `AllowManualOverride`, `RecoveryCode`) from the plain UserDefaults domain
+      with equal authority to managed configuration, and unlike `DemoMode.swift`
+      it carries no simulator build guard.
+    WHY THE PARITY GATE MISSES TWO OF THESE, honestly: `check-decision-port-parity`
+    compares reason-code vocabulary and reason-code-to-outcome wiring, and says of
+    itself that it "cannot prove behavioural equivalence". Predicates and planner
+    inputs are outside its model. It is not broken; it is narrower than a green run
+    reads.
+    CLEAN, and recorded so it is not re-litigated: `UIUserInterfaceStyle` is pinned
+    nowhere (verified two ways); the decision-colour contrast passes with the
+    3.18:1 regression fixed; `DecisionEngine`'s fourteen rule blocks are a faithful
+    port in order, emission and outcome unions; the platform-honesty copy is
+    exemplary and states outright that an app cannot prevent its own closure; and
+    the entire Kotlin surface is fail-closed throughout.
+
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —
     `lib/location` is KEPT. Nothing is outstanding on this row.

@@ -547,6 +547,34 @@
       "date": "2026-08-24",
       "depth": "audited",
       "note": "FINDING (row 70, fixed here): the public-safe-web check printed 'no third-party vendor host in any published web artifact' while scanning 19 files in one tree. Six files across five other web trees carried a Google font host. Scope widened to every web tree under artifacts/ — 19 files to 503 — with a GATED/REPORTED split following what Dockerfile.web actually serves. On its first run the widened gate flagged my own explanatory comment for containing the literal hostname; the comment was reworded rather than the gate weakened, because matching a literal string without parsing comments is correct fail-closed behaviour for a security check."
+    },
+    {
+      "path": "artifacts/signalgrid-review/src/index.css",
+      "reviewedBy": "accessibility-specialist",
+      "date": "2026-08-24",
+      "depth": "verified-live",
+      "note": "FINDING (row 75, fixed here): declared --destructive and --chart-4 as `0 28% 49%` — #A05A5A, the pre-DR-005 fork of deny. Measured with the ratified gate's OWN exported hslToHex/contrast: 3.14:1 on card, below the 4.5:1 AA floor DR-005 ratifies and worse than the 3.18:1 CLAUDE.md records as this system's historic worst. Same defect in signalgrid-desktop and signalgrid-mobile-pwa; web and app had already migrated. Now 0 43% 60.8% (#C67070, 4.55:1). Also removed maximum-scale=1 from its viewport meta, which blocked pinch-zoom on the public review hub."
+    },
+    {
+      "path": "scripts/check-decision-palette.mjs",
+      "reviewedBy": "accessibility-specialist",
+      "date": "2026-08-24",
+      "depth": "audited",
+      "note": "FINDING (row 75, fixed here): this gate's self-test asserts it would reject #A05A5A and names that exact hex, while the identical value sat one line away in three trees under --destructive. THE EXTRACTOR WAS THE BOUNDARY, not the audit: cssBlocks() matched `--(decision-…|background|card)` and never collected --destructive, so widening the canonical table alone changed nothing — verified by doing exactly that and watching the falsification still pass. A token the extractor does not see can never be wrong. `destructive` added to the extractor pattern. --chart-* deliberately NOT pinned: its semantics vary by tree (mobile-pwa used --chart-4 for restrict, not deny), so a blanket rule would assert something untrue."
+    },
+    {
+      "path": "native/ios/EnterpriseShell/Views/HostAppViewController.swift",
+      "reviewedBy": "mobile-native-engineer",
+      "date": "2026-08-24",
+      "depth": "audited",
+      "note": "Read for the audit behind row 78. This file IS the embedded Assist gate — it renders the verdict, the reason and the step-up copy. 16 raw .systemFont(ofSize:) call sites at fixed 9-12pt, so the screen that explains a block does not scale at accessibility text sizes. CLAUDE.md's own stated grep for this rule (`UIFont.systemFont`) returns ZERO against this file because Swift's implicit-member form is used — the documented verification method reports a false clean. Also carries two stacked permissive defaults feeding the gate's staleness input (line 189, backlog row 58, confirmed still live)."
+    },
+    {
+      "path": "native/ios/EnterpriseShell/Services/DecisionEngine.swift",
+      "reviewedBy": "mobile-native-engineer",
+      "date": "2026-08-24",
+      "depth": "audited",
+      "note": "Read end to end against lib/signalgrid-simulator/src/decisionEngine.ts. The byte-faithful port claim HOLDS on structure: fourteen rule blocks in identical order, identical reason-code emission order, identical outcome unions, identical empty-outcomes base-trust arm, both ALLOW_REMOVED subtraction rules in order, identical 10-element ordering array. THREE divergences found, all in attribute predicates: lines 57, 69 and 70 test == \"true\" (string) where the TS tests === true (boolean). Latent — no Swift producer sets those attributes today — and live the moment anything decodes /v1 signal JSON into [String: String] on device. The parity gate cannot see this: it compares reason-code vocabulary and wiring, and says of itself that it cannot prove behavioural equivalence."
     }
   ]
 }

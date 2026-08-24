@@ -1210,6 +1210,31 @@ earlier — that is the loop working, not a reason to soften the record.
     golden rule 1 does NOT apply — none of these four files is a frozen
     byte-faithful port.
 
+59. **The image build makes two un-retried network fetches, and one of them
+    flaked.** — release-engineer (the retry) + security-engineer (if the fix
+    touches the corepack cache). 2026-08-24, first observed instance.
+    `Dockerfile.api` runs `corepack enable pnpm` in BOTH stages (lines 19 and
+    71). Corepack downloads pnpm lazily, so each stage fetches
+    `registry.npmjs.org/pnpm/-/pnpm-10.28.1.tgz` at install time. On PR #287
+    head `f52d54a` the BUILDER fetch succeeded — "Done in 5s using pnpm
+    v10.28.1" — and the RUNTIME fetch four seconds later died inside Node's
+    bundled HTTP parser: `AssertionError: assert(!this.paused)` at
+    `Parser.finish (node:internal/deps/undici/undici:6165:9)`. A TLS stream
+    aborted mid-download and surfaced as an internal assertion, failing the job.
+    NOT A LOCKFILE PROBLEM, checked four ways before concluding: the commit
+    touches no manifest or lockfile; `pnpm install --lockfile-only` locally
+    regenerates the lockfile with zero diff; the builder stage resolved the same
+    lockfile seconds earlier; and the same job passed on the previous commit.
+    Re-running the failed job was the correct response and is what was done.
+    THE FIX IS NOT OBVIOUS, which is why this is a row and not a patch. The
+    cheap mitigation is a retry around the install. The tempting one — carry
+    corepack's cache forward from the builder — is exactly what lines 97-111
+    deliberately REMOVE from the shipping image, because corepack's downloaded
+    pnpm is the copy that hides a CVE. Any fix must not undo that.
+    Until then: an image build that depends on an unretried network fetch will
+    flake again, and the failure will look like a build break rather than a
+    network blip. That is the part worth having written down.
+
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —
     `lib/location` is KEPT. Nothing is outstanding on this row.

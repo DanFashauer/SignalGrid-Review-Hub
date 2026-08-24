@@ -1496,6 +1496,42 @@ earlier — that is the loop working, not a reason to soften the record.
     retiring a category the repo spent a document defining is a positioning
     decision.
 
+64. **The local stack and the production stack are not the same product, and
+    nothing checks that they are.** — sre. 2026-08-24, found by actually reading
+    the sre surface after the owner said roles were not reviewing their portions.
+    `docker-compose.yml` runs **api + web + nginx and NO database**.
+    `docker-compose.prod.yml` runs **db + api**, with the API exposed DIRECTLY
+    on 8080 and zero nginx mentions in the file. Neither stack is the other.
+    Every routing rule, path prefix and forwarded header exercised through the
+    local proxy tier is ABSENT in production; every database behaviour proven in
+    prod is absent locally. `docs/RUN_AND_GO_LIVE.md` never mentions nginx.
+    WHY IT MATTERS BEYOND TIDINESS. `check-deployment-runbook.mjs` exists
+    precisely to keep "the documented path" and "the real one" in agreement, and
+    the CI job named "Prod stack (Docker compose smoke)" reads as though it
+    validates what ships. Nothing compares the two compose topologies to each
+    other, so the shape "the thing you test is not the thing you ship" is
+    unguarded in the one place it is easiest to gate.
+    TWO SMALLER FINDINGS in the same read, both LOCAL-ONLY and recorded so they
+    are not rediscovered as new:
+    · `nginx_certs` is mounted at `/etc/nginx/certs` and NOTHING reads it —
+      `nginx.conf` has `listen 80` only and no `ssl_certificate` directive. A
+      TLS volume wired in and consumed by nothing is the same shape as the
+      `tenant:admin` precedent this repo was founded on: a control that reads as
+      protection and is not.
+    · `X-Forwarded-Proto` and `X-Forwarded-For` are set only on `/api/`. `/app/`
+      and `/` set `X-Real-IP` alone, so anything behind them cannot learn the
+      original scheme. Moot in prod, which has no proxy — which is finding 1.
+    NOT FIXED HERE, deliberately. Whether prod SHOULD gain a proxy, or the local
+    stack should lose one, is an architecture call with real consequences for
+    TLS termination and the `/api` prefix the clients already use. Recording the
+    divergence is this role's job; choosing the topology is solutions-architect's
+    with principal-engineer, and it wants a decision record rather than a commit.
+    THE POINT OF THE ROW, beyond its own content: this is the first finding in
+    the repository produced by a role reading its declared surface end to end
+    rather than by a gate shouting. It took twenty-two files, four of which are
+    now recorded in the coverage ledger at the depth actually reached — a
+    property scan across fifteen workflows is NOT a read and is not claimed.
+
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —
     `lib/location` is KEPT. Nothing is outstanding on this row.

@@ -575,6 +575,8 @@ jobs:
         run: pnpm run proof:audit-ledger
       # Inherited byte-identical from the legacy DEV repo, whose roadmap flagged it and
       # whose fix was never written: String.replace $-expansion in ITSM ticket templates.
+      - name: Proof - itsm-credential-crypto (a weak key is refused, not stretched)
+        run: pnpm run proof:itsm-credential-crypto
       - name: Proof — itsm-template (values verbatim, keys inert)
         run: pnpm run proof:itsm-template
 

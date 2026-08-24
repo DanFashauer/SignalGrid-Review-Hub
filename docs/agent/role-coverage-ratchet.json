@@ -23,7 +23,7 @@
     "secops-domain": 0,
     "network-domain": 3,
     "physical-ot-domain": 0,
-    "itsm-ops-domain": 0,
+    "itsm-ops-domain": 3,
     "solutions-architect": 0,
     "threat-modeler": 0,
     "competitive-analyst": 0,

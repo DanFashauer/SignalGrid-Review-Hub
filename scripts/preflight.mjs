@@ -262,6 +262,7 @@ const STEPS = [
   // with one, the role split is proven locally in both directions.
   { name: "Proof: db-role-split (the ledger append-only by privilege)", cmd: ["pnpm", "run", "proof:db-role-split"] },
   { name: "Proof: audit-ledger", cmd: ["pnpm", "run", "proof:audit-ledger"] },
+  { name: "Proof: itsm-credential-crypto (a weak key is refused, not stretched)", cmd: ["pnpm", "run", "proof:itsm-credential-crypto"] },
   { name: "Proof: itsm-template (evidence text cannot rewrite itself on the way into a ticket)", cmd: ["pnpm", "run", "proof:itsm-template"] },
   { name: "Proof: session-store", cmd: ["pnpm", "run", "proof:session-store"] },
   { name: "Proof: orchestration", cmd: ["pnpm", "run", "proof:orchestration"] },

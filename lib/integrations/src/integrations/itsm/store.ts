@@ -17,7 +17,11 @@ const REDIS_URL = process.env.REDIS_URL;
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 // Encryption key from environment (must be 32 bytes for AES-256)
-const IV_LENGTH = 16;
+// AES-GCM's standard nonce is 12 bytes (NIST SP 800-38D 5.2.1.1): it is used
+// directly, while any other length is first folded through GHASH. decrypt() reads the
+// IV out of the payload rather than assuming this constant, so narrowing the WRITE
+// side does not make previously written payloads unreadable.
+const IV_LENGTH = 12;
 const AUTH_TAG_LENGTH = 16;
 
 // ============================================================================
@@ -164,15 +168,59 @@ const memoryStore: {
 // Encryption Utilities
 // ============================================================================
 
+/** Minimum configured secret length. 32 chars is the length of the hex-encoded
+ *  128-bit secret an operator would naturally generate; anything shorter is a
+ *  human-typed password and is refused rather than stretched. */
+export const MIN_ENCRYPTION_KEY_LENGTH = 32;
+
+/**
+ * Derive the AES-256 key from the configured secret.
+ *
+ * WAS: `Buffer.from(encryptionKey.slice(0, 32).padEnd(32, '0'))` — truncate to 32
+ * CHARACTERS and pad with ASCII '0'. Accurate about producing 32 bytes, and answering
+ * a different question than the one being asked, which is whether those are 32 bytes
+ * of ENTROPY. Two ways it silently lost entropy:
+ *
+ *   · A short secret was STRETCHED, not refused. `ITSM_ENCRYPTION_KEY=secret` yielded
+ *     `secret` + 26 literal zero bytes — an AES-256 key with ~48 bits behind it.
+ *   · The natural way to configure 32 bytes is 64 hex characters. `slice(0, 32)` took
+ *     the first 32 of those, i.e. 16 bytes of entropy, and reported success.
+ *
+ * Fail-closed doctrine says an unknown or under-specified input must TIGHTEN the
+ * answer. A weak key now throws; it is never padded into looking adequate.
+ *
+ * The sibling store in this same package already had this right —
+ * `webhooks/store.ts` derives with `createHash('sha256')`. Two stores, one package,
+ * two answers to the same question, and the weaker one held vendor API tokens.
+ *
+ * SHA-256 maps any secret of adequate length onto the full 32-byte key space without
+ * truncating. This is a KEY-DERIVATION change: ciphertext written by the previous
+ * implementation cannot be decrypted by this one. That is safe here and only here —
+ * the config half of this store is wired to nothing (`itsm/index.ts` deliberately
+ * exports only resolve+adapter, and no api-server route reaches it), so no stored
+ * ciphertext exists to migrate. Anything that wires it up inherits this derivation.
+ */
 function getEncryptionKey(): Buffer {
   const encryptionKey = process.env.ITSM_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY;
   if (!encryptionKey) {
     throw new Error('ITSM encryption key not configured');
   }
-  // Ensure key is exactly 32 bytes for AES-256
-  const key = Buffer.from(encryptionKey.slice(0, 32).padEnd(32, '0'));
-  return key;
+  if (encryptionKey.length < MIN_ENCRYPTION_KEY_LENGTH) {
+    throw new Error(
+      `ITSM encryption key is too short: ${encryptionKey.length} characters, ` +
+        `minimum ${MIN_ENCRYPTION_KEY_LENGTH}. It is refused rather than padded — ` +
+        'a stretched short key is an AES-256 key with a password behind it.',
+    );
+  }
+  return crypto.createHash('sha256').update(encryptionKey, 'utf8').digest();
 }
+
+/** Exposed for the crypto proof; not part of the store's operational surface. */
+export const __cryptoInternals = {
+  deriveKey: (): Buffer => getEncryptionKey(),
+  encrypt: (plaintext: string): string => encrypt(plaintext),
+  decrypt: (payload: string): string => decrypt(payload),
+};
 
 function encrypt(plaintext: string): string {
   const iv = crypto.randomBytes(IV_LENGTH);

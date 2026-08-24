@@ -1576,6 +1576,43 @@ earlier — that is the loop working, not a reason to soften the record.
     registered in both preflight and CI. Sabotaging the discriminator drops it
     to 4/9, so the self-test is watched failing rather than assumed to work.
 
+66. **The ITSM credential store derived its AES-256 key by truncate-and-pad, and
+    nothing had ever tested it.** — FIXED 2026-08-24, found by reading the itsm
+    surface. `getEncryptionKey()` built the key as
+    `Buffer.from(encryptionKey.slice(0, 32).padEnd(32, '0'))`. Accurate about
+    producing 32 bytes, and answering a different question than the one being
+    asked — whether those are 32 bytes of ENTROPY. Two silent losses:
+    `ITSM_ENCRYPTION_KEY=secret` became `secret` plus 26 literal zero bytes, an
+    AES-256 key with roughly 48 bits behind it; and a 64-hex-character secret,
+    the natural way to express 32 bytes, was cut to its first 32 characters —
+    16 bytes of entropy — and reported success. A short key was STRETCHED rather
+    than refused, which inverts fail-closed doctrine: an under-specified input
+    must tighten the answer, never pad itself into looking adequate.
+    IT WAS AN OUTLIER, NOT THE HOUSE PATTERN. `webhooks/store.ts`, the sibling
+    store in the SAME package, already derived with `createHash('sha256')`. Two
+    stores, one package, two answers to the same question — and the weaker one
+    held vendor API tokens.
+    ZERO COVERAGE. This was the only `createCipheriv` site in the repository and
+    nothing exercised it. `itsm-template-proof` covers the template half of the
+    same module and never touches encrypt/decrypt.
+    SEVERITY, STATED HONESTLY: LATENT, NOT LIVE. The config half of this store is
+    wired to nothing — no api-server route reaches it, and `itsm/index.ts`
+    deliberately exports only resolve+adapter. No stored ciphertext exists, which
+    is also why changing the derivation needs no migration.
+    THE FIX. SHA-256 derivation matching the sibling, plus a 32-character floor
+    that THROWS instead of padding. `IV_LENGTH` also moves 16 → 12, GCM's
+    standard nonce length (NIST SP 800-38D 5.2.1.1); `decrypt()` reads the IV out
+    of the payload rather than assuming the constant, so the write-side change
+    leaves previously written payloads readable.
+    LOCKED DOWN. `proof:itsm-credential-crypto` — 20 checks, the encryption
+    path's first test of any kind, registered in preflight and CI. Verified
+    falsifiable: against the pre-fix implementation it fails 5 checks, including
+    the one that matters most (two 64-char secrets sharing their first 32
+    characters must derive DIFFERENT keys). A sixth check was written, passed
+    against the broken code too, and was DELETED rather than kept — padding only
+    appears for a secret under 32 chars, and such a secret now throws before
+    derivation is reached, so it could never fail in either direction.
+
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —
     `lib/location` is KEPT. Nothing is outstanding on this row.

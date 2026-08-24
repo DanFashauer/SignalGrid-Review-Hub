@@ -117,6 +117,7 @@
     "proof:incident-playbook": "pnpm --filter @workspace/scripts run proof:incident-playbook",
     "proof:intune-entra-posture": "pnpm --filter @workspace/scripts run proof:intune-entra-posture",
     "proof:isolation-scope": "pnpm --filter @workspace/scripts run proof:isolation-scope",
+    "proof:itsm-credential-crypto": "pnpm --filter @workspace/scripts run proof:itsm-credential-crypto",
     "proof:itsm-template": "pnpm --filter @workspace/scripts run proof:itsm-template",
     "proof:itom-itsm-bridge": "pnpm --filter @workspace/scripts run proof:itom-itsm-bridge",
     "proof:kpi-kri-kci": "pnpm --filter @workspace/scripts run proof:kpi-kri-kci",

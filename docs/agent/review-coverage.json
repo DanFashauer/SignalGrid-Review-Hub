@@ -372,6 +372,13 @@
       "date": "2026-08-24",
       "depth": "audited",
       "note": "Read end to end (10 lines). Re-exports ./resolve and ./adapter, and via adapter.ts re-exports all eight vendor adapter CLASSES as public surface. Checked the bypass this implies: no call site outside the itsm module constructs an adapter directly (only dist/ build output matches), and each vendor file carries its own resolveEmission() check on its emit path (3-6 sites each), so the factory tier gate is defence in depth rather than the only door. Pulling that thread found the check-ungated-fetch scope defect fixed in this commit (backlog row 65)."
+    },
+    {
+      "path": "lib/integrations/src/integrations/itsm/store.ts",
+      "reviewedBy": "itsm-ops-domain",
+      "date": "2026-08-24",
+      "depth": "audited",
+      "note": "Read the credential half end to end (schemas, encryption utilities, the five config accessors); the ticket-template half from line ~488 down was NOT read — itsm-template-proof covers it. Credential separation is structurally sound: getITSMConfig returns `{ id, ...stored.base }` and credentials live in a separate encrypted field, so the plain getter cannot leak them. FINDING (row 66, fixed here): getEncryptionKey() derived the AES-256 key by `slice(0,32).padEnd(32,'0')` — truncate-and-pad. The only createCipheriv site in the repository, with zero test coverage of any kind, and an outlier: the sibling webhooks/store.ts in the same package derives with createHash('sha256'). Latent rather than live — no api-server route reaches this store and itsm/index.ts exports only resolve+adapter."
     }
   ]
 }

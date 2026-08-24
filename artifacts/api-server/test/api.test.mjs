@@ -1505,7 +1505,17 @@ async function run() {
     auditorStart.status === 403 && auditorStart.json?.session === undefined);
 
   const refreshed = await req("POST", `/v1/sessions/${sessionId}/refresh`, { token: KEYS.operator, body: { ttlSeconds: 900 } });
-  check("session refresh → 200 and extends the expiry", refreshed.status === 200 && Date.parse(refreshed.json?.session?.expiresAt) > Date.parse(started.json?.session?.expiresAt));
+  // Both timestamps are finiteness-checked before the comparison. A bare
+  // `Date.parse(a) > Date.parse(b)` is false when either side is unparseable,
+  // which here happens to fail the assertion — the safe direction — but relying
+  // on that is relying on which branch is permissive, and that is exactly the
+  // reasoning that let a real fail-open ship in verifyStepUp. Assert the
+  // precondition instead of depending on the accident.
+  const refreshedExpMs = Date.parse(refreshed.json?.session?.expiresAt);
+  const startedExpMs = Date.parse(started.json?.session?.expiresAt);
+  check("session refresh → 200 and extends the expiry", refreshed.status === 200
+    && Number.isFinite(refreshedExpMs) && Number.isFinite(startedExpMs)
+    && refreshedExpMs > startedExpMs);
   const refreshOther = await req("POST", `/v1/sessions/${sessionId}/refresh`, { token: KEYS.atlas, body: {} });
   check("session refresh from another tenant → 404", refreshOther.status === 404);
 

@@ -117,11 +117,15 @@ const DECLARED_CLOCK_READS = new Map([
   [
     "lib/webauthn/src/",
     {
-      count: 12,
+      count: 13,
       reason:
         "Challenge and step-up session expiry. An expiry check is inherently clock-dependent; the risk " +
         "here was never the read but its DIRECTION, which is now gated separately by " +
-        "scripts/check-nan-fail-open.mjs after nine fail-open sites were found on this surface.",
+        "scripts/check-nan-fail-open.mjs after TEN fail-open sites were found on this surface. " +
+        "12 -> 13 on 2026-08-24: verifyStepUp compared bare Date objects (`new Date(a) < new Date()`), " +
+        "which reads an unparseable expiry as VALID; closing it required an explicit Date.now() beside a " +
+        "finiteness check. This pin is what surfaced the delta — the fix was written, preflight failed on " +
+        "the count, and the number was re-stated deliberately rather than drifting.",
       retires: "When step-up moves to an injected clock for testability, this drops to the store TTLs.",
     },
   ],

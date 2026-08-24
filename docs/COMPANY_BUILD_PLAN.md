@@ -378,6 +378,38 @@ earlier — that is the loop working, not a reason to soften the record.
     `record_audit` only, neither reaches allow. It was queued for the Mac lane on
     an inherited belief nobody had checked; the queue entry is withdrawn.
 
+40c-2. **A TENTH site survived the sweep, on the auth path, and the gate could
+    not see it.** FIXED 2026-08-24, found by EXTERNAL review after the in-repo
+    reviewer passed the same change.
+    `lib/webauthn/src/webauthn/server.ts` `verifyStepUp` compared
+    `new Date(session.expiresAt) < new Date()`. An Invalid Date coerces to NaN in
+    a relational compare, the test is false, control falls through, and the
+    step-up session RETURNS AS VALID. Same family as the other nine, in the same
+    file the sweep declared finished.
+    **Two mistakes let it through, and the second is the instructive one.**
+    First, `PARSE_EXPR` recognised only `Date.parse(...)` and `.getTime()`, so a
+    bare `new Date(x)` beside `<` matched nothing and the scan reported zero.
+    Second — and worse — the gate carried a deliberate exemption for comparisons
+    with a parse expression on BOTH sides, written on the reasoning that "NaN
+    makes the comparison false either way, so no permissive branch is taken".
+    **That reasoning is wrong.** Whether `false` is safe depends entirely on
+    which branch REJECTS. In an assertion, false fails the test — safe. In
+    `verifyStepUp`, false returns the session — a fail-open. The exemption
+    codified the false belief and hid the defect from the gate written to catch
+    it.
+    Both fixed: `PARSE_EXPR` now covers bare `new Date(...)` in relational
+    position, and the both-parsed exemption is gone in its inline and
+    variable-tracking forms. The escaped shape is pinned in the self-test in both
+    directions, and the FIRST attempt at the widening was caught by that
+    self-test refusing to go green — the exemption still swallowed it.
+    Removing the exemption surfaced one further site,
+    `artifacts/api-server/test/api.test.mjs:1508`, where the direction happens to
+    be safe (a false comparison fails the assertion). It was fixed rather than
+    re-exempted: relying on which branch is permissive is the reasoning that
+    shipped this defect. `test:api` 301/301, gate 0 violations across 1218 files.
+    NOT VERIFIED: whether any equivalent shape exists in the Swift ports; the
+    port-parity gate covers decision rules, not expiry arithmetic.
+
 40d. **The fail-closed backstop let a STALE posture answer through — the two
     freshness ladders disagreed about the same word.** DONE 2026-08-23, found by
     `fail-closed-auditor` on its first run.

@@ -1521,6 +1521,46 @@ earlier — that is the loop working, not a reason to soften the record.
     · `X-Forwarded-Proto` and `X-Forwarded-For` are set only on `/api/`. `/app/`
       and `/` set `X-Real-IP` alone, so anything behind them cannot learn the
       original scheme. Moot in prod, which has no proxy — which is finding 1.
+    MOSTLY WITHDRAWN 2026-08-24, by the solutions-architect read of its OWN
+    surface — the one this row should have started from. The measured facts above
+    are all still true. The DIAGNOSIS was wrong: this is not an undocumented
+    divergence that nothing accounts for. Both halves are documented, deliberate
+    choices, in `docs/DEPLOYMENT.md` — a file this row never cites because I read
+    `docker-compose*.yml` and `RUN_AND_GO_LIVE.md` and never opened it.
+    · **The missing proxy in prod is scoped out on purpose.**
+      `docs/DEPLOYMENT.md:311-315`, under "Not included here (needs your
+      infrastructure)", names "TLS termination / a reverse proxy" among the
+      concerns "owned by whoever operates the stack". The prod compose file
+      exposing the API directly on 8080 is the documented contract, not an
+      oversight, and the repo's `nginx.conf` is a local convenience whose rules
+      were never meant to be a production contract.
+    · **The missing database locally is also documented.**
+      `docs/DEPLOYMENT.md:34-43` states durable persistence is "gated on
+      `DATABASE_URL`", and that unset means in-memory — "the fixture-safe default
+      used by the public build and CI". A local stack with no database is that
+      default working as designed.
+    WHAT SURVIVES: only the two smaller local-only nginx findings above. Nothing
+    else.
+    I FIRST WROTE, IN THIS SAME CORRECTION, that one thing survived — "nothing in
+    either compose file SAYS it is one of two different intended deployments" —
+    and then opened the files. Both already carry exactly that header.
+    `docker-compose.yml`: "Local delivery topology ... The product is the
+    deterministic, in-memory /v1 core — no database is required. nginx (reverse
+    proxy) → api (/api) + web (/, /app)". `docker-compose.prod.yml`:
+    "Production-shaped topology: the SignalGrid API with DURABLE Postgres
+    persistence." A reader opening either file alone is told precisely which
+    deployment it is and why. That claim is withdrawn too — asserted, again,
+    without reading the file it was about.
+    So the row's proposed gate is withdrawn as well: a topology-comparison gate
+    would have failed the build over a difference `docs/DEPLOYMENT.md`
+    deliberately licenses and both compose headers already explain.
+    WHY THIS CORRECTION IS ITSELF THE LESSON. The row was written from the
+    compose files plus the one doc that happened not to answer the question, and
+    it concluded ABSENCE from a narrow read — the identical shape to the
+    device-attestation error external review caught on PR #299 the same day, and
+    to the `check:absence` fail-open recorded earlier. Three instances now, one
+    session. Reading the surface you own BEFORE filing against it is the control,
+    and it is the reason the coverage ledger exists.
     NOT FIXED HERE, deliberately. Whether prod SHOULD gain a proxy, or the local
     stack should lose one, is an architecture call with real consequences for
     TLS termination and the `/api` prefix the clients already use. Recording the

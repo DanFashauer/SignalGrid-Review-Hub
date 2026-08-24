@@ -386,6 +386,20 @@
       "date": "2026-08-24",
       "depth": "audited",
       "note": "Read end to end (182 lines) and probed for defects; NONE FOUND, recorded as a clean read rather than left silent. Fail-closed throughout: every unknown pushes step_up, the worst-concern-wins fold seeds at {action:'none'} and replaces only on strictly-greater severity, and only an explicit `attestable === false` abstains while a self-contradictory report (declares incapable yet carries attestation) is floored at step_up. ACTION_SEVERITY is Record<AttestationRecommendedAction, number>, so a new action cannot be added to the union without a compile error — the extension-direction fail-open is closed by the type. TWO HYPOTHESES TESTED AND REFUTED: (1) six of eleven reason codes appear in no proof by grep — but the proof asserts on posture/recommendedAction/criticalFindings, and those branches are covered; (2) ATTESTED_SECUREBOOT_REDUCED and ATTESTED_KEXT_ALLOWED share an identical posture+action pair, so their distinct reason codes looked unpinned — swapping one for the other KILLS proof:device-attestation (77/77 baseline). The grep was the weaker instrument in both cases."
+    },
+    {
+      "path": "lib/integrations/src/integrations/telemetry/store.ts",
+      "reviewedBy": "endpoint-uem-domain",
+      "date": "2026-08-24",
+      "depth": "audited",
+      "note": "Read end to end (163 lines). FINDING (row 68, fixed here): a WRITE-ONLY posture cache. setPostureForHost runs live on every Fleet posture fetch (fleetdm.ts:270, 300s TTL); the store's getPostureForHost had no caller anywhere; and `expiresAt` was written at two sites and read at ZERO. The in-memory half — the default path whenever REDIS_URL is unset and the fallback whenever Redis throws — returned `inMemoryPosture.get(key) ?? null` with no expiry check, so it would serve indefinitely stale device posture. Redis's own EX covered the Redis half. Second defect in the same family: the Map was never pruned, gaining an entry per host UUID and emptied only by an explicit clearPostureCache()."
+    },
+    {
+      "path": "lib/integrations/src/integrations/device-management-health/evaluate.ts",
+      "reviewedBy": "endpoint-uem-domain",
+      "date": "2026-08-24",
+      "depth": "read",
+      "note": "Read the fail-open surface rather than the whole file: every branch touching unknown/null/absent inputs, the unknownSignals pushes, and the ordering comments. NO defect found on that surface — each unknown raises the bar and the worst-concern-wins ordering carries a measured justification in-comment (the managementReachable case was moved earlier after its cost was measured). Recorded at depth 'read', not 'audited': the normalization half and the type surface were not examined."
     }
   ]
 }

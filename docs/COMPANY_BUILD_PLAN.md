@@ -1648,6 +1648,44 @@ earlier — that is the loop working, not a reason to soften the record.
     and planting one in `telemetry/` also exits 1. The corrected sentence is
     demonstrated by the gate's own behaviour.
 
+68. **The Fleet posture cache was WRITE-ONLY, and would have served stale device
+    posture forever on its default path.** — FIXED 2026-08-24, found by reading
+    the endpoint-uem-domain surface. `getPostureForHost()` ended
+    `return inMemoryPosture.get(key) ?? null` — the cached entry, with no expiry
+    check. `expiresAt` was computed on write, stored, and read by NOTHING: two
+    write sites, zero readers, repository-wide.
+    THE ASYMMETRY IS THE POINT. Redis expires its own keys via `EX`, so that half
+    was covered by the server. The IN-MEMORY half is the default path whenever
+    `REDIS_URL` is unset AND the fallback whenever Redis throws — and it would
+    hand back posture whose `expiresAt` was long past, as though current. Stale
+    device posture must TIGHTEN the answer, never be served as current.
+    SEVERITY, STATED HONESTLY: the write is LIVE, the read is DEAD.
+    `setPostureForHost` runs on every Fleet posture fetch
+    (`fleetdm.ts:270`, 300s TTL), but the store's `getPostureForHost` has no
+    caller — the identically-named method on `FleetDMAdapter` is a different
+    function and does not read the cache. So nothing is being served stale TODAY;
+    what existed was a trap armed for whoever wired up the read, who would reach
+    for the obvious getter and receive indefinitely stale posture.
+    SECOND DEFECT, SAME FAMILY: the Map never pruned. One entry per host UUID on
+    every fetch, emptied only by an explicit `clearPostureCache()`, so a
+    long-running process polling a fleet grew it without bound.
+    THE FIX. `getPostureForHost` honours `expiresAt` on both paths and EVICTS the
+    entry it finds expired; `purgeExpiredPosture()` sweeps on write, which is the
+    path that actually runs. Fail-closed on anything unestablishable: malformed
+    JSON, a missing `expiresAt`, a non-numeric one, and NaN/Infinity all read as
+    "no cached posture", which forces a fresh fetch.
+    THE NaN ARM IS NOT HYPOTHETICAL. `NaN <= now` evaluates FALSE, so a bare
+    `entry.expiresAt <= now` would have reported a NaN expiry as STILL VALID and
+    served it forever — the same fail-open family already fixed on auth expiry in
+    this repository. Closed by requiring `Number.isFinite`, not by comparing and
+    hoping.
+    LOCKED DOWN. `proof:telemetry-posture-cache` — 21 checks, registered in
+    preflight and CI, with `now` injected so expiry is driven deterministically
+    rather than by sleeping. Verified falsifiable three ways: reverting the read
+    fails 2 checks, and removing the write-path sweep fails the check written
+    specifically to pin it — because asserting a purge function WORKS is not the
+    same claim as asserting it RUNS.
+
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —
     `lib/location` is KEPT. Nothing is outstanding on this row.

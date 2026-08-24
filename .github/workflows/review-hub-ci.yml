@@ -577,6 +577,8 @@ jobs:
       # whose fix was never written: String.replace $-expansion in ITSM ticket templates.
       - name: Proof - itsm-credential-crypto (a weak key is refused, not stretched)
         run: pnpm run proof:itsm-credential-crypto
+      - name: Proof - telemetry-posture-cache (stale posture is never served as current)
+        run: pnpm run proof:telemetry-posture-cache
       - name: Proof — itsm-template (values verbatim, keys inert)
         run: pnpm run proof:itsm-template
 

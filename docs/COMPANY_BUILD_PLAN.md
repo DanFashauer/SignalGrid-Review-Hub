@@ -1933,6 +1933,56 @@ earlier — that is the loop working, not a reason to soften the record.
       so they read as covered while no writer can touch them. Either mark the
       surface review-only in the schema, or move the write half.
 
+74. **Three of my own exclusions were "nobody owns this" wearing a different
+    label.** — FIXED 2026-08-24, on the owner's instruction the same day: "if the
+    reason is due to no role or skill please acquire that and assign the work."
+    He was right, and it was the first thing I got wrong about the ownership gate
+    I had just built. Row 70's gate reached UNOWNED: 0 partly by EXCLUDING 75
+    files. Re-examined, three of those rules were not describing generated output
+    at all:
+    · `third_party/**` — 48 files of agents, skills, commands, rules, contexts
+      and MCP configs this org EXECUTES. "Upstream owns it" is true about
+      AUTHORSHIP and false about ACCOUNTABILITY: upstream does not decide whether
+      it is safe for us to run, and `VENDORED.md` itself admits the vendored set
+      was "surveyed, not audited". Now owned by agent-platform-engineer for
+      REVIEW; its writeScope stays `.claude/`, so it still cannot edit vendored
+      source in place, which is the rule CLAUDE.md already sets.
+    · `attached_assets/**` — 976 lines of the OWNER'S OWN research: the
+      enterprise ITSM stack with APIs, the MDM/UEM/endpoint and networking
+      repo-and-SDK list, the shared-device custody architecture, and the
+      PACS/IAM/mobile-credential/FIDO2 convergence thesis. "A source, not a
+      maintained surface" meant nobody was accountable for MINING it. Now owned
+      by solutions-architect, whose existing next action — turn
+      PILOT_SCOPE_SKELETON into a concrete reference architecture — this is the
+      direct input for.
+    · `LICENSE` and `NOTICE` — excluded as "legal text" while
+      `commercial-counsel` had existed with ZERO surfaces the entire time. Now
+      owned by it, and not cosmetically: row 72 found four first-party agent
+      files published under another author's MIT grant in this public repo, so
+      whether NOTICE reflects what we actually vendor is a live question.
+    THE STRUCTURAL FIX, so this cannot recur. Every exclusion is now
+    `[glob, reason, accountableRole]`, and the gate FAILS if the named role does
+    not resolve in the roster. An exclusion is a promise that somebody is still
+    accountable for that ground; a promise pointing at a name nobody answers to
+    is exactly the gap the gate exists to close. Falsified both ways: a rule
+    naming a non-existent role fails, and a rule naming no role fails.
+    WHAT LEGITIMATELY REMAINS EXCLUDED: 21 files across 11 rules, all generated
+    output — sim results and requests, live evidence, lane mail, heartbeats,
+    build-loop history, emulator results, vendor captures, the SBOM, scanner
+    comparisons, the lockfile. Those need no READER, but each now names the role
+    accountable for the retention decision and the pipeline that mints it:
+    mac-lane-steward, devex-tooling-engineer, security-engineer,
+    agent-platform-engineer.
+    Result: owned 2,253 -> 2,307, excluded 75 files -> 21, unowned still 0.
+    A RESOURCE POOL NOBODY HAD OPENED, found by this re-examination and now
+    queued on agent-platform-engineer: `third_party/everything-claude-code`
+    holds 13 skills, 10 commands, 10 rules and 3 contexts that have NEVER been
+    activated. Among them `frontend-patterns`, which carries an Accessibility
+    Patterns section — directly refuting the reason recorded in row 56 for NOT
+    creating a web skill, namely that "no web a11y/brand doctrine exists to put
+    in it". It existed, vendored and unopened, while accessibility-specialist sat
+    at 0 of 294 files with `lane` as its executor.
+
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —
     `lib/location` is KEPT. Nothing is outstanding on this row.

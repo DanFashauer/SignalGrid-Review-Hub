@@ -1686,6 +1686,54 @@ earlier — that is the loop working, not a reason to soften the record.
     specifically to pin it — because asserting a purge function WORKS is not the
     same claim as asserting it RUNS.
 
+69. **The reviewer's evidence log was empty while the reviewer role was
+    running.** — FIXED 2026-08-24, found by reading the records-archivist
+    surface (`docs/agent/**`). `docs/agent/EVIDENCE.md` sat at its seeded
+    2026-08-22 template: 14 lines, a format spec, and the sentence "the first
+    review writes the first entry". No review had. It is one of the
+    signalgrid-reviewer role's only TWO write paths, and it was the one with
+    nothing watching it — `FALSE_CLAIMS.json`, the other, is enforced by
+    `check-known-false-claims.mjs`, which re-verifies every refutation against
+    the tree and scans 442 documents for re-assertions.
+    WHY IT MATTERS, and it is the owner's complaint exactly. Without it, a
+    finding is only as durable as the pull request that carried it. The log is
+    what makes a claim independently RE-CHECKABLE — claim, exact command,
+    verbatim output — by the owner or by a session with no memory of this one.
+    THE FIX IS THE RECORD ITSELF. Eight entries, covering every verification
+    behind rows 65-68 with the command and its real output: the planted ungated
+    fetch that left the gate green at exit 0; the same plant exiting 1 after the
+    fix, plus the two controls that prove it did not simply widen; the
+    "STILL NOT ENFORCED" comment shown against the line that enforces; the
+    key-derivation proof failing 5 checks pre-fix; the posture-cache proof
+    failing 2.
+    THREE ENTRIES RECORD MY OWN CLAIMS AS REFUTED, deliberately. The
+    attestation reason codes that grep said were unasserted (the proof asserts on
+    posture/action instead), the two branches whose codes looked unpinned
+    (swapping them kills the proof), and credential-exposure's severity handling
+    (folded into `highValue` at normalization). All three share one shape —
+    reading an evaluator in isolation and assuming its input was raw — and
+    writing them down is how the next session stops re-raising them.
+    ALSO RECORDED: an explicit NOT VERIFIED HERE section — iOS/Swift (no Xcode),
+    `validate-sim-macos.sh` on real macOS, and the Pages source setting, whose
+    REST call 403s through this environment's proxy so the conclusion came from
+    served artifacts rather than the API.
+    LOCKED DOWN, as a REPORT rather than a gate. `check-known-false-claims.mjs`
+    now prints the entry count and newest date on every run, and says so loudly
+    when the log is empty or missing. Not gated, because entry COUNT is a real
+    number but "did this session's reviews get written up" is a judgement, and a
+    gate on it is satisfied by one junk entry. Both warning arms were falsified
+    by reproducing the exact state the file was in.
+    A BUG IN THE REPORTER ITSELF, caught and fixed before commit: the first
+    version wrapped the read in a blanket `try/catch`, so a `ReferenceError`
+    from a wrong variable name was reported as "the file is missing" — the
+    reporter's own fail-open, the same defect class as the four above. The catch
+    is now narrowed to an `existsSync` check.
+    NOT FILED AS A DEFECT: `CONTINUITY.md`, also still an empty seeded template.
+    It is self-described as a BUFFER that should be empty once its content has
+    landed in real documents, and this session's did — in these rows, the review
+    ledger, and a lane message. An empty buffer is its correct resting state; an
+    empty evidence log is not.
+
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —
     `lib/location` is KEPT. Nothing is outstanding on this row.

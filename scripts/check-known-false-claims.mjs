@@ -214,6 +214,33 @@ for (const rel of docs) {
 
 console.log(`\n  ${docs.length} tracked document(s) scanned for re-assertion · ${reassertions} found`);
 
+// REPORTED, never fatal: the state of the reviewer's OTHER write path.
+//
+// FALSE_CLAIMS.json and docs/agent/EVIDENCE.md are the two files the
+// signalgrid-reviewer role may write, and only the first had anything watching it.
+// EVIDENCE.md sat at its seeded-empty template from 2026-08-22 while the reviewer
+// role ran, so the log that makes a finding independently re-checkable did not
+// exist — the file said "the first review writes the first entry", and no review
+// did. Printed rather than gated: entry COUNT is a real number, but "did this
+// session's reviews get written up" is a judgement, and a gate on it would be
+// satisfied by one junk entry. What a reader needs is to see the number and the
+// date of the newest entry, so an empty or fossilised log is visible on every run
+// instead of silent.
+const evidencePath = resolve(REPO, "docs/agent/EVIDENCE.md");
+if (!existsSync(evidencePath)) {
+  console.log("\n  ⚠ docs/agent/EVIDENCE.md is missing — the reviewer role has nowhere to record evidence.");
+} else {
+  const evidence = readFileSync(evidencePath, "utf8");
+  const entries = [...evidence.matchAll(/^## (\d{4}-\d{2}-\d{2}) — /gm)].map((m) => m[1]);
+  if (entries.length === 0) {
+    console.log("\n  ⚠ docs/agent/EVIDENCE.md holds NO entries — the reviewer's claim→command→output");
+    console.log("    log is empty, so no finding in this repository is independently re-checkable from it.");
+  } else {
+    const newest = entries.slice().sort().at(-1);
+    console.log(`\n  docs/agent/EVIDENCE.md: ${entries.length} entr(ies), newest ${newest}`);
+  }
+}
+
 if (problems.length > 0) {
   console.error(`\nKnown-false-claim check FAILED: ${problems.length} problem(s).\n`);
   for (const p of problems) console.error(`  ✗ ${p}`);

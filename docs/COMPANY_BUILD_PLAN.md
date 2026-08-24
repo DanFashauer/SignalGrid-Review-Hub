@@ -1326,6 +1326,27 @@ earlier — that is the loop working, not a reason to soften the record.
     `docs/research/` exits 1, and scanning `docs/inspiration/` exits 1. Coverage
     can no longer shrink quietly, because a gate that scans less still prints
     that it passed — which is how this survived unnoticed in the first place.
+    QUALIFICATION, added 2026-08-24 after a review challenged the wording above.
+    "Zero new violations" was reported as though it meant the newly-scanned prose
+    is clean. It does not. It means the GATED RULES DO NOT REACH THIS PROSE.
+    `docs/research/COMPETITIVE_IMPRIVATA.md:21` carries five bare external
+    figures in a single paragraph — `~$544M`, `~$500M revenue`, `500+ hospitals
+    across 12 countries`, `~1M healthcare users`, `~47% of customers are
+    healthcare` — and the gate flags none of them. Coverage without detection.
+    That is the same defect class as everything else in this cluster, committed
+    while writing about the defect class: a measurement that was accurate and
+    answered a different question than the one it was used to support. The scan
+    genuinely covers 279 documents now, and that is still worth having; it simply
+    does not license the sentence "and the prose is clean".
+    NOT WIDENED HERE, deliberately. Whether those figures are violations is a
+    judgement, not a mechanical fact: the file's own header says every claim is
+    anchored to a URL in its Sources section, so the convention in `docs/research/`
+    may be to cite at the foot rather than in the block — which is precisely what
+    the gate's same-BLOCK rule cannot see. Widening `EXTERNAL_STAT` or relaxing
+    the block rule across 43 research documents is a real design change with a
+    real blast radius, and this cluster's own lesson is to MEASURE that before
+    building. Owner of the measurement: competitive-analyst for whether the
+    convention is sound, devex-tooling-engineer for the rule if it is not.
 
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —

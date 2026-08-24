@@ -64,7 +64,7 @@
   --muted-foreground: 40 14% 80%;
   --accent: 175 22% 55%;
   --accent-foreground: 210 13% 9%;
-  --destructive: 0 28% 49%;
+  --destructive: 0 43% 60.8%;
   --destructive-foreground: 43 26% 94%;
   --sidebar: 207 14% 13%;
   --sidebar-foreground: 43 26% 94%;
@@ -77,7 +77,7 @@
   --chart-1: 175 28% 43%;
   --chart-2: 145 21% 47%;
   --chart-3: 32 35% 51%;
-  --chart-4: 0 28% 49%;
+  --chart-4: 0 43% 60.8%;
   --chart-5: 175 22% 55%;
   --decision-allow: 145 21% 49%; /* #639779 — DR-006 re-tone */
   --decision-allow-on-tint: 145 21% 55%; /* #74A488 — DR-006 addendum */

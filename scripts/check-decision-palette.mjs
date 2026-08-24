@@ -97,7 +97,12 @@ export function cssBlocks(src) {
   while ((m = re.exec(src))) {
     const body = m[2];
     const decls = [];
-    for (const d of body.matchAll(/--(decision-(?:allow|review|deny)(?:-on-tint)?|background|card):\s*([^;]+);/g)) {
+    // `destructive` joined this list 2026-08-24. The extractor — not the audit — was
+    // the real boundary: widening canonAll alone changed nothing, because a token the
+    // extractor never collects can never be compared. That is why the pre-DR-005 deny
+    // (#A05A5A, 3.14:1 on card) survived in three trees while this gate's own self-test
+    // asserted it would reject that exact hex.
+    for (const d of body.matchAll(/--(decision-(?:allow|review|deny)(?:-on-tint)?|destructive|background|card):\s*([^;]+);/g)) {
       const hex = parseColorValue(d[2]);
       decls.push({ token: d[1], hex, raw: d[2].trim(), line: lineOf(m.index + m[1].length + d.index) });
     }
@@ -149,7 +154,26 @@ const VERDICT_KEY = /\b(allow|step_up|restrict|deny)\s*:|["'](allow|step-up|step
 export function audit(files) {
   const problems = [];
   const table = [];
-  const canonAll = { "decision-allow": CANON.dark.allow, "decision-review": CANON.dark.review, "decision-deny": CANON.dark.deny, "decision-allow-on-tint": CANON.onTint["allow-on-tint"], "decision-deny-on-tint": CANON.onTint["deny-on-tint"] };
+  // `destructive` is audited alongside the decision-* tokens as of 2026-08-24.
+  //
+  // WHY IT WAS ADDED. This gate's own self-test asserts it would reject #A05A5A — the
+  // pre-DR-005 fork of deny — and it names that exact hex. It never extracted
+  // `--destructive`, so the identical value survived ONE LINE AWAY in the same files:
+  // artifacts/signalgrid-{review,desktop,mobile-pwa}/src/index.css each declared
+  // `--destructive: 0 28% 49%`, measuring 3.14:1 on card. That is below the 4.5:1 AA
+  // floor DR-005 ratifies, and WORSE than the 3.18:1 CLAUDE.md records as the historic
+  // worst. Two of five trees had migrated; three had not, and nothing could tell.
+  //
+  // `--destructive` IS a deny surface: it paints destructive buttons and deny-coloured
+  // chart fills. DR-005 says "do not artificially restrict where `deny` may be used",
+  // and already brings `--destructive-foreground` into scope — so `--destructive` was
+  // in scope from the start and simply was not extracted.
+  //
+  // The `--chart-*` tokens are deliberately NOT pinned here. Their semantics vary by
+  // tree (in mobile-pwa `--chart-4` painted `restrict`, not `deny`), so a blanket
+  // equality check would assert something untrue. That gap is real and is filed as a
+  // backlog row rather than papered over with a rule that reads stricter than it is.
+  const canonAll = { "decision-allow": CANON.dark.allow, "decision-review": CANON.dark.review, "decision-deny": CANON.dark.deny, "decision-allow-on-tint": CANON.onTint["allow-on-tint"], "decision-deny-on-tint": CANON.onTint["deny-on-tint"], destructive: CANON.dark.deny };
 
   for (const tree of CSS_TREES) {
     const src = files[tree];
@@ -161,7 +185,7 @@ export function audit(files) {
     }
     let fallback = blocks.find((b) => b.decls.some((d) => d.token === "background"));
     for (const b of blocks) {
-      const decisions = b.decls.filter((d) => d.token.startsWith("decision-"));
+      const decisions = b.decls.filter((d) => d.token.startsWith("decision-") || d.token === "destructive");
       if (!decisions.length) continue;
       const bg = b.decls.find((d) => d.token === "background")?.hex ?? fallback?.decls.find((d) => d.token === "background")?.hex;
       const card = b.decls.find((d) => d.token === "card")?.hex ?? fallback?.decls.find((d) => d.token === "card")?.hex;

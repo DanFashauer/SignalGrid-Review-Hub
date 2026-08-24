@@ -122,7 +122,7 @@
       "activated": null,
       "produced": null,
       "priority": 2,
-      "nextAction": "The backlog names a pending Swift mirror of reconcileDecisions. Assess it against golden rule 1 — it must go AROUND the ported engines, never through them — and say whether it is cloud-lane work or Mac-only."
+      "nextAction": "FIRST EXECUTION DONE 2026-08-24 (row 78). Highest value first: CLAUDE.md's OWN grep for the raw-font rule returns a false clean — the literal spelling it gives matches zero, while Swift's implicit-member form matches 18, all in the two view controllers that host the Assist gate. Fix the doc's spelling, convert the 18 sites to SG tokens with Dynamic Type, and add the ~20-line gate; the conversion has already been done once and regressed, so the gate matters more than the conversion. Then row 58's nil-expiry fail-open (confirmed still live, two stacked permissive defaults on a live Assist input), the missing scoped step-up release the TS side already fixed, and the three string-vs-boolean attribute predicates. All need a lane that can compile Swift; this lane cannot."
     },
     {
       "id": "compliance-analyst",
@@ -263,7 +263,7 @@
       "activated": null,
       "produced": null,
       "priority": 3,
-      "nextAction": "STAYS ON `lane` BY DECISION, not by omission — row 56, 2026-08-24. Assigning this role a skill would have meant inventing one, and there is nothing to put in it: CLAUDE.md's four accessibility rules are all iOS (UIFont, UIFontMetrics, accessibility-extra-large, the SG tokens), and check-decision-palette is the ONLY gate covering web contrast. So the first work here is not an audit, it is DOCTRINE: write what good looks like for the served web surfaces — focus order, live regions, reduced motion, contrast against both themes — the way the iOS rules are written, and then a skill can honestly claim it."
+      "nextAction": "FIRST EXECUTION DONE 2026-08-24 (rows 75-77). Fixed: the pre-DR-005 deny at 3.14:1 in three trees, and the pinch-zoom lock in four. STILL OPEN, in order: (1) write docs/WEB_ACCESSIBILITY_STANDARD.md — row 77 proves eight ways that no web a11y bar exists here, which makes every other finding advisory; the material is in third_party/everything-claude-code/skills/frontend-patterns, vendored and never opened. (2) restrict and deny render as the identical pixel in the mobile-PWA chart, which has no legend, tooltip or axis, so colour is the sole channel (row 76). (3) two dashboards paint verdicts from raw Tailwind hex, one at 4.26:1 on deny, invisible to the palette gate because the verdict arrives as a JSX attribute. Then the live-region, ARIA, form-label and reduced-motion items."
     },
     {
       "id": "desktop-engineer",

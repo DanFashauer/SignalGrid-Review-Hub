@@ -128,16 +128,44 @@ export function evaluateLiveness({ lastSuccessIso, nowMs, staleAfterHours }) {
 // enough to teach people to ignore it. A gate that cries wolf gets switched
 // off, and this one is load-bearing.
 //
-// So: retry the transient statuses, and NEVER retry the permanent ones. 401 and
-// 403 mean the token is missing or lacks `actions: read`; 404 means the path or
-// workflow file is wrong. Those are real findings about configuration and must
-// surface on the first attempt rather than being buried under three retries.
+// So: retry the transient statuses, and NEVER retry the permanent ones. 401 means
+// the token is missing; 404 means the path or workflow file is wrong. Those are real
+// findings about configuration and must surface on the first attempt rather than
+// being buried under three retries.
+//
+// 403 IS BOTH, AND THAT IS WHY IT NEEDS THE BODY. GitHub returns 403 for a token
+// lacking `actions: read` — a permanent configuration finding — AND for a secondary
+// rate limit, which is as transient as a 429. Treating all 403s as permanent reddened
+// this branch on 2026-08-24 with "403 rate limit exceeded", after the E2E job had
+// already been re-run once: exactly the cry-wolf failure the retry was added to
+// prevent, reintroduced by the arm meant to keep permission findings honest.
+//
+// The status alone cannot tell them apart, so the BODY decides. A 403 whose payload
+// says "rate limit" or carries the exhausted-quota headers is retried; every other
+// 403 still fails on the first attempt. Fail-closed on the ambiguity in the direction
+// that matters: an unreadable or unexpected 403 body is NOT treated as a rate limit.
 const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
 const API_ATTEMPTS = 4;
 const API_BACKOFF_MS = [500, 1500, 4000];
 
 export function isRetryableStatus(status) {
   return RETRYABLE_STATUS.has(Number(status));
+}
+
+/**
+ * Is this 403 a RATE LIMIT (transient) rather than a permission denial (permanent)?
+ *
+ * Positive evidence only. The body must actually say so, or the headers must show an
+ * exhausted quota. Anything else — an empty body, an unreadable one, a permission
+ * message — stays permanent, because guessing "probably a rate limit" would bury the
+ * `actions: read` finding this gate exists to surface.
+ */
+export function isRateLimited403(status, body, headers) {
+  if (Number(status) !== 403) return false;
+  const text = String(body ?? "").toLowerCase();
+  if (text.includes("rate limit") || text.includes("secondary rate") || text.includes("abuse detection")) return true;
+  const get = (k) => (headers && typeof headers.get === "function" ? headers.get(k) : undefined);
+  return get("x-ratelimit-remaining") === "0" || get("retry-after") !== undefined && get("retry-after") !== null;
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -159,7 +187,17 @@ export async function apiWith(fetchImpl, path, { attempts = API_ATTEMPTS, backof
       continue;
     }
     if (res.ok) return res.json();
-    last = { retryable: isRetryableStatus(res.status), message: `GET ${path} -> ${res.status} ${res.statusText}` };
+    // Read the body ONLY for a 403, and only to tell a rate limit from a permission
+    // denial. A failed read leaves `body` empty, which keeps the 403 permanent.
+    let body = "";
+    if (Number(res.status) === 403) {
+      try { body = await res.text(); } catch { body = ""; }
+    }
+    const rateLimited = isRateLimited403(res.status, body, res.headers);
+    last = {
+      retryable: isRetryableStatus(res.status) || rateLimited,
+      message: `GET ${path} -> ${res.status} ${res.statusText}${rateLimited ? " (rate limited)" : ""}`,
+    };
     if (!last.retryable) break;
   }
   throw new Error(last.retryable ? `${last.message} (unchanged after ${attempts} attempts)` : last.message);
@@ -211,6 +249,37 @@ async function api(path) {
     try { await apiWith(c.f, "/x", { attempts: 3, backoff: [0, 0], wait: noWait }); } catch (e) { threw = e; }
     if (!threw || !/unchanged after 3 attempts/.test(threw.message)) throw new Error(`threw=${threw && threw.message}`);
     if (c.calls() !== 3) throw new Error(`expected 3 attempts, made ${c.calls()}`);
+  });
+
+  await t("a 403 whose BODY says rate limit IS retried — GitHub uses 403 for secondary limits", async () => {
+    const limited = { ok: false, status: 403, statusText: "Forbidden",
+      text: async () => '{"message":"API rate limit exceeded for user"}',
+      headers: new Map([["x-ratelimit-remaining", "0"]]) };
+    limited.headers.get = Map.prototype.get.bind(limited.headers);
+    const c = counting([limited, limited, ok({ recovered: 1 })]);
+    const got = await apiWith(c.f, "/x", { wait: noWait });
+    if (!got.recovered) throw new Error("expected recovery after rate-limited 403s");
+    if (c.calls() !== 3) throw new Error(`expected 3 attempts, made ${c.calls()}`);
+  });
+
+  await t("classifier: a rate-limit BODY marks a 403 retryable", () => {
+    if (!isRateLimited403(403, '{"message":"You have exceeded a secondary rate limit"}', null)) throw new Error("not detected");
+  });
+  await t("classifier: an EXHAUSTED-QUOTA header marks a 403 retryable even with no body", () => {
+    const h = new Map([["x-ratelimit-remaining", "0"]]); h.get = Map.prototype.get.bind(h);
+    if (!isRateLimited403(403, "", h)) throw new Error("not detected");
+  });
+  await t("classifier: a PERMISSION 403 stays permanent — the actions:read finding must not hide", () => {
+    const h = new Map(); h.get = Map.prototype.get.bind(h);
+    if (isRateLimited403(403, '{"message":"Resource not accessible by integration"}', h)) throw new Error("misclassified");
+  });
+  await t("classifier: an EMPTY or unreadable 403 body stays permanent — fail closed on the ambiguity", () => {
+    const h = new Map(); h.get = Map.prototype.get.bind(h);
+    if (isRateLimited403(403, "", h)) throw new Error("misclassified");
+    if (isRateLimited403(403, undefined, null)) throw new Error("misclassified");
+  });
+  await t("classifier: a rate-limit-shaped body on a NON-403 is not a 403 rate limit", () => {
+    if (isRateLimited403(500, "rate limit", null)) throw new Error("misclassified");
   });
 
   await t("a 403 is NOT retried — a permission finding must not hide under retries", async () => {

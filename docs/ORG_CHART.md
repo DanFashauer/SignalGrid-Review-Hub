@@ -5,8 +5,9 @@ for anything needed in this will require an employee aka agent to be its job to
 be that ultimate skill for that employee. I need you to be running those types
 of operations and thinking like this more."*
 
-This is that chart. Forty roles across four divisions. Each is an agent whose
-job is to be the deepest skill the company has in one thing.
+This is that chart: every role the company needs, across four divisions, each
+meant to be the deepest skill the company has in one thing. The count is not
+written here on purpose — see below.
 
 ## The rule that keeps this honest
 
@@ -32,6 +33,40 @@ An earlier draft of this document pinned the number in prose; that is the exact
 staleness shape `check-memory-freshness.mjs` exists to catch, and it would have
 been wrong within the hour — `network-domain` activated the same afternoon. Run
 `node scripts/check-org-roster.mjs` for the live count.
+
+That draft did it twice. The opening line also read *"Forty roles across four
+divisions"* against a registry that by then held forty one — a fossil sitting
+four lines above the paragraph explaining why fossils are not written here. It
+is gone; the count now comes only from a run.
+
+## Who actually runs a role
+
+The same draft opened with *"Each is an agent whose job is to be the deepest
+skill the company has in one thing."* On 2026-08-24 that sentence was checked
+for the first time, and it was false: neither this document nor the registry
+contained a single reference to `.claude/` — no edge from any role to any of
+the agent or skill definitions that would run it. A roster of specialists and a
+directory of agents, side by side, with nothing joining them.
+
+Every role now carries an **`executor`** in the registry, and the gate refuses a
+role without one:
+
+| Form | Means |
+| --- | --- |
+| `agent:<name>` | A dispatchable subagent, `.claude/agents/<name>.md` |
+| `skill:<name>` | A skill the lane loads, `.claude/skills/<name>/SKILL.md` |
+| `lane` | Nothing dedicated — the main lane adopts the role as a lens |
+
+A role naming an agent or skill that is **not on disk** fails the build. That is
+the case worth gating: an executor is a pointer, and a pointer outlives the file
+it points at. Deleting `.claude/agents/architect.md` now breaks the build in
+every role that names it, instead of leaving them reading as staffed.
+
+`lane` is a real and honest answer, not a placeholder — and the gate prints how
+many roles give it, on every run, beside the dedicated ones. A roster where
+every role says `lane` is a true roster of a thin company, and the printed split
+is what tells the two apart. As with the activation count, it is not repeated
+here.
 
 ## Division 1 — Engineering (function: *how* work is done)
 

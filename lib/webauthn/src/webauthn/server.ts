@@ -587,7 +587,18 @@ export async function verifyStepUp(sessionId: string): Promise<StepUpSession | n
   }
 
   // Check expiration
-  if (new Date(session.expiresAt) < new Date()) {
+  // TENTH SITE of the same family, and the one that survived the sweep that was
+  // supposed to end it. `new Date(bad)` is an Invalid Date; a relational compare
+  // coerces both sides to numbers, `NaN < now` is false, and the step-up session
+  // fell through and returned as VALID.
+  //
+  // It survived because the gate written to catch this family only recognised
+  // `Date.parse(...)` and `.getTime()` as parse expressions — a bare `new Date(x)`
+  // on one side of `<` matched nothing, so the scan reported zero and the sweep
+  // read as complete. Found by external review after the in-repo reviewer passed
+  // the same change. PARSE_EXPR now covers this form.
+  const sessionExpiresAtMs = new Date(session.expiresAt).getTime();
+  if (!Number.isFinite(sessionExpiresAtMs) || sessionExpiresAtMs < Date.now()) {
     return null;
   }
 

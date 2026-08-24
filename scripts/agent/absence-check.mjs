@@ -74,6 +74,14 @@ function workflowFilesMentioning(needle) {
  * [t, \.t$, t/, "t", t_, -t] — every one a subset of the first, so six probes could only
  * ever agree with each other. These four look in different places.
  */
+// Build output and generated artefacts. NOT docs/ — see the content probe below.
+const CONTENT_EXCLUSIONS = [":!*lock*", ":!*dist*", ":!*.map"];
+
+/** A pathspec's bare directory, so ':!docs', ':!docs/*' and ':!docs/**' all normalise to 'docs'. */
+export function excludedDir(pathspec) {
+  return String(pathspec).replace(/^:!/, "").replace(/\/\*{1,2}$/, "").replace(/\/$/, "").toLowerCase();
+}
+
 export function probeSpecs(topic) {
   const t = String(topic).toLowerCase();
   return [
@@ -100,7 +108,35 @@ export function probeSpecs(topic) {
       strength: "weak",
       how: "the WORD appears in tracked source",
       // `-e` makes the next argv element a pattern, so a leading '-' is data, not a flag.
-      run: () => gitLines(["grep", "-lIi", "-e", String(topic), "--", ":!*lock*", ":!*dist*", ":!*.map", ":!docs/*"]),
+      //
+      // docs/ IS SEARCHED. It was excluded until 2026-08-24, and that exclusion
+      // inverted this file's own design. The strength model above says a content
+      // hit is WEAK and must yield INCONCLUSIVE — printed with its matches, for
+      // the caller to read — precisely because this repository is full of
+      // sentences naming things to disclaim them. Blinding the weak probe to the
+      // docs tree did not make those disclaimers stop mattering; it turned "weak
+      // hit -> inconclusive" into "no hit -> CORROBORATED", the strongest
+      // safe-to-claim verdict this tool can return.
+      //
+      // That is a fail-open in the tool whose entire job is preventing a
+      // fail-open, and the failure it was built for was DOCUMENTS asserting
+      // absence — "a document asserted Android does not exist in any form".
+      // It could not read documents.
+      //
+      // Caught live on 2026-08-24: `check:absence "retired label"` returned
+      // CORROBORATED across all four probes, and a roster entry was rewritten to
+      // say those labels are "named NOWHERE in this repository". The same grep
+      // without the exclusion returns four files, three of them under docs/,
+      // which discuss retired labels by name. Excluding a source of weak
+      // evidence does not weaken the verdict — it strengthens it, wrongly.
+      // Exclusions live in a named constant so the self-test can inspect the
+      // ACTUAL pathspecs rather than a stringified function body. Asserting on
+      // source text only ever catches the exact spelling someone last used:
+      // `":!docs".includes("docs/")` is false, and a bare `:!docs` excludes the
+      // tree just as thoroughly. That was a real hole in the first version of
+      // the guard below.
+      exclusions: CONTENT_EXCLUSIONS,
+      run: () => gitLines(["grep", "-lIi", "-e", String(topic), "--", ...CONTENT_EXCLUSIONS]),
     },
   ];
 }
@@ -154,6 +190,45 @@ function selfTest() {
   }
   // …and a topic with no artifact must NOT come back refuted, or the tool is a rubber
   // stamp that says "false" to everything.
+  // THE BLIND SPOT THAT SHIPPED A FALSE CLAIM. A topic living only in prose must
+  // reach INCONCLUSIVE, never CORROBORATED. Before 2026-08-24 the content probe
+  // excluded docs/, so this returned "safe to claim" on a topic named in four
+  // tracked files. Asserted structurally AND live, because the structural half
+  // alone would pass again the moment someone re-adds an exclusion elsewhere.
+  // BOTH HALVES OF THIS GUARD WERE BROKEN IN THEIR FIRST VERSION, and a review
+  // caught it the same day. Recorded because the failure is more instructive
+  // than the fix: a guard written to stop a fail-open regressing could not
+  // itself fail.
+  //
+  //   The structural half asserted `!run.toString().includes("docs/")`. But
+  //   `":!docs".includes("docs/")` is FALSE, and a bare `:!docs` excludes the
+  //   tree just as thoroughly — so re-adding the exclusion in a slightly
+  //   different spelling sailed straight through. It tested the exact typo that
+  //   was removed, not the property.
+  //
+  //   The live half asserted that the topic "retired label" produced content
+  //   hits. That string appears THREE TIMES in this file, in the comments above
+  //   describing this very fix — so `git grep` returned this file whether or not
+  //   docs/ was excluded, and the assertion held either way. The test could not
+  //   distinguish its two outcomes.
+  //
+  // Both now assert the PROPERTY. The structural half normalises real pathspecs;
+  // the live half requires a hit whose PATH is under docs/, which is false the
+  // moment docs/ stops being searched, self-reference or not.
+  const contentSpec = probeSpecs("x").find((sp) => sp.id === "content");
+  checks.push([
+    "the content probe excludes no documentation tree, however the pathspec is spelled",
+    Array.isArray(contentSpec.exclusions) &&
+      !contentSpec.exclusions.some((e) => ["docs", "doc", "documentation"].includes(excludedDir(e))),
+  ]);
+
+  const prose = probeSpecs("retired label").map((sp) => ({ ...sp, hits: sp.run() }));
+  const contentHits = prose.find((r) => r.id === "content").hits;
+  checks.push([
+    "LIVE: a prose topic is INCONCLUSIVE, and the evidence comes from docs/ — not from this file quoting itself",
+    classify(prose) === "inconclusive" && contentHits.some((f) => String(f).startsWith("docs/")),
+  ]);
+
   const fed = probeSpecs("fedramp").map((s) => ({ ...s, hits: s.run() }));
   checks.push(['LIVE: "fedramp" is NOT refuted — mentions exist, artifacts do not', classify(fed) !== "refuted"]);
 

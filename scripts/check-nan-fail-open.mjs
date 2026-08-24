@@ -129,14 +129,29 @@ const RULE1 = /!\s*Number\.isNaN\s*\([^)]*\)\s*&&/;
 // sweep comparing against a local `cutoff` and a lazy-expiry check comparing
 // against a `nowMs` parameter. The clock does not have to be spelled out for
 // NaN to invert the meaning.
-const PARSE_EXPR = String.raw`(?:Date\.parse\s*\([^;]*?\)|new\s+Date\s*\([^;]*?\)\s*\.getTime\s*\(\)|\.getTime\s*\(\))`;
+// A BARE `new Date(x)` counts as a parse expression too. It did not, and that
+// omission let a real fail-open survive the sweep this gate was written for:
+// `if (new Date(session.expiresAt) < new Date())` in webauthn/server.ts
+// verifyStepUp. An Invalid Date coerces to NaN in a relational compare, the test
+// is false, and the session returned as VALID — while this scan reported zero,
+// because the operand matched none of the three recognised forms. Found by
+// external review after the in-repo reviewer passed the same change.
+//
+// Only RELATIONAL uses are reachable from here (rules 2 and 3 both require a
+// comparison operator), so forward construction like `new Date(now + ttl)` is
+// still not flagged.
+const PARSE_EXPR = String.raw`(?:Date\.parse\s*\([^;]*?\)|new\s+Date\s*\([^;]*?\)\s*\.getTime\s*\(\)|new\s+Date\s*\([^;)]*\)|\.getTime\s*\(\))`;
 const RULE2 = new RegExp(`${PARSE_EXPR}\\s*[<>]=?\\s*[^=]|[^<>=!]\\s*[<>]=?\\s*${PARSE_EXPR}`);
-// BOTH sides parsed is excluded: comparing two parsed dates (a sort comparator,
-// a test asserting one timestamp precedes another) fails CLOSED — NaN makes the
-// comparison false either way and no permissive branch is taken. Flagging it
-// would be a false positive on correct code, and a gate with false alarms gets
-// switched off.
-const BOTH_PARSED = new RegExp(`${PARSE_EXPR}\\s*[<>]=?\\s*${PARSE_EXPR}`);
+// BOTH sides parsed is NOT exempt, and the earlier belief that it was is the
+// reason a real fail-open shipped. The claim was "NaN makes the comparison false
+// either way, so no permissive branch is taken". That is wrong: whether false is
+// safe depends entirely on which branch REJECTS. In
+// `if (new Date(session.expiresAt) < new Date()) return null;` the false branch
+// is the permissive one, so a malformed expiry returns the session as valid —
+// two parse expressions, and a fail-open. Exempting the shape hid it.
+//
+// Correctness here cannot be decided from the operands; it needs an explicit
+// finiteness check, which rule 3's guard recognition already looks for.
 const RULE4 =
   /Date\.now\s*\(\)\s*-\s*(?:Date\.parse\s*\(|new\s+Date\s*\()|(?:Date\.parse\s*\([^;]*?\)|\.getTime\s*\(\))\s*-\s*Date\.now\s*\(\)/;
 const ASSIGN = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:Date\.parse\s*\(|new\s+Date\s*\([^)]*\)\s*\.getTime\s*\()/;
@@ -154,7 +169,7 @@ function findViolations(source) {
     if (RULE1.test(line)) {
       hits.push({ line: i + 1, rule: 1, text: line.trim() });
     }
-    if (RULE2.test(line) && !BOTH_PARSED.test(line) && !/Number\.isFinite/.test(line)) {
+    if (RULE2.test(line) && !/Number\.isFinite/.test(line)) {
       hits.push({ line: i + 1, rule: 2, text: line.trim() });
     }
     if (RULE4.test(line) && !/Number\.isFinite/.test(line)) {
@@ -184,10 +199,7 @@ function findViolations(source) {
         // `BOTH_PARSED` only sees the inline spelling, so the variable spelling
         // is handled here — it is how a proof comparing two timestamps got
         // flagged on the first widening.
-        const otherParsed = parsedNames.some(
-          (o) => o !== name && new RegExp(`\\b${o}\\b`).test(lines[j]),
-        );
-        if (j > i && cmp.test(lines[j]) && !otherParsed) {
+        if (j > i && cmp.test(lines[j])) {
           hits.push({ line: j + 1, rule: 3, text: lines[j].trim(), via: `${name} (assigned line ${i + 1})` });
           break;
         }
@@ -232,12 +244,14 @@ function findViolations(source) {
       "const exp = Date.parse(r.expiresAt);\nif (!Number.isNaN(exp) && exp <= cutoff) return null;",
       true,
     ],
-    ["both operands parsed, inline — fails closed, not flagged", "if (Date.parse(a) < Date.parse(b)) swap();", false],
+    // The site that escaped the original sweep, pinned in both directions.
+    ["bare new Date() relational — the verifyStepUp form", "if (new Date(session.expiresAt) < new Date()) return null;", true],
     [
-      "both operands parsed via variables — fails closed, not flagged",
-      "const lastMs = Date.parse(a);\nconst evalMs = Date.parse(b);\nif (lastMs > evalMs) reject();",
+      "bare new Date() relational, fixed",
+      "const ms = new Date(session.expiresAt).getTime();\nif (!Number.isFinite(ms) || ms < Date.now()) return null;",
       false,
     ],
+    ["forward construction is still NOT flagged", "const expiresAt = new Date(now.getTime() + ttl * 1000);", false],
     ["comment describing the bug is NOT flagged", "// was: if (!Number.isNaN(exp) && exp <= Date.now())", false],
   ];
   const failures = cases.filter(([, src, shouldFlag]) => findViolations(src).length > 0 !== shouldFlag);

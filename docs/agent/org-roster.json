@@ -8,8 +8,10 @@
       "title": "Principal engineer / architect",
       "charter": "Holds delegated authority for reversible technical calls; produces decision records with evidence and a reversal path.",
       "trigger": "A decision is pending that is technical and reversible.",
+      "executor": "agent:architect",
       "activated": "2026-08-19",
-      "produced": "docs/DECISION_RECORDS.md DR-001..DR-003"
+      "produced": "docs/DECISION_RECORDS.md DR-001..DR-003",
+      "nextAction": "CORRECTED 2026-08-24 — the previous entry claimed no decision record names how the September 16 Fleet Premium call gets undone. DR-005 section 5 states the action, and its Reversal clause states the undo: the exclusion reverses if a paying customer requires a Premium capability. The record exists. What is genuinely missing is a reversal-path AUDIT across the whole ledger: check-decision-record-format.mjs gates that each record STATES how it gets undone, but nothing checks that the stated reversal still applies to the world the record now sits in. Read every DR against that question and record which reversals have gone stale."
     },
     {
       "id": "qa-engineer",
@@ -17,8 +19,10 @@
       "title": "QA engineer",
       "charter": "Adversarial correctness review of the newest, least-soaked surfaces; only findings with a concrete failure scenario.",
       "trigger": "Code has shipped that no skeptic has read yet.",
+      "executor": "skill:signalgrid-reviewer",
       "activated": "2026-08-19",
-      "produced": "5 confirmed defects incl. the freshness gate's NaN-date silent pass"
+      "produced": "5 confirmed defects incl. the freshness gate's NaN-date silent pass",
+      "nextAction": "ANSWERED 2026-08-24, and it produced a finding — see backlog row 58. The question was whether the ten TypeScript NaN-expiry sites crossed the port boundary. Strictly they cannot: Swift's Date is strongly typed, so there is no unparseable-date-compares-false path. The SEMANTICS crossed anyway through the optional — SessionData.isExpired returns false when expiresAt is nil, two SessionStateManager guards no-op on nil, and HostAppViewController stacks two permissive defaults into the Assist gate's own staleness input. Reachable from the MDM auth path, which returns a real token with expiresAt: nil. REPORTED not fixed: the cloud lane has no Swift toolchain. Queued to the Mac lane. This role's NEXT question, in the same shape: the ten sites and these four were all found by asking what an UNKNOWN resolves to. Take that question to the other direction of the port — what an unknown resolves to in the Kotlin and Rust Assist clients, which no pass has read at all."
     },
     {
       "id": "security-engineer",
@@ -26,6 +30,7 @@
       "title": "Security engineer",
       "charter": "Workflow permissions and injection, script hygiene, auth/authz seams, supply chain.",
       "trigger": "CI, scripts, or auth surfaces change; or on a scheduled sweep.",
+      "executor": "agent:security-reviewer",
       "activated": "2026-08-19",
       "produced": "SBOM token split; third-party actions pinned + check-action-pinning.mjs",
       "nextAction": "SHIFT 1 (owner-sequenced, acceptance bar in the owner's words): extend adversarial trust testing across the uncovered connector tier, grant-producing or assurance-lowering paths first. The bar is stronger than \"tests added\": every unknown/missing/stale/contradictory input that could previously produce an affirmative needs an explicit counterexample, and the harness itself needs a mutation/self-test proving it can fail. Does NOT reopen launch scope — no deferred family activates, no surface is added."
@@ -36,8 +41,10 @@
       "title": "Product manager",
       "charter": "Grooms the build queue; names stale entries and backlog/ledger contradictions.",
       "trigger": "The queue has drifted, or a shift needs its next targets ranked.",
+      "executor": "lane",
       "activated": "2026-08-19",
-      "produced": "backlog re-file; three owner-board contradictions corrected"
+      "produced": "backlog re-file; three owner-board contradictions corrected",
+      "nextAction": "Two things, the first checkable and the second not. CHECKABLE: docs/COMPANY_BUILD_PLAN.md now has an ownership gate but no staleness one — re-rank the rows still carrying work and name any whose premise has been overtaken, as row 54's diagnosis was overtaken once already. NOT CHECKABLE FROM THIS TREE, and recorded as an open question rather than a fact: an external review raised roughly a dozen findings this lane believes are mostly unfixed and filed in no row. Nothing in the repository records them, so the first task is to write them down; until then their count and status are hearsay."
     },
     {
       "id": "web-engineer",
@@ -45,8 +52,10 @@
       "title": "Frontend engineer",
       "charter": "The marketing site and served consoles: correctness, links, residual claims.",
       "trigger": "Web artifacts change, or a truth sweep runs.",
+      "executor": "lane",
       "activated": "2026-08-19",
-      "produced": "14 findings; 8 applied incl. router-base 404s and invisible signal dots"
+      "produced": "14 findings; 8 applied incl. router-base 404s and invisible signal dots",
+      "nextAction": "CORRECTED 2026-08-24 — the previous entry claimed six of fourteen findings had no recorded disposition. docs/INTAKE_LEDGER.md row 95 says \"the web polish queue is now empty too\" and itemises each closure, including the one finding deliberately NOT actioned (three unreferenced section components, kept rather than silently dropped). That queue is closed; the stale artefact was this role's own `produced` field, which still reads \"14 findings; 8 applied\". The genuine open item is structural: artifacts/signalgrid-web/** and artifacts/signalgrid-review/** are claimed by NO skill under .claude/skills/ — signalgrid-core owns api-server and signalgrid-app only — which is why this role and accessibility-specialist both fall back to `lane`. Decide whether to widen signalgrid-core or add a web skill, then re-point both roles."
     },
     {
       "id": "sre",
@@ -54,8 +63,10 @@
       "title": "SRE / operations engineer",
       "charter": "CI estate health: timeouts, concurrency, caching, silent no-op risk, schedule sanity.",
       "trigger": "Workflows change, or CI cost/duration drifts.",
+      "executor": "lane",
       "activated": "2026-08-19",
-      "produced": "timeouts on unbounded jobs; concurrency groups on three workflows"
+      "produced": "timeouts on unbounded jobs; concurrency groups on three workflows",
+      "nextAction": "check-ci-liveness.mjs now gates one sweep job's last success. The estate runs more scheduled workflows than that one, and a schedule that silently stops is the same outage in every one of them. Extend liveness to each scheduled workflow, or record which are exempt and why."
     },
     {
       "id": "mobile-native-engineer",
@@ -63,6 +74,7 @@
       "title": "Mobile / native engineer",
       "charter": "native/* — EnterpriseShell, SignalGridMobile, the byte-faithful Swift ports. New logic goes AROUND the ported engines.",
       "trigger": "Native surfaces change, or port parity needs checking.",
+      "executor": "skill:signalgrid-native",
       "activated": null,
       "produced": null,
       "priority": 2,
@@ -74,8 +86,10 @@
       "title": "Compliance analyst",
       "charter": "Reads partner-facing drafts against what the tree can evidence; maps controls to proofs. CANNOT sign off.",
       "trigger": "A partner/assessor document is drafted or a control claim changes.",
+      "executor": "skill:signalgrid-scribe",
       "activated": "2026-08-19",
-      "produced": "Verified SECURITY_QUESTIONNAIRE_PACK.md end to end — all 12 cited files and 3 cited commands resolve, and both load-bearing claims hold in the code (docs-sanity really does denylist certification claims; the API really asserts 401-before-404 from both sides). Verdict: accurate, ready for a human reviewer; sign-off remains the owner's. Structural gap found and closed — nothing kept command citations resolving, so scripts/check-cited-commands.mjs now gates all 130 across 272 docs"
+      "produced": "Verified SECURITY_QUESTIONNAIRE_PACK.md end to end — all 12 cited files and 3 cited commands resolve, and both load-bearing claims hold in the code (docs-sanity really does denylist certification claims; the API really asserts 401-before-404 from both sides). Verdict: accurate, ready for a human reviewer; sign-off remains the owner's. Structural gap found and closed — nothing kept command citations resolving, so scripts/check-cited-commands.mjs now gates all 130 across 272 docs",
+      "nextAction": "SECURITY_QUESTIONNAIRE_PACK.md was verified end to end, which establishes that its claims resolve — not that the controls behind them are proven. Produce the inverse list: every control the pack asserts that no proof in this tree holds. The gap list, not the pass list."
     },
     {
       "id": "performance-engineer",
@@ -83,8 +97,10 @@
       "title": "Performance engineer",
       "charter": "Owns the bench and load numbers and the honest in-process vs over-HTTP gap.",
       "trigger": "A performance figure is quoted, or the decision path changes. Standing duty: re-measure the baseline table, because no gate covers those figures.",
+      "executor": "skill:signalgrid-core",
       "activated": "2026-08-19",
-      "produced": "Re-measured every quoted performance figure and recorded the dated baseline in docs/RELIABILITY_SLO.md. p95 1.2671 ms against the quoted 1.3 ms; 5,128 decisions/sec aggregate at 3.38x scaling (85% of linear) with identical verdicts on every worker; the 240 req/min default confirmed in rateLimit.ts. Recorded the judgement NOT to gate absolute values — a latency threshold on a shared runner is a flaky gate — and named the consequence: check-proof-figures.mjs does not cover these, so keeping them true is this role's standing duty"
+      "produced": "Re-measured every quoted performance figure and recorded the dated baseline in docs/RELIABILITY_SLO.md. p95 1.2671 ms against the quoted 1.3 ms; 5,128 decisions/sec aggregate at 3.38x scaling (85% of linear) with identical verdicts on every worker; the 240 req/min default confirmed in rateLimit.ts. Recorded the judgement NOT to gate absolute values — a latency threshold on a shared runner is a flaky gate — and named the consequence: check-proof-figures.mjs does not cover these, so keeping them true is this role's standing duty",
+      "nextAction": "The baseline table in docs/RELIABILITY_SLO.md is dated and nothing mechanical keeps it true — this role's own standing duty. Re-measure on the current head and re-date it. While there, quantify the in-process-versus-over-HTTP gap once, so the bench number and the load number stop being read as the same number."
     },
     {
       "id": "release-engineer",
@@ -92,6 +108,7 @@
       "title": "Release engineer",
       "charter": "The launch profile, promotion tiers, packaging and version discipline.",
       "trigger": "A surface is added to or reclassified in the launch profile.",
+      "executor": "skill:signalgrid-scribe",
       "activated": null,
       "produced": null,
       "priority": 2,
@@ -103,6 +120,7 @@
       "title": "Data / persistence engineer",
       "charter": "The Postgres audit ledger: chain integrity, migrations, export, pagination.",
       "trigger": "Ledger, migration or export code changes.",
+      "executor": "skill:signalgrid-core",
       "activated": "2026-08-20",
       "produced": "docs/LEDGER_TRUNCATION_FINDING.md. This role was queued on a claim that turned out to be FALSE — \"the RESTORE path is only described\" — when proof:backup-restore has been exercising it on real Postgres in CI all along (16/16 live, including a flipped byte, a truncated archive and a missing manifest all REFUSED). The real gap was next to it: a hash chain detects EDITS, not deletions of its own tail. 40 records seeded on a live Postgres, the last 10 deleted with a plain DELETE, and db:verify-ledger printed \"Chain intact\" and exited 0. Pinned as an explicit assertion in proof:audit-ledger-pg (14/14), named in the threat model as its own Tampering row, documented in BACKUP_AND_RESTORE.md, and answered operationally with db:verify-ledger --min-records N — because the command already REFUSED a missing DATABASE_URL on the grounds that a verifier which green-lights the void is worse than none, and then exited 0 on an empty table.",
       "nextAction": "SHIFT 2 (owner-sequenced, spec in the owner's words): build the database role split — the runtime role non-owner and minimally privileged (ledger: SELECT+INSERT only), schema/admin operations separate, and BOTH directions proven: legitimate ledger writes still work while destructive operations fail. The backup/restore proof must recreate the same privilege posture rather than accidentally restoring ownership (pg_restore --clean drops table-level grants with the objects). Does NOT reopen launch scope."
@@ -113,6 +131,7 @@
       "title": "API contract architect",
       "charter": "/v1 contract: OpenAPI fidelity, envelope shape, idempotency, versioning and deprecation.",
       "trigger": "A route is added or an existing contract changes.",
+      "executor": "skill:signalgrid-core",
       "activated": "2026-08-20",
       "produced": "docs/API_CONTRACT_AUDIT.md — the published contract asserted \"every route is tenant-scoped: the tenant is derived from the authenticated bearer token\", which is the inverse of what 21 of its own 55 operations do (/cp/v1/* carries no principal and is scoped only by a client-supplied ?tenant=); nothing said the whole /cp/v1 surface and GET /v1/keys are registered only under the review-demo profile and 404 elsewhere; three served routes (self-audit, reliability, iac) had drifted out of the spec, the Postman collection and the launch profile at once. The cause was that proof:api-contract read one route file and compared only /v1 while printing \"Contract holds\" — widened to the whole served surface, plus a zero-routes-parsed guard, self-test 7/7. Also fixed scripts/safety-check.mjs reporting Postman drift with an EMPTY reason.",
       "nextAction": "Status codes and response shapes — the deeper half. Nothing compares documented 400/403/404/429 against the handlers that declare them, and test:api is not driven from the spec, so a documented status nobody implemented passes both."
@@ -123,8 +142,10 @@
       "title": "DevEx / tooling engineer",
       "charter": "The gate fabric itself — preflight, the proof harness, mutation guard, parity checks. Guards the guards.",
       "trigger": "A gate is added or changed, or a gate is suspected of passing vacuously. Standing question: is any gate path-filtered away from part of its own subject?",
+      "executor": "agent:gate-and-proof-engineer",
       "activated": "2026-08-19",
-      "produced": "Audited whether any preflight gate is referenced only by a workflow that does not gate every PR — the weakness check-preflight-ci-parity.mjs admits in its own header. Found and fixed one real hole: check-assist-conformance.mjs discovers TWO Assist clients (native/android/core Kotlin, native/desktop/core Rust) but ran only in desktop.yml, filtered to native/desktop/** and native/shared/**, so a change to the KOTLIN client never triggered the gate that binds it — the exact failure it exists to catch, in the client where it had already caught two real defects. Now runs in review-hub-ci.yml on every PR. Two other candidates were the false positive the parity gate already documents (npm alias vs script path), and check-ios-port-sources is correctly scoped since its subject lives entirely inside its filter"
+      "produced": "Audited whether any preflight gate is referenced only by a workflow that does not gate every PR — the weakness check-preflight-ci-parity.mjs admits in its own header. Found and fixed one real hole: check-assist-conformance.mjs discovers TWO Assist clients (native/android/core Kotlin, native/desktop/core Rust) but ran only in desktop.yml, filtered to native/desktop/** and native/shared/**, so a change to the KOTLIN client never triggered the gate that binds it — the exact failure it exists to catch, in the client where it had already caught two real defects. Now runs in review-hub-ci.yml on every PR. Two other candidates were the false positive the parity gate already documents (npm alias vs script path), and check-ios-port-sources is correctly scoped since its subject lives entirely inside its filter",
+      "nextAction": "CORRECTED 2026-08-24 — the previous entry here asked for work already done a week earlier: it claimed check-preflight-ci-parity.mjs cannot resolve an npm alias against a script path, when aliasesFor/wired() have resolved exactly that since 43ec8f7, and LOCAL_ONLY is empty so there was no exemption to delete. The real open question is narrower and was found while checking that: wired() resolves aliases through a /scripts\\/([a-z0-9-]+\\.mjs)/ pattern, so a gate invoked through an npm script whose target is a .sh — or anything not .mjs — resolves to nothing and would read as unwired. Nothing is currently in that shape, which is why nobody has hit it. Either widen the pattern or state the limit in the file, so the next shell-script gate does not land on a silent false positive."
     },
     {
       "id": "docs-writer",
@@ -132,6 +153,7 @@
       "title": "Documentation engineer",
       "charter": "The docs ARE the PRD here: index reachability, cited paths, figure truth, doc-to-code agreement.",
       "trigger": "A doc is added, or a claim in docs outlives what it described.",
+      "executor": "skill:signalgrid-scribe",
       "activated": null,
       "produced": null,
       "priority": 2,
@@ -143,6 +165,7 @@
       "title": "Accessibility specialist",
       "charter": "WCAG conformance across the site and the served consoles; keyboard, contrast, live regions, reduced motion.",
       "trigger": "Any user-facing surface changes.",
+      "executor": "lane",
       "activated": null,
       "produced": null,
       "priority": 3,
@@ -154,6 +177,7 @@
       "title": "Desktop engineer",
       "charter": "The Tauri desktop lane and its cross-platform parity claims.",
       "trigger": "Desktop code or its CI lane changes.",
+      "executor": "skill:signalgrid-native",
       "activated": null,
       "produced": null,
       "priority": 3,
@@ -165,6 +189,7 @@
       "title": "Firmware / hardware engineer",
       "charter": "firmware/ and the dock surfaces; keeps hardware claims inside what a pre-production concept can assert.",
       "trigger": "Firmware or dock/hardware claims change.",
+      "executor": "skill:signalgrid-native",
       "activated": null,
       "produced": null,
       "priority": 3,
@@ -176,6 +201,7 @@
       "title": "Identity & Access domain lead",
       "charter": "Entra, Okta, Keycloak, Ping, FIDO2. Owns 15 identity dimensions.",
       "trigger": "An identity dimension changes, or its wire truth is unverified.",
+      "executor": "skill:signalgrid-core",
       "activated": "2026-08-20",
       "produced": "docs/IDENTITY_LIVE_SHAPE_CHECK.md — driven against a live Keycloak 26.4. Three fields sso-session names are NOT wire facts: amr is absent from the access token, the ID token, /userinfo and RFC 7662 introspection alike, leaving only an opaque deployment-configured acr, so single_factor/mfa/phishing_resistant is not derivable from a default IdP; auth_time is absent everywhere, so iat (token issuance) is not when the human authenticated — the same defect class as the RADIUS lastAuthAt finding; and the access token exp is 60s against a 36000s session max, demonstrated live at 75s with the token dead and four SSO sessions still alive. The session record carries no device field at all (id, username, userId, ipAddress, start, lastAccess, rememberMe, clients, transientUser), and two logins by the same user from the same host produced two indistinguishable sessions — precisely the leftover-session case the dimension exists for, so the device-session join must come from the device side. The code is already right (the connector normalizes a bridge-supplied value through oneOf with an unknown fallback and evaluate.ts raises the bar on every unknown); what was missing was the wire-truth record. proof:live-keycloak 14/14.",
       "nextAction": "Ten of fifteen dimensions remain unverified against any live IdP, and only Keycloak was driven — Entra DOES emit amr and Okta exposes richer session APIs, so the wire-truth table is one IdP wide. Next: script the Keycloak client setup (KEYCLOAK_LIVE_INTEGRATION.md describes it in prose only, and following that prose cost this shift a 13/14 on a misread mapper value), then take passkey-assurance and token-binding against the same lab."
@@ -186,6 +212,7 @@
       "title": "Endpoint / UEM domain lead",
       "charter": "Intune+Graph, Jamf, Fleet, Headwind, Omnissa, SOTI. Owns 9 device dimensions and the platform-honesty line.",
       "trigger": "A device-management dimension changes, or a vendor's wire shape needs verifying.",
+      "executor": "skill:signalgrid-core",
       "activated": null,
       "produced": null,
       "priority": 1,
@@ -197,6 +224,7 @@
       "title": "Security operations domain lead",
       "charter": "Wazuh, CrowdStrike, Defender, Splunk, Sentinel. Owns 10 threat/vuln/telemetry-integrity dimensions.",
       "trigger": "A SecOps dimension changes, or a threat-vs-vulnerability conflation is suspected.",
+      "executor": "skill:signalgrid-core",
       "activated": null,
       "produced": null,
       "priority": 2,
@@ -208,8 +236,10 @@
       "title": "Network & connectivity domain lead",
       "charter": "Cisco ISE, ClearPass, Zscaler, Netskope, carrier/private-5G. Owns 6 dimensions and the admission/carriage/egress/reachability ladder.",
       "trigger": "carrier remains entirely unverified (no free API); the two NAC console adapters are documentation-verified only and still need an instance.",
+      "executor": "skill:signalgrid-core",
       "activated": "2026-08-19",
-      "produced": "docs/RADIUS_NAC_LIVE_SHAPE_CHECK.md (quarantine is an Access-ACCEPT; rejections carry no reason; SSID glued to the AP MAC; nacCompliant/lastAuthAt are not auth facts) and docs/NETWORK_EGRESS_LIVE_SHAPE_CHECK.md (an egress proxy collapses the dns_failing rung; TLS interception is independently observable via the certificate ISSUER, so service_observing_traffic need not stay a self-report); plus a documentation-verified addendum showing Cisco ISE and Aruba ClearPass both split identity from session, confirming the cisco-ise.ts refusal to infer auth state"
+      "produced": "docs/RADIUS_NAC_LIVE_SHAPE_CHECK.md (quarantine is an Access-ACCEPT; rejections carry no reason; SSID glued to the AP MAC; nacCompliant/lastAuthAt are not auth facts) and docs/NETWORK_EGRESS_LIVE_SHAPE_CHECK.md (an egress proxy collapses the dns_failing rung; TLS interception is independently observable via the certificate ISSUER, so service_observing_traffic need not stay a self-report); plus a documentation-verified addendum showing Cisco ISE and Aruba ClearPass both split identity from session, confirming the cisco-ise.ts refusal to infer auth state",
+      "nextAction": "This role's own trigger still names its gap: carrier is entirely unverified for want of a free API, and both NAC console adapters are documentation-verified only. Get one NAC instance and drive it, or record carrier as permanently deferred with the reason in the dimension table."
     },
     {
       "id": "physical-ot-domain",
@@ -217,6 +247,7 @@
       "title": "Physical, facilities & OT domain lead",
       "charter": "PACS, RTLS/BLE/UWB, Traccar, CMMS, OT historians. Owns 5 dimensions and the safety-independence boundary.",
       "trigger": "A location/custody/OT dimension changes.",
+      "executor": "skill:signalgrid-core",
       "activated": null,
       "produced": null,
       "priority": 2,
@@ -228,6 +259,7 @@
       "title": "ITSM & operations domain lead",
       "charter": "ServiceNow, Jira SM, WMS, osquery. Owns 6 operational-context dimensions and the systems-of-record boundary.",
       "trigger": "An operational-context dimension changes.",
+      "executor": "skill:signalgrid-core",
       "activated": null,
       "produced": null,
       "priority": 2,
@@ -239,6 +271,7 @@
       "title": "Solutions architect",
       "charter": "How this actually deploys at a customer site: pilot scope, reference architecture, the admin's setup path.",
       "trigger": "A pilot is scoped, or a deployment question needs a defensible answer.",
+      "executor": "agent:architect",
       "activated": null,
       "produced": null,
       "priority": 2,
@@ -250,6 +283,7 @@
       "title": "Threat modeler",
       "charter": "Attack surface and abuse cases against the decision fabric itself — including the agent lanes.",
       "trigger": "A trust boundary moves, or a new surface is exposed.",
+      "executor": "agent:security-reviewer",
       "activated": null,
       "produced": null,
       "priority": 2,
@@ -261,6 +295,7 @@
       "title": "Competitive / market analyst",
       "charter": "Landscape briefs and design studies from primary sources; never restates a number it cannot re-derive.",
       "trigger": "A competitor, category or adjacent product needs assessing.",
+      "executor": "lane",
       "activated": null,
       "produced": null,
       "priority": 3,
@@ -272,6 +307,7 @@
       "title": "Partner & alliances analyst",
       "charter": "The MDM/UEM and actuator ecosystem; drafts partner materials. The owner sends; the analyst never does.",
       "trigger": "A partnership candidate surfaces.",
+      "executor": "lane",
       "activated": null,
       "produced": null,
       "priority": 3,
@@ -283,6 +319,7 @@
       "title": "Pricing & packaging analyst",
       "charter": "Tier shape and the honesty of every customer-visible figure. Recommends posture; never commits contractually.",
       "trigger": "A pricing or packaging claim changes.",
+      "executor": "lane",
       "activated": null,
       "produced": null,
       "priority": 3,
@@ -294,6 +331,7 @@
       "title": "Brand & design lead",
       "charter": "Visual identity and the site's design system; keeps the brand palette actually applied.",
       "trigger": "A user-facing surface's look changes.",
+      "executor": "lane",
       "activated": "2026-08-20",
       "produced": "The deny re-tone, applied under DR-005: dark #C67070 / light #8A3F3F across web index.css and iOS DesignSystem.swift in one commit (a fork between them was why the first attempt was reverted), re-measured before applying — 5.05:1/4.55:1 dark, 6.50:1/7.33:1 light, against the old 3.18:1 on card. BRAND_CONTRAST_FINDING.md resolved for deny; canonical decision-state palette now lives in this repository.",
       "priority": 3,
@@ -305,8 +343,10 @@
       "title": "Program manager",
       "charter": "Runs the shift cadence, the lane loops, and this org itself — including calling roles that have never run.",
       "trigger": "A shift is planned, or the roster reports stale/unactivated roles.",
+      "executor": "lane",
       "activated": "2026-08-19",
-      "produced": "Converted the cold roster from a census into a QUEUE: every one of the 21 cold roles now carries a priority and a concrete nextAction, and check-org-roster.mjs was upgraded to REFUSE a cold role that cannot say what would activate it (self-test 10/10) and to print the priority-1 set with its actions, so the top of the list is the next thing to do rather than a number to feel bad about. Also queued the Mac lane's post-merge verification as sim-request 2026-08-19-post-merge-verification and sent the lane message that carries its context"
+      "produced": "Converted the cold roster from a census into a QUEUE: every one of the 21 cold roles now carries a priority and a concrete nextAction, and check-org-roster.mjs was upgraded to REFUSE a cold role that cannot say what would activate it (self-test 10/10) and to print the priority-1 set with its actions, so the top of the list is the next thing to do rather than a number to feel bad about. Also queued the Mac lane's post-merge verification as sim-request 2026-08-19-post-merge-verification and sent the lane message that carries its context. Then, 2026-08-24: closed the reverse gap — every role now names the agent or skill that RUNS it (executor, gated: a pointer at a file not on disk fails the build), nextAction is required of activated roles and not only cold ones, and check-backlog-ownership.mjs refuses a backlog row with work left in it that names no role from the registry",
+      "nextAction": "Roles now name an executor and every role carries a forward action. The remaining shape is the reverse fossil: nothing reports a nextAction that has gone stale, and an action written weeks ago and never taken reads exactly like a title nobody runs. Decide whether to date nextAction and report staleness, or accept it in writing."
     },
     {
       "id": "records-archivist",
@@ -314,6 +354,7 @@
       "title": "Records archivist",
       "charter": "The intake ledger, decision records and provenance discipline — every input dispositioned, every claim traceable.",
       "trigger": "An owner input arrives, or a decision is made.",
+      "executor": "skill:signalgrid-scribe",
       "activated": null,
       "produced": null,
       "priority": 3,
@@ -325,10 +366,11 @@
       "title": "Positioning & messaging lead",
       "charter": "Owns the sentence a buyer would use for SignalGrid, and the boundary between what it does and what the host app / MDM / IdP does. Every claim traceable to something the repository can demonstrate.",
       "trigger": "The product's scope changes, or a document makes a claim a buyer would not recognise — in either direction, including understatement.",
+      "executor": "skill:signalgrid-scribe",
       "activated": null,
       "produced": null,
-      "priority": 1,
-      "nextAction": "FULLY UNBLOCKED: DR-005 ratified launch-profile v4 in full, superseding DR-004's six-item bound — the draft's groundings (graph, EnterpriseShell, /v1 routes, operator console) are ratified ground. Land docs/POSITIONING.md from the sweep draft, reconcile every public surface carrying a retired label (repo-wide search; README.md and the review dashboard are known instances, not the boundary), rewrite the four site sections presenting deferred signals in the present tense, then the launch-claims gate denylisting the four retired labels."
+      "nextAction": "RE-CORRECTED 2026-08-24, and the previous correction was WORSE than what it replaced. It claimed the four retired labels are \"named NOWHERE in this repository\", citing `check:absence \"retired label\"` returning CORROBORATED. That verdict was manufactured by a tool blind spot — absence-check.mjs excluded `docs/*` from its content probe, so a topic living only in prose returned the strongest safe-to-claim verdict instead of the INCONCLUSIVE its own design intends. Fixed in the same commit; the same query now returns INCONCLUSIVE. THE LABELS ARE LIVE, and this is buyer-facing: README.md:3 and :136 say \"Operational Trust Orchestration platform\"; artifacts/signalgrid-review/src/pages/ReviewDashboard.tsx:350 and artifacts/signalgrid-web/src/pages/About.tsx:50 both say \"Zero Trust orchestration platform\". DR-004 ratified \"Shared-Device Trust Gateway\" as the category label. So the ORIGINAL entry was right about the drift and only stale in one clause: docs/POSITIONING.md already exists, created by f4bb9ec on 2026-08-22 (5c8c61b a day later fixed its citations, it did not create it). THE WORK: reconcile those four instances and any others to the ratified label — repo-wide search, the four named here are known instances and not the boundary — then decide whether check-launch-claims.mjs needs a fourth rule denylisting the retired labels, now that they can actually be named. Naming the set was the work; it is named above.",
+      "priority": 1
     },
     {
       "id": "icp-customer-research",
@@ -336,10 +378,10 @@
       "title": "ICP & customer research lead",
       "charter": "Who actually buys this, what they already run, and which of their failures SignalGrid removes. Evidence about real buyers, never invented personas.",
       "trigger": "A positioning, pricing or roadmap decision is about to be made on an assumption about buyers that nobody has checked.",
-      "activated": null,
-      "produced": null,
-      "priority": 1,
-      "nextAction": "Every buyer claim in the docs is currently inferred from the product rather than from anyone who buys. Establish what a shared-device frontline estate actually runs today (Imprivata, Epic, Intune/Jamf, badge readers) and where the handoffs break, from public evidence — vendor docs, published case studies, job postings naming the stack. Mark each finding with its source tier; a vendor's own marketing is the weakest."
+      "executor": "lane",
+      "activated": "2026-08-24",
+      "produced": "docs/company/ICP_EVIDENCE.md — the first buyer evidence in this repository that is sourced rather than inferred, every finding carrying a SOURCE TIER because most of what a search returns on this topic is written by someone selling the fix. TIER 1: three granted US patents (11329990, 11838295, 12425415) disclose shared-device audit misattribution as prior art — the strongest evidence available and a warning that the space is claimed. TIER 2: one healthcare posting spanning Intune, M365 and Imprivata and asking for baselines standardised ACROSS Intune and Jamf Pro, which establishes the SHAPE and explicitly not the frequency. TIER 3: industry writing placing the failure at the shift boundary. It also names what it does NOT establish — the 75-1,000 employee segment in EXECUTIVE_ONE_PAGER.md is corroborated by nothing gathered, and every source is healthcare, so the claim that the pattern generalises to retail and field service is unevidenced. One claim in it was FALSE and is corrected inline rather than edited away: it said no competitive surface named OLOID or Imprivata, while four anchored briefs and a battlecard had sat in docs/research/ since 2026-07-14. See backlog row 57.",
+      "nextAction": "Two things, in order. FIRST, turn Finding 2 from a shape into a frequency: sample 15-20 job postings rather than one, and record the count that name two MDMs, the count that name an identity product beside them, and the count that name neither — a proportion, not an anecdote. SECOND, find a published case study or conference talk where an estate describes the handoff failing in their own words; Finding 3 currently rests on tier 3 and that is the weakest tier in the file. NOT part of this role: the competitive refresh, which belongs to competitive-analyst and is scoped in row 57."
     },
     {
       "id": "proof-led-content",
@@ -347,6 +389,7 @@
       "title": "Proof-led content lead",
       "charter": "Turns what this repository actually measured into published material. Publishes findings, including unflattering ones, because that is the differentiator no competitor will copy.",
       "trigger": "A live shape-check, benchmark or gate finding lands that a practitioner outside the company would want to read.",
+      "executor": "skill:signalgrid-scribe",
       "activated": null,
       "produced": null,
       "priority": 2,
@@ -358,6 +401,7 @@
       "title": "Design-partner outreach lead",
       "charter": "Getting the first real deployments. Prepares target lists, sequences and materials. PREPARES ONLY — every send is the owner's, without exception.",
       "trigger": "The product can be demonstrated end to end and the positioning is settled enough to describe in a paragraph.",
+      "executor": "lane",
       "activated": null,
       "produced": null,
       "priority": 2,
@@ -369,6 +413,7 @@
       "title": "Launch manager",
       "charter": "Sequences the launch: what ships, in what order, to whom, and what must be true before each step.",
       "trigger": "The launch profile's `launch` class stops changing and the deferred set stops growing.",
+      "executor": "lane",
       "activated": null,
       "produced": null,
       "priority": 3,
@@ -380,6 +425,7 @@
       "title": "Lifecycle & activation lead",
       "charter": "What happens after someone says yes — onboarding, first value, and the reasons they would leave.",
       "trigger": "A first design partner is live.",
+      "executor": "lane",
       "activated": null,
       "produced": null,
       "priority": 3,
@@ -391,6 +437,7 @@
       "title": "Finance & fundraising lead",
       "charter": "Runway, unit economics, market sizing, and the materials an investor or acquirer reads. Every figure traceable to a real input.",
       "trigger": "A pricing, hiring or spend decision needs a number, or an outside party asks for financials.",
+      "executor": "lane",
       "activated": null,
       "produced": null,
       "priority": 2,
@@ -402,6 +449,7 @@
       "title": "Commercial counsel liaison",
       "charter": "The paperwork of selling: MSA, DPA, BAA, security questionnaires, and what SignalGrid may and may not commit to in writing. Distinct from `compliance-analyst`, which owns whether a CONTROL claim is true; this owns whether a CONTRACT claim is safe to sign.",
       "trigger": "A counterparty sends paperwork, or a document starts making a commitment rather than a description.",
+      "executor": "lane",
       "activated": null,
       "produced": null,
       "priority": 2,
@@ -413,6 +461,7 @@
       "title": "Agent operations & economics lead",
       "charter": "What the agent organisation costs to run and whether it is producing proportional value. Owns the honest ratio between spend and shipped, verified work.",
       "trigger": "The agent lanes change shape — a new division, a new lane, a new always-on loop — or spend moves without a matching change in output.",
+      "executor": "lane",
       "activated": null,
       "produced": null,
       "priority": 2,
@@ -424,8 +473,10 @@
       "title": "Mac lane steward / local-lane operations",
       "charter": "Owns the cloud side of the cloud↔Mac loop as a standing duty, not an ad-hoc errand: watches the remote for Mac pushes and branches, keeps lane-messages flowing both directions (nothing unread past one duty cycle, nothing sent without a committed push), tracks simulation-request debt (a pending request is REPORTED every cycle, never silently aged out), keeps the Mac's run instructions current when shared surfaces change, and escalates to the owner exactly the blockers only the owner can clear (auth, hardware, physical presence). Cannot operate the Mac itself — it is a separate machine with its own lane; stewardship is observation, shared-surface repair, mail, and escalation. Duty cycle runs on a schedule (owner-requested 2026-08-21); a cycle where nothing changed produces no owner traffic.",
       "trigger": "Every scheduled duty cycle; immediately when a Mac push, lane message, or sim-result lands; when a shared-surface change (run-live-lanes.sh, sim loop, harness) alters what the Mac must do.",
+      "executor": "skill:signalgrid-native",
       "activated": "2026-08-21",
-      "produced": "PR #223 aftercare: lane mail with re-run instructions, ack of the Mac's harness message, standing 4-hour monitor routine"
+      "produced": "PR #223 aftercare: lane mail with re-run instructions, ack of the Mac's harness message, standing 4-hour monitor routine",
+      "nextAction": "The Fleet trial expires September 16, 2026 and the Mac lane holds the only enrollable device, so the seven unverified endpoint dimensions have a deadline this lane cannot move. Confirm the queued sim-requests are drained and report the remaining debt to the owner while the trial is still live."
     }
   ]
 }

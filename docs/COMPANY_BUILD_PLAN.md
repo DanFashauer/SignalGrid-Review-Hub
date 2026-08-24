@@ -72,7 +72,7 @@ Blocking items first. "Fail-closed" means: when the system cannot verify somethi
 
 28. **Positive-path OIDC in the gateway smoke** — devex-tooling-engineer + iam-domain, days. The CI deploy-stack job proves the negative auth path on the packaged image (demo bearer 401, unconfigured/empty-map gateway → not-ready) but the positive path only at the test:api layer: no signed, mapped enterprise token ever completes an allowed `/v1` request against the running container, so a broken JWKS fetch or claim-mapping in the packaged composition would ride under a green job. Stand up a deterministic local JWKS/IdP fixture in the compose smoke and require one valid token end-to-end. (Filed at PR #225's declared cutoff, round-8 finding; gate-estate lens.)
 
-29. **Assurance-pass advisories, batch one (2026-08-21)** — devex-tooling + design + mobile-native, hours each. The org's first self-review confirmed 20 findings (all remediated in PR #231) and filed 14 advisories; the unapplied ones, each needing its executed check when picked up: a bash-3.2 compatibility gate (shellcheck is version-blind, so 4.x-isms pass the lint that exists because of a 3.2 failure); a Darwin guard for scripts/mac/*; pinning the "42 shared conformance vectors" figure and the step-up chip's 4.58:1 margin; a reachability assertion for declared-gap closedWhen dir-conditions (the evaluator must be able to read at least one file the condition names); the ECOSYSTEM §2.1 worker copy aligned to descriptor language; and the real one to watch — the iOS host app renders a near-divergent reason-code vocabulary from the catalog's, which is the catalog's next consumer to reconcile. (Gate-estate + design lenses.)
+29. **Assurance-pass advisories, batch one (2026-08-21)** — devex-tooling-engineer + brand-design + mobile-native-engineer, hours each. The org's first self-review confirmed 20 findings (all remediated in PR #231) and filed 14 advisories; the unapplied ones, each needing its executed check when picked up: a bash-3.2 compatibility gate (shellcheck is version-blind, so 4.x-isms pass the lint that exists because of a 3.2 failure); a Darwin guard for scripts/mac/*; pinning the "42 shared conformance vectors" figure and the step-up chip's 4.58:1 margin; a reachability assertion for declared-gap closedWhen dir-conditions (the evaluator must be able to read at least one file the condition names); the ECOSYSTEM §2.1 worker copy aligned to descriptor language; and the real one to watch — the iOS host app renders a near-divergent reason-code vocabulary from the catalog's, which is the catalog's next consumer to reconcile. (Gate-estate + design lenses.)
 
 Dropped below the cut, tracked in lens records: the shared-evaluator-skeleton refactor (week+), the /metrics timing-safe compare, the cp/v1 requestId envelope fix, the shell-lint population widening, the Autopilot-era doc archival stamps, and the weekly deferred-family sampling cadence (starts after Tier 1 completes).
 30. **Graph launch-subset Bruno collection + transport abstraction check** — endpoint-uem-domain + api-contract-architect. LARGELY BUILT 2026-08-21: artifacts/lab-collections/microsoft-graph/ transcribes the connector's REAL three-request transport (not the report's wider proposal — the collection must not assert more than posture-connector.ts does) with permissions.json as the least-privilege consent record. REMAINING: the msgraph-metadata OpenAPI cross-diff (too large to vendor; belongs in a CI job) and live-tenant validation, a milestone that arrives with the tenant. Per the 2026-08-21 research report: curate a Bruno collection under `artifacts/lab-collections/microsoft-graph/` covering ONLY the ratified launch endpoint families (`managedDevices`, compliance policies, groups/transitive members), generated or hand-derived from `microsoftgraph/msgraph-metadata` rather than from memory; assert the existing graph connector's fixture shapes against it, and record the application-identity least-privilege permission list (`DeviceManagementManagedDevices.Read.All` class) as data. No live tenant required; live validation is a milestone that arrives with the tenant. No launch-scope change — graph is already the launch family.
@@ -246,7 +246,7 @@ earlier — that is the loop working, not a reason to soften the record.
     not done here, because a gate over 18 archival documents would be a large
     rewrite in service of a regex rather than of a reader.
 40b. **Module-scope temporal-dead-zone reads — gated for the COLUMN-0 shape,
-    open for the rest.** This defect shipped twice in one day, silently both
+    open for the rest.** — devex-tooling-engineer. This defect shipped twice in one day, silently both
     times: `context.ts` broke enterprise OIDC entirely (a hoisted function
     called at module load read a `const` declared 21 lines below), and
     `signalgrid-grid-proof.ts` never ran its enum guard (same mechanism, ~650
@@ -377,6 +377,38 @@ earlier — that is the loop working, not a reason to soften the record.
     the engine: an unknown-type signal and an empty scenario both return
     `record_audit` only, neither reaches allow. It was queued for the Mac lane on
     an inherited belief nobody had checked; the queue entry is withdrawn.
+
+40c-2. **A TENTH site survived the sweep, on the auth path, and the gate could
+    not see it.** FIXED 2026-08-24, found by EXTERNAL review after the in-repo
+    reviewer passed the same change.
+    `lib/webauthn/src/webauthn/server.ts` `verifyStepUp` compared
+    `new Date(session.expiresAt) < new Date()`. An Invalid Date coerces to NaN in
+    a relational compare, the test is false, control falls through, and the
+    step-up session RETURNS AS VALID. Same family as the other nine, in the same
+    file the sweep declared finished.
+    **Two mistakes let it through, and the second is the instructive one.**
+    First, `PARSE_EXPR` recognised only `Date.parse(...)` and `.getTime()`, so a
+    bare `new Date(x)` beside `<` matched nothing and the scan reported zero.
+    Second — and worse — the gate carried a deliberate exemption for comparisons
+    with a parse expression on BOTH sides, written on the reasoning that "NaN
+    makes the comparison false either way, so no permissive branch is taken".
+    **That reasoning is wrong.** Whether `false` is safe depends entirely on
+    which branch REJECTS. In an assertion, false fails the test — safe. In
+    `verifyStepUp`, false returns the session — a fail-open. The exemption
+    codified the false belief and hid the defect from the gate written to catch
+    it.
+    Both fixed: `PARSE_EXPR` now covers bare `new Date(...)` in relational
+    position, and the both-parsed exemption is gone in its inline and
+    variable-tracking forms. The escaped shape is pinned in the self-test in both
+    directions, and the FIRST attempt at the widening was caught by that
+    self-test refusing to go green — the exemption still swallowed it.
+    Removing the exemption surfaced one further site,
+    `artifacts/api-server/test/api.test.mjs:1508`, where the direction happens to
+    be safe (a false comparison fails the assertion). It was fixed rather than
+    re-exempted: relying on which branch is permissive is the reasoning that
+    shipped this defect. `test:api` 301/301, gate 0 violations across 1218 files.
+    NOT VERIFIED: whether any equivalent shape exists in the Swift ports; the
+    port-parity gate covers decision rules, not expiry arithmetic.
 
 40d. **The fail-closed backstop let a STALE posture answer through — the two
     freshness ladders disagreed about the same word.** DONE 2026-08-23, found by
@@ -611,7 +643,7 @@ earlier — that is the loop working, not a reason to soften the record.
     readers anywhere, plus `summaryForOperator`, `projectedReasonCodes` and
     `clears` in `resolution.ts` — while the sibling `summaryForWorker` is
     rendered twice, which is what makes the operator one conspicuous.
-43. **Falsifiability is enforced only for the connector tier** — HALF DONE
+43. **Falsifiability is enforced only for the connector tier** — devex-tooling-engineer. HALF DONE
     2026-08-23: the worst unfailable arm is fixed, and fixing it found a live
     bug. Note the path first, because the row named a package that does not
     exist: there is no `lib/signalgrid-grid`; `proof:signalgrid-grid` runs
@@ -669,7 +701,7 @@ earlier — that is the loop working, not a reason to soften the record.
     unique assertions want folding into the gated `proof:mcp-server`, then the
     orphan deleted) and the k6 scripts in `tests/load/`, which the gate
     deliberately does not pattern-match and says so in its own header.
-44. **Two ungated contracts in the governance layer** — HALF DONE
+44. **Two ungated contracts in the governance layer** — devex-tooling-engineer (the gates) + principal-engineer (the records). HALF DONE
     2026-08-23: the decision-record format contract now has
     scripts/check-decision-record-format.mjs (preflight + CI). DR-010 through
     DR-013 — every record written in one fast day — were missing the reversal
@@ -727,12 +759,12 @@ earlier — that is the loop working, not a reason to soften the record.
     the operator's real secret now goes through the same constantTimeEquals
     the core already used for its PUBLIC demo keys. The weaker guard had been
     sitting on the stronger secret.
-48. **Native parity is textual, not behavioral** — mobile-native, days. The
+48. **Native parity is textual, not behavioral** — mobile-native-engineer, days. The
     port-parity gate compares extracted vocabulary and says so itself; iOS is
     carved out of the shared assist-wire conformance vectors; ios-ci does not
     trigger on simulator/workflow library changes; BackendService still calls
     five endpoints that exist nowhere.
-49. **Assessor-facing overstatement** — HALF DONE 2026-08-23: the
+49. **Assessor-facing overstatement** — compliance-analyst. HALF DONE 2026-08-23: the
     questionnaire pack told assessors that docs-sanity "fails the build if any
     document claims otherwise" for SOC 2 / ISO 27001 / HIPAA / FedRAMP. Of
     those four, only SOC 2 (in its "Type II certified" phrasing) and FedRAMP
@@ -745,7 +777,7 @@ earlier — that is the loop working, not a reason to soften the record.
     working: fix the copy, never the gate). The existing negation handling means the pack's own "None held,
     none claimed" row stays legal. REMAINING: SECURITY_CONTROLS_MATRIX's status
     column still has no drift gate (days).
-50. **Operability claims without live evidence** — ONE THIRD DONE 2026-08-23.
+50. **Operability claims without live evidence** — sre (the CI-bound half) + mac-lane-steward (live evidence is mintable only on the Mac). ONE THIRD DONE 2026-08-23.
     The CI-bound half is closed and gated; the other two remain open.
     **DONE — the nine unbounded jobs.** The row's figure was exactly right: 32
     real jobs, 9 without `timeout-minutes` (a first parse of mine said 43 and
@@ -786,6 +818,59 @@ earlier — that is the loop working, not a reason to soften the record.
     it wants an owner's call rather than an agent's preference. The alternative
     — a separate always-on registry for CI-scheduled lanes, checked the same way
     — is the same decision wearing a different hat.
+54. **Seven merges carried zero reviews — and the first diagnosis blamed the
+    wrong thing.** — qa-engineer (the review that was never run) +
+    program-manager (the loop that never called it). 2026-08-24.
+    THE FINDING WAS REAL: #280-#286 all merged with ZERO reviews of any kind,
+    measured one at a time through the API, including #283 which cleared a live
+    CRITICAL on the shipping image. The session saw seven "You have reached your
+    Codex usage limits" notices, called each informational, merged, and then
+    said the reviewer's absence was fine because the gate suite carried the
+    load. That is this repo's `absent-collection law` inverted in the operating
+    loop: nothing observed is not nothing wrong, and silence is not an
+    affirmative — both already gated for the product, neither watching the
+    process that ships it.
+    **THE DIAGNOSIS WAS WRONG.** The first fix built
+    a `check-review-liveness` gate to name merges lacking an EXTERNAL review
+    (built, then deleted in the same session — it is not in the tree and is
+    named here only as the wrong turn it was), and re-requested all seven from
+    Codex. Both actions assumed a
+    reviewer that is RETIRED. The owner had said so; the repo says so too —
+    `docs/BRANCH_HYGIENE.md` describes `codex/*` as "the earlier Codex lane
+    (Jun-Jul 2026)", past tense, and seven consecutive quota rejections in one
+    day is an account that is out, not an account that is busy. The gate was
+    deleted rather than kept: a check that reports a permanent expected
+    condition is the kind that gets ignored, and an ignored gate protects
+    nothing.
+    **WHAT THE GAP ACTUALLY IS.** The reviewer was never missing. `ORG.md`
+    ratifies a Reviewer lane at line 159 — "Adversarial pass. Never fixes.
+    Produces findings only." —
+    `.claude/skills/signalgrid-reviewer/SKILL.md` says in its own description to
+    use it "when a change is ready for review, BEFORE any push or PR"; the
+    roster carries `code-reviewer`, `verdict-core-reader` and
+    `fail-closed-auditor`, all read-only by construction. This lane shipped
+    seven pull requests without invoking any of them, then went looking outside
+    for a reviewer it already had. The control is not a third-party service. It
+    is a role that exists and was not run.
+    CORRECTION APPLIED: the reviewer is invoked before push, not after merge.
+    The Codex attributions in `scripts/review-invariants.mjs` ("the exact class
+    Codex #70 caught", #79, #81) STAY — they are accurate provenance for where
+    those rules came from, and erasing history to match present tooling would be
+    its own falsification.
+    LOOSE END, recorded rather than tidied: seven `@codex review` comments were
+    posted on #280-#286 before the retirement was known. #283's carried a 👀
+    from the connector, so the trigger does work on a merged PR — a fact worth
+    keeping even though the premise was wrong. They will not be answered. They
+    are left in place because they carry the focused review asks and the record
+    of what happened; seven retractions would double the noise to correct a
+    premise this row already corrects. Anyone reading those PRs should treat the
+    request as withdrawn.
+    The `fail-closed-auditor` charter extension to the OPERATING LOOP survives
+    this correction and matters more because of it: a check that did not run is
+    not a check that passed, a job skipped for a missing credential is not a job
+    that found nothing, and "no findings reported" is a different sentence from
+    "no findings".
+
 53. **CI liveness: the harness that proves every guard can fail had nothing
     watching whether it still ran.** DONE 2026-08-23.
     The mutation sweep is the only thing establishing that the gates in this
@@ -904,8 +989,368 @@ earlier — that is the loop working, not a reason to soften the record.
     to WONTFIX, at which point the implementation genuinely has no future and
     deletion becomes correct. Recoverable from history at `4a170db` regardless.
 
+55. **The org chart had no edge to the agents that run it, and running a role
+    once emptied its queue.** — program-manager. 2026-08-24, from the owner's
+    question: are all roles assigned to skills, and does everything have a task
+    and a backlog. Both halves were no.
+    NO ROLE NAMED ITS EXECUTOR. `docs/ORG_CHART.md` opened with "Each is an
+    agent whose job is to be the deepest skill the company has in one thing"
+    while no role named the agent or skill that would run it. CORRECTED
+    2026-08-24, same day, by an adversarial audit of this very row: the first
+    version claimed "ZERO references to `.claude/agents/` or `.claude/skills/`
+    across all SEVEN role documents", and that was FALSE TWICE OVER. "Seven" was
+    not a defined set: three org documents plus "the four under `docs/company/`",
+    a directory that holds NINE files. And `docs/agent/ORG.md:275` already
+    carried one reference, to "the skills under `.claude/skills/`" as a category.
+    Both counts are now stated rather than asserted, because the first attempt to
+    correct this said "twelve role-adjacent documents" and that was the loosest
+    available reading — it counted every file in `docs/company/`, including
+    `ICP_EVIDENCE.md` and `INVESTOR_ONE_PAGER.md`, which mention a role once each.
+    By FILE COUNT the set is twelve; by CONTENT — a document that actually
+    describes roles — it is nine: the three org documents plus `ROLE_CATALOG.md`,
+    `ROLE_ACTIVATION_MATRIX.md`, `RESPONSIBILITY_AND_DRI_MATRIX.md`,
+    `ROLE_LENS_REVIEW_2026-08-21.md`, `ORG_STRUCTURE.md` and `HIRING_SEQUENCE.md`.
+    The measured truth is the same under either: re-run at `a7a9ae7^`, exactly
+    one reference across all twelve files, and it names no role's executor. The
+    substantive finding survives; the quantification did not, and it failed for
+    the reason everything else this week failed — the verification regex
+    required a name after the slash (`.claude/skills/[a-z0-9-]+`) while the
+    CLAIM said "references to `.claude/skills/`". An accurate measurement
+    answering a narrower question than the sentence it was used to support.
+    Forty one roles, twelve agent definitions, no edge between them. Every role
+    now carries an
+    `executor` — `agent:<name>`, `skill:<name>`, or `lane` — and
+    check-org-roster.mjs FAILS on a missing one, a malformed one, or one
+    naming a file that is not on disk. Falsified three ways against the live
+    tree, including renaming `.claude/agents/architect.md` out from under its
+    two callers: exit 1 each time, green again on restore. The honest number is
+    printed on every run and is not repeated here: a minority of roles have a
+    dedicated agent or skill and the rest are the main lane as a lens, which is
+    a true roster of a small company rather than a chart of ghosts.
+    ACTIVATION EMPTIED THE QUEUE. `nextAction` was required of COLD roles only,
+    so eleven of the sixteen activated roles carried none and "activated" had
+    quietly come to mean "finished, forever" — the same fossil as a title
+    nobody runs, one shift later. It is now required of every role, and the
+    eleven were written from what each role actually produced.
+    THE BACKLOG'S OWNERS DID NOT RESOLVE. Nine rows carrying work named no
+    role from the registry. Three abbreviated role names — `mobile-native`,
+    `devex-tooling`, `design` — accounted for two of those nine (rows 29 and
+    48); the first version of this row said "three of them", counting terms as
+    rows. New gate scripts/check-backlog-ownership.mjs (preflight + CI) refuses
+    an open or partially-done row that names no role, and reads the ids from the
+    registry rather than listing them.
+    THE GATE THEN FAILED OPEN, in the exact direction its own header calls the
+    dangerous one, and the same audit found it within the hour. Markers were
+    matched with String.includes, so a row reading "still NOT DONE, nobody owns
+    it" contained "DONE", classified CLOSED, needed no owner, and the gate
+    printed `passed` with zero problems. So did "UNDECIDED", which contains
+    "DECIDED". Fixed two ways: a marker now counts only as a whole upper-case
+    TOKEN, and a marker under a negation does not close a row. REJECTED was
+    removed from the vocabulary outright — "approach A was REJECTED" disposes of
+    an option, not of the work, and no row closed on it alone. The four rows
+    that used to slip through are now negative controls in the self-test.
+    THEN IT FAILED OPEN A SECOND TIME, on this row. Run against the document
+    containing this very entry, the gate read the examples QUOTED two paragraphs
+    above — the quoted string carrying `NOT DONE`, and the quoted `DECIDED` —
+    as its own status, and closed row 55. The negation guard did fire on
+    the first occurrence and was then defeated by the second, because a quotation
+    reproduces a word without meaning it. Status is now read with quoted spans,
+    curly-quoted spans and code spans stripped; ownership deliberately is not,
+    because a wrongly-detected OWNER costs an unnecessary name and a wrongly
+    detected CLOSED hides work. Self-test 11/11 to 21/21. Worth stating plainly:
+    the gate's second and third defects were both found by pointing it at the
+    row describing itself, which is the cheapest falsification available and was
+    not part of the original plan.
+    A FOURTH FAILURE, found by an independent review before merge, and worse in
+    KIND than the first three. Those three misclassified a row's status. This one
+    made a row INVISIBLE: `parseRows` keyed on `/^(\d+[a-z]*)\./`, which cannot
+    match this document's own hyphenated sub-numbering — and `40c-2` exists
+    right here. A heading that does not match is not skipped, it is APPENDED to
+    the row above, so the whole of 40c-2 lived inside row 40c's 10,097-character
+    body. A generous scan found 67 headings; the gate saw 66. An invisible row is
+    never counted, never bucketed, and can never trigger the FATAL owner check
+    whatever it says. Benign today only because both rows happen to be closed.
+    Fixed two ways, because widening the pattern alone postpones it: the id
+    grammar now accepts hyphenated ordinals, AND anything SHAPED like a row start
+    that still fails to parse is now a FATAL problem rather than silent
+    continuation text — the next grammar drift breaks the build instead of
+    quietly shrinking the subject. A live self-test asserts parseRows sees every
+    heading in the real document (67 of 67), so the count cannot shrink again
+    unnoticed. Self-test 21/21 to 25/25.
+    WHY NO SELF-TEST CAUGHT IT: every fixture used a bare `1.` id, so nothing
+    exercised id parsing at all. Twenty-one green self-tests were twenty-one
+    tests of everything except the thing that broke.
+    IT HAPPENED A THIRD TIME while this paragraph was being written. The
+    sentence describing the fix used the word `DECIDED` bare, outside quotes,
+    and closed the row again — the gate was right and the prose was wrong. Every
+    status word named in this document from here on is code-spanned for that
+    reason. The rule the three rounds converge on: a document that discusses a
+    vocabulary will contain that vocabulary, and any gate reading status out of
+    free prose needs an explicit way to tell mention from use. Quoting is that
+    way, and it only works if the writer uses it.
+    A MEASUREMENT CORRECTED MID-TASK, recorded because the first answer was
+    reported before it was checked: a first pass reported twelve unowned rows
+    and the corrected pass six. The first read only each row's HEADING line, so
+    an owner named on a continuation line was invisible. Same defect class as
+    everything else this week — an accurate measurement answering a different
+    question than the one asked.
+    A RULE TRIED AND CUT: the gate first also failed any status-shaped word
+    outside a closed vocabulary. Against the real document that produced
+    sixteen findings, most of them prose rather than status — row 40c's "fails
+    CLOSED" is this product's own fail-closed vocabulary. A rule that fights
+    the domain's own words gets switched off; it was cut before landing, and
+    the reasoning is in the gate's header so it is not retried blind.
+    FOUR OF THE ELEVEN BACKFILLED NEXT ACTIONS WERE WRONG, and the method is
+    why. They were written from each role's own `produced` field — which records
+    what a role DID — rather than from the tree, which records what REMAINS. So
+    they inherited every closure the `produced` field had not been updated for:
+    devex-tooling-engineer was sent to make check-preflight-ci-parity.mjs
+    resolve npm aliases, which it has done since `43ec8f7`, and to delete an
+    exemption that is an empty Map; web-engineer was sent to disposition six
+    findings that `INTAKE_LEDGER.md` row 95 records as closed, itemised, one of
+    them explicitly declined; principal-engineer was sent to write a reversal
+    path that DR-005's Reversal clause already contains. product-manager's
+    asserted a count from a conversation nothing in this repository records, and
+    is now marked as the open question it is. All four corrected in place, each
+    against the primary source rather than against the roster.
+    NO SKILL CLAIMS THE WEB — found while checking the mapping. `signalgrid-core`
+    owns `artifacts/api-server/**` and `artifacts/signalgrid-app/**`;
+    `signalgrid-native` owns `native/**` and `firmware/**`. Nothing claims
+    `artifacts/signalgrid-web/**` (the marketing site) or
+    `artifacts/signalgrid-review/**` (the review dashboard), so web-engineer —
+    whose charter LEADS with the marketing site — and accessibility-specialist,
+    whose charter is "the site and the served consoles", were both pointed at
+    skills that exclude their own subject. Both now say `lane`, which is honest
+    rather than flattering, and the gap is row 56.
+    Still open, and now owned: 40b, 43, 44, 48, 49, 50, 54 carry named roles
+    for the first time.
+
+56. **No skill claims the two served web trees, so two roles point at skills
+    that exclude their own subject.** — web-engineer (the decision) +
+    devex-tooling-engineer (whatever gate follows). 2026-08-24, found while
+    auditing row 55's executor mapping.
+    `skill:signalgrid-core` declares `artifacts/api-server/**` and
+    `artifacts/signalgrid-app/**`. `skill:signalgrid-native` declares
+    `native/**` and `firmware/**`. Nothing under `.claude/skills/` declares
+    `artifacts/signalgrid-web/**` — the marketing site — or
+    `artifacts/signalgrid-review/**` — the review dashboard. Both are served
+    surfaces that buyers see.
+    The consequence was concrete and was corrected the same day: web-engineer,
+    whose charter LEADS with the marketing site, had been pointed at
+    signalgrid-core, and accessibility-specialist, whose charter reads "WCAG
+    conformance across the site and the served consoles", had been pointed at
+    signalgrid-native — a skill scoped to iOS, Android, desktop and firmware.
+    Each executor excluded the role's own subject. Both now read `lane`, which
+    is honest rather than flattering and is why the roster prints that count.
+    The decision, which is not this lane's to make silently: widen
+    signalgrid-core to claim both web trees, or add a web skill and give it
+    them. Either way the two roles get re-pointed and the executor gate starts
+    meaning something for them. Until then `lane` is correct and should not be
+    quietly upgraded to make the roster look better staffed.
+
+57. **The third absence claim shipped, and the fix is not a gate — measured, not
+    assumed.** — competitive-analyst (the refresh) + docs-writer (the rule).
+    2026-08-24.
+    `docs/company/ICP_EVIDENCE.md` shipped the sentence *"no competitive surface
+    anywhere in this repository names them"* about OLOID and Imprivata. False.
+    `docs/research/COMPETITIVE_OLOID.md` (79 lines), `COMPETITIVE_IMPRIVATA.md`
+    (74), `COMPETITIVE_TELEPORT.md` (102) and `COMPETITIVE_BATTLECARD.md` (127)
+    were compiled 2026-07-14, two weeks earlier, every claim anchored to a URL —
+    plus `docs/competitive-battlecard.html` and a rendered `CompetitiveSection`
+    on the review dashboard. `pnpm run check:absence competitive` returns
+    REFUTED and exits 1. It was not run. `CLAUDE.md` already recorded two prior
+    instances of exactly this; its tally now reads three.
+    A GATE WAS CONSIDERED AND REJECTED ON EVIDENCE. The obvious response is to
+    fail any unhedged absence claim that does not cite a verification. Measured
+    first: five narrow patterns for the universal shape — "no X in this
+    repository", "nothing in this repository", "does not exist anywhere",
+    "exists nowhere", "no X exists anywhere" — match 54 lines across 21 files
+    today. Reading them, the overwhelming majority are not absence FINDINGS at
+    all but deliberate BOUNDARY statements, and load-bearing ones: *"nothing in
+    this repository is a production system"*, *"No customer data in the
+    repository"*, *"there are no live vendor calls in this repository"*. Those
+    are the publication boundary and the safety posture written down. A gate on
+    this shape would fire on correct safety prose 50-odd times to catch the
+    three that mattered, and this repository already states what happens to a
+    gate that cries wolf.
+    The distinguishing feature is not the sentence, it is whether the claim is a
+    FINDING that motivates work or a BOUNDARY that constrains it — and no
+    pattern separates those. Recorded here so the next person measures before
+    building rather than after.
+    WHAT ACTUALLY REMAINS: the competitive research is real but INTERNAL and
+    last compiled 2026-07-14, and it predates IGEL shipping Imprivata Web SSO
+    into the browser layer. That is a refresh of an existing surface, not the
+    creation of a missing one, and ICP_EVIDENCE.md now says so.
+
+58. **The NaN fail-open family HAS a Swift analogue — same semantics, different
+    mechanism — and it reaches the Assist gate's own staleness input.** —
+    mobile-native-engineer. REPORTED 2026-08-24 by the cloud lane, NOT FIXED:
+    this lane has no Swift toolchain (`xcodebuild`, `swiftc` both absent), and
+    editing auth-expiry behaviour that cannot be compiled or run is the exact
+    confident-but-unverified move the rest of this week was spent undoing.
+    THE QUESTION qa-engineer's queue asked was whether the ten TypeScript
+    `NaN`-expiry sites crossed the port boundary. Strictly the defect cannot:
+    Swift's `Date` is strongly typed, so there is no unparseable-date-compares-
+    false path. The SEMANTICS crossed anyway, through the OPTIONAL:
+    · `Models/SessionData.swift:44` — `var isExpired: Bool { guard let
+      expiresAt = expiresAt else { return false } ... }`. A session carrying NO
+      expiry is not expired, permanently.
+    · `Services/SessionStateManager.swift:842` — `checkSessionTimeout()` guards
+      on `if let expiresAt`, so a nil expiry makes the server-side expiry
+      heartbeat a silent no-op.
+    · `Services/SessionStateManager.swift:853` — `validateActiveSession()` does
+      the same, so the token is never refreshed either.
+    · `Views/HostAppViewController.swift:189` — `let stale =
+      (SessionStateManager.shared.currentSession?.isExpired ?? false) ||
+      simulatedStale`. TWO permissive defaults stacked: no session reads as not
+      stale, and a session with no expiry reads as not stale. `stale` is a live
+      posture input to the Assist gate.
+    NIL IS REACHABLE FROM A REAL AUTH PATH, which is what makes this a finding
+    rather than a shape. `Services/IdentityProvider.swift:442` — the MDM-based
+    provider returns `AuthenticationResult(accessToken: sessionToken, ...,
+    expiresAt: nil, ...)`: a genuine session token with no expiry. It flows to
+    `SessionStateManager.swift:333` into `SessionData(expiresAt:)`. The `.mdm`
+    auth type is a configured preset (`IdentityProvider.swift:165` sets
+    `mdmProvider: .microsoftIntune`), not dead scaffold.
+    STATED FAIRLY: that provider's own comment reads "In a real implementation,
+    this would call the backend to create a session", so the MDM path is a stub
+    today and no shipping configuration is known to select it. The defect is the
+    DEFAULT, not a demonstrated live exploit — and golden rule 2 is about
+    defaults: an unknown signal must raise assurance, never lower it. Each of
+    the four expressions above resolves the unknown to the permissive side.
+    THE TRADE-OFF IS A DESIGN CALL, not a mechanical fix, which is the other
+    reason this is queued rather than patched. If `nil` legitimately means "this
+    session type does not expire", flipping the default to `true` ends every
+    such session instantly. The likely right answer is to make the absence
+    explicit — a session that cannot say when it expires is not a session that
+    never expires — but that belongs to the lane that can build and run it.
+    FOR THE MAC LANE: reproduce by constructing a `SessionData` with
+    `expiresAt: nil` and asserting `isExpired`, then decide the default. Note
+    golden rule 1 does NOT apply — none of these four files is a frozen
+    byte-faithful port.
+
+59. **The image build makes two un-retried network fetches, and one of them
+    flaked.** — release-engineer (the retry) + security-engineer (if the fix
+    touches the corepack cache). 2026-08-24, first observed instance.
+    `Dockerfile.api` runs `corepack enable pnpm` in BOTH stages (lines 19 and
+    71). Corepack downloads pnpm lazily, so each stage fetches
+    `registry.npmjs.org/pnpm/-/pnpm-10.28.1.tgz` at install time. On PR #287
+    head `f52d54a` the BUILDER fetch succeeded — "Done in 5s using pnpm
+    v10.28.1" — and the RUNTIME fetch four seconds later died inside Node's
+    bundled HTTP parser: `AssertionError: assert(!this.paused)` at
+    `Parser.finish (node:internal/deps/undici/undici:6165:9)`. A TLS stream
+    aborted mid-download and surfaced as an internal assertion, failing the job.
+    NOT A LOCKFILE PROBLEM, checked four ways before concluding: the commit
+    touches no manifest or lockfile; `pnpm install --lockfile-only` locally
+    regenerates the lockfile with zero diff; the builder stage resolved the same
+    lockfile seconds earlier; and the same job passed on the previous commit.
+    Re-running the failed job was the correct response and is what was done.
+    THE FIX IS NOT OBVIOUS, which is why this is a row and not a patch. The
+    cheap mitigation is a retry around the install. The tempting one — carry
+    corepack's cache forward from the builder — is exactly what lines 97-111
+    deliberately REMOVE from the shipping image, because corepack's downloaded
+    pnpm is the copy that hides a CVE. Any fix must not undo that.
+    Until then: an image build that depends on an unretried network fetch will
+    flake again, and the failure will look like a build break rather than a
+    network blip. That is the part worth having written down.
+
+60. **The tool this repo mandates before writing "X does not exist" could not
+    read documents — and the failure it was built to prevent was documents.** —
+    devex-tooling-engineer. FIXED 2026-08-24, found by the pre-merge review.
+    `scripts/agent/absence-check.mjs` ran its content probe as
+    `git grep -lIi -e <topic> -- ':!*lock*' ':!*dist*' ':!*.map' ':!docs/*'`.
+    That last pathspec excluded the entire docs tree.
+    WHY THAT IS A FAIL-OPEN AND NOT A SCOPING CHOICE. The file's own header sets
+    out the strength model in detail: a FILE hit is strong and REFUTES an absence
+    claim; a WORD hit is weak and yields INCONCLUSIVE, "printed with their
+    matches, and the caller reads them", precisely because "this repository is
+    full of sentences naming things to disclaim them". Blinding the weak probe to
+    docs did not make those sentences stop mattering. It converted "weak hit ->
+    inconclusive" into "no hit -> CORROBORATED" — the strongest safe-to-claim
+    verdict the tool can return. Excluding a source of weak evidence did not
+    weaken the verdict; it strengthened it, wrongly. And the failure the file
+    documents as its reason for existing is a DOCUMENT asserting "Android does
+    not exist in any form".
+    CAUGHT BY ITS OWN VICTIM. Row 55's queue work ran
+    `check:absence "retired label"`, got CORROBORATED across all four probes, and
+    rewrote positioning-messaging's nextAction to say the retired labels are
+    "named NOWHERE in this repository" — retiring a real, live, buyer-facing
+    problem. The same grep without the exclusion returns four files, three under
+    docs/, that discuss retired labels by name. The labels themselves are live in
+    `README.md:3` and `:136` ("Operational Trust Orchestration platform") and in
+    `ReviewDashboard.tsx:350` and `About.tsx:50` ("Zero Trust orchestration
+    platform"), against DR-004's ratified "Shared-Device Trust Gateway".
+    FIXED: the exclusion is gone, with the reasoning written into the probe so it
+    is not re-added, and two self-tests that would have caught it — a structural
+    one asserting the content probe does not exclude docs, and a LIVE one
+    asserting a prose-only topic classifies INCONCLUSIVE rather than corroborated.
+    Self-test 12/12 to 14/14. The same query now returns INCONCLUSIVE.
+    THE GENERAL LESSON, which is the reason this row is long: a checker that
+    cannot see part of its subject does not report uncertainty about that part —
+    it reports confidence about the rest. Every gate in this repository that
+    carries an exclusion list is a candidate for the same shape, and nothing
+    currently enumerates them.
+
+61. **Swept every gate for the exclusion shape that broke `check:absence`. Nine
+    of ninety-seven carry one; one was hiding forty-three documents.** —
+    devex-tooling-engineer. 2026-08-24, the generalisation of row 60.
+    Row 60's defect was not really about absence checking. It was: a checker that
+    cannot see part of its subject does not report uncertainty about that part,
+    it reports confidence about the rest. So every gate carrying an exclusion is
+    a candidate. Ninety-seven scripts scanned for git pathspec negations and
+    named SKIP/EXCLUDE/IGNORE lists; NINE carry one.
+    EIGHT ARE LEGITIMATE and were confirmed by reading, not assumed: they skip
+    `node_modules`, `dist`, `build`, `coverage`, `third_party`, `.git` — build
+    output and vendored code, which are not those gates' subject. That includes
+    `check-nan-fail-open.mjs`, written earlier the same day, which was checked
+    precisely because it was recent and mine.
+    THE NINTH WAS REAL. `check-accuracy-doctrine.mjs` excluded `^docs/research/`
+    with no reason recorded anywhere — while its own SCOPE note says "first-party
+    documents only" and separately handles vendored text. `docs/research/` holds
+    43 FIRST-PARTY documents: the competitive briefs, the buyer/partner readiness
+    pack, the outreach copy. Prose that asserts things about the outside world is
+    exactly what an accuracy gate is for, and it was the prose the gate could not
+    see.
+    MEASURED BEFORE CHANGED, and the measurement decided it: including the tree
+    took the scan from 236 documents to 279 and produced ZERO new violations. The
+    exclusion cost forty-three documents of coverage and bought nothing, so it is
+    gone. `docs/inspiration/` stays excluded — imported reference catalogues this
+    repository does not assert, and those files say so themselves — but the
+    reason is now written down, which it was not.
+    NOTE THE OPPOSITE OUTCOME ON THE SAME AFTERNOON. Row 57 measured a candidate
+    absence-claim gate, found its patterns matched 54 lines of correct safety
+    prose, and did not build it. Row 61 measured a candidate exclusion removal,
+    found zero cost, and made it. Same discipline, opposite answers — which is
+    the argument for measuring rather than for having a policy about exclusions.
+    BOTH DIRECTIONS ARE NOW SELF-TESTED AND WATCHED TO FAIL: re-excluding
+    `docs/research/` exits 1, and scanning `docs/inspiration/` exits 1. Coverage
+    can no longer shrink quietly, because a gate that scans less still prints
+    that it passed — which is how this survived unnoticed in the first place.
+    QUALIFICATION, added 2026-08-24 after a review challenged the wording above.
+    "Zero new violations" was reported as though it meant the newly-scanned prose
+    is clean. It does not. It means the GATED RULES DO NOT REACH THIS PROSE.
+    `docs/research/COMPETITIVE_IMPRIVATA.md:21` carries five bare external
+    figures in a single paragraph — `~$544M`, `~$500M revenue`, `500+ hospitals
+    across 12 countries`, `~1M healthcare users`, `~47% of customers are
+    healthcare` — and the gate flags none of them. Coverage without detection.
+    That is the same defect class as everything else in this cluster, committed
+    while writing about the defect class: a measurement that was accurate and
+    answered a different question than the one it was used to support. The scan
+    genuinely covers 279 documents now, and that is still worth having; it simply
+    does not license the sentence "and the prose is clean".
+    NOT WIDENED HERE, deliberately. Whether those figures are violations is a
+    judgement, not a mechanical fact: the file's own header says every claim is
+    anchored to a URL in its Sources section, so the convention in `docs/research/`
+    may be to cite at the foot rather than in the block — which is precisely what
+    the gate's same-BLOCK rule cannot see. Widening `EXTERNAL_STAT` or relaxing
+    the block rule across 43 research documents is a real design change with a
+    real blast radius, and this cluster's own lesson is to MEASURE that before
+    building. Owner of the measurement: competitive-analyst for whether the
+    convention is sound, devex-tooling-engineer for the rule if it is not.
+
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
-    MEASURED 2026-08-23; the disposition itself is an owner call, stated below.
+    MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —
+    `lib/location` is KEPT. Nothing is outstanding on this row.
     Every clause of the row holds. `lib/location` has ZERO importers (only a
     tsconfig project reference), and carries 5 real `Date.now()` calls across 3
     files — `validate.ts:8` does age arithmetic on admission, which is a clock

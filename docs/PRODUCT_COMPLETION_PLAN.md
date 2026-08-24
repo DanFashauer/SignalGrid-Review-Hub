@@ -188,8 +188,10 @@ claim to be canonical**; two plans are dead (a cutover runbook declaring this
 repo "Archived", and its manifest). ~85 files (~40%) belong in a research
 library, not the product path. A design partner needs ~9.
 
-**The gate suite protects the wrong ratio.** 166 preflight steps; **~10% protect
-the launch surface**. Every docs edit fires the full proof wall. Five doctrine
+**The gate suite protects the wrong ratio.** The preflight step count — printed
+by `node scripts/preflight.mjs`, not pinned here, because it changes every time
+a gate lands and this line held a stale 166 for exactly that reason — against
+**~10% that protect the launch surface**. Every docs edit fires the full proof wall. Five doctrine
 proofs sit in the critical path — including three added the same week the freeze
 was being written to stop exactly that category.
 

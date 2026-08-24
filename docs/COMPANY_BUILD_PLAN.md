@@ -1163,6 +1163,53 @@ earlier — that is the loop working, not a reason to soften the record.
     into the browser layer. That is a refresh of an existing surface, not the
     creation of a missing one, and ICP_EVIDENCE.md now says so.
 
+58. **The NaN fail-open family HAS a Swift analogue — same semantics, different
+    mechanism — and it reaches the Assist gate's own staleness input.** —
+    mobile-native-engineer. REPORTED 2026-08-24 by the cloud lane, NOT FIXED:
+    this lane has no Swift toolchain (`xcodebuild`, `swiftc` both absent), and
+    editing auth-expiry behaviour that cannot be compiled or run is the exact
+    confident-but-unverified move the rest of this week was spent undoing.
+    THE QUESTION qa-engineer's queue asked was whether the ten TypeScript
+    `NaN`-expiry sites crossed the port boundary. Strictly the defect cannot:
+    Swift's `Date` is strongly typed, so there is no unparseable-date-compares-
+    false path. The SEMANTICS crossed anyway, through the OPTIONAL:
+    · `Models/SessionData.swift:44` — `var isExpired: Bool { guard let
+      expiresAt = expiresAt else { return false } ... }`. A session carrying NO
+      expiry is not expired, permanently.
+    · `Services/SessionStateManager.swift:842` — `checkSessionTimeout()` guards
+      on `if let expiresAt`, so a nil expiry makes the server-side expiry
+      heartbeat a silent no-op.
+    · `Services/SessionStateManager.swift:853` — `validateActiveSession()` does
+      the same, so the token is never refreshed either.
+    · `Views/HostAppViewController.swift:189` — `let stale =
+      (SessionStateManager.shared.currentSession?.isExpired ?? false) ||
+      simulatedStale`. TWO permissive defaults stacked: no session reads as not
+      stale, and a session with no expiry reads as not stale. `stale` is a live
+      posture input to the Assist gate.
+    NIL IS REACHABLE FROM A REAL AUTH PATH, which is what makes this a finding
+    rather than a shape. `Services/IdentityProvider.swift:442` — the MDM-based
+    provider returns `AuthenticationResult(accessToken: sessionToken, ...,
+    expiresAt: nil, ...)`: a genuine session token with no expiry. It flows to
+    `SessionStateManager.swift:333` into `SessionData(expiresAt:)`. The `.mdm`
+    auth type is a configured preset (`IdentityProvider.swift:165` sets
+    `mdmProvider: .microsoftIntune`), not dead scaffold.
+    STATED FAIRLY: that provider's own comment reads "In a real implementation,
+    this would call the backend to create a session", so the MDM path is a stub
+    today and no shipping configuration is known to select it. The defect is the
+    DEFAULT, not a demonstrated live exploit — and golden rule 2 is about
+    defaults: an unknown signal must raise assurance, never lower it. Each of
+    the four expressions above resolves the unknown to the permissive side.
+    THE TRADE-OFF IS A DESIGN CALL, not a mechanical fix, which is the other
+    reason this is queued rather than patched. If `nil` legitimately means "this
+    session type does not expire", flipping the default to `true` ends every
+    such session instantly. The likely right answer is to make the absence
+    explicit — a session that cannot say when it expires is not a session that
+    never expires — but that belongs to the lane that can build and run it.
+    FOR THE MAC LANE: reproduce by constructing a `SessionData` with
+    `expiresAt: nil` and asserting `isExpired`, then decide the default. Note
+    golden rule 1 does NOT apply — none of these four files is a frozen
+    byte-faithful port.
+
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —
     `lib/location` is KEPT. Nothing is outstanding on this row.

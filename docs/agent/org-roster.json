@@ -22,7 +22,7 @@
       "executor": "skill:signalgrid-reviewer",
       "activated": "2026-08-19",
       "produced": "5 confirmed defects incl. the freshness gate's NaN-date silent pass",
-      "nextAction": "The NaN-date silent pass this role found turned out to be one of ten sites, and the tenth was on the live auth path — three passes missed it. The unasked half is whether the shape crossed the port boundary: nobody has checked the Swift ports for bare Date comparisons. Cloud lane can read them; only the Mac lane can build them."
+      "nextAction": "ANSWERED 2026-08-24, and it produced a finding — see backlog row 58. The question was whether the ten TypeScript NaN-expiry sites crossed the port boundary. Strictly they cannot: Swift's Date is strongly typed, so there is no unparseable-date-compares-false path. The SEMANTICS crossed anyway through the optional — SessionData.isExpired returns false when expiresAt is nil, two SessionStateManager guards no-op on nil, and HostAppViewController stacks two permissive defaults into the Assist gate's own staleness input. Reachable from the MDM auth path, which returns a real token with expiresAt: nil. REPORTED not fixed: the cloud lane has no Swift toolchain. Queued to the Mac lane. This role's NEXT question, in the same shape: the ten sites and these four were all found by asking what an UNKNOWN resolves to. Take that question to the other direction of the port — what an unknown resolves to in the Kotlin and Rust Assist clients, which no pass has read at all."
     },
     {
       "id": "security-engineer",

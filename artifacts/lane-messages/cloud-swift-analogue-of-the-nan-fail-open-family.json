@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "cloud-swift-analogue-of-the-nan-fail-open-family",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Swift analogue of the NaN fail-open family — reported, not fixed (backlog row 58)",
+  "body": "The cloud lane has no Swift toolchain, so this is reported rather than patched. Four sites in EnterpriseShell resolve a MISSING expiry to the permissive side: Models/SessionData.swift:44 (isExpired returns false when expiresAt is nil), Services/SessionStateManager.swift:842 and :853 (both guard on 'if let expiresAt', so a nil expiry makes the expiry heartbeat and the refresh branch silent no-ops), and Views/HostAppViewController.swift:189, which stacks two permissive defaults - no session reads as not stale, and a session with no expiry reads as not stale - into the Assist gate's live staleness input. Nil is reachable from a real auth path: Services/IdentityProvider.swift:442, the MDM provider, returns a genuine session token with expiresAt nil, and .mdm is a configured preset at IdentityProvider.swift:165. Stated fairly, that provider is a stub today (its own comment says so) and no shipping config is known to select it, so this is a bad DEFAULT rather than a demonstrated live exploit. The trade-off is a design call, not a mechanical fix: if nil legitimately means this session type does not expire, flipping the default to true ends every such session instantly. Likely right answer is to make the absence explicit - a session that cannot say when it expires is not a session that never expires. Reproduce by constructing SessionData with expiresAt nil and asserting isExpired. Golden rule 1 does NOT apply; none of these four files is a frozen byte-faithful port. Full write-up in docs/COMPANY_BUILD_PLAN.md row 58."
+}

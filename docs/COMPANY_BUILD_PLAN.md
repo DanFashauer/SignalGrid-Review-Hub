@@ -1291,6 +1291,42 @@ earlier — that is the loop working, not a reason to soften the record.
     carries an exclusion list is a candidate for the same shape, and nothing
     currently enumerates them.
 
+61. **Swept every gate for the exclusion shape that broke `check:absence`. Nine
+    of ninety-seven carry one; one was hiding forty-three documents.** —
+    devex-tooling-engineer. 2026-08-24, the generalisation of row 60.
+    Row 60's defect was not really about absence checking. It was: a checker that
+    cannot see part of its subject does not report uncertainty about that part,
+    it reports confidence about the rest. So every gate carrying an exclusion is
+    a candidate. Ninety-seven scripts scanned for git pathspec negations and
+    named SKIP/EXCLUDE/IGNORE lists; NINE carry one.
+    EIGHT ARE LEGITIMATE and were confirmed by reading, not assumed: they skip
+    `node_modules`, `dist`, `build`, `coverage`, `third_party`, `.git` — build
+    output and vendored code, which are not those gates' subject. That includes
+    `check-nan-fail-open.mjs`, written earlier the same day, which was checked
+    precisely because it was recent and mine.
+    THE NINTH WAS REAL. `check-accuracy-doctrine.mjs` excluded `^docs/research/`
+    with no reason recorded anywhere — while its own SCOPE note says "first-party
+    documents only" and separately handles vendored text. `docs/research/` holds
+    43 FIRST-PARTY documents: the competitive briefs, the buyer/partner readiness
+    pack, the outreach copy. Prose that asserts things about the outside world is
+    exactly what an accuracy gate is for, and it was the prose the gate could not
+    see.
+    MEASURED BEFORE CHANGED, and the measurement decided it: including the tree
+    took the scan from 236 documents to 279 and produced ZERO new violations. The
+    exclusion cost forty-three documents of coverage and bought nothing, so it is
+    gone. `docs/inspiration/` stays excluded — imported reference catalogues this
+    repository does not assert, and those files say so themselves — but the
+    reason is now written down, which it was not.
+    NOTE THE OPPOSITE OUTCOME ON THE SAME AFTERNOON. Row 57 measured a candidate
+    absence-claim gate, found its patterns matched 54 lines of correct safety
+    prose, and did not build it. Row 61 measured a candidate exclusion removal,
+    found zero cost, and made it. Same discipline, opposite answers — which is
+    the argument for measuring rather than for having a policy about exclusions.
+    BOTH DIRECTIONS ARE NOW SELF-TESTED AND WATCHED TO FAIL: re-excluding
+    `docs/research/` exits 1, and scanning `docs/inspiration/` exits 1. Coverage
+    can no longer shrink quietly, because a gate that scans less still prints
+    that it passed — which is how this survived unnoticed in the first place.
+
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —
     `lib/location` is KEPT. Nothing is outstanding on this row.

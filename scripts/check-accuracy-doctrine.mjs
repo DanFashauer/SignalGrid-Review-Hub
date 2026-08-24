@@ -43,6 +43,30 @@
 // its provenance file, not by our doctrine — we did not write it and we may not
 // edit it.
 //
+// WHAT IS EXCLUDED, AND WHY — stated because it was not, and an undeclared
+// exclusion is how a checker comes to report confidence about what it can see
+// instead of uncertainty about what it cannot.
+//
+//   docs/inspiration/  EXCLUDED. Imported reference catalogues, not our prose.
+//                      Those files say so themselves ("NOTHING in this
+//                      repository consumes these contracts. They are a
+//                      reference"). Doctrine governs what we assert, and we do
+//                      not assert these.
+//   docs/research/     NO LONGER EXCLUDED, as of 2026-08-24. It had been, with
+//                      no reason given anywhere, and it holds 43 FIRST-PARTY
+//                      documents — the competitive briefs, the buyer/partner
+//                      readiness pack, the outreach material. Precisely the
+//                      prose an accuracy gate exists for, and precisely the
+//                      prose most likely to carry an external claim.
+//
+// The removal was MEASURED before it was made, not asserted: including the tree
+// took the scan from 236 documents to 279 and produced ZERO new violations. The
+// exclusion was costing forty-three documents of coverage and buying nothing.
+// That is the opposite outcome from the sibling case the same day — an
+// absence-claim gate whose candidate patterns matched 54 lines of correct
+// safety prose and was therefore not built. Measure, then decide; the answer
+// went different ways on the same afternoon.
+//
 // SELF-TEST: each gated rule must flag a synthetic violation and must NOT flag
 // its honest counterpart. A gate that cannot fail proves nothing; a gate that
 // punishes honesty is worse than no gate.
@@ -50,7 +74,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOTS = ["docs"];
-const SKIP = /(^|\/)(node_modules|dist|build|\.git)(\/|$)|^docs\/research\/|^docs\/inspiration\//;
+const SKIP = /(^|\/)(node_modules|dist|build|\.git)(\/|$)|^docs\/inspiration\//;
 const VENDORED = /^(vendor|\.claude\/skills)\//;
 
 // An external, verifiable work is being asserted.
@@ -120,6 +144,25 @@ const walk = (d) => {
   }
 };
 ROOTS.forEach(walk);
+
+// ── coverage self-test: the subject cannot silently shrink ───────────────────
+// docs/research/ sat outside this gate for a long time with no reason recorded
+// anywhere, costing 43 first-party documents — the competitive briefs and the
+// outreach material among them. It was invisible because a gate that scans less
+// still prints that it passed. Both exclusions are now asserted in BOTH
+// directions, so removing a tree from coverage, or quietly re-adding one, fails
+// the build instead of shrinking the number in the summary line.
+{
+  const covers = (prefix) => files.some((f) => f.startsWith(prefix));
+  if (!covers("docs/research/")) {
+    console.error("✗ SELF-TEST FAILED: docs/research/ is not being scanned. It holds first-party prose — competitive briefs, the buyer/partner pack, outreach copy — and an accuracy gate that cannot see it reports confidence about the rest.");
+    process.exit(1);
+  }
+  if (covers("docs/inspiration/")) {
+    console.error("✗ SELF-TEST FAILED: docs/inspiration/ is being scanned. It is imported reference material this repository does not assert, and gating it would punish text we did not write. If that changed, change the SCOPE note above first.");
+    process.exit(1);
+  }
+}
 
 console.log("Accuracy doctrine — DR-015, the half a gate can honestly hold\n");
 let problems = 0;

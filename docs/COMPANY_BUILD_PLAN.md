@@ -1699,7 +1699,8 @@ earlier — that is the loop working, not a reason to soften the record.
     finding is only as durable as the pull request that carried it. The log is
     what makes a claim independently RE-CHECKABLE — claim, exact command,
     verbatim output — by the owner or by a session with no memory of this one.
-    THE FIX IS THE RECORD ITSELF. Eight entries, covering every verification
+    THE FIX IS THE RECORD ITSELF. Seven entries (this row first said EIGHT — see
+    the correction at the end of the row), covering every verification
     behind rows 65-68 with the command and its real output: the planted ungated
     fetch that left the gate green at exit 0; the same plant exiting 1 after the
     fix, plus the two controls that prove it did not simply widen; the
@@ -1728,6 +1729,42 @@ earlier — that is the loop working, not a reason to soften the record.
     from a wrong variable name was reported as "the file is missing" — the
     reporter's own fail-open, the same defect class as the four above. The catch
     is now narrowed to an `existsSync` check.
+    CORRECTED 2026-08-24, after external review (Codex) on PR #299 raised THREE
+    findings against this very work. All three were verified against the tree and
+    all three were right. The row is amended rather than rewritten, because a
+    correction that hides what it corrected teaches nothing.
+    · **One evidence entry stated the wrong MECHANISM.** It said the
+      device-attestation proof "asserts on posture/recommendedAction/
+      criticalFindings, not on the code strings". FALSE:
+      `device-attestation-proof.ts:72` reads
+      `v.reasonCode === spec.expected.reasonCode`, and
+      `scripts/fixtures/device-attestation/devices.json:22,27` pin both codes the
+      mutation swapped. The mutation dies because the codes are FIXTURE-BACKED.
+      The conclusion (not a defect) was right and the reasoning was wrong, which
+      in an evidence log is the part that matters — it teaches the next reader a
+      false thing about where coverage comes from. Worse, line 72 was IN MY OWN
+      GREP OUTPUT earlier in the session and I wrote the opposite. The reason the
+      original grep found nothing is now recorded exactly: the codes live only in
+      `scripts/fixtures/`, and I searched `scripts/src` — a narrow search over
+      the wrong subtree, which is precisely what `pnpm run check:absence` exists
+      to prevent and which I did not run before asserting absence.
+    · **The entry count was inflated, by the session's own defect class.** The
+      reporter matched `^## <date> — ` and nothing else, so the
+      `NOT VERIFIED HERE` section — no claim, no command, no verdict — counted as
+      an entry and made the number 8. A measurement accurate about a real
+      property (dated headings) answering a different question than the one asked
+      (complete, reproducible records). It now parses STRUCTURE, requiring
+      Command/Output/Verdict, reports incomplete headings by name and by which
+      field is missing, and carries 7 new self-test checks (21/21 total). The
+      section is also re-headed so it no longer looks like a record.
+    · **Entry 2 gave no reproducible command.** "same plant, then two controls"
+      supplied neither the shell commands nor the fixture edits, in a file whose
+      whole contract is exact-command/verbatim-output. Both controls now carry
+      their full command block.
+    THE LESSON IS THE ROW'S REAL CONTENT. A log written to make findings
+    re-checkable shipped with an unreproducible entry, an inflated count, and a
+    false explanation. It took an outside reader to catch all three, on the very
+    change that argued for outside-checkable evidence.
     NOT FILED AS A DEFECT: `CONTINUITY.md`, also still an empty seeded template.
     It is self-described as a BUFFER that should be empty once its content has
     landed in real documents, and this session's did — in these rows, the review

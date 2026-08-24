@@ -400,6 +400,41 @@
       "date": "2026-08-24",
       "depth": "read",
       "note": "Read the fail-open surface rather than the whole file: every branch touching unknown/null/absent inputs, the unknownSignals pushes, and the ordering comments. NO defect found on that surface — each unknown raises the bar and the worst-concern-wins ordering carries a measured justification in-comment (the managementReachable case was moved earlier after its cost was measured). Recorded at depth 'read', not 'audited': the normalization half and the type surface were not examined."
+    },
+    {
+      "path": "lib/integrations/src/integrations/credential-exposure/evaluate.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-24",
+      "depth": "audited",
+      "note": "Read end to end (130 lines). NO defect found; recorded as a clean read rather than left silent. Worst-concern-wins fold seeded at clean/none, replaced only on strictly-greater severity. The null-vs-[] distinction is carried deliberately (`findingsObserved`): a feed never read yields SECRET_SCAN_UNOBSERVED/monitor, which beats the clean default and loses to any observed problem. scannerEnrolled === null is handled separately from === false, with an in-comment record of the wedge where `=== false` alone let null fall through to a full clean grant. HYPOTHESIS TESTED AND REFUTED: the escalate branch reads `exposed.some(f => f.highValue)` while its comment promises escalation for 'a critical/high-severity secret' too, and highestSeverity is computed but never gates — that looked like prose outrunning code. It is not: credential-connector.ts:160 folds severity INTO highValue (`HIGH_VALUE_KINDS.has(kind) || severity === 'critical' || severity === 'high'`), so a critical secret does escalate. The comment is accurate and the code implements it one layer up."
+    },
+    {
+      "path": "lib/integrations/src/integrations/credential-exposure/credential-connector.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-24",
+      "depth": "read",
+      "note": "Read the normalization surface, not the whole 309-line file: isExposed(), normalizeLocation(), and the highValue derivation. isExposed is correctly fail-safe — `!(remediation === 'remediated' || validity === 'revoked')` — so every unknown or unmapped state normalizes to EXPOSED rather than contained. Depth 'read', not 'audited': the transport, request shaping and error paths were not examined."
+    },
+    {
+      "path": "lib/integrations/src/integrations/vuln-scan/evaluate.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-24",
+      "depth": "audited",
+      "note": "Read end to end (97 lines). NO defect found. `scanned` is DERIVED (`options.scanned ?? findings.length > 0`) rather than depending on a caller flag, with the reason recorded in-comment: a safety property that depends on the caller remembering an out-of-band flag is not a safety property. The unreadable-severity branch sits ABOVE the medium branch deliberately — an in-comment record of wedge #14 plus an ordering correction from review on #221, where a co-present medium finding re-made an unsupported low-risk claim. An unknown severity forecloses a calm posture without inventing an escalation beyond what was observed."
+    },
+    {
+      "path": "lib/integrations/src/integrations/ot-posture/evaluate.ts",
+      "reviewedBy": "physical-ot-domain",
+      "date": "2026-08-24",
+      "depth": "audited",
+      "note": "Read end to end (108 lines). NO defect found. Unknowns are collected up front across all five axes (firmware, patchable, segmentation, insecureProtocolExposed, gatewayLiveness) and any non-empty set pushes a step_up candidate, so an unreadable axis forecloses the secure grant. Reasons are labelled honestly rather than collapsed: FIRMWARE_EOL and FIRMWARE_UNPATCHABLE are separate codes for the same restrict, because a device flagged unpatchable is not necessarily end-of-life. The outdated branch requires `patchable !== false` so it cannot override the stronger unpatchable finding."
+    },
+    {
+      "path": "lib/integrations/src/integrations/custody-beacon/evaluate.ts",
+      "reviewedBy": "physical-ot-domain",
+      "date": "2026-08-24",
+      "depth": "read",
+      "note": "Read the decision surface (the covered gate, the unknown collection, every candidate branch and the fold), not the type definitions. NO defect found. Custody is granted only when positively confirmed; zone-unknown fails closed BY REACHABILITY (dark -> restrict, otherwise step_up) rather than resolving to a single middling answer. reportIntegrity is guarded as `!== 'clean'` — the fail-closed form, which catches a new bad state without enumerating it, rather than testing for known-bad values. An in-comment note records a prior fix where a backstop covered only `unknown` and was widened to be complete. Depth 'read', not 'audited': types.ts and the connector were not examined."
     }
   ]
 }

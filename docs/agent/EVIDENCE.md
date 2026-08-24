@@ -12,3 +12,148 @@ Command:  <exactly what was run>
 Output:   <the relevant lines, verbatim>
 Verdict:  holds | refuted (→ FALSE_CLAIMS.json) | not verifiable here (why)
 ```
+
+---
+
+## 2026-08-24 — "The ungated-fetch gate covers every outbound path in the connector tree"
+Command:
+```
+cat >> lib/integrations/src/integrations/itsm/zendesk.ts <<'X'
+export async function plantedUngated(u: string) {
+  return fetch(u, { method: "POST" });
+}
+X
+node scripts/check-ungated-fetch.mjs; echo "exit=$?"
+```
+Output:
+```
+  connector files containing fetch: 88
+  fetch call sites checked:         86
+Ungated-fetch gate passed — no ungated healthCheck() remains.
+exit=0
+```
+Verdict:  **refuted.** `itsm/` is one of four directories where a finding FAILS the
+build, and the gate passed with an ungated `fetch` sitting in it. Scope was class
+methods only (`if (start === -1 || !isClassMethod) continue`), while the stated
+reason for that scope was external callability — which an exported top-level
+function also has. Fixed in PR #297; backlog row 65.
+
+## 2026-08-24 — "The fix catches the planted defect without flagging legitimate factories"
+Command:  same plant, then two controls (a NON-exported equivalent, and an
+exported-but-self-gated one), each run against the fixed gate.
+Output:
+```
+1. exported ungated fetch in enforced dir -> exit=1   (expect 1)
+2. non-exported plumbing                  -> exit=0   (expect 0)
+3. exported but self-gated                -> exit=0   (expect 0)
+clean tree: zero findings, zero unaudited
+```
+Verdict:  **holds.** All ~25 `makeDefault*Transport` factories clear automatically,
+including `device-management-health/graph-transport.ts` whose resolver lives one
+file over and is reached through the family `index.ts` source.
+
+## 2026-08-24 — "telemetry/ and passkey-assurance are STILL NOT ENFORCED" (a comment in check-ungated-fetch.mjs)
+Command:
+```
+grep -n "STILL NOT ENFORCED" -A 8 scripts/check-ungated-fetch.mjs
+# then plant an exported ungated fetch in telemetry/fleetdm.ts
+node scripts/check-ungated-fetch.mjs; echo "exit=$?"
+```
+Output:
+```
+362:    // STILL NOT ENFORCED ... telemetry/ and passkey-assurance ... stay visible here.
+369-    const enforcedDir = /\/(itsm|siem|telemetry|passkey-assurance)\//.test(file);
+...
+planted in telemetry/ -> exit=1
+```
+Verdict:  **refuted.** The sentence sat seven lines above the line that made both
+families fatal, and contradicted its own preceding bullet, which already listed
+telemetry/ as enforced. The enforced list is now derived from a named
+`ENFORCED_DIRS` array and printed on every run. Backlog row 67.
+
+## 2026-08-24 — "The ITSM credential store derives a 32-byte AES key" (true, and not the question)
+Command:
+```
+# revert getEncryptionKey() to slice(0,32).padEnd(32,'0'), then:
+pnpm run proof:itsm-credential-crypto
+```
+Output:
+```
+  FAIL — a human-typed password ('secret') is REFUSED, not padded to 32 bytes
+  FAIL — a key one character under the 32-char floor is refused
+  FAIL — two 64-char secrets sharing their first 32 chars derive DIFFERENT keys
+  FAIL — derivation is SHA-256 of the secret, matching the sibling webhooks store
+  FAIL — the IV is GCM's standard 12 bytes
+FAIL — 16/21 checks
+```
+Verdict:  **refuted as a safety claim.** It produced 32 BYTES, not 32 bytes of
+entropy: a short secret was stretched with ASCII zeros rather than refused, and a
+64-hex secret lost half its entropy to the slice. LATENT, not live — the config
+half of that store is wired to nothing. Fixed in PR #297; backlog row 66.
+
+## 2026-08-24 — "The Fleet posture cache honours its own expiry"
+Command:
+```
+# revert getPostureForHost to `return inMemoryPosture.get(key) ?? null`, then:
+pnpm run proof:telemetry-posture-cache
+```
+Output:
+```
+  FAIL — an entry read AFTER its TTL returns null, not stale posture
+  FAIL — a read that finds an expired entry EVICTS it rather than leaving it
+FAIL — 17/19 checks
+```
+Verdict:  **refuted.** `expiresAt` was written at two sites and read at ZERO,
+repository-wide. Redis expired its own keys via `EX`; the in-memory half — the
+default path when `REDIS_URL` is unset — would have served stale posture forever.
+The write is live and the read is dead, so nothing was served stale in practice.
+Fixed in PR #297; backlog row 68.
+
+## 2026-08-24 — "Six device-attestation reason codes are asserted in no proof"
+Command:
+```
+for r in ATTESTED_SIP_DISABLED ATTESTED_KEXT_ALLOWED ...; do
+  grep -rl "$r" scripts/src | grep -v evaluate.ts | wc -l
+done
+# then, the real test:
+sed -i 's/reason: "ATTESTED_KEXT_ALLOWED"/reason: "ATTESTED_SECUREBOOT_REDUCED"/' \
+  lib/integrations/src/integrations/device-attestation/evaluate.ts
+pnpm run proof:device-attestation
+```
+Output:
+```
+grep: 0 files for six of eleven codes
+baseline:  summary=pass (77/77)
+mutant:    Exit status 1
+```
+Verdict:  **my claim refuted — NOT a defect.** The proof asserts on
+`posture`/`recommendedAction`/`criticalFindings`, not on the code strings, and the
+branches are covered. Swapping two codes that share an identical posture+action
+pair still kills the proof. Recorded so the next session does not re-raise it.
+
+## 2026-08-24 — "credential-exposure escalates on highValue only, ignoring severity"
+Command:
+```
+grep -n "highValue" lib/integrations/src/integrations/credential-exposure/*.ts
+```
+Output:
+```
+credential-connector.ts:160:  highValue: HIGH_VALUE_KINDS.has(kind)
+                              || severity === "critical" || severity === "high",
+```
+Verdict:  **my claim refuted — NOT a defect.** Severity is folded into `highValue`
+at NORMALIZATION, so a critical secret does escalate; the comment is accurate and
+the code implements it one layer up. This was the third hypothesis of the day with
+the same shape — reading an evaluator in isolation and assuming its input was raw.
+This codebase does the fail-closed work at the normalization boundary so the
+evaluator can stay simple, and a grep across one layer cannot see that.
+
+## 2026-08-24 — NOT VERIFIED HERE
+- **iOS / Swift behaviour.** No Xcode in this environment. Backlog row 58 (the
+  Swift analogue of the NaN fail-open) remains open and is owed by the Mac lane.
+- **`validate-sim-macos.sh` on real macOS.** This lane runs `preflight.mjs`; the
+  harness under bash 3.2 on arm64 is the Mac lane's surface.
+- **GitHub Pages source setting.** The REST call returns 403 through this
+  environment's proxy; the branch-based-Jekyll conclusion was reached from served
+  artifacts (a `?v=` stylesheet hash resolving to a real commit, `/README.md`
+  returning 200, no `_config.yml`, no `gh-pages` branch), not from the API.

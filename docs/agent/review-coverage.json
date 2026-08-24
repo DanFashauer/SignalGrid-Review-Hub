@@ -435,6 +435,34 @@
       "date": "2026-08-24",
       "depth": "read",
       "note": "Read the decision surface (the covered gate, the unknown collection, every candidate branch and the fold), not the type definitions. NO defect found. Custody is granted only when positively confirmed; zone-unknown fails closed BY REACHABILITY (dark -> restrict, otherwise step_up) rather than resolving to a single middling answer. reportIntegrity is guarded as `!== 'clean'` — the fail-closed form, which catches a new bad state without enumerating it, rather than testing for known-bad values. An in-comment note records a prior fix where a backstop covered only `unknown` and was widened to be complete. Depth 'read', not 'audited': types.ts and the connector were not examined."
+    },
+    {
+      "path": "docs/agent/EVIDENCE.md",
+      "reviewedBy": "records-archivist",
+      "date": "2026-08-24",
+      "depth": "audited",
+      "note": "FINDING (row 69, fixed here): the file sat at its seeded-empty 2026-08-22 template — 14 lines, a format spec, and the sentence 'the first review writes the first entry' — while the signalgrid-reviewer role had run. It is one of that role's only two write paths, and the only one with nothing watching it (FALSE_CLAIMS.json is enforced by check-known-false-claims.mjs). Now carries 8 entries covering every verification behind rows 65-68, each with the exact command and its verbatim output, including three of my OWN hypotheses recorded as REFUTED so a later session does not re-raise them, and an explicit NOT VERIFIED HERE section (iOS/Swift, the macOS harness, the Pages API which 403s through this proxy)."
+    },
+    {
+      "path": "docs/agent/FALSE_CLAIMS.json",
+      "reviewedBy": "records-archivist",
+      "date": "2026-08-24",
+      "depth": "audited",
+      "note": "Read end to end. 6 claims, all with structured refutations. Genuinely maintained, not a fossil: check-known-false-claims.mjs re-verifies every refutation against the tree AND fails if any tracked document re-states one (442 documents scanned, 0 re-assertions). The proof-gate-count entry carries its own correction — it originally pinned the literal count 132 as evidence and broke the first time a proof was added, so it now pins the MECHANISM (a gate-bound published figure exists) rather than a value of it. That is the anti-fossil pattern working on the registry itself."
+    },
+    {
+      "path": "docs/agent/CONTINUITY.md",
+      "reviewedBy": "records-archivist",
+      "date": "2026-08-24",
+      "depth": "read",
+      "note": "Read end to end (9 lines). Still the seeded 2026-08-22 template with no entries. Recorded but NOT filed as a defect, unlike EVIDENCE.md: this file is explicitly self-described as a buffer that should be EMPTY when its content has landed in real documents, and this session's context did land — in COMPANY_BUILD_PLAN rows 65-69, the review ledger, and a lane message. An empty buffer is its correct resting state; an empty evidence log is not."
+    },
+    {
+      "path": "docs/agent/LOOP_COVERAGE.md",
+      "reviewedBy": "records-archivist",
+      "date": "2026-08-24",
+      "depth": "read",
+      "note": "Read the header and Run 1 (2026-08-23). Current, and written after a run rather than before one. Carries its own correction in the open: the first version of the coverage check was WRONG because it confused 'a scope inside this directory' with 'this directory inside a scope', and the corrected method is the one published. Depth 'read': the per-assignment findings table was not re-derived against today's roster."
     }
   ]
 }

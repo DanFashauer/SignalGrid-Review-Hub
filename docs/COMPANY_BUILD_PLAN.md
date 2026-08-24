@@ -1442,6 +1442,60 @@ earlier — that is the loop working, not a reason to soften the record.
     exit, so killing one is not a neutral act. Anything that runs it must either
     let it finish or restore from git afterwards.
 
+63. **The public review hub is not the site this repo builds, and the gate that
+    guards buyer-facing copy had never read it.** — web-engineer (the copy) +
+    OWNER (the Pages setting, which only he can see or change). 2026-08-24,
+    found because the owner asked whether the published site needed reviewing.
+    FETCHED, not inferred. https://danfashauer.github.io/SignalGrid-Review-Hub/
+    returns 200 and serves `README.md` rendered by Jekyll's DEFAULT THEME: the
+    stock `assets/css/style.css`, a `<title>` in Jekyll's "Page | Repo" form,
+    ZERO Vite fingerprints, and a body that is README verbatim. The Vite
+    marketing site in `artifacts/signalgrid-web` — the thing `pages.yml` builds
+    — is not what that URL serves.
+    `pages.yml` HAS run: twelve times, last SUCCEEDING 2026-08-12. So the
+    workflow works and something else determines what Pages actually publishes.
+    WHAT I COULD NOT VERIFY, stated rather than guessed: the Pages source
+    setting. `GET /repos/.../pages` returns 403 at this lane's proxy — "Access
+    to this GitHub API path is not permitted" — so whether Pages is set to
+    "Deploy from a branch" (which would explain Jekyll) or to GitHub Actions
+    with a stale active deployment CANNOT be determined from here. That is an
+    owner action: Settings -> Pages, check Source. Everything else in this row
+    is measured from the bytes the URL actually returned.
+    THE GATE WAS ACCURATE ABOUT THE WRONG DEPLOYMENT. check-launch-claims.mjs
+    is carefully built — it DERIVES the published page set from `pages.yml`
+    rather than hand-listing it, and refuses to "silently scan less" at three
+    separate points. Every one of those derivations answers "what would the
+    deploy workflow publish", and none answers "what does the site serve". The
+    same shape as every other defect in this cluster, at the outermost layer:
+    an accurate measurement answering a different question.
+    WHAT WAS LIVE. Running the gate's own rules against README.md returned a
+    real violation — `README.md:80`, the deferred-capability noun "RTLS" with no
+    hedge in its block, in a sentence saying the simulator shows how those
+    signals "fit together". `location` is a DEFERRED signal kind (row 51a).
+    Confirmed present in the fetched HTML, not just the source.
+    The opening sentence also read "Operational Trust Orchestration platform",
+    the label DR-004 retired. DR-004 is the owner's own instruction: "lock the
+    site to the ratified Shared-Device Trust Gateway scope; and add a gate so
+    marketing cannot drift beyond implemented capability again." The gate was
+    added a month ago and could not see the site it was added for.
+    FIXED: README's opening claim now leads with the ratified label and cites
+    DR-004; the RTLS mention is hedged as roadmap with a pointer to
+    LAUNCH_PROFILE.md; and the gate now scans README.md as the landing page.
+    NAMED, NOT DERIVED, and the header says why — which files Pages serves is a
+    repository SETTING, not a fact in this tree, and the API that would answer
+    it is blocked, so inventing a derivation from a source that cannot see the
+    answer would be worse than an explicit name. Missing README now FAILS the
+    gate rather than shrinking its coverage.
+    FALSIFIED BOTH WAYS: restoring the exact unhedged sentence that was live
+    exits 1 naming `README.md:80`; pointing LANDING_PAGE at a missing file exits
+    1 rather than scanning less. Coverage went from 19 files to 96.
+    STILL OPEN. Whether `docs/OPERATIONAL_TRUST_ORCHESTRATION.md` — a whole
+    category-definition document — survives DR-004's ratification is
+    positioning-messaging's call, not this row's. It was left alone
+    deliberately: retiring a label in a buyer-facing sentence is copy work;
+    retiring a category the repo spent a document defining is a positioning
+    decision.
+
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —
     `lib/location` is KEPT. Nothing is outstanding on this row.

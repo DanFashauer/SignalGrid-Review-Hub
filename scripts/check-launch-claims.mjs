@@ -72,6 +72,42 @@ if (publishedPages.length === 0) {
 }
 for (const p of publishedPages) if (existsSync(p) && !files.includes(p)) files.push(p);
 
+// THE LANDING PAGE ITSELF, and the reason it is named rather than derived.
+//
+// Everything above derives the public surface from `pages.yml` — what the
+// DEPLOY WORKFLOW publishes. On 2026-08-24 the live page was fetched and it is
+// not that at all: https://danfashauer.github.io/SignalGrid-Review-Hub/ serves
+// README.md rendered by Jekyll's default theme. Zero Vite fingerprints, the
+// stock `assets/css/style.css`, and the body text is README verbatim — the
+// first sentence a reviewer reads is README line 3.
+//
+// So this gate was scanning the pages a workflow WOULD publish while the site
+// served a file it had never read. Accurate about the deployment, silent about
+// the deployment that is actually happening. Running these same rules against
+// README.md found a real violation on the live page: an unhedged deferred
+// capability in the simulator paragraph.
+//
+// DR-004 is explicit about why this matters, in the owner's words: "lock the
+// site to the ratified Shared-Device Trust Gateway scope; and add a gate so
+// marketing cannot drift beyond implemented capability again." The gate existed
+// and could not see the site.
+//
+// NOT DERIVED, deliberately. Which files GitHub Pages serves is a repository
+// SETTING, not a fact in this tree, and the Pages API is unreachable from this
+// lane (403 at the proxy) — so there is nothing here to derive it from. Naming
+// README.md and failing loudly if it disappears is the honest substitute; a
+// derivation invented from a source that cannot see the answer would be worse
+// than an explicit name.
+const LANDING_PAGE = "README.md";
+if (!existsSync(LANDING_PAGE)) {
+  console.error(
+    `✗ ${LANDING_PAGE} is missing — it is the file GitHub Pages serves as the landing page, ` +
+      "so losing it from coverage means the gate stops reading the site itself. Do not silently scan less.",
+  );
+  process.exit(1);
+}
+if (!files.includes(LANDING_PAGE)) files.push(LANDING_PAGE);
+
 // The website is not the only thing that reaches a stranger. `docs/outreach/`
 // is sent to real prospects, as real email, under the owner's own identity and
 // increasingly without a human reading each one first — which makes it the

@@ -58,7 +58,8 @@
     "./token-binding": "./src/integrations/token-binding/index.ts",
     "./uem": "./src/integrations/uem/index.ts",
     "./vuln-scan": "./src/integrations/vuln-scan/index.ts",
-    "./webhooks": "./src/integrations/webhooks/index.ts"
+    "./webhooks": "./src/integrations/webhooks/index.ts",
+    "./telemetry/store": "./src/integrations/telemetry/store.ts"
   },
   "dependencies": {
     "ioredis": "^5.4.1",

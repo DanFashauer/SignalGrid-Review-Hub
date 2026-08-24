@@ -1532,6 +1532,160 @@ earlier — that is the loop working, not a reason to soften the record.
     now recorded in the coverage ledger at the depth actually reached — a
     property scan across fifteen workflows is NOT a read and is not claimed.
 
+65. **The ungated-fetch gate could not see an exported function, and passed with
+    a planted ungated `fetch` in an ENFORCED directory.** — FIXED 2026-08-24,
+    found by reading the itsm surface after the owner said roles were not
+    reviewing their portions. `check-ungated-fetch.mjs` walked back from each
+    `fetch` site to the enclosing declaration and then dropped everything that
+    was not a CLASS METHOD (`if (start === -1 || !isClassMethod) continue`). Its
+    own comment gave the reason for that scope as external callability — a
+    method "is externally callable on a constructed adapter, so nothing stands
+    between a caller and the network". An EXPORTED top-level function has
+    exactly that property: `itsm/index.ts` re-exports it. It was neither gated
+    nor counted in the unaudited remainder — invisible, not deferred.
+    EVIDENCE. Appending
+    `export async function plantedUngated(u: string) { return fetch(u, { method: "POST" }); }`
+    to `lib/integrations/src/integrations/itsm/zendesk.ts` — itsm/ is one of the
+    four directories where a finding FAILS the build — left the gate GREEN,
+    exit 0. This is the session's recurring defect class once more: a
+    measurement that was accurate about a real property and answered a different
+    question than the one its own comment asked.
+    WHY THE OBVIOUS FIX IS WRONG. Admitting every exported function re-opens the
+    false-positive flood the gate's first draft died of: ~25
+    `makeDefault*Transport(...)` factories that ARE gated one level up by the
+    `resolve*Connector` calling them. Measured, not assumed — the naive widening
+    flagged 25 of them plus one hard failure. The gate's own comment records why
+    that matters: "A gate that cries wolf gets switched off, and a switched-off
+    gate is worse than none because the policy still reads as enforced."
+    THE FIX, verified rather than trusted, in the same shape as the two clearing
+    rules already present. An exported top-level function is in scope; it clears
+    only if it carries its own gate token, or if EVERY call site of it — in its
+    own file or its family's `index.ts` — sits inside a function whose body
+    carries one. Fail-closed twice: a function with NO call site does not clear
+    (nothing local gates it, so its only caller is outside the family — the
+    planted hole), and one ungated site among many gated ones does not clear.
+    Non-exported top-level functions stay OUT of scope; they are internal
+    plumbing, and flagging them is the original false positive.
+    RESULT. Clean tree: zero findings, zero unaudited — all 25 factories cleared
+    automatically, including `device-management-health/graph-transport.ts`, whose
+    resolver lives one file over and is reached via the family index.ts source.
+    Planted defect: exit 1. Non-exported equivalent: exit 0. Self-gated export:
+    exit 0.
+    LOCKED DOWN. The gate had NO self-test — which is how this survived. It now
+    has one (9/9), with the planted defect kept permanently as fixture 1, and
+    registered in both preflight and CI. Sabotaging the discriminator drops it
+    to 4/9, so the self-test is watched failing rather than assumed to work.
+
+66. **The ITSM credential store derived its AES-256 key by truncate-and-pad, and
+    nothing had ever tested it.** — FIXED 2026-08-24, found by reading the itsm
+    surface. `getEncryptionKey()` built the key as
+    `Buffer.from(encryptionKey.slice(0, 32).padEnd(32, '0'))`. Accurate about
+    producing 32 bytes, and answering a different question than the one being
+    asked — whether those are 32 bytes of ENTROPY. Two silent losses:
+    `ITSM_ENCRYPTION_KEY=secret` became `secret` plus 26 literal zero bytes, an
+    AES-256 key with roughly 48 bits behind it; and a 64-hex-character secret,
+    the natural way to express 32 bytes, was cut to its first 32 characters —
+    16 bytes of entropy — and reported success. A short key was STRETCHED rather
+    than refused, which inverts fail-closed doctrine: an under-specified input
+    must tighten the answer, never pad itself into looking adequate.
+    IT WAS AN OUTLIER, NOT THE HOUSE PATTERN. `webhooks/store.ts`, the sibling
+    store in the SAME package, already derived with `createHash('sha256')`. Two
+    stores, one package, two answers to the same question — and the weaker one
+    held vendor API tokens.
+    ZERO COVERAGE. This was the only `createCipheriv` site in the repository and
+    nothing exercised it. `itsm-template-proof` covers the template half of the
+    same module and never touches encrypt/decrypt.
+    SEVERITY, STATED HONESTLY: LATENT, NOT LIVE. The config half of this store is
+    wired to nothing — no api-server route reaches it, and `itsm/index.ts`
+    deliberately exports only resolve+adapter. No stored ciphertext exists, which
+    is also why changing the derivation needs no migration.
+    THE FIX. SHA-256 derivation matching the sibling, plus a 32-character floor
+    that THROWS instead of padding. `IV_LENGTH` also moves 16 → 12, GCM's
+    standard nonce length (NIST SP 800-38D 5.2.1.1); `decrypt()` reads the IV out
+    of the payload rather than assuming the constant, so the write-side change
+    leaves previously written payloads readable.
+    LOCKED DOWN. `proof:itsm-credential-crypto` — 20 checks, the encryption
+    path's first test of any kind, registered in preflight and CI. Verified
+    falsifiable: against the pre-fix implementation it fails 5 checks, including
+    the one that matters most (two 64-char secrets sharing their first 32
+    characters must derive DIFFERENT keys). A sixth check was written, passed
+    against the broken code too, and was DELETED rather than kept — padding only
+    appears for a secret under 32 chars, and such a secret now throws before
+    derivation is reached, so it could never fail in either direction.
+
+67. **A gate comment said two families were "STILL NOT ENFORCED" directly above
+    the line that made them fatal — and contradicted itself in the same block.**
+    — FIXED 2026-08-24, found while re-reading `check-ungated-fetch.mjs` during
+    the row 65 work. The block listed, as ENFORCED, "EVERY outbound method under
+    itsm/, siem/ and telemetry/", then said seven lines later: "STILL NOT
+    ENFORCED ... the telemetry/ and passkey-assurance methods ... they stay
+    visible here" — i.e. reported, not fatal. The next line read
+    `const enforcedDir = /\/(itsm|siem|telemetry|passkey-assurance)\//.test(file)`,
+    routing BOTH into the fatal list. So the comment contradicted the code
+    beneath it AND its own preceding bullet, and the "not enforced" remainder it
+    described has been EMPTY on a clean tree.
+    WHY IT MATTERS. Nothing reads English. Anyone auditing the live-call boundary
+    from this comment would conclude two connector families were an open,
+    deferred gap and go looking for work that was already done — or, worse,
+    trust that a deferral existed where the build actually fails. This is the
+    prose-claim defect class the reviewer checklist names: "No gate reads
+    English. Is the sentence true today?"
+    WHAT ACTUALLY RESOLVED THE ORIGINAL CONCERN, now recorded where the stale
+    claim was: telemetry/ and passkey-assurance methods genuinely ARE
+    mode-polymorphic — the same method serves fixture transports in proofs — so
+    an in-method `mode !== "live"` throw would break a fixture path it
+    legitimately serves. That was answered by making the CLEARING rules smarter
+    (the isEnabled() chokepoint check and the transport-injection check, both
+    verifying that the gate one level up is real) rather than by exempting the
+    directories. Fatal enforcement and working fixture paths, both.
+    LOCKED DOWN, so the list cannot drift into prose again. `ENFORCED_DIRS` is
+    now a named array; the regex is BUILT from it, the run PRINTS it
+    ("enforced dirs (a finding FAILS): itsm, siem, telemetry, passkey-assurance"),
+    and the unaudited banner interpolates it instead of restating it. Three
+    self-test checks pin the derivation, including that an empty list would be
+    caught — an empty ENFORCED_DIRS would silently turn every finding advisory.
+    VERIFIED, not asserted: planting an exported ungated fetch in `itsm/` exits 1,
+    and planting one in `telemetry/` also exits 1. The corrected sentence is
+    demonstrated by the gate's own behaviour.
+
+68. **The Fleet posture cache was WRITE-ONLY, and would have served stale device
+    posture forever on its default path.** — FIXED 2026-08-24, found by reading
+    the endpoint-uem-domain surface. `getPostureForHost()` ended
+    `return inMemoryPosture.get(key) ?? null` — the cached entry, with no expiry
+    check. `expiresAt` was computed on write, stored, and read by NOTHING: two
+    write sites, zero readers, repository-wide.
+    THE ASYMMETRY IS THE POINT. Redis expires its own keys via `EX`, so that half
+    was covered by the server. The IN-MEMORY half is the default path whenever
+    `REDIS_URL` is unset AND the fallback whenever Redis throws — and it would
+    hand back posture whose `expiresAt` was long past, as though current. Stale
+    device posture must TIGHTEN the answer, never be served as current.
+    SEVERITY, STATED HONESTLY: the write is LIVE, the read is DEAD.
+    `setPostureForHost` runs on every Fleet posture fetch
+    (`fleetdm.ts:270`, 300s TTL), but the store's `getPostureForHost` has no
+    caller — the identically-named method on `FleetDMAdapter` is a different
+    function and does not read the cache. So nothing is being served stale TODAY;
+    what existed was a trap armed for whoever wired up the read, who would reach
+    for the obvious getter and receive indefinitely stale posture.
+    SECOND DEFECT, SAME FAMILY: the Map never pruned. One entry per host UUID on
+    every fetch, emptied only by an explicit `clearPostureCache()`, so a
+    long-running process polling a fleet grew it without bound.
+    THE FIX. `getPostureForHost` honours `expiresAt` on both paths and EVICTS the
+    entry it finds expired; `purgeExpiredPosture()` sweeps on write, which is the
+    path that actually runs. Fail-closed on anything unestablishable: malformed
+    JSON, a missing `expiresAt`, a non-numeric one, and NaN/Infinity all read as
+    "no cached posture", which forces a fresh fetch.
+    THE NaN ARM IS NOT HYPOTHETICAL. `NaN <= now` evaluates FALSE, so a bare
+    `entry.expiresAt <= now` would have reported a NaN expiry as STILL VALID and
+    served it forever — the same fail-open family already fixed on auth expiry in
+    this repository. Closed by requiring `Number.isFinite`, not by comparing and
+    hoping.
+    LOCKED DOWN. `proof:telemetry-posture-cache` — 21 checks, registered in
+    preflight and CI, with `now` injected so expiry is driven deterministically
+    rather than by sleeping. Verified falsifiable three ways: reverting the read
+    fails 2 checks, and removing the write-path sweep fails the check written
+    specifically to pin it — because asserting a purge function WORKS is not the
+    same claim as asserting it RUNS.
+
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —
     `lib/location` is KEPT. Nothing is outstanding on this row.

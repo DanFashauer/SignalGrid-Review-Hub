@@ -236,6 +236,8 @@ jobs:
         run: node scripts/check-retention-claims.mjs
       - name: "Connector discipline (gated + proven, no device actuators)"
         run: node scripts/check-connector-discipline.mjs
+      - name: Ungated-fetch self-test (the gate must be able to fail)
+        run: node scripts/check-ungated-fetch.mjs --self-test
       - name: "Ungated fetch (the live boundary covers every outbound path)"
         run: node scripts/check-ungated-fetch.mjs
       # Sibling of the gate above: that one asks whether the call was allowed to happen,
@@ -573,6 +575,10 @@ jobs:
         run: pnpm run proof:audit-ledger
       # Inherited byte-identical from the legacy DEV repo, whose roadmap flagged it and
       # whose fix was never written: String.replace $-expansion in ITSM ticket templates.
+      - name: Proof - itsm-credential-crypto (a weak key is refused, not stretched)
+        run: pnpm run proof:itsm-credential-crypto
+      - name: Proof - telemetry-posture-cache (stale posture is never served as current)
+        run: pnpm run proof:telemetry-posture-cache
       - name: Proof — itsm-template (values verbatim, keys inert)
         run: pnpm run proof:itsm-template
 

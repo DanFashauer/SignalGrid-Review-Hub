@@ -152,6 +152,7 @@ const STEPS = [
   { name: "CI job timeouts (an unbounded job is an unbounded outage; self-tested)", cmd: ["node", "scripts/check-ci-job-timeouts.mjs"] },
   { name: "Connector discipline (every family gated + proven, none acting on a device)", cmd: ["node", "scripts/check-connector-discipline.mjs"] },
   { name: "Launch profile (the declared product edge matches the real one)", cmd: ["node", "scripts/check-launch-profile.mjs"] },
+  { name: "Ungated-fetch self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-ungated-fetch.mjs", "--self-test"] },
   { name: "Ungated fetch (a health check is still a live call)", cmd: ["node", "scripts/check-ungated-fetch.mjs"] },
   // Sibling of the ungated-fetch gate. That one asks whether a call was allowed to happen;
   // this one asks whether the RESULT reported was one anybody observed. Twelve connectors
@@ -261,6 +262,8 @@ const STEPS = [
   // with one, the role split is proven locally in both directions.
   { name: "Proof: db-role-split (the ledger append-only by privilege)", cmd: ["pnpm", "run", "proof:db-role-split"] },
   { name: "Proof: audit-ledger", cmd: ["pnpm", "run", "proof:audit-ledger"] },
+  { name: "Proof: itsm-credential-crypto (a weak key is refused, not stretched)", cmd: ["pnpm", "run", "proof:itsm-credential-crypto"] },
+  { name: "Proof: telemetry-posture-cache (stale posture is never served as current)", cmd: ["pnpm", "run", "proof:telemetry-posture-cache"] },
   { name: "Proof: itsm-template (evidence text cannot rewrite itself on the way into a ticket)", cmd: ["pnpm", "run", "proof:itsm-template"] },
   { name: "Proof: session-store", cmd: ["pnpm", "run", "proof:session-store"] },
   { name: "Proof: orchestration", cmd: ["pnpm", "run", "proof:orchestration"] },

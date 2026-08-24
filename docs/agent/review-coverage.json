@@ -358,6 +358,48 @@
       "date": "2026-08-24",
       "depth": "audited",
       "note": "Read end to end earlier this session for the corepack/CVE work. npm and the corepack cache are removed from the shipping image with a build-time assertion. Finding recorded as row 59: `corepack enable pnpm` runs in BOTH stages, so each build makes an un-retried network fetch of pnpm from registry.npmjs.org; one of them died mid-download on 2026-08-24 (undici assert(!this.paused)) and failed the job. The obvious fix — carry the builder's corepack cache forward — is exactly what lines 97-111 deliberately strip for CVE reasons, so it needs a retry, not a cache."
+    },
+    {
+      "path": "lib/integrations/src/integrations/itsm/resolve.ts",
+      "reviewedBy": "itsm-ops-domain",
+      "date": "2026-08-24",
+      "depth": "audited",
+      "note": "Read end to end. The live-call gate for the emitter family. Strongest property in the family: ItsmFixtureRecord types `delivered` as the literal `false` and `mode` as the literal \"fixture\", so a fixture record that claims delivery is UNREPRESENTABLE rather than merely absent — the syslog family's status:'sent' lie cannot recur here by construction. ItsmFixtureEmitter is deterministic: no clock, no randomness, seq derived from log length. No live transport ships in this repository, so the live path's failure mode is 'there is no code'."
+    },
+    {
+      "path": "lib/integrations/src/integrations/itsm/index.ts",
+      "reviewedBy": "itsm-ops-domain",
+      "date": "2026-08-24",
+      "depth": "audited",
+      "note": "Read end to end (10 lines). Re-exports ./resolve and ./adapter, and via adapter.ts re-exports all eight vendor adapter CLASSES as public surface. Checked the bypass this implies: no call site outside the itsm module constructs an adapter directly (only dist/ build output matches), and each vendor file carries its own resolveEmission() check on its emit path (3-6 sites each), so the factory tier gate is defence in depth rather than the only door. Pulling that thread found the check-ungated-fetch scope defect fixed in this commit (backlog row 65)."
+    },
+    {
+      "path": "lib/integrations/src/integrations/itsm/store.ts",
+      "reviewedBy": "itsm-ops-domain",
+      "date": "2026-08-24",
+      "depth": "audited",
+      "note": "Read the credential half end to end (schemas, encryption utilities, the five config accessors); the ticket-template half from line ~488 down was NOT read — itsm-template-proof covers it. Credential separation is structurally sound: getITSMConfig returns `{ id, ...stored.base }` and credentials live in a separate encrypted field, so the plain getter cannot leak them. FINDING (row 66, fixed here): getEncryptionKey() derived the AES-256 key by `slice(0,32).padEnd(32,'0')` — truncate-and-pad. The only createCipheriv site in the repository, with zero test coverage of any kind, and an outlier: the sibling webhooks/store.ts in the same package derives with createHash('sha256'). Latent rather than live — no api-server route reaches this store and itsm/index.ts exports only resolve+adapter."
+    },
+    {
+      "path": "lib/integrations/src/integrations/device-attestation/evaluate.ts",
+      "reviewedBy": "endpoint-uem-domain",
+      "date": "2026-08-24",
+      "depth": "audited",
+      "note": "Read end to end (182 lines) and probed for defects; NONE FOUND, recorded as a clean read rather than left silent. Fail-closed throughout: every unknown pushes step_up, the worst-concern-wins fold seeds at {action:'none'} and replaces only on strictly-greater severity, and only an explicit `attestable === false` abstains while a self-contradictory report (declares incapable yet carries attestation) is floored at step_up. ACTION_SEVERITY is Record<AttestationRecommendedAction, number>, so a new action cannot be added to the union without a compile error — the extension-direction fail-open is closed by the type. TWO HYPOTHESES TESTED AND REFUTED: (1) six of eleven reason codes appear in no proof by grep — but the proof asserts on posture/recommendedAction/criticalFindings, and those branches are covered; (2) ATTESTED_SECUREBOOT_REDUCED and ATTESTED_KEXT_ALLOWED share an identical posture+action pair, so their distinct reason codes looked unpinned — swapping one for the other KILLS proof:device-attestation (77/77 baseline). The grep was the weaker instrument in both cases."
+    },
+    {
+      "path": "lib/integrations/src/integrations/telemetry/store.ts",
+      "reviewedBy": "endpoint-uem-domain",
+      "date": "2026-08-24",
+      "depth": "audited",
+      "note": "Read end to end (163 lines). FINDING (row 68, fixed here): a WRITE-ONLY posture cache. setPostureForHost runs live on every Fleet posture fetch (fleetdm.ts:270, 300s TTL); the store's getPostureForHost had no caller anywhere; and `expiresAt` was written at two sites and read at ZERO. The in-memory half — the default path whenever REDIS_URL is unset and the fallback whenever Redis throws — returned `inMemoryPosture.get(key) ?? null` with no expiry check, so it would serve indefinitely stale device posture. Redis's own EX covered the Redis half. Second defect in the same family: the Map was never pruned, gaining an entry per host UUID and emptied only by an explicit clearPostureCache()."
+    },
+    {
+      "path": "lib/integrations/src/integrations/device-management-health/evaluate.ts",
+      "reviewedBy": "endpoint-uem-domain",
+      "date": "2026-08-24",
+      "depth": "read",
+      "note": "Read the fail-open surface rather than the whole file: every branch touching unknown/null/absent inputs, the unknownSignals pushes, and the ordering comments. NO defect found on that surface — each unknown raises the bar and the worst-concern-wins ordering carries a measured justification in-comment (the managementReachable case was moved earlier after its cost was measured). Recorded at depth 'read', not 'audited': the normalization half and the type surface were not examined."
     }
   ]
 }

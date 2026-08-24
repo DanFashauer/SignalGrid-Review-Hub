@@ -83,6 +83,8 @@
     "proof:incident-playbook": "tsx ./src/incident-playbook-proof.ts",
     "proof:intune-entra-posture": "tsx ./src/intune-entra-posture-proof.ts",
     "proof:isolation-scope": "tsx ./src/isolation-scope-proof.ts",
+    "proof:itsm-credential-crypto": "tsx ./src/itsm-credential-crypto-proof.ts",
+    "proof:telemetry-posture-cache": "tsx ./src/telemetry-posture-cache-proof.ts",
     "proof:itsm-template": "tsx ./src/itsm-template-proof.ts",
     "proof:itom-itsm-bridge": "tsx ./src/itom-itsm-bridge-proof.ts",
     "proof:kpi-kri-kci": "tsx ./src/kpi-kri-kci-model-proof.ts",

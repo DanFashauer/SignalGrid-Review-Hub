@@ -145,7 +145,7 @@
       ],
       "activated": "2026-08-19",
       "produced": "Re-measured every quoted performance figure and recorded the dated baseline in docs/RELIABILITY_SLO.md. p95 1.2671 ms against the quoted 1.3 ms; 5,128 decisions/sec aggregate at 3.38x scaling (85% of linear) with identical verdicts on every worker; the 240 req/min default confirmed in rateLimit.ts. Recorded the judgement NOT to gate absolute values — a latency threshold on a shared runner is a flaky gate — and named the consequence: check-proof-figures.mjs does not cover these, so keeping them true is this role's standing duty",
-      "nextAction": "The baseline table in docs/RELIABILITY_SLO.md is dated and nothing mechanical keeps it true — this role's own standing duty. Re-measure on the current head and re-date it. While there, quantify the in-process-versus-over-HTTP gap once, so the bench number and the load number stop being read as the same number."
+      "nextAction": "Baseline re-measured and re-dated 2026-08-24, and the in-process-versus-over-HTTP gap is now quantified once in docs/RELIABILITY_SLO.md (5,370/sec in-process vs 585 req/sec over HTTP on one box; p95 1.38 ms vs 92.1 ms). Its age is now REPORTED by check-proof-figures on every run, so the standing duty has a reminder instead of relying on memory. Next: re-measure when the decision path changes, not on a calendar."
     },
     {
       "id": "release-engineer",

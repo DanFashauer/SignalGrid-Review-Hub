@@ -491,6 +491,27 @@
       "date": "2026-08-24",
       "depth": "audited",
       "note": "Read end to end, with dev.env.example alongside for the diff. Fail-closed by default: SIGNALGRID_LIVE_INTEGRATIONS=false even in the prod example. The profile fence is documented as a fence — unset resolves to review-demo, which serves demo credentials and the unauthenticated simulator — and the five OIDC variables are marked hard-required with the consequence stated plainly: unset means enterprise auth stays disabled and EVERY request is 401, i.e. the deployment has no usable API rather than an open one."
+    },
+    {
+      "path": "docs/RELIABILITY_SLO.md",
+      "reviewedBy": "performance-engineer",
+      "date": "2026-08-24",
+      "depth": "verified-live",
+      "note": "Read end to end AND re-measured, discharging this role's own standing nextAction. All four quoted figures re-run on the current head: decision core p95 1.0458 ms (mean 0.6228, p99 1.3859, 5,000 iterations after 200 warmup); 750 ms pilot gate passing with ~717x margin on p95; 240 req/min per key re-confirmed live by test:load (60 of 300 burst requests throttled, and a malformed limit falls back to exactly 240 rather than 0); parallel scaling 1,529/sec single core and 5,370/sec aggregate on 4 workers, 3.51x (88% of linear), identical verdicts on every worker. Table re-dated 2026-08-19 -> 2026-08-24. The prior column is kept for SHAPE, not subtraction — a different runner, so this is a fresh measurement and not a regression comparison, and that is stated in the doc so nobody computes a percentage across incomparable runs."
+    },
+    {
+      "path": "scripts/src/latency-bench.ts",
+      "reviewedBy": "performance-engineer",
+      "date": "2026-08-24",
+      "depth": "verified-live",
+      "note": "Run on the current head, not merely read. 5,000 iterations after 200 warmup against the in-memory core. Gates only the 750 ms pilot threshold and reports the distribution — the deliberate GATED/REPORTED split, because a latency threshold on a shared runner is a flaky gate and a flaky gate gets switched off."
+    },
+    {
+      "path": "scripts/src/throughput-bench.ts",
+      "reviewedBy": "performance-engineer",
+      "date": "2026-08-24",
+      "depth": "verified-live",
+      "note": "Run on the current head. Gates what is machine-independent — a throughput floor derived from the pilot gate, no parallel collapse, and identical verdicts across workers — and reports absolute rates as hardware-specific. Its own output says so on every run, which is why the figure it produces cannot be quoted as a capacity promise by accident."
     }
   ]
 }

@@ -458,6 +458,8 @@ jobs:
       - name: MCP surface drift gate (server = docs = ready message = manifest)
         run: node scripts/check-mcp-surface.mjs
 
+      - name: Figure-guard self-test (the baseline-age report must be able to fail)
+        run: node scripts/check-proof-figures.mjs --self-test
       - name: Docs↔proof figure guard
         run: node scripts/check-proof-figures.mjs
 

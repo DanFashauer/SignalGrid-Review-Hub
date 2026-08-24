@@ -558,8 +558,69 @@ function main() {
     process.exit(1);
   }
 
+  // REPORTED, never fatal: the age of the performance baseline this guard CANNOT cover.
+  //
+  // docs/RELIABILITY_SLO.md says so about itself, in the section below its table:
+  // this guard "catches comma-formatted numbers of 1000 or more inside a section
+  // naming a proof; `1.3 ms` is neither. Nothing mechanical keeps the latency figure
+  // true, so keeping it true is a standing duty of the performance-engineer role."
+  //
+  // A standing duty nobody is reminded of is how a figure fossilises. The absolute
+  // values stay UNGATED on purpose — a latency threshold on a shared runner is a flaky
+  // gate, and a flaky gate gets switched off — but the DATE is not a judgement call, so
+  // its age is printed on every run. Stale is reported, never fatal: the honest reason
+  // to re-measure is that the decision path changed, not that a calendar rolled over.
+  const sloAge = baselineAge(readFileSync(resolve(repoRoot, "docs/RELIABILITY_SLO.md"), "utf8"), new Date());
+  if (sloAge === null) {
+    console.log("\n  ⚠ docs/RELIABILITY_SLO.md — no dated performance baseline found where one is expected.");
+  } else {
+    const note = sloAge.days >= 90 ? "  ← re-measure: the decision path has had a quarter to move" : "";
+    console.log(`\n  performance baseline (REPORTED, not gated): re-measured ${sloAge.date}, ${sloAge.days} day(s) ago${note}`);
+  }
+
   console.log("Figure guard passed — every measured figure in the docs matches a live proof run.");
 
 }
 
+
+/**
+ * Age of the performance baseline in docs/RELIABILITY_SLO.md, or null if the dated
+ * sentence that owns it is gone. Exported so it can be self-tested; `now` is injected
+ * so the test does not depend on today's date.
+ */
+export function baselineAge(text, now) {
+  const m = text.match(/re-measured on \*\*(\d{4})-(\d{2})-(\d{2})\*\*/);
+  if (m === null) return null;
+  const then = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const days = Math.floor((now.getTime() - then) / 86_400_000);
+  return { date: `${m[1]}-${m[2]}-${m[3]}`, days };
+}
+
+/**
+ * Falsification for the baseline-age REPORT. It is a report and not a gate, so the bar
+ * is "can it be watched failing", not "does it fail the build".
+ *   node scripts/check-proof-figures.mjs --self-test
+ */
+function selfTest() {
+  const NOW = new Date("2026-08-24T00:00:00Z");
+  const doc = (d) => `The figures were re-measured on **${d}** and all still hold:`;
+  const checks = [
+    ["a same-day baseline reports 0 days", baselineAge(doc("2026-08-24"), NOW)?.days === 0],
+    ["a 90-day-old baseline reports 90 — the age is real arithmetic, not a flag",
+      baselineAge(doc("2026-05-26"), NOW)?.days === 90],
+    ["the date is echoed back so the reader can check it", baselineAge(doc("2026-05-26"), NOW)?.date === "2026-05-26"],
+    ["a MISSING dated sentence returns null rather than a comfortable zero",
+      baselineAge("no dated baseline anywhere in this text", NOW) === null],
+    ["an unbolded date does not count — the report tracks the sentence that owns the table",
+      baselineAge("re-measured on 2026-05-26 and all still hold:", NOW) === null],
+    ["LIVE: the committed RELIABILITY_SLO.md still carries a parseable baseline date",
+      baselineAge(readFileSync(resolve(repoRoot, "docs/RELIABILITY_SLO.md"), "utf8"), NOW) !== null],
+  ];
+  const failed = checks.filter(([, ok]) => !ok);
+  for (const [n, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${n}`);
+  console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
+  return failed.length === 0 ? 0 : 1;
+}
+
+if (IS_MAIN && process.argv.includes("--self-test")) process.exit(selfTest());
 if (IS_MAIN) main();

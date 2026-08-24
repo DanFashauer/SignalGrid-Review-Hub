@@ -346,6 +346,42 @@ refuses("a zero maxStandingSeconds is refused", () =>
   reconcileDecisions([rec("x", "allow", { evaluatedOffline: true })], { standingBound: { maxStandingSeconds: 0, elapsedSecondsById: {} } }));
 refuses("an unknown floor is refused", () =>
   reconcileDecisions([rec("x", "allow", { evaluatedOffline: true })], { standingBound: { maxStandingSeconds: 10, elapsedSecondsById: {}, floor: "maybe" as DecisionOutcome } }));
+
+// THE TWO ASSERTIONS ABOVE AND BELOW WERE NOT ENOUGH, and the daily mutation sweep
+// said so on 2026-08-24 by surviving three mutations in continuity.ts. Measured,
+// one guard at a time, rather than reasoned about:
+//
+//   :384 validateRecord Set membership  — disabled alone, every probe is STILL
+//        refused. Genuine defense in depth; :116 catches it downstream. Now
+//        carries an allowlist entry in mutation-guard.mjs saying exactly that.
+//   :116 mostRestrictiveOutcome self-check — disabled alone, a direct call with
+//        an unknown outcome GETS THROUGH. It is EXPORTED, so that is its own
+//        entry point and :116 is the only guard on it. Nothing proved it.
+//   :443 standingBound.floor            — disabled alone, an invalid floor on a
+//        WITHIN-BOUND record gets through silently.
+//
+// The header note further down is right that :116 and :384 cover each other —
+// but only for the `reconcileDecisions` path. It generalised from one call path
+// to the whole module, which is how two load-bearing guards ended up unproven
+// while a comment explained why that was fine.
+//
+// Each assertion below is aimed at the path where NOTHING ELSE can refuse first.
+
+// :116 — the exported entry point, called directly rather than through reconcile.
+refuses("mostRestrictiveOutcome refuses an unknown outcome on its OWN exported entry point", () =>
+  mostRestrictiveOutcome(["allow", "permit" as DecisionOutcome]));
+refuses("mostRestrictiveOutcome refuses a prototype key on its OWN exported entry point", () =>
+  mostRestrictiveOutcome(["allow", "constructor" as DecisionOutcome]));
+
+// :443 — WITHIN bound. The existing assertion above uses a shape that exceeds the
+// bound, so the bad floor reaches mostRestrictiveOutcome and is refused there even
+// with the floor guard gone. Within bound the floor never gets applied, so nothing
+// downstream ever sees it: an invalid floor is accepted and silently does nothing.
+// A caller who typed "denied" for "deny" would get no error and no floor.
+refuses("an unknown floor is refused even when the bound is NOT exceeded (nothing downstream sees it)", () =>
+  reconcileDecisions([rec("x", "allow", { evaluatedOffline: true })], {
+    standingBound: { maxStandingSeconds: 10, elapsedSecondsById: { x: 1 }, floor: "maybe" as DecisionOutcome },
+  }));
 refuses("mostRestrictiveOutcome refuses an empty set", () => mostRestrictiveOutcome([]));
 
 // A duplicate id carrying an IDENTICAL record is de-duplicated, not refused — that is

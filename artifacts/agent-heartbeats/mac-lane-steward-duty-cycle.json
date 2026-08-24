@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-08-24T04:24:24Z",
-  "result": "quiet: no new Mac activity, nothing addressed to cloud unacked, 7 cloud->mac unread (Mac not awake), 1 sim request pending (2026-08-23-glpi-first-bringup). HEARTBEAT HELD at fire time per the open-PR rule — PR #287 was open and widening it was the wrong trade; written now that #287 has merged as ad334f0. Shared-surface changes were also held rather than mailed, because they sat in the open PR and not on SignalGrid_Alpha, which is what the Mac pulls; the lane message goes out with this commit now that they have landed."
+  "firedAt": "2026-08-24T08:24:04Z",
+  "result": "quiet: no Mac activity since the 04:24 cycle (the only commits are this lane's own merges ad334f0 and eefdb04); nothing addressed to cloud unacknowledged, verified by messageId rather than filename; 8 cloud->mac unread because that machine is not awake; 1 sim request pending (2026-08-23-glpi-first-bringup). No shared surface changed since the lane message in eefdb04, so nothing new to mail. The 04:24 heartbeat was HELD under the open-PR rule and landed in eefdb04 once #287 merged; nothing is held this cycle."
 }

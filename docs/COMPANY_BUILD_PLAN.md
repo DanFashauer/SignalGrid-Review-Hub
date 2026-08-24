@@ -786,6 +786,58 @@ earlier — that is the loop working, not a reason to soften the record.
     it wants an owner's call rather than an agent's preference. The alternative
     — a separate always-on registry for CI-scheduled lanes, checked the same way
     — is the same decision wearing a different hat.
+54. **Seven merges carried zero reviews — and the first diagnosis blamed the
+    wrong thing.** 2026-08-24.
+    THE FINDING WAS REAL: #280-#286 all merged with ZERO reviews of any kind,
+    measured one at a time through the API, including #283 which cleared a live
+    CRITICAL on the shipping image. The session saw seven "You have reached your
+    Codex usage limits" notices, called each informational, merged, and then
+    said the reviewer's absence was fine because the gate suite carried the
+    load. That is this repo's `absent-collection law` inverted in the operating
+    loop: nothing observed is not nothing wrong, and silence is not an
+    affirmative — both already gated for the product, neither watching the
+    process that ships it.
+    **THE DIAGNOSIS WAS WRONG.** The first fix built
+    a `check-review-liveness` gate to name merges lacking an EXTERNAL review
+    (built, then deleted in the same session — it is not in the tree and is
+    named here only as the wrong turn it was), and re-requested all seven from
+    Codex. Both actions assumed a
+    reviewer that is RETIRED. The owner had said so; the repo says so too —
+    `docs/BRANCH_HYGIENE.md` describes `codex/*` as "the earlier Codex lane
+    (Jun-Jul 2026)", past tense, and seven consecutive quota rejections in one
+    day is an account that is out, not an account that is busy. The gate was
+    deleted rather than kept: a check that reports a permanent expected
+    condition is the kind that gets ignored, and an ignored gate protects
+    nothing.
+    **WHAT THE GAP ACTUALLY IS.** The reviewer was never missing. `ORG.md`
+    ratifies a Reviewer lane at line 159 — "Adversarial pass. Never fixes.
+    Produces findings only." —
+    `.claude/skills/signalgrid-reviewer/SKILL.md` says in its own description to
+    use it "when a change is ready for review, BEFORE any push or PR"; the
+    roster carries `code-reviewer`, `verdict-core-reader` and
+    `fail-closed-auditor`, all read-only by construction. This lane shipped
+    seven pull requests without invoking any of them, then went looking outside
+    for a reviewer it already had. The control is not a third-party service. It
+    is a role that exists and was not run.
+    CORRECTION APPLIED: the reviewer is invoked before push, not after merge.
+    The Codex attributions in `scripts/review-invariants.mjs` ("the exact class
+    Codex #70 caught", #79, #81) STAY — they are accurate provenance for where
+    those rules came from, and erasing history to match present tooling would be
+    its own falsification.
+    LOOSE END, recorded rather than tidied: seven `@codex review` comments were
+    posted on #280-#286 before the retirement was known. #283's carried a 👀
+    from the connector, so the trigger does work on a merged PR — a fact worth
+    keeping even though the premise was wrong. They will not be answered. They
+    are left in place because they carry the focused review asks and the record
+    of what happened; seven retractions would double the noise to correct a
+    premise this row already corrects. Anyone reading those PRs should treat the
+    request as withdrawn.
+    The `fail-closed-auditor` charter extension to the OPERATING LOOP survives
+    this correction and matters more because of it: a check that did not run is
+    not a check that passed, a job skipped for a missing credential is not a job
+    that found nothing, and "no findings reported" is a different sentence from
+    "no findings".
+
 53. **CI liveness: the harness that proves every guard can fail had nothing
     watching whether it still ran.** DONE 2026-08-23.
     The mutation sweep is the only thing establishing that the gates in this

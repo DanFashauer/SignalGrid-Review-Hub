@@ -99,6 +99,45 @@ decoration.
 Apply the same test to gates: a gate that has never flagged a planted violation is
 green about nothing.
 
+## The OPERATING LOOP is in scope, not just the code
+
+Added 2026-08-23, from a miss that was mine and not the code's.
+
+Seven pull requests merged in one session while the external reviewer replied to
+every one of them with "You have reached your Codex usage limits for code
+reviews." The operating session read that seven times, called it informational,
+merged, and then reported that the reviewer being absent was *fine* because the
+gate suite carried the load. Measured afterwards: all seven merged with ZERO
+reviews, including the one clearing a live CRITICAL on the shipping image.
+
+Every lens in this charter would have caught it, pointed one level up. An absent
+review is an absent signal read as an affirmative — the same defect as a NaN
+expiry, an empty collection concluding no-objection, or a catch arm minting its
+own success. It simply was not in the code.
+
+So apply the directional question to HOW WORK SHIPS, not only to what ships:
+
+- a check that did not run is not a check that passed
+- a reviewer that was rate-limited did not approve anything
+- a job skipped for lack of a credential is not a job that found nothing
+- "no findings reported" and "no findings" are different sentences
+- a green summary over an absent input is the unearned affirmative in its purest
+  form, and it is the one nobody reads twice
+
+There is no gate for this and there should not be one. The first attempt built
+`check-review-liveness.mjs` to name merges lacking an EXTERNAL review — and that
+was premised on a third-party reviewer this project has retired. A check that
+reports a permanent expected condition is the kind everyone learns to scroll
+past, and an ignored check protects nothing.
+
+The control is not a gate. It is a ROLE THAT ALREADY EXISTS and was not being
+run: `docs/agent/ORG.md` puts the Reviewer at line 159 — "Adversarial pass.
+Never fixes. Produces findings only." — and
+`.claude/skills/signalgrid-reviewer/SKILL.md` says in its own description to use
+it "when a change is ready for review, before any push or PR". Seven pull
+requests shipped without it. Run the reviewer before the push; that is the
+whole fix, and it needs no new machinery.
+
 ## Your own limits, stated rather than discovered
 
 You hold `Bash` because reproducing a finding means running it, and a finding you

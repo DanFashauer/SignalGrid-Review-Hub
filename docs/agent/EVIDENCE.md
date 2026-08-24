@@ -39,14 +39,44 @@ reason for that scope was external callability — which an exported top-level
 function also has. Fixed in PR #297; backlog row 65.
 
 ## 2026-08-24 — "The fix catches the planted defect without flagging legitimate factories"
-Command:  same plant, then two controls (a NON-exported equivalent, and an
-exported-but-self-gated one), each run against the fixed gate.
+Command:
+```
+Z=lib/integrations/src/integrations/itsm/zendesk.ts
+cp $Z /tmp/z.bak
+run() { node scripts/check-ungated-fetch.mjs >/dev/null 2>&1; echo "  exit=$?"; }
+
+# 1. the planted hole: exported, ungated, in an ENFORCED dir
+cp /tmp/z.bak $Z
+printf '\nexport async function plantedUngated(u: string) {\n  return fetch(u, { method: "POST" });\n}\n' >> $Z
+run
+
+# 2. control: identical body, NOT exported (internal plumbing, out of scope by design)
+cp /tmp/z.bak $Z
+printf '\nasync function privatePlumbing(u: string) {\n  return fetch(u);\n}\n' >> $Z
+run
+
+# 3. control: exported but carrying its own gate token
+cp /tmp/z.bak $Z
+printf '\nexport async function selfGated(u: string) {\n  const e = resolveEmission();\n  if (e.mode !== "live") return null;\n  return fetch(u);\n}\n' >> $Z
+run
+
+cp /tmp/z.bak $Z   # restore; `git status --porcelain -- $Z` must be empty
+node scripts/check-ungated-fetch.mjs | tail -3
+```
 Output:
 ```
-1. exported ungated fetch in enforced dir -> exit=1   (expect 1)
-2. non-exported plumbing                  -> exit=0   (expect 0)
-3. exported but self-gated                -> exit=0   (expect 0)
-clean tree: zero findings, zero unaudited
+1. exported ungated fetch in enforced dir (expect 1):
+  exit=1
+2. non-exported plumbing (expect 0):
+  exit=0
+3. exported but self-gated (expect 0):
+  exit=0
+restored: (git status empty)
+
+clean tree:
+  connector files containing fetch: 88
+  fetch call sites checked:         85
+Ungated-fetch gate passed — no ungated healthCheck() remains.
 ```
 Verdict:  **holds.** All ~25 `makeDefault*Transport` factories clear automatically,
 including `device-management-health/graph-transport.ts` whose resolver lives one
@@ -126,10 +156,30 @@ grep: 0 files for six of eleven codes
 baseline:  summary=pass (77/77)
 mutant:    Exit status 1
 ```
-Verdict:  **my claim refuted — NOT a defect.** The proof asserts on
-`posture`/`recommendedAction`/`criticalFindings`, not on the code strings, and the
-branches are covered. Swapping two codes that share an identical posture+action
-pair still kills the proof. Recorded so the next session does not re-raise it.
+Verdict:  **my claim refuted — NOT a defect.** Recorded so the next session does
+not re-raise it.
+
+CORRECTED 2026-08-24, after external review on PR #299 caught this entry stating
+the wrong MECHANISM. It said the proof "asserts on posture/recommendedAction/
+criticalFindings, not on the code strings". That is FALSE, and the conclusion
+being right did not make the explanation harmless — an evidence log whose
+reasoning is wrong teaches the next reader the wrong thing about coverage.
+
+What is actually true:
+```
+scripts/src/device-attestation-proof.ts:72     v.reasonCode === spec.expected.reasonCode &&
+scripts/fixtures/device-attestation/devices.json:22   "reasonCode": "ATTESTED_SECUREBOOT_REDUCED"
+scripts/fixtures/device-attestation/devices.json:27   "reasonCode": "ATTESTED_KEXT_ALLOWED"
+```
+The proof is TABLE-DRIVEN and compares `reasonCode` directly against a fixture
+that pins both codes. The mutation dies because the codes are fixture-backed —
+not because some other field happened to catch it.
+
+And the reason my grep returned zero is now exact, which is the part worth
+keeping: the codes live ONLY in `scripts/fixtures/`, and I searched
+`scripts/src`. A narrow search over the wrong subtree — the precise failure
+`pnpm run check:absence` exists to prevent, which I did not run before asserting
+absence.
 
 ## 2026-08-24 — "credential-exposure escalates on highValue only, ignoring severity"
 Command:
@@ -148,7 +198,11 @@ the same shape — reading an evaluator in isolation and assuming its input was 
 This codebase does the fail-closed work at the normalization boundary so the
 evaluator can stay simple, and a grep across one layer cannot see that.
 
-## 2026-08-24 — NOT VERIFIED HERE
+## NOT VERIFIED HERE (as of 2026-08-24)
+
+Not an evidence record — no claim, command or verdict. Deliberately headed so the
+entry counter cannot mistake it for one; coverage gaps are findings, and they are
+reported separately rather than padding the entry count.
 - **iOS / Swift behaviour.** No Xcode in this environment. Backlog row 58 (the
   Swift analogue of the NaN fail-open) remains open and is owed by the Mac lane.
 - **`validate-sim-macos.sh` on real macOS.** This lane runs `preflight.mjs`; the

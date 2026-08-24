@@ -143,6 +143,30 @@ function selfTest() {
   checks.push(["the live registry is non-empty — a gate over nothing is vacuous", (reg.claims ?? []).length > 0]);
   checks.push(["every live entry is well-formed", (reg.claims ?? []).every((c) => validateEntry(c).length === 0)]);
 
+  // The evidence-log structure reporter. Its first version counted dated HEADINGS,
+  // so a section with no claim, command or verdict inflated the number — caught by
+  // external review on PR #299. These fixtures keep the distinction it now draws.
+  const FULL = [
+    "## 2026-08-24 — a real record",
+    "Command:  node scripts/x.mjs",
+    "Output:   ok",
+    "Verdict:  holds",
+  ].join("\n");
+  const HEADING_ONLY = "## 2026-08-24 — NOT VERIFIED HERE\nsome prose, no fields";
+  checks.push(["a record with Command+Output+Verdict COUNTS", evidenceEntries(FULL).complete.length === 1]);
+  checks.push(["a dated heading with none of the three fields does NOT count",
+    evidenceEntries(HEADING_ONLY).complete.length === 0]);
+  checks.push(["...and is REPORTED rather than silently dropped",
+    evidenceEntries(HEADING_ONLY).incomplete.length === 1]);
+  checks.push(["a record missing only Verdict does not count, and names what is missing",
+    evidenceEntries(FULL.replace("Verdict:  holds", "")).incomplete[0]?.missing.join() === "Verdict"]);
+  checks.push(["both kinds are separated in one file",
+    evidenceEntries(`${FULL}\n\n${HEADING_ONLY}`).complete.length === 1 &&
+    evidenceEntries(`${FULL}\n\n${HEADING_ONLY}`).incomplete.length === 1]);
+  checks.push(["an empty file yields no entries rather than throwing", evidenceEntries("").complete.length === 0]);
+  checks.push(["LIVE: the committed evidence log holds at least one complete record",
+    evidenceEntries(readFileSync(resolve(REPO, "docs/agent/EVIDENCE.md"), "utf8")).complete.length > 0]);
+
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
@@ -152,6 +176,39 @@ function selfTest() {
 // Guarded on being the entry point: the pure helpers above are imported by tests and by
 // other gates, and a module that gates the repository as a side effect of being imported
 // makes every consumer's exit code a statement about the wrong thing.
+
+/**
+ * Split EVIDENCE.md into COMPLETE evidence records and dated headings that only look
+ * like one.
+ *
+ * WHY THE STRUCTURE IS CHECKED AND NOT JUST THE HEADING. The first version of this
+ * reporter counted `^## <date> — ` and nothing else, so it reported 8 entries for a
+ * file holding 7 records plus a `## <date> — NOT VERIFIED HERE` section that carries
+ * no claim, no command and no verdict. Caught by external review on PR #299, and it
+ * is the same defect as the four findings the log was written to record: a
+ * measurement that was accurate about a real property (dated headings) and answered a
+ * different question than the one asked (complete, reproducible records).
+ *
+ * A number that cannot tell a reproducible record from any dated heading is worse
+ * than no number, because it reads as coverage.
+ */
+export function evidenceEntries(text) {
+  const complete = [];
+  const incomplete = [];
+  const heads = [...text.matchAll(/^## (\d{4}-\d{2}-\d{2}) — (.*)$/gm)];
+  for (let i = 0; i < heads.length; i += 1) {
+    const start = heads[i].index + heads[i][0].length;
+    const body = text.slice(start, i + 1 < heads.length ? heads[i + 1].index : text.length);
+    const missing = ["Command", "Output", "Verdict"].filter(
+      (f) => !new RegExp(`^${f}:`, "m").test(body),
+    );
+    const entry = { date: heads[i][1], title: heads[i][2], missing };
+    if (missing.length === 0) complete.push(entry);
+    else incomplete.push(entry);
+  }
+  return { complete, incomplete };
+}
+
 const IS_ENTRY = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 const argv = process.argv.slice(2);
 
@@ -230,14 +287,17 @@ const evidencePath = resolve(REPO, "docs/agent/EVIDENCE.md");
 if (!existsSync(evidencePath)) {
   console.log("\n  ⚠ docs/agent/EVIDENCE.md is missing — the reviewer role has nowhere to record evidence.");
 } else {
-  const evidence = readFileSync(evidencePath, "utf8");
-  const entries = [...evidence.matchAll(/^## (\d{4}-\d{2}-\d{2}) — /gm)].map((m) => m[1]);
-  if (entries.length === 0) {
-    console.log("\n  ⚠ docs/agent/EVIDENCE.md holds NO entries — the reviewer's claim→command→output");
-    console.log("    log is empty, so no finding in this repository is independently re-checkable from it.");
+  const { complete, incomplete } = evidenceEntries(readFileSync(evidencePath, "utf8"));
+  if (complete.length === 0) {
+    console.log("\n  ⚠ docs/agent/EVIDENCE.md holds NO complete entries — the reviewer's");
+    console.log("    claim→command→output log is empty, so no finding here is independently re-checkable.");
   } else {
-    const newest = entries.slice().sort().at(-1);
-    console.log(`\n  docs/agent/EVIDENCE.md: ${entries.length} entr(ies), newest ${newest}`);
+    const newest = complete.map((e) => e.date).sort().at(-1);
+    console.log(`\n  docs/agent/EVIDENCE.md: ${complete.length} complete entr(ies), newest ${newest}`);
+  }
+  if (incomplete.length > 0) {
+    console.log(`  ⚠ ${incomplete.length} dated heading(s) NOT counted — missing ${"Command/Output/Verdict"}:`);
+    for (const e of incomplete) console.log(`      ${e.date} — ${e.title.slice(0, 58)} (missing: ${e.missing.join(", ")})`);
   }
 }
 

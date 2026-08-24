@@ -369,8 +369,7 @@
       "executor": "skill:signalgrid-scribe",
       "activated": null,
       "produced": null,
-      "priority": 1,
-      "nextAction": "FULLY UNBLOCKED: DR-005 ratified launch-profile v4 in full, superseding DR-004's six-item bound — the draft's groundings (graph, EnterpriseShell, /v1 routes, operator console) are ratified ground. Land docs/POSITIONING.md from the sweep draft, reconcile every public surface carrying a retired label (repo-wide search; README.md and the review dashboard are known instances, not the boundary), rewrite the four site sections presenting deferred signals in the present tense, then the launch-claims gate denylisting the four retired labels."
+      "nextAction": "CORRECTED 2026-08-24 — the previous entry was stale in one clause and unactionable in another. STALE: it said \"Land docs/POSITIONING.md from the sweep draft\", and docs/POSITIONING.md has existed since commit 5c8c61b (row 41). UNACTIONABLE: it ended \"then the launch-claims gate denylisting the four retired labels\", and those four labels are named NOWHERE in this repository — `pnpm run check:absence \"retired label\"` returns CORROBORATED across all four probes. A future shift could not execute that clause without guessing which four. WHAT IS ACTUALLY OPEN, and checkable: scripts/check-launch-claims.mjs exists with three self-tested rules (the exact overclaim markers, the Limited-GA label bound to the three launch signal kinds, and the same-BLOCK hedging rule that a published pitch deck had already defeated at file scope). Whoever picks this up should FIRST establish whether a retired-label problem still exists at all — name the labels, cite where they appear — and only then decide whether a fourth rule is warranted. Naming the set is the work; denylisting it is the easy half."
     },
     {
       "id": "icp-customer-research",
@@ -379,10 +378,9 @@
       "charter": "Who actually buys this, what they already run, and which of their failures SignalGrid removes. Evidence about real buyers, never invented personas.",
       "trigger": "A positioning, pricing or roadmap decision is about to be made on an assumption about buyers that nobody has checked.",
       "executor": "lane",
-      "activated": null,
-      "produced": null,
-      "priority": 1,
-      "nextAction": "Every buyer claim in the docs is currently inferred from the product rather than from anyone who buys. Establish what a shared-device frontline estate actually runs today (Imprivata, Epic, Intune/Jamf, badge readers) and where the handoffs break, from public evidence — vendor docs, published case studies, job postings naming the stack. Mark each finding with its source tier; a vendor's own marketing is the weakest."
+      "activated": "2026-08-24",
+      "produced": "docs/company/ICP_EVIDENCE.md — the first buyer evidence in this repository that is sourced rather than inferred, every finding carrying a SOURCE TIER because most of what a search returns on this topic is written by someone selling the fix. TIER 1: three granted US patents (11329990, 11838295, 12425415) disclose shared-device audit misattribution as prior art — the strongest evidence available and a warning that the space is claimed. TIER 2: one healthcare posting spanning Intune, M365 and Imprivata and asking for baselines standardised ACROSS Intune and Jamf Pro, which establishes the SHAPE and explicitly not the frequency. TIER 3: industry writing placing the failure at the shift boundary. It also names what it does NOT establish — the 75-1,000 employee segment in EXECUTIVE_ONE_PAGER.md is corroborated by nothing gathered, and every source is healthcare, so the claim that the pattern generalises to retail and field service is unevidenced. One claim in it was FALSE and is corrected inline rather than edited away: it said no competitive surface named OLOID or Imprivata, while four anchored briefs and a battlecard had sat in docs/research/ since 2026-07-14. See backlog row 57.",
+      "nextAction": "Two things, in order. FIRST, turn Finding 2 from a shape into a frequency: sample 15-20 job postings rather than one, and record the count that name two MDMs, the count that name an identity product beside them, and the count that name neither — a proportion, not an anecdote. SECOND, find a published case study or conference talk where an estate describes the handoff failing in their own words; Finding 3 currently rests on tier 3 and that is the weakest tier in the file. NOT part of this role: the competitive refresh, which belongs to competitive-analyst and is scoped in row 57."
     },
     {
       "id": "proof-led-content",

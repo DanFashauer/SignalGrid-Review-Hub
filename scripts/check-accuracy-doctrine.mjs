@@ -84,7 +84,7 @@ const SOURCE_OR_ADMISSION = /https?:\/\/|\bI do not have a verified source\b|\bn
 
 // A figure about the world outside this repository.
 const EXTERNAL_STAT =
-  /\b\d{1,3}(?:\.\d+)?%\s+of\s+(?:all\s+)?(?:organi[sz]ations|companies|hospitals|enterprises|teams|firms|businesses|IT departments|respondents|buyers)\b|\bthe average\s+(?:breach|incident|organi[sz]ation|company|hospital|deployment)\s+(?:costs?|spends?|loses?)\s+\$?\d|\b\$\d+(?:\.\d+)?\s*(?:B|M|billion|million)\s+(?:market|TAM|opportunity|industry)\b/i;
+  /\b\d{1,3}(?:\.\d+)?%\s+of\s+(?:all\s+)?(?:organi[sz]ations|companies|hospitals|enterprises|teams|firms|businesses|IT departments|respondents|buyers)\b|\bthe average\s+(?:breach|incident|organi[sz]ation|company|hospital|deployment)\s+(?:costs?|spends?|loses?)\s+\$?\d|(?<![\w$])\$\d+(?:\.\d+)?\s*(?:B|M|billion|million)\s+(?:market|TAM|opportunity|industry)\b/i;
 // A citation, or a hedge, discharges it.
 const STAT_DISCHARGE = /https?:\/\/|\bapproximately\b|\broughly\b|\bwe have not verified\b|\bunverified\b|\bverify (?:this )?(?:against|with) a primary source\b|\bno verified source\b/i;
 
@@ -121,13 +121,24 @@ function violationsIn(name, body) {
   const goodCite = "As shown in Smith et al. (2024) — https://example.org/paper — shared devices are the weak point.";
   const honestCite = "Smith et al. (2024) is cited in a sales deck; I do not have a verified source for it.";
   const badStat = "73% of hospitals run shared devices without per-action authorization.";
+  // ARM 3 WAS DEAD AND NO TEST NOTICED, because every fixture exercised arm 1 or 2.
+  // The pattern opened `\b\$`, and a word boundary cannot exist between a space
+  // and `$` — both are non-word characters. So the market-size arm could only fire
+  // on `x$12B market`, which nobody writes, and "a $12B market opportunity" — one
+  // of the three shapes this gate explicitly targets — sailed through from the day
+  // it was written. Found by disbelieving a CONTROL rather than the code: it was
+  // used as a positive fixture in an unrelated check and did not match.
+  const badMarket = "SignalGrid addresses a $12B market opportunity.";
+  const goodMarket = "SignalGrid addresses a $12B market opportunity — https://example.org/tam.";
   const goodStat = "Approximately 73% of hospitals run shared devices this way; verify against a primary source.";
   const ok =
     violationsIn("a", badCite).length > 0 &&
     violationsIn("b", goodCite).length === 0 &&
     violationsIn("c", honestCite).length === 0 &&
     violationsIn("d", badStat).length > 0 &&
-    violationsIn("e", goodStat).length === 0;
+    violationsIn("e", goodStat).length === 0 &&
+    violationsIn("f", badMarket).length > 0 &&
+    violationsIn("g", goodMarket).length === 0;
   if (!ok) {
     console.error("✗ SELF-TEST FAILED: a gated rule no longer flags its synthetic violation, or now flags its honest counterpart. A gate that cannot fail proves nothing; a gate that punishes honesty is worse than no gate.");
     process.exit(1);

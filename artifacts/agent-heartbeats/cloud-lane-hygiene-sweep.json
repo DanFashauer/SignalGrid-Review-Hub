@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-08-23T09:40:27Z",
-  "result": "freed 367M of scratchpad (500M -> 133M): the two everything-claude-code clones, now pure scratch since the vendoring merged in #263; 252 files older than 24h; stale preflight logs. pnpm store already lean (0 packages removed). Docker needed nothing - no daemon, no containers, /var/lib/docker at 116K from the 2026-08-21 reclaim. 23G free, far above the 1GB escalation line, so no owner message. Repo tree untouched (git status clean), so no preflight was warranted: the sweep changed nothing a gate reads."
+  "firedAt": "2026-08-24T09:40:20Z",
+  "result": "freed 226M: scratchpad 377M->151M (3816 files older than 24h); 23G free, far above the 1GB escalation line; no dockerd, 0 containers, /var/lib/docker only 116K so nothing to reclaim. HEARTBEAT HELD at fire time and written now: the push chain had a SHA pinned and refuses to run preflight on a dirty tree, so writing this file then would have blocked the push or moved HEAD past the pinned commit. pnpm store prune was also deferred at fire time because the mutation guard was resolving modules; run now that the guard has exited clean (1161 mutations, 0 survivors)."
 }

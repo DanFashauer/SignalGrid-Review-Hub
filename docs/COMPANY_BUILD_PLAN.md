@@ -1121,6 +1121,40 @@ earlier — that is the loop working, not a reason to soften the record.
     meaning something for them. Until then `lane` is correct and should not be
     quietly upgraded to make the roster look better staffed.
 
+57. **The third absence claim shipped, and the fix is not a gate — measured, not
+    assumed.** — competitive-analyst (the refresh) + docs-writer (the rule).
+    2026-08-24.
+    `docs/company/ICP_EVIDENCE.md` shipped the sentence *"no competitive surface
+    anywhere in this repository names them"* about OLOID and Imprivata. False.
+    `docs/research/COMPETITIVE_OLOID.md` (79 lines), `COMPETITIVE_IMPRIVATA.md`
+    (74), `COMPETITIVE_TELEPORT.md` (102) and `COMPETITIVE_BATTLECARD.md` (127)
+    were compiled 2026-07-14, two weeks earlier, every claim anchored to a URL —
+    plus `docs/competitive-battlecard.html` and a rendered `CompetitiveSection`
+    on the review dashboard. `pnpm run check:absence competitive` returns
+    REFUTED and exits 1. It was not run. `CLAUDE.md` already recorded two prior
+    instances of exactly this; its tally now reads three.
+    A GATE WAS CONSIDERED AND REJECTED ON EVIDENCE. The obvious response is to
+    fail any unhedged absence claim that does not cite a verification. Measured
+    first: five narrow patterns for the universal shape — "no X in this
+    repository", "nothing in this repository", "does not exist anywhere",
+    "exists nowhere", "no X exists anywhere" — match 54 lines across 21 files
+    today. Reading them, the overwhelming majority are not absence FINDINGS at
+    all but deliberate BOUNDARY statements, and load-bearing ones: *"nothing in
+    this repository is a production system"*, *"No customer data in the
+    repository"*, *"there are no live vendor calls in this repository"*. Those
+    are the publication boundary and the safety posture written down. A gate on
+    this shape would fire on correct safety prose 50-odd times to catch the
+    three that mattered, and this repository already states what happens to a
+    gate that cries wolf.
+    The distinguishing feature is not the sentence, it is whether the claim is a
+    FINDING that motivates work or a BOUNDARY that constrains it — and no
+    pattern separates those. Recorded here so the next person measures before
+    building rather than after.
+    WHAT ACTUALLY REMAINS: the competitive research is real but INTERNAL and
+    last compiled 2026-07-14, and it predates IGEL shipping Imprivata Web SSO
+    into the browser layer. That is a refresh of an existing surface, not the
+    creation of a missing one, and ICP_EVIDENCE.md now says so.
+
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —
     `lib/location` is KEPT. Nothing is outstanding on this row.

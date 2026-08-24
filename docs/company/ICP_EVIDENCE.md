@@ -76,9 +76,28 @@ non-Windows platform, moving badge auth into the browser layer.
 
 Neither is SignalGrid's shape — both are authentication products; we are a
 decision layer that answers allow / step_up / restrict / deny and authenticates
-nobody. **But no competitive surface anywhere in this repository names them**,
-and a buyer who has heard of OLOID will ask. That is a positioning gap, not a
-product one.
+nobody.
+
+> **CORRECTION, 2026-08-24.** This paragraph originally ended *"But no
+> competitive surface anywhere in this repository names them"*, and that was
+> false. A competitive surface existed two weeks before this file was written:
+> `docs/research/COMPETITIVE_OLOID.md` (79 lines), `COMPETITIVE_IMPRIVATA.md`
+> (74), `COMPETITIVE_TELEPORT.md` (102) and `COMPETITIVE_BATTLECARD.md` (127)
+> were all compiled 2026-07-14 with every claim anchored to a URL, plus
+> `docs/competitive-battlecard.html` and a rendered `CompetitiveSection.tsx` on
+> the review dashboard. IGEL is named in `ECOSYSTEM_POSITIONING.md` and
+> `INTEGRATION_CATALOG.md`.
+>
+> The claim was written without running `pnpm run check:absence`, which is in
+> this repository precisely for this and which returns **REFUTED** on the topic.
+> `CLAUDE.md` already recorded that two documents had claimed a surface was
+> absent while it sat in the tree. This was the third, and the tool that would
+> have caught it takes four seconds.
+
+The real gap is narrower and worth stating precisely: the competitive research
+is INTERNAL and last compiled 2026-07-14. What it does not yet cover is IGEL's
+Imprivata Web SSO move, which is recent. So the work is a refresh of an existing
+surface, not the creation of a missing one.
 
 ---
 
@@ -103,5 +122,8 @@ product one.
 2. Find a published case study or conference talk where an estate describes the
    handoff failing in their own words — tier 2 evidence for Finding 3, which
    currently rests on tier 3.
-3. Build the competitive surface naming OLOID, Imprivata and IGEL with what each
-   actually does, so the difference is stated by us before a buyer states it.
+3. REFRESH — not build — the competitive research. `docs/research/COMPETITIVE_*`
+   already covers OLOID, Imprivata and Teleport from anchored sources, last
+   compiled 2026-07-14. Re-verify those briefs against today and add IGEL's
+   Imprivata Web SSO move, which postdates them. Check what exists before
+   writing that it does not: `pnpm run check:absence <topic>`.

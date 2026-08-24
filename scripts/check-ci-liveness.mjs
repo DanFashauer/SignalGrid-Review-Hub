@@ -111,13 +111,139 @@ export function evaluateLiveness({ lastSuccessIso, nowMs, staleAfterHours }) {
   }
 }
 
+
 // ── resolve the sweep job's last success ─────────────────────────────────────
-async function api(path) {
+//
+// ONE FAILED REQUEST IS NOT AN UNREACHABLE API. This gate reddened
+// SignalGrid_Alpha on 2026-08-24 because a single request returned 504 Gateway
+// Timeout and the gate concluded the API could not be reached. It was reached
+// on the retry seconds later.
+//
+// The fail-closed behaviour was RIGHT and is unchanged: a liveness gate that
+// cannot see its subject must fail, never skip. What was wrong was the
+// measurement feeding it — "this request 504'd" answered a different question
+// from "the API is unreachable", which is the same shape as every other defect
+// this repository keeps finding. `lastSweepSuccess` makes up to eleven calls,
+// so even a low transient-error rate turns into a red default branch often
+// enough to teach people to ignore it. A gate that cries wolf gets switched
+// off, and this one is load-bearing.
+//
+// So: retry the transient statuses, and NEVER retry the permanent ones. 401 and
+// 403 mean the token is missing or lacks `actions: read`; 404 means the path or
+// workflow file is wrong. Those are real findings about configuration and must
+// surface on the first attempt rather than being buried under three retries.
+const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
+const API_ATTEMPTS = 4;
+const API_BACKOFF_MS = [500, 1500, 4000];
+
+export function isRetryableStatus(status) {
+  return RETRYABLE_STATUS.has(Number(status));
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Injectable for the self-test; the real one is global fetch. */
+export async function apiWith(fetchImpl, path, { attempts = API_ATTEMPTS, backoff = API_BACKOFF_MS, wait = sleep } = {}) {
   const headers = { Accept: "application/vnd.github+json", "User-Agent": "signalgrid-ci-liveness" };
   if (TOKEN) headers.Authorization = `Bearer ${TOKEN}`;
-  const res = await fetch(`https://api.github.com${path}`, { headers });
-  if (!res.ok) throw new Error(`GET ${path} -> ${res.status} ${res.statusText}`);
-  return res.json();
+  let last = null;
+  for (let i = 0; i < attempts; i += 1) {
+    if (i > 0) await wait(backoff[i - 1] ?? backoff[backoff.length - 1] ?? 0);
+    let res;
+    try {
+      res = await fetchImpl(`https://api.github.com${path}`, { headers });
+    } catch (err) {
+      // A network-level throw carries no status. Treat it as transient — the
+      // exhaustion message below still fails the build if it never recovers.
+      last = { retryable: true, message: `GET ${path} -> ${err.message}` };
+      continue;
+    }
+    if (res.ok) return res.json();
+    last = { retryable: isRetryableStatus(res.status), message: `GET ${path} -> ${res.status} ${res.statusText}` };
+    if (!last.retryable) break;
+  }
+  throw new Error(last.retryable ? `${last.message} (unchanged after ${attempts} attempts)` : last.message);
+}
+
+async function api(path) {
+  return apiWith(fetch, path);
+}
+
+// ── self-test: the retry that stopped a 504 from reddening the branch ────────
+// A gate nobody has watched fail proves nothing, and the same is true of a
+// retry nobody has watched retry. Both directions are asserted with a fake
+// fetch: a transient status must recover, and a permanent one must NOT be
+// retried, because burying a 403 under three retries hides a real finding about
+// the token's `actions: read` scope.
+{
+  const failures = [];
+  const ok = (body) => ({ ok: true, status: 200, json: async () => body });
+  const bad = (status) => ({ ok: false, status, statusText: `status ${status}` });
+  const noWait = async () => {};
+  const counting = (responses) => {
+    let n = 0;
+    const f = async () => {
+      const r = responses[Math.min(n, responses.length - 1)];
+      n += 1;
+      if (r instanceof Error) throw r;
+      return r;
+    };
+    return { f, calls: () => n };
+  };
+
+  const t = async (name, run) => {
+    try {
+      await run();
+    } catch (err) {
+      failures.push(`${name}: ${err.message}`);
+    }
+  };
+
+  await t("a 504 then success RECOVERS, and does not fail the build", async () => {
+    const c = counting([bad(504), ok({ recovered: true })]);
+    const got = await apiWith(c.f, "/x", { wait: noWait });
+    if (!got.recovered || c.calls() !== 2) throw new Error(`calls=${c.calls()} got=${JSON.stringify(got)}`);
+  });
+
+  await t("a persistent 504 still FAILS after exhausting attempts", async () => {
+    const c = counting([bad(504)]);
+    let threw = null;
+    try { await apiWith(c.f, "/x", { attempts: 3, backoff: [0, 0], wait: noWait }); } catch (e) { threw = e; }
+    if (!threw || !/unchanged after 3 attempts/.test(threw.message)) throw new Error(`threw=${threw && threw.message}`);
+    if (c.calls() !== 3) throw new Error(`expected 3 attempts, made ${c.calls()}`);
+  });
+
+  await t("a 403 is NOT retried — a permission finding must not hide under retries", async () => {
+    const c = counting([bad(403)]);
+    let threw = null;
+    try { await apiWith(c.f, "/x", { wait: noWait }); } catch (e) { threw = e; }
+    if (!threw || /unchanged after/.test(threw.message)) throw new Error(`threw=${threw && threw.message}`);
+    if (c.calls() !== 1) throw new Error(`expected 1 attempt, made ${c.calls()}`);
+  });
+
+  await t("a network throw is treated as transient and recovers", async () => {
+    const c = counting([new Error("ECONNRESET"), ok({ recovered: true })]);
+    const got = await apiWith(c.f, "/x", { wait: noWait });
+    if (!got.recovered || c.calls() !== 2) throw new Error(`calls=${c.calls()}`);
+  });
+
+  await t("the retryable set separates transient from permanent", async () => {
+    const wrong = [
+      [504, true], [502, true], [503, true], [429, true], [500, true],
+      [401, false], [403, false], [404, false], [422, false],
+    ].filter(([code, want]) => isRetryableStatus(code) !== want);
+    if (wrong.length) throw new Error(`misclassified: ${wrong.map(([c]) => c).join(", ")}`);
+  });
+
+  if (failures.length > 0) {
+    console.error(
+      "✗ SELF-TEST FAILED — the API retry no longer behaves as required:\n" +
+        failures.map((f) => `    · ${f}`).join("\n") +
+        "\n  Either a transient blip can redden the branch again, or a permanent\n" +
+        "  auth/permission error is being buried under retries.",
+    );
+    process.exit(1);
+  }
 }
 
 async function lastSweepSuccess() {

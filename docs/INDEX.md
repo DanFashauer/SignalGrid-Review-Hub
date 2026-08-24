@@ -128,6 +128,11 @@ Everything below is the full catalog, deepest first.
 
 ## Strategy and roadmap
 
+- [Why this exists](WHY_THIS_EXISTS.md): the question underneath the product one — why the company exists at
+  all. Built from two diagrams in the founder's own project folder: a nine-layer macOS trust evaluation whose
+  closing line is the product thesis, and a hospital information system architecture that shows who is standing
+  at layer nine when it fails. Records what is inferred, what is sourced, and leaves the founder's own words
+  deliberately blank rather than reconstructing them.
 - [Why SignalGrid](WHY_SIGNALGRID_VERTICALS.md): the layer that simplifies the complexity, and why the same fabric serves very different frontlines.
 - [Vision — the person-first grid](VISION_PERSON_FIRST_GRID.md) and [the trust fabric for the smart hospital](SMART_HOSPITAL_TRUST_FABRIC.md): the long-range framing.
 - [Market landscape & positioning](research/MARKET_LANDSCAPE.md), with the category comparisons: [Entra](research/COMPETITIVE_ENTRA.md), [Imprivata](research/COMPETITIVE_IMPRIVATA.md), [Oloid](research/COMPETITIVE_OLOID.md), [SGNL](research/COMPETITIVE_SGNL.md), [Teleport](research/COMPETITIVE_TELEPORT.md), and the [battlecard](research/COMPETITIVE_BATTLECARD.md).

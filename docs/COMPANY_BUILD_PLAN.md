@@ -72,7 +72,7 @@ Blocking items first. "Fail-closed" means: when the system cannot verify somethi
 
 28. **Positive-path OIDC in the gateway smoke** — devex-tooling-engineer + iam-domain, days. The CI deploy-stack job proves the negative auth path on the packaged image (demo bearer 401, unconfigured/empty-map gateway → not-ready) but the positive path only at the test:api layer: no signed, mapped enterprise token ever completes an allowed `/v1` request against the running container, so a broken JWKS fetch or claim-mapping in the packaged composition would ride under a green job. Stand up a deterministic local JWKS/IdP fixture in the compose smoke and require one valid token end-to-end. (Filed at PR #225's declared cutoff, round-8 finding; gate-estate lens.)
 
-29. **Assurance-pass advisories, batch one (2026-08-21)** — devex-tooling + design + mobile-native, hours each. The org's first self-review confirmed 20 findings (all remediated in PR #231) and filed 14 advisories; the unapplied ones, each needing its executed check when picked up: a bash-3.2 compatibility gate (shellcheck is version-blind, so 4.x-isms pass the lint that exists because of a 3.2 failure); a Darwin guard for scripts/mac/*; pinning the "42 shared conformance vectors" figure and the step-up chip's 4.58:1 margin; a reachability assertion for declared-gap closedWhen dir-conditions (the evaluator must be able to read at least one file the condition names); the ECOSYSTEM §2.1 worker copy aligned to descriptor language; and the real one to watch — the iOS host app renders a near-divergent reason-code vocabulary from the catalog's, which is the catalog's next consumer to reconcile. (Gate-estate + design lenses.)
+29. **Assurance-pass advisories, batch one (2026-08-21)** — devex-tooling-engineer + brand-design + mobile-native-engineer, hours each. The org's first self-review confirmed 20 findings (all remediated in PR #231) and filed 14 advisories; the unapplied ones, each needing its executed check when picked up: a bash-3.2 compatibility gate (shellcheck is version-blind, so 4.x-isms pass the lint that exists because of a 3.2 failure); a Darwin guard for scripts/mac/*; pinning the "42 shared conformance vectors" figure and the step-up chip's 4.58:1 margin; a reachability assertion for declared-gap closedWhen dir-conditions (the evaluator must be able to read at least one file the condition names); the ECOSYSTEM §2.1 worker copy aligned to descriptor language; and the real one to watch — the iOS host app renders a near-divergent reason-code vocabulary from the catalog's, which is the catalog's next consumer to reconcile. (Gate-estate + design lenses.)
 
 Dropped below the cut, tracked in lens records: the shared-evaluator-skeleton refactor (week+), the /metrics timing-safe compare, the cp/v1 requestId envelope fix, the shell-lint population widening, the Autopilot-era doc archival stamps, and the weekly deferred-family sampling cadence (starts after Tier 1 completes).
 30. **Graph launch-subset Bruno collection + transport abstraction check** — endpoint-uem-domain + api-contract-architect. LARGELY BUILT 2026-08-21: artifacts/lab-collections/microsoft-graph/ transcribes the connector's REAL three-request transport (not the report's wider proposal — the collection must not assert more than posture-connector.ts does) with permissions.json as the least-privilege consent record. REMAINING: the msgraph-metadata OpenAPI cross-diff (too large to vendor; belongs in a CI job) and live-tenant validation, a milestone that arrives with the tenant. Per the 2026-08-21 research report: curate a Bruno collection under `artifacts/lab-collections/microsoft-graph/` covering ONLY the ratified launch endpoint families (`managedDevices`, compliance policies, groups/transitive members), generated or hand-derived from `microsoftgraph/msgraph-metadata` rather than from memory; assert the existing graph connector's fixture shapes against it, and record the application-identity least-privilege permission list (`DeviceManagementManagedDevices.Read.All` class) as data. No live tenant required; live validation is a milestone that arrives with the tenant. No launch-scope change — graph is already the launch family.
@@ -246,7 +246,7 @@ earlier — that is the loop working, not a reason to soften the record.
     not done here, because a gate over 18 archival documents would be a large
     rewrite in service of a regex rather than of a reader.
 40b. **Module-scope temporal-dead-zone reads — gated for the COLUMN-0 shape,
-    open for the rest.** This defect shipped twice in one day, silently both
+    open for the rest.** — devex-tooling-engineer. This defect shipped twice in one day, silently both
     times: `context.ts` broke enterprise OIDC entirely (a hoisted function
     called at module load read a `const` declared 21 lines below), and
     `signalgrid-grid-proof.ts` never ran its enum guard (same mechanism, ~650
@@ -643,7 +643,7 @@ earlier — that is the loop working, not a reason to soften the record.
     readers anywhere, plus `summaryForOperator`, `projectedReasonCodes` and
     `clears` in `resolution.ts` — while the sibling `summaryForWorker` is
     rendered twice, which is what makes the operator one conspicuous.
-43. **Falsifiability is enforced only for the connector tier** — HALF DONE
+43. **Falsifiability is enforced only for the connector tier** — devex-tooling-engineer. HALF DONE
     2026-08-23: the worst unfailable arm is fixed, and fixing it found a live
     bug. Note the path first, because the row named a package that does not
     exist: there is no `lib/signalgrid-grid`; `proof:signalgrid-grid` runs
@@ -701,7 +701,7 @@ earlier — that is the loop working, not a reason to soften the record.
     unique assertions want folding into the gated `proof:mcp-server`, then the
     orphan deleted) and the k6 scripts in `tests/load/`, which the gate
     deliberately does not pattern-match and says so in its own header.
-44. **Two ungated contracts in the governance layer** — HALF DONE
+44. **Two ungated contracts in the governance layer** — devex-tooling-engineer (the gates) + principal-engineer (the records). HALF DONE
     2026-08-23: the decision-record format contract now has
     scripts/check-decision-record-format.mjs (preflight + CI). DR-010 through
     DR-013 — every record written in one fast day — were missing the reversal
@@ -759,12 +759,12 @@ earlier — that is the loop working, not a reason to soften the record.
     the operator's real secret now goes through the same constantTimeEquals
     the core already used for its PUBLIC demo keys. The weaker guard had been
     sitting on the stronger secret.
-48. **Native parity is textual, not behavioral** — mobile-native, days. The
+48. **Native parity is textual, not behavioral** — mobile-native-engineer, days. The
     port-parity gate compares extracted vocabulary and says so itself; iOS is
     carved out of the shared assist-wire conformance vectors; ios-ci does not
     trigger on simulator/workflow library changes; BackendService still calls
     five endpoints that exist nowhere.
-49. **Assessor-facing overstatement** — HALF DONE 2026-08-23: the
+49. **Assessor-facing overstatement** — compliance-analyst. HALF DONE 2026-08-23: the
     questionnaire pack told assessors that docs-sanity "fails the build if any
     document claims otherwise" for SOC 2 / ISO 27001 / HIPAA / FedRAMP. Of
     those four, only SOC 2 (in its "Type II certified" phrasing) and FedRAMP
@@ -777,7 +777,7 @@ earlier — that is the loop working, not a reason to soften the record.
     working: fix the copy, never the gate). The existing negation handling means the pack's own "None held,
     none claimed" row stays legal. REMAINING: SECURITY_CONTROLS_MATRIX's status
     column still has no drift gate (days).
-50. **Operability claims without live evidence** — ONE THIRD DONE 2026-08-23.
+50. **Operability claims without live evidence** — sre (the CI-bound half) + mac-lane-steward (live evidence is mintable only on the Mac). ONE THIRD DONE 2026-08-23.
     The CI-bound half is closed and gated; the other two remain open.
     **DONE — the nine unbounded jobs.** The row's figure was exactly right: 32
     real jobs, 9 without `timeout-minutes` (a first parse of mine said 43 and
@@ -819,7 +819,8 @@ earlier — that is the loop working, not a reason to soften the record.
     — a separate always-on registry for CI-scheduled lanes, checked the same way
     — is the same decision wearing a different hat.
 54. **Seven merges carried zero reviews — and the first diagnosis blamed the
-    wrong thing.** 2026-08-24.
+    wrong thing.** — qa-engineer (the review that was never run) +
+    program-manager (the loop that never called it). 2026-08-24.
     THE FINDING WAS REAL: #280-#286 all merged with ZERO reviews of any kind,
     measured one at a time through the API, including #283 which cleared a live
     CRITICAL on the shipping image. The session saw seven "You have reached your
@@ -988,8 +989,53 @@ earlier — that is the loop working, not a reason to soften the record.
     to WONTFIX, at which point the implementation genuinely has no future and
     deletion becomes correct. Recoverable from history at `4a170db` regardless.
 
+55. **The org chart had no edge to the agents that run it, and running a role
+    once emptied its queue.** — program-manager. 2026-08-24, from the owner's
+    question: are all roles assigned to skills, and does everything have a task
+    and a backlog. Both halves were no.
+    NO ROLE NAMED ITS EXECUTOR. `docs/ORG_CHART.md` opened with "Each is an
+    agent whose job is to be the deepest skill the company has in one thing" —
+    and across all SEVEN role documents (`org-roster.json`, `ORG_CHART.md`,
+    `agent/ORG.md`, and the four under `docs/company/`) there were ZERO
+    references to `.claude/agents/` or `.claude/skills/`. Forty one roles,
+    twelve agent definitions, no edge between them. Every role now carries an
+    `executor` — `agent:<name>`, `skill:<name>`, or `lane` — and
+    check-org-roster.mjs FAILS on a missing one, a malformed one, or one
+    naming a file that is not on disk. Falsified three ways against the live
+    tree, including renaming `.claude/agents/architect.md` out from under its
+    two callers: exit 1 each time, green again on restore. The honest number is
+    printed on every run and is not repeated here: a minority of roles have a
+    dedicated agent or skill and the rest are the main lane as a lens, which is
+    a true roster of a small company rather than a chart of ghosts.
+    ACTIVATION EMPTIED THE QUEUE. `nextAction` was required of COLD roles only,
+    so eleven of the sixteen activated roles carried none and "activated" had
+    quietly come to mean "finished, forever" — the same fossil as a title
+    nobody runs, one shift later. It is now required of every role, and the
+    eleven were written from what each role actually produced.
+    THE BACKLOG'S OWNERS DID NOT RESOLVE. Nine rows carrying work named no
+    role from the registry, three of them because the prose abbreviated
+    (`mobile-native`, `devex-tooling`, `design`) to something the registry has
+    no entry for. New gate scripts/check-backlog-ownership.mjs (preflight + CI,
+    self-test 11/11) refuses an open or partially-done row that names no role,
+    and reads the ids from the registry rather than listing them.
+    A MEASUREMENT CORRECTED MID-TASK, recorded because the first answer was
+    reported before it was checked: a first pass reported twelve unowned rows
+    and the corrected pass six. The first read only each row's HEADING line, so
+    an owner named on a continuation line was invisible. Same defect class as
+    everything else this week — an accurate measurement answering a different
+    question than the one asked.
+    A RULE TRIED AND CUT: the gate first also failed any status-shaped word
+    outside a closed vocabulary. Against the real document that produced
+    sixteen findings, most of them prose rather than status — row 40c's "fails
+    CLOSED" is this product's own fail-closed vocabulary. A rule that fights
+    the domain's own words gets switched off; it was cut before landing, and
+    the reasoning is in the gate's header so it is not retried blind.
+    Still open, and now owned: 40b, 43, 44, 48, 49, 50, 54 carry named roles
+    for the first time.
+
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
-    MEASURED 2026-08-23; the disposition itself is an owner call, stated below.
+    MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —
+    `lib/location` is KEPT. Nothing is outstanding on this row.
     Every clause of the row holds. `lib/location` has ZERO importers (only a
     tsconfig project reference), and carries 5 real `Date.now()` calls across 3
     files — `validate.ts:8` does age arithmetic on admission, which is a clock

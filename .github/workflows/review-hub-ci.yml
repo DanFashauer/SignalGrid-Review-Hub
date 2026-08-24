@@ -330,6 +330,10 @@ jobs:
         run: node scripts/check-org-roster.mjs
       - name: Org roster self-test (the gate can fail)
         run: node scripts/check-org-roster.mjs --self-test
+      - name: Backlog ownership (work left in a row names the role that owns it)
+        run: node scripts/check-backlog-ownership.mjs
+      - name: Backlog ownership self-test (the gate can fail)
+        run: node scripts/check-backlog-ownership.mjs --self-test
       - name: Cited commands (documents may not promise a command that is gone)
         run: node scripts/check-cited-commands.mjs
       - name: Cited-command self-test (the gate can fail)

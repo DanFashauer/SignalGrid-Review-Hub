@@ -210,6 +210,8 @@ const STEPS = [
   { name: "Lab registry (both halves agree; every deployment claim cites evidence on disk)", cmd: ["node", "scripts/check-lab-registry.mjs"] },
   { name: "Org roster (a role nobody has ever run is named on every run)", cmd: ["node", "scripts/check-org-roster.mjs"] },
   { name: "Org roster self-test (the gate can actually fail)", cmd: ["node", "scripts/check-org-roster.mjs", "--self-test"] },
+  { name: "Backlog ownership (a row with work left in it names the role that owns it)", cmd: ["node", "scripts/check-backlog-ownership.mjs"] },
+  { name: "Backlog ownership self-test (the gate can actually fail)", cmd: ["node", "scripts/check-backlog-ownership.mjs", "--self-test"] },
   { name: "Cited commands (a command a document promises must still exist)", cmd: ["node", "scripts/check-cited-commands.mjs"] },
   { name: "Cited-command self-test (the gate can actually fail)", cmd: ["node", "scripts/check-cited-commands.mjs", "--self-test"] },
   { name: "Review coverage (a green gate suite is not a reviewed codebase)", cmd: ["node", "scripts/check-review-coverage.mjs"] },

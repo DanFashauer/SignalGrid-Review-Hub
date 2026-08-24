@@ -95,7 +95,10 @@ unflattering measurements is a differentiator competitors will not copy.
   repository states plainly that HIPAA/SOC 2 are not guaranteed and a human review
   is required. Those two facts have never been reconciled in writing.
 - **`agent-ops-economics`** — nothing measures what the agent organisation costs to
-  run, and it now spans 40 roles across four divisions and two machines. Review
+  run, and it now spans every role in `docs/agent/org-roster.json` — the count is
+  printed by `node scripts/check-org-roster.mjs`, not pinned here, because this
+  line held a stale 40 against a registry of 41 — across four divisions and two
+  machines. Review
   coverage measures what was read, never what reading it cost.
 
 ## 4. What did NOT become a role, and why

@@ -270,6 +270,11 @@ Everything below is the full catalog, deepest first.
 - [Secret model](SECRET_MODEL.md): the five rules that exist before OpenBao holds anything — naming as audit trail, service identities not people or agents, what an agent may never hold, leases with rotation proven by rotating, snapshots under backup discipline. Plus the honest inventory (75 credential-shaped env names, nearly all fixture throwaways) and the migration order once DR-010 is ratified.
 - [Agent operating model](agent/ORG.md): the four session lanes (Core builds the fabric, Native maintains the platforms, Reviewer verifies and never fixes, Scribe keeps the docs true), the ownership map derived from commit history, the shared-surface serialization rule, and the reconciliation with this repo's thirteen accountability domains, merge authority, and breadth freeze. Installed 2026-08-22 with the matching skills under .claude/skills/.
 - [Glossary](GLOSSARY.md): the house idiom decoded in one page — 42 terms from "absence check" to "verify:breadth", defined by how they are used here, deleted when nobody uses them.
+- [Review cycle](agent/REVIEW_CYCLE.md): how a surface gets read, checked and checked again — three stages,
+  each a different agent, because an agent that reviews its own work is one author with two opinions. Includes the
+  escalation rule for a finding outside the reading role's surface (file it, name the owner, hand it back — never
+  fix it in place), and the honest terminal state: a surface is done for a pass when three independent passes stop
+  finding things, which is not the same as the surface being correct.
 - [Hiring-loop coverage](agent/LOOP_COVERAGE.md): the output of DR-016's loop — which agent may write which
   surface (computed, not remembered), what each run hired and why, and the assignments that stop at the owner
   because they need a bank account, a tenant, or an opinion about the real world rather than a skill.

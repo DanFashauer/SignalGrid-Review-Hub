@@ -76,6 +76,68 @@ const GATE_TOKENS = ["resolveEmission", "SIGNALGRID_LIVE_INTEGRATIONS", "resolve
 const FETCH_CALL = /(?<![\w$])(?:[\w$]*[Ff]etch[\w$]*|new\s+[\w$]*WebSocket[\w$]*)\s*\(/;
 
 /**
+ * Is an exported top-level function the FACTORY HALF of a gated resolver?
+ *
+ * WHY THIS EXISTS. Scope used to be class methods ONLY, and the stated reason was
+ * external callability: a method "is externally callable on a constructed adapter, so
+ * nothing stands between a caller and the network". An EXPORTED top-level function has
+ * that same property — `index.ts` re-exports it — but was dropped from the scan
+ * entirely, neither gated nor counted. Planting
+ * `export async function x(u){ return fetch(u) }` in itsm/zendesk.ts, an ENFORCED
+ * directory, left the gate GREEN (2026-08-24). The scope test measured a real property
+ * and answered a different question than the one its own comment asked.
+ *
+ * Admitting every exported function naively re-opens the false-positive flood the first
+ * draft of this gate died of: ~25 `makeDefault*Transport(...)` factories that ARE gated
+ * one level up, by the `resolve*Connector` that calls them. So the clearing rule is the
+ * same shape as the two already here — verified, not trusted:
+ *
+ *   an exported top-level function clears ONLY IF every call site of it, in its own file
+ *   or its family's index.ts, sits inside a function whose body carries a gate token.
+ *
+ * Fail-closed twice over. A function with NO call site is NOT cleared — nothing local
+ * gates it, so its only reachable caller is outside the family, which is exactly the
+ * planted hole. And one ungated site among gated ones does not clear.
+ */
+export function consumedByGatedFn(sources, name, gateTokens = GATE_TOKENS) {
+  const texts = Array.isArray(sources) ? sources : [sources];
+  let sites = 0;
+  for (const text of texts) {
+    const r = callSitesGated(text, name, gateTokens);
+    if (r === null) return false;
+    sites += r;
+  }
+  return sites > 0;
+}
+
+/** Call sites of `name` in ONE source: count if all are gated, null if any is not. */
+function callSitesGated(text, name, gateTokens) {
+  const lines = text.split("\n");
+  const decl = new RegExp(`^export\\s+(?:async\\s+)?function\\s+${name}\\b`);
+  const use = new RegExp(`(?<![\\w$.])${name}\\s*\\(`);
+  let sites = 0;
+  for (let i = 0; i < lines.length; i += 1) {
+    if (decl.test(lines[i])) continue;
+    if (/^\s*(\/\/|\*)/.test(lines[i])) continue;
+    if (/^\s*(export\s+)?import\b/.test(lines[i])) continue;
+    if (!use.test(lines[i])) continue;
+    sites += 1;
+    let start = -1;
+    for (let j = i; j >= 0 && j > i - 120; j -= 1) {
+      const topLevelFn = /^(export\s+)?(async\s+)?function\s+\w+/.test(lines[j]);
+      const methodDecl =
+        /^  (private\s+|public\s+|protected\s+)?(async\s+)?[A-Za-z_]\w*\s*\(/.test(lines[j]) &&
+        !/^\s*(if|for|while|switch|catch|return|await|else)\b/.test(lines[j]);
+      if (topLevelFn || methodDecl) { start = j; break; }
+    }
+    if (start === -1) return null;
+    const body = stripComments(lines.slice(start, i + 1).join("\n"));
+    if (!gateTokens.some((t) => body.includes(t))) return null;
+  }
+  return sites;
+}
+
+/**
  * The gate's own blind-spot detector.
  *
  * FETCH_CALL is a naming convention, and a convention that nobody enforces is a
@@ -120,6 +182,60 @@ const EXEMPT = new Map([
   // becomes a hole nobody re-examines.
 ]);
 
+/**
+ * Falsification harness. A guard nobody has watched FAIL proves nothing, and this gate
+ * shipped for months with no way to watch it fail — which is how the exported-function
+ * hole survived. Fixture 1 IS the planted defect, kept permanently.
+ *   node scripts/check-ungated-fetch.mjs --self-test
+ */
+function selfTest() {
+  const gatedResolver = [
+    'export function resolveX(env) {',
+    '  if (env.SIGNALGRID_LIVE_INTEGRATIONS !== "true") return null;',
+    '  return makeT(env.baseUrl);',
+    '}',
+    'export function makeT(u) { return () => fetch(u); }',
+  ].join("\n");
+  const ungatedCaller = [
+    'export function buildX(env) {',
+    '  return makeT(env.baseUrl);',
+    '}',
+    'export function makeT(u) { return () => fetch(u); }',
+  ].join("\n");
+  const orphan = 'export async function plantedUngated(u) {\n  return fetch(u);\n}';
+  const mixed = gatedResolver + "\n" + [
+    'export function alsoBuilds(env) {',
+    '  return makeT(env.baseUrl);',
+    '}',
+  ].join("\n");
+  const mentionOnly = [
+    'export function resolveX(env) {',
+    '  if (env.SIGNALGRID_LIVE_INTEGRATIONS !== "true") return null;',
+    '  // makeT(url) is what we would call here',
+    '  return null;',
+    '}',
+    'export function makeT(u) { return () => fetch(u); }',
+  ].join("\n");
+
+  const checks = [
+    ["an exported factory with NO call site is NOT cleared — the planted hole", consumedByGatedFn(orphan, "plantedUngated") === false],
+    ["an exported factory called by a GATED resolver is cleared", consumedByGatedFn(gatedResolver, "makeT") === true],
+    ["an exported factory called by an UNGATED function is NOT cleared", consumedByGatedFn(ungatedCaller, "makeT") === false],
+    ["one gated site + one ungated site is NOT cleared — fail-closed on the weakest", consumedByGatedFn(mixed, "makeT") === false],
+    ["a call site cleared in a SIBLING source counts (factory one file over from its resolver)", consumedByGatedFn([orphan.replace("plantedUngated", "makeT"), gatedResolver], "makeT") === true],
+    ["a name appearing only in a COMMENT is not a call site", consumedByGatedFn(mentionOnly, "makeT") === false],
+    ["a name appearing only in an IMPORT is not a call site", consumedByGatedFn('import { makeT } from "./t";\nexport function makeT(u) { return () => fetch(u); }', "makeT") === false],
+    ["FETCH_CALL still matches a wrapper callee", FETCH_CALL.test("fetchWithTimeout(")],
+    ["FETCH_CALL still matches the bare builtin", FETCH_CALL.test("fetch(")],
+  ];
+  const failed = checks.filter(([, ok]) => !ok);
+  for (const [n, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${n}`);
+  console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
+  return failed.length === 0 ? 0 : 1;
+}
+
+if (process.argv.includes("--self-test")) process.exit(selfTest());
+
 const files = execFileSync("git", ["ls-files", SCAN_ROOT], { cwd: repoRoot, encoding: "utf8" })
   .split("\n")
   .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"));
@@ -163,6 +279,7 @@ for (const file of files) {
     // switched-off gate is worse than none because the policy still reads as enforced.
     let start = -1;
     let isClassMethod = false;
+    let exportedFnName = null;
     for (let j = i; j >= 0 && j > i - 120; j -= 1) {
       const topLevelFn = /^(export\s+)?(async\s+)?function\s+\w+/.test(lines[j]);
       // Exclude control-flow keywords: `  if (…) {` otherwise reads as a method
@@ -170,13 +287,37 @@ for (const file of files) {
       const methodDecl =
         /^  (private\s+|public\s+|protected\s+)?(async\s+)?[A-Za-z_]\w*\s*\(/.test(lines[j]) &&
         !/^\s*(if|for|while|switch|catch|return|await|else)\b/.test(lines[j]);
-      if (topLevelFn) { start = j; isClassMethod = false; break; }
+      if (topLevelFn) {
+        start = j;
+        isClassMethod = false;
+        const m = lines[j].match(/^export\s+(?:async\s+)?function\s+([\w$]+)/);
+        exportedFnName = m === null ? null : m[1];
+        break;
+      }
       if (methodDecl) { start = j; isClassMethod = true; break; }
     }
-    if (start === -1 || !isClassMethod) continue;
+    // An EXPORTED top-level function is in scope for the same stated reason class
+    // methods are: it is reachable from outside the family, with nothing between the
+    // caller and the network. A NON-exported one stays out — it is internal plumbing,
+    // and flagging it is the false positive the first draft of this gate died of.
+    if (start === -1) continue;
+    if (!isClassMethod && exportedFnName === null) continue;
     const body = stripComments(lines.slice(start, i + 1).join("\n"));
     const gated = GATE_TOKENS.some((t) => body.includes(t));
     if (gated) continue;
+
+    // THE FACTORY PATTERN, verified rather than trusted — see consumedByGatedFn.
+    // Sources: this file plus the family's own index.ts, since the resolver that builds
+    // the live connector often lives one file over from the factory it calls
+    // (device-management-health/graph-transport.ts is the case in tree).
+    if (!isClassMethod) {
+      const sources = [text];
+      const sib = resolve(repoRoot, file, "..", "index.ts");
+      if (sib !== resolve(repoRoot, file)) {
+        try { sources.push(readFileSync(sib, "utf8")); } catch { /* no sibling index.ts */ }
+      }
+      if (consumedByGatedFn(sources, exportedFnName)) continue;
+    }
 
     // THE CHOKEPOINT PATTERN, verified rather than trusted. mde.ts and
     // fleetdm.ts gate every live path through one `isEnabled()` whose body
@@ -266,7 +407,7 @@ console.log(`  network helpers under utils/:     all named so the scan can see t
 // for full coverage — the same convention as the guard registries.
 if (unaudited.length > 0) {
   console.log(
-    `\n  ⚠ ${unaudited.length} other outbound class method(s) NOT covered by this gate.\n` +
+    `\n  ⚠ ${unaudited.length} other outbound function(s) NOT covered by this gate.\n` +
       "    The 2026-08-16 audit closed every prior member of this list; anything printed\n" +
       "    here is NEW since then and needs the same treatment. The clearing rules the\n" +
       "    gate now verifies: an in-method gate token; an isEnabled() chokepoint whose\n" +

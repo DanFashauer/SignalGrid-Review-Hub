@@ -358,6 +358,20 @@
       "date": "2026-08-24",
       "depth": "audited",
       "note": "Read end to end earlier this session for the corepack/CVE work. npm and the corepack cache are removed from the shipping image with a build-time assertion. Finding recorded as row 59: `corepack enable pnpm` runs in BOTH stages, so each build makes an un-retried network fetch of pnpm from registry.npmjs.org; one of them died mid-download on 2026-08-24 (undici assert(!this.paused)) and failed the job. The obvious fix — carry the builder's corepack cache forward — is exactly what lines 97-111 deliberately strip for CVE reasons, so it needs a retry, not a cache."
+    },
+    {
+      "path": "lib/integrations/src/integrations/itsm/resolve.ts",
+      "reviewedBy": "itsm-ops-domain",
+      "date": "2026-08-24",
+      "depth": "audited",
+      "note": "Read end to end. The live-call gate for the emitter family. Strongest property in the family: ItsmFixtureRecord types `delivered` as the literal `false` and `mode` as the literal \"fixture\", so a fixture record that claims delivery is UNREPRESENTABLE rather than merely absent — the syslog family's status:'sent' lie cannot recur here by construction. ItsmFixtureEmitter is deterministic: no clock, no randomness, seq derived from log length. No live transport ships in this repository, so the live path's failure mode is 'there is no code'."
+    },
+    {
+      "path": "lib/integrations/src/integrations/itsm/index.ts",
+      "reviewedBy": "itsm-ops-domain",
+      "date": "2026-08-24",
+      "depth": "audited",
+      "note": "Read end to end (10 lines). Re-exports ./resolve and ./adapter, and via adapter.ts re-exports all eight vendor adapter CLASSES as public surface. Checked the bypass this implies: no call site outside the itsm module constructs an adapter directly (only dist/ build output matches), and each vendor file carries its own resolveEmission() check on its emit path (3-6 sites each), so the factory tier gate is defence in depth rather than the only door. Pulling that thread found the check-ungated-fetch scope defect fixed in this commit (backlog row 65)."
     }
   ]
 }

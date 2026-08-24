@@ -1532,6 +1532,50 @@ earlier — that is the loop working, not a reason to soften the record.
     now recorded in the coverage ledger at the depth actually reached — a
     property scan across fifteen workflows is NOT a read and is not claimed.
 
+65. **The ungated-fetch gate could not see an exported function, and passed with
+    a planted ungated `fetch` in an ENFORCED directory.** — FIXED 2026-08-24,
+    found by reading the itsm surface after the owner said roles were not
+    reviewing their portions. `check-ungated-fetch.mjs` walked back from each
+    `fetch` site to the enclosing declaration and then dropped everything that
+    was not a CLASS METHOD (`if (start === -1 || !isClassMethod) continue`). Its
+    own comment gave the reason for that scope as external callability — a
+    method "is externally callable on a constructed adapter, so nothing stands
+    between a caller and the network". An EXPORTED top-level function has
+    exactly that property: `itsm/index.ts` re-exports it. It was neither gated
+    nor counted in the unaudited remainder — invisible, not deferred.
+    EVIDENCE. Appending
+    `export async function plantedUngated(u: string) { return fetch(u, { method: "POST" }); }`
+    to `lib/integrations/src/integrations/itsm/zendesk.ts` — itsm/ is one of the
+    four directories where a finding FAILS the build — left the gate GREEN,
+    exit 0. This is the session's recurring defect class once more: a
+    measurement that was accurate about a real property and answered a different
+    question than the one its own comment asked.
+    WHY THE OBVIOUS FIX IS WRONG. Admitting every exported function re-opens the
+    false-positive flood the gate's first draft died of: ~25
+    `makeDefault*Transport(...)` factories that ARE gated one level up by the
+    `resolve*Connector` calling them. Measured, not assumed — the naive widening
+    flagged 25 of them plus one hard failure. The gate's own comment records why
+    that matters: "A gate that cries wolf gets switched off, and a switched-off
+    gate is worse than none because the policy still reads as enforced."
+    THE FIX, verified rather than trusted, in the same shape as the two clearing
+    rules already present. An exported top-level function is in scope; it clears
+    only if it carries its own gate token, or if EVERY call site of it — in its
+    own file or its family's `index.ts` — sits inside a function whose body
+    carries one. Fail-closed twice: a function with NO call site does not clear
+    (nothing local gates it, so its only caller is outside the family — the
+    planted hole), and one ungated site among many gated ones does not clear.
+    Non-exported top-level functions stay OUT of scope; they are internal
+    plumbing, and flagging them is the original false positive.
+    RESULT. Clean tree: zero findings, zero unaudited — all 25 factories cleared
+    automatically, including `device-management-health/graph-transport.ts`, whose
+    resolver lives one file over and is reached via the family index.ts source.
+    Planted defect: exit 1. Non-exported equivalent: exit 0. Self-gated export:
+    exit 0.
+    LOCKED DOWN. The gate had NO self-test — which is how this survived. It now
+    has one (9/9), with the planted defect kept permanently as fixture 1, and
+    registered in both preflight and CI. Sabotaging the discriminator drops it
+    to 4/9, so the self-test is watched failing rather than assumed to work.
+
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —
     `lib/location` is KEPT. Nothing is outstanding on this row.

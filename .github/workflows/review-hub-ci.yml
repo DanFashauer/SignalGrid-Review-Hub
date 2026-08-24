@@ -236,6 +236,8 @@ jobs:
         run: node scripts/check-retention-claims.mjs
       - name: "Connector discipline (gated + proven, no device actuators)"
         run: node scripts/check-connector-discipline.mjs
+      - name: Ungated-fetch self-test (the gate must be able to fail)
+        run: node scripts/check-ungated-fetch.mjs --self-test
       - name: "Ungated fetch (the live boundary covers every outbound path)"
         run: node scripts/check-ungated-fetch.mjs
       # Sibling of the gate above: that one asks whether the call was allowed to happen,

@@ -80,14 +80,52 @@ cd scripts && npx tsx ./src/reliability-proof.ts    # proof:reliability (28 chec
 ## Measured performance baseline — and why it is REPORTED, not gated
 
 Owned by the `performance-engineer` role (`docs/ORG_CHART.md`). The figures the
-documentation quotes were re-measured on **2026-08-19** and both still hold:
+documentation quotes were re-measured on **2026-08-24** and all still hold:
 
-| Quoted claim | Where | Re-measured |
-| --- | --- | --- |
-| decision core **p95 1.3 ms** | intake ledger row 80, `rateLimit.ts` header | **p95 1.2671 ms** (mean 0.6786, p99 1.6222, 5,000 iterations after 200 warmup) |
-| **750 ms** pilot gate | `bench:decision-latency` | asserted and passing with three orders of magnitude of margin |
-| **240 requests/min** per key | pricing page, intake row 80 | confirmed as the shipped default in `artifacts/api-server/src/middlewares/rateLimit.ts` |
-| parallel scaling | `bench:decision-throughput` | 5,128 decisions/sec aggregate on 4 workers, **3.38× (85% of linear)**, identical verdicts on every worker |
+| Quoted claim | Where | Re-measured 2026-08-24 | Previous, 2026-08-19 |
+| --- | --- | --- | --- |
+| decision core **p95 1.3 ms** | intake ledger row 80, `rateLimit.ts` header | **p95 1.0458 ms** (mean 0.6228, p50 0.5719, p99 1.3859, max 7.7317; 5,000 iterations after 200 warmup) | p95 1.2671 ms |
+| **750 ms** pilot gate | `bench:decision-latency` | asserted and passing, ~717× margin on p95 | passing |
+| **240 requests/min** per key | pricing page, intake row 80 | confirmed as the shipped default in `artifacts/api-server/src/middlewares/rateLimit.ts`, and re-confirmed live by `test:load` (60 of 300 burst requests throttled; a malformed limit falls back to exactly 240, never to 0) | confirmed |
+| parallel scaling | `bench:decision-throughput` | 1,529 decisions/sec on one core; **5,370/sec aggregate on 4 workers, 3.51× (88% of linear)**, identical verdicts on every worker | 5,128/sec, 3.38× (85%) |
+
+**A DIFFERENT RUNNER, SO THIS IS A FRESH MEASUREMENT AND NOT A REGRESSION
+COMPARISON.** The 2026-08-19 column is kept for shape, not for subtraction:
+absolute rates here are hardware-specific and this box reports 4 cores. Reading
+"1.0458 vs 1.2671" as a 17% improvement would be exactly the kind of arithmetic
+across incomparable runs this section exists to prevent. What the re-measurement
+establishes is narrower and is the whole point: **every quoted figure is still
+true on the current head.**
+
+## The in-process number and the over-HTTP number are NOT the same number
+
+Quantified once, on ONE machine and ONE commit (2026-08-24), because these two
+figures are quoted in different places and are routinely read as interchangeable.
+They are not, and the distance between them is the transport.
+
+| | In-process core (`bench:decision-throughput`) | Over HTTP (`test:load`, concurrency 32) | Gap |
+| --- | --- | --- | --- |
+| throughput | 5,370 decisions/sec (4 workers) | **585 req/sec** | **9.2× lower** |
+| throughput, single core | 1,529 decisions/sec | — | 2.6× the whole HTTP figure |
+| p50 latency | 0.6065 ms (under saturation) | **36.7 ms** | **~60× higher** |
+| p95 latency | 1.3845 ms (under saturation) | **92.1 ms** | **~67× higher** |
+| p99 latency | 4.0391 ms (under saturation) | **609.6 ms** | ~151× higher |
+
+WHAT THE GAP IS MADE OF, and what it is not. The bench measures the decision
+core alone — no HTTP parse, no JSON, no middleware chain, no connector, no
+database. The load figure carries all of that plus the auth, context and
+rate-limit middlewares, and it runs the client on the same 4-core box as the
+server at concurrency 32, so its p99 includes QUEUING and client cost, not
+transport alone. The honest reading is directional: the transport and middleware
+dominate the decision itself by roughly two orders of magnitude on latency.
+
+**AND NEITHER IS THE CAPACITY NUMBER THAT MATTERS.** The shipped default rate
+limit is 240 requests/minute per key — four decisions a second. That is ~146×
+below the measured HTTP throughput and ~1,340× below the in-process aggregate.
+The LIMITER, not the engine and not the transport, defines per-tenant capacity
+today. Any performance claim that quotes 5,370/sec or 585/sec as what a customer
+gets is wrong by construction; what a customer gets is 4/sec unless
+`SIGNALGRID_V1_RATE_LIMIT` is raised deliberately.
 
 **These numbers are deliberately NOT gated on their absolute values, and that is
 a decision rather than an omission.** A latency threshold asserted on a shared

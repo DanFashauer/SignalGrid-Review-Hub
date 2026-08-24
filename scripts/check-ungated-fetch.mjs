@@ -65,6 +65,12 @@ const UTIL_ROOT = "lib/integrations/src/utils";
  *  token that follows it on the same line. */
 const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/[^\n]*/gm, "$1");
 
+// Directories where an ungated outbound call FAILS the build rather than being
+// reported. Named here, once, so the run can print the list instead of a comment
+// asserting it — the previous shape stated the membership in prose and drifted.
+const ENFORCED_DIRS = ["itsm", "siem", "telemetry", "passkey-assurance"];
+const ENFORCED_DIR_RE = new RegExp(`/(${ENFORCED_DIRS.join("|")})/`);
+
 const GATE_TOKENS = ["resolveEmission", "SIGNALGRID_LIVE_INTEGRATIONS", "resolveLive", "mode !== \"live\"", "mode === \"live\""];
 
 // Any callee whose identifier contains "fetch" — the builtin AND every wrapper around
@@ -225,6 +231,10 @@ function selfTest() {
     ["a call site cleared in a SIBLING source counts (factory one file over from its resolver)", consumedByGatedFn([orphan.replace("plantedUngated", "makeT"), gatedResolver], "makeT") === true],
     ["a name appearing only in a COMMENT is not a call site", consumedByGatedFn(mentionOnly, "makeT") === false],
     ["a name appearing only in an IMPORT is not a call site", consumedByGatedFn('import { makeT } from "./t";\nexport function makeT(u) { return () => fetch(u); }', "makeT") === false],
+    ["the enforced-dir regex is DERIVED from ENFORCED_DIRS, not a second copy of the list",
+      ENFORCED_DIRS.every((d) => ENFORCED_DIR_RE.test(`lib/integrations/src/integrations/${d}/x.ts`))],
+    ["a directory NOT in the list is not enforced", !ENFORCED_DIR_RE.test("lib/integrations/src/integrations/telemetry-ish/x.ts")],
+    ["the enforced list is non-empty — an empty list would silently make every finding advisory", ENFORCED_DIRS.length > 0],
     ["FETCH_CALL still matches a wrapper callee", FETCH_CALL.test("fetchWithTimeout(")],
     ["FETCH_CALL still matches the bare builtin", FETCH_CALL.test("fetch(")],
   ];
@@ -359,14 +369,28 @@ for (const file of files) {
     //     boundary hole with no caller above it to close it. All seventeen are now
     //     gated in-method, the same shape as the healthCheck fix.
     //
-    // STILL NOT ENFORCED, counted out loud, and now with the audit's reason: the
-    // telemetry/ and passkey-assurance methods are MODE-POLYMORPHIC — the same
-    // method serves fixture transports in proofs (proof:passkey-assurance drives
-    // fetchNormalizedSet with fixtures; the live lanes drive fleetdm/mde with the
-    // boundary open), so an in-method mode!=live throw would break the fixture
-    // path it legitimately serves. Their gate belongs where the live transport is
-    // selected; until each is verified site by site, they stay visible here.
-    const enforcedDir = /\/(itsm|siem|telemetry|passkey-assurance)\//.test(file);
+    // THE MODE-POLYMORPHIC FAMILIES ARE NOW ENFORCED TOO, and this comment used to
+    // say the opposite. It read "STILL NOT ENFORCED ... telemetry/ and
+    // passkey-assurance ... stay visible here" while sitting directly above a line
+    // that routed both into the FATAL list — and it contradicted its own preceding
+    // bullet, which already listed telemetry/ as enforced. Corrected 2026-08-24; no
+    // gate reads English, so a sentence describing the line beneath it is exactly
+    // the kind of claim that rots unnoticed.
+    //
+    // What resolved the original concern: telemetry/ and passkey-assurance methods
+    // ARE mode-polymorphic — the same method serves fixture transports in proofs
+    // (proof:passkey-assurance drives fetchNormalizedSet with fixtures; the live
+    // lanes drive fleetdm/mde with the boundary open), so an in-method `mode !==
+    // "live"` throw would break the fixture path it legitimately serves. That was
+    // answered by making the CLEARING rules smarter rather than by exempting the
+    // directories: the isEnabled() chokepoint check and the transport-injection
+    // check both clear a method whose gate lives one level up, verified rather than
+    // trusted. So the families are fatal AND their legitimate fixture paths pass.
+    //
+    // The unenforced remainder is consequently EMPTY on a clean tree. It is still
+    // printed when non-empty, because "nothing is deferred right now" and "nothing
+    // can ever be deferred" are different claims.
+    const enforcedDir = ENFORCED_DIR_RE.test(file);
     if (enforcedDir || /\bhealthCheck\s*\(/.test(lines[start])) {
       findings.push({ file, line: i + 1, fn: lines[start].trim().slice(0, 72) });
     } else {
@@ -402,6 +426,7 @@ if (unseenWrappers.length > 0) {
   process.exit(1);
 }
 console.log(`  network helpers under utils/:     all named so the scan can see them`);
+console.log(`  enforced dirs (a finding FAILS):  ${ENFORCED_DIRS.join(", ")}, plus healthCheck() everywhere`);
 
 // The unenforced remainder, printed every run so partial coverage is never mistaken
 // for full coverage — the same convention as the guard registries.
@@ -414,8 +439,7 @@ if (unaudited.length > 0) {
       "    OWN implementation carries a token (a config.enabled lookalike fails); or a\n" +
       "    constructor-injected transport whose family index.ts resolver carries the\n" +
       "    token (strip the resolver's gate and every method in the family goes red).\n" +
-      "    Enforced dirs (a finding FAILS the build): itsm/, siem/, telemetry/,\n" +
-      "    passkey-assurance/, plus healthCheck() everywhere.",
+      `    Enforced dirs (a finding FAILS the build): ${ENFORCED_DIRS.join("/, ")}/, plus healthCheck() everywhere.`,
   );
   for (const u of unaudited) console.log(`      ${u}`);
 }

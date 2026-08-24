@@ -1613,6 +1613,41 @@ earlier — that is the loop working, not a reason to soften the record.
     appears for a secret under 32 chars, and such a secret now throws before
     derivation is reached, so it could never fail in either direction.
 
+67. **A gate comment said two families were "STILL NOT ENFORCED" directly above
+    the line that made them fatal — and contradicted itself in the same block.**
+    — FIXED 2026-08-24, found while re-reading `check-ungated-fetch.mjs` during
+    the row 65 work. The block listed, as ENFORCED, "EVERY outbound method under
+    itsm/, siem/ and telemetry/", then said seven lines later: "STILL NOT
+    ENFORCED ... the telemetry/ and passkey-assurance methods ... they stay
+    visible here" — i.e. reported, not fatal. The next line read
+    `const enforcedDir = /\/(itsm|siem|telemetry|passkey-assurance)\//.test(file)`,
+    routing BOTH into the fatal list. So the comment contradicted the code
+    beneath it AND its own preceding bullet, and the "not enforced" remainder it
+    described has been EMPTY on a clean tree.
+    WHY IT MATTERS. Nothing reads English. Anyone auditing the live-call boundary
+    from this comment would conclude two connector families were an open,
+    deferred gap and go looking for work that was already done — or, worse,
+    trust that a deferral existed where the build actually fails. This is the
+    prose-claim defect class the reviewer checklist names: "No gate reads
+    English. Is the sentence true today?"
+    WHAT ACTUALLY RESOLVED THE ORIGINAL CONCERN, now recorded where the stale
+    claim was: telemetry/ and passkey-assurance methods genuinely ARE
+    mode-polymorphic — the same method serves fixture transports in proofs — so
+    an in-method `mode !== "live"` throw would break a fixture path it
+    legitimately serves. That was answered by making the CLEARING rules smarter
+    (the isEnabled() chokepoint check and the transport-injection check, both
+    verifying that the gate one level up is real) rather than by exempting the
+    directories. Fatal enforcement and working fixture paths, both.
+    LOCKED DOWN, so the list cannot drift into prose again. `ENFORCED_DIRS` is
+    now a named array; the regex is BUILT from it, the run PRINTS it
+    ("enforced dirs (a finding FAILS): itsm, siem, telemetry, passkey-assurance"),
+    and the unaudited banner interpolates it instead of restating it. Three
+    self-test checks pin the derivation, including that an empty list would be
+    caught — an empty ENFORCED_DIRS would silently turn every finding advisory.
+    VERIFIED, not asserted: planting an exported ungated fetch in `itsm/` exits 1,
+    and planting one in `telemetry/` also exits 1. The corrected sentence is
+    demonstrated by the gate's own behaviour.
+
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —
     `lib/location` is KEPT. Nothing is outstanding on this row.

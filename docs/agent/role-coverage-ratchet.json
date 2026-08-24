@@ -19,7 +19,7 @@
     "desktop-engineer": 0,
     "firmware-hardware-engineer": 0,
     "iam-domain": 5,
-    "endpoint-uem-domain": 0,
+    "endpoint-uem-domain": 1,
     "secops-domain": 0,
     "network-domain": 3,
     "physical-ot-domain": 0,

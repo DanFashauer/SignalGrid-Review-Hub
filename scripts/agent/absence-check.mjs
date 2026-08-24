@@ -100,7 +100,28 @@ export function probeSpecs(topic) {
       strength: "weak",
       how: "the WORD appears in tracked source",
       // `-e` makes the next argv element a pattern, so a leading '-' is data, not a flag.
-      run: () => gitLines(["grep", "-lIi", "-e", String(topic), "--", ":!*lock*", ":!*dist*", ":!*.map", ":!docs/*"]),
+      //
+      // docs/ IS SEARCHED. It was excluded until 2026-08-24, and that exclusion
+      // inverted this file's own design. The strength model above says a content
+      // hit is WEAK and must yield INCONCLUSIVE — printed with its matches, for
+      // the caller to read — precisely because this repository is full of
+      // sentences naming things to disclaim them. Blinding the weak probe to the
+      // docs tree did not make those disclaimers stop mattering; it turned "weak
+      // hit -> inconclusive" into "no hit -> CORROBORATED", the strongest
+      // safe-to-claim verdict this tool can return.
+      //
+      // That is a fail-open in the tool whose entire job is preventing a
+      // fail-open, and the failure it was built for was DOCUMENTS asserting
+      // absence — "a document asserted Android does not exist in any form".
+      // It could not read documents.
+      //
+      // Caught live on 2026-08-24: `check:absence "retired label"` returned
+      // CORROBORATED across all four probes, and a roster entry was rewritten to
+      // say those labels are "named NOWHERE in this repository". The same grep
+      // without the exclusion returns four files, three of them under docs/,
+      // which discuss retired labels by name. Excluding a source of weak
+      // evidence does not weaken the verdict — it strengthens it, wrongly.
+      run: () => gitLines(["grep", "-lIi", "-e", String(topic), "--", ":!*lock*", ":!*dist*", ":!*.map"]),
     },
   ];
 }
@@ -154,6 +175,23 @@ function selfTest() {
   }
   // …and a topic with no artifact must NOT come back refuted, or the tool is a rubber
   // stamp that says "false" to everything.
+  // THE BLIND SPOT THAT SHIPPED A FALSE CLAIM. A topic living only in prose must
+  // reach INCONCLUSIVE, never CORROBORATED. Before 2026-08-24 the content probe
+  // excluded docs/, so this returned "safe to claim" on a topic named in four
+  // tracked files. Asserted structurally AND live, because the structural half
+  // alone would pass again the moment someone re-adds an exclusion elsewhere.
+  const contentSpec = probeSpecs("x").find((sp) => sp.id === "content");
+  const contentArgs = contentSpec.run.toString();
+  checks.push([
+    "the content probe does NOT exclude the docs tree — its blindness read as corroboration",
+    !contentArgs.includes("docs/"),
+  ]);
+  const prose = probeSpecs("retired label").map((sp) => ({ ...sp, hits: sp.run() }));
+  checks.push([
+    'LIVE: a docs-only topic is INCONCLUSIVE, not corroborated',
+    classify(prose) === "inconclusive" && prose.find((r) => r.id === "content").hits.length > 0,
+  ]);
+
   const fed = probeSpecs("fedramp").map((s) => ({ ...s, hits: s.run() }));
   checks.push(['LIVE: "fedramp" is NOT refuted — mentions exist, artifacts do not', classify(fed) !== "refuted"]);
 

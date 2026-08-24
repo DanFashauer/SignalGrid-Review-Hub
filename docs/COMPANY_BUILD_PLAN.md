@@ -1061,6 +1061,25 @@ earlier — that is the loop working, not a reason to soften the record.
     the gate's second and third defects were both found by pointing it at the
     row describing itself, which is the cheapest falsification available and was
     not part of the original plan.
+    A FOURTH FAILURE, found by an independent review before merge, and worse in
+    KIND than the first three. Those three misclassified a row's status. This one
+    made a row INVISIBLE: `parseRows` keyed on `/^(\d+[a-z]*)\./`, which cannot
+    match this document's own hyphenated sub-numbering — and `40c-2` exists
+    right here. A heading that does not match is not skipped, it is APPENDED to
+    the row above, so the whole of 40c-2 lived inside row 40c's 10,097-character
+    body. A generous scan found 67 headings; the gate saw 66. An invisible row is
+    never counted, never bucketed, and can never trigger the FATAL owner check
+    whatever it says. Benign today only because both rows happen to be closed.
+    Fixed two ways, because widening the pattern alone postpones it: the id
+    grammar now accepts hyphenated ordinals, AND anything SHAPED like a row start
+    that still fails to parse is now a FATAL problem rather than silent
+    continuation text — the next grammar drift breaks the build instead of
+    quietly shrinking the subject. A live self-test asserts parseRows sees every
+    heading in the real document (67 of 67), so the count cannot shrink again
+    unnoticed. Self-test 21/21 to 25/25.
+    WHY NO SELF-TEST CAUGHT IT: every fixture used a bare `1.` id, so nothing
+    exercised id parsing at all. Twenty-one green self-tests were twenty-one
+    tests of everything except the thing that broke.
     IT HAPPENED A THIRD TIME while this paragraph was being written. The
     sentence describing the fix used the word `DECIDED` bare, outside quotes,
     and closed the row again — the gate was right and the prose was wrong. Every
@@ -1234,6 +1253,43 @@ earlier — that is the loop working, not a reason to soften the record.
     Until then: an image build that depends on an unretried network fetch will
     flake again, and the failure will look like a build break rather than a
     network blip. That is the part worth having written down.
+
+60. **The tool this repo mandates before writing "X does not exist" could not
+    read documents — and the failure it was built to prevent was documents.** —
+    devex-tooling-engineer. FIXED 2026-08-24, found by the pre-merge review.
+    `scripts/agent/absence-check.mjs` ran its content probe as
+    `git grep -lIi -e <topic> -- ':!*lock*' ':!*dist*' ':!*.map' ':!docs/*'`.
+    That last pathspec excluded the entire docs tree.
+    WHY THAT IS A FAIL-OPEN AND NOT A SCOPING CHOICE. The file's own header sets
+    out the strength model in detail: a FILE hit is strong and REFUTES an absence
+    claim; a WORD hit is weak and yields INCONCLUSIVE, "printed with their
+    matches, and the caller reads them", precisely because "this repository is
+    full of sentences naming things to disclaim them". Blinding the weak probe to
+    docs did not make those sentences stop mattering. It converted "weak hit ->
+    inconclusive" into "no hit -> CORROBORATED" — the strongest safe-to-claim
+    verdict the tool can return. Excluding a source of weak evidence did not
+    weaken the verdict; it strengthened it, wrongly. And the failure the file
+    documents as its reason for existing is a DOCUMENT asserting "Android does
+    not exist in any form".
+    CAUGHT BY ITS OWN VICTIM. Row 55's queue work ran
+    `check:absence "retired label"`, got CORROBORATED across all four probes, and
+    rewrote positioning-messaging's nextAction to say the retired labels are
+    "named NOWHERE in this repository" — retiring a real, live, buyer-facing
+    problem. The same grep without the exclusion returns four files, three under
+    docs/, that discuss retired labels by name. The labels themselves are live in
+    `README.md:3` and `:136` ("Operational Trust Orchestration platform") and in
+    `ReviewDashboard.tsx:350` and `About.tsx:50` ("Zero Trust orchestration
+    platform"), against DR-004's ratified "Shared-Device Trust Gateway".
+    FIXED: the exclusion is gone, with the reasoning written into the probe so it
+    is not re-added, and two self-tests that would have caught it — a structural
+    one asserting the content probe does not exclude docs, and a LIVE one
+    asserting a prose-only topic classifies INCONCLUSIVE rather than corroborated.
+    Self-test 12/12 to 14/14. The same query now returns INCONCLUSIVE.
+    THE GENERAL LESSON, which is the reason this row is long: a checker that
+    cannot see part of its subject does not report uncertainty about that part —
+    it reports confidence about the rest. Every gate in this repository that
+    carries an exclusion list is a candidate for the same shape, and nothing
+    currently enumerates them.
 
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —

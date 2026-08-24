@@ -121,6 +121,31 @@ export function marks(text, marker) {
   return false;
 }
 
+// ROW IDS. This document numbers sub-rows by suffixing a letter AND sometimes a
+// hyphenated ordinal: 40b, 40c, and `40c-2`. The first version of this regex was
+// /^(\d+[a-z]*)\./, which cannot match `40c-2.` — and a heading that does not
+// match is not skipped, it is APPENDED to the row above as continuation text.
+//
+// That is the fourth fail-open found in this file, and the worst of the four.
+// The first three misclassified a row's STATUS; this one made a row INVISIBLE.
+// Row 40c-2 exists in docs/COMPANY_BUILD_PLAN.md today: a generous scan finds 67
+// headings in the backlog section and parseRows returned 66, with the whole of
+// 40c-2 — its heading text included — living inside row 40c's 10,097-character
+// body. An invisible row is never counted, never bucketed, and can never trigger
+// the FATAL "names no role" check no matter what it says. Silent, not loud.
+//
+// Two changes, because widening the pattern alone would only postpone this:
+//   1. ROW_HEAD accepts the real id grammar, digits then letters and hyphenated
+//      ordinals.
+//   2. ROW_HEAD_LOOSE catches anything SHAPED like a row start that ROW_HEAD
+//      still rejects, and the caller FAILS on it. The next id-grammar drift
+//      breaks the build instead of quietly shrinking the subject.
+//
+// No self-test caught this because every fixture used a bare `1.` id, so nothing
+// exercised id parsing at all. Fixtures below now include a hyphenated id.
+const ROW_HEAD = /^(\d+[a-z]*(?:-\d+)?)\.\s+\*\*/;
+const ROW_HEAD_LOOSE = /^\d[\w-]*\.\s+\*\*/;
+
 /** Split the global-backlog section into rows: a numbered heading plus its continuation lines. */
 export function parseRows(planText) {
   const start = planText.indexOf("## Global backlog");
@@ -129,15 +154,23 @@ export function parseRows(planText) {
   const end = rest.search(/\n## (?!Global)/);
   const lines = (end < 0 ? rest : rest.slice(0, end)).split("\n");
   const rows = [];
+  const unparsed = [];
   let cur = null;
   for (const line of lines) {
-    const head = /^(\d+[a-z]*)\.\s+\*\*/.exec(line);
+    const head = ROW_HEAD.exec(line);
     if (head) {
       if (cur) rows.push(cur);
       cur = { id: head[1], text: line };
-    } else if (cur) cur.text += "\n" + line;
+      continue;
+    }
+    // A line that LOOKS like a row start but does not parse is the dangerous
+    // case — see ROW_HEAD. Record it so a caller can fail loudly instead of
+    // silently swallowing it into the row above.
+    if (ROW_HEAD_LOOSE.test(line)) unparsed.push(line.slice(0, 60));
+    if (cur) cur.text += "\n" + line;
   }
   if (cur) rows.push(cur);
+  rows.unparsed = unparsed;
   return rows;
 }
 
@@ -149,6 +182,9 @@ export function auditBacklogOwnership(planText, roleIds) {
   const rows = parseRows(planText);
   const open = [], partial = [], closed = [];
 
+  for (const line of rows.unparsed ?? []) {
+    problems.push(`${PLAN}: a line begins like a backlog row but does not parse as one — \`${line}\` — so it would be swallowed into the row above and never gated`);
+  }
   if (rows.length === 0) {
     // Without this the gate passes by finding nothing to check — the vacuous
     // PASS this repo has already shipped once, in a proof harness.
@@ -240,6 +276,26 @@ function selfTest() {
 
   a = auditBacklogOwnership(plan("1. **A thing** — DONE. It replaced the \"HALF DONE\" wording."), IDS);
   checks.push(["an UNQUOTED marker still closes, with a quoted one beside it", a.closed.length === 1 && a.problems.length === 0]);
+
+  // The fourth fail-open: a hyphenated sub-row id. This document already uses
+  // `40c-2`, and the original regex made the whole row invisible.
+  a = auditBacklogOwnership(plan("40c. **First.** DONE.", "40c-2. **Second, open and unowned.** nobody has this."), IDS);
+  checks.push(["a hyphenated sub-row id opens its OWN row, not continuation text", a.open.length === 1 && a.closed.length === 1]);
+  checks.push(["and that sub-row is then owner-checked like any other", a.problems.some((p) => p.includes("nobody owns"))]);
+
+  a = auditBacklogOwnership(plan("40c. **First.** DONE.", "40c_2. **Shape drift.** nobody."), IDS);
+  checks.push(["a row-SHAPED line that still does not parse FAILS loudly rather than being swallowed", a.problems.some((p) => p.includes("does not parse as one"))]);
+
+  // Falsification of the fix against the real document: parseRows must now see
+  // every heading a generous scan finds, or the subject is still shrinking.
+  const planText = readFileSync(join(repo, PLAN), "utf8");
+  const start = planText.indexOf("## Global backlog");
+  const rest = planText.slice(start);
+  const end = rest.search(/\n## (?!Global)/);
+  const section = end < 0 ? rest : rest.slice(0, end);
+  const generous = section.split("\n").filter((l) => /^\d[\w-]*\.\s+\*\*/.test(l)).length;
+  const parsed = parseRows(planText).length;
+  checks.push([`LIVE: parseRows sees every heading in the real document (${parsed} of ${generous})`, parsed === generous && generous > 0]);
 
   a = auditBacklogOwnership(plan("1. **A thing** — mobile-native, days."), IDS);
   checks.push(["an ABBREVIATED role name does not count as an owner — it resolves to no registry entry", a.problems.some((p) => p.includes("nobody owns"))]);

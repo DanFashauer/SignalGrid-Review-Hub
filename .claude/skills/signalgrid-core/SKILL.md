@@ -10,12 +10,47 @@ You build the decision fabric. Inherits the base `signalgrid` skill; read it fir
 ## You own
 
 ```
-lib/**                        decision core, connectors, flows, audit, auth
-artifacts/api-server/**       /v1 decision API + control plane
-artifacts/signalgrid-app/**   the operator console
-scripts/src/*-proof.ts        proof harnesses
-scripts/check-*.mjs           gates
+lib/**                          decision core, connectors, flows, audit, auth
+artifacts/api-server/**         /v1 decision API + control plane
+artifacts/signalgrid-app/**     the operator console
+artifacts/signalgrid-review/**  the public review dashboard
+artifacts/signalgrid-web/**     the marketing site
+scripts/src/*-proof.ts          proof harnesses
+scripts/check-*.mjs             gates
 ```
+
+**The two web trees were added 2026-08-24, and the reasoning is worth keeping
+because two other skills were considered first and both were wrong.**
+
+Nothing claimed them. `web-engineer`, whose charter LEADS with the marketing
+site, and `accessibility-specialist`, whose charter is "the site and the served
+consoles", had both been pointed at skills that exclude their own subject —
+found when the executor field was added and each pointer was checked against the
+scope it claimed.
+
+`signalgrid-scribe` was the obvious candidate and is disqualified by its own
+words: *"You touch no source."* It owns `docs/**` and `README.md`. These trees
+are React source, and widening scribe past its stated boundary would be the same
+over-generalisation this repo keeps finding.
+
+A NEW web skill was considered and rejected. It would have been a label with
+nothing behind it: `CLAUDE.md`'s four accessibility rules are entirely iOS —
+`UIFont`, `UIFontMetrics`, `accessibility-extra-large`, the `SG` tokens — and
+there is no written web a11y or brand doctrine anywhere in the tree to put in
+one. A skill that exists to hold doctrine that does not exist is a role nobody
+runs, one level up, which is the exact defect the roster gate was built for.
+
+So they land here, where they actually fit: all three are Vite/React apps on one
+toolchain, and this skill already owns a served console of the same magnitude
+(98 files against 97 and 86).
+
+WHAT THIS DOES NOT SOLVE, stated rather than smoothed. Claim-truth on these
+trees is already mechanical — `check-launch-claims` and `check-retention-claims`
+read them and need no skill to fire. CRAFT is not: `check-decision-palette` is
+the only gate covering contrast and palette parity, and no prose anywhere tells
+a web author what good looks like. `accessibility-specialist` and `brand-design`
+therefore stay on `lane` deliberately. The fix for them is to WRITE the doctrine
+when someone does that work, not to pre-create a skill to hold the absence.
 
 ## You never touch
 

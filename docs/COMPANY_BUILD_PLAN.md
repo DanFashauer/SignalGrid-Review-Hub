@@ -1142,11 +1142,38 @@ earlier — that is the loop working, not a reason to soften the record.
     signalgrid-native — a skill scoped to iOS, Android, desktop and firmware.
     Each executor excluded the role's own subject. Both now read `lane`, which
     is honest rather than flattering and is why the roster prints that count.
-    The decision, which is not this lane's to make silently: widen
-    signalgrid-core to claim both web trees, or add a web skill and give it
-    them. Either way the two roles get re-pointed and the executor gate starts
-    meaning something for them. Until then `lane` is correct and should not be
-    quietly upgraded to make the roster look better staffed.
+    DECIDED 2026-08-24 — the owner delegated the call ("go with your
+    recommendation"). signalgrid-core now declares BOTH trees, `web-engineer`
+    re-points to it, and NO new skill was created. The two rejected alternatives
+    matter more than the chosen one, because each was rejected on evidence
+    rather than taste.
+    signalgrid-scribe was the obvious candidate and is disqualified BY ITS OWN
+    WORDS: "You touch no source." It owns `docs/**` and `README.md`; these trees
+    are React source. Widening it would have been the same over-generalisation
+    that put two load-bearing guards behind a defense-in-depth comment in row 62
+    — a scope stretched one step past what it says about itself.
+    A NEW WEB SKILL was rejected because it would have been a label with nothing
+    behind it. `CLAUDE.md` carries four accessibility rules and ALL FOUR are iOS
+    — `UIFont`, `UIFontMetrics`, `accessibility-extra-large`, the `SG` tokens —
+    and there is no web a11y or brand doctrine anywhere in the tree. A skill
+    created to hold doctrine that does not exist is a role nobody runs, one
+    level up, which is the defect the roster gate was built to catch.
+    WHY CORE IS APT AND NOT A CONSOLATION: it is the only skill that both
+    touches source and already owns a served web surface. All three trees are
+    Vite/React on one toolchain, and the two being added are the same magnitude
+    as the one it already has — 86 and 97 files against 98.
+    MEASURED FIRST, as this cluster's whole lesson demands. Three gates already
+    read those trees: `check-launch-claims` and `check-retention-claims` are
+    CLAIM-TRUTH and fire without any skill, and `check-decision-palette` is the
+    lone CRAFT gate. That split is what decided it — the truth half is already
+    mechanical, so what a skill adds is source ownership, which is core's.
+    WHAT THIS DELIBERATELY DOES NOT SOLVE. `accessibility-specialist` and
+    `brand-design` STAY on `lane`, by decision rather than omission, and both
+    now say so in their nextAction. Craft has one gate and no prose. The first
+    work there is to WRITE the doctrine — focus order, live regions, reduced
+    motion, contrast against both themes, stated the way the iOS rules are —
+    and only then can a skill honestly claim it. Pre-creating one to hold the
+    absence is what this row refused.
 
 57. **The third absence claim shipped, and the fix is not a gate — measured, not
     assumed.** — competitive-analyst (the refresh) + docs-writer (the rule).

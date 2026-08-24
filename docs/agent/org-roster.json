@@ -52,10 +52,10 @@
       "title": "Frontend engineer",
       "charter": "The marketing site and served consoles: correctness, links, residual claims.",
       "trigger": "Web artifacts change, or a truth sweep runs.",
-      "executor": "lane",
+      "executor": "skill:signalgrid-core",
       "activated": "2026-08-19",
       "produced": "14 findings; 8 applied incl. router-base 404s and invisible signal dots",
-      "nextAction": "CORRECTED 2026-08-24 — the previous entry claimed six of fourteen findings had no recorded disposition. docs/INTAKE_LEDGER.md row 95 says \"the web polish queue is now empty too\" and itemises each closure, including the one finding deliberately NOT actioned (three unreferenced section components, kept rather than silently dropped). That queue is closed; the stale artefact was this role's own `produced` field, which still reads \"14 findings; 8 applied\". The genuine open item is structural: artifacts/signalgrid-web/** and artifacts/signalgrid-review/** are claimed by NO skill under .claude/skills/ — signalgrid-core owns api-server and signalgrid-app only — which is why this role and accessibility-specialist both fall back to `lane`. Decide whether to widen signalgrid-core or add a web skill, then re-point both roles."
+      "nextAction": "ROW 56 DECIDED 2026-08-24, owner delegated the call. signalgrid-core now declares artifacts/signalgrid-web/** and artifacts/signalgrid-review/**, so this role has a real executor for the first time. Two alternatives were considered and rejected on evidence: signalgrid-scribe is disqualified by its own words, \"You touch no source\" — it owns docs/** and README.md, and these trees are React source; and a NEW web skill would have been a label with nothing behind it, because CLAUDE.md's four accessibility rules are entirely iOS and no web a11y or brand doctrine exists in the tree to put in one. THE WORK IS UNCHANGED by the decision: reconcile the retired labels this role owns — README.md:3 and :136 say \"Operational Trust Orchestration platform\"; ReviewDashboard.tsx:350 and About.tsx:50 say \"Zero Trust orchestration platform\" — against DR-004's ratified \"Shared-Device Trust Gateway\". Repo-wide search; those four are known instances, not the boundary."
     },
     {
       "id": "sre",
@@ -169,7 +169,7 @@
       "activated": null,
       "produced": null,
       "priority": 3,
-      "nextAction": "Waits for a user-facing surface change. The web shift already fixed viewport, contrast, live regions and reduced motion; the next trigger is new UI, not a re-sweep."
+      "nextAction": "STAYS ON `lane` BY DECISION, not by omission — row 56, 2026-08-24. Assigning this role a skill would have meant inventing one, and there is nothing to put in it: CLAUDE.md's four accessibility rules are all iOS (UIFont, UIFontMetrics, accessibility-extra-large, the SG tokens), and check-decision-palette is the ONLY gate covering web contrast. So the first work here is not an audit, it is DOCTRINE: write what good looks like for the served web surfaces — focus order, live regions, reduced motion, contrast against both themes — the way the iOS rules are written, and then a skill can honestly claim it."
     },
     {
       "id": "desktop-engineer",
@@ -335,7 +335,7 @@
       "activated": "2026-08-20",
       "produced": "The deny re-tone, applied under DR-005: dark #C67070 / light #8A3F3F across web index.css and iOS DesignSystem.swift in one commit (a fork between them was why the first attempt was reverted), re-measured before applying — 5.05:1/4.55:1 dark, 6.50:1/7.33:1 light, against the old 3.18:1 on card. BRAND_CONTRAST_FINDING.md resolved for deny; canonical decision-state palette now lives in this repository.",
       "priority": 3,
-      "nextAction": "Prepare the allow re-tone proposal under the owner's stated evaluation rule: canonical token first, all rendered surfaces together, text/icon redundancy preserved, and contrast mechanically proved against every background on which the state actually appears. allow is 4.32:1 on the dark card today; mention primary (4.15:1 on card, brand accent, unbound by the floor) in passing. One screen, three options."
+      "nextAction": "STAYS ON `lane` BY DECISION — row 56, 2026-08-24, same reasoning as accessibility-specialist. The palette work this role already did is mechanical (check-decision-palette gates contrast and parity across web and iOS), but nothing states the brand rules in prose, so no skill can claim them without inventing them. Prior next action still stands: the allow re-tone proposal under DR-005's evaluation rule — canonical token first, all rendered surfaces together, text/icon redundancy preserved, contrast proved against every background the state appears on. allow is 4.32:1 on the dark card today."
     },
     {
       "id": "program-manager",

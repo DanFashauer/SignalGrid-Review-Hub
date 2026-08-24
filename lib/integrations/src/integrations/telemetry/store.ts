@@ -183,8 +183,12 @@ export async function getPostureForHost(
  * per host UUID on every posture fetch and was emptied only by an explicit
  * clearPostureCache(), so a long-running process polling a fleet grew it without
  * bound. Called on write, which is the path that actually runs today.
+ *
+ * `now` is REQUIRED rather than defaulted: this package declares its clock reads in
+ * scripts/review-invariants.mjs and every default `= Date.now()` is another one. The
+ * write path already samples the clock for `expiresAt`; the sweep reuses that sample.
  */
-export function purgeExpiredPosture(now: number = Date.now()): number {
+export function purgeExpiredPosture(now: number): number {
   let removed = 0;
   for (const [key, entry] of inMemoryPosture) {
     if (isPostureExpired(entry, now)) {
@@ -207,7 +211,8 @@ export async function setPostureForHost(
 ): Promise<void> {
   const redis = await getRedisClient();
   const key = `${POSTURE_CACHE_PREFIX}${hostUuid}`;
-  const expiresAt = Date.now() + ttlSeconds * 1000;
+  const nowMs = Date.now();
+  const expiresAt = nowMs + ttlSeconds * 1000;
   const value = JSON.stringify({ data, expiresAt });
   
   if (redis) {
@@ -222,7 +227,7 @@ export async function setPostureForHost(
   }
   
   inMemoryPosture.set(key, { data, expiresAt });
-  purgeExpiredPosture(Date.now());
+  purgeExpiredPosture(nowMs);
 }
 
 export async function clearPostureCache(): Promise<void> {

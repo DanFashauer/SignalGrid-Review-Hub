@@ -92,11 +92,17 @@ const DECLARED_CLOCK_READS = new Map([
   [
     "lib/integrations/src/",
     {
-      count: 22,
+      count: 23,
       reason:
         "Connector boundary. Fixture/demo enrolment and last-seen timestamps, and freshness computed " +
         "AT the boundary where wall-clock is the input being read — not a decision path. The decision " +
-        "core receives the derived Freshness value and never reads a clock itself.",
+        "core receives the derived Freshness value and never reads a clock itself. " +
+        "The 23rd (2026-08-24) is the default argument of telemetry/store.ts getPostureForHost(), " +
+        "which reads the clock to decide whether a CACHE ENTRY is still live. Cache expiry is the " +
+        "same shape as freshness: the wall-clock is the input being read, and the answer it produces " +
+        "is 'entry or no entry', never a verdict. `now` is injectable precisely so the proof drives " +
+        "expiry deterministically instead of sleeping, and purgeExpiredPosture() takes its clock as a " +
+        "REQUIRED argument rather than adding a second read — the write path samples once and shares it.",
       retires: "When connector fixtures move to injected clocks, this drops to the freshness derivations only.",
     },
   ],

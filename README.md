@@ -1,6 +1,6 @@
 # SignalGrid Review Hub
 
-SignalGrid is a runtime decision layer and Operational Trust Orchestration platform for shared, mobile, and frontline environments. At the moment a workflow fires it fuses the evidence the deterministic core evaluates today — identity state, device posture, physical custody (DockBridge), security-baseline (CIS) alignment, device owner type, and workflow risk — into a single allow / step-up / restrict / deny decision. Broader signal-source categories (network/cellular, session/shift, and operational SIEM/ITSM signals) are candidate/roadmap, not decision inputs today. See [What SignalGrid Does Today](docs/WHAT_SIGNALGRID_DOES_TODAY.md) for the exact implemented-vs-candidate boundary.
+SignalGrid is a **Shared-Device Trust Gateway** — the ratified category label (DR-004) — a runtime decision layer for shared, mobile, and frontline environments. At the moment a workflow fires it fuses the evidence the deterministic core evaluates today — identity state, device posture, physical custody (DockBridge), security-baseline (CIS) alignment, device owner type, and workflow risk — into a single allow / step-up / restrict / deny decision. Broader signal-source categories (network/cellular, session/shift, and operational SIEM/ITSM signals) are candidate/roadmap, not decision inputs today. See [What SignalGrid Does Today](docs/WHAT_SIGNALGRID_DOES_TODAY.md) for the exact implemented-vs-candidate boundary.
 
 ## Quick start — three rungs, easiest first
 
@@ -77,7 +77,7 @@ Current stage: **concept / pre-dev — a public, buildable prototype and review/
 
 ## Runnable simulator foundation
 
-Review Hub includes a local SignalGrid real-life simulator foundation. It uses deterministic fixtures to show how identity, device state and compliance, device posture, operational health, RTLS/location, DockBridge/shared-device events, workflow ownership, integration health, decisions, routed actions, and audit evidence fit together.
+Review Hub includes a local SignalGrid real-life simulator foundation. It uses deterministic fixtures to show how identity, device state and compliance, device posture, operational health, DockBridge/shared-device events, workflow ownership, integration health, decisions, routed actions, and audit evidence fit together. RTLS/location appears in the fixtures as a **roadmap** signal family, not a decision input today — see docs/LAUNCH_PROFILE.md for the implemented-vs-deferred boundary.
 
 Local simulator entry points:
 

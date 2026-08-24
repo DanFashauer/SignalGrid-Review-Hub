@@ -463,6 +463,34 @@
       "date": "2026-08-24",
       "depth": "read",
       "note": "Read the header and Run 1 (2026-08-23). Current, and written after a run rather than before one. Carries its own correction in the open: the first version of the coverage check was WRONG because it confused 'a scope inside this directory' with 'this directory inside a scope', and the corrected method is the one published. Depth 'read': the per-assignment findings table was not re-derived against today's roster."
+    },
+    {
+      "path": "docs/DEPLOYMENT.md",
+      "reviewedBy": "solutions-architect",
+      "date": "2026-08-24",
+      "depth": "audited",
+      "note": "Read the deployment-contract surface: the env table, the DATABASE_URL gating, the validation section, and the 'Not included here (needs your infrastructure)' scope statement. THIS IS THE FILE THAT CORRECTS BACKLOG ROW 64, which I wrote earlier the same day without opening it. Lines 311-315 name 'TLS termination / a reverse proxy' as owned by whoever operates the stack, so the prod compose file exposing the API directly on 8080 is the documented contract, not an oversight. Lines 34-43 state durable persistence is gated on DATABASE_URL and that unset means in-memory, 'the fixture-safe default used by the public build and CI', so a local stack with no database is that default working as designed. Row 64's measured facts survive; its diagnosis does not."
+    },
+    {
+      "path": "docker-compose.yml",
+      "reviewedBy": "solutions-architect",
+      "date": "2026-08-24",
+      "depth": "audited",
+      "note": "Read end to end. Three services: api (8080), web (3000), nginx (80/443, nginx.conf + nginx_certs volume). No database, deliberately — the header says so in its first three lines. The two local-only nginx findings from the sre read stand: nginx_certs is mounted and nothing reads it (no ssl_certificate directive, listen 80 only), and X-Forwarded-Proto/For are set only on /api/ while /app/ and / set X-Real-IP alone."
+    },
+    {
+      "path": "docker-compose.prod.yml",
+      "reviewedBy": "solutions-architect",
+      "date": "2026-08-24",
+      "depth": "audited",
+      "note": "Read end to end. Two services: db (postgres:16 with sg_pgdata volume) and api (8080 exposed directly). No proxy and no web tier, both accounted for by DEPLOYMENT.md's operator-owned scope statement. Fixture-safe by default per its own header: SIGNALGRID_TIER=prod sets the tier but live vendor calls stay off unless SIGNALGRID_LIVE_INTEGRATIONS=true is added explicitly."
+    },
+    {
+      "path": "config/tiers/prod.env.example",
+      "reviewedBy": "solutions-architect",
+      "date": "2026-08-24",
+      "depth": "audited",
+      "note": "Read end to end, with dev.env.example alongside for the diff. Fail-closed by default: SIGNALGRID_LIVE_INTEGRATIONS=false even in the prod example. The profile fence is documented as a fence — unset resolves to review-demo, which serves demo credentials and the unauthenticated simulator — and the five OIDC variables are marked hard-required with the consequence stated plainly: unset means enterprise auth stays disabled and EVERY request is 401, i.e. the deployment has no usable API rather than an open one."
     }
   ]
 }

@@ -336,6 +336,10 @@ jobs:
         run: node scripts/check-backlog-ownership.mjs
       - name: Backlog ownership self-test (the gate can fail)
         run: node scripts/check-backlog-ownership.mjs --self-test
+      - name: Surface-ownership self-test (the gate must be able to fail)
+        run: node scripts/check-surface-ownership.mjs --self-test
+      - name: Surface ownership (every file is somebody's)
+        run: node scripts/check-surface-ownership.mjs
       - name: Role coverage (has each role read what it owns; ratcheted)
         run: node scripts/check-role-coverage.mjs
       - name: Role-coverage self-test (the gate can fail)

@@ -89,6 +89,7 @@ Detailed charters, the shift loop and the delegated-authority model live in
 | `mac-lane-steward` | Mac lane steward / local-lane operations | Every duty cycle; any Mac push, lane message, or shared-surface change |
 | `api-contract-architect` | API contract architect | A route is added or a contract changes |
 | `devex-tooling-engineer` | DevEx / tooling engineer | A gate changes, or one is suspected of passing vacuously |
+| `agent-platform-engineer` | Agent platform engineer | A skill or agent is written or changed; a skill contradicts the tree or another skill; a roster executor resolves but cannot do the work |
 | `docs-writer` | Documentation engineer | A doc is added, or a claim outlives what it described |
 | `accessibility-specialist` | Accessibility specialist | Any user-facing surface changes |
 | `desktop-engineer` | Desktop engineer | Desktop code or its CI lane changes |

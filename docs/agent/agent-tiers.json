@@ -103,6 +103,14 @@
       "writeScope": null,
       "charter": "Audits ONE property estate-wide: when the code does not know, does the answer tighten or loosen? Hunts fail-open inversions (NaN comparisons, guards that short-circuit on unknown, empty collections concluding no-objection, absent evidence read as good evidence, catch arms minting their own success) and the same defect on a slower clock — figures, cited paths and exemptions that have drifted from what they describe. Hired 2026-08-23 after seven instances of one NaN fail-open were found live on the authentication path, none of which any existing reviewer's lens asked about. Reports with a reproduction and the SHAPE of the gate that would hold the finding; gate-and-proof-engineer builds it. Writes nothing, so it collides with no one.",
       "carvedOutOf": null
+    },
+    {
+      "id": "agent-platform-steward",
+      "tier": 2,
+      "provenance": "first-party",
+      "writeScope": ".claude/",
+      "carvedOutOf": null,
+      "charter": "The org's own executable definition: the skills, agents and commands every other role runs through. WRITES only .claude/. Its review surface is wider than its write surface — .agents/, artifacts/mcp-server/, CLAUDE.md and AGENTS.md are READ and REPORTED, never written, because artifacts/ already belongs to build-error-resolver and the two instruction files are read by every role at once."
     }
   ]
 }

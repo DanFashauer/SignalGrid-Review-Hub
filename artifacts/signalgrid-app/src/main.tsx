@@ -1,3 +1,21 @@
+// Self-hosted fonts. These were three remote <link> tags to Google's font CDN plus a
+// matching @import in index.css, which handed every visitor's IP to that third party
+// on a surface Dockerfile.web:58 actually SHIPS at /app/. review-invariants forbids
+// exactly this and could not see it: the gate scanned artifacts/signalgrid-web/ only,
+// so its "no third-party vendor host in any published web artifact" ran green over six
+// offending files. Same faces, same weights, served from our own origin.
+//
+// The hostnames are deliberately NOT written out here. That gate matches the literal
+// string and does not parse comments — which is the correct fail-closed behaviour for
+// a security check, and it caught this very comment on the first run after the scope
+// was widened.
+import "@fontsource/inter/400.css";
+import "@fontsource/inter/500.css";
+import "@fontsource/inter/600.css";
+import "@fontsource/inter/700.css";
+import "@fontsource/ibm-plex-mono/400.css";
+import "@fontsource/ibm-plex-mono/500.css";
+import "@fontsource/ibm-plex-mono/600.css";
 import { createRoot } from "react-dom/client";
 import { setBaseUrl } from "@workspace/api-client-react";
 import App from "./App";

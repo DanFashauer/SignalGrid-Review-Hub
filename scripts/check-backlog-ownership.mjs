@@ -10,11 +10,36 @@
 // nobody, which is the state this file was written in.
 //
 // Completion is recorded in this document as free prose — DONE, FIXED,
-// DECIDED, REJECTED, and a "HALF DONE" that contains the word DONE — so
-// classification here reads a CLOSED SET of markers, tested longest-first, and
-// matched CASE-SENSITIVELY in upper case. Lower-case "the gate was fixed" in a
-// row's prose therefore does not close it. That direction matters more than the
-// other: a false OPEN costs an unnecessary owner, a false CLOSED hides work.
+// DECIDED, and a "HALF DONE" that contains the word DONE — so classification
+// here reads a CLOSED SET of markers, tested partial-first, and matched
+// CASE-SENSITIVELY in upper case. Lower-case "the gate was fixed" in a row's
+// prose therefore does not close it. That direction matters more than the
+// other: a false OPEN costs an unnecessary owner, a false CLOSED HIDES WORK.
+//
+// THE FIRST VERSION OF THIS FILE FAILED OPEN IN EXACTLY THAT DIRECTION, and an
+// audit of the commit that introduced it found the hole within the hour. The
+// markers were matched with plain String.includes, so a row reading
+//
+//     1. **A thing** — still NOT DONE, nobody owns it.
+//
+// contained "DONE", classified CLOSED, needed no owner, and the gate printed
+// `passed` with zero problems. So did "UNDECIDED" (containing "DECIDED"). A
+// guard whose own header names a dangerous direction and then fails in it is
+// worse than no guard, because it is trusted. Two changes fixed it, both
+// self-tested below:
+//
+//   1. A marker only counts when it stands alone as an upper-case TOKEN —
+//      word-boundary matched, never as a substring. That alone kills UNDECIDED.
+//   2. A marker under a NEGATION does not close a row. "NOT DONE", "NOT YET
+//      DONE" and "NEVER FIXED" are open rows saying so out loud, and reading
+//      them as closed is the worst thing this file could do.
+//
+// REJECTED was also REMOVED from the closed set. "approach A was REJECTED" is a
+// sentence about one option, not a disposition of the row, and no row in the
+// document closed on it alone — 51a, the only row containing it, also carries
+// "DISPOSITION OF ROW". A marker that cannot distinguish rejecting an OPTION
+// from rejecting the WORK does not belong in a vocabulary whose false direction
+// hides work.
 //
 // A REJECTED EXPERIMENT, recorded because the next person will try it. This
 // gate first also FAILED any status-shaped word outside that set — the idea
@@ -46,7 +71,55 @@ const ROSTER = "docs/agent/org-roster.json";
 
 // Order matters: PARTIAL is tested first, because "HALF DONE" contains "DONE".
 const PARTIAL = ["HALF DONE", "ONE THIRD DONE", "TWO THIRDS DONE", "PARTIALLY DONE", "PARTIALLY ANSWERED", "MOSTLY DONE"];
-const CLOSED = ["DONE", "FIXED", "DECIDED", "REJECTED", "SUPERSEDED", "WITHDRAWN", "DISPOSITION OF ROW", "NOT DOING"];
+const CLOSED = ["DONE", "FIXED", "DECIDED", "SUPERSEDED", "WITHDRAWN", "DISPOSITION OF ROW", "NOT DOING"];
+
+// A negation immediately before a marker cancels it. The window is deliberately
+// short: this looks at the text right before the marker, not the whole sentence,
+// because a negation three clauses away is describing something else.
+const NEGATED = /(?:^|[\s(,;])(?:NOT|NEVER|NO)(?:\s+[A-Za-z]+)?\s*$/;
+const NEGATION_WINDOW = 28;
+
+/**
+ * A marker being QUOTED is being discussed, not asserted.
+ *
+ * Found by running this gate against the row that documents this gate. Row 55
+ * quotes `"still NOT DONE, nobody owns it"` and `"DECIDED"` as examples of the
+ * substring bug being fixed — and the gate read its own examples as its own
+ * status and classified the row CLOSED. The negation guard did fire on the
+ * first occurrence and was then defeated by the second, unnegated one, because
+ * a quotation reproduces a word without meaning it.
+ *
+ * So status is read from the row with quoted spans and code spans removed.
+ * Straight quotes, curly quotes, and backticks all count: every one of them is
+ * this document's way of saying "I am naming this string, not claiming it".
+ *
+ * Deliberately NOT applied to the OWNER search. A role id inside a quotation is
+ * weaker evidence of ownership, but treating it as ownership fails toward
+ * requiring an owner that is already named, and failing toward more ownership
+ * is the safe direction. Status is the one that hides work when it is wrong.
+ */
+function statusText(text) {
+  return text
+    .replace(/`[^`]*`/g, " ")
+    .replace(/"[^"]*"/g, " ")
+    .replace(/\u201c[^\u201d]*\u201d/g, " ");
+}
+
+/**
+ * Does `marker` actually mark this row's status?
+ * Whole upper-case token only, and not under a negation. Substring matching is
+ * what made this gate fail open; it is not coming back.
+ */
+export function marks(text, marker) {
+  const esc = marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/ /g, "\\s+");
+  const re = new RegExp(`(?<![\\w-])${esc}(?![\\w-])`, "g");
+  for (const m of text.matchAll(re)) {
+    const before = text.slice(Math.max(0, m.index - NEGATION_WINDOW), m.index);
+    if (NEGATED.test(before)) continue;
+    return true;
+  }
+  return false;
+}
 
 /** Split the global-backlog section into rows: a numbered heading plus its continuation lines. */
 export function parseRows(planText) {
@@ -84,8 +157,9 @@ export function auditBacklogOwnership(planText, roleIds) {
   }
 
   for (const row of rows) {
-    const bucket = PARTIAL.some((m) => row.text.includes(m)) ? partial
-      : CLOSED.some((m) => row.text.includes(m)) ? closed
+    const status = statusText(row.text);
+    const bucket = PARTIAL.some((m) => marks(status, m)) ? partial
+      : CLOSED.some((m) => marks(status, m)) ? closed
       : open;
     bucket.push(row.id);
     if (bucket === closed) continue;
@@ -130,6 +204,42 @@ function selfTest() {
 
   a = auditBacklogOwnership(plan("1. **A thing** — the gate was fixed last week, nobody."), IDS);
   checks.push(["lower-case \"fixed\" in prose does NOT close a row — a false close hides work", a.problems.some((p) => p.includes("nobody owns"))]);
+
+  // The three negative controls the FIRST version of this gate failed. Each one
+  // is a row announcing out loud that it is not finished, and each one used to
+  // classify CLOSED and pass with zero problems.
+  a = auditBacklogOwnership(plan("1. **A thing** — still NOT DONE, nobody owns it."), IDS);
+  checks.push(["\"NOT DONE\" does not close a row — substring matching failed open here", a.problems.some((p) => p.includes("nobody owns")) && a.closed.length === 0]);
+
+  a = auditBacklogOwnership(plan("1. **A thing** — NOT YET DONE, nobody owns it."), IDS);
+  checks.push(["\"NOT YET DONE\" does not close a row — the negation may be one word away", a.problems.some((p) => p.includes("nobody owns"))]);
+
+  a = auditBacklogOwnership(plan("1. **A thing** — UNDECIDED, nobody owns it."), IDS);
+  checks.push(["\"UNDECIDED\" does not close a row — DECIDED is not a substring match", a.problems.some((p) => p.includes("nobody owns")) && a.closed.length === 0]);
+
+  a = auditBacklogOwnership(plan("1. **A thing** — approach A was REJECTED; the work continues, nobody."), IDS);
+  checks.push(["rejecting one OPTION does not dispose of the row", a.problems.some((p) => p.includes("nobody owns"))]);
+
+  // ...and the positive controls, so the hardening did not simply refuse everything.
+  a = auditBacklogOwnership(plan("1. **A thing** — DONE 2026-01-01."), IDS);
+  checks.push(["a plain DONE still closes a row — the negation guard is not over-firing", a.problems.length === 0 && a.closed.length === 1]);
+
+  a = auditBacklogOwnership(plan("1. **A thing** — DONE; the vendor sends NO webhook for this."), IDS);
+  checks.push(["a negation LATER in the row does not reopen a closed one", a.closed.length === 1]);
+
+  a = auditBacklogOwnership(plan("1. **A thing** — DISPOSITION OF ROW 9: NOT DOING it."), IDS);
+  checks.push(["a multi-word marker still matches across whitespace", a.closed.length === 1]);
+
+  // The residual the gate found in its OWN backlog row: a row that quotes status
+  // vocabulary while discussing it was classified by the quotation.
+  a = auditBacklogOwnership(plan("1. **A thing** — a row reading \"still NOT DONE\" contained \"DONE\" and closed. Fix pending, nobody."), IDS);
+  checks.push(["a marker inside QUOTES is being discussed, not asserted", a.problems.some((p) => p.includes("nobody owns")) && a.closed.length === 0]);
+
+  a = auditBacklogOwnership(plan("1. **A thing** — the `DONE` marker needs review. nobody."), IDS);
+  checks.push(["a marker inside a CODE SPAN does not close a row either", a.problems.some((p) => p.includes("nobody owns"))]);
+
+  a = auditBacklogOwnership(plan("1. **A thing** — DONE. It replaced the \"HALF DONE\" wording."), IDS);
+  checks.push(["an UNQUOTED marker still closes, with a quoted one beside it", a.closed.length === 1 && a.problems.length === 0]);
 
   a = auditBacklogOwnership(plan("1. **A thing** — mobile-native, days."), IDS);
   checks.push(["an ABBREVIATED role name does not count as an owner — it resolves to no registry entry", a.problems.some((p) => p.includes("nobody owns"))]);

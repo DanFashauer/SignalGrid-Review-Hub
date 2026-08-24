@@ -994,11 +994,23 @@ earlier — that is the loop working, not a reason to soften the record.
     question: are all roles assigned to skills, and does everything have a task
     and a backlog. Both halves were no.
     NO ROLE NAMED ITS EXECUTOR. `docs/ORG_CHART.md` opened with "Each is an
-    agent whose job is to be the deepest skill the company has in one thing" —
-    and across all SEVEN role documents (`org-roster.json`, `ORG_CHART.md`,
-    `agent/ORG.md`, and the four under `docs/company/`) there were ZERO
-    references to `.claude/agents/` or `.claude/skills/`. Forty one roles,
-    twelve agent definitions, no edge between them. Every role now carries an
+    agent whose job is to be the deepest skill the company has in one thing"
+    while no role named the agent or skill that would run it. CORRECTED
+    2026-08-24, same day, by an adversarial audit of this very row: the first
+    version claimed "ZERO references to `.claude/agents/` or `.claude/skills/`
+    across all SEVEN role documents", and that was FALSE TWICE OVER. There are
+    TWELVE role-adjacent documents, not seven — `docs/company/` holds nine
+    files, not the four that were checked — and `docs/agent/ORG.md:275` already
+    carried one reference, to "the skills under `.claude/skills/`" as a
+    category. The measured truth, re-run across all twelve at `a7a9ae7^`: one
+    reference in twelve documents, and it names no role's executor. The
+    substantive finding survives; the quantification did not, and it failed for
+    the reason everything else this week failed — the verification regex
+    required a name after the slash (`.claude/skills/[a-z0-9-]+`) while the
+    CLAIM said "references to `.claude/skills/`". An accurate measurement
+    answering a narrower question than the sentence it was used to support.
+    Forty one roles, twelve agent definitions, no edge between them. Every role
+    now carries an
     `executor` — `agent:<name>`, `skill:<name>`, or `lane` — and
     check-org-roster.mjs FAILS on a missing one, a malformed one, or one
     naming a file that is not on disk. Falsified three ways against the live
@@ -1013,11 +1025,42 @@ earlier — that is the loop working, not a reason to soften the record.
     nobody runs, one shift later. It is now required of every role, and the
     eleven were written from what each role actually produced.
     THE BACKLOG'S OWNERS DID NOT RESOLVE. Nine rows carrying work named no
-    role from the registry, three of them because the prose abbreviated
-    (`mobile-native`, `devex-tooling`, `design`) to something the registry has
-    no entry for. New gate scripts/check-backlog-ownership.mjs (preflight + CI,
-    self-test 11/11) refuses an open or partially-done row that names no role,
-    and reads the ids from the registry rather than listing them.
+    role from the registry. Three abbreviated role names — `mobile-native`,
+    `devex-tooling`, `design` — accounted for two of those nine (rows 29 and
+    48); the first version of this row said "three of them", counting terms as
+    rows. New gate scripts/check-backlog-ownership.mjs (preflight + CI) refuses
+    an open or partially-done row that names no role, and reads the ids from the
+    registry rather than listing them.
+    THE GATE THEN FAILED OPEN, in the exact direction its own header calls the
+    dangerous one, and the same audit found it within the hour. Markers were
+    matched with String.includes, so a row reading "still NOT DONE, nobody owns
+    it" contained "DONE", classified CLOSED, needed no owner, and the gate
+    printed `passed` with zero problems. So did "UNDECIDED", which contains
+    "DECIDED". Fixed two ways: a marker now counts only as a whole upper-case
+    TOKEN, and a marker under a negation does not close a row. REJECTED was
+    removed from the vocabulary outright — "approach A was REJECTED" disposes of
+    an option, not of the work, and no row closed on it alone. The four rows
+    that used to slip through are now negative controls in the self-test.
+    THEN IT FAILED OPEN A SECOND TIME, on this row. Run against the document
+    containing this very entry, the gate read the examples QUOTED two paragraphs
+    above — the quoted string carrying `NOT DONE`, and the quoted `DECIDED` —
+    as its own status, and closed row 55. The negation guard did fire on
+    the first occurrence and was then defeated by the second, because a quotation
+    reproduces a word without meaning it. Status is now read with quoted spans,
+    curly-quoted spans and code spans stripped; ownership deliberately is not,
+    because a wrongly-detected OWNER costs an unnecessary name and a wrongly
+    detected CLOSED hides work. Self-test 11/11 to 21/21. Worth stating plainly:
+    the gate's second and third defects were both found by pointing it at the
+    row describing itself, which is the cheapest falsification available and was
+    not part of the original plan.
+    IT HAPPENED A THIRD TIME while this paragraph was being written. The
+    sentence describing the fix used the word `DECIDED` bare, outside quotes,
+    and closed the row again — the gate was right and the prose was wrong. Every
+    status word named in this document from here on is code-spanned for that
+    reason. The rule the three rounds converge on: a document that discusses a
+    vocabulary will contain that vocabulary, and any gate reading status out of
+    free prose needs an explicit way to tell mention from use. Quoting is that
+    way, and it only works if the writer uses it.
     A MEASUREMENT CORRECTED MID-TASK, recorded because the first answer was
     reported before it was checked: a first pass reported twelve unowned rows
     and the corrected pass six. The first read only each row's HEADING line, so
@@ -1030,8 +1073,53 @@ earlier — that is the loop working, not a reason to soften the record.
     CLOSED" is this product's own fail-closed vocabulary. A rule that fights
     the domain's own words gets switched off; it was cut before landing, and
     the reasoning is in the gate's header so it is not retried blind.
+    FOUR OF THE ELEVEN BACKFILLED NEXT ACTIONS WERE WRONG, and the method is
+    why. They were written from each role's own `produced` field — which records
+    what a role DID — rather than from the tree, which records what REMAINS. So
+    they inherited every closure the `produced` field had not been updated for:
+    devex-tooling-engineer was sent to make check-preflight-ci-parity.mjs
+    resolve npm aliases, which it has done since `43ec8f7`, and to delete an
+    exemption that is an empty Map; web-engineer was sent to disposition six
+    findings that `INTAKE_LEDGER.md` row 95 records as closed, itemised, one of
+    them explicitly declined; principal-engineer was sent to write a reversal
+    path that DR-005's Reversal clause already contains. product-manager's
+    asserted a count from a conversation nothing in this repository records, and
+    is now marked as the open question it is. All four corrected in place, each
+    against the primary source rather than against the roster.
+    NO SKILL CLAIMS THE WEB — found while checking the mapping. `signalgrid-core`
+    owns `artifacts/api-server/**` and `artifacts/signalgrid-app/**`;
+    `signalgrid-native` owns `native/**` and `firmware/**`. Nothing claims
+    `artifacts/signalgrid-web/**` (the marketing site) or
+    `artifacts/signalgrid-review/**` (the review dashboard), so web-engineer —
+    whose charter LEADS with the marketing site — and accessibility-specialist,
+    whose charter is "the site and the served consoles", were both pointed at
+    skills that exclude their own subject. Both now say `lane`, which is honest
+    rather than flattering, and the gap is row 56.
     Still open, and now owned: 40b, 43, 44, 48, 49, 50, 54 carry named roles
     for the first time.
+
+56. **No skill claims the two served web trees, so two roles point at skills
+    that exclude their own subject.** — web-engineer (the decision) +
+    devex-tooling-engineer (whatever gate follows). 2026-08-24, found while
+    auditing row 55's executor mapping.
+    `skill:signalgrid-core` declares `artifacts/api-server/**` and
+    `artifacts/signalgrid-app/**`. `skill:signalgrid-native` declares
+    `native/**` and `firmware/**`. Nothing under `.claude/skills/` declares
+    `artifacts/signalgrid-web/**` — the marketing site — or
+    `artifacts/signalgrid-review/**` — the review dashboard. Both are served
+    surfaces that buyers see.
+    The consequence was concrete and was corrected the same day: web-engineer,
+    whose charter LEADS with the marketing site, had been pointed at
+    signalgrid-core, and accessibility-specialist, whose charter reads "WCAG
+    conformance across the site and the served consoles", had been pointed at
+    signalgrid-native — a skill scoped to iOS, Android, desktop and firmware.
+    Each executor excluded the role's own subject. Both now read `lane`, which
+    is honest rather than flattering and is why the roster prints that count.
+    The decision, which is not this lane's to make silently: widen
+    signalgrid-core to claim both web trees, or add a web skill and give it
+    them. Either way the two roles get re-pointed and the executor gate starts
+    meaning something for them. Until then `lane` is correct and should not be
+    quietly upgraded to make the roster look better staffed.
 
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —

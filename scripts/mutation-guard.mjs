@@ -537,6 +537,27 @@ export const TARGETS = [
 // moved and nobody re-derived whether the justification still holds.
 const ALLOWED = [
   {
+    file: "lib/signalgrid-core/src/continuity.ts",
+    line: "if (!VALID_OUTCOMES.has(record.outcome)) {",
+    reason:
+      "DEFENSE IN DEPTH, measured one guard at a time rather than argued. This is " +
+      "validateRecord's Set-membership check on a record's outcome. Disabled ALONE, every " +
+      "probe is still refused — an unknown outcome, a prototype key, and an unknown " +
+      "standingBound.floor all still throw, because mostRestrictiveOutcome validates its " +
+      "own input downstream (continuity.ts:116). Disabling BOTH lets all of them through, " +
+      "which is why the property is real and this arm is redundant rather than dead. " +
+      "IT IS THE ONLY REDUNDANT ONE OF THE THREE. The sweep flagged three surviving " +
+      "mutations in this file on 2026-08-24 and the proof's own header called all three " +
+      "deliberate redundancy; that generalised from the reconcileDecisions path to the " +
+      "whole module and was wrong twice. :116 is the SOLE guard on mostRestrictiveOutcome's " +
+      "exported entry point, and :443 is the sole guard on a floor that is never applied " +
+      "when the record is within bound — both are now pinned by assertions in " +
+      "proof:decision-continuity aimed at the path where nothing else can refuse first, " +
+      "and disabling either one now drops the proof (73/75 and 74/75). Only this arm " +
+      "survives on purpose. DELETE THIS EXEMPTION if :116 ever stops validating its own " +
+      "input, because this line becomes load-bearing the moment it does.",
+  },
+  {
     file: "lib/integrations/src/integrations/nac/index.ts",
     line: "unreachable-by-type, fail-closed default",
     reason:

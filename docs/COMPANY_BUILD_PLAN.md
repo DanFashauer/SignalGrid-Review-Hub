@@ -1348,6 +1348,54 @@ earlier — that is the loop working, not a reason to soften the record.
     building. Owner of the measurement: competitive-analyst for whether the
     convention is sound, devex-tooling-engineer for the rule if it is not.
 
+62. **Two of three "deliberate redundancy" guards in the decision core were
+    load-bearing and unproven — and the comment saying otherwise was the
+    reason nobody looked.** — devex-tooling-engineer (the proof) +
+    principal-engineer (the design call). FIXED 2026-08-24.
+    The daily mutation sweep had been failing since `a50f6e7`. Read the JOBS,
+    not the run: the image-vulnerability gate that owned issue #245 was SUCCESS
+    (so #245 closed), daily verification was SUCCESS, and the failing job was
+    the sweep. Three mutations survived in `lib/signalgrid-core/src/continuity.ts`.
+    THE PROOF'S OWN HEADER ALREADY EXPLAINED THEM: "there are now TWO guards ...
+    Reverting EITHER one alone leaves these assertions green (72/72); reverting
+    BOTH drops seven ... That is deliberate defense in depth." True for the
+    `reconcileDecisions` path. Generalised to the whole module, and wrong twice.
+    MEASURED ONE GUARD AT A TIME rather than reasoned about:
+    · `:384` validateRecord Set membership — disabled ALONE, all four probes
+      still refused. GENUINE defense in depth; `:116` catches them downstream.
+    · `:116` mostRestrictiveOutcome self-check — disabled ALONE, a direct call
+      with an unknown outcome GETS THROUGH. The function is EXPORTED, so that is
+      its own entry point and `:116` is the only guard on it. An unknown outcome
+      reaching the ranking table compares as NaN and STICKS as the accumulator —
+      the same fail-open family as the ten timestamp sites fixed the same week.
+    · `:443` standingBound.floor — disabled ALONE, an invalid floor on a
+      WITHIN-BOUND record passes silently. In plain terms: a caller who typed
+      "denied" instead of "deny" gets no error and no floor. The safety floor
+      they asked for does not exist.
+    WHY THE EXISTING FLOOR ASSERTION NEVER CAUGHT IT: it uses a shape that
+    EXCEEDS the bound, so the bad value reaches `:116` and is refused there. The
+    assertion passed with `:443` disabled — it was testing a different guard than
+    the one it names. The full proof stayed 72/72 with the floor check gone.
+    FIXED with assertions aimed at the path where nothing else can refuse first:
+    `mostRestrictiveOutcome` called directly with an unknown outcome and with a
+    prototype key, and an unknown floor on a within-bound record. 72/72 to 75/75.
+    Falsified: `:116` disabled now drops it to 73/75, `:443` to 74/75, and `:384`
+    still passes at 75/75 — which is the measurement that earns `:384` an
+    allowlist entry rather than an assertion. That entry states what was
+    measured, that it is the only redundant one of the three, and the condition
+    that should delete it.
+    A SECOND INCIDENT, recorded because it nearly shipped a defect. The sweep was
+    re-run locally under a 1200s timeout that was too short; it took SIGTERM
+    mid-run and LEFT A PLANTED MUTATION in the tree —
+    `passkey-assurance/evaluate.ts`, `report.registration === "registered"`
+    rewritten to `true`, which would let an unregistered credential satisfy the
+    assurance check. The push chain refused to run preflight on a dirty tree and
+    exited rather than validate a poisoned one; the file was restored and the
+    tree verified clean before anything was pushed. THE LESSON IS THE TIMEOUT:
+    a mutation sweep mutates files IN PLACE and only restores them on a clean
+    exit, so killing one is not a neutral act. Anything that runs it must either
+    let it finish or restore from git afterwards.
+
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —
     `lib/location` is KEPT. Nothing is outstanding on this row.

@@ -9701,6 +9701,20 @@
     },
     {
       "type": "library",
+      "name": "@hono/node-server",
+      "version": "2.1.1",
+      "bom-ref": "pkg:npm/%40hono/node-server@2.1.1",
+      "purl": "pkg:npm/%40hono/node-server@2.1.1",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "@hookform/resolvers",
       "version": "3.10.0",
       "bom-ref": "pkg:npm/%40hookform/resolvers@3.10.0",
@@ -9886,7 +9900,14 @@
       "name": "@modelcontextprotocol/sdk",
       "version": "1.30.0",
       "bom-ref": "pkg:npm/%40modelcontextprotocol/sdk@1.30.0",
-      "purl": "pkg:npm/%40modelcontextprotocol/sdk@1.30.0"
+      "purl": "pkg:npm/%40modelcontextprotocol/sdk@1.30.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
     },
     {
       "type": "library",
@@ -14660,6 +14681,34 @@
     },
     {
       "type": "library",
+      "name": "eventsource-parser",
+      "version": "3.1.1",
+      "bom-ref": "pkg:npm/eventsource-parser@3.1.1",
+      "purl": "pkg:npm/eventsource-parser@3.1.1",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "eventsource",
+      "version": "3.0.7",
+      "bom-ref": "pkg:npm/eventsource@3.0.7",
+      "purl": "pkg:npm/eventsource@3.0.7",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "execa",
       "version": "5.1.1",
       "bom-ref": "pkg:npm/execa@5.1.1",
@@ -15426,6 +15475,20 @@
     },
     {
       "type": "library",
+      "name": "hono",
+      "version": "4.13.2",
+      "bom-ref": "pkg:npm/hono@4.13.2",
+      "purl": "pkg:npm/hono@4.13.2",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "htmlparser2",
       "version": "10.1.0",
       "bom-ref": "pkg:npm/htmlparser2@10.1.0",
@@ -16057,6 +16120,20 @@
         {
           "license": {
             "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "json-schema-typed",
+      "version": "8.0.2",
+      "bom-ref": "pkg:npm/json-schema-typed@8.0.2",
+      "purl": "pkg:npm/json-schema-typed@8.0.2",
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-2-Clause"
           }
         }
       ]
@@ -17783,6 +17860,20 @@
       "version": "4.0.7",
       "bom-ref": "pkg:npm/pirates@4.0.7",
       "purl": "pkg:npm/pirates@4.0.7",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "pkce-challenge",
+      "version": "5.0.1",
+      "bom-ref": "pkg:npm/pkce-challenge@5.0.1",
+      "purl": "pkg:npm/pkce-challenge@5.0.1",
       "licenses": [
         {
           "license": {
@@ -20241,6 +20332,20 @@
         {
           "license": {
             "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "zod-to-json-schema",
+      "version": "3.25.2",
+      "bom-ref": "pkg:npm/zod-to-json-schema@3.25.2",
+      "purl": "pkg:npm/zod-to-json-schema@3.25.2",
+      "licenses": [
+        {
+          "license": {
+            "id": "ISC"
           }
         }
       ]

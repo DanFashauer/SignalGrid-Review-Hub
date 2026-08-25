@@ -3897,7 +3897,10 @@ earlier — that is the loop working, not a reason to soften the record.
     reads, remain open and are the ones that would close it.
 
 184. **A guard sat one layer above the thing it guarded.** — FIXED 2026-08-25,
-    qa-engineer. `PasskeyAssuranceConnector.fetchNormalized(identityRef,
+    qa-engineer, in PR #319.
+    `lib/integrations/src/integrations/passkey-assurance/passkey-assurance-connector.ts`;
+    verify with `pnpm run proof:passkey-assurance` (91 checks, was 87).
+    `PasskeyAssuranceConnector.fetchNormalized(identityRef,
     credentialRef?)` took the requested credential ref and never compared it to
     the ref the source answered with. The substitution check lived on
     `fetchNormalizedSet`, which calls straight through to `fetchNormalized` with

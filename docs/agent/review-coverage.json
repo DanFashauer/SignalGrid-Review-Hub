@@ -610,6 +610,97 @@
       "date": "2026-08-25",
       "depth": "audited",
       "note": "FINDING (row 79, fixed here): two independent holes, and the ORDER of the fixes is the evidence for that. Widening the ramp list alone left the gate at exit 0; adding an attribute/data-value anchor took it to exit 1 naming BOTH signalgrid-desktop and signalgrid-app. Either hole alone would have kept the defect invisible. Self-tests 14 to 17, anchored VERBATIM to the two Dashboard files that were evading it rather than written against the new regex — a self-test anchored to the regex it tests proves only that the regex is itself."
+    },
+    {
+      "path": "lib/webauthn/src/webauthn/verify.ts",
+      "reviewedBy": "security-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full file. CBOR reader, COSE-to-JWK conversion and authData field offsets traced against the WebAuthn spec layout; assertion signature verification (ES256 DER / RS256), rpIdHash and UP/UV flag checks, and attestation-statement verification for none/packed/fido-u2f, all fail-closed on parse error, unknown format or bad signature. NOT independently re-verified: the CBOR decoder against adversarial malformed input beyond its fail-closed try/catch — proof:webauthn-verify (48/48, executed) covers that."
+    },
+    {
+      "path": "lib/webauthn/src/webauthn/server.ts",
+      "reviewedBy": "security-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full file. Challenge expiry, purpose and user-binding checks are Number.isFinite-guarded so an unparseable expiry reads as EXPIRED; exact origin/type/challenge matching; signature-counter clone detection with CAS advance. Malformed-shape guards run BEFORE challenge consumption. No error path returns success early."
+    },
+    {
+      "path": "lib/webauthn/src/webauthn/store.ts",
+      "reviewedBy": "security-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full file. Redis-authoritative with failures propagated rather than swallowed; per-user SET NX PX lock with token-checked release on addCredential; WATCH/MULTI compare-and-advance on the signature counter; GETDEL single-use challenge consumption. FINDING (row 82): removeCredential is the one mutator with an unprotected read-modify-write."
+    },
+    {
+      "path": "lib/webauthn/src/webauthn/types.ts",
+      "reviewedBy": "security-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full file. Types and DEFAULT_WEBAUTHN_CONFIG env fallbacks; requireStepUpForAdmin defaults false via an explicit === \"true\" comparison rather than a truthy env-string test."
+    },
+    {
+      "path": "lib/webauthn/src/index.ts",
+      "reviewedBy": "security-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full file, 13 lines, barrel export only."
+    },
+    {
+      "path": "lib/webauthn/src/stepUpStore.ts",
+      "reviewedBy": "security-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full file. Its expiry check is Number.isFinite-guarded and correct. FINDING (row 82, note): hasValidStepUpSession is a hardcoded `return false` stub whose docstring implies a real check. It fails CLOSED and is unreachable — verified two ways that no api-server route imports it — but it is a second, parallel step-up implementation sitting unused beside the live one."
+    },
+    {
+      "path": "lib/enterprise-auth/src/jwt.ts",
+      "reviewedBy": "security-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full file. Alg-confusion defence: RS256-only gate before key lookup, none/HS* rejected. Signature verified BEFORE any claim is read, then exp/nbf/iat/iss/aud/sub with clock tolerance applied in the fail direction."
+    },
+    {
+      "path": "lib/enterprise-auth/src/jwks.ts",
+      "reviewedBy": "security-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full file, 47 lines. TTL cache stores only on a successful shape-validated fetch, so a transient outage cannot poison the cache with an empty keyset."
+    },
+    {
+      "path": "lib/enterprise-auth/src/claims.ts",
+      "reviewedBy": "security-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full file. Deny-by-default claim-to-principal mapping: unmapped tenant or role values are rejected via hasOwnProperty-gated lookups with no default fallthrough."
+    },
+    {
+      "path": "lib/enterprise-auth/src/config.ts",
+      "reviewedBy": "security-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full file. OIDC is off unless issuer, audience and jwksUri are all present; empty tenant/role maps are configuration ERRORS rather than silently-open or silently-dead; clock tolerance uses an explicit Number.isFinite guard rather than relying on Number('') === 0."
+    },
+    {
+      "path": "lib/enterprise-auth/src/provider.ts",
+      "reviewedBy": "security-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full file. Every failure path returns a typed ok:false with no early success return; authenticateOrThrow raises 401 rather than defaulting an identity."
+    },
+    {
+      "path": "lib/enterprise-auth/src/base64url.ts",
+      "reviewedBy": "security-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full file, 18 lines. Throws on a non-string or empty segment rather than returning an empty buffer."
+    },
+    {
+      "path": "lib/enterprise-auth/src/index.ts",
+      "reviewedBy": "security-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full file, 10 lines, barrel export only."
     }
   ]
 }

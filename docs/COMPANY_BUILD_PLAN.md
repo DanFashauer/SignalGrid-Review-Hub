@@ -2261,6 +2261,63 @@ earlier — that is the loop working, not a reason to soften the record.
     whether the same seam has the same shape on iOS, Android and Windows is
     unexamined. principal-engineer and solutions-architect own the disposition.
 
+82. **A credential REVOCATION can be silently undone by a concurrent enrolment —
+    the one mutator in the store without the lock its neighbours carry.** — OPEN,
+    security-engineer. Found by the first read of `lib/webauthn/**` and
+    `lib/enterprise-auth/**`, and INDEPENDENTLY CONFIRMED before filing.
+    · `addCredential` (`store.ts:166-239`) takes a per-user `SET NX PX` Redis lock
+      before its read-modify-write, and carries a long comment explaining exactly
+      why: "each read the user, append a credential, and each write the whole
+      thing back. The later SET erases the earlier." It even records that a
+      WATCH/MULTI version "persisted 7 of 12 concurrent enrollments".
+    · `advanceCredentialCounter` (`:301-357`) uses WATCH/MULTI, correctly — the
+      counter must fail closed on a lost race.
+    · `removeCredential` (`:241-277`) does neither. Plain `getUser()` -> splice ->
+      save. Verified by reading it: no lock, no CAS.
+    THE CONSEQUENCE, in the ordering that matters: a revocation reads the
+    credential list, a concurrent enrolment takes the lock and writes, then the
+    unlocked revocation writes its stale snapshot last — **restoring the
+    credential that was just revoked.** That is precisely the outcome
+    `addCredential`'s comment says the lock exists to make impossible, and the
+    guarantee simply is not held on the removal side.
+    SEVERITY, STATED HONESTLY: LATENT. No live API route calls `removeCredential`
+    — established two differently-shaped ways (a repo-wide symbol search, and
+    reading the v1 route file). Only `webauthn-enrollment-race-proof.ts` exercises
+    it. It becomes live and security-relevant the moment an admin credential-revoke
+    endpoint is wired, which is a normal thing to add and would not obviously
+    require touching this file.
+    FIX: give it the same per-user lock, or fold both into one lock-guarded mutate
+    helper, and add a proof case exercising add/remove concurrency the way
+    `proof:enrollment-race` exercises add/add.
+    ALSO FOUND, same read, both should-fix or lower:
+    · `packed` and `fido-u2f` full attestation verify only the LEAF certificate's
+      signature (`verify.ts:348-352`, `:386`) — no chain to a trusted root, no
+      validity period, no revocation. Mitigated because
+      `generateRegistrationOptions` requests `attestation: 'none'`, so a conformant
+      authenticator does not return a full statement in this product's own flow.
+      It matters the moment attestation is tightened to direct/indirect, and the
+      assumption should be commented at the call site so that change cannot
+      silently inherit unchecked trust.
+    · `stepUpStore.ts:251-258` — `hasValidStepUpSession` is a hardcoded
+      `return false` under a docstring claiming it performs a real check. It fails
+      CLOSED and is unreachable, but it is a SECOND, parallel step-up
+      implementation with its own Redis client and session shape sitting unused
+      beside the live one. A future integrator wiring the wrong one inherits an
+      always-deny stub. Remove it or mark it deprecated in a header.
+    AND A DEAD SURFACE, FIXED IN PASSING: the roster gave security-engineer
+    `lib/api-auth/**`, which matches NO file in the tree (confirmed two ways).
+    The intent was `lib/enterprise-auth/**`. Corrected — and the symptom was
+    concrete rather than cosmetic: seven genuinely-read files did not count
+    toward coverage until the glob pointed at something real.
+    CLEAN, and recorded so it is not re-litigated: every expiry and freshness
+    comparison across both directories now uses the `Number.isFinite`-guarded
+    form, verified by two independently-shaped searches — no sibling of the
+    original NaN fail-open family remains on this surface. `proof:webauthn-verify`
+    (48/48) and `proof:enterprise-auth` (21/21, including alg-confusion,
+    clock-tolerance boundary and cross-tenant denial) both executed clean. No
+    secret, plaintext-password comparison or unparameterised query exists on this
+    surface; logging carries IDs only, never tokens or key material.
+
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —
     `lib/location` is KEPT. Nothing is outstanding on this row.

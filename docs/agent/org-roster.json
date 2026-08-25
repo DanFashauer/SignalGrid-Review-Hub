@@ -45,7 +45,7 @@
         ".github/workflows/**",
         "scripts/**",
         "lib/webauthn/**",
-        "lib/api-auth/**",
+        "lib/enterprise-auth/**",
         "tests/security-reference/**",
         ".gitleaks.toml",
         ".gitleaksignore",
@@ -53,7 +53,7 @@
       ],
       "activated": "2026-08-19",
       "produced": "SBOM token split; third-party actions pinned + check-action-pinning.mjs",
-      "nextAction": "Row 71: triage tests/security-reference/** — five of eight specs cannot fail against broken code (verified by two independent agents). Mark which are worth porting (admin-auth-hardening, fail-closed-fallbacks, webauthn-request-identity carry real falsifiable assertions) and which are tautologies that must never be ported as coverage. Then row 73: the roster gives this role lib/api-auth/**, which matches no file in the tree — likely lib/enterprise-auth/**."
+      "nextAction": "Row 82, in order: (1) removeCredential in lib/webauthn/src/webauthn/store.ts:241-277 has no lock while addCredential has SET NX PX and advanceCredentialCounter has WATCH/MULTI — a revocation racing an enrolment can write a stale snapshot last and RESTORE the revoked credential, which is exactly what addCredential's own comment says its lock prevents. Latent only because no live route calls it. Give it the same lock and add an add/remove concurrency proof. (2) Comment the attestation:'none' assumption at verify.ts:348 so tightening to direct/indirect cannot silently inherit unchained leaf-cert trust. (3) Delete or deprecate stepUpStore.ts — a parallel step-up implementation whose hasValidStepUpSession is a hardcoded return false under a docstring claiming otherwise. The lib/api-auth dead glob is already fixed."
     },
     {
       "id": "product-manager",

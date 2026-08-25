@@ -2338,9 +2338,22 @@ earlier — that is the loop working, not a reason to soften the record.
     surface; logging carries IDs only, never tokens or key material.
 
 83. **An OLDER, more permissive reading from a second connector silently erases a
-    newer one — and the outcome flips deny to allow.** — OPEN, principal-engineer.
-    BLOCKING. Found by the first line-by-line read of the decision core, and
-    reproduced by execution before filing.
+    newer one — and the outcome flips deny to allow.** — FIXED 2026-08-25,
+    principal-engineer. Was BLOCKING. Shipped in #309.
+    THE FIX: `connector.id` is now part of the signal id at all three mint sites, so
+    per-connector rows coexist and `groupLatest` does the greatest-observedAt
+    arbitration it was always written for. Six assertions in
+    `signalgrid-core-proof` (233 -> 239) construct the case the shipped seed cannot,
+    because Northwind's two dock connectors cover disjoint devices.
+    FALSIFIED: removing `connector.id` fails them with the original symptom — only
+    one connector's row survives and the winner becomes `observedAt=14:00
+    value=none`. `CORE_NORMALIZATION_VERSION` 8 -> 9 and the canary re-pinned with
+    its reasoning, as the two prior re-pins did.
+    HEADER CORRECTED 2026-08-25: this row said OPEN for several hours after the fix
+    merged. A backlog that under-reports finished work sends someone to redo it —
+    the mirror of the false-CLOSED that hides work, and worth naming rather than
+    quietly flipping.
+    ORIGINAL FINDING FOLLOWS.
     · Signal ids are minted as
       `deterministicId("sig", tenantId, subjectType, subjectId, category)` at all
       three sites (`dock.ts:107`, `shift.ts:69`, `connector.ts:201`). **The
@@ -2430,8 +2443,18 @@ earlier — that is the loop working, not a reason to soften the record.
     rates while `outcomesCovered()` — which only checks key presence — stays true.
 
 89. **The connector's `identity_state` signal is normalized, recorded as "used",
-    and never read: a disabled account allows.** — OPEN, principal-engineer.
-    BLOCKING. Reproduced before filing.
+    and never read: a disabled account allows.** — FIXED 2026-08-25,
+    principal-engineer. Was BLOCKING. Shipped in #309.
+    THE FIX: `foldIdentityEnabled` folds the identity row and the connector's
+    signal worst-wins. An affirmative `false` from EITHER source wins, and SILENCE
+    CHANGES NOTHING in either direction — an absent signal cannot loosen a disabled
+    row and cannot promote an `"unknown"` row to `true`. That silence half is what
+    made it safe to land: with no identity connector present the behaviour is
+    byte-identical to before, which is why all 225 pre-existing assertions passed
+    untouched. Eight assertions added; falsified by restoring the defect, which
+    fails exactly the two that target it.
+    HEADER CORRECTED 2026-08-25, same reason as row 83.
+    ORIGINAL FINDING FOLLOWS.
     · Emitted at `connector.ts:150-163`. The only producer of
       `evidence.identityEnabled` is `evidence.ts:50-55`, which reads the STATIC
       `identity.state` store row instead.
@@ -3122,7 +3145,17 @@ earlier — that is the loop working, not a reason to soften the record.
     quietly.
 
 134. **A GARBLED readiness budget grades strictly better than no budget at all.** —
-    OPEN, iam-domain. `session-readiness/evaluate.ts:93-113`, root cause at
+    FIXED 2026-08-25, iam-domain. Shipped in #309.
+    THE FIX: a distinct `READINESS_BUDGET_UNREADABLE` rung, kept SEPARATE from
+    UNPOSED because "you did not ask" and "your question is unreadable" have
+    different owners and different fixes. Reads through the shared
+    `utils/posed-bound.ts`.
+    A FIRST PASS WAS INCOMPLETE and a probe caught it: `posedBound` treats
+    `undefined` as "not posed" by contract, which is right at its own boundary and
+    wrong inside a budget object where the threshold is not optional — so the
+    misspelled-key case still granted. Closed, and pinned by its own assertion.
+    HEADER CORRECTED 2026-08-25, same reason as row 83.
+    ORIGINAL FINDING FOLLOWS. `session-readiness/evaluate.ts:93-113`, root cause at
     `index.ts:107,136` where `budget: opts.budget ?? null` passes through
     unvalidated while `elapsedToUsableSeconds` beside it goes through `asSeconds`.
     REPRODUCED, identical record each time (42s elapsed, usable, measured,
@@ -3146,7 +3179,19 @@ earlier — that is the loop working, not a reason to soften the record.
     not enough — `evaluateSessionReadiness` is exported and callable directly.
 
 135. **A non-finite caller threshold turns an abandoned device into a full custody
-    grant.** — OPEN, physical-ot-domain. `rtls-custody/evaluate.ts:56-57,102,107,109`.
+    grant.** — FIXED 2026-08-25, physical-ot-domain. Shipped in #309.
+    THE FIX: both bounds read through `utils/posed-bound.ts`, where a garbled pose
+    yields `null` and each comparison treats null exactly as it treats an
+    unconfirmable MEASUREMENT — it raises. The helper exists so the next family
+    inherits the guard rather than the accident.
+    MY FIRST ASSERTIONS PASSED FOR THE WRONG REASON: they asserted "does not grant"
+    on a record where the ABANDONMENT axis fired independently, so they passed with
+    the fix-age guard removed. Each axis is now isolated, and the proof records
+    WHICH cases discriminate — NaN and Infinity do; zero and negative pass either
+    way, because any positive age satisfies `>= 0`. Four falsifiable, two
+    intentional.
+    HEADER CORRECTED 2026-08-25, same reason as row 83.
+    ORIGINAL FINDING FOLLOWS. `rtls-custody/evaluate.ts:56-57,102,107,109`.
     REPRODUCED, identical badge-less record in an authorized clinical zone with a
     fix age and dwell of 99,999s: defaults give `abandoned / alert / ABANDONED`;
     `staleFixSeconds` of NaN or Infinity both give `in_zone / none / CUSTODY_OK`.

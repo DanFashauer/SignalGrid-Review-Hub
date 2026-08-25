@@ -3896,6 +3896,45 @@ earlier — that is the loop working, not a reason to soften the record.
     have caught the legend — and (c), pinning the mapping in one registry the gate
     reads, remain open and are the ones that would close it.
 
+183. **The org automated on a clock and never on an event.** — FIXED 2026-08-25,
+    agent-platform-engineer. The owner asked for an assistant that acts "when x
+    event or task plus function happens", and asked first whether something already
+    built does this. It does, and researching before building is the whole finding.
+    WHAT ALREADY EXISTED: `docs/agent/scheduled-routines.json` declares four
+    routines on cron — steward duty cycle, live-sync keeper, nightly build agent,
+    hygiene sweep — each gated on an authorizing human, a write scope and an
+    escalation boundary. That is a TIME layer: "at 09:40 daily". There was no EVENT
+    layer at all. `.claude/settings.json` and `.claude/hooks/` did not exist, so
+    Claude Code's own hook system — SessionStart, Stop, PreToolUse, PostToolUse,
+    which ships with the harness and needed building by nobody — was entirely
+    unused. Nothing to invent; something to connect.
+    WHAT THE HOOK DOES, chosen from one day's evidence rather than from a list of
+    what hooks CAN do. Three things cost real time on 2026-08-25 and all three are
+    now automatic: the container silently reverted to a day-old snapshot TWICE, so
+    committed work read as missing and the instinctive response — redo it — would
+    have been wrong both times; `@fontsource/inter` was declared and not installed,
+    reddening a build in a package the session never opened; and `CLAUDE.md` says
+    "Run this first, every session" about the lane inbox while nothing made that
+    true, so it ran when somebody remembered.
+    IT REPORTS AND NEVER BLOCKS, and that inversion is deliberate. This repository
+    is fail-closed everywhere, and a session start is the one place where failing
+    closed is wrong: a blocked session cannot be used to fix the thing that blocked
+    it. Every path exits 0. Nothing here gates — preflight's 180-odd gates do that,
+    after there is something to gate.
+    THE DEPENDENCY INSTALL IS REMOTE-ONLY, and the exclusion is load-bearing rather
+    than lazy. `CLAUDE.md` records that local macOS builds add darwin platform
+    binaries and restore the manifests afterwards, re-diverging the lockfile AFTER
+    it was correctly regenerated. A hook running `pnpm install` on the Mac would
+    manufacture exactly the drift `.githooks/pre-push` exists to catch.
+    Falsified: reset one commit back and the hook names the drift and prints the
+    recovery command; pointed at a directory that is not a repository it still
+    exits 0.
+    NOT DONE, and worth stating because the hook system offers it: no PreToolUse or
+    PostToolUse hooks. A PostToolUse hook on Edit could have caught the
+    check-then-read race committed twice in one day (rows 175, 182) at the moment
+    of writing rather than in CodeQL hours later. That is a real candidate and it
+    needs its own decision — a hook that fires on every edit is a tax on every edit.
+
 182. **The claims gate read zero of 281 public documents.** — MITIGATED 2026-08-25,
     positioning-messaging. `scripts/check-launch-claims.mjs` reads the website, the
     Pages-derived HTML, the outreach surface and anything carrying the public

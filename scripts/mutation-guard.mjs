@@ -292,6 +292,7 @@ export const TARGETS = [
     proof: "proof:credential-rotation",
     files: [
       "lib/integrations/src/integrations/credential-rotation/evaluate.ts",
+      "lib/integrations/src/integrations/credential-rotation/index.ts",
       "lib/integrations/src/integrations/credential-rotation/normalize.ts",
     ],
   },
@@ -299,6 +300,7 @@ export const TARGETS = [
     proof: "proof:observability-integrity",
     files: [
       "lib/integrations/src/integrations/observability-integrity/evaluate.ts",
+      "lib/integrations/src/integrations/observability-integrity/index.ts",
       "lib/integrations/src/integrations/observability-integrity/normalize.ts",
     ],
   },
@@ -306,6 +308,7 @@ export const TARGETS = [
     proof: "proof:local-authority",
     files: [
       "lib/integrations/src/integrations/local-authority/evaluate.ts",
+      "lib/integrations/src/integrations/local-authority/index.ts",
       "lib/integrations/src/integrations/local-authority/normalize.ts",
     ],
   },
@@ -419,8 +422,11 @@ export const TARGETS = [
     proof: "proof:uem",
     files: [
       "lib/integrations/src/integrations/uem/evaluate.ts",
-      "lib/integrations/src/integrations/uem/intune.ts",
       "lib/integrations/src/integrations/uem/index.ts",
+      "lib/integrations/src/integrations/uem/intune.ts",
+      "lib/integrations/src/integrations/uem/jamf.ts",
+      "lib/integrations/src/integrations/uem/store.ts",
+      "lib/integrations/src/integrations/uem/workspace-one.ts",
     ],
   },
   {
@@ -474,59 +480,119 @@ export const TARGETS = [
   },
   {
     proof: "proof:credential-exposure",
-    files: ["lib/integrations/src/integrations/credential-exposure/index.ts"],
+    files: [
+      "lib/integrations/src/integrations/credential-exposure/credential-connector.ts",
+      "lib/integrations/src/integrations/credential-exposure/evaluate.ts",
+      "lib/integrations/src/integrations/credential-exposure/index.ts",
+    ],
   },
   {
     proof: "proof:data-protection",
-    files: ["lib/integrations/src/integrations/data-protection/index.ts"],
+    files: [
+      "lib/integrations/src/integrations/data-protection/dlp-connector.ts",
+      "lib/integrations/src/integrations/data-protection/evaluate.ts",
+      "lib/integrations/src/integrations/data-protection/index.ts",
+    ],
   },
   {
     proof: "proof:device-attestation",
-    files: ["lib/integrations/src/integrations/device-attestation/index.ts"],
+    files: [
+      // `evaluate.ts` grants the TOP assurance tier for this family and was not
+      // mutated at all: the registration named `index.ts`, which re-exports it.
+      // Mutation operates on files, so a barrel buys nothing.
+      "lib/integrations/src/integrations/device-attestation/evaluate.ts",
+      "lib/integrations/src/integrations/device-attestation/device-attestation-connector.ts",
+      "lib/integrations/src/integrations/device-attestation/index.ts",
+    ],
   },
   {
     proof: "proof:edr-threat",
-    files: ["lib/integrations/src/integrations/edr-threat/index.ts"],
+    files: [
+      "lib/integrations/src/integrations/edr-threat/edr-connector.ts",
+      "lib/integrations/src/integrations/edr-threat/evaluate.ts",
+      "lib/integrations/src/integrations/edr-threat/index.ts",
+    ],
   },
   {
     proof: "proof:entitlement-binding",
-    files: ["lib/integrations/src/integrations/entitlement-binding/index.ts"],
+    files: [
+      "lib/integrations/src/integrations/entitlement-binding/evaluate.ts",
+      "lib/integrations/src/integrations/entitlement-binding/index.ts",
+    ],
   },
   {
     proof: "proof:identity-risk",
-    files: ["lib/integrations/src/integrations/identity-risk/index.ts"],
+    files: [
+      "lib/integrations/src/integrations/identity-risk/evaluate.ts",
+      "lib/integrations/src/integrations/identity-risk/identity-connector.ts",
+      "lib/integrations/src/integrations/identity-risk/index.ts",
+    ],
   },
   {
     proof: "proof:location-services",
-    files: ["lib/integrations/src/integrations/location-services/index.ts"],
+    files: [
+      "lib/integrations/src/integrations/location-services/evaluate.ts",
+      "lib/integrations/src/integrations/location-services/index.ts",
+      "lib/integrations/src/integrations/location-services/location-connector.ts",
+    ],
   },
   {
     proof: "proof:macos-posture",
-    files: ["lib/integrations/src/integrations/macos-posture/index.ts"],
+    files: [
+      "lib/integrations/src/integrations/macos-posture/apple-schema.ts",
+      "lib/integrations/src/integrations/macos-posture/evaluate.ts",
+      "lib/integrations/src/integrations/macos-posture/index.ts",
+      "lib/integrations/src/integrations/macos-posture/macos-connector.ts",
+    ],
   },
   {
     proof: "proof:nac",
-    files: ["lib/integrations/src/integrations/nac/index.ts"],
+    files: [
+      "lib/integrations/src/integrations/nac/aruba-clearpass.ts",
+      "lib/integrations/src/integrations/nac/cisco-ise.ts",
+      "lib/integrations/src/integrations/nac/identifier.ts",
+      "lib/integrations/src/integrations/nac/index.ts",
+      "lib/integrations/src/integrations/nac/store.ts",
+    ],
   },
   {
     proof: "proof:network-nac",
-    files: ["lib/integrations/src/integrations/network-nac/index.ts"],
+    files: [
+      "lib/integrations/src/integrations/network-nac/evaluate.ts",
+      "lib/integrations/src/integrations/network-nac/index.ts",
+      "lib/integrations/src/integrations/network-nac/network-connector.ts",
+    ],
   },
   {
     proof: "proof:peripheral-control",
-    files: ["lib/integrations/src/integrations/peripheral-control/index.ts"],
+    files: [
+      "lib/integrations/src/integrations/peripheral-control/evaluate.ts",
+      "lib/integrations/src/integrations/peripheral-control/index.ts",
+      "lib/integrations/src/integrations/peripheral-control/peripheral-connector.ts",
+    ],
   },
   {
     proof: "proof:response-accountability",
-    files: ["lib/integrations/src/integrations/response-accountability/index.ts"],
+    files: [
+      "lib/integrations/src/integrations/response-accountability/evaluate.ts",
+      "lib/integrations/src/integrations/response-accountability/index.ts",
+    ],
   },
   {
     proof: "proof:rtls-custody",
-    files: ["lib/integrations/src/integrations/rtls-custody/index.ts"],
+    files: [
+      "lib/integrations/src/integrations/rtls-custody/evaluate.ts",
+      "lib/integrations/src/integrations/rtls-custody/index.ts",
+      "lib/integrations/src/integrations/rtls-custody/rtls-connector.ts",
+    ],
   },
   {
     proof: "proof:vuln-scan",
-    files: ["lib/integrations/src/integrations/vuln-scan/index.ts"],
+    files: [
+      "lib/integrations/src/integrations/vuln-scan/evaluate.ts",
+      "lib/integrations/src/integrations/vuln-scan/index.ts",
+      "lib/integrations/src/integrations/vuln-scan/vuln-connector.ts",
+    ],
   },
 ];
 
@@ -1064,7 +1130,7 @@ function runProof(proof) {
   return summary[1] === "pass" ? "survivor" : "killed";
 }
 
-function mutationsFor(file) {
+export function mutationsFor(file) {
   const abs = join(repoRoot, file);
   const original = readFileSync(abs, "utf8");
   const lines = original.split("\n");
@@ -1096,12 +1162,61 @@ function isAllowed(mutation) {
   return ALLOWED.find((a) => a.file === mutation.file && mutation.sourceLine.includes(a.line));
 }
 
+/** Split TARGETS across N shards, balanced by MUTATION COUNT rather than by target
+ *  count. The two are wildly different: one family can carry more mutations than
+ *  ten others together, so an even split of targets is a lopsided split of work,
+ *  and the slowest shard sets the wall clock. Counting is cheap — `mutationsFor`
+ *  parses text and runs no proof — so the balance is computed from the real
+ *  numbers instead of assumed.
+ *
+ *  Exported and self-tested because a sharder that silently DROPS a target would
+ *  make the sweep report success over work it never did — the exact failure mode
+ *  this whole script exists to prevent, reintroduced at the scheduling layer.
+ */
+export function shardTargets(all, index, count) {
+  if (!Number.isInteger(index) || !Number.isInteger(count) || count < 1 || index < 0 || index >= count) {
+    throw new Error(`--shard expects i/N with 0 <= i < N and N >= 1, got ${index}/${count}`);
+  }
+  const weighted = all.map((t) => ({
+    target: t,
+    weight: t.files.reduce((n, f) => n + mutationsFor(f).length, 0),
+  }));
+  // Longest-processing-time first: heaviest target into the currently lightest bin.
+  weighted.sort((a, b) => b.weight - a.weight || a.target.proof.localeCompare(b.target.proof));
+  const bins = Array.from({ length: count }, () => ({ load: 0, targets: [] }));
+  for (const w of weighted) {
+    const lightest = bins.reduce((min, b) => (b.load < min.load ? b : min), bins[0]);
+    lightest.load += w.weight;
+    lightest.targets.push(w.target);
+  }
+  return bins[index].targets;
+}
+
 function main() {
   const only = process.argv.find((a) => a.startsWith("--proof="))?.split("=")[1];
-  const targets = only ? TARGETS.filter((t) => t.proof === only) : TARGETS;
+  const shardArg = process.argv.find((a) => a.startsWith("--shard="))?.split("=")[1];
+  let targets = only ? TARGETS.filter((t) => t.proof === only) : TARGETS;
   if (targets.length === 0) {
     console.error(`No target matches --proof=${only}. Known: ${TARGETS.map((t) => t.proof).join(", ")}`);
     process.exit(1);
+  }
+  if (shardArg !== undefined) {
+    const [i, n] = shardArg.split("/").map((x) => Number.parseInt(x, 10));
+    try {
+      targets = shardTargets(targets, i, n);
+    } catch (err) {
+      // Refuse rather than sweep a subset. A malformed shard argument that fell
+      // through to "no targets" would report a clean sweep of nothing.
+      console.error(`Mutation guard FAILED: ${err instanceof Error ? err.message : String(err)}`);
+      process.exit(1);
+    }
+    console.log(`Shard ${i + 1} of ${n} — ${targets.length} of ${TARGETS.length} registered targets.`);
+    if (targets.length === 0) {
+      // Not an error: with more shards than targets, an empty shard is correct and
+      // must stay GREEN, or the lane fails for a scheduling choice rather than a defect.
+      console.log("This shard has no targets. Nothing to sweep.\n");
+      return;
+    }
   }
 
   console.log("Mutation guard — every registered guard must be falsifiable by its own proof\n");

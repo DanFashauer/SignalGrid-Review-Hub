@@ -21,7 +21,11 @@ import {
 
 // Environment
 const REDIS_URL = process.env.REDIS_URL;
-const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+// No IS_PRODUCTION here on purpose. One was declared and never read, sitting
+// directly above two "unvalidated" warnings, so a reader scanning this file for
+// guards counted a guard that did not exist. The real environment decision lives
+// in `dispatch.ts`, is passed in rather than captured at module load, and is the
+// only place it belongs.
 
 // Redis client (lazy init)
 let redis: Redis | null = null;

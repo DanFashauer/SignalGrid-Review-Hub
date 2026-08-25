@@ -2542,18 +2542,36 @@ earlier — that is the loop working, not a reason to soften the record.
     and collapse everything unmatched to a single `route="other"`. Failing that, cap
     distinct label tuples with the same FIFO shape `idempotency.ts:99-102` uses.
 
-94. **The global limiter throttles `/healthz`, `/readyz` and `/metrics`.** — OPEN,
-    api-contract-architect. After 150 requests, `/api/healthz` returns **429** and so
-    does `/metrics`. `lib/profile.ts:118-121` allowlists `/readyz` on the explicit
-    reasoning that an orchestrator "would treat a fenced 404 as a dead instance and
-    restart a working server" — the limiter reintroduces that same failure by a
-    different route, and the Prometheus scraper goes blind exactly when it matters.
-    SECOND HALF: `trust proxy` is never set (confirmed two ways). Leaving it false is
-    the right call against XFF spoofing, but behind an ingress every caller keys to
-    one socket peer and shares a single 600/min bucket.
-    FIX: `skip` the three operational paths in `globalRateLimiter` and gate
-    `/metrics` on `METRICS_TOKEN` instead. If deployed behind a known proxy, set
-    `trust proxy` to that specific hop count or CIDR — never `true`.
+94. **The global limiter throttles `/healthz`, `/readyz` and `/metrics`.** — FIXED
+    2026-08-25, api-contract-architect. Reproduced first, with
+    `SIGNALGRID_GLOBAL_RATE_LIMIT=5`: `/api/healthz`, `/api/readyz` and `/metrics`
+    all returned 429 inside twelve requests. `artifacts/api-server/src/lib/profile.ts` already keeps the two
+    probes outside the GA fence on the reasoning that an orchestrator "would treat a
+    fenced 404 as a dead instance and restart a working server" — a 429 lands in the
+    same place, and it lands under load, which is when a false unhealthy verdict is
+    most expensive.
+    `globalRateLimiter` now takes a `skip`. The two probes are exempt
+    unconditionally and by EXACT path match, never by prefix, so
+    `/api/healthz-and-something-expensive` inherits nothing.
+    `/metrics` is deliberately NOT unconditional. It is a data surface rather than a
+    liveness signal, so its exemption is conditional on `METRICS_TOKEN` being set:
+    authenticated, the scrape is exempt; unconfigured, the endpoint is open and the
+    limiter is the only protection it has left, so the limit stays. The unknown case
+    keeps the restriction. The token is read per request, not captured at module
+    load — the defect already fixed once in `webhooks/dispatch.ts`.
+    Nine assertions in `pnpm --filter @workspace/api-server run test:api` (305 → 314),
+    including a positive control proving the limiter is still engaged on ordinary
+    routes, so "not throttled" cannot pass against a limiter that was accidentally
+    switched off. Falsified three ways, each hitting only its own assertions:
+    removing the skip fails 4, making `/metrics` unconditionally exempt fails 1,
+    prefix-matching instead of exact fails 1.
+    SECOND HALF, dispositioned rather than coded. `trust proxy` stays unset — that
+    is the correct posture against `X-Forwarded-For` spoofing, and turning it on
+    would convert the per-address limit into no limit. The shared-bucket cost behind
+    an ingress is real and is now blunted at both ends: `/v1` is keyed per bearer,
+    and the probes can no longer be throttled into looking dead. `docs/DEPLOYMENT.md`
+    carries the operator guidance, including that a proxy hop must be named by count
+    or CIDR and never by `true`.
 
 95. **`HEAD` on an allowlisted route 404s under the gateway profile.** — OPEN,
     api-contract-architect. Express auto-serves `HEAD` from a `GET` handler, but
@@ -3291,9 +3309,12 @@ earlier — that is the loop working, not a reason to soften the record.
     counted, in the artefact an operator reads to reconstruct what happened.
 
 139. **A dead safety-shaped constant sits beside two "unvalidated" warnings.** —
-    OPEN, secops-domain. NOTE. `webhooks/store.ts:24` declares `IS_PRODUCTION` and
-    never uses it — the only uses are in `dispatch.ts`. A reader scanning that file
-    for guards will count it as one.
+    FIXED 2026-08-25, secops-domain. `webhooks/store.ts` declared an environment
+    constant and never read it, directly above two warnings about unvalidated input,
+    so a reader scanning that file for guards counted one that did not exist. Removed,
+    with a comment saying why nothing replaces it: the real environment decision lives
+    in `dispatch.ts`, is passed in rather than captured at module load, and belongs in
+    exactly one place. `pnpm run typecheck` clean.
 
 140. **`vuln-scan` lets a non-finite CVSS into the evidence field while a sibling
     guards the same shape.** — OPEN, secops-domain. NOTE, and NOT a fail-open on

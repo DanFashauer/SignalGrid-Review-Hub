@@ -1636,6 +1636,73 @@ async function run() {
     check("audit trail: connector.sync.triggered appended", counted("connector.sync.triggered") >= 1);
   }
 
+  // ── OPERATIONAL PROBES MUST NOT BE THROTTLED (backlog row 94) ─────────────
+  //
+  // `lib/profile.ts` keeps /healthz and /readyz outside the GA fence because an
+  // orchestrator "would treat a fenced 404 as a dead instance and restart a
+  // working server". The global limiter reintroduced that failure by a different
+  // route: a probe that gets a 429 reads as an unhealthy instance, and it happens
+  // under load — exactly when a false unhealthy verdict costs the most. Measured
+  // before the fix with SIGNALGRID_GLOBAL_RATE_LIMIT=5: /api/healthz, /api/readyz
+  // and /metrics all returned 429 within twelve requests.
+  //
+  // /metrics is asserted in BOTH configurations on purpose. It is a data surface,
+  // not a liveness signal, so its exemption is conditional on being authenticated:
+  // with no METRICS_TOKEN the endpoint is open and the limiter is the only
+  // protection left, so the limit must STAY. Asserting only the exempt half would
+  // pass just as well against an unconditional skip, which is the unsafe version.
+  {
+    const spawnLimited = (port, extraEnv) => spawn("node", [serverEntry], {
+      env: { ...process.env, PORT: String(port), LOG_LEVEL: "silent", SIGNALGRID_GLOBAL_RATE_LIMIT: "5", ...extraEnv },
+      stdio: ["ignore", "ignore", "inherit"],
+    });
+    const waitReady = async (port) => {
+      const start = Date.now();
+      while (Date.now() - start < 15000) {
+        try { if ((await fetch(`http://localhost:${port}/api/healthz`)).ok) return true; } catch { /* not up yet */ }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      return false;
+    };
+    // Burn well past the limit of 5, then report what the path answers.
+    const hammer = async (port, path) => {
+      const seen = [];
+      for (let i = 0; i < 12; i++) seen.push((await fetch(`http://localhost:${port}${path}`)).status);
+      return seen;
+    };
+
+    const PORT_OPEN = 5314;
+    const openServer = spawnLimited(PORT_OPEN, {});
+    try {
+      check("rate-limit probe server (no METRICS_TOKEN) becomes ready", (await waitReady(PORT_OPEN)) === true);
+      check("liveness is never throttled", !(await hammer(PORT_OPEN, "/api/healthz")).includes(429));
+      check("readiness is never throttled", !(await hammer(PORT_OPEN, "/api/readyz")).includes(429));
+      // The fail-closed half: unauthenticated /metrics keeps its only protection.
+      check("an UNAUTHENTICATED /metrics is still rate limited", (await hammer(PORT_OPEN, "/metrics")).includes(429));
+      // The positive control for every "not throttled" assertion above: prove the
+      // limiter is actually engaged on this server. Without this, all three pass
+      // just as well against a limiter that was accidentally disabled entirely.
+      check("the limiter is still engaged on ordinary routes", (await hammer(PORT_OPEN, "/api/v1/keys")).includes(429));
+      // And that the exemption is EXACT, not a prefix: a path merely starting with
+      // an exempt one must not inherit the exemption.
+      const near = await fetch(`http://localhost:${PORT_OPEN}/api/healthz-and-more`);
+      check("a path that only STARTS with an exempt one is not exempt", near.status === 429);
+    } finally {
+      openServer.kill("SIGTERM");
+    }
+
+    const PORT_TOKEN = 5315;
+    const tokenServer = spawnLimited(PORT_TOKEN, { METRICS_TOKEN: "row94-probe-token" });
+    try {
+      check("rate-limit probe server (METRICS_TOKEN set) becomes ready", (await waitReady(PORT_TOKEN)) === true);
+      const scraped = await hammer(PORT_TOKEN, "/metrics");
+      check("an AUTHENTICATED /metrics is exempt from the limiter", !scraped.includes(429));
+      check("...and still refuses a scrape with no bearer — exempt from the limiter is not exempt from auth", scraped.every((s) => s === 401));
+    } finally {
+      tokenServer.kill("SIGTERM");
+    }
+  }
+
   // ── transport hygiene ───────────────────────────────────────────────────
   check("rate-limit headers present", allow.headers.get("ratelimit-limit") !== null);
   check("security header x-content-type-options set", allow.headers.get("x-content-type-options") === "nosniff");

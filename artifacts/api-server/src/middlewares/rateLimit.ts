@@ -78,11 +78,54 @@ export const v1RateLimiter: RateLimitRequestHandler = rateLimit({
  * spammed for amplification or token harvesting. Keyed by client address; the
  * per-key /v1 limiter still applies a tighter bound on the authenticated paths.
  */
+/**
+ * Liveness and readiness, app-absolute. These are mounted under the `/api`
+ * router, and the global limiter runs at the app level BEFORE that mount, so
+ * `req.path` here carries the prefix.
+ *
+ * Matched by EXACT string, never by prefix. A prefix test would exempt
+ * `/api/healthz-and-also-something-expensive` from the limiter, and an
+ * allowlist that is loose in the direction of exempting more is the wrong
+ * direction for this one.
+ */
+const UNTHROTTLED_PROBES = new Set(["/api/healthz", "/api/readyz"]);
+
+/**
+ * Why the probes are exempt at all: `lib/profile.ts` already keeps `/healthz`
+ * and `/readyz` outside the GA fence on the stated reasoning that an
+ * orchestrator "would treat a fenced 404 as a dead instance and restart a
+ * working server". A 429 lands in exactly the same place — a probe that cannot
+ * get an answer reads as an unhealthy instance, so the limiter reintroduced by
+ * a different route the failure the fence exemption exists to prevent. Under
+ * load, which is when the limiter engages, is precisely when a false unhealthy
+ * verdict is most expensive.
+ *
+ * `/metrics` is treated differently ON PURPOSE. It is not a liveness signal, it
+ * is a data surface, and exempting it unconditionally would leave an open,
+ * unauthenticated, unthrottled endpoint on any deployment that has not set
+ * `METRICS_TOKEN`. So the exemption is conditional on the endpoint being
+ * authenticated: configured token, scrape is exempt; no token, the endpoint is
+ * open and the limiter is the only protection it has left, so the limit stays.
+ * The unconfigured case keeps the restriction, which is the direction this
+ * repository requires of an unknown.
+ *
+ * Read per request rather than at module load: a constant captured at import
+ * time reports the environment as it was when the module first ran, which is a
+ * defect this codebase has already fixed once in `webhooks/dispatch.ts`.
+ */
+function skipGlobalLimit(req: Request): boolean {
+  if (UNTHROTTLED_PROBES.has(req.path)) {
+    return true;
+  }
+  return req.path === "/metrics" && (process.env.METRICS_TOKEN?.trim() ?? "") !== "";
+}
+
 export const globalRateLimiter: RateLimitRequestHandler = rateLimit({
   windowMs: 60_000,
   limit: limitFromEnv("SIGNALGRID_GLOBAL_RATE_LIMIT", 600),
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipGlobalLimit,
   handler: rateLimitHandler,
 });
 

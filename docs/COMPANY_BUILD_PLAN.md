@@ -3896,6 +3896,39 @@ earlier — that is the loop working, not a reason to soften the record.
     have caught the legend — and (c), pinning the mapping in one registry the gate
     reads, remain open and are the ones that would close it.
 
+177. **The evidence contract advertised six sources and implemented two.** —
+    FIXED 2026-08-25, principal-engineer. Found while building the source registry
+    the owner asked for, which is the registry earning its place before it shipped.
+    `EvidenceSourceSystem` in `lib/integration-bridge/src/evidence.ts` names six
+    members. `fleet` and `headwind` have product converters. `intune` and `nanomdm`
+    are constructed INLINE INSIDE `scripts/src/evidence-adapter-proof.ts` and
+    produced by no product code — the Graph production path reaches the
+    device-management-health connector through `graph-transport.ts`, which does not
+    emit this contract at all. `jamf` appears in twelve files as a vendor SignalGrid
+    reads ABOUT and produces evidence in none of them. `omnissa` appears only in its
+    own type declaration. None of the four was named in the launch profile's
+    declared gaps.
+    NOTHING WAS BROKEN BY THIS, and the row says so plainly: a union is a
+    vocabulary, not a promise, and no caller could have obtained evidence from an
+    unimplemented source. But a type member nobody implements READS as a
+    capability, and this repository fails builds over that shape elsewhere — a
+    launcher cited as deployment evidence (row 175), a field asserting attestation
+    it never checked (row 174). The same defect, in the source vocabulary.
+    `docs/agent/evidence-sources.json` now declares all six with an honest status —
+    `converter`, `proof_only`, `vocabulary_only` — and
+    `scripts/check-evidence-sources.mjs` enforces the bijection BOTH directions:
+    every union member has an entry, every entry is a union member, a `converter`
+    entry's named function must actually be exported from its named module, and a
+    weaker status may not name a converter and launder itself into the stronger
+    one. Registered in preflight and CI. Self-test 9/9, and falsified twice against
+    the real tree — adding `kandji` to the union without registering it fails, and
+    renaming the Fleet converter while the registry still claims it fails.
+    WHAT THIS IS NOT, stated so the owner's larger ask is not reported as done: it
+    does not make adding a source a no-code act. The converter is still a function
+    somebody writes, and row 176 measured that at ~26 lines. This makes adding one
+    a DECLARED act a gate can see, which is the precondition for a
+    configuration-driven registry rather than the thing itself.
+
 176. **"Adding a signal to the grid" is already the architecture, and I recommended
     against it on a mis-framing.** — MEASURED 2026-08-25, principal-engineer. The
     owner, asked whether to build live lanes for Velociraptor, Zeek and OpenVAS,

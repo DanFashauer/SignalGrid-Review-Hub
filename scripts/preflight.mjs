@@ -212,6 +212,8 @@ const STEPS = [
   { name: "Scheduled routines (every always-on lane declared, authorized, scoped, evidenced)", cmd: ["node", "scripts/check-scheduled-routines.mjs"] },
   { name: "Lab registry self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-lab-registry.mjs", "--self-test"] },
   { name: "Lab registry (both halves agree; every deployment claim cites evidence on disk)", cmd: ["node", "scripts/check-lab-registry.mjs"] },
+  { name: "Evidence sources self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-evidence-sources.mjs", "--self-test"] },
+  { name: "Evidence sources (the contract's vocabulary matches what exists)", cmd: ["node", "scripts/check-evidence-sources.mjs"] },
   { name: "Org roster (a role nobody has ever run is named on every run)", cmd: ["node", "scripts/check-org-roster.mjs"] },
   { name: "Org roster self-test (the gate can actually fail)", cmd: ["node", "scripts/check-org-roster.mjs", "--self-test"] },
   { name: "Backlog ownership (a row with work left in it names the role that owns it)", cmd: ["node", "scripts/check-backlog-ownership.mjs"] },

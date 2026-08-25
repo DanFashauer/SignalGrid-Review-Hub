@@ -218,6 +218,10 @@ jobs:
         run: node scripts/check-lab-registry.mjs --self-test
       - name: Lab registry (both halves agree; every deployment claim cites evidence on disk)
         run: node scripts/check-lab-registry.mjs
+      - name: Evidence sources self-test (the gate can fail)
+        run: node scripts/check-evidence-sources.mjs --self-test
+      - name: Evidence sources (the contract's vocabulary matches what exists)
+        run: node scripts/check-evidence-sources.mjs
       - name: Assist wire self-test (the gate must be able to fail)
         run: node scripts/check-assist-wire-served.mjs --self-test
       - name: Assist wire served-ness (a bound wire is served or a declared gap)

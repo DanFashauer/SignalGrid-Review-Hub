@@ -2128,6 +2128,80 @@ earlier — that is the loop working, not a reason to soften the record.
     exemplary and states outright that an app cannot prevent its own closure; and
     the entire Kotlin surface is fail-closed throughout.
 
+79. **The palette gate had TWO independent holes, and the second one meant even a
+    CORRECTLY-keyed step-up passed.** — FIXED 2026-08-25, found by the first
+    `desktop-engineer` execution (0 of 94 files read) and confirmed against the
+    accessibility read of row 76.
+    · **Anchor hole.** The ramp scan is key-anchored (`allow:`) or
+      comparison-anchored (`outcome ===`). A charting library uses neither: the
+      verdict is a JSX ATTRIBUTE VALUE (`dataKey="allow" stroke="#22c55e"`) or a
+      DATA value keyed on something else (`{ c: "#22c55e", l: "ALLOW" }`). No
+      anchor fired, so the window never opened.
+    · **Ramp-list hole, independent of the first.** `#eab308` — Tailwind
+      yellow-500, the step-up colour — was simply ABSENT from the ramp list. Even
+      a properly verdict-keyed use of it passed. Proven by fixing the anchors
+      first and watching the gate STILL exit 0.
+    THE ORDER IS THE EVIDENCE. Widening the ramp list alone: still exit 0. Adding
+    the attribute anchor: exit 1, naming BOTH `signalgrid-desktop` and
+    `signalgrid-app`. Two holes, and either one alone would have kept the defect
+    invisible.
+    WHAT WAS BEHIND THEM: both dashboards painted all four verdicts from raw
+    Tailwind hex — a second, unratified decision palette in a shipped tree. Deny
+    at `#EF4444` measures **4.26:1 on card**, below the 4.5:1 floor this gate
+    enforces everywhere else, on the most safety-critical verdict.
+    THE CAVEAT, STATED RATHER THAN BURIED: these marks are chart strokes and
+    legend swatches — graphical objects, for which WCAG 1.4.11 sets 3:1, not 4.5:1.
+    So the AA number is arguable AS WCAG. What is not arguable is that this
+    repository's ratified rule applies 4.5:1 to decision colours on background and
+    card with no text/non-text carve-out, and that a second palette was rendering
+    behind a green gate.
+    THE FIX AVOIDS INVENTING DOCTRINE. Only three decision tones are ratified
+    (allow, review, deny) and four verdicts are drawn, so `restrict` has no
+    colour of its own. Rather than mint a fourth — a design decision that is not
+    mine — restrict now uses the deny tone distinguished by a DASH PATTERN, a
+    non-colour channel, which is better doctrine than a new hue. `signalgrid-app`
+    also had NO legend, so colour was the sole channel for four series; a
+    `<Legend />` was added. Chart chrome moved off a third palette (slate) onto
+    `--border`/`--muted-foreground`/`--popover`.
+    SELF-TESTS ANCHORED TO THE REAL SHAPES, 14 -> 17, taken verbatim from the two
+    Dashboard files rather than written against the new regex — anchoring a
+    self-test to the regex it tests proves only that the regex is itself. Both
+    apps build clean.
+    STILL OPEN — brand-design/accessibility-specialist: whether `restrict`
+    deserves its own ratified tone. The dash is a correct stopgap, not an answer.
+
+80. **The Rust Assist client is the strongest of the three, and it is worth
+    recording that a clean read happened.** — CLOSED 2026-08-25, no defect.
+    The roster's standing open question — what an UNKNOWN resolves to in the
+    Kotlin **and Rust** Assist clients — was answered for Kotlin on 2026-08-24 and
+    left open for Rust. It is now answered, by execution rather than reading:
+    `cargo` IS available in the cloud lane (1.94.1), so 36 unit + 2 conformance
+    tests were run, plus `fmt --check` and `clippy -D warnings`, all clean.
+    · Unrecognised outcome -> DENY (`assist.rs:32-41`); `None` only for genuine
+      absence, matching Kotlin exactly.
+    · Non-2xx, empty body, malformed JSON, non-object JSON, missing `assist`, and
+      present-but-non-string `assist` each fail closed WITH a named reason
+      (`wire.rs:20-79`). 401/403 are not rescued by an `allow` body.
+    · No `#[derive(Deserialize)]` anywhere in the tree (corroborated by
+      `check:absence deny_unknown_fields`), so serde's silent-unknown-field
+      default has no surface. Unknown RESPONSE fields are tolerated deliberately —
+      `deny_unknown_fields` there would flip a legitimate allow to deny when a
+      newer server adds a field, which is fail-closed in the wrong place.
+    · Two `unwrap_or` instances, both resolving the unknown to the TIGHTER side;
+      no `unwrap_or_default` anywhere. The `?? false` family has no analogue here.
+    · Plaintext refused off-loopback and credentials refused in the authority,
+      with `10.0.2.2` deliberately OMITTED from the loopback set that Kotlin
+      includes — on a desktop that is a routable address. Documented, stricter.
+    ONE REAL GAP, and it is not the desktop's: Rust folds case with
+    `to_ascii_lowercase()`, Kotlin with full-Unicode `lowercase()`. Different
+    functions, and all 42 shared conformance vectors are ASCII, so nothing pins
+    the difference. The direction is favourable — Unicode folding maps MORE inputs
+    onto "allow", so Kotlin can only be equal or more permissive — which makes
+    this a hole in `native/shared/assist-wire-conformance.json`, owned by
+    api-contract-architect, not a desktop defect. Add non-ASCII vectors (NBSP-,
+    U+3000- and ZWSP-padded `allow`, and a Cyrillic homoglyph) and both clients
+    are obliged at once.
+
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —
     `lib/location` is KEPT. Nothing is outstanding on this row.

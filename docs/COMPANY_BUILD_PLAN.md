@@ -2202,6 +2202,65 @@ earlier — that is the loop working, not a reason to soften the record.
     U+3000- and ZWSP-padded `allow`, and a Cyrillic homoglyph) and both clients
     are obliged at once.
 
+81. **The product's sharpest unbuilt idea was already latent in its own DDM
+    schema: the difference between what is DECLARED and what is OBSERVED.** —
+    PROPOSED 2026-08-25, not built. Owner-directed: mine the Drive source
+    material for product ideas.
+    THE SEAM. `lib/ddm-connector/src/apple-schema.ts` records, per property, how
+    Apple's Declarative Device Management reports it. Three notes carry the
+    insight: privacy/PPPC is "configuration-declared, not a status item — no DDM
+    status key"; Endpoint Security binary control is "a CONFIGURATION
+    declaration, not a status item ... Reported out-of-band / on-device";
+    check-in recency is "a transport/control-plane fact, not a device-reported
+    status item". That is intent versus evidence. The management plane can always
+    tell you what was ASKED FOR. For several layers it structurally cannot tell
+    you what is TRUE, because the platform exposes no status key at all.
+    WHY THAT IS THE WHOLE PRODUCT. The founder's nine-layer macOS troubleshooting
+    diagram (see `WHY_THIS_EXISTS.md`) lists a failure mode per layer, and every
+    one is the same failure wearing a different costume: the intent was recorded
+    and something downstream did not honour it. Profile assigned but not received.
+    PPPC payload present but TCC still denying. Extension policy present but the
+    extension silently not loading. An operator with that diagram is doing ONE
+    thing, nine times, by hand — comparing declared against observed and finding
+    where they diverge.
+    THE GAP IS MEASURED, NOT ASSUMED. `decisionEngine.ts:120` already reads
+    `declaredState` and fails closed on `"stale"`, and `scenarios.ts:16` carries
+    an `apple.ddm_declared_state` signal. But `grep -rl "observedState"` over
+    `lib/signalgrid-core/src` and `lib/signalgrid-simulator/src` returns ZERO.
+    The engine can consume a declaration and notice one has gone stale; it cannot
+    express that a declaration and an observation DISAGREE.
+    THE PATTERN ALREADY EXISTS IN ONE FAMILY, arrived at independently, which is
+    what makes this a generalisation rather than a clever idea:
+    `device-attestation/evaluate.ts` refuses to abstain when a report declares
+    `attestable: false` while also carrying attestation evidence — "malformed or
+    tampered; it must NEVER abstain". That is declared-versus-observed divergence
+    treated as a FAULT, in one dimension.
+    DOCTRINE FIT: a contradiction must tighten at least as hard as an absence,
+    and probably harder. An unknown is a gap; a contradiction is a fault, because
+    one system is actively asserting something another contradicts.
+    THE LAYER WITH NO SIGNAL IS THE ONE THE PLATFORM DECLINES TO REPORT.
+    `check:absence "TCC privacy permission"` returns CORROBORATED across four
+    probes — no file, no directory, no workflow, no source mention. Per the
+    diagram that same layer produces the most user-visible symptom of all, "user
+    prompt still appearing": the worker sees a permission dialog nobody can
+    explain while the console reports compliant, and BOTH are telling the truth.
+    THE SECOND SOURCE ALREADY EXISTS, which is the hard part — the Fleet/osquery
+    telemetry connector and the live Fleet lab lane. Whether osquery can observe
+    any GIVEN layer is untested and must not be assumed; naming Fleet is a
+    hypothesis with a lane attached, not a capability.
+    WHAT IT ANSWERS COMMERCIALLY. The May 2025 second-opinion review asked how
+    SignalGrid answers "why not just extend our existing Okta/CrowdStrike/
+    ServiceNow deployment?" and called differentiation the gap needing one more
+    pass. This is the sharpest form available: the existing stack IS the thing
+    making the declaration. It cannot audit its own assertion, and a vendor
+    cannot corroborate itself from one vantage point. A layer whose whole job is
+    comparing two independent sources is structurally something no incumbent can
+    be — not for want of engineering, but because it is one of the two sources.
+    NOT BUILT. Recorded as a proposal with its gap measured. Design, doctrine
+    placement and per-platform applicability are open — the diagram is macOS, and
+    whether the same seam has the same shape on iOS, Android and Windows is
+    unexamined. principal-engineer and solutions-architect own the disposition.
+
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —
     `lib/location` is KEPT. Nothing is outstanding on this row.

@@ -128,6 +128,11 @@ Everything below is the full catalog, deepest first.
 
 ## Strategy and roadmap
 
+- [Ideas from the source material](IDEAS_FROM_THE_SOURCE_MATERIAL.md): what the nine-layer observation implies
+  that the product does NOT do yet. Its organising insight is already in this codebase — apple-schema.ts records which
+  device properties DDM can report as STATUS and which it can only carry as CONFIGURATION, which is the difference
+  between intent and evidence. The proposal is to make the DIVERGENCE between a declaration and an observation a
+  first-class signal, since `observedState` currently matches zero files in the core. Marked unbuilt where unbuilt.
 - [Why this exists](WHY_THIS_EXISTS.md): the question underneath the product one — why the company exists at
   all. Built from two diagrams in the founder's own project folder: a nine-layer macOS trust evaluation whose
   closing line is the product thesis, and a hospital information system architecture that shows who is standing

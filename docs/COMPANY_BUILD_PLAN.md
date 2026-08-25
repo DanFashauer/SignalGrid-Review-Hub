@@ -3516,8 +3516,27 @@ earlier — that is the loop working, not a reason to soften the record.
     "a DIRECTORY standing in for 78 file(s)" and exit 1.
 
 160. **The published "independent" review is dated twelve months later than its
-    source, renumbered, and internally contradicts itself on a score.** — OPEN,
-    docs-writer. BLOCKING for anything public-facing. Found by reading the source
+    source, renumbered, and internally contradicts itself on a score.** — FIXED
+    2026-08-25, docs-writer. Was BLOCKING for anything public-facing.
+    OWNER DECISION, 2026-08-25: relabel as SignalGrid's own self-assessment rather
+    than restore the source's numbers. Applied:
+    · `index.html` — every meta description now reads "SignalGrid self-assessment …
+      derived from a May 2025 external second-opinion review". The word
+      "independent" is gone from the page's own description.
+    · `robots` is now `noindex, nofollow`, with the reason in a comment beside it:
+      indexing a self-assessment as though it were third-party judgement is not
+      something a disclaimer repairs.
+    · `REVIEW_DATE` and `REVIEW_VERSION` now name both things — that this is a
+      self-assessment, and that the external review it derives from is v0.1, May
+      2025 — with the full provenance recorded in a comment above them.
+    · The 7-versus-8 contradiction is resolved to 8 in BOTH places, with the delta
+      from the external review's 7 stated inline as SignalGrid's own later
+      judgement rather than absorbed silently.
+    · `rc:smoke` is gone from every rendered string in `reviewData.ts` and
+      `demoData.ts` — seven sites — replaced by the CI gate suite that actually
+      exists. Row 157 is closed by the same change. The only surviving occurrences
+      are in gitignored `dist/` build output, which regenerates.
+    ORIGINAL FINDING FOLLOWS. Found by reading the source
     PDF in the founder's Drive and diffing it against the shipped deck; the shipped
     values were then verified directly in the tree.
     · SOURCE: "SignalGrid Second-Opinion Review", **v0.1, May 2025**.
@@ -3582,21 +3601,37 @@ earlier — that is the loop working, not a reason to soften the record.
     TWO FIGURES THAT MUST NEVER MIGRATE: "200K+ devices" is the CUSTOMER'S estate,
     not SignalGrid's scale, and "40-50% app reduction" is that program's target, not
     a result.
-    HANDLING: this reads as an employer-internal program document. Treat as
-    SOURCE-ONLY — it should not reach GitHub Pages or the website in any form.
+    HANDLING — OWNER DECISION 2026-08-25: **background reading only, never
+    published.** The team may learn the buyer's vocabulary and named pains from it;
+    nothing from it goes on the website, into the repo as content, or into any
+    customer-facing material. It does not reach GitHub Pages in any form. Treat the
+    ICP brief built from it (item 4 of the Drive synthesis) as written in our own
+    words about a problem space, never as an excerpt.
 
-163. **The Gartner exposure already filed is worse than when it was filed.** —
-    OPEN, security-engineer. `docs/PUBLICATION_BOUNDARY.md:91` already records two
-    Gartner Peer Insights reports reproduced whole in `attached_assets/` in a public
-    repository, `OWNER_PENDING`, with no licence recorded. The Drive scan found what
-    is almost certainly that same pair. The material is genuinely useful — a
-    mandatory-feature list that draws the cleanest available line between IGA and
-    what SignalGrid is, four peer lessons usable as objection-handling, and an
-    install-base ordering for connector prioritisation — which is exactly why the
-    licence question needs answering rather than deferring.
-    RULE FOR EVERY TEAM UNTIL IT IS ANSWERED: extract facts and vendor names, never
-    reproduce passages, never cite ratings or "Customers' Choice" marks on any
-    public surface, and never add a third copy to the repo.
+163. **WITHDRAWN — the Gartner exposure was already closed, and I said the
+    opposite.** — CLOSED 2026-08-25, security-engineer. This row asserted that two
+    Gartner Peer Insights reports sat reproduced whole in `attached_assets/` and
+    that the exposure was "worse than when it was filed". BOTH HALVES WERE WRONG.
+    THE FACTS: the files were added 2026-08-03 (`4a170db`) and REMOVED 2026-08-06
+    by `9143d73`, "chore(licensing): remove four republished third-party files and
+    gate the class (#171)". They are absent from HEAD, absent from disk, and
+    `attached_assets/` holds four pasted text files and nothing else.
+    HOW THE ERROR HAPPENED, because the mechanism matters more than the row: I did
+    not check the tree. I read `docs/PUBLICATION_BOUNDARY.md`, which still described
+    the exposure in the PRESENT TENSE nineteen days after the fix, and repeated it —
+    then a Drive scan found the same two documents in the founder's own Drive and I
+    treated that as corroboration that they were still in the repo. Two independent
+    sources agreeing, neither of them the tree. The stale doc has been corrected.
+    WHAT REMAINS TRUE: the files are still in git HISTORY, which the boundary doc
+    always said and which removal from HEAD never addressed. Purging that needs a
+    history rewrite — the owner's call alone, and `NOTICE` argues against it for the
+    provenance record. Recorded as a standing accepted condition, not a task.
+    STILL WORTH DOING, and unaffected: the extracted facts are genuinely useful — a
+    mandatory-feature list that draws the cleanest line between IGA and what
+    SignalGrid is, four peer lessons usable as objection-handling, and an
+    install-base ordering for connector prioritisation. Use facts and vendor names,
+    never reproduce passages, never cite ratings or "Customers' Choice" marks on a
+    public surface, and do not re-add a copy.
 
 164. **Five IGA vendors the competitive surface has never mentioned.** — OPEN,
     competitive-analyst. `docs/research/IGA_ADJACENCY.md` names four vendors. The
